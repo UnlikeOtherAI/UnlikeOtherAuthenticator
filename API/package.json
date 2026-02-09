@@ -9,7 +9,7 @@
     "start": "node dist/server.js",
     "lint": "node ../node_modules/eslint/bin/eslint.js \"**/*.{ts,tsx,js,jsx,mjs,cjs}\" --no-error-on-unmatched-pattern",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest"
+    "test": "vitest run"
   },
   "dependencies": {
     "@prisma/client": "^6.3.1",
