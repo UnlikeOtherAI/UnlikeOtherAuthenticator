@@ -1,4 +1,9 @@
 import { z } from 'zod';
+import dotenv from 'dotenv';
+
+// Load local development environment variables from `.env` if present.
+// In production, variables should be provided by the process environment.
+dotenv.config();
 
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -7,8 +12,8 @@ const EnvSchema = z.object({
   LOG_LEVEL: z
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace'])
     .default('info'),
-  // Secrets are validated when features that require them are used.
-  SHARED_SECRET: z.string().min(1).optional(),
+  // Single global shared secret used for config JWT verification and domain hashing.
+  SHARED_SECRET: z.string().min(1),
   DATABASE_URL: z.string().min(1).optional(),
   ACCESS_TOKEN_TTL: z.string().default('30m'),
   LOG_RETENTION_DAYS: z.coerce.number().int().positive().default(90),
@@ -31,4 +36,3 @@ export function requireEnv<K extends keyof Env>(...keys: K[]): Pick<Env, K> {
   }
   return env as Pick<Env, K>;
 }
-

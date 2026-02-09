@@ -4,6 +4,8 @@ import { createApp } from '../../src/app.js';
 
 describe('GET /health', () => {
   it('returns ok', async () => {
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+
     const app = await createApp();
     await app.ready();
 
@@ -15,4 +17,3 @@ describe('GET /health', () => {
     await app.close();
   });
 });
-
