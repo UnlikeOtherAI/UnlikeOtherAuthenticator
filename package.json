@@ -1,0 +1,29 @@
+{
+  "name": "unlike-other-authenticator",
+  "private": true,
+  "version": "0.0.0",
+  "workspaces": [
+    "API",
+    "Auth"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev --workspace API",
+    "dev:auth": "npm run dev --workspace Auth",
+    "build": "npm run build --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "format": "prettier -w .",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.19.0",
+    "eslint": "^9.19.0",
+    "eslint-config-prettier": "^10.0.1",
+    "eslint-plugin-react": "^7.37.4",
+    "eslint-plugin-react-hooks": "^5.1.0",
+    "globals": "^15.14.0",
+    "prettier": "^3.5.1",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.22.0"
+  }
+}

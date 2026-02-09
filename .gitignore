@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.DS_Store
+
+# local env files
+.env
+.env.*
+
+# logs
+*.log
+
+# tooling
+.eslintcache
+
+# steroids (managed externally)
+.steroids/
+
