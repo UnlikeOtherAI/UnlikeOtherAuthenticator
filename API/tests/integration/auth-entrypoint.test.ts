@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SignJWT } from 'jose';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { createApp } from '../../src/app.js';
 
@@ -22,13 +25,25 @@ function base64UrlEncodeJson(value: unknown): string {
   return Buffer.from(JSON.stringify(value)).toString('base64url');
 }
 
+async function readAuthDistIndexHtml(): Promise<string> {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const repoRoot = path.resolve(here, '../../../');
+  return await readFile(path.join(repoRoot, 'Auth', 'dist', 'index.html'), 'utf8');
+}
+
+function extractFirstMatch(re: RegExp, text: string): string {
+  const m = text.match(re);
+  if (!m?.[1]) throw new Error(`failed to match: ${re}`);
+  return m[1];
+}
+
 describe('GET /auth', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
 
-  it('fetches config JWT from config_url and returns ok', async () => {
+  it('fetches config JWT from config_url and renders the auth UI HTML', async () => {
     process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
     process.env.AUTH_SERVICE_IDENTIFIER =
       process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
@@ -47,7 +62,10 @@ describe('GET /auth', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ ok: true });
+    expect(res.headers['content-type']).toContain('text/html');
+    expect(res.body).toContain('<div id="root"></div>');
+    expect(res.body).toContain('window.__UOA_CLIENT_CONFIG__');
+    expect(res.body).toContain('client.example.com');
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0]?.[0]).toBe(configUrl);
@@ -60,7 +78,7 @@ describe('GET /auth', () => {
     await app.close();
   });
 
-  it('returns ok when optional config fields are present', async () => {
+  it('renders UI HTML when optional config fields are present', async () => {
     process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
     process.env.AUTH_SERVICE_IDENTIFIER =
       process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
@@ -92,7 +110,29 @@ describe('GET /auth', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ ok: true });
+    expect(res.headers['content-type']).toContain('text/html');
+    expect(res.body).toContain('<div id="root"></div>');
+    expect(res.body).toContain('window.__UOA_CLIENT_CONFIG__');
+    expect(res.body).toContain('allowed_social_providers');
+
+    await app.close();
+  });
+
+  it('serves built Auth assets from /assets/*', async () => {
+    const app = await createApp();
+    await app.ready();
+
+    const html = await readAuthDistIndexHtml();
+    const jsPath = extractFirstMatch(/src="(\/assets\/[^"]+)"/, html);
+    const cssPath = extractFirstMatch(/href="(\/assets\/[^"]+)"/, html);
+
+    const jsRes = await app.inject({ method: 'GET', url: jsPath });
+    expect(jsRes.statusCode).toBe(200);
+    expect(jsRes.headers['content-type']).toContain('application/javascript');
+
+    const cssRes = await app.inject({ method: 'GET', url: cssPath });
+    expect(cssRes.statusCode).toBe(200);
+    expect(cssRes.headers['content-type']).toContain('text/css');
 
     await app.close();
   });
