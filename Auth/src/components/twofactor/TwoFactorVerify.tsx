@@ -2,15 +2,17 @@ import React, { useState } from 'react';
 
 import { TwoFactorInput } from '../form/TwoFactorInput.js';
 import { Button } from '../ui/Button.js';
+import { useTranslation } from '../../i18n/use-translation.js';
 
 export function TwoFactorVerify(): React.JSX.Element {
+  const { t } = useTranslation();
   const [code, setCode] = useState('');
   const [done, setDone] = useState(false);
 
   return (
     <div className="mt-6 flex flex-col gap-4">
       <p className="text-sm text-[var(--uoa-color-muted)]">
-        Enter the 6-digit code from your authenticator app to finish signing in.
+        {t('twoFactor.verify.instructions')}
       </p>
 
       <form
@@ -25,7 +27,7 @@ export function TwoFactorVerify(): React.JSX.Element {
 
         <div className="mt-2">
           <Button variant="primary" type="submit" disabled={done || code.length !== 6}>
-            Verify
+            {t('twoFactor.verify.submit')}
           </Button>
         </div>
 
@@ -37,11 +39,10 @@ export function TwoFactorVerify(): React.JSX.Element {
               'bg-[var(--uoa-color-surface)] px-3 py-2 text-sm text-[var(--uoa-color-text)]',
             ].join(' ')}
           >
-            Verification successful
+            {t('twoFactor.verify.success')}
           </p>
         ) : null}
       </form>
     </div>
   );
 }
-

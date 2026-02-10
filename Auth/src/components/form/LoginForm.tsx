@@ -1,6 +1,7 @@
 import React, { useId, useState } from 'react';
 
 import { Button } from '../ui/Button.js';
+import { useTranslation } from '../../i18n/use-translation.js';
 
 function fieldInputClasses(): string {
   return [
@@ -15,6 +16,7 @@ function fieldInputClasses(): string {
 export function LoginForm(): React.JSX.Element {
   const emailId = useId();
   const passwordId = useId();
+  const { t } = useTranslation();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -29,7 +31,7 @@ export function LoginForm(): React.JSX.Element {
     >
       <div>
         <label htmlFor={emailId} className="text-sm font-medium">
-          Email
+          {t('form.email.label')}
         </label>
         <input
           id={emailId}
@@ -46,7 +48,7 @@ export function LoginForm(): React.JSX.Element {
 
       <div>
         <label htmlFor={passwordId} className="text-sm font-medium">
-          Password
+          {t('form.password.label')}
         </label>
         <input
           id={passwordId}
@@ -62,10 +64,9 @@ export function LoginForm(): React.JSX.Element {
 
       <div className="mt-2">
         <Button variant="primary" type="submit">
-          Sign in
+          {t('form.login.submit')}
         </Button>
       </div>
     </form>
   );
 }
-

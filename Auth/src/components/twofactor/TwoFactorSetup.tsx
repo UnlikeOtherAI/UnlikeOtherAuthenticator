@@ -3,17 +3,19 @@ import React, { useState } from 'react';
 import { TwoFactorInput } from '../form/TwoFactorInput.js';
 import { Button } from '../ui/Button.js';
 import { QrCodeDisplay } from './QrCodeDisplay.js';
+import { useTranslation } from '../../i18n/use-translation.js';
 
 export function TwoFactorSetup(props: {
   qrCodeDataUrl?: string;
 }): React.JSX.Element {
+  const { t } = useTranslation();
   const [code, setCode] = useState('');
   const [done, setDone] = useState(false);
 
   return (
     <div className="mt-6 flex flex-col gap-4">
       <p className="text-sm text-[var(--uoa-color-muted)]">
-        Scan this QR code with an authenticator app, then enter the 6-digit code to verify setup.
+        {t('twoFactor.setup.instructions')}
       </p>
 
       <QrCodeDisplay src={props.qrCodeDataUrl} />
@@ -30,7 +32,7 @@ export function TwoFactorSetup(props: {
 
         <div className="mt-2">
           <Button variant="primary" type="submit" disabled={done}>
-            Enable 2FA
+            {t('twoFactor.setup.submit')}
           </Button>
         </div>
 
@@ -42,11 +44,10 @@ export function TwoFactorSetup(props: {
               'bg-[var(--uoa-color-surface)] px-3 py-2 text-sm text-[var(--uoa-color-text)]',
             ].join(' ')}
           >
-            Two-factor authentication is enabled
+            {t('twoFactor.setup.success')}
           </p>
         ) : null}
       </form>
     </div>
   );
 }
-

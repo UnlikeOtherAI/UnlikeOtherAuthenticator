@@ -1,6 +1,7 @@
 import React, { useId, useState } from 'react';
 
 import { Button } from '../ui/Button.js';
+import { useTranslation } from '../../i18n/use-translation.js';
 
 function fieldInputClasses(): string {
   return [
@@ -14,6 +15,7 @@ function fieldInputClasses(): string {
 
 export function RegisterForm(): React.JSX.Element {
   const emailId = useId();
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
 
@@ -29,7 +31,7 @@ export function RegisterForm(): React.JSX.Element {
     >
       <div>
         <label htmlFor={emailId} className="text-sm font-medium">
-          Email
+          {t('form.email.label')}
         </label>
         <input
           id={emailId}
@@ -46,7 +48,7 @@ export function RegisterForm(): React.JSX.Element {
 
       <div className="mt-2">
         <Button variant="primary" type="submit">
-          Continue
+          {t('form.register.submit')}
         </Button>
       </div>
 
@@ -58,10 +60,9 @@ export function RegisterForm(): React.JSX.Element {
             'bg-[var(--uoa-color-surface)] px-3 py-2 text-sm text-[var(--uoa-color-text)]',
           ].join(' ')}
         >
-          We sent instructions to your email
+          {t('message.instructionsSent')}
         </p>
       ) : null}
     </form>
   );
 }
-

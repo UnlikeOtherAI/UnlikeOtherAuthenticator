@@ -63,6 +63,8 @@ describe('GET /auth', () => {
     expect(res.body).toMatch(/<div\s+id=(["'])root\1[^>]*>\s*<div/i);
     expect(res.body).toContain('window.__UOA_CLIENT_CONFIG__');
     expect(res.body).toContain('client.example.com');
+    // Brief 8: single language config should not show a selector.
+    expect(res.body).not.toContain('data-testid="language-selector"');
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0]?.[0]).toBe(configUrl);
@@ -71,6 +73,36 @@ describe('GET /auth', () => {
         method: 'GET',
       }),
     );
+
+    await app.close();
+  });
+
+  it('renders the language selector when multiple languages are provided', async () => {
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.AUTH_SERVICE_IDENTIFIER =
+      process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
+
+    const jwt = await new SignJWT(baseClientConfigPayload({
+      language_config: ['en', 'es'],
+    }))
+      .setProtectedHeader({ alg: 'HS256' })
+      .setAudience(process.env.AUTH_SERVICE_IDENTIFIER)
+      .sign(new TextEncoder().encode(process.env.SHARED_SECRET));
+
+    const fetchMock = vi.fn().mockResolvedValue(new Response(jwt, { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const app = await createApp();
+    await app.ready();
+
+    const configUrl = 'https://client.example.com/auth-config';
+    const res = await app.inject({
+      method: 'GET',
+      url: `/auth?config_url=${encodeURIComponent(configUrl)}`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('data-testid="language-selector"');
 
     await app.close();
   });
