@@ -9,6 +9,9 @@ const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   HOST: z.string().default('127.0.0.1'),
   PORT: z.coerce.number().int().positive().default(3000),
+  // Public origin used when generating links sent by email (magic links, verification, reset).
+  // If unset, we fall back to `http://${HOST}:${PORT}`.
+  PUBLIC_BASE_URL: z.string().min(1).optional(),
   LOG_LEVEL: z
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace'])
     .default('info'),

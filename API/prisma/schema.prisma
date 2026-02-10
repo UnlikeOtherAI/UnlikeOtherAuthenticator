@@ -12,6 +12,13 @@ enum UserRole {
   USER
 }
 
+enum VerificationTokenType {
+  LOGIN_LINK
+  VERIFY_EMAIL_SET_PASSWORD
+  PASSWORD_RESET
+  TWOFA_RESET
+}
+
 model User {
   id           String    @id @default(cuid())
   // Note: email is not globally unique because `user_scope` can be "per_domain".
@@ -27,6 +34,7 @@ model User {
   createdAt    DateTime  @default(now()) @map("created_at")
 
   domainRoles  DomainRole[]
+  tokens       VerificationToken[]
 
   @@index([email])
   @@index([domain])
@@ -44,4 +52,26 @@ model DomainRole {
   @@id([domain, userId])
   @@index([userId])
   @@map("domain_roles")
+}
+
+model VerificationToken {
+  id        String                @id @default(cuid())
+  type      VerificationTokenType
+  email     String
+  userKey   String                @map("user_key")
+  domain    String?
+  configUrl String                @map("config_url")
+  tokenHash String                @unique @map("token_hash")
+  expiresAt DateTime              @map("expires_at")
+  usedAt    DateTime?             @map("used_at")
+  createdAt DateTime              @default(now()) @map("created_at")
+
+  userId String? @map("user_id")
+  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([email])
+  @@index([userKey])
+  @@index([expiresAt])
+  @@index([createdAt])
+  @@map("verification_tokens")
 }

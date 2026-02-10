@@ -24,9 +24,13 @@ export function registerAuthRegisterRoute(app: FastifyInstance): void {
       const parsed = RegisterBodySchema.safeParse(request.body);
       const email = parsed.success ? parsed.data.email : null;
 
-      if (email && request.config) {
+      if (email && request.config && request.configUrl) {
         try {
-          await requestRegistrationInstructions({ email, config: request.config });
+          await requestRegistrationInstructions({
+            email,
+            config: request.config,
+            configUrl: request.configUrl,
+          });
         } catch (err) {
           // Never leak internal failures; always return the generic success response.
           request.log.error({ err }, 'registration instructions failed');
@@ -37,4 +41,3 @@ export function registerAuthRegisterRoute(app: FastifyInstance): void {
     },
   );
 }
-
