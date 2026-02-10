@@ -32,9 +32,16 @@ export async function configVerifier(
   // Task 2.2: fetch the signed config JWT from the client-provided URL.
   request.configJwt = await fetchConfigJwtFromUrl(config_url);
 
-  // Task 2.3: verify JWT signature using the shared secret.
-  const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
-  const payload = await verifyConfigJwtSignature(request.configJwt, SHARED_SECRET);
+  // Task 2.3 + 2.6: verify JWT signature using the shared secret and enforce expected `aud`.
+  const { SHARED_SECRET, AUTH_SERVICE_IDENTIFIER } = requireEnv(
+    'SHARED_SECRET',
+    'AUTH_SERVICE_IDENTIFIER',
+  );
+  const payload = await verifyConfigJwtSignature(
+    request.configJwt,
+    SHARED_SECRET,
+    AUTH_SERVICE_IDENTIFIER,
+  );
 
   // Task 2.4 + 2.5: validate required config fields + parse optional config fields.
   request.config = validateConfigFields(payload);

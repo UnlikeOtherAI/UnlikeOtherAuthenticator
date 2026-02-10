@@ -102,6 +102,7 @@ The auth window is the user-facing UI rendered inside the OAuth popup. It is a *
 All secrets and configuration live in environment variables. Nothing is hardcoded.
 
 * `SHARED_SECRET` — the single global shared secret for JWT signing and domain hashing
+* `AUTH_SERVICE_IDENTIFIER` — auth service identifier (expected `aud` for config JWTs)
 * `DATABASE_URL` — database connection string
 * Social provider credentials (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, etc.)
 * Email service credentials

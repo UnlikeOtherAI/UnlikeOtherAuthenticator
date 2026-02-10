@@ -115,16 +115,18 @@ export async function fetchConfigJwtFromUrl(
 /**
  * Task 2.3: Verify the config JWT signature using the global shared secret.
  *
- * This only asserts integrity (tamper protection). Claim validation (aud/iss/etc)
- * and payload schema validation are handled in subsequent tasks.
+ * Task 2.6: Enforce expected `aud` (auth service identifier) so config JWTs minted
+ * for one auth service are not accepted by another.
  */
 export async function verifyConfigJwtSignature(
   configJwt: string,
   sharedSecret: string,
+  expectedAudience: string,
 ): Promise<JWTPayload> {
   try {
     const { payload } = await jwtVerify(configJwt, sharedSecretKey(sharedSecret), {
       algorithms: [...CONFIG_JWT_ALLOWED_ALGS],
+      audience: expectedAudience,
     });
     return payload;
   } catch {

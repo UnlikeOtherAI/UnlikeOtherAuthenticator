@@ -5,6 +5,8 @@ import { createApp } from '../../src/app.js';
 describe('GET /health', () => {
   it('returns ok', async () => {
     process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.AUTH_SERVICE_IDENTIFIER =
+      process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
 
     const app = await createApp();
     await app.ready();

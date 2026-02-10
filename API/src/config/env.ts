@@ -14,6 +14,8 @@ const EnvSchema = z.object({
     .default('info'),
   // Single global shared secret used for config JWT verification and domain hashing.
   SHARED_SECRET: z.string().min(1),
+  // Identifier for this auth service instance. Used as expected `aud` for config JWTs.
+  AUTH_SERVICE_IDENTIFIER: z.string().min(1),
   DATABASE_URL: z.string().min(1).optional(),
   ACCESS_TOKEN_TTL: z.string().default('30m'),
   LOG_RETENTION_DAYS: z.coerce.number().int().positive().default(90),
