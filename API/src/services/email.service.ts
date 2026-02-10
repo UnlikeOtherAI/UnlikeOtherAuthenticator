@@ -2,6 +2,7 @@ import nodemailer from 'nodemailer';
 
 import type { Env } from '../config/env.js';
 import { getEnv } from '../config/env.js';
+import { buildVerifyEmailSetPasswordTemplate } from './email.templates.js';
 
 export type EmailProviderName = 'disabled' | 'smtp';
 
@@ -154,12 +155,14 @@ export async function sendVerifyEmailSetPasswordEmail(params: {
   link: string;
 }): Promise<void> {
   const env = getEnv();
+  const template = buildVerifyEmailSetPasswordTemplate({ link: params.link });
   await dispatchEmail({
     to: params.to,
     from: env.EMAIL_FROM,
     replyTo: env.EMAIL_REPLY_TO,
-    subject: 'Verify your email',
-    text: `Verify your email and set your password: ${params.link}`,
+    subject: template.subject,
+    text: template.text,
+    html: template.html,
   });
 }
 
