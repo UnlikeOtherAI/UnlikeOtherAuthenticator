@@ -30,6 +30,21 @@ function computeRetentionCutoff(now: Date, retentionDays: number): Date {
   return new Date(now.getTime() - ms);
 }
 
+export async function pruneLoginLogs(deps?: LoginLogDeps): Promise<{ deletedCount: number }> {
+  const env = deps?.env ?? getEnv();
+  if (!env.DATABASE_URL) return { deletedCount: 0 };
+
+  const prisma = deps?.prisma ?? (getPrisma() as unknown as LoginLogPrisma);
+  const now = deps?.now ? deps.now() : new Date();
+
+  const cutoff = computeRetentionCutoff(now, env.LOG_RETENTION_DAYS);
+  const result = await prisma.loginLog.deleteMany({
+    where: { createdAt: { lt: cutoff } },
+  });
+
+  return { deletedCount: result.count };
+}
+
 export async function recordLoginLog(
   params: {
     userId: string;
@@ -71,10 +86,7 @@ export async function recordLoginLog(
   });
 
   // Brief 22.8: log retention must be finite. Enforce it opportunistically on writes.
-  const cutoff = computeRetentionCutoff(now, env.LOG_RETENTION_DAYS);
-  await prisma.loginLog.deleteMany({
-    where: { createdAt: { lt: cutoff } },
-  });
+  await pruneLoginLogs({ env, prisma, now: () => now });
 }
 
 export async function listLoginLogsForDomain(
@@ -109,4 +121,3 @@ export async function listLoginLogsForDomain(
     },
   });
 }
-
