@@ -2,7 +2,11 @@ import nodemailer from 'nodemailer';
 
 import type { Env } from '../config/env.js';
 import { getEnv } from '../config/env.js';
-import { buildPasswordResetTemplate, buildVerifyEmailSetPasswordTemplate } from './email.templates.js';
+import {
+  buildLoginLinkTemplate,
+  buildPasswordResetTemplate,
+  buildVerifyEmailSetPasswordTemplate,
+} from './email.templates.js';
 
 export type EmailProviderName = 'disabled' | 'smtp';
 
@@ -141,12 +145,14 @@ async function dispatchEmail(message: EmailMessage): Promise<void> {
 
 export async function sendLoginLinkEmail(params: { to: string; link: string }): Promise<void> {
   const env = getEnv();
+  const template = buildLoginLinkTemplate({ link: params.link });
   await dispatchEmail({
     to: params.to,
     from: env.EMAIL_FROM,
     replyTo: env.EMAIL_REPLY_TO,
-    subject: 'Your login link',
-    text: `Use this link to log in: ${params.link}`,
+    subject: template.subject,
+    text: template.text,
+    html: template.html,
   });
 }
 
