@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildLoginLinkTemplate,
   buildPasswordResetTemplate,
+  buildTwoFaResetTemplate,
   buildVerifyEmailSetPasswordTemplate,
 } from '../../src/services/email.templates.js';
 
@@ -79,6 +80,32 @@ describe('buildLoginLinkTemplate', () => {
   it('escapes links in HTML so special characters cannot break attributes', () => {
     const link = 'https://example.com/path?x=1&y=2';
     const tpl = buildLoginLinkTemplate({ link });
+
+    // `&` must be escaped in attributes and body text.
+    expect(tpl.html).toContain('href="https://example.com/path?x=1&amp;y=2"');
+    expect(tpl.html).toContain('https://example.com/path?x=1&amp;y=2');
+    expect(tpl.html).not.toContain('href="https://example.com/path?x=1&y=2"');
+  });
+});
+
+describe('buildTwoFaResetTemplate', () => {
+  it('includes subject, text, and html with the provided link', () => {
+    const link = 'https://auth.example.com/auth/email/twofa-reset?token=t&config_url=https%3A%2F%2Fcfg.example.com%2Fconfig.jwt';
+    const tpl = buildTwoFaResetTemplate({ link });
+    const escapedLink = link.replaceAll('&', '&amp;');
+
+    expect(tpl.subject).toBe('Reset two-factor authentication');
+    expect(tpl.text).toContain(link);
+    expect(tpl.text).toMatch(/expires in 30 minutes/i);
+    expect(tpl.text).toMatch(/ignore this email/i);
+
+    expect(tpl.html).toContain('Reset two-factor authentication');
+    expect(tpl.html).toContain(`href="${escapedLink}"`);
+  });
+
+  it('escapes links in HTML so special characters cannot break attributes', () => {
+    const link = 'https://example.com/path?x=1&y=2';
+    const tpl = buildTwoFaResetTemplate({ link });
 
     // `&` must be escaped in attributes and body text.
     expect(tpl.html).toContain('href="https://example.com/path?x=1&amp;y=2"');

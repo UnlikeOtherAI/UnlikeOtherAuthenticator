@@ -5,6 +5,7 @@ import { getEnv } from '../config/env.js';
 import {
   buildLoginLinkTemplate,
   buildPasswordResetTemplate,
+  buildTwoFaResetTemplate,
   buildVerifyEmailSetPasswordTemplate,
 } from './email.templates.js';
 
@@ -187,11 +188,13 @@ export async function sendPasswordResetEmail(params: { to: string; link: string 
 
 export async function sendTwoFaResetEmail(params: { to: string; link: string }): Promise<void> {
   const env = getEnv();
+  const template = buildTwoFaResetTemplate({ link: params.link });
   await dispatchEmail({
     to: params.to,
     from: env.EMAIL_FROM,
     replyTo: env.EMAIL_REPLY_TO,
-    subject: 'Reset two-factor authentication',
-    text: `Use this link to reset two-factor authentication: ${params.link}\n\nIf you did not request this, you can ignore this email.`,
+    subject: template.subject,
+    text: template.text,
+    html: template.html,
   });
 }
