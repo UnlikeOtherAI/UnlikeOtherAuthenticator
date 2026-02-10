@@ -29,7 +29,7 @@ function isUniqueConstraintError(err: unknown): err is Prisma.PrismaClientKnownR
 export async function ensureDomainRoleForUser(params: {
   domain: string;
   userId: string;
-  prisma?: PrismaClient;
+  prisma?: PrismaClient | Prisma.TransactionClient;
 }): Promise<DomainRole> {
   const prisma = params.prisma ?? getPrisma();
   const domain = normalizeDomain(params.domain);
