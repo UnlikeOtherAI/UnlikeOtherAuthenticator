@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -p tsconfig.json && vite build",
+    "build": "tsc -p tsconfig.json && vite build && vite build --ssr src/entry-server.tsx --outDir dist-ssr",
     "preview": "vite preview",
     "lint": "node ../node_modules/eslint/bin/eslint.js \"**/*.{ts,tsx,js,jsx,mjs,cjs}\" --no-error-on-unmatched-pattern",
     "typecheck": "tsc -p tsconfig.json"

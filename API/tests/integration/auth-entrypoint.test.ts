@@ -63,7 +63,9 @@ describe('GET /auth', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.headers['content-type']).toContain('text/html');
-    expect(res.body).toContain('<div id="root"></div>');
+    expect(res.body).toMatch(/<div\s+id=(["'])root\1[^>]*>/i);
+    // SSR should inject initial markup into #root (the client then hydrates).
+    expect(res.body).toMatch(/<div\s+id=(["'])root\1[^>]*>\s*<div/i);
     expect(res.body).toContain('window.__UOA_CLIENT_CONFIG__');
     expect(res.body).toContain('client.example.com');
 
@@ -111,7 +113,8 @@ describe('GET /auth', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.headers['content-type']).toContain('text/html');
-    expect(res.body).toContain('<div id="root"></div>');
+    expect(res.body).toMatch(/<div\s+id=(["'])root\1[^>]*>/i);
+    expect(res.body).toMatch(/<div\s+id=(["'])root\1[^>]*>\s*<div/i);
     expect(res.body).toContain('window.__UOA_CLIENT_CONFIG__');
     expect(res.body).toContain('allowed_social_providers');
 
