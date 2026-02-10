@@ -36,6 +36,9 @@ const EnvSchema = z.object({
   // Identifier for this auth service instance. Used as expected `aud` for config JWTs.
   AUTH_SERVICE_IDENTIFIER: z.string().min(1),
   DATABASE_URL: z.string().min(1).optional(),
+  // Social providers (one set of credentials for the auth service, not per-client).
+  GOOGLE_CLIENT_ID: z.string().min(1).optional(),
+  GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
   ACCESS_TOKEN_TTL: z.preprocess(
     normalizeAccessTokenTtl,
     z

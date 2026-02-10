@@ -1,0 +1,125 @@
+import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
+
+import { getEnv, requireEnv } from '../../config/env.js';
+import { AppError } from '../../utils/errors.js';
+import {
+  assertConfigDomainMatchesConfigUrl,
+  fetchConfigJwtFromUrl,
+  validateConfigFields,
+  verifyConfigJwtSignature,
+} from '../../services/config.service.js';
+import { assertSocialProviderAllowed } from '../../services/social/index.js';
+import { getGoogleProfileFromCode } from '../../services/social/google.service.js';
+import { loginWithSocialProfile } from '../../services/social/social-login.service.js';
+import { verifySocialState } from '../../services/social/social-state.service.js';
+import {
+  buildRedirectToUrl,
+  issueAuthorizationCode,
+  selectRedirectUrl,
+} from '../../services/token.service.js';
+
+const ParamsSchema = z.object({
+  provider: z.enum(['google']),
+});
+
+const QuerySchema = z
+  .object({
+    code: z.string().min(1).optional(),
+    state: z.string().min(1).optional(),
+    error: z.string().min(1).optional(),
+  })
+  .passthrough();
+
+function normalizeBaseUrl(value: string): string {
+  return value.trim().replace(/\/+$/, '');
+}
+
+function resolvePublicBaseUrl(): string {
+  const env = getEnv();
+  return env.PUBLIC_BASE_URL ? normalizeBaseUrl(env.PUBLIC_BASE_URL) : `http://${env.HOST}:${env.PORT}`;
+}
+
+export function registerAuthCallbackRoute(app: FastifyInstance): void {
+  app.get('/auth/callback/:provider', async (request, reply) => {
+    const { provider } = ParamsSchema.parse(request.params);
+    const { code, state, error } = QuerySchema.parse(request.query);
+
+    // Any provider error is a generic auth failure. Don't leak specifics.
+    if (error) {
+      throw new AppError('UNAUTHORIZED', 401, 'SOCIAL_PROVIDER_ERROR');
+    }
+
+    if (!code || !state) {
+      throw new AppError('BAD_REQUEST', 400, 'MISSING_SOCIAL_CALLBACK_PARAMS');
+    }
+
+    const { SHARED_SECRET, AUTH_SERVICE_IDENTIFIER } = requireEnv(
+      'SHARED_SECRET',
+      'AUTH_SERVICE_IDENTIFIER',
+    );
+
+    const socialState = await verifySocialState({
+      stateJwt: state,
+      sharedSecret: SHARED_SECRET,
+      audience: AUTH_SERVICE_IDENTIFIER,
+    });
+
+    if (socialState.provider !== provider) {
+      throw new AppError('BAD_REQUEST', 400, 'SOCIAL_PROVIDER_MISMATCH');
+    }
+
+    const configUrl = socialState.config_url;
+    const requestedRedirectUrl = socialState.redirect_url;
+
+    // Brief 22.1 + 22.4: fetch and verify config on each auth initiation.
+    const configJwt = await fetchConfigJwtFromUrl(configUrl);
+    const payload = await verifyConfigJwtSignature(
+      configJwt,
+      SHARED_SECRET,
+      AUTH_SERVICE_IDENTIFIER,
+    );
+    const config = validateConfigFields(payload);
+    assertConfigDomainMatchesConfigUrl(config.domain, configUrl);
+    assertSocialProviderAllowed({ config, provider });
+
+    // Re-validate redirect URL against current config (config can change between initiation and callback).
+    const redirectUrl = selectRedirectUrl({
+      allowedRedirectUrls: config.redirect_urls,
+      requestedRedirectUrl,
+    });
+
+    const env = getEnv();
+    const baseUrl = resolvePublicBaseUrl();
+
+    if (provider !== 'google') {
+      throw new AppError('BAD_REQUEST', 400);
+    }
+
+    if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
+      throw new AppError('INTERNAL', 500, 'GOOGLE_ENV_MISSING');
+    }
+
+    const redirectUri = `${baseUrl}/auth/callback/google`;
+    const profile = await getGoogleProfileFromCode({
+      code,
+      clientId: env.GOOGLE_CLIENT_ID,
+      clientSecret: env.GOOGLE_CLIENT_SECRET,
+      redirectUri,
+    });
+
+    const { userId } = await loginWithSocialProfile({
+      profile,
+      config,
+    });
+
+    const { code: authCode } = await issueAuthorizationCode({
+      userId,
+      domain: config.domain,
+      configUrl,
+      redirectUrl,
+    });
+
+    reply.redirect(buildRedirectToUrl({ redirectUrl, code: authCode }), 302);
+  });
+}

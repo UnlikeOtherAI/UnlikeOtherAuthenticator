@@ -8,14 +8,18 @@ import { registerAuthRegisterRoute } from './register.js';
 import { registerAuthResetPasswordRoutes } from './reset-password.js';
 import { registerAuthTokenExchangeRoute } from './token-exchange.js';
 import { registerAuthVerifyEmailRoute } from './verify-email.js';
+import { registerAuthSocialRoute } from './social.js';
+import { registerAuthCallbackRoute } from './callback.js';
 
 export function registerAuthRoutes(app: FastifyInstance): void {
   registerAuthEntrypointRoute(app);
+  registerAuthCallbackRoute(app);
   registerAuthEmailResetPasswordRoute(app);
   registerAuthEmailVerifySetPasswordRoute(app);
   registerAuthLoginRoute(app);
   registerAuthRegisterRoute(app);
   registerAuthResetPasswordRoutes(app);
+  registerAuthSocialRoute(app);
   registerAuthTokenExchangeRoute(app);
   registerAuthVerifyEmailRoute(app);
 }
