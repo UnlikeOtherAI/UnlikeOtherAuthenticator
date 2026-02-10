@@ -48,7 +48,7 @@ describe('apple.service', () => {
       .setExpirationTime('5m')
       .sign(idTokenPriv);
 
-    const fetchMock = vi.fn(async (input: any) => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url =
         typeof input === 'string'
           ? input

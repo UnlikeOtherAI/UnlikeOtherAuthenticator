@@ -12,6 +12,7 @@ import {
 import { assertSocialProviderAllowed } from '../../services/social/index.js';
 import { getAppleProfileFromCode } from '../../services/social/apple.service.js';
 import { getFacebookProfileFromCode } from '../../services/social/facebook.service.js';
+import { getGitHubProfileFromCode } from '../../services/social/github.service.js';
 import { getGoogleProfileFromCode } from '../../services/social/google.service.js';
 import type { SocialProfile } from '../../services/social/provider.base.js';
 import { loginWithSocialProfile } from '../../services/social/social-login.service.js';
@@ -23,7 +24,7 @@ import {
 } from '../../services/token.service.js';
 
 const ParamsSchema = z.object({
-  provider: z.enum(['google', 'apple', 'facebook']),
+  provider: z.enum(['google', 'apple', 'facebook', 'github']),
 });
 
 const QuerySchema = z
@@ -118,6 +119,18 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         code,
         clientId: env.FACEBOOK_CLIENT_ID,
         clientSecret: env.FACEBOOK_CLIENT_SECRET,
+        redirectUri,
+      });
+    } else if (provider === 'github') {
+      if (!env.GITHUB_CLIENT_ID || !env.GITHUB_CLIENT_SECRET) {
+        throw new AppError('INTERNAL', 500, 'GITHUB_ENV_MISSING');
+      }
+
+      const redirectUri = `${baseUrl}/auth/callback/github`;
+      profile = await getGitHubProfileFromCode({
+        code,
+        clientId: env.GITHUB_CLIENT_ID,
+        clientSecret: env.GITHUB_CLIENT_SECRET,
         redirectUri,
       });
     } else if (provider === 'apple') {
