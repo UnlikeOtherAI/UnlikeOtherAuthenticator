@@ -4,8 +4,14 @@ import { SignJWT } from 'jose';
 import { createApp } from '../../src/app.js';
 
 async function createSignedConfigJwt(sharedSecret: string): Promise<string> {
-  // Minimal payload; signature verification is the focus of this task.
-  return await new SignJWT({ domain: 'client.example.com' })
+  // Minimal payload satisfying required config fields (Task 2.4).
+  return await new SignJWT({
+    domain: 'client.example.com',
+    redirect_urls: ['https://client.example.com/oauth/callback'],
+    enabled_auth_methods: ['email_password'],
+    ui_theme: {},
+    language_config: 'en',
+  })
     .setProtectedHeader({ alg: 'HS256' })
     .sign(new TextEncoder().encode(sharedSecret));
 }
@@ -77,6 +83,76 @@ describe('GET /auth', () => {
     await app.ready();
 
     const res = await app.inject({ method: 'GET', url: '/auth' });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: 'Request failed' });
+
+    await app.close();
+  });
+
+  it.each([
+    [
+      'domain',
+      {
+        redirect_urls: ['https://client.example.com/oauth/callback'],
+        enabled_auth_methods: ['email_password'],
+        ui_theme: {},
+        language_config: 'en',
+      },
+    ],
+    [
+      'redirect_urls',
+      {
+        domain: 'client.example.com',
+        enabled_auth_methods: ['email_password'],
+        ui_theme: {},
+        language_config: 'en',
+      },
+    ],
+    [
+      'enabled_auth_methods',
+      {
+        domain: 'client.example.com',
+        redirect_urls: ['https://client.example.com/oauth/callback'],
+        ui_theme: {},
+        language_config: 'en',
+      },
+    ],
+    [
+      'ui_theme',
+      {
+        domain: 'client.example.com',
+        redirect_urls: ['https://client.example.com/oauth/callback'],
+        enabled_auth_methods: ['email_password'],
+        language_config: 'en',
+      },
+    ],
+    [
+      'language_config',
+      {
+        domain: 'client.example.com',
+        redirect_urls: ['https://client.example.com/oauth/callback'],
+        enabled_auth_methods: ['email_password'],
+        ui_theme: {},
+      },
+    ],
+  ])('returns generic 400 when required config field is missing: %s', async (_field, payload) => {
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    const jwt = await new SignJWT(payload)
+      .setProtectedHeader({ alg: 'HS256' })
+      .sign(new TextEncoder().encode(process.env.SHARED_SECRET));
+
+    const fetchMock = vi.fn().mockResolvedValue(new Response(jwt, { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const app = await createApp();
+    await app.ready();
+
+    const configUrl = 'https://client.example.com/auth-config';
+    const res = await app.inject({
+      method: 'GET',
+      url: `/auth?config_url=${encodeURIComponent(configUrl)}`,
+    });
 
     expect(res.statusCode).toBe(400);
     expect(res.json()).toEqual({ error: 'Request failed' });

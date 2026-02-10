@@ -1,9 +1,26 @@
 import { AppError } from '../utils/errors.js';
 import { jwtVerify, type JWTPayload } from 'jose';
+import { z } from 'zod';
 
 const DEFAULT_CONFIG_FETCH_TIMEOUT_MS = 5_000;
 
 const CONFIG_JWT_ALLOWED_ALGS = ['HS256', 'HS384', 'HS512'] as const;
+
+const RequiredConfigSchema = z
+  .object({
+    domain: z.string().min(1),
+    redirect_urls: z.array(z.string().min(1)).min(1),
+    enabled_auth_methods: z.array(z.string().min(1)).min(1),
+    ui_theme: z.record(z.unknown()),
+    // Brief: either single language or array of languages (dropdown enabled).
+    language_config: z.union([
+      z.string().min(1),
+      z.array(z.string().min(1)).min(1),
+    ]),
+  })
+  .passthrough();
+
+export type RequiredClientConfig = z.infer<typeof RequiredConfigSchema>;
 
 function sharedSecretKey(sharedSecret: string): Uint8Array {
   return new TextEncoder().encode(sharedSecret);
@@ -101,4 +118,18 @@ export async function verifyConfigJwtSignature(
     // Normalize all verification failures into a generic, user-safe error.
     throw new AppError('BAD_REQUEST', 400);
   }
+}
+
+/**
+ * Task 2.4: Validate required config fields from the verified config JWT payload.
+ *
+ * This is intentionally minimal and only asserts presence and basic types.
+ * Deeper validation (aud/iss enforcement, domain/origin matching, redirect URL allowlisting)
+ * is handled in subsequent tasks.
+ */
+export function validateRequiredConfigFields(
+  payload: JWTPayload,
+): RequiredClientConfig {
+  // JWTPayload is already JSON-ish but typed as unknown values; validate explicitly.
+  return RequiredConfigSchema.parse(payload);
 }
