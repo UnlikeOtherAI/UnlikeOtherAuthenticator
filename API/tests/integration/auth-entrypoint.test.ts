@@ -77,6 +77,45 @@ describe('GET /auth', () => {
     await app.close();
   });
 
+  it('re-fetches and re-verifies config on every /auth initiation (no caching)', async () => {
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.AUTH_SERVICE_IDENTIFIER =
+      process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
+
+    const okJwt = await createSignedConfigJwt(process.env.SHARED_SECRET);
+    const mismatchedDomainJwt = await new SignJWT(baseClientConfigPayload({
+      domain: 'attacker.example.com',
+    }))
+      .setProtectedHeader({ alg: 'HS256' })
+      .setAudience(process.env.AUTH_SERVICE_IDENTIFIER)
+      .sign(new TextEncoder().encode(process.env.SHARED_SECRET));
+
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(async () => new Response(okJwt, { status: 200 }))
+      .mockImplementationOnce(async () => new Response(mismatchedDomainJwt, { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const app = await createApp();
+    await app.ready();
+
+    const configUrl = 'https://client.example.com/auth-config';
+    const url = `/auth?config_url=${encodeURIComponent(configUrl)}`;
+
+    const okRes = await app.inject({ method: 'GET', url });
+    expect(okRes.statusCode).toBe(200);
+
+    const badRes = await app.inject({ method: 'GET', url });
+    expect(badRes.statusCode).toBe(400);
+    expect(badRes.json()).toEqual({ error: 'Request failed' });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(configUrl);
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(configUrl);
+
+    await app.close();
+  });
+
   it('renders the language selector when multiple languages are provided', async () => {
     process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
     process.env.AUTH_SERVICE_IDENTIFIER =
