@@ -7,13 +7,14 @@ import { buildAppleAuthorizationUrl } from '../../services/social/apple.service.
 import { buildFacebookAuthorizationUrl } from '../../services/social/facebook.service.js';
 import { buildGitHubAuthorizationUrl } from '../../services/social/github.service.js';
 import { buildGoogleAuthorizationUrl } from '../../services/social/google.service.js';
+import { buildLinkedInAuthorizationUrl } from '../../services/social/linkedin.service.js';
 import { assertSocialProviderAllowed } from '../../services/social/index.js';
 import { signSocialState } from '../../services/social/social-state.service.js';
 import { selectRedirectUrl } from '../../services/token.service.js';
 import { AppError } from '../../utils/errors.js';
 
 const ParamsSchema = z.object({
-  provider: z.enum(['google', 'apple', 'facebook', 'github']),
+  provider: z.enum(['google', 'apple', 'facebook', 'github', 'linkedin']),
 });
 
 const QuerySchema = z
@@ -175,6 +176,37 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
 
         const url = buildAppleAuthorizationUrl({
           clientId: env.APPLE_CLIENT_ID,
+          redirectUri,
+          state,
+        });
+        reply.redirect(url, 302);
+        return;
+      }
+
+      if (provider === 'linkedin') {
+        if (!env.LINKEDIN_CLIENT_ID || !env.LINKEDIN_CLIENT_SECRET) {
+          // Misconfiguration; keep response generic.
+          throw new AppError('INTERNAL', 500, 'LINKEDIN_ENV_MISSING');
+        }
+
+        const { SHARED_SECRET, AUTH_SERVICE_IDENTIFIER } = requireEnv(
+          'SHARED_SECRET',
+          'AUTH_SERVICE_IDENTIFIER',
+        );
+        const baseUrl = resolvePublicBaseUrl();
+        const redirectUri = `${baseUrl}/auth/callback/linkedin`;
+
+        const state = await signSocialState({
+          provider: 'linkedin',
+          configUrl: request.configUrl,
+          redirectUrl,
+          sharedSecret: SHARED_SECRET,
+          audience: AUTH_SERVICE_IDENTIFIER,
+          baseUrlForIssuer: baseUrl,
+        });
+
+        const url = buildLinkedInAuthorizationUrl({
+          clientId: env.LINKEDIN_CLIENT_ID,
           redirectUri,
           state,
         });

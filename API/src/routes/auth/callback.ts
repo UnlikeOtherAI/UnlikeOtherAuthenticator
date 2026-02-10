@@ -14,6 +14,7 @@ import { getAppleProfileFromCode } from '../../services/social/apple.service.js'
 import { getFacebookProfileFromCode } from '../../services/social/facebook.service.js';
 import { getGitHubProfileFromCode } from '../../services/social/github.service.js';
 import { getGoogleProfileFromCode } from '../../services/social/google.service.js';
+import { getLinkedInProfileFromCode } from '../../services/social/linkedin.service.js';
 import type { SocialProfile } from '../../services/social/provider.base.js';
 import { loginWithSocialProfile } from '../../services/social/social-login.service.js';
 import { verifySocialState } from '../../services/social/social-state.service.js';
@@ -24,7 +25,7 @@ import {
 } from '../../services/token.service.js';
 
 const ParamsSchema = z.object({
-  provider: z.enum(['google', 'apple', 'facebook', 'github']),
+  provider: z.enum(['google', 'apple', 'facebook', 'github', 'linkedin']),
 });
 
 const QuerySchema = z
@@ -150,6 +151,18 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         teamId: env.APPLE_TEAM_ID,
         keyId: env.APPLE_KEY_ID,
         privateKeyPem: env.APPLE_PRIVATE_KEY,
+        redirectUri,
+      });
+    } else if (provider === 'linkedin') {
+      if (!env.LINKEDIN_CLIENT_ID || !env.LINKEDIN_CLIENT_SECRET) {
+        throw new AppError('INTERNAL', 500, 'LINKEDIN_ENV_MISSING');
+      }
+
+      const redirectUri = `${baseUrl}/auth/callback/linkedin`;
+      profile = await getLinkedInProfileFromCode({
+        code,
+        clientId: env.LINKEDIN_CLIENT_ID,
+        clientSecret: env.LINKEDIN_CLIENT_SECRET,
         redirectUri,
       });
     } else {

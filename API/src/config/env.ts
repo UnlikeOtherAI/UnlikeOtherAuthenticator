@@ -43,6 +43,8 @@ const EnvSchema = z.object({
   FACEBOOK_CLIENT_SECRET: z.string().min(1).optional(),
   GITHUB_CLIENT_ID: z.string().min(1).optional(),
   GITHUB_CLIENT_SECRET: z.string().min(1).optional(),
+  LINKEDIN_CLIENT_ID: z.string().min(1).optional(),
+  LINKEDIN_CLIENT_SECRET: z.string().min(1).optional(),
   APPLE_CLIENT_ID: z.string().min(1).optional(),
   APPLE_TEAM_ID: z.string().min(1).optional(),
   APPLE_KEY_ID: z.string().min(1).optional(),
