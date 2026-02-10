@@ -20,9 +20,11 @@ export function registerAuthEntrypointRoute(app: FastifyInstance): void {
         return;
       }
 
+      const requestUrl = request.raw.url ?? '';
       const html = await renderAuthEntrypointHtml({
         config: request.config,
         configUrl: request.configUrl,
+        requestUrl,
       });
       reply.type('text/html; charset=utf-8').status(200).send(html);
     },

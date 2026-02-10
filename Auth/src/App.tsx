@@ -1,17 +1,12 @@
-import { AuthLayout } from './components/layout/AuthLayout.js';
+import { PopupContainer } from './components/layout/PopupContainer.js';
 import { ThemeProvider } from './theme/ThemeProvider.js';
 import { readClientBootstrap } from './utils/bootstrap.js';
-import { RegisterPage } from './pages/RegisterPage.js';
 
-function AppContent() {
-  return (
-    <AuthLayout>
-      <RegisterPage />
-    </AuthLayout>
-  );
-}
-
-export function App(props?: { config?: unknown; configUrl?: string }) {
+export function App(props?: {
+  config?: unknown;
+  configUrl?: string;
+  initialSearch?: string;
+}) {
   const bootstrap = readClientBootstrap({
     serverConfig: props?.config,
     serverConfigUrl: props?.configUrl,
@@ -19,7 +14,7 @@ export function App(props?: { config?: unknown; configUrl?: string }) {
 
   return (
     <ThemeProvider config={bootstrap.config} configUrl={bootstrap.configUrl}>
-      <AppContent />
+      <PopupContainer configUrl={bootstrap.configUrl} initialSearch={props?.initialSearch} />
     </ThemeProvider>
   );
 }
