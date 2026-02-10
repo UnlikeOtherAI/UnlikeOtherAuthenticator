@@ -146,6 +146,38 @@ describe('GET /auth', () => {
     await app.close();
   });
 
+  it('strips unknown config claims before bootstrapping the Auth UI', async () => {
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.AUTH_SERVICE_IDENTIFIER =
+      process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
+
+    const jwt = await new SignJWT({
+      ...baseClientConfigPayload(),
+      extra_claim: 'should_not_render',
+    })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setAudience(process.env.AUTH_SERVICE_IDENTIFIER)
+      .sign(new TextEncoder().encode(process.env.SHARED_SECRET));
+
+    const fetchMock = vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const app = await createApp();
+    await app.ready();
+
+    const configUrl = 'https://client.example.com/auth-config';
+    const res = await app.inject({
+      method: 'GET',
+      url: `/auth?config_url=${encodeURIComponent(configUrl)}`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).not.toContain('extra_claim');
+    expect(res.body).not.toContain('should_not_render');
+
+    await app.close();
+  });
+
   it('serves built Auth assets from /assets/*', async () => {
     const app = await createApp();
     await app.ready();
@@ -161,6 +193,31 @@ describe('GET /auth', () => {
     const cssRes = await app.inject({ method: 'GET', url: cssPath });
     expect(cssRes.statusCode).toBe(200);
     expect(cssRes.headers['content-type']).toContain('text/css');
+
+    await app.close();
+  });
+
+  it('returns generic 400 when config_url contains the shared secret', async () => {
+    process.env.SHARED_SECRET = 'test-shared-secret';
+    process.env.AUTH_SERVICE_IDENTIFIER =
+      process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
+
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const app = await createApp();
+    await app.ready();
+
+    const configUrl = `https://client.example.com/auth-config?leak=${encodeURIComponent(process.env.SHARED_SECRET)}`;
+    const res = await app.inject({
+      method: 'GET',
+      url: `/auth?config_url=${encodeURIComponent(configUrl)}`,
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: 'Request failed' });
+    expect(res.body).not.toContain(process.env.SHARED_SECRET);
+    expect(fetchMock).not.toHaveBeenCalled();
 
     await app.close();
   });
@@ -186,6 +243,39 @@ describe('GET /auth', () => {
     expect(res.statusCode).toBe(400);
     expect(res.json()).toEqual({ error: 'Request failed' });
 
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await app.close();
+  });
+
+  it('returns generic 400 when config payload contains the shared secret', async () => {
+    process.env.SHARED_SECRET = 'test-shared-secret';
+    process.env.AUTH_SERVICE_IDENTIFIER =
+      process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
+
+    const jwt = await new SignJWT({
+      ...baseClientConfigPayload(),
+      leak: process.env.SHARED_SECRET,
+    })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setAudience(process.env.AUTH_SERVICE_IDENTIFIER)
+      .sign(new TextEncoder().encode(process.env.SHARED_SECRET));
+
+    const fetchMock = vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const app = await createApp();
+    await app.ready();
+
+    const configUrl = 'https://client.example.com/auth-config';
+    const res = await app.inject({
+      method: 'GET',
+      url: `/auth?config_url=${encodeURIComponent(configUrl)}`,
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: 'Request failed' });
+    expect(res.body).not.toContain(process.env.SHARED_SECRET);
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
     await app.close();

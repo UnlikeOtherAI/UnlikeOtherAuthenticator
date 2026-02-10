@@ -10,7 +10,36 @@ export async function createApp(): Promise<FastifyInstance> {
   const env = getEnv();
 
   const app = fastify({
-    logger: env.NODE_ENV === 'test' ? false : { level: env.LOG_LEVEL },
+    // Never log bearer tokens or other secrets. Additionally, avoid automatic request
+    // logging to prevent sensitive query params (like config_url) from being persisted.
+    disableRequestLogging: true,
+    logger:
+      env.NODE_ENV === 'test'
+        ? false
+        : {
+            level: env.LOG_LEVEL,
+            redact: {
+              paths: [
+                // Common sensitive headers (domain hash + access token).
+                'req.headers.authorization',
+                'req.headers.cookie',
+                'req.headers["x-uoa-access-token"]',
+                // Redact common token-like keys if we ever log structured objects containing them.
+                'authorization',
+                'headers.authorization',
+                'headers.cookie',
+                'headers["x-uoa-access-token"]',
+                'token',
+                'access_token',
+                'refresh_token',
+                'configJwt',
+                'config_jwt',
+                'sharedSecret',
+                'SHARED_SECRET',
+              ],
+              censor: '[REDACTED]',
+            },
+          },
   });
 
   if (env.DATABASE_URL) {

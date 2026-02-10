@@ -92,8 +92,7 @@ const RequiredConfigSchema = z
       z.string().min(1),
       z.array(z.string().min(1)).min(1),
     ]),
-  })
-  .passthrough();
+  });
 
 export type RequiredClientConfig = z.infer<typeof RequiredConfigSchema>;
 
@@ -109,7 +108,7 @@ const ClientConfigSchema = RequiredConfigSchema.extend({
   // Brief 8 / Phase 10.4: default language should come from the client website's selection.
   // This is the currently selected language (not the list of available languages).
   language: z.string().trim().min(1).optional(),
-}).passthrough();
+});
 
 export type ClientConfig = z.infer<typeof ClientConfigSchema>;
 
