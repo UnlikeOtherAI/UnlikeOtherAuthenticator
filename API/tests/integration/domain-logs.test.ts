@@ -45,6 +45,7 @@ describe.skipIf(!hasDatabase)('GET /domain/logs', () => {
       select: { id: true },
     });
 
+    const now = Date.now();
     await handle!.prisma.loginLog.createMany({
       data: [
         {
@@ -54,7 +55,7 @@ describe.skipIf(!hasDatabase)('GET /domain/logs', () => {
           authMethod: 'google',
           ip: '203.0.113.1',
           userAgent: 'UA-1',
-          createdAt: new Date('2026-02-10T00:00:00.000Z'),
+          createdAt: new Date(now - 60_000),
         },
         {
           userId: user.id,
@@ -63,7 +64,7 @@ describe.skipIf(!hasDatabase)('GET /domain/logs', () => {
           authMethod: 'email_password',
           ip: '203.0.113.2',
           userAgent: 'UA-2',
-          createdAt: new Date('2026-02-10T01:00:00.000Z'),
+          createdAt: new Date(now - 30_000),
         },
       ],
     });
@@ -127,4 +128,3 @@ describe.skipIf(!hasDatabase)('GET /domain/logs', () => {
     await app.close();
   });
 });
-
