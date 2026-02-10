@@ -43,6 +43,7 @@ describe.skipIf(!hasDatabase)('POST /auth/login', () => {
 
   beforeEach(async () => {
     if (!handle) return;
+    await handle.prisma.authorizationCode.deleteMany();
     await handle.prisma.verificationToken.deleteMany();
     await handle.prisma.domainRole.deleteMany();
     await handle.prisma.user.deleteMany();
@@ -59,12 +60,13 @@ describe.skipIf(!hasDatabase)('POST /auth/login', () => {
       process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
 
     const passwordHash = await hashPassword('Abcdef1!');
-    await handle!.prisma.user.create({
+    const created = await handle!.prisma.user.create({
       data: {
         email: 'user@example.com',
         userKey: 'user@example.com',
         passwordHash,
       },
+      select: { id: true },
     });
 
     const jwt = await createSignedConfigJwt(process.env.SHARED_SECRET);
@@ -81,7 +83,24 @@ describe.skipIf(!hasDatabase)('POST /auth/login', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ ok: true });
+    const body = res.json() as { ok: boolean; code: string; redirect_to: string };
+    expect(body.ok).toBe(true);
+    expect(typeof body.code).toBe('string');
+    expect(body.code.length).toBeGreaterThan(10);
+
+    const u = new URL(body.redirect_to);
+    expect(`${u.origin}${u.pathname}`).toBe('https://client.example.com/oauth/callback');
+    expect(u.searchParams.get('code')).toBe(body.code);
+
+    const codes = await handle!.prisma.authorizationCode.findMany({
+      where: { userId: created.id },
+      select: { domain: true, configUrl: true, redirectUrl: true, usedAt: true },
+    });
+    expect(codes).toHaveLength(1);
+    expect(codes[0].domain).toBe('client.example.com');
+    expect(codes[0].configUrl).toBe(configUrl);
+    expect(codes[0].redirectUrl).toBe('https://client.example.com/oauth/callback');
+    expect(codes[0].usedAt).toBeNull();
 
     await app.close();
   });

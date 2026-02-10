@@ -53,6 +53,7 @@ describe.skipIf(!hasDatabase)('Email verification flow', () => {
 
   beforeEach(async () => {
     if (!handle) return;
+    await handle.prisma.authorizationCode.deleteMany();
     await handle.prisma.verificationToken.deleteMany();
     await handle.prisma.domainRole.deleteMany();
     await handle.prisma.user.deleteMany();
@@ -108,7 +109,14 @@ describe.skipIf(!hasDatabase)('Email verification flow', () => {
     });
 
     expect(verify.statusCode).toBe(200);
-    expect(verify.json()).toEqual({ ok: true });
+    const body = verify.json() as { ok: boolean; code: string; redirect_to: string };
+    expect(body.ok).toBe(true);
+    expect(typeof body.code).toBe('string');
+    expect(body.code.length).toBeGreaterThan(10);
+
+    const u = new URL(body.redirect_to);
+    expect(`${u.origin}${u.pathname}`).toBe('https://client.example.com/oauth/callback');
+    expect(u.searchParams.get('code')).toBe(body.code);
 
     const user = await handle!.prisma.user.findUnique({
       where: { userKey: 'newuser@example.com' },
@@ -133,6 +141,16 @@ describe.skipIf(!hasDatabase)('Email verification flow', () => {
     expect(roles).toHaveLength(1);
     expect(roles[0].userId).toBe(user!.id);
     expect(roles[0].role).toBe('SUPERUSER');
+
+    const codes = await handle!.prisma.authorizationCode.findMany({
+      where: { userId: user!.id },
+      select: { domain: true, configUrl: true, redirectUrl: true, usedAt: true },
+    });
+    expect(codes).toHaveLength(1);
+    expect(codes[0].domain).toBe('client.example.com');
+    expect(codes[0].configUrl).toBe(configUrl);
+    expect(codes[0].redirectUrl).toBe('https://client.example.com/oauth/callback');
+    expect(codes[0].usedAt).toBeNull();
 
     // Second use should fail (one-time token).
     const reuse = await app.inject({
@@ -172,4 +190,3 @@ describe.skipIf(!hasDatabase)('Email verification flow', () => {
     await app.close();
   });
 });
-
