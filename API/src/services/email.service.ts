@@ -30,3 +30,11 @@ export async function sendVerifyEmailSetPasswordEmail(params: {
     text: `Verify your email and set your password: ${params.link}`,
   });
 }
+
+export async function sendPasswordResetEmail(params: { to: string; link: string }): Promise<void> {
+  await sendEmail({
+    to: params.to,
+    subject: 'Reset your password',
+    text: `Reset your password using this link: ${params.link}`,
+  });
+}
