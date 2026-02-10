@@ -25,12 +25,14 @@ describe('validateConfigFields', () => {
       '2fa_enabled': true,
       debug_enabled: true,
       allowed_social_providers: ['google', 'github'],
+      language: '  es  ',
     });
 
     expect(cfg.user_scope).toBe('per_domain');
     expect(cfg['2fa_enabled']).toBe(true);
     expect(cfg.debug_enabled).toBe(true);
     expect(cfg.allowed_social_providers).toEqual(['google', 'github']);
+    expect(cfg.language).toBe('es');
   });
 
   it('rejects invalid user_scope values', () => {

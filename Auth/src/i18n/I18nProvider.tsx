@@ -16,10 +16,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
+function readSelectedLanguage(config: Record<string, unknown>): string {
+  const raw = config.language;
+  if (typeof raw !== 'string') return '';
+  return raw.trim();
+}
+
 function readLanguageConfig(config: unknown): { language: string; languages: string[] } {
   if (!isRecord(config)) return { language: 'en', languages: ['en'] };
 
   const raw = config.language_config;
+  const selected = readSelectedLanguage(config);
   if (typeof raw === 'string') {
     const v = raw.trim();
     return v ? { language: v, languages: [v] } : { language: 'en', languages: ['en'] };
@@ -31,7 +38,9 @@ function readLanguageConfig(config: unknown): { language: string; languages: str
       .map((v) => v.trim())
       .filter(Boolean);
     if (langs.length === 0) return { language: 'en', languages: ['en'] };
-    return { language: langs[0] ?? 'en', languages: langs };
+
+    const chosen = selected && langs.includes(selected) ? selected : (langs[0] ?? 'en');
+    return { language: chosen, languages: langs };
   }
 
   return { language: 'en', languages: ['en'] };
@@ -78,4 +87,3 @@ export function useI18n(): I18nContextValue {
   if (!ctx) throw new Error('useI18n must be used within <I18nProvider />');
   return ctx;
 }
-

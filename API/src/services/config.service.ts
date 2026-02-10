@@ -106,6 +106,9 @@ const ClientConfigSchema = RequiredConfigSchema.extend({
   // Keep this as a generic string list for now; provider key validation is handled in later tasks.
   allowed_social_providers: z.array(z.string().min(1)).optional(),
   user_scope: z.enum(['global', 'per_domain']).optional().default('global'),
+  // Brief 8 / Phase 10.4: default language should come from the client website's selection.
+  // This is the currently selected language (not the list of available languages).
+  language: z.string().trim().min(1).optional(),
 }).passthrough();
 
 export type ClientConfig = z.infer<typeof ClientConfigSchema>;

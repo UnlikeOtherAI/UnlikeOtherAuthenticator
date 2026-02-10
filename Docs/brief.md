@@ -157,6 +157,7 @@ This service is **stateless where possible**, standards-based, and API-first.
 
 * Defaults to language selected on client website
 * Dropdown shown only if multiple languages provided
+* Client passes the selected language via optional config claim: `language` (must be one of `language_config` when `language_config` is an array)
 
 ### Translation Fallback
 

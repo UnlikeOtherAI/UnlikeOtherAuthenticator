@@ -140,7 +140,7 @@ PopupContainer
 * If a translation key is missing, the AI fallback is triggered via `language-loader.ts`
 * AI-generated translations are cached server-side permanently
 * Language selector dropdown is only rendered if config provides multiple languages
-* Default language comes from the client website's selection (passed in config)
+* Default language comes from the client website's selection (passed in config as optional `language`)
 
 ---
 

@@ -84,6 +84,7 @@ describe('GET /auth', () => {
 
     const jwt = await new SignJWT(baseClientConfigPayload({
       language_config: ['en', 'es'],
+      language: 'es',
     }))
       .setProtectedHeader({ alg: 'HS256' })
       .setAudience(process.env.AUTH_SERVICE_IDENTIFIER)
@@ -103,6 +104,8 @@ describe('GET /auth', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.body).toContain('data-testid="language-selector"');
+    // Brief 8 / Phase 10.4: default to the language selected on the client website.
+    expect(res.body).toContain('Iniciar sesion');
 
     await app.close();
   });
