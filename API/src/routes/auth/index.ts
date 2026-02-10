@@ -6,6 +6,7 @@ import { registerAuthEmailVerifySetPasswordRoute } from './email-verify-set-pass
 import { registerAuthLoginRoute } from './login.js';
 import { registerAuthRegisterRoute } from './register.js';
 import { registerAuthResetPasswordRoutes } from './reset-password.js';
+import { registerAuthTokenExchangeRoute } from './token-exchange.js';
 import { registerAuthVerifyEmailRoute } from './verify-email.js';
 
 export function registerAuthRoutes(app: FastifyInstance): void {
@@ -15,5 +16,6 @@ export function registerAuthRoutes(app: FastifyInstance): void {
   registerAuthLoginRoute(app);
   registerAuthRegisterRoute(app);
   registerAuthResetPasswordRoutes(app);
+  registerAuthTokenExchangeRoute(app);
   registerAuthVerifyEmailRoute(app);
 }

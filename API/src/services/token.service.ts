@@ -1,14 +1,23 @@
 import { createHash, randomBytes } from 'node:crypto';
 
 import type { PrismaClient } from '@prisma/client';
+import { SignJWT } from 'jose';
 
 import { AUTHORIZATION_CODE_TTL_MS } from '../config/constants.js';
 import { getEnv, requireEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
+import { ensureDomainRoleForUser } from './domain-role.service.js';
+import { createClientId } from '../utils/hash.js';
 import { AppError } from '../utils/errors.js';
+import type { ClientConfig } from './config.service.js';
 
 type TokenPrisma = {
-  authorizationCode: Pick<PrismaClient['authorizationCode'], 'create'>;
+  authorizationCode: Pick<
+    PrismaClient['authorizationCode'],
+    'create' | 'findUnique' | 'updateMany'
+  >;
+  user: Pick<PrismaClient['user'], 'findUnique'>;
+  domainRole: PrismaClient['domainRole'];
 };
 
 type TokenDeps = {
@@ -29,6 +38,10 @@ function generateAuthorizationCode(): string {
 function hashAuthorizationCode(code: string, pepper: string): string {
   // Store only a hashed code. The raw code is a bearer secret; treat it like email tokens.
   return sha256Hex(`${code}.${pepper}`);
+}
+
+function sharedSecretKey(sharedSecret: string): Uint8Array {
+  return new TextEncoder().encode(sharedSecret);
 }
 
 function parseHttpUrl(value: string): URL {
@@ -138,3 +151,142 @@ export async function issueAuthorizationCode(
   throw new AppError('INTERNAL', 500, 'AUTH_CODE_COLLISION');
 }
 
+async function consumeAuthorizationCode(params: {
+  code: string;
+  configUrl: string;
+  domain: string;
+  now: Date;
+  sharedSecret: string;
+  prisma: TokenPrisma;
+}): Promise<{ userId: string }> {
+  const codeHash = hashAuthorizationCode(params.code, params.sharedSecret);
+  const row = await params.prisma.authorizationCode.findUnique({
+    where: { codeHash },
+    select: {
+      id: true,
+      userId: true,
+      domain: true,
+      configUrl: true,
+      expiresAt: true,
+      usedAt: true,
+    },
+  });
+
+  // Treat all failures as generic auth failure; never leak "expired" vs "unknown" etc.
+  if (!row) throw new AppError('UNAUTHORIZED', 401, 'INVALID_AUTH_CODE');
+  if (row.domain !== params.domain) throw new AppError('UNAUTHORIZED', 401, 'INVALID_AUTH_CODE');
+  if (row.configUrl !== params.configUrl)
+    throw new AppError('UNAUTHORIZED', 401, 'INVALID_AUTH_CODE');
+  if (row.usedAt) throw new AppError('UNAUTHORIZED', 401, 'INVALID_AUTH_CODE');
+  if (row.expiresAt.getTime() <= params.now.getTime())
+    throw new AppError('UNAUTHORIZED', 401, 'INVALID_AUTH_CODE');
+
+  const updated = await params.prisma.authorizationCode.updateMany({
+    where: {
+      id: row.id,
+      usedAt: null,
+      expiresAt: { gt: params.now },
+    },
+    data: {
+      usedAt: params.now,
+    },
+  });
+  if (updated.count !== 1) {
+    throw new AppError('UNAUTHORIZED', 401, 'INVALID_AUTH_CODE');
+  }
+
+  return { userId: row.userId };
+}
+
+async function signAccessToken(params: {
+  userId: string;
+  email: string;
+  domain: string;
+  role: 'superuser' | 'user';
+  clientId: string;
+  sharedSecret: string;
+  ttl: string;
+  issuer: string;
+}): Promise<string> {
+  try {
+    return await new SignJWT({
+      email: params.email,
+      domain: params.domain,
+      client_id: params.clientId,
+      role: params.role,
+    })
+      .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
+      .setIssuer(params.issuer)
+      .setSubject(params.userId)
+      .setIssuedAt()
+      .setExpirationTime(params.ttl)
+      .sign(sharedSecretKey(params.sharedSecret));
+  } catch {
+    // Normalize token signing failures into a generic error.
+    throw new AppError('INTERNAL', 500, 'TOKEN_SIGN_FAILED');
+  }
+}
+
+/**
+ * Brief 22.13: client backend exchanges the authorization code for an access token JWT.
+ */
+export async function exchangeAuthorizationCodeForAccessToken(
+  params: {
+    code: string;
+    config: ClientConfig;
+    configUrl: string;
+  },
+  deps?: TokenDeps & { accessTokenTtl?: string; authServiceIdentifier?: string },
+): Promise<{ accessToken: string }> {
+  const env = getEnv();
+
+  if (!env.DATABASE_URL) {
+    throw new AppError('INTERNAL', 500, 'DATABASE_DISABLED');
+  }
+
+  const now = deps?.now ? deps.now() : new Date();
+  const sharedSecret = deps?.sharedSecret ?? requireEnv('SHARED_SECRET').SHARED_SECRET;
+  const issuer =
+    deps?.authServiceIdentifier ?? requireEnv('AUTH_SERVICE_IDENTIFIER').AUTH_SERVICE_IDENTIFIER;
+  const ttl = deps?.accessTokenTtl ?? env.ACCESS_TOKEN_TTL;
+
+  const prisma = deps?.prisma ?? (getPrisma() as unknown as TokenPrisma);
+
+  const { userId } = await consumeAuthorizationCode({
+    code: params.code,
+    configUrl: params.configUrl,
+    domain: params.config.domain,
+    now,
+    sharedSecret,
+    prisma,
+  });
+
+  // Ensure a per-domain role exists (global users may log in on new domains).
+  const domainRole = await ensureDomainRoleForUser({
+    prisma: prisma as unknown as PrismaClient,
+    domain: params.config.domain,
+    userId,
+  });
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true },
+  });
+  if (!user) throw new AppError('INTERNAL', 500, 'MISSING_USER');
+
+  const role = domainRole.role === 'SUPERUSER' ? 'superuser' : 'user';
+  const clientId = createClientId(params.config.domain, sharedSecret);
+
+  const accessToken = await signAccessToken({
+    userId,
+    email: user.email,
+    domain: params.config.domain,
+    role,
+    clientId,
+    sharedSecret,
+    ttl,
+    issuer,
+  });
+
+  return { accessToken };
+}
