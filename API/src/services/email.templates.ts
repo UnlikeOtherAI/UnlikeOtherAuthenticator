@@ -24,11 +24,12 @@ export function buildVerifyEmailSetPasswordTemplate(params: { link: string }): E
   const minutes = tokenTtlMinutes();
   const escapedLink = escapeHtml(params.link);
 
-  const subject = 'Verify your email';
+  // Keep registration/login emails generic so copy doesn't imply account existence/state.
+  const subject = 'Your sign-in link';
   const text = [
-    'Confirm your email address',
+    'Continue signing in',
     '',
-    'Use this link to verify your email and set your password:',
+    'Use this link to continue:',
     params.link,
     '',
     `This link expires in ${minutes} minutes and can only be used once.`,
@@ -51,18 +52,18 @@ export function buildVerifyEmailSetPasswordTemplate(params: { link: string }): E
           <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e8eaf0;">
             <tr>
               <td style="padding:24px 24px 8px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111827;">
-                <h1 style="margin:0;font-size:20px;line-height:28px;">Confirm your email address</h1>
+                <h1 style="margin:0;font-size:20px;line-height:28px;">Continue signing in</h1>
               </td>
             </tr>
             <tr>
               <td style="padding:0 24px 16px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#374151;font-size:14px;line-height:22px;">
-                Click the button below to verify your email and set your password.
+                Click the button below to continue.
               </td>
             </tr>
             <tr>
               <td align="center" style="padding:0 24px 20px 24px;">
                 <a href="${escapedLink}" style="display:inline-block;background:#111827;color:#ffffff;text-decoration:none;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:20px;padding:12px 16px;border-radius:10px;">
-                  Verify email
+                  Continue
                 </a>
               </td>
             </tr>
@@ -96,11 +97,11 @@ export function buildLoginLinkTemplate(params: { link: string }): EmailTemplate 
   const minutes = tokenTtlMinutes();
   const escapedLink = escapeHtml(params.link);
 
-  const subject = 'Your login link';
+  const subject = 'Your sign-in link';
   const text = [
-    'Log in to continue',
+    'Continue signing in',
     '',
-    'Use this link to log in:',
+    'Use this link to continue:',
     params.link,
     '',
     `This link expires in ${minutes} minutes and can only be used once.`,
@@ -123,18 +124,18 @@ export function buildLoginLinkTemplate(params: { link: string }): EmailTemplate 
           <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e8eaf0;">
             <tr>
               <td style="padding:24px 24px 8px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111827;">
-                <h1 style="margin:0;font-size:20px;line-height:28px;">Log in to continue</h1>
+                <h1 style="margin:0;font-size:20px;line-height:28px;">Continue signing in</h1>
               </td>
             </tr>
             <tr>
               <td style="padding:0 24px 16px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#374151;font-size:14px;line-height:22px;">
-                Click the button below to log in.
+                Click the button below to continue.
               </td>
             </tr>
             <tr>
               <td align="center" style="padding:0 24px 20px 24px;">
                 <a href="${escapedLink}" style="display:inline-block;background:#111827;color:#ffffff;text-decoration:none;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:20px;padding:12px 16px;border-radius:10px;">
-                  Log in
+                  Continue
                 </a>
               </td>
             </tr>
@@ -172,7 +173,7 @@ export function buildPasswordResetTemplate(params: { link: string }): EmailTempl
   const text = [
     'Reset your password',
     '',
-    'Use this link to reset your password:',
+    'If you requested a password reset, use this link:',
     params.link,
     '',
     `This link expires in ${minutes} minutes and can only be used once.`,
@@ -200,7 +201,7 @@ export function buildPasswordResetTemplate(params: { link: string }): EmailTempl
             </tr>
             <tr>
               <td style="padding:0 24px 16px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#374151;font-size:14px;line-height:22px;">
-                Click the button below to reset your password.
+                If you requested a password reset, click the button below.
               </td>
             </tr>
             <tr>
@@ -244,7 +245,7 @@ export function buildTwoFaResetTemplate(params: { link: string }): EmailTemplate
   const text = [
     'Reset two-factor authentication',
     '',
-    'Use this link to reset two-factor authentication:',
+    'If you requested to reset two-factor authentication, use this link:',
     params.link,
     '',
     `This link expires in ${minutes} minutes and can only be used once.`,
@@ -272,7 +273,7 @@ export function buildTwoFaResetTemplate(params: { link: string }): EmailTemplate
             </tr>
             <tr>
               <td style="padding:0 24px 16px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#374151;font-size:14px;line-height:22px;">
-                Click the button below to reset two-factor authentication.
+                If you requested to reset two-factor authentication, click the button below.
               </td>
             </tr>
             <tr>

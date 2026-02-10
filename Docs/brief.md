@@ -236,6 +236,7 @@ This service is **stateless where possible**, standards-based, and API-first.
 
   * Existing user → login link
   * New user → verification + set password
+* **Email copy must remain generic**: subjects and body text must not explicitly indicate whether an account already exists (even though the backend sends different links depending on state)
 
 ---
 

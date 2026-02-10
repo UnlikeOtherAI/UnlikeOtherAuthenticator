@@ -13,13 +13,14 @@ describe('buildVerifyEmailSetPasswordTemplate', () => {
     const tpl = buildVerifyEmailSetPasswordTemplate({ link });
     const escapedLink = link.replaceAll('&', '&amp;');
 
-    expect(tpl.subject).toBe('Verify your email');
+    expect(tpl.subject).toBe('Your sign-in link');
     expect(tpl.text).toContain(link);
     expect(tpl.text).toMatch(/expires in 30 minutes/i);
     expect(tpl.text).toMatch(/ignore this email/i);
+    expect(tpl.text).not.toMatch(/set your password/i);
 
-    expect(tpl.html).toContain('Confirm your email address');
-    expect(tpl.html).toContain('Verify email');
+    expect(tpl.html).toContain('Continue signing in');
+    expect(tpl.html).toContain('Continue');
     expect(tpl.html).toContain(`href="${escapedLink}"`);
   });
 
@@ -44,6 +45,7 @@ describe('buildPasswordResetTemplate', () => {
     expect(tpl.text).toContain(link);
     expect(tpl.text).toMatch(/expires in 30 minutes/i);
     expect(tpl.text).toMatch(/ignore this email/i);
+    expect(tpl.text).toMatch(/if you requested a password reset/i);
 
     expect(tpl.html).toContain('Reset your password');
     expect(tpl.html).toContain('Reset password');
@@ -67,13 +69,13 @@ describe('buildLoginLinkTemplate', () => {
     const tpl = buildLoginLinkTemplate({ link });
     const escapedLink = link.replaceAll('&', '&amp;');
 
-    expect(tpl.subject).toBe('Your login link');
+    expect(tpl.subject).toBe('Your sign-in link');
     expect(tpl.text).toContain(link);
     expect(tpl.text).toMatch(/expires in 30 minutes/i);
     expect(tpl.text).toMatch(/ignore this email/i);
 
-    expect(tpl.html).toContain('Log in to continue');
-    expect(tpl.html).toContain('Log in');
+    expect(tpl.html).toContain('Continue signing in');
+    expect(tpl.html).toContain('Continue');
     expect(tpl.html).toContain(`href="${escapedLink}"`);
   });
 
@@ -98,6 +100,7 @@ describe('buildTwoFaResetTemplate', () => {
     expect(tpl.text).toContain(link);
     expect(tpl.text).toMatch(/expires in 30 minutes/i);
     expect(tpl.text).toMatch(/ignore this email/i);
+    expect(tpl.text).toMatch(/if you requested to reset two-factor authentication/i);
 
     expect(tpl.html).toContain('Reset two-factor authentication');
     expect(tpl.html).toContain(`href="${escapedLink}"`);
