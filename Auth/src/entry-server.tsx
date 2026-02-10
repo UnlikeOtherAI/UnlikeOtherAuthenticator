@@ -8,5 +8,5 @@ export async function render(_params: {
   configUrl: string;
 }): Promise<string> {
   // No client-only globals should be accessed here.
-  return renderToString(<App />);
+  return renderToString(<App config={_params.config} configUrl={_params.configUrl} />);
 }

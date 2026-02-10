@@ -7,7 +7,7 @@ import tseslint from 'typescript-eslint';
 
 export default [
   {
-    ignores: ['**/dist/**', '**/node_modules/**', '**/.steroids/**'],
+    ignores: ['**/dist/**', '**/dist-ssr/**', '**/node_modules/**', '**/.steroids/**'],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
