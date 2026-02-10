@@ -61,6 +61,10 @@ const EnvSchema = z.object({
       }),
   ),
   LOG_RETENTION_DAYS: z.coerce.number().int().positive().default(90),
+  // Brief 8 / Phase 10: AI translation service credentials (optional; the UI falls back to English if disabled).
+  AI_TRANSLATION_PROVIDER: z.enum(['disabled', 'openai']).default('disabled'),
+  OPENAI_API_KEY: z.string().min(1).optional(),
+  OPENAI_MODEL: z.string().min(1).optional(),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

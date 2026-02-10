@@ -96,3 +96,16 @@ model AuthorizationCode {
   @@index([createdAt])
   @@map("authorization_codes")
 }
+
+// Brief 8.4 / Phase 10: AI translation fallback results must be cached permanently after generation.
+model AiTranslation {
+  language   String   @id
+  // Hash of the source translation file used to generate this row (lets us regenerate if the source changes).
+  sourceHash String   @map("source_hash")
+  data       Json
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@index([sourceHash])
+  @@map("ai_translations")
+}

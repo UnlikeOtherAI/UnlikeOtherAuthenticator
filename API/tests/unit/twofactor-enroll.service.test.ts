@@ -33,6 +33,9 @@ function testEnv(overrides?: Partial<Env>): Env {
     DATABASE_URL: 'postgres://example.invalid/db',
     ACCESS_TOKEN_TTL: '30m',
     LOG_RETENTION_DAYS: 90,
+    AI_TRANSLATION_PROVIDER: 'disabled',
+    OPENAI_API_KEY: undefined,
+    OPENAI_MODEL: undefined,
     ...overrides,
   };
 }
@@ -137,4 +140,3 @@ describe('enrollTwoFactorForUser', () => {
     ).rejects.toMatchObject({ statusCode: 500 });
   });
 });
-

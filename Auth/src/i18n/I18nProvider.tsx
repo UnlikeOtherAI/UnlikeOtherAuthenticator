@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
 import { translationsByLanguage } from './translations/index.js';
 import type { TranslationKey } from './translations/en.js';
+import { loadTranslations } from './language-loader.js';
 
 type I18nContextValue = {
   language: string;
@@ -48,14 +49,57 @@ function readLanguageConfig(config: unknown): { language: string; languages: str
 
 export function I18nProvider(props: {
   config: unknown;
+  configUrl: string;
   children: React.ReactNode;
 }): React.JSX.Element {
   const initial = useMemo(() => readLanguageConfig(props.config), [props.config]);
   const [language, setLanguageState] = useState<string>(initial.language);
+  const [remoteByLanguage, setRemoteByLanguage] = useState<Record<string, Record<string, string>>>(
+    {},
+  );
+
+  const enKeys = useMemo(() => Object.keys(translationsByLanguage.en) as TranslationKey[], []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const safeLanguage = initial.languages.includes(language)
+      ? language
+      : (initial.languages[0] ?? 'en');
+    if (safeLanguage === 'en') return;
+    if (!props.configUrl) return;
+
+    const builtIn =
+      safeLanguage in translationsByLanguage
+        ? translationsByLanguage[safeLanguage as keyof typeof translationsByLanguage]
+        : null;
+    const existing = remoteByLanguage[safeLanguage] ?? builtIn;
+
+    const needsAi =
+      !builtIn ||
+      enKeys.some((k) => {
+        const v = (existing as Record<string, unknown> | null)?.[k];
+        return typeof v !== 'string' || !v.trim();
+      });
+    if (!needsAi) return;
+
+    let cancelled = false;
+    void (async () => {
+      const loaded = await loadTranslations({ language: safeLanguage, configUrl: props.configUrl });
+      if (cancelled) return;
+      if (!loaded) return;
+      setRemoteByLanguage((prev) => ({ ...prev, [safeLanguage]: loaded }));
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [enKeys, initial.languages, language, props.configUrl, remoteByLanguage]);
 
   const value = useMemo<I18nContextValue>(() => {
     const languages = initial.languages;
     const safeLanguage = languages.includes(language) ? language : (languages[0] ?? 'en');
+    const remote = remoteByLanguage[safeLanguage];
 
     return {
       language: safeLanguage,
@@ -72,12 +116,13 @@ export function I18nProvider(props: {
             ? (safeLanguage as keyof typeof translationsByLanguage)
             : 'en';
 
-        const active = translationsByLanguage[langKey] ?? translationsByLanguage.en;
+        const builtIn = translationsByLanguage[langKey] ?? translationsByLanguage.en;
+        const active = remote ?? builtIn;
         const fallback = translationsByLanguage.en;
-        return active[key] ?? fallback[key] ?? key;
+        return active[key] ?? builtIn[key] ?? fallback[key] ?? key;
       },
     };
-  }, [initial.languages, language]);
+  }, [initial.languages, language, remoteByLanguage]);
 
   return <I18nContext.Provider value={value}>{props.children}</I18nContext.Provider>;
 }
