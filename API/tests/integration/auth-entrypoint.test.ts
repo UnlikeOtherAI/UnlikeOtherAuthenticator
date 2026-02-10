@@ -18,6 +18,10 @@ async function createSignedConfigJwt(sharedSecret: string): Promise<string> {
     .sign(new TextEncoder().encode(sharedSecret));
 }
 
+function base64UrlEncodeJson(value: unknown): string {
+  return Buffer.from(JSON.stringify(value)).toString('base64url');
+}
+
 describe('GET /auth', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -115,6 +119,78 @@ describe('GET /auth', () => {
     expect(res.json()).toEqual({ error: 'Request failed' });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await app.close();
+  });
+
+  it('returns generic 400 when config JWT is unsigned (alg=none)', async () => {
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.AUTH_SERVICE_IDENTIFIER =
+      process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
+
+    const header = base64UrlEncodeJson({ alg: 'none', typ: 'JWT' });
+    const payload = base64UrlEncodeJson({
+      domain: 'client.example.com',
+      redirect_urls: ['https://client.example.com/oauth/callback'],
+      enabled_auth_methods: ['email_password'],
+      ui_theme: {},
+      language_config: 'en',
+      aud: process.env.AUTH_SERVICE_IDENTIFIER,
+    });
+    const unsignedJwt = `${header}.${payload}.`;
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(unsignedJwt, { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const app = await createApp();
+    await app.ready();
+
+    const configUrl = 'https://client.example.com/auth-config';
+    const res = await app.inject({
+      method: 'GET',
+      url: `/auth?config_url=${encodeURIComponent(configUrl)}`,
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: 'Request failed' });
+
+    await app.close();
+  });
+
+  it('returns generic 400 when config JWT is tampered', async () => {
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.AUTH_SERVICE_IDENTIFIER =
+      process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
+
+    const jwt = await createSignedConfigJwt(process.env.SHARED_SECRET);
+    const parts = jwt.split('.');
+    expect(parts).toHaveLength(3);
+
+    const decodedPayload = JSON.parse(
+      Buffer.from(parts[1] ?? '', 'base64url').toString('utf8'),
+    ) as Record<string, unknown>;
+    decodedPayload.domain = 'attacker.example.com';
+    parts[1] = base64UrlEncodeJson(decodedPayload);
+    const tamperedJwt = parts.join('.');
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(tamperedJwt, { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const app = await createApp();
+    await app.ready();
+
+    const configUrl = 'https://client.example.com/auth-config';
+    const res = await app.inject({
+      method: 'GET',
+      url: `/auth?config_url=${encodeURIComponent(configUrl)}`,
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: 'Request failed' });
 
     await app.close();
   });
