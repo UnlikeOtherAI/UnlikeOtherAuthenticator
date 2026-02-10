@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { AppError } from '../../utils/errors.js';
 
-export type SocialProviderKey = 'google';
+export type SocialProviderKey = 'google' | 'apple';
 
 export type SocialProfile = {
   provider: SocialProviderKey;
@@ -13,7 +13,7 @@ export type SocialProfile = {
 };
 
 const SocialProfileSchema = z.object({
-  provider: z.enum(['google']),
+  provider: z.enum(['google', 'apple']),
   email: z.string().trim().toLowerCase().email(),
   emailVerified: z.boolean(),
   name: z.string().trim().min(1).nullable(),
@@ -33,4 +33,3 @@ export function assertProviderVerifiedEmail(profile: SocialProfile): void {
     throw new AppError('UNAUTHORIZED', 401, 'SOCIAL_EMAIL_NOT_VERIFIED');
   }
 }
-

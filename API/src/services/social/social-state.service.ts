@@ -9,7 +9,7 @@ const SOCIAL_STATE_ALLOWED_ALGS = ['HS256'] as const;
 
 const SocialStateSchema = z
   .object({
-    provider: z.enum(['google']),
+    provider: z.enum(['google', 'apple']),
     config_url: z.string().min(1),
     redirect_url: z.string().min(1),
   });

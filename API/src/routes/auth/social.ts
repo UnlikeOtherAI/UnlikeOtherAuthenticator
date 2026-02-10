@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { getEnv, requireEnv } from '../../config/env.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
+import { buildAppleAuthorizationUrl } from '../../services/social/apple.service.js';
 import { buildGoogleAuthorizationUrl } from '../../services/social/google.service.js';
 import { assertSocialProviderAllowed } from '../../services/social/index.js';
 import { signSocialState } from '../../services/social/social-state.service.js';
@@ -10,7 +11,7 @@ import { selectRedirectUrl } from '../../services/token.service.js';
 import { AppError } from '../../utils/errors.js';
 
 const ParamsSchema = z.object({
-  provider: z.enum(['google']),
+  provider: z.enum(['google', 'apple']),
 });
 
 const QuerySchema = z
@@ -74,6 +75,42 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
 
         const url = buildGoogleAuthorizationUrl({
           clientId: env.GOOGLE_CLIENT_ID,
+          redirectUri,
+          state,
+        });
+        reply.redirect(url, 302);
+        return;
+      }
+
+      if (provider === 'apple') {
+        if (
+          !env.APPLE_CLIENT_ID ||
+          !env.APPLE_TEAM_ID ||
+          !env.APPLE_KEY_ID ||
+          !env.APPLE_PRIVATE_KEY
+        ) {
+          // Misconfiguration; keep response generic.
+          throw new AppError('INTERNAL', 500, 'APPLE_ENV_MISSING');
+        }
+
+        const { SHARED_SECRET, AUTH_SERVICE_IDENTIFIER } = requireEnv(
+          'SHARED_SECRET',
+          'AUTH_SERVICE_IDENTIFIER',
+        );
+        const baseUrl = resolvePublicBaseUrl();
+        const redirectUri = `${baseUrl}/auth/callback/apple`;
+
+        const state = await signSocialState({
+          provider: 'apple',
+          configUrl: request.configUrl,
+          redirectUrl,
+          sharedSecret: SHARED_SECRET,
+          audience: AUTH_SERVICE_IDENTIFIER,
+          baseUrlForIssuer: baseUrl,
+        });
+
+        const url = buildAppleAuthorizationUrl({
+          clientId: env.APPLE_CLIENT_ID,
           redirectUri,
           state,
         });

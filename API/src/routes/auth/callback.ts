@@ -10,7 +10,9 @@ import {
   verifyConfigJwtSignature,
 } from '../../services/config.service.js';
 import { assertSocialProviderAllowed } from '../../services/social/index.js';
+import { getAppleProfileFromCode } from '../../services/social/apple.service.js';
 import { getGoogleProfileFromCode } from '../../services/social/google.service.js';
+import type { SocialProfile } from '../../services/social/provider.base.js';
 import { loginWithSocialProfile } from '../../services/social/social-login.service.js';
 import { verifySocialState } from '../../services/social/social-state.service.js';
 import {
@@ -20,7 +22,7 @@ import {
 } from '../../services/token.service.js';
 
 const ParamsSchema = z.object({
-  provider: z.enum(['google']),
+  provider: z.enum(['google', 'apple']),
 });
 
 const QuerySchema = z
@@ -92,21 +94,41 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
     const env = getEnv();
     const baseUrl = resolvePublicBaseUrl();
 
-    if (provider !== 'google') {
+    let profile: SocialProfile;
+    if (provider === 'google') {
+      if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
+        throw new AppError('INTERNAL', 500, 'GOOGLE_ENV_MISSING');
+      }
+
+      const redirectUri = `${baseUrl}/auth/callback/google`;
+      profile = await getGoogleProfileFromCode({
+        code,
+        clientId: env.GOOGLE_CLIENT_ID,
+        clientSecret: env.GOOGLE_CLIENT_SECRET,
+        redirectUri,
+      });
+    } else if (provider === 'apple') {
+      if (
+        !env.APPLE_CLIENT_ID ||
+        !env.APPLE_TEAM_ID ||
+        !env.APPLE_KEY_ID ||
+        !env.APPLE_PRIVATE_KEY
+      ) {
+        throw new AppError('INTERNAL', 500, 'APPLE_ENV_MISSING');
+      }
+
+      const redirectUri = `${baseUrl}/auth/callback/apple`;
+      profile = await getAppleProfileFromCode({
+        code,
+        clientId: env.APPLE_CLIENT_ID,
+        teamId: env.APPLE_TEAM_ID,
+        keyId: env.APPLE_KEY_ID,
+        privateKeyPem: env.APPLE_PRIVATE_KEY,
+        redirectUri,
+      });
+    } else {
       throw new AppError('BAD_REQUEST', 400);
     }
-
-    if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
-      throw new AppError('INTERNAL', 500, 'GOOGLE_ENV_MISSING');
-    }
-
-    const redirectUri = `${baseUrl}/auth/callback/google`;
-    const profile = await getGoogleProfileFromCode({
-      code,
-      clientId: env.GOOGLE_CLIENT_ID,
-      clientSecret: env.GOOGLE_CLIENT_SECRET,
-      redirectUri,
-    });
 
     const { userId } = await loginWithSocialProfile({
       profile,

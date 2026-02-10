@@ -39,6 +39,12 @@ const EnvSchema = z.object({
   // Social providers (one set of credentials for the auth service, not per-client).
   GOOGLE_CLIENT_ID: z.string().min(1).optional(),
   GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
+  APPLE_CLIENT_ID: z.string().min(1).optional(),
+  APPLE_TEAM_ID: z.string().min(1).optional(),
+  APPLE_KEY_ID: z.string().min(1).optional(),
+  // Apple private key contents (typically a .p8 PEM). May be provided with literal newlines
+  // or with escaped newlines ("\\n") depending on the deployment environment.
+  APPLE_PRIVATE_KEY: z.string().min(1).optional(),
   ACCESS_TOKEN_TTL: z.preprocess(
     normalizeAccessTokenTtl,
     z
