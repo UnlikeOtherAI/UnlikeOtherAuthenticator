@@ -7,6 +7,33 @@ import type { ClientConfig } from '../../src/services/config.service.js';
 import { testUiTheme } from '../helpers/test-config.js';
 
 describe('social-login.service', () => {
+  it('rejects unverified provider emails', async () => {
+    const config: ClientConfig = {
+      domain: 'client.example.com',
+      redirect_urls: ['https://client.example.com/oauth/callback'],
+      enabled_auth_methods: ['google'],
+      ui_theme: testUiTheme(),
+      language_config: 'en',
+      user_scope: 'global',
+      '2fa_enabled': false,
+      debug_enabled: false,
+      allowed_social_providers: ['google'],
+    };
+
+    await expect(
+      loginWithSocialProfile({
+        profile: {
+          provider: 'google',
+          email: 'user@example.com',
+          emailVerified: false,
+          name: 'User',
+          avatarUrl: null,
+        },
+        config,
+      }),
+    ).rejects.toThrow(/SOCIAL_EMAIL_NOT_VERIFIED/);
+  });
+
   it('creates a new user and overwrites avatar on subsequent logins', async () => {
     type StoredUser = {
       id: string;
