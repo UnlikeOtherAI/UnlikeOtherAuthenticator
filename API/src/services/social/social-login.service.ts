@@ -25,7 +25,7 @@ export async function loginWithSocialProfile(
     config: ClientConfig;
   },
   deps?: SocialLoginDeps,
-): Promise<{ userId: string }> {
+): Promise<{ userId: string; twoFaEnabled: boolean }> {
   assertProviderVerifiedEmail(params.profile);
 
   const env = deps?.env ?? getEnv();
@@ -48,6 +48,7 @@ export async function loginWithSocialProfile(
   });
 
   let userId: string;
+  let twoFaEnabled: boolean;
   if (existing) {
     const updated = await prisma.user.update({
       where: { userKey },
@@ -59,9 +60,10 @@ export async function loginWithSocialProfile(
         // Brief 22.7: overwrite avatar URL on every login.
         avatarUrl: params.profile.avatarUrl,
       },
-      select: { id: true },
+      select: { id: true, twoFaEnabled: true },
     });
     userId = updated.id;
+    twoFaEnabled = updated.twoFaEnabled;
   } else {
     const created = await prisma.user.create({
       data: {
@@ -72,9 +74,10 @@ export async function loginWithSocialProfile(
         avatarUrl: params.profile.avatarUrl,
         passwordHash: null,
       },
-      select: { id: true },
+      select: { id: true, twoFaEnabled: true },
     });
     userId = created.id;
+    twoFaEnabled = created.twoFaEnabled;
   }
 
   // Ensure domain-level role exists for this login domain (superuser assignment is per-domain).
@@ -84,6 +87,5 @@ export async function loginWithSocialProfile(
     prisma: prisma as unknown as PrismaClient,
   });
 
-  return { userId };
+  return { userId, twoFaEnabled };
 }
-

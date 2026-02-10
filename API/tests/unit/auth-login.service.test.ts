@@ -14,6 +14,7 @@ type PrismaStub = {
     findUnique: (args: PrismaUserFindUniqueArgs) => Promise<{
       id: string;
       passwordHash: string | null;
+      twoFaEnabled: boolean;
     } | null>;
   };
 };
@@ -54,7 +55,7 @@ describe('loginWithEmailPassword', () => {
       user: {
         findUnique: async (args) => {
           expect(args.where.userKey).toBe('user@example.com');
-          return { id: 'u1', passwordHash: 'hash' };
+          return { id: 'u1', passwordHash: 'hash', twoFaEnabled: false };
         },
       },
     };
@@ -69,6 +70,7 @@ describe('loginWithEmailPassword', () => {
     );
 
     expect(result.userId).toBe('u1');
+    expect(result.twoFaEnabled).toBe(false);
   });
 
   it('respects per_domain user scope when building the lookup key', async () => {
@@ -76,7 +78,7 @@ describe('loginWithEmailPassword', () => {
       user: {
         findUnique: async (args) => {
           expect(args.where.userKey).toBe('client.example.com|user@example.com');
-          return { id: 'u2', passwordHash: 'hash2' };
+          return { id: 'u2', passwordHash: 'hash2', twoFaEnabled: true };
         },
       },
     };
@@ -95,12 +97,13 @@ describe('loginWithEmailPassword', () => {
     );
 
     expect(result.userId).toBe('u2');
+    expect(result.twoFaEnabled).toBe(true);
   });
 
   it('throws UNAUTHORIZED for wrong password', async () => {
     const prisma: PrismaStub = {
       user: {
-        findUnique: async () => ({ id: 'u1', passwordHash: 'hash' }),
+        findUnique: async () => ({ id: 'u1', passwordHash: 'hash', twoFaEnabled: false }),
       },
     };
 

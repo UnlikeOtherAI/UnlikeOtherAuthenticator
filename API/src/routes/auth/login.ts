@@ -1,8 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
+import { requireEnv } from '../../config/env.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
 import { loginWithEmailPassword } from '../../services/auth-login.service.js';
+import { signTwoFaChallenge } from '../../services/twofactor-challenge.service.js';
 import {
   buildRedirectToUrl,
   issueAuthorizationCode,
@@ -42,12 +44,33 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
         throw new Error('missing request.configUrl');
       }
 
-      const { userId } = await loginWithEmailPassword({ email, password, config });
+      const { userId, twoFaEnabled } = await loginWithEmailPassword({ email, password, config });
 
       const redirectUrl = selectRedirectUrl({
         allowedRedirectUrls: config.redirect_urls,
         requestedRedirectUrl: redirect_url,
       });
+
+      // Brief 13 / Phase 8.6 + 8.7: enforce 2FA verification during login when enabled via config.
+      if (config['2fa_enabled'] && twoFaEnabled) {
+        const { SHARED_SECRET, AUTH_SERVICE_IDENTIFIER } = requireEnv(
+          'SHARED_SECRET',
+          'AUTH_SERVICE_IDENTIFIER',
+        );
+
+        const twofa_token = await signTwoFaChallenge({
+          userId,
+          domain: config.domain,
+          configUrl: request.configUrl,
+          redirectUrl,
+          sharedSecret: SHARED_SECRET,
+          audience: AUTH_SERVICE_IDENTIFIER,
+        });
+
+        reply.status(200).send({ ok: true, twofa_required: true, twofa_token });
+        return;
+      }
+
       const { code } = await issueAuthorizationCode({
         userId,
         domain: config.domain,

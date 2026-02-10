@@ -15,6 +15,7 @@ describe('social-login.service', () => {
       name: string | null;
       avatarUrl: string | null;
       passwordHash: string | null;
+      twoFaEnabled?: boolean;
     };
 
     const users = new Map<
@@ -34,22 +35,22 @@ describe('social-login.service', () => {
         },
         async create(args: {
           data: Omit<StoredUser, 'id'>;
-          select: { id: true };
-        }): Promise<{ id: string }> {
+          select: { id: true; twoFaEnabled: true };
+        }): Promise<{ id: string; twoFaEnabled: boolean }> {
           const id = `user_${users.size + 1}`;
-          users.set(args.data.userKey, { id, ...args.data });
-          return { id };
+          users.set(args.data.userKey, { id, ...args.data, twoFaEnabled: false });
+          return { id, twoFaEnabled: false };
         },
         async update(args: {
           where: { userKey: string };
           data: Pick<StoredUser, 'email' | 'domain' | 'name' | 'avatarUrl'>;
-          select: { id: true };
-        }): Promise<{ id: string }> {
+          select: { id: true; twoFaEnabled: true };
+        }): Promise<{ id: string; twoFaEnabled: boolean }> {
           const row = users.get(args.where.userKey);
           if (!row) throw new Error('missing');
           const next: StoredUser = { ...row, ...args.data };
           users.set(args.where.userKey, next);
-          return { id: next.id };
+          return { id: next.id, twoFaEnabled: Boolean(next.twoFaEnabled) };
         },
       },
     };
@@ -103,6 +104,7 @@ describe('social-login.service', () => {
     );
 
     expect(first.userId).toBe('user_1');
+    expect(first.twoFaEnabled).toBe(false);
     expect(ensureDomainRoleForUser).toHaveBeenCalledTimes(1);
 
     const second = await loginWithSocialProfile(
@@ -120,6 +122,7 @@ describe('social-login.service', () => {
     );
 
     expect(second.userId).toBe('user_1');
+    expect(second.twoFaEnabled).toBe(false);
     const stored = users.get('user@example.com');
     expect(stored?.avatarUrl).toBe('https://example.com/b.png');
   });

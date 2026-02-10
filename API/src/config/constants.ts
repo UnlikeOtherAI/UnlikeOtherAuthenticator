@@ -7,5 +7,8 @@ export const EMAIL_TOKEN_TTL_MS = 30 * 60 * 1000;
 // Brief 22.13: authorization codes must be short-lived (OAuth authorization code flow).
 export const AUTHORIZATION_CODE_TTL_MS = 5 * 60 * 1000;
 
+// Brief 13 / Phase 8.6: 2FA challenges during login must be short-lived bearer tokens.
+export const TWOFA_CHALLENGE_TTL_MS = 5 * 60 * 1000;
+
 // Social OAuth state is signed and short-lived to limit replay window.
 export const SOCIAL_STATE_TTL_MS = 10 * 60 * 1000;

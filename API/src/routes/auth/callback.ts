@@ -18,6 +18,7 @@ import { getLinkedInProfileFromCode } from '../../services/social/linkedin.servi
 import type { SocialProfile } from '../../services/social/provider.base.js';
 import { loginWithSocialProfile } from '../../services/social/social-login.service.js';
 import { verifySocialState } from '../../services/social/social-state.service.js';
+import { signTwoFaChallenge } from '../../services/twofactor-challenge.service.js';
 import {
   buildRedirectToUrl,
   issueAuthorizationCode,
@@ -169,10 +170,29 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
       throw new AppError('BAD_REQUEST', 400);
     }
 
-    const { userId } = await loginWithSocialProfile({
+    const { userId, twoFaEnabled } = await loginWithSocialProfile({
       profile,
       config,
     });
+
+    // Brief 13 / Phase 8.6 + 8.7: enforce 2FA verification during login when enabled via config.
+    if (config['2fa_enabled'] && twoFaEnabled) {
+      const twofa_token = await signTwoFaChallenge({
+        userId,
+        domain: config.domain,
+        configUrl,
+        redirectUrl,
+        sharedSecret: SHARED_SECRET,
+        audience: AUTH_SERVICE_IDENTIFIER,
+      });
+
+      const u = new URL(`${baseUrl}/auth`);
+      u.searchParams.set('config_url', configUrl);
+      u.searchParams.set('redirect_url', redirectUrl);
+      u.searchParams.set('twofa_token', twofa_token);
+      reply.redirect(u.toString(), 302);
+      return;
+    }
 
     const { code: authCode } = await issueAuthorizationCode({
       userId,

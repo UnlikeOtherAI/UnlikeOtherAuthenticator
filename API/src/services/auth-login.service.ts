@@ -10,8 +10,8 @@ type LoginPrisma = {
   user: {
     findUnique: (args: {
       where: { userKey: string };
-      select: { id: true; passwordHash: true };
-    }) => Promise<{ id: string; passwordHash: string | null } | null>;
+      select: { id: true; passwordHash: true; twoFaEnabled: true };
+    }) => Promise<{ id: string; passwordHash: string | null; twoFaEnabled: boolean } | null>;
   };
 };
 
@@ -29,7 +29,7 @@ export async function loginWithEmailPassword(
     config: ClientConfig;
   },
   deps?: LoginDeps,
-): Promise<{ userId: string }> {
+): Promise<{ userId: string; twoFaEnabled: boolean }> {
   const env = deps?.env ?? getEnv();
 
   if (!env.DATABASE_URL) {
@@ -47,7 +47,7 @@ export async function loginWithEmailPassword(
   const prisma = deps?.prisma ?? (getPrisma() as unknown as LoginPrisma);
   const user = await prisma.user.findUnique({
     where: { userKey },
-    select: { id: true, passwordHash: true },
+    select: { id: true, passwordHash: true, twoFaEnabled: true },
   });
 
   const ok = await (deps?.verifyPassword ?? verifyPassword)(
@@ -60,5 +60,5 @@ export async function loginWithEmailPassword(
     throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
   }
 
-  return { userId: user.id };
+  return { userId: user.id, twoFaEnabled: user.twoFaEnabled };
 }
