@@ -52,7 +52,7 @@ export async function loginWithEmailPassword(
 
   const ok = await (deps?.verifyPassword ?? verifyPassword)(
     params.password,
-    user?.passwordHash,
+    user?.passwordHash ?? null,
   );
 
   if (!ok || !user) {
@@ -62,4 +62,3 @@ export async function loginWithEmailPassword(
 
   return { userId: user.id };
 }
-

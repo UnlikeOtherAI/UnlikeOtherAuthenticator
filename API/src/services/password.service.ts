@@ -26,6 +26,12 @@ const ARGON2_OPTIONS: argon2.Options & { type: number } = {
   hashLength: 32,
 };
 
+// Used to mitigate timing-based email enumeration during login. When a user doesn't exist
+// (or has no password hash), we still run an Argon2 verify against this dummy hash so the
+// request does not short-circuit cheaply.
+const DUMMY_ARGON2ID_HASH =
+  '$argon2id$v=19$m=32768,t=3,p=1$onb6T27gs47vxfVunB08uQ$hadGiwenm9HEKxSvGEbaklz91en+kFM92aGWwSFMYGY';
+
 export function isPasswordValid(password: string): boolean {
   if (typeof password !== 'string') return false;
   if (password.length < MIN_PASSWORD_LENGTH) return false;
@@ -61,12 +67,19 @@ export async function verifyPassword(
   passwordHash: string | null | undefined,
 ): Promise<boolean> {
   if (typeof password !== 'string') return false;
-  if (typeof passwordHash !== 'string' || !passwordHash) return false;
+
+  const hashToVerify =
+    typeof passwordHash === 'string' && passwordHash ? passwordHash : DUMMY_ARGON2ID_HASH;
 
   try {
-    return await argon2.verify(passwordHash, password);
+    return await argon2.verify(hashToVerify, password);
   } catch {
-    // Corrupt/unknown hash formats should just fail closed.
+    // Corrupt/unknown hash formats should just fail closed, but also avoid a fast throw path.
+    try {
+      await argon2.verify(DUMMY_ARGON2ID_HASH, password);
+    } catch {
+      // Ignore.
+    }
     return false;
   }
 }

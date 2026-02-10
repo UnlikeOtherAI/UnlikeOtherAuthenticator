@@ -123,16 +123,27 @@ describe('loginWithEmailPassword', () => {
       },
     };
 
+    let sawNullHash = false;
+    const verifyPassword = async (password: string, hash: string | null | undefined) => {
+      expect(password).toBe('pw');
+      expect(hash).toBe(null);
+      sawNullHash = true;
+      return false;
+    };
+
     await expect(
       loginWithEmailPassword(
         { email: 'missing@example.com', password: 'pw', config: baseConfig() },
         {
           env: testEnv(),
           prisma,
-          verifyPassword: async () => false,
+          verifyPassword,
         },
       ),
     ).rejects.toMatchObject({ statusCode: 401 });
+
+    // Ensure we still run password verification logic even when the user doesn't exist.
+    expect(sawNullHash).toBe(true);
   });
 
   it('throws INTERNAL when DATABASE_URL is not configured', async () => {
@@ -153,4 +164,3 @@ describe('loginWithEmailPassword', () => {
     ).rejects.toMatchObject({ statusCode: 500 });
   });
 });
-
