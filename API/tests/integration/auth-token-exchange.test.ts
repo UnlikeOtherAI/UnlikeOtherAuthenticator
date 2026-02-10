@@ -107,6 +107,8 @@ describe.skipIf(!hasDatabase)('POST /auth/token', () => {
     expect(tokenBody.token_type).toBe('Bearer');
     expect(typeof tokenBody.access_token).toBe('string');
     expect(tokenBody.access_token.length).toBeGreaterThan(20);
+    // Brief 22.10: no refresh tokens (and therefore no refresh token rotation).
+    expect((tokenBody as unknown as { refresh_token?: unknown }).refresh_token).toBeUndefined();
 
     const { payload } = await jwtVerify(
       tokenBody.access_token,
@@ -137,6 +139,54 @@ describe.skipIf(!hasDatabase)('POST /auth/token', () => {
     expect(codes[0]?.usedAt).not.toBeNull();
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    await app.close();
+  });
+
+  it('does not accept refresh-token style payloads (no refresh tokens, no rotation)', async () => {
+    const passwordHash = await hashPassword('Abcdef1!');
+    await handle!.prisma.user.create({
+      data: {
+        email: 'user@example.com',
+        userKey: 'user@example.com',
+        passwordHash,
+      },
+    });
+
+    const jwt = await createSignedConfigJwt(process.env.SHARED_SECRET!);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(jwt, { status: 200 })));
+
+    const app = await createApp();
+    await app.ready();
+
+    const configUrl = 'https://client.example.com/auth-config';
+    const loginRes = await app.inject({
+      method: 'POST',
+      url: `/auth/login?config_url=${encodeURIComponent(configUrl)}`,
+      payload: { email: 'user@example.com', password: 'Abcdef1!' },
+    });
+    expect(loginRes.statusCode).toBe(200);
+    const { code } = loginRes.json() as { code: string };
+
+    const tokenRes = await app.inject({
+      method: 'POST',
+      url: `/auth/token?config_url=${encodeURIComponent(configUrl)}`,
+      headers: {
+        authorization: `Bearer ${createClientId(
+          'client.example.com',
+          process.env.SHARED_SECRET!,
+        )}`,
+      },
+      // Attempt to use the token endpoint as if it supported refresh tokens.
+      payload: {
+        code,
+        grant_type: 'refresh_token',
+        refresh_token: 'not-a-real-token',
+      },
+    });
+
+    expect(tokenRes.statusCode).toBe(400);
+    expect(tokenRes.json()).toEqual({ error: 'Request failed' });
 
     await app.close();
   });
