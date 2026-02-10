@@ -5,6 +5,22 @@ import dotenv from 'dotenv';
 // In production, variables should be provided by the process environment.
 dotenv.config();
 
+function normalizeAccessTokenTtl(input: unknown): unknown {
+  if (typeof input !== 'string') return input;
+  return input.trim();
+}
+
+function isValidAccessTokenTtl(value: string): boolean {
+  // Brief 22.10 + task 1ac35cf5: access tokens must be short-lived (configurable, e.g. 15–60 minutes).
+  // Enforce minutes-only format to avoid accidental long-lived tokens via "h/d" units.
+  const match = value.match(/^(\d{1,3})m$/);
+  if (!match) return false;
+
+  const minutes = Number(match[1]);
+  if (!Number.isInteger(minutes)) return false;
+  return minutes >= 15 && minutes <= 60;
+}
+
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   HOST: z.string().default('127.0.0.1'),
@@ -20,7 +36,15 @@ const EnvSchema = z.object({
   // Identifier for this auth service instance. Used as expected `aud` for config JWTs.
   AUTH_SERVICE_IDENTIFIER: z.string().min(1),
   DATABASE_URL: z.string().min(1).optional(),
-  ACCESS_TOKEN_TTL: z.string().default('30m'),
+  ACCESS_TOKEN_TTL: z.preprocess(
+    normalizeAccessTokenTtl,
+    z
+      .string()
+      .default('30m')
+      .refine(isValidAccessTokenTtl, {
+        message: 'ACCESS_TOKEN_TTL must be minutes-only between 15m and 60m (e.g. "30m")',
+      }),
+  ),
   LOG_RETENTION_DAYS: z.coerce.number().int().positive().default(90),
 });
 
@@ -28,8 +52,12 @@ export type Env = z.infer<typeof EnvSchema>;
 
 let cachedEnv: Env | undefined;
 
+export function parseEnv(input: NodeJS.ProcessEnv): Env {
+  return EnvSchema.parse(input);
+}
+
 export function getEnv(): Env {
-  cachedEnv ??= EnvSchema.parse(process.env);
+  cachedEnv ??= parseEnv(process.env);
   return cachedEnv;
 }
 

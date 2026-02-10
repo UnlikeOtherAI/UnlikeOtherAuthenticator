@@ -107,5 +107,5 @@ All secrets and configuration live in environment variables. Nothing is hardcode
 * Social provider credentials (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, etc.)
 * Email service credentials
 * AI translation service credentials
-* `ACCESS_TOKEN_TTL` — access token lifetime (default: short-lived, e.g. 30m)
+* `ACCESS_TOKEN_TTL` — access token lifetime (minutes-only, 15m–60m; default: 30m)
 * `LOG_RETENTION_DAYS` — login log retention window (default: 90)
