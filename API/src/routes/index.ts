@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 
+import { PUBLIC_ERROR_MESSAGE } from '../config/constants.js';
 import { registerAuthRoutes } from './auth/index.js';
 import { registerDomainRoutes } from './domain/index.js';
 import { registerHealthRoutes } from './health/index.js';
@@ -14,6 +15,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   registerTwoFactorRoutes(app);
 
   app.setNotFoundHandler(async (_request, reply) => {
-    reply.status(404).send({ error: 'Not found' });
+    // Keep 404s generic as well; avoid leaking route existence via message copy.
+    reply.status(404).send({ error: PUBLIC_ERROR_MESSAGE });
   });
 }
