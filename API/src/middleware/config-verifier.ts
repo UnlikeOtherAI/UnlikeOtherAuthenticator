@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { requireEnv } from '../config/env.js';
 import {
+  assertConfigDomainMatchesConfigUrl,
   fetchConfigJwtFromUrl,
   validateConfigFields,
   verifyConfigJwtSignature,
@@ -45,4 +46,7 @@ export async function configVerifier(
 
   // Task 2.4 + 2.5: validate required config fields + parse optional config fields.
   request.config = validateConfigFields(payload);
+
+  // Task 2.8: validate domain claim matches the origin (host) of the config URL.
+  assertConfigDomainMatchesConfigUrl(request.config.domain, config_url);
 }

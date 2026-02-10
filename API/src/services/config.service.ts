@@ -39,6 +39,10 @@ function sharedSecretKey(sharedSecret: string): Uint8Array {
   return new TextEncoder().encode(sharedSecret);
 }
 
+function normalizeHostname(value: string): string {
+  return value.trim().toLowerCase().replace(/\.$/, '');
+}
+
 function extractJwtFromBody(bodyText: string): string {
   const trimmed = bodyText.trim();
   if (!trimmed) return '';
@@ -131,6 +135,32 @@ export async function verifyConfigJwtSignature(
     return payload;
   } catch {
     // Normalize all verification failures into a generic, user-safe error.
+    throw new AppError('BAD_REQUEST', 400);
+  }
+}
+
+/**
+ * Task 2.8: Validate `domain` claim matches the origin of the request.
+ *
+ * We treat the config URL host as the deterministic "origin" for this auth initiation.
+ * This prevents a client who knows the shared secret from minting a valid config JWT for a
+ * different domain while hosting it on their own infrastructure.
+ */
+export function assertConfigDomainMatchesConfigUrl(
+  domainClaim: string,
+  configUrl: string,
+): void {
+  let url: URL;
+  try {
+    url = new URL(configUrl);
+  } catch {
+    throw new AppError('BAD_REQUEST', 400);
+  }
+
+  const domain = normalizeHostname(domainClaim);
+  const originHost = normalizeHostname(url.hostname);
+
+  if (!domain || !originHost || domain !== originHost) {
     throw new AppError('BAD_REQUEST', 400);
   }
 }
