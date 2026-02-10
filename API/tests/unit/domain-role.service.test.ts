@@ -1,9 +1,47 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ensureDomainRoleForUser } from '../../src/services/domain-role.service.js';
 import { createTestDb } from '../helpers/test-db.js';
+import { Prisma, type PrismaClient } from '@prisma/client';
 
 const hasDatabase = Boolean(process.env.DATABASE_URL);
+
+describe('ensureDomainRoleForUser (unit)', () => {
+  it('falls back to USER on P2002 from SUPERUSER create even if meta.target is missing', async () => {
+    const domainInput = 'Client.Example.com.';
+    const domain = 'client.example.com';
+    const userId = 'u_1';
+    const createdAt = new Date('2026-02-10T00:00:00.000Z');
+
+    const userRow = { domain, userId, role: 'USER', createdAt };
+
+    const prisma = {
+      domainRole: {
+        findUnique: vi.fn().mockResolvedValueOnce(null).mockResolvedValueOnce(null),
+        create: vi
+          .fn()
+          .mockRejectedValueOnce(
+            new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+              code: 'P2002',
+              clientVersion: '6.3.1',
+              meta: {},
+            }),
+          )
+          .mockResolvedValueOnce(userRow),
+      },
+    } as unknown as PrismaClient;
+
+    const result = await ensureDomainRoleForUser({ prisma, domain: domainInput, userId });
+
+    expect(result.role).toBe('USER');
+    expect(result.domain).toBe(domain);
+    expect(result.userId).toBe(userId);
+
+    expect(prisma.domainRole.create).toHaveBeenCalledTimes(2);
+    expect(prisma.domainRole.create.mock.calls[0][0].data).toEqual({ domain, userId, role: 'SUPERUSER' });
+    expect(prisma.domainRole.create.mock.calls[1][0].data).toEqual({ domain, userId, role: 'USER' });
+  });
+});
 
 describe.skipIf(!hasDatabase)('ensureDomainRoleForUser (DB-backed)', () => {
   const domain = 'client.example.com';
@@ -104,4 +142,3 @@ describe.skipIf(!hasDatabase)('ensureDomainRoleForUser (DB-backed)', () => {
     expect(rows).toHaveLength(1);
   });
 });
-

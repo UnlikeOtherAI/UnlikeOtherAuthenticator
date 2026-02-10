@@ -12,17 +12,6 @@ function isUniqueConstraintError(err: unknown): err is Prisma.PrismaClientKnownR
   return err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002';
 }
 
-function isSuperuserUniqueConflict(err: Prisma.PrismaClientKnownRequestError): boolean {
-  // Partial unique index: domain is unique where role=SUPERUSER.
-  // Prisma typically reports `meta.target` as the field(s) that were unique.
-  const target = err.meta?.target;
-  if (!Array.isArray(target)) return false;
-  const lowered = target.map((t) => String(t).toLowerCase());
-  // Primary key uniqueness usually reports both domain and user_id/userId; distinguish that.
-  if (lowered.some((t) => t.includes('user'))) return false;
-  return lowered.includes('domain');
-}
-
 /**
  * Ensures a per-domain role row exists for a given user.
  *
@@ -32,8 +21,10 @@ function isSuperuserUniqueConflict(err: Prisma.PrismaClientKnownRequestError): b
  *
  * Write-path:
  * - Try insert SUPERUSER
- * - On unique conflict (domain already has a SUPERUSER), insert USER
- * - If row already exists (concurrent call), return existing row
+ * - On any unique conflict (P2002), first check if (domain,user) already exists and return it
+ *   (handles concurrent same-user insert regardless of role).
+ * - Otherwise, insert USER (domain already has a SUPERUSER or we lost some other recoverable race).
+ * - If USER insert also P2002, check for existing row again and return it; otherwise rethrow.
  */
 export async function ensureDomainRoleForUser(params: {
   domain: string;
@@ -50,6 +41,12 @@ export async function ensureDomainRoleForUser(params: {
   });
   if (existing) return existing;
 
+  const findExisting = async (): Promise<DomainRole | null> => {
+    return await prisma.domainRole.findUnique({
+      where: { domain_userId: { domain, userId: params.userId } },
+    });
+  };
+
   const createWithRole = async (role: UserRole): Promise<DomainRole> => {
     return await prisma.domainRole.create({
       data: { domain, userId: params.userId, role },
@@ -61,25 +58,18 @@ export async function ensureDomainRoleForUser(params: {
   } catch (err) {
     if (!isUniqueConstraintError(err)) throw err;
 
-    // If we lost the SUPERUSER race, fall back to USER.
-    if (isSuperuserUniqueConflict(err)) {
-      try {
-        return await createWithRole('USER');
-      } catch (err2) {
-        if (!isUniqueConstraintError(err2)) throw err2;
-        const row = await prisma.domainRole.findUnique({
-          where: { domain_userId: { domain, userId: params.userId } },
-        });
-        if (row) return row;
-        throw err2;
-      }
-    }
+    // Any P2002 is recoverable. First, check if someone inserted (domain,user) concurrently.
+    const rowAfterSuperuserConflict = await findExisting();
+    if (rowAfterSuperuserConflict) return rowAfterSuperuserConflict;
 
-    // Otherwise we likely raced on (domain, userId) itself; return the existing row.
-    const row = await prisma.domainRole.findUnique({
-      where: { domain_userId: { domain, userId: params.userId } },
-    });
-    if (row) return row;
-    throw err;
+    // Otherwise, we lost the "first SUPERUSER per domain" race; fall back to USER.
+    try {
+      return await createWithRole('USER');
+    } catch (err2) {
+      if (!isUniqueConstraintError(err2)) throw err2;
+      const rowAfterUserConflict = await findExisting();
+      if (rowAfterUserConflict) return rowAfterUserConflict;
+      throw err2;
+    }
   }
 }
