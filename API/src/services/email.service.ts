@@ -38,3 +38,11 @@ export async function sendPasswordResetEmail(params: { to: string; link: string 
     text: `Reset your password using this link: ${params.link}`,
   });
 }
+
+export async function sendTwoFaResetEmail(params: { to: string; link: string }): Promise<void> {
+  await sendEmail({
+    to: params.to,
+    subject: 'Reset two-factor authentication',
+    text: `Use this link to reset two-factor authentication: ${params.link}\n\nIf you did not request this, you can ignore this email.`,
+  });
+}
