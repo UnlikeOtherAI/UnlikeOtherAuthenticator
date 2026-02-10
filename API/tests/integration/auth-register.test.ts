@@ -2,16 +2,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SignJWT } from 'jose';
 
 import { createApp } from '../../src/app.js';
+import { baseClientConfigPayload } from '../helpers/test-config.js';
 
 async function createSignedConfigJwt(sharedSecret: string): Promise<string> {
   const aud = process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
-  return await new SignJWT({
-    domain: 'client.example.com',
-    redirect_urls: ['https://client.example.com/oauth/callback'],
-    enabled_auth_methods: ['email_password'],
-    ui_theme: {},
-    language_config: 'en',
-  })
+  return await new SignJWT(baseClientConfigPayload())
     .setProtectedHeader({ alg: 'HS256' })
     .setAudience(aud)
     .sign(new TextEncoder().encode(sharedSecret));

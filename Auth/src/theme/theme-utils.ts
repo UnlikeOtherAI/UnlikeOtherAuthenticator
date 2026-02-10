@@ -1,4 +1,4 @@
-import { DEFAULT_THEME, THEME_CSS_VAR_NAMES } from './theme-defaults.js';
+import { THEME_CSS_VAR_NAMES } from './theme-defaults.js';
 import type {
   BaseTextSize,
   ButtonStyle,
@@ -75,15 +75,6 @@ function parseCardStyle(value: unknown): CardStyle | '' {
   return '';
 }
 
-function mergeVars(base: ThemeVars, override: ThemeVars): ThemeVars {
-  const next: ThemeVars = { ...base };
-  for (const name of THEME_CSS_VAR_NAMES) {
-    const v = override[name];
-    if (typeof v === 'string' && v.trim()) next[name] = v.trim();
-  }
-  return next;
-}
-
 function parseThemeVars(uiTheme: Record<string, unknown>): ThemeVars {
   const vars: ThemeVars = {};
 
@@ -134,36 +125,41 @@ function parseThemeVars(uiTheme: Record<string, unknown>): ThemeVars {
 }
 
 export function buildThemeFromConfig(config: unknown): Theme {
-  const base = DEFAULT_THEME;
-  if (!isRecord(config)) return base;
+  if (!isRecord(config)) throw new Error('Invalid theme config');
 
   const uiThemeUnknown = config.ui_theme;
-  const uiTheme = isRecord(uiThemeUnknown) ? uiThemeUnknown : {};
+  if (!isRecord(uiThemeUnknown)) throw new Error('Invalid theme config');
+  const uiTheme = uiThemeUnknown;
 
-  const vars = mergeVars(base.vars, parseThemeVars(uiTheme));
+  const vars = parseThemeVars(uiTheme);
+  for (const name of THEME_CSS_VAR_NAMES) {
+    if (!vars[name]) throw new Error('Invalid theme config');
+  }
 
-  const density = parseDensity(uiTheme.density) || base.density;
+  const density = parseDensity(uiTheme.density);
+  if (!density) throw new Error('Invalid theme config');
 
   const typography = isRecord(uiTheme.typography) ? uiTheme.typography : null;
-  const fontFamily =
-    (typography ? parseFontFamily(typography.font_family) : '') ||
-    base.typography.fontFamily;
-  const baseTextSize =
-    (typography ? parseBaseTextSize(typography.base_text_size) : '') ||
-    base.typography.baseTextSize;
+  const fontFamily = typography ? parseFontFamily(typography.font_family) : '';
+  const baseTextSize = typography ? parseBaseTextSize(typography.base_text_size) : '';
+  if (!fontFamily || !baseTextSize) throw new Error('Invalid theme config');
 
   const button = isRecord(uiTheme.button) ? uiTheme.button : null;
-  const buttonStyle = (button ? parseButtonStyle(button.style) : '') || base.button.style;
+  const buttonStyle = button ? parseButtonStyle(button.style) : '';
+  if (!buttonStyle) throw new Error('Invalid theme config');
 
   const card = isRecord(uiTheme.card) ? uiTheme.card : null;
-  const cardStyle = (card ? parseCardStyle(card.style) : '') || base.card.style;
+  const cardStyle = card ? parseCardStyle(card.style) : '';
+  if (!cardStyle) throw new Error('Invalid theme config');
 
-  const logoUrl =
-    sanitizeHttpUrl(readString(uiTheme, 'logo_url')) ||
-    sanitizeHttpUrl(readString(isRecord(uiTheme.logo) ? uiTheme.logo : {}, 'url')) ||
-    '';
-  const logoAlt =
-    readString(isRecord(uiTheme.logo) ? uiTheme.logo : {}, 'alt').trim() || base.logo.alt;
+  const logo = isRecord(uiTheme.logo) ? uiTheme.logo : null;
+  const rawLogoUrl = logo ? readString(logo, 'url').trim() : '';
+  const rawLogoAlt = logo ? readString(logo, 'alt').trim() : '';
+  if (!rawLogoAlt) throw new Error('Invalid theme config');
+
+  const logoUrl = rawLogoUrl ? sanitizeHttpUrl(rawLogoUrl) : '';
+  if (rawLogoUrl && !logoUrl) throw new Error('Invalid theme config');
+  const logoAlt = rawLogoAlt;
 
   return {
     vars,
@@ -187,6 +183,18 @@ function densityPagePadding(density: Density): string {
   }
 }
 
+function densityCardPadding(density: Density): string {
+  switch (density) {
+    case 'compact':
+      return 'p-5';
+    case 'spacious':
+      return 'p-9';
+    case 'comfortable':
+    default:
+      return 'p-7';
+  }
+}
+
 function typographyClasses(typography: Theme['typography']): {
   font: string;
   baseText: string;
@@ -204,7 +212,13 @@ function typographyClasses(typography: Theme['typography']): {
       : typography.baseTextSize === 'lg'
         ? 'text-lg'
         : 'text-base';
-  return { font, baseText, title: 'text-2xl font-semibold tracking-tight' };
+  const titleSize =
+    typography.baseTextSize === 'sm'
+      ? 'text-xl'
+      : typography.baseTextSize === 'lg'
+        ? 'text-3xl'
+        : 'text-2xl';
+  return { font, baseText, title: `${titleSize} font-semibold tracking-tight` };
 }
 
 function cardClasses(style: CardStyle): string {
@@ -217,7 +231,7 @@ function cardClasses(style: CardStyle): string {
 
 function buttonPrimaryClasses(style: ButtonStyle): string {
   const base =
-    'inline-flex w-full items-center justify-center gap-2 rounded-[var(--uoa-radius-button)] px-4 py-2.5 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--uoa-color-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--uoa-color-bg)] disabled:opacity-60';
+    'inline-flex w-full items-center justify-center gap-2 rounded-[var(--uoa-radius-button)] px-4 py-2.5 font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--uoa-color-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--uoa-color-bg)] disabled:opacity-60';
   if (style === 'outline') {
     return `${base} border border-[var(--uoa-color-primary)] bg-transparent text-[var(--uoa-color-primary)] hover:bg-[var(--uoa-color-surface)]`;
   }
@@ -229,7 +243,7 @@ function buttonPrimaryClasses(style: ButtonStyle): string {
 
 function buttonSecondaryClasses(style: ButtonStyle): string {
   const base =
-    'inline-flex w-full items-center justify-center gap-2 rounded-[var(--uoa-radius-button)] px-4 py-2.5 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--uoa-color-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--uoa-color-bg)] disabled:opacity-60';
+    'inline-flex w-full items-center justify-center gap-2 rounded-[var(--uoa-radius-button)] px-4 py-2.5 font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--uoa-color-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--uoa-color-bg)] disabled:opacity-60';
   // Secondary stays neutral regardless of primary style choice.
   void style;
   return `${base} border border-[var(--uoa-color-border)] bg-[var(--uoa-color-surface)] text-[var(--uoa-color-text)] hover:opacity-90`;
@@ -241,7 +255,7 @@ export function buildThemeClassNames(theme: Theme): ThemeClassNames {
   return {
     appShell: `min-h-dvh bg-[var(--uoa-color-bg)] text-[var(--uoa-color-text)] ${t.font} ${t.baseText}`,
     pageContainer: `mx-auto max-w-lg ${densityPagePadding(theme.density)}`,
-    card: `p-7 ${cardClasses(theme.card.style)}`,
+    card: `${densityCardPadding(theme.density)} ${cardClasses(theme.card.style)}`,
     logoWrap: 'mb-6 flex items-center justify-center',
     title: t.title,
     buttonPrimary: buttonPrimaryClasses(theme.button.style),

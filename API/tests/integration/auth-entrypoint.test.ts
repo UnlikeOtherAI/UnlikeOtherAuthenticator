@@ -5,17 +5,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { createApp } from '../../src/app.js';
+import { baseClientConfigPayload } from '../helpers/test-config.js';
 
 async function createSignedConfigJwt(sharedSecret: string): Promise<string> {
   // Minimal payload satisfying required config fields (Task 2.4).
   const aud = process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
-  return await new SignJWT({
-    domain: 'client.example.com',
-    redirect_urls: ['https://client.example.com/oauth/callback'],
-    enabled_auth_methods: ['email_password'],
-    ui_theme: {},
-    language_config: 'en',
-  })
+  return await new SignJWT(baseClientConfigPayload())
     .setProtectedHeader({ alg: 'HS256' })
     .setAudience(aud)
     .sign(new TextEncoder().encode(sharedSecret));
@@ -84,17 +79,12 @@ describe('GET /auth', () => {
     process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
     process.env.AUTH_SERVICE_IDENTIFIER =
       process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
-    const jwt = await new SignJWT({
-      domain: 'client.example.com',
-      redirect_urls: ['https://client.example.com/oauth/callback'],
-      enabled_auth_methods: ['email_password'],
-      ui_theme: {},
-      language_config: 'en',
+    const jwt = await new SignJWT(baseClientConfigPayload({
       user_scope: 'per_domain',
       '2fa_enabled': true,
       debug_enabled: true,
       allowed_social_providers: ['google', 'github'],
-    })
+    }))
       .setProtectedHeader({ alg: 'HS256' })
       .setAudience(process.env.AUTH_SERVICE_IDENTIFIER)
       .sign(new TextEncoder().encode(process.env.SHARED_SECRET));
@@ -173,11 +163,7 @@ describe('GET /auth', () => {
 
     const header = base64UrlEncodeJson({ alg: 'none', typ: 'JWT' });
     const payload = base64UrlEncodeJson({
-      domain: 'client.example.com',
-      redirect_urls: ['https://client.example.com/oauth/callback'],
-      enabled_auth_methods: ['email_password'],
-      ui_theme: {},
-      language_config: 'en',
+      ...baseClientConfigPayload(),
       aud: process.env.AUTH_SERVICE_IDENTIFIER,
     });
     const unsignedJwt = `${header}.${payload}.`;
@@ -243,13 +229,9 @@ describe('GET /auth', () => {
     process.env.AUTH_SERVICE_IDENTIFIER =
       process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
 
-    const jwt = await new SignJWT({
+    const jwt = await new SignJWT(baseClientConfigPayload({
       domain: 'attacker.example.com',
-      redirect_urls: ['https://client.example.com/oauth/callback'],
-      enabled_auth_methods: ['email_password'],
-      ui_theme: {},
-      language_config: 'en',
-    })
+    }))
       .setProtectedHeader({ alg: 'HS256' })
       .setAudience(process.env.AUTH_SERVICE_IDENTIFIER)
       .sign(new TextEncoder().encode(process.env.SHARED_SECRET));
@@ -294,7 +276,7 @@ describe('GET /auth', () => {
       {
         redirect_urls: ['https://client.example.com/oauth/callback'],
         enabled_auth_methods: ['email_password'],
-        ui_theme: {},
+        ui_theme: baseClientConfigPayload().ui_theme,
         language_config: 'en',
       },
     ],
@@ -303,7 +285,7 @@ describe('GET /auth', () => {
       {
         domain: 'client.example.com',
         enabled_auth_methods: ['email_password'],
-        ui_theme: {},
+        ui_theme: baseClientConfigPayload().ui_theme,
         language_config: 'en',
       },
     ],
@@ -312,7 +294,7 @@ describe('GET /auth', () => {
       {
         domain: 'client.example.com',
         redirect_urls: ['https://client.example.com/oauth/callback'],
-        ui_theme: {},
+        ui_theme: baseClientConfigPayload().ui_theme,
         language_config: 'en',
       },
     ],
@@ -331,7 +313,7 @@ describe('GET /auth', () => {
         domain: 'client.example.com',
         redirect_urls: ['https://client.example.com/oauth/callback'],
         enabled_auth_methods: ['email_password'],
-        ui_theme: {},
+        ui_theme: baseClientConfigPayload().ui_theme,
       },
     ],
   ])('returns generic 400 when required config field is missing: %s', async (_field, payload) => {
@@ -366,13 +348,7 @@ describe('GET /auth', () => {
     process.env.AUTH_SERVICE_IDENTIFIER =
       process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
 
-    const jwt = await new SignJWT({
-      domain: 'client.example.com',
-      redirect_urls: ['https://client.example.com/oauth/callback'],
-      enabled_auth_methods: ['email_password'],
-      ui_theme: {},
-      language_config: 'en',
-    })
+    const jwt = await new SignJWT(baseClientConfigPayload())
       .setProtectedHeader({ alg: 'HS256' })
       .sign(new TextEncoder().encode(process.env.SHARED_SECRET));
 
@@ -399,13 +375,7 @@ describe('GET /auth', () => {
     process.env.AUTH_SERVICE_IDENTIFIER =
       process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
 
-    const jwt = await new SignJWT({
-      domain: 'client.example.com',
-      redirect_urls: ['https://client.example.com/oauth/callback'],
-      enabled_auth_methods: ['email_password'],
-      ui_theme: {},
-      language_config: 'en',
-    })
+    const jwt = await new SignJWT(baseClientConfigPayload())
       .setProtectedHeader({ alg: 'HS256' })
       .setAudience('some-other-auth-service')
       .sign(new TextEncoder().encode(process.env.SHARED_SECRET));

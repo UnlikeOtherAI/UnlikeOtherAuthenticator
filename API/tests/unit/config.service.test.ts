@@ -2,15 +2,10 @@ import { describe, expect, it } from 'vitest';
 import type { JWTPayload } from 'jose';
 
 import { validateConfigFields } from '../../src/services/config.service.js';
+import { baseClientConfigPayload } from '../helpers/test-config.js';
 
 function basePayload(): JWTPayload {
-  return {
-    domain: 'client.example.com',
-    redirect_urls: ['https://client.example.com/oauth/callback'],
-    enabled_auth_methods: ['email_password'],
-    ui_theme: {},
-    language_config: 'en',
-  };
+  return baseClientConfigPayload();
 }
 
 describe('validateConfigFields', () => {

@@ -4,6 +4,7 @@ import type { DomainRole } from '@prisma/client';
 import { loginWithSocialProfile } from '../../src/services/social/social-login.service.js';
 import type { Env } from '../../src/config/env.js';
 import type { ClientConfig } from '../../src/services/config.service.js';
+import { testUiTheme } from '../helpers/test-config.js';
 
 describe('social-login.service', () => {
   it('creates a new user and overwrites avatar on subsequent logins', async () => {
@@ -81,7 +82,7 @@ describe('social-login.service', () => {
       domain: 'client.example.com',
       redirect_urls: ['https://client.example.com/oauth/callback'],
       enabled_auth_methods: ['google'],
-      ui_theme: {},
+      ui_theme: testUiTheme(),
       language_config: 'en',
       user_scope: 'global',
       '2fa_enabled': false,

@@ -13,13 +13,80 @@ const RedirectUrlSchema = z
   .min(1)
   .refine((value) => Boolean(tryParseHttpUrl(value)));
 
+const HexColorSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .refine((value) => value === 'transparent' || /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(value));
+
+const CssLengthSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .refine((value) => value === '0' || /^[0-9]+(?:\.[0-9]+)?(px|rem|em|%)$/.test(value));
+
+const HttpUrlOrEmptySchema = z
+  .string()
+  .trim()
+  .refine((value) => value === '' || Boolean(tryParseHttpUrl(value)));
+
+const UiThemeSchema = z
+  .object({
+    colors: z
+      .object({
+        bg: HexColorSchema,
+        surface: HexColorSchema,
+        text: HexColorSchema,
+        muted: HexColorSchema,
+        primary: HexColorSchema,
+        primary_text: HexColorSchema,
+        border: HexColorSchema,
+        danger: HexColorSchema,
+        danger_text: HexColorSchema,
+      })
+      .passthrough(),
+    radii: z
+      .object({
+        card: CssLengthSchema,
+        button: CssLengthSchema,
+        input: CssLengthSchema,
+      })
+      .passthrough(),
+    density: z.enum(['compact', 'comfortable', 'spacious']),
+    typography: z
+      .object({
+        font_family: z.enum(['sans', 'serif', 'mono']),
+        base_text_size: z.enum(['sm', 'md', 'lg']),
+      })
+      .passthrough(),
+    button: z
+      .object({
+        style: z.enum(['solid', 'outline', 'ghost']),
+      })
+      .passthrough(),
+    card: z
+      .object({
+        style: z.enum(['plain', 'bordered', 'shadow']),
+      })
+      .passthrough(),
+    logo: z
+      .object({
+        url: HttpUrlOrEmptySchema,
+        alt: z.string().trim().min(1),
+      })
+      .passthrough(),
+    // Optional explicit overrides for advanced clients; validated if provided.
+    css_vars: z.record(z.string()).optional(),
+  })
+  .passthrough();
+
 const RequiredConfigSchema = z
   .object({
     domain: z.string().min(1),
     // Brief 6.6: validate redirect URLs from config before redirecting.
     redirect_urls: z.array(RedirectUrlSchema).min(1),
     enabled_auth_methods: z.array(z.string().min(1)).min(1),
-    ui_theme: z.record(z.unknown()),
+    ui_theme: UiThemeSchema,
     // Brief: either single language or array of languages (dropdown enabled).
     language_config: z.union([
       z.string().min(1),
@@ -176,7 +243,8 @@ export function assertConfigDomainMatchesConfigUrl(
 /**
  * Task 2.4: Validate required config fields from the verified config JWT payload.
  *
- * This is intentionally minimal and only asserts presence and basic types.
+ * This asserts required keys and validates the UI theme shape so the Auth UI can be
+ * fully config-driven (no hardcoded client styles).
  * Deeper validation (aud/iss enforcement, domain/origin matching, redirect URL allowlisting)
  * is handled in subsequent tasks.
  */

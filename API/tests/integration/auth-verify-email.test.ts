@@ -13,19 +13,13 @@ import { SignJWT } from 'jose';
 import { createApp } from '../../src/app.js';
 import { createTestDb } from '../helpers/test-db.js';
 import { hashEmailToken } from '../../src/utils/verification-token.js';
+import { baseClientConfigPayload } from '../helpers/test-config.js';
 
 const hasDatabase = Boolean(process.env.DATABASE_URL);
 
 async function createSignedConfigJwt(sharedSecret: string): Promise<string> {
   const aud = process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
-  return await new SignJWT({
-    domain: 'client.example.com',
-    redirect_urls: ['https://client.example.com/oauth/callback'],
-    enabled_auth_methods: ['email_password'],
-    ui_theme: {},
-    language_config: 'en',
-    user_scope: 'global',
-  })
+  return await new SignJWT(baseClientConfigPayload({ user_scope: 'global' }))
     .setProtectedHeader({ alg: 'HS256' })
     .setAudience(aud)
     .sign(new TextEncoder().encode(sharedSecret));

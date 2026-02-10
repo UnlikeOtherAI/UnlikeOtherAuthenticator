@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Env } from '../../src/config/env.js';
 import type { ClientConfig } from '../../src/services/config.service.js';
 import { requestRegistrationInstructions } from '../../src/services/auth-register.service.js';
+import { testUiTheme } from '../helpers/test-config.js';
 
 type PrismaUserFindUniqueArgs = {
   where: { userKey: string };
@@ -43,7 +44,7 @@ function baseConfig(overrides?: Partial<ClientConfig>): ClientConfig {
     domain: 'client.example.com',
     redirect_urls: ['https://client.example.com/oauth/callback'],
     enabled_auth_methods: ['email_password'],
-    ui_theme: {},
+    ui_theme: testUiTheme(),
     language_config: 'en',
     user_scope: 'global',
     '2fa_enabled': false,

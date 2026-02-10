@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ClientConfig } from '../../src/services/config.service.js';
+import { testUiTheme } from '../helpers/test-config.js';
 
 let currentConfig: ClientConfig | null = null;
 
@@ -60,7 +61,7 @@ describe('2FA gated by config `2fa_enabled`', () => {
       domain: 'client.example.com',
       redirect_urls: ['https://client.example.com/oauth/callback'],
       enabled_auth_methods: ['email_password'],
-      ui_theme: {},
+      ui_theme: testUiTheme(),
       language_config: 'en',
       user_scope: 'global',
       '2fa_enabled': false,

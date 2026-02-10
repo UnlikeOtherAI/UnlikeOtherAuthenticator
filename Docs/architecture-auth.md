@@ -60,7 +60,7 @@ For the full product spec, see [brief.md](./brief.md). For tech stack, see [tech
     /theme
       ThemeProvider.tsx       — React context provider, reads config and exposes theme values
       theme-utils.ts          — Maps config theme properties to Tailwind classes
-      theme-defaults.ts       — Sensible defaults if optional theme properties are missing
+      theme-defaults.ts       — Theme constants (CSS var names)
     /i18n
       I18nProvider.tsx        — React context provider for translations
       use-translation.ts      — Hook: returns `t()` function for current language
@@ -128,7 +128,7 @@ PopupContainer
 * It maps config values (colors, radii, typography, logo, density) to Tailwind utility classes
 * All components consume theme via the `use-theme` hook
 * **No hardcoded brand styles anywhere** — every visual property comes from config
-* `theme-defaults.ts` provides sensible fallbacks for optional properties
+* `ui_theme` must be fully specified; missing theme properties should fail config validation
 
 ---
 
