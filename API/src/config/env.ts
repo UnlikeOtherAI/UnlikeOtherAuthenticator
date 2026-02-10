@@ -39,6 +39,8 @@ const EnvSchema = z.object({
   // Social providers (one set of credentials for the auth service, not per-client).
   GOOGLE_CLIENT_ID: z.string().min(1).optional(),
   GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
+  FACEBOOK_CLIENT_ID: z.string().min(1).optional(),
+  FACEBOOK_CLIENT_SECRET: z.string().min(1).optional(),
   APPLE_CLIENT_ID: z.string().min(1).optional(),
   APPLE_TEAM_ID: z.string().min(1).optional(),
   APPLE_KEY_ID: z.string().min(1).optional(),

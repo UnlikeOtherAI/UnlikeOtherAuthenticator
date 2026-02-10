@@ -11,6 +11,7 @@ import {
 } from '../../services/config.service.js';
 import { assertSocialProviderAllowed } from '../../services/social/index.js';
 import { getAppleProfileFromCode } from '../../services/social/apple.service.js';
+import { getFacebookProfileFromCode } from '../../services/social/facebook.service.js';
 import { getGoogleProfileFromCode } from '../../services/social/google.service.js';
 import type { SocialProfile } from '../../services/social/provider.base.js';
 import { loginWithSocialProfile } from '../../services/social/social-login.service.js';
@@ -22,7 +23,7 @@ import {
 } from '../../services/token.service.js';
 
 const ParamsSchema = z.object({
-  provider: z.enum(['google', 'apple']),
+  provider: z.enum(['google', 'apple', 'facebook']),
 });
 
 const QuerySchema = z
@@ -105,6 +106,18 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         code,
         clientId: env.GOOGLE_CLIENT_ID,
         clientSecret: env.GOOGLE_CLIENT_SECRET,
+        redirectUri,
+      });
+    } else if (provider === 'facebook') {
+      if (!env.FACEBOOK_CLIENT_ID || !env.FACEBOOK_CLIENT_SECRET) {
+        throw new AppError('INTERNAL', 500, 'FACEBOOK_ENV_MISSING');
+      }
+
+      const redirectUri = `${baseUrl}/auth/callback/facebook`;
+      profile = await getFacebookProfileFromCode({
+        code,
+        clientId: env.FACEBOOK_CLIENT_ID,
+        clientSecret: env.FACEBOOK_CLIENT_SECRET,
         redirectUri,
       });
     } else if (provider === 'apple') {
