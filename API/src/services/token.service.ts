@@ -10,6 +10,7 @@ import { ensureDomainRoleForUser } from './domain-role.service.js';
 import { createClientId } from '../utils/hash.js';
 import { AppError } from '../utils/errors.js';
 import type { ClientConfig } from './config.service.js';
+import { tryParseHttpUrl } from '../utils/http-url.js';
 
 type TokenPrisma = {
   authorizationCode: Pick<
@@ -45,21 +46,8 @@ function sharedSecretKey(sharedSecret: string): Uint8Array {
 }
 
 function parseHttpUrl(value: string): URL {
-  let u: URL;
-  try {
-    u = new URL(value);
-  } catch {
-    throw new AppError('BAD_REQUEST', 400, 'INVALID_REDIRECT_URL');
-  }
-
-  if (u.protocol !== 'https:' && u.protocol !== 'http:') {
-    throw new AppError('BAD_REQUEST', 400, 'INVALID_REDIRECT_URL');
-  }
-
-  if (!u.hostname) {
-    throw new AppError('BAD_REQUEST', 400, 'INVALID_REDIRECT_URL');
-  }
-
+  const u = tryParseHttpUrl(value);
+  if (!u) throw new AppError('BAD_REQUEST', 400, 'INVALID_REDIRECT_URL');
   return u;
 }
 

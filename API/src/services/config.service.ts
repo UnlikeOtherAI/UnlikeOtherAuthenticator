@@ -1,15 +1,23 @@
 import { AppError } from '../utils/errors.js';
 import { jwtVerify, type JWTPayload } from 'jose';
 import { z } from 'zod';
+import { tryParseHttpUrl } from '../utils/http-url.js';
 
 const DEFAULT_CONFIG_FETCH_TIMEOUT_MS = 5_000;
 
 const CONFIG_JWT_ALLOWED_ALGS = ['HS256', 'HS384', 'HS512'] as const;
 
+const RedirectUrlSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .refine((value) => Boolean(tryParseHttpUrl(value)));
+
 const RequiredConfigSchema = z
   .object({
     domain: z.string().min(1),
-    redirect_urls: z.array(z.string().min(1)).min(1),
+    // Brief 6.6: validate redirect URLs from config before redirecting.
+    redirect_urls: z.array(RedirectUrlSchema).min(1),
     enabled_auth_methods: z.array(z.string().min(1)).min(1),
     ui_theme: z.record(z.unknown()),
     // Brief: either single language or array of languages (dropdown enabled).

@@ -62,5 +62,29 @@ describe('validateConfigFields', () => {
       }),
     ).toThrow();
   });
-});
 
+  it('rejects invalid redirect_urls entries', () => {
+    expect(() =>
+      validateConfigFields({
+        ...basePayload(),
+        redirect_urls: ['javascript:alert(1)'],
+      }),
+    ).toThrow();
+
+    expect(() =>
+      validateConfigFields({
+        ...basePayload(),
+        redirect_urls: ['/relative/path'],
+      }),
+    ).toThrow();
+  });
+
+  it('trims redirect_urls entries', () => {
+    const cfg = validateConfigFields({
+      ...basePayload(),
+      redirect_urls: ['  https://client.example.com/oauth/callback  '],
+    });
+
+    expect(cfg.redirect_urls).toEqual(['https://client.example.com/oauth/callback']);
+  });
+});
