@@ -4,6 +4,7 @@ import {
   buildTotpOtpAuthUri,
   generateTotpSecret,
   renderTotpQrCodeDataUrl,
+  verifyTotpCode,
 } from '../../src/services/totp.service.js';
 
 describe('totp.service', () => {
@@ -68,5 +69,89 @@ describe('totp.service', () => {
     const b64 = dataUrl.slice('data:image/svg+xml;base64,'.length);
     const svg = Buffer.from(b64, 'base64').toString('utf8');
     expect(svg).toContain('<svg');
+  });
+
+  it('verifies RFC 6238 SHA1 test vectors (8 digits)', () => {
+    // RFC 6238 Appendix B uses secret "12345678901234567890" (ASCII),
+    // which base32-encodes to:
+    const secret = 'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ';
+
+    expect(
+      verifyTotpCode({
+        secret,
+        code: '94287082',
+        digits: 8,
+        algorithm: 'SHA1',
+        period: 30,
+        now: new Date(59_000),
+        window: 0,
+      }),
+    ).toBe(true);
+
+    expect(
+      verifyTotpCode({
+        secret,
+        code: '07081804',
+        digits: 8,
+        algorithm: 'SHA1',
+        period: 30,
+        now: new Date(1_111_111_109_000),
+        window: 0,
+      }),
+    ).toBe(true);
+
+    expect(
+      verifyTotpCode({
+        secret,
+        code: '00000000',
+        digits: 8,
+        algorithm: 'SHA1',
+        period: 30,
+        now: new Date(59_000),
+        window: 0,
+      }),
+    ).toBe(false);
+  });
+
+  it('verifies 6-digit codes with a small time-skew window', () => {
+    const secret = 'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ';
+
+    // At t=59s, the 6-digit code is 287082 (94287082 mod 1e6).
+    expect(
+      verifyTotpCode({
+        secret,
+        code: '287082',
+        digits: 6,
+        algorithm: 'SHA1',
+        period: 30,
+        now: new Date(59_000),
+        window: 0,
+      }),
+    ).toBe(true);
+
+    // With window=1, accept a code from the previous 30s step.
+    expect(
+      verifyTotpCode({
+        secret,
+        code: '287082',
+        digits: 6,
+        algorithm: 'SHA1',
+        period: 30,
+        now: new Date(89_000),
+        window: 1,
+      }),
+    ).toBe(true);
+
+    expect(
+      verifyTotpCode({
+        secret,
+        code: '287082',
+        digits: 6,
+        algorithm: 'SHA1',
+        period: 30,
+        now: new Date(89_000),
+        window: 0,
+      }),
+    ).toBe(false);
   });
 });

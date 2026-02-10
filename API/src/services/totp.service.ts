@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 
 import * as QRCode from 'qrcode';
 
@@ -37,6 +37,42 @@ function base32Encode(bytes: Uint8Array): string {
   return out;
 }
 
+function base32Decode(secret: string): Uint8Array {
+  assertTotpSecretValid(secret);
+  const s = secret.trim();
+
+  // RFC 4648 base32 decode (no padding).
+  const out: number[] = [];
+  let buffer = 0;
+  let bitsLeft = 0;
+
+  for (const ch of s) {
+    const code = ch.charCodeAt(0);
+    let val = -1;
+
+    if (code >= 65 && code <= 90) {
+      // A-Z
+      val = code - 65;
+    } else if (code >= 50 && code <= 55) {
+      // 2-7
+      val = 26 + (code - 50);
+    }
+
+    if (val < 0) throw new AppError('BAD_REQUEST', 400, 'INVALID_TOTP_SECRET');
+
+    buffer = (buffer << 5) | val;
+    bitsLeft += 5;
+
+    while (bitsLeft >= 8) {
+      out.push((buffer >> (bitsLeft - 8)) & 255);
+      bitsLeft -= 8;
+      buffer &= (1 << bitsLeft) - 1;
+    }
+  }
+
+  return Uint8Array.from(out);
+}
+
 /**
  * Brief 13 / Phase 8.1: generate a user-specific TOTP secret for enrollment.
  *
@@ -52,6 +88,13 @@ function assertTotpSecretValid(secret: string): void {
   const trimmed = secret.trim();
   if (!trimmed) throw new AppError('BAD_REQUEST', 400, 'INVALID_TOTP_SECRET');
   if (!BASE32_RE.test(trimmed)) throw new AppError('BAD_REQUEST', 400, 'INVALID_TOTP_SECRET');
+}
+
+function assertTotpCodeValid(code: string, digits: 6 | 8): void {
+  if (typeof code !== 'string') throw new AppError('BAD_REQUEST', 400, 'INVALID_TOTP_CODE');
+  const trimmed = code.trim();
+  if (trimmed.length !== digits) throw new AppError('BAD_REQUEST', 400, 'INVALID_TOTP_CODE');
+  if (!/^[0-9]+$/.test(trimmed)) throw new AppError('BAD_REQUEST', 400, 'INVALID_TOTP_CODE');
 }
 
 /**
@@ -87,6 +130,96 @@ export function buildTotpOtpAuthUri(params: {
   sp.set('period', String(params.period ?? 30));
 
   return `otpauth://totp/${label}?${sp.toString()}`;
+}
+
+function toCryptoAlgorithm(algorithm: 'SHA1' | 'SHA256' | 'SHA512'): 'sha1' | 'sha256' | 'sha512' {
+  if (algorithm === 'SHA1') return 'sha1';
+  if (algorithm === 'SHA256') return 'sha256';
+  return 'sha512';
+}
+
+function computeTotp(params: {
+  secret: string;
+  nowMs: number;
+  algorithm: 'SHA1' | 'SHA256' | 'SHA512';
+  digits: 6 | 8;
+  period: number;
+}): string {
+  const secretBytes = base32Decode(params.secret);
+
+  const period = params.period;
+  if (!Number.isFinite(period) || period <= 0) throw new AppError('BAD_REQUEST', 400, 'INVALID_TOTP_PERIOD');
+
+  const nowMs = params.nowMs;
+  if (!Number.isFinite(nowMs) || nowMs < 0) throw new AppError('BAD_REQUEST', 400, 'INVALID_TOTP_TIME');
+
+  const counter = BigInt(Math.floor(nowMs / 1000 / period));
+  const counterBuf = Buffer.alloc(8);
+  counterBuf.writeBigUInt64BE(counter);
+
+  const mac = createHmac(toCryptoAlgorithm(params.algorithm), Buffer.from(secretBytes))
+    .update(counterBuf)
+    .digest();
+
+  // Dynamic truncation (RFC 4226/6238).
+  const offset = mac[mac.length - 1]! & 0x0f;
+  const binCode =
+    ((mac[offset]! & 0x7f) << 24) |
+    ((mac[offset + 1]! & 0xff) << 16) |
+    ((mac[offset + 2]! & 0xff) << 8) |
+    (mac[offset + 3]! & 0xff);
+
+  const mod = params.digits === 8 ? 100_000_000 : 1_000_000;
+  const otp = binCode % mod;
+  return String(otp).padStart(params.digits, '0');
+}
+
+/**
+ * Brief 13 / Phase 8.4: verify the initial TOTP code during setup.
+ *
+ * For UX, we allow a small time skew window (default +/- 1 step).
+ * Callers are responsible for rate limiting and generic user-facing errors.
+ */
+export function verifyTotpCode(params: {
+  secret: string;
+  code: string;
+  now?: Date;
+  algorithm?: 'SHA1' | 'SHA256' | 'SHA512';
+  digits?: 6 | 8;
+  period?: number;
+  window?: number;
+}): boolean {
+  const algorithm = params.algorithm ?? 'SHA1';
+  const digits = params.digits ?? 6;
+  const period = params.period ?? 30;
+  const window = params.window ?? 1;
+
+  assertTotpCodeValid(params.code, digits);
+  assertTotpSecretValid(params.secret);
+
+  if (!Number.isInteger(window) || window < 0 || window > 5) {
+    // Keep the allowed skew bounded to avoid accidental large acceptance windows.
+    throw new AppError('BAD_REQUEST', 400, 'INVALID_TOTP_WINDOW');
+  }
+
+  const baseNowMs = (params.now ?? new Date()).getTime();
+  const expected = Buffer.from(params.code.trim(), 'utf8');
+
+  for (let step = -window; step <= window; step += 1) {
+    const candidate = computeTotp({
+      secret: params.secret,
+      nowMs: baseNowMs + step * period * 1000,
+      algorithm,
+      digits,
+      period,
+    });
+
+    const candidateBuf = Buffer.from(candidate, 'utf8');
+    if (candidateBuf.length !== expected.length) continue;
+    if (timingSafeEqual(candidateBuf, expected)) return true;
+  }
+
+  return false;
 }
 
 /**
