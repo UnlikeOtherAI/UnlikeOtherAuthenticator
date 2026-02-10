@@ -93,7 +93,7 @@ describe.skipIf(!hasDatabase)('Email verification flow', () => {
 
     const landing = await app.inject({
       method: 'GET',
-      url: `/auth/email/verify-set-password?${baseQuery}&token=${encodeURIComponent(rawToken)}`,
+      url: `/auth/email/link?${baseQuery}&token=${encodeURIComponent(rawToken)}`,
     });
 
     expect(landing.statusCode).toBe(200);

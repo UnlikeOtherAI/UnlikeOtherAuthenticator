@@ -113,8 +113,10 @@ describe('requestRegistrationInstructions', () => {
 
     expect(sendLoginLinkEmail).toHaveBeenCalledWith({
       to: 'existing@example.com',
-      link: 'https://auth.example.com/auth/email/login-link?token=token123&config_url=https%3A%2F%2Fclient.example.com%2Fauth-config',
+      link: 'https://auth.example.com/auth/email/link?token=token123&config_url=https%3A%2F%2Fclient.example.com%2Fauth-config',
     });
+    expect(sendLoginLinkEmail.mock.calls[0][0].link).not.toContain('login-link');
+    expect(sendLoginLinkEmail.mock.calls[0][0].link).not.toContain('verify-set-password');
     expect(sendVerifyEmailSetPasswordEmail).not.toHaveBeenCalled();
   });
 
@@ -174,8 +176,10 @@ describe('requestRegistrationInstructions', () => {
 
     expect(sendVerifyEmailSetPasswordEmail).toHaveBeenCalledWith({
       to: 'new@example.com',
-      link: 'https://auth.example.com/auth/email/verify-set-password?token=token456&config_url=https%3A%2F%2Fclient.example.com%2Fauth-config',
+      link: 'https://auth.example.com/auth/email/link?token=token456&config_url=https%3A%2F%2Fclient.example.com%2Fauth-config',
     });
+    expect(sendVerifyEmailSetPasswordEmail.mock.calls[0][0].link).not.toContain('login-link');
+    expect(sendVerifyEmailSetPasswordEmail.mock.calls[0][0].link).not.toContain('verify-set-password');
     expect(sendLoginLinkEmail).not.toHaveBeenCalled();
   });
 

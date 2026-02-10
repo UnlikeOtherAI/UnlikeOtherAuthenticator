@@ -41,14 +41,15 @@ function normalizeBaseUrl(value: string): string {
   return value.trim().replace(/\/+$/, '');
 }
 
-function buildEmailActionLink(params: {
+function buildRegistrationEmailLandingLink(params: {
   baseUrl: string;
-  action: 'login-link' | 'verify-set-password';
   token: string;
   configUrl: string;
 }): string {
   const baseUrl = normalizeBaseUrl(params.baseUrl);
-  const url = new URL(`${baseUrl}/auth/email/${params.action}`);
+  // Neutral landing route for registration flows (existing-user login link vs new-user
+  // verify+set-password) to avoid leaking account state via URL semantics.
+  const url = new URL(`${baseUrl}/auth/email/link`);
   url.searchParams.set('token', params.token);
   url.searchParams.set('config_url', params.configUrl);
   return url.toString();
@@ -107,9 +108,8 @@ export async function requestRegistrationInstructions(
     : `http://${env.HOST}:${env.PORT}`;
 
   if (existing) {
-    const link = buildEmailActionLink({
+    const link = buildRegistrationEmailLandingLink({
       baseUrl,
-      action: 'login-link',
       token,
       configUrl: params.configUrl,
     });
@@ -117,9 +117,8 @@ export async function requestRegistrationInstructions(
     return;
   }
 
-  const link = buildEmailActionLink({
+  const link = buildRegistrationEmailLandingLink({
     baseUrl,
-    action: 'verify-set-password',
     token,
     configUrl: params.configUrl,
   });

@@ -9,12 +9,14 @@ import {
 
 describe('buildVerifyEmailSetPasswordTemplate', () => {
   it('includes subject, text, and html with the provided link', () => {
-    const link = 'https://auth.example.com/auth/email/verify-set-password?token=t&config_url=https%3A%2F%2Fcfg.example.com%2Fconfig.jwt';
+    const link = 'https://auth.example.com/auth/email/link?token=t&config_url=https%3A%2F%2Fcfg.example.com%2Fconfig.jwt';
     const tpl = buildVerifyEmailSetPasswordTemplate({ link });
     const escapedLink = link.replaceAll('&', '&amp;');
 
     expect(tpl.subject).toBe('Your sign-in link');
     expect(tpl.text).toContain(link);
+    expect(tpl.text).not.toContain('login-link');
+    expect(tpl.text).not.toContain('verify-set-password');
     expect(tpl.text).toMatch(/expires in 30 minutes/i);
     expect(tpl.text).toMatch(/ignore this email/i);
     expect(tpl.text).not.toMatch(/set your password/i);
@@ -22,6 +24,8 @@ describe('buildVerifyEmailSetPasswordTemplate', () => {
     expect(tpl.html).toContain('Continue signing in');
     expect(tpl.html).toContain('Continue');
     expect(tpl.html).toContain(`href="${escapedLink}"`);
+    expect(tpl.html).not.toContain('login-link');
+    expect(tpl.html).not.toContain('verify-set-password');
   });
 
   it('escapes links in HTML so special characters cannot break attributes', () => {
@@ -65,18 +69,22 @@ describe('buildPasswordResetTemplate', () => {
 
 describe('buildLoginLinkTemplate', () => {
   it('includes subject, text, and html with the provided link', () => {
-    const link = 'https://auth.example.com/auth/email/login-link?token=t&config_url=https%3A%2F%2Fcfg.example.com%2Fconfig.jwt';
+    const link = 'https://auth.example.com/auth/email/link?token=t&config_url=https%3A%2F%2Fcfg.example.com%2Fconfig.jwt';
     const tpl = buildLoginLinkTemplate({ link });
     const escapedLink = link.replaceAll('&', '&amp;');
 
     expect(tpl.subject).toBe('Your sign-in link');
     expect(tpl.text).toContain(link);
+    expect(tpl.text).not.toContain('login-link');
+    expect(tpl.text).not.toContain('verify-set-password');
     expect(tpl.text).toMatch(/expires in 30 minutes/i);
     expect(tpl.text).toMatch(/ignore this email/i);
 
     expect(tpl.html).toContain('Continue signing in');
     expect(tpl.html).toContain('Continue');
     expect(tpl.html).toContain(`href="${escapedLink}"`);
+    expect(tpl.html).not.toContain('login-link');
+    expect(tpl.html).not.toContain('verify-set-password');
   });
 
   it('escapes links in HTML so special characters cannot break attributes', () => {
