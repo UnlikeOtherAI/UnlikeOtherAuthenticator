@@ -94,6 +94,12 @@ describe.skipIf(!hasDatabase)('POST /auth/token', () => {
     const tokenRes = await app.inject({
       method: 'POST',
       url: `/auth/token?config_url=${encodeURIComponent(configUrl)}`,
+      headers: {
+        authorization: `Bearer ${createClientId(
+          'client.example.com',
+          process.env.SHARED_SECRET!,
+        )}`,
+      },
       payload: { code: loginBody.code },
     });
     expect(tokenRes.statusCode).toBe(200);
@@ -163,6 +169,12 @@ describe.skipIf(!hasDatabase)('POST /auth/token', () => {
     const first = await app.inject({
       method: 'POST',
       url: `/auth/token?config_url=${encodeURIComponent(configUrl)}`,
+      headers: {
+        authorization: `Bearer ${createClientId(
+          'client.example.com',
+          process.env.SHARED_SECRET!,
+        )}`,
+      },
       payload: { code },
     });
     expect(first.statusCode).toBe(200);
@@ -170,6 +182,12 @@ describe.skipIf(!hasDatabase)('POST /auth/token', () => {
     const second = await app.inject({
       method: 'POST',
       url: `/auth/token?config_url=${encodeURIComponent(configUrl)}`,
+      headers: {
+        authorization: `Bearer ${createClientId(
+          'client.example.com',
+          process.env.SHARED_SECRET!,
+        )}`,
+      },
       payload: { code },
     });
     expect(second.statusCode).toBe(401);
@@ -177,5 +195,40 @@ describe.skipIf(!hasDatabase)('POST /auth/token', () => {
 
     await app.close();
   });
-});
 
+  it('rejects exchanging a code without a domain-hash bearer token', async () => {
+    const passwordHash = await hashPassword('Abcdef1!');
+    await handle!.prisma.user.create({
+      data: {
+        email: 'user@example.com',
+        userKey: 'user@example.com',
+        passwordHash,
+      },
+    });
+
+    const jwt = await createSignedConfigJwt(process.env.SHARED_SECRET!);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(jwt, { status: 200 })));
+
+    const app = await createApp();
+    await app.ready();
+
+    const configUrl = 'https://client.example.com/auth-config';
+    const loginRes = await app.inject({
+      method: 'POST',
+      url: `/auth/login?config_url=${encodeURIComponent(configUrl)}`,
+      payload: { email: 'user@example.com', password: 'Abcdef1!' },
+    });
+    expect(loginRes.statusCode).toBe(200);
+    const { code } = loginRes.json() as { code: string };
+
+    const tokenRes = await app.inject({
+      method: 'POST',
+      url: `/auth/token?config_url=${encodeURIComponent(configUrl)}`,
+      payload: { code },
+    });
+    expect(tokenRes.statusCode).toBe(401);
+    expect(tokenRes.json()).toEqual({ error: 'Request failed' });
+
+    await app.close();
+  });
+});

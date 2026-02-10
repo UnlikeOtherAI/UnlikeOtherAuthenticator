@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 import { configVerifier } from '../../middleware/config-verifier.js';
+import { requireDomainHashAuth } from '../../middleware/domain-hash-auth.js';
 import { exchangeAuthorizationCodeForAccessToken } from '../../services/token.service.js';
 
 const BodySchema = z
@@ -15,7 +16,7 @@ export function registerAuthTokenExchangeRoute(app: FastifyInstance): void {
   app.post(
     '/auth/token',
     {
-      preHandler: [configVerifier],
+      preHandler: [configVerifier, requireDomainHashAuth],
     },
     async (request, reply) => {
       const { code } = BodySchema.parse(request.body);
@@ -40,4 +41,3 @@ export function registerAuthTokenExchangeRoute(app: FastifyInstance): void {
     },
   );
 }
-

@@ -534,6 +534,7 @@ The following tighten ambiguities in the brief to prevent misinterpretation duri
 * This is the standard, more secure approach
 * The token is **never** returned directly to the frontend via the popup
 * Clients must have a backend callback endpoint to complete the exchange
+* The code exchange endpoint must require backend-only authorization (derived from the shared secret)
 
 ---
 
