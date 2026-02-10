@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import {
   assertPasswordValid,
+  hashPassword,
   isPasswordValid,
+  verifyPassword,
 } from '../../src/services/password.service.js';
 
 describe('password.service', () => {
@@ -35,5 +37,21 @@ describe('password.service', () => {
   it('does not treat whitespace as a special character', () => {
     expect(isPasswordValid('Abcdef1 ')).toBe(false);
   });
-});
 
+  it('hashes and verifies passwords with argon2id', async () => {
+    const password = 'Abcdef1-';
+    const hash = await hashPassword(password);
+
+    expect(hash).toContain('$argon2id$');
+    await expect(verifyPassword(password, hash)).resolves.toBe(true);
+    await expect(verifyPassword('Wrongpass1-', hash)).resolves.toBe(false);
+  });
+
+  it('rejects hashing when password violates the policy', async () => {
+    await expect(hashPassword('Aa1-aaa')).rejects.toThrow();
+  });
+
+  it('fails closed when hash is invalid/corrupt', async () => {
+    await expect(verifyPassword('Abcdef1-', 'not-a-hash')).resolves.toBe(false);
+  });
+});
