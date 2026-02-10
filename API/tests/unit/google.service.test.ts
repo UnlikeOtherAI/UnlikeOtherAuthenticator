@@ -92,5 +92,31 @@ describe('google.service', () => {
       if (!profile.emailVerified) throw new AppError('UNAUTHORIZED', 401);
     }).toThrow();
   });
-});
 
+  it('treats string "false" as unverified', async () => {
+    const fetchMock = vi.fn();
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ access_token: 'access-token' }), { status: 200 }),
+    );
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          email: 'user@example.com',
+          email_verified: 'false',
+          name: 'User Example',
+        }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const profile = await getGoogleProfileFromCode({
+      code: 'auth-code',
+      clientId: 'client-id',
+      clientSecret: 'client-secret',
+      redirectUri: 'https://auth.example.com/auth/callback/google',
+    });
+
+    expect(profile.emailVerified).toBe(false);
+  });
+});

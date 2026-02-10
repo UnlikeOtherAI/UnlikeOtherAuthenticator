@@ -15,6 +15,14 @@ function normalizeOptionalString(value: unknown): string | null {
   return s ? s : null;
 }
 
+function parseBooleanish(value: unknown): boolean {
+  if (value === true) return true;
+  if (value === false) return false;
+  if (typeof value === 'string') return value.trim().toLowerCase() === 'true';
+  if (typeof value === 'number') return value === 1;
+  return false;
+}
+
 export function buildGoogleAuthorizationUrl(params: {
   clientId: string;
   redirectUri: string;
@@ -115,9 +123,9 @@ export async function getGoogleProfileFromCode(params: {
   return validateSocialProfile({
     provider: 'google',
     email: normalizeString(obj.email),
-    emailVerified: Boolean(obj.email_verified),
+    // Brief 22.6: require provider-verified email. Some providers may serialize booleans as strings.
+    emailVerified: parseBooleanish(obj.email_verified),
     name: normalizeOptionalString(obj.name),
     avatarUrl: normalizeOptionalString(obj.picture),
   });
 }
-
