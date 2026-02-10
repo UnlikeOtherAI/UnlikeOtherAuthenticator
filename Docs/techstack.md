@@ -105,7 +105,14 @@ All secrets and configuration live in environment variables. Nothing is hardcode
 * `AUTH_SERVICE_IDENTIFIER` — auth service identifier (expected `aud` for config JWTs)
 * `DATABASE_URL` — database connection string
 * Social provider credentials (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, etc.)
-* Email service credentials
+* Email service credentials:
+  * `EMAIL_PROVIDER` — `disabled` (default behavior) or `smtp`
+  * `EMAIL_FROM` — required for `smtp`
+  * `EMAIL_REPLY_TO` — optional reply-to address
+  * `SMTP_HOST` — required for `smtp`
+  * `SMTP_PORT` — optional (default: 587)
+  * `SMTP_SECURE` — optional (`true`/`false`, default: `false`)
+  * `SMTP_USER` / `SMTP_PASSWORD` — optional (SMTP auth)
 * AI translation service credentials
 * `ACCESS_TOKEN_TTL` — access token lifetime (minutes-only, 15m–60m; default: 30m)
 * `LOG_RETENTION_DAYS` — login log retention window (default: 90)

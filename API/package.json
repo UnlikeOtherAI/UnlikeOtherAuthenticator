@@ -21,11 +21,13 @@
     "dotenv": "^16.6.1",
     "fastify": "^5.2.1",
     "jose": "^5.9.6",
+    "nodemailer": "^6.10.1",
     "qrcode": "^1.5.4",
     "zod": "^3.24.1"
   },
   "devDependencies": {
     "@types/node": "^22.13.1",
+    "@types/nodemailer": "^6.4.17",
     "@types/qrcode": "^1.5.6",
     "prisma": "^6.3.1",
     "tsx": "^4.19.2",
