@@ -21,13 +21,27 @@ model User {
   domain       String?
   passwordHash String?   @map("password_hash")
   name         String?
-  role         UserRole  @default(USER)
   twoFaEnabled Boolean   @default(false) @map("2fa_enabled")
   twoFaSecret  String?   @map("2fa_secret")
   avatarUrl    String?   @map("avatar_url")
   createdAt    DateTime  @default(now()) @map("created_at")
 
+  domainRoles  DomainRole[]
+
   @@index([email])
   @@index([domain])
   @@map("users")
+}
+
+model DomainRole {
+  domain    String
+  userId    String   @map("user_id")
+  role      UserRole @default(USER)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([domain, userId])
+  @@index([userId])
+  @@map("domain_roles")
 }
