@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -19,7 +20,10 @@ function apiRootDir(): string {
 
 function prismaBinPath(): string {
   const bin = process.platform === 'win32' ? 'prisma.cmd' : 'prisma';
-  return path.join(apiRootDir(), 'node_modules', '.bin', bin);
+  // In npm workspaces, binaries are often hoisted to the repo root `node_modules/.bin`.
+  const local = path.join(apiRootDir(), 'node_modules', '.bin', bin);
+  if (fs.existsSync(local)) return local;
+  return path.join(apiRootDir(), '..', 'node_modules', '.bin', bin);
 }
 
 function withSchemaParam(databaseUrl: string, schema: string): string {
@@ -51,11 +55,11 @@ export async function createTestDb(): Promise<TestDbHandle | null> {
     process.platform === 'win32'
       ? [
           '/c',
-          `echo CREATE SCHEMA IF NOT EXISTS "${schema}"; | "${prismaBinPath()}" db execute --stdin`,
+          `echo CREATE SCHEMA IF NOT EXISTS "${schema}"; | "${prismaBinPath()}" db execute --stdin --schema prisma/schema.prisma`,
         ]
       : [
           '-lc',
-          `echo 'CREATE SCHEMA IF NOT EXISTS "${schema}";' | "${prismaBinPath()}" db execute --stdin`,
+          `echo 'CREATE SCHEMA IF NOT EXISTS "${schema}";' | "${prismaBinPath()}" db execute --stdin --schema prisma/schema.prisma`,
         ],
     {
       cwd: apiRootDir(),
@@ -79,11 +83,11 @@ export async function createTestDb(): Promise<TestDbHandle | null> {
       process.platform === 'win32'
         ? [
             '/c',
-            `echo DROP SCHEMA IF EXISTS "${schema}" CASCADE; | "${prismaBinPath()}" db execute --stdin`,
+            `echo DROP SCHEMA IF EXISTS "${schema}" CASCADE; | "${prismaBinPath()}" db execute --stdin --schema prisma/schema.prisma`,
           ]
         : [
             '-lc',
-            `echo 'DROP SCHEMA IF EXISTS "${schema}" CASCADE;' | "${prismaBinPath()}" db execute --stdin`,
+            `echo 'DROP SCHEMA IF EXISTS "${schema}" CASCADE;' | "${prismaBinPath()}" db execute --stdin --schema prisma/schema.prisma`,
           ],
       {
         cwd: apiRootDir(),

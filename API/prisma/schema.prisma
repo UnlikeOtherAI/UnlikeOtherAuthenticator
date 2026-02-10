@@ -36,6 +36,7 @@ model User {
   domainRoles  DomainRole[]
   tokens       VerificationToken[]
   authorizationCodes AuthorizationCode[]
+  loginLogs    LoginLog[]
 
   @@index([email])
   @@index([domain])
@@ -95,6 +96,24 @@ model AuthorizationCode {
   @@index([expiresAt])
   @@index([createdAt])
   @@map("authorization_codes")
+}
+
+model LoginLog {
+  id         String   @id @default(cuid())
+  userId     String   @map("user_id")
+  email      String
+  domain     String
+  authMethod String   @map("auth_method")
+  ip         String?
+  userAgent  String?  @map("user_agent")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([domain, createdAt])
+  @@index([createdAt])
+  @@map("login_logs")
 }
 
 // Brief 8.4 / Phase 10: AI translation fallback results must be cached permanently after generation.

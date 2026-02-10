@@ -86,6 +86,12 @@ export function parseEnv(input: NodeJS.ProcessEnv): Env {
 }
 
 export function getEnv(): Env {
+  // In production the environment is static, so caching is fine. In tests we mutate `process.env`
+  // across suites (e.g. DATABASE_URL per test schema), so always re-parse to avoid stale values.
+  if (process.env.NODE_ENV === 'test') {
+    return parseEnv(process.env);
+  }
+
   cachedEnv ??= parseEnv(process.env);
   return cachedEnv;
 }

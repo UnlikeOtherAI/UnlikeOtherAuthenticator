@@ -69,7 +69,7 @@ describe.skipIf(!hasDatabase)('POST /auth/token', () => {
     });
 
     const jwt = await createSignedConfigJwt(process.env.SHARED_SECRET!);
-    const fetchMock = vi.fn().mockResolvedValue(new Response(jwt, { status: 200 }));
+    const fetchMock = vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
 
     const app = await createApp();
@@ -149,7 +149,10 @@ describe.skipIf(!hasDatabase)('POST /auth/token', () => {
     });
 
     const jwt = await createSignedConfigJwt(process.env.SHARED_SECRET!);
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(jwt, { status: 200 })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 })),
+    );
 
     const app = await createApp();
     await app.ready();
@@ -197,7 +200,10 @@ describe.skipIf(!hasDatabase)('POST /auth/token', () => {
     });
 
     const jwt = await createSignedConfigJwt(process.env.SHARED_SECRET!);
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(jwt, { status: 200 })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 })),
+    );
 
     const app = await createApp();
     await app.ready();
@@ -252,7 +258,10 @@ describe.skipIf(!hasDatabase)('POST /auth/token', () => {
     });
 
     const jwt = await createSignedConfigJwt(process.env.SHARED_SECRET!);
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(jwt, { status: 200 })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 })),
+    );
 
     const app = await createApp();
     await app.ready();

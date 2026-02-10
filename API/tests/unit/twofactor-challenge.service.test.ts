@@ -13,6 +13,7 @@ describe('twofactor-challenge.service', () => {
       domain: 'client.example.com',
       configUrl: 'https://client.example.com/auth-config',
       redirectUrl: 'https://client.example.com/oauth/callback',
+      authMethod: 'email_password',
       sharedSecret: 'test-shared-secret',
       audience: 'uoa-auth-service',
       now,
@@ -31,6 +32,7 @@ describe('twofactor-challenge.service', () => {
       domain: 'client.example.com',
       configUrl: 'https://client.example.com/auth-config',
       redirectUrl: 'https://client.example.com/oauth/callback',
+      authMethod: 'email_password',
     });
   });
 
@@ -41,6 +43,7 @@ describe('twofactor-challenge.service', () => {
       domain: 'client.example.com',
       configUrl: 'https://client.example.com/auth-config',
       redirectUrl: 'https://client.example.com/oauth/callback',
+      authMethod: 'email_password',
       sharedSecret: 'test-shared-secret',
       audience: 'uoa-auth-service',
       now,
@@ -64,6 +67,7 @@ describe('twofactor-challenge.service', () => {
       domain: 'client.example.com',
       configUrl: 'https://client.example.com/auth-config',
       redirectUrl: 'https://client.example.com/oauth/callback',
+      authMethod: 'email_password',
       sharedSecret: 'test-shared-secret',
       audience: 'uoa-auth-service',
       now,
@@ -80,4 +84,3 @@ describe('twofactor-challenge.service', () => {
     ).rejects.toMatchObject({ statusCode: 401 });
   });
 });
-

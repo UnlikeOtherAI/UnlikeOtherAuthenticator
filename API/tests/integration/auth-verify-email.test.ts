@@ -64,7 +64,10 @@ describe.skipIf(!hasDatabase)('Email verification flow', () => {
       process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
 
     const jwt = await createSignedConfigJwt(process.env.SHARED_SECRET);
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(jwt, { status: 200 })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 })),
+    );
 
     const configUrl = 'https://client.example.com/auth-config';
     const rawToken = 'test-token-value';
@@ -164,7 +167,10 @@ describe.skipIf(!hasDatabase)('Email verification flow', () => {
       process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
 
     const jwt = await createSignedConfigJwt(process.env.SHARED_SECRET);
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(jwt, { status: 200 })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 })),
+    );
 
     const app = await createApp();
     await app.ready();

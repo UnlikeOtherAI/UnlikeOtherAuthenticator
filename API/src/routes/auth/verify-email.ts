@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { configVerifier } from '../../middleware/config-verifier.js';
 import { verifyEmailAndSetPassword } from '../../services/auth-verify-email.service.js';
+import { recordLoginLog } from '../../services/login-log.service.js';
 import {
   buildRedirectToUrl,
   issueAuthorizationCode,
@@ -55,6 +56,21 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
         configUrl: request.configUrl,
         redirectUrl,
       });
+
+      try {
+        await recordLoginLog({
+          userId,
+          domain: request.config.domain,
+          authMethod: 'verify_email_set_password',
+          ip: request.ip ?? null,
+          userAgent:
+            typeof request.headers['user-agent'] === 'string'
+              ? request.headers['user-agent']
+              : null,
+        });
+      } catch (err) {
+        request.log.error({ err }, 'failed to record login log');
+      }
 
       reply.status(200).send({
         ok: true,

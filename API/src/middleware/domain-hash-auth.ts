@@ -56,3 +56,32 @@ export async function requireDomainHashAuth(
   }
 }
 
+/**
+ * Brief 17: domain-scoped APIs require a bearer token = hash(domain + shared secret).
+ *
+ * These endpoints don't necessarily run through config verification, so we bind the token
+ * to an explicit `?domain=...` query parameter.
+ */
+export async function requireDomainHashAuthForDomainQuery(
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> {
+  void reply;
+
+  const provided = parseBearerToken(request.headers.authorization);
+  if (!provided) {
+    throw new AppError('UNAUTHORIZED', 401, 'MISSING_DOMAIN_HASH_TOKEN');
+  }
+
+  const domain = (request.query as { domain?: unknown } | undefined)?.domain;
+  if (typeof domain !== 'string' || !domain.trim()) {
+    throw new AppError('BAD_REQUEST', 400, 'MISSING_DOMAIN');
+  }
+
+  const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
+  const expected = createClientId(domain, SHARED_SECRET);
+
+  if (!safeEqual(provided, expected)) {
+    throw new AppError('UNAUTHORIZED', 401, 'INVALID_DOMAIN_HASH_TOKEN');
+  }
+}

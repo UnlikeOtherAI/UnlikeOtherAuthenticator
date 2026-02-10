@@ -18,6 +18,7 @@ import { getLinkedInProfileFromCode } from '../../services/social/linkedin.servi
 import type { SocialProfile } from '../../services/social/provider.base.js';
 import { loginWithSocialProfile } from '../../services/social/social-login.service.js';
 import { verifySocialState } from '../../services/social/social-state.service.js';
+import { recordLoginLog } from '../../services/login-log.service.js';
 import { signTwoFaChallenge } from '../../services/twofactor-challenge.service.js';
 import {
   buildRedirectToUrl,
@@ -182,6 +183,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         domain: config.domain,
         configUrl,
         redirectUrl,
+        authMethod: provider,
         sharedSecret: SHARED_SECRET,
         audience: AUTH_SERVICE_IDENTIFIER,
       });
@@ -200,6 +202,19 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
       configUrl,
       redirectUrl,
     });
+
+    try {
+      await recordLoginLog({
+        userId,
+        email: profile.email,
+        domain: config.domain,
+        authMethod: provider,
+        ip: request.ip ?? null,
+        userAgent: typeof request.headers['user-agent'] === 'string' ? request.headers['user-agent'] : null,
+      });
+    } catch (err) {
+      request.log.error({ err }, 'failed to record login log');
+    }
 
     reply.redirect(buildRedirectToUrl({ redirectUrl, code: authCode }), 302);
   });

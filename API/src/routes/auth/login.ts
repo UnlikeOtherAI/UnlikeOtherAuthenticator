@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { requireEnv } from '../../config/env.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
 import { loginWithEmailPassword } from '../../services/auth-login.service.js';
+import { recordLoginLog } from '../../services/login-log.service.js';
 import { signTwoFaChallenge } from '../../services/twofactor-challenge.service.js';
 import {
   buildRedirectToUrl,
@@ -63,6 +64,7 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
           domain: config.domain,
           configUrl: request.configUrl,
           redirectUrl,
+          authMethod: 'email_password',
           sharedSecret: SHARED_SECRET,
           audience: AUTH_SERVICE_IDENTIFIER,
         });
@@ -77,6 +79,19 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
         configUrl: request.configUrl,
         redirectUrl,
       });
+
+      try {
+        await recordLoginLog({
+          userId,
+          email,
+          domain: config.domain,
+          authMethod: 'email_password',
+          ip: request.ip ?? null,
+          userAgent: typeof request.headers['user-agent'] === 'string' ? request.headers['user-agent'] : null,
+        });
+      } catch (err) {
+        request.log.error({ err }, 'failed to record login log');
+      }
 
       reply.status(200).send({
         ok: true,

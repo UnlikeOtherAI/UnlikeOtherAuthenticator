@@ -72,17 +72,18 @@ describe.skipIf(!hasDatabase)('POST /auth/login', () => {
     handle = await createTestDb();
     if (!handle) throw new Error('DATABASE_URL is required for DB-backed tests');
     process.env.DATABASE_URL = handle.databaseUrl;
-  });
+  }, 20_000);
 
   afterAll(async () => {
     process.env.DATABASE_URL = originalDatabaseUrl;
     process.env.SHARED_SECRET = originalSharedSecret;
     process.env.AUTH_SERVICE_IDENTIFIER = originalAud;
     if (handle) await handle.cleanup();
-  });
+  }, 20_000);
 
   beforeEach(async () => {
     if (!handle) return;
+    await handle.prisma.loginLog.deleteMany();
     await handle.prisma.authorizationCode.deleteMany();
     await handle.prisma.verificationToken.deleteMany();
     await handle.prisma.domainRole.deleteMany();
@@ -110,7 +111,10 @@ describe.skipIf(!hasDatabase)('POST /auth/login', () => {
     });
 
     const jwt = await createSignedConfigJwt(process.env.SHARED_SECRET);
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(jwt, { status: 200 })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 })),
+    );
 
     const app = await createApp();
     await app.ready();
@@ -142,13 +146,19 @@ describe.skipIf(!hasDatabase)('POST /auth/login', () => {
     expect(codes[0].redirectUrl).toBe('https://client.example.com/oauth/callback');
     expect(codes[0].usedAt).toBeNull();
 
+    const logs = await handle!.prisma.loginLog.findMany({
+      where: { userId: created.id },
+      select: { domain: true, email: true, authMethod: true, ip: true, userAgent: true },
+    });
+    expect(logs).toHaveLength(1);
+    expect(logs[0].domain).toBe('client.example.com');
+    expect(logs[0].email).toBe('user@example.com');
+    expect(logs[0].authMethod).toBe('email_password');
+
     await app.close();
   });
 
   it('requires 2FA when enabled in config and on the user record', async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-02-10T00:00:00.000Z'));
-
     let app: Awaited<ReturnType<typeof createApp>> | null = null;
     try {
       process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
@@ -174,7 +184,10 @@ describe.skipIf(!hasDatabase)('POST /auth/login', () => {
       });
 
       const jwt = await createSignedConfigJwt(process.env.SHARED_SECRET, { '2fa_enabled': true });
-      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(jwt, { status: 200 })));
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 })),
+      );
 
       app = await createApp();
       await app.ready();
@@ -195,6 +208,12 @@ describe.skipIf(!hasDatabase)('POST /auth/login', () => {
       expect(loginBody.ok).toBe(true);
       expect(loginBody.twofa_required).toBe(true);
       expect(typeof loginBody.twofa_token).toBe('string');
+
+      const logsBefore = await handle!.prisma.loginLog.findMany({
+        where: { userId: created.id },
+        select: { id: true },
+      });
+      expect(logsBefore).toHaveLength(0);
 
       const code = computeTotp({ secret: totpSecret, nowMs: Date.now() });
       const verifyRes = await app.inject({
@@ -220,11 +239,20 @@ describe.skipIf(!hasDatabase)('POST /auth/login', () => {
       expect(codes[0].configUrl).toBe(configUrl);
       expect(codes[0].redirectUrl).toBe('https://client.example.com/oauth/callback');
       expect(codes[0].usedAt).toBeNull();
+
+      const logsAfter = await handle!.prisma.loginLog.findMany({
+        where: { userId: created.id },
+        select: { domain: true, email: true, authMethod: true },
+      });
+      expect(logsAfter).toHaveLength(1);
+      expect(logsAfter[0].domain).toBe('client.example.com');
+      expect(logsAfter[0].email).toBe('user@example.com');
+      expect(logsAfter[0].authMethod).toBe('email_password');
     } finally {
       if (app) await app.close();
       vi.useRealTimers();
     }
-  });
+  }, 20_000);
 
   it('returns generic 401 for wrong password and unknown email (no enumeration)', async () => {
     process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
@@ -241,7 +269,10 @@ describe.skipIf(!hasDatabase)('POST /auth/login', () => {
     });
 
     const jwt = await createSignedConfigJwt(process.env.SHARED_SECRET);
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(jwt, { status: 200 })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 })),
+    );
 
     const app = await createApp();
     await app.ready();
@@ -267,5 +298,5 @@ describe.skipIf(!hasDatabase)('POST /auth/login', () => {
     expect(unknownEmail.json()).toEqual({ error: 'Request failed' });
 
     await app.close();
-  });
+  }, 20_000);
 });

@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { requireEnv } from '../../config/env.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
+import { recordLoginLog } from '../../services/login-log.service.js';
 import { verifyTwoFaChallenge } from '../../services/twofactor-challenge.service.js';
 import { verifyTwoFactorForLogin } from '../../services/twofactor-login.service.js';
 import {
@@ -71,6 +72,21 @@ export function registerTwoFactorVerifyRoute(app: FastifyInstance): void {
         redirectUrl,
       });
 
+      try {
+        await recordLoginLog({
+          userId: challenge.userId,
+          domain: config.domain,
+          authMethod: challenge.authMethod,
+          ip: request.ip ?? null,
+          userAgent:
+            typeof request.headers['user-agent'] === 'string'
+              ? request.headers['user-agent']
+              : null,
+        });
+      } catch (err) {
+        request.log.error({ err }, 'failed to record login log');
+      }
+
       reply.status(200).send({
         ok: true,
         code: authCode,
@@ -79,4 +95,3 @@ export function registerTwoFactorVerifyRoute(app: FastifyInstance): void {
     },
   );
 }
-

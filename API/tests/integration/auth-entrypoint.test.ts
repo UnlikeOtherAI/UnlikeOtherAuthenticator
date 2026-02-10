@@ -44,7 +44,7 @@ describe('GET /auth', () => {
       process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
     const jwt = await createSignedConfigJwt(process.env.SHARED_SECRET);
 
-    const fetchMock = vi.fn().mockResolvedValue(new Response(jwt, { status: 200 }));
+    const fetchMock = vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
 
     const app = await createApp();
@@ -90,7 +90,7 @@ describe('GET /auth', () => {
       .setAudience(process.env.AUTH_SERVICE_IDENTIFIER)
       .sign(new TextEncoder().encode(process.env.SHARED_SECRET));
 
-    const fetchMock = vi.fn().mockResolvedValue(new Response(jwt, { status: 200 }));
+    const fetchMock = vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
 
     const app = await createApp();
@@ -124,7 +124,7 @@ describe('GET /auth', () => {
       .setAudience(process.env.AUTH_SERVICE_IDENTIFIER)
       .sign(new TextEncoder().encode(process.env.SHARED_SECRET));
 
-    const fetchMock = vi.fn().mockResolvedValue(new Response(jwt, { status: 200 }));
+    const fetchMock = vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
 
     const app = await createApp();
@@ -171,7 +171,7 @@ describe('GET /auth', () => {
       process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
     const jwt = await createSignedConfigJwt('different-secret');
 
-    const fetchMock = vi.fn().mockResolvedValue(new Response(jwt, { status: 200 }));
+    const fetchMock = vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
 
     const app = await createApp();
@@ -205,7 +205,7 @@ describe('GET /auth', () => {
 
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(new Response(unsignedJwt, { status: 200 }));
+      .mockImplementation(async () => new Response(unsignedJwt, { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
 
     const app = await createApp();
@@ -241,7 +241,7 @@ describe('GET /auth', () => {
 
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(new Response(tamperedJwt, { status: 200 }));
+      .mockImplementation(async () => new Response(tamperedJwt, { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
 
     const app = await createApp();
@@ -271,7 +271,7 @@ describe('GET /auth', () => {
       .setAudience(process.env.AUTH_SERVICE_IDENTIFIER)
       .sign(new TextEncoder().encode(process.env.SHARED_SECRET));
 
-    const fetchMock = vi.fn().mockResolvedValue(new Response(jwt, { status: 200 }));
+    const fetchMock = vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
 
     const app = await createApp();
@@ -360,7 +360,7 @@ describe('GET /auth', () => {
       .setAudience(process.env.AUTH_SERVICE_IDENTIFIER)
       .sign(new TextEncoder().encode(process.env.SHARED_SECRET));
 
-    const fetchMock = vi.fn().mockResolvedValue(new Response(jwt, { status: 200 }));
+    const fetchMock = vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
 
     const app = await createApp();
@@ -387,7 +387,7 @@ describe('GET /auth', () => {
       .setProtectedHeader({ alg: 'HS256' })
       .sign(new TextEncoder().encode(process.env.SHARED_SECRET));
 
-    const fetchMock = vi.fn().mockResolvedValue(new Response(jwt, { status: 200 }));
+    const fetchMock = vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
 
     const app = await createApp();
@@ -415,7 +415,7 @@ describe('GET /auth', () => {
       .setAudience('some-other-auth-service')
       .sign(new TextEncoder().encode(process.env.SHARED_SECRET));
 
-    const fetchMock = vi.fn().mockResolvedValue(new Response(jwt, { status: 200 }));
+    const fetchMock = vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
 
     const app = await createApp();
