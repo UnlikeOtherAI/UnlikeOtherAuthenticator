@@ -1,5 +1,7 @@
 import { randomBytes } from 'node:crypto';
 
+import * as QRCode from 'qrcode';
+
 import { AppError } from '../utils/errors.js';
 
 const BASE32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
@@ -85,4 +87,28 @@ export function buildTotpOtpAuthUri(params: {
   sp.set('period', String(params.period ?? 30));
 
   return `otpauth://totp/${label}?${sp.toString()}`;
+}
+
+/**
+ * Brief 13 / Phase 8.3: render a scannable QR code for authenticator enrollment.
+ *
+ * Returns a `data:image/svg+xml;base64,...` URL suitable for `<img src="...">`.
+ */
+export async function renderTotpQrCodeDataUrl(params: {
+  otpAuthUri: string;
+}): Promise<string> {
+  const value = (params.otpAuthUri ?? '').trim();
+  if (!value) throw new AppError('BAD_REQUEST', 400, 'INVALID_OTPAUTH_URI');
+  if (!value.startsWith('otpauth://')) {
+    throw new AppError('BAD_REQUEST', 400, 'INVALID_OTPAUTH_URI');
+  }
+
+  const svg = await QRCode.toString(value, {
+    type: 'svg',
+    errorCorrectionLevel: 'M',
+    margin: 1,
+    scale: 4,
+  });
+
+  return `data:image/svg+xml;base64,${Buffer.from(svg, 'utf8').toString('base64')}`;
 }

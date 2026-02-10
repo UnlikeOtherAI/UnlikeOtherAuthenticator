@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildTotpOtpAuthUri, generateTotpSecret } from '../../src/services/totp.service.js';
+import {
+  buildTotpOtpAuthUri,
+  generateTotpSecret,
+  renderTotpQrCodeDataUrl,
+} from '../../src/services/totp.service.js';
 
 describe('totp.service', () => {
   it('generates a base32 secret compatible with authenticator apps', () => {
@@ -49,5 +53,20 @@ describe('totp.service', () => {
         accountName: 'user@example.com',
       }),
     ).toThrow();
+  });
+
+  it('renders a scannable QR code data URL for an otpauth:// URI', async () => {
+    const uri = buildTotpOtpAuthUri({
+      secret: 'JBSWY3DPEHPK3PXP',
+      issuer: 'My App',
+      accountName: 'user@example.com',
+    });
+
+    const dataUrl = await renderTotpQrCodeDataUrl({ otpAuthUri: uri });
+    expect(dataUrl.startsWith('data:image/svg+xml;base64,')).toBe(true);
+
+    const b64 = dataUrl.slice('data:image/svg+xml;base64,'.length);
+    const svg = Buffer.from(b64, 'base64').toString('utf8');
+    expect(svg).toContain('<svg');
   });
 });
