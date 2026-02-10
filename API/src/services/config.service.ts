@@ -22,6 +22,19 @@ const RequiredConfigSchema = z
 
 export type RequiredClientConfig = z.infer<typeof RequiredConfigSchema>;
 
+const ClientConfigSchema = RequiredConfigSchema.extend({
+  // Task 2.5: optional config fields.
+  //
+  // Note: property name starts with a digit, so it must be accessed using bracket notation.
+  '2fa_enabled': z.boolean().optional().default(false),
+  debug_enabled: z.boolean().optional().default(false),
+  // Keep this as a generic string list for now; provider key validation is handled in later tasks.
+  allowed_social_providers: z.array(z.string().min(1)).optional(),
+  user_scope: z.enum(['global', 'per_domain']).optional().default('global'),
+}).passthrough();
+
+export type ClientConfig = z.infer<typeof ClientConfigSchema>;
+
 function sharedSecretKey(sharedSecret: string): Uint8Array {
   return new TextEncoder().encode(sharedSecret);
 }
@@ -132,4 +145,17 @@ export function validateRequiredConfigFields(
 ): RequiredClientConfig {
   // JWTPayload is already JSON-ish but typed as unknown values; validate explicitly.
   return RequiredConfigSchema.parse(payload);
+}
+
+/**
+ * Task 2.5: Parse optional config fields from the verified config JWT payload.
+ *
+ * Defaults:
+ * - user_scope: "global"
+ * - 2fa_enabled: false
+ * - debug_enabled: false
+ */
+export function validateConfigFields(payload: JWTPayload): ClientConfig {
+  // Includes required validation plus optional field parsing and defaults.
+  return ClientConfigSchema.parse(payload);
 }

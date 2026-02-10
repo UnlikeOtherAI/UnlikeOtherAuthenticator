@@ -4,9 +4,9 @@ import { z } from 'zod';
 import { requireEnv } from '../config/env.js';
 import {
   fetchConfigJwtFromUrl,
-  validateRequiredConfigFields,
+  validateConfigFields,
   verifyConfigJwtSignature,
-  type RequiredClientConfig,
+  type ClientConfig,
 } from '../services/config.service.js';
 
 const QuerySchema = z.object({
@@ -17,7 +17,7 @@ declare module 'fastify' {
   interface FastifyRequest {
     configUrl?: string;
     configJwt?: string;
-    config?: RequiredClientConfig;
+    config?: ClientConfig;
   }
 }
 
@@ -36,6 +36,6 @@ export async function configVerifier(
   const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
   const payload = await verifyConfigJwtSignature(request.configJwt, SHARED_SECRET);
 
-  // Task 2.4: validate required config fields.
-  request.config = validateRequiredConfigFields(payload);
+  // Task 2.4 + 2.5: validate required config fields + parse optional config fields.
+  request.config = validateConfigFields(payload);
 }

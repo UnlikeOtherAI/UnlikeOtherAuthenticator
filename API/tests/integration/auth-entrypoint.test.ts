@@ -52,6 +52,40 @@ describe('GET /auth', () => {
     await app.close();
   });
 
+  it('returns ok when optional config fields are present', async () => {
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    const jwt = await new SignJWT({
+      domain: 'client.example.com',
+      redirect_urls: ['https://client.example.com/oauth/callback'],
+      enabled_auth_methods: ['email_password'],
+      ui_theme: {},
+      language_config: 'en',
+      user_scope: 'per_domain',
+      '2fa_enabled': true,
+      debug_enabled: true,
+      allowed_social_providers: ['google', 'github'],
+    })
+      .setProtectedHeader({ alg: 'HS256' })
+      .sign(new TextEncoder().encode(process.env.SHARED_SECRET));
+
+    const fetchMock = vi.fn().mockResolvedValue(new Response(jwt, { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const app = await createApp();
+    await app.ready();
+
+    const configUrl = 'https://client.example.com/auth-config';
+    const res = await app.inject({
+      method: 'GET',
+      url: `/auth?config_url=${encodeURIComponent(configUrl)}`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ ok: true });
+
+    await app.close();
+  });
+
   it('returns generic 400 when config JWT signature is invalid', async () => {
     process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
     const jwt = await createSignedConfigJwt('different-secret');
