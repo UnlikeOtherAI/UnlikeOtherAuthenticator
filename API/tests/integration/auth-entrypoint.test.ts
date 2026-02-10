@@ -1,6 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { SignJWT } from 'jose';
 
 import { createApp } from '../../src/app.js';
+
+async function createSignedConfigJwt(sharedSecret: string): Promise<string> {
+  // Minimal payload; signature verification is the focus of this task.
+  return await new SignJWT({ domain: 'client.example.com' })
+    .setProtectedHeader({ alg: 'HS256' })
+    .sign(new TextEncoder().encode(sharedSecret));
+}
 
 describe('GET /auth', () => {
   afterEach(() => {
@@ -10,8 +18,9 @@ describe('GET /auth', () => {
 
   it('fetches config JWT from config_url and returns ok', async () => {
     process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    const jwt = await createSignedConfigJwt(process.env.SHARED_SECRET);
 
-    const fetchMock = vi.fn().mockResolvedValue(new Response('test.jwt.token', { status: 200 }));
+    const fetchMock = vi.fn().mockResolvedValue(new Response(jwt, { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
 
     const app = await createApp();
@@ -33,6 +42,30 @@ describe('GET /auth', () => {
         method: 'GET',
       }),
     );
+
+    await app.close();
+  });
+
+  it('returns generic 400 when config JWT signature is invalid', async () => {
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    const jwt = await createSignedConfigJwt('different-secret');
+
+    const fetchMock = vi.fn().mockResolvedValue(new Response(jwt, { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const app = await createApp();
+    await app.ready();
+
+    const configUrl = 'https://client.example.com/auth-config';
+    const res = await app.inject({
+      method: 'GET',
+      url: `/auth?config_url=${encodeURIComponent(configUrl)}`,
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: 'Request failed' });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
 
     await app.close();
   });

@@ -1,7 +1,11 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
-import { fetchConfigJwtFromUrl } from '../services/config.service.js';
+import { requireEnv } from '../config/env.js';
+import {
+  fetchConfigJwtFromUrl,
+  verifyConfigJwtSignature,
+} from '../services/config.service.js';
 
 const QuerySchema = z.object({
   config_url: z.string().min(1),
@@ -23,6 +27,9 @@ export async function configVerifier(
   request.configUrl = config_url;
 
   // Task 2.2: fetch the signed config JWT from the client-provided URL.
-  // Verification/parsing/validation are handled in subsequent tasks.
   request.configJwt = await fetchConfigJwtFromUrl(config_url);
+
+  // Task 2.3: verify JWT signature using the shared secret.
+  const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
+  await verifyConfigJwtSignature(request.configJwt, SHARED_SECRET);
 }

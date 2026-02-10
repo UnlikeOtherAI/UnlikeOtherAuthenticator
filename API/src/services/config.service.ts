@@ -1,6 +1,13 @@
 import { AppError } from '../utils/errors.js';
+import { jwtVerify, type JWTPayload } from 'jose';
 
 const DEFAULT_CONFIG_FETCH_TIMEOUT_MS = 5_000;
+
+const CONFIG_JWT_ALLOWED_ALGS = ['HS256', 'HS384', 'HS512'] as const;
+
+function sharedSecretKey(sharedSecret: string): Uint8Array {
+  return new TextEncoder().encode(sharedSecret);
+}
 
 function extractJwtFromBody(bodyText: string): string {
   const trimmed = bodyText.trim();
@@ -75,3 +82,23 @@ export async function fetchConfigJwtFromUrl(
   }
 }
 
+/**
+ * Task 2.3: Verify the config JWT signature using the global shared secret.
+ *
+ * This only asserts integrity (tamper protection). Claim validation (aud/iss/etc)
+ * and payload schema validation are handled in subsequent tasks.
+ */
+export async function verifyConfigJwtSignature(
+  configJwt: string,
+  sharedSecret: string,
+): Promise<JWTPayload> {
+  try {
+    const { payload } = await jwtVerify(configJwt, sharedSecretKey(sharedSecret), {
+      algorithms: [...CONFIG_JWT_ALLOWED_ALGS],
+    });
+    return payload;
+  } catch {
+    // Normalize all verification failures into a generic, user-safe error.
+    throw new AppError('BAD_REQUEST', 400);
+  }
+}
