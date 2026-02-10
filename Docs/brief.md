@@ -298,6 +298,11 @@ This service is **stateless where possible**, standards-based, and API-first.
 * No session storage required
 * Token verification via signature
 
+### Short-Lived
+
+* Access tokens must be **short-lived** (see **22.10 Token Lifetimes**; e.g. 15–60 minutes)
+* There are **no refresh tokens** — when the access token expires, the client must re-initiate the OAuth flow
+
 ---
 
 ## 15. User Model
