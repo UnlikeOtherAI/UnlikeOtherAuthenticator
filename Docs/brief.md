@@ -117,6 +117,7 @@ This service is **stateless where possible**, standards-based, and API-first.
 * `debug_enabled`
 * `allowed_social_providers`
 * `user_scope` — `"global"` (default) or `"per_domain"`
+* `org_features` — feature-gated organisations/teams/groups configuration (default: disabled)
 
 ---
 
@@ -548,6 +549,33 @@ The following tighten ambiguities in the brief to prevent misinterpretation duri
 **This brief is the single source of truth for implementation.**
 
 ---
+
+## Organisations, Teams & Groups
+
+### Config Feature Gate
+
+Org, team, and group capabilities are optional and controlled by an optional `org_features` claim in the config JWT.
+
+```json
+"org_features": {
+  "enabled": false,
+  "groups_enabled": false,
+  "max_teams_per_org": 100,
+  "max_groups_per_org": 20,
+  "max_members_per_org": 1000,
+  "max_members_per_team": 200,
+  "max_members_per_group": 500,
+  "max_team_memberships_per_user": 50,
+  "org_roles": ["owner", "admin", "member"]
+}
+```
+
+### Rules
+
+* `enabled` gates all `/org/*` and `/internal/org/*` API access (`false` returns 404).
+* `groups_enabled` gates group-specific operations.
+* `org_roles` must include `"owner"` and is used to validate org roles on write operations.
+* `max_*` values cap organisation, team, group, and membership counts enforced at write time.
 
 ## 23. Task Breakdown by Phase
 

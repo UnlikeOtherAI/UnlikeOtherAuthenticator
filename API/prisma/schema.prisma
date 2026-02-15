@@ -37,6 +37,10 @@ model User {
   tokens       VerificationToken[]
   authorizationCodes AuthorizationCode[]
   loginLogs    LoginLog[]
+  ownedOrgs    Organisation[]   @relation("OrgOwner")
+  orgMembers   OrgMember[]
+  teamMembers  TeamMember[]
+  groupMembers GroupMember[]
 
   @@index([email])
   @@index([domain])
@@ -114,6 +118,111 @@ model LoginLog {
   @@index([domain, createdAt])
   @@index([createdAt])
   @@map("login_logs")
+}
+
+model Organisation {
+  id        String   @id @default(cuid())
+  domain    String
+  name      String   @db.VarChar(100)
+  slug      String   @db.VarChar(120)
+  ownerId   String   @map("owner_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  owner   User        @relation("OrgOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  members OrgMember[]
+  teams   Team[]
+  groups  Group[]
+
+  @@unique([domain, slug])
+  @@index([domain])
+  @@index([ownerId])
+  @@map("organisations")
+}
+
+model OrgMember {
+  id        String   @id @default(cuid())
+  orgId     String   @map("org_id")
+  userId    String   @map("user_id")
+  role      String   @default("member")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  org  Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, userId])
+  @@index([userId])
+  @@map("org_members")
+}
+
+model Team {
+  id          String   @id @default(cuid())
+  orgId       String   @map("org_id")
+  groupId     String?  @map("group_id")
+  name        String   @db.VarChar(100)
+  description String?  @db.VarChar(500)
+  isDefault   Boolean  @default(false) @map("is_default")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  org     Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  group   Group?       @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  members TeamMember[]
+
+  @@unique([orgId, name])
+  @@index([orgId])
+  @@index([groupId])
+  @@map("teams")
+}
+
+model TeamMember {
+  id        String   @id @default(cuid())
+  teamId    String   @map("team_id")
+  userId    String   @map("user_id")
+  teamRole  String   @default("member") @map("team_role")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@index([userId])
+  @@map("team_members")
+}
+
+model Group {
+  id          String   @id @default(cuid())
+  orgId       String   @map("org_id")
+  name        String   @db.VarChar(100)
+  description String?  @db.VarChar(500)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  org     Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  teams   Team[]
+  members GroupMember[]
+
+  @@unique([orgId, name])
+  @@index([orgId])
+  @@map("groups")
+}
+
+model GroupMember {
+  id        String   @id @default(cuid())
+  groupId   String   @map("group_id")
+  userId    String   @map("user_id")
+  isAdmin   Boolean  @default(false) @map("is_admin")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@index([userId])
+  @@map("group_members")
 }
 
 // Brief 8.4 / Phase 10: AI translation fallback results must be cached permanently after generation.

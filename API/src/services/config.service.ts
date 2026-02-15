@@ -108,6 +108,33 @@ const ClientConfigSchema = RequiredConfigSchema.extend({
   // Brief 8 / Phase 10.4: default language should come from the client website's selection.
   // This is the currently selected language (not the list of available languages).
   language: z.string().trim().min(1).optional(),
+  org_features: z
+    .object({
+      enabled: z.boolean().default(false),
+      groups_enabled: z.boolean().default(false),
+      max_teams_per_org: z.number().int().positive().max(1000).default(100),
+      max_groups_per_org: z.number().int().positive().max(200).default(20),
+      max_members_per_org: z.number().int().positive().max(10000).default(1000),
+      max_members_per_team: z.number().int().positive().max(5000).default(200),
+      max_members_per_group: z.number().int().positive().max(5000).default(500),
+      max_team_memberships_per_user: z.number().int().positive().max(200).default(50),
+      org_roles: z
+        .array(z.string().min(1).max(50))
+        .refine((roles) => roles.includes('owner'), { message: 'org_roles must include "owner"' })
+        .default(['owner', 'admin', 'member']),
+    })
+    .optional()
+    .default({
+      enabled: false,
+      groups_enabled: false,
+      max_teams_per_org: 100,
+      max_groups_per_org: 20,
+      max_members_per_org: 1000,
+      max_members_per_team: 200,
+      max_members_per_group: 500,
+      max_team_memberships_per_user: 50,
+      org_roles: ['owner', 'admin', 'member'],
+    }),
 });
 
 export type ClientConfig = z.infer<typeof ClientConfigSchema>;

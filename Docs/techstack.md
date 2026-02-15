@@ -23,6 +23,7 @@ The API is the central OAuth/auth server. It handles:
 * Authorization code generation and token exchange
 * 2FA setup and verification
 * Domain-scoped APIs (user list, login logs, debug)
+* Organisation, team, and group management APIs (`/org/*` and `/internal/org/*`)
 * Email dispatch (verification, password reset, login links)
 
 ### Structure
@@ -83,6 +84,7 @@ The auth window is the user-facing UI rendered inside the OAuth popup. It is a *
 * **PostgreSQL** — the database
 * **Prisma** — ORM and migration tool
 * Tables: `users`, `domain_roles`, `login_logs`, `verification_tokens`
+* Organisational tables: `organisations`, `org_members`, `teams`, `team_members`, `groups`, `group_members`
 * All schema changes go through Prisma migrations — no manual SQL
 * Prisma schema lives in `/API/prisma/schema.prisma`
 * Superuser race condition resolved at DB constraint level (unique constraint, first insert wins)

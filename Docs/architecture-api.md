@@ -37,17 +37,36 @@ For the full product spec, see [brief.md](./brief.md). For tech stack, see [tech
         users.ts              — GET  /domain/users
         logs.ts               — GET  /domain/logs
         debug.ts              — GET  /domain/debug
+      /org
+        organisations.ts      — POST/GET/PUT/DELETE organisation operations
+        org-members.ts        — POST/DELETE org members + role transfers
+        teams.ts              — POST/GET/PUT/DELETE team operations
+        team-members.ts       — POST/DELETE team members
+        groups.ts             — GET group operations (org-aware reads)
+        me.ts                 — GET /org/me
       /health
         index.ts              — GET  /health
+    /routes/internal
+      /org
+        groups.ts              — POST/PUT/DELETE internal group operations
+        group-members.ts       — internal group member management
+        team-group-assignment.ts — internal team to group assignment
     /middleware
       config-verifier.ts      — Fetches config URL, verifies JWT, attaches config to request
       domain-auth.ts          — Verifies domain hash token for domain-scoped APIs
+      org-features.ts         — Returns 404 when org features are disabled
+      groups-enabled.ts       — Returns 404 when groups are disabled
+      org-role-guard.ts       — Validates user access token and org role for /org endpoints
       error-handler.ts        — Global error handler (generic user-facing errors, detailed internal logs)
       rate-limiter.ts         — Rate limiting
     /services
       auth.service.ts         — Login, registration, password verification logic
       config.service.ts       — Config JWT fetching, parsing, validation
       token.service.ts        — Access token and authorization code generation/verification
+      organisation.service.ts  — Organisation CRUD and membership lifecycle
+      team.service.ts         — Team CRUD and team membership lifecycle
+      group.service.ts        — Group CRUD and membership lifecycle
+      org-context.service.ts  — Resolve user org context for JWT enrichment
       password.service.ts     — Hashing, validation rules, comparison
       email.service.ts        — Email dispatch abstraction (verification, reset, login links)
       social
@@ -102,6 +121,9 @@ Request → Route → Middleware → Service → Database (Prisma)
 
 * **config-verifier** — runs on all OAuth entry points. Fetches config from URL, verifies JWT, attaches parsed config to the request context
 * **domain-auth** — runs on domain-scoped API routes. Verifies the domain hash token
+* **org-features** — rejects org endpoints when `org_features.enabled` is false
+* **groups-enabled** — rejects group endpoints when `org_features.groups_enabled` is false
+* **org-role-guard** — validates user context and org role for `/org/*` routes
 * **error-handler** — catches all errors. Returns generic message to user. Logs specifics internally
 
 ### Services (fat)
