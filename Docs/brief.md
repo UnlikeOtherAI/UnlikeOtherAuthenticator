@@ -550,11 +550,13 @@ The following tighten ambiguities in the brief to prevent misinterpretation duri
 
 ---
 
-## Organisations, Teams & Groups
+## 24. Organisations, Teams & Groups
 
-### Config Feature Gate
+### 24.1 Feature Gate and Configuration Contract
 
-Org, team, and group capabilities are optional and controlled by an optional `org_features` claim in the config JWT.
+Organisation, team, and group behavior is opt-in via the config JWT claim `org_features`.
+
+The claim is optional and defaults to disabled. The object shape and defaults are:
 
 ```json
 "org_features": {
@@ -570,14 +572,109 @@ Org, team, and group capabilities are optional and controlled by an optional `or
 }
 ```
 
-### Rules
+* `enabled = false` (or omitted): all `/org/*` and `/internal/org/*` endpoints return `404`, and access tokens do not include `org` claims.
+* `groups_enabled = false`: group read/write paths return `404` just like disabled features.
+* `org_roles` is validated at config parse and **must include `"owner"`**.
+* `max_*` values are enforced on write paths; values outside schema bounds are rejected during config validation.
 
-* `enabled` gates all `/org/*` and `/internal/org/*` API access (`false` returns 404).
-* `groups_enabled` gates group-specific operations.
-* `org_roles` must include `"owner"` and is used to validate org roles on write operations.
-* `max_*` values cap organisation, team, group, and membership counts enforced at write time.
+`org_features` is validated with the same style as other config options:
 
-## 23. Task Breakdown by Phase
+* `enabled`: boolean, default `false`
+* `groups_enabled`: boolean, default `false`
+* `max_teams_per_org`: integer, positive, max `1000`, default `100`
+* `max_groups_per_org`: integer, positive, max `200`, default `20`
+* `max_members_per_org`: integer, positive, max `10000`, default `1000`
+* `max_members_per_team`: integer, positive, max `5000`, default `200`
+* `max_members_per_group`: integer, positive, max `5000`, default `500`
+* `max_team_memberships_per_user`: integer, positive, max `200`, default `50`
+* `org_roles`: non-empty strings, default `["owner", "admin", "member"]`
+
+### 24.2 Organisation (tenant)
+
+* An `Organisation` belongs to a `domain` and is the top-level tenant concept.
+* A domain can have multiple orgs.
+* A user can belong to **at most one org per domain**.
+* Creating an org creates:
+  * one owner (`ownerId`)
+  * one `slug` derived from org name
+  * one default team named `"General"` with `isDefault: true`
+* User who creates the org is assigned as owner.
+* Owner-only behavior:
+  * delete the org
+  * transfer ownership
+  * change org member roles
+* `owner` role must always be present in config and is treated as a reserved, system-level role.
+* `updateOrganisation` is allowed by owner/admin and rewrites slug from the new name with collision handling.
+* `slug` constraints:
+  * URL-safe, lower-case, no leading/trailing hyphen
+  * 2–120 chars
+  * reserved words blocked (`admin`, `api`, `internal`, `me`, `system`, `settings`, `new`, `default`)
+  * uniqueness is per-domain
+  * collision retries append a short random suffix
+* `deleteOrganisation` is owner-only and fails if deletion constraints are violated.
+
+### 24.3 Team semantics
+
+* An org has many teams.
+* Team constraints:
+  * `name`: max 100 chars
+  * `description`: optional, max 500 chars
+  * `isDefault`: true/false
+* Team membership role is separate from org role:
+  * allowed values: `member` (default), `lead`
+  * storage is free text in DB, but only these values are accepted by service/API paths
+* Every org member must belong to at least one team.
+  * On org membership add, user is auto-added to the default team.
+* Team lifecycle:
+  * default team cannot be deleted
+  * default team can be renamed
+  * `isDefault` cannot be changed
+* Team membership constraints:
+  * `max_members_per_team`
+  * `max_team_memberships_per_user`
+  * user cannot be removed from their final team membership
+* Team-manager operations are enforced for owner/admin roles only.
+
+### 24.4 Group semantics (enterprise option)
+
+* Groups are optional and only active when `groups_enabled` is true.
+* An org can have many groups; max is config-gated by `max_groups_per_org`.
+* A team can belong to at most one group (or none).
+* Group membership stores `is_admin` per user.
+* `is_admin` has no auth-level behavior in this service; it is just persisted for consuming products.
+* Group read is exposed to org members via:
+  * `GET /org/organisations/:orgId/groups`
+* Group writes are internal only:
+  * `POST /internal/org/organisations/:orgId/groups`
+  * `PUT /internal/org/organisations/:orgId/groups/:groupId`
+  * `DELETE /internal/org/organisations/:orgId/groups/:groupId`
+  * `POST /internal/org/organisations/:orgId/groups/:groupId/members`
+  * `PUT /internal/org/organisations/:orgId/groups/:groupId/members/:userId`
+  * `DELETE /internal/org/organisations/:orgId/groups/:groupId/members/:userId`
+  * `PUT /internal/org/organisations/:orgId/teams/:teamId/group`
+
+### 24.5 JWT Org Claim Contract
+
+When enabled and user belongs to an org, tokens may include `org`:
+
+* `org_id`: org identifier
+* `org_role`: member role in org
+* `teams`: list of team IDs
+* `team_roles`: map `teamId -> role`
+* `groups`: optional list of group IDs (only when groups enabled and memberships exist)
+* `group_admin`: optional list of group IDs where user has `is_admin`
+
+If `org_features.enabled` is false, the org claim is omitted entirely.
+
+### 24.6 API and validation clarifications
+
+* `/org/organisations/:orgId/members` writes validate org role values against `org_roles` when provided.
+* Existing stored roles are not retrofitted when `org_roles` in config changes.
+* `owner` and `admin` are the only system-interpreted roles for service-level permissions.
+* All other custom roles are persisted and passed through in JWTs.
+* Group endpoints short-circuit at middleware with `404` when the feature flag is off.
+
+## 25. Task Breakdown by Phase
 
 Each task references the line number(s) where the relevant specification lives in this document.
 
