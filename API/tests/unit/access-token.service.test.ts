@@ -13,15 +13,25 @@ async function signAccessToken(params: {
   subject?: string;
   alg?: 'HS256' | 'HS512';
   ttl?: string;
+  org?: {
+    org_id: string;
+    org_role: string;
+    teams: string[];
+    team_roles: Record<string, string>;
+    groups?: string[];
+    group_admin?: string[];
+  };
 }): Promise<string> {
   const alg = params.alg ?? 'HS256';
   const ttl = params.ttl ?? '30m';
+  const org = params.org;
 
   const jwt = new SignJWT({
     email: 'user@example.com',
     domain: 'client.example.com',
     client_id: 'client-id',
     role: 'superuser',
+    ...(org ? { org } : {}),
   })
     .setProtectedHeader({ alg, typ: 'JWT' })
     .setIssuer(params.issuer)
@@ -51,7 +61,7 @@ describe('verifyAccessToken', () => {
     process.env.NODE_ENV = originalNodeEnv;
   });
 
-  it('accepts a valid, self-contained JWT and returns claims (stateless verification)', async () => {
+  it('accepts a valid JWT without org claim and returns claims', async () => {
     const token = await signAccessToken({
       sharedSecret: process.env.SHARED_SECRET!,
       issuer: process.env.AUTH_SERVICE_IDENTIFIER!,
@@ -65,6 +75,35 @@ describe('verifyAccessToken', () => {
       domain: 'client.example.com',
       clientId: 'client-id',
       role: 'superuser',
+    });
+  });
+
+  it('accepts a valid JWT with org claim and returns claims including org', async () => {
+    const token = await signAccessToken({
+      sharedSecret: process.env.SHARED_SECRET!,
+      issuer: process.env.AUTH_SERVICE_IDENTIFIER!,
+      subject: 'u2',
+      org: {
+        org_id: 'org_1',
+        org_role: 'member',
+        teams: ['team_a', 'team_b'],
+        team_roles: { team_a: 'lead', team_b: 'member' },
+      },
+    });
+
+    const claims = await verifyAccessToken(token);
+    expect(claims).toEqual({
+      userId: 'u2',
+      email: 'user@example.com',
+      domain: 'client.example.com',
+      clientId: 'client-id',
+      role: 'superuser',
+      org: {
+        org_id: 'org_1',
+        org_role: 'member',
+        teams: ['team_a', 'team_b'],
+        team_roles: { team_a: 'lead', team_b: 'member' },
+      },
     });
   });
 
@@ -101,4 +140,3 @@ describe('verifyAccessToken', () => {
     await expect(verifyAccessToken(wrongAlgToken)).rejects.toMatchObject({ statusCode: 401 });
   });
 });
-

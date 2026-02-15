@@ -21,7 +21,8 @@ const AccessTokenClaimsSchema = z
         groups: z.array(z.string().trim().min(1)).optional(),
         group_admin: z.array(z.string().trim().min(1)).optional(),
       })
-      .passthrough(),
+      .passthrough()
+      .optional(),
   })
   .passthrough();
 
