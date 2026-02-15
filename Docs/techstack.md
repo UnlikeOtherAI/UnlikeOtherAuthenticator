@@ -31,6 +31,8 @@ The API is the central OAuth/auth server. It handles:
 ```
 /API
   /routes          — Express/Fastify route handlers
+  /routes/org      — User-facing org/team routes
+  /routes/internal/org — Internal org-team-group admin routes
   /middleware       — Auth, config verification, error handling
   /models          — Database models (users, domain roles, login logs, tokens)
   /services        — Business logic (auth, email, JWT, TOTP, social providers)
@@ -45,6 +47,41 @@ The API is the central OAuth/auth server. It handles:
 * JWT for both config verification and access tokens (separate concerns, separate validation)
 * Shared secret loaded from environment variables only
 * All error responses are generic to the user — specifics in internal logs only
+* Organisational models: `organisations`, `org_members`, `teams`, `team_members`, `groups`, `group_members`
+
+### Organisational Endpoints
+
+* `POST /org/organisations` — create an organisation (also creates default team)
+* `GET /org/organisations` — list organisations on a domain
+* `GET /org/organisations/:orgId` — read org details
+* `PUT /org/organisations/:orgId` — update org metadata
+* `DELETE /org/organisations/:orgId` — delete org and nested data
+* `GET /org/organisations/:orgId/members` — list org members
+* `POST /org/organisations/:orgId/members` — add org member
+* `PUT /org/organisations/:orgId/members/:userId` — change org role
+* `DELETE /org/organisations/:orgId/members/:userId` — remove org member
+* `POST /org/organisations/:orgId/transfer-ownership` — transfer org ownership
+* `GET /org/organisations/:orgId/teams` — list teams
+* `POST /org/organisations/:orgId/teams` — create team
+* `GET /org/organisations/:orgId/teams/:teamId` — read team details
+* `PUT /org/organisations/:orgId/teams/:teamId` — update team
+* `DELETE /org/organisations/:orgId/teams/:teamId` — delete team
+* `POST /org/organisations/:orgId/teams/:teamId/members` — add team member
+* `PUT /org/organisations/:orgId/teams/:teamId/members/:userId` — change team role
+* `DELETE /org/organisations/:orgId/teams/:teamId/members/:userId` — remove team member
+* `GET /org/organisations/:orgId/groups` — list groups
+* `GET /org/organisations/:orgId/groups/:groupId` — read group details
+* `GET /org/me` — current user org context
+
+### Internal API
+
+* `POST /internal/org/organisations/:orgId/groups` — create group
+* `PUT /internal/org/organisations/:orgId/groups/:groupId` — update group
+* `DELETE /internal/org/organisations/:orgId/groups/:groupId` — delete group
+* `POST /internal/org/organisations/:orgId/groups/:groupId/members` — add group member
+* `PUT /internal/org/organisations/:orgId/groups/:groupId/members/:userId` — toggle `is_admin`
+* `DELETE /internal/org/organisations/:orgId/groups/:groupId/members/:userId` — remove group member
+* `PUT /internal/org/organisations/:orgId/teams/:teamId/group` — assign/unassign team
 
 ---
 
