@@ -211,7 +211,7 @@ describe.skipIf(!hasDatabase)('internal /internal/org endpoints', () => {
       },
     });
     expect(removeResponse.statusCode).toBe(200);
-    expect(removeResponse.json()).toEqual({ removed: true });
+    expect(removeResponse.json()).toEqual({ ok: true });
 
     const remaining = await handle!.prisma.groupMember.findMany({ where: { groupId: group.id } });
     expect(remaining).toHaveLength(0);
