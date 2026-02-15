@@ -28,32 +28,43 @@ For the full product spec, see [brief.md](./brief.md). For tech stack, see [tech
         verify-email.ts       — POST /auth/verify-email
         reset-password.ts     — POST /auth/reset-password
         callback.ts           — GET  /auth/callback/:provider
+        social.ts             — GET /auth/social/:provider
         token-exchange.ts     — POST /auth/token
+        entrypoint.ts         — GET /auth (main auth entry)
+        email-reset-password.ts  — GET /auth/email-reset-password
+        email-registration-link.ts — GET /auth/email-registration-link
+        email-twofa-reset.ts  — GET /auth/email-twofa-reset
+        index.ts              — Route registration for /auth
+      /i18n
+        get.ts                — GET /i18n/:language
+        index.ts              — Route registration for /i18n
       /twofactor
-        setup.ts              — POST /2fa/setup
         verify.ts             — POST /2fa/verify
         reset.ts              — POST /2fa/reset
+        index.ts              — Route registration for /2fa
       /domain
         users.ts              — GET  /domain/users
         logs.ts               — GET  /domain/logs
         debug.ts              — GET  /domain/debug
+        index.ts              — Route registration for /domain
       /org
-        organisations.ts      — POST/GET/PUT/DELETE organisation operations
-        org-members.ts        — POST/DELETE org members + role transfers
-        teams.ts              — POST/GET/PUT/DELETE team operations
-        team-members.ts       — POST/DELETE team members
+        organisations.ts      — Organisations + memberships + ownership transfer
+        teams.ts              — Teams + team membership operations
         groups.ts             — GET group operations (org-aware reads)
         me.ts                 — GET /org/me
+        index.ts              — Route registration for /org
       /health
         index.ts              — GET  /health
-    /routes/internal
-      /org
-        groups.ts              — POST/PUT/DELETE internal group operations
-        group-members.ts       — internal group member management
-        team-group-assignment.ts — internal team to group assignment
+      /internal
+        /org
+          groups.ts              — POST/PUT/DELETE internal group operations
+          group-members.ts       — POST/PUT/DELETE internal group members
+          team-group-assignment.ts — PUT team↔group assignment
+          index.ts               — Route registration for /internal/org
     /middleware
       config-verifier.ts      — Fetches config URL, verifies JWT, attaches config to request
-      domain-auth.ts          — Verifies domain hash token for domain-scoped APIs
+      domain-hash-auth.ts     — Verifies domain hash token for domain-scoped APIs
+      superuser-access-token.ts — Verifies user access token and requires superuser role
       org-features.ts         — Returns 404 when org features are disabled
       groups-enabled.ts       — Returns 404 when groups are disabled
       org-role-guard.ts       — Validates user access token and org role for /org endpoints
@@ -63,10 +74,19 @@ For the full product spec, see [brief.md](./brief.md). For tech stack, see [tech
       auth.service.ts         — Login, registration, password verification logic
       config.service.ts       — Config JWT fetching, parsing, validation
       token.service.ts        — Access token and authorization code generation/verification
-      organisation.service.ts  — Organisation CRUD and membership lifecycle
-      team.service.ts         — Team CRUD and team membership lifecycle
-      group.service.ts        — Group CRUD and membership lifecycle
-      org-context.service.ts  — Resolve user org context for JWT enrichment
+      organisation.service.ts  — Organisation orchestration API
+      organisation.service.base.ts — Organisation service building blocks
+      organisation.service.organisation.ts — Organisation CRUD + slug generation
+      organisation.service.members.ts — Org membership lifecycle
+      team.service.ts         — Team orchestration API
+      team.service.base.ts    — Team service building blocks
+      team.service.teams.ts   — Team CRUD
+      team.service.members.ts — Team member lifecycle
+      group.service.ts        — Group orchestration API
+      group.service.base.ts   — Group service building blocks
+      group.service.groups.ts — Group CRUD
+      group.service.members.ts — Group membership lifecycle
+      org-context.service.ts  — Resolve user org context for JWT enrichment and /org/me
       password.service.ts     — Hashing, validation rules, comparison
       email.service.ts        — Email dispatch abstraction (verification, reset, login links)
       social
@@ -120,7 +140,8 @@ Request → Route → Middleware → Service → Database (Prisma)
 ### Middleware
 
 * **config-verifier** — runs on all OAuth entry points. Fetches config from URL, verifies JWT, attaches parsed config to the request context
-* **domain-auth** — runs on domain-scoped API routes. Verifies the domain hash token
+* **domain-hash-auth** — runs on domain-scoped API routes. Verifies the domain hash token
+* **superuser-access-token** — validates user access tokens for superuser-only domain endpoints
 * **org-features** — rejects org endpoints when `org_features.enabled` is false
 * **groups-enabled** — rejects group endpoints when `org_features.groups_enabled` is false
 * **org-role-guard** — validates user context and org role for `/org/*` routes
