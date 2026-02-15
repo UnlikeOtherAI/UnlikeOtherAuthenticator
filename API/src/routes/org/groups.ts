@@ -6,7 +6,7 @@ import { requireOrgRole } from '../../middleware/org-role-guard.js';
 import requireDomainHashAuthForDomainQuery from '../../middleware/domain-hash-auth.js';
 import { requireOrgFeatures } from '../../middleware/org-features.js';
 import { requireGroupsEnabled } from '../../middleware/groups-enabled.js';
-import { listGroups } from '../../services/group.service.js';
+import { getGroup, listGroups } from '../../services/group.service.js';
 import { AppError } from '../../utils/errors.js';
 
 const DomainQuerySchema = z
@@ -27,6 +27,10 @@ const ListQuerySchema = DomainQuerySchema.extend({
 
 const OrgPathSchema = z.object({
   orgId: z.string().trim().min(1),
+});
+
+const GroupPathSchema = OrgPathSchema.extend({
+  groupId: z.string().trim().min(1),
 });
 
 function parseDomainContext(
@@ -55,6 +59,11 @@ function parseLimitCursor(
 function getOrgIdFromParams(params: { orgId?: string } | undefined): string {
   const parsed = OrgPathSchema.parse(params ?? {});
   return parsed.orgId;
+}
+
+function getGroupIdFromParams(params: { groupId?: string } | undefined): string {
+  const parsed = GroupPathSchema.parse(params ?? {});
+  return parsed.groupId;
 }
 
 export function registerGroupRoutes(app: FastifyInstance): void {
@@ -86,6 +95,37 @@ export function registerGroupRoutes(app: FastifyInstance): void {
       });
 
       reply.status(200).send(groups);
+    },
+  );
+
+  app.get(
+    '/org/organisations/:orgId/groups/:groupId',
+    {
+      preValidation: [
+        parseDomainContext,
+        configVerifier,
+        requireDomainHashAuthForDomainQuery(),
+        requireOrgFeatures,
+        requireGroupsEnabled,
+        requireOrgRole(),
+      ],
+    },
+    async (request, reply) => {
+      const { domain } = parseDomainContext(request);
+      const config = request.config;
+      if (!config) throw new AppError('UNAUTHORIZED', 401, 'MISSING_CONFIG');
+
+      const orgId = getOrgIdFromParams(request.params);
+      const groupId = getGroupIdFromParams(request.params);
+
+      const group = await getGroup({
+        orgId,
+        groupId,
+        domain,
+        config,
+      });
+
+      reply.status(200).send(group);
     },
   );
 }

@@ -552,9 +552,9 @@ The following tighten ambiguities in the brief to prevent misinterpretation duri
 
 ## 24. Organisations, Teams & Groups
 
-### 24.1 Feature Gate and Configuration Contract
+### 24.1 Feature Gate & Configuration
 
-Organisation, team, and group behavior is opt-in via the config JWT claim `org_features`.
+Organisation, team, and group behaviour is opt-in via the config JWT claim `org_features`.
 
 The claim is optional and defaults to disabled. The object shape and defaults are:
 
@@ -572,107 +572,571 @@ The claim is optional and defaults to disabled. The object shape and defaults ar
 }
 ```
 
-* `enabled = false` (or omitted): all `/org/*` and `/internal/org/*` endpoints return `404`, and access tokens do not include `org` claims.
-* `groups_enabled = false`: group read/write paths return `404` just like disabled features.
-* `org_roles` is validated at config parse and **must include `"owner"`**.
-* `max_*` values are enforced on write paths; values outside schema bounds are rejected during config validation.
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `enabled` | boolean | `false` | Whether org/team features are enabled for this domain |
+| `groups_enabled` | boolean | `false` | Whether groups are enabled (requires `enabled: true`) |
+| `max_teams_per_org` | integer | `100` | Maximum teams per organisation (max 1000) |
+| `max_groups_per_org` | integer | `20` | Maximum groups per organisation (max 200) |
+| `max_members_per_org` | integer | `1000` | Maximum members per organisation (max 10000) |
+| `max_members_per_team` | integer | `200` | Maximum members per team (max 5000) |
+| `max_members_per_group` | integer | `500` | Maximum members per group (max 5000) |
+| `max_team_memberships_per_user` | integer | `50` | Maximum teams a single user can belong to — also caps JWT size (max 200) |
+| `org_roles` | string[] | `["owner", "admin", "member"]` | Allowed org-level roles. Must always contain `"owner"`. |
 
-`org_features` is validated with the same style as other config options:
+* `enabled = false` (or omitted): all `/org/*` and `/internal/org/*` endpoints return `404`, access tokens omit `org` claims.
+* `groups_enabled = false`: group read/write paths return `404`.
+* `org_roles` **must include `"owner"`** — Zod validation rejects configs without it.
+* `max_*` values are enforced on write paths; invalid values reject the config.
 
-* `enabled`: boolean, default `false`
-* `groups_enabled`: boolean, default `false`
-* `max_teams_per_org`: integer, positive, max `1000`, default `100`
-* `max_groups_per_org`: integer, positive, max `200`, default `20`
-* `max_members_per_org`: integer, positive, max `10000`, default `1000`
-* `max_members_per_team`: integer, positive, max `5000`, default `200`
-* `max_members_per_group`: integer, positive, max `5000`, default `500`
-* `max_team_memberships_per_user`: integer, positive, max `200`, default `50`
-* `org_roles`: non-empty strings, default `["owner", "admin", "member"]`
+Follow the same Zod pattern as `2fa_enabled` and `user_scope` in `ClientConfigSchema` — an optional field with defaults:
 
-### 24.2 Organisation (tenant)
+```typescript
+org_features: z.object({
+  enabled: z.boolean().default(false),
+  groups_enabled: z.boolean().default(false),
+  max_teams_per_org: z.number().int().positive().max(1000).default(100),
+  max_groups_per_org: z.number().int().positive().max(200).default(20),
+  max_members_per_org: z.number().int().positive().max(10000).default(1000),
+  max_members_per_team: z.number().int().positive().max(5000).default(200),
+  max_members_per_group: z.number().int().positive().max(5000).default(500),
+  max_team_memberships_per_user: z.number().int().positive().max(200).default(50),
+  org_roles: z.array(z.string().min(1).max(50)).refine(
+    (roles) => roles.includes('owner'),
+    { message: 'org_roles must include "owner"' }
+  ).default(['owner', 'admin', 'member']),
+}).optional().default({
+  enabled: false, groups_enabled: false,
+  max_teams_per_org: 100, max_groups_per_org: 20,
+  max_members_per_org: 1000, max_members_per_team: 200,
+  max_members_per_group: 500, max_team_memberships_per_user: 50,
+  org_roles: ['owner', 'admin', 'member'],
+})
+```
 
-* An `Organisation` belongs to a `domain` and is the top-level tenant concept.
-* A domain can have multiple orgs.
-* A user can belong to **at most one org per domain**.
-* Creating an org creates:
-  * one owner (`ownerId`)
-  * one `slug` derived from org name
-  * one default team named `"General"` with `isDefault: true`
-* User who creates the org is assigned as owner.
-* Owner-only behavior:
-  * delete the org
-  * transfer ownership
-  * change org member roles
-* `owner` role must always be present in config and is treated as a reserved, system-level role.
-* `updateOrganisation` is allowed by owner/admin and rewrites slug from the new name with collision handling.
-* `slug` constraints:
-  * URL-safe, lower-case, no leading/trailing hyphen
-  * 2–120 chars
-  * reserved words blocked (`admin`, `api`, `internal`, `me`, `system`, `settings`, `new`, `default`)
-  * uniqueness is per-domain
-  * collision retries append a short random suffix
-* `deleteOrganisation` is owner-only and fails if deletion constraints are violated.
+#### Reserved Role: `"owner"`
 
-### 24.3 Team semantics
+The `"owner"` role has system-level semantics: only owners can delete organisations, transfer ownership, and change member roles. The `org_roles` array must always include `"owner"`.
+
+`"owner"` and `"admin"` are the only system-interpreted roles for service-level permissions. All other role strings in `org_roles` are product-defined — stored and included in JWTs but carry no system-level permissions.
+
+---
+
+### 24.2 Database Schema
+
+Add the following models to `API/prisma/schema.prisma`. Follow existing conventions: `cuid()` IDs, `snake_case` table/column mapping, `@@map()` on all models, `createdAt`/`updatedAt` timestamps.
+
+#### Organisation
+
+```prisma
+model Organisation {
+  id        String   @id @default(cuid())
+  domain    String
+  name      String   @db.VarChar(100)
+  slug      String   @db.VarChar(120)
+  ownerId   String   @map("owner_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  owner   User         @relation("OrgOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  members OrgMember[]
+  teams   Team[]
+  groups  Group[]
+
+  @@unique([domain, slug])
+  @@index([domain])
+  @@index([ownerId])
+  @@map("organisations")
+}
+```
+
+* `ownerId` is a direct reference to the owning user. `onDelete: Restrict` prevents deleting a user who owns an org — ownership must be transferred first.
+* `slug` is URL-safe, unique per domain (see 24.4).
+
+#### OrgMember
+
+```prisma
+model OrgMember {
+  id        String   @id @default(cuid())
+  orgId     String   @map("org_id")
+  userId    String   @map("user_id")
+  role      String   @default("member")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  org  Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, userId])
+  @@index([userId])
+  @@map("org_members")
+}
+```
+
+* `role` is validated against `org_roles` config on write only. On read, return whatever is stored.
+* `updatedAt` tracks role change timestamps.
+
+#### Team
+
+```prisma
+model Team {
+  id          String   @id @default(cuid())
+  orgId       String   @map("org_id")
+  groupId     String?  @map("group_id")
+  name        String   @db.VarChar(100)
+  description String?  @db.VarChar(500)
+  isDefault   Boolean  @default(false) @map("is_default")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  org     Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  group   Group?       @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  members TeamMember[]
+
+  @@unique([orgId, name])
+  @@index([orgId])
+  @@index([groupId])
+  @@map("teams")
+}
+```
+
+* If a group is deleted, its teams become ungrouped (`onDelete: SetNull`).
+* `isDefault` marks the auto-created default team. One per org.
+
+#### TeamMember
+
+```prisma
+model TeamMember {
+  id        String   @id @default(cuid())
+  teamId    String   @map("team_id")
+  userId    String   @map("user_id")
+  teamRole  String   @default("member") @map("team_role")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@index([userId])
+  @@map("team_members")
+}
+```
+
+* `teamRole`: `lead` or `member`. Validated at application layer.
+
+#### Group
+
+```prisma
+model Group {
+  id          String   @id @default(cuid())
+  orgId       String   @map("org_id")
+  name        String   @db.VarChar(100)
+  description String?  @db.VarChar(500)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  org     Organisation  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  teams   Team[]
+  members GroupMember[]
+
+  @@unique([orgId, name])
+  @@index([orgId])
+  @@map("groups")
+}
+```
+
+#### GroupMember
+
+```prisma
+model GroupMember {
+  id        String   @id @default(cuid())
+  groupId   String   @map("group_id")
+  userId    String   @map("user_id")
+  isAdmin   Boolean  @default(false) @map("is_admin")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@index([userId])
+  @@map("group_members")
+}
+```
+
+#### User Model Changes
+
+Add relations to the existing `User` model:
+
+```prisma
+ownedOrgs     Organisation[] @relation("OrgOwner")
+orgMembers    OrgMember[]
+teamMembers   TeamMember[]
+groupMembers  GroupMember[]
+```
+
+---
+
+### 24.3 Organisation
+
+* An organisation belongs to a **domain** and is the top-level tenant concept.
+* A domain can have **multiple organisations**.
+* A user belongs to **exactly one organisation** per domain (with global `user_scope`, the same person could belong to different orgs on different domains).
+* The user who creates an organisation becomes its **owner** (tracked via `ownerId`).
+* Every organisation has a **default team** created automatically at org creation time (see 24.5).
+* Creating an org: in one transaction, create the org, add the creator as owner (`OrgMember` with role `"owner"`), and create the default "General" team with `isDefault: true`.
+
+#### Owner-Only Operations
+
+* Delete the organisation
+* Transfer ownership (`POST /org/organisations/:orgId/transfer-ownership`)
+* Change a member's org role
+
+#### Ownership Transfer
+
+`POST /org/organisations/:orgId/transfer-ownership` accepts `{ newOwnerId: string }`. In a transaction:
+
+1. Verify `newOwnerId` is an existing org member.
+2. Set `Organisation.ownerId` to the new owner.
+3. Set the new owner's `OrgMember.role` to `"owner"`.
+4. Set the old owner's `OrgMember.role` to `"admin"`.
+
+#### User Removal Cascade
+
+When removing a user from an org (`DELETE /org/organisations/:orgId/members/:userId`), the service must within the same transaction:
+
+1. Delete all `TeamMember` records where the user belongs to teams in this org.
+2. Delete all `GroupMember` records where the user belongs to groups in this org.
+3. Delete the `OrgMember` record.
+
+#### Sole Owner Deletion
+
+`Organisation.ownerId` has `onDelete: Restrict`. A user who is the sole owner of an org cannot be deleted — ownership must be transferred first.
+
+#### One Org Per User Per Domain
+
+The `@@unique([orgId, userId])` on `OrgMember` only prevents duplicate membership within one org. To enforce one-org-per-user-per-domain:
+
+* The service must query "does this user already belong to any org on this domain?" before adding them.
+* This check runs inside the transaction that creates the `OrgMember` record.
+* With `user_scope: "per_domain"`, this is naturally enforced (user records are domain-scoped). With `user_scope: "global"`, the check must be explicit.
+
+#### Member Addition: No Email-Based Lookup
+
+To prevent email enumeration (consistent with Section 11), the member addition endpoint accepts a **userId**, not an email. The consuming product looks up user IDs through its own means (e.g., the existing `/domain/users` endpoint). If the userId does not exist or does not belong to the domain, the endpoint returns a generic error.
+
+---
+
+### 24.4 Slug Rules
+
+Organisation slugs are derived from the `name` field:
+
+* **Allowed characters:** lowercase alphanumeric and hyphens (`[a-z0-9-]`)
+* **Pattern:** `/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/` (start and end with alphanumeric)
+* **No consecutive hyphens**
+* **Minimum length:** 2 characters
+* **Maximum length:** 120 characters
+* Unicode characters transliterated to ASCII before slugifying
+* **Reserved slugs** that must be rejected: `admin`, `api`, `internal`, `me`, `system`, `settings`, `new`, `default`
+* **Collision resolution:** append a random 4-character alphanumeric suffix (e.g., `my-org-a7f3`). Try up to 10 times, then fail. Do NOT use incrementing numeric suffixes (avoids leaking org count).
+* Slugs are **regenerated** when the org name is updated via `PUT /org/organisations/:orgId`.
+
+---
+
+### 24.5 Team Semantics
 
 * An org has many teams.
 * Team constraints:
-  * `name`: max 100 chars
+  * `name`: max 100 chars, unique within org
   * `description`: optional, max 500 chars
-  * `isDefault`: true/false
+  * `isDefault`: boolean
 * Team membership role is separate from org role:
-  * allowed values: `member` (default), `lead`
-  * storage is free text in DB, but only these values are accepted by service/API paths
+  * Allowed values: `member` (default), `lead`
+  * `lead` is a display/routing designation — not an access control role
 * Every org member must belong to at least one team.
   * On org membership add, user is auto-added to the default team.
-* Team lifecycle:
-  * default team cannot be deleted
-  * default team can be renamed
-  * `isDefault` cannot be changed
-* Team membership constraints:
-  * `max_members_per_team`
-  * `max_team_memberships_per_user`
-  * user cannot be removed from their final team membership
-* Team-manager operations are enforced for owner/admin roles only.
 
-### 24.4 Group semantics (enterprise option)
+#### Default Team
 
-* Groups are optional and only active when `groups_enabled` is true.
-* An org can have many groups; max is config-gated by `max_groups_per_org`.
-* A team can belong to at most one group (or none).
-* Group membership stores `is_admin` per user.
-* `is_admin` has no auth-level behavior in this service; it is just persisted for consuming products.
-* Group read is exposed to org members via:
-  * `GET /org/organisations/:orgId/groups`
-* Group writes are internal only:
-  * `POST /internal/org/organisations/:orgId/groups`
-  * `PUT /internal/org/organisations/:orgId/groups/:groupId`
-  * `DELETE /internal/org/organisations/:orgId/groups/:groupId`
-  * `POST /internal/org/organisations/:orgId/groups/:groupId/members`
-  * `PUT /internal/org/organisations/:orgId/groups/:groupId/members/:userId`
-  * `DELETE /internal/org/organisations/:orgId/groups/:groupId/members/:userId`
-  * `PUT /internal/org/organisations/:orgId/teams/:teamId/group`
+* When an org is created, a team named "General" is auto-created with `isDefault: true`.
+* When a user is added to an org, they are auto-added to the default team.
+* The default team **cannot be deleted**.
+* The default team can be renamed but `isDefault` cannot be changed.
+* A user cannot be removed from their last team — remove them from the org instead.
 
-### 24.5 JWT Org Claim Contract
+#### Team Membership Constraints
 
-When enabled and user belongs to an org, tokens may include `org`:
+* `max_members_per_team` from config
+* `max_team_memberships_per_user` from config
+* User cannot be removed from their final team membership
+* Team CRUD restricted to owner/admin roles
+* `PUT` on team **cannot change `isDefault` or `groupId`** — group assignment is internal-only
 
-* `org_id`: org identifier
-* `org_role`: member role in org
-* `teams`: list of team IDs
-* `team_roles`: map `teamId -> role`
-* `groups`: optional list of group IDs (only when groups enabled and memberships exist)
-* `group_admin`: optional list of group IDs where user has `is_admin`
+---
 
-If `org_features.enabled` is false, the org claim is omitted entirely.
+### 24.6 Group Semantics (Enterprise Option)
 
-### 24.6 API and validation clarifications
+* Groups are optional — only active when `groups_enabled` is `true`.
+* An org can have many groups; max is `max_groups_per_org`.
+* A team belongs to **at most one group** (nullable — teams can be ungrouped).
+* Group membership stores `is_admin` per user. This flag has no auth-level behaviour — it is persisted for consuming products.
+* Group reads are available to any org member via the `/org/` API.
+* **All group write operations are system-admin-only** — accessed through the Internal API (`/internal/org/`), not user-facing endpoints.
 
-* `/org/organisations/:orgId/members` writes validate org role values against `org_roles` when provided.
-* Existing stored roles are not retrofitted when `org_roles` in config changes.
-* `owner` and `admin` are the only system-interpreted roles for service-level permissions.
-* All other custom roles are persisted and passed through in JWTs.
-* Group endpoints short-circuit at middleware with `404` when the feature flag is off.
+---
+
+### 24.7 Access Token JWT Changes
+
+When `org_features.enabled` is `true` and the user belongs to an org, the access token includes an `org` claim:
+
+```json
+{
+  "sub": "user_abc",
+  "email": "user@example.com",
+  "domain": "app.example.com",
+  "client_id": "hash_xyz",
+  "role": "user",
+  "org": {
+    "org_id": "org_abc",
+    "org_role": "admin",
+    "teams": ["team_1", "team_2"],
+    "team_roles": { "team_1": "lead", "team_2": "member" },
+    "groups": ["group_a"],
+    "group_admin": ["group_a"]
+  },
+  "iss": "unlike-other-authenticator",
+  "iat": 1706742000,
+  "exp": 1706745600
+}
+```
+
+| Claim | Type | Description |
+|---|---|---|
+| `org.org_id` | string | Organisation ID |
+| `org.org_role` | string | User's org role |
+| `org.teams` | string[] | Team IDs (capped at `max_team_memberships_per_user`) |
+| `org.team_roles` | object | Map of team_id to team role |
+| `org.groups` | string[] | Group IDs (only when `groups_enabled`) |
+| `org.group_admin` | string[] | Groups where user has `is_admin = true` |
+
+* If user has no org on this domain, the `org` claim is **omitted entirely** (not null, not empty — absent).
+* JWT size grows linearly with memberships. `max_team_memberships_per_user` (default: 50) caps this. With 50 teams and 20 groups, expect ~4-5KB additional payload. Consuming products may need to increase reverse proxy header buffer sizes.
+* JWT `org` claims are populated at issuance time, not updated mid-session. Changes require re-authentication (consistent with Section 22.10).
+
+#### Implementation
+
+* Modify `signAccessToken()` in `token.service.ts`: add optional `org` parameter to the existing flat params.
+* Modify `AccessTokenClaimsSchema` in `access-token.service.ts`: add optional `org` Zod schema. Update `AccessTokenClaims` type and the hand-mapped return in `verifyAccessToken()`.
+* Modify `exchangeAuthorizationCodeForAccessToken()`: query org context via `org-context.service.ts` when `org_features.enabled`.
+
+---
+
+### 24.8 Authentication & Middleware
+
+The `/org/` endpoints use a **dual-auth pattern**: domain hash token for backend identity + user access token for user identity.
+
+#### Required on All `/org/` Endpoints
+
+1. `?domain=<domain>` query parameter (same pattern as `/domain/*`)
+2. `?config_url=<config_url>` query parameter (config verified on every request)
+3. Domain hash bearer token in `Authorization` header
+
+#### User Identity
+
+For endpoints needing user context, the access token goes in `X-UOA-Access-Token` header (already redacted in Fastify logger config). The `Authorization` header carries the domain hash token.
+
+#### Middleware Chain
+
+```
+Request
+  → config-verifier.ts       (fetch & verify config, attach to request)
+  → requireDomainHashAuthForDomainQuery  (verify Authorization bearer)
+  → org-features.ts          (check config.org_features.enabled → 404 if disabled)
+  → org-role-guard.ts        (extract X-UOA-Access-Token, verify, check org role)
+  → Route handler
+```
+
+For org creation: `org-role-guard.ts` must not require an org role (user has no org yet). It only verifies the access token is valid and the domain matches.
+
+#### Cross-Domain Validation (IDOR Prevention)
+
+* `org-role-guard.ts` must verify the `domain` claim in the user's access token matches `?domain=`.
+* Service layer must verify that any org in the URL path belongs to the `?domain=` domain.
+* Every operation must verify the full ownership chain: domain → org → team/group → member.
+
+#### Error Pattern
+
+All errors use `AppError` from `utils/errors.ts`. The global error handler returns only `{ error: "Request failed" }`. No status-specific messages that leak information.
+
+---
+
+### 24.9 API Endpoints (User-Facing)
+
+#### Organisation Management
+
+| Method | Endpoint | Description | Who can call |
+|--------|----------|-------------|-------------|
+| POST | `/org/organisations` | Create org (auto-creates default team) | Any authenticated user (must not already belong to an org on this domain) |
+| GET | `/org/organisations/:orgId` | Get org details | Any org member |
+| PUT | `/org/organisations/:orgId` | Update org name/slug | Owner, Admin |
+| DELETE | `/org/organisations/:orgId` | Delete org and all nested data | Owner only |
+| GET | `/org/organisations/:orgId/members` | List org members (paginated) | Any org member |
+| POST | `/org/organisations/:orgId/members` | Add user to org (by userId) | Owner, Admin |
+| PUT | `/org/organisations/:orgId/members/:userId` | Change member's org role | Owner only |
+| DELETE | `/org/organisations/:orgId/members/:userId` | Remove member (cascades team/group) | Owner, Admin (cannot remove last owner) |
+| POST | `/org/organisations/:orgId/transfer-ownership` | Transfer ownership | Owner only |
+
+#### Team Management
+
+| Method | Endpoint | Description | Who can call |
+|--------|----------|-------------|-------------|
+| GET | `/org/organisations/:orgId/teams` | List teams (paginated) | Any org member |
+| POST | `/org/organisations/:orgId/teams` | Create team | Owner, Admin |
+| GET | `/org/organisations/:orgId/teams/:teamId` | Get team details + members | Any org member |
+| PUT | `/org/organisations/:orgId/teams/:teamId` | Update name/description | Owner, Admin |
+| DELETE | `/org/organisations/:orgId/teams/:teamId` | Delete team (not default) | Owner, Admin |
+| POST | `/org/organisations/:orgId/teams/:teamId/members` | Add user to team | Owner, Admin |
+| PUT | `/org/organisations/:orgId/teams/:teamId/members/:userId` | Change team role | Owner, Admin |
+| DELETE | `/org/organisations/:orgId/teams/:teamId/members/:userId` | Remove from team (not last team) | Owner, Admin |
+
+#### Group Management (Read-Only)
+
+Returns `404` if `groups_enabled` is `false`.
+
+| Method | Endpoint | Description | Who can call |
+|--------|----------|-------------|-------------|
+| GET | `/org/organisations/:orgId/groups` | List groups (paginated) | Any org member |
+| GET | `/org/organisations/:orgId/groups/:groupId` | Get group details + teams + members | Any org member |
+
+#### Domain Admin
+
+| Method | Endpoint | Description | Who can call |
+|--------|----------|-------------|-------------|
+| GET | `/org/organisations` | List all orgs on domain (paginated) | Domain hash auth only |
+
+#### User Context
+
+| Method | Endpoint | Description | Who can call |
+|--------|----------|-------------|-------------|
+| GET | `/org/me` | Current user's org context | Any authenticated user |
+
+Returns same structure as JWT `org` claim but always reflects current database state.
+
+---
+
+### 24.10 Internal API
+
+Group management and team-to-group assignment are system-admin-only. System admins are backend services, not human users.
+
+#### Authentication
+
+1. `?domain=<domain>` query parameter
+2. Domain hash bearer token in `Authorization` header
+3. `?config_url=<config_url>` query parameter
+4. **No user access token** — machine-to-machine calls
+
+The domain hash token represents full system trust. Any backend possessing the shared secret is implicitly a system admin.
+
+#### Middleware Chain
+
+```
+Request
+  → config-verifier.ts                     (fetch & verify config)
+  → requireDomainHashAuthForDomainQuery    (verify domain hash)
+  → org-features.ts                        (check enabled)
+  → groups-enabled.ts                      (check groups_enabled → 404 if disabled)
+  → Route handler
+```
+
+No `org-role-guard.ts` — no user in the request.
+
+#### Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/internal/org/organisations/:orgId/groups` | Create group |
+| PUT | `/internal/org/organisations/:orgId/groups/:groupId` | Update group |
+| DELETE | `/internal/org/organisations/:orgId/groups/:groupId` | Delete group (teams become ungrouped) |
+| POST | `/internal/org/organisations/:orgId/groups/:groupId/members` | Add group member |
+| PUT | `/internal/org/organisations/:orgId/groups/:groupId/members/:userId` | Toggle is_admin |
+| DELETE | `/internal/org/organisations/:orgId/groups/:groupId/members/:userId` | Remove group member |
+| PUT | `/internal/org/organisations/:orgId/teams/:teamId/group` | Assign/unassign team to group |
+
+#### Team-Group Assignment
+
+`PUT /internal/org/organisations/:orgId/teams/:teamId/group` accepts `{ groupId: string | null }`. `null` ungroups the team. Must verify:
+
+1. Team belongs to the org.
+2. Group (if provided) belongs to the same org.
+3. `groups_enabled` is `true`.
+
+#### Security Note
+
+The internal API must never be exposed to end users. In production, these endpoints should be network-restricted (VPC, API gateway). The authenticator does not enforce network-level restrictions.
+
+---
+
+### 24.11 Pagination & Rate Limiting
+
+#### Pagination
+
+All list endpoints support cursor-based pagination:
+
+* Query parameters: `?limit=50&cursor=<last_id>`
+* Response: `{ data: [...], next_cursor: "..." | null }`
+* Default limit: 50, maximum: 200
+
+#### Rate Limiting
+
+Extend `rate-limiter.ts` for `/org/` routes:
+
+* Org creation: 5 per user per domain per hour
+* Member addition: 100 per org per hour
+* Team creation: 50 per org per hour
+* Read endpoints: standard API rate limits
+
+---
+
+### 24.12 Operational Lifecycle
+
+#### Enabling on an Existing Domain
+
+When `org_features` is enabled on a domain with existing users, none belong to an org. The authenticator does not migrate. The consuming product must:
+
+1. Prompt users to create or join organisations.
+2. Handle missing `org` JWT claim gracefully.
+3. Optionally use the Internal API to pre-create orgs.
+
+#### Disabling After Orgs Exist
+
+Setting `enabled: false` hides all org endpoints (`404`) and omits `org` JWT claims. **Existing data is NOT deleted.** Re-enabling restores access. For permanent removal, delete orgs via API before disabling.
+
+#### `org_roles` Config Changes
+
+If `org_roles` changes and existing members have roles no longer in the list, those members retain their stored role. The consuming product must bulk-update roles if needed. Validation is write-only — the JWT contains whatever role is stored.
+
+---
+
+### 24.13 Constraints
+
+1. **Completely generic.** No product-specific concepts.
+2. **Backwards compatible.** Existing flows unchanged when `org_features` is absent.
+3. **No admin dashboard.** API-only. No UI changes.
+4. **No refresh tokens.** Re-authenticate for updated claims.
+5. **Existing security rules apply.** Generic errors, no enumeration, no leakage.
+6. **File size limit: 500 lines.**
+7. **Follow existing code patterns.** See `token.service.ts`, `domain-role.service.ts`, `domain-hash-auth.ts`.
+8. **Prisma only.** No raw SQL. Use transactions for multi-step mutations.
+9. **Slug rules.** Random suffixes, not incrementing (see 24.4).
+10. **Deletion cascades.** Org deletion cascades teams, groups, memberships. Team deletion cascades memberships (cannot delete default). Group deletion sets `groupId = null` on teams.
+11. **`org_roles` must include `"owner"`.** Validated on write, not read.
+12. **One org per user per domain.** Enforced at application layer.
+13. **Every user in at least one team.** Auto-added to default team on join.
+14. **Group writes are internal-only.** Via `/internal/org/`.
+15. **Member addition by userId, not email.** No enumeration.
+16. **IDOR prevention.** Verify full ownership chain: domain → org → team/group → member.
 
 ## 25. Task Breakdown by Phase
 

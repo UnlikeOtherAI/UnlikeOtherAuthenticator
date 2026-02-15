@@ -256,4 +256,105 @@ describe.skipIf(!hasDatabase)('GET /org/organisations/:orgId/groups', () => {
 
     await app.close();
   });
+
+  it('returns group details with teams and members when groups are enabled', async () => {
+    const owner = await handle!.prisma.user.create({
+      data: {
+        email: 'owner-detail@example.com',
+        userKey: 'owner-detail@example.com',
+        passwordHash: null,
+      },
+      select: { id: true },
+    });
+
+    const domain = 'client.example.com';
+    const configUrl = 'https://client.example.com/auth-config';
+    const configJwt = await createSignedConfigJwt(process.env.SHARED_SECRET!, {
+      groups_enabled: true,
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(configJwt, { status: 200 })));
+
+    const org = await handle!.prisma.organisation.create({
+      data: {
+        domain,
+        name: orgNameDateSuffix('Org'),
+        slug: 'acme-org-detail',
+        ownerId: owner.id,
+      },
+      select: { id: true },
+    });
+
+    const team = await handle!.prisma.team.create({
+      data: {
+        orgId: org.id,
+        name: orgNameDateSuffix('Team Alpha'),
+      },
+      select: { id: true },
+    });
+
+    const group = await handle!.prisma.group.create({
+      data: {
+        orgId: org.id,
+        name: orgNameDateSuffix('Group Detail'),
+        description: 'Group used for integration detail test',
+      },
+      select: { id: true },
+    });
+
+    await handle!.prisma.team.update({
+      where: { id: team.id },
+      data: { groupId: group.id },
+    });
+
+    await handle!.prisma.groupMember.create({
+      data: {
+        groupId: group.id,
+        userId: owner.id,
+        isAdmin: true,
+      },
+    });
+
+    const ownerToken = await signOrgAccessToken({
+      subject: owner.id,
+      orgId: org.id,
+      domain,
+      secret: process.env.SHARED_SECRET!,
+      issuer: process.env.AUTH_SERVICE_IDENTIFIER!,
+    });
+
+    const domainHash = createClientId(domain, process.env.SHARED_SECRET);
+    const app = await createApp();
+    await app.ready();
+
+    const groupRes = await app.inject({
+      method: 'GET',
+      url: `/org/organisations/${org.id}/groups/${group.id}?domain=${encodeURIComponent(
+        domain,
+      )}&config_url=${encodeURIComponent(configUrl)}`,
+      headers: {
+        authorization: `Bearer ${domainHash}`,
+        'x-uoa-access-token': `Bearer ${ownerToken}`,
+      },
+    });
+
+    expect(groupRes.statusCode).toBe(200);
+    const groupBody = groupRes.json() as {
+      id: string;
+      orgId: string;
+      name: string;
+      teams: Array<{ id: string; orgId: string; groupId: string | null }>;
+      members: Array<{ userId: string; isAdmin: boolean }>;
+    };
+
+    expect(groupBody.id).toBe(group.id);
+    expect(groupBody.orgId).toBe(org.id);
+    expect(groupBody.teams).toHaveLength(1);
+    expect(groupBody.teams[0].id).toBe(team.id);
+    expect(groupBody.teams[0].groupId).toBe(group.id);
+    expect(groupBody.members).toHaveLength(1);
+    expect(groupBody.members[0].userId).toBe(owner.id);
+    expect(groupBody.members[0].isAdmin).toBe(true);
+
+    await app.close();
+  });
 });

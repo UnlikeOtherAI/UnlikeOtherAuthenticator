@@ -69,7 +69,7 @@ Enable organisations, teams, and groups by adding `org_features` to the config:
 }
 ```
 
-When enabled, the access token JWT includes an `org` claim with the user's organisation, team, and group memberships. Groups are managed exclusively through the Internal API (`/internal/org/`) using signed requests. See the [full org/teams/groups spec](./AUTHENTICATOR-ORG-TEAMS-GROUPS-PROMPT.md) for details.
+When enabled, the access token JWT includes an `org` claim with the user's organisation, team, and group memberships. Groups are managed exclusively through the Internal API (`/internal/org/`) using signed requests. See [Section 24 of the brief](./Docs/brief.md#24-organisations-teams--groups) for the full specification.
 
 ### JWT Signing
 
@@ -420,10 +420,14 @@ These endpoints require `org_features.enabled: true` in the config JWT.
 
 **Internal API** (require domain hash token only, no user token):
 - `POST /internal/org/organisations/:orgId/groups` — Create group
-- `PUT /internal/org/organisations/:orgId/teams/:teamId/group` — Assign team to group
-- Group member management endpoints
+- `PUT /internal/org/organisations/:orgId/groups/:groupId` — Update group
+- `DELETE /internal/org/organisations/:orgId/groups/:groupId` — Delete group
+- `POST /internal/org/organisations/:orgId/groups/:groupId/members` — Add group member
+- `PUT /internal/org/organisations/:orgId/groups/:groupId/members/:userId` — Toggle is_admin
+- `DELETE /internal/org/organisations/:orgId/groups/:groupId/members/:userId` — Remove group member
+- `PUT /internal/org/organisations/:orgId/teams/:teamId/group` — Assign/unassign team to group
 
-See [`AUTHENTICATOR-ORG-TEAMS-GROUPS-PROMPT.md`](./AUTHENTICATOR-ORG-TEAMS-GROUPS-PROMPT.md) for the full specification.
+See [Section 24 of the brief](./Docs/brief.md#24-organisations-teams--groups) for the full specification.
 
 ### Health
 
