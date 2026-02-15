@@ -347,6 +347,64 @@ describe.skipIf(!hasDatabase)('user-facing /org organisations and members', () =
     await app.close();
   });
 
+  it('returns a generic error when adding a non-existent userId to an organisation', async () => {
+    const domain = 'org-members-missing-user.example.com';
+    const orgConfigUrl = 'https://org-members-missing-user.example.com/auth-config';
+    const configJwt = await createSignedConfigJwt(process.env.SHARED_SECRET!, {});
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(configJwt, { status: 200 })));
+
+    const owner = await createTestUser(handle!, 'member-owner-missing@example.com');
+    const actorToken = await signAccessToken({
+      subject: owner.id,
+      domain,
+      secret: process.env.SHARED_SECRET!,
+      issuer: process.env.AUTH_SERVICE_IDENTIFIER!,
+    });
+
+    const app = await createApp();
+    await app.ready();
+
+    const domainHash = createClientId(domain, process.env.SHARED_SECRET!);
+    const createOrg = await app.inject({
+      method: 'POST',
+      url: `/org/organisations?domain=${encodeURIComponent(domain)}&config_url=${encodeURIComponent(orgConfigUrl)}`,
+      headers: {
+        authorization: `Bearer ${domainHash}`,
+        'x-uoa-access-token': `Bearer ${actorToken}`,
+      },
+      payload: { name: 'Acme Missing User Org' },
+    });
+    expect(createOrg.statusCode).toBe(200);
+    const org = createOrg.json() as OrgRecord;
+
+    const ownerToken = await signAccessToken({
+      subject: owner.id,
+      domain,
+      secret: process.env.SHARED_SECRET!,
+      issuer: process.env.AUTH_SERVICE_IDENTIFIER!,
+      org: {
+        orgId: org.id,
+        orgRole: 'owner',
+        teams: [],
+        team_roles: {},
+      },
+    });
+
+    const addMissing = await app.inject({
+      method: 'POST',
+      url: `/org/organisations/${org.id}/members?domain=${encodeURIComponent(domain)}&config_url=${encodeURIComponent(orgConfigUrl)}`,
+      headers: {
+        authorization: `Bearer ${domainHash}`,
+        'x-uoa-access-token': `Bearer ${ownerToken}`,
+      },
+      payload: { userId: 'missing-user-id' },
+    });
+    expect(addMissing.statusCode).toBe(400);
+    expect(addMissing.json()).toEqual({ error: 'Request failed' });
+
+    await app.close();
+  });
+
   it('returns current org context from /org/me for org members', async () => {
     const domain = 'client.example.com';
     const orgConfigUrl = 'https://client.example.com/auth-config';
