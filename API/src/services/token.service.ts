@@ -11,6 +11,7 @@ import { createClientId } from '../utils/hash.js';
 import { AppError } from '../utils/errors.js';
 import type { ClientConfig } from './config.service.js';
 import { tryParseHttpUrl } from '../utils/http-url.js';
+import { getUserOrgContext, type OrgContext } from './org-context.service.js';
 
 type TokenPrisma = {
   authorizationCode: Pick<
@@ -195,14 +196,27 @@ async function signAccessToken(params: {
   sharedSecret: string;
   ttl: string;
   issuer: string;
+  org?: OrgContext | null;
 }): Promise<string> {
+  const payload = {
+    email: params.email,
+    domain: params.domain,
+    client_id: params.clientId,
+    role: params.role,
+  } as {
+    email: string;
+    domain: string;
+    client_id: string;
+    role: 'superuser' | 'user';
+    org?: OrgContext;
+  };
+
+  if (params.org) {
+    payload.org = params.org;
+  }
+
   try {
-    return await new SignJWT({
-      email: params.email,
-      domain: params.domain,
-      client_id: params.clientId,
-      role: params.role,
-    })
+    return await new SignJWT(payload)
       .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
       .setIssuer(params.issuer)
       .setSubject(params.userId)
@@ -264,6 +278,16 @@ export async function exchangeAuthorizationCodeForAccessToken(
 
   const role = domainRole.role === 'SUPERUSER' ? 'superuser' : 'user';
   const clientId = createClientId(params.config.domain, sharedSecret);
+  const org = params.config.org_features?.enabled
+    ? await getUserOrgContext(
+        {
+          userId,
+          domain: params.config.domain,
+          config: params.config,
+        },
+        { env, prisma: prisma as unknown as PrismaClient },
+      )
+    : null;
 
   const accessToken = await signAccessToken({
     userId,
@@ -274,6 +298,7 @@ export async function exchangeAuthorizationCodeForAccessToken(
     sharedSecret,
     ttl,
     issuer,
+    org,
   });
 
   return { accessToken };

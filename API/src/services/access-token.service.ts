@@ -12,6 +12,16 @@ const AccessTokenClaimsSchema = z
     domain: z.string().trim().min(1),
     client_id: z.string().trim().min(1),
     role: z.enum(['superuser', 'user']),
+    org: z
+      .object({
+        org_id: z.string().trim().min(1),
+        org_role: z.string().trim().min(1),
+        teams: z.array(z.string().trim().min(1)),
+        team_roles: z.record(z.string().trim().min(1), z.string().trim().min(1)),
+        groups: z.array(z.string().trim().min(1)).optional(),
+        group_admin: z.array(z.string().trim().min(1)).optional(),
+      })
+      .passthrough(),
   })
   .passthrough();
 
@@ -21,6 +31,14 @@ export type AccessTokenClaims = {
   domain: string;
   clientId: string;
   role: 'superuser' | 'user';
+  org?: {
+    org_id: string;
+    org_role: string;
+    teams: string[];
+    team_roles: Record<string, string>;
+    groups?: string[];
+    group_admin?: string[];
+  };
 };
 
 function sharedSecretKey(sharedSecret: string): Uint8Array {
@@ -55,10 +73,10 @@ export async function verifyAccessToken(
       domain: parsed.domain,
       clientId: parsed.client_id,
       role: parsed.role,
+      ...(parsed.org ? { org: parsed.org } : {}),
     };
   } catch {
     // Normalize all verification/parsing failures into a generic, user-safe error.
     throw new AppError('UNAUTHORIZED', 401, 'INVALID_ACCESS_TOKEN');
   }
 }
-
