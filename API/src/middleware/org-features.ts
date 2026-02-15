@@ -1,16 +1,24 @@
-import type { FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyRequest } from 'fastify';
 
 import { AppError } from '../utils/errors.js';
 
-export async function requireOrgFeaturesEnabled(
-  request: FastifyRequest,
-  reply: FastifyReply,
-): Promise<void> {
-  void reply;
+type RequestWithConfig = FastifyRequest & {
+  config?: {
+    org_features?: {
+      enabled?: boolean;
+    };
+  };
+};
 
-  const config = request.config;
-  if (!config?.org_features?.enabled) {
+export function requireOrgFeatures(request: RequestWithConfig): void {
+  const enabled = request.config?.org_features?.enabled === true;
+  if (!enabled) {
     throw new AppError('NOT_FOUND', 404);
   }
 }
 
+export function requireOrgFeaturesEnabled(request: RequestWithConfig): void {
+  return requireOrgFeatures(request);
+}
+
+export default requireOrgFeatures;
