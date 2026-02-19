@@ -7,9 +7,11 @@ import { registerInternalOrgRoutes } from './internal/org/index.js';
 import { registerHealthRoutes } from './health/index.js';
 import { registerI18nRoutes } from './i18n/index.js';
 import { registerOrgRoutes } from './org/index.js';
+import { registerRootRoute } from './root/index.js';
 import { registerTwoFactorRoutes } from './twofactor/index.js';
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
+  registerRootRoute(app);
   registerHealthRoutes(app);
   registerAuthRoutes(app);
   registerDomainRoutes(app);
