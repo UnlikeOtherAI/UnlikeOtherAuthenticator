@@ -202,7 +202,7 @@ export class OrganisationService {
         data: {
           teamId: team.id,
           userId: input.ownerUserId,
-          role: TEAM_ROLE_MEMBER,
+          teamRole: TEAM_ROLE_MEMBER,
         },
       });
 
@@ -423,7 +423,7 @@ export class OrganisationService {
         data: {
           teamId: defaultTeam.id,
           userId: input.userId,
-          role: TEAM_ROLE_MEMBER,
+          teamRole: TEAM_ROLE_MEMBER,
         },
       });
 

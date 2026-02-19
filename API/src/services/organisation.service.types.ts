@@ -59,6 +59,7 @@ export interface AddOrgMemberInput {
   role: string;
   callerUserId: string;
   limits: Pick<OrgLimits, 'maxMembersPerOrg'>;
+  allowedRoles?: string[];
 }
 
 export interface UpdateOrgMemberRoleInput {

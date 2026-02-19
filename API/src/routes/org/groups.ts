@@ -33,35 +33,27 @@ const GroupPathSchema = OrgPathSchema.extend({
   groupId: z.string().trim().min(1),
 });
 
-function parseDomainContext(
-  request: FastifyRequest<{
-    Querystring: { domain?: string; config_url?: string; [key: string]: unknown };
-  }>,
-) {
+function parseDomainContext(request: FastifyRequest) {
   const parsed = DomainQuerySchema.parse(request.query);
 
   request.config = {
     ...(request.config ?? {}),
     domain: parsed.domain,
-  };
+  } as typeof request.config;
 
   return parsed;
 }
 
-function parseLimitCursor(
-  request: FastifyRequest<{
-    Querystring: { limit?: string | number; cursor?: string; [key: string]: unknown };
-  }>,
-) {
+function parseLimitCursor(request: FastifyRequest) {
   return ListQuerySchema.parse(request.query);
 }
 
-function getOrgIdFromParams(params: { orgId?: string } | undefined): string {
+function getOrgIdFromParams(params: unknown): string {
   const parsed = OrgPathSchema.parse(params ?? {});
   return parsed.orgId;
 }
 
-function getGroupIdFromParams(params: { groupId?: string } | undefined): string {
+function getGroupIdFromParams(params: unknown): string {
   const parsed = GroupPathSchema.parse(params ?? {});
   return parsed.groupId;
 }

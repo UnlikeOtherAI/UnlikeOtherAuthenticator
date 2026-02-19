@@ -68,17 +68,13 @@ type RequestWithClaims = FastifyRequest & {
   };
 };
 
-function parseDomainContext(
-  request: FastifyRequest<{
-    Querystring: { domain?: string; config_url?: string; [key: string]: unknown };
-  }>,
-) {
+function parseDomainContext(request: FastifyRequest) {
   const parsed = DomainQuerySchema.parse(request.query);
 
   request.config = {
     ...(request.config ?? {}),
     domain: parsed.domain,
-  };
+  } as typeof request.config;
 
   return parsed;
 }
@@ -88,11 +84,7 @@ function parseDomainFromRequest(request: FastifyRequest): string {
   return parsed.domain;
 }
 
-function parseLimitCursor(
-  request: FastifyRequest<{
-    Querystring: { limit?: string | number; cursor?: string; [key: string]: unknown };
-  }>,
-) {
+function parseLimitCursor(request: FastifyRequest) {
   return ListQuerySchema.parse(request.query);
 }
 
@@ -105,24 +97,22 @@ function getActorUserId(request: RequestWithClaims): string {
   return userId;
 }
 
-function getOrgIdFromParams(params: { orgId?: string } | undefined): string {
+function getOrgIdFromParams(params: unknown): string {
   const parsed = OrgPathSchema.parse(params ?? {});
   return parsed.orgId;
 }
 
-function getTeamIdFromParams(params: { orgId?: string; teamId?: string } | undefined): string {
+function getTeamIdFromParams(params: unknown): string {
   const parsed = TeamPathSchema.parse(params ?? {});
   return parsed.teamId;
 }
 
-function getMemberUserIdFromParams(params: { userId?: string } | undefined): string {
+function getMemberUserIdFromParams(params: unknown): string {
   const parsed = z.object({ userId: z.string().trim().min(1) }).parse(params ?? {});
   return parsed.userId;
 }
 
-function keyCreateTeamRateLimit(
-  request: FastifyRequest<{ Params: { orgId: string }; Querystring: { domain: string } }>,
-) {
+function keyCreateTeamRateLimit(request: FastifyRequest) {
   const domain = parseDomainFromRequest(request);
   const orgId = getOrgIdFromParams(request.params);
   return `org:create-team:${domain}:${orgId}`;

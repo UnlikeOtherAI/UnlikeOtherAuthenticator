@@ -38,25 +38,21 @@ const GroupUpdateBodySchema = z.object({
   description: z.string().trim().max(500).nullable().optional(),
 });
 
-function parseDomainContext(
-  request: FastifyRequest<{
-    Querystring: { domain?: string; config_url?: string; [key: string]: unknown };
-  }>,
-) {
+function parseDomainContext(request: FastifyRequest) {
   const parsed = DomainQuerySchema.parse(request.query);
   request.config = {
     ...(request.config ?? {}),
     domain: parsed.domain,
-  };
+  } as typeof request.config;
   return parsed;
 }
 
-function getOrgIdFromParams(params: { orgId?: string } | undefined): string {
+function getOrgIdFromParams(params: unknown): string {
   const parsed = OrgPathSchema.parse(params ?? {});
   return parsed.orgId;
 }
 
-function getGroupIdFromParams(params: { orgId?: string; groupId?: string } | undefined): string {
+function getGroupIdFromParams(params: unknown): string {
   const parsed = GroupPathSchema.parse(params ?? {});
   return parsed.groupId;
 }

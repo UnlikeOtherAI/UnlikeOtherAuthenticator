@@ -8,7 +8,6 @@ import {
   deleteOrganisation,
   getOrganisation,
   listOrganisationsForDomain,
-  transferOrganisationOwnership,
   updateOrganisation,
 } from '../../services/organisation.service.organisation.js';
 import {
@@ -16,6 +15,7 @@ import {
   addOrganisationMember,
   changeOrganisationMemberRole,
   removeOrganisationMember,
+  transferOrganisationOwnership,
 } from '../../services/organisation.service.members.js';
 import { createRateLimiter } from '../../middleware/rate-limiter.js';
 import { requireOrgFeatures } from '../../middleware/org-features.js';
@@ -86,15 +86,13 @@ type RequestWithClaims = FastifyRequest & {
   };
 };
 
-function parseDomainContext(
-  request: FastifyRequest<{ Querystring: { domain?: string; config_url?: string; [key: string]: unknown } }>,
-) {
+function parseDomainContext(request: FastifyRequest) {
   const parsed = DomainQuerySchema.parse(request.query);
 
   request.config = {
     ...(request.config ?? {}),
     domain: parsed.domain,
-  };
+  } as typeof request.config;
 
   return parsed;
 }
@@ -104,11 +102,7 @@ function parseDomainFromRequest(request: FastifyRequest): string {
   return parsed.domain;
 }
 
-function parseLimitCursor(
-  request: FastifyRequest<{
-    Querystring: { limit?: string | number; cursor?: string; [key: string]: unknown };
-  }>,
-) {
+function parseLimitCursor(request: FastifyRequest) {
   return ListQuerySchema.parse(request.query);
 }
 
@@ -120,14 +114,16 @@ function getActorUserId(request: RequestWithClaims): string {
   return userId;
 }
 
-function getOrgIdFromParams(params: { orgId?: string } | undefined): string {
+function getOrgIdFromParams(params: unknown): string {
   const parsed = OrgPathSchema.parse(params ?? {});
   return parsed.orgId;
 }
 
-function getTransferOwnerId(body: { newOwnerId?: string; newOwnerUserId?: string }) {
+function getTransferOwnerId(body: Record<string, unknown>): string {
   const parsed = TransferOwnershipBodySchema.parse(body);
-  return parsed.newOwnerId ?? parsed.newOwnerUserId;
+  const id = parsed.newOwnerId ?? parsed.newOwnerUserId;
+  if (!id) throw new AppError('BAD_REQUEST', 400, 'MISSING_NEW_OWNER');
+  return id;
 }
 
 function keyCreateOrganisationRateLimit(request: FastifyRequest) {
@@ -136,9 +132,7 @@ function keyCreateOrganisationRateLimit(request: FastifyRequest) {
   return `org:create:${domain}:${actor}`;
 }
 
-function keyAddMemberRateLimit(
-  request: FastifyRequest<{ Params: { orgId: string }; Querystring: { domain: string; [key: string]: unknown } }>,
-) {
+function keyAddMemberRateLimit(request: FastifyRequest) {
   const domain = parseDomainFromRequest(request);
   const parsedOrg = OrgPathSchema.parse(request.params);
   return `org:add-member:${domain}:${parsedOrg.orgId}`;
@@ -208,7 +202,7 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
       ],
     },
     async (request, reply) => {
-      const domain = parseDomainContext(request);
+      const { domain } = parseDomainContext(request);
       const orgId = getOrgIdFromParams(request.params);
 
       const org = await getOrganisation({ orgId, domain });
@@ -229,7 +223,7 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
       ],
     },
     async (request, reply) => {
-      const domain = parseDomainContext(request);
+      const { domain } = parseDomainContext(request);
       const config = request.config;
       if (!config) throw new AppError('UNAUTHORIZED', 401, 'MISSING_CONFIG');
 
@@ -261,7 +255,7 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
       ],
     },
     async (request, reply) => {
-      const domain = parseDomainContext(request);
+      const { domain } = parseDomainContext(request);
       const orgId = getOrgIdFromParams(request.params);
       const actorUserId = getActorUserId(request as RequestWithClaims);
 
@@ -287,7 +281,7 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
       ],
     },
     async (request, reply) => {
-      const domain = parseDomainContext(request);
+      const { domain } = parseDomainContext(request);
       const orgId = getOrgIdFromParams(request.params);
       const { limit, cursor } = parseLimitCursor(request);
 
@@ -319,7 +313,7 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
       ],
     },
     async (request, reply) => {
-      const domain = parseDomainContext(request);
+      const { domain } = parseDomainContext(request);
       const config = request.config;
       if (!config) throw new AppError('UNAUTHORIZED', 401, 'MISSING_CONFIG');
 
@@ -346,7 +340,7 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
       preValidation: [parseDomainContext, configVerifier, requireDomainHashAuthForDomainQuery(), requireOrgFeatures, requireOrgRole()],
     },
     async (request, reply) => {
-      const domain = parseDomainContext(request);
+      const { domain } = parseDomainContext(request);
       const config = request.config;
       if (!config) throw new AppError('UNAUTHORIZED', 401, 'MISSING_CONFIG');
 
@@ -374,7 +368,7 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
       preValidation: [parseDomainContext, configVerifier, requireDomainHashAuthForDomainQuery(), requireOrgFeatures, requireOrgRole()],
     },
     async (request, reply) => {
-      const domain = parseDomainContext(request);
+      const { domain } = parseDomainContext(request);
       const orgId = getOrgIdFromParams(request.params);
       const userId = z.object({ userId: z.string().trim().min(1) }).parse(request.params).userId;
       const actorUserId = getActorUserId(request as RequestWithClaims);
@@ -391,14 +385,13 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
   );
 
   const transferOwnershipHandler = async (
-    request:
-      | FastifyRequest<{ Params: { orgId: string }; Querystring: { domain: string } }>
-      | FastifyRequest<{ Params: { orgId: string; [key: string]: string }; Querystring: { domain: string } }>,
+    request: FastifyRequest,
     reply: FastifyReply,
   ) => {
-    const domain = parseDomainContext(request as FastifyRequest);
+    const { domain } = parseDomainContext(request);
     const orgId = getOrgIdFromParams(request.params);
-    const newOwnerId = getTransferOwnerId(request.body ?? {});
+    const newOwnerId = getTransferOwnerId((request.body ?? {}) as Record<string, unknown>);
+
     const actorUserId = getActorUserId(request as RequestWithClaims);
 
     const org = await transferOrganisationOwnership({

@@ -32,25 +32,21 @@ const TeamGroupBodySchema = z.object({
   groupId: z.union([z.string().trim().min(1), z.null()]),
 });
 
-function parseDomainContext(
-  request: FastifyRequest<{
-    Querystring: { domain?: string; config_url?: string; [key: string]: unknown };
-  }>,
-) {
+function parseDomainContext(request: FastifyRequest) {
   const parsed = DomainQuerySchema.parse(request.query);
   request.config = {
     ...(request.config ?? {}),
     domain: parsed.domain,
-  };
+  } as typeof request.config;
   return parsed;
 }
 
-function getOrgIdFromParams(params: { orgId?: string } | undefined): string {
+function getOrgIdFromParams(params: unknown): string {
   const parsed = OrgPathSchema.parse(params ?? {});
   return parsed.orgId;
 }
 
-function getTeamIdFromParams(params: { teamId?: string } | undefined): string {
+function getTeamIdFromParams(params: unknown): string {
   const parsed = TeamPathSchema.pick({ teamId: true }).parse(params ?? {});
   return parsed.teamId;
 }

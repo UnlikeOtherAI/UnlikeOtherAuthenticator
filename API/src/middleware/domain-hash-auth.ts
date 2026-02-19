@@ -11,7 +11,7 @@ type RequestWithConfig = FastifyRequest & {
 function getSecret() {
   const secret = process.env.SHARED_SECRET;
   if (!secret?.trim()) {
-    throw new AppError('Missing shared secret', 500);
+    throw new AppError('INTERNAL', 500, 'Missing shared secret');
   }
   return secret;
 }
