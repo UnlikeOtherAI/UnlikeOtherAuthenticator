@@ -8,13 +8,15 @@ COPY package.json package-lock.json ./
 COPY API/package.json API/
 COPY Auth/package.json Auth/
 
-RUN npm ci --workspace API --include-workspace-root
+RUN npm ci --include-workspace-root
 
 COPY API/ API/
+COPY Auth/ Auth/
 COPY tsconfig.base.json ./
 
 RUN npm run prisma:generate --workspace API
 RUN npm run build --workspace API
+RUN npm run build --workspace Auth
 
 FROM node:22-slim AS runtime
 
@@ -24,11 +26,14 @@ WORKDIR /app
 
 COPY package.json package-lock.json ./
 COPY API/package.json API/
+COPY Auth/package.json Auth/
 
-RUN npm ci --workspace API --include-workspace-root --omit=dev
+RUN npm ci --workspace API --workspace Auth --include-workspace-root --omit=dev
 
 COPY --from=build /app/API/dist/ API/dist/
 COPY --from=build /app/API/prisma/ API/prisma/
+COPY --from=build /app/Auth/dist/ Auth/dist/
+COPY --from=build /app/Auth/dist-ssr/ Auth/dist-ssr/
 COPY --from=build /app/node_modules/.prisma/ node_modules/.prisma/
 COPY --from=build /app/node_modules/@prisma/ node_modules/@prisma/
 
