@@ -25,6 +25,12 @@ describe('env', () => {
     expect(env.AWS_REGION).toBe('eu-west-1');
   });
 
+  it('accepts sendgrid as EMAIL_PROVIDER', () => {
+    const env = parseEnv(baseInput({ EMAIL_PROVIDER: 'sendgrid', SENDGRID_API_KEY: 'SG.example-key' }));
+    expect(env.EMAIL_PROVIDER).toBe('sendgrid');
+    expect(env.SENDGRID_API_KEY).toBe('SG.example-key');
+  });
+
   it('rejects unsupported EMAIL_PROVIDER values', () => {
     expect(() => parseEnv(baseInput({ EMAIL_PROVIDER: 'mailgun' }))).toThrow();
   });

@@ -11,7 +11,7 @@ import {
 
 type SesModule = typeof import('@aws-sdk/client-ses');
 
-export type EmailProviderName = 'disabled' | 'smtp' | 'ses';
+export type EmailProviderName = 'disabled' | 'smtp' | 'ses' | 'sendgrid';
 
 export type EmailMessage = {
   to: string;
@@ -30,6 +30,7 @@ type EmailProvider = {
 type EmailProviderDeps = {
   nodemailer?: typeof nodemailer;
   loadSesModule?: () => Promise<SesModule>;
+  loadSendgridModule?: () => Promise<unknown>;
 };
 
 class ProviderSendError extends Error {
@@ -54,6 +55,10 @@ function resolveProviderName(env: Env): EmailProviderName {
 
 function loadSesModule(): Promise<SesModule> {
   return import('@aws-sdk/client-ses');
+}
+
+function loadSendgridModule(): Promise<unknown> {
+  return import('@sendgrid/mail');
 }
 
 function safeEmailLog(env: Env, message: EmailMessage): void {
@@ -200,6 +205,101 @@ function createSesProvider(env: Env, deps?: EmailProviderDeps): EmailProvider {
   };
 }
 
+type SendgridClient = {
+  setApiKey: (apiKey: string) => void;
+  send: (message: {
+    to: string;
+    from: string;
+    replyTo?: string;
+    subject: string;
+    text: string;
+    html?: string;
+  }) => Promise<unknown>;
+};
+
+function resolveSendgridClient(mod: unknown): SendgridClient {
+  const client = ((mod as { default?: unknown }).default ?? mod) as SendgridClient;
+  if (typeof client?.setApiKey !== 'function' || typeof client?.send !== 'function') {
+    throw new Error('Invalid @sendgrid/mail module shape');
+  }
+  return client;
+}
+
+function extractProviderHttpStatusCode(err: unknown): number | undefined {
+  if (typeof err !== 'object' || err === null) {
+    return undefined;
+  }
+
+  const code = (err as { code?: unknown }).code;
+  if (typeof code === 'number') {
+    return code;
+  }
+
+  const responseStatusCode = (err as { response?: { statusCode?: unknown } }).response?.statusCode;
+  if (typeof responseStatusCode === 'number') {
+    return responseStatusCode;
+  }
+
+  return undefined;
+}
+
+function createSendgridProvider(env: Env, deps?: EmailProviderDeps): EmailProvider {
+  const apiKey = env.SENDGRID_API_KEY;
+
+  // Don't fail server startup if SendGrid is misconfigured; callers handle failures generically.
+  if (!apiKey) {
+    return {
+      name: 'sendgrid',
+      async send() {
+        throw new Error('SENDGRID_API_KEY is required when EMAIL_PROVIDER=sendgrid');
+      },
+    };
+  }
+
+  const loadSendgrid = deps?.loadSendgridModule ?? loadSendgridModule;
+  let clientPromise: Promise<SendgridClient> | undefined;
+
+  const getClient = async (): Promise<SendgridClient> => {
+    if (!clientPromise) {
+      clientPromise = (async () => {
+        const mod = await loadSendgrid();
+        const client = resolveSendgridClient(mod);
+        client.setApiKey(apiKey);
+        return client;
+      })();
+    }
+
+    return clientPromise;
+  };
+
+  return {
+    name: 'sendgrid',
+    async send(message) {
+      if (!message.from) {
+        throw new Error('EMAIL_FROM is required when EMAIL_PROVIDER=sendgrid');
+      }
+
+      const client = await getClient();
+
+      try {
+        await client.send({
+          to: message.to,
+          from: message.from,
+          replyTo: message.replyTo,
+          subject: message.subject,
+          text: message.text,
+          html: message.html,
+        });
+      } catch (err) {
+        throw new ProviderSendError('SendGrid send failed', {
+          providerErrorName: err instanceof Error ? err.name : 'UnknownError',
+          providerHttpStatusCode: extractProviderHttpStatusCode(err),
+        });
+      }
+    },
+  };
+}
+
 function toSafeErrorContext(err: unknown): Record<string, unknown> {
   if (err instanceof ProviderSendError) {
     return err.safeContext;
@@ -219,6 +319,8 @@ export function createEmailProvider(env: Env, deps?: EmailProviderDeps): EmailPr
       return createSmtpProvider(env, deps);
     case 'ses':
       return createSesProvider(env, deps);
+    case 'sendgrid':
+      return createSendgridProvider(env, deps);
     case 'disabled':
       return createDisabledProvider(env);
     default:

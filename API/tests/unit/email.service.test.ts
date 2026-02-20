@@ -102,6 +102,77 @@ describe('createEmailProvider', () => {
     expect(loadSesModule).not.toHaveBeenCalled();
   });
 
+  it('creates a sendgrid provider that errors when SENDGRID_API_KEY is missing', async () => {
+    const loadSendgridModule = vi.fn(async () => {
+      throw new Error('should not be called');
+    });
+
+    const provider = createEmailProvider(
+      baseEnv({ EMAIL_PROVIDER: 'sendgrid', EMAIL_FROM: 'noreply@example.com' }),
+      { loadSendgridModule: loadSendgridModule as unknown as () => Promise<unknown> },
+    );
+
+    await expect(
+      provider.send({ to: 't@example.com', from: 'noreply@example.com', subject: 's', text: 'hello' }),
+    ).rejects.toThrow(/SENDGRID_API_KEY/);
+    expect(loadSendgridModule).not.toHaveBeenCalled();
+  });
+
+  it('creates a sendgrid provider that sends mail via dynamic import', async () => {
+    const setApiKey = vi.fn();
+    const send = vi.fn(async () => [{ statusCode: 202 }, {}]);
+    const loadSendgridModule = vi.fn(async () => ({
+      default: { setApiKey, send },
+    }));
+
+    const env = baseEnv({
+      EMAIL_PROVIDER: 'sendgrid',
+      SENDGRID_API_KEY: 'SG.example-key',
+      EMAIL_FROM: 'noreply@example.com',
+      EMAIL_REPLY_TO: 'support@example.com',
+    });
+
+    const provider = createEmailProvider(env, {
+      loadSendgridModule: loadSendgridModule as unknown as () => Promise<unknown>,
+    });
+
+    await provider.send({
+      to: 'to@example.com',
+      from: env.EMAIL_FROM,
+      replyTo: env.EMAIL_REPLY_TO,
+      subject: 'Subject',
+      text: 'Text',
+      html: '<p>Text</p>',
+    });
+    await provider.send({
+      to: 'to2@example.com',
+      from: env.EMAIL_FROM,
+      subject: 'Subject2',
+      text: 'Text2',
+    });
+
+    expect(loadSendgridModule).toHaveBeenCalledTimes(1);
+    expect(setApiKey).toHaveBeenCalledTimes(1);
+    expect(setApiKey).toHaveBeenCalledWith('SG.example-key');
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(send).toHaveBeenNthCalledWith(1, {
+      to: 'to@example.com',
+      from: 'noreply@example.com',
+      replyTo: 'support@example.com',
+      subject: 'Subject',
+      text: 'Text',
+      html: '<p>Text</p>',
+    });
+    expect(send).toHaveBeenNthCalledWith(2, {
+      to: 'to2@example.com',
+      from: 'noreply@example.com',
+      replyTo: undefined,
+      subject: 'Subject2',
+      text: 'Text2',
+      html: undefined,
+    });
+  });
+
   it('creates an ses provider that sends via AWS SES with dynamic import', async () => {
     class SendEmailCommand {
       readonly input: unknown;
@@ -232,6 +303,49 @@ describe('createEmailProvider', () => {
     expect(error.safeContext).toEqual({
       providerErrorName: 'MessageRejected',
       providerHttpStatusCode: 400,
+    });
+  });
+
+  it('wraps SendGrid errors with safe metadata only', async () => {
+    const send = vi.fn(async () => {
+      throw Object.assign(new Error('bad request'), {
+        name: 'ResponseError',
+        response: {
+          statusCode: 429,
+          body: { errors: [{ message: 'The to address is invalid', email: 'to@example.com' }] },
+        },
+      });
+    });
+
+    const loadSendgridModule = vi.fn(async () => ({
+      default: {
+        setApiKey: vi.fn(),
+        send,
+      },
+    }));
+
+    const provider = createEmailProvider(
+      baseEnv({
+        EMAIL_PROVIDER: 'sendgrid',
+        SENDGRID_API_KEY: 'SG.example-key',
+        EMAIL_FROM: 'noreply@example.com',
+      }),
+      { loadSendgridModule: loadSendgridModule as unknown as () => Promise<unknown> },
+    );
+
+    const error = await provider
+      .send({
+        to: 'to@example.com',
+        from: 'noreply@example.com',
+        subject: 'Subject',
+        text: 'Text',
+      })
+      .catch((err) => err as Error & { safeContext?: Record<string, unknown> });
+
+    expect(error.name).toBe('ProviderSendError');
+    expect(error.safeContext).toEqual({
+      providerErrorName: 'ResponseError',
+      providerHttpStatusCode: 429,
     });
   });
 });

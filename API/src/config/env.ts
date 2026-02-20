@@ -37,11 +37,13 @@ const EnvSchema = z.object({
   AUTH_SERVICE_IDENTIFIER: z.string().min(1),
   DATABASE_URL: z.string().min(1).optional(),
   // Email provider abstraction (brief phase 11.1). Provider can be swapped via env without code changes.
-  EMAIL_PROVIDER: z.enum(['disabled', 'smtp', 'ses']).optional(),
+  EMAIL_PROVIDER: z.enum(['disabled', 'smtp', 'ses', 'sendgrid']).optional(),
   EMAIL_FROM: z.string().min(1).optional(),
   EMAIL_REPLY_TO: z.string().min(1).optional(),
   // AWS SES provider configuration.
   AWS_REGION: z.string().min(1).optional(),
+  // SendGrid provider configuration.
+  SENDGRID_API_KEY: z.string().min(1).optional(),
   SMTP_HOST: z.string().min(1).optional(),
   SMTP_PORT: z.coerce.number().int().positive().optional(),
   // "true"/"false" for whether to use implicit TLS. If unset, the provider defaults to "false".
