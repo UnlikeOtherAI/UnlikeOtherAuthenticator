@@ -9,7 +9,9 @@ import {
   buildVerifyEmailSetPasswordTemplate,
 } from './email.templates.js';
 
-export type EmailProviderName = 'disabled' | 'smtp';
+type SesModule = typeof import('@aws-sdk/client-ses');
+
+export type EmailProviderName = 'disabled' | 'smtp' | 'ses';
 
 export type EmailMessage = {
   to: string;
@@ -25,6 +27,21 @@ type EmailProvider = {
   send: (message: EmailMessage) => Promise<void>;
 };
 
+type EmailProviderDeps = {
+  nodemailer?: typeof nodemailer;
+  loadSesModule?: () => Promise<SesModule>;
+};
+
+class ProviderSendError extends Error {
+  readonly safeContext: Record<string, unknown>;
+
+  constructor(message: string, safeContext: Record<string, unknown>) {
+    super(message);
+    this.name = 'ProviderSendError';
+    this.safeContext = safeContext;
+  }
+}
+
 function parseBoolean(value: string | undefined, fallback: boolean): boolean {
   if (value === 'true') return true;
   if (value === 'false') return false;
@@ -33,6 +50,10 @@ function parseBoolean(value: string | undefined, fallback: boolean): boolean {
 
 function resolveProviderName(env: Env): EmailProviderName {
   return env.EMAIL_PROVIDER ?? 'disabled';
+}
+
+function loadSesModule(): Promise<SesModule> {
+  return import('@aws-sdk/client-ses');
 }
 
 function safeEmailLog(env: Env, message: EmailMessage): void {
@@ -61,7 +82,7 @@ function createDisabledProvider(env: Env): EmailProvider {
   };
 }
 
-function createSmtpProvider(env: Env, deps?: { nodemailer?: typeof nodemailer }): EmailProvider {
+function createSmtpProvider(env: Env, deps?: EmailProviderDeps): EmailProvider {
   const nm = deps?.nodemailer ?? nodemailer;
   const host = env.SMTP_HOST;
   const port = env.SMTP_PORT ?? 587;
@@ -102,18 +123,114 @@ function createSmtpProvider(env: Env, deps?: { nodemailer?: typeof nodemailer })
   };
 }
 
-export function createEmailProvider(env: Env, deps?: { nodemailer?: typeof nodemailer }): EmailProvider {
+function createSesProvider(env: Env, deps?: EmailProviderDeps): EmailProvider {
+  const region = env.AWS_REGION;
+
+  // Don't fail server startup if SES is misconfigured; callers handle failures generically.
+  if (!region) {
+    return {
+      name: 'ses',
+      async send() {
+        throw new Error('AWS_REGION is required when EMAIL_PROVIDER=ses');
+      },
+    };
+  }
+
+  type SesRuntime = {
+    mod: SesModule;
+    client: InstanceType<SesModule['SESClient']>;
+  };
+
+  const loadSes = deps?.loadSesModule ?? loadSesModule;
+  let runtimePromise: Promise<SesRuntime> | undefined;
+
+  const getRuntime = async (): Promise<SesRuntime> => {
+    if (!runtimePromise) {
+      runtimePromise = (async () => {
+        const mod = await loadSes();
+        return {
+          mod,
+          client: new mod.SESClient({ region }),
+        };
+      })();
+    }
+    return runtimePromise;
+  };
+
+  return {
+    name: 'ses',
+    async send(message) {
+      if (!message.from) {
+        throw new Error('EMAIL_FROM is required when EMAIL_PROVIDER=ses');
+      }
+
+      const runtime = await getRuntime();
+      const { SendEmailCommand, SESServiceException } = runtime.mod;
+      const body: { Text: { Data: string }; Html?: { Data: string } } = {
+        Text: { Data: message.text },
+      };
+
+      if (message.html) {
+        body.Html = { Data: message.html };
+      }
+
+      try {
+        await runtime.client.send(
+          new SendEmailCommand({
+            Destination: { ToAddresses: [message.to] },
+            Message: {
+              Subject: { Data: message.subject },
+              Body: body,
+            },
+            Source: message.from,
+            ReplyToAddresses: message.replyTo ? [message.replyTo] : undefined,
+          }),
+        );
+      } catch (err) {
+        if (err instanceof SESServiceException) {
+          throw new ProviderSendError('SES send failed', {
+            providerErrorName: err.name,
+            providerHttpStatusCode: err.$metadata?.httpStatusCode,
+          });
+        }
+
+        throw err;
+      }
+    },
+  };
+}
+
+function toSafeErrorContext(err: unknown): Record<string, unknown> {
+  if (err instanceof ProviderSendError) {
+    return err.safeContext;
+  }
+
+  if (err instanceof Error) {
+    return { providerErrorName: err.name };
+  }
+
+  return { providerErrorName: 'UnknownError' };
+}
+
+export function createEmailProvider(env: Env, deps?: EmailProviderDeps): EmailProvider {
   const name = resolveProviderName(env);
   switch (name) {
     case 'smtp':
       return createSmtpProvider(env, deps);
+    case 'ses':
+      return createSesProvider(env, deps);
     case 'disabled':
-    default:
       return createDisabledProvider(env);
+    default:
+      throw new Error(`Unsupported EMAIL_PROVIDER: ${name}`);
   }
 }
 
 let cachedProvider: EmailProvider | undefined;
+
+export function resetEmailProviderCache(): void {
+  cachedProvider = undefined;
+}
 
 function getProvider(): EmailProvider {
   cachedProvider ??= createEmailProvider(getEnv());
@@ -133,7 +250,7 @@ async function dispatchEmail(message: EmailMessage): Promise<void> {
       provider: provider.name,
       to: message.to,
       subject: message.subject,
-      err,
+      ...toSafeErrorContext(err),
     });
 
     // Keep API behavior stable (especially registration) even if email fails.

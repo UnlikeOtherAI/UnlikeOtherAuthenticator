@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Env } from '../../src/config/env.js';
 import { createEmailProvider } from '../../src/services/email.service.js';
 
+type SesModule = typeof import('@aws-sdk/client-ses');
+
 function baseEnv(overrides?: Partial<Env>): Env {
   return {
     NODE_ENV: 'test',
@@ -83,5 +85,153 @@ describe('createEmailProvider', () => {
       html: '<p>Text</p>',
     });
   });
-});
 
+  it('creates an ses provider that errors when AWS_REGION is missing', async () => {
+    const loadSesModule = vi.fn(async () => {
+      throw new Error('should not be called');
+    });
+
+    const provider = createEmailProvider(
+      baseEnv({ EMAIL_PROVIDER: 'ses', EMAIL_FROM: 'noreply@example.com' }),
+      { loadSesModule: loadSesModule as unknown as () => Promise<SesModule> },
+    );
+
+    await expect(
+      provider.send({ to: 't@example.com', from: 'noreply@example.com', subject: 's', text: 'hello' }),
+    ).rejects.toThrow(/AWS_REGION/);
+    expect(loadSesModule).not.toHaveBeenCalled();
+  });
+
+  it('creates an ses provider that sends via AWS SES with dynamic import', async () => {
+    class SendEmailCommand {
+      readonly input: unknown;
+
+      constructor(input: unknown) {
+        this.input = input;
+      }
+    }
+
+    class SESServiceException extends Error {
+      readonly $metadata: { httpStatusCode?: number };
+
+      constructor(name: string, httpStatusCode?: number) {
+        super(name);
+        this.name = name;
+        this.$metadata = { httpStatusCode };
+      }
+    }
+
+    const send = vi.fn(async () => undefined);
+    const SESClient = vi.fn(() => ({ send }));
+    const loadSesModule = vi.fn(async () => ({
+      SESClient: SESClient as unknown as SesModule['SESClient'],
+      SendEmailCommand: SendEmailCommand as unknown as SesModule['SendEmailCommand'],
+      SESServiceException: SESServiceException as unknown as SesModule['SESServiceException'],
+    }));
+
+    const env = baseEnv({
+      EMAIL_PROVIDER: 'ses',
+      AWS_REGION: 'eu-west-1',
+      EMAIL_FROM: 'noreply@example.com',
+      EMAIL_REPLY_TO: 'support@example.com',
+    });
+
+    const provider = createEmailProvider(env, { loadSesModule });
+    await provider.send({
+      to: 'to@example.com',
+      from: env.EMAIL_FROM,
+      replyTo: env.EMAIL_REPLY_TO,
+      subject: 'Subject',
+      text: 'Text',
+      html: '<p>Text</p>',
+    });
+    await provider.send({
+      to: 'to2@example.com',
+      from: env.EMAIL_FROM,
+      subject: 'Subject2',
+      text: 'Text2',
+    });
+
+    expect(loadSesModule).toHaveBeenCalledTimes(1);
+    expect(SESClient).toHaveBeenCalledTimes(1);
+    expect(SESClient).toHaveBeenCalledWith({ region: 'eu-west-1' });
+    expect(send).toHaveBeenCalledTimes(2);
+
+    const firstCommand = send.mock.calls[0]?.[0] as SendEmailCommand;
+    expect(firstCommand.input).toEqual({
+      Destination: { ToAddresses: ['to@example.com'] },
+      Message: {
+        Subject: { Data: 'Subject' },
+        Body: {
+          Text: { Data: 'Text' },
+          Html: { Data: '<p>Text</p>' },
+        },
+      },
+      Source: 'noreply@example.com',
+      ReplyToAddresses: ['support@example.com'],
+    });
+
+    const secondCommand = send.mock.calls[1]?.[0] as SendEmailCommand;
+    expect(secondCommand.input).toEqual({
+      Destination: { ToAddresses: ['to2@example.com'] },
+      Message: {
+        Subject: { Data: 'Subject2' },
+        Body: {
+          Text: { Data: 'Text2' },
+        },
+      },
+      Source: 'noreply@example.com',
+      ReplyToAddresses: undefined,
+    });
+  });
+
+  it('wraps SES service exceptions with safe metadata only', async () => {
+    class SendEmailCommand {
+      constructor() {}
+    }
+
+    class SESServiceException extends Error {
+      readonly $metadata: { httpStatusCode?: number };
+
+      constructor(name: string, httpStatusCode?: number) {
+        super(name);
+        this.name = name;
+        this.$metadata = { httpStatusCode };
+      }
+    }
+
+    const send = vi.fn(async () => {
+      throw new SESServiceException('MessageRejected', 400);
+    });
+
+    const loadSesModule = vi.fn(async () => ({
+      SESClient: vi.fn(() => ({ send })) as unknown as SesModule['SESClient'],
+      SendEmailCommand: SendEmailCommand as unknown as SesModule['SendEmailCommand'],
+      SESServiceException: SESServiceException as unknown as SesModule['SESServiceException'],
+    }));
+
+    const provider = createEmailProvider(
+      baseEnv({
+        EMAIL_PROVIDER: 'ses',
+        AWS_REGION: 'eu-west-1',
+        EMAIL_FROM: 'noreply@example.com',
+      }),
+      { loadSesModule },
+    );
+
+    const error = await provider
+      .send({
+        to: 'to@example.com',
+        from: 'noreply@example.com',
+        subject: 'Subject',
+        text: 'Text',
+      })
+      .catch((err) => err as Error & { safeContext?: Record<string, unknown> });
+
+    expect(error.name).toBe('ProviderSendError');
+    expect(error.safeContext).toEqual({
+      providerErrorName: 'MessageRejected',
+      providerHttpStatusCode: 400,
+    });
+  });
+});

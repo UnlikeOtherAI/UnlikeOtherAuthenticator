@@ -37,9 +37,11 @@ const EnvSchema = z.object({
   AUTH_SERVICE_IDENTIFIER: z.string().min(1),
   DATABASE_URL: z.string().min(1).optional(),
   // Email provider abstraction (brief phase 11.1). Provider can be swapped via env without code changes.
-  EMAIL_PROVIDER: z.enum(['disabled', 'smtp']).optional(),
+  EMAIL_PROVIDER: z.enum(['disabled', 'smtp', 'ses']).optional(),
   EMAIL_FROM: z.string().min(1).optional(),
   EMAIL_REPLY_TO: z.string().min(1).optional(),
+  // AWS SES provider configuration.
+  AWS_REGION: z.string().min(1).optional(),
   SMTP_HOST: z.string().min(1).optional(),
   SMTP_PORT: z.coerce.number().int().positive().optional(),
   // "true"/"false" for whether to use implicit TLS. If unset, the provider defaults to "false".
@@ -80,6 +82,19 @@ const EnvSchema = z.object({
 export type Env = z.infer<typeof EnvSchema>;
 
 let cachedEnv: Env | undefined;
+let hasLoggedSesProductionWarning = false;
+
+function maybeLogSesProductionWarning(env: Env): void {
+  if (env.NODE_ENV !== 'production') return;
+  if (env.EMAIL_PROVIDER !== 'ses') return;
+  if (hasLoggedSesProductionWarning) return;
+
+  hasLoggedSesProductionWarning = true;
+  console.warn(
+    '[email:ses]',
+    'EMAIL_PROVIDER=ses in production. Ensure AWS SES production access is approved; sandbox mode silently drops unverified recipients.',
+  );
+}
 
 export function parseEnv(input: NodeJS.ProcessEnv): Env {
   return EnvSchema.parse(input);
@@ -93,6 +108,7 @@ export function getEnv(): Env {
   }
 
   cachedEnv ??= parseEnv(process.env);
+  maybeLogSesProductionWarning(cachedEnv);
   return cachedEnv;
 }
 
