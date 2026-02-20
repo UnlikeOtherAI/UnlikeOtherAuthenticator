@@ -7,6 +7,8 @@ export type PopupQueryParams = {
 
 export type PopupContextValue = PopupQueryParams & {
   configUrl: string;
+  /** The raw client config object (for reading enabled_auth_methods, etc.). */
+  config: unknown;
   /**
    * Perform the final OAuth redirect (authorization code flow).
    * This intentionally uses a normal top-level navigation, not postMessage.
@@ -43,6 +45,7 @@ function readClientSearch(): string {
 
 export function PopupProvider(props: {
   configUrl: string;
+  config?: unknown;
   initialSearch?: string;
   children: React.ReactNode;
 }): React.JSX.Element {
@@ -56,6 +59,7 @@ export function PopupProvider(props: {
   const value = useMemo<PopupContextValue>(() => {
     return {
       configUrl: props.configUrl,
+      config: props.config,
       redirectUrl: parsed.redirectUrl,
       twoFaToken: parsed.twoFaToken,
       redirectTo: (url: string) => {
@@ -63,7 +67,7 @@ export function PopupProvider(props: {
         window.location.assign(url);
       },
     };
-  }, [parsed.redirectUrl, parsed.twoFaToken, props.configUrl]);
+  }, [parsed.redirectUrl, parsed.twoFaToken, props.configUrl, props.config]);
 
   return <PopupContext.Provider value={value}>{props.children}</PopupContext.Provider>;
 }

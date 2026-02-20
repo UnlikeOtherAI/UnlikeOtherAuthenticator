@@ -16,7 +16,7 @@ export function App(props?: {
   return (
     <ThemeProvider config={bootstrap.config} configUrl={bootstrap.configUrl}>
       <I18nProvider config={bootstrap.config} configUrl={bootstrap.configUrl}>
-        <PopupContainer configUrl={bootstrap.configUrl} initialSearch={props?.initialSearch} />
+        <PopupContainer configUrl={bootstrap.configUrl} config={bootstrap.config} initialSearch={props?.initialSearch} />
       </I18nProvider>
     </ThemeProvider>
   );

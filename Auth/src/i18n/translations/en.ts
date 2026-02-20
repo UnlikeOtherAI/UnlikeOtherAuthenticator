@@ -24,6 +24,9 @@ export const en = {
     'Enter the 6-digit code from your authenticator app to finish signing in.',
   'twoFactor.verify.submit': 'Verify',
   'twoFactor.verify.success': 'Verification successful',
+
+  'social.divider': 'or',
+  'social.continueWith': 'Continue with',
 } as const;
 
 export type TranslationKey = keyof typeof en;

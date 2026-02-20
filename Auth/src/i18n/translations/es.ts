@@ -25,5 +25,8 @@ export const es = {
     'Ingresa el codigo de 6 digitos de tu app autenticadora para terminar de iniciar sesion.',
   'twoFactor.verify.submit': 'Verificar',
   'twoFactor.verify.success': 'Verificacion exitosa',
+
+  'social.divider': 'o',
+  'social.continueWith': 'Continuar con',
 } satisfies Translations;
 

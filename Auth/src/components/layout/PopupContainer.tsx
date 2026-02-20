@@ -20,10 +20,11 @@ function PopupContent(): React.JSX.Element {
 
 export function PopupContainer(props: {
   configUrl: string;
+  config?: unknown;
   initialSearch?: string;
 }): React.JSX.Element {
   return (
-    <PopupProvider configUrl={props.configUrl} initialSearch={props.initialSearch}>
+    <PopupProvider configUrl={props.configUrl} config={props.config} initialSearch={props.initialSearch}>
       <AuthLayout>
         <PopupContent />
       </AuthLayout>
