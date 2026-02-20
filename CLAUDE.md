@@ -40,6 +40,10 @@ Before making any architectural, design, or implementation decisions, read all d
 - Do **not** read, write, modify, or delete `.steroids/steroids.db` unless explicitly asked by the user
 - Steroids manages its own database — treat it as an external system
 - Use the `steroids` CLI to interact with tasks, sections, and project state — never touch the DB directly
+- **Do NOT write or edit code when steroids tasks exist.** Steroids spawns its own coder/reviewer LLM agents to implement tasks. Your role is to create sections, add tasks, manage dependencies, and start/stop runners — not to write implementation code. If you edit code, steroids will revert it or conflict with its own changes.
+- **Starting the runner:** Use `steroids runners start --detach` (background daemon) or `steroids loop` (foreground). Do NOT use `steroids run`, `steroids start`, or other invented commands.
+- **Always run `steroids llm` first** before using any steroids commands. This prints the full CLI reference and ensures you use the correct syntax. Do this at the start of every session that involves steroids.
+- **Key CLI commands:** `steroids tasks add`, `steroids sections add`, `steroids sections depends-on`, `steroids runners start --detach`, `steroids runners list`, `steroids runners status`, `steroids tasks stats`.
 
 ### Code Style & Approach
 
