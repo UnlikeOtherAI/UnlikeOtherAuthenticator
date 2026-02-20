@@ -15,6 +15,7 @@ enum UserRole {
 enum VerificationTokenType {
   LOGIN_LINK
   VERIFY_EMAIL_SET_PASSWORD
+  VERIFY_EMAIL
   PASSWORD_RESET
   TWOFA_RESET
 }

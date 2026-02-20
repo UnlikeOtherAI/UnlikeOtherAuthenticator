@@ -16,6 +16,7 @@ describe('validateConfigFields', () => {
     expect(cfg['2fa_enabled']).toBe(false);
     expect(cfg.debug_enabled).toBe(false);
     expect(cfg.allow_registration).toBe(true);
+    expect(cfg.registration_mode).toBe('password_required');
     expect(cfg.allowed_registration_domains).toBeUndefined();
     expect(cfg.allowed_social_providers).toBeUndefined();
   });
@@ -27,6 +28,7 @@ describe('validateConfigFields', () => {
       '2fa_enabled': true,
       debug_enabled: true,
       allow_registration: false,
+      registration_mode: 'password_required',
       allowed_registration_domains: ['  EXAMPLE.COM ', 'subsidiary.co.uk'],
       allowed_social_providers: ['google', 'github'],
       language: '  es  ',
@@ -36,9 +38,20 @@ describe('validateConfigFields', () => {
     expect(cfg['2fa_enabled']).toBe(true);
     expect(cfg.debug_enabled).toBe(true);
     expect(cfg.allow_registration).toBe(false);
+    expect(cfg.registration_mode).toBe('password_required');
     expect(cfg.allowed_registration_domains).toEqual(['example.com', 'subsidiary.co.uk']);
     expect(cfg.allowed_social_providers).toEqual(['google', 'github']);
     expect(cfg.language).toBe('es');
+  });
+
+  it('rejects passwordless mode when registration is disabled', () => {
+    expect(() =>
+      validateConfigFields({
+        ...basePayload(),
+        allow_registration: false,
+        registration_mode: 'passwordless',
+      }),
+    ).toThrow();
   });
 
   it('rejects empty allowed_registration_domains arrays', () => {

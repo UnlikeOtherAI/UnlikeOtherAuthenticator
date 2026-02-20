@@ -39,6 +39,7 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
           reply.status(200).send({ ok: true });
           return;
         case 'VERIFY_EMAIL_SET_PASSWORD':
+        case 'VERIFY_EMAIL':
           reply.status(200).send({ ok: true });
           return;
         default: {
@@ -49,4 +50,3 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
     },
   );
 }
-

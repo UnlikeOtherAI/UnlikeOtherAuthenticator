@@ -106,6 +106,10 @@ const ClientConfigSchema = RequiredConfigSchema.extend({
   allowed_social_providers: z.array(z.string().min(1)).optional(),
   user_scope: z.enum(['global', 'per_domain']).optional().default('global'),
   allow_registration: z.boolean().optional().default(true),
+  registration_mode: z
+    .enum(['password_required', 'passwordless'])
+    .optional()
+    .default('password_required'),
   allowed_registration_domains: z
     .array(z.string().trim().toLowerCase().min(1))
     .min(1)
@@ -141,6 +145,14 @@ const ClientConfigSchema = RequiredConfigSchema.extend({
       org_roles: ['owner', 'admin', 'member'],
     }),
 }).superRefine((config, ctx) => {
+  if (config.allow_registration === false && config.registration_mode === 'passwordless') {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'registration_mode "passwordless" requires allow_registration to be true',
+      path: ['registration_mode'],
+    });
+  }
+
   const domains = config.allowed_registration_domains;
   if (!domains) return;
 

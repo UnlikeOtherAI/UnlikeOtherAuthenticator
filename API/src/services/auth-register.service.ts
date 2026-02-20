@@ -4,7 +4,11 @@ import { EMAIL_TOKEN_TTL_MS } from '../config/constants.js';
 import { getEnv, requireEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
 import { buildUserIdentity } from './user-scope.service.js';
-import { sendLoginLinkEmail, sendVerifyEmailSetPasswordEmail } from './email.service.js';
+import {
+  sendLoginLinkEmail,
+  sendVerifyEmailEmail,
+  sendVerifyEmailSetPasswordEmail,
+} from './email.service.js';
 import { generateEmailToken, hashEmailToken } from '../utils/verification-token.js';
 
 /**
@@ -31,6 +35,7 @@ type RegisterDeps = {
   now?: () => Date;
   sharedSecret?: string;
   sendLoginLinkEmail?: typeof sendLoginLinkEmail;
+  sendVerifyEmailEmail?: typeof sendVerifyEmailEmail;
   sendVerifyEmailSetPasswordEmail?: typeof sendVerifyEmailSetPasswordEmail;
   generateEmailToken?: typeof generateEmailToken;
   hashEmailToken?: typeof hashEmailToken;
@@ -126,7 +131,12 @@ export async function requestRegistrationInstructions(
   const now = deps?.now ? deps.now() : new Date();
   const expiresAt = new Date(now.getTime() + EMAIL_TOKEN_TTL_MS);
 
-  const type = existing ? 'LOGIN_LINK' : 'VERIFY_EMAIL_SET_PASSWORD';
+  const type =
+    existing
+      ? 'LOGIN_LINK'
+      : params.config.registration_mode === 'passwordless'
+        ? 'VERIFY_EMAIL'
+        : 'VERIFY_EMAIL_SET_PASSWORD';
   await prisma.verificationToken.create({
     data: {
       type,
@@ -159,6 +169,14 @@ export async function requestRegistrationInstructions(
     token,
     configUrl: params.configUrl,
   });
+  if (type === 'VERIFY_EMAIL') {
+    await (deps?.sendVerifyEmailEmail ?? sendVerifyEmailEmail)({
+      to: email,
+      link,
+    });
+    return;
+  }
+
   await (deps?.sendVerifyEmailSetPasswordEmail ?? sendVerifyEmailSetPasswordEmail)({
     to: email,
     link,

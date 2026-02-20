@@ -6,6 +6,7 @@ import {
   buildLoginLinkTemplate,
   buildPasswordResetTemplate,
   buildTwoFaResetTemplate,
+  buildVerifyEmailTemplate,
   buildVerifyEmailSetPasswordTemplate,
 } from './email.templates.js';
 
@@ -382,6 +383,19 @@ export async function sendVerifyEmailSetPasswordEmail(params: {
 }): Promise<void> {
   const env = getEnv();
   const template = buildVerifyEmailSetPasswordTemplate({ link: params.link });
+  await dispatchEmail({
+    to: params.to,
+    from: env.EMAIL_FROM,
+    replyTo: env.EMAIL_REPLY_TO,
+    subject: template.subject,
+    text: template.text,
+    html: template.html,
+  });
+}
+
+export async function sendVerifyEmailEmail(params: { to: string; link: string }): Promise<void> {
+  const env = getEnv();
+  const template = buildVerifyEmailTemplate({ link: params.link });
   await dispatchEmail({
     to: params.to,
     from: env.EMAIL_FROM,

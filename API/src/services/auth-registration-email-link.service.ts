@@ -40,7 +40,7 @@ export async function validateRegistrationEmailLandingToken(params: {
   token: string;
   configUrl: string;
   config: ClientConfig;
-}): Promise<'LOGIN_LINK' | 'VERIFY_EMAIL_SET_PASSWORD'> {
+}): Promise<'LOGIN_LINK' | 'VERIFY_EMAIL_SET_PASSWORD' | 'VERIFY_EMAIL'> {
   void params.config; // Included for future-proofing; configVerifier already validates domain integrity.
   const env = getEnv();
 
@@ -68,7 +68,7 @@ export async function validateRegistrationEmailLandingToken(params: {
 
   assertRegistrationLandingTokenValid({ token: row, configUrl: params.configUrl, now: new Date() });
   const type = row.type;
-  if (type !== 'LOGIN_LINK' && type !== 'VERIFY_EMAIL_SET_PASSWORD') {
+  if (type !== 'LOGIN_LINK' && type !== 'VERIFY_EMAIL_SET_PASSWORD' && type !== 'VERIFY_EMAIL') {
     throw new AppError('BAD_REQUEST', 400, 'INVALID_TOKEN_TYPE');
   }
   return type;

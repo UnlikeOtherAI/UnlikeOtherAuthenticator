@@ -189,4 +189,130 @@ describe.skipIf(!hasDatabase)('Email verification flow', () => {
 
     await app.close();
   });
+
+  it('consumes VERIFY_EMAIL tokens without requiring password and creates a null-password user', async () => {
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.AUTH_SERVICE_IDENTIFIER =
+      process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
+
+    const jwt = await createSignedConfigJwt(process.env.SHARED_SECRET);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 })),
+    );
+
+    const configUrl = 'https://client.example.com/auth-config';
+    const rawToken = 'passwordless-token-value';
+    const tokenHash = hashEmailToken(rawToken, process.env.SHARED_SECRET);
+
+    await handle!.prisma.verificationToken.create({
+      data: {
+        type: 'VERIFY_EMAIL',
+        email: 'passwordless@example.com',
+        userKey: 'passwordless@example.com',
+        domain: null,
+        configUrl,
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+        tokenHash,
+      },
+    });
+
+    const app = await createApp();
+    await app.ready();
+
+    const baseQuery = `config_url=${encodeURIComponent(configUrl)}`;
+    const landing = await app.inject({
+      method: 'GET',
+      url: `/auth/email/link?${baseQuery}&token=${encodeURIComponent(rawToken)}`,
+    });
+    expect(landing.statusCode).toBe(200);
+    expect(landing.json()).toEqual({ ok: true });
+
+    const verify = await app.inject({
+      method: 'POST',
+      url: `/auth/verify-email?${baseQuery}`,
+      payload: { token: rawToken },
+    });
+
+    expect(verify.statusCode).toBe(200);
+    const body = verify.json() as { ok: boolean; code: string; redirect_to: string };
+    expect(body.ok).toBe(true);
+    expect(typeof body.code).toBe('string');
+    expect(body.code.length).toBeGreaterThan(10);
+
+    const user = await handle!.prisma.user.findUnique({
+      where: { userKey: 'passwordless@example.com' },
+      select: { id: true, passwordHash: true },
+    });
+    expect(user).not.toBeNull();
+    expect(user!.passwordHash).toBeNull();
+
+    const tokenRow = await handle!.prisma.verificationToken.findUnique({
+      where: { tokenHash },
+      select: { usedAt: true, userId: true },
+    });
+    expect(tokenRow).not.toBeNull();
+    expect(tokenRow!.usedAt).not.toBeNull();
+    expect(tokenRow!.userId).toBe(user!.id);
+
+    const log = await handle!.prisma.loginLog.findFirst({
+      where: { userId: user!.id },
+      select: { authMethod: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(log).not.toBeNull();
+    expect(log!.authMethod).toBe('verify_email');
+
+    await app.close();
+  });
+
+  it('returns generic 400 when VERIFY_EMAIL_SET_PASSWORD token is consumed without password', async () => {
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.AUTH_SERVICE_IDENTIFIER =
+      process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
+
+    const jwt = await createSignedConfigJwt(process.env.SHARED_SECRET);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 })),
+    );
+
+    const configUrl = 'https://client.example.com/auth-config';
+    const rawToken = 'missing-password-token';
+    const tokenHash = hashEmailToken(rawToken, process.env.SHARED_SECRET);
+
+    await handle!.prisma.verificationToken.create({
+      data: {
+        type: 'VERIFY_EMAIL_SET_PASSWORD',
+        email: 'missing-password@example.com',
+        userKey: 'missing-password@example.com',
+        domain: null,
+        configUrl,
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+        tokenHash,
+      },
+    });
+
+    const app = await createApp();
+    await app.ready();
+
+    const baseQuery = `config_url=${encodeURIComponent(configUrl)}`;
+    const res = await app.inject({
+      method: 'POST',
+      url: `/auth/verify-email?${baseQuery}`,
+      payload: { token: rawToken },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: 'Request failed' });
+
+    const tokenRow = await handle!.prisma.verificationToken.findUnique({
+      where: { tokenHash },
+      select: { usedAt: true },
+    });
+    expect(tokenRow).not.toBeNull();
+    expect(tokenRow!.usedAt).toBeNull();
+
+    await app.close();
+  });
 });

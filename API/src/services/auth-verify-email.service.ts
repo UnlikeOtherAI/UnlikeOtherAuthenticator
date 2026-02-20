@@ -22,26 +22,32 @@ type VerifyEmailDeps = {
   prisma?: VerifyEmailPrisma;
 };
 
-function assertTokenValid(params: {
-  token: Prisma.VerificationTokenGetPayload<{
-    select: {
-      id: true;
-      type: true;
-      userKey: true;
-      email: true;
-      domain: true;
-      configUrl: true;
-      expiresAt: true;
-      usedAt: true;
-    };
-  }>;
-  configUrl: string;
-  now: Date;
-}): void {
-  if (params.token.type !== 'VERIFY_EMAIL_SET_PASSWORD') {
+type VerifyEmailTokenRow = Prisma.VerificationTokenGetPayload<{
+  select: {
+    id: true;
+    type: true;
+    userKey: true;
+    email: true;
+    domain: true;
+    configUrl: true;
+    expiresAt: true;
+    usedAt: true;
+  };
+}>;
+
+export type VerifyEmailTokenType = 'VERIFY_EMAIL_SET_PASSWORD' | 'VERIFY_EMAIL';
+
+function assertVerifyEmailTokenType(type: VerifyEmailTokenRow['type']): asserts type is VerifyEmailTokenType {
+  if (type !== 'VERIFY_EMAIL_SET_PASSWORD' && type !== 'VERIFY_EMAIL') {
     throw new AppError('BAD_REQUEST', 400, 'INVALID_TOKEN_TYPE');
   }
+}
 
+function assertTokenValid(params: {
+  token: VerifyEmailTokenRow;
+  configUrl: string;
+  now: Date;
+}): VerifyEmailTokenType {
   if (params.token.configUrl !== params.configUrl) {
     // Token is bound to the original config URL to avoid cross-client replay.
     throw new AppError('BAD_REQUEST', 400, 'INVALID_TOKEN_CONFIG_URL');
@@ -54,13 +60,16 @@ function assertTokenValid(params: {
   if (params.token.expiresAt.getTime() <= params.now.getTime()) {
     throw new AppError('BAD_REQUEST', 400, 'TOKEN_EXPIRED');
   }
+
+  assertVerifyEmailTokenType(params.token.type);
+  return params.token.type;
 }
 
 export async function validateVerifyEmailToken(params: {
   token: string;
   configUrl: string;
   config: ClientConfig;
-}): Promise<void> {
+}): Promise<VerifyEmailTokenType> {
   void params.config; // Included for future-proofing; configVerifier already validates domain integrity.
   const env = getEnv();
 
@@ -90,18 +99,18 @@ export async function validateVerifyEmailToken(params: {
     throw new AppError('BAD_REQUEST', 400, 'INVALID_TOKEN');
   }
 
-  assertTokenValid({ token: row, configUrl: params.configUrl, now: new Date() });
+  return assertTokenValid({ token: row, configUrl: params.configUrl, now: new Date() });
 }
 
-export async function verifyEmailAndSetPassword(
+export async function verifyEmailToken(
   params: {
     token: string;
-    password: string;
+    password?: string;
     configUrl: string;
     config: ClientConfig;
   },
   deps?: VerifyEmailDeps,
-): Promise<{ userId: string }> {
+): Promise<{ userId: string; type: VerifyEmailTokenType }> {
   const env = deps?.env ?? getEnv();
 
   if (!env.DATABASE_URL) {
@@ -112,7 +121,7 @@ export async function verifyEmailAndSetPassword(
   const now = deps?.now ? deps.now() : new Date();
   const sharedSecret = deps?.sharedSecret ?? requireEnv('SHARED_SECRET').SHARED_SECRET;
   const tokenHash = (deps?.hashEmailToken ?? hashEmailToken)(params.token, sharedSecret);
-  const passwordHash = await (deps?.hashPassword ?? hashPassword)(params.password);
+  const hashPasswordFn = deps?.hashPassword ?? hashPassword;
 
   // Token consumption + user creation/update must be atomic to enforce one-time use.
   return await prisma.$transaction(async (tx) => {
@@ -134,42 +143,69 @@ export async function verifyEmailAndSetPassword(
       throw new AppError('BAD_REQUEST', 400, 'INVALID_TOKEN');
     }
 
-    assertTokenValid({ token: tokenRow, configUrl: params.configUrl, now });
-
-    const existingUser = await tx.user.findUnique({
-      where: { userKey: tokenRow.userKey },
-      select: { id: true, passwordHash: true },
-    });
-
-    if (existingUser?.passwordHash) {
-      // A verify-email token must never be usable to reset an established account password.
-      throw new AppError('BAD_REQUEST', 400, 'USER_ALREADY_HAS_PASSWORD');
-    }
+    const type = assertTokenValid({ token: tokenRow, configUrl: params.configUrl, now });
 
     let userId: string;
-    if (existingUser) {
-      const updated = await tx.user.update({
+    if (type === 'VERIFY_EMAIL_SET_PASSWORD') {
+      if (!params.password) {
+        throw new AppError('BAD_REQUEST', 400, 'MISSING_PASSWORD');
+      }
+
+      const passwordHash = await hashPasswordFn(params.password);
+      const existingUser = await tx.user.findUnique({
         where: { userKey: tokenRow.userKey },
-        data: {
-          // Keep identity stable; updating these is safe and makes the record consistent.
-          email: tokenRow.email,
-          domain: tokenRow.domain,
-          passwordHash,
-        },
-        select: { id: true },
+        select: { id: true, passwordHash: true },
       });
-      userId = updated.id;
+
+      if (existingUser?.passwordHash) {
+        // A verify-email token must never be usable to reset an established account password.
+        throw new AppError('BAD_REQUEST', 400, 'USER_ALREADY_HAS_PASSWORD');
+      }
+
+      if (existingUser) {
+        const updated = await tx.user.update({
+          where: { userKey: tokenRow.userKey },
+          data: {
+            // Keep identity stable; updating these is safe and makes the record consistent.
+            email: tokenRow.email,
+            domain: tokenRow.domain,
+            passwordHash,
+          },
+          select: { id: true },
+        });
+        userId = updated.id;
+      } else {
+        const created = await tx.user.create({
+          data: {
+            email: tokenRow.email,
+            userKey: tokenRow.userKey,
+            domain: tokenRow.domain,
+            passwordHash,
+          },
+          select: { id: true },
+        });
+        userId = created.id;
+      }
     } else {
-      const created = await tx.user.create({
-        data: {
-          email: tokenRow.email,
-          userKey: tokenRow.userKey,
-          domain: tokenRow.domain,
-          passwordHash,
-        },
+      const existingUser = await tx.user.findUnique({
+        where: { userKey: tokenRow.userKey },
         select: { id: true },
       });
-      userId = created.id;
+
+      if (existingUser) {
+        userId = existingUser.id;
+      } else {
+        const created = await tx.user.create({
+          data: {
+            email: tokenRow.email,
+            userKey: tokenRow.userKey,
+            domain: tokenRow.domain,
+            passwordHash: null,
+          },
+          select: { id: true },
+        });
+        userId = created.id;
+      }
     }
 
     // Brief 18: ensure a per-domain role exists for this domain.
@@ -195,7 +231,32 @@ export async function verifyEmailAndSetPassword(
       throw new AppError('BAD_REQUEST', 400, 'TOKEN_ALREADY_USED');
     }
 
-    return { userId };
+    return { userId, type };
   });
 }
 
+export async function verifyEmailAndSetPassword(
+  params: {
+    token: string;
+    password: string;
+    configUrl: string;
+    config: ClientConfig;
+  },
+  deps?: VerifyEmailDeps,
+): Promise<{ userId: string }> {
+  const result = await verifyEmailToken(
+    {
+      token: params.token,
+      password: params.password,
+      configUrl: params.configUrl,
+      config: params.config,
+    },
+    deps,
+  );
+
+  if (result.type !== 'VERIFY_EMAIL_SET_PASSWORD') {
+    throw new AppError('BAD_REQUEST', 400, 'INVALID_TOKEN_TYPE');
+  }
+
+  return { userId: result.userId };
+}

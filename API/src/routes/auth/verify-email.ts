@@ -2,7 +2,10 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 import { configVerifier } from '../../middleware/config-verifier.js';
-import { verifyEmailAndSetPassword } from '../../services/auth-verify-email.service.js';
+import {
+  validateVerifyEmailToken,
+  verifyEmailToken,
+} from '../../services/auth-verify-email.service.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
 import {
   buildRedirectToUrl,
@@ -13,7 +16,7 @@ import {
 const BodySchema = z
   .object({
     token: z.string().min(1),
-    password: z.string().min(1),
+    password: z.string().min(1).optional(),
   })
   .strict();
 
@@ -24,7 +27,8 @@ const QuerySchema = z
   .passthrough();
 
 export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
-  // Completes the "verify email + set password" flow for new users.
+  // Completes registration email verification. For password-required mode, a password is
+  // required; for passwordless mode, token consumption signs the user in directly.
   app.post(
     '/auth/verify-email',
     {
@@ -39,7 +43,18 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
         return;
       }
 
-      const { userId } = await verifyEmailAndSetPassword({
+      const tokenType = await validateVerifyEmailToken({
+        token,
+        config: request.config,
+        configUrl: request.configUrl,
+      });
+
+      if (tokenType === 'VERIFY_EMAIL_SET_PASSWORD' && !password) {
+        reply.status(400).send({ error: 'Request failed' });
+        return;
+      }
+
+      const { userId, type } = await verifyEmailToken({
         token,
         password,
         config: request.config,
@@ -61,7 +76,7 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
         await recordLoginLog({
           userId,
           domain: request.config.domain,
-          authMethod: 'verify_email_set_password',
+          authMethod: type === 'VERIFY_EMAIL' ? 'verify_email' : 'verify_email_set_password',
           ip: request.ip ?? null,
           userAgent:
             typeof request.headers['user-agent'] === 'string'

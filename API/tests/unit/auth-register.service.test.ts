@@ -51,6 +51,7 @@ function baseConfig(overrides?: Partial<ClientConfig>): ClientConfig {
     language_config: 'en',
     user_scope: 'global',
     allow_registration: true,
+    registration_mode: 'password_required',
     '2fa_enabled': false,
     debug_enabled: false,
     ...overrides,
@@ -76,6 +77,9 @@ describe('requestRegistrationInstructions', () => {
     const sendVerifyEmailSetPasswordEmail = vi.fn<
       (params: { to: string; link: string }) => Promise<void>
     >(async () => undefined);
+    const sendVerifyEmailEmail = vi.fn<(params: { to: string; link: string }) => Promise<void>>(
+      async () => undefined,
+    );
 
     await requestRegistrationInstructions(
       {
@@ -91,6 +95,7 @@ describe('requestRegistrationInstructions', () => {
         generateEmailToken: () => 'token123',
         hashEmailToken: () => 'hash123',
         sendLoginLinkEmail,
+        sendVerifyEmailEmail,
         sendVerifyEmailSetPasswordEmail,
       },
     );
@@ -119,6 +124,7 @@ describe('requestRegistrationInstructions', () => {
     expect(sendLoginLinkEmail.mock.calls[0][0].link).not.toContain('login-link');
     expect(sendLoginLinkEmail.mock.calls[0][0].link).not.toContain('verify-set-password');
     expect(sendVerifyEmailSetPasswordEmail).not.toHaveBeenCalled();
+    expect(sendVerifyEmailEmail).not.toHaveBeenCalled();
   });
 
   it('creates a VERIFY_EMAIL_SET_PASSWORD token and sends verification instructions for a new user', async () => {
@@ -139,6 +145,9 @@ describe('requestRegistrationInstructions', () => {
     const sendVerifyEmailSetPasswordEmail = vi.fn<
       (params: { to: string; link: string }) => Promise<void>
     >(async () => undefined);
+    const sendVerifyEmailEmail = vi.fn<(params: { to: string; link: string }) => Promise<void>>(
+      async () => undefined,
+    );
 
     await requestRegistrationInstructions(
       {
@@ -154,6 +163,7 @@ describe('requestRegistrationInstructions', () => {
         generateEmailToken: () => 'token456',
         hashEmailToken: () => 'hash456',
         sendLoginLinkEmail,
+        sendVerifyEmailEmail,
         sendVerifyEmailSetPasswordEmail,
       },
     );
@@ -182,6 +192,63 @@ describe('requestRegistrationInstructions', () => {
     expect(sendVerifyEmailSetPasswordEmail.mock.calls[0][0].link).not.toContain('login-link');
     expect(sendVerifyEmailSetPasswordEmail.mock.calls[0][0].link).not.toContain('verify-set-password');
     expect(sendLoginLinkEmail).not.toHaveBeenCalled();
+    expect(sendVerifyEmailEmail).not.toHaveBeenCalled();
+  });
+
+  it('creates a VERIFY_EMAIL token and sends passwordless verification instructions when registration_mode=passwordless', async () => {
+    const findUnique = vi
+      .fn<PrismaStub['user']['findUnique']>()
+      .mockResolvedValue(null);
+    const createToken = vi
+      .fn<PrismaStub['verificationToken']['create']>()
+      .mockResolvedValue({ id: 't2b' });
+    const prisma: PrismaStub = {
+      user: { findUnique },
+      verificationToken: { create: createToken },
+    };
+
+    const sendLoginLinkEmail = vi.fn<(params: { to: string; link: string }) => Promise<void>>(
+      async () => undefined,
+    );
+    const sendVerifyEmailSetPasswordEmail = vi.fn<
+      (params: { to: string; link: string }) => Promise<void>
+    >(async () => undefined);
+    const sendVerifyEmailEmail = vi.fn<(params: { to: string; link: string }) => Promise<void>>(
+      async () => undefined,
+    );
+
+    await requestRegistrationInstructions(
+      {
+        email: 'new@example.com',
+        config: baseConfig({ registration_mode: 'passwordless' }),
+        configUrl: 'https://client.example.com/auth-config',
+      },
+      {
+        env: testEnv(),
+        prisma,
+        sharedSecret: 'pepper',
+        now: () => new Date('2026-02-10T00:00:00.000Z'),
+        generateEmailToken: () => 'token789',
+        hashEmailToken: () => 'hash789',
+        sendLoginLinkEmail,
+        sendVerifyEmailEmail,
+        sendVerifyEmailSetPasswordEmail,
+      },
+    );
+
+    expect(createToken).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        type: 'VERIFY_EMAIL',
+        email: 'new@example.com',
+      }),
+    });
+
+    expect(sendVerifyEmailEmail).toHaveBeenCalledWith({
+      to: 'new@example.com',
+      link: 'https://auth.example.com/auth/email/link?token=token789&config_url=https%3A%2F%2Fclient.example.com%2Fauth-config',
+    });
+    expect(sendLoginLinkEmail).not.toHaveBeenCalled();
+    expect(sendVerifyEmailSetPasswordEmail).not.toHaveBeenCalled();
   });
 
   it('is a no-op when the database is disabled', async () => {
@@ -232,6 +299,9 @@ describe('requestRegistrationInstructions', () => {
     const sendVerifyEmailSetPasswordEmail = vi.fn<
       (params: { to: string; link: string }) => Promise<void>
     >(async () => undefined);
+    const sendVerifyEmailEmail = vi.fn<(params: { to: string; link: string }) => Promise<void>>(
+      async () => undefined,
+    );
 
     await requestRegistrationInstructions(
       {
@@ -247,12 +317,14 @@ describe('requestRegistrationInstructions', () => {
         generateEmailToken: () => 'token789',
         hashEmailToken: () => 'hash789',
         sendLoginLinkEmail,
+        sendVerifyEmailEmail,
         sendVerifyEmailSetPasswordEmail,
       },
     );
 
     expect(createToken).not.toHaveBeenCalled();
     expect(sendLoginLinkEmail).not.toHaveBeenCalled();
+    expect(sendVerifyEmailEmail).not.toHaveBeenCalled();
     expect(sendVerifyEmailSetPasswordEmail).not.toHaveBeenCalled();
   });
 
@@ -274,6 +346,9 @@ describe('requestRegistrationInstructions', () => {
     const sendVerifyEmailSetPasswordEmail = vi.fn<
       (params: { to: string; link: string }) => Promise<void>
     >(async () => undefined);
+    const sendVerifyEmailEmail = vi.fn<(params: { to: string; link: string }) => Promise<void>>(
+      async () => undefined,
+    );
 
     await requestRegistrationInstructions(
       {
@@ -291,12 +366,14 @@ describe('requestRegistrationInstructions', () => {
         generateEmailToken: () => 'token999',
         hashEmailToken: () => 'hash999',
         sendLoginLinkEmail,
+        sendVerifyEmailEmail,
         sendVerifyEmailSetPasswordEmail,
       },
     );
 
     expect(createToken).not.toHaveBeenCalled();
     expect(sendLoginLinkEmail).not.toHaveBeenCalled();
+    expect(sendVerifyEmailEmail).not.toHaveBeenCalled();
     expect(sendVerifyEmailSetPasswordEmail).not.toHaveBeenCalled();
   });
 
@@ -318,6 +395,9 @@ describe('requestRegistrationInstructions', () => {
     const sendVerifyEmailSetPasswordEmail = vi.fn<
       (params: { to: string; link: string }) => Promise<void>
     >(async () => undefined);
+    const sendVerifyEmailEmail = vi.fn<(params: { to: string; link: string }) => Promise<void>>(
+      async () => undefined,
+    );
 
     await requestRegistrationInstructions(
       {
@@ -335,6 +415,7 @@ describe('requestRegistrationInstructions', () => {
         generateEmailToken: () => 'tokenexisting',
         hashEmailToken: () => 'hashexisting',
         sendLoginLinkEmail,
+        sendVerifyEmailEmail,
         sendVerifyEmailSetPasswordEmail,
       },
     );
@@ -347,6 +428,7 @@ describe('requestRegistrationInstructions', () => {
       }),
     });
     expect(sendLoginLinkEmail).toHaveBeenCalledTimes(1);
+    expect(sendVerifyEmailEmail).not.toHaveBeenCalled();
     expect(sendVerifyEmailSetPasswordEmail).not.toHaveBeenCalled();
   });
 });
