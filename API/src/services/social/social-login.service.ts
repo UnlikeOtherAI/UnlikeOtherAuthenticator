@@ -19,13 +19,36 @@ type SocialLoginDeps = {
   ensureDomainRoleForUser?: typeof ensureDomainRoleForUser;
 };
 
+type SocialLoginResult =
+  | { status: 'authenticated'; userId: string; twoFaEnabled: boolean }
+  | { status: 'blocked' };
+
+function extractEmailDomain(email: string): string | null {
+  const atIndex = email.lastIndexOf('@');
+  if (atIndex < 0 || atIndex === email.length - 1) return null;
+  return email.slice(atIndex + 1).toLowerCase();
+}
+
+function isAllowedByRegistrationDomainPolicy(params: {
+  email: string;
+  config: ClientConfig;
+}): boolean {
+  const domains = params.config.allowed_registration_domains;
+  if (!domains?.length) return true;
+
+  const emailDomain = extractEmailDomain(params.email);
+  if (!emailDomain) return false;
+
+  return domains.includes(emailDomain);
+}
+
 export async function loginWithSocialProfile(
   params: {
     profile: SocialProfile;
     config: ClientConfig;
   },
   deps?: SocialLoginDeps,
-): Promise<{ userId: string; twoFaEnabled: boolean }> {
+): Promise<SocialLoginResult> {
   assertProviderVerifiedEmail(params.profile);
 
   const env = deps?.env ?? getEnv();
@@ -65,6 +88,10 @@ export async function loginWithSocialProfile(
     userId = updated.id;
     twoFaEnabled = updated.twoFaEnabled;
   } else {
+    if (!isAllowedByRegistrationDomainPolicy({ email, config: params.config })) {
+      return { status: 'blocked' };
+    }
+
     const created = await prisma.user.create({
       data: {
         email,
@@ -87,5 +114,5 @@ export async function loginWithSocialProfile(
     prisma: prisma as unknown as PrismaClient,
   });
 
-  return { userId, twoFaEnabled };
+  return { status: 'authenticated', userId, twoFaEnabled };
 }

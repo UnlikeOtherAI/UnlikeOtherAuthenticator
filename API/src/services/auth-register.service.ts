@@ -55,6 +55,33 @@ function buildRegistrationEmailLandingLink(params: {
   return url.toString();
 }
 
+function extractEmailDomain(email: string): string | null {
+  const atIndex = email.lastIndexOf('@');
+  if (atIndex < 0 || atIndex === email.length - 1) return null;
+  return email.slice(atIndex + 1).toLowerCase();
+}
+
+function isNewUserEmailRegistrationAllowed(params: {
+  email: string;
+  config: ClientConfig;
+}): boolean {
+  if (params.config.allow_registration === false) {
+    return false;
+  }
+
+  const domains = params.config.allowed_registration_domains;
+  if (!domains?.length) {
+    return true;
+  }
+
+  const emailDomain = extractEmailDomain(params.email);
+  if (!emailDomain) {
+    return false;
+  }
+
+  return domains.includes(emailDomain);
+}
+
 export async function requestRegistrationInstructions(
   params: {
     email: string;
@@ -79,6 +106,16 @@ export async function requestRegistrationInstructions(
     where: { userKey },
     select: { id: true },
   });
+
+  if (
+    !existing &&
+    !isNewUserEmailRegistrationAllowed({
+      email,
+      config: params.config,
+    })
+  ) {
+    return;
+  }
 
   const token = deps?.generateEmailToken ? deps.generateEmailToken() : generateEmailToken();
   const sharedSecret = deps?.sharedSecret ?? requireEnv('SHARED_SECRET').SHARED_SECRET;

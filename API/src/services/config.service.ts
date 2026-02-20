@@ -105,6 +105,11 @@ const ClientConfigSchema = RequiredConfigSchema.extend({
   // Keep this as a generic string list for now; provider key validation is handled in later tasks.
   allowed_social_providers: z.array(z.string().min(1)).optional(),
   user_scope: z.enum(['global', 'per_domain']).optional().default('global'),
+  allow_registration: z.boolean().optional().default(true),
+  allowed_registration_domains: z
+    .array(z.string().trim().toLowerCase().min(1))
+    .min(1)
+    .optional(),
   // Brief 8 / Phase 10.4: default language should come from the client website's selection.
   // This is the currently selected language (not the list of available languages).
   language: z.string().trim().min(1).optional(),
@@ -135,6 +140,22 @@ const ClientConfigSchema = RequiredConfigSchema.extend({
       max_team_memberships_per_user: 50,
       org_roles: ['owner', 'admin', 'member'],
     }),
+}).superRefine((config, ctx) => {
+  const domains = config.allowed_registration_domains;
+  if (!domains) return;
+
+  const seen = new Set<string>();
+  for (let i = 0; i < domains.length; i++) {
+    const domain = domains[i];
+    if (seen.has(domain)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Duplicate allowed registration domain: ${domain}`,
+        path: ['allowed_registration_domains', i],
+      });
+    }
+    seen.add(domain);
+  }
 });
 
 export type ClientConfig = z.infer<typeof ClientConfigSchema>;

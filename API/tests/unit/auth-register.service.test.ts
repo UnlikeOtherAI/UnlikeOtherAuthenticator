@@ -50,6 +50,7 @@ function baseConfig(overrides?: Partial<ClientConfig>): ClientConfig {
     ui_theme: testUiTheme(),
     language_config: 'en',
     user_scope: 'global',
+    allow_registration: true,
     '2fa_enabled': false,
     debug_enabled: false,
     ...overrides,
@@ -211,5 +212,141 @@ describe('requestRegistrationInstructions', () => {
     expect(findUnique).not.toHaveBeenCalled();
     expect(createToken).not.toHaveBeenCalled();
     expect(sendLoginLinkEmail).not.toHaveBeenCalled();
+  });
+
+  it('silently blocks registration when allow_registration is false for a new user', async () => {
+    const findUnique = vi
+      .fn<PrismaStub['user']['findUnique']>()
+      .mockResolvedValue(null);
+    const createToken = vi
+      .fn<PrismaStub['verificationToken']['create']>()
+      .mockResolvedValue({ id: 't3' });
+    const prisma: PrismaStub = {
+      user: { findUnique },
+      verificationToken: { create: createToken },
+    };
+
+    const sendLoginLinkEmail = vi.fn<(params: { to: string; link: string }) => Promise<void>>(
+      async () => undefined,
+    );
+    const sendVerifyEmailSetPasswordEmail = vi.fn<
+      (params: { to: string; link: string }) => Promise<void>
+    >(async () => undefined);
+
+    await requestRegistrationInstructions(
+      {
+        email: 'new@example.com',
+        config: baseConfig({ allow_registration: false }),
+        configUrl: 'https://client.example.com/auth-config',
+      },
+      {
+        env: testEnv(),
+        prisma,
+        sharedSecret: 'pepper',
+        now: () => new Date('2026-02-10T00:00:00.000Z'),
+        generateEmailToken: () => 'token789',
+        hashEmailToken: () => 'hash789',
+        sendLoginLinkEmail,
+        sendVerifyEmailSetPasswordEmail,
+      },
+    );
+
+    expect(createToken).not.toHaveBeenCalled();
+    expect(sendLoginLinkEmail).not.toHaveBeenCalled();
+    expect(sendVerifyEmailSetPasswordEmail).not.toHaveBeenCalled();
+  });
+
+  it('silently blocks registration when the new user email domain is not allowed', async () => {
+    const findUnique = vi
+      .fn<PrismaStub['user']['findUnique']>()
+      .mockResolvedValue(null);
+    const createToken = vi
+      .fn<PrismaStub['verificationToken']['create']>()
+      .mockResolvedValue({ id: 't4' });
+    const prisma: PrismaStub = {
+      user: { findUnique },
+      verificationToken: { create: createToken },
+    };
+
+    const sendLoginLinkEmail = vi.fn<(params: { to: string; link: string }) => Promise<void>>(
+      async () => undefined,
+    );
+    const sendVerifyEmailSetPasswordEmail = vi.fn<
+      (params: { to: string; link: string }) => Promise<void>
+    >(async () => undefined);
+
+    await requestRegistrationInstructions(
+      {
+        email: 'new@gmail.com',
+        config: baseConfig({
+          allowed_registration_domains: ['company.com'],
+        }),
+        configUrl: 'https://client.example.com/auth-config',
+      },
+      {
+        env: testEnv(),
+        prisma,
+        sharedSecret: 'pepper',
+        now: () => new Date('2026-02-10T00:00:00.000Z'),
+        generateEmailToken: () => 'token999',
+        hashEmailToken: () => 'hash999',
+        sendLoginLinkEmail,
+        sendVerifyEmailSetPasswordEmail,
+      },
+    );
+
+    expect(createToken).not.toHaveBeenCalled();
+    expect(sendLoginLinkEmail).not.toHaveBeenCalled();
+    expect(sendVerifyEmailSetPasswordEmail).not.toHaveBeenCalled();
+  });
+
+  it('still sends login links for existing users even when domain restrictions are configured', async () => {
+    const findUnique = vi
+      .fn<PrismaStub['user']['findUnique']>()
+      .mockResolvedValue({ id: 'u2' });
+    const createToken = vi
+      .fn<PrismaStub['verificationToken']['create']>()
+      .mockResolvedValue({ id: 't5' });
+    const prisma: PrismaStub = {
+      user: { findUnique },
+      verificationToken: { create: createToken },
+    };
+
+    const sendLoginLinkEmail = vi.fn<(params: { to: string; link: string }) => Promise<void>>(
+      async () => undefined,
+    );
+    const sendVerifyEmailSetPasswordEmail = vi.fn<
+      (params: { to: string; link: string }) => Promise<void>
+    >(async () => undefined);
+
+    await requestRegistrationInstructions(
+      {
+        email: 'existing@gmail.com',
+        config: baseConfig({
+          allowed_registration_domains: ['company.com'],
+        }),
+        configUrl: 'https://client.example.com/auth-config',
+      },
+      {
+        env: testEnv(),
+        prisma,
+        sharedSecret: 'pepper',
+        now: () => new Date('2026-02-10T00:00:00.000Z'),
+        generateEmailToken: () => 'tokenexisting',
+        hashEmailToken: () => 'hashexisting',
+        sendLoginLinkEmail,
+        sendVerifyEmailSetPasswordEmail,
+      },
+    );
+
+    expect(createToken).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        type: 'LOGIN_LINK',
+        email: 'existing@gmail.com',
+        userId: 'u2',
+      }),
+    });
+    expect(sendLoginLinkEmail).toHaveBeenCalledTimes(1);
+    expect(sendVerifyEmailSetPasswordEmail).not.toHaveBeenCalled();
   });
 });

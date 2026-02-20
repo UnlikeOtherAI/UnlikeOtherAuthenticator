@@ -47,6 +47,12 @@ function resolvePublicBaseUrl(): string {
   return env.PUBLIC_BASE_URL ? normalizeBaseUrl(env.PUBLIC_BASE_URL) : `http://${env.HOST}:${env.PORT}`;
 }
 
+function buildAuthFailedRedirectUrl(redirectUrl: string): string {
+  const u = new URL(redirectUrl);
+  u.searchParams.set('error', 'auth_failed');
+  return u.toString();
+}
+
 export function registerAuthCallbackRoute(app: FastifyInstance): void {
   app.get('/auth/callback/:provider', async (request, reply) => {
     const { provider } = ParamsSchema.parse(request.params);
@@ -171,10 +177,17 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
       throw new AppError('BAD_REQUEST', 400);
     }
 
-    const { userId, twoFaEnabled } = await loginWithSocialProfile({
+    const socialLoginResult = await loginWithSocialProfile({
       profile,
       config,
     });
+
+    if (socialLoginResult.status === 'blocked') {
+      reply.redirect(buildAuthFailedRedirectUrl(redirectUrl), 302);
+      return;
+    }
+
+    const { userId, twoFaEnabled } = socialLoginResult;
 
     // Brief 13 / Phase 8.6 + 8.7: enforce 2FA verification during login when enabled via config.
     if (config['2fa_enabled'] && twoFaEnabled) {
