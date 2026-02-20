@@ -6,6 +6,7 @@ import { getPrisma } from '../../db/prisma.js';
 import { AppError } from '../../utils/errors.js';
 import { buildUserIdentity } from '../user-scope.service.js';
 import { ensureDomainRoleForUser } from '../domain-role.service.js';
+import { placeUserInConfiguredOrganisation } from '../org-placement.service.js';
 import { assertProviderVerifiedEmail, type SocialProfile } from './provider.base.js';
 
 type SocialLoginPrisma = {
@@ -17,6 +18,7 @@ type SocialLoginDeps = {
   prisma?: SocialLoginPrisma;
   buildUserIdentity?: typeof buildUserIdentity;
   ensureDomainRoleForUser?: typeof ensureDomainRoleForUser;
+  placeUserInConfiguredOrganisation?: typeof placeUserInConfiguredOrganisation;
 };
 
 type SocialLoginResult =
@@ -72,6 +74,7 @@ export async function loginWithSocialProfile(
 
   let userId: string;
   let twoFaEnabled: boolean;
+  let createdUser = false;
   if (existing) {
     const updated = await prisma.user.update({
       where: { userKey },
@@ -105,6 +108,7 @@ export async function loginWithSocialProfile(
     });
     userId = created.id;
     twoFaEnabled = created.twoFaEnabled;
+    createdUser = true;
   }
 
   // Ensure domain-level role exists for this login domain (superuser assignment is per-domain).
@@ -113,6 +117,22 @@ export async function loginWithSocialProfile(
     userId,
     prisma: prisma as unknown as PrismaClient,
   });
+
+  if (createdUser) {
+    try {
+      await (deps?.placeUserInConfiguredOrganisation ?? placeUserInConfiguredOrganisation)({
+        userId,
+        email,
+        config: params.config,
+      });
+    } catch (err) {
+      console.error('[org-placement]', 'failed while attempting social registration placement', {
+        domain: params.config.domain,
+        userId,
+        errorName: err instanceof Error ? err.name : 'unknown',
+      });
+    }
+  }
 
   return { status: 'authenticated', userId, twoFaEnabled };
 }

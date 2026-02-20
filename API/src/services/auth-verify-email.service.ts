@@ -7,6 +7,7 @@ import { AppError } from '../utils/errors.js';
 import { hashEmailToken } from '../utils/verification-token.js';
 import { hashPassword } from './password.service.js';
 import { ensureDomainRoleForUser } from './domain-role.service.js';
+import { placeUserInConfiguredOrganisation } from './org-placement.service.js';
 
 type VerifyEmailPrisma = Pick<PrismaClient, '$transaction'> & {
   verificationToken: Pick<PrismaClient['verificationToken'], 'findUnique' | 'updateMany'>;
@@ -20,6 +21,7 @@ type VerifyEmailDeps = {
   hashEmailToken?: typeof hashEmailToken;
   hashPassword?: typeof hashPassword;
   prisma?: VerifyEmailPrisma;
+  placeUserInConfiguredOrganisation?: typeof placeUserInConfiguredOrganisation;
 };
 
 type VerifyEmailTokenRow = Prisma.VerificationTokenGetPayload<{
@@ -124,7 +126,7 @@ export async function verifyEmailToken(
   const hashPasswordFn = deps?.hashPassword ?? hashPassword;
 
   // Token consumption + user creation/update must be atomic to enforce one-time use.
-  return await prisma.$transaction(async (tx) => {
+  const consumed = await prisma.$transaction(async (tx) => {
     const tokenRow = await tx.verificationToken.findUnique({
       where: { tokenHash },
       select: {
@@ -146,6 +148,7 @@ export async function verifyEmailToken(
     const type = assertTokenValid({ token: tokenRow, configUrl: params.configUrl, now });
 
     let userId: string;
+    let createdUser = false;
     if (type === 'VERIFY_EMAIL_SET_PASSWORD') {
       if (!params.password) {
         throw new AppError('BAD_REQUEST', 400, 'MISSING_PASSWORD');
@@ -185,6 +188,7 @@ export async function verifyEmailToken(
           select: { id: true },
         });
         userId = created.id;
+        createdUser = true;
       }
     } else {
       const existingUser = await tx.user.findUnique({
@@ -205,6 +209,7 @@ export async function verifyEmailToken(
           select: { id: true },
         });
         userId = created.id;
+        createdUser = true;
       }
     }
 
@@ -231,8 +236,31 @@ export async function verifyEmailToken(
       throw new AppError('BAD_REQUEST', 400, 'TOKEN_ALREADY_USED');
     }
 
-    return { userId, type };
+    return {
+      userId,
+      type,
+      createdUser,
+      email: tokenRow.email,
+    };
   });
+
+  if (consumed.createdUser) {
+    try {
+      await (deps?.placeUserInConfiguredOrganisation ?? placeUserInConfiguredOrganisation)({
+        userId: consumed.userId,
+        email: consumed.email,
+        config: params.config,
+      });
+    } catch (err) {
+      console.error('[org-placement]', 'failed while attempting automatic registration placement', {
+        domain: params.config.domain,
+        userId: consumed.userId,
+        errorName: err instanceof Error ? err.name : 'unknown',
+      });
+    }
+  }
+
+  return { userId: consumed.userId, type: consumed.type };
 }
 
 export async function verifyEmailAndSetPassword(

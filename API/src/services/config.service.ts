@@ -96,6 +96,32 @@ const RequiredConfigSchema = z
 
 export type RequiredClientConfig = z.infer<typeof RequiredConfigSchema>;
 
+const RegistrationDomainMappingSchema = z
+  .array(
+    z.object({
+      email_domain: z.string().trim().toLowerCase().min(1),
+      org_id: z.string().trim().min(1),
+      team_id: z.string().trim().min(1).optional(),
+    }),
+  )
+  .optional()
+  .superRefine((entries, ctx) => {
+    if (!entries) return;
+
+    const seen = new Set<string>();
+    for (let i = 0; i < entries.length; i++) {
+      const domain = entries[i].email_domain;
+      if (seen.has(domain)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Duplicate email_domain: ${domain}`,
+          path: [i, 'email_domain'],
+        });
+      }
+      seen.add(domain);
+    }
+  });
+
 const ClientConfigSchema = RequiredConfigSchema.extend({
   // Task 2.5: optional config fields.
   //
@@ -114,6 +140,7 @@ const ClientConfigSchema = RequiredConfigSchema.extend({
     .array(z.string().trim().toLowerCase().min(1))
     .min(1)
     .optional(),
+  registration_domain_mapping: RegistrationDomainMappingSchema,
   // Brief 8 / Phase 10.4: default language should come from the client website's selection.
   // This is the currently selected language (not the list of available languages).
   language: z.string().trim().min(1).optional(),
@@ -154,23 +181,44 @@ const ClientConfigSchema = RequiredConfigSchema.extend({
   }
 
   const domains = config.allowed_registration_domains;
-  if (!domains) return;
-
-  const seen = new Set<string>();
-  for (let i = 0; i < domains.length; i++) {
-    const domain = domains[i];
-    if (seen.has(domain)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: `Duplicate allowed registration domain: ${domain}`,
-        path: ['allowed_registration_domains', i],
-      });
+  if (domains) {
+    const seen = new Set<string>();
+    for (let i = 0; i < domains.length; i++) {
+      const domain = domains[i];
+      if (seen.has(domain)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Duplicate allowed registration domain: ${domain}`,
+          path: ['allowed_registration_domains', i],
+        });
+      }
+      seen.add(domain);
     }
-    seen.add(domain);
   }
 });
 
 export type ClientConfig = z.infer<typeof ClientConfigSchema>;
+
+function warnUnreachableRegistrationDomainMappings(config: ClientConfig): void {
+  const allowed = config.allowed_registration_domains;
+  const mappings = config.registration_domain_mapping;
+  if (!allowed?.length || !mappings?.length) {
+    return;
+  }
+
+  const allowedSet = new Set(allowed);
+  const unreachable = [...new Set(mappings.map((entry) => entry.email_domain))]
+    .filter((domain) => !allowedSet.has(domain));
+
+  if (!unreachable.length) {
+    return;
+  }
+
+  console.warn(
+    '[config]',
+    `registration_domain_mapping contains domains not in allowed_registration_domains for "${config.domain}": ${unreachable.join(', ')}`,
+  );
+}
 
 function sharedSecretKey(sharedSecret: string): Uint8Array {
   return new TextEncoder().encode(sharedSecret);
@@ -327,5 +375,7 @@ export function validateRequiredConfigFields(
  */
 export function validateConfigFields(payload: JWTPayload): ClientConfig {
   // Includes required validation plus optional field parsing and defaults.
-  return ClientConfigSchema.parse(payload);
+  const config = ClientConfigSchema.parse(payload);
+  warnUnreachableRegistrationDomainMappings(config);
+  return config;
 }

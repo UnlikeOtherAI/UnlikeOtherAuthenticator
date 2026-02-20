@@ -17,9 +17,12 @@ import { baseClientConfigPayload } from '../helpers/test-config.js';
 
 const hasDatabase = Boolean(process.env.DATABASE_URL);
 
-async function createSignedConfigJwt(sharedSecret: string): Promise<string> {
+async function createSignedConfigJwt(
+  sharedSecret: string,
+  overrides?: Record<string, unknown>,
+): Promise<string> {
   const aud = process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
-  return await new SignJWT(baseClientConfigPayload({ user_scope: 'global' }))
+  return await new SignJWT(baseClientConfigPayload({ user_scope: 'global', ...overrides }))
     .setProtectedHeader({ alg: 'HS256' })
     .setAudience(aud)
     .sign(new TextEncoder().encode(sharedSecret));
@@ -50,6 +53,12 @@ describe.skipIf(!hasDatabase)('Email verification flow', () => {
     await handle.prisma.authorizationCode.deleteMany();
     await handle.prisma.verificationToken.deleteMany();
     await handle.prisma.domainRole.deleteMany();
+    await handle.prisma.teamMember.deleteMany();
+    await handle.prisma.orgMember.deleteMany();
+    await handle.prisma.groupMember.deleteMany();
+    await handle.prisma.team.deleteMany();
+    await handle.prisma.group.deleteMany();
+    await handle.prisma.organisation.deleteMany();
     await handle.prisma.user.deleteMany();
   });
 
@@ -262,6 +271,136 @@ describe.skipIf(!hasDatabase)('Email verification flow', () => {
     });
     expect(log).not.toBeNull();
     expect(log!.authMethod).toBe('verify_email');
+
+    await app.close();
+  });
+
+  it('auto-places a newly verified user into mapped org/team when registration_domain_mapping matches', async () => {
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.AUTH_SERVICE_IDENTIFIER =
+      process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
+
+    const owner = await handle!.prisma.user.create({
+      data: {
+        email: 'owner@company.com',
+        userKey: 'owner@company.com',
+        domain: null,
+        passwordHash: null,
+      },
+      select: { id: true },
+    });
+
+    const org = await handle!.prisma.organisation.create({
+      data: {
+        domain: 'client.example.com',
+        name: 'Client Org',
+        slug: 'client-org',
+        ownerId: owner.id,
+      },
+      select: { id: true },
+    });
+
+    const defaultTeam = await handle!.prisma.team.create({
+      data: {
+        orgId: org.id,
+        name: 'General',
+        isDefault: true,
+      },
+      select: { id: true },
+    });
+    const mappedTeam = await handle!.prisma.team.create({
+      data: {
+        orgId: org.id,
+        name: 'Engineering',
+        isDefault: false,
+      },
+      select: { id: true },
+    });
+
+    await handle!.prisma.orgMember.create({
+      data: {
+        orgId: org.id,
+        userId: owner.id,
+        role: 'owner',
+      },
+    });
+    await handle!.prisma.teamMember.create({
+      data: {
+        teamId: defaultTeam.id,
+        userId: owner.id,
+        teamRole: 'member',
+      },
+    });
+
+    const jwt = await createSignedConfigJwt(process.env.SHARED_SECRET, {
+      org_features: { enabled: true },
+      registration_domain_mapping: [
+        {
+          email_domain: 'company.com',
+          org_id: org.id,
+          team_id: mappedTeam.id,
+        },
+      ],
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 })),
+    );
+
+    const configUrl = 'https://client.example.com/auth-config';
+    const rawToken = 'placement-token-value';
+    const tokenHash = hashEmailToken(rawToken, process.env.SHARED_SECRET);
+
+    await handle!.prisma.verificationToken.create({
+      data: {
+        type: 'VERIFY_EMAIL',
+        email: 'placed@company.com',
+        userKey: 'placed@company.com',
+        domain: null,
+        configUrl,
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+        tokenHash,
+      },
+    });
+
+    const app = await createApp();
+    await app.ready();
+
+    const baseQuery = `config_url=${encodeURIComponent(configUrl)}`;
+    const verify = await app.inject({
+      method: 'POST',
+      url: `/auth/verify-email?${baseQuery}`,
+      payload: { token: rawToken },
+    });
+
+    expect(verify.statusCode).toBe(200);
+    expect(verify.json()).toMatchObject({ ok: true });
+
+    const user = await handle!.prisma.user.findUnique({
+      where: { userKey: 'placed@company.com' },
+      select: { id: true },
+    });
+    expect(user).not.toBeNull();
+
+    const orgMembership = await handle!.prisma.orgMember.findFirst({
+      where: {
+        userId: user!.id,
+        orgId: org.id,
+      },
+      select: { role: true },
+    });
+    expect(orgMembership).not.toBeNull();
+    expect(orgMembership!.role).toBe('member');
+
+    const teamMembership = await handle!.prisma.teamMember.findFirst({
+      where: {
+        userId: user!.id,
+        teamId: mappedTeam.id,
+      },
+      select: { teamRole: true },
+    });
+    expect(teamMembership).not.toBeNull();
+    expect(teamMembership!.teamRole).toBe('member');
 
     await app.close();
   });

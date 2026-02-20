@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { JWTPayload } from 'jose';
 
 import { validateConfigFields } from '../../src/services/config.service.js';
@@ -18,6 +18,7 @@ describe('validateConfigFields', () => {
     expect(cfg.allow_registration).toBe(true);
     expect(cfg.registration_mode).toBe('password_required');
     expect(cfg.allowed_registration_domains).toBeUndefined();
+    expect(cfg.registration_domain_mapping).toBeUndefined();
     expect(cfg.allowed_social_providers).toBeUndefined();
   });
 
@@ -30,6 +31,13 @@ describe('validateConfigFields', () => {
       allow_registration: false,
       registration_mode: 'password_required',
       allowed_registration_domains: ['  EXAMPLE.COM ', 'subsidiary.co.uk'],
+      registration_domain_mapping: [
+        {
+          email_domain: '  EXAMPLE.COM  ',
+          org_id: ' org-1 ',
+          team_id: ' team-1 ',
+        },
+      ],
       allowed_social_providers: ['google', 'github'],
       language: '  es  ',
     });
@@ -40,6 +48,13 @@ describe('validateConfigFields', () => {
     expect(cfg.allow_registration).toBe(false);
     expect(cfg.registration_mode).toBe('password_required');
     expect(cfg.allowed_registration_domains).toEqual(['example.com', 'subsidiary.co.uk']);
+    expect(cfg.registration_domain_mapping).toEqual([
+      {
+        email_domain: 'example.com',
+        org_id: 'org-1',
+        team_id: 'team-1',
+      },
+    ]);
     expect(cfg.allowed_social_providers).toEqual(['google', 'github']);
     expect(cfg.language).toBe('es');
   });
@@ -70,6 +85,37 @@ describe('validateConfigFields', () => {
         allowed_registration_domains: ['example.com', 'example.com'],
       }),
     ).toThrow();
+  });
+
+  it('rejects duplicate registration_domain_mapping email domains', () => {
+    expect(() =>
+      validateConfigFields({
+        ...basePayload(),
+        registration_domain_mapping: [
+          { email_domain: 'example.com', org_id: 'org-1' },
+          { email_domain: 'EXAMPLE.COM', org_id: 'org-2' },
+        ],
+      }),
+    ).toThrow();
+  });
+
+  it('warns when registration_domain_mapping contains domains outside allowed_registration_domains', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const cfg = validateConfigFields({
+      ...basePayload(),
+      allowed_registration_domains: ['company.com'],
+      registration_domain_mapping: [
+        { email_domain: 'company.com', org_id: 'org-1' },
+        { email_domain: 'gmail.com', org_id: 'org-2' },
+      ],
+    });
+
+    expect(cfg.registration_domain_mapping).toHaveLength(2);
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy.mock.calls[0][0]).toBe('[config]');
+
+    warnSpy.mockRestore();
   });
 
   it('rejects invalid user_scope values', () => {

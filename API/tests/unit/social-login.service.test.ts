@@ -92,6 +92,9 @@ describe('social-login.service', () => {
         createdAt: new Date(),
       } as DomainRole;
     });
+    const placeUserInConfiguredOrganisation = vi.fn(async () => {
+      return { status: 'skipped', reason: 'mapping_not_found' } as const;
+    });
 
     const env: Env = {
       NODE_ENV: 'test',
@@ -130,7 +133,7 @@ describe('social-login.service', () => {
         },
         config,
       },
-      { env, prisma, ensureDomainRoleForUser },
+      { env, prisma, ensureDomainRoleForUser, placeUserInConfiguredOrganisation },
     );
 
     expect(first).toEqual({
@@ -139,6 +142,7 @@ describe('social-login.service', () => {
       twoFaEnabled: false,
     });
     expect(ensureDomainRoleForUser).toHaveBeenCalledTimes(1);
+    expect(placeUserInConfiguredOrganisation).toHaveBeenCalledTimes(1);
 
     const second = await loginWithSocialProfile(
       {
@@ -151,7 +155,7 @@ describe('social-login.service', () => {
         },
         config,
       },
-      { env, prisma, ensureDomainRoleForUser },
+      { env, prisma, ensureDomainRoleForUser, placeUserInConfiguredOrganisation },
     );
 
     expect(second).toEqual({
@@ -161,6 +165,7 @@ describe('social-login.service', () => {
     });
     const stored = users.get('user@example.com');
     expect(stored?.avatarUrl).toBe('https://example.com/b.png');
+    expect(placeUserInConfiguredOrganisation).toHaveBeenCalledTimes(1);
   });
 
   it('blocks new social users whose email domain is not allowed', async () => {
@@ -175,6 +180,7 @@ describe('social-login.service', () => {
     };
 
     const ensureDomainRoleForUser = vi.fn();
+    const placeUserInConfiguredOrganisation = vi.fn();
 
     const env: Env = {
       NODE_ENV: 'test',
@@ -214,12 +220,13 @@ describe('social-login.service', () => {
         },
         config,
       },
-      { env, prisma, ensureDomainRoleForUser },
+      { env, prisma, ensureDomainRoleForUser, placeUserInConfiguredOrganisation },
     );
 
     expect(result).toEqual({ status: 'blocked' });
     expect(prisma.user.create).not.toHaveBeenCalled();
     expect(ensureDomainRoleForUser).not.toHaveBeenCalled();
+    expect(placeUserInConfiguredOrganisation).not.toHaveBeenCalled();
   });
 
   it('allows existing social users even when their email domain is not allowed for new registration', async () => {
@@ -241,6 +248,7 @@ describe('social-login.service', () => {
         createdAt: new Date(),
       } as DomainRole;
     });
+    const placeUserInConfiguredOrganisation = vi.fn();
 
     const env: Env = {
       NODE_ENV: 'test',
@@ -280,7 +288,7 @@ describe('social-login.service', () => {
         },
         config,
       },
-      { env, prisma, ensureDomainRoleForUser },
+      { env, prisma, ensureDomainRoleForUser, placeUserInConfiguredOrganisation },
     );
 
     expect(result).toEqual({
@@ -291,5 +299,6 @@ describe('social-login.service', () => {
     expect(prisma.user.create).not.toHaveBeenCalled();
     expect(prisma.user.update).toHaveBeenCalledTimes(1);
     expect(ensureDomainRoleForUser).toHaveBeenCalledTimes(1);
+    expect(placeUserInConfiguredOrganisation).not.toHaveBeenCalled();
   });
 });
