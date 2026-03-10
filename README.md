@@ -20,7 +20,7 @@ Unlike Other Authenticator is a stateless, API-first authentication service that
 1. **Client Identification**: Each client is identified by a verified domain. The hash of `(domain + shared secret)` becomes the client ID.
 2. **Config Delivery**: All client configuration is delivered as a signed JWT. The OAuth server verifies the JWT signature before trusting any config.
 3. **OAuth Flow**: Uses the standard authorization code flow. Client popup redirects with a code, which the client backend exchanges for an access token.
-4. **Stateless Tokens**: Access tokens are short-lived JWTs (15–60 minutes) with no refresh tokens. Clients re-initiate OAuth when tokens expire.
+4. **Token Pair**: Access tokens remain short-lived JWTs (15–60 minutes). Client backends also receive rotating refresh tokens for server-side session renewal.
 
 ### Core Principles
 
@@ -259,7 +259,7 @@ PopupContainer
 - **Config integrity**: All configs signed with JWT, verified on every request
 - **Domain verification**: Runs on each auth initiation (not cached)
 - **Social email trust**: Only provider-verified emails accepted
-- **Short-lived tokens**: Access tokens expire in 15–60 minutes (no refresh tokens)
+- **Short-lived access tokens**: Access tokens expire in 15–60 minutes and are renewed through rotating refresh tokens
 - **Generic errors**: All user-facing error messages are non-specific
 
 ## Development
@@ -357,20 +357,29 @@ On your client backend:
 app.get('/auth/callback', async (req, res) => {
   const { code } = req.query;
 
-  // Exchange code for access token
+  // Exchange code for an access token + refresh token pair
   const response = await fetch('https://auth.yourservice.com/auth/token', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${hashDomainAndSecret(domain, sharedSecret)}`
+    },
     body: JSON.stringify({
-      code,
-      client_id: hashDomainAndSecret(domain, sharedSecret)
+      code
     })
   });
 
-  const { access_token } = await response.json();
+  const { access_token, refresh_token } = await response.json();
 
   // Verify and decode the JWT access token
   const user = jwt.verify(access_token, process.env.SHARED_SECRET);
+
+  // Store the refresh token server-side only (for example an HttpOnly cookie)
+  res.cookie('refresh_token', refresh_token, {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'lax'
+  });
 
   // Set session and redirect
   req.session.userId = user.id;
@@ -387,7 +396,8 @@ app.get('/auth/callback', async (req, res) => {
 - `POST /auth/verify-email` — Verify email with token
 - `POST /auth/reset-password` — Request password reset
 - `GET /auth/callback/:provider` — Social OAuth callback
-- `POST /auth/token` — Exchange authorization code for access token
+- `POST /auth/token` — Exchange authorization code or refresh token for a token pair
+- `POST /auth/revoke` — Revoke the refresh-token family for logout
 
 ### Two-Factor Authentication
 

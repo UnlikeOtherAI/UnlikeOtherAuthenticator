@@ -33,9 +33,10 @@ export function registerRootRoute(app: FastifyInstance): void {
         { method: 'POST', path: '/auth/verify-email', description: 'Email verification' },
         {
           method: 'POST',
-          path: '/auth/token-exchange',
-          description: 'Exchange auth code for access token',
+          path: '/auth/token',
+          description: 'Exchange auth code or refresh token for an access token',
         },
+        { method: 'POST', path: '/auth/revoke', description: 'Revoke refresh token family' },
         {
           method: 'POST',
           path: '/auth/reset-password/request',

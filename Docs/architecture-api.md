@@ -30,6 +30,7 @@ For the full product spec, see [brief.md](./brief.md). For tech stack, see [tech
         callback.ts           — GET  /auth/callback/:provider
         social.ts             — GET /auth/social/:provider
         token-exchange.ts     — POST /auth/token
+        revoke.ts             — POST /auth/revoke
         entrypoint.ts         — GET /auth (main auth entry)
         email-reset-password.ts  — GET /auth/email-reset-password
         email-registration-link.ts — GET /auth/email-registration-link
@@ -73,7 +74,8 @@ For the full product spec, see [brief.md](./brief.md). For tech stack, see [tech
     /services
       auth.service.ts         — Login, registration, password verification logic
       config.service.ts       — Config JWT fetching, parsing, validation
-      token.service.ts        — Access token and authorization code generation/verification
+      token.service.ts        — Access token, refresh token, and authorization code orchestration
+      refresh-token.service.ts — Refresh token issuance, rotation, reuse detection, revocation
       organisation.service.ts  — Organisation orchestration API
       organisation.service.base.ts — Organisation service building blocks
       organisation.service.organisation.ts — Organisation CRUD + slug generation

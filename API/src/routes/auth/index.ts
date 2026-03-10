@@ -6,6 +6,7 @@ import { registerAuthEmailTwoFaResetRoute } from './email-twofa-reset.js';
 import { registerAuthEntrypointRoute } from './entrypoint.js';
 import { registerAuthLoginRoute } from './login.js';
 import { registerAuthDomainMappingRoute } from './domain-mapping.js';
+import { registerAuthRevokeRoute } from './revoke.js';
 import { registerAuthRegisterRoute } from './register.js';
 import { registerAuthResetPasswordRoutes } from './reset-password.js';
 import { registerAuthTokenExchangeRoute } from './token-exchange.js';
@@ -24,6 +25,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
   registerAuthRegisterRoute(app);
   registerAuthResetPasswordRoutes(app);
   registerAuthSocialRoute(app);
+  registerAuthRevokeRoute(app);
   registerAuthTokenExchangeRoute(app);
   registerAuthVerifyEmailRoute(app);
 }

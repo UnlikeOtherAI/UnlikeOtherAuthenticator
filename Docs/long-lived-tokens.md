@@ -1,343 +1,158 @@
-# Long-Lived Tokens — Specification
+# Long-Lived Tokens
 
-> **Status:** Proposed
-> **Purpose:** Add refresh token support to the Authenticator so consumer products (e.g. Remember Ninja admin panel) can maintain long-lived sessions without forcing re-authentication every 15–60 minutes.
-
----
-
-## Problem
-
-The Authenticator currently issues **short-lived JWTs only** (15–60 minute TTL, configurable via `ACCESS_TOKEN_TTL`). There are no refresh tokens. When a token expires, the client must re-initiate the full OAuth flow (popup → authenticate → code exchange).
-
-This is acceptable for products where authentication is infrequent, but breaks down for **admin panels and dashboards** where users expect long-lived sessions (hours or days). Forcing a popup re-auth every 30 minutes is hostile UX.
+> **Status:** Implemented
+> **Purpose:** Define the refresh-token contract used by client backends that need long-lived sessions without re-running the full OAuth popup flow.
 
 ---
 
-## Solution: Refresh Token Grant
+## Current Behavior
 
-Add an **opaque refresh token** alongside the existing access token. The refresh token is long-lived, stored server-side, and can be exchanged for a new access token without user interaction.
+The Authenticator now issues a **token pair** from `POST /auth/token`:
 
-### Token Pair
+- `access_token` — short-lived JWT for API calls
+- `refresh_token` — opaque bearer token for server-side renewal only
+- `token_type`
+- `expires_in`
+- `refresh_token_expires_in`
 
-| Token | Type | Lifetime | Storage (Client) | Storage (Server) |
-|-------|------|----------|-------------------|-------------------|
-| **Access token** | JWT (HS256, signed) | 15–60 min (unchanged) | Memory (JavaScript variable) | Not stored (stateless) |
-| **Refresh token** | Opaque (random 64 bytes, base64url) | 30 days (configurable) | HttpOnly Secure SameSite=Strict cookie | Hashed (SHA-256) in `refresh_tokens` table |
+`POST /auth/token` supports two grants:
 
-### Why Opaque (Not JWT) for Refresh Tokens
+1. Authorization-code exchange
+2. Refresh-token exchange with `grant_type=refresh_token`
 
-- Refresh tokens are **always validated server-side** (DB lookup) — there's no benefit to self-contained claims
-- Opaque tokens can be **revoked instantly** by deleting the DB row
-- No risk of stale claims in a long-lived JWT
-- Shorter token string (86 chars vs 300+ for JWT)
+`POST /auth/revoke` revokes the refresh-token family used by the caller during logout.
 
 ---
 
-## Database Schema
+## Token Model
 
-```sql
-CREATE TABLE refresh_tokens (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    domain          TEXT NOT NULL,               -- which client domain issued this
-    token_hash      TEXT NOT NULL UNIQUE,         -- SHA-256 of the opaque token
-    token_family    UUID NOT NULL,                -- rotation family (detect reuse)
-    expires_at      TIMESTAMPTZ NOT NULL,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-    revoked_at      TIMESTAMPTZ,
-    replaced_by     UUID REFERENCES refresh_tokens(id),  -- points to next token in chain
-    ip_address      INET,
-    user_agent      TEXT
-);
+| Token | Format | Lifetime | Client Storage | Server Storage |
+|-------|--------|----------|----------------|----------------|
+| Access token | HS256 JWT | 15-60 minutes | Memory / short-lived session | Stateless |
+| Refresh token | Opaque random base64url string | 1-90 days, default 30 | Backend-only, never browser JS | SHA-256 hash in `refresh_tokens` |
 
-CREATE INDEX idx_refresh_tokens_user ON refresh_tokens (user_id, domain) WHERE revoked_at IS NULL;
-CREATE INDEX idx_refresh_tokens_hash ON refresh_tokens (token_hash) WHERE revoked_at IS NULL;
-CREATE INDEX idx_refresh_tokens_family ON refresh_tokens (token_family);
-CREATE INDEX idx_refresh_tokens_expires ON refresh_tokens (expires_at) WHERE revoked_at IS NULL;
-```
+### Important Constraints
 
-### Prisma Schema Addition
+- Refresh tokens are returned to the **client backend**, not directly to browser JavaScript.
+- Consumer products must store refresh tokens in a **server-only** location such as an `HttpOnly` cookie or backend session store.
+- Access tokens stay short-lived even when refresh tokens are enabled.
 
-```prisma
-model RefreshToken {
-  id           String    @id @default(uuid())
-  userId       String    @map("user_id")
-  domain       String
-  tokenHash    String    @unique @map("token_hash")
-  tokenFamily  String    @map("token_family")
-  expiresAt    DateTime  @map("expires_at")
-  createdAt    DateTime  @default(now()) @map("created_at")
-  revokedAt    DateTime? @map("revoked_at")
-  replacedById String?   @map("replaced_by")
-  ipAddress    String?   @map("ip_address")
-  userAgent    String?   @map("user_agent")
+---
 
-  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  replacedBy   RefreshToken? @relation("TokenChain", fields: [replacedById], references: [id])
-  replacements RefreshToken[] @relation("TokenChain")
+## Persistence Model
 
-  @@index([userId, domain])
-  @@index([tokenFamily])
-  @@map("refresh_tokens")
+Refresh tokens are stored in the `refresh_tokens` table with:
+
+- `token_hash`
+- `family_id`
+- `parent_token_id`
+- `replaced_by_token_id`
+- `user_id`
+- `domain`
+- `client_id`
+- `config_url`
+- `expires_at`
+- `revoked_at`
+- `last_used_at`
+- `created_at`
+
+Only the hash is persisted. Raw refresh tokens are never stored.
+
+---
+
+## Rotation and Reuse Detection
+
+Every successful refresh-token exchange:
+
+1. Creates a new refresh token in the same family
+2. Marks the previous token as revoked
+3. Links the old token to the replacement with `replaced_by_token_id`
+
+If an already-rotated refresh token is presented again:
+
+1. The entire token family is revoked
+2. The request fails with a generic unauthorized response
+3. Subsequent refresh attempts from that family also fail
+
+This is the theft-detection path for replayed refresh tokens.
+
+---
+
+## API Contract
+
+### `POST /auth/token`
+
+Authorization-code request:
+
+```json
+{
+  "code": "auth_code_here"
 }
 ```
 
----
+Refresh-token request:
 
-## API Changes
-
-### Token Exchange Response (Updated)
-
-`POST /auth/token` — exchange authorization code for tokens.
-
-**Current response:**
 ```json
 {
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  "grant_type": "refresh_token",
+  "refresh_token": "opaque_refresh_token"
 }
 ```
 
-**New response:**
+Success response:
+
 ```json
 {
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "access_token": "jwt_here",
   "expires_in": 1800,
+  "refresh_token": "opaque_refresh_token",
+  "refresh_token_expires_in": 2592000,
   "token_type": "Bearer"
 }
 ```
 
-The refresh token is **NOT** returned in the JSON body. Instead, it is set as a cookie:
+### `POST /auth/revoke`
 
-```
-Set-Cookie: __Host-refresh=<opaque_token>; HttpOnly; Secure; SameSite=Strict; Path=/auth/refresh; Max-Age=2592000
-```
+Request:
 
-**Why cookie instead of response body:**
-- HttpOnly prevents XSS from reading the refresh token
-- SameSite=Strict prevents CSRF
-- Path=/auth/refresh limits cookie transmission to refresh endpoint only
-- The access token (in memory) is the XSS-vulnerable surface; keeping the refresh token in a cookie means an XSS attack cannot escalate to long-lived access
-
-### New Endpoint: Refresh
-
-`POST /auth/refresh`
-
-No request body needed — the refresh token comes from the cookie.
-
-**Success response (200):**
 ```json
 {
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "expires_in": 1800,
-  "token_type": "Bearer"
+  "refresh_token": "opaque_refresh_token"
 }
 ```
 
-A new `Set-Cookie` header is also sent (token rotation — see below).
+Success response:
 
-**Error responses:**
-- `401` — No refresh cookie, or token not found / expired / revoked
-- `403` — Token reuse detected (entire family revoked — see security section)
-
-### New Endpoint: Logout
-
-`POST /auth/logout`
-
-Revokes the refresh token from the cookie. Clears the cookie.
-
-**Response (200):**
 ```json
 {
-  "logged_out": true
-}
-```
-
-### New Endpoint: Revoke All Sessions
-
-`POST /auth/revoke-all`
-
-Requires a valid access token. Revokes all refresh tokens for the authenticated user across all domains.
-
-**Response (200):**
-```json
-{
-  "revoked": 5,
-  "message": "All sessions revoked"
+  "ok": true
 }
 ```
 
 ---
 
-## Token Rotation
-
-Every time a refresh token is used, a **new refresh token** is issued and the old one is marked as used (`replaced_by` set). This is called **refresh token rotation**.
-
-```
-Initial login:
-  → Access token A1, Refresh token R1 (family F1)
-
-R1 used to refresh:
-  → Access token A2, Refresh token R2 (family F1)
-  → R1 marked as replaced_by = R2
-
-R2 used to refresh:
-  → Access token A3, Refresh token R3 (family F1)
-  → R2 marked as replaced_by = R3
-```
-
-### Reuse Detection
-
-If an **already-used** refresh token (e.g. R1, which was replaced by R2) is presented:
-
-1. This indicates the token was stolen (legitimate user already used it, attacker is replaying)
-2. **Revoke the entire family** (all tokens with `token_family = F1`)
-3. Return `403 Forbidden` with error `token_reuse_detected`
-4. Log a security event
-
-This is the standard approach recommended by the OAuth 2.0 Security Best Current Practice (RFC 6819, draft-ietf-oauth-security-topics).
-
----
-
-## Configuration
-
-New environment variables:
+## Environment
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `REFRESH_TOKEN_ENABLED` | `false` | Enable refresh token issuance |
-| `REFRESH_TOKEN_TTL_DAYS` | `30` | Refresh token lifetime in days |
-| `REFRESH_TOKEN_MAX_PER_USER` | `10` | Max active refresh tokens per user per domain |
-
-### Config JWT Support
-
-Consumer products opt into refresh tokens via their config JWT:
-
-```json
-{
-  "domain": "admin.remember.ninja",
-  "refresh_tokens": {
-    "enabled": true,
-    "ttl_days": 30
-  }
-}
-```
-
-If `refresh_tokens` is absent or `enabled: false`, behaviour is unchanged (access token only, no refresh cookie).
+| `ACCESS_TOKEN_TTL` | `30m` | Short-lived JWT lifetime, bounded to 15-60 minutes |
+| `REFRESH_TOKEN_TTL_DAYS` | `30` | Refresh-token lifetime in days, bounded to 1-90 |
 
 ---
 
-## Client Integration
+## Consumer Responsibilities
 
-### Token Exchange (Updated)
+Client backends integrating with the Authenticator must:
 
-```javascript
-// Client backend: exchange auth code for tokens
-app.get('/auth/callback', async (req, res) => {
-  const { code } = req.query;
-
-  const response = await fetch('https://auth.unlikeotherai.com/auth/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      code,
-      client_id: hashDomainAndSecret(domain, sharedSecret)
-    }),
-    credentials: 'include'  // Important: accept Set-Cookie
-  });
-
-  const { access_token, expires_in } = await response.json();
-  // Refresh token is now in an HttpOnly cookie managed by the browser
-
-  // Forward the Set-Cookie header to the client
-  const setCookie = response.headers.get('set-cookie');
-  if (setCookie) res.setHeader('Set-Cookie', setCookie);
-
-  // Store access token in memory (JavaScript variable)
-  // Return to the SPA
-});
-```
-
-### Silent Refresh (Browser SPA)
-
-```javascript
-async function refreshAccessToken(): Promise<string | null> {
-  try {
-    const response = await fetch('https://auth.unlikeotherai.com/auth/refresh', {
-      method: 'POST',
-      credentials: 'include',  // sends the HttpOnly cookie
-    });
-
-    if (!response.ok) return null;
-
-    const { access_token } = await response.json();
-    return access_token;
-  } catch {
-    return null;  // network error → redirect to login
-  }
-}
-
-// Set up a timer to refresh before expiry
-function scheduleRefresh(expiresIn: number) {
-  const refreshAt = (expiresIn - 60) * 1000;  // 60s before expiry
-  setTimeout(async () => {
-    const newToken = await refreshAccessToken();
-    if (newToken) {
-      store.setAccessToken(newToken);
-      scheduleRefresh(expiresIn);  // reschedule
-    } else {
-      store.clearSession();
-      redirectToLogin();
-    }
-  }, refreshAt);
-}
-```
+1. Exchange the authorization code on the backend only
+2. Store the returned refresh token in a server-only location
+3. Use `grant_type=refresh_token` to renew sessions
+4. Call `POST /auth/revoke` during logout
+5. Clear local cookies/session state if refresh fails
 
 ---
 
-## Cleanup
+## Deployment Notes
 
-A background job (or Prisma middleware) should periodically delete expired and revoked refresh tokens:
-
-```sql
-DELETE FROM refresh_tokens
-WHERE (expires_at < now() - INTERVAL '7 days')
-   OR (revoked_at IS NOT NULL AND revoked_at < now() - INTERVAL '7 days');
-```
-
-This can run daily. Keeping revoked tokens for 7 days allows security analysis of reuse patterns.
-
----
-
-## Security Considerations
-
-| Concern | Mitigation |
-|---------|-----------|
-| **XSS stealing refresh token** | HttpOnly cookie — JavaScript cannot read it |
-| **CSRF using refresh cookie** | SameSite=Strict — cookie not sent on cross-origin requests |
-| **Refresh token stolen from DB** | Stored as SHA-256 hash (like API keys) |
-| **Replay attack** | Token rotation + reuse detection → entire family revoked |
-| **Long session after password change** | On password change, revoke all refresh tokens for the user |
-| **Leaked refresh token** | 30-day expiry caps exposure window. Admin can revoke all. |
-
----
-
-## Implementation Scope
-
-### Phase 1 (This Spec)
-
-1. Add `refresh_tokens` table (Prisma migration)
-2. Add `RefreshToken` Prisma model
-3. Create `RefreshTokenService` (create, validate, rotate, revoke, reuse detection)
-4. Update `POST /auth/token` to issue refresh cookie when enabled
-5. Add `POST /auth/refresh` endpoint
-6. Add `POST /auth/logout` endpoint
-7. Add `POST /auth/revoke-all` endpoint
-8. Add config JWT validation for `refresh_tokens` field
-9. Add cleanup job for expired tokens
-10. Update tests
-
-### Not in Scope
-
-- Sliding window refresh (extend TTL on use) — use fixed expiry for simplicity
-- Per-device session management UI — future feature
-- Refresh token for social provider token refresh — only for our own tokens
+- The refresh-token feature requires the `refresh_tokens` Prisma migration to be deployed before the new application revision starts serving traffic.
+- For G Cloud / Cloud Run deployments, apply `prisma migrate deploy` as part of the rollout before or alongside the new container revision.

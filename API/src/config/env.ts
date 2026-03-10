@@ -74,6 +74,7 @@ const EnvSchema = z.object({
         message: 'ACCESS_TOKEN_TTL must be minutes-only between 15m and 60m (e.g. "30m")',
       }),
   ),
+  REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(30),
   LOG_RETENTION_DAYS: z.coerce.number().int().positive().default(90),
   // Brief 8 / Phase 10: AI translation service credentials (optional; the UI falls back to English if disabled).
   AI_TRANSLATION_PROVIDER: z.enum(['disabled', 'openai']).default('disabled'),

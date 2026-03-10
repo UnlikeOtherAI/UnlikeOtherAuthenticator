@@ -7,24 +7,22 @@ import { AUTHORIZATION_CODE_TTL_MS } from '../config/constants.js';
 import { getEnv, requireEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
 import { ensureDomainRoleForUser } from './domain-role.service.js';
+import {
+  exchangeRefreshToken,
+  issueRefreshToken,
+} from './refresh-token.service.js';
 import { createClientId } from '../utils/hash.js';
 import { AppError } from '../utils/errors.js';
 import type { ClientConfig } from './config.service.js';
 import { tryParseHttpUrl } from '../utils/http-url.js';
 import { getUserOrgContext, type OrgContext } from './org-context.service.js';
 
-type TokenPrisma = {
-  authorizationCode: Pick<
-    PrismaClient['authorizationCode'],
-    'create' | 'findUnique' | 'updateMany'
-  >;
-  user: Pick<PrismaClient['user'], 'findUnique'>;
-  domainRole: PrismaClient['domainRole'];
-};
+type TokenPrisma = PrismaClient;
 
 type TokenDeps = {
   prisma?: TokenPrisma;
   now?: () => Date;
+  refreshTokenTtlDays?: number;
   sharedSecret?: string;
 };
 
@@ -229,49 +227,51 @@ async function signAccessToken(params: {
   }
 }
 
-/**
- * Brief 22.13: client backend exchanges the authorization code for an access token JWT.
- */
-export async function exchangeAuthorizationCodeForAccessToken(
+function accessTokenExpiresInSeconds(ttl: string): number {
+  const minutes = Number(ttl.replace(/m$/, ''));
+  if (!Number.isFinite(minutes) || minutes <= 0) {
+    throw new AppError('INTERNAL', 500, 'INVALID_ACCESS_TOKEN_TTL');
+  }
+  return minutes * 60;
+}
+
+type TokenIssuerDeps = TokenDeps & {
+  accessTokenTtl?: string;
+  authServiceIdentifier?: string;
+};
+
+type IssuedTokenPair = {
+  accessToken: string;
+  expiresInSeconds: number;
+  refreshToken: string;
+  refreshTokenExpiresInSeconds: number;
+};
+
+async function issueTokenPairForUser(
   params: {
-    code: string;
     config: ClientConfig;
     configUrl: string;
+    refreshToken: string;
+    refreshTokenExpiresInSeconds: number;
+    userId: string;
   },
-  deps?: TokenDeps & { accessTokenTtl?: string; authServiceIdentifier?: string },
-): Promise<{ accessToken: string }> {
+  deps?: TokenIssuerDeps,
+): Promise<IssuedTokenPair> {
   const env = getEnv();
-
-  if (!env.DATABASE_URL) {
-    throw new AppError('INTERNAL', 500, 'DATABASE_DISABLED');
-  }
-
-  const now = deps?.now ? deps.now() : new Date();
   const sharedSecret = deps?.sharedSecret ?? requireEnv('SHARED_SECRET').SHARED_SECRET;
   const issuer =
     deps?.authServiceIdentifier ?? requireEnv('AUTH_SERVICE_IDENTIFIER').AUTH_SERVICE_IDENTIFIER;
   const ttl = deps?.accessTokenTtl ?? env.ACCESS_TOKEN_TTL;
+  const prisma = deps?.prisma ?? getPrisma();
 
-  const prisma = deps?.prisma ?? (getPrisma() as unknown as TokenPrisma);
-
-  const { userId } = await consumeAuthorizationCode({
-    code: params.code,
-    configUrl: params.configUrl,
-    domain: params.config.domain,
-    now,
-    sharedSecret,
-    prisma,
-  });
-
-  // Ensure a per-domain role exists (global users may log in on new domains).
   const domainRole = await ensureDomainRoleForUser({
-    prisma: prisma as unknown as PrismaClient,
+    prisma,
     domain: params.config.domain,
-    userId,
+    userId: params.userId,
   });
 
   const user = await prisma.user.findUnique({
-    where: { id: userId },
+    where: { id: params.userId },
     select: { email: true },
   });
   if (!user) throw new AppError('INTERNAL', 500, 'MISSING_USER');
@@ -281,16 +281,16 @@ export async function exchangeAuthorizationCodeForAccessToken(
   const org = params.config.org_features?.enabled
     ? await getUserOrgContext(
         {
-          userId,
+          userId: params.userId,
           domain: params.config.domain,
           config: params.config,
         },
-        { env, prisma: prisma as unknown as PrismaClient },
+        { env, prisma },
       )
     : null;
 
   const accessToken = await signAccessToken({
-    userId,
+    userId: params.userId,
     email: user.email,
     domain: params.config.domain,
     role,
@@ -301,5 +301,113 @@ export async function exchangeAuthorizationCodeForAccessToken(
     org,
   });
 
-  return { accessToken };
+  return {
+    accessToken,
+    expiresInSeconds: accessTokenExpiresInSeconds(ttl),
+    refreshToken: params.refreshToken,
+    refreshTokenExpiresInSeconds: params.refreshTokenExpiresInSeconds,
+  };
+}
+
+/**
+ * Client backend exchanges the authorization code for an access token and refresh token pair.
+ */
+export async function exchangeAuthorizationCodeForTokens(
+  params: {
+    code: string;
+    config: ClientConfig;
+    configUrl: string;
+  },
+  deps?: TokenIssuerDeps,
+): Promise<IssuedTokenPair> {
+  const env = getEnv();
+
+  if (!env.DATABASE_URL) {
+    throw new AppError('INTERNAL', 500, 'DATABASE_DISABLED');
+  }
+
+  const now = deps?.now ? deps.now() : new Date();
+  const sharedSecret = deps?.sharedSecret ?? requireEnv('SHARED_SECRET').SHARED_SECRET;
+  const prisma = deps?.prisma ?? getPrisma();
+  const clientId = createClientId(params.config.domain, sharedSecret);
+
+  const { userId } = await consumeAuthorizationCode({
+    code: params.code,
+    configUrl: params.configUrl,
+    domain: params.config.domain,
+    now,
+    sharedSecret,
+    prisma,
+  });
+
+  const issuedRefreshToken = await issueRefreshToken(
+    {
+      userId,
+      domain: params.config.domain,
+      clientId,
+      configUrl: params.configUrl,
+    },
+    {
+      now: deps?.now,
+      prisma,
+      refreshTokenTtlDays: deps?.refreshTokenTtlDays,
+      sharedSecret,
+    },
+  );
+
+  return issueTokenPairForUser(
+    {
+      userId,
+      config: params.config,
+      configUrl: params.configUrl,
+      refreshToken: issuedRefreshToken.refreshToken,
+      refreshTokenExpiresInSeconds: issuedRefreshToken.expiresInSeconds,
+    },
+    deps,
+  );
+}
+
+export async function exchangeRefreshTokenForTokens(
+  params: {
+    config: ClientConfig;
+    configUrl: string;
+    refreshToken: string;
+  },
+  deps?: TokenIssuerDeps,
+): Promise<IssuedTokenPair> {
+  const env = getEnv();
+
+  if (!env.DATABASE_URL) {
+    throw new AppError('INTERNAL', 500, 'DATABASE_DISABLED');
+  }
+
+  const sharedSecret = deps?.sharedSecret ?? requireEnv('SHARED_SECRET').SHARED_SECRET;
+  const prisma = deps?.prisma ?? getPrisma();
+  const clientId = createClientId(params.config.domain, sharedSecret);
+
+  const rotatedRefreshToken = await exchangeRefreshToken(
+    {
+      refreshToken: params.refreshToken,
+      domain: params.config.domain,
+      clientId,
+      configUrl: params.configUrl,
+    },
+    {
+      now: deps?.now,
+      prisma,
+      refreshTokenTtlDays: deps?.refreshTokenTtlDays,
+      sharedSecret,
+    },
+  );
+
+  return issueTokenPairForUser(
+    {
+      userId: rotatedRefreshToken.userId,
+      config: params.config,
+      configUrl: params.configUrl,
+      refreshToken: rotatedRefreshToken.refreshToken,
+      refreshTokenExpiresInSeconds: rotatedRefreshToken.expiresInSeconds,
+    },
+    deps,
+  );
 }

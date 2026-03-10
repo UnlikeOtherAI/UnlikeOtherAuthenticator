@@ -284,6 +284,7 @@ This service is **stateless where possible**, standards-based, and API-first.
 ### Returned to Client
 
 * OAuth access token (JWT)
+* OAuth refresh token (opaque, returned to the client backend only)
 
 ### Token Contains
 
@@ -302,7 +303,8 @@ This service is **stateless where possible**, standards-based, and API-first.
 ### Short-Lived
 
 * Access tokens must be **short-lived** (see **22.10 Token Lifetimes**; e.g. 15–60 minutes)
-* There are **no refresh tokens** — when the access token expires, the client must re-initiate the OAuth flow
+* Refresh tokens are supported for **client backends only** and must be rotated on every use
+* Browser clients must never receive or persist refresh tokens directly
 
 ---
 
@@ -496,10 +498,10 @@ The following tighten ambiguities in the brief to prevent misinterpretation duri
 ### 22.10 Token Lifetimes
 
 * Access token TTL: **implementation-defined, short-lived** (e.g. 15–60 minutes)
-* There are **no refresh tokens** — explicitly excluded
-* There is **no silent reauth**
-* There is **no token rotation**
-* When the access token expires, the client must re-initiate the OAuth flow
+* Refresh token TTL: **implementation-defined, bounded** (1–90 days; default 30 days)
+* Silent reauth is allowed **server-side only** via the refresh-token grant
+* Refresh tokens must be **opaque, hashed at rest, and rotated on every use**
+* Reuse of an already-rotated refresh token must revoke the entire token family
 
 ---
 
@@ -1124,7 +1126,7 @@ If `org_roles` changes and existing members have roles no longer in the list, th
 1. **Completely generic.** No product-specific concepts.
 2. **Backwards compatible.** Existing flows unchanged when `org_features` is absent.
 3. **No admin dashboard.** API-only. No UI changes.
-4. **No refresh tokens.** Re-authenticate for updated claims.
+4. **Refresh tokens are backend-only.** Never expose them to browser JavaScript or local storage.
 5. **Existing security rules apply.** Generic errors, no enumeration, no leakage.
 6. **File size limit: 500 lines.**
 7. **Follow existing code patterns.** See `token.service.ts`, `domain-role.service.ts`, `domain-hash-auth.ts`.
@@ -1222,7 +1224,7 @@ Each task references the line number(s) where the relevant specification lives i
 | 6.5 | Enforce short-lived access token TTL (configurable, e.g. 15–60 min) | L488–494 |
 | 6.6 | Validate `redirect_urls` from config before redirecting | L109 |
 | 6.7 | Ensure token is never returned directly to frontend — code exchange only | L535 |
-| 6.8 | No refresh tokens, no silent reauth, no token rotation | L491–494 |
+| 6.8 | Implement rotating refresh tokens and server-side silent reauth for client backends | L491–494 |
 
 ---
 
@@ -1325,6 +1327,6 @@ Each task references the line number(s) where the relevant specification lives i
 | 13.5 | Verify domain verification runs on every auth initiation | L434–440 |
 | 13.6 | Verify social login only accepts provider-verified emails | L453–457 |
 | 13.7 | Verify access tokens are stateless and short-lived | L294–297, L488–494 |
-| 13.8 | Verify no refresh tokens, backup codes, or admin overrides exist | L379–385, L491, L480–482 |
+| 13.8 | Verify refresh tokens are hashed, rotated, and never exposed to browser clients; backup codes and admin overrides remain absent | L379–385, L491, L480–482 |
 | 13.9 | Verify avatar URL overwrite behavior (no history, no local storage) | L461–466 |
 | 13.10 | End-to-end test: full OAuth flow from config URL fetch through token exchange | L405–410, L529–536 |

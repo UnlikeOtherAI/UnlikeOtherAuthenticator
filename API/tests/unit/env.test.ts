@@ -13,6 +13,7 @@ function baseInput(overrides?: Partial<NodeJS.ProcessEnv>): NodeJS.ProcessEnv {
     AUTH_SERVICE_IDENTIFIER: 'uoa-auth-service',
     DATABASE_URL: 'postgres://example.invalid/db',
     ACCESS_TOKEN_TTL: '30m',
+    REFRESH_TOKEN_TTL_DAYS: '30',
     LOG_RETENTION_DAYS: '90',
     ...overrides,
   };
@@ -54,5 +55,15 @@ describe('env', () => {
     expect(() => parseEnv(baseInput({ ACCESS_TOKEN_TTL: '1800s' }))).toThrow();
     expect(() => parseEnv(baseInput({ ACCESS_TOKEN_TTL: '1h' }))).toThrow();
     expect(() => parseEnv(baseInput({ ACCESS_TOKEN_TTL: '30' }))).toThrow();
+  });
+
+  it('accepts REFRESH_TOKEN_TTL_DAYS between 1 and 90', () => {
+    expect(parseEnv(baseInput({ REFRESH_TOKEN_TTL_DAYS: '1' })).REFRESH_TOKEN_TTL_DAYS).toBe(1);
+    expect(parseEnv(baseInput({ REFRESH_TOKEN_TTL_DAYS: '90' })).REFRESH_TOKEN_TTL_DAYS).toBe(90);
+  });
+
+  it('rejects REFRESH_TOKEN_TTL_DAYS outside the allowed window', () => {
+    expect(() => parseEnv(baseInput({ REFRESH_TOKEN_TTL_DAYS: '0' }))).toThrow();
+    expect(() => parseEnv(baseInput({ REFRESH_TOKEN_TTL_DAYS: '91' }))).toThrow();
   });
 });

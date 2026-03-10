@@ -8,6 +8,17 @@ import { createTestDb } from '../helpers/test-db.js';
 import { baseClientConfigPayload } from '../helpers/test-config.js';
 
 const hasDatabase = Boolean(process.env.DATABASE_URL);
+const configUrl = 'https://client.example.com/auth-config';
+const userEmail = 'user@example.com';
+const userPassword = 'Abcdef1!';
+
+type TokenBody = {
+  access_token: string;
+  expires_in: number;
+  refresh_token: string;
+  refresh_token_expires_in: number;
+  token_type: string;
+};
 
 async function createSignedConfigJwt(sharedSecret: string): Promise<string> {
   const aud = process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
@@ -17,6 +28,10 @@ async function createSignedConfigJwt(sharedSecret: string): Promise<string> {
     .sign(new TextEncoder().encode(sharedSecret));
 }
 
+function authorizationHeader(): string {
+  return `Bearer ${createClientId('client.example.com', process.env.SHARED_SECRET!)}`;
+}
+
 describe.skipIf(!hasDatabase)('POST /auth/token', () => {
   let handle: Awaited<ReturnType<typeof createTestDb>>;
 
@@ -24,6 +39,7 @@ describe.skipIf(!hasDatabase)('POST /auth/token', () => {
   const originalSharedSecret = process.env.SHARED_SECRET;
   const originalAud = process.env.AUTH_SERVICE_IDENTIFIER;
   const originalTtl = process.env.ACCESS_TOKEN_TTL;
+  const originalRefreshTokenTtlDays = process.env.REFRESH_TOKEN_TTL_DAYS;
 
   beforeAll(async () => {
     handle = await createTestDb();
@@ -36,6 +52,7 @@ describe.skipIf(!hasDatabase)('POST /auth/token', () => {
     process.env.SHARED_SECRET = originalSharedSecret;
     process.env.AUTH_SERVICE_IDENTIFIER = originalAud;
     process.env.ACCESS_TOKEN_TTL = originalTtl;
+    process.env.REFRESH_TOKEN_TTL_DAYS = originalRefreshTokenTtlDays;
     if (handle) await handle.cleanup();
   });
 
@@ -43,9 +60,11 @@ describe.skipIf(!hasDatabase)('POST /auth/token', () => {
     process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
     process.env.AUTH_SERVICE_IDENTIFIER =
       process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
-    process.env.ACCESS_TOKEN_TTL = process.env.ACCESS_TOKEN_TTL ?? '15m';
+    process.env.ACCESS_TOKEN_TTL = '15m';
+    process.env.REFRESH_TOKEN_TTL_DAYS = '30';
 
     if (!handle) return;
+    await handle.prisma.refreshToken.deleteMany();
     await handle.prisma.authorizationCode.deleteMany();
     await handle.prisma.verificationToken.deleteMany();
     await handle.prisma.domainRole.deleteMany();
@@ -57,53 +76,90 @@ describe.skipIf(!hasDatabase)('POST /auth/token', () => {
     vi.restoreAllMocks();
   });
 
-  it('exchanges a one-time authorization code for an access token JWT', async () => {
-    const passwordHash = await hashPassword('Abcdef1!');
-    const created = await handle!.prisma.user.create({
+  async function seedUser() {
+    const passwordHash = await hashPassword(userPassword);
+    return await handle!.prisma.user.create({
       data: {
-        email: 'user@example.com',
-        userKey: 'user@example.com',
+        email: userEmail,
+        userKey: userEmail,
         passwordHash,
       },
       select: { id: true },
     });
+  }
 
+  async function createConfiguredApp() {
     const jwt = await createSignedConfigJwt(process.env.SHARED_SECRET!);
     const fetchMock = vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
 
     const app = await createApp();
     await app.ready();
+    return { app, fetchMock };
+  }
 
-    const configUrl = 'https://client.example.com/auth-config';
+  async function issueAuthorizationCode(app: Awaited<ReturnType<typeof createApp>>): Promise<string> {
     const loginRes = await app.inject({
       method: 'POST',
       url: `/auth/login?config_url=${encodeURIComponent(configUrl)}`,
-      payload: { email: 'user@example.com', password: 'Abcdef1!' },
+      payload: { email: userEmail, password: userPassword },
     });
     expect(loginRes.statusCode).toBe(200);
-    const loginBody = loginRes.json() as { ok: boolean; code: string };
-    expect(loginBody.ok).toBe(true);
-    expect(typeof loginBody.code).toBe('string');
+    const { code } = loginRes.json() as { code: string };
+    return code;
+  }
 
-    const tokenRes = await app.inject({
+  async function exchangeAuthorizationCode(
+    app: Awaited<ReturnType<typeof createApp>>,
+    code: string,
+  ) {
+    return await app.inject({
       method: 'POST',
       url: `/auth/token?config_url=${encodeURIComponent(configUrl)}`,
       headers: {
-        authorization: `Bearer ${createClientId(
-          'client.example.com',
-          process.env.SHARED_SECRET!,
-        )}`,
+        authorization: authorizationHeader(),
       },
-      payload: { code: loginBody.code },
+      payload: { code },
     });
+  }
+
+  async function issueTokenPair(app: Awaited<ReturnType<typeof createApp>>): Promise<TokenBody> {
+    const code = await issueAuthorizationCode(app);
+    const tokenRes = await exchangeAuthorizationCode(app, code);
     expect(tokenRes.statusCode).toBe(200);
-    const tokenBody = tokenRes.json() as { access_token: string; token_type: string };
-    expect(tokenBody.token_type).toBe('Bearer');
-    expect(typeof tokenBody.access_token).toBe('string');
+    return tokenRes.json() as TokenBody;
+  }
+
+  async function exchangeRefreshToken(
+    app: Awaited<ReturnType<typeof createApp>>,
+    refreshToken: string,
+  ) {
+    return await app.inject({
+      method: 'POST',
+      url: `/auth/token?config_url=${encodeURIComponent(configUrl)}`,
+      headers: {
+        authorization: authorizationHeader(),
+      },
+      payload: {
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken,
+      },
+    });
+  }
+
+  it('exchanges a one-time authorization code for an access token and refresh token pair', async () => {
+    const created = await seedUser();
+    const { app, fetchMock } = await createConfiguredApp();
+
+    const tokenBody = await issueTokenPair(app);
+
+    expect(tokenBody).toMatchObject({
+      token_type: 'Bearer',
+      expires_in: 15 * 60,
+      refresh_token_expires_in: 30 * 24 * 60 * 60,
+    });
     expect(tokenBody.access_token.length).toBeGreaterThan(20);
-    // Brief 22.10: no refresh tokens (and therefore no refresh token rotation).
-    expect((tokenBody as unknown as { refresh_token?: unknown }).refresh_token).toBeUndefined();
+    expect(tokenBody.refresh_token.length).toBeGreaterThan(20);
 
     const { payload } = await jwtVerify(
       tokenBody.access_token,
@@ -112,7 +168,7 @@ describe.skipIf(!hasDatabase)('POST /auth/token', () => {
     );
 
     expect(payload.sub).toBe(created.id);
-    expect(payload.email).toBe('user@example.com');
+    expect(payload.email).toBe(userEmail);
     expect(payload.domain).toBe('client.example.com');
     expect(payload.client_id).toBe(
       createClientId('client.example.com', process.env.SHARED_SECRET!),
@@ -133,53 +189,36 @@ describe.skipIf(!hasDatabase)('POST /auth/token', () => {
     expect(codes).toHaveLength(1);
     expect(codes[0]?.usedAt).not.toBeNull();
 
+    const refreshTokens = await handle!.prisma.refreshToken.findMany({
+      where: { userId: created.id },
+      select: {
+        tokenHash: true,
+        revokedAt: true,
+        replacedByTokenId: true,
+      },
+    });
+    expect(refreshTokens).toHaveLength(1);
+    expect(refreshTokens[0]?.tokenHash).not.toBe(tokenBody.refresh_token);
+    expect(refreshTokens[0]?.revokedAt).toBeNull();
+    expect(refreshTokens[0]?.replacedByTokenId).toBeNull();
+
     expect(fetchMock).toHaveBeenCalledTimes(2);
 
     await app.close();
   });
 
-  it('does not accept refresh-token style payloads (no refresh tokens, no rotation)', async () => {
-    const passwordHash = await hashPassword('Abcdef1!');
-    await handle!.prisma.user.create({
-      data: {
-        email: 'user@example.com',
-        userKey: 'user@example.com',
-        passwordHash,
-      },
-    });
-
-    const jwt = await createSignedConfigJwt(process.env.SHARED_SECRET!);
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 })),
-    );
-
-    const app = await createApp();
-    await app.ready();
-
-    const configUrl = 'https://client.example.com/auth-config';
-    const loginRes = await app.inject({
-      method: 'POST',
-      url: `/auth/login?config_url=${encodeURIComponent(configUrl)}`,
-      payload: { email: 'user@example.com', password: 'Abcdef1!' },
-    });
-    expect(loginRes.statusCode).toBe(200);
-    const { code } = loginRes.json() as { code: string };
+  it('rejects malformed refresh-token requests', async () => {
+    await seedUser();
+    const { app } = await createConfiguredApp();
 
     const tokenRes = await app.inject({
       method: 'POST',
       url: `/auth/token?config_url=${encodeURIComponent(configUrl)}`,
       headers: {
-        authorization: `Bearer ${createClientId(
-          'client.example.com',
-          process.env.SHARED_SECRET!,
-        )}`,
+        authorization: authorizationHeader(),
       },
-      // Attempt to use the token endpoint as if it supported refresh tokens.
       payload: {
-        code,
         grant_type: 'refresh_token',
-        refresh_token: 'not-a-real-token',
       },
     });
 
@@ -189,58 +228,122 @@ describe.skipIf(!hasDatabase)('POST /auth/token', () => {
     await app.close();
   });
 
-  it('rejects reusing the same code (one-time)', async () => {
-    const passwordHash = await hashPassword('Abcdef1!');
-    await handle!.prisma.user.create({
+  it('rotates refresh tokens on refresh exchange', async () => {
+    await seedUser();
+    const { app } = await createConfiguredApp();
+
+    const firstPair = await issueTokenPair(app);
+    const refreshRes = await exchangeRefreshToken(app, firstPair.refresh_token);
+
+    expect(refreshRes.statusCode).toBe(200);
+    const secondPair = refreshRes.json() as TokenBody;
+    expect(secondPair.refresh_token).not.toBe(firstPair.refresh_token);
+
+    const refreshTokens = await handle!.prisma.refreshToken.findMany({
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        parentTokenId: true,
+        replacedByTokenId: true,
+        revokedAt: true,
+        lastUsedAt: true,
+      },
+    });
+
+    expect(refreshTokens).toHaveLength(2);
+    expect(refreshTokens[0]?.replacedByTokenId).toBe(refreshTokens[1]?.id);
+    expect(refreshTokens[0]?.revokedAt).not.toBeNull();
+    expect(refreshTokens[0]?.lastUsedAt).not.toBeNull();
+    expect(refreshTokens[1]?.parentTokenId).toBe(refreshTokens[0]?.id);
+    expect(refreshTokens[1]?.revokedAt).toBeNull();
+
+    await app.close();
+  });
+
+  it('revokes the full refresh-token family when an old token is reused', async () => {
+    await seedUser();
+    const { app } = await createConfiguredApp();
+
+    const firstPair = await issueTokenPair(app);
+    const rotatedRes = await exchangeRefreshToken(app, firstPair.refresh_token);
+    expect(rotatedRes.statusCode).toBe(200);
+    const secondPair = rotatedRes.json() as TokenBody;
+
+    const reusedRes = await exchangeRefreshToken(app, firstPair.refresh_token);
+    expect(reusedRes.statusCode).toBe(401);
+    expect(reusedRes.json()).toEqual({ error: 'Request failed' });
+
+    const currentRes = await exchangeRefreshToken(app, secondPair.refresh_token);
+    expect(currentRes.statusCode).toBe(401);
+    expect(currentRes.json()).toEqual({ error: 'Request failed' });
+
+    const refreshTokens = await handle!.prisma.refreshToken.findMany({
+      select: { revokedAt: true },
+    });
+    expect(refreshTokens).toHaveLength(2);
+    expect(refreshTokens.every((token) => token.revokedAt !== null)).toBe(true);
+
+    await app.close();
+  });
+
+  it('rejects expired refresh tokens', async () => {
+    await seedUser();
+    const { app } = await createConfiguredApp();
+
+    const firstPair = await issueTokenPair(app);
+    await handle!.prisma.refreshToken.updateMany({
       data: {
-        email: 'user@example.com',
-        userKey: 'user@example.com',
-        passwordHash,
+        expiresAt: new Date('2026-03-10T00:00:00.000Z'),
       },
     });
 
-    const jwt = await createSignedConfigJwt(process.env.SHARED_SECRET!);
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 })),
-    );
+    const refreshRes = await exchangeRefreshToken(app, firstPair.refresh_token);
+    expect(refreshRes.statusCode).toBe(401);
+    expect(refreshRes.json()).toEqual({ error: 'Request failed' });
 
-    const app = await createApp();
-    await app.ready();
+    await app.close();
+  });
 
-    const configUrl = 'https://client.example.com/auth-config';
-    const loginRes = await app.inject({
+  it('revokes refresh tokens via /auth/revoke', async () => {
+    await seedUser();
+    const { app } = await createConfiguredApp();
+
+    const firstPair = await issueTokenPair(app);
+    const revokeRes = await app.inject({
       method: 'POST',
-      url: `/auth/login?config_url=${encodeURIComponent(configUrl)}`,
-      payload: { email: 'user@example.com', password: 'Abcdef1!' },
-    });
-    expect(loginRes.statusCode).toBe(200);
-    const { code } = loginRes.json() as { code: string };
-
-    const first = await app.inject({
-      method: 'POST',
-      url: `/auth/token?config_url=${encodeURIComponent(configUrl)}`,
+      url: `/auth/revoke?config_url=${encodeURIComponent(configUrl)}`,
       headers: {
-        authorization: `Bearer ${createClientId(
-          'client.example.com',
-          process.env.SHARED_SECRET!,
-        )}`,
+        authorization: authorizationHeader(),
       },
-      payload: { code },
+      payload: {
+        refresh_token: firstPair.refresh_token,
+      },
     });
+    expect(revokeRes.statusCode).toBe(200);
+    expect(revokeRes.json()).toEqual({ ok: true });
+
+    const refreshRes = await exchangeRefreshToken(app, firstPair.refresh_token);
+    expect(refreshRes.statusCode).toBe(401);
+    expect(refreshRes.json()).toEqual({ error: 'Request failed' });
+
+    const refreshTokens = await handle!.prisma.refreshToken.findMany({
+      select: { revokedAt: true },
+    });
+    expect(refreshTokens).toHaveLength(1);
+    expect(refreshTokens[0]?.revokedAt).not.toBeNull();
+
+    await app.close();
+  });
+
+  it('rejects reusing the same code (one-time)', async () => {
+    await seedUser();
+    const { app } = await createConfiguredApp();
+
+    const code = await issueAuthorizationCode(app);
+    const first = await exchangeAuthorizationCode(app, code);
     expect(first.statusCode).toBe(200);
 
-    const second = await app.inject({
-      method: 'POST',
-      url: `/auth/token?config_url=${encodeURIComponent(configUrl)}`,
-      headers: {
-        authorization: `Bearer ${createClientId(
-          'client.example.com',
-          process.env.SHARED_SECRET!,
-        )}`,
-      },
-      payload: { code },
-    });
+    const second = await exchangeAuthorizationCode(app, code);
     expect(second.statusCode).toBe(401);
     expect(second.json()).toEqual({ error: 'Request failed' });
 
@@ -248,33 +351,10 @@ describe.skipIf(!hasDatabase)('POST /auth/token', () => {
   });
 
   it('rejects exchanging a code without a domain-hash bearer token', async () => {
-    const passwordHash = await hashPassword('Abcdef1!');
-    await handle!.prisma.user.create({
-      data: {
-        email: 'user@example.com',
-        userKey: 'user@example.com',
-        passwordHash,
-      },
-    });
+    await seedUser();
+    const { app } = await createConfiguredApp();
 
-    const jwt = await createSignedConfigJwt(process.env.SHARED_SECRET!);
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 })),
-    );
-
-    const app = await createApp();
-    await app.ready();
-
-    const configUrl = 'https://client.example.com/auth-config';
-    const loginRes = await app.inject({
-      method: 'POST',
-      url: `/auth/login?config_url=${encodeURIComponent(configUrl)}`,
-      payload: { email: 'user@example.com', password: 'Abcdef1!' },
-    });
-    expect(loginRes.statusCode).toBe(200);
-    const { code } = loginRes.json() as { code: string };
-
+    const code = await issueAuthorizationCode(app);
     const tokenRes = await app.inject({
       method: 'POST',
       url: `/auth/token?config_url=${encodeURIComponent(configUrl)}`,

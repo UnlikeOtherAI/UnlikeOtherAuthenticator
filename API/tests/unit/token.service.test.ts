@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createClientId } from '../../src/utils/hash.js';
 import type { ClientConfig } from '../../src/services/config.service.js';
-import { exchangeAuthorizationCodeForAccessToken } from '../../src/services/token.service.js';
+import { exchangeAuthorizationCodeForTokens } from '../../src/services/token.service.js';
 import { verifyAccessToken } from '../../src/services/access-token.service.js';
 
 function hashAuthorizationCode(code: string, sharedSecret: string): string {
@@ -30,17 +30,19 @@ function makeConfig(overrides?: Partial<ClientConfig['org_features']>): ClientCo
   } as unknown as ClientConfig;
 }
 
-describe('exchangeAuthorizationCodeForAccessToken (unit)', () => {
+describe('exchangeAuthorizationCodeForTokens (unit)', () => {
   const originalDatabaseUrl = process.env.DATABASE_URL;
   const originalSharedSecret = process.env.SHARED_SECRET;
   const originalIssuer = process.env.AUTH_SERVICE_IDENTIFIER;
   const originalAccessTokenTtl = process.env.ACCESS_TOKEN_TTL;
+  const originalRefreshTokenTtlDays = process.env.REFRESH_TOKEN_TTL_DAYS;
 
   beforeEach(() => {
     process.env.DATABASE_URL = 'postgres://localhost:5432/authenticator_test';
     process.env.SHARED_SECRET = 'test-shared-secret';
     process.env.AUTH_SERVICE_IDENTIFIER = 'uoa-auth-service';
     process.env.ACCESS_TOKEN_TTL = '30m';
+    process.env.REFRESH_TOKEN_TTL_DAYS = '30';
   });
 
   afterEach(() => {
@@ -48,6 +50,7 @@ describe('exchangeAuthorizationCodeForAccessToken (unit)', () => {
     process.env.SHARED_SECRET = originalSharedSecret;
     process.env.AUTH_SERVICE_IDENTIFIER = originalIssuer;
     process.env.ACCESS_TOKEN_TTL = originalAccessTokenTtl;
+    process.env.REFRESH_TOKEN_TTL_DAYS = originalRefreshTokenTtlDays;
     vi.restoreAllMocks();
     vi.clearAllMocks();
   });
@@ -66,6 +69,9 @@ describe('exchangeAuthorizationCodeForAccessToken (unit)', () => {
       authorizationCode: {
         findUnique: vi.fn(),
         updateMany: vi.fn(),
+      },
+      refreshToken: {
+        create: vi.fn(),
       },
       user: {
         findUnique: vi.fn(),
@@ -94,6 +100,7 @@ describe('exchangeAuthorizationCodeForAccessToken (unit)', () => {
       codeHash: hashAuthorizationCode(code, sharedSecret),
     });
     prisma.authorizationCode.updateMany.mockResolvedValue({ count: 1 });
+    prisma.refreshToken.create.mockResolvedValue({ id: 'refresh-token-1' });
     prisma.domainRole.findUnique.mockResolvedValue({
       role: 'USER',
       domain: config.domain,
@@ -113,10 +120,10 @@ describe('exchangeAuthorizationCodeForAccessToken (unit)', () => {
       { groupId: 'group-2', isAdmin: false },
     ]);
 
-    const { accessToken } = await exchangeAuthorizationCodeForAccessToken(
+    const { accessToken, refreshToken } = await exchangeAuthorizationCodeForTokens(
       { code, config, configUrl },
       {
-        now,
+        now: () => now,
         sharedSecret,
         authServiceIdentifier: process.env.AUTH_SERVICE_IDENTIFIER,
         accessTokenTtl: '15m',
@@ -147,6 +154,7 @@ describe('exchangeAuthorizationCodeForAccessToken (unit)', () => {
         group_admin: ['group-1'],
       },
     });
+    expect(refreshToken).toBeTypeOf('string');
   });
 
   it('omits the org claim when org_features is disabled', async () => {
@@ -160,6 +168,9 @@ describe('exchangeAuthorizationCodeForAccessToken (unit)', () => {
       authorizationCode: {
         findUnique: vi.fn(),
         updateMany: vi.fn(),
+      },
+      refreshToken: {
+        create: vi.fn(),
       },
       user: {
         findUnique: vi.fn(),
@@ -188,6 +199,7 @@ describe('exchangeAuthorizationCodeForAccessToken (unit)', () => {
       codeHash: hashAuthorizationCode(code, sharedSecret),
     });
     prisma.authorizationCode.updateMany.mockResolvedValue({ count: 1 });
+    prisma.refreshToken.create.mockResolvedValue({ id: 'refresh-token-2' });
     prisma.domainRole.findUnique.mockResolvedValue({
       role: 'USER',
       domain: config.domain,
@@ -195,10 +207,10 @@ describe('exchangeAuthorizationCodeForAccessToken (unit)', () => {
     });
     prisma.user.findUnique.mockResolvedValue({ email: 'user2@example.com' });
 
-    const { accessToken } = await exchangeAuthorizationCodeForAccessToken(
+    const { accessToken, refreshToken } = await exchangeAuthorizationCodeForTokens(
       { code, config, configUrl },
       {
-        now,
+        now: () => now,
         sharedSecret,
         authServiceIdentifier: process.env.AUTH_SERVICE_IDENTIFIER,
         accessTokenTtl: '15m',
@@ -222,6 +234,7 @@ describe('exchangeAuthorizationCodeForAccessToken (unit)', () => {
     expect(prisma.orgMember.findFirst).not.toHaveBeenCalled();
     expect(prisma.teamMember.findMany).not.toHaveBeenCalled();
     expect(prisma.groupMember.findMany).not.toHaveBeenCalled();
+    expect(refreshToken).toBeTypeOf('string');
   });
 
   it('omits the org claim when the user has no organisation on the domain', async () => {
@@ -238,6 +251,9 @@ describe('exchangeAuthorizationCodeForAccessToken (unit)', () => {
       authorizationCode: {
         findUnique: vi.fn(),
         updateMany: vi.fn(),
+      },
+      refreshToken: {
+        create: vi.fn(),
       },
       user: {
         findUnique: vi.fn(),
@@ -266,6 +282,7 @@ describe('exchangeAuthorizationCodeForAccessToken (unit)', () => {
       codeHash: hashAuthorizationCode(code, sharedSecret),
     });
     prisma.authorizationCode.updateMany.mockResolvedValue({ count: 1 });
+    prisma.refreshToken.create.mockResolvedValue({ id: 'refresh-token-3' });
     prisma.domainRole.findUnique.mockResolvedValue({
       role: 'USER',
       domain: config.domain,
@@ -274,10 +291,10 @@ describe('exchangeAuthorizationCodeForAccessToken (unit)', () => {
     prisma.user.findUnique.mockResolvedValue({ email: 'user3@example.com' });
     prisma.orgMember.findFirst.mockResolvedValue(null);
 
-    const { accessToken } = await exchangeAuthorizationCodeForAccessToken(
+    const { accessToken, refreshToken } = await exchangeAuthorizationCodeForTokens(
       { code, config, configUrl },
       {
-        now,
+        now: () => now,
         sharedSecret,
         authServiceIdentifier: process.env.AUTH_SERVICE_IDENTIFIER,
         accessTokenTtl: '15m',
@@ -300,5 +317,6 @@ describe('exchangeAuthorizationCodeForAccessToken (unit)', () => {
     expect(claims.org).toBeUndefined();
     expect(prisma.teamMember.findMany).not.toHaveBeenCalled();
     expect(prisma.groupMember.findMany).not.toHaveBeenCalled();
+    expect(refreshToken).toBeTypeOf('string');
   });
 });
