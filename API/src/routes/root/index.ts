@@ -46,7 +46,7 @@ const endpoints: EndpointSchema[] = [
     description: 'OAuth entrypoint — renders the auth UI',
     query: {
       config_url: 'string (required) — URL to fetch signed config JWT',
-      redirect_url: 'string (optional) — OAuth redirect URL override',
+      redirect_url: 'string (optional) — OAuth redirect URL override (redirect_uri also accepted)',
     },
   },
   {
@@ -54,7 +54,7 @@ const endpoints: EndpointSchema[] = [
     path: '/auth/login',
     description: 'Email/password login',
     auth: 'config_url query param',
-    query: { redirect_url: 'string (optional)' },
+    query: { redirect_url: 'string (optional, redirect_uri also accepted)' },
     body: {
       email: 'string (required)',
       password: 'string (required)',

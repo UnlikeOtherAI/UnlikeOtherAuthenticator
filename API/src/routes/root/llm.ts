@@ -143,7 +143,7 @@ export function registerLlmRoute(app: FastifyInstance): void {
         step_1:
           'Create a config JWT endpoint on your backend that returns a signed JWT with your domain, redirect_urls, enabled_auth_methods, and ui_theme.',
         step_2:
-          'Open the auth popup/redirect to: GET /auth?config_url=<your_config_endpoint_url>&redirect_url=<your_callback_url>',
+          'Open the auth popup/redirect to: GET /auth?config_url=<your_config_endpoint_url>&redirect_url=<your_callback_url> (redirect_uri is also accepted as an alias for redirect_url)',
         step_3:
           'After authentication, the user is redirected to your redirect_url with ?code=<authorization_code>.',
         step_4:
