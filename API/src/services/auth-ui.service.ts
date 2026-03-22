@@ -106,10 +106,14 @@ export async function renderAuthEntrypointHtml(params: {
     base = injectSsrIntoRootDiv(base, ssrHtml);
   }
 
+  const qIdx = params.requestUrl ? params.requestUrl.indexOf('?') : -1;
+  const searchStr = qIdx !== -1 ? params.requestUrl!.slice(qIdx) : '';
+
   const bootstrap = [
     '<script>',
     `window.__UOA_CLIENT_CONFIG__ = ${escapeJsonForHtmlScriptTag(params.config)};`,
     `window.__UOA_CONFIG_URL__ = ${escapeJsonForHtmlScriptTag(params.configUrl)};`,
+    `window.__UOA_INITIAL_SEARCH__ = ${escapeJsonForHtmlScriptTag(searchStr)};`,
     '</script>',
   ].join('');
 

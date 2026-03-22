@@ -74,7 +74,7 @@ describe('POST /auth/reset-password/request', () => {
     expect(res3.statusCode).toBe(200);
     expect(res4.statusCode).toBe(200);
 
-    const expected = { message: 'We sent instructions to your email' };
+    const expected = { message: "If you have an account with us, we've sent you instructions" };
     expect(res1.json()).toEqual(expected);
     expect(res2.json()).toEqual(expected);
     expect(res3.json()).toEqual(expected);
