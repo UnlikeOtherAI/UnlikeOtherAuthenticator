@@ -185,8 +185,11 @@ npm run start --workspace API
 /Docs             — Full specification and architecture docs
   brief.md        — Complete product specification
   techstack.md    — Technology stack and structure
-  architecture-api.md    — API layered architecture
-  architecture-auth.md   — Auth UI component architecture
+  Auth/
+    architecture-api.md    — API layered architecture
+    architecture-auth.md   — Auth UI component architecture
+  Admin/           — Admin panel documentation
+/Admin            — Admin panel UI (React CSR)
 CLAUDE.md         — Agent/contributor instructions
 ```
 
@@ -450,7 +453,7 @@ See [`CLAUDE.md`](./CLAUDE.md) for contributor guidelines and [`Docs/brief.md`](
 **Key Rules:**
 - Read the brief before making changes
 - Never remove content from `Docs/brief.md` unless explicitly instructed
-- Follow architecture patterns in `Docs/architecture-api.md` and `Docs/architecture-auth.md`
+- Follow architecture patterns in `Docs/Auth/architecture-api.md` and `Docs/Auth/architecture-auth.md`
 - No code file longer than 500 lines
 - Keep the codebase reusable and clean
 - Security first: no enumeration, no information leakage, all config verified

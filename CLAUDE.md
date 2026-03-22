@@ -14,8 +14,8 @@ These two documents define **what** we're building and **how**:
 
 - **[`Docs/brief.md`](./Docs/brief.md)** — The full build brief. Defines the product, features, security model, constraints, and task breakdown. This is the single source of truth for what we're building.
 - **[`Docs/techstack.md`](./Docs/techstack.md)** — The tech stack and project structure. Defines technology choices (Node.js, React, Tailwind, PostgreSQL + Prisma), folder layout (`/API`, `/Auth`), and environment variables. This is the single source of truth for how it's built.
-- **[`Docs/architecture-api.md`](./Docs/architecture-api.md)** — API architecture. Defines the layered structure (routes → middleware → services → Prisma), directory layout, error handling patterns, and file organization rules for `/API`.
-- **[`Docs/architecture-auth.md`](./Docs/architecture-auth.md)** — Auth window architecture. Defines the React component structure, theming system, i18n approach, and auth flow navigation for `/Auth`.
+- **[`Docs/Auth/architecture-api.md`](./Docs/Auth/architecture-api.md)** — API architecture. Defines the layered structure (routes → middleware → services → Prisma), directory layout, error handling patterns, and file organization rules for `/API`.
+- **[`Docs/Auth/architecture-auth.md`](./Docs/Auth/architecture-auth.md)** — Auth window architecture. Defines the React component structure, theming system, i18n approach, and auth flow navigation for `/Auth`.
 
 Before making any architectural, design, or implementation decisions, read all documents above in full.
 
@@ -54,7 +54,7 @@ Before making any architectural, design, or implementation decisions, read all d
 - No features beyond what the brief specifies
 - Tailwind-only for UI — no other CSS frameworks
 - Stateless where possible
-- Follow the architecture docs: [`architecture-api.md`](./Docs/architecture-api.md) for API, [`architecture-auth.md`](./Docs/architecture-auth.md) for the auth window
+- Follow the architecture docs: [`architecture-api.md`](./Docs/Auth/architecture-api.md) for API, [`architecture-auth.md`](./Docs/Auth/architecture-auth.md) for the auth window
 
 ### Security
 
@@ -68,7 +68,7 @@ Before making any architectural, design, or implementation decisions, read all d
 
 These are explicitly out of scope (see brief section 20):
 
-- No admin dashboard
+- ~~No admin dashboard~~ — now in scope, see `Docs/Admin/`
 - No local avatar storage
 - No per-client OAuth secrets
 - No user-visible error specificity
@@ -86,10 +86,13 @@ AGENTS.md                   — Agent onboarding instructions
 Docs/
   brief.md                  — Full build brief (the spec)
   techstack.md              — Tech stack and project structure
-  architecture-api.md       — API architecture (/API)
-  architecture-auth.md      — Auth window architecture (/Auth)
-API/                        — Node.js auth server (see architecture-api.md)
-Auth/                       — React auth UI (see architecture-auth.md)
+  Auth/
+    architecture-api.md     — API architecture (/API)
+    architecture-auth.md    — Auth window architecture (/Auth)
+  Admin/                    — Admin panel documentation
+API/                        — Node.js auth server (see Docs/Auth/architecture-api.md)
+Auth/                       — React auth UI (see Docs/Auth/architecture-auth.md)
+Admin/                      — Admin panel UI
 ```
 
 ---
