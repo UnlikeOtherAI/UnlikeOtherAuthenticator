@@ -79,6 +79,10 @@ function parseDomainContext(request: FastifyRequest) {
   return parsed;
 }
 
+async function parseDomainContextHook(request: FastifyRequest): Promise<void> {
+  parseDomainContext(request);
+}
+
 function parseDomainFromRequest(request: FastifyRequest): string {
   const parsed = DomainQuerySchema.parse(request.query);
   return parsed.domain;
@@ -123,7 +127,7 @@ export function registerTeamRoutes(app: FastifyInstance): void {
     '/org/organisations/:orgId/teams',
     {
       preValidation: [
-        parseDomainContext,
+        parseDomainContextHook,
         configVerifier,
         requireDomainHashAuthForDomainQuery(),
         requireOrgFeatures,
@@ -151,7 +155,7 @@ export function registerTeamRoutes(app: FastifyInstance): void {
     '/org/organisations/:orgId/teams',
     {
       preValidation: [
-        parseDomainContext,
+        parseDomainContextHook,
         configVerifier,
         requireDomainHashAuthForDomainQuery(),
         requireOrgFeatures,
@@ -189,7 +193,7 @@ export function registerTeamRoutes(app: FastifyInstance): void {
     '/org/organisations/:orgId/teams/:teamId',
     {
       preValidation: [
-        parseDomainContext,
+        parseDomainContextHook,
         configVerifier,
         requireDomainHashAuthForDomainQuery(),
         requireOrgFeatures,
@@ -216,7 +220,7 @@ export function registerTeamRoutes(app: FastifyInstance): void {
   app.put(
     '/org/organisations/:orgId/teams/:teamId',
     {
-      preValidation: [parseDomainContext, configVerifier, requireDomainHashAuthForDomainQuery(), requireOrgFeatures, requireOrgRole()],
+      preValidation: [parseDomainContextHook, configVerifier, requireDomainHashAuthForDomainQuery(), requireOrgFeatures, requireOrgRole()],
     },
     async (request, reply) => {
       const { domain } = parseDomainContext(request);
@@ -245,7 +249,7 @@ export function registerTeamRoutes(app: FastifyInstance): void {
   app.delete(
     '/org/organisations/:orgId/teams/:teamId',
     {
-      preValidation: [parseDomainContext, configVerifier, requireDomainHashAuthForDomainQuery(), requireOrgFeatures, requireOrgRole()],
+      preValidation: [parseDomainContextHook, configVerifier, requireDomainHashAuthForDomainQuery(), requireOrgFeatures, requireOrgRole()],
     },
     async (request, reply) => {
       const { domain } = parseDomainContext(request);
@@ -267,7 +271,7 @@ export function registerTeamRoutes(app: FastifyInstance): void {
   app.post(
     '/org/organisations/:orgId/teams/:teamId/members',
     {
-      preValidation: [parseDomainContext, configVerifier, requireDomainHashAuthForDomainQuery(), requireOrgFeatures, requireOrgRole()],
+      preValidation: [parseDomainContextHook, configVerifier, requireDomainHashAuthForDomainQuery(), requireOrgFeatures, requireOrgRole()],
     },
     async (request, reply) => {
       const { domain } = parseDomainContext(request);
@@ -296,7 +300,7 @@ export function registerTeamRoutes(app: FastifyInstance): void {
   app.put(
     '/org/organisations/:orgId/teams/:teamId/members/:userId',
     {
-      preValidation: [parseDomainContext, configVerifier, requireDomainHashAuthForDomainQuery(), requireOrgFeatures, requireOrgRole()],
+      preValidation: [parseDomainContextHook, configVerifier, requireDomainHashAuthForDomainQuery(), requireOrgFeatures, requireOrgRole()],
     },
     async (request, reply) => {
       const { domain } = parseDomainContext(request);
@@ -322,7 +326,7 @@ export function registerTeamRoutes(app: FastifyInstance): void {
   app.delete(
     '/org/organisations/:orgId/teams/:teamId/members/:userId',
     {
-      preValidation: [parseDomainContext, configVerifier, requireDomainHashAuthForDomainQuery(), requireOrgFeatures, requireOrgRole()],
+      preValidation: [parseDomainContextHook, configVerifier, requireDomainHashAuthForDomainQuery(), requireOrgFeatures, requireOrgRole()],
     },
     async (request, reply) => {
       const { domain } = parseDomainContext(request);

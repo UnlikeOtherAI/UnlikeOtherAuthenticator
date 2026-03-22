@@ -44,6 +44,10 @@ function parseDomainContext(request: FastifyRequest) {
   return parsed;
 }
 
+async function parseDomainContextHook(request: FastifyRequest): Promise<void> {
+  parseDomainContext(request);
+}
+
 function parseLimitCursor(request: FastifyRequest) {
   return ListQuerySchema.parse(request.query);
 }
@@ -63,7 +67,7 @@ export function registerGroupRoutes(app: FastifyInstance): void {
     '/org/organisations/:orgId/groups',
     {
       preValidation: [
-        parseDomainContext,
+        parseDomainContextHook,
         configVerifier,
         requireDomainHashAuthForDomainQuery(),
         requireOrgFeatures,
@@ -94,7 +98,7 @@ export function registerGroupRoutes(app: FastifyInstance): void {
     '/org/organisations/:orgId/groups/:groupId',
     {
       preValidation: [
-        parseDomainContext,
+        parseDomainContextHook,
         configVerifier,
         requireDomainHashAuthForDomainQuery(),
         requireOrgFeatures,

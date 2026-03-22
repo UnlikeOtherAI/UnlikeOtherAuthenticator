@@ -48,6 +48,10 @@ function parseDomainContext(request: FastifyRequest) {
   return parsed;
 }
 
+async function parseDomainContextHook(request: FastifyRequest): Promise<void> {
+  parseDomainContext(request);
+}
+
 function getOrgIdFromParams(params: unknown): string {
   const parsed = GroupPathSchema.pick({ orgId: true }).parse(params ?? {});
   return parsed.orgId;
@@ -68,7 +72,7 @@ export function registerInternalGroupMemberRoutes(app: FastifyInstance): void {
     '/internal/org/organisations/:orgId/groups/:groupId/members',
     {
       preValidation: [
-        parseDomainContext,
+        parseDomainContextHook,
         configVerifier,
         requireDomainHashAuthForDomainQuery(),
         requireOrgFeatures,
@@ -101,7 +105,7 @@ export function registerInternalGroupMemberRoutes(app: FastifyInstance): void {
     '/internal/org/organisations/:orgId/groups/:groupId/members/:userId',
     {
       preValidation: [
-        parseDomainContext,
+        parseDomainContextHook,
         configVerifier,
         requireDomainHashAuthForDomainQuery(),
         requireOrgFeatures,
@@ -133,7 +137,7 @@ export function registerInternalGroupMemberRoutes(app: FastifyInstance): void {
     '/internal/org/organisations/:orgId/groups/:groupId/members/:userId',
     {
       preValidation: [
-        parseDomainContext,
+        parseDomainContextHook,
         configVerifier,
         requireDomainHashAuthForDomainQuery(),
         requireOrgFeatures,

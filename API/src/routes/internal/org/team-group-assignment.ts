@@ -41,6 +41,10 @@ function parseDomainContext(request: FastifyRequest) {
   return parsed;
 }
 
+async function parseDomainContextHook(request: FastifyRequest): Promise<void> {
+  parseDomainContext(request);
+}
+
 function getOrgIdFromParams(params: unknown): string {
   const parsed = OrgPathSchema.parse(params ?? {});
   return parsed.orgId;
@@ -56,7 +60,7 @@ export function registerInternalTeamGroupAssignmentRoutes(app: FastifyInstance):
     '/internal/org/organisations/:orgId/teams/:teamId/group',
     {
       preValidation: [
-        parseDomainContext,
+        parseDomainContextHook,
         configVerifier,
         requireDomainHashAuthForDomainQuery(),
         requireOrgFeatures,

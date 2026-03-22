@@ -10,14 +10,14 @@ type RequestWithConfig = FastifyRequest & {
   };
 };
 
-export function requireOrgFeatures(request: RequestWithConfig): void {
+export async function requireOrgFeatures(request: RequestWithConfig): Promise<void> {
   const enabled = request.config?.org_features?.enabled === true;
   if (!enabled) {
     throw new AppError('NOT_FOUND', 404);
   }
 }
 
-export function requireOrgFeaturesEnabled(request: RequestWithConfig): void {
+export async function requireOrgFeaturesEnabled(request: RequestWithConfig): Promise<void> {
   return requireOrgFeatures(request);
 }
 
