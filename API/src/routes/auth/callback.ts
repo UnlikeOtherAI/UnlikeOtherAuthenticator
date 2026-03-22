@@ -190,6 +190,8 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
     const { userId, twoFaEnabled } = socialLoginResult;
 
     // Brief 13 / Phase 8.6 + 8.7: enforce 2FA verification during login when enabled via config.
+    const rememberMe = config.session?.remember_me_default ?? true;
+
     if (config['2fa_enabled'] && twoFaEnabled) {
       const twofa_token = await signTwoFaChallenge({
         userId,
@@ -197,6 +199,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         configUrl,
         redirectUrl,
         authMethod: provider,
+        rememberMe,
         sharedSecret: SHARED_SECRET,
         audience: AUTH_SERVICE_IDENTIFIER,
       });
@@ -214,6 +217,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
       domain: config.domain,
       configUrl,
       redirectUrl,
+      rememberMe,
     });
 
     try {

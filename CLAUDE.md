@@ -64,6 +64,13 @@ Before making any architectural, design, or implementation decisions, read all d
 - Only provider-verified emails accepted from social logins
 - All config JWTs must be verified before trust
 
+### API Schema & /llm Endpoint
+
+- `GET /` must always return the full endpoint schema for all routes (method, path, description, auth, query, body, response)
+- `GET /llm` must always return comprehensive configuration documentation (config JWT fields, env vars, integration guide)
+- When adding, removing, or changing any endpoint, update both `API/src/routes/root/index.ts` and `API/src/routes/root/llm.ts`
+- These endpoints are the machine-readable contract for the API — they must never fall out of sync
+
 ### What Not To Build
 
 These are explicitly out of scope (see brief section 20):
@@ -73,7 +80,7 @@ These are explicitly out of scope (see brief section 20):
 - No per-client OAuth secrets
 - No user-visible error specificity
 - No unsigned configs accepted
-- No refresh tokens
+- ~~No refresh tokens~~ — now implemented, see `Docs/Auth/long-lived-tokens.md`
 - No backup codes for 2FA
 
 ---

@@ -13,6 +13,7 @@ export const es = {
   'form.newPassword.label': 'Nueva contrasena',
   'form.confirmPassword.label': 'Confirmar contrasena',
 
+  'form.rememberMe.label': 'Recordarme',
   'form.login.submit': 'Iniciar sesion',
   'form.login.error': 'Correo electronico o contrasena invalidos.',
   'form.register.submit': 'Continuar',

@@ -11,6 +11,7 @@ export const en = {
   'form.newPassword.label': 'New password',
   'form.confirmPassword.label': 'Confirm password',
 
+  'form.rememberMe.label': 'Remember me',
   'form.login.submit': 'Sign in',
   'form.login.error': 'Invalid email or password.',
   'form.register.submit': 'Continue',

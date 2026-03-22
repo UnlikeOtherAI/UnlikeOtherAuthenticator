@@ -60,6 +60,7 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
             domain: request.config.domain,
             configUrl: request.configUrl,
             redirectUrl,
+            rememberMe: request.config.session?.remember_me_default ?? true,
           });
 
           try {

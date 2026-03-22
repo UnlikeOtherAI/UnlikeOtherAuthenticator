@@ -92,6 +92,7 @@ export async function issueAuthorizationCode(
     domain: string;
     configUrl: string;
     redirectUrl: string;
+    rememberMe?: boolean;
   },
   deps?: TokenDeps,
 ): Promise<{ code: string }> {
@@ -121,6 +122,7 @@ export async function issueAuthorizationCode(
           domain: params.domain,
           configUrl: params.configUrl,
           redirectUrl: params.redirectUrl,
+          rememberMe: params.rememberMe ?? false,
           expiresAt,
         },
         select: { id: true },
@@ -145,7 +147,7 @@ async function consumeAuthorizationCode(params: {
   now: Date;
   sharedSecret: string;
   prisma: TokenPrisma;
-}): Promise<{ userId: string }> {
+}): Promise<{ userId: string; rememberMe: boolean }> {
   const codeHash = hashAuthorizationCode(params.code, params.sharedSecret);
   const row = await params.prisma.authorizationCode.findUnique({
     where: { codeHash },
@@ -154,6 +156,7 @@ async function consumeAuthorizationCode(params: {
       userId: true,
       domain: true,
       configUrl: true,
+      rememberMe: true,
       expiresAt: true,
       usedAt: true,
     },
@@ -182,7 +185,7 @@ async function consumeAuthorizationCode(params: {
     throw new AppError('UNAUTHORIZED', 401, 'INVALID_AUTH_CODE');
   }
 
-  return { userId: row.userId };
+  return { userId: row.userId, rememberMe: row.rememberMe };
 }
 
 async function signAccessToken(params: {
@@ -233,6 +236,22 @@ function accessTokenExpiresInSeconds(ttl: string): number {
     throw new AppError('INTERNAL', 500, 'INVALID_ACCESS_TOKEN_TTL');
   }
   return minutes * 60;
+}
+
+function resolveAccessTokenTtl(config: ClientConfig, envTtl: string): string {
+  const configMinutes = config.session?.access_token_ttl_minutes;
+  if (configMinutes != null) return `${configMinutes}m`;
+  return envTtl;
+}
+
+function resolveRefreshTokenTtlSeconds(config: ClientConfig, rememberMe: boolean): number {
+  const session = config.session;
+  if (rememberMe) {
+    const days = session?.long_refresh_token_ttl_days ?? 30;
+    return days * 24 * 60 * 60;
+  }
+  const hours = session?.short_refresh_token_ttl_hours ?? 1;
+  return hours * 60 * 60;
 }
 
 type TokenIssuerDeps = TokenDeps & {
@@ -331,7 +350,7 @@ export async function exchangeAuthorizationCodeForTokens(
   const prisma = deps?.prisma ?? getPrisma();
   const clientId = createClientId(params.config.domain, sharedSecret);
 
-  const { userId } = await consumeAuthorizationCode({
+  const { userId, rememberMe } = await consumeAuthorizationCode({
     code: params.code,
     configUrl: params.configUrl,
     domain: params.config.domain,
@@ -340,6 +359,7 @@ export async function exchangeAuthorizationCodeForTokens(
     prisma,
   });
 
+  const refreshTtlSeconds = resolveRefreshTokenTtlSeconds(params.config, rememberMe);
   const issuedRefreshToken = await issueRefreshToken(
     {
       userId,
@@ -350,11 +370,12 @@ export async function exchangeAuthorizationCodeForTokens(
     {
       now: deps?.now,
       prisma,
-      refreshTokenTtlDays: deps?.refreshTokenTtlDays,
+      refreshTokenTtlSeconds: refreshTtlSeconds,
       sharedSecret,
     },
   );
 
+  const accessTtl = resolveAccessTokenTtl(params.config, env.ACCESS_TOKEN_TTL);
   return issueTokenPairForUser(
     {
       userId,
@@ -363,7 +384,7 @@ export async function exchangeAuthorizationCodeForTokens(
       refreshToken: issuedRefreshToken.refreshToken,
       refreshTokenExpiresInSeconds: issuedRefreshToken.expiresInSeconds,
     },
-    deps,
+    { ...deps, accessTokenTtl: accessTtl },
   );
 }
 
@@ -395,11 +416,11 @@ export async function exchangeRefreshTokenForTokens(
     {
       now: deps?.now,
       prisma,
-      refreshTokenTtlDays: deps?.refreshTokenTtlDays,
       sharedSecret,
     },
   );
 
+  const accessTtl = resolveAccessTokenTtl(params.config, getEnv().ACCESS_TOKEN_TTL);
   return issueTokenPairForUser(
     {
       userId: rotatedRefreshToken.userId,
@@ -408,6 +429,6 @@ export async function exchangeRefreshTokenForTokens(
       refreshToken: rotatedRefreshToken.refreshToken,
       refreshTokenExpiresInSeconds: rotatedRefreshToken.expiresInSeconds,
     },
-    deps,
+    { ...deps, accessTokenTtl: accessTtl },
   );
 }

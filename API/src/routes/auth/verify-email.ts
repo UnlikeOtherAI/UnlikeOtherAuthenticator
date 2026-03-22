@@ -70,6 +70,7 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
         domain: request.config.domain,
         configUrl: request.configUrl,
         redirectUrl,
+        rememberMe: request.config.session?.remember_me_default ?? true,
       });
 
       try {

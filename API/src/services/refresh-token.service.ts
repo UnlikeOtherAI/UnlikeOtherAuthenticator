@@ -12,6 +12,8 @@ type RefreshTokenDeps = {
   now?: () => Date;
   prisma?: RefreshTokenPrisma;
   refreshTokenTtlDays?: number;
+  /** Override TTL in seconds. Takes precedence over refreshTokenTtlDays when set. */
+  refreshTokenTtlSeconds?: number;
   sharedSecret?: string;
 };
 
@@ -49,16 +51,13 @@ function getRefreshTokenTtlDays(deps?: RefreshTokenDeps): number {
   return deps?.refreshTokenTtlDays ?? getEnv().REFRESH_TOKEN_TTL_DAYS;
 }
 
+function getRefreshTokenTtlSeconds(deps?: RefreshTokenDeps): number {
+  if (deps?.refreshTokenTtlSeconds != null) return deps.refreshTokenTtlSeconds;
+  return getRefreshTokenTtlDays(deps) * 24 * 60 * 60;
+}
+
 function getRefreshTokenPrisma(deps?: RefreshTokenDeps): RefreshTokenPrisma {
   return deps?.prisma ?? (getPrisma() as unknown as RefreshTokenPrisma);
-}
-
-function refreshTokenExpiresAt(now: Date, ttlDays: number): Date {
-  return new Date(now.getTime() + ttlDays * 24 * 60 * 60 * 1000);
-}
-
-function refreshTokenExpiresInSeconds(ttlDays: number): number {
-  return ttlDays * 24 * 60 * 60;
 }
 
 function matchesRefreshTokenContext(
@@ -106,10 +105,11 @@ export async function issueRefreshToken(
 }> {
   const prisma = getRefreshTokenPrisma(deps);
   const now = nowDate(deps);
-  const ttlDays = getRefreshTokenTtlDays(deps);
+  const ttlSeconds = getRefreshTokenTtlSeconds(deps);
   const sharedSecret = getSharedSecret(deps);
   const refreshToken = generateRefreshTokenValue();
   const tokenHash = hashRefreshToken(refreshToken, sharedSecret);
+  const expiresAt = new Date(now.getTime() + ttlSeconds * 1000);
   const row = await prisma.refreshToken.create({
     data: {
       tokenHash,
@@ -119,7 +119,7 @@ export async function issueRefreshToken(
       domain: params.domain,
       clientId: params.clientId,
       configUrl: params.configUrl,
-      expiresAt: refreshTokenExpiresAt(now, ttlDays),
+      expiresAt,
     },
     select: {
       id: true,
@@ -129,7 +129,7 @@ export async function issueRefreshToken(
   return {
     refreshToken,
     refreshTokenId: row.id,
-    expiresInSeconds: refreshTokenExpiresInSeconds(ttlDays),
+    expiresInSeconds: ttlSeconds,
   };
 }
 
@@ -157,6 +157,7 @@ export async function exchangeRefreshToken(
       domain: true,
       clientId: true,
       configUrl: true,
+      createdAt: true,
       expiresAt: true,
       revokedAt: true,
       replacedByTokenId: true,
@@ -180,6 +181,10 @@ export async function exchangeRefreshToken(
     throw new AppError('UNAUTHORIZED', 401, 'INVALID_REFRESH_TOKEN');
   }
 
+  // Inherit the original session's TTL so rotated tokens keep the same lifetime.
+  const inheritedTtlSeconds = Math.round(
+    (row.expiresAt.getTime() - row.createdAt.getTime()) / 1000,
+  );
   const nextRefreshToken = await issueRefreshToken(
     {
       userId: row.userId,
@@ -189,7 +194,10 @@ export async function exchangeRefreshToken(
       clientId: row.clientId,
       configUrl: row.configUrl,
     },
-    deps,
+    {
+      ...deps,
+      refreshTokenTtlSeconds: inheritedTtlSeconds > 0 ? inheritedTtlSeconds : undefined,
+    },
   );
 
   const rotated = await prisma.refreshToken.updateMany({

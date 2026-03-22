@@ -144,6 +144,21 @@ const ClientConfigSchema = RequiredConfigSchema.extend({
   // Brief 8 / Phase 10.4: default language should come from the client website's selection.
   // This is the currently selected language (not the list of available languages).
   language: z.string().trim().min(1).optional(),
+  session: z
+    .object({
+      remember_me_enabled: z.boolean().default(true),
+      remember_me_default: z.boolean().default(true),
+      short_refresh_token_ttl_hours: z.number().int().min(1).max(168).default(1),
+      long_refresh_token_ttl_days: z.number().int().min(1).max(90).default(30),
+      access_token_ttl_minutes: z.number().int().min(15).max(60).optional(),
+    })
+    .optional()
+    .default({
+      remember_me_enabled: true,
+      remember_me_default: true,
+      short_refresh_token_ttl_hours: 1,
+      long_refresh_token_ttl_days: 30,
+    }),
   org_features: z
     .object({
       enabled: z.boolean().default(false),

@@ -14,14 +14,34 @@ function fieldInputClasses(): string {
   ].join(' ');
 }
 
+function readSessionConfig(config: unknown): {
+  rememberMeEnabled: boolean;
+  rememberMeDefault: boolean;
+} {
+  if (config && typeof config === 'object' && 'session' in config) {
+    const s = (config as Record<string, unknown>).session;
+    if (s && typeof s === 'object') {
+      const session = s as Record<string, unknown>;
+      return {
+        rememberMeEnabled: session.remember_me_enabled !== false,
+        rememberMeDefault: session.remember_me_default !== false,
+      };
+    }
+  }
+  return { rememberMeEnabled: true, rememberMeDefault: true };
+}
+
 export function LoginForm(): React.JSX.Element {
   const emailId = useId();
   const passwordId = useId();
+  const rememberMeId = useId();
   const { t } = useTranslation();
-  const { configUrl, redirectUrl, redirectTo, setView } = usePopup();
+  const { configUrl, config, redirectUrl, redirectTo, setView } = usePopup();
+  const { rememberMeEnabled, rememberMeDefault } = readSessionConfig(config);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(rememberMeDefault);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -40,7 +60,7 @@ export function LoginForm(): React.JSX.Element {
       const response = await fetch(url.toString(), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, remember_me: rememberMe }),
       });
 
       const data = await response.json() as Record<string, unknown>;
@@ -108,6 +128,20 @@ export function LoginForm(): React.JSX.Element {
           onChange={(e) => setPassword(e.currentTarget.value)}
         />
       </div>
+
+      {rememberMeEnabled && (
+        <label htmlFor={rememberMeId} className="flex items-center gap-2 text-sm">
+          <input
+            id={rememberMeId}
+            name="remember_me"
+            type="checkbox"
+            checked={rememberMe}
+            onChange={(e) => setRememberMe(e.currentTarget.checked)}
+            className="h-4 w-4 rounded border-[var(--uoa-color-border)] text-[var(--uoa-color-primary)] focus:ring-[var(--uoa-color-primary)]"
+          />
+          {t('form.rememberMe.label')}
+        </label>
+      )}
 
       {error && (
         <p className="text-sm text-[var(--uoa-color-danger)]">{error}</p>

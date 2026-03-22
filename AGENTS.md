@@ -31,3 +31,4 @@ Do not skip these. Do not skim. Read them in full before writing any code or mak
 - **Don't delete.** Never remove content from documentation unless explicitly told to.
 - **Don't over-engineer.** Build exactly what's specified, nothing more.
 - **Raise conflicts.** If you find a contradiction between files, flag it immediately rather than silently resolving it.
+- **Keep API schema in sync.** When adding/removing/changing any endpoint, update both `API/src/routes/root/index.ts` (endpoint schema) and `API/src/routes/root/llm.ts` (config docs). These are the machine-readable API contract.

@@ -33,6 +33,7 @@ describe('twofactor-challenge.service', () => {
       configUrl: 'https://client.example.com/auth-config',
       redirectUrl: 'https://client.example.com/oauth/callback',
       authMethod: 'email_password',
+      rememberMe: false,
     });
   });
 

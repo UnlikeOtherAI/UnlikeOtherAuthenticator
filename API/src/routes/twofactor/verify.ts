@@ -70,6 +70,7 @@ export function registerTwoFactorVerifyRoute(app: FastifyInstance): void {
         domain: config.domain,
         configUrl: request.configUrl,
         redirectUrl,
+        rememberMe: challenge.rememberMe,
       });
 
       try {

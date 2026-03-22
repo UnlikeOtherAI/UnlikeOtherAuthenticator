@@ -16,6 +16,7 @@ const LoginBodySchema = z
   .object({
     email: z.string().trim().toLowerCase().email(),
     password: z.string().min(1),
+    remember_me: z.boolean().optional(),
   })
   .strict();
 
@@ -32,7 +33,7 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
       preHandler: [configVerifier],
     },
     async (request, reply) => {
-      const { email, password } = LoginBodySchema.parse(request.body);
+      const { email, password, remember_me } = LoginBodySchema.parse(request.body);
       const { redirect_url } = LoginQuerySchema.parse(request.query);
 
       // configVerifier guarantees request.config is set on success.
@@ -52,6 +53,8 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
         requestedRedirectUrl: redirect_url,
       });
 
+      const rememberMe = remember_me ?? config.session?.remember_me_default ?? true;
+
       // Brief 13 / Phase 8.6 + 8.7: enforce 2FA verification during login when enabled via config.
       if (config['2fa_enabled'] && twoFaEnabled) {
         const { SHARED_SECRET, AUTH_SERVICE_IDENTIFIER } = requireEnv(
@@ -65,6 +68,7 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
           configUrl: request.configUrl,
           redirectUrl,
           authMethod: 'email_password',
+          rememberMe,
           sharedSecret: SHARED_SECRET,
           audience: AUTH_SERVICE_IDENTIFIER,
         });
@@ -78,6 +82,7 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
         domain: config.domain,
         configUrl: request.configUrl,
         redirectUrl,
+        rememberMe,
       });
 
       try {
