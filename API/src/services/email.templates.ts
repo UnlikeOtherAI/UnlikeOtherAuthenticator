@@ -231,6 +231,36 @@ export function buildLoginLinkTemplate(params: { link: string; theme?: Partial<E
   return { subject, text, html };
 }
 
+export function buildAccountExistsTemplate(params: { link: string; theme?: Partial<EmailTheme> }): EmailTemplate {
+  const minutes = tokenTtlMinutes();
+  const theme = resolveTheme(params.theme);
+
+  const subject = 'You already have an account';
+  const text = [
+    'You already have an account',
+    '',
+    'Someone tried to create an account with this email, but you already have one.',
+    'If this was you, you can reset your password using the link below:',
+    params.link,
+    '',
+    `This link expires in ${minutes} minutes and can only be used once.`,
+    '',
+    'If you did not request this, you can ignore this email.',
+  ].join('\n');
+
+  const html = buildEmailHtml({
+    theme,
+    subject,
+    heading: 'You already have an account',
+    body: 'Someone tried to create an account with this email, but you already have one. If this was you, you can reset your password using the button below.',
+    buttonLabel: 'Reset password',
+    buttonUrl: params.link,
+    minutes,
+  });
+
+  return { subject, text, html };
+}
+
 export function buildPasswordResetTemplate(params: { link: string; theme?: Partial<EmailTheme> }): EmailTemplate {
   const minutes = tokenTtlMinutes();
   const theme = resolveTheme(params.theme);

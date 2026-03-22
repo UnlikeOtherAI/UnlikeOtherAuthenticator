@@ -4,6 +4,7 @@ import type { Env } from '../config/env.js';
 import { getEnv } from '../config/env.js';
 import type { EmailTheme } from './email.templates.js';
 import {
+  buildAccountExistsTemplate,
   buildLoginLinkTemplate,
   buildPasswordResetTemplate,
   buildTwoFaResetTemplate,
@@ -398,6 +399,19 @@ export async function sendVerifyEmailSetPasswordEmail(params: {
 export async function sendVerifyEmailEmail(params: { to: string; link: string; theme?: Partial<EmailTheme> }): Promise<void> {
   const env = getEnv();
   const template = buildVerifyEmailTemplate({ link: params.link, theme: params.theme });
+  await dispatchEmail({
+    to: params.to,
+    from: env.EMAIL_FROM,
+    replyTo: env.EMAIL_REPLY_TO,
+    subject: template.subject,
+    text: template.text,
+    html: template.html,
+  });
+}
+
+export async function sendAccountExistsEmail(params: { to: string; link: string; theme?: Partial<EmailTheme> }): Promise<void> {
+  const env = getEnv();
+  const template = buildAccountExistsTemplate({ link: params.link, theme: params.theme });
   await dispatchEmail({
     to: params.to,
     from: env.EMAIL_FROM,

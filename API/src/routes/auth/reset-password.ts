@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { configVerifier } from '../../middleware/config-verifier.js';
 import { requestPasswordReset, resetPasswordWithToken } from '../../services/auth-reset-password.service.js';
 
-const SUCCESS_MESSAGE = 'We sent instructions to your email';
+const SUCCESS_MESSAGE = 'If you have an account with us, we\'ve sent you instructions';
 
 const RequestBodySchema = z
   .object({

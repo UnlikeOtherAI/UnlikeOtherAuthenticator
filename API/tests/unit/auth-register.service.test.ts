@@ -59,7 +59,7 @@ function baseConfig(overrides?: Partial<ClientConfig>): ClientConfig {
 }
 
 describe('requestRegistrationInstructions', () => {
-  it('creates a LOGIN_LINK token and sends a login link for an existing user', async () => {
+  it('creates a PASSWORD_RESET token and sends account-exists email for an existing user', async () => {
     const findUnique = vi
       .fn<PrismaStub['user']['findUnique']>()
       .mockResolvedValue({ id: 'u1' });
@@ -71,7 +71,7 @@ describe('requestRegistrationInstructions', () => {
       verificationToken: { create: createToken },
     };
 
-    const sendLoginLinkEmail = vi.fn<(params: { to: string; link: string }) => Promise<void>>(
+    const sendAccountExistsEmail = vi.fn<(params: { to: string; link: string }) => Promise<void>>(
       async () => undefined,
     );
     const sendVerifyEmailSetPasswordEmail = vi.fn<
@@ -94,7 +94,7 @@ describe('requestRegistrationInstructions', () => {
         now: () => new Date('2026-02-10T00:00:00.000Z'),
         generateEmailToken: () => 'token123',
         hashEmailToken: () => 'hash123',
-        sendLoginLinkEmail,
+        sendAccountExistsEmail,
         sendVerifyEmailEmail,
         sendVerifyEmailSetPasswordEmail,
       },
@@ -107,7 +107,7 @@ describe('requestRegistrationInstructions', () => {
 
     expect(createToken).toHaveBeenCalledWith({
       data: expect.objectContaining({
-        type: 'LOGIN_LINK',
+        type: 'PASSWORD_RESET',
         email: 'existing@example.com',
         userKey: 'existing@example.com',
         domain: null,
@@ -117,12 +117,10 @@ describe('requestRegistrationInstructions', () => {
       }),
     });
 
-    expect(sendLoginLinkEmail).toHaveBeenCalledWith(expect.objectContaining({
+    expect(sendAccountExistsEmail).toHaveBeenCalledWith(expect.objectContaining({
       to: 'existing@example.com',
-      link: 'https://auth.example.com/auth/email/link?token=token123&config_url=https%3A%2F%2Fclient.example.com%2Fauth-config',
+      link: 'https://auth.example.com/auth/email/reset-password?token=token123&config_url=https%3A%2F%2Fclient.example.com%2Fauth-config',
     }));
-    expect(sendLoginLinkEmail.mock.calls[0][0].link).not.toContain('login-link');
-    expect(sendLoginLinkEmail.mock.calls[0][0].link).not.toContain('verify-set-password');
     expect(sendVerifyEmailSetPasswordEmail).not.toHaveBeenCalled();
     expect(sendVerifyEmailEmail).not.toHaveBeenCalled();
   });
@@ -139,7 +137,7 @@ describe('requestRegistrationInstructions', () => {
       verificationToken: { create: createToken },
     };
 
-    const sendLoginLinkEmail = vi.fn<(params: { to: string; link: string }) => Promise<void>>(
+    const sendAccountExistsEmail = vi.fn<(params: { to: string; link: string }) => Promise<void>>(
       async () => undefined,
     );
     const sendVerifyEmailSetPasswordEmail = vi.fn<
@@ -162,7 +160,7 @@ describe('requestRegistrationInstructions', () => {
         now: () => new Date('2026-02-10T00:00:00.000Z'),
         generateEmailToken: () => 'token456',
         hashEmailToken: () => 'hash456',
-        sendLoginLinkEmail,
+        sendAccountExistsEmail,
         sendVerifyEmailEmail,
         sendVerifyEmailSetPasswordEmail,
       },
@@ -191,7 +189,7 @@ describe('requestRegistrationInstructions', () => {
     }));
     expect(sendVerifyEmailSetPasswordEmail.mock.calls[0][0].link).not.toContain('login-link');
     expect(sendVerifyEmailSetPasswordEmail.mock.calls[0][0].link).not.toContain('verify-set-password');
-    expect(sendLoginLinkEmail).not.toHaveBeenCalled();
+    expect(sendAccountExistsEmail).not.toHaveBeenCalled();
     expect(sendVerifyEmailEmail).not.toHaveBeenCalled();
   });
 
@@ -207,7 +205,7 @@ describe('requestRegistrationInstructions', () => {
       verificationToken: { create: createToken },
     };
 
-    const sendLoginLinkEmail = vi.fn<(params: { to: string; link: string }) => Promise<void>>(
+    const sendAccountExistsEmail = vi.fn<(params: { to: string; link: string }) => Promise<void>>(
       async () => undefined,
     );
     const sendVerifyEmailSetPasswordEmail = vi.fn<
@@ -230,7 +228,7 @@ describe('requestRegistrationInstructions', () => {
         now: () => new Date('2026-02-10T00:00:00.000Z'),
         generateEmailToken: () => 'token789',
         hashEmailToken: () => 'hash789',
-        sendLoginLinkEmail,
+        sendAccountExistsEmail,
         sendVerifyEmailEmail,
         sendVerifyEmailSetPasswordEmail,
       },
@@ -247,7 +245,7 @@ describe('requestRegistrationInstructions', () => {
       to: 'new@example.com',
       link: 'https://auth.example.com/auth/email/link?token=token789&config_url=https%3A%2F%2Fclient.example.com%2Fauth-config',
     }));
-    expect(sendLoginLinkEmail).not.toHaveBeenCalled();
+    expect(sendAccountExistsEmail).not.toHaveBeenCalled();
     expect(sendVerifyEmailSetPasswordEmail).not.toHaveBeenCalled();
   });
 
@@ -259,7 +257,7 @@ describe('requestRegistrationInstructions', () => {
       verificationToken: { create: createToken },
     };
 
-    const sendLoginLinkEmail = vi.fn<(params: { to: string; link: string }) => Promise<void>>(
+    const sendAccountExistsEmail = vi.fn<(params: { to: string; link: string }) => Promise<void>>(
       async () => undefined,
     );
 
@@ -272,13 +270,13 @@ describe('requestRegistrationInstructions', () => {
       {
         env: testEnv({ DATABASE_URL: undefined, PUBLIC_BASE_URL: undefined }),
         prisma,
-        sendLoginLinkEmail,
+        sendAccountExistsEmail,
       },
     );
 
     expect(findUnique).not.toHaveBeenCalled();
     expect(createToken).not.toHaveBeenCalled();
-    expect(sendLoginLinkEmail).not.toHaveBeenCalled();
+    expect(sendAccountExistsEmail).not.toHaveBeenCalled();
   });
 
   it('silently blocks registration when allow_registration is false for a new user', async () => {
@@ -293,7 +291,7 @@ describe('requestRegistrationInstructions', () => {
       verificationToken: { create: createToken },
     };
 
-    const sendLoginLinkEmail = vi.fn<(params: { to: string; link: string }) => Promise<void>>(
+    const sendAccountExistsEmail = vi.fn<(params: { to: string; link: string }) => Promise<void>>(
       async () => undefined,
     );
     const sendVerifyEmailSetPasswordEmail = vi.fn<
@@ -316,14 +314,14 @@ describe('requestRegistrationInstructions', () => {
         now: () => new Date('2026-02-10T00:00:00.000Z'),
         generateEmailToken: () => 'token789',
         hashEmailToken: () => 'hash789',
-        sendLoginLinkEmail,
+        sendAccountExistsEmail,
         sendVerifyEmailEmail,
         sendVerifyEmailSetPasswordEmail,
       },
     );
 
     expect(createToken).not.toHaveBeenCalled();
-    expect(sendLoginLinkEmail).not.toHaveBeenCalled();
+    expect(sendAccountExistsEmail).not.toHaveBeenCalled();
     expect(sendVerifyEmailEmail).not.toHaveBeenCalled();
     expect(sendVerifyEmailSetPasswordEmail).not.toHaveBeenCalled();
   });
@@ -340,7 +338,7 @@ describe('requestRegistrationInstructions', () => {
       verificationToken: { create: createToken },
     };
 
-    const sendLoginLinkEmail = vi.fn<(params: { to: string; link: string }) => Promise<void>>(
+    const sendAccountExistsEmail = vi.fn<(params: { to: string; link: string }) => Promise<void>>(
       async () => undefined,
     );
     const sendVerifyEmailSetPasswordEmail = vi.fn<
@@ -365,19 +363,19 @@ describe('requestRegistrationInstructions', () => {
         now: () => new Date('2026-02-10T00:00:00.000Z'),
         generateEmailToken: () => 'token999',
         hashEmailToken: () => 'hash999',
-        sendLoginLinkEmail,
+        sendAccountExistsEmail,
         sendVerifyEmailEmail,
         sendVerifyEmailSetPasswordEmail,
       },
     );
 
     expect(createToken).not.toHaveBeenCalled();
-    expect(sendLoginLinkEmail).not.toHaveBeenCalled();
+    expect(sendAccountExistsEmail).not.toHaveBeenCalled();
     expect(sendVerifyEmailEmail).not.toHaveBeenCalled();
     expect(sendVerifyEmailSetPasswordEmail).not.toHaveBeenCalled();
   });
 
-  it('still sends login links for existing users even when domain restrictions are configured', async () => {
+  it('still sends account-exists email for existing users even when domain restrictions are configured', async () => {
     const findUnique = vi
       .fn<PrismaStub['user']['findUnique']>()
       .mockResolvedValue({ id: 'u2' });
@@ -389,7 +387,7 @@ describe('requestRegistrationInstructions', () => {
       verificationToken: { create: createToken },
     };
 
-    const sendLoginLinkEmail = vi.fn<(params: { to: string; link: string }) => Promise<void>>(
+    const sendAccountExistsEmail = vi.fn<(params: { to: string; link: string }) => Promise<void>>(
       async () => undefined,
     );
     const sendVerifyEmailSetPasswordEmail = vi.fn<
@@ -414,7 +412,7 @@ describe('requestRegistrationInstructions', () => {
         now: () => new Date('2026-02-10T00:00:00.000Z'),
         generateEmailToken: () => 'tokenexisting',
         hashEmailToken: () => 'hashexisting',
-        sendLoginLinkEmail,
+        sendAccountExistsEmail,
         sendVerifyEmailEmail,
         sendVerifyEmailSetPasswordEmail,
       },
@@ -422,12 +420,12 @@ describe('requestRegistrationInstructions', () => {
 
     expect(createToken).toHaveBeenCalledWith({
       data: expect.objectContaining({
-        type: 'LOGIN_LINK',
+        type: 'PASSWORD_RESET',
         email: 'existing@gmail.com',
         userId: 'u2',
       }),
     });
-    expect(sendLoginLinkEmail).toHaveBeenCalledTimes(1);
+    expect(sendAccountExistsEmail).toHaveBeenCalledTimes(1);
     expect(sendVerifyEmailEmail).not.toHaveBeenCalled();
     expect(sendVerifyEmailSetPasswordEmail).not.toHaveBeenCalled();
   });
