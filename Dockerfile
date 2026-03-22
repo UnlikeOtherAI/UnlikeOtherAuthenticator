@@ -36,6 +36,7 @@ COPY --from=build /app/Auth/dist/ Auth/dist/
 COPY --from=build /app/Auth/dist-ssr/ Auth/dist-ssr/
 COPY --from=build /app/node_modules/.prisma/ node_modules/.prisma/
 COPY --from=build /app/node_modules/@prisma/ node_modules/@prisma/
+COPY --from=build /app/node_modules/prisma/ node_modules/prisma/
 
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0
@@ -43,4 +44,4 @@ ENV PORT=3000
 
 EXPOSE 3000
 
-CMD ["node", "API/dist/server.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy --schema API/prisma/schema.prisma && node API/dist/server.js"]
