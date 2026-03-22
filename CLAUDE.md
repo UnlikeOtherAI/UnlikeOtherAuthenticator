@@ -16,6 +16,7 @@ These two documents define **what** we're building and **how**:
 - **[`Docs/techstack.md`](./Docs/techstack.md)** — The tech stack and project structure. Defines technology choices (Node.js, React, Tailwind, PostgreSQL + Prisma), folder layout (`/API`, `/Auth`), and environment variables. This is the single source of truth for how it's built.
 - **[`Docs/Auth/architecture-api.md`](./Docs/Auth/architecture-api.md)** — API architecture. Defines the layered structure (routes → middleware → services → Prisma), directory layout, error handling patterns, and file organization rules for `/API`.
 - **[`Docs/Auth/architecture-auth.md`](./Docs/Auth/architecture-auth.md)** — Auth window architecture. Defines the React component structure, theming system, i18n approach, and auth flow navigation for `/Auth`.
+- **[`Docs/deploy.md`](./Docs/deploy.md)** — Deployment to Google Cloud Run (build, deploy, env vars, service config).
 
 Before making any architectural, design, or implementation decisions, read all documents above in full.
 
