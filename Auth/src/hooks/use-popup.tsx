@@ -39,7 +39,7 @@ export function parsePopupQueryParams(search: string): PopupQueryParams {
 
   const params = new URLSearchParams(s);
 
-  const redirectUrl = params.get('redirect_url');
+  const redirectUrl = params.get('redirect_url') ?? params.get('redirect_uri');
   const twoFaToken = params.get('twofa_token');
   const emailToken = params.get('email_token');
   const rawType = params.get('email_token_type');

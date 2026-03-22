@@ -20,6 +20,7 @@ const ParamsSchema = z.object({
 const QuerySchema = z
   .object({
     redirect_url: z.string().min(1).optional(),
+    redirect_uri: z.string().min(1).optional(),
   })
   .passthrough();
 
@@ -40,7 +41,7 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
     },
     async (request, reply) => {
       const { provider } = ParamsSchema.parse(request.params);
-      const { redirect_url } = QuerySchema.parse(request.query);
+      const { redirect_url, redirect_uri } = QuerySchema.parse(request.query);
 
       const config = request.config;
       if (!config) throw new Error('missing request.config');
@@ -50,7 +51,7 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
 
       const redirectUrl = selectRedirectUrl({
         allowedRedirectUrls: config.redirect_urls,
-        requestedRedirectUrl: redirect_url,
+        requestedRedirectUrl: redirect_url ?? redirect_uri,
       });
 
       const env = getEnv();
