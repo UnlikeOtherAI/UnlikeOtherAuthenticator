@@ -56,8 +56,10 @@ function parseDensity(value: unknown): Density | '' {
 }
 
 function parseFontFamily(value: unknown): FontFamily | '' {
-  if (value === 'sans' || value === 'serif' || value === 'mono') return value;
-  return '';
+  if (typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  return trimmed;
 }
 
 function parseBaseTextSize(value: unknown): BaseTextSize | '' {
@@ -164,6 +166,14 @@ export function buildThemeFromConfig(config: unknown): Theme {
   const baseTextSize = typography ? parseBaseTextSize(typography.base_text_size) : '';
   if (!fontFamily || !baseTextSize) throw new Error('Invalid theme config');
 
+  const rawFontImportUrl = typography ? readString(typography, 'font_import_url').trim() : '';
+  const fontImportUrl = rawFontImportUrl ? sanitizeHttpUrl(rawFontImportUrl) : undefined;
+
+  // For custom (non-preset) font families, expose via CSS variable.
+  if (!isPresetFont(fontFamily)) {
+    vars['--uoa-font-family'] = fontFamily;
+  }
+
   const button = isRecord(uiTheme.button) ? uiTheme.button : null;
   const buttonStyle = button ? parseButtonStyle(button.style) : '';
   if (!buttonStyle) throw new Error('Invalid theme config');
@@ -193,7 +203,7 @@ export function buildThemeFromConfig(config: unknown): Theme {
   return {
     vars,
     density,
-    typography: { fontFamily, baseTextSize },
+    typography: { fontFamily, baseTextSize, ...(fontImportUrl ? { fontImportUrl } : {}) },
     button: { style: buttonStyle },
     card: { style: cardStyle },
     logo: {
@@ -231,17 +241,22 @@ function densityCardPadding(density: Density): string {
   }
 }
 
+function isPresetFont(value: string): value is 'sans' | 'serif' | 'mono' {
+  return value === 'sans' || value === 'serif' || value === 'mono';
+}
+
 function typographyClasses(typography: Theme['typography']): {
   font: string;
   baseText: string;
   title: string;
 } {
-  const font =
-    typography.fontFamily === 'serif'
+  const font = isPresetFont(typography.fontFamily)
+    ? typography.fontFamily === 'serif'
       ? 'font-serif'
       : typography.fontFamily === 'mono'
         ? 'font-mono'
-        : 'font-sans';
+        : 'font-sans'
+    : 'font-[family-name:var(--uoa-font-family)]';
   const baseText =
     typography.baseTextSize === 'sm'
       ? 'text-sm'
@@ -305,6 +320,11 @@ export function themeVarsToCss(vars: ThemeVars): string {
   for (const name of THEME_CSS_VAR_NAMES) {
     const v = vars[name];
     if (typeof v === 'string' && v) parts.push(`${name}:${v}`);
+  }
+  // Emit any extra vars not in the required list (e.g. --uoa-font-family).
+  const required = new Set<string>(THEME_CSS_VAR_NAMES);
+  for (const [name, v] of Object.entries(vars)) {
+    if (!required.has(name) && typeof v === 'string' && v) parts.push(`${name}:${v}`);
   }
   return parts.join(';');
 }

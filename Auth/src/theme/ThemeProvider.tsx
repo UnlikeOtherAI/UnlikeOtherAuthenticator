@@ -30,9 +30,14 @@ export function ThemeProvider(props: {
     return `.uoa-theme{${themeVarsToCss(value.theme.vars)}}`;
   }, [value.theme.vars]);
 
+  const fontImportUrl = value.theme.typography.fontImportUrl;
+
   return (
     <ThemeContext.Provider value={value}>
       <div className="uoa-theme">
+        {fontImportUrl && (
+          <link rel="stylesheet" href={fontImportUrl} />
+        )}
         <style>{cssText}</style>
         {props.children}
       </div>

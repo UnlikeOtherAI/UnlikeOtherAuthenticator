@@ -62,8 +62,9 @@ const UiThemeSchema = z
     density: z.enum(['compact', 'comfortable', 'spacious']),
     typography: z
       .object({
-        font_family: z.enum(['sans', 'serif', 'mono']),
+        font_family: z.string().trim().min(1).max(200),
         base_text_size: z.enum(['sm', 'md', 'lg']),
+        font_import_url: HttpUrlOrEmptySchema.optional(),
       })
       .passthrough(),
     button: z

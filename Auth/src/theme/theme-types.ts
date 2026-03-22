@@ -3,7 +3,8 @@ export type Density = 'compact' | 'comfortable' | 'spacious';
 export type ButtonStyle = 'solid' | 'outline' | 'ghost';
 export type CardStyle = 'plain' | 'bordered' | 'shadow';
 
-export type FontFamily = 'sans' | 'serif' | 'mono';
+export type FontFamilyPreset = 'sans' | 'serif' | 'mono';
+export type FontFamily = FontFamilyPreset | (string & {});
 export type BaseTextSize = 'sm' | 'md' | 'lg';
 
 export type ThemeVars = Record<string, string>;
@@ -14,6 +15,7 @@ export type Theme = {
   typography: {
     fontFamily: FontFamily;
     baseTextSize: BaseTextSize;
+    fontImportUrl?: string;
   };
   button: {
     style: ButtonStyle;

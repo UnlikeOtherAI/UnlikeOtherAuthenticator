@@ -27,6 +27,11 @@ export function registerLlmRoute(app: FastifyInstance): void {
             'string[] — Auth methods to show: "email_password", "google", "facebook", "github", "linkedin", "apple"',
           ui_theme: {
             description: 'object — Full theme configuration (colors, radii, typography, logo, etc.)',
+            typography: {
+              font_family: 'string (required) — Preset: "sans", "serif", "mono", or a custom CSS font-family name (e.g. "Inter", "Playfair Display")',
+              base_text_size: 'string (required) — "sm", "md", or "lg"',
+              font_import_url: 'string (optional) — URL to a CSS font stylesheet (e.g. Google Fonts URL). Required when using a custom font_family.',
+            },
             logo: {
               url: 'string — Logo image URL (HTTPS/HTTP) or empty string',
               alt: 'string (required) — Alt text for the logo (always required even for text logos)',
