@@ -21,7 +21,10 @@ export type EmailTheme = {
   logoAlt?: string;
   logoText?: string;
   logoFontSize?: string;
+  logoFontWeight?: string;
+  logoFontFamily?: string;
   logoColor?: string;
+  fontImportUrl?: string;
 };
 
 const DEFAULT_THEME: EmailTheme = {
@@ -67,9 +70,13 @@ function logoHtml(t: EmailTheme): string {
 
   if (t.logoText) {
     const fontSize = t.logoFontSize ?? '24px';
+    const fontWeight = t.logoFontWeight ?? '600';
+    const fontFamily = t.logoFontFamily
+      ? `${escapeHtml(t.logoFontFamily)},ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif`
+      : 'ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif';
     const color = t.logoColor ?? t.text;
     return `<tr>
-  <td align="center" style="padding:24px 24px 0 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:${escapeHtml(fontSize)};font-weight:600;color:${escapeHtml(color)};">
+  <td align="center" style="padding:24px 24px 0 24px;font-family:${fontFamily};font-size:${escapeHtml(fontSize)};font-weight:${escapeHtml(fontWeight)};color:${escapeHtml(color)};">
     ${escapeHtml(t.logoText)}
   </td>
 </tr>`;
@@ -90,22 +97,27 @@ function buildEmailHtml(params: {
   const t = params.theme;
   const escapedLink = escapeHtml(params.buttonUrl);
 
+  const fontLink = t.fontImportUrl
+    ? `<link rel="stylesheet" href="${escapeHtml(t.fontImportUrl)}" />`
+    : '';
+
   return `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>${escapeHtml(params.subject)}</title>
+    ${fontLink}
   </head>
-  <body style="margin:0;padding:0;background:${t.bg};">
-    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:${t.bg};padding:24px 12px;">
+  <body style="margin:0;padding:0;background-color:${t.bg};" bgcolor="${t.bg}">
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color:${t.bg};padding:24px 12px;" bgcolor="${t.bg}">
       <tr>
-        <td align="center">
-          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:560px;background:${t.surface};border-radius:${t.cardRadius};overflow:hidden;border:1px solid ${t.border};">
+        <td align="center" bgcolor="${t.bg}">
+          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:560px;background-color:${t.surface};border-radius:${t.cardRadius};overflow:hidden;border:1px solid ${t.border};" bgcolor="${t.surface}">
             ${logoHtml(t)}
             <tr>
               <td style="padding:24px 24px 8px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:${t.text};">
-                <h1 style="margin:0;font-size:20px;line-height:28px;">${escapeHtml(params.heading)}</h1>
+                <h1 style="margin:0;font-size:20px;line-height:28px;color:${t.text};">${escapeHtml(params.heading)}</h1>
               </td>
             </tr>
             <tr>
@@ -115,7 +127,7 @@ function buildEmailHtml(params: {
             </tr>
             <tr>
               <td align="center" style="padding:0 24px 20px 24px;">
-                <a href="${escapedLink}" style="display:inline-block;background:${t.primary};color:${t.primaryText};text-decoration:none;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:20px;padding:12px 16px;border-radius:${t.buttonRadius};">
+                <a href="${escapedLink}" style="display:inline-block;background-color:${t.primary};color:${t.primaryText};text-decoration:none;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:20px;padding:12px 16px;border-radius:${t.buttonRadius};">
                   ${escapeHtml(params.buttonLabel)}
                 </a>
               </td>
