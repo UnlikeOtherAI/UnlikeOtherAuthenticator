@@ -2,6 +2,7 @@ import nodemailer from 'nodemailer';
 
 import type { Env } from '../config/env.js';
 import { getEnv } from '../config/env.js';
+import type { EmailTheme } from './email.templates.js';
 import {
   buildLoginLinkTemplate,
   buildPasswordResetTemplate,
@@ -364,9 +365,9 @@ async function dispatchEmail(message: EmailMessage): Promise<void> {
   }
 }
 
-export async function sendLoginLinkEmail(params: { to: string; link: string }): Promise<void> {
+export async function sendLoginLinkEmail(params: { to: string; link: string; theme?: Partial<EmailTheme> }): Promise<void> {
   const env = getEnv();
-  const template = buildLoginLinkTemplate({ link: params.link });
+  const template = buildLoginLinkTemplate({ link: params.link, theme: params.theme });
   await dispatchEmail({
     to: params.to,
     from: env.EMAIL_FROM,
@@ -380,9 +381,10 @@ export async function sendLoginLinkEmail(params: { to: string; link: string }): 
 export async function sendVerifyEmailSetPasswordEmail(params: {
   to: string;
   link: string;
+  theme?: Partial<EmailTheme>;
 }): Promise<void> {
   const env = getEnv();
-  const template = buildVerifyEmailSetPasswordTemplate({ link: params.link });
+  const template = buildVerifyEmailSetPasswordTemplate({ link: params.link, theme: params.theme });
   await dispatchEmail({
     to: params.to,
     from: env.EMAIL_FROM,
@@ -393,9 +395,9 @@ export async function sendVerifyEmailSetPasswordEmail(params: {
   });
 }
 
-export async function sendVerifyEmailEmail(params: { to: string; link: string }): Promise<void> {
+export async function sendVerifyEmailEmail(params: { to: string; link: string; theme?: Partial<EmailTheme> }): Promise<void> {
   const env = getEnv();
-  const template = buildVerifyEmailTemplate({ link: params.link });
+  const template = buildVerifyEmailTemplate({ link: params.link, theme: params.theme });
   await dispatchEmail({
     to: params.to,
     from: env.EMAIL_FROM,
@@ -406,9 +408,9 @@ export async function sendVerifyEmailEmail(params: { to: string; link: string })
   });
 }
 
-export async function sendPasswordResetEmail(params: { to: string; link: string }): Promise<void> {
+export async function sendPasswordResetEmail(params: { to: string; link: string; theme?: Partial<EmailTheme> }): Promise<void> {
   const env = getEnv();
-  const template = buildPasswordResetTemplate({ link: params.link });
+  const template = buildPasswordResetTemplate({ link: params.link, theme: params.theme });
   await dispatchEmail({
     to: params.to,
     from: env.EMAIL_FROM,
@@ -419,9 +421,9 @@ export async function sendPasswordResetEmail(params: { to: string; link: string 
   });
 }
 
-export async function sendTwoFaResetEmail(params: { to: string; link: string }): Promise<void> {
+export async function sendTwoFaResetEmail(params: { to: string; link: string; theme?: Partial<EmailTheme> }): Promise<void> {
   const env = getEnv();
-  const template = buildTwoFaResetTemplate({ link: params.link });
+  const template = buildTwoFaResetTemplate({ link: params.link, theme: params.theme });
   await dispatchEmail({
     to: params.to,
     from: env.EMAIL_FROM,

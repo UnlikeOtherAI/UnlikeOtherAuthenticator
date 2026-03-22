@@ -6,6 +6,7 @@ import { getEnv, requireEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import { generateEmailToken, hashEmailToken } from '../utils/verification-token.js';
+import { extractEmailTheme } from './email-theme.service.js';
 import { sendPasswordResetEmail } from './email.service.js';
 import { hashPassword } from './password.service.js';
 import { buildUserIdentity } from './user-scope.service.js';
@@ -124,8 +125,9 @@ export async function requestPasswordReset(
     ? normalizeBaseUrl(env.PUBLIC_BASE_URL)
     : `http://${env.HOST}:${env.PORT}`;
 
+  const theme = extractEmailTheme(params.config);
   const link = buildPasswordResetLink({ baseUrl, token, configUrl: params.configUrl });
-  await (deps?.sendPasswordResetEmail ?? sendPasswordResetEmail)({ to: email, link });
+  await (deps?.sendPasswordResetEmail ?? sendPasswordResetEmail)({ to: email, link, theme });
 }
 
 export async function validatePasswordResetToken(params: {

@@ -3,38 +3,55 @@ import { z } from 'zod';
 
 import { configVerifier } from '../../middleware/config-verifier.js';
 import { validatePasswordResetToken } from '../../services/auth-reset-password.service.js';
+import { renderAuthEntrypointHtml } from '../../services/auth-ui.service.js';
 
 const QuerySchema = z
   .object({
     token: z.string().min(1),
+    redirect_url: z.string().min(1).optional(),
   })
   .passthrough();
 
 export function registerAuthEmailResetPasswordRoute(app: FastifyInstance): void {
-  // Email link landing endpoint. UI rendering comes later; for now, we validate the token
-  // so "clicking the link" has a stable server-side behavior.
+  // Email link landing for password reset. Validates the token, then renders
+  // the Auth UI with the set-password view so the user can choose a new password.
   app.get(
     '/auth/email/reset-password',
     {
       preHandler: [configVerifier],
     },
     async (request, reply) => {
-      const { token } = QuerySchema.parse(request.query);
+      const { token, redirect_url } = QuerySchema.parse(request.query);
 
       if (!request.config || !request.configUrl) {
-        // configVerifier should always attach these; fail closed.
         reply.status(400).send({ error: 'Request failed' });
         return;
       }
 
-      await validatePasswordResetToken({
-        token,
+      try {
+        await validatePasswordResetToken({
+          token,
+          config: request.config,
+          configUrl: request.configUrl,
+        });
+      } catch {
+        reply.status(400).send({ error: 'Request failed' });
+        return;
+      }
+
+      // Token is valid — render the Auth UI with the token context.
+      const params = new URLSearchParams();
+      params.set('config_url', request.configUrl);
+      if (redirect_url) params.set('redirect_url', redirect_url);
+      params.set('email_token', token);
+      params.set('email_token_type', 'PASSWORD_RESET');
+
+      const html = await renderAuthEntrypointHtml({
         config: request.config,
         configUrl: request.configUrl,
+        requestUrl: `/auth?${params.toString()}`,
       });
-
-      reply.status(200).send({ ok: true });
+      reply.type('text/html; charset=utf-8').status(200).send(html);
     },
   );
 }
-

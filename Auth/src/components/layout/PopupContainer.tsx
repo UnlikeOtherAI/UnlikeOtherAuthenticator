@@ -2,6 +2,9 @@ import React from 'react';
 
 import { PopupProvider, usePopup } from '../../hooks/use-popup.js';
 import { LoginPage } from '../../pages/LoginPage.js';
+import { RegisterPage } from '../../pages/RegisterPage.js';
+import { ResetPasswordPage } from '../../pages/ResetPasswordPage.js';
+import { SetPasswordPage } from '../../pages/SetPasswordPage.js';
 import { TwoFactorVerifyPage } from '../../pages/TwoFactorVerifyPage.js';
 import { AuthLayout } from './AuthLayout.js';
 
@@ -14,8 +17,16 @@ function PopupContent(): React.JSX.Element {
     return <TwoFactorVerifyPage />;
   }
 
-  // Default entry: login screen (registration / reset flows are navigated in later tasks).
-  return <LoginPage />;
+  switch (popup.view) {
+    case 'register':
+      return <RegisterPage />;
+    case 'reset-password':
+      return <ResetPasswordPage />;
+    case 'set-password':
+      return <SetPasswordPage />;
+    default:
+      return <LoginPage />;
+  }
 }
 
 export function PopupContainer(props: {
@@ -31,4 +42,3 @@ export function PopupContainer(props: {
     </PopupProvider>
   );
 }
-

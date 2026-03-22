@@ -1,6 +1,7 @@
 import React, { useId, useState } from 'react';
 
 import { Button } from '../ui/Button.js';
+import { usePopup } from '../../hooks/use-popup.js';
 import { useTranslation } from '../../i18n/use-translation.js';
 
 function fieldInputClasses(): string {
@@ -16,18 +17,50 @@ function fieldInputClasses(): string {
 export function ResetPasswordForm(): React.JSX.Element {
   const emailId = useId();
   const { t } = useTranslation();
+  const { configUrl } = usePopup();
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      const url = new URL('/auth/reset-password/request', window.location.origin);
+      url.searchParams.set('config_url', configUrl);
+
+      await fetch(url.toString(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+    } catch {
+      // Swallow — always show the same message to avoid account-existence hints.
+    } finally {
+      setLoading(false);
+      setSubmitted(true);
+    }
+  }
+
+  if (submitted) {
+    return (
+      <p
+        role="status"
+        className={[
+          'mt-6 rounded-[var(--uoa-radius-card)] border border-[var(--uoa-color-border)]',
+          'bg-[var(--uoa-color-surface)] px-3 py-2 text-sm text-[var(--uoa-color-text)]',
+        ].join(' ')}
+      >
+        {t('message.instructionsSent')}
+      </p>
+    );
+  }
 
   return (
     <form
       className="mt-6 flex flex-col gap-4"
-      onSubmit={(e) => {
-        // Template only; API wiring is handled in a later task.
-        // Always show the same message to avoid account-existence hints.
-        e.preventDefault();
-        setSubmitted(true);
-      }}
+      onSubmit={handleSubmit}
     >
       <div>
         <label htmlFor={emailId} className="text-sm font-medium">
@@ -47,22 +80,10 @@ export function ResetPasswordForm(): React.JSX.Element {
       </div>
 
       <div className="mt-2">
-        <Button variant="primary" type="submit">
-          {t('form.resetPassword.submit')}
+        <Button variant="primary" type="submit" disabled={loading}>
+          {loading ? '...' : t('form.resetPassword.submit')}
         </Button>
       </div>
-
-      {submitted ? (
-        <p
-          role="status"
-          className={[
-            'rounded-[var(--uoa-radius-card)] border border-[var(--uoa-color-border)]',
-            'bg-[var(--uoa-color-surface)] px-3 py-2 text-sm text-[var(--uoa-color-text)]',
-          ].join(' ')}
-        >
-          {t('message.instructionsSent')}
-        </p>
-      ) : null}
     </form>
   );
 }

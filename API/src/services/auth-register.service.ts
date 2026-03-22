@@ -4,6 +4,7 @@ import { EMAIL_TOKEN_TTL_MS } from '../config/constants.js';
 import { getEnv, requireEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
 import { buildUserIdentity } from './user-scope.service.js';
+import { extractEmailTheme } from './email-theme.service.js';
 import {
   sendLoginLinkEmail,
   sendVerifyEmailEmail,
@@ -154,13 +155,15 @@ export async function requestRegistrationInstructions(
     ? normalizeBaseUrl(env.PUBLIC_BASE_URL)
     : `http://${env.HOST}:${env.PORT}`;
 
+  const theme = extractEmailTheme(params.config);
+
   if (existing) {
     const link = buildRegistrationEmailLandingLink({
       baseUrl,
       token,
       configUrl: params.configUrl,
     });
-    await (deps?.sendLoginLinkEmail ?? sendLoginLinkEmail)({ to: email, link });
+    await (deps?.sendLoginLinkEmail ?? sendLoginLinkEmail)({ to: email, link, theme });
     return;
   }
 
@@ -173,6 +176,7 @@ export async function requestRegistrationInstructions(
     await (deps?.sendVerifyEmailEmail ?? sendVerifyEmailEmail)({
       to: email,
       link,
+      theme,
     });
     return;
   }
@@ -180,5 +184,6 @@ export async function requestRegistrationInstructions(
   await (deps?.sendVerifyEmailSetPasswordEmail ?? sendVerifyEmailSetPasswordEmail)({
     to: email,
     link,
+    theme,
   });
 }

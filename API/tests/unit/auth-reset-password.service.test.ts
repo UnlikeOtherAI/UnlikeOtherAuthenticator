@@ -105,10 +105,10 @@ describe('requestPasswordReset', () => {
       }),
     });
 
-    expect(sendPasswordResetEmail).toHaveBeenCalledWith({
+    expect(sendPasswordResetEmail).toHaveBeenCalledWith(expect.objectContaining({
       to: 'existing@example.com',
       link: 'https://auth.example.com/auth/email/reset-password?token=token123&config_url=https%3A%2F%2Fclient.example.com%2Fauth-config',
-    });
+    }));
   });
 
   it('does nothing for non-existent users (no enumeration)', async () => {

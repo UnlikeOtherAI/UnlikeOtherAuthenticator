@@ -1,6 +1,7 @@
 import React, { useId, useState } from 'react';
 
 import { Button } from '../ui/Button.js';
+import { usePopup } from '../../hooks/use-popup.js';
 import { useTranslation } from '../../i18n/use-translation.js';
 
 function fieldInputClasses(): string {
@@ -17,17 +18,63 @@ export function LoginForm(): React.JSX.Element {
   const emailId = useId();
   const passwordId = useId();
   const { t } = useTranslation();
+  const { configUrl, redirectUrl, redirectTo, setView } = usePopup();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+
+    try {
+      const url = new URL('/auth/login', window.location.origin);
+      url.searchParams.set('config_url', configUrl);
+      if (redirectUrl) {
+        url.searchParams.set('redirect_url', redirectUrl);
+      }
+
+      const response = await fetch(url.toString(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json() as Record<string, unknown>;
+
+      if (!response.ok) {
+        setError(t('form.login.error'));
+        return;
+      }
+
+      if (data.twofa_required && typeof data.twofa_token === 'string') {
+        // 2FA required: update URL to trigger the 2FA view
+        const twofaUrl = new URL(window.location.href);
+        twofaUrl.searchParams.set('twofa_token', data.twofa_token);
+        window.location.assign(twofaUrl.toString());
+        return;
+      }
+
+      if (typeof data.redirect_to === 'string') {
+        redirectTo(data.redirect_to);
+        return;
+      }
+
+      setError(t('form.login.error'));
+    } catch {
+      setError(t('form.login.error'));
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <form
       className="mt-6 flex flex-col gap-4"
-      onSubmit={(e) => {
-        // Template only; API wiring is handled in a later task.
-        e.preventDefault();
-      }}
+      onSubmit={handleSubmit}
     >
       <div>
         <label htmlFor={emailId} className="text-sm font-medium">
@@ -62,10 +109,31 @@ export function LoginForm(): React.JSX.Element {
         />
       </div>
 
+      {error && (
+        <p className="text-sm text-[var(--uoa-color-danger)]">{error}</p>
+      )}
+
       <div className="mt-2">
-        <Button variant="primary" type="submit">
-          {t('form.login.submit')}
+        <Button variant="primary" type="submit" disabled={loading}>
+          {loading ? '...' : t('form.login.submit')}
         </Button>
+      </div>
+
+      <div className="flex items-center justify-between text-sm">
+        <button
+          type="button"
+          className="text-[var(--uoa-color-primary)] hover:underline"
+          onClick={() => setView('reset-password')}
+        >
+          {t('nav.forgotPassword')}
+        </button>
+        <button
+          type="button"
+          className="text-[var(--uoa-color-primary)] hover:underline"
+          onClick={() => setView('register')}
+        >
+          {t('nav.createAccount')}
+        </button>
       </div>
     </form>
   );

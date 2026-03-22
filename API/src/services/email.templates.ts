@@ -6,6 +6,33 @@ type EmailTemplate = {
   html: string;
 };
 
+/** Subset of config theme colors used to style emails. */
+export type EmailTheme = {
+  bg: string;
+  surface: string;
+  text: string;
+  muted: string;
+  primary: string;
+  primaryText: string;
+  border: string;
+  buttonRadius: string;
+  cardRadius: string;
+  logoUrl?: string;
+  logoAlt?: string;
+};
+
+const DEFAULT_THEME: EmailTheme = {
+  bg: '#f6f7fb',
+  surface: '#ffffff',
+  text: '#111827',
+  muted: '#6b7280',
+  primary: '#111827',
+  primaryText: '#ffffff',
+  border: '#e8eaf0',
+  buttonRadius: '10px',
+  cardRadius: '12px',
+};
+
 function escapeHtml(value: string): string {
   return value
     .replaceAll('&', '&amp;')
@@ -16,15 +43,95 @@ function escapeHtml(value: string): string {
 }
 
 function tokenTtlMinutes(): number {
-  // Keep the email copy stable and human-readable even if the TTL changes later.
   return Math.max(1, Math.round(EMAIL_TOKEN_TTL_MS / (60 * 1000)));
 }
 
-export function buildVerifyEmailSetPasswordTemplate(params: { link: string }): EmailTemplate {
-  const minutes = tokenTtlMinutes();
-  const escapedLink = escapeHtml(params.link);
+function resolveTheme(theme?: Partial<EmailTheme>): EmailTheme {
+  if (!theme) return DEFAULT_THEME;
+  return { ...DEFAULT_THEME, ...theme };
+}
 
-  // Keep registration/login emails generic so copy doesn't imply account existence/state.
+function logoHtml(t: EmailTheme): string {
+  if (!t.logoUrl) return '';
+  const alt = escapeHtml(t.logoAlt ?? '');
+  const src = escapeHtml(t.logoUrl);
+  return `<tr>
+  <td align="center" style="padding:24px 24px 0 24px;">
+    <img src="${src}" alt="${alt}" height="32" style="display:block;height:32px;width:auto;max-width:200px;" />
+  </td>
+</tr>`;
+}
+
+function buildEmailHtml(params: {
+  theme: EmailTheme;
+  subject: string;
+  heading: string;
+  body: string;
+  buttonLabel: string;
+  buttonUrl: string;
+  minutes: number;
+}): string {
+  const t = params.theme;
+  const escapedLink = escapeHtml(params.buttonUrl);
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>${escapeHtml(params.subject)}</title>
+  </head>
+  <body style="margin:0;padding:0;background:${t.bg};">
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:${t.bg};padding:24px 12px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:560px;background:${t.surface};border-radius:${t.cardRadius};overflow:hidden;border:1px solid ${t.border};">
+            ${logoHtml(t)}
+            <tr>
+              <td style="padding:24px 24px 8px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:${t.text};">
+                <h1 style="margin:0;font-size:20px;line-height:28px;">${escapeHtml(params.heading)}</h1>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:0 24px 16px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:${t.text};font-size:14px;line-height:22px;">
+                ${escapeHtml(params.body)}
+              </td>
+            </tr>
+            <tr>
+              <td align="center" style="padding:0 24px 20px 24px;">
+                <a href="${escapedLink}" style="display:inline-block;background:${t.primary};color:${t.primaryText};text-decoration:none;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:20px;padding:12px 16px;border-radius:${t.buttonRadius};">
+                  ${escapeHtml(params.buttonLabel)}
+                </a>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:0 24px 16px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:${t.muted};font-size:12px;line-height:18px;">
+                This link expires in ${params.minutes} minutes and can only be used once.
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:0 24px 16px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:${t.muted};font-size:12px;line-height:18px;">
+                If the button does not work, copy and paste this URL into your browser:
+                <div style="margin-top:8px;word-break:break-all;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;color:${t.text};">${escapedLink}</div>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:0 24px 24px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:${t.muted};font-size:12px;line-height:18px;">
+                If you did not request this, you can ignore this email.
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+}
+
+export function buildVerifyEmailSetPasswordTemplate(params: { link: string; theme?: Partial<EmailTheme> }): EmailTemplate {
+  const minutes = tokenTtlMinutes();
+  const theme = resolveTheme(params.theme);
+
   const subject = 'Your sign-in link';
   const text = [
     'Continue signing in',
@@ -37,65 +144,22 @@ export function buildVerifyEmailSetPasswordTemplate(params: { link: string }): E
     'If you did not request this, you can ignore this email.',
   ].join('\n');
 
-  // Inline CSS only; email clients strip external styles.
-  const html = `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>${escapeHtml(subject)}</title>
-  </head>
-  <body style="margin:0;padding:0;background:#f6f7fb;">
-    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#f6f7fb;padding:24px 12px;">
-      <tr>
-        <td align="center">
-          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e8eaf0;">
-            <tr>
-              <td style="padding:24px 24px 8px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111827;">
-                <h1 style="margin:0;font-size:20px;line-height:28px;">Continue signing in</h1>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:0 24px 16px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#374151;font-size:14px;line-height:22px;">
-                Click the button below to continue.
-              </td>
-            </tr>
-            <tr>
-              <td align="center" style="padding:0 24px 20px 24px;">
-                <a href="${escapedLink}" style="display:inline-block;background:#111827;color:#ffffff;text-decoration:none;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:20px;padding:12px 16px;border-radius:10px;">
-                  Continue
-                </a>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:0 24px 16px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#6b7280;font-size:12px;line-height:18px;">
-                This link expires in ${minutes} minutes and can only be used once.
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:0 24px 16px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#6b7280;font-size:12px;line-height:18px;">
-                If the button does not work, copy and paste this URL into your browser:
-                <div style="margin-top:8px;word-break:break-all;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;color:#111827;">${escapedLink}</div>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:0 24px 24px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#6b7280;font-size:12px;line-height:18px;">
-                If you did not request this, you can ignore this email.
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-  </body>
-</html>`;
+  const html = buildEmailHtml({
+    theme,
+    subject,
+    heading: 'Continue signing in',
+    body: 'Click the button below to continue.',
+    buttonLabel: 'Continue',
+    buttonUrl: params.link,
+    minutes,
+  });
 
   return { subject, text, html };
 }
 
-export function buildVerifyEmailTemplate(params: { link: string }): EmailTemplate {
+export function buildVerifyEmailTemplate(params: { link: string; theme?: Partial<EmailTheme> }): EmailTemplate {
   const minutes = tokenTtlMinutes();
-  const escapedLink = escapeHtml(params.link);
+  const theme = resolveTheme(params.theme);
 
   const subject = 'Verify your email and sign in';
   const text = [
@@ -109,64 +173,22 @@ export function buildVerifyEmailTemplate(params: { link: string }): EmailTemplat
     'If you did not request this, you can ignore this email.',
   ].join('\n');
 
-  const html = `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>${escapeHtml(subject)}</title>
-  </head>
-  <body style="margin:0;padding:0;background:#f6f7fb;">
-    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#f6f7fb;padding:24px 12px;">
-      <tr>
-        <td align="center">
-          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e8eaf0;">
-            <tr>
-              <td style="padding:24px 24px 8px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111827;">
-                <h1 style="margin:0;font-size:20px;line-height:28px;">Verify your email and sign in</h1>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:0 24px 16px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#374151;font-size:14px;line-height:22px;">
-                Click the button below to verify your email.
-              </td>
-            </tr>
-            <tr>
-              <td align="center" style="padding:0 24px 20px 24px;">
-                <a href="${escapedLink}" style="display:inline-block;background:#111827;color:#ffffff;text-decoration:none;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:20px;padding:12px 16px;border-radius:10px;">
-                  Verify email
-                </a>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:0 24px 16px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#6b7280;font-size:12px;line-height:18px;">
-                This link expires in ${minutes} minutes and can only be used once.
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:0 24px 16px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#6b7280;font-size:12px;line-height:18px;">
-                If the button does not work, copy and paste this URL into your browser:
-                <div style="margin-top:8px;word-break:break-all;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;color:#111827;">${escapedLink}</div>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:0 24px 24px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#6b7280;font-size:12px;line-height:18px;">
-                If you did not request this, you can ignore this email.
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-  </body>
-</html>`;
+  const html = buildEmailHtml({
+    theme,
+    subject,
+    heading: 'Verify your email and sign in',
+    body: 'Click the button below to verify your email.',
+    buttonLabel: 'Verify email',
+    buttonUrl: params.link,
+    minutes,
+  });
 
   return { subject, text, html };
 }
 
-export function buildLoginLinkTemplate(params: { link: string }): EmailTemplate {
+export function buildLoginLinkTemplate(params: { link: string; theme?: Partial<EmailTheme> }): EmailTemplate {
   const minutes = tokenTtlMinutes();
-  const escapedLink = escapeHtml(params.link);
+  const theme = resolveTheme(params.theme);
 
   const subject = 'Your sign-in link';
   const text = [
@@ -180,65 +202,22 @@ export function buildLoginLinkTemplate(params: { link: string }): EmailTemplate 
     'If you did not request this, you can ignore this email.',
   ].join('\n');
 
-  // Inline CSS only; email clients strip external styles.
-  const html = `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>${escapeHtml(subject)}</title>
-  </head>
-  <body style="margin:0;padding:0;background:#f6f7fb;">
-    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#f6f7fb;padding:24px 12px;">
-      <tr>
-        <td align="center">
-          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e8eaf0;">
-            <tr>
-              <td style="padding:24px 24px 8px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111827;">
-                <h1 style="margin:0;font-size:20px;line-height:28px;">Continue signing in</h1>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:0 24px 16px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#374151;font-size:14px;line-height:22px;">
-                Click the button below to continue.
-              </td>
-            </tr>
-            <tr>
-              <td align="center" style="padding:0 24px 20px 24px;">
-                <a href="${escapedLink}" style="display:inline-block;background:#111827;color:#ffffff;text-decoration:none;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:20px;padding:12px 16px;border-radius:10px;">
-                  Continue
-                </a>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:0 24px 16px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#6b7280;font-size:12px;line-height:18px;">
-                This link expires in ${minutes} minutes and can only be used once.
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:0 24px 16px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#6b7280;font-size:12px;line-height:18px;">
-                If the button does not work, copy and paste this URL into your browser:
-                <div style="margin-top:8px;word-break:break-all;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;color:#111827;">${escapedLink}</div>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:0 24px 24px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#6b7280;font-size:12px;line-height:18px;">
-                If you did not request this, you can ignore this email.
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-  </body>
-</html>`;
+  const html = buildEmailHtml({
+    theme,
+    subject,
+    heading: 'Continue signing in',
+    body: 'Click the button below to continue.',
+    buttonLabel: 'Continue',
+    buttonUrl: params.link,
+    minutes,
+  });
 
   return { subject, text, html };
 }
 
-export function buildPasswordResetTemplate(params: { link: string }): EmailTemplate {
+export function buildPasswordResetTemplate(params: { link: string; theme?: Partial<EmailTheme> }): EmailTemplate {
   const minutes = tokenTtlMinutes();
-  const escapedLink = escapeHtml(params.link);
+  const theme = resolveTheme(params.theme);
 
   const subject = 'Reset your password';
   const text = [
@@ -252,65 +231,22 @@ export function buildPasswordResetTemplate(params: { link: string }): EmailTempl
     'If you did not request this, you can ignore this email.',
   ].join('\n');
 
-  // Inline CSS only; email clients strip external styles.
-  const html = `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>${escapeHtml(subject)}</title>
-  </head>
-  <body style="margin:0;padding:0;background:#f6f7fb;">
-    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#f6f7fb;padding:24px 12px;">
-      <tr>
-        <td align="center">
-          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e8eaf0;">
-            <tr>
-              <td style="padding:24px 24px 8px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111827;">
-                <h1 style="margin:0;font-size:20px;line-height:28px;">Reset your password</h1>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:0 24px 16px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#374151;font-size:14px;line-height:22px;">
-                If you requested a password reset, click the button below.
-              </td>
-            </tr>
-            <tr>
-              <td align="center" style="padding:0 24px 20px 24px;">
-                <a href="${escapedLink}" style="display:inline-block;background:#111827;color:#ffffff;text-decoration:none;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:20px;padding:12px 16px;border-radius:10px;">
-                  Reset password
-                </a>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:0 24px 16px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#6b7280;font-size:12px;line-height:18px;">
-                This link expires in ${minutes} minutes and can only be used once.
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:0 24px 16px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#6b7280;font-size:12px;line-height:18px;">
-                If the button does not work, copy and paste this URL into your browser:
-                <div style="margin-top:8px;word-break:break-all;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;color:#111827;">${escapedLink}</div>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:0 24px 24px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#6b7280;font-size:12px;line-height:18px;">
-                If you did not request this, you can ignore this email.
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-  </body>
-</html>`;
+  const html = buildEmailHtml({
+    theme,
+    subject,
+    heading: 'Reset your password',
+    body: 'If you requested a password reset, click the button below.',
+    buttonLabel: 'Reset password',
+    buttonUrl: params.link,
+    minutes,
+  });
 
   return { subject, text, html };
 }
 
-export function buildTwoFaResetTemplate(params: { link: string }): EmailTemplate {
+export function buildTwoFaResetTemplate(params: { link: string; theme?: Partial<EmailTheme> }): EmailTemplate {
   const minutes = tokenTtlMinutes();
-  const escapedLink = escapeHtml(params.link);
+  const theme = resolveTheme(params.theme);
 
   const subject = 'Reset two-factor authentication';
   const text = [
@@ -324,58 +260,15 @@ export function buildTwoFaResetTemplate(params: { link: string }): EmailTemplate
     'If you did not request this, you can ignore this email.',
   ].join('\n');
 
-  // Inline CSS only; email clients strip external styles.
-  const html = `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>${escapeHtml(subject)}</title>
-  </head>
-  <body style="margin:0;padding:0;background:#f6f7fb;">
-    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#f6f7fb;padding:24px 12px;">
-      <tr>
-        <td align="center">
-          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e8eaf0;">
-            <tr>
-              <td style="padding:24px 24px 8px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111827;">
-                <h1 style="margin:0;font-size:20px;line-height:28px;">Reset two-factor authentication</h1>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:0 24px 16px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#374151;font-size:14px;line-height:22px;">
-                If you requested to reset two-factor authentication, click the button below.
-              </td>
-            </tr>
-            <tr>
-              <td align="center" style="padding:0 24px 20px 24px;">
-                <a href="${escapedLink}" style="display:inline-block;background:#111827;color:#ffffff;text-decoration:none;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:20px;padding:12px 16px;border-radius:10px;">
-                  Reset two-factor authentication
-                </a>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:0 24px 16px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#6b7280;font-size:12px;line-height:18px;">
-                This link expires in ${minutes} minutes and can only be used once.
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:0 24px 16px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#6b7280;font-size:12px;line-height:18px;">
-                If the button does not work, copy and paste this URL into your browser:
-                <div style="margin-top:8px;word-break:break-all;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;color:#111827;">${escapedLink}</div>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:0 24px 24px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#6b7280;font-size:12px;line-height:18px;">
-                If you did not request this, you can ignore this email.
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-  </body>
-</html>`;
+  const html = buildEmailHtml({
+    theme,
+    subject,
+    heading: 'Reset two-factor authentication',
+    body: 'If you requested to reset two-factor authentication, click the button below.',
+    buttonLabel: 'Reset two-factor authentication',
+    buttonUrl: params.link,
+    minutes,
+  });
 
   return { subject, text, html };
 }

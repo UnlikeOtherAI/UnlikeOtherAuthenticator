@@ -4,17 +4,29 @@ export const es = {
   'auth.login.title': 'Iniciar sesion',
   'auth.register.title': 'Crea tu cuenta',
   'auth.resetPassword.title': 'Restablecer tu contrasena',
+  'auth.setPassword.title': 'Establece tu contrasena',
   'auth.twoFactorVerify.title': 'Verificar codigo de dos factores',
   'auth.twoFactorSetup.title': 'Configurar autenticacion de dos factores',
 
   'form.email.label': 'Correo electronico',
   'form.password.label': 'Contrasena',
+  'form.newPassword.label': 'Nueva contrasena',
+  'form.confirmPassword.label': 'Confirmar contrasena',
 
   'form.login.submit': 'Iniciar sesion',
+  'form.login.error': 'Correo electronico o contrasena invalidos.',
   'form.register.submit': 'Continuar',
   'form.resetPassword.submit': 'Enviar instrucciones de restablecimiento',
+  'form.setPassword.submit': 'Establecer contrasena y continuar',
+  'form.setPassword.error': 'Algo salio mal. El enlace puede haber expirado.',
+  'form.setPassword.mismatch': 'Las contrasenas no coinciden.',
+  'form.setPassword.success': 'Contrasena restablecida correctamente. Ya puedes iniciar sesion.',
 
   'message.instructionsSent': 'Hemos enviado instrucciones a tu correo electronico',
+
+  'nav.forgotPassword': 'Olvidaste tu contrasena?',
+  'nav.createAccount': 'Crear una cuenta',
+  'nav.backToLogin': 'Volver a iniciar sesion',
 
   'twoFactor.setup.instructions':
     'Escanea este codigo QR con una app autenticadora y luego ingresa el codigo de 6 digitos para verificar la configuracion.',
