@@ -28,7 +28,7 @@ For the full product spec, see [brief.md](./brief.md). For tech stack, see [tech
         Card.tsx              — Card container, styled from theme config
         Input.tsx             — Text input with label and error state
         PasswordInput.tsx     — Password input with show/hide toggle and strength indicator
-        Logo.tsx              — Renders logo from config URL
+        Logo.tsx              — Renders logo from config (image URL or styled text)
         Spinner.tsx           — Loading indicator
         Alert.tsx             — Generic error/success message display
         Divider.tsx           — Visual separator (e.g. "or continue with")

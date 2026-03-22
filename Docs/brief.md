@@ -135,7 +135,7 @@ This service is **stateless where possible**, standards-based, and API-first.
 * Button styles
 * Card styles
 * Typography
-* Logo URL
+* Logo — image URL **or** text with configurable font size, color, and custom CSS styles
 * Layout density
 
 ### Theming Source

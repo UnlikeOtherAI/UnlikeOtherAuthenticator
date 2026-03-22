@@ -75,6 +75,26 @@ function parseCardStyle(value: unknown): CardStyle | '' {
   return '';
 }
 
+function sanitizeCssValue(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > 200) return '';
+  // Block dangerous patterns: semicolons, braces, url(), expression()
+  if (/[{};]|url\s*\(|expression\s*\(/i.test(trimmed)) return '';
+  return trimmed;
+}
+
+function sanitizeCssRecord(obj: Record<string, unknown>): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const [key, raw] of Object.entries(obj)) {
+    if (typeof raw !== 'string') continue;
+    // Only allow valid CSS property names (kebab-case or camelCase alphanumeric + hyphens)
+    if (!/^[a-zA-Z-][a-zA-Z0-9-]*$/.test(key)) continue;
+    const val = sanitizeCssValue(raw);
+    if (val) result[key] = val;
+  }
+  return result;
+}
+
 function parseThemeVars(uiTheme: Record<string, unknown>): ThemeVars {
   const vars: ThemeVars = {};
 
@@ -161,13 +181,29 @@ export function buildThemeFromConfig(config: unknown): Theme {
   if (rawLogoUrl && !logoUrl) throw new Error('Invalid theme config');
   const logoAlt = rawLogoAlt;
 
+  const rawLogoText = logo ? readString(logo, 'text').trim() : '';
+  const rawLogoFontSize = logo ? readString(logo, 'font_size').trim() : '';
+  const logoFontSize = rawLogoFontSize ? sanitizeCssLength(rawLogoFontSize) : undefined;
+  const rawLogoColor = logo ? readString(logo, 'color').trim() : '';
+  const logoColor = rawLogoColor ? sanitizeHexColor(rawLogoColor) : undefined;
+  const logoStyle = logo && isRecord(logo.style)
+    ? sanitizeCssRecord(logo.style as Record<string, unknown>)
+    : undefined;
+
   return {
     vars,
     density,
     typography: { fontFamily, baseTextSize },
     button: { style: buttonStyle },
     card: { style: cardStyle },
-    logo: { url: logoUrl, alt: logoAlt },
+    logo: {
+      url: logoUrl,
+      alt: logoAlt,
+      ...(rawLogoText ? { text: rawLogoText } : {}),
+      ...(logoFontSize ? { fontSize: logoFontSize } : {}),
+      ...(logoColor ? { color: logoColor } : {}),
+      ...(logoStyle && Object.keys(logoStyle).length > 0 ? { style: logoStyle } : {}),
+    },
   };
 }
 

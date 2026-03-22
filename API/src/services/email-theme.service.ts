@@ -16,5 +16,8 @@ export function extractEmailTheme(config: ClientConfig): Partial<EmailTheme> {
     cardRadius: ui_theme.radii.card,
     logoUrl: ui_theme.logo.url || undefined,
     logoAlt: ui_theme.logo.alt,
+    logoText: ui_theme.logo.text || undefined,
+    logoFontSize: ui_theme.logo.font_size || undefined,
+    logoColor: ui_theme.logo.color || undefined,
   };
 }

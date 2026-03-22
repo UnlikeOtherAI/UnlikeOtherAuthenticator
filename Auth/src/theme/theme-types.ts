@@ -24,6 +24,10 @@ export type Theme = {
   logo: {
     url: string;
     alt: string;
+    text?: string;
+    fontSize?: string;
+    color?: string;
+    style?: Record<string, string>;
   };
 };
 

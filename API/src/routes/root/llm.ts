@@ -25,7 +25,18 @@ export function registerLlmRoute(app: FastifyInstance): void {
           redirect_urls: 'string[] — Allowed OAuth redirect URLs (min 1)',
           enabled_auth_methods:
             'string[] — Auth methods to show: "email_password", "google", "facebook", "github", "linkedin", "apple"',
-          ui_theme: 'object — Full theme configuration (colors, radii, typography, logo, etc.)',
+          ui_theme: {
+            description: 'object — Full theme configuration (colors, radii, typography, logo, etc.)',
+            logo: {
+              url: 'string — Logo image URL (HTTPS/HTTP) or empty string',
+              alt: 'string (required) — Alt text for the logo (always required even for text logos)',
+              text: 'string (optional, max 100) — Text to display instead of an image when url is empty',
+              font_size: 'string (optional) — CSS font size for text logo (e.g. "24px", "2rem")',
+              color: 'string (optional) — Hex color for text logo (e.g. "#111827")',
+              style: 'Record<string, string> (optional) — Additional CSS properties for text logo (e.g. {"font-weight":"800","letter-spacing":"-0.02em"})',
+              note: 'If url is provided it takes precedence over text. If neither is set, no logo is rendered.',
+            },
+          },
           language_config:
             'string | string[] — Single language code or array of language codes for the auth UI',
         },

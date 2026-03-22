@@ -19,6 +19,9 @@ export type EmailTheme = {
   cardRadius: string;
   logoUrl?: string;
   logoAlt?: string;
+  logoText?: string;
+  logoFontSize?: string;
+  logoColor?: string;
 };
 
 const DEFAULT_THEME: EmailTheme = {
@@ -52,14 +55,27 @@ function resolveTheme(theme?: Partial<EmailTheme>): EmailTheme {
 }
 
 function logoHtml(t: EmailTheme): string {
-  if (!t.logoUrl) return '';
-  const alt = escapeHtml(t.logoAlt ?? '');
-  const src = escapeHtml(t.logoUrl);
-  return `<tr>
+  if (t.logoUrl) {
+    const alt = escapeHtml(t.logoAlt ?? '');
+    const src = escapeHtml(t.logoUrl);
+    return `<tr>
   <td align="center" style="padding:24px 24px 0 24px;">
     <img src="${src}" alt="${alt}" height="32" style="display:block;height:32px;width:auto;max-width:200px;" />
   </td>
 </tr>`;
+  }
+
+  if (t.logoText) {
+    const fontSize = t.logoFontSize ?? '24px';
+    const color = t.logoColor ?? t.text;
+    return `<tr>
+  <td align="center" style="padding:24px 24px 0 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:${escapeHtml(fontSize)};font-weight:600;color:${escapeHtml(color)};">
+    ${escapeHtml(t.logoText)}
+  </td>
+</tr>`;
+  }
+
+  return '';
 }
 
 function buildEmailHtml(params: {

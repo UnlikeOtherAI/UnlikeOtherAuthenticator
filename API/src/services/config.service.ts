@@ -25,6 +25,13 @@ const CssLengthSchema = z
   .min(1)
   .refine((value) => value === '0' || /^[0-9]+(?:\.[0-9]+)?(px|rem|em|%)$/.test(value));
 
+/** Safe CSS value: no semicolons, braces, url(), or expression(). */
+const SafeCssValueSchema = z
+  .string()
+  .trim()
+  .max(200)
+  .refine((value) => !/[{};]|url\s*\(|expression\s*\(/i.test(value));
+
 const HttpUrlOrEmptySchema = z
   .string()
   .trim()
@@ -73,6 +80,10 @@ const UiThemeSchema = z
       .object({
         url: HttpUrlOrEmptySchema,
         alt: z.string().trim().min(1),
+        text: z.string().trim().max(100).optional(),
+        font_size: CssLengthSchema.optional(),
+        color: HexColorSchema.optional(),
+        style: z.record(SafeCssValueSchema).optional(),
       })
       .passthrough(),
     // Optional explicit overrides for advanced clients; validated if provided.
