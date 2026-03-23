@@ -1,6 +1,7 @@
 import React, { useId, useState } from 'react';
 
 import { Button } from '../ui/Button.js';
+import { Switch } from '../ui/Switch.js';
 import { usePopup } from '../../hooks/use-popup.js';
 import { useTranslation } from '../../i18n/use-translation.js';
 
@@ -130,17 +131,12 @@ export function LoginForm(): React.JSX.Element {
       </div>
 
       {rememberMeEnabled && (
-        <label htmlFor={rememberMeId} className="flex items-center gap-2 text-sm">
-          <input
-            id={rememberMeId}
-            name="remember_me"
-            type="checkbox"
-            checked={rememberMe}
-            onChange={(e) => setRememberMe(e.currentTarget.checked)}
-            className="h-4 w-4 rounded border-[var(--uoa-color-border)] text-[var(--uoa-color-primary)] focus:ring-[var(--uoa-color-primary)]"
-          />
-          {t('form.rememberMe.label')}
-        </label>
+        <Switch
+          id={rememberMeId}
+          checked={rememberMe}
+          onChange={setRememberMe}
+          label={t('form.rememberMe.label')}
+        />
       )}
 
       {error && (
