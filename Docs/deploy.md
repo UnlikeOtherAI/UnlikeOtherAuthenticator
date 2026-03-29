@@ -12,6 +12,32 @@
 
 ## How to deploy
 
+### Automatic deploys
+
+- Push to `main` triggers GitHub Actions workflow [deploy-main.yml](/System/Volumes/Data/.internal/projects/Projects/UnlikeOtherAuthenticator/.github/workflows/deploy-main.yml).
+- The workflow:
+  - authenticates to Google Cloud via GitHub OIDC workload identity
+  - builds and pushes the container image to Artifact Registry
+  - deploys the new image to Cloud Run service `uoa-auth`
+  - checks `https://authentication.unlikeotherai.com/health`
+
+### GitHub Actions configuration
+
+Configured as GitHub repository variables:
+
+| Variable | Value |
+|----------|-------|
+| `GCP_PROJECT_ID` | `gen-lang-client-0561071620` |
+| `GCP_REGION` | `europe-west1` |
+| `GCP_CLOUD_RUN_SERVICE` | `uoa-auth` |
+| `GCP_ARTIFACT_REGISTRY_REPOSITORY` | `uoa-docker` |
+| `GCP_WORKLOAD_IDENTITY_PROVIDER` | `projects/193510011126/locations/global/workloadIdentityPools/github-actions/providers/github` |
+| `GCP_SERVICE_ACCOUNT` | `gha-uoa-auth-deploy@gen-lang-client-0561071620.iam.gserviceaccount.com` |
+
+The workload identity provider is restricted to GitHub repository `UnlikeOtherAI/UnlikeOtherAuthenticator`.
+
+### Manual fallback
+
 ```bash
 # 1. Get the current commit hash for the image tag
 TAG=$(git rev-parse --short HEAD)

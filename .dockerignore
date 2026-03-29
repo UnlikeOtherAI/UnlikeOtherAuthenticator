@@ -1,0 +1,13 @@
+node_modules
+API/node_modules
+Auth/node_modules
+Admin/node_modules
+.git
+.github
+.playwright-cli
+coverage
+dist
+API/dist
+Auth/dist
+Auth/dist-ssr
+npm-debug.log*
