@@ -18,6 +18,7 @@ function makeConfig(overrides?: Partial<ClientConfig['org_features']>): ClientCo
     org_features: {
       enabled: false,
       groups_enabled: false,
+      user_needs_team: false,
       max_teams_per_org: 100,
       max_groups_per_org: 20,
       max_members_per_org: 1000,

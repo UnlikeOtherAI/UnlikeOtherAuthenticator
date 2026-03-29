@@ -210,6 +210,7 @@ const ClientConfigSchema = RequiredConfigSchema.extend({
     .object({
       enabled: z.boolean().default(false),
       groups_enabled: z.boolean().default(false),
+      user_needs_team: z.boolean().default(false),
       max_teams_per_org: z.number().int().positive().max(1000).default(100),
       max_groups_per_org: z.number().int().positive().max(200).default(20),
       max_members_per_org: z.number().int().positive().max(10000).default(1000),
@@ -225,6 +226,7 @@ const ClientConfigSchema = RequiredConfigSchema.extend({
     .default({
       enabled: false,
       groups_enabled: false,
+      user_needs_team: false,
       max_teams_per_org: 100,
       max_groups_per_org: 20,
       max_members_per_org: 1000,

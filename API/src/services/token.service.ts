@@ -16,6 +16,7 @@ import { AppError } from '../utils/errors.js';
 import type { ClientConfig } from './config.service.js';
 import { tryParseHttpUrl } from '../utils/http-url.js';
 import { getUserOrgContext, type OrgContext } from './org-context.service.js';
+import { ensureUserHasRequiredTeam } from './user-team-requirement.service.js';
 
 type TokenPrisma = PrismaClient;
 
@@ -297,6 +298,13 @@ async function issueTokenPairForUser(
 
   const role = domainRole.role === 'SUPERUSER' ? 'superuser' : 'user';
   const clientId = createClientId(params.config.domain, sharedSecret);
+  await ensureUserHasRequiredTeam(
+    {
+      userId: params.userId,
+      config: params.config,
+    },
+    { env, prisma },
+  );
   const org = params.config.org_features?.enabled
     ? await getUserOrgContext(
         {

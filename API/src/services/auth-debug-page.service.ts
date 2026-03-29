@@ -230,6 +230,7 @@ function buildConfigExample(debug: AuthDebugInfo): string | null {
     org_features: {
       enabled: true,
       groups_enabled: false,
+      user_needs_team: false,
       max_teams_per_org: 100,
       max_groups_per_org: 20,
       max_members_per_org: 1000,

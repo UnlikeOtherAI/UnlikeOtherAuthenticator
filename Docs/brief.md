@@ -564,6 +564,7 @@ The claim is optional and defaults to disabled. The object shape and defaults ar
 "org_features": {
   "enabled": false,
   "groups_enabled": false,
+  "user_needs_team": false,
   "max_teams_per_org": 100,
   "max_groups_per_org": 20,
   "max_members_per_org": 1000,
@@ -578,6 +579,7 @@ The claim is optional and defaults to disabled. The object shape and defaults ar
 |---|---|---|---|
 | `enabled` | boolean | `false` | Whether org/team features are enabled for this domain |
 | `groups_enabled` | boolean | `false` | Whether groups are enabled (requires `enabled: true`) |
+| `user_needs_team` | boolean | `false` | On successful auth, ensure the user ends up in a team. Existing org members with zero teams get a personal team; users with no org get a new personal org plus default team. |
 | `max_teams_per_org` | integer | `100` | Maximum teams per organisation (max 1000) |
 | `max_groups_per_org` | integer | `20` | Maximum groups per organisation (max 200) |
 | `max_members_per_org` | integer | `1000` | Maximum members per organisation (max 10000) |
@@ -597,6 +599,7 @@ Follow the same Zod pattern as `2fa_enabled` and `user_scope` in `ClientConfigSc
 org_features: z.object({
   enabled: z.boolean().default(false),
   groups_enabled: z.boolean().default(false),
+  user_needs_team: z.boolean().default(false),
   max_teams_per_org: z.number().int().positive().max(1000).default(100),
   max_groups_per_org: z.number().int().positive().max(200).default(20),
   max_members_per_org: z.number().int().positive().max(10000).default(1000),
@@ -608,7 +611,7 @@ org_features: z.object({
     { message: 'org_roles must include "owner"' }
   ).default(['owner', 'admin', 'member']),
 }).optional().default({
-  enabled: false, groups_enabled: false,
+  enabled: false, groups_enabled: false, user_needs_team: false,
   max_teams_per_org: 100, max_groups_per_org: 20,
   max_members_per_org: 1000, max_members_per_team: 200,
   max_members_per_group: 500, max_team_memberships_per_user: 50,
@@ -859,6 +862,9 @@ Organisation slugs are derived from the `name` field:
   * `lead` is a display/routing designation — not an access control role
 * Every org member must belong to at least one team.
   * On org membership add, user is auto-added to the default team.
+* If `org_features.user_needs_team = true`, successful auth must self-heal users with no team membership:
+  * If the user already belongs to an org on the domain but has zero teams, create a personal team named `"{user name}'s team"` and add them as `lead`.
+  * If the user does not belong to any org on the domain, create a new personal org for them, create a default personal team named `"{user name}'s team"`, and place them there.
 
 #### Default Team
 

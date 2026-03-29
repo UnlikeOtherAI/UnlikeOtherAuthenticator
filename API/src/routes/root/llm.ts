@@ -80,6 +80,8 @@ export function registerLlmRoute(app: FastifyInstance): void {
             fields: {
               enabled: 'boolean (default: false) — Enable org features',
               groups_enabled: 'boolean (default: false) — Enable groups within orgs',
+              user_needs_team:
+                'boolean (default: false) — when true, successful auth ensures the user ends up in a team: existing org members with zero teams get a personal team, and users with no org on the domain get a new personal org plus default team',
               max_teams_per_org: 'number (default: 100, max: 1000)',
               max_groups_per_org: 'number (default: 20, max: 200)',
               max_members_per_org: 'number (default: 1000, max: 10000)',
@@ -198,6 +200,8 @@ export function registerLlmRoute(app: FastifyInstance): void {
           'Your backend can list and review access requests with GET /org/organisations/:orgId/teams/:teamId/access-requests plus POST .../:requestId/approve or POST .../:requestId/reject. These endpoints are domain-hash protected and only work for the exact org/team configured in access_requests.',
         step_13:
           'Team records now expose a unique slug per organisation. POST /org/organisations/:orgId/teams accepts an optional slug; if omitted, the service derives one from the team name and appends a number when needed. PUT /org/organisations/:orgId/teams/:teamId also accepts an optional slug, while omitting it leaves the existing slug unchanged. Existing teams are backfilled during the team-slug migration.',
+        step_14:
+          'If org_features.user_needs_team=true, token issuance self-heals before building the access-token org claim. Users already in a domain org but with zero teams get a personal "<name>\'s team" with teamRole=lead and member->admin promotion when org_roles includes admin. Users with no org on the domain get a new personal org plus a default personal team.',
       },
     };
   });
