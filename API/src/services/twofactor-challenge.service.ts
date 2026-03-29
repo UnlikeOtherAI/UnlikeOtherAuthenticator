@@ -13,6 +13,7 @@ const TwoFaChallengeSchema = z.object({
   domain: z.string().min(1),
   auth_method: z.string().min(1),
   remember_me: z.boolean().optional(),
+  request_access: z.boolean().optional(),
 });
 
 export type TwoFaChallenge = {
@@ -22,6 +23,7 @@ export type TwoFaChallenge = {
   domain: string;
   authMethod: string;
   rememberMe: boolean;
+  requestAccess: boolean;
 };
 
 function sharedSecretKey(sharedSecret: string): Uint8Array {
@@ -41,6 +43,7 @@ export async function signTwoFaChallenge(params: {
   domain: string;
   authMethod: string;
   rememberMe?: boolean;
+  requestAccess?: boolean;
   sharedSecret: string;
   audience: string;
   now?: Date;
@@ -57,6 +60,7 @@ export async function signTwoFaChallenge(params: {
       domain: params.domain,
       auth_method: params.authMethod,
       remember_me: params.rememberMe ?? false,
+      request_access: params.requestAccess ?? false,
     })
       .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
       .setAudience(params.audience)
@@ -102,5 +106,6 @@ export async function verifyTwoFaChallenge(params: {
     domain: parsed.domain,
     authMethod: parsed.auth_method,
     rememberMe: parsed.remember_me ?? false,
+    requestAccess: parsed.request_access ?? false,
   };
 }

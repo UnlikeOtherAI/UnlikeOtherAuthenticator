@@ -43,6 +43,9 @@ model User {
   orgMembers   OrgMember[]
   teamMembers  TeamMember[]
   groupMembers GroupMember[]
+  acceptedTeamInvites TeamInvite[] @relation("AcceptedTeamInvites")
+  accessRequests AccessRequest[]
+  reviewedAccessRequests AccessRequest[] @relation("ReviewedAccessRequests")
 
   @@index([email])
   @@index([domain])
@@ -76,11 +79,14 @@ model VerificationToken {
 
   userId String? @map("user_id")
   user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  teamInviteId String? @map("team_invite_id")
+  teamInvite TeamInvite? @relation(fields: [teamInviteId], references: [id], onDelete: SetNull)
 
   @@index([email])
   @@index([userKey])
   @@index([expiresAt])
   @@index([createdAt])
+  @@index([teamInviteId])
   @@map("verification_tokens")
 }
 
@@ -161,6 +167,8 @@ model Organisation {
   members OrgMember[]
   teams   Team[]
   groups  Group[]
+  invites TeamInvite[]
+  accessRequests AccessRequest[]
 
   @@unique([domain, slug])
   @@index([domain])
@@ -189,6 +197,7 @@ model Team {
   orgId       String   @map("org_id")
   groupId     String?  @map("group_id")
   name        String   @db.VarChar(100)
+  slug        String   @db.VarChar(120)
   description String?  @db.VarChar(500)
   isDefault   Boolean  @default(false) @map("is_default")
   createdAt   DateTime @default(now()) @map("created_at")
@@ -197,8 +206,11 @@ model Team {
   org     Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
   group   Group?       @relation(fields: [groupId], references: [id], onDelete: SetNull)
   members TeamMember[]
+  invites TeamInvite[]
+  accessRequests AccessRequest[]
 
   @@unique([orgId, name])
+  @@unique([orgId, slug])
   @@index([orgId])
   @@index([groupId])
   @@map("teams")
@@ -220,6 +232,39 @@ model TeamMember {
   @@map("team_members")
 }
 
+model TeamInvite {
+  id              String    @id @default(cuid())
+  orgId           String    @map("org_id")
+  teamId          String    @map("team_id")
+  email           String
+  inviteName      String?   @db.VarChar(120) @map("invite_name")
+  teamRole        String    @default("member") @map("team_role")
+  redirectUrl     String?   @map("redirect_url")
+  invitedByUserId String?   @map("invited_by_user_id")
+  invitedByName   String?   @db.VarChar(120) @map("invited_by_name")
+  invitedByEmail  String?   @map("invited_by_email")
+  acceptedUserId  String?   @map("accepted_user_id")
+  acceptedAt      DateTime? @map("accepted_at")
+  declinedAt      DateTime? @map("declined_at")
+  revokedAt       DateTime? @map("revoked_at")
+  openedAt        DateTime? @map("opened_at")
+  openCount       Int       @default(0) @map("open_count")
+  lastSentAt      DateTime  @map("last_sent_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  org Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  acceptedUser User? @relation("AcceptedTeamInvites", fields: [acceptedUserId], references: [id], onDelete: SetNull)
+  tokens VerificationToken[]
+
+  @@index([orgId])
+  @@index([teamId, email])
+  @@index([acceptedAt])
+  @@index([revokedAt])
+  @@map("team_invites")
+}
+
 model Group {
   id          String   @id @default(cuid())
   orgId       String   @map("org_id")
@@ -235,6 +280,40 @@ model Group {
   @@unique([orgId, name])
   @@index([orgId])
   @@map("groups")
+}
+
+enum AccessRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model AccessRequest {
+  id               String              @id @default(cuid())
+  orgId            String              @map("org_id")
+  teamId           String              @map("team_id")
+  email            String
+  requestName      String?             @db.VarChar(120) @map("request_name")
+  status           AccessRequestStatus @default(PENDING)
+  requestedAt      DateTime            @default(now()) @map("requested_at")
+  lastRequestedAt  DateTime            @map("last_requested_at")
+  reviewedAt       DateTime?           @map("reviewed_at")
+  reviewReason     String?             @db.VarChar(500) @map("review_reason")
+  notifiedAt       DateTime?           @map("notified_at")
+  createdAt        DateTime            @default(now()) @map("created_at")
+  updatedAt        DateTime            @updatedAt @map("updated_at")
+  userId           String?             @map("user_id")
+  reviewedByUserId String?             @map("reviewed_by_user_id")
+
+  org        Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  team       Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user       User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  reviewedBy User?        @relation("ReviewedAccessRequests", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([orgId, teamId, status])
+  @@index([teamId, email, status])
+  @@index([userId])
+  @@map("access_requests")
 }
 
 model GroupMember {

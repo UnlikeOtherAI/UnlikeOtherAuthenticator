@@ -3,6 +3,7 @@ export const en = {
   'auth.register.title': 'Create your account',
   'auth.resetPassword.title': 'Reset your password',
   'auth.setPassword.title': 'Set your password',
+  'auth.accessRequested.title': 'Access request submitted',
   'auth.twoFactorVerify.title': 'Verify two-factor code',
   'auth.twoFactorSetup.title': 'Set up two-factor authentication',
 
@@ -23,6 +24,8 @@ export const en = {
 
   // Used by registration and reset-password flows; must remain generic.
   'message.instructionsSent': 'We sent instructions to your email',
+  'message.accessRequested':
+    'Your request has been sent to the team administrators. You can close this window and wait for approval.',
 
   // Navigation links between auth views.
   'nav.forgotPassword': 'Forgot your password?',
@@ -45,4 +48,3 @@ export const en = {
 
 export type TranslationKey = keyof typeof en;
 export type Translations = Record<TranslationKey, string>;
-

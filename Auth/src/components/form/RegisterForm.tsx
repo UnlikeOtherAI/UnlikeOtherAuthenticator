@@ -17,7 +17,7 @@ function fieldInputClasses(): string {
 export function RegisterForm(): React.JSX.Element {
   const emailId = useId();
   const { t } = useTranslation();
-  const { configUrl, redirectUrl } = usePopup();
+  const { configUrl, redirectUrl, requestAccess } = usePopup();
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -31,6 +31,9 @@ export function RegisterForm(): React.JSX.Element {
       url.searchParams.set('config_url', configUrl);
       if (redirectUrl) {
         url.searchParams.set('redirect_url', redirectUrl);
+      }
+      if (requestAccess) {
+        url.searchParams.set('request_access', 'true');
       }
 
       await fetch(url.toString(), {

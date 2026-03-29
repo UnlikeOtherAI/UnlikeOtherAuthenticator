@@ -19,6 +19,7 @@ export type TeamRecord = {
   orgId: string;
   groupId: string | null;
   name: string;
+  slug: string;
   description: string | null;
   isDefault: boolean;
   createdAt: Date;
@@ -39,6 +40,10 @@ export type TeamWithMembersRecord = TeamRecord & {
 };
 
 const ALLOWED_TEAM_ROLES = new Set(['member', 'lead']);
+const TEAM_SLUG_ALLOWED_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
+const TEAM_SLUG_FALLBACK = 'team';
+const MAX_TEAM_SLUG_LENGTH = 120;
+const MAX_TEAM_SLUG_COLLISION_RETRIES = 10_000;
 
 export function normalizeTeamName(value: string): string {
   const trimmed = value.trim();
@@ -55,6 +60,101 @@ export function normalizeTeamDescription(value?: string | null): string | null |
   const trimmed = value.trim();
   if (trimmed.length > 500) throw new AppError('BAD_REQUEST', 400);
   return trimmed === '' ? null : trimmed;
+}
+
+function normalizeTeamSlugBase(value: string): string {
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\x20-\x7e]/g, '');
+
+  const slug = normalized
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+/, '')
+    .replace(/-+$/, '');
+
+  const base = slug || TEAM_SLUG_FALLBACK;
+  const trimmed = base.slice(0, MAX_TEAM_SLUG_LENGTH).replace(/-+$/g, '');
+  return trimmed.length >= 2 ? trimmed : TEAM_SLUG_FALLBACK;
+}
+
+function buildTeamSlugCandidate(base: string, suffix?: number): string {
+  if (!suffix) return base;
+
+  const suffixText = `-${suffix}`;
+  const trimmedBase = base
+    .slice(0, Math.max(1, MAX_TEAM_SLUG_LENGTH - suffixText.length))
+    .replace(/-+$/g, '');
+
+  const candidateBase = trimmedBase.length >= 2 ? trimmedBase : TEAM_SLUG_FALLBACK;
+  return `${candidateBase}${suffixText}`;
+}
+
+export function normalizeTeamSlug(value: string): string {
+  const slug = normalizeTeamSlugBase(value);
+  if (slug.length < 2 || slug.length > MAX_TEAM_SLUG_LENGTH || !TEAM_SLUG_ALLOWED_RE.test(slug)) {
+    throw new AppError('BAD_REQUEST', 400);
+  }
+
+  return slug;
+}
+
+export async function deriveUniqueTeamSlug(params: {
+  orgId: string;
+  prisma: Pick<OrgServicePrisma, 'team'>;
+  name: string;
+  existingSlugToIgnore?: string;
+}): Promise<string> {
+  const base = normalizeTeamSlugBase(params.name);
+  const ignoredSlug = params.existingSlugToIgnore?.trim();
+
+  for (let suffix = 0; suffix < MAX_TEAM_SLUG_COLLISION_RETRIES; suffix += 1) {
+    const candidate = buildTeamSlugCandidate(base, suffix === 0 ? undefined : suffix + 1);
+    if (candidate === ignoredSlug) {
+      return candidate;
+    }
+
+    const existing = await params.prisma.team.findFirst({
+      where: {
+        orgId: params.orgId,
+        slug: candidate,
+      },
+      select: { id: true },
+    });
+    if (!existing) {
+      return candidate;
+    }
+  }
+
+  throw new AppError('INTERNAL', 500, 'TEAM_SLUG_COLLISION_RETRY_EXHAUSTED');
+}
+
+export async function ensureAvailableTeamSlug(params: {
+  orgId: string;
+  prisma: Pick<OrgServicePrisma, 'team'>;
+  slug: string;
+  existingSlugToIgnore?: string;
+}): Promise<string> {
+  const candidate = normalizeTeamSlug(params.slug);
+  if (candidate === params.existingSlugToIgnore?.trim()) {
+    return candidate;
+  }
+
+  const existing = await params.prisma.team.findFirst({
+    where: {
+      orgId: params.orgId,
+      slug: candidate,
+    },
+    select: { id: true },
+  });
+  if (existing) {
+    throw new AppError('BAD_REQUEST', 400);
+  }
+
+  return candidate;
 }
 
 export function normalizeTeamRole(value: string | undefined): string {
@@ -84,6 +184,7 @@ export function toTeamRecord(row: {
   orgId: string;
   groupId: string | null;
   name: string;
+  slug: string;
   description: string | null;
   isDefault: boolean;
   createdAt: Date;
@@ -94,6 +195,7 @@ export function toTeamRecord(row: {
     orgId: row.orgId,
     groupId: row.groupId,
     name: row.name,
+    slug: row.slug,
     description: row.description,
     isDefault: row.isDefault,
     createdAt: row.createdAt,

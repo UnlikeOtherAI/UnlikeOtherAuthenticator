@@ -53,6 +53,7 @@ function buildRegistrationEmailLandingLink(params: {
   baseUrl: string;
   token: string;
   configUrl: string;
+  requestAccess?: boolean;
 }): string {
   const baseUrl = normalizeBaseUrl(params.baseUrl);
   // Neutral landing route for registration flows (existing-user login link vs new-user
@@ -60,6 +61,9 @@ function buildRegistrationEmailLandingLink(params: {
   const url = new URL(`${baseUrl}/auth/email/link`);
   url.searchParams.set('token', params.token);
   url.searchParams.set('config_url', params.configUrl);
+  if (params.requestAccess) {
+    url.searchParams.set('request_access', 'true');
+  }
   return url.toString();
 }
 
@@ -107,6 +111,7 @@ export async function requestRegistrationInstructions(
     email: string;
     config: ClientConfig;
     configUrl: string;
+    requestAccess?: boolean;
   },
   deps?: RegisterDeps,
 ): Promise<void> {
@@ -127,13 +132,10 @@ export async function requestRegistrationInstructions(
     select: { id: true },
   });
 
-  if (
-    !existing &&
-    !isNewUserEmailRegistrationAllowed({
-      email,
-      config: params.config,
-    })
-  ) {
+  if (!existing && !params.requestAccess && !isNewUserEmailRegistrationAllowed({
+    email,
+    config: params.config,
+  })) {
     return;
   }
 
@@ -185,6 +187,7 @@ export async function requestRegistrationInstructions(
     baseUrl,
     token,
     configUrl: params.configUrl,
+    requestAccess: params.requestAccess,
   });
   if (type === 'VERIFY_EMAIL') {
     await (deps?.sendVerifyEmailEmail ?? sendVerifyEmailEmail)({

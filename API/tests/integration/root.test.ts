@@ -73,6 +73,24 @@ describe('GET /', () => {
     expect(body.endpoints).toContainEqual(
       expect.objectContaining({ method: 'GET', path: '/org/me' }),
     );
+    expect(body.endpoints).toContainEqual(
+      expect.objectContaining({
+        method: 'POST',
+        path: '/org/organisations/:orgId/teams/:teamId/invitations',
+      }),
+    );
+    expect(body.endpoints).toContainEqual(
+      expect.objectContaining({
+        method: 'GET',
+        path: '/org/organisations/:orgId/teams/:teamId/access-requests',
+      }),
+    );
+    expect(body.endpoints).toContainEqual(
+      expect.objectContaining({
+        method: 'POST',
+        path: '/org/organisations/:orgId/teams/:teamId/access-requests/:requestId/approve',
+      }),
+    );
   });
 
   it('does not expose internal admin routes', async () => {
@@ -97,5 +115,22 @@ describe('GET /', () => {
     const res = await app.inject({ method: 'GET', url: '/' });
 
     expect(res.headers['content-type']).toContain('application/json');
+  });
+});
+
+describe('GET /llm', () => {
+  it('documents access request config and backend review endpoints', async () => {
+    const res = await app.inject({ method: 'GET', url: '/llm' });
+
+    expect(res.statusCode).toBe(200);
+
+    const body = res.json();
+
+    expect(body.config_jwt.optional_fields.access_requests.fields.target_team_id).toContain(
+      'team that receives auto-grants and access requests',
+    );
+    expect(body.integration_guide.step_10).toContain('request_access=true');
+    expect(body.integration_guide.step_12).toContain('/teams/:teamId/access-requests');
+    expect(body.integration_guide.step_13).toContain('optional slug');
   });
 });

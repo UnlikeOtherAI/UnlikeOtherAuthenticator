@@ -4,9 +4,11 @@ import type { Env } from '../config/env.js';
 import { getEnv } from '../config/env.js';
 import type { EmailTheme } from './email.templates.js';
 import {
+  buildAccessRequestNotificationTemplate,
   buildAccountExistsTemplate,
   buildLoginLinkTemplate,
   buildPasswordResetTemplate,
+  buildTeamInviteTemplate,
   buildTwoFaResetTemplate,
   buildVerifyEmailTemplate,
   buildVerifyEmailSetPasswordTemplate,
@@ -369,6 +371,55 @@ async function dispatchEmail(message: EmailMessage): Promise<void> {
 export async function sendLoginLinkEmail(params: { to: string; link: string; theme?: Partial<EmailTheme> }): Promise<void> {
   const env = getEnv();
   const template = buildLoginLinkTemplate({ link: params.link, theme: params.theme });
+  await dispatchEmail({
+    to: params.to,
+    from: env.EMAIL_FROM,
+    replyTo: env.EMAIL_REPLY_TO,
+    subject: template.subject,
+    text: template.text,
+    html: template.html,
+  });
+}
+
+export async function sendTeamInviteEmail(params: {
+  to: string;
+  link: string;
+  organisationName: string;
+  teamName: string;
+  inviteeName?: string;
+  trackingPixelUrl?: string;
+  theme?: Partial<EmailTheme>;
+}): Promise<void> {
+  const env = getEnv();
+  const template = buildTeamInviteTemplate({
+    link: params.link,
+    organisationName: params.organisationName,
+    teamName: params.teamName,
+    inviteeName: params.inviteeName,
+    trackingPixelUrl: params.trackingPixelUrl,
+    theme: params.theme,
+  });
+  await dispatchEmail({
+    to: params.to,
+    from: env.EMAIL_FROM,
+    replyTo: env.EMAIL_REPLY_TO,
+    subject: template.subject,
+    text: template.text,
+    html: template.html,
+  });
+}
+
+export async function sendAccessRequestNotificationEmail(params: {
+  to: string;
+  reviewUrl: string;
+  requesterEmail: string;
+  requesterName?: string | null;
+  organisationName: string;
+  teamName: string;
+  theme?: Partial<EmailTheme>;
+}): Promise<void> {
+  const env = getEnv();
+  const template = buildAccessRequestNotificationTemplate(params);
   await dispatchEmail({
     to: params.to,
     from: env.EMAIL_FROM,

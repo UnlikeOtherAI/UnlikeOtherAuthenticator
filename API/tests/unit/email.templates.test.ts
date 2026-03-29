@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildAccessRequestNotificationTemplate,
   buildLoginLinkTemplate,
   buildPasswordResetTemplate,
+  buildTeamInviteTemplate,
   buildTwoFaResetTemplate,
   buildVerifyEmailTemplate,
   buildVerifyEmailSetPasswordTemplate,
@@ -125,6 +127,51 @@ describe('buildLoginLinkTemplate', () => {
     expect(tpl.html).toContain('href="https://example.com/path?x=1&amp;y=2"');
     expect(tpl.html).toContain('https://example.com/path?x=1&amp;y=2');
     expect(tpl.html).not.toContain('href="https://example.com/path?x=1&y=2"');
+  });
+});
+
+describe('buildTeamInviteTemplate', () => {
+  it('includes the invite context and action link', () => {
+    const link = 'https://auth.example.com/auth/email/link?token=t&config_url=https%3A%2F%2Fcfg.example.com%2Fconfig.jwt';
+    const tpl = buildTeamInviteTemplate({
+      link,
+      organisationName: 'Acme',
+      teamName: 'Core Team',
+      inviteeName: 'Taylor',
+      trackingPixelUrl: 'https://auth.example.com/auth/email/team-invite-open/invite-1.gif',
+    });
+    const escapedLink = link.replaceAll('&', '&amp;');
+
+    expect(tpl.subject).toBe('You have been invited to join Core Team');
+    expect(tpl.text).toContain('Taylor, you have been invited to join the Core Team team on Acme.');
+    expect(tpl.text).toContain(link);
+    expect(tpl.text).toMatch(/accept the invitation/i);
+
+    expect(tpl.html).toContain('Join Core Team');
+    expect(tpl.html).toContain('Accept invitation');
+    expect(tpl.html).toContain(`href="${escapedLink}"`);
+    expect(tpl.html).toContain('team-invite-open/invite-1.gif');
+  });
+});
+
+describe('buildAccessRequestNotificationTemplate', () => {
+  it('includes requester context and the admin review link without token-expiry copy', () => {
+    const reviewUrl = 'https://admin.example.com/team-access?request=123&team=core';
+    const tpl = buildAccessRequestNotificationTemplate({
+      reviewUrl,
+      requesterEmail: 'alex@example.com',
+      requesterName: 'Alex Example',
+      organisationName: 'Acme',
+      teamName: 'Core Team',
+    });
+
+    expect(tpl.subject).toBe('Alex Example <alex@example.com> requested access to Core Team');
+    expect(tpl.text).toContain('Access request received');
+    expect(tpl.text).toContain(reviewUrl);
+    expect(tpl.text).not.toMatch(/expires in 30 minutes/i);
+    expect(tpl.html).toContain('Review request');
+    expect(tpl.html).toContain('Alex Example &lt;alex@example.com&gt;');
+    expect(tpl.html).toContain('href="https://admin.example.com/team-access?request=123&amp;team=core"');
   });
 });
 

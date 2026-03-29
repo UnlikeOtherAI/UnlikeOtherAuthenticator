@@ -5,6 +5,7 @@ export const es = {
   'auth.register.title': 'Crea tu cuenta',
   'auth.resetPassword.title': 'Restablecer tu contrasena',
   'auth.setPassword.title': 'Establece tu contrasena',
+  'auth.accessRequested.title': 'Solicitud de acceso enviada',
   'auth.twoFactorVerify.title': 'Verificar codigo de dos factores',
   'auth.twoFactorSetup.title': 'Configurar autenticacion de dos factores',
 
@@ -24,6 +25,8 @@ export const es = {
   'form.setPassword.success': 'Contrasena restablecida correctamente. Ya puedes iniciar sesion.',
 
   'message.instructionsSent': 'Hemos enviado instrucciones a tu correo electronico',
+  'message.accessRequested':
+    'Tu solicitud se ha enviado a los administradores del equipo. Puedes cerrar esta ventana y esperar su aprobacion.',
 
   'nav.forgotPassword': 'Olvidaste tu contrasena?',
   'nav.createAccount': 'Crear una cuenta',
@@ -42,4 +45,3 @@ export const es = {
   'social.divider': 'o',
   'social.continueWith': 'Continuar con',
 } satisfies Translations;
-

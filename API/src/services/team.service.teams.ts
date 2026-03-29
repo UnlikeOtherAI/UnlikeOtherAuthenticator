@@ -5,6 +5,8 @@ import { AppError } from '../utils/errors.js';
 
 import {
   assertDatabaseEnabled,
+  deriveUniqueTeamSlug,
+  ensureAvailableTeamSlug,
   normalizeTeamDescription,
   normalizeTeamName,
   parseMaxTeamsPerOrg,
@@ -60,6 +62,7 @@ export async function listTeams(
       orgId: true,
       groupId: true,
       name: true,
+      slug: true,
       description: true,
       isDefault: true,
       createdAt: true,
@@ -79,6 +82,7 @@ export async function createTeam(
     domain: string;
     actorUserId: string;
     name: string;
+    slug?: string;
     description?: string;
     config: ClientConfig;
   },
@@ -111,11 +115,24 @@ export async function createTeam(
       throw new AppError('BAD_REQUEST', 400);
     }
 
+    const slug = params.slug
+      ? await ensureAvailableTeamSlug({
+          orgId: org.id,
+          prisma: tx,
+          slug: params.slug,
+        })
+      : await deriveUniqueTeamSlug({
+          orgId: org.id,
+          prisma: tx,
+          name,
+        });
+
     try {
       const created = await tx.team.create({
         data: {
           orgId: org.id,
           name,
+          slug,
           ...(description === undefined ? {} : { description }),
         },
         select: {
@@ -123,6 +140,7 @@ export async function createTeam(
           orgId: true,
           groupId: true,
           name: true,
+          slug: true,
           description: true,
           isDefault: true,
           createdAt: true,
@@ -174,6 +192,7 @@ export async function getTeam(
       orgId: true,
       groupId: true,
       name: true,
+      slug: true,
       description: true,
       isDefault: true,
       createdAt: true,
@@ -209,6 +228,7 @@ export async function updateTeam(
     domain: string;
     actorUserId: string;
     name?: string;
+    slug?: string;
     description?: string | null;
   },
   deps?: OrgServiceDeps,
@@ -221,12 +241,13 @@ export async function updateTeam(
     throw new AppError('BAD_REQUEST', 400);
   }
 
-  const hasUpdates = params.name !== undefined || params.description !== undefined;
+  const hasUpdates =
+    params.name !== undefined || params.slug !== undefined || params.description !== undefined;
   if (!hasUpdates) {
     throw new AppError('BAD_REQUEST', 400);
   }
 
-  const data: Partial<{ name: string; description: string | null }> = {};
+  const data: Partial<{ name: string; slug: string; description: string | null }> = {};
   if (params.name !== undefined) {
     data.name = normalizeTeamName(params.name);
   }
@@ -244,10 +265,19 @@ export async function updateTeam(
 
   const existing = await prisma.team.findFirst({
     where: { id: params.teamId, orgId: org.id },
-    select: { id: true },
+    select: { id: true, slug: true },
   });
   if (!existing) {
     throw new AppError('NOT_FOUND', 404);
+  }
+
+  if (params.slug !== undefined) {
+    data.slug = await ensureAvailableTeamSlug({
+      orgId: org.id,
+      prisma,
+      slug: params.slug,
+      existingSlugToIgnore: existing.slug,
+    });
   }
 
   try {
@@ -259,6 +289,7 @@ export async function updateTeam(
         orgId: true,
         groupId: true,
         name: true,
+        slug: true,
         description: true,
         isDefault: true,
         createdAt: true,

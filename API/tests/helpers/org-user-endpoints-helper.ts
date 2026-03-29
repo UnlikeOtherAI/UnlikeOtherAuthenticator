@@ -13,6 +13,8 @@ type PrismaCreateUser = (args: {
 
 type OrgTestDbHandle = {
   prisma: {
+    verificationToken: { deleteMany: PrismaDeleteMany };
+    teamInvite: { deleteMany: PrismaDeleteMany };
     groupMember: { deleteMany: PrismaDeleteMany };
     teamMember: { deleteMany: PrismaDeleteMany };
     orgMember: { deleteMany: PrismaDeleteMany };
@@ -50,6 +52,7 @@ export type TeamRecord = {
   id: string;
   orgId: string;
   name: string;
+  slug: string;
   description: string | null;
   isDefault: boolean;
   groupId: string | null;
@@ -71,6 +74,26 @@ export type TeamMemberRecord = {
   teamRole: string;
 };
 
+export type TeamInviteRecord = {
+  id: string;
+  orgId: string;
+  teamId: string;
+  email: string;
+  inviteName: string | null;
+  teamRole: string;
+  status?: string;
+  redirectUrl: string | null;
+  invitedByUserId: string | null;
+  invitedByName: string | null;
+  invitedByEmail: string | null;
+  declinedAt?: string | Date | null;
+  openedAt?: string | Date | null;
+  openCount?: number;
+  lastSentAt: string | Date;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+};
+
 export type OrgMemberRecord = {
   id: string;
   orgId: string;
@@ -80,6 +103,8 @@ export type OrgMemberRecord = {
 
 export function clearOrgTestDatabase(handle: OrgTestDbHandle): Promise<unknown[]> {
   return Promise.all([
+    handle.prisma.verificationToken.deleteMany(),
+    handle.prisma.teamInvite.deleteMany(),
     handle.prisma.groupMember.deleteMany(),
     handle.prisma.teamMember.deleteMany(),
     handle.prisma.orgMember.deleteMany(),

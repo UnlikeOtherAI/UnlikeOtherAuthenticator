@@ -8,11 +8,9 @@ import { hashEmailToken } from '../utils/verification-token.js';
 import { hashPassword } from './password.service.js';
 import { ensureDomainRoleForUser } from './domain-role.service.js';
 import { placeUserInConfiguredOrganisation } from './org-placement.service.js';
+import { acceptTeamInviteWithinTransaction } from './team-invite.service.js';
 
-type VerifyEmailPrisma = Pick<PrismaClient, '$transaction'> & {
-  verificationToken: Pick<PrismaClient['verificationToken'], 'findUnique' | 'updateMany'>;
-  user: Pick<PrismaClient['user'], 'findUnique' | 'create' | 'update'>;
-};
+type VerifyEmailPrisma = PrismaClient;
 
 type VerifyEmailDeps = {
   env?: ReturnType<typeof getEnv>;
@@ -22,6 +20,7 @@ type VerifyEmailDeps = {
   hashPassword?: typeof hashPassword;
   prisma?: VerifyEmailPrisma;
   placeUserInConfiguredOrganisation?: typeof placeUserInConfiguredOrganisation;
+  acceptTeamInviteWithinTransaction?: typeof acceptTeamInviteWithinTransaction;
 };
 
 type VerifyEmailTokenRow = Prisma.VerificationTokenGetPayload<{
@@ -32,6 +31,7 @@ type VerifyEmailTokenRow = Prisma.VerificationTokenGetPayload<{
     email: true;
     domain: true;
     configUrl: true;
+    teamInviteId: true;
     expiresAt: true;
     usedAt: true;
   };
@@ -92,6 +92,7 @@ export async function validateVerifyEmailToken(params: {
       email: true,
       domain: true,
       configUrl: true,
+      teamInviteId: true,
       expiresAt: true,
       usedAt: true,
     },
@@ -136,6 +137,7 @@ export async function verifyEmailToken(
         email: true,
         domain: true,
         configUrl: true,
+        teamInviteId: true,
         expiresAt: true,
         usedAt: true,
       },
@@ -220,6 +222,16 @@ export async function verifyEmailToken(
       prisma: tx,
     });
 
+    if (tokenRow.teamInviteId) {
+      await (deps?.acceptTeamInviteWithinTransaction ?? acceptTeamInviteWithinTransaction)({
+        prisma: tx,
+        teamInviteId: tokenRow.teamInviteId,
+        userId,
+        config: params.config,
+        now,
+      });
+    }
+
     const updated = await tx.verificationToken.updateMany({
       where: {
         id: tokenRow.id,
@@ -241,10 +253,11 @@ export async function verifyEmailToken(
       type,
       createdUser,
       email: tokenRow.email,
+      teamInviteId: tokenRow.teamInviteId,
     };
   });
 
-  if (consumed.createdUser) {
+  if (consumed.createdUser && !consumed.teamInviteId) {
     try {
       await (deps?.placeUserInConfiguredOrganisation ?? placeUserInConfiguredOrganisation)({
         userId: consumed.userId,

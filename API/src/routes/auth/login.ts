@@ -4,6 +4,10 @@ import { z } from 'zod';
 import { requireEnv } from '../../config/env.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
 import { loginWithEmailPassword } from '../../services/auth-login.service.js';
+import {
+  finalizeAuthenticatedUser,
+  parseRequestAccessFlag,
+} from '../../services/access-request-flow.service.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
 import { signTwoFaChallenge } from '../../services/twofactor-challenge.service.js';
 import {
@@ -23,6 +27,7 @@ const LoginBodySchema = z
 const LoginQuerySchema = z
   .object({
     redirect_url: z.string().min(1).optional(),
+    request_access: z.string().optional(),
   })
   .passthrough();
 
@@ -34,7 +39,7 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
     },
     async (request, reply) => {
       const { email, password, remember_me } = LoginBodySchema.parse(request.body);
-      const { redirect_url } = LoginQuerySchema.parse(request.query);
+      const { redirect_url, request_access } = LoginQuerySchema.parse(request.query);
 
       // configVerifier guarantees request.config is set on success.
       const config = request.config;
@@ -69,6 +74,7 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
           redirectUrl,
           authMethod: 'email_password',
           rememberMe,
+          requestAccess: parseRequestAccessFlag(request_access),
           sharedSecret: SHARED_SECRET,
           audience: AUTH_SERVICE_IDENTIFIER,
         });
@@ -77,12 +83,13 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
         return;
       }
 
-      const { code } = await issueAuthorizationCode({
+      const finalResult = await finalizeAuthenticatedUser({
         userId,
-        domain: config.domain,
+        config,
         configUrl: request.configUrl,
         redirectUrl,
         rememberMe,
+        requestAccess: parseRequestAccessFlag(request_access),
       });
 
       try {
@@ -100,8 +107,9 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
 
       reply.status(200).send({
         ok: true,
-        code,
-        redirect_to: buildRedirectToUrl({ redirectUrl, code }),
+        code: finalResult.status === 'granted' ? finalResult.code : undefined,
+        redirect_to: finalResult.redirectTo,
+        access_request_status: finalResult.status === 'requested' ? 'pending' : undefined,
       });
     },
   );

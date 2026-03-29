@@ -96,6 +96,7 @@ describe('Team service', () => {
         orgId: 'org-1',
         groupId: null,
         name: 'New',
+        slug: 'new',
         description: null,
         isDefault: false,
         createdAt: now,
@@ -106,6 +107,7 @@ describe('Team service', () => {
         orgId: 'org-1',
         groupId: null,
         name: 'Old',
+        slug: 'old',
         description: null,
         isDefault: true,
         createdAt: new Date('2026-02-14T00:00:00.000Z'),
@@ -131,6 +133,7 @@ describe('Team service', () => {
           orgId: 'org-1',
           groupId: null,
           name: 'New',
+          slug: 'new',
           description: null,
           isDefault: false,
         },
@@ -173,6 +176,7 @@ describe('Team service', () => {
       orgId: 'org-1',
       groupId: null,
       name: 'Engineering',
+      slug: 'engineering',
       description: 'Core',
       isDefault: false,
       createdAt: now,
@@ -195,8 +199,66 @@ describe('Team service', () => {
       id: 'team-1',
       orgId: 'org-1',
       name: 'Engineering',
+      slug: 'engineering',
       description: 'Core',
     });
+  });
+
+  it('derives a numbered slug when the base team slug is already taken', async () => {
+    const prisma = makePrismaMock();
+
+    prisma.organisation.findFirst.mockResolvedValue({
+      id: 'org-1',
+      domain: 'acme.example.com',
+      name: 'Acme',
+      slug: 'acme',
+      ownerId: 'u-owner',
+      createdAt: now,
+      updatedAt: now,
+    });
+    prisma.orgMember.findFirst.mockResolvedValue({
+      id: 'm-owner',
+      orgId: 'org-1',
+      userId: 'u-owner',
+      role: 'owner',
+      createdAt: now,
+      updatedAt: now,
+    });
+    prisma.team.count.mockResolvedValue(1);
+    prisma.team.findFirst
+      .mockResolvedValueOnce({ id: 'existing-team' })
+      .mockResolvedValueOnce(null);
+    prisma.team.create.mockResolvedValue({
+      id: 'team-2',
+      orgId: 'org-1',
+      groupId: null,
+      name: 'Engineering',
+      slug: 'engineering-2',
+      description: null,
+      isDefault: false,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const team = await createTeam(
+      {
+        orgId: 'org-1',
+        domain: 'acme.example.com',
+        actorUserId: 'u-owner',
+        name: 'Engineering',
+        config: makeConfig(),
+      },
+      { prisma },
+    );
+
+    expect(team.slug).toBe('engineering-2');
+    expect(prisma.team.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          slug: 'engineering-2',
+        }),
+      }),
+    );
   });
 
   it('rejects creating a team when org reaches max_teams_per_org', async () => {
@@ -264,6 +326,7 @@ describe('Team service', () => {
       orgId: 'org-1',
       groupId: null,
       name: 'Engineering',
+      slug: 'engineering',
       description: null,
       isDefault: false,
       createdAt: now,
@@ -293,6 +356,7 @@ describe('Team service', () => {
     expect(result).toMatchObject({
       id: 'team-1',
       name: 'Engineering',
+      slug: 'engineering',
       members: [{ userId: 'u-owner', teamRole: 'lead' }],
     });
   });
@@ -317,12 +381,13 @@ describe('Team service', () => {
       createdAt: now,
       updatedAt: now,
     });
-    prisma.team.findFirst.mockResolvedValue({ id: 'team-1' });
+    prisma.team.findFirst.mockResolvedValue({ id: 'team-1', slug: 'engineering' });
     prisma.team.update.mockResolvedValue({
       id: 'team-1',
       orgId: 'org-1',
       groupId: null,
       name: 'Platform',
+      slug: 'platform',
       description: 'Core infra',
       isDefault: false,
       createdAt: now,
@@ -342,6 +407,7 @@ describe('Team service', () => {
     );
 
     expect(result.name).toBe('Platform');
+    expect(result.slug).toBe('platform');
   });
 
   it('reassigns remaining users before deleting a team', async () => {
@@ -385,6 +451,7 @@ describe('Team service', () => {
       orgId: 'org-1',
       groupId: null,
       name: 'Platform',
+      slug: 'platform',
       description: null,
       isDefault: false,
       createdAt: now,

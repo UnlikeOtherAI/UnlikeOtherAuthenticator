@@ -1,10 +1,12 @@
 import React, { createContext, useContext, useMemo, useState, useCallback } from 'react';
 
-export type AuthView = 'login' | 'register' | 'reset-password' | 'set-password';
+export type AuthView = 'login' | 'register' | 'reset-password' | 'set-password' | 'access-requested';
 
 export type PopupQueryParams = {
   redirectUrl: string | null;
   twoFaToken: string | null;
+  requestAccess: boolean;
+  requestAccessStatus: 'pending' | null;
   /** Token from an email link landing (registration verify or password reset). */
   emailToken: string | null;
   /** The type of email link flow, set by the server on landing routes. */
@@ -35,12 +37,23 @@ function normalizeSearch(value: string): string {
 
 export function parsePopupQueryParams(search: string): PopupQueryParams {
   const s = normalizeSearch(search);
-  if (!s) return { redirectUrl: null, twoFaToken: null, emailToken: null, emailTokenType: null };
+  if (!s) {
+    return {
+      redirectUrl: null,
+      twoFaToken: null,
+      requestAccess: false,
+      requestAccessStatus: null,
+      emailToken: null,
+      emailTokenType: null,
+    };
+  }
 
   const params = new URLSearchParams(s);
 
   const redirectUrl = params.get('redirect_url') ?? params.get('redirect_uri');
   const twoFaToken = params.get('twofa_token');
+  const requestAccess = ['1', 'true', 'yes'].includes((params.get('request_access') ?? '').toLowerCase());
+  const requestAccessStatus = params.get('request_access_status') === 'pending' ? 'pending' : null;
   const emailToken = params.get('email_token');
   const rawType = params.get('email_token_type');
 
@@ -52,6 +65,8 @@ export function parsePopupQueryParams(search: string): PopupQueryParams {
   return {
     redirectUrl: redirectUrl && redirectUrl.trim() ? redirectUrl : null,
     twoFaToken: twoFaToken && twoFaToken.trim() ? twoFaToken : null,
+    requestAccess,
+    requestAccessStatus,
     emailToken: emailToken && emailToken.trim() ? emailToken : null,
     emailTokenType,
   };
@@ -63,6 +78,9 @@ function readClientSearch(): string {
 }
 
 function deriveInitialView(parsed: PopupQueryParams): AuthView {
+  if (parsed.requestAccessStatus === 'pending') {
+    return 'access-requested';
+  }
   if (parsed.emailToken && parsed.emailTokenType) {
     // Email link landing: show set-password for both registration+password and password reset.
     if (parsed.emailTokenType === 'VERIFY_EMAIL_SET_PASSWORD' || parsed.emailTokenType === 'PASSWORD_RESET') {
@@ -96,6 +114,8 @@ export function PopupProvider(props: {
       config: props.config,
       redirectUrl: parsed.redirectUrl,
       twoFaToken: parsed.twoFaToken,
+      requestAccess: parsed.requestAccess,
+      requestAccessStatus: parsed.requestAccessStatus,
       emailToken: parsed.emailToken,
       emailTokenType: parsed.emailTokenType,
       view,
@@ -105,7 +125,7 @@ export function PopupProvider(props: {
         window.location.assign(url);
       },
     };
-  }, [parsed.redirectUrl, parsed.twoFaToken, parsed.emailToken, parsed.emailTokenType, view, setView, props.configUrl, props.config]);
+  }, [parsed.redirectUrl, parsed.twoFaToken, parsed.requestAccess, parsed.requestAccessStatus, parsed.emailToken, parsed.emailTokenType, view, setView, props.configUrl, props.config]);
 
   return <PopupContext.Provider value={value}>{props.children}</PopupContext.Provider>;
 }

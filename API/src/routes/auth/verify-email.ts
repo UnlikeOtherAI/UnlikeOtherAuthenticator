@@ -8,8 +8,10 @@ import {
 } from '../../services/auth-verify-email.service.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
 import {
-  buildRedirectToUrl,
-  issueAuthorizationCode,
+  finalizeAuthenticatedUser,
+  parseRequestAccessFlag,
+} from '../../services/access-request-flow.service.js';
+import {
   selectRedirectUrl,
 } from '../../services/token.service.js';
 
@@ -23,6 +25,7 @@ const BodySchema = z
 const QuerySchema = z
   .object({
     redirect_url: z.string().min(1).optional(),
+    request_access: z.string().optional(),
   })
   .passthrough();
 
@@ -36,7 +39,7 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
     },
     async (request, reply) => {
       const { token, password } = BodySchema.parse(request.body);
-      const { redirect_url } = QuerySchema.parse(request.query);
+      const { redirect_url, request_access } = QuerySchema.parse(request.query);
 
       if (!request.config || !request.configUrl) {
         reply.status(400).send({ error: 'Request failed' });
@@ -65,12 +68,13 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
         allowedRedirectUrls: request.config.redirect_urls,
         requestedRedirectUrl: redirect_url,
       });
-      const { code } = await issueAuthorizationCode({
+      const finalResult = await finalizeAuthenticatedUser({
         userId,
-        domain: request.config.domain,
+        config: request.config,
         configUrl: request.configUrl,
         redirectUrl,
         rememberMe: request.config.session?.remember_me_default ?? true,
+        requestAccess: parseRequestAccessFlag(request_access),
       });
 
       try {
@@ -90,8 +94,9 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
 
       reply.status(200).send({
         ok: true,
-        code,
-        redirect_to: buildRedirectToUrl({ redirectUrl, code }),
+        code: finalResult.status === 'granted' ? finalResult.code : undefined,
+        redirect_to: finalResult.redirectTo,
+        access_request_status: finalResult.status === 'requested' ? 'pending' : undefined,
       });
     },
   );

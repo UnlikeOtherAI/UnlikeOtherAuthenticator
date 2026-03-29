@@ -5,6 +5,8 @@ import { AppError } from '../utils/errors.js';
 
 import {
   assertDatabaseEnabled,
+  deriveSlugWithValidation,
+  getOrganisationMember,
   ensureOrgName,
   isP2002Error,
   isP2003Error,
@@ -13,13 +15,12 @@ import {
   resolveOrganisationByDomain,
   toListLimit,
   toOrganisationRecord,
-  deriveSlugWithValidation,
-  getOrganisationMember,
   type CursorList,
   type OrgServiceDeps,
   type OrgServicePrisma,
   type OrganisationRecord,
 } from './organisation.service.base.js';
+import { deriveUniqueTeamSlug } from './team.service.base.js';
 
 export async function listOrganisationsForDomain(
   params: { domain: string; limit?: number; cursor?: string },
@@ -120,6 +121,11 @@ export async function createOrganisation(
       data: {
         orgId: createdOrg.id,
         name: 'General',
+        slug: await deriveUniqueTeamSlug({
+          orgId: createdOrg.id,
+          prisma: tx,
+          name: 'General',
+        }),
         isDefault: true,
       },
       select: { id: true },

@@ -10,6 +10,7 @@ import { buildGoogleAuthorizationUrl } from '../../services/social/google.servic
 import { buildLinkedInAuthorizationUrl } from '../../services/social/linkedin.service.js';
 import { assertSocialProviderAllowed } from '../../services/social/index.js';
 import { signSocialState } from '../../services/social/social-state.service.js';
+import { parseRequestAccessFlag } from '../../services/access-request-flow.service.js';
 import { selectRedirectUrl } from '../../services/token.service.js';
 import { AppError } from '../../utils/errors.js';
 
@@ -21,6 +22,7 @@ const QuerySchema = z
   .object({
     redirect_url: z.string().min(1).optional(),
     redirect_uri: z.string().min(1).optional(),
+    request_access: z.string().optional(),
   })
   .passthrough();
 
@@ -41,7 +43,7 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
     },
     async (request, reply) => {
       const { provider } = ParamsSchema.parse(request.params);
-      const { redirect_url, redirect_uri } = QuerySchema.parse(request.query);
+      const { redirect_url, redirect_uri, request_access } = QuerySchema.parse(request.query);
 
       const config = request.config;
       if (!config) throw new Error('missing request.config');
@@ -72,6 +74,7 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
           provider: 'google',
           configUrl: request.configUrl,
           redirectUrl,
+          requestAccess: parseRequestAccessFlag(request_access),
           sharedSecret: SHARED_SECRET,
           audience: AUTH_SERVICE_IDENTIFIER,
           baseUrlForIssuer: baseUrl,
@@ -103,6 +106,7 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
           provider: 'facebook',
           configUrl: request.configUrl,
           redirectUrl,
+          requestAccess: parseRequestAccessFlag(request_access),
           sharedSecret: SHARED_SECRET,
           audience: AUTH_SERVICE_IDENTIFIER,
           baseUrlForIssuer: baseUrl,
@@ -134,6 +138,7 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
           provider: 'github',
           configUrl: request.configUrl,
           redirectUrl,
+          requestAccess: parseRequestAccessFlag(request_access),
           sharedSecret: SHARED_SECRET,
           audience: AUTH_SERVICE_IDENTIFIER,
           baseUrlForIssuer: baseUrl,
@@ -170,6 +175,7 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
           provider: 'apple',
           configUrl: request.configUrl,
           redirectUrl,
+          requestAccess: parseRequestAccessFlag(request_access),
           sharedSecret: SHARED_SECRET,
           audience: AUTH_SERVICE_IDENTIFIER,
           baseUrlForIssuer: baseUrl,
@@ -201,6 +207,7 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
           provider: 'linkedin',
           configUrl: request.configUrl,
           redirectUrl,
+          requestAccess: parseRequestAccessFlag(request_access),
           sharedSecret: SHARED_SECRET,
           audience: AUTH_SERVICE_IDENTIFIER,
           baseUrlForIssuer: baseUrl,

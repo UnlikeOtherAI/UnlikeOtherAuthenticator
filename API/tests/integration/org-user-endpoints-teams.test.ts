@@ -9,6 +9,7 @@ import {
   createTestUser,
   hasDatabase,
   TeamMemberRecord,
+  TeamInviteRecord,
   TeamRecord,
   TeamWithMembersRecord,
   signAccessToken,
@@ -121,12 +122,14 @@ describe.skipIf(!hasDatabase)('user-facing /org team CRUD and membership', () =>
         },
         payload: {
           name: `Project Team ${i}`,
+          ...(i === 1 ? { slug: 'project-team-primary' } : {}),
           description: `Team ${i} for project users`,
         },
       });
       expect(res.statusCode).toBe(200);
       const created = res.json() as TeamRecord;
       expect(created.orgId).toBe(org.id);
+      expect(created.slug).toBe(i === 1 ? 'project-team-primary' : `project-team-${i}`);
       createdTeamIds.push(created.id);
       expect(created.description).toBe(`Team ${i} for project users`);
     }
@@ -155,6 +158,7 @@ describe.skipIf(!hasDatabase)('user-facing /org team CRUD and membership', () =>
     expect(teamById.statusCode).toBe(200);
     const team = teamById.json() as TeamWithMembersRecord;
     expect(team.id).toBe(createdTeamIds[0]);
+    expect(team.slug).toBe('project-team-primary');
     expect(team.members).toHaveLength(0);
 
     const updateTeam = await app.inject({
@@ -164,10 +168,66 @@ describe.skipIf(!hasDatabase)('user-facing /org team CRUD and membership', () =>
         authorization: `Bearer ${domainHash}`,
         'x-uoa-access-token': `Bearer ${ownerToken}`,
       },
-      payload: { description: 'Updated description' },
+      payload: { slug: 'project-team-renamed', description: 'Updated description' },
     });
     expect(updateTeam.statusCode).toBe(200);
     expect((updateTeam.json() as TeamRecord).description).toBe('Updated description');
+    expect((updateTeam.json() as TeamRecord).slug).toBe('project-team-renamed');
+
+    const createInvites = await app.inject({
+      method: 'POST',
+      url: `/org/organisations/${org.id}/teams/${createdTeamIds[0]}/invitations?domain=${encodeURIComponent(domain)}&config_url=${encodeURIComponent(orgConfigUrl)}`,
+      headers: {
+        authorization: `Bearer ${domainHash}`,
+      },
+      payload: {
+        redirectUrl: 'https://org-teams.example.com/oauth/callback',
+        invitedBy: {
+          userId: owner.id,
+          name: 'Team Owner',
+          email: 'team-owner@example.com',
+        },
+        invites: [
+          {
+            email: 'pending-user@example.com',
+            name: 'Pending User',
+          },
+          {
+            email: 'team-member@example.com',
+            name: 'Existing Member',
+            teamRole: 'lead',
+          },
+        ],
+      },
+    });
+    expect(createInvites.statusCode).toBe(200);
+    const inviteResponse = createInvites.json() as {
+      results: Array<{ email: string; status: string; invite?: TeamInviteRecord }>;
+    };
+    expect(inviteResponse.results).toHaveLength(2);
+    expect(inviteResponse.results.every((item) => item.status === 'invited')).toBe(true);
+
+    const pendingInvites = await app.inject({
+      method: 'GET',
+      url: `/org/organisations/${org.id}/teams/${createdTeamIds[0]}/invitations?domain=${encodeURIComponent(domain)}&config_url=${encodeURIComponent(orgConfigUrl)}`,
+      headers: {
+        authorization: `Bearer ${domainHash}`,
+      },
+    });
+    expect(pendingInvites.statusCode).toBe(200);
+    const pendingList = pendingInvites.json() as { data: TeamInviteRecord[] };
+    expect(pendingList.data).toHaveLength(2);
+    expect(pendingList.data.some((invite) => invite.invitedByName === 'Team Owner')).toBe(true);
+
+    const resendInvite = await app.inject({
+      method: 'POST',
+      url: `/org/organisations/${org.id}/teams/${createdTeamIds[0]}/invitations/${pendingList.data[0].id}/resend?domain=${encodeURIComponent(domain)}&config_url=${encodeURIComponent(orgConfigUrl)}`,
+      headers: {
+        authorization: `Bearer ${domainHash}`,
+      },
+    });
+    expect(resendInvite.statusCode).toBe(200);
+    expect((resendInvite.json() as TeamInviteRecord).id).not.toBe(pendingList.data[0].id);
 
     const addTeamMember = await app.inject({
       method: 'POST',

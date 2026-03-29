@@ -4,11 +4,10 @@ import { z } from 'zod';
 import { requireEnv } from '../../config/env.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
+import { finalizeAuthenticatedUser } from '../../services/access-request-flow.service.js';
 import { verifyTwoFaChallenge } from '../../services/twofactor-challenge.service.js';
 import { verifyTwoFactorForLogin } from '../../services/twofactor-login.service.js';
 import {
-  buildRedirectToUrl,
-  issueAuthorizationCode,
   selectRedirectUrl,
 } from '../../services/token.service.js';
 import { AppError } from '../../utils/errors.js';
@@ -65,12 +64,13 @@ export function registerTwoFactorVerifyRoute(app: FastifyInstance): void {
 
       await verifyTwoFactorForLogin({ userId: challenge.userId, code });
 
-      const { code: authCode } = await issueAuthorizationCode({
+      const finalResult = await finalizeAuthenticatedUser({
         userId: challenge.userId,
-        domain: config.domain,
+        config,
         configUrl: request.configUrl,
         redirectUrl,
         rememberMe: challenge.rememberMe,
+        requestAccess: challenge.requestAccess,
       });
 
       try {
@@ -90,8 +90,9 @@ export function registerTwoFactorVerifyRoute(app: FastifyInstance): void {
 
       reply.status(200).send({
         ok: true,
-        code: authCode,
-        redirect_to: buildRedirectToUrl({ redirectUrl, code: authCode }),
+        code: finalResult.status === 'granted' ? finalResult.code : undefined,
+        redirect_to: finalResult.redirectTo,
+        access_request_status: finalResult.status === 'requested' ? 'pending' : undefined,
       });
     },
   );

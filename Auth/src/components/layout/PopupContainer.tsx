@@ -1,6 +1,7 @@
 import React from 'react';
 
 import { PopupProvider, usePopup } from '../../hooks/use-popup.js';
+import { AccessRequestedPage } from '../../pages/AccessRequestedPage.js';
 import { LoginPage } from '../../pages/LoginPage.js';
 import { RegisterPage } from '../../pages/RegisterPage.js';
 import { ResetPasswordPage } from '../../pages/ResetPasswordPage.js';
@@ -24,6 +25,8 @@ function PopupContent(): React.JSX.Element {
       return <ResetPasswordPage />;
     case 'set-password':
       return <SetPasswordPage />;
+    case 'access-requested':
+      return <AccessRequestedPage />;
     default:
       return <LoginPage />;
   }

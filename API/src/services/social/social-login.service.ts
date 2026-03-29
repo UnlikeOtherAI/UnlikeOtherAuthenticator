@@ -48,6 +48,7 @@ export async function loginWithSocialProfile(
   params: {
     profile: SocialProfile;
     config: ClientConfig;
+    requestAccess?: boolean;
   },
   deps?: SocialLoginDeps,
 ): Promise<SocialLoginResult> {
@@ -91,7 +92,7 @@ export async function loginWithSocialProfile(
     userId = updated.id;
     twoFaEnabled = updated.twoFaEnabled;
   } else {
-    if (!isAllowedByRegistrationDomainPolicy({ email, config: params.config })) {
+    if (!params.requestAccess && !isAllowedByRegistrationDomainPolicy({ email, config: params.config })) {
       return { status: 'blocked' };
     }
 

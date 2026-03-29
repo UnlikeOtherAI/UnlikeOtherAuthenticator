@@ -112,7 +112,12 @@ export function SocialButtons(): React.JSX.Element | null {
       {providers.map((provider) => {
         const Icon = PROVIDER_ICONS[provider];
         const label = PROVIDER_LABELS[provider];
-        const href = buildSocialUrl(popup.configUrl, provider, popup.redirectUrl);
+        const href = buildSocialUrl(
+          popup.configUrl,
+          provider,
+          popup.redirectUrl,
+          popup.requestAccess,
+        );
 
         return (
           <a key={provider} href={href} className={classNames.buttonSecondary}>
@@ -129,12 +134,16 @@ function buildSocialUrl(
   configUrl: string,
   provider: SocialProvider,
   redirectUrl: string | null,
+  requestAccess: boolean,
 ): string {
   // Auth UI runs inside the authenticator popup, so use relative URLs.
   const params = new URLSearchParams();
   params.set('config_url', configUrl);
   if (redirectUrl) {
     params.set('redirect_url', redirectUrl);
+  }
+  if (requestAccess) {
+    params.set('request_access', 'true');
   }
   return `/auth/social/${provider}?${params.toString()}`;
 }

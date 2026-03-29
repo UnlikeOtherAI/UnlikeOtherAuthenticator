@@ -246,6 +246,7 @@ export async function assignTeamToGroup(
       orgId: true,
       groupId: true,
       name: true,
+      slug: true,
       description: true,
       isDefault: true,
       createdAt: true,

@@ -134,6 +134,37 @@ const RegistrationDomainMappingSchema = z
     }
   });
 
+const AccessRequestConfigSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    target_org_id: z.string().trim().min(1).optional(),
+    target_team_id: z.string().trim().min(1).optional(),
+    auto_grant_domains: z.array(z.string().trim().toLowerCase().min(1)).optional(),
+    notify_org_roles: z.array(z.string().trim().min(1).max(50)).default(['owner', 'admin']),
+    admin_review_url: z.string().trim().min(1).refine((value) => Boolean(tryParseHttpUrl(value))).optional(),
+  })
+  .superRefine((config, ctx) => {
+    if (!config.enabled) {
+      return;
+    }
+
+    if (!config.target_org_id) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'access_requests.target_org_id is required when access_requests.enabled=true',
+        path: ['target_org_id'],
+      });
+    }
+
+    if (!config.target_team_id) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'access_requests.target_team_id is required when access_requests.enabled=true',
+        path: ['target_team_id'],
+      });
+    }
+  });
+
 const ClientConfigSchema = RequiredConfigSchema.extend({
   // Task 2.5: optional config fields.
   //
@@ -153,6 +184,10 @@ const ClientConfigSchema = RequiredConfigSchema.extend({
     .min(1)
     .optional(),
   registration_domain_mapping: RegistrationDomainMappingSchema,
+  access_requests: AccessRequestConfigSchema.optional().default({
+    enabled: false,
+    notify_org_roles: ['owner', 'admin'],
+  }),
   // Brief 8 / Phase 10.4: default language should come from the client website's selection.
   // This is the currently selected language (not the list of available languages).
   language: z.string().trim().min(1).optional(),

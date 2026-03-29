@@ -90,6 +90,7 @@ function buildEmailHtml(params: {
   subject: string;
   heading: string;
   body: string;
+  bodyHtml?: string;
   buttonLabel: string;
   buttonUrl: string;
   minutes: number;
@@ -122,7 +123,7 @@ function buildEmailHtml(params: {
             </tr>
             <tr>
               <td style="padding:0 24px 16px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:${t.text};font-size:14px;line-height:22px;">
-                ${escapeHtml(params.body)}
+                ${params.bodyHtml ?? escapeHtml(params.body)}
               </td>
             </tr>
             <tr>
@@ -239,6 +240,109 @@ export function buildLoginLinkTemplate(params: { link: string; theme?: Partial<E
     buttonUrl: params.link,
     minutes,
   });
+
+  return { subject, text, html };
+}
+
+export function buildTeamInviteTemplate(params: {
+  link: string;
+  organisationName: string;
+  teamName: string;
+  inviteeName?: string;
+  trackingPixelUrl?: string;
+  theme?: Partial<EmailTheme>;
+}): EmailTemplate {
+  const minutes = tokenTtlMinutes();
+  const theme = resolveTheme(params.theme);
+  const recipient = params.inviteeName?.trim() ? `${params.inviteeName.trim()}, ` : '';
+  const subject = `You have been invited to join ${params.teamName}`;
+  const body =
+    `${recipient}you have been invited to join the ${params.teamName} team on ${params.organisationName}. ` +
+    'Click the button below to accept the invitation.';
+  const text = [
+    `Invitation to join ${params.teamName}`,
+    '',
+    `${recipient}you have been invited to join the ${params.teamName} team on ${params.organisationName}.`,
+    'Use this link to accept the invitation:',
+    params.link,
+    '',
+    `This link expires in ${minutes} minutes and can only be used once.`,
+    '',
+    'If you did not expect this invitation, you can ignore this email.',
+  ].join('\n');
+
+  const html = buildEmailHtml({
+    theme,
+    subject,
+    heading: `Join ${params.teamName}`,
+    body,
+    bodyHtml: params.trackingPixelUrl
+      ? `${escapeHtml(body)}<img src="${escapeHtml(params.trackingPixelUrl)}" alt="" width="1" height="1" style="display:none;" />`
+      : undefined,
+    buttonLabel: 'Accept invitation',
+    buttonUrl: params.link,
+    minutes,
+  });
+
+  return { subject, text, html };
+}
+
+export function buildAccessRequestNotificationTemplate(params: {
+  reviewUrl: string;
+  requesterEmail: string;
+  requesterName?: string | null;
+  organisationName: string;
+  teamName: string;
+  theme?: Partial<EmailTheme>;
+}): EmailTemplate {
+  const theme = resolveTheme(params.theme);
+  const requester = params.requesterName?.trim()
+    ? `${params.requesterName.trim()} <${params.requesterEmail}>`
+    : params.requesterEmail;
+  const subject = `${requester} requested access to ${params.teamName}`;
+  const text = [
+    'Access request received',
+    '',
+    `${requester} requested access to ${params.teamName} on ${params.organisationName}.`,
+    'Review the request here:',
+    params.reviewUrl,
+  ].join('\n');
+  const html = `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>${escapeHtml(subject)}</title>
+  </head>
+  <body style="margin:0;padding:0;background-color:${theme.bg};" bgcolor="${theme.bg}">
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color:${theme.bg};padding:24px 12px;" bgcolor="${theme.bg}">
+      <tr>
+        <td align="center" bgcolor="${theme.bg}">
+          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:560px;background-color:${theme.surface};border-radius:${theme.cardRadius};overflow:hidden;border:1px solid ${theme.border};" bgcolor="${theme.surface}">
+            ${logoHtml(theme)}
+            <tr>
+              <td style="padding:24px 24px 8px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:${theme.text};">
+                <h1 style="margin:0;font-size:20px;line-height:28px;color:${theme.text};">Access request received</h1>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:0 24px 16px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:${theme.text};font-size:14px;line-height:22px;">
+                ${escapeHtml(requester)} requested access to ${escapeHtml(params.teamName)} on ${escapeHtml(params.organisationName)}.
+              </td>
+            </tr>
+            <tr>
+              <td align="center" style="padding:0 24px 20px 24px;">
+                <a href="${escapeHtml(params.reviewUrl)}" style="display:inline-block;background-color:${theme.primary};color:${theme.primaryText};text-decoration:none;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:20px;padding:12px 16px;border-radius:${theme.buttonRadius};">
+                  Review request
+                </a>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
 
   return { subject, text, html };
 }

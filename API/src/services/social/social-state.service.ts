@@ -12,6 +12,7 @@ const SocialStateSchema = z
     provider: z.enum(['google', 'apple', 'facebook', 'github', 'linkedin']),
     config_url: z.string().min(1),
     redirect_url: z.string().min(1),
+    request_access: z.boolean().optional(),
   });
 
 export type SocialState = z.infer<typeof SocialStateSchema>;
@@ -28,6 +29,7 @@ export async function signSocialState(params: {
   provider: SocialProviderKey;
   configUrl: string;
   redirectUrl: string;
+  requestAccess?: boolean;
   sharedSecret: string;
   audience: string;
   baseUrlForIssuer: string;
@@ -43,6 +45,7 @@ export async function signSocialState(params: {
       provider: params.provider,
       config_url: params.configUrl,
       redirect_url: params.redirectUrl,
+      request_access: params.requestAccess ?? false,
     })
       .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
       .setAudience(params.audience)

@@ -3,8 +3,12 @@ import { z } from 'zod';
 
 import { configVerifier } from '../../middleware/config-verifier.js';
 import { validateRegistrationEmailLandingToken } from '../../services/auth-registration-email-link.service.js';
+import {
+  finalizeAuthenticatedUser,
+  parseRequestAccessFlag,
+} from '../../services/access-request-flow.service.js';
 import { renderAuthEntrypointHtml } from '../../services/auth-ui.service.js';
-import { issueAuthorizationCode, buildRedirectToUrl, selectRedirectUrl } from '../../services/token.service.js';
+import { selectRedirectUrl } from '../../services/token.service.js';
 import { verifyEmailToken } from '../../services/auth-verify-email.service.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
 
@@ -12,6 +16,7 @@ const QuerySchema = z
   .object({
     token: z.string().min(1),
     redirect_url: z.string().min(1).optional(),
+    request_access: z.string().optional(),
   })
   .passthrough();
 
@@ -22,7 +27,7 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
       preHandler: [configVerifier],
     },
     async (request, reply) => {
-      const { token, redirect_url } = QuerySchema.parse(request.query);
+      const { token, redirect_url, request_access } = QuerySchema.parse(request.query);
 
       if (!request.config || !request.configUrl) {
         reply.status(400).send({ error: 'Request failed' });
@@ -55,12 +60,13 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
             allowedRedirectUrls: request.config.redirect_urls,
             requestedRedirectUrl: redirect_url,
           });
-          const { code } = await issueAuthorizationCode({
+          const finalResult = await finalizeAuthenticatedUser({
             userId,
-            domain: request.config.domain,
+            config: request.config,
             configUrl: request.configUrl,
             redirectUrl,
             rememberMe: request.config.session?.remember_me_default ?? true,
+            requestAccess: parseRequestAccessFlag(request_access),
           });
 
           try {
@@ -78,7 +84,7 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
             request.log.error({ err }, 'failed to record login log');
           }
 
-          const finalUrl = buildRedirectToUrl({ redirectUrl, code });
+          const finalUrl = finalResult.redirectTo;
           if (finalUrl) {
             reply.redirect(finalUrl, 302);
             return;
@@ -95,7 +101,7 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
       const html = await renderAuthEntrypointHtml({
         config: request.config,
         configUrl: request.configUrl,
-        requestUrl: buildAuthUrl(request.configUrl, redirect_url, token, type),
+        requestUrl: buildAuthUrl(request.configUrl, redirect_url, token, type, parseRequestAccessFlag(request_access)),
       });
       reply.type('text/html; charset=utf-8').status(200).send(html);
     },
@@ -107,11 +113,13 @@ function buildAuthUrl(
   redirectUrl: string | undefined,
   token: string,
   type: string,
+  requestAccess: boolean,
 ): string {
   const params = new URLSearchParams();
   params.set('config_url', configUrl);
   if (redirectUrl) params.set('redirect_url', redirectUrl);
   params.set('email_token', token);
   params.set('email_token_type', type);
+  if (requestAccess) params.set('request_access', 'true');
   return `/auth?${params.toString()}`;
 }

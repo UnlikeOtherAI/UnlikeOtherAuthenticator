@@ -11,7 +11,7 @@ export function registerLlmRoute(app: FastifyInstance): void {
         overview:
           'Clients integrate via the OAuth 2.0 authorization code flow. The auth UI is rendered by this service at /auth. After authentication, an authorization code is returned to the client redirect_url. The client backend exchanges that code for tokens at POST /auth/token.',
         domain_auth:
-          'Backend-to-backend endpoints (POST /auth/token, POST /auth/revoke, /domain/*) require a domain hash bearer token: SHA-256(domain + SHARED_SECRET). This is sent as Authorization: Bearer <hash>.',
+          'Backend-to-backend endpoints (POST /auth/token, POST /auth/revoke, /domain/*, server-driven team invite routes under /org/organisations/:orgId/teams/:teamId/invitations*, and access-request review routes under /org/organisations/:orgId/teams/:teamId/access-requests*) require a domain hash bearer token: SHA-256(domain + SHARED_SECRET). This is sent as Authorization: Bearer <hash>.',
         config_url:
           'Most endpoints require a config_url query parameter pointing to a URL that returns the signed config JWT. The server fetches and verifies this JWT on every request.',
       },
@@ -90,6 +90,39 @@ export function registerLlmRoute(app: FastifyInstance): void {
                 'string[] (default: ["owner", "admin", "member"]) — Must include "owner"',
             },
           },
+          team_invites: {
+            description: 'Optional server-driven invite metadata for backend-managed team invitations',
+            fields: {
+              invitedBy:
+                'object — optional inviter metadata attached to pending team invites { userId?, name?, email? }',
+              redirectUrl:
+                'string — optional post-accept redirect URL stored with the invite and reused on resend',
+              openedAt:
+                'string|null — first invite-open timestamp recorded by the email tracking pixel',
+              openCount:
+                'number — number of times the invite email tracking pixel was requested',
+              declinedAt:
+                'string|null — timestamp set when the recipient explicitly declines the invite',
+            },
+          },
+          access_requests: {
+            description:
+              'Optional policy for authenticated users who click "request access" for a single configured team',
+            fields: {
+              enabled:
+                'boolean (default: false) — enables request-access handling after authentication completes',
+              target_org_id:
+                'string (required when enabled=true) — organisation that receives auto-grants and access requests',
+              target_team_id:
+                'string (required when enabled=true) — team that receives auto-grants and access requests',
+              auto_grant_domains:
+                'string[] (optional) — verified email domains that are auto-added to the configured team as basic members',
+              notify_org_roles:
+                'string[] (default: ["owner", "admin"]) — org roles that receive access-request notification emails',
+              admin_review_url:
+                'string (optional) — absolute URL included in access-request notification emails; falls back to https://<domain>/ when omitted',
+            },
+          },
         },
       },
 
@@ -151,6 +184,20 @@ export function registerLlmRoute(app: FastifyInstance): void {
         step_5:
           'Store the refresh_token server-side. Use the access_token for API calls. Refresh via POST /auth/token with { "grant_type": "refresh_token", "refresh_token": "<token>" }.',
         step_6: 'On logout, call POST /auth/revoke with the refresh_token to revoke the session.',
+        step_7:
+          'To invite a batch of users into a team from your backend, call POST /org/organisations/:orgId/teams/:teamId/invitations with Authorization: Bearer SHA256(domain+SHARED_SECRET), config_url, optional invitedBy metadata, and invites: [{ email, name?, teamRole? }]. If the same team/email is invited again before acceptance, the old active invite is replaced and a fresh email is sent.',
+        step_8:
+          'Invite emails land on GET /auth/email/team-invite, where the recipient can explicitly accept or decline the invitation. Decline is handled by GET /auth/email/team-invite/decline and recorded on the invite row.',
+        step_9:
+          'Invite emails include a tracking pixel at GET /auth/email/team-invite-open/:inviteId.gif. Team invite records expose openedAt/openCount so your backend can see whether an invite email was opened at all. This is best-effort because some mail clients proxy or block remote images.',
+        step_10:
+          'To let a user ask for access to one configured team, send them through the normal auth flow with request_access=true on /auth/login, /auth/register, /auth/verify-email, /auth/email/link, or /auth/social/:provider. The user authenticates first; then the service either auto-grants them to access_requests.target_team_id if their verified email domain matches access_requests.auto_grant_domains, or creates/refreshes a pending access request.',
+        step_11:
+          'When a pending access request is created, notification emails go to the configured org roles. The email includes access_requests.admin_review_url if provided, otherwise it falls back to https://<domain>/. The user is redirected back to /auth with request_access_status=pending so the popup can render an "access requested" confirmation state instead of issuing an authorization code.',
+        step_12:
+          'Your backend can list and review access requests with GET /org/organisations/:orgId/teams/:teamId/access-requests plus POST .../:requestId/approve or POST .../:requestId/reject. These endpoints are domain-hash protected and only work for the exact org/team configured in access_requests.',
+        step_13:
+          'Team records now expose a unique slug per organisation. POST /org/organisations/:orgId/teams accepts an optional slug; if omitted, the service derives one from the team name and appends a number when needed. PUT /org/organisations/:orgId/teams/:teamId also accepts an optional slug, while omitting it leaves the existing slug unchanged. Existing teams are backfilled during the team-slug migration.',
       },
     };
   });

@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 import { configVerifier } from '../../middleware/config-verifier.js';
+import { parseRequestAccessFlag } from '../../services/access-request-flow.service.js';
 import { requestRegistrationInstructions } from '../../services/auth-register.service.js';
 
 const SUCCESS_MESSAGE = 'We sent instructions to your email';
@@ -26,10 +27,14 @@ export function registerAuthRegisterRoute(app: FastifyInstance): void {
 
       if (email && request.config && request.configUrl) {
         try {
+          const requestAccess = parseRequestAccessFlag(
+            (request.query as { request_access?: unknown } | undefined)?.request_access,
+          );
           await requestRegistrationInstructions({
             email,
             config: request.config,
             configUrl: request.configUrl,
+            requestAccess,
           });
         } catch (err) {
           // Never leak internal failures; always return the generic success response.

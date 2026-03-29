@@ -18,6 +18,7 @@ import {
   UpdateOrgMemberRoleInput,
   UpdateOrganisationInput,
 } from './organisation.service.types.js';
+import { deriveUniqueTeamSlug } from './team.service.base.js';
 
 export * from './organisation.service.types.js';
 
@@ -194,6 +195,11 @@ export class OrganisationService {
         data: {
           orgId: org.id,
           name: DEFAULT_TEAM_NAME,
+          slug: await deriveUniqueTeamSlug({
+            orgId: org.id,
+            prisma: tx,
+            name: DEFAULT_TEAM_NAME,
+          }),
           isDefault: true,
         },
       });

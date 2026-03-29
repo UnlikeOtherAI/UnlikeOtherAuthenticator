@@ -19,10 +19,9 @@ import type { SocialProfile } from '../../services/social/provider.base.js';
 import { loginWithSocialProfile } from '../../services/social/social-login.service.js';
 import { verifySocialState } from '../../services/social/social-state.service.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
+import { finalizeAuthenticatedUser } from '../../services/access-request-flow.service.js';
 import { signTwoFaChallenge } from '../../services/twofactor-challenge.service.js';
 import {
-  buildRedirectToUrl,
-  issueAuthorizationCode,
   selectRedirectUrl,
 } from '../../services/token.service.js';
 
@@ -180,6 +179,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
     const socialLoginResult = await loginWithSocialProfile({
       profile,
       config,
+      requestAccess: socialState.request_access === true,
     });
 
     if (socialLoginResult.status === 'blocked') {
@@ -200,6 +200,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         redirectUrl,
         authMethod: provider,
         rememberMe,
+        requestAccess: socialState.request_access === true,
         sharedSecret: SHARED_SECRET,
         audience: AUTH_SERVICE_IDENTIFIER,
       });
@@ -208,16 +209,20 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
       u.searchParams.set('config_url', configUrl);
       u.searchParams.set('redirect_url', redirectUrl);
       u.searchParams.set('twofa_token', twofa_token);
+      if (socialState.request_access === true) {
+        u.searchParams.set('request_access', 'true');
+      }
       reply.redirect(u.toString(), 302);
       return;
     }
 
-    const { code: authCode } = await issueAuthorizationCode({
+    const finalResult = await finalizeAuthenticatedUser({
       userId,
-      domain: config.domain,
+      config,
       configUrl,
       redirectUrl,
       rememberMe,
+      requestAccess: socialState.request_access === true,
     });
 
     try {
@@ -233,6 +238,6 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
       request.log.error({ err }, 'failed to record login log');
     }
 
-    reply.redirect(buildRedirectToUrl({ redirectUrl, code: authCode }), 302);
+    reply.redirect(finalResult.redirectTo, 302);
   });
 }

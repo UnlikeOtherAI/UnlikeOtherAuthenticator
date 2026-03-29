@@ -1,5 +1,4 @@
-import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { z } from 'zod';
+import type { FastifyInstance } from 'fastify';
 
 import { configVerifier } from '../../middleware/config-verifier.js';
 import { createRateLimiter } from '../../middleware/rate-limiter.js';
@@ -17,110 +16,21 @@ import {
   updateTeam,
 } from '../../services/team.service.js';
 import { AppError } from '../../utils/errors.js';
-
-const DomainQuerySchema = z
-  .object({
-    domain: z
-      .string()
-      .trim()
-      .min(1)
-      .transform((value) => value.toLowerCase().replace(/\.$/, '')),
-    config_url: z.string().trim().min(1),
-  })
-  .passthrough();
-
-const ListQuerySchema = DomainQuerySchema.extend({
-  limit: z.coerce.number().int().positive().max(200).optional(),
-  cursor: z.string().trim().min(1).optional(),
-}).passthrough();
-
-const TeamPathSchema = z.object({
-  orgId: z.string().trim().min(1),
-  teamId: z.string().trim().min(1),
-});
-
-const OrgPathSchema = z.object({
-  orgId: z.string().trim().min(1),
-});
-
-const TeamBodySchema = z.object({
-  name: z.string().trim().min(1).max(100),
-  description: z.string().trim().max(500).nullable().optional(),
-});
-
-const TeamUpdateBodySchema = z.object({
-  name: z.string().trim().min(1).max(100).optional(),
-  description: z.string().trim().max(500).nullable().optional(),
-});
-
-const AddTeamMemberBodySchema = z.object({
-  userId: z.string().trim().min(1),
-  teamRole: z.string().trim().min(1).optional(),
-});
-
-const ChangeTeamMemberRoleBodySchema = z.object({
-  teamRole: z.string().trim().min(1),
-});
-
-type RequestWithClaims = FastifyRequest & {
-  accessTokenClaims?: {
-    userId: string;
-  };
-};
-
-function parseDomainContext(request: FastifyRequest) {
-  const parsed = DomainQuerySchema.parse(request.query);
-
-  request.config = {
-    ...(request.config ?? {}),
-    domain: parsed.domain,
-  } as typeof request.config;
-
-  return parsed;
-}
-
-async function parseDomainContextHook(request: FastifyRequest): Promise<void> {
-  parseDomainContext(request);
-}
-
-function parseDomainFromRequest(request: FastifyRequest): string {
-  const parsed = DomainQuerySchema.parse(request.query);
-  return parsed.domain;
-}
-
-function parseLimitCursor(request: FastifyRequest) {
-  return ListQuerySchema.parse(request.query);
-}
-
-function getActorUserId(request: RequestWithClaims): string {
-  const userId = request.accessTokenClaims?.userId;
-  if (!userId) {
-    throw new AppError('UNAUTHORIZED', 401, 'MISSING_ACCESS_TOKEN');
-  }
-
-  return userId;
-}
-
-function getOrgIdFromParams(params: unknown): string {
-  const parsed = OrgPathSchema.parse(params ?? {});
-  return parsed.orgId;
-}
-
-function getTeamIdFromParams(params: unknown): string {
-  const parsed = TeamPathSchema.parse(params ?? {});
-  return parsed.teamId;
-}
-
-function getMemberUserIdFromParams(params: unknown): string {
-  const parsed = z.object({ userId: z.string().trim().min(1) }).parse(params ?? {});
-  return parsed.userId;
-}
-
-function keyCreateTeamRateLimit(request: FastifyRequest) {
-  const domain = parseDomainFromRequest(request);
-  const orgId = getOrgIdFromParams(request.params);
-  return `org:create-team:${domain}:${orgId}`;
-}
+import {
+  AddTeamMemberBodySchema,
+  ChangeTeamMemberRoleBodySchema,
+  TeamBodySchema,
+  TeamUpdateBodySchema,
+  type RequestWithClaims,
+  getActorUserId,
+  getMemberUserIdFromParams,
+  getOrgIdFromParams,
+  getTeamIdFromParams,
+  keyCreateTeamRateLimit,
+  parseDomainContext,
+  parseDomainContextHook,
+  parseLimitCursor,
+} from './team-route.shared.js';
 
 export function registerTeamRoutes(app: FastifyInstance): void {
   app.get(
@@ -181,6 +91,7 @@ export function registerTeamRoutes(app: FastifyInstance): void {
         domain,
         actorUserId,
         name: body.name,
+        slug: body.slug,
         description: body.description ?? undefined,
         config,
       });
@@ -229,7 +140,7 @@ export function registerTeamRoutes(app: FastifyInstance): void {
       const actorUserId = getActorUserId(request as RequestWithClaims);
       const body = TeamUpdateBodySchema.parse(request.body ?? {});
 
-      if (!Object.hasOwn(body, 'name') && !Object.hasOwn(body, 'description')) {
+      if (!Object.hasOwn(body, 'name') && !Object.hasOwn(body, 'slug') && !Object.hasOwn(body, 'description')) {
         throw new AppError('BAD_REQUEST', 400);
       }
 
@@ -239,6 +150,7 @@ export function registerTeamRoutes(app: FastifyInstance): void {
         domain,
         actorUserId,
         name: body.name,
+        slug: body.slug,
         description: body.description,
       });
 
