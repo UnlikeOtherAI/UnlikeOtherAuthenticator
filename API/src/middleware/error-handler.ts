@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { ZodError } from 'zod';
 
 import { PUBLIC_ERROR_MESSAGE } from '../config/constants.js';
+import { renderAuthDebugHtml } from '../services/auth-debug-page.service.js';
 import { isAppError } from '../utils/errors.js';
 
 function wantsHtml(request: { method: string; headers: { accept?: string } }): boolean {
@@ -14,12 +15,31 @@ function renderGenericErrorHtml(): string {
   return `<!doctype html><html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>Auth</title></head><body><main><h1>Request failed</h1><p>Please close this window and try again.</p></main></body></html>`;
 }
 
+function shouldRenderAuthDebug(request: {
+  method: string;
+  headers: { accept?: string };
+  raw: { url?: string };
+  authDebug?: unknown;
+}): boolean {
+  if (!wantsHtml(request)) return false;
+  if (request.authDebug) return true;
+  const requestUrl = request.raw.url ?? '';
+  return requestUrl.startsWith('/auth');
+}
+
 export function registerErrorHandler(app: FastifyInstance): void {
   app.setErrorHandler((error, request, reply) => {
     // Internal logs can contain specifics; user-facing responses must remain generic.
     request.log.error({ err: error }, 'request failed');
 
     if (error instanceof ZodError) {
+      if (shouldRenderAuthDebug(request)) {
+        reply
+          .type('text/html; charset=utf-8')
+          .status(400)
+          .send(renderAuthDebugHtml({ statusCode: 400, requestUrl: request.raw.url, error, debug: request.authDebug }));
+        return;
+      }
       if (wantsHtml(request)) {
         reply.type('text/html; charset=utf-8').status(400).send(renderGenericErrorHtml());
         return;
@@ -29,6 +49,13 @@ export function registerErrorHandler(app: FastifyInstance): void {
     }
 
     if (isAppError(error)) {
+      if (shouldRenderAuthDebug(request)) {
+        reply
+          .type('text/html; charset=utf-8')
+          .status(error.statusCode)
+          .send(renderAuthDebugHtml({ statusCode: error.statusCode, requestUrl: request.raw.url, error, debug: request.authDebug }));
+        return;
+      }
       if (wantsHtml(request)) {
         reply
           .type('text/html; charset=utf-8')
@@ -40,6 +67,13 @@ export function registerErrorHandler(app: FastifyInstance): void {
       return;
     }
 
+    if (shouldRenderAuthDebug(request)) {
+      reply
+        .type('text/html; charset=utf-8')
+        .status(500)
+        .send(renderAuthDebugHtml({ statusCode: 500, requestUrl: request.raw.url, error, debug: request.authDebug }));
+      return;
+    }
     if (wantsHtml(request)) {
       reply.type('text/html; charset=utf-8').status(500).send(renderGenericErrorHtml());
       return;

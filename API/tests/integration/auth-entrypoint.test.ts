@@ -185,6 +185,43 @@ describe('GET /auth', () => {
     await app.close();
   });
 
+  it('renders an SVG logo URL from the client theme config', async () => {
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.AUTH_SERVICE_IDENTIFIER =
+      process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
+
+    const jwt = await new SignJWT(baseClientConfigPayload({
+      ui_theme: {
+        ...baseClientConfigPayload().ui_theme,
+        logo: {
+          url: 'https://client.example.com/brand-mark.svg',
+          alt: 'Client brand mark',
+          text: 'Client',
+        },
+      },
+    }))
+      .setProtectedHeader({ alg: 'HS256' })
+      .setAudience(process.env.AUTH_SERVICE_IDENTIFIER)
+      .sign(new TextEncoder().encode(process.env.SHARED_SECRET));
+
+    const fetchMock = vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const app = await createApp();
+    await app.ready();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/auth?config_url=${encodeURIComponent('https://client.example.com/auth-config')}`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('https://client.example.com/brand-mark.svg');
+    expect(res.body).toContain('Client brand mark');
+
+    await app.close();
+  });
+
   it('strips unknown config claims before bootstrapping the Auth UI', async () => {
     process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
     process.env.AUTH_SERVICE_IDENTIFIER =
