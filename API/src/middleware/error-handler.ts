@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { ZodError } from 'zod';
 
 import { PUBLIC_ERROR_MESSAGE } from '../config/constants.js';
-import { renderAuthDebugHtml } from '../services/auth-debug-page.service.js';
+import { enrichAuthDebugForAppError, renderAuthDebugHtml } from '../services/auth-debug-page.service.js';
 import { isAppError } from '../utils/errors.js';
 
 function wantsHtml(request: { method: string; headers: { accept?: string } }): boolean {
@@ -50,6 +50,7 @@ export function registerErrorHandler(app: FastifyInstance): void {
 
     if (isAppError(error)) {
       if (shouldRenderAuthDebug(request)) {
+        enrichAuthDebugForAppError(request, error);
         reply
           .type('text/html; charset=utf-8')
           .status(error.statusCode)

@@ -137,6 +137,49 @@ describe('GET /auth (config validation)', () => {
     await app.close();
   });
 
+  it('renders redirect mismatch details for HTML social auth requests when redirect_url is not allowlisted', async () => {
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.AUTH_SERVICE_IDENTIFIER =
+      process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
+
+    const jwt = await new SignJWT(
+      baseClientConfigPayload({
+        redirect_urls: ['https://client.example.com/auth/callback'],
+        enabled_auth_methods: ['google'],
+        allowed_social_providers: ['google'],
+      }),
+    )
+      .setProtectedHeader({ alg: 'HS256' })
+      .setAudience(process.env.AUTH_SERVICE_IDENTIFIER)
+      .sign(new TextEncoder().encode(process.env.SHARED_SECRET));
+
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 })));
+
+    const app = await createApp();
+    await app.ready();
+
+    const configUrl = 'https://client.example.com/auth-config';
+    const redirectUrl = 'https://client.example.com/auth/callback?mode=signin&next=%2F';
+    const res = await app.inject({
+      method: 'GET',
+      url: `/auth/social/google?config_url=${encodeURIComponent(configUrl)}&redirect_url=${encodeURIComponent(redirectUrl)}`,
+      headers: { accept: 'text/html' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.headers['content-type']).toContain('text/html');
+    expect(res.body).toContain('REDIRECT_URL_NOT_ALLOWED');
+    expect(res.body).toContain('config_url was fetched successfully and the config JWT passed signature, schema, and domain checks.');
+    expect(res.body).toContain('The requested redirect_url does not exactly match any value in config.redirect_urls.');
+    expect(res.body).toContain('https://client.example.com/auth/callback?mode=');
+    expect(res.body).toContain('Requested redirect_url includes query keys: mode, next.');
+    expect(res.body).toContain('Allowlisted redirect_urls: https://client.example.com/auth/callback.');
+    expect(res.body).toContain('redirect_url matching is exact.');
+    expect(res.body).not.toContain('next=%2F');
+
+    await app.close();
+  });
+
   it('returns generic 400 when config JWT aud is missing', async () => {
     process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
     process.env.AUTH_SERVICE_IDENTIFIER =

@@ -1,6 +1,8 @@
 import type { FastifyRequest } from 'fastify';
 import { ZodError } from 'zod';
 
+import type { AppError } from '../utils/errors.js';
+
 export type AuthDebugStage =
   | 'request'
   | 'config_url'
@@ -36,12 +38,20 @@ function escapeHtml(value: string): string {
     .replace(/'/g, '&#39;');
 }
 
-function sanitizeUrlForDebug(raw: string | null | undefined): string | null {
+function sanitizeUrlForDebug(
+  raw: string | null | undefined,
+  options?: { includeQueryKeys?: boolean },
+): string | null {
   if (!raw?.trim()) return null;
 
   try {
     const url = new URL(raw);
-    return `${url.origin}${url.pathname}`;
+    const base = `${url.origin}${url.pathname}`;
+    if (!options?.includeQueryKeys || url.searchParams.size === 0) return base;
+
+    const queryKeys = [...new Set(url.searchParams.keys())];
+    if (!queryKeys.length) return base;
+    return `${base}?${queryKeys.map((key) => `${key}=…`).join('&')}`;
   } catch {
     return raw.trim();
   }
@@ -74,6 +84,7 @@ function parseRequestDebugUrls(requestUrl: string | undefined): {
       configUrl: sanitizeUrlForDebug(url.searchParams.get('config_url')),
       redirectUrl: sanitizeUrlForDebug(
         url.searchParams.get('redirect_url') ?? url.searchParams.get('redirect_uri'),
+        { includeQueryKeys: true },
       ),
       requestPath: url.pathname || fallback.requestPath,
     };
@@ -276,6 +287,91 @@ export function mergeAuthDebugInfo(
     details: next.details ?? current.details,
     hints: next.hints,
   });
+}
+
+function parseRedirectQueryKeys(requestUrl: string | undefined): string[] {
+  if (!requestUrl) return [];
+
+  try {
+    const url = new URL(requestUrl, 'http://local-auth-request');
+    const redirectUrl = url.searchParams.get('redirect_url') ?? url.searchParams.get('redirect_uri');
+    if (!redirectUrl) return [];
+    return [...new Set(new URL(redirectUrl).searchParams.keys())];
+  } catch {
+    return [];
+  }
+}
+
+function sanitizeAllowedRedirectUrls(redirectUrls: string[] | undefined): string[] {
+  if (!redirectUrls?.length) return [];
+  return redirectUrls
+    .map((value) => sanitizeUrlForDebug(value, { includeQueryKeys: true }))
+    .filter((value): value is string => Boolean(value));
+}
+
+export function enrichAuthDebugForAppError(
+  request: FastifyRequest & { config?: { redirect_urls?: string[] } },
+  error: AppError,
+): void {
+  const code = error.message || error.code;
+  const allowedRedirectUrls = sanitizeAllowedRedirectUrls(request.config?.redirect_urls);
+  const redirectQueryKeys = parseRedirectQueryKeys(request.raw.url);
+  const configValidatedDetail =
+    'config_url was fetched successfully and the config JWT passed signature, schema, and domain checks.';
+
+  if (code === 'REDIRECT_URL_NOT_ALLOWED') {
+    const details = [
+      configValidatedDetail,
+      'The requested redirect_url does not exactly match any value in config.redirect_urls.',
+    ];
+    if (redirectQueryKeys.length) {
+      details.push(`Requested redirect_url includes query keys: ${redirectQueryKeys.join(', ')}.`);
+    }
+    if (allowedRedirectUrls.length) {
+      details.push(`Allowlisted redirect_urls: ${allowedRedirectUrls.join(', ')}.`);
+    }
+
+    mergeAuthDebugInfo(request, {
+      stage: 'request',
+      code,
+      summary: 'The requested redirect_url is not allowed for this client config.',
+      details,
+      hints: [
+        'redirect_url matching is exact. Path, trailing slash, and query string must match a value in config.redirect_urls exactly.',
+        'Either send the exact allowlisted callback URL or add the exact callback URL your client uses to config.redirect_urls.',
+      ],
+    });
+    return;
+  }
+
+  if (code === 'MISSING_REDIRECT_URL') {
+    mergeAuthDebugInfo(request, {
+      stage: 'request',
+      code,
+      summary: 'No usable redirect_url was provided and the client config did not supply a fallback.',
+      details: allowedRedirectUrls.length
+        ? [configValidatedDetail, `Allowlisted redirect_urls: ${allowedRedirectUrls.join(', ')}.`]
+        : [configValidatedDetail, 'config.redirect_urls is empty or missing.'],
+      hints: [
+        'Provide redirect_url in the request, or include at least one valid absolute URL in config.redirect_urls.',
+      ],
+    });
+    return;
+  }
+
+  if (code === 'INVALID_REDIRECT_URL') {
+    mergeAuthDebugInfo(request, {
+      stage: 'request',
+      code,
+      summary: 'The supplied redirect_url is not a valid absolute HTTP(S) URL.',
+      details: allowedRedirectUrls.length
+        ? [configValidatedDetail, `Allowlisted redirect_urls: ${allowedRedirectUrls.join(', ')}.`]
+        : [configValidatedDetail],
+      hints: [
+        'Use a full http:// or https:// callback URL and make sure it exactly matches a value in config.redirect_urls.',
+      ],
+    });
+  }
 }
 
 export function renderAuthDebugHtml(params: {
