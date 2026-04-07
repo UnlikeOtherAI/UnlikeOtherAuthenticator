@@ -145,7 +145,7 @@ New section in the sidebar, scoped to the selected App:
 
 - Table: key, description, default state (toggle), actions (edit, delete)
 - "Add Flag" button → modal: key, description, default state
-- Deleting a flag removes all role and user assignments for it
+- Deleting a flag removes all role and user assignments for it. Access tokens already issued containing this flag are not automatically invalidated; the change takes effect on next token issuance or SDK poll.
 
 ### Role matrix UI
 
@@ -160,6 +160,46 @@ New section in the sidebar, scoped to the selected App:
 - Search for a user
 - Shows their resolved flag state with source indicated: `role`, `override`, or `default`
 - Toggle any flag to create or remove a per-user override
+
+### Flag management API endpoints
+
+All require org `admin` or `owner` UOA role (domain-hash auth + config JWT).
+
+```
+GET    /apps/:appId/flags/definitions              — list all flag definitions for an App
+POST   /apps/:appId/flags/definitions              — create a flag  (body: { key, description, defaultState })
+PATCH  /apps/:appId/flags/definitions/:flagKey     — update a flag  (body: { description?, defaultState? })
+DELETE /apps/:appId/flags/definitions/:flagKey     — delete a flag (cascades: role assignments, user overrides)
+```
+
+### Role matrix API endpoints
+
+```
+GET    /apps/:appId/flags/matrix                   — get full matrix (flags × roles grid)
+PATCH  /apps/:appId/flags/matrix/:roleName/:flagKey — set cell value (body: { value: boolean })
+```
+
+Roles are derived from the team custom role union (see role matrix section). Adding/removing roles is done via the team custom role endpoints in `roles-and-acl.md`.
+
+### Per-user override API endpoints
+
+```
+GET    /apps/:appId/flags/overrides/:userId        — get all overrides for a user (resolved state + source)
+PUT    /apps/:appId/flags/overrides/:userId        — set one or more overrides (body: { flags: { [key]: boolean } })
+DELETE /apps/:appId/flags/overrides/:userId/:flagKey  — remove a specific override
+DELETE /apps/:appId/flags/overrides/:userId        — remove all overrides for a user
+```
+
+### Feature flags service enablement
+
+Feature flags are enabled per **App** (not per-org globally). Two fields control availability:
+
+- `feature_flags_enabled: boolean` — on the App model. When `false`, `/apps/:appId/flags` returns `{}` (HTTP 200). `/apps/startup` returns `flags: {}`. No flag endpoint is disabled (they return graceful empty responses). Default: `false`.
+- `role_flag_matrix_enabled: boolean` — on the App model. When `false`, role matrix resolution (step 2) is skipped entirely. Per-user overrides and flag defaults still apply. Default: `false`.
+
+**`max_flags_per_app`** — org-level config in `org_features` (to be added to brief.md §24.1). Default: `100`. Maximum: `500`. When the cap is reached, `POST /apps/:appId/flags/definitions` returns HTTP 400 with `{ "error": "Request failed" }`. Enforced at flag creation time. Existing flags are unaffected when the cap is lowered.
+
+**`scim_override_retention`** — org-level config in `org_features` (to be added to brief.md §24.1). Values: `"retain"` (default) | `"clear"`. Controls per-user override retention on hard-deprovision.
 
 ---
 

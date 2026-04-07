@@ -85,11 +85,28 @@ Each team (and optionally org) defines its own role names. One role is marked as
 ```
 
 - Exactly one role per team must be marked default at all times
-- If the default role is deleted, the admin must designate a new default before the deletion is allowed
+- If the default role is deleted, the admin must designate a new default before the deletion is allowed. If the default role no longer exists at the time of auto-enrolment (race condition), the auto-enrolment fails gracefully: the user is added as a plain member with no `customRole` assigned and no error is returned.
 - No limit on number of roles
-- Role names validated only for being non-empty strings — format is up to the defining org
+- Role names: non-empty string, max 100 characters. Spaces and special characters are allowed — format is up to the defining org. Duplicate names within the same team are rejected (case-sensitive). The same name may exist on different teams in the same org; in the flag matrix these collapse to a single column.
+- Role names share a namespace with UOA system role names but do not conflict — custom `owner`/`admin` labels are valid (different namespaces).
 
 What a role *permits* inside the consuming application is entirely that application's concern.
+
+### Custom role CRUD endpoints
+
+These require team `admin` or `owner` UOA role (or org `owner`).
+
+```
+GET    /org/:orgId/teams/:teamId/roles          — list custom role definitions
+POST   /org/:orgId/teams/:teamId/roles          — create a role
+PATCH  /org/:orgId/teams/:teamId/roles/:name    — rename a role (only `name` field; `default` is set separately)
+DELETE /org/:orgId/teams/:teamId/roles/:name    — delete a role (blocked if it is the current default; caller must reassign first)
+PUT    /org/:orgId/teams/:teamId/roles/:name/default  — mark this role as the default (unmarks the previous default)
+```
+
+`POST` body: `{ "name": "editor" }`. `PATCH` body: `{ "name": "new-editor" }`.
+
+On rename: existing `TeamMember.customRole` records with the old name are updated atomically. The flag matrix column is renamed atomically. On delete: `TeamMember` records with this role get `customRole = null` (they become plain members with no custom role). The flag matrix column is removed.
 
 ---
 
@@ -123,7 +140,10 @@ What a role *permits* inside the consuming application is entirely that applicat
 - `method` — the authentication method used: `"email"`, `"google"`, `"github"`, `"microsoft"`
 - `uoaRole` — `owner`, `admin`, or omitted if neither (plain member has no named UOA role)
 - `uoaRoleInherited` — `true` if derived from org-level role rather than explicit team assignment; omitted if `false`
-- `customRole` — the consuming app's role label for this user on this org/team. A single string (one role per user per team). Omitted if no custom role is assigned. See decision in the role model section below.
+- `customRole` (org level) — the consuming app's role label for this user at the org level. Since org-level custom roles are independent of team roles, this reflects any role explicitly set at the org scope. Omitted if none assigned at org level.
+- `customRole` (team level) — the consuming app's single role label for this user on this specific team membership. Omitted if no custom role is assigned on that team.
+
+**`org.customRole` when the user has multiple team memberships:** The org-level `customRole` is set explicitly (not derived from team roles). If the user has no explicit org-level custom role, `org.customRole` is omitted. Team-level `customRole` values are always per-team in the `teams[]` array and are never aggregated to the org level. See decision in the role model section below.
 
 ---
 
@@ -220,12 +240,15 @@ DELETE /scim/v2/Groups/:id     — delete team
 
 **Deprovisioning behavior (`DELETE /scim/v2/Users/:id`):**
 - Default: **soft-deprovision** — user's `active` is set to `false`, all active sessions are invalidated, org/team memberships are retained but marked inactive. Per-user flag overrides are retained.
+- `PATCH /scim/v2/Users/:id` with `{ active: false }` triggers the same soft-deprovision behavior (sessions invalidated, memberships marked inactive, overrides retained). `PATCH` with `{ active: true }` on a soft-deprovisioned user re-activates them and restores memberships (same as re-provisioning). Unknown SCIM schema attributes in a PATCH body are silently ignored.
 - Hard-delete: only triggered by `DELETE` with `?hardDelete=true` query param (requires explicit IdP config). Removes org/team membership but retains per-user flag overrides by default (see `scim_override_retention` in `org_features`).
-- Re-provisioning a soft-deprovisioned user (`POST /scim/v2/Users` with same email or `externalId`) re-activates the user and restores their memberships.
+- Re-provisioning a soft-deprovisioned user (`POST /scim/v2/Users` with same email or `externalId`) re-activates the user and restores their memberships. Active sessions are not automatically re-issued — the user must re-authenticate. If the mapped team was deleted during the inactive period, the SCIM auto-create logic applies.
 
 SCIM endpoints are authenticated with the per-org SCIM bearer token (see above). All SCIM endpoints are scoped to the org identified by the token.
 
 **SCIM error responses:** Use the standard SCIM error schema (`urn:ietf:params:scim:api:messages:2.0:Error`), `Content-Type: application/scim+json`. HTTP status codes: 400 (malformed request), 401 (missing/invalid token), 404 (resource not found), 409 (duplicate user). Response body: `{ "schemas": ["urn:ietf:params:scim:api:messages:2.0:Error"], "status": "404", "detail": "Resource not found" }`. Per UOA policy, detail messages are generic and non-enumerable.
+
+**`externalId` storage:** The IdP's `externalId` is stored as `scimExternalId: String?` on the UOA `User` model. It is used for re-provisioning matching. It is mutable on PATCH. It does not need to be a specific format — stored as received.
 
 **SCIM `POST /scim/v2/Users` response (HTTP 201):**
 ```json
@@ -244,6 +267,27 @@ SCIM endpoints are authenticated with the per-org SCIM bearer token (see above).
   }
 }
 ```
+
+**SCIM `POST /scim/v2/Groups` response (HTTP 201):**
+```json
+{
+  "schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"],
+  "id": "<uoa-team-id>",
+  "externalId": "<idp-external-id>",
+  "displayName": "Engineering",
+  "members": [],
+  "meta": {
+    "resourceType": "Group",
+    "created": "2026-04-07T10:00:00Z",
+    "lastModified": "2026-04-07T10:00:00Z",
+    "location": "/scim/v2/Groups/<uoa-team-id>"
+  }
+}
+```
+
+**SCIM authentication:** `Authorization: Bearer <token>` header (RFC 7523 standard). Missing or invalid token returns HTTP 401 with SCIM error schema. Token scope is validated against the org identified in the token hash lookup — requests targeting a different org's resources return HTTP 403.
+
+**SCIM `GET /scim/v2/Groups` pagination:** Uses SCIM standard `startIndex` (1-based, default 1) and `count` (page size, default 100, max 200) params. Supports `filter=displayName eq "Engineering"` per RFC 7644 §3.4.2.2. Response includes `totalResults`, `startIndex`, `itemsPerPage`.
 
 **SCIM bearer token management endpoints** (system admin auth required):
 ```

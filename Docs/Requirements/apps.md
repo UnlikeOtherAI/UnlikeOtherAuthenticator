@@ -31,6 +31,8 @@ An App is a registered client application that uses UOA for authentication and o
 | `storeUrl` | string (URL) | Default app store / update URL. Optional for non-mobile platforms. |
 | `offlinePolicy` | enum | `allow` \| `block` \| `cached` — what the SDK does if UOA is unreachable. Default: `allow`. |
 | `pollIntervalSeconds` | integer | How often the SDK re-checks the startup endpoint on foreground resume. Default: `300` (5 minutes). Minimum: `60`. Maximum: `3600`. |
+| `feature_flags_enabled` | boolean | Whether the feature flags service is active for this App. Default: `false`. When `false`, flag endpoints return `{}`. |
+| `role_flag_matrix_enabled` | boolean | Whether the role flag matrix service is active for this App. Only meaningful when `feature_flags_enabled` is `true`. Default: `false`. |
 | `active` | boolean | Whether the app is active. Inactive apps are rejected by the SDK startup endpoint. |
 | `createdAt` | datetime | |
 
@@ -42,8 +44,8 @@ All endpoints require org `admin` or `owner` UOA role (domain-hash auth + config
 POST   /org/:orgId/apps           — create an App
 GET    /org/:orgId/apps           — list all Apps for an org (paginated, cursor-based)
 GET    /org/:orgId/apps/:appId    — get a single App
-PATCH  /org/:orgId/apps/:appId    — update App fields (name, storeUrl, offlinePolicy, active, domains)
-DELETE /org/:orgId/apps/:appId    — delete an App (and all its flags and kill switches)
+PATCH  /org/:orgId/apps/:appId    — update App fields (name, storeUrl, offlinePolicy, active, domains, pollIntervalSeconds, feature_flags_enabled, role_flag_matrix_enabled). `identifier` and `platform` are immutable after creation.
+DELETE /org/:orgId/apps/:appId    — delete an App (and all its flags, kill switches, per-user overrides, and kill switch metadata)
 ```
 
 Request body for `POST /org/:orgId/apps`:
@@ -155,12 +157,12 @@ Kill switches belong to an App. A kill switch entry defines a version range and 
 | `secondaryButtonKey` | i18n key for secondary button ("Maybe Later") — soft/info types only |
 | `secondaryButton` | Fallback plain text |
 | `latestVersion` | Optional — displayed to user as the version they'll get |
-| `active` | Manual on/off toggle |
-| `activateAt` | Scheduled activation datetime — goes live automatically |
-| `deactivateAt` | Scheduled deactivation datetime |
-| `priority` | Integer — if multiple entries match, highest priority wins |
-| `testUserIds` | List of user IDs who see this kill switch in test mode only |
-| `cacheTtl` | How long the SDK should cache this response (seconds) |
+| `active` | boolean | Manual on/off toggle |
+| `activateAt` | datetime \| null | Scheduled activation datetime — goes live automatically. Until `activateAt`, the entry is not evaluated for non-test users. A `hard` or `maintenance` entry with a future `activateAt` does NOT block immediately — the SDK receives `activatesIn` (seconds) and stays silent until activation. |
+| `deactivateAt` | datetime \| null | Scheduled deactivation datetime. Entry stops matching after this time. |
+| `priority` | integer | 0–1000 (default 0). Highest value wins when multiple entries match. Equal priority: earliest `createdAt` wins; if still equal, ascending `id` order. |
+| `testUserIds` | string[] | User IDs who see this kill switch regardless of `active` flag and `activateAt` scheduling. Bypasses scheduling and on/off toggle — test users always see the entry if it matches their version. Empty array means no test users. |
+| `cacheTtl` | integer (seconds) | How long the SDK should cache this response. Minimum: 0 (no cache). |
 
 ### Kill switch types
 
@@ -248,7 +250,8 @@ GET /apps/startup
   &platform=ios
   &versionName=1.5.0
   &buildNumber=142
-  &userId=user_123
+  &userId=user_123         (optional — when authenticated; required for per-user flag overrides)
+  &teamId=team_xyz         (optional — for multi-team flag resolution; see feature-flags.md multi-team rule)
 ```
 
 Response:

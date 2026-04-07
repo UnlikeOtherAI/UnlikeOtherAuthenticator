@@ -299,6 +299,7 @@ interface AccessTokenPayload {
   email: string;
   method: 'email' | 'google' | 'github' | 'microsoft';  // auth method used
   orgs: OrgClaim[];
+  flags?: Record<string, boolean>;      // resolved flag map for the App context; present only when feature_flags_enabled=true on the App
 }
 
 interface OrgClaim {
