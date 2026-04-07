@@ -70,7 +70,7 @@ Returns the fully resolved flag map for that user in that App:
 
 Flags are resolved server-side. The consuming app receives a flat key→boolean map and checks it directly. No role or matrix logic leaks to the consuming app.
 
-Flags are also embedded in the access token at issue time so the consuming app does not need a separate request on every page load:
+Flags are also embedded in the access token at issue time so the consuming app does not need a separate request on every page load. The `flags` field is **only present in the token when `feature_flags_enabled = true`** on the App. When disabled, the field is omitted entirely (not `{}`). The SDK checks for the field's presence, not its value, to determine if flags are enabled:
 
 ```json
 {
@@ -127,7 +127,7 @@ Services are enabled **per App** (not per org). Two boolean fields on the App mo
 | Service | When disabled | When enabled |
 |---|---|---|
 | Feature Flags | No flag endpoints, no flags in token | Full flag management, query API, flags in token |
-| Role Flag Matrix | `roleLabel` is an opaque string on membership | UOA manages role definitions, matrix UI, flags resolved per role |
+| Role Flag Matrix | `customRole` is an opaque string on membership (stored but not resolved against any matrix) | UOA manages role definitions, matrix UI, flags resolved per role |
 
 Both services can be enabled independently. You can have feature flags without the role matrix (all flags managed per-user). You can have the role matrix without adding extra flags (matrix defines access, no additional product flags).
 
@@ -228,9 +228,9 @@ Feature flags are enabled per **App** (not per-org globally). Two fields control
 - `feature_flags_enabled: boolean` — on the App model. When `false`, `/apps/:appId/flags` returns `{}` (HTTP 200). `/apps/startup` returns `flags: {}`. No flag endpoint is disabled (they return graceful empty responses). Default: `false`.
 - `role_flag_matrix_enabled: boolean` — on the App model. When `false`, role matrix resolution (step 2) is skipped entirely. Per-user overrides and flag defaults still apply. Default: `false`.
 
-**`max_flags_per_app`** — org-level config in `org_features` (to be added to brief.md §24.1). Default: `100`. Maximum: `500`. When the cap is reached, `POST /apps/:appId/flags/definitions` returns HTTP 400 with `{ "error": "Request failed" }`. Enforced at flag creation time. Existing flags are unaffected when the cap is lowered.
+**`max_flags_per_app`** — org-level config in `org_features` (see `brief.md §24.1`). Default: `100`. Maximum: `500`. When the cap is reached, `POST /apps/:appId/flags/definitions` returns HTTP 400 with `{ "error": "Request failed" }`. Enforced at flag creation time. Existing flags are unaffected when the cap is lowered. The 500 absolute maximum is enforced by Zod schema at config parse time (config JWT rejected if value exceeds 500); the HTTP 400 applies only to the org-level configurable cap.
 
-**`scim_override_retention`** — org-level config in `org_features` (to be added to brief.md §24.1). Values: `"retain"` (default) | `"clear"`. Controls per-user override retention on hard-deprovision.
+**`scim_override_retention`** — org-level config in `org_features` (see `brief.md §24.1`). Values: `"retain"` (default) | `"clear"`. Controls per-user override retention on hard-delete only (`DELETE /scim/v2/Users/:id?hardDelete=true`). Soft-deprovision always retains overrides regardless of this setting.
 
 ---
 

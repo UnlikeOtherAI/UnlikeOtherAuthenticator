@@ -122,7 +122,7 @@ On rename: existing `TeamMember.customRole` records with the old name are update
       "id": "org_abc",
       "slug": "acme",
       "uoaRole": "admin",
-      "customRole": "manager",
+      "customRole": "editor",
       "teams": [
         {
           "id": "team_xyz",
@@ -133,14 +133,20 @@ On rename: existing `TeamMember.customRole` records with the old name are update
         }
       ]
     }
-  ]
+  ],
+  "flags": {
+    "dark_mode": true,
+    "new_checkout": false
+  }
 }
 ```
+
+Note: `flags` is present only when `feature_flags_enabled = true` on the App associated with the login. When absent, no `flags` key appears in the token. See `api-changes-rebac.md §5` for the canonical TypeScript interface. This document's token example is illustrative; `api-changes-rebac.md §5` is authoritative.
 
 - `method` — the authentication method used: `"email"`, `"google"`, `"github"`, `"microsoft"`
 - `uoaRole` — `owner`, `admin`, or omitted if neither (plain member has no named UOA role)
 - `uoaRoleInherited` — `true` if derived from org-level role rather than explicit team assignment; omitted if `false`
-- `customRole` (org level) — a convenience field. Derived from the user's primary team `customRole` using the same tiebreaker as flag resolution (highest UOA system role → earliest `TeamMember.createdAt`). There is no separately stored org-level custom role — this field is computed, not read from a separate org-scope data model. Omitted if no team has a `customRole` set for this user.
+- `customRole` (org level) — a convenience field. Derived from the user's primary team `customRole`. Tiebreaker: (1) highest UOA system role on that team (`owner > admin`, users with no named role rank lowest), (2) if tied, earliest `TeamMember.createdAt`. There is no separately stored org-level custom role — this field is computed server-side at token issuance, not read from a separate org-scope data model. Omitted if no team has a `customRole` assigned for this user.
 - `customRole` (team level) — the consuming app's single role label for this user on this specific team membership. Omitted if no custom role is assigned on that team.
 
 **`org.customRole` when the user has multiple team memberships:** Always derived from the primary team's `customRole` using the standard multi-team tiebreaker. It is never independently set or stored at org scope. Custom roles are team-only constructs.
@@ -169,7 +175,13 @@ Each rule specifies:
 - UOA role to grant — `admin` or `member` (plain member). `owner` can never be granted via auto-enrolment.
 - Verification method required: `ANY`, `EMAIL`, `GOOGLE`, `GITHUB`, `MICROSOFT`
 
-On auto-enrolment the user receives the **default custom role** of the team they are added to. The rule does not need to specify a custom role explicitly.
+**Verification method matching per login type:**
+- Email link login → matches rules with `ANY` or `EMAIL`
+- Google OAuth login → matches rules with `ANY` or `GOOGLE`
+- GitHub OAuth login → matches rules with `ANY` or `GITHUB`
+- Microsoft Entra ID login → matches rules with `ANY` or `MICROSOFT`
+
+Auto-enrolment adds the user to the org and to the org's `isDefault: true` team. On auto-enrolment the user receives the **default custom role** of that team (the team's `isDefault: true` custom role, if role flag matrix is enabled). The rule does not need to specify a custom role explicitly.
 
 **Multi-org conflict:** A user's email domain may match rules on multiple orgs within the same UOA instance (e.g. `ford.com` rules on both `ford-engineering` and `ford-marketing` orgs). This is intentional — the user is added to all matching orgs. There is no conflict; each org's rule is evaluated independently. If this is undesired, the org admin must not add overlapping domain rules.
 
@@ -219,11 +231,11 @@ POST   /scim/v2/Users          — provision a new user
 GET    /scim/v2/Users/:id      — read user
 PATCH  /scim/v2/Users/:id      — update user attributes / active status
 DELETE /scim/v2/Users/:id      — deprovision user (see deprovisioning behavior below)
-GET    /scim/v2/Groups         — list groups/teams (paginated, cursor-based)
-GET    /scim/v2/Groups/:id     — read a single group/team
-POST   /scim/v2/Groups         — create team via IdP
-PATCH  /scim/v2/Groups/:id     — add/remove members, rename team
-DELETE /scim/v2/Groups/:id     — delete team
+GET    /scim/v2/Groups          — list groups/teams (paginated, cursor-based)
+GET    /scim/v2/Groups/:id      — read a single group/team with its members
+POST   /scim/v2/Groups          — create team via IdP
+PATCH  /scim/v2/Groups/:id      — add/remove members, rename team (RFC 7644 Operations[] format)
+DELETE /scim/v2/Groups/:id      — delete team and sever ScimGroupMapping
 ```
 
 **SCIM bearer token:** An opaque UUID token issued per org via the admin panel. It has no expiry by default (long-lived). A single org may have multiple active tokens (for rolling rotation or multiple IdP integrations). Tokens are stored hashed; plain value shown only at creation. Revoked via admin panel (`DELETE /internal/admin/orgs/:orgId/scim-tokens/:tokenId`). Scoped to a single org — cannot be used across orgs.
@@ -247,7 +259,7 @@ DELETE /scim/v2/Groups/:id     — delete team
 
 SCIM endpoints are authenticated with the per-org SCIM bearer token (see above). All SCIM endpoints are scoped to the org identified by the token.
 
-**SCIM error responses:** Use the standard SCIM error schema (`urn:ietf:params:scim:api:messages:2.0:Error`), `Content-Type: application/scim+json`. HTTP status codes: 400 (malformed request), 401 (missing/invalid token), 404 (resource not found), 409 (duplicate user). Response body: `{ "schemas": ["urn:ietf:params:scim:api:messages:2.0:Error"], "status": "404", "detail": "Resource not found" }`. Per UOA policy, detail messages are generic and non-enumerable.
+**SCIM error responses:** Use the standard SCIM error schema (`urn:ietf:params:scim:api:messages:2.0:Error`), `Content-Type: application/scim+json`. HTTP status codes: 400 (malformed request), 401 (missing/invalid token), 404 (resource not found), 409 (duplicate user). Response body: `{ "schemas": ["urn:ietf:params:scim:api:messages:2.0:Error"], "status": 404, "detail": "Resource not found" }`. (Per RFC 7643 §8.7.1, `status` is an integer, not a string.) Per UOA policy, detail messages are generic and non-enumerable.
 
 **`externalId` storage:** The IdP's `externalId` is stored as `scimExternalId: String?` on the UOA `User` model. It is used for re-provisioning matching. It is mutable on PATCH. It does not need to be a specific format — stored as received.
 
@@ -299,6 +311,8 @@ SCIM endpoints are authenticated with the per-org SCIM bearer token (see above).
 Multiple operations may appear in a single PATCH body. Operations are applied atomically. Team rename via SCIM is authoritative — if a UOA admin renamed the team, the next SCIM PATCH with a `displayName` replace will overwrite it.
 
 **SCIM `GET /scim/v2/Groups` pagination:** Uses SCIM standard `startIndex` (1-based, default 1) and `count` (page size, default 100, max 200) params. Supports `filter=displayName eq "Engineering"` per RFC 7644 §3.4.2.2. Response includes `totalResults`, `startIndex`, `itemsPerPage`.
+
+**SCIM `DELETE /scim/v2/Groups/:id` behavior:** Deletes the UOA team associated with the SCIM group. The `ScimGroupMapping` record is removed. All team members remain as org members but lose their team membership. Per-user flag overrides are retained. The team itself is deleted. HTTP 204 on success. HTTP 404 if the group ID does not match any active mapping. This is a destructive operation — the team cannot be recovered. If the consuming IdP sends DELETE on a group in error, the team must be manually recreated and the mapping re-established.
 
 **Override retention on soft-deprovision:** Per-user flag overrides are **always retained** on soft-deprovision (`PATCH { active: false }` or `DELETE` without `?hardDelete=true`), regardless of the `scim_override_retention` org config. The `scim_override_retention` config only controls what happens on hard-delete (`DELETE?hardDelete=true`).
 

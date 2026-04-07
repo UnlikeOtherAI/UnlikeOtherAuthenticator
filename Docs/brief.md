@@ -402,7 +402,7 @@ This service is **stateless where possible**, standards-based, and API-first.
 * No local avatar storage
 * No per-client OAuth secrets
 * No user-visible error specificity
-* No unsiged configs accepted
+* No unsigned configs accepted
 
 ---
 
@@ -745,7 +745,7 @@ model TeamMember {
 }
 ```
 
-* `teamRole`: `lead` or `member`. Validated at application layer.
+* `teamRole`: `lead` or `member`. Validated at application layer. **⚠ SUPERSEDED:** `api-changes-rebac.md §1` replaces this with `TeamRole` enum (`owner | admin | member`); `lead` is removed and migrated to `admin`.
 
 #### Group
 
@@ -875,8 +875,8 @@ Organisation slugs are derived from the `name` field:
   * `description`: optional, max 500 chars
   * `isDefault`: boolean
 * Team membership role is separate from org role:
-  * Allowed values: `member` (default), `lead`
-  * `lead` is a display/routing designation — not an access control role
+  * Allowed values: `member` (default), `lead` **⚠ SUPERSEDED by `api-changes-rebac.md §1`** — canonical enum is `owner | admin | member`; `lead` is removed
+  * `lead` is a display/routing designation — not an access control role (pre-ReBAC; now replaced by `admin`)
 * Every org member must belong to at least one team.
   * On org membership add, user is auto-added to the default team.
 * If `org_features.user_needs_team = true`, successful auth must self-heal users with no team membership:
@@ -914,6 +914,8 @@ Organisation slugs are derived from the `name` field:
 
 ### 24.7 Access Token JWT Changes
 
+> **⚠ SUPERSEDED by `Docs/Research/api-changes-rebac.md §5`.** The token shape defined below (flat `org` object, `teams: string[]`, `org_role`, `team_roles: {}`) is pre-ReBAC and no longer canonical. The canonical shape uses a nested `orgs[]` array with `uoaRole`, `customRole`, `uoaRoleInherited`, and `method` fields. When implementing, use `api-changes-rebac.md §5` as the authoritative source. The content below is preserved for historical context only.
+
 When `org_features.enabled` is `true` and the user belongs to an org, the access token includes an `org` claim:
 
 ```json
@@ -949,6 +951,7 @@ When `org_features.enabled` is `true` and the user belongs to an org, the access
 * If user has no org on this domain, the `org` claim is **omitted entirely** (not null, not empty — absent).
 * JWT size grows linearly with memberships. `max_team_memberships_per_user` (default: 50) caps this. With 50 teams and 20 groups, expect ~4-5KB additional payload. Consuming products may need to increase reverse proxy header buffer sizes.
 * JWT `org` claims are populated at issuance time, not updated mid-session. Changes require re-authentication (consistent with Section 22.10).
+* **Refresh token + org claims:** Refresh tokens carry no org context themselves — they are scoped only to the user identity. When a refresh token is used to issue a new access token, org claims are re-resolved from the current DB state at that moment. A user added to or removed from an org will see the change reflected on the next token refresh, without requiring full re-authentication.
 
 #### Implementation
 

@@ -145,7 +145,7 @@ Kill switches belong to an App. A kill switch entry defines a version range and 
 | `versionField` | enum | `versionName` \| `versionCode` \| `buildNumber` — which field from the SDK request to compare against |
 | `operator` | enum | `lt` \| `lte` \| `eq` \| `gte` \| `gt` \| `range`. For `range`: both bounds are **inclusive** (`versionValue <= version <= versionMax`). |
 | `versionValue` | string | The threshold value (or lower bound for `range`), e.g. `"2.0.0"` or `"100"`. Always stored as string; comparison uses `versionScheme`. |
-| `versionMax` | string \| null | Upper bound for `range` operator (inclusive). Must be present and greater than `versionValue` when operator is `range`. Null for all other operators. |
+| `versionMax` | string \| null | Upper bound for `range` operator (inclusive). Must be present and greater than or equal to `versionValue` when operator is `range` (strictly equal means exact-match range). A zero-width range (same value as `versionValue`) is valid — it matches exactly one version. Null for all other operators. |
 | `versionScheme` | enum | `semver` \| `integer` \| `date` \| `custom` |
 | `storeUrl` | string (URL) \| null | Override the app's default store URL for this entry |
 | `titleKey` | i18n translation key for dialog title |
@@ -173,6 +173,16 @@ Kill switches belong to an App. A kill switch entry defines a version range and 
 | `info` | Informational only. Non-blocking. Can be a banner or toast. | Yes |
 | `maintenance` | App is down. No version check. Shows maintenance message. Primary button is "Retry". | No |
 
+**Response shapes by type:**
+- `hard` and `maintenance` entries always produce `"status": "blocked"` with the full `killSwitch` object.
+- `soft` and `info` entries produce `"status": "warning"` with the full `killSwitch` object. The SDK shows the dialog but does not block app launch. The user may dismiss and proceed.
+- If no entry matches, the response is `"status": "ok"`.
+
+Example response for `soft`/`info`:
+```json
+{ "status": "warning", "killSwitch": { "type": "soft", "title": "Update Available", ... }, "cacheTtl": 3600 }
+```
+
 ### Version scheme support
 
 | Scheme | Example | Comparison |
@@ -196,7 +206,7 @@ PATCH  /org/:orgId/apps/:appId/killswitches/:id      — update entry fields (al
 DELETE /org/:orgId/apps/:appId/killswitches/:id      — delete an entry
 ```
 
-`POST` body accepts all kill switch entry fields (`platform`, `type`, `versionField`, `versionValue`, `versionMax`, `versionScheme`, `name`, `titleKey`, `title`, `messageKey`, `message`, `primaryButtonKey`, `primaryButton`, `secondaryButtonKey`, `secondaryButton`, `latestVersion`, `active`, `activateAt`, `deactivateAt`, `priority`, `testUserIds`, `cacheTtl`). `platform`, `type`, `versionField`, `versionValue`, and `type` are required; all others are optional. Returns HTTP 201 on creation with the full entry.
+`POST` body accepts all kill switch entry fields (`platform`, `type`, `versionField`, `versionValue`, `versionMax`, `versionScheme`, `name`, `titleKey`, `title`, `messageKey`, `message`, `primaryButtonKey`, `primaryButton`, `secondaryButtonKey`, `secondaryButton`, `latestVersion`, `active`, `activateAt`, `deactivateAt`, `priority`, `testUserIds`, `cacheTtl`). Required fields: `platform`, `type`, `versionField`, `versionValue`, `versionScheme`. All others are optional. Returns HTTP 201 on creation with the full entry.
 
 `DELETE` is idempotent — deleting a non-existent entry returns HTTP 404.
 
@@ -287,6 +297,7 @@ Response:
 ```json
 {
   "killSwitch": { ... } | null,
+  "activatesIn": 540,
   "flags": { "dark_mode": true, "new_checkout": false },
   "cacheTtl": 300,
   "serverTime": "2026-04-07T10:00:00Z"
