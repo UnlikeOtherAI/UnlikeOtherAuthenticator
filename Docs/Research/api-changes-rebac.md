@@ -30,28 +30,29 @@ model OrgEmailDomainRule {
 }
 
 enum VerificationMethod {
-  ANY    // any verified identity (email link, Google, GitHub, etc.)
-  EMAIL  // email link only
+  ANY       // any verified identity (email link, Google, GitHub, Microsoft, etc.)
+  EMAIL     // email link only
   GOOGLE
   GITHUB
+  MICROSOFT // Microsoft Entra ID / Azure AD OIDC
 }
 ```
 
 #### `OrgRole` enum (if not already defined)
 ```prisma
 enum OrgRole {
-  owner
-  admin
-  member
+  owner   // non-removable, transferable; implicitly has all admin capabilities
+  admin   // full power: manage members, teams, billing, domains
+  member  // DB-level value only — not a named UOA system role. Users without owner/admin are plain members.
 }
 ```
 
 #### `TeamRole` enum — standardise to same 3 levels
 ```prisma
 enum TeamRole {
-  owner
-  admin
-  member
+  owner   // non-removable, transferable
+  admin   // full power on this team
+  member  // DB-level value only — not a named UOA system role
 }
 ```
 
@@ -173,6 +174,7 @@ for (const rule of matchingRules) {
 `applicableVerificationMethods(loginMethod)`:
 - Google login → matches `ANY`, `GOOGLE`
 - GitHub login → matches `ANY`, `GITHUB`
+- Microsoft login → matches `ANY`, `MICROSOFT`
 - Email verified → matches `ANY`, `EMAIL`
 
 ### `GET /user/me` and access token payload
@@ -183,17 +185,20 @@ Add to token claims:
     {
       "id": "org_abc",
       "slug": "acme-engineering",
-      "role": "admin",           // org-level role
+      "uoaRole": "admin",           // org-level UOA system role; omitted if plain member
+      "customRole": "manager",      // consuming app's role label; omitted if none assigned
       "teams": [
-        { "id": "team_xyz", "name": "Backend", "role": "admin", "inherited": false },
-        { "id": "team_abc", "name": "General", "role": "member", "inherited": false }
+        { "id": "team_xyz", "name": "Backend", "uoaRole": "admin", "uoaRoleInherited": false, "customRole": "editor" },
+        { "id": "team_abc", "name": "General", "uoaRoleInherited": false, "customRole": "viewer" }
       ]
     }
   ]
 }
 ```
 
-`inherited: true` means the team role was not explicitly set — it was computed from the org role.
+- `uoaRole` — `owner` or `admin`; omitted if neither
+- `uoaRoleInherited` — `true` if the team role was computed from org-level role, not explicitly set
+- `customRole` — the consuming app's single role label for this team membership; omitted if none
 
 ### `GET /org/:orgId/members` — include role inheritance
 Response should include `effectiveTeamRole` alongside the explicit team role so callers can show "inherited from org" in UI.

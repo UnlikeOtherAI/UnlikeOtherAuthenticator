@@ -26,14 +26,13 @@ When the role flag matrix is enabled, UOA manages role definitions. When it is d
 
 ### Flag definition
 
-Each flag belongs to a domain (or team). It has:
+Each flag belongs to an **App** (see `Docs/Requirements/apps.md`). Flags are not shared across Apps — each App is an isolated flag scope.
 
 | Field | Description |
 |---|---|
-| `key` | Unique string identifier, e.g. `new_checkout`, `dark_mode` (lowercase, no spaces) |
+| `key` | Unique string identifier, e.g. `new_checkout`, `dark_mode` (lowercase, underscores only) |
 | `description` | Human-readable label for the admin UI |
 | `defaultState` | `enabled` or `disabled` — the value returned when no explicit assignment exists for a user |
-| `scope` | `domain` (all teams) or `team` (specific team only) |
 
 ### Flag resolution order (per user, per flag)
 
@@ -49,10 +48,10 @@ The global missing-flag default means consuming apps never get an error for an u
 ### Flag query API
 
 ```
-GET /flags?domain=api.acme.com&userId=user_123
+GET /apps/:appId/flags?userId=user_123
 ```
 
-Returns the fully resolved flag map for that user on that domain:
+Returns the fully resolved flag map for that user in that App:
 
 ```json
 {
@@ -130,16 +129,16 @@ Both services can be enabled independently. You can have feature flags without t
 
 ### Sidebar section — "Flags & Roles"
 
-New section in the sidebar under Configuration:
+New section in the sidebar, scoped to the selected App:
 
-- **Feature Flags** — list all flags for the selected domain, toggle default state, add/remove flags
+- **Feature Flags** — list all flags for the selected App, toggle default state, add/remove flags
 - **Role Matrix** — the flag × role grid with toggle cells, role management (add/rename/delete/set default)
 - **User Overrides** — per-user flag overrides, searchable by user
 
 ### Flag management UI
 
-- Table: key, description, default state (toggle), scope, actions (edit, delete)
-- "Add Flag" button → modal: key, description, default state, scope
+- Table: key, description, default state (toggle), actions (edit, delete)
+- "Add Flag" button → modal: key, description, default state
 - Deleting a flag removes all role and user assignments for it
 
 ### Role matrix UI

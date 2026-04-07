@@ -104,15 +104,14 @@ What a role *permits* inside the consuming application is entirely that applicat
       "id": "org_abc",
       "slug": "acme",
       "uoaRole": "admin",
-      "customRoles": ["manager"],
+      "customRole": "manager",
       "teams": [
         {
           "id": "team_xyz",
           "name": "Backend",
-          "domain": "api.acme.com",
           "uoaRole": "admin",
           "uoaRoleInherited": true,
-          "customRoles": ["editor"]
+          "customRole": "editor"
         }
       ]
     }
@@ -122,7 +121,7 @@ What a role *permits* inside the consuming application is entirely that applicat
 
 - `uoaRole` — `owner`, `admin`, or omitted if neither
 - `uoaRoleInherited` — true if derived from org-level role rather than explicit team assignment
-- `customRoles` — array of the consuming app's role labels. See decision in the role model section below.
+- `customRole` — the consuming app's role label for this user on this org/team. A single string (one role per user per team). Omitted if no custom role is assigned. See decision in the role model section below.
 
 ---
 
