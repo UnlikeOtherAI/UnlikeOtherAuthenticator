@@ -255,10 +255,14 @@ Each custom role has a set of boolean flags attached: `{ canPublish: true, canEd
 
 ---
 
-### Recommendation
+### Decision
 
-**Option A as the default**, with Option C as an optional enterprise add-on.
+**Option C is the chosen model, implemented as an optional service.**
 
-Option A gives consuming apps the flexibility they need without forcing UOA to model their internal feature space. The consuming app defines the roles, assigns them, and interprets combinations itself. Option B creates unsustainable role lists at scale. Option C is powerful but risks scope creep into territory that belongs to the consuming app — the right pattern for that is the consuming app having its own feature flag system (LaunchDarkly, etc.) keyed on the role UOA returns, not UOA doing it for them.
+The role flag matrix is managed in UOA. When enabled, UOA owns role definitions and the flag → role mapping. When disabled, `roleLabel` is an opaque string on the membership record and the consuming app's config JWT defines its meaning.
 
-If there is strong market demand for Option C from enterprise clients, it can be introduced as a paid feature on top of Option A without breaking existing integrations.
+A user holds **one role per team**. Per-user flag overrides handle exceptions without needing combined roles.
+
+The default role is marked with a tick. Auto-enrolled users receive it automatically.
+
+See `Docs/Requirements/feature-flags.md` for the full specification.
