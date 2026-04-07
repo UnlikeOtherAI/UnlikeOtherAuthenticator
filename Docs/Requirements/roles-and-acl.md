@@ -145,13 +145,15 @@ Custom roles do not inherit. If a consuming app wants custom role inheritance, i
 Orgs can define rules so that any user who authenticates with a verified email from a given domain is automatically granted membership on first login.
 
 Each rule specifies:
-- Email domain (e.g. `acme.com`)
-- UOA role to grant — `admin`, or neither (plain member)
+- Email domain (e.g. `acme.com`) — lowercase, no `@`, no protocol. Submitted values are lowercased automatically. IDN/Unicode domains must be submitted in Punycode (`xn--` form).
+- UOA role to grant — `admin` or `member` (plain member). `owner` can never be granted via auto-enrolment.
 - Verification method required: `ANY`, `EMAIL`, `GOOGLE`, `GITHUB`, `MICROSOFT`
 
 On auto-enrolment the user receives the **default custom role** of the team they are added to. The rule does not need to specify a custom role explicitly.
 
-`owner` can never be granted via auto-enrolment.
+**Multi-org conflict:** A user's email domain may match rules on multiple orgs within the same UOA instance (e.g. `ford.com` rules on both `ford-engineering` and `ford-marketing` orgs). This is intentional — the user is added to all matching orgs. There is no conflict; each org's rule is evaluated independently. If this is undesired, the org admin must not add overlapping domain rules.
+
+**SCIM vs manual authority:** SCIM provisioning is authoritative for users managed by the IdP. Manual membership changes (via admin panel or API) are valid but will be overwritten on the next SCIM sync for SCIM-managed users. An org can opt out of SCIM for specific teams by not adding those teams to a group mapping.
 
 ---
 
@@ -177,9 +179,12 @@ Required for enterprise clients (e.g. automotive, manufacturing, finance) whose 
 - **Multi-tenant app registration** — UOA registers a single Microsoft App in Azure Portal configured for multi-tenant (`signInAudience: AzureADMultipleOrgs`). This allows any Microsoft Entra ID tenant to authenticate without per-customer registration. Customers with single-tenant requirements can use the domain auto-enrolment `MICROSOFT` verification method to restrict sign-in to specific corporate domains.
 - **Required scopes:** `openid email profile` (minimum). `offline_access` only if refresh token is needed from Microsoft side — not required since UOA issues its own refresh tokens.
 - **Redirect URI:** same pattern as Google/GitHub OAuth callbacks, e.g. `https://auth.uoa.example.com/auth/social/microsoft/callback`
-- **User field mapping:** `email` ← `email` or `upn` (UPN like `alice@ford.com` is used as canonical email); `name` ← `displayName`; no avatar from Microsoft OIDC by default.
+- **User field mapping (priority order):** `email` ← `upn` first, then `preferred_username`, then `email` claim. When `upn` and `email` differ, `upn` is stored as the canonical email. `name` ← `displayName`; no avatar from Microsoft OIDC by default.
+- **Token validation:** use the OIDC common endpoint (`https://login.microsoftonline.com/common/v2.0/.well-known/openid-configuration`). The `tid` (tenant ID) claim is extracted and stored but not used for access control. All valid Entra ID tenants are accepted.
+- **Conditional Access / MFA:** handled entirely by Microsoft's identity platform before the OAuth callback. UOA treats a successful Microsoft callback as a completed authentication, regardless of which MFA method the tenant required.
 - **Env vars required:** `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET` (registered in Azure Portal)
-- **Same-email merge:** if a user with the same verified email already exists (registered via email or Google), the Microsoft identity is linked to the existing account. No duplicate user is created.
+- **Same-email merge:** if a user with the same verified email already exists (registered via email, Google, or GitHub), the Microsoft identity is linked to the existing account. A second identity link is added; no duplicate user is created. If the user already had Microsoft linked, the existing link is silently updated.
+- **No matching domain rule:** if a user authenticates via Microsoft but their email domain does not match any `MICROSOFT` or `ANY` auto-enrolment rule in any org, authentication succeeds but the user has no org memberships. They can see the UOA account page but cannot access any org-protected resources. They must be added to an org manually or a matching domain rule must be configured.
 
 ### SCIM provisioning (Entra ID / Okta)
 
@@ -219,6 +224,35 @@ DELETE /scim/v2/Groups/:id     — delete team
 - Re-provisioning a soft-deprovisioned user (`POST /scim/v2/Users` with same email or `externalId`) re-activates the user and restores their memberships.
 
 SCIM endpoints are authenticated with the per-org SCIM bearer token (see above). All SCIM endpoints are scoped to the org identified by the token.
+
+**SCIM error responses:** Use the standard SCIM error schema (`urn:ietf:params:scim:api:messages:2.0:Error`), `Content-Type: application/scim+json`. HTTP status codes: 400 (malformed request), 401 (missing/invalid token), 404 (resource not found), 409 (duplicate user). Response body: `{ "schemas": ["urn:ietf:params:scim:api:messages:2.0:Error"], "status": "404", "detail": "Resource not found" }`. Per UOA policy, detail messages are generic and non-enumerable.
+
+**SCIM `POST /scim/v2/Users` response (HTTP 201):**
+```json
+{
+  "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
+  "id": "<uoa-user-id>",
+  "externalId": "<idp-external-id>",
+  "userName": "alice@ford.com",
+  "name": { "formatted": "Alice Smith" },
+  "active": true,
+  "meta": {
+    "resourceType": "User",
+    "created": "2026-04-07T10:00:00Z",
+    "lastModified": "2026-04-07T10:00:00Z",
+    "location": "/scim/v2/Users/<uoa-user-id>"
+  }
+}
+```
+
+**SCIM bearer token management endpoints** (system admin auth required):
+```
+GET    /internal/admin/orgs/:orgId/scim-tokens          — list all tokens (id, label, createdAt, lastUsedAt; plain token never returned after creation)
+POST   /internal/admin/orgs/:orgId/scim-tokens          — create token (returns plain token in response once only)
+DELETE /internal/admin/orgs/:orgId/scim-tokens/:tokenId — revoke a token
+```
+
+`POST` response includes the plain token in a `token` field (shown once, never retrievable again). All other endpoints return the hashed/masked token only.
 
 ---
 

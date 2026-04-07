@@ -141,7 +141,7 @@ Request → Route → Middleware → Service → Database (Prisma)
 
 ### Middleware
 
-* **config-verifier** — runs on all OAuth entry points. Fetches config from URL, verifies JWT, attaches parsed config to the request context
+* **config-verifier** — runs on all OAuth entry points. Fetches config from URL, verifies JWT, attaches parsed config to the request context. **Bypass exceptions** (SDK-facing or machine-readable endpoints called without a backend config context): `GET /killswitch/check`, `GET /apps/startup`, `GET /` (schema), `GET /llm` (config docs).
 * **domain-hash-auth** — runs on domain-scoped API routes. Verifies the domain hash token
 * **superuser-access-token** — validates user access tokens for superuser-only domain endpoints
 * **org-features** — rejects org endpoints when `org_features.enabled` is false

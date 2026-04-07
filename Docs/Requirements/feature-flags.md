@@ -45,7 +45,7 @@ When a consuming app queries a flag for a user, resolution proceeds in order and
 
 The global missing-flag default means consuming apps never get an error for an undefined flag — they always get a boolean.
 
-**Multi-team context:** A user may have different `customRole` values on different teams within the same org, producing different role flag values. The flag query must specify a team context (`teamId` param) when a user has more than one team membership. If no `teamId` is provided and the user has exactly one team membership, that team's role is used. If no `teamId` is provided and the user has multiple memberships, the role from the team with the highest-privilege UOA role is used as a tiebreaker; if UOA roles are equal, the most recently joined team wins.
+**Multi-team context:** A user may have different `customRole` values on different teams within the same org, producing different role flag values. The flag query must specify a team context (`teamId` param) when a user has more than one team membership. If no `teamId` is provided and the user has exactly one team membership, that team's role is used. If no `teamId` is provided and the user has multiple memberships, the tiebreaker is applied in this order: (1) highest UOA system role on that team (`owner > admin > plain-member`), (2) if equal, earliest `createdAt` on the `TeamMember` record (the team the user joined first). This tiebreaker uses the effective UOA role (including org-level inheritance).
 
 ### Flag query API
 
@@ -88,7 +88,8 @@ Token flags reflect the state at login time. For real-time flag changes without 
 
 When the role flag matrix service is enabled for an App:
 
-- The matrix columns **are the same custom role labels** as defined on the teams that use this App. There is no separate role namespace for the matrix — a `customRole` of `"editor"` on a team membership maps directly to the `editor` column in the App's matrix.
+- The matrix is **app-wide** — it contains the union of all custom role labels defined on all teams that belong to the same org. There is no per-team matrix; a `customRole` of `"editor"` on any team membership in the org maps to the `editor` column in the App's single matrix.
+- If Team A has roles `[viewer, editor]` and Team B has `[viewer, manager]`, the App's matrix has 3 columns: `viewer`, `editor`, `manager`. A `manager` on Team B resolves the `manager` column; an `editor` on Team A resolves the `editor` column.
 - UOA manages role definitions for the App (not the consuming app's config JWT)
 - Each role has a column of flag values in the matrix
 - The matrix is managed entirely from the UOA admin panel, scoped to the App
@@ -164,7 +165,7 @@ New section in the sidebar, scoped to the selected App:
 
 ## Resolved decisions
 
-1. **Flag key format** — **decided: lowercase + underscores only** (`[a-z][a-z0-9_]*`). Enforced at creation. Validation rejects any other format with a 400 error. This applies to all flags across all Apps.
+1. **Flag key format** — **decided: lowercase letters, digits, and underscores only; must start with a letter** (`[a-z][a-z0-9_]*`). Examples: `dark_mode`, `can_publish`, `beta_access`. Enforced at creation. Validation rejects any other format with a 400 error. This applies to all flags across all Apps. Leading underscores are not allowed.
 2. **Token flag inclusion** — **decided: all flags for the App are included in the token at login time**, regardless of whether they differ from the default. This keeps token consumption simple (no server-side re-resolution needed on read). Orgs with many flags should use `max_flags_per_app` config to cap token size (default 100; see `org_features` in brief.md).
 3. **Real-time flag changes** — **decided: poll only**. The token embeds flag state at login. Mid-session changes are visible only via `/apps/:appId/flags` query endpoint calls. The SDK polls on foreground resume (default interval: 5 minutes, minimum 60 seconds, configurable per App). No push mechanism.
 4. **SCIM flag sync / override retention** — **decided: soft-deprovision by default**. When a SCIM user is deprovisioned (`active: false`), their per-user flag overrides are **retained** and are re-linked when the user is re-provisioned (matched by email or SCIM `externalId`). Overrides are only deleted when a user is hard-deleted (`DELETE /scim/v2/Users/:id` with `?hardDelete=true` query param, or when the org is deleted). This is the default; orgs can configure `scim_override_retention: "retain" | "clear"` in their `org_features`.

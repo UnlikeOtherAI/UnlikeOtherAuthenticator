@@ -320,6 +320,8 @@ interface TeamClaim {
 
 Note: Token size increases with number of orgs/teams. The `max_team_memberships_per_user` config cap (already in the system) becomes important here.
 
+**Supersedes brief.md section 24.7:** The token shape above (`orgs[]` array with nested team objects, `uoaRole`, `customRole`, `uoaRoleInherited`) is the canonical token format. It replaces the flat `org: { org_id, org_role, teams: string[] }` structure in brief.md section 24.7, which predates the ReBAC model. Implementers must use this shape.
+
 ---
 
 ## 6. Admin API endpoints (new)
@@ -332,9 +334,19 @@ GET    /internal/admin/orgs/:orgId                   — org detail with rules
 GET    /internal/admin/orgs/:orgId/domain-rules      — email domain rules
 POST   /internal/admin/orgs/:orgId/domain-rules      — add rule
 DELETE /internal/admin/orgs/:orgId/domain-rules/:id  — remove rule
-PATCH  /internal/admin/orgs/:orgId/members/:userId   — change org role
-DELETE /internal/admin/orgs/:orgId/members/:userId   — remove from org
-PATCH  /internal/admin/teams/:teamId/members/:userId — change team role
+PATCH  /internal/admin/orgs/:orgId/members/:userId                — change org role
+DELETE /internal/admin/orgs/:orgId/members/:userId                — remove from org
+PATCH  /internal/admin/teams/:teamId/members/:userId              — change team role
+
+— SCIM token management (per-org) —
+GET    /internal/admin/orgs/:orgId/scim-tokens                    — list tokens (id, label, lastUsedAt; plain value not returned)
+POST   /internal/admin/orgs/:orgId/scim-tokens                    — create token (returns plain value once only)
+DELETE /internal/admin/orgs/:orgId/scim-tokens/:tokenId           — revoke token
+
+— SCIM group mapping management —
+GET    /internal/admin/orgs/:orgId/scim/group-mappings            — list group → team mappings
+POST   /internal/admin/orgs/:orgId/scim/group-mappings            — create mapping
+DELETE /internal/admin/orgs/:orgId/scim/group-mappings/:mappingId — remove mapping (does not delete team)
 ```
 
 All require system admin authentication (existing domain-hash auth with the admin domain, or a separate system admin JWT).

@@ -30,6 +30,7 @@ An App is a registered client application that uses UOA for authentication and o
 | `domains` | string[] | Array of domain ID strings from the org's domain pool that this app authenticates against. Informational — used for routing and admin display, not access control. |
 | `storeUrl` | string (URL) | Default app store / update URL. Optional for non-mobile platforms. |
 | `offlinePolicy` | enum | `allow` \| `block` \| `cached` — what the SDK does if UOA is unreachable. Default: `allow`. |
+| `pollIntervalSeconds` | integer | How often the SDK re-checks the startup endpoint on foreground resume. Default: `300` (5 minutes). Minimum: `60`. Maximum: `3600`. |
 | `active` | boolean | Whether the app is active. Inactive apps are rejected by the SDK startup endpoint. |
 | `createdAt` | datetime | |
 
@@ -266,6 +267,20 @@ Response:
 - `serverTime` — ISO 8601 UTC timestamp. SDK should check against local clock; if skew > 60 seconds, log a warning. No automatic blocking on skew.
 
 One endpoint. SDK checks kill switch first — if `hard` or `maintenance` block, show dialog, stop. Otherwise load flags and continue.
+
+**Failure matrix:**
+
+| Scenario | Response |
+|---|---|
+| Unknown `appIdentifier` | `{ "status": "ok", "flags": {}, "cacheTtl": 3600, "serverTime": "..." }` |
+| App `active: false` | `{ "status": "ok", "flags": {}, "cacheTtl": 3600, "serverTime": "..." }` — same as unknown (no information leaked) |
+| Missing or expired `X-UOA-Access-Token` | Proceed without per-user overrides; resolve flags against role default. No error. |
+| Invalid (tampered) `X-UOA-Access-Token` | Treated as absent — resolve flags against role default. No error. |
+| Feature flags service disabled for App | `flags: {}` in response; kill switch check proceeds normally. |
+| Invalid `platform` value | HTTP 400, `{ "error": "Request failed" }` |
+| Missing `appIdentifier` param | HTTP 400, `{ "error": "Request failed" }` |
+
+**`activateAt` scheduling:** When a kill switch entry has an `activateAt` time in the future, the response includes an `activatesIn` field (seconds until activation). If `activatesIn` ≤ 900 (15 minutes), the SDK must re-poll after that interval rather than using the full `cacheTtl`. This ensures kill switches activate promptly.
 
 ---
 
