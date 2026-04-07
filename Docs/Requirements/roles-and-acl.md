@@ -21,14 +21,15 @@ Users who are neither `owner` nor `admin` have no named UOA system role — they
 
 These are roles that a developer or org defines for their own product. UOA stores only the **label** — a string reference. UOA has no opinion on what the role permits. The consuming application owns all gating logic.
 
-- Any number of custom roles per team or organisation — no cap, no gating
+- Any number of custom roles per team or organisation — no cap
+- Each role set has exactly one **default role** — marked with a tick in the admin UI. Any user added without a specified role, or auto-enrolled via domain rule, receives the default role automatically
 - Custom roles can share names with UOA system roles (different namespaces, no conflict)
-- A user's UOA role and their custom role are completely orthogonal: an `owner` in UOA can be a `viewer` in the app; a plain user in UOA can be a `superadmin` in the app
+- A user's UOA role and their custom role are completely orthogonal
 
 UOA's only responsibilities for custom roles:
-- Store the role definitions per team/org
+- Store the role definitions per team/org, including which is the default
 - Validate that a role assigned to a user exists in the team/org's defined list
-- Return the role label in the access token and via API
+- Return the role label(s) in the access token and via API
 - Enforce nothing beyond that
 
 ---
@@ -39,11 +40,11 @@ UOA's only responsibilities for custom roles:
 Organisation
   ├── has many Domains     (multiple — one org can serve hundreds of services)
   ├── has UOA role assignments (owner, admin) per member
-  ├── has custom role definitions
+  ├── has custom role definitions (with one marked default)
   └── has many Teams
         ├── references one or more Domains from the org's domain pool
         ├── has UOA role assignments (owner, admin) per member
-        ├── has custom role definitions (can differ from org-level)
+        ├── has custom role definitions (with one marked default, can differ from org-level)
         └── has Members with assigned custom roles
 ```
 
@@ -69,18 +70,26 @@ Teams are the primary registration unit. Not every setup needs a full enterprise
 
 ## Custom role definitions
 
-Each team (and optionally org) defines its own role names as a simple list of strings:
+Each team (and optionally org) defines its own role names. One role is marked as the default.
 
 ```json
 {
   "teamId": "team_abc",
-  "customRoles": ["editor", "viewer", "staff", "manager"]
+  "customRoles": [
+    { "name": "editor",  "default": false },
+    { "name": "viewer",  "default": true  },
+    { "name": "staff",   "default": false },
+    { "name": "manager", "default": false }
+  ]
 }
 ```
 
-No limit on the number of roles. Role names are validated only for being non-empty strings. Format is up to the defining org — UOA imposes no casing or character rules beyond that.
+- Exactly one role per team must be marked default at all times
+- If the default role is deleted, the admin must designate a new default before the deletion is allowed
+- No limit on number of roles
+- Role names validated only for being non-empty strings — format is up to the defining org
 
-What a role *permits* inside the consuming application is entirely that application's concern. UOA returns only the label.
+What a role *permits* inside the consuming application is entirely that application's concern.
 
 ---
 
@@ -111,11 +120,9 @@ What a role *permits* inside the consuming application is entirely that applicat
 }
 ```
 
-- `uoaRole` — `owner`, `admin`, or omitted if neither. For UOA management use only.
-- `uoaRoleInherited` — true if the team-level UOA role was derived from the org-level role, not set explicitly
-- `customRoles` — array of the consuming app's role labels for that scope. UOA stores and returns them; the app interprets them.
-
-Note: `customRoles` is an array because a user may hold multiple custom roles at the same scope (e.g. `["editor", "billing"]`).
+- `uoaRole` — `owner`, `admin`, or omitted if neither
+- `uoaRoleInherited` — true if derived from org-level role rather than explicit team assignment
+- `customRoles` — array of the consuming app's role labels. See decision in the role model section below.
 
 ---
 
@@ -128,7 +135,7 @@ Inheritance applies only to UOA system roles, not to custom roles.
 3. A user with an explicitly higher team role than their org role keeps the higher team role
 4. Inheritance is computed at request time — not stored as duplicate records
 
-Custom roles do not inherit. If a consuming app wants role inheritance, it implements that in its own gating layer.
+Custom roles do not inherit. If a consuming app wants custom role inheritance, it implements that in its own gating layer.
 
 ---
 
@@ -138,21 +145,120 @@ Orgs can define rules so that any user who authenticates with a verified email f
 
 Each rule specifies:
 - Email domain (e.g. `acme.com`)
-- UOA role to grant — `admin` only, or neither (plain member with no UOA role)
-- Custom role(s) to assign on the default team — must exist in the team's defined list
-- Verification method required: `ANY`, `EMAIL`, `GOOGLE`, `GITHUB`
+- UOA role to grant — `admin`, or neither (plain member)
+- Verification method required: `ANY`, `EMAIL`, `GOOGLE`, `GITHUB`, `MICROSOFT`
 
-`owner` can never be granted via auto-enrolment — ownership is always explicit.
+On auto-enrolment the user receives the **default custom role** of the team they are added to. The rule does not need to specify a custom role explicitly.
+
+`owner` can never be granted via auto-enrolment.
 
 ---
 
 ## Who can manage custom role definitions
 
-Only the **team admin** and the **org owner** can create, rename, or delete custom role definitions for a team. No other role has this permission.
+Only the **team admin** and the **org owner** can create, rename, delete, or change the default custom role for a team.
 
 ---
 
-## Outstanding decisions
+## Enterprise features (in scope from the start)
 
-1. **Default custom role on auto-enrolment** — must the rule explicitly name a custom role, or fall back to the first role in the team's list if none specified?
-2. **Multiple custom roles per user per team** — the token uses an array; confirm this is intentional (a user can hold `editor` and `billing` simultaneously at the same team scope)
+### Microsoft SSO (Azure AD / Entra ID)
+
+Required for enterprise clients (e.g. automotive, manufacturing, finance) whose employees authenticate via corporate Microsoft accounts.
+
+- Add Microsoft OAuth 2.0 / OIDC as a supported social login provider alongside Google and GitHub
+- Employees sign in with `user@ford.com` or `user@skoda-auto.cz` via their corporate Entra ID
+- Verified Microsoft identity qualifies as `ANY` or `MICROSOFT` verification method for auto-enrolment rules
+- Token includes `method: "microsoft"` alongside existing `google`, `github`, `email`
+
+### SCIM provisioning (Entra ID / Okta)
+
+Required for enterprise clients who manage thousands of users via a central identity provider and cannot manage membership manually.
+
+SCIM (System for Cross-domain Identity Management) is the protocol identity providers like Microsoft Entra ID and Okta use to push user and group changes into external apps automatically. When an employee joins Ford, Entra ID provisions them into UOA. When they leave, it deprovisions them. Groups in Entra ID map to teams in UOA.
+
+UOA must expose a SCIM 2.0 endpoint:
+
+```
+POST   /scim/v2/Users          — provision a new user
+GET    /scim/v2/Users/:id      — read user
+PATCH  /scim/v2/Users/:id      — update user attributes / active status
+DELETE /scim/v2/Users/:id      — deprovision (ban or remove from org)
+GET    /scim/v2/Groups         — list groups (maps to teams)
+POST   /scim/v2/Groups         — create team via IdP
+PATCH  /scim/v2/Groups/:id     — add/remove members, rename team
+DELETE /scim/v2/Groups/:id     — delete team
+```
+
+SCIM group membership maps to UOA team membership. The custom role assigned to SCIM-provisioned members defaults to the team's default custom role unless the IdP sends a role attribute.
+
+SCIM endpoints are authenticated with a long-lived bearer token issued per org, managed via the admin panel.
+
+---
+
+## Role model decision — three options, analysis
+
+This is an open architectural decision. Three viable approaches exist for how a user's custom roles are modelled per team.
+
+### Option A — Multiple roles per user
+
+A user can hold several custom roles simultaneously on the same team: `["editor", "billing"]`.
+
+**Pros**
+- Naturally models reality — a person can be an editor *and* handle billing without needing a combined role
+- No role explosion — define N atomic roles, combine freely
+- Changing one dimension of access doesn't affect others
+- Consuming app checks `roles.includes('billing')` per capability
+
+**Cons**
+- Token grows as role combinations increase
+- Access logic spreads across the consuming app's codebase — no single place to answer "what kind of user is this?"
+- Harder to explain to end users and admins ("you have: editor, billing, content-reviewer")
+- Role combinations can produce unintended interactions if not carefully designed on the consuming app's side
+
+---
+
+### Option B — More granular single roles, server-side gating
+
+Define enough roles that every combination of access needs gets its own named role: `editor`, `billing-editor`, `read-only-viewer`, `senior-editor`, etc. One role per user per team. The consuming app gates features by checking the role name.
+
+**Pros**
+- Simplest mental model — one role, one identity, one place to check
+- Easy to display: "you are a Billing Editor"
+- Auditable — role assignments are explicit
+- Common pattern, well understood
+
+**Cons**
+- Role explosion as the product grows — every new capability combination requires a new role
+- Adding capabilities requires new role definitions and code changes on the consuming app side
+- Admins must understand a large, growing list of roles
+- Combining two users' access (one person covering two jobs) means creating a combined role
+
+---
+
+### Option C — Feature flags per role (UOA as a feature flag store)
+
+Each custom role has a set of boolean flags attached: `{ canPublish: true, canEditBilling: false }`. UOA stores flag definitions per org/team and returns them in the token alongside the role. The consuming app checks flags rather than role names.
+
+**Pros**
+- Consuming app never needs to know role names — just checks `flags.canPublish`
+- Adding new capabilities doesn't require new roles or code deploys on the consuming app side
+- Org admins can adjust flags without touching app code
+- Reduces coupling between UOA's role labels and the consuming app's feature names
+
+**Cons**
+- UOA becomes opinionated about the consuming app's internal features — leaks application concerns into the auth layer
+- Flag definitions must be created, maintained, and versioned in UOA — additional operational surface
+- Consuming apps may not trust externally defined flags for security-critical decisions (the flag is just data; the check still happens in their code)
+- Flags and role permissions are distinct concepts being merged, which can become confusing as both evolve
+- Significantly more complex admin UI and data model in UOA
+
+---
+
+### Recommendation
+
+**Option A as the default**, with Option C as an optional enterprise add-on.
+
+Option A gives consuming apps the flexibility they need without forcing UOA to model their internal feature space. The consuming app defines the roles, assigns them, and interprets combinations itself. Option B creates unsustainable role lists at scale. Option C is powerful but risks scope creep into territory that belongs to the consuming app — the right pattern for that is the consuming app having its own feature flag system (LaunchDarkly, etc.) keyed on the role UOA returns, not UOA doing it for them.
+
+If there is strong market demand for Option C from enterprise clients, it can be introduced as a paid feature on top of Option A without breaking existing integrations.
