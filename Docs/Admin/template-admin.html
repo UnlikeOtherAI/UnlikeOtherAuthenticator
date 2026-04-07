@@ -59,12 +59,22 @@
     input:focus, select:focus, textarea:focus { border-color:#6366f1; background:#fff; box-shadow:0 0 0 3px rgba(99,102,241,.12); }
     label { font-size:13px; font-weight:500; color:#374151; display:block; margin-bottom:5px; }
     mark.highlight { background:#fef9c3; border-radius:2px; font-style:normal; }
+    #sidebar-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:39; cursor:pointer; }
+    #burger-btn { display:none; align-items:center; justify-content:center; width:32px; height:32px; border:none; background:transparent; cursor:pointer; border-radius:8px; color:#6b7280; padding:0; flex-shrink:0; }
+    #burger-btn:hover { background:#f3f4f6; }
+    @media (max-width:768px) {
+      #sidebar { position:fixed !important; top:0; left:0; transform:translateX(-240px); transition:transform .25s ease; z-index:40; }
+      #sidebar.open { transform:translateX(0); }
+      #burger-btn { display:flex; }
+    }
   </style>
 </head>
 <body class="h-full bg-gray-50" style="display:flex;">
 
+<div id="sidebar-overlay" onclick="closeSidebar()"></div>
+
 <!-- SIDEBAR -->
-<aside style="width:240px;flex-shrink:0;background:#0f172a;display:flex;flex-direction:column;height:100vh;position:sticky;top:0;overflow-y:auto;">
+<aside id="sidebar" style="width:240px;flex-shrink:0;background:#0f172a;display:flex;flex-direction:column;height:100vh;position:sticky;top:0;overflow-y:auto;">
   <div style="display:flex;align-items:center;gap:10px;padding:0 16px;height:60px;border-bottom:1px solid #1e293b;flex-shrink:0;">
     <div style="width:30px;height:30px;background:#4f46e5;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
       <svg width="16" height="16" fill="none" stroke="#fff" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
@@ -122,7 +132,10 @@
 <!-- MAIN -->
 <div style="flex:1;display:flex;flex-direction:column;min-width:0;overflow:auto;">
   <!-- TOPBAR -->
-  <header style="background:#fff;border-bottom:1px solid #e5e7eb;height:60px;display:flex;align-items:center;padding:0 24px;gap:16px;flex-shrink:0;position:sticky;top:0;z-index:20;">
+  <header style="background:#fff;border-bottom:1px solid #e5e7eb;height:60px;display:flex;align-items:center;padding:0 24px;gap:12px;flex-shrink:0;position:sticky;top:0;z-index:20;">
+    <button id="burger-btn" onclick="toggleSidebar()" aria-label="Toggle navigation">
+      <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
     <nav style="display:flex;align-items:center;gap:6px;font-size:13px;flex:1;" id="breadcrumb">
       <span style="color:#9ca3af;">Admin</span>
       <svg width="11" height="11" fill="none" stroke="#d1d5db" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
@@ -190,6 +203,57 @@
     <div style="display:flex;justify-content:flex-end;gap:10px;padding:14px 24px;border-top:1px solid #f3f4f6;background:#fafafa;">
       <button onclick="closeModal('modal-ban')" class="btn-secondary">Cancel</button>
       <button class="btn-danger">Add Ban</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-new-org">
+  <div style="background:#fff;border-radius:16px;width:520px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 25px 60px rgba(0,0,0,.2);">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 24px;border-bottom:1px solid #f3f4f6;">
+      <h2 style="font-size:15px;font-weight:600;">New Organisation</h2>
+      <button onclick="closeModal('modal-new-org')" style="color:#9ca3af;cursor:pointer;background:none;border:none;"><svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button>
+    </div>
+    <div style="padding:20px 24px;display:flex;flex-direction:column;gap:16px;">
+      <div>
+        <label>Organisation name</label>
+        <input type="text" id="new-org-name" placeholder="Acme Engineering" style="width:100%;box-sizing:border-box;" oninput="autoSlug(this.value)"/>
+      </div>
+      <div>
+        <label>Slug <span style="font-size:11px;color:#9ca3af;font-weight:400;">(URL-safe identifier, auto-generated)</span></label>
+        <input type="text" id="new-org-slug" placeholder="acme-engineering" style="width:100%;box-sizing:border-box;font-family:monospace;"/>
+      </div>
+      <div>
+        <label>Domain</label>
+        <select id="new-org-domain" style="width:100%;box-sizing:border-box;">
+          <option value="">— Select a domain —</option>
+        </select>
+      </div>
+      <div>
+        <label>Description <span style="font-size:11px;color:#9ca3af;font-weight:400;">(optional)</span></label>
+        <textarea id="new-org-desc" placeholder="What does this organisation do?" rows="2" style="width:100%;box-sizing:border-box;resize:vertical;"></textarea>
+      </div>
+      <div>
+        <label>Owner email <span style="font-size:11px;color:#9ca3af;font-weight:400;">(must be an existing user)</span></label>
+        <input type="email" id="new-org-owner" placeholder="owner@example.com" style="width:100%;box-sizing:border-box;"/>
+      </div>
+      <!-- Pre-approved members -->
+      <div style="border-top:1px solid #f3f4f6;padding-top:16px;">
+        <p style="font-size:13px;font-weight:600;color:#111827;margin-bottom:4px;">Pre-approved members</p>
+        <p style="font-size:12px;color:#6b7280;margin-bottom:12px;">These email addresses will automatically receive membership when they first log in, without needing an invitation.</p>
+        <div style="display:flex;gap:8px;margin-bottom:10px;">
+          <input type="email" id="new-org-preapprove-input" placeholder="user@example.com" style="flex:1;" onkeydown="if(event.key==='Enter'){event.preventDefault();addPreapproved();}"/>
+          <select id="new-org-preapprove-role" style="width:100px;">
+            <option value="member">Member</option>
+            <option value="admin">Admin</option>
+          </select>
+          <button class="btn-secondary" onclick="addPreapproved()" style="padding:7px 12px;flex-shrink:0;">Add</button>
+        </div>
+        <div id="new-org-preapproved-list" style="display:flex;flex-direction:column;gap:4px;"></div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:10px;padding:14px 24px;border-top:1px solid #f3f4f6;background:#fafafa;border-radius:0 0 16px 16px;">
+      <button onclick="closeModal('modal-new-org')" class="btn-secondary">Cancel</button>
+      <button class="btn-primary" onclick="closeModal('modal-new-org')"><svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>Create Organisation</button>
     </div>
   </div>
 </div>
@@ -320,7 +384,19 @@ const DATA = {
 // ── NAV ──
 let navStack = [{ type:'dashboard' }];
 
+function toggleSidebar() {
+  const s = document.getElementById('sidebar');
+  const o = document.getElementById('sidebar-overlay');
+  s.classList.toggle('open');
+  o.style.display = s.classList.contains('open') ? 'block' : 'none';
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').style.display = 'none';
+}
+
 function nav(type, extra) {
+  closeSidebar();
   navStack = [Object.assign({ type }, extra||{})];
   render(); updateSidebar(); updateBreadcrumb();
 }
@@ -415,7 +491,7 @@ function renderDomains(){
 
 // ── ORG LIST ──
 function renderOrgList(){
-  return pageHead('Organisations','All organisations across all domains','<button class="btn-primary"><svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>New Org</button>')
+  return pageHead('Organisations','All organisations across all domains','<button class="btn-primary" onclick="openNewOrgModal()"><svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>New Org</button>')
     +'<div class="card">'
     +'<div style="display:flex;gap:8px;padding:12px 16px;border-bottom:1px solid #f3f4f6;"><input type="search" placeholder="Search organisations&#x2026;" style="width:220px;"/><select><option>All domains</option>'+DATA.domains.map(d=>'<option>'+esc(d.name)+'</option>').join('')+'</select></div>'
     +tbl(['Organisation','Domain','Owner','Members','Teams','Created','Actions'],DATA.orgs.map(o=>'<tr><td class="td"><div style="display:flex;align-items:center;gap:10px;">'+av(o.name)+'<div><a onclick="push({type:\'org\',orgId:'+o.id+'})" style="font-weight:600;color:#4f46e5;cursor:pointer;font-size:13px;">'+esc(o.name)+'</a><p style="font-size:11px;color:#9ca3af;">'+esc(o.slug)+'</p></div></div></td><td class="td" style="font-size:12px;color:#9ca3af;">'+esc(o.domain)+'</td><td class="td"><a onclick="openUser('+o.owner.id+')" style="color:#374151;cursor:pointer;">'+esc(o.owner.name)+'</a><p style="font-size:11px;color:#9ca3af;">'+esc(o.owner.email)+'</p></td><td class="td">'+o.members.length+'</td><td class="td">'+o.teams.length+'</td><td class="td" style="font-size:12px;color:#9ca3af;">'+esc(o.created)+'</td><td class="td"><button class="action-btn indigo" onclick="push({type:\'org\',orgId:'+o.id+'})">View</button><span class="divider">|</span><button class="action-btn amber">Transfer</button><span class="divider">|</span><button class="action-btn red" onclick="confirm_(\'Delete '+esc(o.name)+'?\',\'Deletes all teams and memberships.\')">Delete</button></td></tr>').join(''))
@@ -616,6 +692,51 @@ function hl(text,q){
 }
 
 function generateSecret(){ const c='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'; return Array.from({length:48},()=>c[Math.floor(Math.random()*c.length)]).join(''); }
+
+function openNewOrgModal(){
+  document.getElementById('new-org-name').value='';
+  document.getElementById('new-org-slug').value='';
+  document.getElementById('new-org-desc').value='';
+  document.getElementById('new-org-owner').value='';
+  document.getElementById('new-org-preapprove-input').value='';
+  document.getElementById('new-org-preapproved-list').innerHTML='';
+  const sel=document.getElementById('new-org-domain');
+  sel.innerHTML='<option value="">— Select a domain —</option>'+DATA.domains.map(d=>'<option value="'+d.id+'">'+esc(d.name)+(d.label?' ('+esc(d.label)+')':'')+'</option>').join('');
+  openModal('modal-new-org');
+  setTimeout(()=>document.getElementById('new-org-name').focus(),80);
+}
+
+function autoSlug(name){
+  document.getElementById('new-org-slug').value=name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+}
+
+let _preapproved=[];
+function addPreapproved(){
+  const inp=document.getElementById('new-org-preapprove-input');
+  const role=document.getElementById('new-org-preapprove-role').value;
+  const email=inp.value.trim();
+  if(!email||!email.includes('@')) return;
+  if(_preapproved.find(p=>p.email===email)) return;
+  _preapproved.push({email,role});
+  inp.value='';
+  renderPreapproved();
+  inp.focus();
+}
+function removePreapproved(email){
+  _preapproved=_preapproved.filter(p=>p.email!==email);
+  renderPreapproved();
+}
+function renderPreapproved(){
+  const el=document.getElementById('new-org-preapproved-list');
+  if(!_preapproved.length){ el.innerHTML='<p style="font-size:12px;color:#9ca3af;">No pre-approved members yet.</p>'; return; }
+  el.innerHTML=_preapproved.map(p=>'<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;">'
+    +'<svg width="12" height="12" fill="none" stroke="#6b7280" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>'
+    +'<span style="flex:1;font-size:12px;color:#374151;">'+esc(p.email)+'</span>'
+    +'<span style="font-size:11px;color:#6b7280;background:#e5e7eb;padding:1px 7px;border-radius:999px;">'+esc(p.role)+'</span>'
+    +'<button onclick="removePreapproved(\''+esc(p.email)+'\')" style="color:#9ca3af;cursor:pointer;background:none;border:none;line-height:1;" title="Remove">'
+    +'<svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button>'
+    +'</div>').join('');
+}
 
 document.addEventListener('click',e=>{ if(!document.getElementById('search-container').contains(e.target)) document.getElementById('search-dropdown').style.display='none'; });
 document.querySelectorAll('.modal-overlay').forEach(el=>el.addEventListener('click',e=>{ if(e.target===el) el.classList.remove('open'); }));
