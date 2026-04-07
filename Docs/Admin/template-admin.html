@@ -3,1082 +3,623 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>UOA Admin — Dashboard</title>
+  <title>UOA Admin</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body { font-family: system-ui, -apple-system, sans-serif; }
-    .nav-link { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-radius: 8px; font-size: 14px; font-weight: 500; color: #94a3b8; text-decoration: none; cursor: pointer; transition: all 0.15s; }
-    .nav-link:hover { color: #fff; background: #1e293b; }
-    .nav-link.active { color: #fff; background: #4f46e5; }
-    .nav-link.active:hover { background: #4338ca; }
-    .nav-section { font-size: 11px; font-weight: 600; color: #475569; text-transform: uppercase; letter-spacing: 0.08em; padding: 0 12px; margin: 20px 0 4px; }
-    .badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 500; }
-    .badge-green { background: #dcfce7; color: #16a34a; }
-    .badge-red { background: #fee2e2; color: #dc2626; }
-    .badge-amber { background: #fef3c7; color: #d97706; }
-    .badge-blue { background: #dbeafe; color: #2563eb; }
-    .badge-slate { background: #f1f5f9; color: #475569; }
-    .section { display: none; }
-    .section.active { display: block; }
-    .tab-btn { padding: 8px 16px; font-size: 14px; font-weight: 500; border-radius: 8px; cursor: pointer; transition: all 0.15s; color: #6b7280; background: transparent; border: none; }
-    .tab-btn:hover { background: #f3f4f6; color: #111827; }
-    .tab-btn.active { background: #fff; color: #111827; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
-    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 50; align-items: center; justify-content: center; }
-    .modal-overlay.open { display: flex; }
-    tr:hover td { background: #f9fafb; }
-    .expand-row { display: none; }
-    .expand-row.open { display: table-row; }
+    .nav-link { display:flex; align-items:center; gap:12px; padding:8px 12px; border-radius:8px; font-size:14px; font-weight:500; color:#94a3b8; cursor:pointer; transition:all .15s; user-select:none; }
+    .nav-link:hover { color:#fff; background:#1e293b; }
+    .nav-link.active { color:#fff; background:#4f46e5; }
+    .nav-link.active:hover { background:#4338ca; }
+    .nav-section { font-size:11px; font-weight:600; color:#475569; text-transform:uppercase; letter-spacing:.08em; padding:0 12px; margin:18px 0 4px; }
+    .badge { display:inline-flex; align-items:center; padding:2px 8px; border-radius:9999px; font-size:11px; font-weight:500; }
+    .badge-green { background:#dcfce7; color:#16a34a; }
+    .badge-red { background:#fee2e2; color:#dc2626; }
+    .badge-amber { background:#fef3c7; color:#d97706; }
+    .badge-blue { background:#dbeafe; color:#2563eb; }
+    .badge-slate { background:#f1f5f9; color:#475569; }
+    .badge-purple { background:#f3e8ff; color:#7c3aed; }
+    .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:50; align-items:center; justify-content:center; }
+    .modal-overlay.open { display:flex; }
+    .tab-btn { padding:7px 14px; font-size:13px; font-weight:500; border-radius:7px; cursor:pointer; transition:all .15s; color:#6b7280; background:transparent; border:none; }
+    .tab-btn:hover { background:#f3f4f6; color:#111827; }
+    .tab-btn.active { background:#fff; color:#111827; box-shadow:0 1px 3px rgba(0,0,0,.1); }
+    table tr:hover td { background:#fafafa; }
+    .search-result { display:flex; align-items:center; gap:10px; padding:8px 12px; cursor:pointer; }
+    .search-result:hover, .search-result.focused { background:#f5f3ff; }
+    .search-result.focused .sr-primary { color:#4f46e5; }
+    .crumb-link { color:#9ca3af; cursor:pointer; }
+    .crumb-link:hover { color:#374151; text-decoration:underline; }
+    .action-btn { font-size:12px; font-weight:500; padding:1px 0; cursor:pointer; background:none; border:none; }
+    .action-btn.indigo { color:#4f46e5; }
+    .action-btn.indigo:hover { color:#3730a3; }
+    .action-btn.amber { color:#d97706; }
+    .action-btn.amber:hover { color:#92400e; }
+    .action-btn.red { color:#dc2626; }
+    .action-btn.red:hover { color:#991b1b; }
+    .action-btn.green { color:#16a34a; }
+    .action-btn.green:hover { color:#14532d; }
+    .divider { color:#d1d5db; margin:0 4px; }
+    .card { background:#fff; border-radius:12px; border:1px solid #e5e7eb; overflow:hidden; }
+    .card-header { display:flex; align-items:center; justify-content:space-between; padding:14px 20px; border-bottom:1px solid #f3f4f6; }
+    .th { text-align:left; padding:10px 20px; font-size:11px; font-weight:600; color:#6b7280; text-transform:uppercase; letter-spacing:.05em; background:#f9fafb; border-bottom:1px solid #e5e7eb; }
+    .td { padding:10px 20px; font-size:13px; color:#374151; border-bottom:1px solid #f3f4f6; }
+    .page-title { font-size:18px; font-weight:600; color:#111827; }
+    .page-sub { font-size:13px; color:#6b7280; margin-top:2px; }
+    .btn-primary { display:inline-flex; align-items:center; gap:6px; background:#4f46e5; color:#fff; font-size:13px; font-weight:500; padding:7px 14px; border-radius:8px; cursor:pointer; border:none; transition:background .15s; }
+    .btn-primary:hover { background:#4338ca; }
+    .btn-secondary { display:inline-flex; align-items:center; gap:6px; background:#fff; color:#374151; font-size:13px; font-weight:500; padding:7px 14px; border-radius:8px; cursor:pointer; border:1px solid #e5e7eb; transition:background .15s; }
+    .btn-secondary:hover { background:#f9fafb; }
+    .btn-danger { display:inline-flex; align-items:center; gap:6px; background:#dc2626; color:#fff; font-size:13px; font-weight:500; padding:7px 14px; border-radius:8px; cursor:pointer; border:none; transition:background .15s; }
+    .btn-danger:hover { background:#b91c1c; }
+    input[type=text], input[type=search], input[type=email], input[type=date], select, textarea {
+      font-size:13px; border:1px solid #e5e7eb; border-radius:8px; padding:7px 12px;
+      outline:none; background:#f9fafb; color:#111827; transition:border-color .15s, background .15s;
+    }
+    input:focus, select:focus, textarea:focus { border-color:#6366f1; background:#fff; box-shadow:0 0 0 3px rgba(99,102,241,.12); }
+    label { font-size:13px; font-weight:500; color:#374151; display:block; margin-bottom:5px; }
+    mark.highlight { background:#fef9c3; border-radius:2px; font-style:normal; }
   </style>
 </head>
-<body class="h-full bg-gray-50">
+<body class="h-full bg-gray-50" style="display:flex;">
 
-<div class="flex h-full">
-
-  <!-- ── Sidebar ── -->
-  <aside class="w-64 flex-shrink-0 bg-slate-900 flex flex-col h-screen sticky top-0 overflow-y-auto">
-
-    <div class="flex items-center gap-3 px-4 h-16 border-b border-slate-800 flex-shrink-0">
-      <div class="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center flex-shrink-0">
-        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-        </svg>
-      </div>
-      <div>
-        <p class="text-white text-sm font-semibold leading-tight">UOA Admin</p>
-        <p class="text-slate-500 text-xs">System Administration</p>
-      </div>
+<!-- SIDEBAR -->
+<aside style="width:240px;flex-shrink:0;background:#0f172a;display:flex;flex-direction:column;height:100vh;position:sticky;top:0;overflow-y:auto;">
+  <div style="display:flex;align-items:center;gap:10px;padding:0 16px;height:60px;border-bottom:1px solid #1e293b;flex-shrink:0;">
+    <div style="width:30px;height:30px;background:#4f46e5;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+      <svg width="16" height="16" fill="none" stroke="#fff" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
     </div>
+    <div><p style="color:#f1f5f9;font-size:14px;font-weight:600;line-height:1.2;">UOA Admin</p><p style="color:#475569;font-size:11px;">System Administration</p></div>
+  </div>
+  <nav style="flex:1;padding:8px;" id="sidebar-nav">
+    <p class="nav-section" style="margin-top:8px;">Overview</p>
+    <a class="nav-link active" id="nav-dashboard" onclick="nav('dashboard')">
+      <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+      Dashboard
+    </a>
+    <p class="nav-section">Configuration</p>
+    <a class="nav-link" id="nav-domains" onclick="nav('domains')">
+      <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/></svg>
+      Domains &amp; Secrets
+      <span style="margin-left:auto;background:#1e293b;color:#94a3b8;font-size:11px;padding:1px 6px;border-radius:999px;">12</span>
+    </a>
+    <p class="nav-section">Directory</p>
+    <a class="nav-link" id="nav-orgs" onclick="nav('orgs')">
+      <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 8h2v-8h2v8h2"/></svg>
+      Organisations
+      <span style="margin-left:auto;background:#1e293b;color:#94a3b8;font-size:11px;padding:1px 6px;border-radius:999px;">34</span>
+    </a>
+    <a class="nav-link" id="nav-teams" onclick="nav('teams')">
+      <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+      Teams
+      <span style="margin-left:auto;background:#1e293b;color:#94a3b8;font-size:11px;padding:1px 6px;border-radius:999px;">89</span>
+    </a>
+    <a class="nav-link" id="nav-users" onclick="nav('users')">
+      <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+      Users
+      <span style="margin-left:auto;background:#1e293b;color:#94a3b8;font-size:11px;padding:1px 6px;border-radius:999px;">1.2k</span>
+    </a>
+    <p class="nav-section">Security</p>
+    <a class="nav-link" id="nav-bans" onclick="nav('bans')">
+      <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>
+      Bans
+      <span style="margin-left:auto;background:#450a0a;color:#fca5a5;font-size:11px;padding:1px 6px;border-radius:999px;">11</span>
+    </a>
+    <a class="nav-link" id="nav-logs" onclick="nav('logs')">
+      <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+      Login Logs
+    </a>
+  </nav>
+  <div style="border-top:1px solid #1e293b;padding:10px;">
+    <a href="template-login.html" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer;transition:background .15s;text-decoration:none;" onmouseover="this.style.background='#1e293b'" onmouseout="this.style.background='transparent'">
+      <div style="width:32px;height:32px;background:#312e81;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><span style="color:#fff;font-size:11px;font-weight:600;">SA</span></div>
+      <div style="flex:1;min-width:0;"><p style="color:#e2e8f0;font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">sys_admin</p><p style="color:#475569;font-size:11px;">admin@system.local</p></div>
+      <svg width="14" height="14" fill="none" stroke="#64748b" viewBox="0 0 24 24" title="Sign out"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+    </a>
+  </div>
+</aside>
 
-    <nav class="flex-1 px-2 py-2">
-      <p class="nav-section" style="margin-top:8px;">Overview</p>
-      <a class="nav-link active" onclick="showSection('dashboard')">
-        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
-        Dashboard
-      </a>
-      <p class="nav-section">Configuration</p>
-      <a class="nav-link" onclick="showSection('domains')">
-        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/></svg>
-        Domains &amp; Secrets
-        <span class="ml-auto text-xs px-1.5 py-0.5 rounded-full" style="background:#1e293b;color:#94a3b8;">12</span>
-      </a>
-      <p class="nav-section">Directory</p>
-      <a class="nav-link" onclick="showSection('orgs')">
-        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 8h2v-8h2v8h2"/></svg>
-        Organisations
-        <span class="ml-auto text-xs px-1.5 py-0.5 rounded-full" style="background:#1e293b;color:#94a3b8;">34</span>
-      </a>
-      <a class="nav-link" onclick="showSection('teams')">
-        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
-        Teams
-        <span class="ml-auto text-xs px-1.5 py-0.5 rounded-full" style="background:#1e293b;color:#94a3b8;">89</span>
-      </a>
-      <a class="nav-link" onclick="showSection('users')">
-        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
-        Users
-        <span class="ml-auto text-xs px-1.5 py-0.5 rounded-full" style="background:#1e293b;color:#94a3b8;">1.2k</span>
-      </a>
-      <p class="nav-section">Security</p>
-      <a class="nav-link" onclick="showSection('bans')">
-        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>
-        Email Bans
-        <span class="ml-auto text-xs px-1.5 py-0.5 rounded-full" style="background:#450a0a;color:#fca5a5;">7</span>
-      </a>
-      <a class="nav-link" onclick="showSection('logs')">
-        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-        Login Logs
-      </a>
+<!-- MAIN -->
+<div style="flex:1;display:flex;flex-direction:column;min-width:0;overflow:auto;">
+  <!-- TOPBAR -->
+  <header style="background:#fff;border-bottom:1px solid #e5e7eb;height:60px;display:flex;align-items:center;padding:0 24px;gap:16px;flex-shrink:0;position:sticky;top:0;z-index:20;">
+    <nav style="display:flex;align-items:center;gap:6px;font-size:13px;flex:1;" id="breadcrumb">
+      <span style="color:#9ca3af;">Admin</span>
+      <svg width="11" height="11" fill="none" stroke="#d1d5db" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+      <span style="color:#111827;font-weight:500;">Dashboard</span>
     </nav>
-
-    <div class="border-t border-slate-800 px-3 py-3 flex-shrink-0">
-      <div class="flex items-center gap-3 px-2 py-1.5 rounded-lg hover:bg-slate-800 cursor-pointer" style="transition:background .15s;">
-        <div class="w-8 h-8 bg-indigo-700 rounded-full flex items-center justify-center flex-shrink-0">
-          <span class="text-white text-xs font-semibold">SA</span>
-        </div>
-        <div class="flex-1 min-w-0">
-          <p class="text-slate-200 text-sm font-medium truncate">sys_admin</p>
-          <p class="text-slate-500 text-xs truncate">admin@system.local</p>
-        </div>
-        <svg class="w-4 h-4 text-slate-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
-      </div>
+    <div style="position:relative;width:320px;" id="search-container">
+      <svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%);pointer-events:none;" width="14" height="14" fill="none" stroke="#9ca3af" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+      <input id="search-input" type="search" placeholder="Search orgs, teams, users&#x2026;"
+        style="width:100%;padding:7px 12px 7px 32px;border:1px solid #e5e7eb;border-radius:9px;font-size:13px;background:#f9fafb;outline:none;box-sizing:border-box;"
+        autocomplete="off"
+        oninput="onSearchInput(this.value)"
+        onkeydown="onSearchKey(event)"
+        onfocus="if(this.value.trim().length>0)showDropdown(this.value)"
+      />
+      <div id="search-dropdown" style="display:none;position:absolute;top:calc(100% + 6px);left:0;right:0;background:#fff;border:1px solid #e5e7eb;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.12);overflow:hidden;z-index:100;max-height:420px;overflow-y:auto;"></div>
     </div>
-  </aside>
-
-  <!-- ── Main ── -->
-  <div class="flex-1 flex flex-col min-w-0 overflow-auto">
-
-    <!-- Top bar -->
-    <header class="bg-white border-b border-gray-200 h-16 flex items-center px-6 gap-4 flex-shrink-0 sticky top-0 z-10">
-      <nav class="flex items-center gap-1.5 text-sm flex-1" id="breadcrumb">
-        <span class="text-gray-400">Admin</span>
-        <svg class="w-3.5 h-3.5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-        <span class="text-gray-900 font-medium" id="breadcrumb-current">Dashboard</span>
-      </nav>
-      <div class="relative w-72">
-        <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-        <input type="search" placeholder="Search users, domains, orgs…"
-          class="w-full pl-9 pr-3 py-1.5 text-sm bg-gray-50 border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
-      </div>
-      <button class="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 relative">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
-        <span class="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-      </button>
-    </header>
-
-    <main class="flex-1 p-6">
-
-      <!-- ══ DASHBOARD ══ -->
-      <div class="section active" id="s-dashboard">
-        <div class="flex items-center justify-between mb-6">
-          <div>
-            <h1 class="text-xl font-semibold text-gray-900">Dashboard</h1>
-            <p class="text-sm text-gray-500 mt-0.5">System health and recent activity</p>
-          </div>
-          <span class="text-xs text-gray-400">Last updated: just now</span>
-        </div>
-
-        <!-- Stats grid -->
-        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <div class="bg-white rounded-xl border border-gray-200 p-5">
-            <p class="text-xs font-medium text-gray-500 uppercase tracking-wide">Total Users</p>
-            <p class="text-3xl font-bold text-gray-900 mt-1">1,247</p>
-            <p class="text-xs text-green-600 mt-1">+23 this week</p>
-          </div>
-          <div class="bg-white rounded-xl border border-gray-200 p-5">
-            <p class="text-xs font-medium text-gray-500 uppercase tracking-wide">Active Domains</p>
-            <p class="text-3xl font-bold text-gray-900 mt-1">12</p>
-            <p class="text-xs text-gray-400 mt-1">2 pending setup</p>
-          </div>
-          <div class="bg-white rounded-xl border border-gray-200 p-5">
-            <p class="text-xs font-medium text-gray-500 uppercase tracking-wide">Organisations</p>
-            <p class="text-3xl font-bold text-gray-900 mt-1">34</p>
-            <p class="text-xs text-blue-600 mt-1">across 8 domains</p>
-          </div>
-          <div class="bg-white rounded-xl border border-gray-200 p-5">
-            <p class="text-xs font-medium text-gray-500 uppercase tracking-wide">Logins Today</p>
-            <p class="text-3xl font-bold text-gray-900 mt-1">389</p>
-            <p class="text-xs text-amber-600 mt-1">3 failed attempts</p>
-          </div>
-        </div>
-
-        <!-- Two columns: recent logins + alerts -->
-        <div class="grid grid-cols-3 gap-4">
-          <div class="col-span-2 bg-white rounded-xl border border-gray-200">
-            <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-              <h2 class="text-sm font-semibold text-gray-900">Recent Login Activity</h2>
-              <a href="#" onclick="showSection('logs')" class="text-xs text-indigo-600 hover:text-indigo-700">View all</a>
-            </div>
-            <table class="w-full text-sm">
-              <thead>
-                <tr class="border-b border-gray-100">
-                  <th class="text-left px-5 py-2.5 text-xs font-medium text-gray-500">User</th>
-                  <th class="text-left px-5 py-2.5 text-xs font-medium text-gray-500">Domain</th>
-                  <th class="text-left px-5 py-2.5 text-xs font-medium text-gray-500">Method</th>
-                  <th class="text-left px-5 py-2.5 text-xs font-medium text-gray-500">Time</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr><td class="px-5 py-2.5 text-gray-900">alice@acme.com</td><td class="px-5 py-2.5 text-gray-500">app.acme.com</td><td class="px-5 py-2.5"><span class="badge badge-blue">google</span></td><td class="px-5 py-2.5 text-gray-400 text-xs">2 min ago</td></tr>
-                <tr><td class="px-5 py-2.5 text-gray-900">bob@widgets.io</td><td class="px-5 py-2.5 text-gray-500">widgets.io</td><td class="px-5 py-2.5"><span class="badge badge-slate">email</span></td><td class="px-5 py-2.5 text-gray-400 text-xs">5 min ago</td></tr>
-                <tr><td class="px-5 py-2.5 text-gray-900">carol@example.com</td><td class="px-5 py-2.5 text-gray-500">portal.example.com</td><td class="px-5 py-2.5"><span class="badge badge-slate">email</span></td><td class="px-5 py-2.5 text-gray-400 text-xs">11 min ago</td></tr>
-                <tr><td class="px-5 py-2.5 text-gray-900">dan@acme.com</td><td class="px-5 py-2.5 text-gray-500">app.acme.com</td><td class="px-5 py-2.5"><span class="badge badge-blue">github</span></td><td class="px-5 py-2.5 text-gray-400 text-xs">18 min ago</td></tr>
-                <tr><td class="px-5 py-2.5 text-gray-900">eve@startup.dev</td><td class="px-5 py-2.5 text-gray-500">startup.dev</td><td class="px-5 py-2.5"><span class="badge badge-slate">email</span></td><td class="px-5 py-2.5 text-gray-400 text-xs">34 min ago</td></tr>
-              </tbody>
-            </table>
-          </div>
-          <div class="bg-white rounded-xl border border-gray-200">
-            <div class="px-5 py-4 border-b border-gray-100">
-              <h2 class="text-sm font-semibold text-gray-900">Alerts</h2>
-            </div>
-            <div class="divide-y divide-gray-100">
-              <div class="px-5 py-3 flex gap-3">
-                <div class="w-2 h-2 bg-amber-400 rounded-full mt-1.5 flex-shrink-0"></div>
-                <div><p class="text-xs font-medium text-gray-800">Secret rotation needed</p><p class="text-xs text-gray-500 mt-0.5">widgets.io secret is 89 days old</p></div>
-              </div>
-              <div class="px-5 py-3 flex gap-3">
-                <div class="w-2 h-2 bg-red-400 rounded-full mt-1.5 flex-shrink-0"></div>
-                <div><p class="text-xs font-medium text-gray-800">3 failed login attempts</p><p class="text-xs text-gray-500 mt-0.5">From 185.220.101.x today</p></div>
-              </div>
-              <div class="px-5 py-3 flex gap-3">
-                <div class="w-2 h-2 bg-blue-400 rounded-full mt-1.5 flex-shrink-0"></div>
-                <div><p class="text-xs font-medium text-gray-800">New domain registered</p><p class="text-xs text-gray-500 mt-0.5">beta.newproduct.com added 2h ago</p></div>
-              </div>
-              <div class="px-5 py-3 flex gap-3">
-                <div class="w-2 h-2 bg-green-400 rounded-full mt-1.5 flex-shrink-0"></div>
-                <div><p class="text-xs font-medium text-gray-800">All systems operational</p><p class="text-xs text-gray-500 mt-0.5">DB, email, social providers OK</p></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ══ DOMAINS & SECRETS ══ -->
-      <div class="section" id="s-domains">
-        <div class="flex items-center justify-between mb-6">
-          <div>
-            <h1 class="text-xl font-semibold text-gray-900">Domains &amp; Secrets</h1>
-            <p class="text-sm text-gray-500 mt-0.5">Manage registered client domains and their access secrets</p>
-          </div>
-          <button onclick="document.getElementById('modal-domain').classList.add('open')"
-            class="flex items-center gap-2 bg-indigo-600 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-indigo-500 transition-colors">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-            Add Domain
-          </button>
-        </div>
-
-        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div class="px-5 py-3 border-b border-gray-100 flex items-center gap-3">
-            <input type="search" placeholder="Filter by domain…" class="text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 w-64 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
-            <select class="text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-              <option>All statuses</option>
-              <option>Active</option>
-              <option>Inactive</option>
-            </select>
-          </div>
-          <table class="w-full text-sm">
-            <thead class="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Domain</th>
-                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Client Hash</th>
-                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Secret Age</th>
-                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Users</th>
-                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Orgs</th>
-                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Status</th>
-                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Actions</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-100">
-              <tr>
-                <td class="px-5 py-3"><p class="font-medium text-gray-900">app.acme.com</p><p class="text-xs text-gray-400 mt-0.5">Added 2024-01-15</p></td>
-                <td class="px-5 py-3"><code class="text-xs bg-gray-100 px-2 py-0.5 rounded font-mono text-gray-600">a3f8d2c1…</code></td>
-                <td class="px-5 py-3"><span class="badge badge-green">12 days</span></td>
-                <td class="px-5 py-3 text-gray-700">487</td>
-                <td class="px-5 py-3 text-gray-700">8</td>
-                <td class="px-5 py-3"><span class="badge badge-green">Active</span></td>
-                <td class="px-5 py-3">
-                  <div class="flex items-center gap-2">
-                    <button class="text-xs text-indigo-600 hover:text-indigo-800 font-medium">Edit</button>
-                    <span class="text-gray-300">|</span>
-                    <button class="text-xs text-amber-600 hover:text-amber-800 font-medium">Rotate</button>
-                    <span class="text-gray-300">|</span>
-                    <button class="text-xs text-red-500 hover:text-red-700 font-medium">Disable</button>
-                  </div>
-                </td>
-              </tr>
-              <tr>
-                <td class="px-5 py-3"><p class="font-medium text-gray-900">widgets.io</p><p class="text-xs text-gray-400 mt-0.5">Added 2023-11-02</p></td>
-                <td class="px-5 py-3"><code class="text-xs bg-gray-100 px-2 py-0.5 rounded font-mono text-gray-600">b7e2f9a4…</code></td>
-                <td class="px-5 py-3"><span class="badge badge-amber">89 days</span></td>
-                <td class="px-5 py-3 text-gray-700">312</td>
-                <td class="px-5 py-3 text-gray-700">5</td>
-                <td class="px-5 py-3"><span class="badge badge-green">Active</span></td>
-                <td class="px-5 py-3">
-                  <div class="flex items-center gap-2">
-                    <button class="text-xs text-indigo-600 hover:text-indigo-800 font-medium">Edit</button>
-                    <span class="text-gray-300">|</span>
-                    <button class="text-xs text-amber-600 hover:text-amber-800 font-medium">Rotate</button>
-                    <span class="text-gray-300">|</span>
-                    <button class="text-xs text-red-500 hover:text-red-700 font-medium">Disable</button>
-                  </div>
-                </td>
-              </tr>
-              <tr>
-                <td class="px-5 py-3"><p class="font-medium text-gray-900">portal.example.com</p><p class="text-xs text-gray-400 mt-0.5">Added 2024-03-01</p></td>
-                <td class="px-5 py-3"><code class="text-xs bg-gray-100 px-2 py-0.5 rounded font-mono text-gray-600">c1d4e8b3…</code></td>
-                <td class="px-5 py-3"><span class="badge badge-green">5 days</span></td>
-                <td class="px-5 py-3 text-gray-700">198</td>
-                <td class="px-5 py-3 text-gray-700">3</td>
-                <td class="px-5 py-3"><span class="badge badge-green">Active</span></td>
-                <td class="px-5 py-3">
-                  <div class="flex items-center gap-2">
-                    <button class="text-xs text-indigo-600 hover:text-indigo-800 font-medium">Edit</button>
-                    <span class="text-gray-300">|</span>
-                    <button class="text-xs text-amber-600 hover:text-amber-800 font-medium">Rotate</button>
-                    <span class="text-gray-300">|</span>
-                    <button class="text-xs text-red-500 hover:text-red-700 font-medium">Disable</button>
-                  </div>
-                </td>
-              </tr>
-              <tr>
-                <td class="px-5 py-3"><p class="font-medium text-gray-900">old-product.com</p><p class="text-xs text-gray-400 mt-0.5">Added 2023-06-10</p></td>
-                <td class="px-5 py-3"><code class="text-xs bg-gray-100 px-2 py-0.5 rounded font-mono text-gray-600">d9c3a7e2…</code></td>
-                <td class="px-5 py-3"><span class="badge badge-slate">—</span></td>
-                <td class="px-5 py-3 text-gray-400">89</td>
-                <td class="px-5 py-3 text-gray-400">2</td>
-                <td class="px-5 py-3"><span class="badge badge-red">Disabled</span></td>
-                <td class="px-5 py-3">
-                  <div class="flex items-center gap-2">
-                    <button class="text-xs text-indigo-600 hover:text-indigo-800 font-medium">Edit</button>
-                    <span class="text-gray-300">|</span>
-                    <button class="text-xs text-green-600 hover:text-green-800 font-medium">Enable</button>
-                    <span class="text-gray-300">|</span>
-                    <button class="text-xs text-red-500 hover:text-red-700 font-medium">Delete</button>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-          <div class="px-5 py-3 border-t border-gray-100 flex items-center justify-between">
-            <p class="text-xs text-gray-500">Showing 4 of 12 domains</p>
-            <div class="flex gap-1">
-              <button class="px-2.5 py-1 text-xs text-gray-500 border border-gray-200 rounded hover:bg-gray-50">Prev</button>
-              <button class="px-2.5 py-1 text-xs text-white bg-indigo-600 rounded">1</button>
-              <button class="px-2.5 py-1 text-xs text-gray-500 border border-gray-200 rounded hover:bg-gray-50">2</button>
-              <button class="px-2.5 py-1 text-xs text-gray-500 border border-gray-200 rounded hover:bg-gray-50">Next</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Domain Access Log -->
-        <div class="bg-white rounded-xl border border-gray-200 mt-4">
-          <div class="px-5 py-4 border-b border-gray-100">
-            <h2 class="text-sm font-semibold text-gray-900">Domain Request Log</h2>
-            <p class="text-xs text-gray-500 mt-0.5">All auth initiations by domain — last 7 days</p>
-          </div>
-          <table class="w-full text-sm">
-            <thead class="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500">Domain</th>
-                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500">Requests</th>
-                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500">Unique Users</th>
-                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500">Failed Auth</th>
-                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500">Last Request</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-100">
-              <tr><td class="px-5 py-2.5 font-medium text-gray-900">app.acme.com</td><td class="px-5 py-2.5 text-gray-700">2,341</td><td class="px-5 py-2.5 text-gray-700">487</td><td class="px-5 py-2.5"><span class="badge badge-slate">12</span></td><td class="px-5 py-2.5 text-gray-400 text-xs">2 min ago</td></tr>
-              <tr><td class="px-5 py-2.5 font-medium text-gray-900">widgets.io</td><td class="px-5 py-2.5 text-gray-700">981</td><td class="px-5 py-2.5 text-gray-700">312</td><td class="px-5 py-2.5"><span class="badge badge-red">3</span></td><td class="px-5 py-2.5 text-gray-400 text-xs">8 min ago</td></tr>
-              <tr><td class="px-5 py-2.5 font-medium text-gray-900">portal.example.com</td><td class="px-5 py-2.5 text-gray-700">543</td><td class="px-5 py-2.5 text-gray-700">198</td><td class="px-5 py-2.5"><span class="badge badge-slate">1</span></td><td class="px-5 py-2.5 text-gray-400 text-xs">34 min ago</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- ══ ORGANISATIONS ══ -->
-      <div class="section" id="s-orgs">
-        <div class="flex items-center justify-between mb-6">
-          <div>
-            <h1 class="text-xl font-semibold text-gray-900">Organisations</h1>
-            <p class="text-sm text-gray-500 mt-0.5">All organisations across all domains</p>
-          </div>
-          <button class="flex items-center gap-2 bg-indigo-600 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-indigo-500 transition-colors">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-            New Organisation
-          </button>
-        </div>
-
-        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div class="px-5 py-3 border-b border-gray-100 flex items-center gap-3">
-            <input type="search" placeholder="Search orgs…" class="text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 w-64 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
-            <select class="text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-              <option>All domains</option>
-              <option>app.acme.com</option>
-              <option>widgets.io</option>
-            </select>
-          </div>
-          <table class="w-full text-sm">
-            <thead class="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th class="w-8 px-3 py-3"></th>
-                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Organisation</th>
-                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Domain</th>
-                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Owner</th>
-                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Members</th>
-                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Teams</th>
-                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Created</th>
-                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              <!-- Org row -->
-              <tr id="org-1-row">
-                <td class="px-3 py-3 text-center">
-                  <button onclick="toggleExpand('org-1')" class="text-gray-400 hover:text-gray-600">
-                    <svg id="org-1-chevron" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-                  </button>
-                </td>
-                <td class="px-5 py-3">
-                  <p class="font-medium text-gray-900">Acme Engineering</p>
-                  <p class="text-xs text-gray-400">acme-engineering</p>
-                </td>
-                <td class="px-5 py-3 text-gray-500 text-xs">app.acme.com</td>
-                <td class="px-5 py-3"><span class="text-gray-700">alice@acme.com</span></td>
-                <td class="px-5 py-3 text-gray-700">42</td>
-                <td class="px-5 py-3 text-gray-700">6</td>
-                <td class="px-5 py-3 text-gray-400 text-xs">Jan 15, 2024</td>
-                <td class="px-5 py-3">
-                  <div class="flex items-center gap-2">
-                    <button class="text-xs text-indigo-600 font-medium">Edit</button>
-                    <span class="text-gray-300">|</span>
-                    <button class="text-xs text-amber-600 font-medium">Transfer</button>
-                    <span class="text-gray-300">|</span>
-                    <button class="text-xs text-red-500 font-medium">Delete</button>
-                  </div>
-                </td>
-              </tr>
-              <!-- Expanded: teams inside org -->
-              <tr class="expand-row open" id="org-1-expand">
-                <td colspan="8" class="bg-indigo-50 border-l-4 border-indigo-400">
-                  <div class="px-10 py-3">
-                    <p class="text-xs font-semibold text-indigo-700 mb-2">Teams in Acme Engineering</p>
-                    <table class="w-full text-sm bg-white rounded-lg overflow-hidden shadow-sm">
-                      <thead class="bg-gray-50 border-b border-gray-200">
-                        <tr>
-                          <th class="text-left px-4 py-2 text-xs font-medium text-gray-500">Team</th>
-                          <th class="text-left px-4 py-2 text-xs font-medium text-gray-500">Members</th>
-                          <th class="text-left px-4 py-2 text-xs font-medium text-gray-500">Type</th>
-                          <th class="text-left px-4 py-2 text-xs font-medium text-gray-500">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody class="divide-y divide-gray-100">
-                        <tr><td class="px-4 py-2 font-medium text-gray-800">General</td><td class="px-4 py-2 text-gray-600">42</td><td class="px-4 py-2"><span class="badge badge-blue">Default</span></td><td class="px-4 py-2"><div class="flex gap-2"><button class="text-xs text-indigo-600">View</button><span class="text-gray-300">|</span><button class="text-xs text-indigo-600">Edit</button></div></td></tr>
-                        <tr><td class="px-4 py-2 font-medium text-gray-800">Backend</td><td class="px-4 py-2 text-gray-600">14</td><td class="px-4 py-2"><span class="badge badge-slate">Team</span></td><td class="px-4 py-2"><div class="flex gap-2"><button class="text-xs text-indigo-600">View</button><span class="text-gray-300">|</span><button class="text-xs text-indigo-600">Edit</button><span class="text-gray-300">|</span><button class="text-xs text-red-500">Delete</button></div></td></tr>
-                        <tr><td class="px-4 py-2 font-medium text-gray-800">Frontend</td><td class="px-4 py-2 text-gray-600">11</td><td class="px-4 py-2"><span class="badge badge-slate">Team</span></td><td class="px-4 py-2"><div class="flex gap-2"><button class="text-xs text-indigo-600">View</button><span class="text-gray-300">|</span><button class="text-xs text-indigo-600">Edit</button><span class="text-gray-300">|</span><button class="text-xs text-red-500">Delete</button></div></td></tr>
-                      </tbody>
-                    </table>
-                    <button class="mt-2 text-xs text-indigo-600 font-medium flex items-center gap-1">
-                      <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-                      Add team
-                    </button>
-                  </div>
-                </td>
-              </tr>
-              <!-- More orgs -->
-              <tr>
-                <td class="px-3 py-3 text-center"><button onclick="toggleExpand('org-2')" class="text-gray-400 hover:text-gray-600"><svg id="org-2-chevron" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg></button></td>
-                <td class="px-5 py-3"><p class="font-medium text-gray-900">Acme Design</p><p class="text-xs text-gray-400">acme-design</p></td>
-                <td class="px-5 py-3 text-gray-500 text-xs">app.acme.com</td>
-                <td class="px-5 py-3 text-gray-700">bob@acme.com</td>
-                <td class="px-5 py-3 text-gray-700">18</td>
-                <td class="px-5 py-3 text-gray-700">3</td>
-                <td class="px-5 py-3 text-gray-400 text-xs">Feb 3, 2024</td>
-                <td class="px-5 py-3"><div class="flex items-center gap-2"><button class="text-xs text-indigo-600 font-medium">Edit</button><span class="text-gray-300">|</span><button class="text-xs text-amber-600 font-medium">Transfer</button><span class="text-gray-300">|</span><button class="text-xs text-red-500 font-medium">Delete</button></div></td>
-              </tr>
-              <tr class="expand-row" id="org-2-expand"><td colspan="8" class="bg-indigo-50 border-l-4 border-indigo-400"><div class="px-10 py-3"><p class="text-xs text-indigo-600">Loading teams…</p></div></td></tr>
-              <tr>
-                <td class="px-3 py-3 text-center"><button onclick="toggleExpand('org-3')" class="text-gray-400 hover:text-gray-600"><svg id="org-3-chevron" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg></button></td>
-                <td class="px-5 py-3"><p class="font-medium text-gray-900">Widgets Core</p><p class="text-xs text-gray-400">widgets-core</p></td>
-                <td class="px-5 py-3 text-gray-500 text-xs">widgets.io</td>
-                <td class="px-5 py-3 text-gray-700">carol@widgets.io</td>
-                <td class="px-5 py-3 text-gray-700">91</td>
-                <td class="px-5 py-3 text-gray-700">9</td>
-                <td class="px-5 py-3 text-gray-400 text-xs">Nov 2, 2023</td>
-                <td class="px-5 py-3"><div class="flex items-center gap-2"><button class="text-xs text-indigo-600 font-medium">Edit</button><span class="text-gray-300">|</span><button class="text-xs text-amber-600 font-medium">Transfer</button><span class="text-gray-300">|</span><button class="text-xs text-red-500 font-medium">Delete</button></div></td>
-              </tr>
-              <tr class="expand-row" id="org-3-expand"><td colspan="8" class="bg-indigo-50 border-l-4 border-indigo-400"><div class="px-10 py-3"><p class="text-xs text-indigo-600">Click chevron to expand</p></div></td></tr>
-            </tbody>
-          </table>
-          <div class="px-5 py-3 border-t border-gray-100 flex items-center justify-between">
-            <p class="text-xs text-gray-500">Showing 3 of 34 organisations</p>
-            <div class="flex gap-1">
-              <button class="px-2.5 py-1 text-xs text-gray-500 border border-gray-200 rounded hover:bg-gray-50">Prev</button>
-              <button class="px-2.5 py-1 text-xs text-white bg-indigo-600 rounded">1</button>
-              <button class="px-2.5 py-1 text-xs text-gray-500 border border-gray-200 rounded hover:bg-gray-50">2</button>
-              <button class="px-2.5 py-1 text-xs text-gray-500 border border-gray-200 rounded hover:bg-gray-50">Next</button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ══ TEAMS ══ -->
-      <div class="section" id="s-teams">
-        <div class="flex items-center justify-between mb-6">
-          <div>
-            <h1 class="text-xl font-semibold text-gray-900">Teams</h1>
-            <p class="text-sm text-gray-500 mt-0.5">Browse and manage all teams across all organisations</p>
-          </div>
-        </div>
-
-        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div class="px-5 py-3 border-b border-gray-100 flex items-center gap-3">
-            <input type="search" placeholder="Search teams…" class="text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 w-64 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
-            <select class="text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-              <option>All organisations</option>
-              <option>Acme Engineering</option>
-              <option>Widgets Core</option>
-            </select>
-          </div>
-          <table class="w-full text-sm">
-            <thead class="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th class="w-8 px-3 py-3"></th>
-                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Team</th>
-                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Organisation</th>
-                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Domain</th>
-                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Members</th>
-                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Type</th>
-                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td class="px-3 py-3 text-center"><button onclick="toggleExpand('team-1')" class="text-gray-400 hover:text-gray-600"><svg id="team-1-chevron" class="w-4 h-4 rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg></button></td>
-                <td class="px-5 py-3 font-medium text-gray-900">Backend</td>
-                <td class="px-5 py-3 text-gray-500">Acme Engineering</td>
-                <td class="px-5 py-3 text-gray-400 text-xs">app.acme.com</td>
-                <td class="px-5 py-3 text-gray-700">14</td>
-                <td class="px-5 py-3"><span class="badge badge-slate">Team</span></td>
-                <td class="px-5 py-3"><div class="flex gap-2"><button class="text-xs text-indigo-600 font-medium">Edit</button><span class="text-gray-300">|</span><button class="text-xs text-red-500 font-medium">Delete</button></div></td>
-              </tr>
-              <!-- Expanded team: members list -->
-              <tr class="expand-row open" id="team-1-expand">
-                <td colspan="7" class="bg-sky-50 border-l-4 border-sky-400">
-                  <div class="px-10 py-3">
-                    <p class="text-xs font-semibold text-sky-700 mb-2">Members of Backend team</p>
-                    <table class="w-full text-sm bg-white rounded-lg overflow-hidden shadow-sm">
-                      <thead class="bg-gray-50 border-b border-gray-200">
-                        <tr>
-                          <th class="text-left px-4 py-2 text-xs font-medium text-gray-500">User</th>
-                          <th class="text-left px-4 py-2 text-xs font-medium text-gray-500">Email</th>
-                          <th class="text-left px-4 py-2 text-xs font-medium text-gray-500">Role</th>
-                          <th class="text-left px-4 py-2 text-xs font-medium text-gray-500">Joined</th>
-                          <th class="text-left px-4 py-2 text-xs font-medium text-gray-500">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody class="divide-y divide-gray-100">
-                        <tr><td class="px-4 py-2 font-medium text-gray-800">Alice Chen</td><td class="px-4 py-2 text-gray-500">alice@acme.com</td><td class="px-4 py-2"><span class="badge badge-blue">lead</span></td><td class="px-4 py-2 text-gray-400 text-xs">Jan 15</td><td class="px-4 py-2"><div class="flex gap-2"><button class="text-xs text-indigo-600">Change Role</button><span class="text-gray-300">|</span><button class="text-xs text-red-500">Remove</button></div></td></tr>
-                        <tr><td class="px-4 py-2 font-medium text-gray-800">Bob Smith</td><td class="px-4 py-2 text-gray-500">bob@acme.com</td><td class="px-4 py-2"><span class="badge badge-slate">member</span></td><td class="px-4 py-2 text-gray-400 text-xs">Jan 20</td><td class="px-4 py-2"><div class="flex gap-2"><button class="text-xs text-indigo-600">Change Role</button><span class="text-gray-300">|</span><button class="text-xs text-red-500">Remove</button></div></td></tr>
-                        <tr><td class="px-4 py-2 font-medium text-gray-800">Carol Davis</td><td class="px-4 py-2 text-gray-500">carol@acme.com</td><td class="px-4 py-2"><span class="badge badge-slate">member</span></td><td class="px-4 py-2 text-gray-400 text-xs">Feb 3</td><td class="px-4 py-2"><div class="flex gap-2"><button class="text-xs text-indigo-600">Change Role</button><span class="text-gray-300">|</span><button class="text-xs text-red-500">Remove</button></div></td></tr>
-                      </tbody>
-                    </table>
-                    <button class="mt-2 text-xs text-sky-600 font-medium flex items-center gap-1">
-                      <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-                      Add member
-                    </button>
-                  </div>
-                </td>
-              </tr>
-              <tr><td class="px-3 py-3 text-center"><button onclick="toggleExpand('team-2')" class="text-gray-400"><svg id="team-2-chevron" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg></button></td><td class="px-5 py-3 font-medium text-gray-900">General</td><td class="px-5 py-3 text-gray-500">Acme Engineering</td><td class="px-5 py-3 text-gray-400 text-xs">app.acme.com</td><td class="px-5 py-3 text-gray-700">42</td><td class="px-5 py-3"><span class="badge badge-blue">Default</span></td><td class="px-5 py-3"><div class="flex gap-2"><button class="text-xs text-indigo-600 font-medium">Edit</button></div></td></tr>
-              <tr class="expand-row" id="team-2-expand"><td colspan="7" class="bg-sky-50 border-l-4 border-sky-400"><div class="px-10 py-3 text-xs text-sky-600">Click chevron to see members</div></td></tr>
-              <tr><td class="px-3 py-3 text-center"><button class="text-gray-400"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg></button></td><td class="px-5 py-3 font-medium text-gray-900">Widget Builders</td><td class="px-5 py-3 text-gray-500">Widgets Core</td><td class="px-5 py-3 text-gray-400 text-xs">widgets.io</td><td class="px-5 py-3 text-gray-700">28</td><td class="px-5 py-3"><span class="badge badge-slate">Team</span></td><td class="px-5 py-3"><div class="flex gap-2"><button class="text-xs text-indigo-600 font-medium">Edit</button><span class="text-gray-300">|</span><button class="text-xs text-red-500 font-medium">Delete</button></div></td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- ══ USERS ══ -->
-      <div class="section" id="s-users">
-        <div class="flex items-center justify-between mb-6">
-          <div>
-            <h1 class="text-xl font-semibold text-gray-900">Users</h1>
-            <p class="text-sm text-gray-500 mt-0.5">All users across all domains — search, edit, or ban</p>
-          </div>
-        </div>
-
-        <!-- Tabs -->
-        <div class="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit mb-5">
-          <button class="tab-btn active" onclick="switchUserTab('all', this)">All Users</button>
-          <button class="tab-btn" onclick="switchUserTab('banned', this)">Banned</button>
-          <button class="tab-btn" onclick="switchUserTab('super', this)">Superusers</button>
-        </div>
-
-        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div class="px-5 py-3 border-b border-gray-100 flex items-center gap-3">
-            <input type="search" placeholder="Search by email or name…" class="text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 w-72 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
-            <select class="text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-              <option>All domains</option>
-              <option>app.acme.com</option>
-              <option>widgets.io</option>
-            </select>
-            <select class="text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-              <option>All methods</option>
-              <option>email</option>
-              <option>google</option>
-              <option>github</option>
-            </select>
-          </div>
-          <table class="w-full text-sm">
-            <thead class="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">User</th>
-                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Domains</th>
-                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">2FA</th>
-                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Last Login</th>
-                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Status</th>
-                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Actions</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-100">
-              <tr>
-                <td class="px-5 py-3">
-                  <div class="flex items-center gap-3">
-                    <div class="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center flex-shrink-0">
-                      <span class="text-indigo-700 text-xs font-semibold">AC</span>
-                    </div>
-                    <div>
-                      <p class="font-medium text-gray-900">Alice Chen</p>
-                      <p class="text-xs text-gray-400">alice@acme.com</p>
-                    </div>
-                  </div>
-                </td>
-                <td class="px-5 py-3"><span class="badge badge-slate">app.acme.com</span></td>
-                <td class="px-5 py-3"><span class="badge badge-green">Enabled</span></td>
-                <td class="px-5 py-3 text-gray-400 text-xs">2 min ago</td>
-                <td class="px-5 py-3"><span class="badge badge-green">Active</span></td>
-                <td class="px-5 py-3">
-                  <div class="flex items-center gap-2">
-                    <button onclick="document.getElementById('modal-user').classList.add('open')" class="text-xs text-indigo-600 font-medium">View</button>
-                    <span class="text-gray-300">|</span>
-                    <button class="text-xs text-amber-600 font-medium">Reset 2FA</button>
-                    <span class="text-gray-300">|</span>
-                    <button class="text-xs text-red-500 font-medium">Ban</button>
-                  </div>
-                </td>
-              </tr>
-              <tr>
-                <td class="px-5 py-3">
-                  <div class="flex items-center gap-3">
-                    <div class="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center flex-shrink-0">
-                      <span class="text-emerald-700 text-xs font-semibold">BS</span>
-                    </div>
-                    <div>
-                      <p class="font-medium text-gray-900">Bob Smith</p>
-                      <p class="text-xs text-gray-400">bob@widgets.io</p>
-                    </div>
-                  </div>
-                </td>
-                <td class="px-5 py-3"><span class="badge badge-slate">widgets.io</span></td>
-                <td class="px-5 py-3"><span class="badge badge-amber">Disabled</span></td>
-                <td class="px-5 py-3 text-gray-400 text-xs">3 days ago</td>
-                <td class="px-5 py-3"><span class="badge badge-green">Active</span></td>
-                <td class="px-5 py-3"><div class="flex items-center gap-2"><button class="text-xs text-indigo-600 font-medium">View</button><span class="text-gray-300">|</span><button class="text-xs text-amber-600 font-medium">Reset 2FA</button><span class="text-gray-300">|</span><button class="text-xs text-red-500 font-medium">Ban</button></div></td>
-              </tr>
-              <tr>
-                <td class="px-5 py-3">
-                  <div class="flex items-center gap-3">
-                    <div class="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
-                      <span class="text-red-700 text-xs font-semibold">SP</span>
-                    </div>
-                    <div>
-                      <p class="font-medium text-gray-400 line-through">spam@evil.ru</p>
-                      <p class="text-xs text-red-400">Banned user</p>
-                    </div>
-                  </div>
-                </td>
-                <td class="px-5 py-3"><span class="badge badge-slate">portal.example.com</span></td>
-                <td class="px-5 py-3"><span class="badge badge-slate">—</span></td>
-                <td class="px-5 py-3 text-gray-400 text-xs">Never</td>
-                <td class="px-5 py-3"><span class="badge badge-red">Banned</span></td>
-                <td class="px-5 py-3"><div class="flex items-center gap-2"><button class="text-xs text-indigo-600 font-medium">View</button><span class="text-gray-300">|</span><button class="text-xs text-green-600 font-medium">Unban</button><span class="text-gray-300">|</span><button class="text-xs text-red-500 font-medium">Delete</button></div></td>
-              </tr>
-              <tr>
-                <td class="px-5 py-3">
-                  <div class="flex items-center gap-3">
-                    <div class="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0">
-                      <span class="text-purple-700 text-xs font-semibold">CD</span>
-                    </div>
-                    <div>
-                      <p class="font-medium text-gray-900">Carol Davis</p>
-                      <p class="text-xs text-gray-400">carol@acme.com</p>
-                    </div>
-                  </div>
-                </td>
-                <td class="px-5 py-3">
-                  <div class="flex gap-1 flex-wrap">
-                    <span class="badge badge-slate">app.acme.com</span>
-                    <span class="badge badge-slate">widgets.io</span>
-                  </div>
-                </td>
-                <td class="px-5 py-3"><span class="badge badge-green">Enabled</span></td>
-                <td class="px-5 py-3 text-gray-400 text-xs">1 hour ago</td>
-                <td class="px-5 py-3"><span class="badge badge-green">Active</span></td>
-                <td class="px-5 py-3"><div class="flex items-center gap-2"><button class="text-xs text-indigo-600 font-medium">View</button><span class="text-gray-300">|</span><button class="text-xs text-amber-600 font-medium">Reset 2FA</button><span class="text-gray-300">|</span><button class="text-xs text-red-500 font-medium">Ban</button></div></td>
-              </tr>
-            </tbody>
-          </table>
-          <div class="px-5 py-3 border-t border-gray-100 flex items-center justify-between">
-            <p class="text-xs text-gray-500">Showing 4 of 1,247 users</p>
-            <div class="flex gap-1">
-              <button class="px-2.5 py-1 text-xs text-gray-500 border border-gray-200 rounded hover:bg-gray-50">Prev</button>
-              <button class="px-2.5 py-1 text-xs text-white bg-indigo-600 rounded">1</button>
-              <button class="px-2.5 py-1 text-xs text-gray-500 border border-gray-200 rounded hover:bg-gray-50">2</button>
-              <button class="px-2.5 py-1 text-xs text-gray-500 border border-gray-200 rounded hover:bg-gray-50">…</button>
-              <button class="px-2.5 py-1 text-xs text-gray-500 border border-gray-200 rounded hover:bg-gray-50">Next</button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ══ EMAIL BANS ══ -->
-      <div class="section" id="s-bans">
-        <div class="flex items-center justify-between mb-6">
-          <div>
-            <h1 class="text-xl font-semibold text-gray-900">Email Bans</h1>
-            <p class="text-sm text-gray-500 mt-0.5">Block specific emails or patterns from registering or logging in</p>
-          </div>
-          <button onclick="document.getElementById('modal-ban').classList.add('open')"
-            class="flex items-center gap-2 bg-red-600 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-red-500 transition-colors">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>
-            Add Ban
-          </button>
-        </div>
-
-        <!-- Two panels side by side -->
-        <div class="grid grid-cols-2 gap-4">
-
-          <!-- Banned emails -->
-          <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <div class="px-5 py-4 border-b border-gray-100">
-              <h2 class="text-sm font-semibold text-gray-900">Banned Emails</h2>
-              <p class="text-xs text-gray-500 mt-0.5">Exact email address matches</p>
-            </div>
-            <table class="w-full text-sm">
-              <thead class="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th class="text-left px-5 py-2.5 text-xs font-medium text-gray-500">Email</th>
-                  <th class="text-left px-5 py-2.5 text-xs font-medium text-gray-500">Banned</th>
-                  <th class="text-left px-5 py-2.5 text-xs font-medium text-gray-500">Reason</th>
-                  <th class="px-5 py-2.5"></th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-gray-100">
-                <tr><td class="px-5 py-2.5 font-mono text-xs text-gray-700">spam@evil.ru</td><td class="px-5 py-2.5 text-gray-400 text-xs">3 days ago</td><td class="px-5 py-2.5 text-gray-500 text-xs">Spam</td><td class="px-5 py-2.5 text-right"><button class="text-xs text-red-500 hover:text-red-700">Remove</button></td></tr>
-                <tr><td class="px-5 py-2.5 font-mono text-xs text-gray-700">abuse@tempmail.org</td><td class="px-5 py-2.5 text-gray-400 text-xs">1 week ago</td><td class="px-5 py-2.5 text-gray-500 text-xs">Abuse</td><td class="px-5 py-2.5 text-right"><button class="text-xs text-red-500 hover:text-red-700">Remove</button></td></tr>
-                <tr><td class="px-5 py-2.5 font-mono text-xs text-gray-700">test123@disposable.xyz</td><td class="px-5 py-2.5 text-gray-400 text-xs">2 weeks ago</td><td class="px-5 py-2.5 text-gray-500 text-xs">Disposable</td><td class="px-5 py-2.5 text-right"><button class="text-xs text-red-500 hover:text-red-700">Remove</button></td></tr>
-              </tbody>
-            </table>
-          </div>
-
-          <!-- Banned patterns -->
-          <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <div class="px-5 py-4 border-b border-gray-100">
-              <h2 class="text-sm font-semibold text-gray-900">Banned Patterns</h2>
-              <p class="text-xs text-gray-500 mt-0.5">Domain or pattern-based blocks (e.g. *@domain.com)</p>
-            </div>
-            <table class="w-full text-sm">
-              <thead class="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th class="text-left px-5 py-2.5 text-xs font-medium text-gray-500">Pattern</th>
-                  <th class="text-left px-5 py-2.5 text-xs font-medium text-gray-500">Banned</th>
-                  <th class="text-left px-5 py-2.5 text-xs font-medium text-gray-500">Hits</th>
-                  <th class="px-5 py-2.5"></th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-gray-100">
-                <tr><td class="px-5 py-2.5 font-mono text-xs text-gray-700">*@tempmail.org</td><td class="px-5 py-2.5 text-gray-400 text-xs">1 month ago</td><td class="px-5 py-2.5"><span class="badge badge-red">42</span></td><td class="px-5 py-2.5 text-right"><button class="text-xs text-red-500 hover:text-red-700">Remove</button></td></tr>
-                <tr><td class="px-5 py-2.5 font-mono text-xs text-gray-700">*@disposable.xyz</td><td class="px-5 py-2.5 text-gray-400 text-xs">3 weeks ago</td><td class="px-5 py-2.5"><span class="badge badge-red">17</span></td><td class="px-5 py-2.5 text-right"><button class="text-xs text-red-500 hover:text-red-700">Remove</button></td></tr>
-                <tr><td class="px-5 py-2.5 font-mono text-xs text-gray-700">*+test*@*</td><td class="px-5 py-2.5 text-gray-400 text-xs">5 days ago</td><td class="px-5 py-2.5"><span class="badge badge-slate">3</span></td><td class="px-5 py-2.5 text-right"><button class="text-xs text-red-500 hover:text-red-700">Remove</button></td></tr>
-                <tr><td class="px-5 py-2.5 font-mono text-xs text-gray-700">*.ru (country block)</td><td class="px-5 py-2.5 text-gray-400 text-xs">2 months ago</td><td class="px-5 py-2.5"><span class="badge badge-red">128</span></td><td class="px-5 py-2.5 text-right"><button class="text-xs text-red-500 hover:text-red-700">Remove</button></td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- Banned user accounts panel -->
-        <div class="bg-white rounded-xl border border-gray-200 mt-4 overflow-hidden">
-          <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-            <div>
-              <h2 class="text-sm font-semibold text-gray-900">Banned User Accounts</h2>
-              <p class="text-xs text-gray-500 mt-0.5">Users with banned account status — can log in but are blocked from app access</p>
-            </div>
-          </div>
-          <table class="w-full text-sm">
-            <thead class="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500">User</th>
-                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500">Domain</th>
-                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500">Banned</th>
-                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500">Reason</th>
-                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500">Actions</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-100">
-              <tr>
-                <td class="px-5 py-3"><p class="font-medium text-gray-700">spam@evil.ru</p></td>
-                <td class="px-5 py-3 text-gray-500 text-xs">portal.example.com</td>
-                <td class="px-5 py-3 text-gray-400 text-xs">Apr 4, 2026</td>
-                <td class="px-5 py-3 text-gray-500 text-sm">Spam account</td>
-                <td class="px-5 py-3"><div class="flex gap-2"><button class="text-xs text-green-600 font-medium">Unban</button><span class="text-gray-300">|</span><button class="text-xs text-red-500 font-medium">Delete Account</button></div></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- ══ LOGIN LOGS ══ -->
-      <div class="section" id="s-logs">
-        <div class="flex items-center justify-between mb-6">
-          <div>
-            <h1 class="text-xl font-semibold text-gray-900">Login Logs</h1>
-            <p class="text-sm text-gray-500 mt-0.5">All authentication events across all domains (90-day retention)</p>
-          </div>
-          <button class="flex items-center gap-2 border border-gray-200 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-            Export CSV
-          </button>
-        </div>
-
-        <!-- Filters -->
-        <div class="bg-white rounded-xl border border-gray-200 px-5 py-4 mb-4 flex items-center gap-3 flex-wrap">
-          <div>
-            <label class="text-xs font-medium text-gray-500 block mb-1">Date range</label>
-            <div class="flex items-center gap-2">
-              <input type="date" value="2026-04-01" class="text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
-              <span class="text-gray-400">—</span>
-              <input type="date" value="2026-04-07" class="text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
-            </div>
-          </div>
-          <div>
-            <label class="text-xs font-medium text-gray-500 block mb-1">Domain</label>
-            <select class="text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-              <option>All domains</option>
-              <option>app.acme.com</option>
-              <option>widgets.io</option>
-            </select>
-          </div>
-          <div>
-            <label class="text-xs font-medium text-gray-500 block mb-1">Auth method</label>
-            <select class="text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-              <option>All methods</option>
-              <option>email</option>
-              <option>google</option>
-              <option>github</option>
-              <option>apple</option>
-            </select>
-          </div>
-          <div class="self-end">
-            <button class="text-sm bg-indigo-600 text-white px-4 py-1.5 rounded-lg hover:bg-indigo-500 transition-colors">Apply</button>
-          </div>
-        </div>
-
-        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <table class="w-full text-sm">
-            <thead class="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Timestamp</th>
-                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">User</th>
-                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Domain</th>
-                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Method</th>
-                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">IP Address</th>
-                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">User Agent</th>
-                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Result</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-100">
-              <tr><td class="px-5 py-2.5 text-gray-400 text-xs whitespace-nowrap">2026-04-07 09:42:11</td><td class="px-5 py-2.5 text-gray-700">alice@acme.com</td><td class="px-5 py-2.5 text-gray-500 text-xs">app.acme.com</td><td class="px-5 py-2.5"><span class="badge badge-blue">google</span></td><td class="px-5 py-2.5 font-mono text-xs text-gray-500">84.198.12.xx</td><td class="px-5 py-2.5 text-gray-400 text-xs truncate max-w-xs">Chrome 123 / macOS</td><td class="px-5 py-2.5"><span class="badge badge-green">OK</span></td></tr>
-              <tr><td class="px-5 py-2.5 text-gray-400 text-xs whitespace-nowrap">2026-04-07 09:39:05</td><td class="px-5 py-2.5 text-gray-700">bob@widgets.io</td><td class="px-5 py-2.5 text-gray-500 text-xs">widgets.io</td><td class="px-5 py-2.5"><span class="badge badge-slate">email</span></td><td class="px-5 py-2.5 font-mono text-xs text-gray-500">31.41.59.xx</td><td class="px-5 py-2.5 text-gray-400 text-xs truncate max-w-xs">Firefox 124 / Windows</td><td class="px-5 py-2.5"><span class="badge badge-green">OK</span></td></tr>
-              <tr><td class="px-5 py-2.5 text-gray-400 text-xs whitespace-nowrap">2026-04-07 09:31:22</td><td class="px-5 py-2.5 text-gray-700">carol@example.com</td><td class="px-5 py-2.5 text-gray-500 text-xs">portal.example.com</td><td class="px-5 py-2.5"><span class="badge badge-slate">email</span></td><td class="px-5 py-2.5 font-mono text-xs text-gray-500">192.168.1.xx</td><td class="px-5 py-2.5 text-gray-400 text-xs truncate max-w-xs">Safari 17 / iOS</td><td class="px-5 py-2.5"><span class="badge badge-green">OK</span></td></tr>
-              <tr><td class="px-5 py-2.5 text-gray-400 text-xs whitespace-nowrap">2026-04-07 09:18:44</td><td class="px-5 py-2.5 text-gray-400 text-xs italic">unknown</td><td class="px-5 py-2.5 text-gray-500 text-xs">app.acme.com</td><td class="px-5 py-2.5"><span class="badge badge-slate">email</span></td><td class="px-5 py-2.5 font-mono text-xs text-red-400">185.220.101.xx</td><td class="px-5 py-2.5 text-gray-400 text-xs truncate max-w-xs">python-requests/2.31</td><td class="px-5 py-2.5"><span class="badge badge-red">FAIL</span></td></tr>
-              <tr><td class="px-5 py-2.5 text-gray-400 text-xs whitespace-nowrap">2026-04-07 09:05:11</td><td class="px-5 py-2.5 text-gray-700">dan@acme.com</td><td class="px-5 py-2.5 text-gray-500 text-xs">app.acme.com</td><td class="px-5 py-2.5"><span class="badge badge-blue">github</span></td><td class="px-5 py-2.5 font-mono text-xs text-gray-500">77.99.201.xx</td><td class="px-5 py-2.5 text-gray-400 text-xs truncate max-w-xs">Chrome 123 / Linux</td><td class="px-5 py-2.5"><span class="badge badge-green">OK</span></td></tr>
-              <tr><td class="px-5 py-2.5 text-gray-400 text-xs whitespace-nowrap">2026-04-07 08:47:33</td><td class="px-5 py-2.5 text-gray-700">eve@startup.dev</td><td class="px-5 py-2.5 text-gray-500 text-xs">startup.dev</td><td class="px-5 py-2.5"><span class="badge badge-slate">email</span></td><td class="px-5 py-2.5 font-mono text-xs text-gray-500">93.184.216.xx</td><td class="px-5 py-2.5 text-gray-400 text-xs truncate max-w-xs">Edge 123 / Windows</td><td class="px-5 py-2.5"><span class="badge badge-green">OK</span></td></tr>
-            </tbody>
-          </table>
-          <div class="px-5 py-3 border-t border-gray-100 flex items-center justify-between">
-            <p class="text-xs text-gray-500">6 of 2,847 log entries — filtered to last 7 days</p>
-            <div class="flex gap-1">
-              <button class="px-2.5 py-1 text-xs text-gray-500 border border-gray-200 rounded hover:bg-gray-50">Prev</button>
-              <button class="px-2.5 py-1 text-xs text-white bg-indigo-600 rounded">1</button>
-              <button class="px-2.5 py-1 text-xs text-gray-500 border border-gray-200 rounded hover:bg-gray-50">2</button>
-              <button class="px-2.5 py-1 text-xs text-gray-500 border border-gray-200 rounded hover:bg-gray-50">Next</button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-    </main>
-  </div>
-
+  </header>
+  <main style="flex:1;padding:24px;" id="content"></main>
 </div>
 
-<!-- ══ MODAL: Add Domain ══ -->
-<div class="modal-overlay" id="modal-domain">
-  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
-    <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-      <h2 class="text-base font-semibold text-gray-900">Add Domain</h2>
-      <button onclick="document.getElementById('modal-domain').classList.remove('open')" class="text-gray-400 hover:text-gray-600">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-      </button>
-    </div>
-    <div class="px-6 py-5 space-y-4">
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1.5">Domain name</label>
-        <input type="text" placeholder="app.example.com" class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
-        <p class="text-xs text-gray-400 mt-1">Must match the domain claim in config JWTs</p>
-      </div>
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1.5">Friendly name</label>
-        <input type="text" placeholder="My App" class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
-      </div>
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1.5">Client secret</label>
-        <div class="flex gap-2">
-          <input type="text" placeholder="Paste or generate a secret" class="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
-          <button class="text-sm border border-gray-200 px-3 py-2 rounded-lg hover:bg-gray-50 text-gray-600 whitespace-nowrap">Generate</button>
-        </div>
-        <p class="text-xs text-gray-400 mt-1">This secret is used by the client backend to sign config JWTs</p>
-      </div>
-      <div class="bg-amber-50 border border-amber-200 rounded-lg p-3">
-        <p class="text-xs text-amber-800">
-          <strong>Note:</strong> The client backend must set this secret as their <code class="bg-amber-100 px-1 rounded">SHARED_SECRET</code> environment variable. Store it securely — it cannot be recovered after creation.
-        </p>
-      </div>
-    </div>
-    <div class="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50">
-      <button onclick="document.getElementById('modal-domain').classList.remove('open')" class="text-sm text-gray-600 px-4 py-2 rounded-lg hover:bg-gray-100">Cancel</button>
-      <button class="text-sm bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-500">Add Domain</button>
-    </div>
-  </div>
-</div>
-
-<!-- ══ MODAL: View User ══ -->
+<!-- MODALS -->
 <div class="modal-overlay" id="modal-user">
-  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
-    <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-      <h2 class="text-base font-semibold text-gray-900">User Details</h2>
-      <button onclick="document.getElementById('modal-user').classList.remove('open')" class="text-gray-400 hover:text-gray-600">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-      </button>
+  <div style="background:#fff;border-radius:16px;width:520px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 25px 60px rgba(0,0,0,.2);">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 24px;border-bottom:1px solid #f3f4f6;">
+      <h2 style="font-size:15px;font-weight:600;color:#111827;">User Details</h2>
+      <button onclick="closeModal('modal-user')" style="color:#9ca3af;cursor:pointer;background:none;border:none;padding:4px;"><svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button>
     </div>
-    <div class="px-6 py-5">
-      <!-- User header -->
-      <div class="flex items-center gap-4 mb-5">
-        <div class="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center">
-          <span class="text-indigo-700 font-semibold">AC</span>
-        </div>
-        <div>
-          <p class="font-semibold text-gray-900">Alice Chen</p>
-          <p class="text-sm text-gray-500">alice@acme.com</p>
-          <span class="badge badge-green mt-1">Active</span>
-        </div>
-        <div class="ml-auto flex flex-col gap-1.5">
-          <button class="text-sm text-amber-600 border border-amber-200 px-3 py-1 rounded-lg hover:bg-amber-50">Reset 2FA</button>
-          <button class="text-sm text-red-600 border border-red-200 px-3 py-1 rounded-lg hover:bg-red-50">Ban User</button>
-        </div>
-      </div>
-      <!-- Details grid -->
-      <div class="grid grid-cols-2 gap-4 text-sm">
-        <div class="bg-gray-50 rounded-lg p-3">
-          <p class="text-xs text-gray-500 mb-1">User ID</p>
-          <p class="font-mono text-xs text-gray-700 truncate">cm8x2f4k00001abc…</p>
-        </div>
-        <div class="bg-gray-50 rounded-lg p-3">
-          <p class="text-xs text-gray-500 mb-1">Registered</p>
-          <p class="text-gray-700">Jan 15, 2024</p>
-        </div>
-        <div class="bg-gray-50 rounded-lg p-3">
-          <p class="text-xs text-gray-500 mb-1">2FA</p>
-          <p class="text-gray-700">TOTP Enabled</p>
-        </div>
-        <div class="bg-gray-50 rounded-lg p-3">
-          <p class="text-xs text-gray-500 mb-1">Last Login</p>
-          <p class="text-gray-700">2 min ago</p>
-        </div>
-        <div class="bg-gray-50 rounded-lg p-3 col-span-2">
-          <p class="text-xs text-gray-500 mb-1">Active Domains</p>
-          <div class="flex gap-1.5 flex-wrap mt-1">
-            <span class="badge badge-slate">app.acme.com (superuser)</span>
-            <span class="badge badge-slate">portal.example.com</span>
-          </div>
-        </div>
-      </div>
-      <!-- Orgs/Teams -->
-      <div class="mt-4">
-        <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Organisations &amp; Teams</p>
-        <div class="space-y-2">
-          <div class="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
-            <div>
-              <p class="text-sm font-medium text-gray-800">Acme Engineering</p>
-              <p class="text-xs text-gray-500">Backend, Frontend</p>
-            </div>
-            <span class="badge badge-blue">admin</span>
-          </div>
-        </div>
-      </div>
-      <!-- Recent logins -->
-      <div class="mt-4">
-        <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Recent Logins</p>
-        <div class="space-y-1.5">
-          <div class="flex items-center justify-between text-xs">
-            <span class="text-gray-600">Apr 7, 09:42 — google — Chrome/macOS</span>
-            <span class="badge badge-green">OK</span>
-          </div>
-          <div class="flex items-center justify-between text-xs">
-            <span class="text-gray-600">Apr 6, 14:15 — google — Chrome/macOS</span>
-            <span class="badge badge-green">OK</span>
-          </div>
-          <div class="flex items-center justify-between text-xs">
-            <span class="text-gray-600">Apr 5, 09:01 — google — Safari/iOS</span>
-            <span class="badge badge-green">OK</span>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="flex justify-end px-6 py-4 border-t border-gray-200 bg-gray-50">
-      <button onclick="document.getElementById('modal-user').classList.remove('open')" class="text-sm text-gray-600 px-4 py-2 rounded-lg hover:bg-gray-100">Close</button>
+    <div style="padding:20px 24px;" id="modal-user-content"></div>
+    <div style="display:flex;justify-content:flex-end;padding:14px 24px;border-top:1px solid #f3f4f6;background:#fafafa;">
+      <button onclick="closeModal('modal-user')" class="btn-secondary">Close</button>
     </div>
   </div>
 </div>
 
-<!-- ══ MODAL: Add Ban ══ -->
+<div class="modal-overlay" id="modal-domain">
+  <div style="background:#fff;border-radius:16px;width:460px;max-width:95vw;box-shadow:0 25px 60px rgba(0,0,0,.2);">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 24px;border-bottom:1px solid #f3f4f6;">
+      <h2 style="font-size:15px;font-weight:600;">Add Domain</h2>
+      <button onclick="closeModal('modal-domain')" style="color:#9ca3af;cursor:pointer;background:none;border:none;"><svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button>
+    </div>
+    <div style="padding:20px 24px;display:flex;flex-direction:column;gap:14px;">
+      <div><label>Domain name</label><input type="text" placeholder="app.example.com" style="width:100%;box-sizing:border-box;"/><p style="font-size:11px;color:#9ca3af;margin-top:4px;">Must match the domain claim in config JWTs</p></div>
+      <div><label>Friendly name</label><input type="text" placeholder="My App" style="width:100%;box-sizing:border-box;"/></div>
+      <div><label>Client secret</label>
+        <div style="display:flex;gap:8px;"><input type="text" id="domain-secret-input" placeholder="Paste or generate" style="flex:1;font-family:monospace;"/><button class="btn-secondary" onclick="document.getElementById('domain-secret-input').value=generateSecret()">Generate</button></div>
+        <p style="font-size:11px;color:#9ca3af;margin-top:4px;">The client backend sets this as their SHARED_SECRET env var</p>
+      </div>
+      <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;font-size:12px;color:#92400e;">Store this secret securely — it will not be shown again after saving.</div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:10px;padding:14px 24px;border-top:1px solid #f3f4f6;background:#fafafa;">
+      <button onclick="closeModal('modal-domain')" class="btn-secondary">Cancel</button>
+      <button class="btn-primary">Add Domain</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-ban">
-  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
-    <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-      <h2 class="text-base font-semibold text-gray-900">Add Email Ban</h2>
-      <button onclick="document.getElementById('modal-ban').classList.remove('open')" class="text-gray-400 hover:text-gray-600">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-      </button>
+  <div style="background:#fff;border-radius:16px;width:460px;max-width:95vw;box-shadow:0 25px 60px rgba(0,0,0,.2);">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 24px;border-bottom:1px solid #f3f4f6;">
+      <h2 style="font-size:15px;font-weight:600;" id="modal-ban-title">Add Ban</h2>
+      <button onclick="closeModal('modal-ban')" style="color:#9ca3af;cursor:pointer;background:none;border:none;"><svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button>
     </div>
-    <div class="px-6 py-5 space-y-4">
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1.5">Ban type</label>
-        <div class="flex gap-1 bg-gray-100 p-1 rounded-lg">
-          <button class="tab-btn active flex-1 text-center">Exact email</button>
-          <button class="tab-btn flex-1 text-center">Pattern</button>
-        </div>
-      </div>
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1.5">Email or pattern</label>
-        <input type="text" placeholder="e.g. spam@evil.com or *@evil.com" class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 font-mono focus:outline-none focus:ring-2 focus:ring-red-500"/>
-        <p class="text-xs text-gray-400 mt-1">Use <code class="bg-gray-100 px-1 rounded">*</code> as wildcard. Example: <code class="bg-gray-100 px-1 rounded">*@disposable.net</code></p>
-      </div>
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1.5">Scope</label>
-        <select class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500">
-          <option>Global (all domains)</option>
-          <option>app.acme.com only</option>
-          <option>widgets.io only</option>
-        </select>
-      </div>
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1.5">Reason (optional)</label>
-        <input type="text" placeholder="e.g. Spam, abuse, disposable" class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500"/>
-      </div>
-      <div class="flex items-start gap-2">
-        <input type="checkbox" id="ban-existing" class="mt-0.5 rounded border-gray-300"/>
-        <label for="ban-existing" class="text-sm text-gray-700">Also ban any existing accounts matching this pattern</label>
-      </div>
+    <div style="padding:20px 24px;" id="modal-ban-content"></div>
+    <div style="display:flex;justify-content:flex-end;gap:10px;padding:14px 24px;border-top:1px solid #f3f4f6;background:#fafafa;">
+      <button onclick="closeModal('modal-ban')" class="btn-secondary">Cancel</button>
+      <button class="btn-danger">Add Ban</button>
     </div>
-    <div class="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50">
-      <button onclick="document.getElementById('modal-ban').classList.remove('open')" class="text-sm text-gray-600 px-4 py-2 rounded-lg hover:bg-gray-100">Cancel</button>
-      <button class="text-sm bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-500">Add Ban</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-confirm">
+  <div style="background:#fff;border-radius:16px;width:380px;max-width:95vw;box-shadow:0 25px 60px rgba(0,0,0,.2);">
+    <div style="padding:24px 24px 10px;">
+      <div style="width:40px;height:40px;background:#fee2e2;border-radius:10px;display:flex;align-items:center;justify-content:center;margin-bottom:12px;"><svg width="20" height="20" fill="none" stroke="#dc2626" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg></div>
+      <h2 style="font-size:15px;font-weight:600;color:#111827;" id="confirm-title">Are you sure?</h2>
+      <p style="font-size:13px;color:#6b7280;margin-top:6px;" id="confirm-body">This action cannot be undone.</p>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:10px;padding:16px 24px;border-top:1px solid #f3f4f6;">
+      <button onclick="closeModal('modal-confirm')" class="btn-secondary">Cancel</button>
+      <button class="btn-danger">Confirm</button>
     </div>
   </div>
 </div>
 
 <script>
-  function showSection(id) {
-    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
-    document.getElementById('s-' + id).classList.add('active');
+// ── DATA ──
+const DATA = {
+  stats: { users: 1247, domains: 12, orgs: 34, loginsToday: 389 },
+  domains: [
+    { id:1, name:'app.acme.com', label:'Acme App', secretAge:'12 days', secretOld:false, users:487, orgs:8, status:'active', created:'2024-01-15', hash:'a3f8d2c1…' },
+    { id:2, name:'widgets.io', label:'Widgets', secretAge:'89 days', secretOld:true, users:312, orgs:5, status:'active', created:'2023-11-02', hash:'b7e2f9a4…' },
+    { id:3, name:'portal.example.com', label:'Example Portal', secretAge:'5 days', secretOld:false, users:198, orgs:3, status:'active', created:'2024-03-01', hash:'c1d4e8b3…' },
+    { id:4, name:'startup.dev', label:'Startup Dev', secretAge:'22 days', secretOld:false, users:104, orgs:2, status:'active', created:'2024-02-10', hash:'e4b7c9f1…' },
+    { id:5, name:'old-product.com', label:'Old Product', secretAge:null, secretOld:false, users:89, orgs:2, status:'disabled', created:'2023-06-10', hash:'d9c3a7e2…' },
+  ],
+  orgs: [
+    { id:1, name:'Acme Engineering', slug:'acme-engineering', domain:'app.acme.com', created:'Jan 15, 2024',
+      owner:{ id:101, name:'Alice Chen', email:'alice@acme.com' },
+      teams:[
+        { id:11, name:'General', isDefault:true, desc:'All members', members:42 },
+        { id:12, name:'Backend', isDefault:false, desc:'Backend engineers', members:14 },
+        { id:13, name:'Frontend', isDefault:false, desc:'Frontend engineers', members:11 },
+        { id:14, name:'DevOps', isDefault:false, desc:'Infrastructure', members:6 },
+        { id:15, name:'QA', isDefault:false, desc:'Quality assurance', members:5 },
+      ],
+      members:[
+        { id:101, name:'Alice Chen', email:'alice@acme.com', role:'owner', teams:['General','Backend'], teamRoles:{General:'member',Backend:'lead'}, twofa:true, lastLogin:'2 min ago', status:'active', method:'google' },
+        { id:102, name:'Bob Smith', email:'bob@acme.com', role:'admin', teams:['General','Frontend'], teamRoles:{General:'member',Frontend:'lead'}, twofa:false, lastLogin:'1 hour ago', status:'active', method:'email' },
+        { id:103, name:'Carol Davis', email:'carol@acme.com', role:'member', teams:['General','Backend'], teamRoles:{General:'member',Backend:'member'}, twofa:true, lastLogin:'3 days ago', status:'active', method:'email' },
+        { id:104, name:'Dan Lee', email:'dan@acme.com', role:'member', teams:['General','DevOps'], teamRoles:{General:'member',DevOps:'lead'}, twofa:false, lastLogin:'1 week ago', status:'active', method:'github' },
+        { id:105, name:'Eva Torres', email:'eva@acme.com', role:'member', teams:['General','QA'], teamRoles:{General:'member',QA:'lead'}, twofa:true, lastLogin:'2 days ago', status:'active', method:'google' },
+      ]
+    },
+    { id:2, name:'Acme Design', slug:'acme-design', domain:'app.acme.com', created:'Feb 3, 2024',
+      owner:{ id:201, name:'Emily Park', email:'emily@acme.com' },
+      teams:[
+        { id:21, name:'General', isDefault:true, desc:'All members', members:18 },
+        { id:22, name:'Brand', isDefault:false, desc:'Brand design', members:8 },
+        { id:23, name:'UX Research', isDefault:false, desc:'User experience', members:7 },
+      ],
+      members:[
+        { id:201, name:'Emily Park', email:'emily@acme.com', role:'owner', teams:['General','Brand'], teamRoles:{General:'member',Brand:'lead'}, twofa:true, lastLogin:'30 min ago', status:'active', method:'google' },
+        { id:202, name:'Frank Wu', email:'frank@acme.com', role:'admin', teams:['General','UX Research'], teamRoles:{General:'member','UX Research':'lead'}, twofa:false, lastLogin:'2 days ago', status:'active', method:'email' },
+        { id:203, name:'Grace Kim', email:'grace@acme.com', role:'member', teams:['General','Brand'], teamRoles:{General:'member',Brand:'member'}, twofa:true, lastLogin:'5 hours ago', status:'active', method:'email' },
+      ]
+    },
+    { id:3, name:'Widgets Core', slug:'widgets-core', domain:'widgets.io', created:'Nov 2, 2023',
+      owner:{ id:301, name:'Carol Johnson', email:'carol@widgets.io' },
+      teams:[
+        { id:31, name:'General', isDefault:true, desc:'All members', members:91 },
+        { id:32, name:'Platform', isDefault:false, desc:'Core platform', members:22 },
+        { id:33, name:'Integrations', isDefault:false, desc:'Third-party integrations', members:18 },
+        { id:34, name:'Mobile', isDefault:false, desc:'Mobile apps', members:15 },
+      ],
+      members:[
+        { id:301, name:'Carol Johnson', email:'carol@widgets.io', role:'owner', teams:['General','Platform'], teamRoles:{General:'member',Platform:'lead'}, twofa:true, lastLogin:'1 day ago', status:'active', method:'email' },
+        { id:302, name:'Dave Brown', email:'dave@widgets.io', role:'admin', teams:['General','Integrations'], teamRoles:{General:'member',Integrations:'lead'}, twofa:true, lastLogin:'4 hours ago', status:'active', method:'email' },
+        { id:303, name:'Eve Martinez', email:'eve@widgets.io', role:'member', teams:['General','Mobile'], teamRoles:{General:'member',Mobile:'member'}, twofa:false, lastLogin:'2 hours ago', status:'active', method:'github' },
+        { id:304, name:'Henry Park', email:'henry@widgets.io', role:'member', teams:['General','Platform','Integrations'], teamRoles:{General:'member',Platform:'member',Integrations:'member'}, twofa:true, lastLogin:'6 hours ago', status:'active', method:'email' },
+      ]
+    },
+    { id:4, name:'Startup Alpha', slug:'startup-alpha', domain:'startup.dev', created:'Feb 10, 2024',
+      owner:{ id:401, name:'Ian Chen', email:'ian@startup.dev' },
+      teams:[
+        { id:41, name:'General', isDefault:true, desc:'All members', members:12 },
+        { id:42, name:'Product', isDefault:false, desc:'Product team', members:5 },
+      ],
+      members:[
+        { id:401, name:'Ian Chen', email:'ian@startup.dev', role:'owner', teams:['General','Product'], teamRoles:{General:'member',Product:'lead'}, twofa:false, lastLogin:'1 hour ago', status:'active', method:'google' },
+        { id:402, name:'Julia Ross', email:'julia@startup.dev', role:'member', teams:['General','Product'], teamRoles:{General:'member',Product:'member'}, twofa:false, lastLogin:'3 hours ago', status:'active', method:'email' },
+      ]
+    },
+  ],
+  users: [
+    { id:101, name:'Alice Chen', email:'alice@acme.com', domains:['app.acme.com'], twofa:true, lastLogin:'2 min ago', status:'active', method:'google', created:'Jan 15, 2024' },
+    { id:102, name:'Bob Smith', email:'bob@acme.com', domains:['app.acme.com'], twofa:false, lastLogin:'1 hour ago', status:'active', method:'email', created:'Jan 20, 2024' },
+    { id:103, name:'Carol Davis', email:'carol@acme.com', domains:['app.acme.com','widgets.io'], twofa:true, lastLogin:'1 hour ago', status:'active', method:'email', created:'Feb 3, 2024' },
+    { id:104, name:'Dan Lee', email:'dan@acme.com', domains:['app.acme.com'], twofa:false, lastLogin:'1 week ago', status:'active', method:'github', created:'Mar 1, 2024' },
+    { id:201, name:'Emily Park', email:'emily@acme.com', domains:['app.acme.com'], twofa:true, lastLogin:'30 min ago', status:'active', method:'google', created:'Feb 3, 2024' },
+    { id:301, name:'Carol Johnson', email:'carol@widgets.io', domains:['widgets.io'], twofa:true, lastLogin:'1 day ago', status:'active', method:'email', created:'Nov 2, 2023' },
+    { id:302, name:'Dave Brown', email:'dave@widgets.io', domains:['widgets.io'], twofa:true, lastLogin:'4 hours ago', status:'active', method:'email', created:'Nov 5, 2023' },
+    { id:999, name:null, email:'spam@evil.ru', domains:['portal.example.com'], twofa:false, lastLogin:'Never', status:'banned', method:'email', created:'Apr 4, 2026' },
+  ],
+  bans: {
+    emails: [
+      { id:1, email:'spam@evil.ru', bannedAt:'3 days ago', reason:'Spam' },
+      { id:2, email:'abuse@tempmail.org', bannedAt:'1 week ago', reason:'Abuse' },
+      { id:3, email:'test123@disposable.xyz', bannedAt:'2 weeks ago', reason:'Disposable' },
+    ],
+    patterns: [
+      { id:1, pattern:'*@tempmail.org', bannedAt:'1 month ago', hits:42 },
+      { id:2, pattern:'*@disposable.xyz', bannedAt:'3 weeks ago', hits:17 },
+      { id:3, pattern:'*+test*@*', bannedAt:'5 days ago', hits:3 },
+    ],
+    ips: [
+      { id:1, ip:'185.220.101.0/24', label:'Tor exit node range', bannedAt:'1 week ago', hits:128, expiry:null },
+      { id:2, ip:'45.12.33.199', label:'Brute force source', bannedAt:'2 days ago', hits:7, expiry:'Apr 14, 2026' },
+      { id:3, ip:'91.108.56.0/22', label:'Known spam subnet', bannedAt:'3 weeks ago', hits:54, expiry:null },
+    ],
+    users: [
+      { email:'spam@evil.ru', domain:'portal.example.com', bannedAt:'Apr 4, 2026', reason:'Spam account' },
+    ]
+  },
+  logs: [
+    { ts:'2026-04-07 09:42:11', user:'alice@acme.com', domain:'app.acme.com', method:'google', ip:'84.198.12.xx', ua:'Chrome 123 / macOS', result:'ok' },
+    { ts:'2026-04-07 09:39:05', user:'bob@widgets.io', domain:'widgets.io', method:'email', ip:'31.41.59.xx', ua:'Firefox 124 / Windows', result:'ok' },
+    { ts:'2026-04-07 09:31:22', user:'carol@example.com', domain:'portal.example.com', method:'email', ip:'192.168.1.xx', ua:'Safari 17 / iOS', result:'ok' },
+    { ts:'2026-04-07 09:18:44', user:null, domain:'app.acme.com', method:'email', ip:'185.220.101.xx', ua:'python-requests/2.31', result:'fail' },
+    { ts:'2026-04-07 09:05:11', user:'dan@acme.com', domain:'app.acme.com', method:'github', ip:'77.99.201.xx', ua:'Chrome 123 / Linux', result:'ok' },
+    { ts:'2026-04-07 08:47:33', user:'eve@startup.dev', domain:'startup.dev', method:'email', ip:'93.184.216.xx', ua:'Edge 123 / Windows', result:'ok' },
+  ]
+};
 
-    document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
-    event.currentTarget.classList.add('active');
+// ── NAV ──
+let navStack = [{ type:'dashboard' }];
 
-    const labels = { dashboard: 'Dashboard', domains: 'Domains & Secrets', orgs: 'Organisations', teams: 'Teams', users: 'Users', bans: 'Email Bans', logs: 'Login Logs' };
-    document.getElementById('breadcrumb-current').textContent = labels[id] || id;
+function nav(type, extra) {
+  navStack = [Object.assign({ type }, extra||{})];
+  render(); updateSidebar(); updateBreadcrumb();
+}
+function push(item) {
+  navStack.push(item); render(); updateSidebar(); updateBreadcrumb();
+}
+function goBack() {
+  if (navStack.length > 1) { navStack.pop(); render(); updateSidebar(); updateBreadcrumb(); }
+}
+function jumpTo(idx) {
+  navStack = navStack.slice(0, idx+1); render(); updateSidebar(); updateBreadcrumb();
+}
+function updateSidebar() {
+  const root = navStack[0].type;
+  document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
+  const key = root==='org'?'orgs': root==='team'?'orgs': root;
+  const el = document.getElementById('nav-'+key);
+  if (el) el.classList.add('active');
+}
+const chev = '<svg width="11" height="11" fill="none" stroke="#d1d5db" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>';
+function crumbLabel(item) {
+  if (item.type==='dashboard') return 'Dashboard';
+  if (item.type==='domains') return 'Domains & Secrets';
+  if (item.type==='orgs') return 'Organisations';
+  if (item.type==='org') return DATA.orgs.find(o=>o.id===item.orgId)?.name||'Org';
+  if (item.type==='teams') return 'Teams';
+  if (item.type==='team') {
+    const org = DATA.orgs.find(o=>o.id===item.orgId);
+    return org?.teams.find(t=>t.id===item.teamId)?.name||'Team';
   }
+  if (item.type==='users') return 'Users';
+  if (item.type==='bans') return 'Bans';
+  if (item.type==='logs') return 'Login Logs';
+  return item.type;
+}
+function updateBreadcrumb() {
+  const parts = navStack.map((item, i) => {
+    const last = i === navStack.length-1;
+    const label = crumbLabel(item);
+    if (last) return '<span style="color:#111827;font-weight:500;">'+label+'</span>';
+    return '<a class="crumb-link" onclick="jumpTo('+i+')">'+label+'</a>';
+  });
+  document.getElementById('breadcrumb').innerHTML =
+    '<span style="color:#9ca3af;">Admin</span>' + chev + parts.join(chev);
+}
 
-  function toggleExpand(id) {
-    const row = document.getElementById(id + '-expand');
-    const chevron = document.getElementById(id + '-chevron');
-    if (!row) return;
-    row.classList.toggle('open');
-    if (chevron) chevron.style.transform = row.classList.contains('open') ? 'rotate(90deg)' : '';
-  }
+// ── RENDER ──
+function render() {
+  const cur = navStack[navStack.length-1];
+  const el = document.getElementById('content');
+  const fns = { dashboard:renderDashboard, domains:renderDomains, orgs:renderOrgList,
+    org:()=>renderOrgDetail(cur.orgId), teams:renderTeamList,
+    team:()=>renderTeamDetail(cur.orgId,cur.teamId),
+    users:renderUserList, bans:renderBans, logs:renderLogs };
+  el.innerHTML = (fns[cur.type]||renderDashboard)();
+}
 
-  function switchUserTab(tab, btn) {
-    document.querySelectorAll('#s-users .tab-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
+// ── HELPERS ──
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function badge(label,cls){ return '<span class="badge '+cls+'">'+esc(label)+'</span>'; }
+function statusBadge(s){ const m={active:'badge-green',banned:'badge-red',disabled:'badge-red',owner:'badge-purple',admin:'badge-blue',member:'badge-slate',lead:'badge-blue','2FA on':'badge-green','2FA off':'badge-slate'}; return badge(s,m[s]||'badge-slate'); }
+function methodBadge(m){ return badge(m,{google:'badge-blue',github:'badge-slate',apple:'badge-slate',email:'badge-slate',facebook:'badge-blue',linkedin:'badge-blue'}[m]||'badge-slate'); }
+function av(name){ const i=(name||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase(); return '<div style="width:32px;height:32px;border-radius:50%;background:#e0e7ff;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;font-weight:600;color:#4338ca;">'+i+'</div>'; }
+function tbl(headers,rows){ return '<table style="width:100%;border-collapse:collapse;"><thead><tr>'+headers.map(h=>'<th class="th">'+h+'</th>').join('')+'</tr></thead><tbody>'+rows+'</tbody></table>'; }
+function pageHead(title,sub,actions){ return '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;"><div><p class="page-title">'+title+'</p><p class="page-sub">'+sub+'</p></div><div style="display:flex;gap:8px;flex-shrink:0;">'+(actions||'')+'</div></div>'; }
+function backBtn(){ return navStack.length>1?'<button onclick="goBack()" class="btn-secondary" style="margin-bottom:16px;"><svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>Back</button>':''; }
+function paginate(){ return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 20px;border-top:1px solid #f3f4f6;"><span style="font-size:12px;color:#9ca3af;">Showing sample data</span><div style="display:flex;gap:4px;"><button class="btn-secondary" style="padding:4px 10px;font-size:12px;">Prev</button><button class="btn-primary" style="padding:4px 10px;font-size:12px;">1</button><button class="btn-secondary" style="padding:4px 10px;font-size:12px;">2</button><button class="btn-secondary" style="padding:4px 10px;font-size:12px;">Next</button></div></div>'; }
+function actions(...items){ return items.map((a,i)=>i%2===0?'<button class="action-btn '+a[0]+'" onclick="'+a[2]+'">'+a[1]+'</button>':'<span class="divider">|</span>').join(''); }
+
+// ── DASHBOARD ──
+function renderDashboard(){
+  const stats=[['Total Users','1,247','+23 this week','#16a34a'],['Active Domains','12','2 pending setup','#6b7280'],['Organisations','34','across 8 domains','#2563eb'],['Logins Today','389','3 failed attempts','#d97706']];
+  return pageHead('Dashboard','System overview and recent activity')
+    +'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px;">'
+    +stats.map(([l,v,s,c])=>'<div class="card" style="padding:18px;"><p style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#9ca3af;">'+l+'</p><p style="font-size:28px;font-weight:700;color:#111827;margin-top:4px;">'+v+'</p><p style="font-size:12px;color:'+c+';margin-top:2px;">'+s+'</p></div>').join('')
+    +'</div><div style="display:grid;grid-template-columns:2fr 1fr;gap:14px;">'
+    +'<div class="card"><div class="card-header"><span style="font-size:14px;font-weight:600;">Recent Login Activity</span><a onclick="nav(\'logs\')" style="font-size:12px;color:#4f46e5;cursor:pointer;">View all</a></div>'
+    +tbl(['User','Domain','Method','Time'],DATA.logs.slice(0,5).map(l=>'<tr><td class="td">'+(l.user||'<span style="color:#9ca3af;font-style:italic;">unknown</span>')+'</td><td class="td" style="color:#9ca3af;font-size:12px;">'+esc(l.domain)+'</td><td class="td">'+methodBadge(l.method)+'</td><td class="td" style="color:#9ca3af;font-size:12px;">recent</td></tr>').join(''))
+    +'</div><div class="card"><div class="card-header"><span style="font-size:14px;font-weight:600;">Alerts</span></div>'
+    +[['#f59e0b','Secret rotation needed','widgets.io secret 89 days old'],['#ef4444','Failed logins','3 from 185.220.101.x today'],['#3b82f6','New domain added','beta.newproduct.com 2h ago'],['#22c55e','Systems operational','DB, email, social OK']].map(([c,t,s])=>'<div style="display:flex;gap:10px;padding:10px 16px;border-bottom:1px solid #f9fafb;"><div style="width:8px;height:8px;border-radius:50%;background:'+c+';margin-top:4px;flex-shrink:0;"></div><div><p style="font-size:12px;font-weight:500;color:#111827;">'+t+'</p><p style="font-size:11px;color:#9ca3af;margin-top:1px;">'+s+'</p></div></div>').join('')
+    +'</div></div>';
+}
+
+// ── DOMAINS ──
+function renderDomains(){
+  return pageHead('Domains &amp; Secrets','Registered client domains and access secrets','<button class="btn-primary" onclick="openModal(\'modal-domain\')"><svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>Add Domain</button>')
+    +'<div class="card">'
+    +'<div style="display:flex;gap:8px;padding:12px 16px;border-bottom:1px solid #f3f4f6;"><input type="search" placeholder="Filter by domain&#x2026;" style="width:220px;"/><select>'+['All','Active','Disabled'].map(s=>'<option>'+s+'</option>').join('')+'</select></div>'
+    +tbl(['Domain','Client Hash','Secret Age','Users','Orgs','Status','Actions'],DATA.domains.map(d=>'<tr><td class="td"><p style="font-weight:500;">'+esc(d.name)+'</p><p style="font-size:11px;color:#9ca3af;">'+esc(d.label)+' &middot; Added '+esc(d.created)+'</p></td><td class="td"><code style="font-size:11px;background:#f1f5f9;padding:2px 6px;border-radius:4px;color:#475569;">'+esc(d.hash)+'</code></td><td class="td">'+(d.secretAge?badge(d.secretAge,d.secretOld?'badge-amber':'badge-green'):badge('—','badge-slate'))+'</td><td class="td">'+d.users+'</td><td class="td">'+d.orgs+'</td><td class="td">'+statusBadge(d.status)+'</td><td class="td"><button class="action-btn indigo">Edit</button><span class="divider">|</span><button class="action-btn amber">Rotate</button><span class="divider">|</span><button class="action-btn red">'+(d.status==='active'?'Disable':'Enable')+'</button></td></tr>').join(''))
+    +paginate()+'</div>';
+}
+
+// ── ORG LIST ──
+function renderOrgList(){
+  return pageHead('Organisations','All organisations across all domains','<button class="btn-primary"><svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>New Org</button>')
+    +'<div class="card">'
+    +'<div style="display:flex;gap:8px;padding:12px 16px;border-bottom:1px solid #f3f4f6;"><input type="search" placeholder="Search organisations&#x2026;" style="width:220px;"/><select><option>All domains</option>'+DATA.domains.map(d=>'<option>'+esc(d.name)+'</option>').join('')+'</select></div>'
+    +tbl(['Organisation','Domain','Owner','Members','Teams','Created','Actions'],DATA.orgs.map(o=>'<tr><td class="td"><div style="display:flex;align-items:center;gap:10px;">'+av(o.name)+'<div><a onclick="push({type:\'org\',orgId:'+o.id+'})" style="font-weight:600;color:#4f46e5;cursor:pointer;font-size:13px;">'+esc(o.name)+'</a><p style="font-size:11px;color:#9ca3af;">'+esc(o.slug)+'</p></div></div></td><td class="td" style="font-size:12px;color:#9ca3af;">'+esc(o.domain)+'</td><td class="td"><a onclick="openUser('+o.owner.id+')" style="color:#374151;cursor:pointer;">'+esc(o.owner.name)+'</a><p style="font-size:11px;color:#9ca3af;">'+esc(o.owner.email)+'</p></td><td class="td">'+o.members.length+'</td><td class="td">'+o.teams.length+'</td><td class="td" style="font-size:12px;color:#9ca3af;">'+esc(o.created)+'</td><td class="td"><button class="action-btn indigo" onclick="push({type:\'org\',orgId:'+o.id+'})">View</button><span class="divider">|</span><button class="action-btn amber">Transfer</button><span class="divider">|</span><button class="action-btn red" onclick="confirm_(\'Delete '+esc(o.name)+'?\',\'Deletes all teams and memberships.\')">Delete</button></td></tr>').join(''))
+    +paginate()+'</div>';
+}
+
+// ── ORG DETAIL ──
+function renderOrgDetail(orgId){
+  const org=DATA.orgs.find(o=>o.id===orgId); if(!org) return '<p>Not found</p>';
+  const teamRows=org.teams.map(t=>'<tr><td class="td"><a onclick="push({type:\'team\',orgId:'+org.id+',teamId:'+t.id+'})" style="font-weight:600;color:#4f46e5;cursor:pointer;">'+esc(t.name)+'</a>'+(t.isDefault?' '+badge('Default','badge-blue'):'')+'</td><td class="td" style="color:#9ca3af;font-size:12px;">'+(t.desc||'—')+'</td><td class="td">'+t.members+'</td><td class="td"><button class="action-btn indigo" onclick="push({type:\'team\',orgId:'+org.id+',teamId:'+t.id+'})">View</button><span class="divider">|</span><button class="action-btn indigo">Edit</button>'+(t.isDefault?'':'<span class="divider">|</span><button class="action-btn red" onclick="confirm_(\'Delete '+esc(t.name)+'?\',\'Members stay in the org.\')">Delete</button>')+'</td></tr>').join('');
+  const memberRows=org.members.map(m=>'<tr><td class="td"><div style="display:flex;align-items:center;gap:10px;">'+av(m.name)+'<div><a onclick="openUser('+m.id+')" style="font-weight:500;color:#374151;cursor:pointer;">'+esc(m.name)+'</a><p style="font-size:11px;color:#9ca3af;">'+esc(m.email)+'</p></div></div></td><td class="td">'+statusBadge(m.role)+'</td><td class="td">'+m.teams.map(t=>'<a onclick="push({type:\'team\',orgId:'+org.id+',teamId:'+org.teams.find(x=>x.name===t)?.id+'})" style="color:#4f46e5;cursor:pointer;margin-right:3px;">'+esc(t)+'</a>').join('')+'</td><td class="td" style="font-size:12px;color:#9ca3af;">'+esc(m.lastLogin)+'</td><td class="td"><button class="action-btn indigo" onclick="openUser('+m.id+')">View</button><span class="divider">|</span><button class="action-btn amber">Change Role</button><span class="divider">|</span><button class="action-btn red" onclick="confirm_(\'Remove '+esc(m.name)+'?\',\'Removes from all teams in this org.\')">Remove</button></td></tr>').join('');
+  return backBtn()
+    +'<div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;"><div style="width:48px;height:48px;border-radius:12px;background:#e0e7ff;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#4338ca;flex-shrink:0;">'+org.name[0]+'</div><div style="flex:1;"><div style="display:flex;align-items:center;gap:10px;"><h1 class="page-title">'+esc(org.name)+'</h1>'+badge('Active','badge-green')+'</div><p class="page-sub">'+esc(org.slug)+' &middot; '+esc(org.domain)+' &middot; Created '+esc(org.created)+'</p></div><div style="display:flex;gap:8px;"><button class="btn-secondary">Edit</button><button class="btn-secondary">Transfer Ownership</button><button class="btn-danger" onclick="confirm_(\'Delete '+esc(org.name)+'?\',\'Permanently deletes the org and all teams.\')">Delete</button></div></div>'
+    +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;"><div class="card" style="padding:14px 18px;"><p style="font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;font-weight:600;">Owner</p><p style="font-size:13px;font-weight:500;color:#111827;margin-top:4px;">'+esc(org.owner.name)+'</p><a onclick="openUser('+org.owner.id+')" style="font-size:12px;color:#4f46e5;cursor:pointer;">'+esc(org.owner.email)+'</a></div><div class="card" style="padding:14px 18px;"><p style="font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;font-weight:600;">Members</p><p style="font-size:24px;font-weight:700;color:#111827;margin-top:4px;">'+org.members.length+'</p></div><div class="card" style="padding:14px 18px;"><p style="font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;font-weight:600;">Teams</p><p style="font-size:24px;font-weight:700;color:#111827;margin-top:4px;">'+org.teams.length+'</p></div></div>'
+    +'<div style="display:flex;gap:1px;background:#e5e7eb;border-radius:9px;padding:3px;width:fit-content;margin-bottom:16px;" id="org-tabs"><button class="tab-btn active" onclick="switchOrgTab(\'teams\',this)">Teams</button><button class="tab-btn" onclick="switchOrgTab(\'members\',this)">Members</button></div>'
+    +'<div id="org-tab-teams" class="card"><div class="card-header"><span style="font-size:14px;font-weight:600;">Teams</span><button class="btn-primary" style="font-size:12px;padding:5px 10px;"><svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>Add Team</button></div>'+tbl(['Team','Description','Members','Actions'],teamRows)+'</div>'
+    +'<div id="org-tab-members" class="card" style="display:none;"><div class="card-header"><span style="font-size:14px;font-weight:600;">Members</span><button class="btn-primary" style="font-size:12px;padding:5px 10px;"><svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>Add Member</button></div>'+tbl(['User','Org Role','Teams','Last Login','Actions'],memberRows)+'</div>';
+}
+
+// ── TEAM LIST ──
+function renderTeamList(){
+  const all=[];
+  DATA.orgs.forEach(org=>org.teams.forEach(t=>all.push(Object.assign({},t,{orgId:org.id,orgName:org.name,domain:org.domain}))));
+  return pageHead('Teams','All teams across all organisations')
+    +'<div class="card">'
+    +'<div style="display:flex;gap:8px;padding:12px 16px;border-bottom:1px solid #f3f4f6;"><input type="search" placeholder="Search teams&#x2026;" style="width:220px;"/><select><option>All orgs</option>'+DATA.orgs.map(o=>'<option>'+esc(o.name)+'</option>').join('')+'</select></div>'
+    +tbl(['Team','Organisation','Domain','Members','Actions'],all.map(t=>'<tr><td class="td"><a onclick="push({type:\'team\',orgId:'+t.orgId+',teamId:'+t.id+'})" style="font-weight:600;color:#4f46e5;cursor:pointer;">'+esc(t.name)+'</a>'+(t.isDefault?' '+badge('Default','badge-blue'):'')+'</td><td class="td"><a onclick="push({type:\'org\',orgId:'+t.orgId+'})" style="color:#374151;cursor:pointer;">'+esc(t.orgName)+'</a></td><td class="td" style="font-size:12px;color:#9ca3af;">'+esc(t.domain)+'</td><td class="td">'+t.members+'</td><td class="td"><button class="action-btn indigo" onclick="push({type:\'team\',orgId:'+t.orgId+',teamId:'+t.id+'})">View</button><span class="divider">|</span><button class="action-btn indigo">Edit</button>'+(t.isDefault?'':'<span class="divider">|</span><button class="action-btn red">Delete</button>')+'</td></tr>').join(''))
+    +paginate()+'</div>';
+}
+
+// ── TEAM DETAIL ──
+function renderTeamDetail(orgId,teamId){
+  const org=DATA.orgs.find(o=>o.id===orgId); const team=org&&org.teams.find(t=>t.id===teamId);
+  if(!org||!team) return '<p>Not found</p>';
+  const members=org.members.filter(m=>m.teams.includes(team.name));
+  const rows=members.map(m=>'<tr><td class="td"><div style="display:flex;align-items:center;gap:10px;">'+av(m.name)+'<div><a onclick="openUser('+m.id+')" style="font-weight:500;color:#374151;cursor:pointer;">'+esc(m.name||m.email)+'</a><p style="font-size:11px;color:#9ca3af;">'+esc(m.email)+'</p></div></div></td><td class="td">'+statusBadge(m.teamRoles[team.name]||'member')+'</td><td class="td">'+(m.twofa?badge('On','badge-green'):badge('Off','badge-slate'))+'</td><td class="td" style="font-size:12px;color:#9ca3af;">'+esc(m.lastLogin)+'</td><td class="td"><button class="action-btn indigo" onclick="openUser('+m.id+')">View</button><span class="divider">|</span><button class="action-btn amber">Change Role</button><span class="divider">|</span><button class="action-btn red" onclick="confirm_(\'Remove from team?\',\''+esc(m.name)+' will be removed from '+esc(team.name)+'.\')">Remove</button></td></tr>').join('');
+  return backBtn()
+    +'<div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;"><div style="width:48px;height:48px;border-radius:12px;background:#dbeafe;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">&#x1F465;</div><div style="flex:1;"><div style="display:flex;align-items:center;gap:10px;"><h1 class="page-title">'+esc(team.name)+'</h1>'+(team.isDefault?badge('Default','badge-blue'):'')+'</div><p class="page-sub">in <a onclick="push({type:\'org\',orgId:'+org.id+'})" style="color:#4f46e5;cursor:pointer;">'+esc(org.name)+'</a> &middot; '+esc(org.domain)+' &middot; '+members.length+' members</p></div><div style="display:flex;gap:8px;"><button class="btn-secondary">Edit</button>'+(team.isDefault?'':'<button class="btn-danger" onclick="confirm_(\'Delete '+esc(team.name)+'?\',\'Members stay in the org.\')">Delete</button>')+'</div></div>'
+    +'<div class="card"><div class="card-header"><span style="font-size:14px;font-weight:600;">Members ('+members.length+')</span><button class="btn-primary" style="font-size:12px;padding:5px 10px;"><svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>Add Member</button></div>'
+    +tbl(['User','Team Role','2FA','Last Login','Actions'],rows)+'</div>';
+}
+
+// ── USERS ──
+function renderUserList(){
+  return pageHead('Users','All users across all domains')
+    +'<div class="card">'
+    +'<div style="display:flex;gap:8px;padding:12px 16px;border-bottom:1px solid #f3f4f6;flex-wrap:wrap;"><input type="search" placeholder="Search by name or email&#x2026;" style="width:240px;"/><select><option>All domains</option>'+DATA.domains.map(d=>'<option>'+esc(d.name)+'</option>').join('')+'</select><select><option>All statuses</option><option>Active</option><option>Banned</option></select></div>'
+    +tbl(['User','Domains','Method','2FA','Last Login','Status','Actions'],DATA.users.map(u=>'<tr><td class="td"><div style="display:flex;align-items:center;gap:10px;">'+av(u.name||u.email)+'<div><a onclick="openUser('+u.id+')" style="font-weight:500;color:#374151;cursor:pointer;'+(u.status==='banned'?'text-decoration:line-through;color:#9ca3af;':'')+'">'+esc(u.name||u.email)+'</a><p style="font-size:11px;color:#9ca3af;">'+esc(u.email)+'</p></div></div></td><td class="td">'+u.domains.map(d=>'<span class="badge badge-slate" style="margin-right:3px;">'+esc(d)+'</span>').join('')+'</td><td class="td">'+methodBadge(u.method)+'</td><td class="td">'+(u.twofa?badge('On','badge-green'):badge('Off','badge-slate'))+'</td><td class="td" style="font-size:12px;color:#9ca3af;">'+esc(u.lastLogin)+'</td><td class="td">'+statusBadge(u.status)+'</td><td class="td"><button class="action-btn indigo" onclick="openUser('+u.id+')">View</button><span class="divider">|</span>'+(u.twofa?'<button class="action-btn amber">Reset 2FA</button><span class="divider">|</span>':'')+(u.status==='banned'?'<button class="action-btn green">Unban</button>':'<button class="action-btn red" onclick="confirm_(\'Ban '+esc(u.email)+'?\',\'Blocks access to all services.\')">Ban</button>')+'</td></tr>').join(''))
+    +paginate()+'</div>';
+}
+
+// ── BANS ──
+function renderBans(){
+  return pageHead('Bans','Block emails, patterns, IP addresses, and accounts')
+    +'<div style="display:flex;gap:1px;background:#e5e7eb;border-radius:9px;padding:3px;width:fit-content;margin-bottom:16px;"><button class="tab-btn active" onclick="switchBanTab(\'emails\',this)">Email Bans</button><button class="tab-btn" onclick="switchBanTab(\'patterns\',this)">Patterns</button><button class="tab-btn" onclick="switchBanTab(\'ips\',this)">IP Addresses</button><button class="tab-btn" onclick="switchBanTab(\'accounts\',this)">Accounts</button></div>'
+    +'<div id="ban-tab-emails" class="card" style="margin-bottom:16px;"><div class="card-header"><div><span style="font-size:14px;font-weight:600;">Banned Emails</span><p style="font-size:12px;color:#9ca3af;margin-top:2px;">Exact email address blocks</p></div><button class="btn-danger" style="font-size:12px;" onclick="openBanModal(\'email\')"><svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>Add</button></div>'
+    +tbl(['Email','Banned','Reason',''],DATA.bans.emails.map(b=>'<tr><td class="td"><code style="font-size:12px;">'+esc(b.email)+'</code></td><td class="td" style="font-size:12px;color:#9ca3af;">'+esc(b.bannedAt)+'</td><td class="td" style="font-size:12px;color:#9ca3af;">'+esc(b.reason)+'</td><td class="td" style="text-align:right;"><button class="action-btn red">Remove</button></td></tr>').join(''))+'</div>'
+    +'<div id="ban-tab-patterns" class="card" style="margin-bottom:16px;display:none;"><div class="card-header"><div><span style="font-size:14px;font-weight:600;">Email Patterns</span><p style="font-size:12px;color:#9ca3af;margin-top:2px;">Wildcard and domain-level blocks</p></div><button class="btn-danger" style="font-size:12px;" onclick="openBanModal(\'pattern\')"><svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>Add</button></div>'
+    +tbl(['Pattern','Banned','Hits',''],DATA.bans.patterns.map(b=>'<tr><td class="td"><code style="font-size:12px;">'+esc(b.pattern)+'</code></td><td class="td" style="font-size:12px;color:#9ca3af;">'+esc(b.bannedAt)+'</td><td class="td">'+badge(b.hits,b.hits>20?'badge-red':'badge-slate')+'</td><td class="td" style="text-align:right;"><button class="action-btn red">Remove</button></td></tr>').join(''))+'</div>'
+    +'<div id="ban-tab-ips" class="card" style="margin-bottom:16px;display:none;"><div class="card-header"><div><span style="font-size:14px;font-weight:600;">IP Address Bans</span><p style="font-size:12px;color:#9ca3af;margin-top:2px;">Single IPs and CIDR ranges</p></div><button class="btn-danger" style="font-size:12px;" onclick="openBanModal(\'ip\')"><svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>Ban IP / Range</button></div>'
+    +tbl(['IP / CIDR','Label','Banned','Hits','Expires',''],DATA.bans.ips.map(b=>'<tr><td class="td"><code style="font-size:12px;font-weight:600;">'+esc(b.ip)+'</code></td><td class="td" style="font-size:12px;color:#9ca3af;">'+(b.label||'—')+'</td><td class="td" style="font-size:12px;color:#9ca3af;">'+esc(b.bannedAt)+'</td><td class="td">'+badge(b.hits,b.hits>50?'badge-red':b.hits>10?'badge-amber':'badge-slate')+'</td><td class="td" style="font-size:12px;color:#9ca3af;">'+(b.expiry||'<span style="color:#9ca3af;">Permanent</span>')+'</td><td class="td" style="text-align:right;"><button class="action-btn amber" style="margin-right:8px;">Edit</button><button class="action-btn red">Remove</button></td></tr>').join(''))+'</div>'
+    +'<div id="ban-tab-accounts" class="card" style="display:none;"><div class="card-header"><span style="font-size:14px;font-weight:600;">Banned Accounts</span></div>'
+    +tbl(['User','Domain','Banned','Reason',''],DATA.bans.users.map(b=>'<tr><td class="td"><code style="font-size:12px;">'+esc(b.email)+'</code></td><td class="td" style="font-size:12px;color:#9ca3af;">'+esc(b.domain)+'</td><td class="td" style="font-size:12px;color:#9ca3af;">'+esc(b.bannedAt)+'</td><td class="td" style="font-size:12px;color:#9ca3af;">'+esc(b.reason)+'</td><td class="td" style="text-align:right;"><button class="action-btn green" style="margin-right:8px;">Unban</button><button class="action-btn red">Delete Account</button></td></tr>').join(''))+'</div>';
+}
+
+// ── LOGS ──
+function renderLogs(){
+  return pageHead('Login Logs','All authentication events — 90-day retention','<button class="btn-secondary"><svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>Export CSV</button>')
+    +'<div class="card" style="margin-bottom:14px;padding:14px 16px;display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">'
+    +'<div><label style="font-size:11px;">Date range</label><div style="display:flex;gap:6px;align-items:center;"><input type="date" value="2026-04-01"/><span style="color:#9ca3af;">—</span><input type="date" value="2026-04-07"/></div></div>'
+    +'<div><label style="font-size:11px;">Domain</label><select><option>All domains</option>'+DATA.domains.map(d=>'<option>'+esc(d.name)+'</option>').join('')+'</select></div>'
+    +'<div><label style="font-size:11px;">Method</label><select><option>All</option><option>email</option><option>google</option><option>github</option><option>apple</option></select></div>'
+    +'<div><label style="font-size:11px;">Result</label><select><option>All</option><option>OK</option><option>FAIL</option></select></div>'
+    +'<button class="btn-primary">Apply</button></div>'
+    +'<div class="card">'+tbl(['Timestamp','User','Domain','Method','IP Address','User Agent','Result'],DATA.logs.map(l=>'<tr><td class="td" style="font-size:11px;color:#9ca3af;white-space:nowrap;">'+esc(l.ts)+'</td><td class="td">'+(l.user?esc(l.user):'<span style="color:#9ca3af;font-style:italic;">unknown</span>')+'</td><td class="td" style="font-size:12px;color:#9ca3af;">'+esc(l.domain)+'</td><td class="td">'+methodBadge(l.method)+'</td><td class="td"><code style="font-size:11px;color:'+(l.result==='fail'?'#ef4444':'#6b7280')+';">'+esc(l.ip)+'</code></td><td class="td" style="font-size:11px;color:#9ca3af;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(l.ua)+'</td><td class="td">'+(l.result==='ok'?badge('OK','badge-green'):badge('FAIL','badge-red'))+'</td></tr>').join(''))+paginate()+'</div>';
+}
+
+// ── MODALS ──
+function openModal(id){ document.getElementById(id).classList.add('open'); }
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+
+function openUser(userId){
+  const u=DATA.users.find(x=>x.id===userId)||DATA.orgs.flatMap(o=>o.members).find(m=>m.id===userId);
+  if(!u) return;
+  const orgsForUser=DATA.orgs.filter(o=>o.members.some(m=>m.id===userId));
+  const orgLines=orgsForUser.map(o=>{
+    const m=o.members.find(m=>m.id===userId);
+    return '<div style="display:flex;align-items:center;justify-content:space-between;background:#f9fafb;border-radius:8px;padding:8px 12px;margin-bottom:6px;"><div><a onclick="closeModal(\'modal-user\');push({type:\'org\',orgId:'+o.id+'})" style="font-size:13px;font-weight:500;color:#4f46e5;cursor:pointer;">'+esc(o.name)+'</a><p style="font-size:11px;color:#9ca3af;">'+m.teams.map(t=>'<a onclick="closeModal(\'modal-user\');push({type:\'team\',orgId:'+o.id+',teamId:'+o.teams.find(x=>x.name===t)?.id+'})" style="color:#6366f1;cursor:pointer;">'+esc(t)+'</a>').join(', ')+'</p></div>'+statusBadge(m.role)+'</div>';
+  }).join('');
+  const logLines=DATA.logs.filter(l=>l.user===u.email).slice(0,3).map(l=>'<div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:5px 0;border-bottom:1px solid #f3f4f6;"><span style="color:#374151;">'+esc(l.ts)+' — '+esc(l.method)+' — '+esc(l.ua)+'</span>'+(l.result==='ok'?badge('OK','badge-green'):badge('FAIL','badge-red'))+'</div>').join('');
+  document.getElementById('modal-user-content').innerHTML =
+    '<div style="display:flex;align-items:center;gap:14px;margin-bottom:18px;">'+av(u.name||u.email)+'<div style="flex:1;"><p style="font-size:16px;font-weight:600;color:#111827;">'+esc(u.name||u.email)+'</p><p style="font-size:13px;color:#6b7280;">'+esc(u.email)+'</p><div style="margin-top:4px;display:flex;gap:6px;">'+statusBadge(u.status||'active')+(u.twofa?badge('2FA on','badge-green'):badge('2FA off','badge-amber'))+'</div></div>'
+    +'<div style="display:flex;flex-direction:column;gap:6px;">'+(u.twofa?'<button class="btn-secondary" style="font-size:12px;padding:5px 10px;" onclick="confirm_(\'Reset 2FA for '+esc(u.email)+'?\',\'They will need to re-enroll.\')">Reset 2FA</button>':'')+(u.status!=='banned'?'<button class="btn-danger" style="font-size:12px;padding:5px 10px;" onclick="confirm_(\'Ban '+esc(u.email)+'?\',\'Blocks from all services.\')">Ban User</button>':'<button class="btn-secondary" style="font-size:12px;padding:5px 10px;">Unban</button>')+'</div></div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;">'
+    +'<div style="background:#f9fafb;border-radius:8px;padding:10px 12px;"><p style="font-size:11px;color:#9ca3af;margin-bottom:3px;">Registered</p><p style="font-size:13px;font-weight:500;">'+(u.created||'—')+'</p></div>'
+    +'<div style="background:#f9fafb;border-radius:8px;padding:10px 12px;"><p style="font-size:11px;color:#9ca3af;margin-bottom:3px;">Last Login</p><p style="font-size:13px;font-weight:500;">'+esc(u.lastLogin)+'</p></div>'
+    +'<div style="background:#f9fafb;border-radius:8px;padding:10px 12px;"><p style="font-size:11px;color:#9ca3af;margin-bottom:3px;">Auth Method</p><p style="font-size:13px;font-weight:500;">'+(u.method||'—')+'</p></div>'
+    +'<div style="background:#f9fafb;border-radius:8px;padding:10px 12px;"><p style="font-size:11px;color:#9ca3af;margin-bottom:3px;">Domains</p><p style="font-size:13px;">'+(u.domains||[]).join(', ')+'</p></div></div>'
+    +(orgsForUser.length?'<p style="font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">Organisations &amp; Teams</p>'+orgLines:'')
+    +'<p style="font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin:14px 0 8px;">Recent Logins</p>'
+    +(logLines||'<p style="font-size:12px;color:#9ca3af;">No recent logs</p>');
+  openModal('modal-user');
+}
+
+function openBanModal(type){
+  const titles={email:'Ban Email Address',pattern:'Ban Email Pattern',ip:'Ban IP Address / Range'};
+  document.getElementById('modal-ban-title').textContent=titles[type]||'Add Ban';
+  const domOpts=DATA.domains.map(d=>'<option>'+esc(d.name)+' only</option>').join('');
+  const scopes='<select style="width:100%;box-sizing:border-box;"><option>Global (all domains)</option>'+domOpts+'</select>';
+  const contents={
+    email:'<div style="display:flex;flex-direction:column;gap:14px;"><div><label>Email address</label><input type="email" placeholder="spam@example.com" style="width:100%;box-sizing:border-box;font-family:monospace;"/></div><div><label>Reason (optional)</label><input type="text" placeholder="e.g. Spam, abuse" style="width:100%;box-sizing:border-box;"/></div><div><label>Scope</label>'+scopes+'</div><div style="display:flex;align-items:center;gap:8px;"><input type="checkbox" id="ban-existing"/><label for="ban-existing" style="display:inline;cursor:pointer;font-weight:400;">Also ban existing account with this email</label></div></div>',
+    pattern:'<div style="display:flex;flex-direction:column;gap:14px;"><div><label>Pattern</label><input type="text" placeholder="*@disposable.com" style="width:100%;box-sizing:border-box;font-family:monospace;"/><p style="font-size:11px;color:#9ca3af;margin-top:4px;">Use * as wildcard. e.g. <code>*@tempmail.org</code></p></div><div><label>Scope</label>'+scopes+'</div></div>',
+    ip:'<div style="display:flex;flex-direction:column;gap:14px;"><div><label>IP address or CIDR range</label><input type="text" placeholder="e.g. 185.220.101.0/24 or 45.12.33.199" style="width:100%;box-sizing:border-box;font-family:monospace;"/><p style="font-size:11px;color:#9ca3af;margin-top:4px;">Supports single IPs and CIDR notation (/24, /22, etc.)</p></div><div><label>Label (optional)</label><input type="text" placeholder="e.g. Tor exit node, brute force source" style="width:100%;box-sizing:border-box;"/></div><div style="display:flex;gap:12px;"><div style="flex:1;"><label>Scope</label>'+scopes+'</div><div style="flex:1;"><label>Expiry (optional)</label><input type="date" style="width:100%;box-sizing:border-box;"/></div></div><div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;font-size:12px;color:#92400e;">Banning a /24 or larger range may affect legitimate users. Use with care.</div></div>',
+  };
+  document.getElementById('modal-ban-content').innerHTML=contents[type]||'';
+  openModal('modal-ban');
+}
+
+function confirm_(title,body){
+  document.getElementById('confirm-title').textContent=title;
+  document.getElementById('confirm-body').textContent=body;
+  openModal('modal-confirm');
+}
+
+// ── TABS ──
+function switchOrgTab(tab,btn){
+  ['teams','members'].forEach(t=>document.getElementById('org-tab-'+t).style.display=t===tab?'':'none');
+  btn.closest('div').querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+}
+function switchBanTab(tab,btn){
+  ['emails','patterns','ips','accounts'].forEach(t=>document.getElementById('ban-tab-'+t).style.display=t===tab?'':'none');
+  btn.closest('div').querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+// ── SEARCH ──
+let _searchTimer=null, _searchIdx=-1;
+function onSearchInput(v){ clearTimeout(_searchTimer); _searchTimer=setTimeout(()=>showDropdown(v),120); }
+
+function showDropdown(v){
+  const dd=document.getElementById('search-dropdown');
+  const q=v.trim();
+  if(!q){ dd.style.display='none'; return; }
+  const r=searchAll(q);
+  const total=r.orgs.length+r.teams.length+r.users.length;
+  if(!total){
+    dd.innerHTML='<div style="padding:14px 16px;text-align:center;color:#9ca3af;font-size:13px;">No results for &ldquo;'+esc(q)+'&rdquo;</div>';
+    dd.style.display='block'; _searchIdx=-1; return;
   }
+  let html='';
+  const sec=(label)=>'<div style="padding:8px 12px 4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af;'+(html?'border-top:1px solid #f3f4f6;margin-top:4px;':'')+'">'+label+'</div>';
+  if(r.orgs.length){
+    html+=sec('Organisations');
+    html+=r.orgs.map(o=>'<div class="search-result" onclick="searchNav(\'org\','+o.id+')"><div style="width:28px;height:28px;border-radius:7px;background:#e0e7ff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#4338ca;flex-shrink:0;">'+esc(o.name[0])+'</div><div><p class="sr-primary" style="font-size:13px;font-weight:500;color:#111827;">'+hl(o.name,q)+'</p><p style="font-size:11px;color:#9ca3af;">'+esc(o.domain)+' &middot; '+o.members.length+' members</p></div></div>').join('');
+  }
+  if(r.teams.length){
+    html+=sec('Teams');
+    html+=r.teams.map(t=>'<div class="search-result" onclick="searchNav(\'team\','+t.orgId+','+t.id+')"><div style="width:28px;height:28px;border-radius:7px;background:#dbeafe;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;">&#x1F465;</div><div><p class="sr-primary" style="font-size:13px;font-weight:500;color:#111827;">'+hl(t.name,q)+'</p><p style="font-size:11px;color:#9ca3af;">'+esc(t.orgName)+' &middot; '+t.members+' members</p></div></div>').join('');
+  }
+  if(r.users.length){
+    html+=sec('Users');
+    html+=r.users.map(u=>'<div class="search-result" onclick="searchNav(\'user\','+u.id+')"><div style="width:28px;height:28px;border-radius:50%;background:#dcfce7;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#166534;flex-shrink:0;">'+(u.name||u.email).split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase()+'</div><div style="flex:1;min-width:0;"><p class="sr-primary" style="font-size:13px;font-weight:500;color:#111827;">'+hl(u.name||u.email,q)+'</p><p style="font-size:11px;color:#9ca3af;">'+(u.name?hl(u.email,q)+' &middot; ':'')+esc(u.domains.join(', '))+'</p></div>'+statusBadge(u.status)+'</div>').join('');
+  }
+  html+='<div style="padding:7px 12px;border-top:1px solid #f3f4f6;text-align:center;"><span style="font-size:11px;color:#9ca3af;">&uarr;&darr; navigate &nbsp;&middot;&nbsp; Enter select &nbsp;&middot;&nbsp; Esc close</span></div>';
+  dd.innerHTML=html; dd.style.display='block'; _searchIdx=-1;
+}
+
+function searchAll(q){
+  const lq=q.toLowerCase();
+  const orgs=DATA.orgs.filter(o=>o.name.toLowerCase().includes(lq)||o.slug.includes(lq)||o.domain.includes(lq)).slice(0,4);
+  const teams=[]; DATA.orgs.forEach(org=>org.teams.forEach(t=>{ if(t.name.toLowerCase().includes(lq)) teams.push(Object.assign({},t,{orgId:org.id,orgName:org.name})); }));
+  const users=DATA.users.filter(u=>(u.name&&u.name.toLowerCase().includes(lq))||u.email.toLowerCase().includes(lq)).slice(0,5);
+  return {orgs,teams:teams.slice(0,4),users};
+}
+
+function searchNav(type,a,b){
+  document.getElementById('search-input').value='';
+  document.getElementById('search-dropdown').style.display='none';
+  if(type==='org'){ navStack=[{type:'orgs'}]; push({type:'org',orgId:a}); }
+  else if(type==='team'){ navStack=[{type:'orgs'}]; push({type:'org',orgId:a}); push({type:'team',orgId:a,teamId:b}); }
+  else if(type==='user') openUser(a);
+}
+
+function onSearchKey(e){
+  const dd=document.getElementById('search-dropdown');
+  if(dd.style.display==='none') return;
+  const items=dd.querySelectorAll('.search-result');
+  if(e.key==='ArrowDown'){ e.preventDefault(); _searchIdx=Math.min(_searchIdx+1,items.length-1); items.forEach((el,i)=>el.classList.toggle('focused',i===_searchIdx)); items[_searchIdx]&&items[_searchIdx].scrollIntoView({block:'nearest'}); }
+  else if(e.key==='ArrowUp'){ e.preventDefault(); _searchIdx=Math.max(_searchIdx-1,0); items.forEach((el,i)=>el.classList.toggle('focused',i===_searchIdx)); }
+  else if(e.key==='Enter'){ if(_searchIdx>=0) items[_searchIdx].click(); }
+  else if(e.key==='Escape'){ dd.style.display='none'; document.getElementById('search-input').blur(); }
+}
+
+function hl(text,q){
+  if(!text||!q) return esc(text||'');
+  return esc(text).replace(new RegExp(esc(q).replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi'),m=>'<mark class="highlight">'+m+'</mark>');
+}
+
+function generateSecret(){ const c='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'; return Array.from({length:48},()=>c[Math.floor(Math.random()*c.length)]).join(''); }
+
+document.addEventListener('click',e=>{ if(!document.getElementById('search-container').contains(e.target)) document.getElementById('search-dropdown').style.display='none'; });
+document.querySelectorAll('.modal-overlay').forEach(el=>el.addEventListener('click',e=>{ if(e.target===el) el.classList.remove('open'); }));
+
+render(); updateBreadcrumb();
 </script>
-
 </body>
 </html>
