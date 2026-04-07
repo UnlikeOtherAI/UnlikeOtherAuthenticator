@@ -22,6 +22,19 @@ For the full product spec, see [brief.md](./brief.md). For tech stack, see [tech
 /API
   /src
     /routes
+      /root
+        index.ts              — GET / (full endpoint schema)
+        llm.ts                — GET /llm (config documentation for LLM consumers)
+      /apps
+        apps.ts               — CRUD for /org/:orgId/apps[/:appId]
+        killswitches.ts       — CRUD for /org/:orgId/apps/:appId/killswitches[/:id]
+        flags.ts              — Flag definitions: GET/POST/PATCH/DELETE /apps/:appId/flags/definitions[/:flagKey]
+        flag-matrix.ts        — GET/PATCH /apps/:appId/flags/matrix[/:roleName/:flagKey]
+        flag-overrides.ts     — GET/PUT/DELETE /apps/:appId/flags/overrides/:userId[/:flagKey]
+        flag-query.ts         — GET /apps/:appId/flags (resolved flag map for a user)
+        startup.ts            — GET /apps/startup (combined kill switch + flags; public)
+        killswitch-check.ts   — GET /killswitch/check (standalone kill switch query; public)
+        index.ts              — Route registration for /apps and /killswitch
       /auth
         login.ts              — POST /auth/login
         register.ts           — POST /auth/register
@@ -117,6 +130,9 @@ For the full product spec, see [brief.md](./brief.md). For tech stack, see [tech
       user.service.ts         — User CRUD, scope handling (global vs per-domain)
       domain.service.ts       — Client ID generation, domain verification, superuser logic
       translation.service.ts  — AI translation fallback and caching
+      app.service.ts          — App CRUD, identifier uniqueness, platform validation
+      killswitch.service.ts   — Kill switch entry CRUD, version matching, priority resolution, activateAt scheduling
+      flag.service.ts         — Flag definition CRUD, role matrix management, per-user override management, flag resolution
     /utils
       hash.ts                 — Hashing helpers (domain + secret, tokens)
       errors.ts               — Generic error factory (never leaks specifics)

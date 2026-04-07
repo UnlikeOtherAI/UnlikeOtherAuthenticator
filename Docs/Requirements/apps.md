@@ -78,7 +78,7 @@ Organisation
         ├── uses one or more Domains from the org pool
         ├── Feature Flags     (optional service)
         │     ├── Flag definitions with defaults
-        │     ├── Role overrides (flag matrix)
+        │     ├── Role Flag Matrix (optional, per-App)
         │     └── Per-user overrides
         └── Kill Switches     (optional service)
               ├── one or more entries per app
@@ -257,6 +257,8 @@ Response when a kill switch has a future `activateAt` (not yet blocking, but app
 ```
 
 `activatesIn` is the number of seconds until the nearest pending kill switch activates. When `activatesIn ≤ 900` (15 minutes), `cacheTtl` is capped to `activatesIn` so the SDK re-polls before activation. The kill switch entry is not present in the response until it activates.
+
+**SDK cache TTL precedence:** The SDK must use `min(cacheTtl, activatesIn)` when both fields are present. If `activatesIn` is present and smaller than `cacheTtl`, the SDK must re-poll after `activatesIn` seconds rather than waiting the full `cacheTtl`.
 
 Response when clear:
 

@@ -13,6 +13,12 @@ The model uses three layers — **Organisation → Team → Member** — with ro
 
 ### Add
 
+#### User model additions
+```prisma
+// Add to existing User model:
+scimExternalId String?  @unique @map("scim_external_id")  // IdP-assigned externalId for SCIM-provisioned users
+```
+
 #### `OrgEmailDomainRule`
 Replaces the old `domain` association. Drives automatic org membership on first verified login.
 
@@ -76,15 +82,15 @@ model ScimToken {
 #### `ScimGroupMapping` (IdP group → UOA team link)
 ```prisma
 model ScimGroupMapping {
-  id              String   @id @default(cuid())
-  orgId           String
-  org             Organisation @relation(fields:[orgId], references:[id], onDelete:Cascade)
-  externalGroupId String           // IdP's group ID (stable, not displayName)
-  teamId          String
-  team            Team @relation(fields:[teamId], references:[id], onDelete:Cascade)
-  createdAt       DateTime @default(now())
+  id          String   @id @default(cuid())
+  orgId       String
+  org         Organisation @relation(fields:[orgId], references:[id], onDelete:Cascade)
+  externalId  String           // IdP's SCIM externalId (stable, not displayName)
+  teamId      String
+  team        Team @relation(fields:[teamId], references:[id], onDelete:Cascade)
+  createdAt   DateTime @default(now())
 
-  @@unique([orgId, externalGroupId])
+  @@unique([orgId, externalId])
   @@unique([orgId, teamId])          // one team can only be mapped to one IdP group
 }
 ```
@@ -194,16 +200,24 @@ for (const rule of matchingRules) {
       where: { orgId: rule.orgId, isDefault: true }
     });
     if (defaultTeam) {
-      // Look up default customRole for this team (if role_flag_matrix_enabled)
-      const defaultCustomRole = await prisma.teamCustomRole.findFirst({
-        where: { teamId: defaultTeam.id, isDefault: true }
-      });
+      // Look up default customRole for this team (when role_flag_matrix_enabled for the org's App).
+      // TeamCustomRole model is defined in the Apps/feature-flags schema additions (see apps.md).
+      // At auto-enrolment time: if the model is available, query it; otherwise default to null.
+      let defaultCustomRole: string | null = null;
+      try {
+        const roleRecord = await (prisma as any).teamCustomRole?.findFirst({
+          where: { teamId: defaultTeam.id, isDefault: true }
+        });
+        defaultCustomRole = roleRecord?.name ?? null;
+      } catch {
+        // TeamCustomRole model not yet migrated — proceed with null
+      }
       await prisma.teamMember.create({
         data: {
           teamId: defaultTeam.id,
           userId: user.id,
           role: 'member',
-          customRole: defaultCustomRole?.name ?? null
+          customRole: defaultCustomRole
         }
       });
     }

@@ -130,7 +130,7 @@ The auth window is the user-facing UI rendered inside the OAuth popup. It is a *
 
 ## External Integrations
 
-* **Social OAuth Providers** — Google, Apple, Facebook, GitHub, LinkedIn (one set of credentials for the auth service, not per-client)
+* **Social OAuth Providers** — Google, Apple, Facebook, GitHub, LinkedIn, Microsoft (Entra ID / Azure AD OIDC) (one set of credentials for the auth service, not per-client)
 * **Email Service** — provider-abstracted (e.g. SendGrid, SES), swappable without code changes
 * **AI Translation Service** — for missing translation fallback, results cached permanently
 
