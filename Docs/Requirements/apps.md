@@ -60,7 +60,7 @@ Request body for `POST /org/:orgId/apps`:
 }
 ```
 
-`DELETE` is destructive — cascades to all kill switch entries and flag definitions for the App. Requires confirmation (`?confirm=true` query param).
+`DELETE` is destructive — cascades to all kill switch entries and flag definitions for the App. Requires confirmation (`?confirm=true` query param). **SDK cache behavior after App deletion:** SDKs holding a cached startup response must re-validate on next app launch or foreground resume, even if the cache TTL has not expired. After deletion, the `/apps/startup` endpoint returns an empty response (same as unknown `appIdentifier`) — the SDK should treat this gracefully and not block the app.
 
 An App belongs to an **org**, not a team. Teams manage who has access; Apps define what those people are using.
 
@@ -396,6 +396,6 @@ Every SDK must:
 
 2. **Web app versioning** — **decided: use `semver` scheme with `versionName` only.** Web apps pass their semver tag (e.g. `1.5.0`) or deploy timestamp (as a date scheme, e.g. `2024.01.15`) as `versionName`. `buildNumber` is optional for web. The `versionScheme` field on the kill switch entry specifies which scheme to use.
 
-3. **Flag sync in token vs query / polling interval** — **decided: SDK polls on foreground resume, minimum 60 seconds between checks, default 5 minutes.** This is configurable per App (see `pollIntervalSeconds` field — to be added to App data model as an optional integer, default 300, minimum 60). Token-embedded flags are login-time snapshots; mid-session changes require poll.
+3. **Flag sync in token vs query / polling interval** — **decided: SDK polls on foreground resume, minimum 60 seconds between checks, default 5 minutes.** This is configurable per App via `pollIntervalSeconds` (default 300, minimum 60, maximum 3600). Token-embedded flags are login-time snapshots; mid-session changes require poll. The `pollIntervalSeconds` value applies to both the `/apps/startup` endpoint poll **and** any direct `/apps/:appId/flags` query polls. SDKs must not poll either endpoint more frequently than `pollIntervalSeconds` (minimum 60 seconds between calls).
 
 4. **Multiple matching kill switches** — **decided: highest `priority` integer wins.** If two entries have identical priority, the one with the earlier `createdAt` wins (first created takes precedence). This must be deterministic — no random tiebreaking. The `priority` field is an integer from 0 to 1000 (default 0). Entries with the same priority and `createdAt` are processed in ascending `id` order as a final tiebreaker.

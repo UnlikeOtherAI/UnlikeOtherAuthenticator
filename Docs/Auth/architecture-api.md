@@ -28,10 +28,10 @@ For the full product spec, see [brief.md](./brief.md). For tech stack, see [tech
       /apps
         apps.ts               — CRUD for /org/:orgId/apps[/:appId]
         killswitches.ts       — CRUD for /org/:orgId/apps/:appId/killswitches[/:id]
-        flags.ts              — Flag definitions: GET/POST/PATCH/DELETE /apps/:appId/flags/definitions[/:flagKey]
-        flag-matrix.ts        — GET/PATCH /apps/:appId/flags/matrix[/:roleName/:flagKey]
-        flag-overrides.ts     — GET/PUT/DELETE /apps/:appId/flags/overrides/:userId[/:flagKey]
-        flag-query.ts         — GET /apps/:appId/flags (resolved flag map for a user)
+        flags.ts              — Flag definitions: GET/POST/PATCH/DELETE /org/:orgId/apps/:appId/flags/definitions[/:flagKey]
+        flag-matrix.ts        — GET/PATCH /org/:orgId/apps/:appId/flags/matrix[/:roleName/:flagKey]
+        flag-overrides.ts     — GET/PUT/DELETE /org/:orgId/apps/:appId/flags/overrides/:userId[/:flagKey]
+        flag-query.ts         — GET /apps/:appId/flags (resolved flag map for a user; domain-hash auth, no orgId in path)
         startup.ts            — GET /apps/startup (combined kill switch + flags; public)
         killswitch-check.ts   — GET /killswitch/check (standalone kill switch query; public)
         index.ts              — Route registration for /apps and /killswitch

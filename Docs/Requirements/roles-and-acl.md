@@ -27,8 +27,8 @@ These are roles that a developer or org defines for their own product. UOA store
 - A user's UOA role and their custom role are completely orthogonal
 
 UOA's only responsibilities for custom roles:
-- Store the role definitions per team/org, including which is the default
-- Validate that a role assigned to a user exists in the team/org's defined list
+- Store the role definitions per team, including which is the default
+- Validate that a role assigned to a user exists in the team's defined list
 - Return the role label(s) in the access token and via API
 - Enforce nothing beyond that
 
@@ -69,7 +69,7 @@ Teams are the primary registration unit. Not every setup needs a full enterprise
 
 ## Custom role definitions
 
-Each team (and optionally org) defines its own role names. One role is marked as the default.
+Each team defines its own role names. One role is marked as the default. Custom roles are team-scoped — there is no independently-defined org-level custom role set. The `org.customRole` field in the token is a convenience field derived from the user's primary team (see Token output section below).
 
 ```json
 {
@@ -152,7 +152,7 @@ Note: `flags` is present only when `feature_flags_enabled = true` on the App ass
 
 **`orgs` when user has zero org memberships:** When org features are enabled but the user belongs to no org, `orgs` is an empty array (`"orgs": []`), not absent. The field is always present when `org_features.enabled = true`.
 
-**Token refresh behavior:** When a refresh token is used to issue a new access token, `orgs[]` claims are **re-resolved from the current database state** at that moment — they are not cached from the original login. Flag values embedded in the token are also re-resolved at refresh time. Refresh tokens themselves carry no org or flag data.
+**Token refresh behavior:** When a refresh token is used to issue a new access token, `orgs[]` claims are **re-resolved from the current database state** at that moment — they are not cached from the original login. Refresh tokens themselves carry no org data. **Flag values are NOT re-resolved on refresh** — they reflect the state at login time (see `feature-flags.md §Resolved decisions #3`). For real-time flag changes mid-session, the consuming app calls the `/apps/:appId/flags` query endpoint directly.
 
 **`org.uoaRole` derivation for multi-team users:** The org-level `uoaRole` is the highest UOA system role the user holds across all teams in that org (accounting for inheritance). If a user is `owner` on one team and `admin` on another, their org-level `uoaRole` is `owner`. If the user has no `owner` or `admin` role on any team (and no org-level role assignment), `uoaRole` is omitted.
 
@@ -241,6 +241,7 @@ GET    /scim/v2/Groups/:id      — read a single group/team with its members
 POST   /scim/v2/Groups          — create team via IdP
 PATCH  /scim/v2/Groups/:id      — add/remove members, rename team (RFC 7644 Operations[] format)
 DELETE /scim/v2/Groups/:id      — delete team and sever ScimGroupMapping
+POST   /scim/v2/Bulk            — not supported; returns HTTP 405
 ```
 
 **SCIM bearer token:** An opaque UUID token issued per org via the admin panel. It has no expiry by default (long-lived). A single org may have multiple active tokens (for rolling rotation or multiple IdP integrations). Tokens are stored hashed; plain value shown only at creation. Revoked via admin panel (`DELETE /internal/admin/orgs/:orgId/scim-tokens/:tokenId`). Scoped to a single org — cannot be used across orgs.
@@ -253,6 +254,8 @@ DELETE /scim/v2/Groups/:id      — delete team and sever ScimGroupMapping
 - `emails[0].value` is used as a fallback if `userName` is not an email
 - If a user with the same email already exists in UOA, the SCIM-provisioned user is linked to the existing account (matched by email)
 - `externalId` (IdP-provided) is stored on the UOA user record for stable re-linking on reprovision
+
+**Email (userName) changes via PATCH:** `userName` maps to UOA email (the canonical user identifier). **Email changes via SCIM PATCH are rejected with HTTP 400** — email is immutable after account creation. If an IdP sends a new `userName` in a PATCH body, UOA returns `{ "schemas": ["urn:ietf:params:scim:api:messages:2.0:Error"], "status": 400, "detail": "userName is immutable" }`. The IdP should provision a new user with the new email and deprovision the old one separately.
 
 **Custom role assignment:** The custom role assigned to SCIM-provisioned members defaults to the team's default custom role. If the IdP sends a role via SCIM enterprise extension (`urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:organization` or a custom schema attribute `uoa:customRole`), that role is validated against the team's defined custom roles and assigned if valid. If the role is unknown, provisioning proceeds with the default role (not rejected).
 

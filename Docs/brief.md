@@ -809,6 +809,8 @@ groupMembers  GroupMember[]
 
 ### 24.3 Organisation
 
+> **Note:** The "one org per domain" constraint and domain-based org scoping below predates the ReBAC model. `api-changes-rebac.md §1` removes `Organisation.domain` — orgs are no longer tied to a single client domain. Auto-enrolment via `OrgEmailDomainRule` replaces domain-scoped org membership. Implementers should follow `api-changes-rebac.md §1–3` for the current model.
+
 * An organisation belongs to a **domain** and is the top-level tenant concept.
 * A domain can have **multiple organisations**.
 * A user belongs to **exactly one organisation** per domain (with global `user_scope`, the same person could belong to different orgs on different domains).
@@ -886,7 +888,7 @@ Organisation slugs are derived from the `name` field:
 * Every org member must belong to at least one team.
   * On org membership add, user is auto-added to the default team.
 * If `org_features.user_needs_team = true`, successful auth must self-heal users with no team membership:
-  * If the user already belongs to an org on the domain but has zero teams, create a personal team named `"{user name}'s team"` and add them as `lead`.
+  * If the user already belongs to an org on the domain but has zero teams, create a personal team named `"{user name}'s team"` and add them as `lead`. **⚠ SUPERSEDED:** `lead` is replaced by `admin` per `api-changes-rebac.md §1`.
   * If the user does not belong to any org on the domain, create a new personal org for them, create a default personal team named `"{user name}'s team"`, and place them there.
 
 #### Default Team

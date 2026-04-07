@@ -39,11 +39,12 @@ model OrgEmailDomainRule {
 }
 
 enum VerificationMethod {
-  ANY       // any verified identity (email link, Google, GitHub, Microsoft, etc.)
+  ANY       // any verified identity (email link, Google, GitHub, Microsoft, Apple, etc.)
   EMAIL     // email link only
   GOOGLE
   GITHUB
   MICROSOFT // Microsoft Entra ID / Azure AD OIDC
+  APPLE     // Apple Sign In
 }
 ```
 
@@ -232,6 +233,7 @@ for (const rule of matchingRules) {
 - Google login → matches `ANY`, `GOOGLE`
 - GitHub login → matches `ANY`, `GITHUB`
 - Microsoft login → matches `ANY`, `MICROSOFT`
+- Apple login → matches `ANY`, `APPLE`
 - Email verified → matches `ANY`, `EMAIL`
 
 ### `GET /user/me` and access token payload

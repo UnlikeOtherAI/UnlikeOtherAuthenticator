@@ -153,9 +153,10 @@ New section in the sidebar, scoped to the selected App:
 
 - Grid view: rows = flags, columns = roles
 - Each cell = toggle (on/off)
-- "Add Role" button — adds a column
+- "Add Role" button — adds a column by creating a new custom role on the selected team via the team role endpoints (`POST /org/:orgId/teams/:teamId/roles`). The matrix column appears once the role exists on at least one team in the org.
+- "Rename Role" / "Delete Role" / "Set Default" — these operations are team role management, delegated to `PATCH/DELETE/PUT /org/:orgId/teams/:teamId/roles/:name[/default]`. The matrix API itself only manages cell values.
 - "Add Flag" button — adds a row (or reuses a flag defined in the flags section)
-- Default role indicator (tick icon on column header, clickable to reassign)
+- Default role indicator (tick icon on column header, clickable to reassign via team role endpoint)
 
 ### User override UI
 
@@ -201,7 +202,7 @@ Roles are derived from the team custom role union (see role matrix section). Add
 
 ```
 GET    /apps/:appId/flags/overrides/:userId        — get all overrides for a user (resolved state + source)
-PUT    /apps/:appId/flags/overrides/:userId        — set one or more overrides (body: { flags: { [key]: boolean } })
+PUT    /apps/:appId/flags/overrides/:userId        — set one or more overrides (body: { flags: { [key]: boolean } }). Empty `flags: {}` returns HTTP 400 (nothing to set; use DELETE to clear overrides).
 DELETE /apps/:appId/flags/overrides/:userId/:flagKey  — remove a specific override
 DELETE /apps/:appId/flags/overrides/:userId        — remove all overrides for a user
 ```
