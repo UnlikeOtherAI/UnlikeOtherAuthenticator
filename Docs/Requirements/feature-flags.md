@@ -45,7 +45,7 @@ When a consuming app queries a flag for a user, resolution proceeds in order and
 
 The global missing-flag default means consuming apps never get an error for an undefined flag — they always get a boolean.
 
-**Multi-team context:** A user may have different `customRole` values on different teams within the same org, producing different role flag values. The flag query must specify a team context (`teamId` param) when a user has more than one team membership. If no `teamId` is provided and the user has exactly one team membership, that team's role is used. If no `teamId` is provided and the user has multiple memberships, the tiebreaker is applied in this order: (1) highest UOA system role on that team (`owner > admin > plain-member`), (2) if equal, earliest `createdAt` on the `TeamMember` record (the team the user joined first). This tiebreaker uses the effective UOA role (including org-level inheritance).
+**Multi-team context:** A user may have different `customRole` values on different teams within the same org, producing different role flag values. The flag query must specify a team context (`teamId` param) when a user has more than one team membership. If no `teamId` is provided and the user has exactly one team membership, that team's role is used. If no `teamId` is provided and the user has multiple memberships, the tiebreaker is applied in this order: (1) highest UOA system role on that team (`owner > admin`, with users having no named UOA role ranking lowest), (2) if equal, earliest `createdAt` on the `TeamMember` record (the team the user joined first). This tiebreaker uses the effective UOA role (including org-level inheritance). Note: "no named UOA role" (plain member) is not a valid enum value — it simply means neither `owner` nor `admin` is assigned.
 
 ### Flag query API
 
@@ -174,6 +174,20 @@ PATCH  /apps/:appId/flags/definitions/:flagKey     — update a flag  (body: { d
 DELETE /apps/:appId/flags/definitions/:flagKey     — delete a flag (cascades: role assignments, user overrides)
 ```
 
+`GET` response (HTTP 200):
+```json
+[
+  { "key": "dark_mode", "description": "Dark mode UI", "defaultState": "disabled", "createdAt": "2024-01-15T10:00:00Z" },
+  { "key": "new_checkout", "description": "New checkout flow", "defaultState": "enabled", "createdAt": "2024-01-16T08:30:00Z" }
+]
+```
+
+`POST` response (HTTP 201): same shape as a single element from the `GET` response array. Returns HTTP 400 with `{ "error": "Request failed" }` if the key is invalid format, already exists, or the App's `max_flags_per_app` cap is reached.
+
+`PATCH` response (HTTP 200): updated flag object. `PATCH` with an empty body `{}` returns HTTP 400. Unknown fields in body return HTTP 400.
+
+`DELETE` response: HTTP 204 (no body).
+
 ### Role matrix API endpoints
 
 ```
@@ -192,6 +206,21 @@ DELETE /apps/:appId/flags/overrides/:userId/:flagKey  — remove a specific over
 DELETE /apps/:appId/flags/overrides/:userId        — remove all overrides for a user
 ```
 
+`GET` response (HTTP 200):
+```json
+{
+  "dark_mode": { "value": true, "source": "override" },
+  "new_checkout": { "value": false, "source": "role" },
+  "beta_access": { "value": false, "source": "default" }
+}
+```
+
+Source values: `"override"` (explicit per-user assignment), `"role"` (from role matrix), `"default"` (flag's `defaultState`). An unknown `userId` or a `userId` not belonging to this org's App returns HTTP 200 with `{}` (no overrides, no information leak).
+
+`PUT` response (HTTP 200): the updated resolved flag map for the user, same shape as above.
+
+`DELETE` (single flag) response: HTTP 204. `DELETE` (all overrides) response: HTTP 204.
+
 ### Feature flags service enablement
 
 Feature flags are enabled per **App** (not per-org globally). Two fields control availability:
@@ -207,7 +236,7 @@ Feature flags are enabled per **App** (not per-org globally). Two fields control
 
 ## Resolved decisions
 
-1. **Flag key format** — **decided: lowercase letters, digits, and underscores only; must start with a letter** (`[a-z][a-z0-9_]*`). Examples: `dark_mode`, `can_publish`, `beta_access`. Enforced at creation. Validation rejects any other format with a 400 error. This applies to all flags across all Apps. Leading underscores are not allowed.
+1. **Flag key format** — **decided: must start with a lowercase letter, followed by lowercase letters, digits, or underscores** (regex: `[a-z][a-z0-9_]*`). Examples: `dark_mode`, `can_publish`, `beta_access`. Enforced at creation. Validation rejects any other format with HTTP 400. This applies to all flags across all Apps.
 2. **Token flag inclusion** — **decided: all flags for the App are included in the token at login time**, regardless of whether they differ from the default. This keeps token consumption simple (no server-side re-resolution needed on read). Orgs with many flags should use `max_flags_per_app` config to cap token size (default 100; see `org_features` in brief.md).
 3. **Real-time flag changes** — **decided: poll only**. The token embeds flag state at login. Mid-session changes are visible only via `/apps/:appId/flags` query endpoint calls. The SDK polls on foreground resume (default interval: 5 minutes, minimum 60 seconds, configurable per App). No push mechanism.
 4. **SCIM flag sync / override retention** — **decided: soft-deprovision by default**. When a SCIM user is deprovisioned (`active: false`), their per-user flag overrides are **retained** and are re-linked when the user is re-provisioned (matched by email or SCIM `externalId`). Overrides are only deleted when a user is hard-deleted (`DELETE /scim/v2/Users/:id` with `?hardDelete=true` query param, or when the org is deleted). This is the default; orgs can configure `scim_override_retention: "retain" | "clear"` in their `org_features`.

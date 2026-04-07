@@ -15,7 +15,7 @@ These control who can administer the UOA backend itself — the org and team str
 
 Users who are neither `owner` nor `admin` have no named UOA system role — they are plain members whose significance is defined entirely by their custom role.
 
-`system_admin` is a separate global role for UOA's own admin panel operators and is not visible to org/team users.
+`system_admin` is a separate global role for UOA's own admin panel operators and is not visible to org/team users. It is stored as the string value `"system_admin"` on the internal `AdminUser` model (separate from `OrgMember`/`TeamMember`). System admin identity is verified via domain-hash auth against the admin domain + the UOA `SHARED_SECRET` (same mechanism as other internal routes). Endpoints under `/internal/admin/` require system admin auth and bypass all org/team permission middleware.
 
 ### 2. Consumer-defined roles (external, custom)
 
@@ -140,10 +140,10 @@ On rename: existing `TeamMember.customRole` records with the old name are update
 - `method` — the authentication method used: `"email"`, `"google"`, `"github"`, `"microsoft"`
 - `uoaRole` — `owner`, `admin`, or omitted if neither (plain member has no named UOA role)
 - `uoaRoleInherited` — `true` if derived from org-level role rather than explicit team assignment; omitted if `false`
-- `customRole` (org level) — the consuming app's role label for this user at the org level. Since org-level custom roles are independent of team roles, this reflects any role explicitly set at the org scope. Omitted if none assigned at org level.
+- `customRole` (org level) — a convenience field. Derived from the user's primary team `customRole` using the same tiebreaker as flag resolution (highest UOA system role → earliest `TeamMember.createdAt`). There is no separately stored org-level custom role — this field is computed, not read from a separate org-scope data model. Omitted if no team has a `customRole` set for this user.
 - `customRole` (team level) — the consuming app's single role label for this user on this specific team membership. Omitted if no custom role is assigned on that team.
 
-**`org.customRole` when the user has multiple team memberships:** The org-level `customRole` is set explicitly (not derived from team roles). If the user has no explicit org-level custom role, `org.customRole` is omitted. Team-level `customRole` values are always per-team in the `teams[]` array and are never aggregated to the org level. See decision in the role model section below.
+**`org.customRole` when the user has multiple team memberships:** Always derived from the primary team's `customRole` using the standard multi-team tiebreaker. It is never independently set or stored at org scope. Custom roles are team-only constructs.
 
 ---
 
@@ -220,6 +220,7 @@ GET    /scim/v2/Users/:id      — read user
 PATCH  /scim/v2/Users/:id      — update user attributes / active status
 DELETE /scim/v2/Users/:id      — deprovision user (see deprovisioning behavior below)
 GET    /scim/v2/Groups         — list groups/teams (paginated, cursor-based)
+GET    /scim/v2/Groups/:id     — read a single group/team
 POST   /scim/v2/Groups         — create team via IdP
 PATCH  /scim/v2/Groups/:id     — add/remove members, rename team
 DELETE /scim/v2/Groups/:id     — delete team
@@ -227,7 +228,7 @@ DELETE /scim/v2/Groups/:id     — delete team
 
 **SCIM bearer token:** An opaque UUID token issued per org via the admin panel. It has no expiry by default (long-lived). A single org may have multiple active tokens (for rolling rotation or multiple IdP integrations). Tokens are stored hashed; plain value shown only at creation. Revoked via admin panel (`DELETE /internal/admin/orgs/:orgId/scim-tokens/:tokenId`). Scoped to a single org — cannot be used across orgs.
 
-**Group → team mapping:** SCIM Groups map to UOA teams. Mapping is stored explicitly: a `ScimGroupMapping` record links an IdP `externalGroupId` to a UOA `teamId`. Endpoints for managing mappings: `GET/POST/DELETE /org/:orgId/scim/group-mappings`. If a SCIM Group arrives with no mapping, UOA auto-creates a new team with the group `displayName` as the team name, and creates a mapping automatically. Deleting a mapping does not delete the team — only severs the auto-sync link.
+**Group → team mapping:** SCIM Groups map to UOA teams. Mapping is stored explicitly: a `ScimGroupMapping` record links an IdP `externalGroupId` to a UOA `teamId`. Endpoints for managing mappings (system admin auth required): `GET/POST/DELETE /internal/admin/orgs/:orgId/scim/group-mappings` (see also `api-changes-rebac.md §6`). If a SCIM Group arrives with no mapping, UOA auto-creates a new team with the group `displayName` as the team name (if a team with that name already exists in the org, auto-creation is skipped and the SCIM operation continues without team assignment for that group), and creates a mapping automatically. When a SCIM group auto-creates a team, the first member added in the provisioning request receives `admin` UOA team role; all subsequent members receive `member`. Deleting a mapping does not delete the team — only severs the auto-sync link.
 
 **User attribute mapping:**
 - `userName` → UOA `email` (UPN format like `alice@ford.com`)
@@ -289,7 +290,17 @@ SCIM endpoints are authenticated with the per-org SCIM bearer token (see above).
 
 **SCIM `GET /scim/v2/Users` pagination:** Uses SCIM standard `startIndex` (1-based, default 1) and `count` (page size, default 100, max 200) params. Supports `filter=userName eq "alice@acme.com"` and `filter=externalId eq "<idp-id>"` per RFC 7644 §3.4.2.2. Response includes `totalResults`, `startIndex`, `itemsPerPage`, and a `Resources` array of User objects.
 
+**SCIM `GET /scim/v2/Groups/:id` response:** Returns a SCIM Group object including `id`, `displayName`, `externalId` (IdP group ID), and a `members[]` array of `{ "value": "<scimUserId>", "display": "<userName>" }` objects for current team members.
+
+**SCIM `PATCH /scim/v2/Groups/:id` format:** Uses RFC 7644 §3.5.2 `Operations[]` array format. Three supported operations:
+- Add member: `{ "op": "Add", "path": "members", "value": [{"value": "<userId>"}] }`
+- Remove member: `{ "op": "Remove", "path": "members[value eq \"<userId>\"]" }`
+- Rename team: `{ "op": "Replace", "path": "displayName", "value": "New Team Name" }`
+Multiple operations may appear in a single PATCH body. Operations are applied atomically. Team rename via SCIM is authoritative — if a UOA admin renamed the team, the next SCIM PATCH with a `displayName` replace will overwrite it.
+
 **SCIM `GET /scim/v2/Groups` pagination:** Uses SCIM standard `startIndex` (1-based, default 1) and `count` (page size, default 100, max 200) params. Supports `filter=displayName eq "Engineering"` per RFC 7644 §3.4.2.2. Response includes `totalResults`, `startIndex`, `itemsPerPage`.
+
+**Override retention on soft-deprovision:** Per-user flag overrides are **always retained** on soft-deprovision (`PATCH { active: false }` or `DELETE` without `?hardDelete=true`), regardless of the `scim_override_retention` org config. The `scim_override_retention` config only controls what happens on hard-delete (`DELETE?hardDelete=true`).
 
 **SCIM bearer token management endpoints** (system admin auth required):
 ```

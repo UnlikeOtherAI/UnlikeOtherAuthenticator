@@ -315,7 +315,7 @@ interface OrgClaim {
   id: string;
   slug: string;
   uoaRole?: 'owner' | 'admin';         // omitted if plain member
-  customRole?: string;                  // consuming app's role label; omitted if none
+  customRole?: string;                  // the customRole from the user's primary team (tiebreaker: highest UOA system role → earliest TeamMember.createdAt); omitted if no team customRole is set. This is a convenience field derived from the teams[] array — it is NOT a separately stored org-level role. There is no org-scoped custom role data model.
   teams: TeamClaim[];
 }
 

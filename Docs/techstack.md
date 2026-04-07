@@ -30,7 +30,7 @@ The API is the central OAuth/auth server. It handles:
 
 ```
 /API
-  /routes          — Express/Fastify route handlers
+  /routes          — Fastify route handlers
   /routes/org      — User-facing org/team routes
   /routes/internal/org — Internal org-team-group admin routes
   /middleware       — Auth, config verification, error handling

@@ -184,6 +184,22 @@ Kill switches belong to an App. A kill switch entry defines a version range and 
 
 iOS apps provide `versionName` (CFBundleShortVersionString) and `buildNumber` (CFBundleVersion). Android apps provide `versionName` and `versionCode`. The kill switch entry specifies which field to compare against.
 
+### Kill switch entry management API
+
+All endpoints require org `admin` or `owner` UOA role (domain-hash auth + config JWT verification).
+
+```
+POST   /org/:orgId/apps/:appId/killswitches          — create a kill switch entry
+GET    /org/:orgId/apps/:appId/killswitches          — list all entries for an App (paginated, cursor-based)
+GET    /org/:orgId/apps/:appId/killswitches/:id      — get a single entry
+PATCH  /org/:orgId/apps/:appId/killswitches/:id      — update entry fields (all fields except id, appId, createdAt)
+DELETE /org/:orgId/apps/:appId/killswitches/:id      — delete an entry
+```
+
+`POST` body accepts all kill switch entry fields (`platform`, `type`, `versionField`, `versionValue`, `versionMax`, `versionScheme`, `name`, `titleKey`, `title`, `messageKey`, `message`, `primaryButtonKey`, `primaryButton`, `secondaryButtonKey`, `secondaryButton`, `latestVersion`, `active`, `activateAt`, `deactivateAt`, `priority`, `testUserIds`, `cacheTtl`). `platform`, `type`, `versionField`, `versionValue`, and `type` are required; all others are optional. Returns HTTP 201 on creation with the full entry.
+
+`DELETE` is idempotent — deleting a non-existent entry returns HTTP 404.
+
 ### Kill switch query API
 
 **Authentication:** This endpoint is intentionally public (no bearer token required). It identifies the app by `appIdentifier` (a registered, non-secret identifier). Optionally the SDK may attach the domain-hash bearer token for the org's domain if available, but it is not required. The `userId` param, if provided, must be a valid user ID — it is not authenticated here (used only for test mode targeting).
@@ -219,6 +235,18 @@ Response when blocked:
   }
 }
 ```
+
+Response when a kill switch has a future `activateAt` (not yet blocking, but approaching):
+
+```json
+{
+  "status": "ok",
+  "activatesIn": 540,
+  "cacheTtl": 540
+}
+```
+
+`activatesIn` is the number of seconds until the nearest pending kill switch activates. When `activatesIn ≤ 900` (15 minutes), `cacheTtl` is capped to `activatesIn` so the SDK re-polls before activation. The kill switch entry is not present in the response until it activates.
 
 Response when clear:
 

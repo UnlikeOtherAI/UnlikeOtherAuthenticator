@@ -127,7 +127,7 @@ For the full product spec, see [brief.md](./brief.md). For tech stack, see [tech
     /unit                     — Unit tests per service
     /integration              — API endpoint integration tests
   server.ts                   — Server entry point
-  app.ts                      — Express/Fastify app setup and middleware registration
+  app.ts                      — Fastify app setup and middleware registration
 ```
 
 ---

@@ -581,7 +581,9 @@ The claim is optional and defaults to disabled. The object shape and defaults ar
   "max_members_per_team": 200,
   "max_members_per_group": 500,
   "max_team_memberships_per_user": 50,
-  "org_roles": ["owner", "admin", "member"]
+  "org_roles": ["owner", "admin", "member"],
+  "max_flags_per_app": 100,
+  "scim_override_retention": "retain"
 }
 ```
 
@@ -597,6 +599,8 @@ The claim is optional and defaults to disabled. The object shape and defaults ar
 | `max_members_per_group` | integer | `500` | Maximum members per group (max 5000) |
 | `max_team_memberships_per_user` | integer | `50` | Maximum teams a single user can belong to — also caps JWT size (max 200) |
 | `org_roles` | string[] | `["owner", "admin", "member"]` | Allowed org-level roles. Must always contain `"owner"`. |
+| `max_flags_per_app` | integer | `100` | Maximum feature flag definitions per App (max 500). Enforced at creation; existing flags unaffected if cap is lowered. |
+| `scim_override_retention` | `"retain"` \| `"clear"` | `"retain"` | Controls per-user flag override retention on SCIM hard-delete (`DELETE /scim/v2/Users/:id?hardDelete=true`). `"retain"` keeps overrides; `"clear"` deletes them. Soft-deprovision always retains overrides regardless of this setting. |
 
 * `enabled = false` (or omitted): all `/org/*` and `/internal/org/*` endpoints return `404`, access tokens omit `org` claims.
 * `groups_enabled = false`: group read/write paths return `404`.
@@ -620,12 +624,15 @@ org_features: z.object({
     (roles) => roles.includes('owner'),
     { message: 'org_roles must include "owner"' }
   ).default(['owner', 'admin', 'member']),
+  max_flags_per_app: z.number().int().positive().max(500).default(100),
+  scim_override_retention: z.enum(['retain', 'clear']).default('retain'),
 }).optional().default({
   enabled: false, groups_enabled: false, user_needs_team: false,
   max_teams_per_org: 100, max_groups_per_org: 20,
   max_members_per_org: 1000, max_members_per_team: 200,
   max_members_per_group: 500, max_team_memberships_per_user: 50,
   org_roles: ['owner', 'admin', 'member'],
+  max_flags_per_app: 100, scim_override_retention: 'retain',
 })
 ```
 
