@@ -129,7 +129,7 @@ Services are enabled **per App** (not per org). Two boolean fields on the App mo
 | Feature Flags | No flag endpoints, no flags in token | Full flag management, query API, flags in token |
 | Role Flag Matrix | `customRole` is an opaque string on membership (stored but not resolved against any matrix) | UOA manages role definitions, matrix UI, flags resolved per role |
 
-Both services can be enabled independently. You can have feature flags without the role matrix (all flags managed per-user). You can have the role matrix without adding extra flags (matrix defines access, no additional product flags).
+The feature flags service can be enabled without the role matrix (all flags managed per-user or via defaults). The role matrix is only meaningful when `feature_flags_enabled = true` — enabling `role_flag_matrix_enabled` alone without `feature_flags_enabled` has no effect (no flag resolution occurs, no matrix UI is shown). Use case: you can have feature flags **without** the role matrix (per-user overrides + flag defaults only), but not the role matrix without feature flags enabled.
 
 ---
 

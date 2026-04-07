@@ -103,9 +103,9 @@ Feature flags belong to an App. They do not belong to a team or org directly.
 Within a single App, flags resolve in this order:
 
 1. **Per-user override** — explicit assignment for this user in this App
-2. **Role value** — the flag value defined for the user's role in the App's role matrix
+2. **Role value** — the flag value defined for the user's role in the App's role matrix. Only applies when `role_flag_matrix_enabled = true` **and** the user has a `customRole` assigned on the relevant team. If the matrix is enabled but the user has no `customRole`, skip to step 3.
 3. **Flag default** — the default state defined on the flag itself
-4. **Global missing-flag default** — if the flag key doesn't exist in this App at all, return the org's configured missing-flag default (`enabled` or `disabled`)
+4. **Global missing-flag default** — if the flag key doesn't exist in this App at all, return the org's configured missing-flag default (`enabled` or `disabled`, see `org_features.global_missing_flag_default`)
 
 There is no cross-App flag inheritance. Each App is its own isolated flag scope.
 
@@ -312,19 +312,26 @@ Response:
 
 One endpoint. SDK checks kill switch first — if `hard` or `maintenance` block, show dialog, stop. Otherwise load flags and continue.
 
+**Startup response format note:** The startup endpoint does not include a top-level `status` field. Instead, the `killSwitch` field is the signal: `null` means no block, an object means a kill switch matched. The `cacheTtl` field at the top level is the SDK's cache duration for the whole response. Failure matrix responses that include `"status": "ok"` below are shorthand for `{ "killSwitch": null, "flags": {}, "cacheTtl": ..., "serverTime": "..." }`.
+
 **Failure matrix:**
 
 | Scenario | Response |
 |---|---|
-| Unknown `appIdentifier` | `{ "status": "ok", "flags": {}, "cacheTtl": 3600, "serverTime": "..." }` |
-| App `active: false` | `{ "status": "ok", "flags": {}, "cacheTtl": 3600, "serverTime": "..." }` — same as unknown (no information leaked) |
+| Unknown `appIdentifier` | `{ "killSwitch": null, "flags": {}, "cacheTtl": 3600, "serverTime": "..." }` |
+| App `active: false` | Same as unknown — `{ "killSwitch": null, "flags": {}, "cacheTtl": 3600, "serverTime": "..." }` (no information leaked) |
 | Missing or expired `X-UOA-Access-Token` | Proceed without per-user overrides; resolve flags against role default. No error. |
 | Invalid (tampered) `X-UOA-Access-Token` | Treated as absent — resolve flags against role default. No error. |
 | Feature flags service disabled for App | `flags: {}` in response; kill switch check proceeds normally. |
+| User listed in `testUserIds` of an inactive/scheduled entry | Entry is evaluated for this user regardless of `active` flag and `activateAt`. |
 | Invalid `platform` value | HTTP 400, `{ "error": "Request failed" }` |
 | Missing `appIdentifier` param | HTTP 400, `{ "error": "Request failed" }` |
 
 **`activateAt` scheduling:** When a kill switch entry has an `activateAt` time in the future, the response includes an `activatesIn` field (seconds until activation). If `activatesIn` ≤ 900 (15 minutes), the SDK must re-poll after that interval rather than using the full `cacheTtl`. This ensures kill switches activate promptly.
+
+**SDK cache TTL precedence (startup):** The SDK must use `min(cacheTtl, activatesIn)` when both fields are present. When `activatesIn` is present and less than `cacheTtl`, the SDK caches for `activatesIn` seconds only.
+
+**`testUserIds` bypass:** If `userId` is provided in the startup request and the user is listed in a kill switch entry's `testUserIds`, that entry is evaluated for the user regardless of the entry's `active` flag and `activateAt` scheduling. This applies at the startup endpoint exactly as it does at `/killswitch/check`.
 
 ---
 

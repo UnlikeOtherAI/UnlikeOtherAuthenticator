@@ -40,11 +40,10 @@ UOA's only responsibilities for custom roles:
 Organisation
   ├── has many Domains     (multiple — one org can serve hundreds of services)
   ├── has UOA role assignments (owner, admin) per member
-  ├── has custom role definitions (with one marked default)
   └── has many Teams
         ├── references one or more Domains from the org's domain pool
         ├── has UOA role assignments (owner, admin) per member
-        ├── has custom role definitions (with one marked default, can differ from org-level)
+        ├── has custom role definitions (with one marked default) — custom roles are team-scoped only; there are no independently-defined org-level custom roles
         └── has Members with assigned custom roles
 ```
 
@@ -143,13 +142,19 @@ On rename: existing `TeamMember.customRole` records with the old name are update
 
 Note: `flags` is present only when `feature_flags_enabled = true` on the App associated with the login. When absent, no `flags` key appears in the token. See `api-changes-rebac.md §5` for the canonical TypeScript interface. This document's token example is illustrative; `api-changes-rebac.md §5` is authoritative.
 
-- `method` — the authentication method used: `"email"`, `"google"`, `"github"`, `"microsoft"`
+- `method` — the authentication method used: `"email"`, `"google"`, `"github"`, `"microsoft"`, `"apple"`. SCIM-provisioned users who have not completed an interactive login will not have a `method` value until first login — implementors should treat `method` as potentially absent for machine-provisioned accounts.
 - `uoaRole` — `owner`, `admin`, or omitted if neither (plain member has no named UOA role)
 - `uoaRoleInherited` — `true` if derived from org-level role rather than explicit team assignment; omitted if `false`
 - `customRole` (org level) — a convenience field. Derived from the user's primary team `customRole`. Tiebreaker: (1) highest UOA system role on that team (`owner > admin`, users with no named role rank lowest), (2) if tied, earliest `TeamMember.createdAt`. There is no separately stored org-level custom role — this field is computed server-side at token issuance, not read from a separate org-scope data model. Omitted if no team has a `customRole` assigned for this user.
 - `customRole` (team level) — the consuming app's single role label for this user on this specific team membership. Omitted if no custom role is assigned on that team.
 
 **`org.customRole` when the user has multiple team memberships:** Always derived from the primary team's `customRole` using the standard multi-team tiebreaker. It is never independently set or stored at org scope. Custom roles are team-only constructs.
+
+**`orgs` when user has zero org memberships:** When org features are enabled but the user belongs to no org, `orgs` is an empty array (`"orgs": []`), not absent. The field is always present when `org_features.enabled = true`.
+
+**Token refresh behavior:** When a refresh token is used to issue a new access token, `orgs[]` claims are **re-resolved from the current database state** at that moment — they are not cached from the original login. Flag values embedded in the token are also re-resolved at refresh time. Refresh tokens themselves carry no org or flag data.
+
+**`org.uoaRole` derivation for multi-team users:** The org-level `uoaRole` is the highest UOA system role the user holds across all teams in that org (accounting for inheritance). If a user is `owner` on one team and `admin` on another, their org-level `uoaRole` is `owner`. If the user has no `owner` or `admin` role on any team (and no org-level role assignment), `uoaRole` is omitted.
 
 ---
 
@@ -231,7 +236,7 @@ POST   /scim/v2/Users          — provision a new user
 GET    /scim/v2/Users/:id      — read user
 PATCH  /scim/v2/Users/:id      — update user attributes / active status
 DELETE /scim/v2/Users/:id      — deprovision user (see deprovisioning behavior below)
-GET    /scim/v2/Groups          — list groups/teams (paginated, cursor-based)
+GET    /scim/v2/Groups          — list groups/teams (paginated, offset-based)
 GET    /scim/v2/Groups/:id      — read a single group/team with its members
 POST   /scim/v2/Groups          — create team via IdP
 PATCH  /scim/v2/Groups/:id      — add/remove members, rename team (RFC 7644 Operations[] format)

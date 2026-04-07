@@ -63,7 +63,8 @@ For the full product spec, see [brief.md](./brief.md). For tech stack, see [tech
         index.ts              — Route registration for /domain
       /org
         organisations.ts      — Organisations + memberships + ownership transfer
-        teams.ts              — Teams + team membership operations
+        teams.ts              — Teams + team membership operations + custom role CRUD (/org/:orgId/teams/:teamId/roles)
+        domain-rules.ts       — GET/POST/DELETE /org/:orgId/domain-rules (email domain auto-enrolment rules)
         groups.ts             — GET group operations (org-aware reads)
         me.ts                 — GET /org/me
         index.ts              — Route registration for /org
@@ -125,6 +126,7 @@ For the full product spec, see [brief.md](./brief.md). For tech stack, see [tech
         facebook.service.ts   — Facebook OAuth flow
         github.service.ts     — GitHub OAuth flow
         linkedin.service.ts   — LinkedIn OAuth flow
+        microsoft.service.ts  — Microsoft Entra ID (Azure AD) OIDC flow
         provider.base.ts      — Shared interface and email verification enforcement
       totp.service.ts         — TOTP secret generation, QR code, verification
       user.service.ts         — User CRUD, scope handling (global vs per-domain)

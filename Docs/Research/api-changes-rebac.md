@@ -16,7 +16,10 @@ The model uses three layers — **Organisation → Team → Member** — with ro
 #### User model additions
 ```prisma
 // Add to existing User model:
-scimExternalId String?  @unique @map("scim_external_id")  // IdP-assigned externalId for SCIM-provisioned users
+scimExternalId String?  @map("scim_external_id")  // IdP-assigned externalId for SCIM-provisioned users
+// Note: NOT @unique — one org may have multiple SCIM tokens (multiple IdP integrations per brief).
+// Uniqueness is enforced at the org scope via ScimToken.orgId, not globally on scimExternalId.
+// Lookup: filter by orgId + scimExternalId at the application layer.
 ```
 
 #### `OrgEmailDomainRule`
@@ -240,7 +243,7 @@ Add to token claims:
       "id": "org_abc",
       "slug": "acme-engineering",
       "uoaRole": "admin",           // org-level UOA system role; omitted if plain member
-      "customRole": "manager",      // consuming app's role label; omitted if none assigned
+      "customRole": "editor",       // derived from primary team's customRole using tiebreaker; omitted if none
       "teams": [
         { "id": "team_xyz", "name": "Backend", "uoaRole": "admin", "uoaRoleInherited": false, "customRole": "editor" },
         { "id": "team_abc", "name": "General", "uoaRoleInherited": false, "customRole": "viewer" }
@@ -248,6 +251,9 @@ Add to token claims:
     }
   ]
 }
+```
+
+Note: `org.customRole` above is `"editor"` because `team_xyz` is the primary team (user has `uoaRole: admin` there — highest UOA role). The primary team's `customRole` is propagated to the org level as a convenience field.
 ```
 
 - `uoaRole` — `owner` or `admin`; omitted if neither
@@ -320,7 +326,7 @@ The access token JWT (signed via `signAccessToken`) needs the full org/team/role
 interface AccessTokenPayload {
   sub: string;                          // userId
   email: string;
-  method: 'email' | 'google' | 'github' | 'microsoft';  // auth method used
+  method?: 'email' | 'google' | 'github' | 'microsoft' | 'apple';  // auth method used; absent for SCIM-provisioned users until first interactive login
   orgs: OrgClaim[];
   flags?: Record<string, boolean>;      // resolved flag map for the App context; present only when feature_flags_enabled=true on the App
 }
@@ -329,7 +335,7 @@ interface OrgClaim {
   id: string;
   slug: string;
   uoaRole?: 'owner' | 'admin';         // omitted if plain member
-  customRole?: string;                  // the customRole from the user's primary team (tiebreaker: highest UOA system role → earliest TeamMember.createdAt); omitted if no team customRole is set. This is a convenience field derived from the teams[] array — it is NOT a separately stored org-level role. There is no org-scoped custom role data model.
+  customRole?: string;                  // convenience field derived from the primary team's customRole (tiebreaker: highest UOA system role → earliest TeamMember.createdAt); omitted if no team has a customRole set for this user. NOT a separately stored org-level role — there is no org-scoped custom role data model.
   teams: TeamClaim[];
 }
 
