@@ -232,18 +232,58 @@ One endpoint. SDK checks kill switch first — if `hard` block, show dialog, sto
 
 ---
 
-## SDK requirements (Kotlin + Swift)
+## SDK targets
 
-Both SDKs must:
+Four SDK targets are required:
 
-- Call `/apps/startup` on launch (or on foreground resume, configurable)
-- Cache response locally with the TTL returned
-- Show the appropriate dialog type automatically (AlertDialog / UIAlertController)
-- Support custom UI via a callback/delegate for apps that want their own dialog
-- Handle network failure per the App's configured offline policy
-- Expose a `flags` accessor: `UOA.flags["dark_mode"]` → Bool (defaults to org's missing-flag default if not found)
-- Support test mode: force a specific kill switch response for a test device
-- Support async/await and callback patterns
+| SDK | Language | Platform |
+|---|---|---|
+| `uoa-swift` | Swift | iOS, macOS |
+| `uoa-kotlin` | Kotlin | Android |
+| `uoa-flutter` | Dart | iOS + Android (Flutter) |
+| `uoa-react-native` | TypeScript | iOS + Android (React Native) |
+
+All four SDKs expose the same conceptual API. Native SDKs (Swift, Kotlin) have first-class platform dialog support. Cross-platform SDKs (Flutter, React Native) expose the raw response and provide optional pre-built dialog widgets/components, since UI conventions vary more across cross-platform apps.
+
+## SDK requirements (all targets)
+
+Every SDK must:
+
+- Call `/apps/startup` on launch (or on foreground resume — configurable interval)
+- Cache response locally with the `cacheTtl` returned by the server
+- Check kill switch first — if `hard` or `maintenance`, block and show dialog before anything else loads
+- Show the appropriate dialog type automatically (native dialog by default)
+- Support custom UI via a callback/delegate/builder for apps that want their own dialog
+- Handle network failure per the App's configured offline policy (`allow` / `block` / `cached`)
+- Expose a `flags` accessor: `UOA.flags["dark_mode"]` → `Bool` — returns org's missing-flag default if key not found, never throws
+- Support test mode: force a specific kill switch response for a nominated test device or user
+- Support async/await (Swift, Kotlin, Dart) and Future/Promise patterns
+- Support scheduled activation — SDK re-checks when a `activateAt` time is in the near future
+- Pass `userId` in the startup request when a user is authenticated, for per-user flag overrides
+- Include `serverTime` from response to detect significant clock skew
+
+### Platform-specific notes
+
+**Swift (iOS/macOS)**
+- Present `UIAlertController` (iOS) or `NSAlert` (macOS) automatically
+- Support SwiftUI environment via a ViewModifier: `.uoaKillSwitch()`
+- App store URL opens via `UIApplication.open` / `NSWorkspace.open`
+
+**Kotlin (Android)**
+- Present `AlertDialog` (Material) automatically
+- Support Jetpack Compose via a `@Composable` wrapper
+- App store URL opens via `Intent.ACTION_VIEW` targeting Google Play
+- Use `versionCode` (integer) and `versionName` (string) from `BuildConfig`
+
+**Flutter**
+- Pre-built `UOAKillSwitchWrapper` widget wraps the app widget tree
+- Exposes raw response for custom UI via `UOAService.startupResponse`
+- Flag accessor: `UOAService.flag("dark_mode", defaultValue: false)`
+
+**React Native**
+- Pre-built `<UOAKillSwitchProvider>` wraps the app
+- Exposes `useFlags()` hook and `useKillSwitch()` hook
+- Automatic `Alert.alert()` for kill switch dialogs, overridable via prop
 
 ---
 
