@@ -36,20 +36,24 @@ Each flag belongs to an **App** (see `Docs/Requirements/apps.md`). Flags are not
 
 ### Flag resolution order (per user, per flag)
 
-When a consuming app queries a flag for a user:
+When a consuming app queries a flag for a user, resolution proceeds in order and stops at the first match:
 
-1. **Per-user override** — if an explicit assignment exists for this user, use it
-2. **Role assignment** — if the role flag matrix is enabled and the user has a role, use the flag value defined for that role
+1. **Per-user override** — if an explicit assignment exists for this user in this App, use it
+2. **Role assignment** — if the role flag matrix is enabled and the user has a `customRole` assigned on the relevant team, use the flag value defined for that role in the matrix. If the matrix is enabled but the user has no `customRole` assigned, skip to step 3.
 3. **Flag default** — use the flag's `defaultState`
-4. **Global default** — if the flag doesn't exist at all, return the global missing-flag default (configurable per org: `enabled` or `disabled`, defaults to `disabled`)
+4. **Global default** — if the flag key doesn't exist in this App at all, return the global missing-flag default (configurable per org: `enabled` or `disabled`, defaults to `disabled`)
 
 The global missing-flag default means consuming apps never get an error for an undefined flag — they always get a boolean.
+
+**Multi-team context:** A user may have different `customRole` values on different teams within the same org, producing different role flag values. The flag query must specify a team context (`teamId` param) when a user has more than one team membership. If no `teamId` is provided and the user has exactly one team membership, that team's role is used. If no `teamId` is provided and the user has multiple memberships, the role from the team with the highest-privilege UOA role is used as a tiebreaker; if UOA roles are equal, the most recently joined team wins.
 
 ### Flag query API
 
 ```
-GET /apps/:appId/flags?userId=user_123
+GET /apps/:appId/flags?userId=user_123[&teamId=team_xyz]
 ```
+
+`teamId` is optional. When omitted and the user has a single team membership relevant to this App, that team's role is used. When the user has multiple team memberships, `teamId` must be provided or the multi-team fallback rule (see resolution order above) applies.
 
 Returns the fully resolved flag map for that user in that App:
 
@@ -82,11 +86,12 @@ Token flags reflect the state at login time. For real-time flag changes without 
 
 ## Role flag matrix
 
-When the role flag matrix service is enabled for an org or domain:
+When the role flag matrix service is enabled for an App:
 
-- UOA manages role definitions (not the consuming app's config JWT)
+- The matrix columns **are the same custom role labels** as defined on the teams that use this App. There is no separate role namespace for the matrix — a `customRole` of `"editor"` on a team membership maps directly to the `editor` column in the App's matrix.
+- UOA manages role definitions for the App (not the consuming app's config JWT)
 - Each role has a column of flag values in the matrix
-- The matrix is managed entirely from the UOA admin panel
+- The matrix is managed entirely from the UOA admin panel, scoped to the App
 
 ### Example matrix
 
@@ -157,9 +162,9 @@ New section in the sidebar, scoped to the selected App:
 
 ---
 
-## Outstanding decisions
+## Resolved decisions
 
-1. **Flag key format** — enforce lowercase + underscores only, or allow any string?
-2. **Token flag inclusion** — include all flags in the token, or only flags that differ from the default? (Token size concern for orgs with many flags)
-3. **Real-time flag changes** — when a flag is toggled in the admin, should existing sessions see the change immediately (requires query endpoint) or only on next login (token-embedded only)?
-4. **SCIM flag sync** — when a user is provisioned via SCIM, their role is set by the IdP group mapping. Per-user flag overrides set in UOA must survive deprovisioning/reprovisioning cycles — define retention policy.
+1. **Flag key format** — **decided: lowercase + underscores only** (`[a-z][a-z0-9_]*`). Enforced at creation. Validation rejects any other format with a 400 error. This applies to all flags across all Apps.
+2. **Token flag inclusion** — **decided: all flags for the App are included in the token at login time**, regardless of whether they differ from the default. This keeps token consumption simple (no server-side re-resolution needed on read). Orgs with many flags should use `max_flags_per_app` config to cap token size (default 100; see `org_features` in brief.md).
+3. **Real-time flag changes** — **decided: poll only**. The token embeds flag state at login. Mid-session changes are visible only via `/apps/:appId/flags` query endpoint calls. The SDK polls on foreground resume (default interval: 5 minutes, minimum 60 seconds, configurable per App). No push mechanism.
+4. **SCIM flag sync / override retention** — **decided: soft-deprovision by default**. When a SCIM user is deprovisioned (`active: false`), their per-user flag overrides are **retained** and are re-linked when the user is re-provisioned (matched by email or SCIM `externalId`). Overrides are only deleted when a user is hard-deleted (`DELETE /scim/v2/Users/:id` with `?hardDelete=true` query param, or when the org is deleted). This is the default; orgs can configure `scim_override_retention: "retain" | "clear"` in their `org_features`.

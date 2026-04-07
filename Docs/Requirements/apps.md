@@ -20,17 +20,44 @@ Teams and orgs are about **people and membership**. Apps are about **client soft
 
 An App is a registered client application that uses UOA for authentication and optionally consumes the feature flag and kill switch services.
 
-| Field | Description |
-|---|---|
-| `id` | Unique identifier |
-| `orgId` | The organisation this app belongs to |
-| `name` | Human-readable name, e.g. "Acme iOS App" |
-| `identifier` | Unique string the SDK uses to identify itself, e.g. `com.acme.ios` |
-| `platform` | `ios` \| `android` \| `web` \| `macos` \| `windows` \| `other` |
-| `domains` | One or more domains from the org's domain pool that this app connects to |
-| `storeUrl` | Default app store / update URL (can be overridden per kill switch) |
-| `active` | Whether the app is active |
-| `createdAt` | |
+| Field | Type | Description |
+|---|---|---|
+| `id` | string (cuid) | Unique identifier |
+| `orgId` | string | The organisation this app belongs to |
+| `name` | string | Human-readable name, e.g. "Acme iOS App" |
+| `identifier` | string | Unique string the SDK uses to identify itself, e.g. `com.acme.ios`. Unique per org. Lowercase, dot-separated (bundle ID style). |
+| `platform` | enum | `ios` \| `android` \| `web` \| `macos` \| `windows` \| `other` |
+| `domains` | string[] | Array of domain ID strings from the org's domain pool that this app authenticates against. Informational — used for routing and admin display, not access control. |
+| `storeUrl` | string (URL) | Default app store / update URL. Optional for non-mobile platforms. |
+| `offlinePolicy` | enum | `allow` \| `block` \| `cached` — what the SDK does if UOA is unreachable. Default: `allow`. |
+| `active` | boolean | Whether the app is active. Inactive apps are rejected by the SDK startup endpoint. |
+| `createdAt` | datetime | |
+
+### App API endpoints
+
+All endpoints require org `admin` or `owner` UOA role (domain-hash auth + config JWT verification).
+
+```
+POST   /org/:orgId/apps           — create an App
+GET    /org/:orgId/apps           — list all Apps for an org (paginated, cursor-based)
+GET    /org/:orgId/apps/:appId    — get a single App
+PATCH  /org/:orgId/apps/:appId    — update App fields (name, storeUrl, offlinePolicy, active, domains)
+DELETE /org/:orgId/apps/:appId    — delete an App (and all its flags and kill switches)
+```
+
+Request body for `POST /org/:orgId/apps`:
+```json
+{
+  "name": "Acme iOS App",
+  "identifier": "com.acme.ios",
+  "platform": "ios",
+  "storeUrl": "https://apps.apple.com/app/acme/id123456789",
+  "offlinePolicy": "allow",
+  "domains": ["domain_id_1"]
+}
+```
+
+`DELETE` is destructive — cascades to all kill switch entries and flag definitions for the App. Requires confirmation (`?confirm=true` query param).
 
 An App belongs to an **org**, not a team. Teams manage who has access; Apps define what those people are using.
 
@@ -105,19 +132,19 @@ Kill switches belong to an App. A kill switch entry defines a version range and 
 
 ### Kill switch entry fields
 
-| Field | Description |
-|---|---|
-| `id` | |
-| `appId` | The App this applies to |
-| `name` | Internal label for admin UI |
-| `platform` | `ios` \| `android` \| `both` |
-| `type` | `hard` \| `soft` \| `info` \| `maintenance` |
-| `versionField` | `versionName` \| `versionCode` \| `buildNumber` — which field to compare |
-| `operator` | `lt` \| `lte` \| `eq` \| `gte` \| `gt` \| `range` |
-| `versionValue` | The threshold value, e.g. `"2.0.0"` or `100` |
-| `versionMax` | Upper bound for `range` operator |
-| `versionScheme` | `semver` \| `integer` \| `date` \| `custom` |
-| `storeUrl` | Override the app's default store URL for this entry |
+| Field | Type | Description |
+|---|---|---|
+| `id` | string (cuid) | Unique identifier for this kill switch entry |
+| `appId` | string | The App this entry belongs to |
+| `name` | string | Internal label for admin UI |
+| `platform` | enum | `ios` \| `android` \| `both`. Kill switches do not target web/macOS/windows — for those platforms the kill switch is skipped. |
+| `type` | enum | `hard` \| `soft` \| `info` \| `maintenance` |
+| `versionField` | enum | `versionName` \| `versionCode` \| `buildNumber` — which field from the SDK request to compare against |
+| `operator` | enum | `lt` \| `lte` \| `eq` \| `gte` \| `gt` \| `range`. For `range`: both bounds are **inclusive** (`versionValue <= version <= versionMax`). |
+| `versionValue` | string | The threshold value (or lower bound for `range`), e.g. `"2.0.0"` or `"100"`. Always stored as string; comparison uses `versionScheme`. |
+| `versionMax` | string \| null | Upper bound for `range` operator (inclusive). Must be present and greater than `versionValue` when operator is `range`. Null for all other operators. |
+| `versionScheme` | enum | `semver` \| `integer` \| `date` \| `custom` |
+| `storeUrl` | string (URL) \| null | Override the app's default store URL for this entry |
 | `titleKey` | i18n translation key for dialog title |
 | `title` | Fallback plain text title if no i18n |
 | `messageKey` | i18n translation key for dialog body |
@@ -155,6 +182,10 @@ Kill switches belong to an App. A kill switch entry defines a version range and 
 iOS apps provide `versionName` (CFBundleShortVersionString) and `buildNumber` (CFBundleVersion). Android apps provide `versionName` and `versionCode`. The kill switch entry specifies which field to compare against.
 
 ### Kill switch query API
+
+**Authentication:** This endpoint is intentionally public (no bearer token required). It identifies the app by `appIdentifier` (a registered, non-secret identifier). Optionally the SDK may attach the domain-hash bearer token for the org's domain if available, but it is not required. The `userId` param, if provided, must be a valid user ID — it is not authenticated here (used only for test mode targeting).
+
+**Unknown `appIdentifier`:** Returns `{ "status": "ok", "cacheTtl": 3600 }` — same as the "clear" response. No information is leaked about unregistered apps.
 
 ```
 GET /killswitch/check
@@ -208,6 +239,8 @@ Configurable per App:
 
 To avoid multiple round trips, the SDK can request everything it needs in one call at app launch:
 
+**Authentication:** Same as `/killswitch/check` — publicly accessible by `appIdentifier`. If the user is authenticated, pass `userId` and the user's UOA access token in `X-UOA-Access-Token` header. When the access token is present and valid, the user's per-user flag overrides are applied. Without it, flags resolve against the role default or flag default only.
+
 ```
 GET /apps/startup
   ?appIdentifier=com.acme.ios
@@ -228,7 +261,11 @@ Response:
 }
 ```
 
-One endpoint. SDK checks kill switch first — if `hard` block, show dialog, stop. Otherwise load flags and continue.
+- `killSwitch` — the matched kill switch entry (see kill switch response shape above), or `null` if no entry matches. The `cacheTtl` on the `killSwitch` object (when present) is the kill-switch-specific TTL. The top-level `cacheTtl` is the SDK's cache TTL for the entire startup response.
+- `flags` — resolved flag map. Empty object `{}` if feature flags service is disabled for this App.
+- `serverTime` — ISO 8601 UTC timestamp. SDK should check against local clock; if skew > 60 seconds, log a warning. No automatic blocking on skew.
+
+One endpoint. SDK checks kill switch first — if `hard` or `maintenance` block, show dialog, stop. Otherwise load flags and continue.
 
 ---
 
@@ -287,9 +324,12 @@ Every SDK must:
 
 ---
 
-## Outstanding decisions
+## Resolved decisions
 
-1. **App-level vs team-scoped apps** — currently Apps belong to an Org. Should an App be optionally scoped to a specific team (so only that team's members are subject to its flags)? Or is team scoping always done via membership, never via App ownership?
-2. **Web app versioning** — web apps don't have a versionCode/buildNumber in the same way. Use commit SHA, deploy timestamp, or semver tag?
-3. **Flag sync in token vs query** — flags embedded in the access token reflect state at login time. If a kill switch fires mid-session, the SDK needs to detect it via the startup poll. Define the recommended polling interval.
-4. **Multiple matching kill switches** — if two entries match (e.g. a hard block and a soft warning for the same version range), priority field resolves it. Confirm: highest `priority` integer wins, or first created?
+1. **App-level vs team-scoped apps** — **decided: Apps always belong to an Org, never to a specific team.** Team scoping is done via membership, not App ownership. The flag matrix uses team custom role labels as column names, but the App itself is org-level.
+
+2. **Web app versioning** — **decided: use `semver` scheme with `versionName` only.** Web apps pass their semver tag (e.g. `1.5.0`) or deploy timestamp (as a date scheme, e.g. `2024.01.15`) as `versionName`. `buildNumber` is optional for web. The `versionScheme` field on the kill switch entry specifies which scheme to use.
+
+3. **Flag sync in token vs query / polling interval** — **decided: SDK polls on foreground resume, minimum 60 seconds between checks, default 5 minutes.** This is configurable per App (see `pollIntervalSeconds` field — to be added to App data model as an optional integer, default 300, minimum 60). Token-embedded flags are login-time snapshots; mid-session changes require poll.
+
+4. **Multiple matching kill switches** — **decided: highest `priority` integer wins.** If two entries have identical priority, the one with the earlier `createdAt` wins (first created takes precedence). This must be deterministic — no random tiebreaking. The `priority` field is an integer from 0 to 1000 (default 0). Entries with the same priority and `createdAt` are processed in ascending `id` order as a final tiebreaker.

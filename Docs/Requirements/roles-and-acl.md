@@ -99,6 +99,7 @@ What a role *permits* inside the consuming application is entirely that applicat
 {
   "sub": "user_123",
   "email": "alice@acme.com",
+  "method": "microsoft",
   "orgs": [
     {
       "id": "org_abc",
@@ -119,8 +120,9 @@ What a role *permits* inside the consuming application is entirely that applicat
 }
 ```
 
-- `uoaRole` — `owner`, `admin`, or omitted if neither
-- `uoaRoleInherited` — true if derived from org-level role rather than explicit team assignment
+- `method` — the authentication method used: `"email"`, `"google"`, `"github"`, `"microsoft"`
+- `uoaRole` — `owner`, `admin`, or omitted if neither (plain member has no named UOA role)
+- `uoaRoleInherited` — `true` if derived from org-level role rather than explicit team assignment; omitted if `false`
 - `customRole` — the consuming app's role label for this user on this org/team. A single string (one role per user per team). Omitted if no custom role is assigned. See decision in the role model section below.
 
 ---
@@ -165,10 +167,19 @@ Only the **team admin** and the **org owner** can create, rename, delete, or cha
 
 Required for enterprise clients (e.g. automotive, manufacturing, finance) whose employees authenticate via corporate Microsoft accounts.
 
-- Add Microsoft OAuth 2.0 / OIDC as a supported social login provider alongside Google and GitHub
+- Microsoft OAuth 2.0 / OIDC added as a supported social login provider alongside Google and GitHub
 - Employees sign in with `user@ford.com` or `user@skoda-auto.cz` via their corporate Entra ID
 - Verified Microsoft identity qualifies as `ANY` or `MICROSOFT` verification method for auto-enrolment rules
-- Token includes `method: "microsoft"` alongside existing `google`, `github`, `email`
+- Token includes `method: "microsoft"` alongside existing `"google"`, `"github"`, `"email"`
+
+**Implementation notes:**
+
+- **Multi-tenant app registration** — UOA registers a single Microsoft App in Azure Portal configured for multi-tenant (`signInAudience: AzureADMultipleOrgs`). This allows any Microsoft Entra ID tenant to authenticate without per-customer registration. Customers with single-tenant requirements can use the domain auto-enrolment `MICROSOFT` verification method to restrict sign-in to specific corporate domains.
+- **Required scopes:** `openid email profile` (minimum). `offline_access` only if refresh token is needed from Microsoft side — not required since UOA issues its own refresh tokens.
+- **Redirect URI:** same pattern as Google/GitHub OAuth callbacks, e.g. `https://auth.uoa.example.com/auth/social/microsoft/callback`
+- **User field mapping:** `email` ← `email` or `upn` (UPN like `alice@ford.com` is used as canonical email); `name` ← `displayName`; no avatar from Microsoft OIDC by default.
+- **Env vars required:** `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET` (registered in Azure Portal)
+- **Same-email merge:** if a user with the same verified email already exists (registered via email or Google), the Microsoft identity is linked to the existing account. No duplicate user is created.
 
 ### SCIM provisioning (Entra ID / Okta)
 
@@ -182,16 +193,32 @@ UOA must expose a SCIM 2.0 endpoint:
 POST   /scim/v2/Users          — provision a new user
 GET    /scim/v2/Users/:id      — read user
 PATCH  /scim/v2/Users/:id      — update user attributes / active status
-DELETE /scim/v2/Users/:id      — deprovision (ban or remove from org)
-GET    /scim/v2/Groups         — list groups (maps to teams)
+DELETE /scim/v2/Users/:id      — deprovision user (see deprovisioning behavior below)
+GET    /scim/v2/Groups         — list groups/teams (paginated, cursor-based)
 POST   /scim/v2/Groups         — create team via IdP
 PATCH  /scim/v2/Groups/:id     — add/remove members, rename team
 DELETE /scim/v2/Groups/:id     — delete team
 ```
 
-SCIM group membership maps to UOA team membership. The custom role assigned to SCIM-provisioned members defaults to the team's default custom role unless the IdP sends a role attribute.
+**SCIM bearer token:** An opaque UUID token issued per org via the admin panel. It has no expiry by default (long-lived). A single org may have multiple active tokens (for rolling rotation or multiple IdP integrations). Tokens are stored hashed; plain value shown only at creation. Revoked via admin panel (`DELETE /internal/admin/orgs/:orgId/scim-tokens/:tokenId`). Scoped to a single org — cannot be used across orgs.
 
-SCIM endpoints are authenticated with a long-lived bearer token issued per org, managed via the admin panel.
+**Group → team mapping:** SCIM Groups map to UOA teams. Mapping is stored explicitly: a `ScimGroupMapping` record links an IdP `externalGroupId` to a UOA `teamId`. Endpoints for managing mappings: `GET/POST/DELETE /org/:orgId/scim/group-mappings`. If a SCIM Group arrives with no mapping, UOA auto-creates a new team with the group `displayName` as the team name, and creates a mapping automatically. Deleting a mapping does not delete the team — only severs the auto-sync link.
+
+**User attribute mapping:**
+- `userName` → UOA `email` (UPN format like `alice@ford.com`)
+- `name.formatted` or `name.givenName + name.familyName` → UOA `name`
+- `emails[0].value` is used as a fallback if `userName` is not an email
+- If a user with the same email already exists in UOA, the SCIM-provisioned user is linked to the existing account (matched by email)
+- `externalId` (IdP-provided) is stored on the UOA user record for stable re-linking on reprovision
+
+**Custom role assignment:** The custom role assigned to SCIM-provisioned members defaults to the team's default custom role. If the IdP sends a role via SCIM enterprise extension (`urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:organization` or a custom schema attribute `uoa:customRole`), that role is validated against the team's defined custom roles and assigned if valid. If the role is unknown, provisioning proceeds with the default role (not rejected).
+
+**Deprovisioning behavior (`DELETE /scim/v2/Users/:id`):**
+- Default: **soft-deprovision** — user's `active` is set to `false`, all active sessions are invalidated, org/team memberships are retained but marked inactive. Per-user flag overrides are retained.
+- Hard-delete: only triggered by `DELETE` with `?hardDelete=true` query param (requires explicit IdP config). Removes org/team membership but retains per-user flag overrides by default (see `scim_override_retention` in `org_features`).
+- Re-provisioning a soft-deprovisioned user (`POST /scim/v2/Users` with same email or `externalId`) re-activates the user and restores their memberships.
+
+SCIM endpoints are authenticated with the per-org SCIM bearer token (see above). All SCIM endpoints are scoped to the org identified by the token.
 
 ---
 

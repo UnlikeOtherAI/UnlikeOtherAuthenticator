@@ -56,7 +56,38 @@ enum TeamRole {
 }
 ```
 
-Replace any existing `lead` value with `admin` in migration.
+Replace any existing `lead` value with `admin` in migration. `lead` is fully removed — the new canonical enum is `owner | admin | member`.
+
+#### `ScimToken` (for enterprise SCIM authentication)
+```prisma
+model ScimToken {
+  id        String   @id @default(cuid())
+  orgId     String
+  org       Organisation @relation(fields:[orgId], references:[id], onDelete:Cascade)
+  tokenHash String   @unique  // SHA-256 hash of the opaque UUID token
+  label     String?           // admin label, e.g. "Okta production"
+  createdAt DateTime @default(now())
+  lastUsedAt DateTime?
+
+  @@index([orgId])
+}
+```
+
+#### `ScimGroupMapping` (IdP group → UOA team link)
+```prisma
+model ScimGroupMapping {
+  id              String   @id @default(cuid())
+  orgId           String
+  org             Organisation @relation(fields:[orgId], references:[id], onDelete:Cascade)
+  externalGroupId String           // IdP's group ID (stable, not displayName)
+  teamId          String
+  team            Team @relation(fields:[teamId], references:[id], onDelete:Cascade)
+  createdAt       DateTime @default(now())
+
+  @@unique([orgId, externalGroupId])
+  @@unique([orgId, teamId])          // one team can only be mapped to one IdP group
+}
+```
 
 #### `RelationshipTuple` (optional — for future Zanzibar migration)
 If adopting OpenFGA or SpiceDB later, add a relationship tuple table now so you can dual-write and migrate without downtime:
@@ -264,23 +295,26 @@ The access token JWT (signed via `signAccessToken`) needs the full org/team/role
 
 ```ts
 interface AccessTokenPayload {
-  sub: string;           // userId
+  sub: string;                          // userId
   email: string;
+  method: 'email' | 'google' | 'github' | 'microsoft';  // auth method used
   orgs: OrgClaim[];
 }
 
 interface OrgClaim {
   id: string;
   slug: string;
-  role: OrgRole;         // direct org-level role
+  uoaRole?: 'owner' | 'admin';         // omitted if plain member
+  customRole?: string;                  // consuming app's role label; omitted if none
   teams: TeamClaim[];
 }
 
 interface TeamClaim {
   id: string;
   name: string;
-  role: TeamRole;        // effective role (direct or inherited)
-  inherited: boolean;    // true if derived from org role, not explicit team assignment
+  uoaRole?: 'owner' | 'admin';         // effective UOA role (direct or inherited); omitted if plain member
+  uoaRoleInherited?: boolean;          // present and true if derived from org role, not explicit team assignment
+  customRole?: string;                  // consuming app's role label for this team membership; omitted if none
 }
 ```
 
