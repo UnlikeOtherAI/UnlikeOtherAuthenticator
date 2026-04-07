@@ -177,16 +177,20 @@ Orgs can define rules so that any user who authenticates with a verified email f
 
 Each rule specifies:
 - Email domain (e.g. `acme.com`) — lowercase, no `@`, no protocol. Submitted values are lowercased automatically. IDN/Unicode domains must be submitted in Punycode (`xn--` form).
+- Target team (optional) — `teamId` of the team to add the user to. If omitted (`null`), the user is added to the org's `isDefault: true` team.
 - UOA role to grant — `admin` or `member` (plain member). `owner` can never be granted via auto-enrolment.
-- Verification method required: `ANY`, `EMAIL`, `GOOGLE`, `GITHUB`, `MICROSOFT`
+- Verification method required: `ANY`, `EMAIL`, `GOOGLE`, `GITHUB`, `MICROSOFT`, `APPLE`
+
+**Multiple rules per domain:** The same email domain can appear in multiple rules for the same org, each targeting a different team. For example, `acme.com` can have one rule routing to the Engineering team and another routing to the Marketing team — all `acme.com` users will be added to both teams on first login. The unique constraint is `(orgId, emailDomain, teamId)`.
 
 **Verification method matching per login type:**
 - Email link login → matches rules with `ANY` or `EMAIL`
 - Google OAuth login → matches rules with `ANY` or `GOOGLE`
 - GitHub OAuth login → matches rules with `ANY` or `GITHUB`
 - Microsoft Entra ID login → matches rules with `ANY` or `MICROSOFT`
+- Apple Sign In → matches rules with `ANY` or `APPLE`
 
-Auto-enrolment adds the user to the org and to the org's `isDefault: true` team. On auto-enrolment the user receives the **default custom role** of that team (the team's `isDefault: true` custom role, if role flag matrix is enabled). The rule does not need to specify a custom role explicitly.
+Auto-enrolment adds the user to the org and to the rule's target team (or the org's default team if no `teamId` is specified). Multiple matching rules for the same org are all applied — the user is added to each rule's target team. On auto-enrolment the user receives the **default custom role** of that team (the team's `isDefault: true` custom role, if role flag matrix is enabled). The rule does not need to specify a custom role explicitly.
 
 **Multi-org conflict:** A user's email domain may match rules on multiple orgs within the same UOA instance (e.g. `ford.com` rules on both `ford-engineering` and `ford-marketing` orgs). This is intentional — the user is added to all matching orgs. There is no conflict; each org's rule is evaluated independently. If this is undesired, the org admin must not add overlapping domain rules.
 

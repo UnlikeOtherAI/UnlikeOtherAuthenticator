@@ -20,35 +20,46 @@ enum VerificationTokenType {
   TWOFA_RESET
 }
 
+enum VerificationMethod {
+  ANY
+  EMAIL
+  GOOGLE
+  GITHUB
+  MICROSOFT
+  APPLE
+}
+
 model User {
-  id           String    @id @default(cuid())
+  id             String    @id @default(cuid())
   // Note: email is not globally unique because `user_scope` can be "per_domain".
   // Uniqueness is enforced via `user_key` instead (global: email, per_domain: domain|email).
-  email        String
-  userKey      String    @unique @map("user_key")
-  domain       String?
-  passwordHash String?   @map("password_hash")
-  name         String?
-  twoFaEnabled Boolean   @default(false) @map("2fa_enabled")
-  twoFaSecret  String?   @map("2fa_secret")
-  avatarUrl    String?   @map("avatar_url")
-  createdAt    DateTime  @default(now()) @map("created_at")
+  email          String
+  userKey        String    @unique @map("user_key")
+  domain         String?
+  passwordHash   String?   @map("password_hash")
+  name           String?
+  twoFaEnabled   Boolean   @default(false) @map("2fa_enabled")
+  twoFaSecret    String?   @map("2fa_secret")
+  avatarUrl      String?   @map("avatar_url")
+  scimExternalId String?   @map("scim_external_id") // IdP-assigned externalId; org-scoped uniqueness enforced at app layer
+  createdAt      DateTime  @default(now()) @map("created_at")
 
-  domainRoles  DomainRole[]
-  tokens       VerificationToken[]
-  authorizationCodes AuthorizationCode[]
-  refreshTokens RefreshToken[]
-  loginLogs    LoginLog[]
-  ownedOrgs    Organisation[]   @relation("OrgOwner")
-  orgMembers   OrgMember[]
-  teamMembers  TeamMember[]
-  groupMembers GroupMember[]
-  acceptedTeamInvites TeamInvite[] @relation("AcceptedTeamInvites")
-  accessRequests AccessRequest[]
+  domainRoles            DomainRole[]
+  tokens                 VerificationToken[]
+  authorizationCodes     AuthorizationCode[]
+  refreshTokens          RefreshToken[]
+  loginLogs              LoginLog[]
+  ownedOrgs              Organisation[]   @relation("OrgOwner")
+  orgMembers             OrgMember[]
+  teamMembers            TeamMember[]
+  groupMembers           GroupMember[]
+  acceptedTeamInvites    TeamInvite[] @relation("AcceptedTeamInvites")
+  accessRequests         AccessRequest[]
   reviewedAccessRequests AccessRequest[] @relation("ReviewedAccessRequests")
 
   @@index([email])
   @@index([domain])
+  @@index([scimExternalId])
   @@map("users")
 }
 
@@ -77,10 +88,10 @@ model VerificationToken {
   usedAt    DateTime?             @map("used_at")
   createdAt DateTime              @default(now()) @map("created_at")
 
-  userId String? @map("user_id")
-  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  teamInviteId String? @map("team_invite_id")
-  teamInvite TeamInvite? @relation(fields: [teamInviteId], references: [id], onDelete: SetNull)
+  userId       String?     @map("user_id")
+  user         User?       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  teamInviteId String?     @map("team_invite_id")
+  teamInvite   TeamInvite? @relation(fields: [teamInviteId], references: [id], onDelete: SetNull)
 
   @@index([email])
   @@index([userKey])
@@ -91,16 +102,16 @@ model VerificationToken {
 }
 
 model AuthorizationCode {
-  id          String   @id @default(cuid())
-  codeHash    String   @unique @map("code_hash")
-  userId      String   @map("user_id")
+  id          String    @id @default(cuid())
+  codeHash    String    @unique @map("code_hash")
+  userId      String    @map("user_id")
   domain      String
-  configUrl   String   @map("config_url")
-  redirectUrl String   @map("redirect_url")
-  rememberMe  Boolean  @default(false) @map("remember_me")
-  expiresAt   DateTime @map("expires_at")
+  configUrl   String    @map("config_url")
+  redirectUrl String    @map("redirect_url")
+  rememberMe  Boolean   @default(false) @map("remember_me")
+  expiresAt   DateTime  @map("expires_at")
   usedAt      DateTime? @map("used_at")
-  createdAt   DateTime @default(now()) @map("created_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -156,36 +167,55 @@ model LoginLog {
 
 model Organisation {
   id        String   @id @default(cuid())
-  domain    String
   name      String   @db.VarChar(100)
-  slug      String   @db.VarChar(120)
+  slug      String   @unique @db.VarChar(120)
   ownerId   String   @map("owner_id")
+  dormant   Boolean  @default(false) // set true when sole owner is SCIM-deprovisioned; cleared when ownership transfers or owner reactivates
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  owner   User        @relation("OrgOwner", fields: [ownerId], references: [id], onDelete: Restrict)
-  members OrgMember[]
-  teams   Team[]
-  groups  Group[]
-  invites TeamInvite[]
-  accessRequests AccessRequest[]
+  owner            User                 @relation("OrgOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  members          OrgMember[]
+  teams            Team[]
+  groups           Group[]
+  invites          TeamInvite[]
+  accessRequests   AccessRequest[]
+  emailDomainRules OrgEmailDomainRule[]
+  scimTokens       ScimToken[]
+  scimGroupMappings ScimGroupMapping[]
+  teamCustomRoles  TeamCustomRole[]
 
-  @@unique([domain, slug])
-  @@index([domain])
   @@index([ownerId])
   @@map("organisations")
+}
+
+model OrgEmailDomainRule {
+  id           String             @id @default(cuid())
+  orgId        String             @map("org_id")
+  emailDomain  String             @map("email_domain") // e.g. "ford.com" — lowercase, no @ prefix
+  teamId       String?            @map("team_id") // null = org default team
+  grantedRole  String             @default("member") @map("granted_role") // "admin" | "member"; never "owner"
+  verification VerificationMethod @default(ANY)
+  createdAt    DateTime           @default(now()) @map("created_at")
+
+  org  Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  team Team?        @relation(fields: [teamId], references: [id], onDelete: SetNull)
+
+  @@unique([orgId, emailDomain, teamId]) // same domain can route to multiple teams
+  @@index([emailDomain]) // fast lookup at login time across all orgs
+  @@map("org_email_domain_rules")
 }
 
 model OrgMember {
   id        String   @id @default(cuid())
   orgId     String   @map("org_id")
   userId    String   @map("user_id")
-  role      String   @default("member")
+  role      String   @default("member") // validated against org_roles config: "owner" | "admin" | "member"
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   org  Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  user User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([orgId, userId])
   @@index([userId])
@@ -203,11 +233,14 @@ model Team {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  org     Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  group   Group?       @relation(fields: [groupId], references: [id], onDelete: SetNull)
-  members TeamMember[]
-  invites TeamInvite[]
-  accessRequests AccessRequest[]
+  org              Organisation      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  group            Group?            @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  members          TeamMember[]
+  invites          TeamInvite[]
+  accessRequests   AccessRequest[]
+  customRoles      TeamCustomRole[]
+  scimGroupMapping ScimGroupMapping?
+  domainRules      OrgEmailDomainRule[]
 
   @@unique([orgId, name])
   @@unique([orgId, slug])
@@ -216,13 +249,32 @@ model Team {
   @@map("teams")
 }
 
-model TeamMember {
+model TeamCustomRole {
   id        String   @id @default(cuid())
   teamId    String   @map("team_id")
-  userId    String   @map("user_id")
-  teamRole  String   @default("member") @map("team_role")
+  orgId     String   @map("org_id") // denormalized for efficient org-wide matrix queries
+  name      String   @db.VarChar(50)
+  isDefault Boolean  @default(false) @map("is_default")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
+
+  team Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  org  Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, name])
+  @@index([teamId])
+  @@index([orgId]) // for org-wide role union (flag matrix columns)
+  @@map("team_custom_roles")
+}
+
+model TeamMember {
+  id         String   @id @default(cuid())
+  teamId     String   @map("team_id")
+  userId     String   @map("user_id")
+  teamRole   String   @default("member") @map("team_role") // "owner" | "admin" | "member"
+  customRole String?  @map("custom_role") // consumer-defined role label; references TeamCustomRole.name
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
 
   team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -253,16 +305,45 @@ model TeamInvite {
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
-  org Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  acceptedUser User? @relation("AcceptedTeamInvites", fields: [acceptedUserId], references: [id], onDelete: SetNull)
-  tokens VerificationToken[]
+  org          Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  team         Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  acceptedUser User?        @relation("AcceptedTeamInvites", fields: [acceptedUserId], references: [id], onDelete: SetNull)
+  tokens       VerificationToken[]
 
   @@index([orgId])
   @@index([teamId, email])
   @@index([acceptedAt])
   @@index([revokedAt])
   @@map("team_invites")
+}
+
+model ScimToken {
+  id         String    @id @default(cuid())
+  orgId      String    @map("org_id")
+  tokenHash  String    @unique @map("token_hash") // SHA-256 of the opaque UUID token
+  label      String?   @db.VarChar(120)
+  lastUsedAt DateTime? @map("last_used_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  org Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@map("scim_tokens")
+}
+
+model ScimGroupMapping {
+  id         String   @id @default(cuid())
+  orgId      String   @map("org_id")
+  externalId String   @map("external_id") // IdP's SCIM externalId (stable, not displayName)
+  teamId     String   @unique @map("team_id") // one team maps to at most one IdP group
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  org  Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  team Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, externalId])
+  @@index([orgId])
+  @@map("scim_group_mappings")
 }
 
 model Group {

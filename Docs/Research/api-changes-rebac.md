@@ -27,15 +27,21 @@ Replaces the old `domain` association. Drives automatic org membership on first 
 
 ```prisma
 model OrgEmailDomainRule {
-  id           String   @id @default(cuid())
-  orgId        String
-  org          Organisation @relation(fields:[orgId], references:[id], onDelete:Cascade)
-  emailDomain  String   // e.g. "acme.com" — no @ prefix, lowercase
-  grantedRole  OrgRole  // role assigned on auto-enrolment
-  verification VerificationMethod // ANY | EMAIL | GOOGLE | GITHUB
-  createdAt    DateTime @default(now())
+  id           String             @id @default(cuid())
+  orgId        String             @map("org_id")
+  emailDomain  String             @map("email_domain") // e.g. "acme.com" — no @ prefix, lowercase
+  teamId       String?            @map("team_id") // null = org's isDefault team
+  grantedRole  String             @default("member") @map("granted_role") // "admin" | "member"; never "owner"
+  verification VerificationMethod @default(ANY)
+  createdAt    DateTime           @default(now()) @map("created_at")
 
-  @@unique([orgId, emailDomain])
+  org  Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  team Team?        @relation(fields: [teamId], references: [id], onDelete: SetNull)
+
+  // same domain can route to multiple teams; unique per (org, domain, team)
+  @@unique([orgId, emailDomain, teamId])
+  @@index([emailDomain]) // fast lookup at login time
+  @@map("org_email_domain_rules")
 }
 
 enum VerificationMethod {
@@ -135,15 +141,17 @@ Request body for POST:
 ```json
 {
   "emailDomain": "acme.com",
-  "grantedRole": "member",
-  "verification": "ANY"
+  "teamId": "team_xyz",       // optional; null/omitted = org's isDefault team
+  "grantedRole": "member",    // "admin" | "member"; never "owner"
+  "verification": "ANY"       // ANY | EMAIL | GOOGLE | GITHUB | MICROSOFT | APPLE
 }
 ```
 
 Validation:
 - `emailDomain` must be a valid domain (no `@`, no protocol, lowercase)
-- `emailDomain` must not already exist for this org
+- `(orgId, emailDomain, teamId)` must be unique — same domain can have multiple rules targeting different teams
 - `grantedRole` cannot be `owner` (owners must be explicitly assigned)
+- If `teamId` is provided, it must belong to this org
 - Caller must be org `owner` or `admin`
 
 ### Permission check endpoint (for internal use / future)
@@ -192,39 +200,31 @@ const matchingRules = await prisma.orgEmailDomainRule.findMany({
 });
 
 for (const rule of matchingRules) {
-  const existing = await prisma.orgMember.findFirst({
-    where: { orgId: rule.orgId, userId: user.id }
+  // Ensure org membership exists (idempotent)
+  await prisma.orgMember.upsert({
+    where: { orgId_userId: { orgId: rule.orgId, userId: user.id } },
+    create: { orgId: rule.orgId, userId: user.id, role: rule.grantedRole },
+    update: {} // don't downgrade an existing role
   });
-  if (!existing) {
-    await prisma.orgMember.create({
-      data: { orgId: rule.orgId, userId: user.id, role: rule.grantedRole }
+
+  // Resolve target team: rule.teamId if set, otherwise the org's default team
+  const targetTeam = rule.teamId
+    ? await prisma.team.findUnique({ where: { id: rule.teamId } })
+    : await prisma.team.findFirst({ where: { orgId: rule.orgId, isDefault: true } });
+
+  if (targetTeam) {
+    // Look up the team's default custom role (if role flag matrix is enabled for this org's App)
+    const defaultCustomRoleRecord = await prisma.teamCustomRole.findFirst({
+      where: { teamId: targetTeam.id, isDefault: true }
     });
-    // Also add to the org's default team
-    const defaultTeam = await prisma.team.findFirst({
-      where: { orgId: rule.orgId, isDefault: true }
+    const defaultCustomRole = defaultCustomRoleRecord?.name ?? null;
+
+    // Add to team (idempotent — skip if already a member)
+    await prisma.teamMember.upsert({
+      where: { teamId_userId: { teamId: targetTeam.id, userId: user.id } },
+      create: { teamId: targetTeam.id, userId: user.id, teamRole: 'member', customRole: defaultCustomRole },
+      update: {} // don't downgrade existing membership
     });
-    if (defaultTeam) {
-      // Look up default customRole for this team (when role_flag_matrix_enabled for the org's App).
-      // TeamCustomRole model is defined in the Apps/feature-flags schema additions (see apps.md).
-      // At auto-enrolment time: if the model is available, query it; otherwise default to null.
-      let defaultCustomRole: string | null = null;
-      try {
-        const roleRecord = await (prisma as any).teamCustomRole?.findFirst({
-          where: { teamId: defaultTeam.id, isDefault: true }
-        });
-        defaultCustomRole = roleRecord?.name ?? null;
-      } catch {
-        // TeamCustomRole model not yet migrated — proceed with null
-      }
-      await prisma.teamMember.create({
-        data: {
-          teamId: defaultTeam.id,
-          userId: user.id,
-          role: 'member',
-          customRole: defaultCustomRole
-        }
-      });
-    }
   }
 }
 ```
