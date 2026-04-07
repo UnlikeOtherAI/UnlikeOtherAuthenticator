@@ -2,7 +2,7 @@
 
 ## Status: confirmed, in scope
 
-Both the feature flag service and the role flag matrix are **optional services**. Neither is mandatory for a consuming app that just needs identity and authentication. They are enabled or disabled per organisation in the UOA admin panel.
+Both the feature flag service and the role flag matrix are **optional services**. Neither is mandatory for a consuming app that just needs identity and authentication. They are enabled or disabled **per App** via the `feature_flags_enabled` and `role_flag_matrix_enabled` fields on the App model (see `apps.md`). A system admin or org admin toggles these fields from the admin panel.
 
 ---
 
@@ -52,6 +52,8 @@ The global missing-flag default means consuming apps never get an error for an u
 ```
 GET /apps/:appId/flags?userId=user_123[&teamId=team_xyz]
 ```
+
+**Auth:** Domain-hash auth (consuming app calling server-side). The `userId` param must correspond to a real user in the calling app's org — the server validates this. When called from a client SDK context, use the `/apps/startup` endpoint instead (which accepts an `X-UOA-Access-Token` header and derives `userId` from it).
 
 `teamId` is optional. When omitted and the user has a single team membership relevant to this App, that team's role is used. When the user has multiple team memberships, `teamId` must be provided or the multi-team fallback rule (see resolution order above) applies.
 
@@ -120,7 +122,7 @@ Example: a `viewer` who needs temporary `beta_access` gets a per-user override o
 
 ## Service enablement
 
-Services are enabled per organisation. A system admin can toggle them from the admin panel. The consuming app does not need to change any code — if flags are not enabled, the query endpoint returns an empty object and the token contains no `flags` field.
+Services are enabled **per App** (not per org). Two boolean fields on the App model control availability — `feature_flags_enabled` and `role_flag_matrix_enabled`. A system admin or org admin toggles these from the admin panel on a per-App basis. The consuming app does not need to change any code — if flags are not enabled, the query endpoint returns an empty object and the token contains no `flags` field.
 
 | Service | When disabled | When enabled |
 |---|---|---|

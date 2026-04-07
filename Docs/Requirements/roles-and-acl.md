@@ -287,6 +287,8 @@ SCIM endpoints are authenticated with the per-org SCIM bearer token (see above).
 
 **SCIM authentication:** `Authorization: Bearer <token>` header (RFC 7523 standard). Missing or invalid token returns HTTP 401 with SCIM error schema. Token scope is validated against the org identified in the token hash lookup — requests targeting a different org's resources return HTTP 403.
 
+**SCIM `GET /scim/v2/Users` pagination:** Uses SCIM standard `startIndex` (1-based, default 1) and `count` (page size, default 100, max 200) params. Supports `filter=userName eq "alice@acme.com"` and `filter=externalId eq "<idp-id>"` per RFC 7644 §3.4.2.2. Response includes `totalResults`, `startIndex`, `itemsPerPage`, and a `Resources` array of User objects.
+
 **SCIM `GET /scim/v2/Groups` pagination:** Uses SCIM standard `startIndex` (1-based, default 1) and `count` (page size, default 100, max 200) params. Supports `filter=displayName eq "Engineering"` per RFC 7644 §3.4.2.2. Response includes `totalResults`, `startIndex`, `itemsPerPage`.
 
 **SCIM bearer token management endpoints** (system admin auth required):

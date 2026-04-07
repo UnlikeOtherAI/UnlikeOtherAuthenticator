@@ -194,8 +194,17 @@ for (const rule of matchingRules) {
       where: { orgId: rule.orgId, isDefault: true }
     });
     if (defaultTeam) {
+      // Look up default customRole for this team (if role_flag_matrix_enabled)
+      const defaultCustomRole = await prisma.teamCustomRole.findFirst({
+        where: { teamId: defaultTeam.id, isDefault: true }
+      });
       await prisma.teamMember.create({
-        data: { teamId: defaultTeam.id, userId: user.id, role: 'member' }
+        data: {
+          teamId: defaultTeam.id,
+          userId: user.id,
+          role: 'member',
+          customRole: defaultCustomRole?.name ?? null
+        }
       });
     }
   }

@@ -62,6 +62,14 @@ For the full product spec, see [brief.md](./brief.md). For tech stack, see [tech
           group-members.ts       — POST/PUT/DELETE internal group members
           team-group-assignment.ts — PUT team↔group assignment
           index.ts               — Route registration for /internal/org
+        /admin
+          orgs.ts                — GET /internal/admin/orgs, GET /internal/admin/orgs/:orgId
+          org-members.ts         — PATCH/DELETE /internal/admin/orgs/:orgId/members/:userId
+          org-domain-rules.ts    — GET/POST/DELETE /internal/admin/orgs/:orgId/domain-rules
+          team-members.ts        — PATCH /internal/admin/teams/:teamId/members/:userId
+          scim-tokens.ts         — GET/POST/DELETE /internal/admin/orgs/:orgId/scim-tokens
+          scim-group-mappings.ts — GET/POST/DELETE /internal/admin/orgs/:orgId/scim/group-mappings
+          index.ts               — Route registration for /internal/admin
     /middleware
       config-verifier.ts      — Fetches config URL, verifies JWT, attaches config to request
       domain-hash-auth.ts     — Verifies domain hash token for domain-scoped APIs
@@ -69,6 +77,8 @@ For the full product spec, see [brief.md](./brief.md). For tech stack, see [tech
       org-features.ts         — Returns 404 when org features are disabled
       groups-enabled.ts       — Returns 404 when groups are disabled
       org-role-guard.ts       — Validates user access token and org role for /org endpoints
+      org-permission.ts       — requireOrgRole(minRole) — org-level UOA role enforcement (owner > admin > member)
+      team-permission.ts      — requireTeamRole(minRole) — team-level UOA role enforcement with org-level fallback
       error-handler.ts        — Global error handler (generic user-facing errors, detailed internal logs)
       rate-limiter.ts         — Rate limiting
     /services
@@ -147,6 +157,8 @@ Request → Route → Middleware → Service → Database (Prisma)
 * **org-features** — rejects org endpoints when `org_features.enabled` is false
 * **groups-enabled** — rejects group endpoints when `org_features.groups_enabled` is false
 * **org-role-guard** — validates user context and org role for `/org/*` routes
+* **org-permission** (`requireOrgRole(minRole)`) — enforces org-level UOA role (`owner > admin > member`). Reads `OrgMember.role` for the authenticated user in the target org. Returns 403 if not a member or role is insufficient. Used on org management endpoints and admin panel org routes. See `api-changes-rebac.md §4`.
+* **team-permission** (`requireTeamRole(minRole)`) — enforces team-level UOA role with org-level fallback inheritance. Checks `TeamMember.role` first; if not a direct member, falls back to the user's `OrgMember.role` for the parent org. Returns 403 if neither check passes. See `api-changes-rebac.md §4`.
 * **error-handler** — catches all errors. Returns generic message to user. Logs specifics internally
 
 ### Services (fat)
