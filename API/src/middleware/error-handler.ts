@@ -1,9 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import { ZodError } from 'zod';
 
-import { PUBLIC_ERROR_MESSAGE } from '../config/constants.js';
 import { enrichAuthDebugForAppError, renderAuthDebugHtml } from '../services/auth-debug-page.service.js';
 import { isAppError } from '../utils/errors.js';
+import { buildPublicErrorBody } from '../utils/error-response.js';
 
 function wantsHtml(request: { method: string; headers: { accept?: string } }): boolean {
   const accept = request.headers.accept ?? '';
@@ -44,7 +44,7 @@ export function registerErrorHandler(app: FastifyInstance): void {
         reply.type('text/html; charset=utf-8').status(400).send(renderGenericErrorHtml());
         return;
       }
-      reply.status(400).send({ error: PUBLIC_ERROR_MESSAGE });
+      reply.status(400).send(buildPublicErrorBody({ request, error, statusCode: 400 }));
       return;
     }
 
@@ -64,7 +64,9 @@ export function registerErrorHandler(app: FastifyInstance): void {
           .send(renderGenericErrorHtml());
         return;
       }
-      reply.status(error.statusCode).send({ error: PUBLIC_ERROR_MESSAGE });
+      reply
+        .status(error.statusCode)
+        .send(buildPublicErrorBody({ request, error, statusCode: error.statusCode }));
       return;
     }
 
@@ -79,6 +81,6 @@ export function registerErrorHandler(app: FastifyInstance): void {
       reply.type('text/html; charset=utf-8').status(500).send(renderGenericErrorHtml());
       return;
     }
-    reply.status(500).send({ error: PUBLIC_ERROR_MESSAGE });
+    reply.status(500).send(buildPublicErrorBody({ request, error, statusCode: 500 }));
   });
 }

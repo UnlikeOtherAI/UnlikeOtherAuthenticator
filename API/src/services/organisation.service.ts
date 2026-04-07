@@ -37,7 +37,6 @@ const RESERVED_ORG_SLUGS = new Set([
 
 const DEFAULT_TEAM_NAME = 'General';
 const TEAM_ROLE_MEMBER = 'member';
-const TEAM_ROLE_LEAD = 'lead';
 
 function stripDiacritics(value: string): string {
   return value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '');

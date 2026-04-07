@@ -4,6 +4,7 @@ import { createHmac } from 'node:crypto';
 
 import { createApp } from '../../src/app.js';
 import { hashPassword } from '../../src/services/password.service.js';
+import { expectJsonError } from '../helpers/error-response.js';
 import { createTestDb } from '../helpers/test-db.js';
 import { encryptTwoFaSecret } from '../../src/utils/twofa-secret.js';
 import { baseClientConfigPayload } from '../helpers/test-config.js';
@@ -294,8 +295,8 @@ describe.skipIf(!hasDatabase)('POST /auth/login', () => {
     expect(wrongPassword.statusCode).toBe(401);
     expect(unknownEmail.statusCode).toBe(401);
 
-    expect(wrongPassword.json()).toEqual({ error: 'Request failed' });
-    expect(unknownEmail.json()).toEqual({ error: 'Request failed' });
+    expectJsonError(wrongPassword.json());
+    expectJsonError(unknownEmail.json());
 
     await app.close();
   }, 20_000);

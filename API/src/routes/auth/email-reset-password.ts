@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { configVerifier } from '../../middleware/config-verifier.js';
 import { validatePasswordResetToken } from '../../services/auth-reset-password.service.js';
 import { renderAuthEntrypointHtml } from '../../services/auth-ui.service.js';
+import { AppError } from '../../utils/errors.js';
 
 const QuerySchema = z
   .object({
@@ -24,20 +25,14 @@ export function registerAuthEmailResetPasswordRoute(app: FastifyInstance): void 
       const { token, redirect_url } = QuerySchema.parse(request.query);
 
       if (!request.config || !request.configUrl) {
-        reply.status(400).send({ error: 'Request failed' });
-        return;
+        throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
       }
 
-      try {
-        await validatePasswordResetToken({
-          token,
-          config: request.config,
-          configUrl: request.configUrl,
-        });
-      } catch {
-        reply.status(400).send({ error: 'Request failed' });
-        return;
-      }
+      await validatePasswordResetToken({
+        token,
+        config: request.config,
+        configUrl: request.configUrl,
+      });
 
       // Token is valid — render the Auth UI with the token context.
       const params = new URLSearchParams();

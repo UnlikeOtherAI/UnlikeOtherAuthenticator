@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 
 import { createApp } from '../../src/app.js';
 import { createClientId } from '../../src/utils/hash.js';
+import { expectJsonError } from '../helpers/error-response.js';
 import { createTestDb } from '../helpers/test-db.js';
 import {
   clearOrgTestDatabase,
@@ -117,7 +118,7 @@ describe.skipIf(!hasDatabase)('organisation owner transfer before sole-owner rem
       },
     });
     expect(removeOwnerFirstAttempt.statusCode).toBe(400);
-    expect(removeOwnerFirstAttempt.json()).toEqual({ error: 'Request failed' });
+    expectJsonError(removeOwnerFirstAttempt.json());
 
     const transferOwnership = await app.inject({
       method: 'POST',

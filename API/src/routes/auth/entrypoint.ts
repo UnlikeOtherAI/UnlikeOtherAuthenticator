@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 
+import { AppError } from '../../utils/errors.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
 import {
   readAuthUiAsset,
@@ -15,9 +16,7 @@ export function registerAuthEntrypointRoute(app: FastifyInstance): void {
     },
     async (request, reply) => {
       if (!request.config || !request.configUrl) {
-        // configVerifier should always attach these; fail closed.
-        reply.status(400).send({ error: 'Request failed' });
-        return;
+        throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
       }
 
       const requestUrl = request.raw.url ?? '';

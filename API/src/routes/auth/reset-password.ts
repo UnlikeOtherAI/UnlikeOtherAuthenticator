@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { configVerifier } from '../../middleware/config-verifier.js';
 import { requestPasswordReset, resetPasswordWithToken } from '../../services/auth-reset-password.service.js';
+import { AppError } from '../../utils/errors.js';
 
 const SUCCESS_MESSAGE = 'If you have an account with us, we\'ve sent you instructions';
 
@@ -56,9 +57,7 @@ export function registerAuthResetPasswordRoutes(app: FastifyInstance): void {
       const { token, password } = ResetBodySchema.parse(request.body);
 
       if (!request.config || !request.configUrl) {
-        // configVerifier should always attach these; fail closed.
-        reply.status(400).send({ error: 'Request failed' });
-        return;
+        throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
       }
 
       await resetPasswordWithToken({
@@ -72,4 +71,3 @@ export function registerAuthResetPasswordRoutes(app: FastifyInstance): void {
     },
   );
 }
-

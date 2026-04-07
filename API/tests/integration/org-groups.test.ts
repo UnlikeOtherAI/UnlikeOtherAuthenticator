@@ -3,6 +3,7 @@ import { SignJWT } from 'jose';
 
 import { createApp } from '../../src/app.js';
 import { createClientId } from '../../src/utils/hash.js';
+import { expectJsonError } from '../helpers/error-response.js';
 import { createTestDb } from '../helpers/test-db.js';
 import { baseClientConfigPayload } from '../helpers/test-config.js';
 
@@ -252,7 +253,7 @@ describe.skipIf(!hasDatabase)('GET /org/organisations/:orgId/groups', () => {
     });
 
     expect(res.statusCode).toBe(404);
-    expect(res.json()).toEqual({ error: 'Request failed' });
+    expectJsonError(res.json());
 
     await app.close();
   });

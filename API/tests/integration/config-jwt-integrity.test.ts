@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SignJWT } from 'jose';
 
 import { createApp } from '../../src/app.js';
+import { expectJsonError } from '../helpers/error-response.js';
 import { baseClientConfigPayload } from '../helpers/test-config.js';
 
 type RouteCase = {
@@ -180,11 +181,10 @@ describe('Config JWT integrity is enforced across all config-verifier routes', (
         res.statusCode,
         `expected 400 for route "${route.name}" (${route.method} ${route.url})`,
       ).toBe(400);
-      expect(res.json()).toEqual({ error: 'Request failed' });
+      expectJsonError(res.json());
     }
 
     expect(fetchMock).toHaveBeenCalledTimes(routes.length);
     await app.close();
   });
 });
-

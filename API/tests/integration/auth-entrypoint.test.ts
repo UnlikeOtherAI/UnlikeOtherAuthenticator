@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { createApp } from '../../src/app.js';
+import { expectJsonError } from '../helpers/error-response.js';
 import { baseClientConfigPayload } from '../helpers/test-config.js';
 
 async function createSignedConfigJwt(sharedSecret: string): Promise<string> {
@@ -107,7 +108,7 @@ describe('GET /auth', () => {
 
     const badRes = await app.inject({ method: 'GET', url });
     expect(badRes.statusCode).toBe(400);
-    expect(badRes.json()).toEqual({ error: 'Request failed' });
+    expectJsonError(badRes.json());
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[0]?.[0]).toBe(configUrl);
@@ -291,7 +292,7 @@ describe('GET /auth', () => {
     });
 
     expect(res.statusCode).toBe(400);
-    expect(res.json()).toEqual({ error: 'Request failed' });
+    expectJsonError(res.json());
     expect(res.body).not.toContain(process.env.SHARED_SECRET);
     expect(fetchMock).not.toHaveBeenCalled();
 
@@ -317,7 +318,7 @@ describe('GET /auth', () => {
     });
 
     expect(res.statusCode).toBe(400);
-    expect(res.json()).toEqual({ error: 'Request failed' });
+    expectJsonError(res.json());
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
@@ -350,7 +351,7 @@ describe('GET /auth', () => {
     });
 
     expect(res.statusCode).toBe(400);
-    expect(res.json()).toEqual({ error: 'Request failed' });
+    expectJsonError(res.json());
     expect(res.body).not.toContain(process.env.SHARED_SECRET);
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
@@ -384,7 +385,7 @@ describe('GET /auth', () => {
     });
 
     expect(res.statusCode).toBe(400);
-    expect(res.json()).toEqual({ error: 'Request failed' });
+    expectJsonError(res.json());
 
     await app.close();
   });
@@ -420,7 +421,7 @@ describe('GET /auth', () => {
     });
 
     expect(res.statusCode).toBe(400);
-    expect(res.json()).toEqual({ error: 'Request failed' });
+    expectJsonError(res.json());
 
     await app.close();
   });
@@ -450,7 +451,7 @@ describe('GET /auth', () => {
     });
 
     expect(res.statusCode).toBe(400);
-    expect(res.json()).toEqual({ error: 'Request failed' });
+    expectJsonError(res.json());
 
     await app.close();
   });
@@ -466,7 +467,7 @@ describe('GET /auth', () => {
     const res = await app.inject({ method: 'GET', url: '/auth' });
 
     expect(res.statusCode).toBe(400);
-    expect(res.json()).toEqual({ error: 'Request failed' });
+    expectJsonError(res.json());
 
     await app.close();
   });

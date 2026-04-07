@@ -33,7 +33,10 @@ export function registerDomainDebugRoute(app: FastifyInstance): void {
       const { domain } = QuerySchema.parse(request.query);
       const normalizedDomain = normalizeDomain(domain);
 
-      const claims = request.accessTokenClaims!;
+      const claims = request.accessTokenClaims;
+      if (!claims) {
+        throw new Error('missing request.accessTokenClaims');
+      }
       const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
 
       // Not a secret (it's already required as the domain-hash auth token), but useful for debugging integrations.
@@ -51,4 +54,3 @@ export function registerDomainDebugRoute(app: FastifyInstance): void {
     },
   );
 }
-

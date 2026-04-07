@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 import { configVerifier } from '../../middleware/config-verifier.js';
+import { AppError } from '../../utils/errors.js';
 import {
   validateVerifyEmailToken,
   verifyEmailToken,
@@ -42,8 +43,7 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
       const { redirect_url, request_access } = QuerySchema.parse(request.query);
 
       if (!request.config || !request.configUrl) {
-        reply.status(400).send({ error: 'Request failed' });
-        return;
+        throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
       }
 
       const tokenType = await validateVerifyEmailToken({
@@ -53,8 +53,7 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
       });
 
       if (tokenType === 'VERIFY_EMAIL_SET_PASSWORD' && !password) {
-        reply.status(400).send({ error: 'Request failed' });
-        return;
+        throw new AppError('BAD_REQUEST', 400, 'MISSING_PASSWORD');
       }
 
       const { userId, type } = await verifyEmailToken({

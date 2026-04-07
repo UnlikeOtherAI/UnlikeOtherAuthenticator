@@ -11,6 +11,7 @@ import { renderAuthEntrypointHtml } from '../../services/auth-ui.service.js';
 import { selectRedirectUrl } from '../../services/token.service.js';
 import { verifyEmailToken } from '../../services/auth-verify-email.service.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
+import { AppError } from '../../utils/errors.js';
 
 const QuerySchema = z
   .object({
@@ -30,21 +31,14 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
       const { token, redirect_url, request_access } = QuerySchema.parse(request.query);
 
       if (!request.config || !request.configUrl) {
-        reply.status(400).send({ error: 'Request failed' });
-        return;
+        throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
       }
 
-      let type: Awaited<ReturnType<typeof validateRegistrationEmailLandingToken>>;
-      try {
-        type = await validateRegistrationEmailLandingToken({
-          token,
-          config: request.config,
-          configUrl: request.configUrl,
-        });
-      } catch {
-        reply.status(400).send({ error: 'Request failed' });
-        return;
-      }
+      const type = await validateRegistrationEmailLandingToken({
+        token,
+        config: request.config,
+        configUrl: request.configUrl,
+      });
 
       // LOGIN_LINK and VERIFY_EMAIL: auto-consume the token and redirect immediately.
       // No password needed — the user is signed in by clicking the link.
@@ -91,10 +85,10 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
           }
         } catch (err) {
           request.log.error({ err }, 'email link auto-consume failed');
+          throw err;
         }
 
-        reply.status(400).send({ error: 'Request failed' });
-        return;
+        throw new AppError('INTERNAL', 500, 'AUTH_REDIRECT_MISSING');
       }
 
       // VERIFY_EMAIL_SET_PASSWORD: render the Auth UI with the set-password view.

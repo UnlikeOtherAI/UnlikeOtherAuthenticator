@@ -21,13 +21,19 @@ function splitEncrypted(value: string): { iv: Buffer; ciphertext: Buffer; tag: B
   const parts = trimmed.split(':');
   if (parts.length !== 4) throw new AppError('INTERNAL', 500, 'INVALID_ENCRYPTED_TOTP_SECRET');
 
-  const [version, ivB64, ctB64, tagB64] = parts;
+  const version = parts[0];
+  const ivB64 = parts[1];
+  const ctB64 = parts[2];
+  const tagB64 = parts[3];
   if (version !== VERSION) throw new AppError('INTERNAL', 500, 'INVALID_ENCRYPTED_TOTP_SECRET');
+  if (!ivB64 || !ctB64 || !tagB64) {
+    throw new AppError('INTERNAL', 500, 'INVALID_ENCRYPTED_TOTP_SECRET');
+  }
 
   try {
-    const iv = Buffer.from(ivB64!, 'base64');
-    const ciphertext = Buffer.from(ctB64!, 'base64');
-    const tag = Buffer.from(tagB64!, 'base64');
+    const iv = Buffer.from(ivB64, 'base64');
+    const ciphertext = Buffer.from(ctB64, 'base64');
+    const tag = Buffer.from(tagB64, 'base64');
 
     if (iv.length !== IV_BYTES) throw new AppError('INTERNAL', 500, 'INVALID_ENCRYPTED_TOTP_SECRET');
     if (tag.length !== 16) throw new AppError('INTERNAL', 500, 'INVALID_ENCRYPTED_TOTP_SECRET');
@@ -85,4 +91,3 @@ export function decryptTwoFaSecret(params: {
     throw new AppError('INTERNAL', 500, 'TOTP_SECRET_DECRYPT_FAILED');
   }
 }
-

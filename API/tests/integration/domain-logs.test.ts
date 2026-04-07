@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { createApp } from '../../src/app.js';
 import { createClientId } from '../../src/utils/hash.js';
+import { expectJsonError } from '../helpers/error-response.js';
 import { createTestDb } from '../helpers/test-db.js';
 
 const hasDatabase = Boolean(process.env.DATABASE_URL);
@@ -123,7 +124,7 @@ describe.skipIf(!hasDatabase)('GET /domain/logs', () => {
     });
 
     expect(res.statusCode).toBe(401);
-    expect(res.json()).toEqual({ error: 'Request failed' });
+    expectJsonError(res.json());
 
     await app.close();
   });

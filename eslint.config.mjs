@@ -10,13 +10,23 @@ export default [
     ignores: ['**/dist/**', '**/dist-ssr/**', '**/node_modules/**'],
   },
   js.configs.recommended,
-  ...tseslint.configs.recommended,
+  ...tseslint.configs.strict,
   {
     files: ['**/*.{ts,tsx,js,jsx,mjs,cjs}'],
     languageOptions: {
       globals: {
         ...globals.node,
       },
+    },
+    rules: {
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+        },
+      ],
     },
   },
   {
@@ -38,6 +48,14 @@ export default [
       react: {
         version: 'detect',
       },
+    },
+  },
+  {
+    files: ['**/tests/**/*.{ts,tsx,js,jsx,mjs,cjs}'],
+    rules: {
+      '@typescript-eslint/no-non-null-assertion': 'off',
+      '@typescript-eslint/no-extraneous-class': 'off',
+      '@typescript-eslint/no-useless-constructor': 'off',
     },
   },
   {

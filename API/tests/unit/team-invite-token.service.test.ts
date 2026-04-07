@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
 
 import type { ClientConfig } from '../../src/services/config.service.js';

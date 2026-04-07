@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
 
 import type { ClientConfig } from '../../src/services/config.service.js';
@@ -67,10 +67,25 @@ function makePrismaMock() {
 }
 
 const now = new Date('2026-02-15T00:00:00.000Z');
+const originalNodeEnv = process.env.NODE_ENV;
+const originalSharedSecret = process.env.SHARED_SECRET;
+const originalAuthServiceIdentifier = process.env.AUTH_SERVICE_IDENTIFIER;
+const originalDatabaseUrl = process.env.DATABASE_URL;
 
 describe('Group service', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    process.env.NODE_ENV = 'test';
+    process.env.SHARED_SECRET = 'test-shared-secret';
+    process.env.AUTH_SERVICE_IDENTIFIER = 'uoa-auth-service';
+    process.env.DATABASE_URL = 'postgres://example.invalid/db';
+  });
+
+  afterAll(() => {
+    process.env.NODE_ENV = originalNodeEnv;
+    process.env.SHARED_SECRET = originalSharedSecret;
+    process.env.AUTH_SERVICE_IDENTIFIER = originalAuthServiceIdentifier;
+    process.env.DATABASE_URL = originalDatabaseUrl;
   });
 
   it('lists groups for an organisation with cursor pagination', async () => {
@@ -475,14 +490,17 @@ describe('Group service', () => {
       updatedAt: now,
     });
 
-    const member = await updateGroupMemberAdmin({
-      orgId: 'org-1',
-      groupId: 'group-1',
-      domain: 'acme.example.com',
-      userId: 'u-owner',
-      isAdmin: true,
-      config: makeConfig(),
-    });
+    const member = await updateGroupMemberAdmin(
+      {
+        orgId: 'org-1',
+        groupId: 'group-1',
+        domain: 'acme.example.com',
+        userId: 'u-owner',
+        isAdmin: true,
+        config: makeConfig(),
+      },
+      { prisma },
+    );
 
     expect(member).toMatchObject({
       groupId: 'group-1',
@@ -514,13 +532,16 @@ describe('Group service', () => {
       updatedAt: now,
     });
 
-    const result = await removeGroupMember({
-      orgId: 'org-1',
-      groupId: 'group-1',
-      domain: 'acme.example.com',
-      userId: 'u-owner',
-      config: makeConfig(),
-    });
+    const result = await removeGroupMember(
+      {
+        orgId: 'org-1',
+        groupId: 'group-1',
+        domain: 'acme.example.com',
+        userId: 'u-owner',
+        config: makeConfig(),
+      },
+      { prisma },
+    );
 
     expect(result).toEqual({ removed: true });
   });

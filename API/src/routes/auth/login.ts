@@ -11,8 +11,6 @@ import {
 import { recordLoginLog } from '../../services/login-log.service.js';
 import { signTwoFaChallenge } from '../../services/twofactor-challenge.service.js';
 import {
-  buildRedirectToUrl,
-  issueAuthorizationCode,
   selectRedirectUrl,
 } from '../../services/token.service.js';
 

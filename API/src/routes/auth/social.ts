@@ -46,8 +46,7 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
       const { redirect_url, redirect_uri, request_access } = QuerySchema.parse(request.query);
 
       const config = request.config;
-      if (!config) throw new Error('missing request.config');
-      if (!request.configUrl) throw new Error('missing request.configUrl');
+      if (!config || !request.configUrl) throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
 
       assertSocialProviderAllowed({ config, provider });
 

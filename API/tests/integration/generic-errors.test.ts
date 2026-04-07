@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createApp } from '../../src/app.js';
+import { expectJsonError } from '../helpers/error-response.js';
 
 describe('generic error responses', () => {
   afterEach(() => {
@@ -22,9 +23,8 @@ describe('generic error responses', () => {
     });
 
     expect(res.statusCode).toBe(404);
-    expect(res.json()).toEqual({ error: 'Request failed' });
+    expectJsonError(res.json(), { code: 'NOT_FOUND' });
 
     await app.close();
   });
 });
-

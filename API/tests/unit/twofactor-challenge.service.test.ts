@@ -34,6 +34,7 @@ describe('twofactor-challenge.service', () => {
       redirectUrl: 'https://client.example.com/oauth/callback',
       authMethod: 'email_password',
       rememberMe: false,
+      requestAccess: false,
     });
   });
 

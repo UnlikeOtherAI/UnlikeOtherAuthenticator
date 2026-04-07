@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 
 import { createApp } from '../../src/app.js';
 import { createClientId } from '../../src/utils/hash.js';
+import { expectJsonError } from '../helpers/error-response.js';
 import { createTestDb } from '../helpers/test-db.js';
 import { clearOrgTestDatabase, createSignedConfigJwt, createTestUser, hasDatabase, OrgListRecord, OrgMemberRecord, OrgRecord, signAccessToken } from '../helpers/org-user-endpoints-helper.js';
 
@@ -400,7 +401,7 @@ describe.skipIf(!hasDatabase)('user-facing /org organisations and members', () =
       payload: { userId: 'missing-user-id' },
     });
     expect(addMissing.statusCode).toBe(400);
-    expect(addMissing.json()).toEqual({ error: 'Request failed' });
+    expectJsonError(addMissing.json());
 
     await app.close();
   });

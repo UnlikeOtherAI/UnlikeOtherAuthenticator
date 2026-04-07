@@ -6,6 +6,7 @@ import { requireDomainHashAuth } from '../../middleware/domain-hash-auth.js';
 import { revokeRefreshTokenFamily } from '../../services/refresh-token.service.js';
 import { createClientId } from '../../utils/hash.js';
 import { requireEnv } from '../../config/env.js';
+import { AppError } from '../../utils/errors.js';
 
 const BodySchema = z
   .object({
@@ -23,8 +24,7 @@ export function registerAuthRevokeRoute(app: FastifyInstance): void {
       const { refresh_token } = BodySchema.parse(request.body);
 
       if (!request.config || !request.configUrl) {
-        reply.status(400).send({ error: 'Request failed' });
-        return;
+        throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
       }
 
       const { SHARED_SECRET } = requireEnv('SHARED_SECRET');

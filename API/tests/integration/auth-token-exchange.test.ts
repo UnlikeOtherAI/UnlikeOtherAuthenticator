@@ -4,6 +4,7 @@ import { jwtVerify, SignJWT } from 'jose';
 import { createApp } from '../../src/app.js';
 import { hashPassword } from '../../src/services/password.service.js';
 import { createClientId } from '../../src/utils/hash.js';
+import { expectJsonError } from '../helpers/error-response.js';
 import { createTestDb } from '../helpers/test-db.js';
 import { baseClientConfigPayload } from '../helpers/test-config.js';
 
@@ -223,7 +224,7 @@ describe.skipIf(!hasDatabase)('POST /auth/token', () => {
     });
 
     expect(tokenRes.statusCode).toBe(400);
-    expect(tokenRes.json()).toEqual({ error: 'Request failed' });
+    expectJsonError(tokenRes.json());
 
     await app.close();
   });
@@ -271,11 +272,11 @@ describe.skipIf(!hasDatabase)('POST /auth/token', () => {
 
     const reusedRes = await exchangeRefreshToken(app, firstPair.refresh_token);
     expect(reusedRes.statusCode).toBe(401);
-    expect(reusedRes.json()).toEqual({ error: 'Request failed' });
+    expectJsonError(reusedRes.json());
 
     const currentRes = await exchangeRefreshToken(app, secondPair.refresh_token);
     expect(currentRes.statusCode).toBe(401);
-    expect(currentRes.json()).toEqual({ error: 'Request failed' });
+    expectJsonError(currentRes.json());
 
     const refreshTokens = await handle!.prisma.refreshToken.findMany({
       select: { revokedAt: true },
@@ -299,7 +300,7 @@ describe.skipIf(!hasDatabase)('POST /auth/token', () => {
 
     const refreshRes = await exchangeRefreshToken(app, firstPair.refresh_token);
     expect(refreshRes.statusCode).toBe(401);
-    expect(refreshRes.json()).toEqual({ error: 'Request failed' });
+    expectJsonError(refreshRes.json());
 
     await app.close();
   });
@@ -324,7 +325,7 @@ describe.skipIf(!hasDatabase)('POST /auth/token', () => {
 
     const refreshRes = await exchangeRefreshToken(app, firstPair.refresh_token);
     expect(refreshRes.statusCode).toBe(401);
-    expect(refreshRes.json()).toEqual({ error: 'Request failed' });
+    expectJsonError(refreshRes.json());
 
     const refreshTokens = await handle!.prisma.refreshToken.findMany({
       select: { revokedAt: true },
@@ -345,7 +346,7 @@ describe.skipIf(!hasDatabase)('POST /auth/token', () => {
 
     const second = await exchangeAuthorizationCode(app, code);
     expect(second.statusCode).toBe(401);
-    expect(second.json()).toEqual({ error: 'Request failed' });
+    expectJsonError(second.json());
 
     await app.close();
   });
@@ -361,7 +362,7 @@ describe.skipIf(!hasDatabase)('POST /auth/token', () => {
       payload: { code },
     });
     expect(tokenRes.statusCode).toBe(401);
-    expect(tokenRes.json()).toEqual({ error: 'Request failed' });
+    expectJsonError(tokenRes.json());
 
     await app.close();
   });

@@ -52,9 +52,7 @@ export function registerAuthTokenExchangeRoute(app: FastifyInstance): void {
       const body = parseTokenExchangeBody(request.body);
 
       if (!request.config || !request.configUrl) {
-        // configVerifier should always attach these; fail closed.
-        reply.status(400).send({ error: 'Request failed' });
-        return;
+        throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
       }
 
       const tokenPair =

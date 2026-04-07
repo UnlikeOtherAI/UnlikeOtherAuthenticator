@@ -20,7 +20,9 @@ function base32Encode(bytes: Uint8Array): string {
 
     while (bitsLeft >= 5) {
       const idx = (buffer >> (bitsLeft - 5)) & 31;
-      out += BASE32_ALPHABET[idx]!;
+      const next = BASE32_ALPHABET[idx];
+      if (!next) throw new AppError('BAD_REQUEST', 400, 'INVALID_TOTP_SECRET');
+      out += next;
       bitsLeft -= 5;
 
       // Keep only the remaining bits to avoid growing the buffer.
@@ -31,7 +33,9 @@ function base32Encode(bytes: Uint8Array): string {
   if (bitsLeft > 0) {
     // Remaining bits (0 < bitsLeft < 5): pad with zeros to form the last base32 char.
     const idx = (buffer << (5 - bitsLeft)) & 31;
-    out += BASE32_ALPHABET[idx]!;
+    const next = BASE32_ALPHABET[idx];
+    if (!next) throw new AppError('BAD_REQUEST', 400, 'INVALID_TOTP_SECRET');
+    out += next;
   }
 
   return out;
@@ -162,12 +166,26 @@ function computeTotp(params: {
     .digest();
 
   // Dynamic truncation (RFC 4226/6238).
-  const offset = mac[mac.length - 1]! & 0x0f;
+  const lastByte = mac[mac.length - 1];
+  if (lastByte === undefined) throw new AppError('BAD_REQUEST', 400, 'INVALID_TOTP_SECRET');
+  const offset = lastByte & 0x0f;
+  const byte0 = mac[offset];
+  const byte1 = mac[offset + 1];
+  const byte2 = mac[offset + 2];
+  const byte3 = mac[offset + 3];
+  if (
+    byte0 === undefined ||
+    byte1 === undefined ||
+    byte2 === undefined ||
+    byte3 === undefined
+  ) {
+    throw new AppError('BAD_REQUEST', 400, 'INVALID_TOTP_SECRET');
+  }
   const binCode =
-    ((mac[offset]! & 0x7f) << 24) |
-    ((mac[offset + 1]! & 0xff) << 16) |
-    ((mac[offset + 2]! & 0xff) << 8) |
-    (mac[offset + 3]! & 0xff);
+    ((byte0 & 0x7f) << 24) |
+    ((byte1 & 0xff) << 16) |
+    ((byte2 & 0xff) << 8) |
+    (byte3 & 0xff);
 
   const mod = params.digits === 8 ? 100_000_000 : 1_000_000;
   const otp = binCode % mod;

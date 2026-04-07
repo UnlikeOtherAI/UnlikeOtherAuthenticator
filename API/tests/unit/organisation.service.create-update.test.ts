@@ -160,6 +160,7 @@ describe('OrganisationService', () => {
         data: {
           orgId: 'org-1',
           name: 'General',
+          slug: 'general',
           isDefault: true,
         },
       }),
@@ -169,7 +170,7 @@ describe('OrganisationService', () => {
         data: {
           teamId: 'team-default',
           userId: 'u-owner',
-          role: 'member',
+          teamRole: 'member',
         },
       }),
     );

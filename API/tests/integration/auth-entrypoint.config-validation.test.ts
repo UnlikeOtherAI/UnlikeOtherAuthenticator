@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SignJWT } from 'jose';
 
 import { createApp } from '../../src/app.js';
+import { expectJsonError } from '../helpers/error-response.js';
 import { baseClientConfigPayload } from '../helpers/test-config.js';
 
 describe('GET /auth (config validation)', () => {
@@ -79,7 +80,7 @@ describe('GET /auth (config validation)', () => {
     });
 
     expect(res.statusCode).toBe(400);
-    expect(res.json()).toEqual({ error: 'Request failed' });
+    expectJsonError(res.json());
 
     await app.close();
   });
@@ -202,7 +203,7 @@ describe('GET /auth (config validation)', () => {
     });
 
     expect(res.statusCode).toBe(400);
-    expect(res.json()).toEqual({ error: 'Request failed' });
+    expectJsonError(res.json());
 
     await app.close();
   });
@@ -230,7 +231,7 @@ describe('GET /auth (config validation)', () => {
     });
 
     expect(res.statusCode).toBe(400);
-    expect(res.json()).toEqual({ error: 'Request failed' });
+    expectJsonError(res.json());
 
     await app.close();
   });

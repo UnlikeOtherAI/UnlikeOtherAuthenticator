@@ -26,6 +26,7 @@ describe('social-state.service', () => {
       provider: 'google',
       config_url: 'https://client.example.com/auth-config',
       redirect_url: 'https://client.example.com/oauth/callback',
+      request_access: false,
     });
   });
 
@@ -80,4 +81,3 @@ describe('social-state.service', () => {
     ).rejects.toThrow();
   });
 });
-

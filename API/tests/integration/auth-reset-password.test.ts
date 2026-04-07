@@ -12,6 +12,7 @@ import { SignJWT } from 'jose';
 
 import { createApp } from '../../src/app.js';
 import { createTestDb } from '../helpers/test-db.js';
+import { expectJsonError } from '../helpers/error-response.js';
 import { hashEmailToken } from '../../src/utils/verification-token.js';
 import { baseClientConfigPayload } from '../helpers/test-config.js';
 
@@ -202,7 +203,7 @@ describe.skipIf(!hasDatabase)('Password reset flow', () => {
       payload: { token: rawToken, password: 'Abcdef1!' },
     });
     expect(reuse.statusCode).toBe(400);
-    expect(reuse.json()).toEqual({ error: 'Request failed' });
+    expectJsonError(reuse.json());
 
     await app.close();
   });
@@ -231,7 +232,7 @@ describe.skipIf(!hasDatabase)('Password reset flow', () => {
     });
 
     expect(res.statusCode).toBe(400);
-    expect(res.json()).toEqual({ error: 'Request failed' });
+    expectJsonError(res.json());
 
     await app.close();
   });

@@ -4,6 +4,7 @@ import { SignJWT } from 'jose';
 
 import { createApp } from '../../src/app.js';
 import { createClientId } from '../../src/utils/hash.js';
+import { expectJsonError } from '../helpers/error-response.js';
 
 function sharedSecretKey(sharedSecret: string): Uint8Array {
   return new TextEncoder().encode(sharedSecret);
@@ -97,7 +98,7 @@ describe('GET /domain/debug', () => {
     });
 
     expect(res.statusCode).toBe(401);
-    expect(res.json()).toEqual({ error: 'Request failed' });
+    expectJsonError(res.json());
 
     await app.close();
   });
@@ -130,7 +131,7 @@ describe('GET /domain/debug', () => {
     });
 
     expect(res.statusCode).toBe(403);
-    expect(res.json()).toEqual({ error: 'Request failed' });
+    expectJsonError(res.json());
 
     await app.close();
   });
@@ -165,9 +166,8 @@ describe('GET /domain/debug', () => {
     });
 
     expect(res.statusCode).toBe(403);
-    expect(res.json()).toEqual({ error: 'Request failed' });
+    expectJsonError(res.json());
 
     await app.close();
   });
 });
-

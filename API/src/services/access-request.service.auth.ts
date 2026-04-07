@@ -5,7 +5,6 @@ import { sendAccessRequestNotificationEmail } from './email.service.js';
 import { extractEmailTheme } from './email-theme.service.js';
 import {
   AccessRequestPrisma,
-  assertAccessRequestsEnabled,
   buildAdminReviewUrl,
   getEnv,
   isAutoGrantDomain,

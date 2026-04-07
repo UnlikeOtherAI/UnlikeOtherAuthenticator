@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 
 import { createApp } from '../../src/app.js';
 import { createClientId } from '../../src/utils/hash.js';
+import { expectJsonError } from '../helpers/error-response.js';
 import { createTestDb } from '../helpers/test-db.js';
 import {
   clearOrgTestDatabase,
@@ -321,7 +322,7 @@ describe.skipIf(!hasDatabase)('internal /internal/org endpoints', () => {
       },
     });
     expect(response.statusCode).toBe(404);
-    expect(response.json()).toEqual({ error: 'Request failed' });
+    expectJsonError(response.json());
 
     await app.close();
   });
@@ -416,7 +417,7 @@ describe.skipIf(!hasDatabase)('internal /internal/org endpoints', () => {
         ...(request.payload ? { payload: request.payload } : {}),
       });
       expect(response.statusCode).toBe(401);
-      expect(response.json()).toEqual({ error: 'Request failed' });
+      expectJsonError(response.json());
     }
 
     await app.close();

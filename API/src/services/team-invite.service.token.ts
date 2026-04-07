@@ -99,6 +99,14 @@ async function findInviteToken(params: {
   });
 }
 
+function requireTeamInvite(row: InviteTokenRow): NonNullable<InviteTokenRow['teamInvite']> {
+  if (!row.teamInvite) {
+    throw new AppError('BAD_REQUEST', 400);
+  }
+
+  return row.teamInvite;
+}
+
 export async function getTeamInviteLandingData(params: {
   token: string;
   configUrl: string;
@@ -134,14 +142,15 @@ export async function getTeamInviteLandingData(params: {
     configUrl: params.configUrl,
     now,
   });
+  const teamInvite = requireTeamInvite(row);
 
   return {
     tokenType,
-    inviteId: row.teamInvite!.id,
-    email: row.teamInvite!.email,
-    inviteName: row.teamInvite!.inviteName,
-    teamName: row.teamInvite!.team.name,
-    organisationName: row.teamInvite!.org.name,
+    inviteId: teamInvite.id,
+    email: teamInvite.email,
+    inviteName: teamInvite.inviteName,
+    teamName: teamInvite.team.name,
+    organisationName: teamInvite.org.name,
   };
 }
 
@@ -180,15 +189,16 @@ export async function declineTeamInviteByToken(params: {
       configUrl: params.configUrl,
       now,
     });
+    const teamInvite = requireTeamInvite(row);
 
     await tx.teamInvite.update({
-      where: { id: row.teamInvite!.id },
+      where: { id: teamInvite.id },
       data: { declinedAt: now },
       select: { id: true },
     });
     await tx.verificationToken.updateMany({
       where: {
-        teamInviteId: row.teamInvite!.id,
+        teamInviteId: teamInvite.id,
         usedAt: null,
       },
       data: {
@@ -197,10 +207,10 @@ export async function declineTeamInviteByToken(params: {
     });
 
     return {
-      email: row.teamInvite!.email,
-      inviteName: row.teamInvite!.inviteName,
-      teamName: row.teamInvite!.team.name,
-      organisationName: row.teamInvite!.org.name,
+      email: teamInvite.email,
+      inviteName: teamInvite.inviteName,
+      teamName: teamInvite.team.name,
+      organisationName: teamInvite.org.name,
     };
   });
 }

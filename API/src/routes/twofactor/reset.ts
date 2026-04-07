@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { configVerifier } from '../../middleware/config-verifier.js';
 import { requestTwoFaReset, resetTwoFaWithToken } from '../../services/twofactor-reset.service.js';
+import { AppError } from '../../utils/errors.js';
 
 const SUCCESS_MESSAGE = 'We sent instructions to your email';
 
@@ -55,9 +56,7 @@ export function registerTwoFactorResetRoutes(app: FastifyInstance): void {
       const { token } = ResetBodySchema.parse(request.body);
 
       if (!request.config || !request.configUrl) {
-        // configVerifier should always attach these; fail closed.
-        reply.status(400).send({ error: 'Request failed' });
-        return;
+        throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
       }
 
       await resetTwoFaWithToken({
@@ -70,4 +69,3 @@ export function registerTwoFactorResetRoutes(app: FastifyInstance): void {
     },
   );
 }
-

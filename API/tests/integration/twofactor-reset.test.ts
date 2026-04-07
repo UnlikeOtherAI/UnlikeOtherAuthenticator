@@ -12,6 +12,7 @@ import { SignJWT } from 'jose';
 
 import { createApp } from '../../src/app.js';
 import { createTestDb } from '../helpers/test-db.js';
+import { expectJsonError } from '../helpers/error-response.js';
 import { hashEmailToken } from '../../src/utils/verification-token.js';
 import { encryptTwoFaSecret } from '../../src/utils/twofa-secret.js';
 import { baseClientConfigPayload } from '../helpers/test-config.js';
@@ -197,7 +198,7 @@ describe.skipIf(!hasDatabase)('2FA reset flow', () => {
       url: `/auth/email/twofa-reset?${baseQuery}&token=${encodeURIComponent(rawToken)}`,
     });
     expect(reuse.statusCode).toBe(400);
-    expect(reuse.json()).toEqual({ error: 'Request failed' });
+    expectJsonError(reuse.json());
 
     await app.close();
   });

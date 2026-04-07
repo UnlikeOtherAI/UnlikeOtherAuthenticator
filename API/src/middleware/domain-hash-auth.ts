@@ -78,7 +78,11 @@ async function domainHashAuth(request: RequestWithConfig) {
   }
 }
 
-export function requireDomainHashAuthForDomainQuery(request?: RequestWithConfig): any {
+export function requireDomainHashAuthForDomainQuery(): typeof domainHashAuth;
+export function requireDomainHashAuthForDomainQuery(request: RequestWithConfig): Promise<void>;
+export function requireDomainHashAuthForDomainQuery(
+  request?: RequestWithConfig,
+): Promise<void> | typeof domainHashAuth {
   if (request) {
     return domainHashAuth(request);
   }

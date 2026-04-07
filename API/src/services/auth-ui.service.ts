@@ -106,8 +106,9 @@ export async function renderAuthEntrypointHtml(params: {
     base = injectSsrIntoRootDiv(base, ssrHtml);
   }
 
-  const qIdx = params.requestUrl ? params.requestUrl.indexOf('?') : -1;
-  const searchStr = qIdx !== -1 ? params.requestUrl!.slice(qIdx) : '';
+  const requestUrl = params.requestUrl ?? '';
+  const qIdx = requestUrl.indexOf('?');
+  const searchStr = qIdx !== -1 ? requestUrl.slice(qIdx) : '';
 
   const bootstrap = [
     '<script>',

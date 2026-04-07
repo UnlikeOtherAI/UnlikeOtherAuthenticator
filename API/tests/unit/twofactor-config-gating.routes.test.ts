@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ClientConfig } from '../../src/services/config.service.js';
+import { expectJsonError } from '../helpers/error-response.js';
 import { testUiTheme } from '../helpers/test-config.js';
 
 let currentConfig: ClientConfig | null = null;
@@ -155,7 +156,7 @@ describe('2FA gated by config `2fa_enabled`', () => {
     });
 
     expect(res.statusCode).toBe(401);
-    expect(res.json()).toEqual({ error: 'Request failed' });
+    expectJsonError(res.json());
 
     expect(verifyTwoFaChallengeMock).not.toHaveBeenCalled();
     expect(verifyTwoFactorForLoginMock).not.toHaveBeenCalled();

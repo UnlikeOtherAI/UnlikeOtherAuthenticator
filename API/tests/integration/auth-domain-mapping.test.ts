@@ -11,6 +11,7 @@ import {
 } from 'vitest';
 
 import { createApp } from '../../src/app.js';
+import { expectJsonError } from '../helpers/error-response.js';
 import { baseClientConfigPayload } from '../helpers/test-config.js';
 import { createTestDb } from '../helpers/test-db.js';
 
@@ -47,7 +48,7 @@ describe('GET /auth/domain-mapping (config + rate limiting)', () => {
     });
 
     expect(res.statusCode).toBe(400);
-    expect(res.json()).toEqual({ error: 'Request failed' });
+    expectJsonError(res.json());
 
     await app.close();
   });
@@ -72,7 +73,7 @@ describe('GET /auth/domain-mapping (config + rate limiting)', () => {
     });
 
     expect(res.statusCode).toBe(400);
-    expect(res.json()).toEqual({ error: 'Request failed' });
+    expectJsonError(res.json());
 
     await app.close();
   });
@@ -111,7 +112,7 @@ describe('GET /auth/domain-mapping (config + rate limiting)', () => {
       remoteAddress: ip,
     });
     expect(blocked.statusCode).toBe(429);
-    expect(blocked.json()).toEqual({ error: 'Request failed' });
+    expectJsonError(blocked.json());
 
     await app.close();
   });

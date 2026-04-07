@@ -28,7 +28,7 @@ export function registerI18nGetRoute(app: FastifyInstance): void {
     async (request, reply) => {
       const { language } = ParamsSchema.parse(request.params);
       const config = request.config;
-      if (!config) throw new Error('missing request.config');
+      if (!config) throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
 
       const allowed = allowedLanguagesFromConfig(config);
       if (!allowed.includes(language)) {
@@ -40,4 +40,3 @@ export function registerI18nGetRoute(app: FastifyInstance): void {
     },
   );
 }
-

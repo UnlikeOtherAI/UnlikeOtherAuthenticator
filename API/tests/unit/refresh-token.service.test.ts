@@ -98,6 +98,7 @@ describe('refresh-token.service (unit)', () => {
           domain: context.domain,
           clientId: context.clientId,
           configUrl: context.configUrl,
+          createdAt: new Date(now.getTime() + 60_000 - 30 * 24 * 60 * 60 * 1000),
           expiresAt: new Date(now.getTime() + 60_000),
           revokedAt: null,
           replacedByTokenId: null,
