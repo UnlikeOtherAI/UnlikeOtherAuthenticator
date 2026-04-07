@@ -146,8 +146,13 @@ Each rule specifies:
 
 ---
 
+## Who can manage custom role definitions
+
+Only the **team admin** and the **org owner** can create, rename, or delete custom role definitions for a team. No other role has this permission.
+
+---
+
 ## Outstanding decisions
 
 1. **Default custom role on auto-enrolment** — must the rule explicitly name a custom role, or fall back to the first role in the team's list if none specified?
 2. **Multiple custom roles per user per team** — the token uses an array; confirm this is intentional (a user can hold `editor` and `billing` simultaneously at the same team scope)
-3. **SCIM** — confirmed out of scope for now
