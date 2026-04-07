@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url';
 
 import type { FastifyInstance } from 'fastify';
 
+import { configJwtDocumentation, configVerificationEndpointDocumentation } from './config-docs.js';
+import { registerConfigVerifyRoute } from './config-verify.js';
 import { registerLlmRoute } from './llm.js';
 import { endpoints } from './schema.js';
 
@@ -21,6 +23,7 @@ try {
 
 export function registerRootRoute(app: FastifyInstance): void {
   registerLlmRoute(app);
+  registerConfigVerifyRoute(app);
 
   app.get('/', async () => {
     return {
@@ -30,6 +33,8 @@ export function registerRootRoute(app: FastifyInstance): void {
       version,
       repository: 'https://github.com/UnlikeOtherAI/UnlikeOtherAuthenticator',
       docs: '/llm',
+      config_jwt: configJwtDocumentation,
+      config_verification: configVerificationEndpointDocumentation,
       endpoints,
     };
   });

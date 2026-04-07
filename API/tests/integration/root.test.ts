@@ -19,7 +19,7 @@ afterAll(async () => {
 });
 
 describe('GET /', () => {
-  it('returns API information with version, repo link, and endpoints', async () => {
+  it('returns API information with version, repo link, config docs, and endpoints', async () => {
     const res = await app.inject({ method: 'GET', url: '/' });
 
     expect(res.statusCode).toBe(200);
@@ -32,6 +32,10 @@ describe('GET /', () => {
     expect(body.repository).toBe(
       'https://github.com/UnlikeOtherAI/UnlikeOtherAuthenticator',
     );
+    expect(body.config_jwt.required_fields.ui_theme.required_sections.colors.required_keys).toContain(
+      'primary',
+    );
+    expect(body.config_verification.path).toBe('/config/verify');
     expect(body.endpoints).toEqual(expect.any(Array));
     expect(body.endpoints.length).toBeGreaterThan(0);
 
@@ -54,6 +58,9 @@ describe('GET /', () => {
     // Spot-check well-known routes with correct methods and paths
     expect(body.endpoints).toContainEqual(
       expect.objectContaining({ method: 'GET', path: '/health' }),
+    );
+    expect(body.endpoints).toContainEqual(
+      expect.objectContaining({ method: 'POST', path: '/config/verify' }),
     );
     expect(body.endpoints).toContainEqual(
       expect.objectContaining({ method: 'POST', path: '/auth/login' }),
@@ -119,18 +126,20 @@ describe('GET /', () => {
 });
 
 describe('GET /llm', () => {
-  it('documents access request config and backend review endpoints', async () => {
+  it('documents config styling/debugging and backend review endpoints', async () => {
     const res = await app.inject({ method: 'GET', url: '/llm' });
 
     expect(res.statusCode).toBe(200);
 
     const body = res.json();
 
-    expect(body.config_jwt.optional_fields.access_requests.fields.target_team_id).toContain(
-      'team that receives auto-grants and access requests',
+    expect(body.config_jwt.required_fields.ui_theme.required_sections.logo.alt).toContain(
+      'required non-empty string',
     );
-    expect(body.integration_guide.step_10).toContain('request_access=true');
-    expect(body.integration_guide.step_12).toContain('/teams/:teamId/access-requests');
-    expect(body.integration_guide.step_13).toContain('optional slug');
+    expect(body.config_verification.path).toBe('/config/verify');
+    expect(body.integration_guide.step_2).toContain('/config/verify');
+    expect(body.integration_guide.step_11).toContain('request_access=true');
+    expect(body.integration_guide.step_13).toContain('/teams/:teamId/access-requests');
+    expect(body.integration_guide.step_14).toContain('optional slug');
   });
 });

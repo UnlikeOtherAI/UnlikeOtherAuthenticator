@@ -1,3 +1,5 @@
+import { configDebugEndpoints } from './schema.config-debug.js';
+
 export type EndpointSchema = {
   method: string;
   path: string;
@@ -489,6 +491,7 @@ const orgEndpoints: EndpointSchema[] = [
 
 export const endpoints: EndpointSchema[] = [
   ...baseEndpoints,
+  ...configDebugEndpoints,
   ...authEndpoints,
   ...domainEndpoints,
   ...orgEndpoints,
