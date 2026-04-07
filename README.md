@@ -238,7 +238,7 @@ PopupContainer
 ### Database Schema
 
 **Core Tables:**
-- `users` — User accounts (email, password hash, name, avatar URL, 2FA settings)
+- `users` — User accounts (email, password hash, name, pronouns preset/custom fields, avatar URL, 2FA settings)
 - `domain_roles` — Per-domain role assignments (superuser vs user)
 - `login_logs` — Audit trail of authentication events
 - `verification_tokens` — One-time tokens for email verification and password reset
@@ -254,6 +254,11 @@ PopupContainer
 **User Scope:**
 - **Global** (default): One email = one user across all domains
 - **Per-domain**: Same email on different domains = separate user records
+
+**Pronouns Model:**
+- Use `pronouns_preset` plus optional `pronouns_custom`
+- Recommended presets: `he_him`, `she_her`, `they_them`, `any_pronouns`, `ask_me`, `prefer_not_to_say`, `custom`
+- Require `pronouns_custom` only when `pronouns_preset = custom`
 
 ### Security Model
 

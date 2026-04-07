@@ -316,10 +316,20 @@ This service is **stateless where possible**, standards-based, and API-first.
 * `email`
 * `password_hash` (nullable for social-only)
 * `name`
+* `pronouns_preset` (nullable enum: `he_him`, `she_her`, `they_them`, `any_pronouns`, `ask_me`, `prefer_not_to_say`, `custom`)
+* `pronouns_custom` (nullable string, required when `pronouns_preset = custom`)
 * `role` (superuser / user)
 * `2fa_enabled`
 * `2fa_secret` (encrypted)
 * `created_at`
+
+### Pronouns
+
+* Pronouns support both **preset values** and a **custom free-text fallback**
+* `pronouns_preset` should be used for common values and filtering/UI consistency
+* `pronouns_custom` is used only when `pronouns_preset = custom`
+* If `pronouns_preset` is not `custom`, `pronouns_custom` should be `null`
+* Pronouns are part of the user profile and follow the same user scope rules as the rest of the user record
 
 ### Avatar
 
@@ -1184,7 +1194,7 @@ Each task references the line number(s) where the relevant specification lives i
 
 | #  | Task | Ref (line) |
 |----|------|------------|
-| 3.1 | Create users table: `id`, `email`, `password_hash`, `name`, `role`, `2fa_enabled`, `2fa_secret`, `created_at` | L303–312 |
+| 3.1 | Create users table: `id`, `email`, `password_hash`, `name`, `pronouns_preset`, `pronouns_custom`, `role`, `2fa_enabled`, `2fa_secret`, `created_at` | L303–321 |
 | 3.2 | Add `avatar_url` column (external URL only, no local storage) | L314–318 |
 | 3.3 | Implement global user scope (default): one email = one user across all domains | L516–520 |
 | 3.4 | Implement per-domain user scope: users isolated per domain, same email = separate records | L521–525 |
