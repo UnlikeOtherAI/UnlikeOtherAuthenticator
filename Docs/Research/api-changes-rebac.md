@@ -74,6 +74,10 @@ enum TeamRole {
 
 Replace any existing `lead` value with `admin` in migration. `lead` is fully removed — the new canonical enum is `owner | admin | member`.
 
+#### `ScimToken` and `ScimGroupMapping` — DEFERRED
+
+> **DEFERRED — not in initial build.** Both models are present in `schema.prisma` and will be migrated, but no SCIM endpoints or logic will be implemented initially. See `roles-and-acl.md §SCIM provisioning` for the full spec when ready to implement.
+
 #### `ScimToken` (for enterprise SCIM authentication)
 ```prisma
 model ScimToken {
@@ -370,12 +374,12 @@ PATCH  /internal/admin/orgs/:orgId/members/:userId                — change org
 DELETE /internal/admin/orgs/:orgId/members/:userId                — remove from org
 PATCH  /internal/admin/teams/:teamId/members/:userId              — change team role
 
-— SCIM token management (per-org) —
+— SCIM token management (per-org) — DEFERRED —
 GET    /internal/admin/orgs/:orgId/scim-tokens                    — list tokens (id, label, lastUsedAt; plain value not returned)
 POST   /internal/admin/orgs/:orgId/scim-tokens                    — create token (returns plain value once only)
 DELETE /internal/admin/orgs/:orgId/scim-tokens/:tokenId           — revoke token
 
-— SCIM group mapping management —
+— SCIM group mapping management — DEFERRED —
 GET    /internal/admin/orgs/:orgId/scim/group-mappings            — list group → team mappings
 POST   /internal/admin/orgs/:orgId/scim/group-mappings            — create mapping
 DELETE /internal/admin/orgs/:orgId/scim/group-mappings/:mappingId — remove mapping (does not delete team)

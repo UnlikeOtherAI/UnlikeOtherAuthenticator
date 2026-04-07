@@ -81,10 +81,10 @@ For the full product spec, see [brief.md](./brief.md). For tech stack, see [tech
           org-members.ts         — PATCH/DELETE /internal/admin/orgs/:orgId/members/:userId
           org-domain-rules.ts    — GET/POST/DELETE /internal/admin/orgs/:orgId/domain-rules
           team-members.ts        — PATCH /internal/admin/teams/:teamId/members/:userId
-          scim-tokens.ts         — GET/POST/DELETE /internal/admin/orgs/:orgId/scim-tokens
-          scim-group-mappings.ts — GET/POST/DELETE /internal/admin/orgs/:orgId/scim/group-mappings
+          scim-tokens.ts         — GET/POST/DELETE /internal/admin/orgs/:orgId/scim-tokens  [DEFERRED]
+          scim-group-mappings.ts — GET/POST/DELETE /internal/admin/orgs/:orgId/scim/group-mappings  [DEFERRED]
           index.ts               — Route registration for /internal/admin
-      /scim
+      /scim                      [DEFERRED — full spec in roles-and-acl.md; schema ready]
         users.ts               — POST/GET/PATCH/DELETE /scim/v2/Users[/:id]
         groups.ts              — GET/POST/PATCH/DELETE /scim/v2/Groups[/:id]
         index.ts               — Route registration for /scim/v2 (uses ScimToken bearer auth, no config-verifier)
@@ -97,7 +97,7 @@ For the full product spec, see [brief.md](./brief.md). For tech stack, see [tech
       org-role-guard.ts       — Validates user access token and org role for /org endpoints
       org-permission.ts       — requireOrgRole(minRole) — org-level UOA role enforcement (owner > admin > member)
       team-permission.ts      — requireTeamRole(minRole) — team-level UOA role enforcement with org-level fallback
-      scim-auth.ts            — SCIM bearer token validation and org-scope verification for /scim/v2/* routes
+      scim-auth.ts            — SCIM bearer token validation and org-scope verification for /scim/v2/* routes  [DEFERRED]
       error-handler.ts        — Global error handler (generic user-facing errors, detailed internal logs)
       rate-limiter.ts         — Rate limiting
     /services
@@ -174,7 +174,7 @@ Request → Route → Middleware → Service → Database (Prisma)
 
 ### Middleware
 
-* **config-verifier** — runs on all OAuth entry points. Fetches config from URL, verifies JWT, attaches parsed config to the request context. **Bypass exceptions** (SDK-facing or machine-readable endpoints called without a backend config context): `GET /killswitch/check`, `GET /apps/startup`, `GET /` (schema), `GET /llm` (config docs). All `/scim/v2/*` endpoints also bypass config-verifier (they use SCIM bearer token auth instead).
+* **config-verifier** — runs on all OAuth entry points. Fetches config from URL, verifies JWT, attaches parsed config to the request context. **Bypass exceptions** (SDK-facing or machine-readable endpoints called without a backend config context): `GET /killswitch/check`, `GET /apps/startup`, `GET /` (schema), `GET /llm` (config docs). All `/scim/v2/*` endpoints also bypass config-verifier (they use SCIM bearer token auth instead) — noted here for when SCIM is implemented [DEFERRED].
 * **domain-hash-auth** — runs on domain-scoped API routes. Verifies the domain hash token
 * **superuser-access-token** — validates user access tokens for superuser-only domain endpoints
 * **org-features** — rejects org endpoints when `org_features.enabled` is false
@@ -182,7 +182,7 @@ Request → Route → Middleware → Service → Database (Prisma)
 * **org-role-guard** — validates user context and org role for `/org/*` routes
 * **org-permission** (`requireOrgRole(minRole)`) — enforces org-level UOA role (`owner > admin > member`). Reads `OrgMember.role` for the authenticated user in the target org. Returns 403 if not a member or role is insufficient. Used on org management endpoints and admin panel org routes. See `api-changes-rebac.md §4`.
 * **team-permission** (`requireTeamRole(minRole)`) — enforces team-level UOA role with org-level fallback inheritance. Checks `TeamMember.role` first; if not a direct member, falls back to the user's `OrgMember.role` for the parent org. Returns 403 if neither check passes. See `api-changes-rebac.md §4`.
-* **scim-auth** — used only on `/scim/v2/*` routes. Extracts the bearer token from the `Authorization` header, looks up the hashed token in `ScimToken`, validates the org scope. Returns 401 on missing/invalid token, 403 on org scope mismatch.
+* **scim-auth** — [DEFERRED] used only on `/scim/v2/*` routes. Extracts the bearer token from the `Authorization` header, looks up the hashed token in `ScimToken`, validates the org scope. Returns 401 on missing/invalid token, 403 on org scope mismatch.
 * **error-handler** — catches all errors. Returns generic message to user. Logs specifics internally
 
 ### Services (fat)

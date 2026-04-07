@@ -1,0 +1,23 @@
+- main [ref=e5]:
+  - generic [ref=e7]:
+    - heading "Sign in" [level=1] [ref=e8]
+    - generic [ref=e9]:
+      - generic [ref=e10]:
+        - text: Email
+        - textbox "Email" [ref=e11]
+      - generic [ref=e12]:
+        - text: Password
+        - textbox "Password" [ref=e13]
+      - generic [ref=e14] [cursor=pointer]:
+        - switch "Remember me" [checked] [ref=e15]
+        - generic [ref=e16]: Remember me
+      - button "Sign in" [ref=e18] [cursor=pointer]
+      - generic [ref=e19]:
+        - button "Forgot your password?" [ref=e20] [cursor=pointer]
+        - button "Create an account" [ref=e21] [cursor=pointer]
+    - generic [ref=e23]:
+      - generic [ref=e26]: or
+      - link "Continue with Google" [ref=e28] [cursor=pointer]:
+        - /url: /auth/social/google?config_url=https%3A%2F%2Fpaste.rs%2FFUcmh
+        - img [ref=e29]
+        - text: Continue with Google

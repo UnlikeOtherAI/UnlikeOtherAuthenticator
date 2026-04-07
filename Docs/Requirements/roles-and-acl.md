@@ -229,6 +229,8 @@ Required for enterprise clients (e.g. automotive, manufacturing, finance) whose 
 
 ### SCIM provisioning (Entra ID / Okta)
 
+> **DEFERRED — not in initial build.** The schema models (`ScimToken`, `ScimGroupMapping`, `scimExternalId` on `User`) are present and will be created in the initial migration so no schema changes are needed when SCIM is implemented. The endpoints and all logic below are fully specified but not built yet.
+
 Required for enterprise clients who manage thousands of users via a central identity provider and cannot manage membership manually.
 
 SCIM (System for Cross-domain Identity Management) is the protocol identity providers like Microsoft Entra ID and Okta use to push user and group changes into external apps automatically. When an employee joins Ford, Entra ID provisions them into UOA. When they leave, it deprovisions them. Groups in Entra ID map to teams in UOA.
