@@ -117,6 +117,11 @@
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
       Login Logs
     </a>
+    <p class="nav-section">Apps</p>
+    <a class="nav-link" id="nav-apps" onclick="nav('apps')">
+      <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
+      Apps &amp; Flags
+    </a>
   </nav>
   <div style="border-top:1px solid #1e293b;padding:10px;">
     <a href="template-login.html" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer;transition:background .15s;text-decoration:none;" onmouseover="this.style.background='#1e293b'" onmouseout="this.style.background='transparent'">
@@ -228,13 +233,14 @@
           <select id="new-org-domain-role">
             <option value="member">Member</option>
             <option value="admin">Admin</option>
-            <option value="owner">Owner</option>
           </select>
           <select id="new-org-domain-verification">
             <option value="any">Any verified</option>
             <option value="email">Email link</option>
             <option value="google">Google</option>
             <option value="github">GitHub</option>
+            <option value="microsoft">Microsoft</option>
+            <option value="apple">Apple</option>
           </select>
           <button class="btn-secondary" onclick="addEmailDomainRule()" style="padding:7px 12px;white-space:nowrap;">Add</button>
         </div>
@@ -296,8 +302,12 @@ const DATA = {
     { id:5, name:'old-product.com', label:'Old Product', secretAge:null, secretOld:false, users:89, orgs:2, status:'disabled', created:'2023-06-10', hash:'d9c3a7e2…' },
   ],
   orgs: [
-    { id:1, name:'Acme Engineering', slug:'acme-engineering', created:'Jan 15, 2024',
-      emailDomainRules:[{domain:'acme.com',grantedRole:'member',verification:'any'}],
+    { id:1, name:'Acme Engineering', slug:'acme-engineering', created:'Jan 15, 2024', dormant:false,
+      emailDomainRules:[
+        {domain:'acme.com',teamId:null,teamName:null,grantedRole:'member',verification:'any'},
+        {domain:'acme.com',teamId:12,teamName:'Backend',grantedRole:'member',verification:'microsoft'},
+        {domain:'contractors.acme.com',teamId:13,teamName:'Frontend',grantedRole:'member',verification:'any'},
+      ],
       owner:{ id:101, name:'Alice Chen', email:'alice@acme.com' },
       teams:[
         { id:11, name:'General', isDefault:true, desc:'All members', members:42 },
@@ -314,8 +324,8 @@ const DATA = {
         { id:105, name:'Eva Torres', email:'eva@acme.com', role:'member', teams:['General','QA'], teamRoles:{General:'member',QA:'admin'}, twofa:true, lastLogin:'2 days ago', status:'active', method:'google' },
       ]
     },
-    { id:2, name:'Acme Design', slug:'acme-design', created:'Feb 3, 2024',
-      emailDomainRules:[{domain:'acme.com',grantedRole:'member',verification:'any'}],
+    { id:2, name:'Acme Design', slug:'acme-design', created:'Feb 3, 2024', dormant:false,
+      emailDomainRules:[{domain:'acme.com',teamId:null,teamName:null,grantedRole:'member',verification:'any'}],
       owner:{ id:201, name:'Emily Park', email:'emily@acme.com' },
       teams:[
         { id:21, name:'General', isDefault:true, desc:'All members', members:18 },
@@ -328,8 +338,11 @@ const DATA = {
         { id:203, name:'Grace Kim', email:'grace@acme.com', role:'member', teams:['General','Brand'], teamRoles:{General:'member',Brand:'member'}, twofa:true, lastLogin:'5 hours ago', status:'active', method:'email' },
       ]
     },
-    { id:3, name:'Widgets Core', slug:'widgets-core', created:'Nov 2, 2023',
-      emailDomainRules:[{domain:'widgets.io',grantedRole:'member',verification:'any'},{domain:'widgets.com',grantedRole:'member',verification:'google'}],
+    { id:3, name:'Widgets Core', slug:'widgets-core', created:'Nov 2, 2023', dormant:false,
+      emailDomainRules:[
+        {domain:'widgets.io',teamId:null,teamName:null,grantedRole:'member',verification:'any'},
+        {domain:'widgets.com',teamId:32,teamName:'Platform',grantedRole:'member',verification:'google'},
+      ],
       owner:{ id:301, name:'Carol Johnson', email:'carol@widgets.io' },
       teams:[
         { id:31, name:'General', isDefault:true, desc:'All members', members:91 },
@@ -344,8 +357,8 @@ const DATA = {
         { id:304, name:'Henry Park', email:'henry@widgets.io', role:'member', teams:['General','Platform','Integrations'], teamRoles:{General:'member',Platform:'member',Integrations:'member'}, twofa:true, lastLogin:'6 hours ago', status:'active', method:'email' },
       ]
     },
-    { id:4, name:'Startup Alpha', slug:'startup-alpha', created:'Feb 10, 2024',
-      emailDomainRules:[{domain:'startup.dev',grantedRole:'member',verification:'email'}],
+    { id:4, name:'Startup Alpha', slug:'startup-alpha', created:'Feb 10, 2024', dormant:false,
+      emailDomainRules:[{domain:'startup.dev',teamId:null,teamName:null,grantedRole:'member',verification:'email'}],
       owner:{ id:401, name:'Ian Chen', email:'ian@startup.dev' },
       teams:[
         { id:41, name:'General', isDefault:true, desc:'All members', members:12 },
@@ -355,6 +368,18 @@ const DATA = {
         { id:401, name:'Ian Chen', email:'ian@startup.dev', role:'owner', teams:['General','Product'], teamRoles:{General:'member',Product:'admin'}, twofa:false, lastLogin:'1 hour ago', status:'active', method:'google' },
         { id:402, name:'Julia Ross', email:'julia@startup.dev', role:'member', teams:['General','Product'], teamRoles:{General:'member',Product:'member'}, twofa:false, lastLogin:'3 hours ago', status:'active', method:'email' },
       ]
+    },
+    { id:5, name:'Ford Enterprise', slug:'ford-enterprise', created:'Mar 1, 2024', dormant:true,
+      emailDomainRules:[
+        {domain:'ford.com',teamId:null,teamName:null,grantedRole:'member',verification:'microsoft'},
+        {domain:'ford.com',teamId:52,teamName:'Engineering',grantedRole:'admin',verification:'microsoft'},
+      ],
+      owner:{ id:501, name:'James Ford', email:'james.ford@ford.com' },
+      teams:[
+        { id:51, name:'General', isDefault:true, desc:'All employees', members:0 },
+        { id:52, name:'Engineering', isDefault:false, desc:'Engineering staff', members:0 },
+      ],
+      members:[]
     },
   ],
   users: [
@@ -428,7 +453,7 @@ function jumpTo(idx) {
 function updateSidebar() {
   const root = navStack[0].type;
   document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
-  const key = root==='org'?'orgs': root==='team'?'orgs': root;
+  const key = root==='org'?'orgs': root==='team'?'orgs': root==='apps'?'apps': root;
   const el = document.getElementById('nav-'+key);
   if (el) el.classList.add('active');
 }
@@ -446,6 +471,7 @@ function crumbLabel(item) {
   if (item.type==='users') return 'Users';
   if (item.type==='bans') return 'Bans';
   if (item.type==='logs') return 'Login Logs';
+  if (item.type==='apps') return 'Apps & Flags';
   return item.type;
 }
 function updateBreadcrumb() {
@@ -466,7 +492,7 @@ function render() {
   const fns = { dashboard:renderDashboard, domains:renderDomains, orgs:renderOrgList,
     org:()=>renderOrgDetail(cur.orgId), teams:renderTeamList,
     team:()=>renderTeamDetail(cur.orgId,cur.teamId),
-    users:renderUserList, bans:renderBans, logs:renderLogs };
+    users:renderUserList, bans:renderBans, logs:renderLogs, apps:renderApps };
   el.innerHTML = (fns[cur.type]||renderDashboard)();
 }
 
@@ -510,7 +536,7 @@ function renderOrgList(){
   return pageHead('Organisations','All organisations across all domains','<button class="btn-primary" onclick="openNewOrgModal()"><svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>New Org</button>')
     +'<div class="card">'
     +'<div style="display:flex;gap:8px;padding:12px 16px;border-bottom:1px solid #f3f4f6;"><input type="search" placeholder="Search organisations&#x2026;" style="width:220px;"/></div>'
-    +tbl(['Organisation','Auto-enrol','Owner','Members','Teams','Created','Actions'],DATA.orgs.map(o=>'<tr><td class="td"><div style="display:flex;align-items:center;gap:10px;">'+av(o.name)+'<div><a onclick="push({type:\'org\',orgId:'+o.id+'})" style="font-weight:600;color:#4f46e5;cursor:pointer;font-size:13px;">'+esc(o.name)+'</a><p style="font-size:11px;color:#9ca3af;">'+esc(o.slug)+'</p></div></div></td><td class="td">'+((o.emailDomainRules||[]).slice(0,2).map(r=>'<code style="font-size:11px;background:#f0fdf4;color:#166534;padding:1px 6px;border-radius:4px;margin-right:4px;">@'+esc(r.domain)+'</code>').join(''))+((o.emailDomainRules||[]).length>2?'<span style="font-size:11px;color:#6b7280;">+'+(o.emailDomainRules.length-2)+'</span>':'')+'</td><td class="td"><a onclick="openUser('+o.owner.id+')" style="color:#374151;cursor:pointer;">'+esc(o.owner.name)+'</a><p style="font-size:11px;color:#9ca3af;">'+esc(o.owner.email)+'</p></td><td class="td">'+o.members.length+'</td><td class="td">'+o.teams.length+'</td><td class="td" style="font-size:12px;color:#9ca3af;">'+esc(o.created)+'</td><td class="td"><button class="action-btn indigo" onclick="push({type:\'org\',orgId:'+o.id+'})">View</button><span class="divider">|</span><button class="action-btn amber">Transfer</button><span class="divider">|</span><button class="action-btn red" onclick="confirm_(\'Delete '+esc(o.name)+'?\',\'Deletes all teams and memberships.\')">Delete</button></td></tr>').join(''))
+    +tbl(['Organisation','Auto-enrol','Owner','Members','Teams','Created','Actions'],DATA.orgs.map(o=>'<tr><td class="td"><div style="display:flex;align-items:center;gap:10px;">'+av(o.name)+'<div><a onclick="push({type:\'org\',orgId:'+o.id+'})" style="font-weight:600;color:#4f46e5;cursor:pointer;font-size:13px;">'+esc(o.name)+'</a><div style="display:flex;align-items:center;gap:5px;margin-top:2px;"><p style="font-size:11px;color:#9ca3af;margin:0;">'+esc(o.slug)+'</p>'+(o.dormant?badge('Dormant','badge-amber'):'')+'</div></div></div></td><td class="td">'+((o.emailDomainRules||[]).slice(0,2).map(r=>'<div style="margin-bottom:2px;"><code style="font-size:11px;background:#f0fdf4;color:#166534;padding:1px 6px;border-radius:4px;">@'+esc(r.domain)+'</code>'+(r.teamName?'<span style="font-size:10px;color:#6b7280;margin-left:3px;">→ '+esc(r.teamName)+'</span>':'')+'</div>').join(''))+((o.emailDomainRules||[]).length>2?'<span style="font-size:11px;color:#6b7280;">+'+(o.emailDomainRules.length-2)+' more</span>':'')+'</td><td class="td"><a onclick="openUser('+o.owner.id+')" style="color:#374151;cursor:pointer;">'+esc(o.owner.name)+'</a><p style="font-size:11px;color:#9ca3af;">'+esc(o.owner.email)+'</p></td><td class="td">'+o.members.length+'</td><td class="td">'+o.teams.length+'</td><td class="td" style="font-size:12px;color:#9ca3af;">'+esc(o.created)+'</td><td class="td"><button class="action-btn indigo" onclick="push({type:\'org\',orgId:'+o.id+'})">View</button><span class="divider">|</span><button class="action-btn amber">Transfer</button><span class="divider">|</span><button class="action-btn red" onclick="confirm_(\'Delete '+esc(o.name)+'?\',\'Deletes all teams and memberships.\')">Delete</button></td></tr>').join(''))
     +paginate()+'</div>';
 }
 
@@ -519,12 +545,24 @@ function renderOrgDetail(orgId){
   const org=DATA.orgs.find(o=>o.id===orgId); if(!org) return '<p>Not found</p>';
   const teamRows=org.teams.map(t=>'<tr><td class="td"><a onclick="push({type:\'team\',orgId:'+org.id+',teamId:'+t.id+'})" style="font-weight:600;color:#4f46e5;cursor:pointer;">'+esc(t.name)+'</a>'+(t.isDefault?' '+badge('Default','badge-blue'):'')+'</td><td class="td" style="color:#9ca3af;font-size:12px;">'+(t.desc||'—')+'</td><td class="td">'+t.members+'</td><td class="td"><button class="action-btn indigo" onclick="push({type:\'team\',orgId:'+org.id+',teamId:'+t.id+'})">View</button><span class="divider">|</span><button class="action-btn indigo">Edit</button>'+(t.isDefault?'':'<span class="divider">|</span><button class="action-btn red" onclick="confirm_(\'Delete '+esc(t.name)+'?\',\'Members stay in the org.\')">Delete</button>')+'</td></tr>').join('');
   const memberRows=org.members.map(m=>'<tr><td class="td"><div style="display:flex;align-items:center;gap:10px;">'+av(m.name)+'<div><a onclick="openUser('+m.id+')" style="font-weight:500;color:#374151;cursor:pointer;">'+esc(m.name)+'</a><p style="font-size:11px;color:#9ca3af;">'+esc(m.email)+'</p></div></div></td><td class="td">'+statusBadge(m.role)+'</td><td class="td">'+m.teams.map(t=>'<a onclick="push({type:\'team\',orgId:'+org.id+',teamId:'+org.teams.find(x=>x.name===t)?.id+'})" style="color:#4f46e5;cursor:pointer;margin-right:3px;">'+esc(t)+'</a>').join('')+'</td><td class="td" style="font-size:12px;color:#9ca3af;">'+esc(m.lastLogin)+'</td><td class="td"><button class="action-btn indigo" onclick="openUser('+m.id+')">View</button><span class="divider">|</span><button class="action-btn amber">Change Role</button><span class="divider">|</span><button class="action-btn red" onclick="confirm_(\'Remove '+esc(m.name)+'?\',\'Removes from all teams in this org.\')">Remove</button></td></tr>').join('');
+  const domainRuleRows=((org.emailDomainRules||[]).map(r=>'<tr><td class="td"><code style="font-size:12px;color:#166534;background:#f0fdf4;padding:1px 6px;border-radius:4px;">@'+esc(r.domain)+'</code></td><td class="td">'+(r.teamName?'<a onclick="push({type:\'team\',orgId:'+org.id+',teamId:'+r.teamId+'})" style="color:#4f46e5;cursor:pointer;font-size:12px;">'+esc(r.teamName)+'</a>':'<span style="font-size:12px;color:#9ca3af;">Default team</span>')+'</td><td class="td">'+statusBadge(r.grantedRole)+'</td><td class="td"><span class="badge badge-slate" style="font-size:11px;">'+esc(r.verification)+'</span></td><td class="td" style="text-align:right;"><button class="action-btn red" onclick="confirm_(\'Remove rule for @'+esc(r.domain)+'?\',\'Users will no longer be auto-enrolled via this rule.\')">Remove</button></td></tr>')).join('');
+  const domainTeamOpts='<option value="">Default team</option>'+org.teams.map(t=>'<option value="'+t.id+'">'+esc(t.name)+'</option>').join('');
   return backBtn()
-    +'<div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;"><div style="width:48px;height:48px;border-radius:12px;background:#e0e7ff;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#4338ca;flex-shrink:0;">'+org.name[0]+'</div><div style="flex:1;"><div style="display:flex;align-items:center;gap:10px;"><h1 class="page-title">'+esc(org.name)+'</h1>'+badge('Active','badge-green')+'</div><p class="page-sub">'+esc(org.slug)+' &middot; Created '+esc(org.created)+'</p></div><div style="display:flex;gap:8px;"><button class="btn-secondary">Edit</button><button class="btn-secondary">Transfer Ownership</button><button class="btn-danger" onclick="confirm_(\'Delete '+esc(org.name)+'?\',\'Permanently deletes the org and all teams.\')">Delete</button></div></div>'
-    +'<div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:12px;margin-bottom:20px;"><div class="card" style="padding:14px 18px;"><p style="font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;font-weight:600;">Owner</p><p style="font-size:13px;font-weight:500;color:#111827;margin-top:4px;">'+esc(org.owner.name)+'</p><a onclick="openUser('+org.owner.id+')" style="font-size:12px;color:#4f46e5;cursor:pointer;">'+esc(org.owner.email)+'</a></div><div class="card" style="padding:14px 18px;"><p style="font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;font-weight:600;">Members</p><p style="font-size:24px;font-weight:700;color:#111827;margin-top:4px;">'+org.members.length+'</p></div><div class="card" style="padding:14px 18px;"><p style="font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;font-weight:600;">Teams</p><p style="font-size:24px;font-weight:700;color:#111827;margin-top:4px;">'+org.teams.length+'</p></div><div class="card" style="padding:14px 18px;"><p style="font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;font-weight:600;">Auto-enrol</p><div style="margin-top:6px;">'+((org.emailDomainRules||[]).map(r=>'<p style="font-size:12px;color:#166534;margin-bottom:2px;">@'+esc(r.domain)+' → '+esc(r.grantedRole)+'</p>').join('')||'<p style="font-size:12px;color:#9ca3af;">None</p>')+'</div></div></div>'
-    +'<div style="display:flex;gap:1px;background:#e5e7eb;border-radius:9px;padding:3px;width:fit-content;margin-bottom:16px;" id="org-tabs"><button class="tab-btn active" onclick="switchOrgTab(\'teams\',this)">Teams</button><button class="tab-btn" onclick="switchOrgTab(\'members\',this)">Members</button></div>'
+    +'<div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;"><div style="width:48px;height:48px;border-radius:12px;background:#e0e7ff;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#4338ca;flex-shrink:0;">'+org.name[0]+'</div><div style="flex:1;"><div style="display:flex;align-items:center;gap:10px;"><h1 class="page-title">'+esc(org.name)+'</h1>'+(org.dormant?badge('Dormant','badge-amber'):badge('Active','badge-green'))+'</div><p class="page-sub">'+esc(org.slug)+' &middot; Created '+esc(org.created)+'</p></div><div style="display:flex;gap:8px;">'+(org.dormant?'<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:6px 12px;font-size:12px;color:#92400e;">Org is dormant — owner was deprovisioned</div>':'')+'<button class="btn-secondary">Edit</button><button class="btn-secondary">Transfer Ownership</button><button class="btn-danger" onclick="confirm_(\'Delete '+esc(org.name)+'?\',\'Permanently deletes the org and all teams.\')">Delete</button></div></div>'
+    +'<div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:12px;margin-bottom:20px;"><div class="card" style="padding:14px 18px;"><p style="font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;font-weight:600;">Owner</p><p style="font-size:13px;font-weight:500;color:#111827;margin-top:4px;">'+esc(org.owner.name)+'</p><a onclick="openUser('+org.owner.id+')" style="font-size:12px;color:#4f46e5;cursor:pointer;">'+esc(org.owner.email)+'</a></div><div class="card" style="padding:14px 18px;"><p style="font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;font-weight:600;">Members</p><p style="font-size:24px;font-weight:700;color:#111827;margin-top:4px;">'+org.members.length+'</p></div><div class="card" style="padding:14px 18px;"><p style="font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;font-weight:600;">Teams</p><p style="font-size:24px;font-weight:700;color:#111827;margin-top:4px;">'+org.teams.length+'</p></div><div class="card" style="padding:14px 18px;"><p style="font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;font-weight:600;">Auto-enrol rules</p><p style="font-size:24px;font-weight:700;color:#111827;margin-top:4px;">'+(org.emailDomainRules||[]).length+'</p></div></div>'
+    +'<div style="display:flex;gap:1px;background:#e5e7eb;border-radius:9px;padding:3px;width:fit-content;margin-bottom:16px;" id="org-tabs"><button class="tab-btn active" onclick="switchOrgTab(\'teams\',this)">Teams</button><button class="tab-btn" onclick="switchOrgTab(\'members\',this)">Members</button><button class="tab-btn" onclick="switchOrgTab(\'domain-rules\',this)">Domain Rules</button></div>'
     +'<div id="org-tab-teams" class="card"><div class="card-header"><span style="font-size:14px;font-weight:600;">Teams</span><button class="btn-primary" style="font-size:12px;padding:5px 10px;"><svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>Add Team</button></div>'+tbl(['Team','Description','Members','Actions'],teamRows)+'</div>'
-    +'<div id="org-tab-members" class="card" style="display:none;"><div class="card-header"><span style="font-size:14px;font-weight:600;">Members</span><button class="btn-primary" style="font-size:12px;padding:5px 10px;"><svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>Add Member</button></div>'+tbl(['User','Role','Teams','Last Login','Actions'],memberRows)+'</div>';
+    +'<div id="org-tab-members" class="card" style="display:none;"><div class="card-header"><span style="font-size:14px;font-weight:600;">Members</span><button class="btn-primary" style="font-size:12px;padding:5px 10px;"><svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>Add Member</button></div>'+tbl(['User','Role','Teams','Last Login','Actions'],memberRows)+'</div>'
+    +'<div id="org-tab-domain-rules" class="card" style="display:none;"><div class="card-header"><span style="font-size:14px;font-weight:600;">Email Domain Auto-enrolment</span></div>'
+    +'<p style="font-size:12px;color:#6b7280;padding:10px 20px 0;">Users whose verified email matches a domain are automatically added to this org and the specified team on first login. The same domain can route to multiple teams.</p>'
+    +'<div style="padding:12px 20px;display:grid;grid-template-columns:1fr 120px 120px 120px auto;gap:8px;align-items:center;border-bottom:1px solid #f3f4f6;">'
+    +'<input type="text" placeholder="acme.com" id="org-domain-input" style="font-family:monospace;"/>'
+    +'<select id="org-domain-team">'+domainTeamOpts+'</select>'
+    +'<select id="org-domain-role"><option value="member">Member</option><option value="admin">Admin</option></select>'
+    +'<select id="org-domain-verification"><option value="any">Any verified</option><option value="email">Email link</option><option value="google">Google</option><option value="github">GitHub</option><option value="microsoft">Microsoft</option><option value="apple">Apple</option></select>'
+    +'<button class="btn-primary" style="font-size:12px;padding:6px 12px;white-space:nowrap;">Add Rule</button></div>'
+    +(domainRuleRows?tbl(['Domain','Target Team','Org Role','Verification',''],domainRuleRows):'<p style="font-size:12px;color:#9ca3af;padding:16px 20px;">No auto-enrolment rules configured.</p>')
+    +'</div>';
 }
 
 // ── TEAM LIST ──
@@ -634,7 +672,7 @@ function confirm_(title,body){
 
 // ── TABS ──
 function switchOrgTab(tab,btn){
-  ['teams','members'].forEach(t=>document.getElementById('org-tab-'+t).style.display=t===tab?'':'none');
+  ['teams','members','domain-rules'].forEach(t=>document.getElementById('org-tab-'+t).style.display=t===tab?'':'none');
   btn.closest('div').querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
 }
@@ -749,7 +787,7 @@ function renderEmailDomainRules(){
   const el=document.getElementById('new-org-domain-rules-list');
   if(!el) return;
   if(!_emailDomainRules.length){ el.innerHTML='<p style="font-size:12px;color:#9ca3af;">No auto-enrolment rules yet.</p>'; return; }
-  const verLabel={any:'Any verified',email:'Email link',google:'Google',github:'GitHub'};
+  const verLabel={any:'Any verified',email:'Email link',google:'Google',github:'GitHub',microsoft:'Microsoft',apple:'Apple'};
   el.innerHTML=_emailDomainRules.map(r=>'<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;">'
     +'<code style="flex:1;font-size:12px;color:#166534;background:#f0fdf4;padding:1px 6px;border-radius:4px;">@'+esc(r.domain)+'</code>'
     +'<span style="font-size:11px;color:#6b7280;background:#e5e7eb;padding:1px 7px;border-radius:999px;">→ '+esc(r.role)+'</span>'
@@ -785,6 +823,29 @@ function renderPreapproved(){
     +'<button onclick="removePreapproved(\''+esc(p.email)+'\')" style="color:#9ca3af;cursor:pointer;background:none;border:none;line-height:1;" title="Remove">'
     +'<svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button>'
     +'</div>').join('');
+}
+
+// ── APPS & FLAGS ──
+function renderApps(){
+  const apps=[
+    { id:'app_1', name:'Acme Main App', domain:'app.acme.com', org:'Acme Engineering', flagsEnabled:true, matrixEnabled:true, flags:8, status:'active' },
+    { id:'app_2', name:'Widgets Dashboard', domain:'widgets.io', org:'Widgets Core', flagsEnabled:true, matrixEnabled:false, flags:3, status:'active' },
+    { id:'app_3', name:'Startup Portal', domain:'startup.dev', org:'Startup Alpha', flagsEnabled:false, matrixEnabled:false, flags:0, status:'active' },
+  ];
+  return pageHead('Apps &amp; Flags','Per-app feature flag configuration and role matrices','<button class="btn-primary"><svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>Register App</button>')
+    +'<div class="card">'
+    +tbl(['App','Domain','Organisation','Feature Flags','Role Matrix','Flags Defined','Actions'],apps.map(a=>
+      '<tr><td class="td"><p style="font-weight:600;font-size:13px;">'+esc(a.name)+'</p></td>'
+      +'<td class="td"><code style="font-size:12px;color:#374151;">'+esc(a.domain)+'</code></td>'
+      +'<td class="td"><span style="font-size:12px;color:#6b7280;">'+esc(a.org)+'</span></td>'
+      +'<td class="td">'+(a.flagsEnabled?badge('Enabled','badge-green'):badge('Disabled','badge-slate'))+'</td>'
+      +'<td class="td">'+(a.matrixEnabled?badge('Enabled','badge-green'):badge('Disabled','badge-slate'))+'</td>'
+      +'<td class="td"><span style="font-size:13px;font-weight:600;">'+a.flags+'</span></td>'
+      +'<td class="td"><button class="action-btn indigo">Manage Flags</button><span class="divider">|</span><button class="action-btn amber">Settings</button><span class="divider">|</span><button class="action-btn red">Delete</button></td></tr>'
+    ).join(''))
+    +'</div>'
+    +'<div style="margin-top:16px;padding:14px 18px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px;font-size:13px;color:#0369a1;">'
+    +'<strong>Feature Flags</strong> and <strong>Role Matrix</strong> are enabled per App. When Feature Flags is enabled, flag state is embedded in the access token at login and can be queried in real time via the flag query API. The Role Matrix extends flags with per-role defaults — each custom role gets a column of flag values. Per-user overrides always take precedence.</div>';
 }
 
 document.addEventListener('click',e=>{ if(!document.getElementById('search-container').contains(e.target)) document.getElementById('search-dropdown').style.display='none'; });
