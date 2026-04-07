@@ -220,11 +220,25 @@
         <label>Slug <span style="font-size:11px;color:#9ca3af;font-weight:400;">(URL-safe identifier, auto-generated)</span></label>
         <input type="text" id="new-org-slug" placeholder="acme-engineering" style="width:100%;box-sizing:border-box;font-family:monospace;"/>
       </div>
-      <div>
-        <label>Domain</label>
-        <select id="new-org-domain" style="width:100%;box-sizing:border-box;">
-          <option value="">— Select a domain —</option>
-        </select>
+      <div style="border-top:1px solid #f3f4f6;padding-top:16px;">
+        <p style="font-size:13px;font-weight:600;color:#111827;margin-bottom:4px;">Email domain auto-enrolment</p>
+        <p style="font-size:12px;color:#6b7280;margin-bottom:12px;">Users whose verified email matches these domains are automatically added to this organisation on first login.</p>
+        <div style="display:grid;grid-template-columns:1fr 110px 130px auto;gap:8px;margin-bottom:10px;align-items:center;">
+          <input type="text" id="new-org-domain-input" placeholder="acme.com" onkeydown="if(event.key==='Enter'){event.preventDefault();addEmailDomainRule();}"/>
+          <select id="new-org-domain-role">
+            <option value="member">Member</option>
+            <option value="admin">Admin</option>
+            <option value="owner">Owner</option>
+          </select>
+          <select id="new-org-domain-verification">
+            <option value="any">Any verified</option>
+            <option value="email">Email link</option>
+            <option value="google">Google</option>
+            <option value="github">GitHub</option>
+          </select>
+          <button class="btn-secondary" onclick="addEmailDomainRule()" style="padding:7px 12px;white-space:nowrap;">Add</button>
+        </div>
+        <div id="new-org-domain-rules-list" style="display:flex;flex-direction:column;gap:4px;"></div>
       </div>
       <div>
         <label>Description <span style="font-size:11px;color:#9ca3af;font-weight:400;">(optional)</span></label>
@@ -282,7 +296,8 @@ const DATA = {
     { id:5, name:'old-product.com', label:'Old Product', secretAge:null, secretOld:false, users:89, orgs:2, status:'disabled', created:'2023-06-10', hash:'d9c3a7e2…' },
   ],
   orgs: [
-    { id:1, name:'Acme Engineering', slug:'acme-engineering', domain:'app.acme.com', created:'Jan 15, 2024',
+    { id:1, name:'Acme Engineering', slug:'acme-engineering', created:'Jan 15, 2024',
+      emailDomainRules:[{domain:'acme.com',grantedRole:'member',verification:'any'}],
       owner:{ id:101, name:'Alice Chen', email:'alice@acme.com' },
       teams:[
         { id:11, name:'General', isDefault:true, desc:'All members', members:42 },
@@ -292,14 +307,15 @@ const DATA = {
         { id:15, name:'QA', isDefault:false, desc:'Quality assurance', members:5 },
       ],
       members:[
-        { id:101, name:'Alice Chen', email:'alice@acme.com', role:'owner', teams:['General','Backend'], teamRoles:{General:'member',Backend:'lead'}, twofa:true, lastLogin:'2 min ago', status:'active', method:'google' },
-        { id:102, name:'Bob Smith', email:'bob@acme.com', role:'admin', teams:['General','Frontend'], teamRoles:{General:'member',Frontend:'lead'}, twofa:false, lastLogin:'1 hour ago', status:'active', method:'email' },
+        { id:101, name:'Alice Chen', email:'alice@acme.com', role:'owner', teams:['General','Backend'], teamRoles:{General:'member',Backend:'admin'}, twofa:true, lastLogin:'2 min ago', status:'active', method:'google' },
+        { id:102, name:'Bob Smith', email:'bob@acme.com', role:'admin', teams:['General','Frontend'], teamRoles:{General:'member',Frontend:'admin'}, twofa:false, lastLogin:'1 hour ago', status:'active', method:'email' },
         { id:103, name:'Carol Davis', email:'carol@acme.com', role:'member', teams:['General','Backend'], teamRoles:{General:'member',Backend:'member'}, twofa:true, lastLogin:'3 days ago', status:'active', method:'email' },
-        { id:104, name:'Dan Lee', email:'dan@acme.com', role:'member', teams:['General','DevOps'], teamRoles:{General:'member',DevOps:'lead'}, twofa:false, lastLogin:'1 week ago', status:'active', method:'github' },
-        { id:105, name:'Eva Torres', email:'eva@acme.com', role:'member', teams:['General','QA'], teamRoles:{General:'member',QA:'lead'}, twofa:true, lastLogin:'2 days ago', status:'active', method:'google' },
+        { id:104, name:'Dan Lee', email:'dan@acme.com', role:'member', teams:['General','DevOps'], teamRoles:{General:'member',DevOps:'admin'}, twofa:false, lastLogin:'1 week ago', status:'active', method:'github' },
+        { id:105, name:'Eva Torres', email:'eva@acme.com', role:'member', teams:['General','QA'], teamRoles:{General:'member',QA:'admin'}, twofa:true, lastLogin:'2 days ago', status:'active', method:'google' },
       ]
     },
-    { id:2, name:'Acme Design', slug:'acme-design', domain:'app.acme.com', created:'Feb 3, 2024',
+    { id:2, name:'Acme Design', slug:'acme-design', created:'Feb 3, 2024',
+      emailDomainRules:[{domain:'acme.com',grantedRole:'member',verification:'any'}],
       owner:{ id:201, name:'Emily Park', email:'emily@acme.com' },
       teams:[
         { id:21, name:'General', isDefault:true, desc:'All members', members:18 },
@@ -307,12 +323,13 @@ const DATA = {
         { id:23, name:'UX Research', isDefault:false, desc:'User experience', members:7 },
       ],
       members:[
-        { id:201, name:'Emily Park', email:'emily@acme.com', role:'owner', teams:['General','Brand'], teamRoles:{General:'member',Brand:'lead'}, twofa:true, lastLogin:'30 min ago', status:'active', method:'google' },
-        { id:202, name:'Frank Wu', email:'frank@acme.com', role:'admin', teams:['General','UX Research'], teamRoles:{General:'member','UX Research':'lead'}, twofa:false, lastLogin:'2 days ago', status:'active', method:'email' },
+        { id:201, name:'Emily Park', email:'emily@acme.com', role:'owner', teams:['General','Brand'], teamRoles:{General:'member',Brand:'admin'}, twofa:true, lastLogin:'30 min ago', status:'active', method:'google' },
+        { id:202, name:'Frank Wu', email:'frank@acme.com', role:'admin', teams:['General','UX Research'], teamRoles:{General:'member','UX Research':'admin'}, twofa:false, lastLogin:'2 days ago', status:'active', method:'email' },
         { id:203, name:'Grace Kim', email:'grace@acme.com', role:'member', teams:['General','Brand'], teamRoles:{General:'member',Brand:'member'}, twofa:true, lastLogin:'5 hours ago', status:'active', method:'email' },
       ]
     },
-    { id:3, name:'Widgets Core', slug:'widgets-core', domain:'widgets.io', created:'Nov 2, 2023',
+    { id:3, name:'Widgets Core', slug:'widgets-core', created:'Nov 2, 2023',
+      emailDomainRules:[{domain:'widgets.io',grantedRole:'member',verification:'any'},{domain:'widgets.com',grantedRole:'member',verification:'google'}],
       owner:{ id:301, name:'Carol Johnson', email:'carol@widgets.io' },
       teams:[
         { id:31, name:'General', isDefault:true, desc:'All members', members:91 },
@@ -321,20 +338,21 @@ const DATA = {
         { id:34, name:'Mobile', isDefault:false, desc:'Mobile apps', members:15 },
       ],
       members:[
-        { id:301, name:'Carol Johnson', email:'carol@widgets.io', role:'owner', teams:['General','Platform'], teamRoles:{General:'member',Platform:'lead'}, twofa:true, lastLogin:'1 day ago', status:'active', method:'email' },
-        { id:302, name:'Dave Brown', email:'dave@widgets.io', role:'admin', teams:['General','Integrations'], teamRoles:{General:'member',Integrations:'lead'}, twofa:true, lastLogin:'4 hours ago', status:'active', method:'email' },
+        { id:301, name:'Carol Johnson', email:'carol@widgets.io', role:'owner', teams:['General','Platform'], teamRoles:{General:'member',Platform:'admin'}, twofa:true, lastLogin:'1 day ago', status:'active', method:'email' },
+        { id:302, name:'Dave Brown', email:'dave@widgets.io', role:'admin', teams:['General','Integrations'], teamRoles:{General:'member',Integrations:'admin'}, twofa:true, lastLogin:'4 hours ago', status:'active', method:'email' },
         { id:303, name:'Eve Martinez', email:'eve@widgets.io', role:'member', teams:['General','Mobile'], teamRoles:{General:'member',Mobile:'member'}, twofa:false, lastLogin:'2 hours ago', status:'active', method:'github' },
         { id:304, name:'Henry Park', email:'henry@widgets.io', role:'member', teams:['General','Platform','Integrations'], teamRoles:{General:'member',Platform:'member',Integrations:'member'}, twofa:true, lastLogin:'6 hours ago', status:'active', method:'email' },
       ]
     },
-    { id:4, name:'Startup Alpha', slug:'startup-alpha', domain:'startup.dev', created:'Feb 10, 2024',
+    { id:4, name:'Startup Alpha', slug:'startup-alpha', created:'Feb 10, 2024',
+      emailDomainRules:[{domain:'startup.dev',grantedRole:'member',verification:'email'}],
       owner:{ id:401, name:'Ian Chen', email:'ian@startup.dev' },
       teams:[
         { id:41, name:'General', isDefault:true, desc:'All members', members:12 },
         { id:42, name:'Product', isDefault:false, desc:'Product team', members:5 },
       ],
       members:[
-        { id:401, name:'Ian Chen', email:'ian@startup.dev', role:'owner', teams:['General','Product'], teamRoles:{General:'member',Product:'lead'}, twofa:false, lastLogin:'1 hour ago', status:'active', method:'google' },
+        { id:401, name:'Ian Chen', email:'ian@startup.dev', role:'owner', teams:['General','Product'], teamRoles:{General:'member',Product:'admin'}, twofa:false, lastLogin:'1 hour ago', status:'active', method:'google' },
         { id:402, name:'Julia Ross', email:'julia@startup.dev', role:'member', teams:['General','Product'], teamRoles:{General:'member',Product:'member'}, twofa:false, lastLogin:'3 hours ago', status:'active', method:'email' },
       ]
     },
@@ -491,8 +509,8 @@ function renderDomains(){
 function renderOrgList(){
   return pageHead('Organisations','All organisations across all domains','<button class="btn-primary" onclick="openNewOrgModal()"><svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>New Org</button>')
     +'<div class="card">'
-    +'<div style="display:flex;gap:8px;padding:12px 16px;border-bottom:1px solid #f3f4f6;"><input type="search" placeholder="Search organisations&#x2026;" style="width:220px;"/><select><option>All domains</option>'+DATA.domains.map(d=>'<option>'+esc(d.name)+'</option>').join('')+'</select></div>'
-    +tbl(['Organisation','Domain','Owner','Members','Teams','Created','Actions'],DATA.orgs.map(o=>'<tr><td class="td"><div style="display:flex;align-items:center;gap:10px;">'+av(o.name)+'<div><a onclick="push({type:\'org\',orgId:'+o.id+'})" style="font-weight:600;color:#4f46e5;cursor:pointer;font-size:13px;">'+esc(o.name)+'</a><p style="font-size:11px;color:#9ca3af;">'+esc(o.slug)+'</p></div></div></td><td class="td" style="font-size:12px;color:#9ca3af;">'+esc(o.domain)+'</td><td class="td"><a onclick="openUser('+o.owner.id+')" style="color:#374151;cursor:pointer;">'+esc(o.owner.name)+'</a><p style="font-size:11px;color:#9ca3af;">'+esc(o.owner.email)+'</p></td><td class="td">'+o.members.length+'</td><td class="td">'+o.teams.length+'</td><td class="td" style="font-size:12px;color:#9ca3af;">'+esc(o.created)+'</td><td class="td"><button class="action-btn indigo" onclick="push({type:\'org\',orgId:'+o.id+'})">View</button><span class="divider">|</span><button class="action-btn amber">Transfer</button><span class="divider">|</span><button class="action-btn red" onclick="confirm_(\'Delete '+esc(o.name)+'?\',\'Deletes all teams and memberships.\')">Delete</button></td></tr>').join(''))
+    +'<div style="display:flex;gap:8px;padding:12px 16px;border-bottom:1px solid #f3f4f6;"><input type="search" placeholder="Search organisations&#x2026;" style="width:220px;"/></div>'
+    +tbl(['Organisation','Auto-enrol','Owner','Members','Teams','Created','Actions'],DATA.orgs.map(o=>'<tr><td class="td"><div style="display:flex;align-items:center;gap:10px;">'+av(o.name)+'<div><a onclick="push({type:\'org\',orgId:'+o.id+'})" style="font-weight:600;color:#4f46e5;cursor:pointer;font-size:13px;">'+esc(o.name)+'</a><p style="font-size:11px;color:#9ca3af;">'+esc(o.slug)+'</p></div></div></td><td class="td">'+((o.emailDomainRules||[]).slice(0,2).map(r=>'<code style="font-size:11px;background:#f0fdf4;color:#166534;padding:1px 6px;border-radius:4px;margin-right:4px;">@'+esc(r.domain)+'</code>').join(''))+((o.emailDomainRules||[]).length>2?'<span style="font-size:11px;color:#6b7280;">+'+(o.emailDomainRules.length-2)+'</span>':'')+'</td><td class="td"><a onclick="openUser('+o.owner.id+')" style="color:#374151;cursor:pointer;">'+esc(o.owner.name)+'</a><p style="font-size:11px;color:#9ca3af;">'+esc(o.owner.email)+'</p></td><td class="td">'+o.members.length+'</td><td class="td">'+o.teams.length+'</td><td class="td" style="font-size:12px;color:#9ca3af;">'+esc(o.created)+'</td><td class="td"><button class="action-btn indigo" onclick="push({type:\'org\',orgId:'+o.id+'})">View</button><span class="divider">|</span><button class="action-btn amber">Transfer</button><span class="divider">|</span><button class="action-btn red" onclick="confirm_(\'Delete '+esc(o.name)+'?\',\'Deletes all teams and memberships.\')">Delete</button></td></tr>').join(''))
     +paginate()+'</div>';
 }
 
@@ -502,21 +520,21 @@ function renderOrgDetail(orgId){
   const teamRows=org.teams.map(t=>'<tr><td class="td"><a onclick="push({type:\'team\',orgId:'+org.id+',teamId:'+t.id+'})" style="font-weight:600;color:#4f46e5;cursor:pointer;">'+esc(t.name)+'</a>'+(t.isDefault?' '+badge('Default','badge-blue'):'')+'</td><td class="td" style="color:#9ca3af;font-size:12px;">'+(t.desc||'—')+'</td><td class="td">'+t.members+'</td><td class="td"><button class="action-btn indigo" onclick="push({type:\'team\',orgId:'+org.id+',teamId:'+t.id+'})">View</button><span class="divider">|</span><button class="action-btn indigo">Edit</button>'+(t.isDefault?'':'<span class="divider">|</span><button class="action-btn red" onclick="confirm_(\'Delete '+esc(t.name)+'?\',\'Members stay in the org.\')">Delete</button>')+'</td></tr>').join('');
   const memberRows=org.members.map(m=>'<tr><td class="td"><div style="display:flex;align-items:center;gap:10px;">'+av(m.name)+'<div><a onclick="openUser('+m.id+')" style="font-weight:500;color:#374151;cursor:pointer;">'+esc(m.name)+'</a><p style="font-size:11px;color:#9ca3af;">'+esc(m.email)+'</p></div></div></td><td class="td">'+statusBadge(m.role)+'</td><td class="td">'+m.teams.map(t=>'<a onclick="push({type:\'team\',orgId:'+org.id+',teamId:'+org.teams.find(x=>x.name===t)?.id+'})" style="color:#4f46e5;cursor:pointer;margin-right:3px;">'+esc(t)+'</a>').join('')+'</td><td class="td" style="font-size:12px;color:#9ca3af;">'+esc(m.lastLogin)+'</td><td class="td"><button class="action-btn indigo" onclick="openUser('+m.id+')">View</button><span class="divider">|</span><button class="action-btn amber">Change Role</button><span class="divider">|</span><button class="action-btn red" onclick="confirm_(\'Remove '+esc(m.name)+'?\',\'Removes from all teams in this org.\')">Remove</button></td></tr>').join('');
   return backBtn()
-    +'<div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;"><div style="width:48px;height:48px;border-radius:12px;background:#e0e7ff;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#4338ca;flex-shrink:0;">'+org.name[0]+'</div><div style="flex:1;"><div style="display:flex;align-items:center;gap:10px;"><h1 class="page-title">'+esc(org.name)+'</h1>'+badge('Active','badge-green')+'</div><p class="page-sub">'+esc(org.slug)+' &middot; '+esc(org.domain)+' &middot; Created '+esc(org.created)+'</p></div><div style="display:flex;gap:8px;"><button class="btn-secondary">Edit</button><button class="btn-secondary">Transfer Ownership</button><button class="btn-danger" onclick="confirm_(\'Delete '+esc(org.name)+'?\',\'Permanently deletes the org and all teams.\')">Delete</button></div></div>'
-    +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;"><div class="card" style="padding:14px 18px;"><p style="font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;font-weight:600;">Owner</p><p style="font-size:13px;font-weight:500;color:#111827;margin-top:4px;">'+esc(org.owner.name)+'</p><a onclick="openUser('+org.owner.id+')" style="font-size:12px;color:#4f46e5;cursor:pointer;">'+esc(org.owner.email)+'</a></div><div class="card" style="padding:14px 18px;"><p style="font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;font-weight:600;">Members</p><p style="font-size:24px;font-weight:700;color:#111827;margin-top:4px;">'+org.members.length+'</p></div><div class="card" style="padding:14px 18px;"><p style="font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;font-weight:600;">Teams</p><p style="font-size:24px;font-weight:700;color:#111827;margin-top:4px;">'+org.teams.length+'</p></div></div>'
+    +'<div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;"><div style="width:48px;height:48px;border-radius:12px;background:#e0e7ff;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#4338ca;flex-shrink:0;">'+org.name[0]+'</div><div style="flex:1;"><div style="display:flex;align-items:center;gap:10px;"><h1 class="page-title">'+esc(org.name)+'</h1>'+badge('Active','badge-green')+'</div><p class="page-sub">'+esc(org.slug)+' &middot; Created '+esc(org.created)+'</p></div><div style="display:flex;gap:8px;"><button class="btn-secondary">Edit</button><button class="btn-secondary">Transfer Ownership</button><button class="btn-danger" onclick="confirm_(\'Delete '+esc(org.name)+'?\',\'Permanently deletes the org and all teams.\')">Delete</button></div></div>'
+    +'<div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:12px;margin-bottom:20px;"><div class="card" style="padding:14px 18px;"><p style="font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;font-weight:600;">Owner</p><p style="font-size:13px;font-weight:500;color:#111827;margin-top:4px;">'+esc(org.owner.name)+'</p><a onclick="openUser('+org.owner.id+')" style="font-size:12px;color:#4f46e5;cursor:pointer;">'+esc(org.owner.email)+'</a></div><div class="card" style="padding:14px 18px;"><p style="font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;font-weight:600;">Members</p><p style="font-size:24px;font-weight:700;color:#111827;margin-top:4px;">'+org.members.length+'</p></div><div class="card" style="padding:14px 18px;"><p style="font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;font-weight:600;">Teams</p><p style="font-size:24px;font-weight:700;color:#111827;margin-top:4px;">'+org.teams.length+'</p></div><div class="card" style="padding:14px 18px;"><p style="font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;font-weight:600;">Auto-enrol</p><div style="margin-top:6px;">'+((org.emailDomainRules||[]).map(r=>'<p style="font-size:12px;color:#166534;margin-bottom:2px;">@'+esc(r.domain)+' → '+esc(r.grantedRole)+'</p>').join('')||'<p style="font-size:12px;color:#9ca3af;">None</p>')+'</div></div></div>'
     +'<div style="display:flex;gap:1px;background:#e5e7eb;border-radius:9px;padding:3px;width:fit-content;margin-bottom:16px;" id="org-tabs"><button class="tab-btn active" onclick="switchOrgTab(\'teams\',this)">Teams</button><button class="tab-btn" onclick="switchOrgTab(\'members\',this)">Members</button></div>'
     +'<div id="org-tab-teams" class="card"><div class="card-header"><span style="font-size:14px;font-weight:600;">Teams</span><button class="btn-primary" style="font-size:12px;padding:5px 10px;"><svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>Add Team</button></div>'+tbl(['Team','Description','Members','Actions'],teamRows)+'</div>'
-    +'<div id="org-tab-members" class="card" style="display:none;"><div class="card-header"><span style="font-size:14px;font-weight:600;">Members</span><button class="btn-primary" style="font-size:12px;padding:5px 10px;"><svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>Add Member</button></div>'+tbl(['User','Org Role','Teams','Last Login','Actions'],memberRows)+'</div>';
+    +'<div id="org-tab-members" class="card" style="display:none;"><div class="card-header"><span style="font-size:14px;font-weight:600;">Members</span><button class="btn-primary" style="font-size:12px;padding:5px 10px;"><svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>Add Member</button></div>'+tbl(['User','Role','Teams','Last Login','Actions'],memberRows)+'</div>';
 }
 
 // ── TEAM LIST ──
 function renderTeamList(){
   const all=[];
-  DATA.orgs.forEach(org=>org.teams.forEach(t=>all.push(Object.assign({},t,{orgId:org.id,orgName:org.name,domain:org.domain}))));
+  DATA.orgs.forEach(org=>org.teams.forEach(t=>all.push(Object.assign({},t,{orgId:org.id,orgName:org.name}))));
   return pageHead('Teams','All teams across all organisations')
     +'<div class="card">'
     +'<div style="display:flex;gap:8px;padding:12px 16px;border-bottom:1px solid #f3f4f6;"><input type="search" placeholder="Search teams&#x2026;" style="width:220px;"/><select><option>All orgs</option>'+DATA.orgs.map(o=>'<option>'+esc(o.name)+'</option>').join('')+'</select></div>'
-    +tbl(['Team','Organisation','Domain','Members','Actions'],all.map(t=>'<tr><td class="td"><a onclick="push({type:\'team\',orgId:'+t.orgId+',teamId:'+t.id+'})" style="font-weight:600;color:#4f46e5;cursor:pointer;">'+esc(t.name)+'</a>'+(t.isDefault?' '+badge('Default','badge-blue'):'')+'</td><td class="td"><a onclick="push({type:\'org\',orgId:'+t.orgId+'})" style="color:#374151;cursor:pointer;">'+esc(t.orgName)+'</a></td><td class="td" style="font-size:12px;color:#9ca3af;">'+esc(t.domain)+'</td><td class="td">'+t.members+'</td><td class="td"><button class="action-btn indigo" onclick="push({type:\'team\',orgId:'+t.orgId+',teamId:'+t.id+'})">View</button><span class="divider">|</span><button class="action-btn indigo">Edit</button>'+(t.isDefault?'':'<span class="divider">|</span><button class="action-btn red">Delete</button>')+'</td></tr>').join(''))
+    +tbl(['Team','Organisation','Members','Actions'],all.map(t=>'<tr><td class="td"><a onclick="push({type:\'team\',orgId:'+t.orgId+',teamId:'+t.id+'})" style="font-weight:600;color:#4f46e5;cursor:pointer;">'+esc(t.name)+'</a>'+(t.isDefault?' '+badge('Default','badge-blue'):'')+'</td><td class="td"><a onclick="push({type:\'org\',orgId:'+t.orgId+'})" style="color:#374151;cursor:pointer;">'+esc(t.orgName)+'</a></td><td class="td">'+t.members+'</td><td class="td"><button class="action-btn indigo" onclick="push({type:\'team\',orgId:'+t.orgId+',teamId:'+t.id+'})">View</button><span class="divider">|</span><button class="action-btn indigo">Edit</button>'+(t.isDefault?'':'<span class="divider">|</span><button class="action-btn red">Delete</button>')+'</td></tr>').join(''))
     +paginate()+'</div>';
 }
 
@@ -527,7 +545,7 @@ function renderTeamDetail(orgId,teamId){
   const members=org.members.filter(m=>m.teams.includes(team.name));
   const rows=members.map(m=>'<tr><td class="td"><div style="display:flex;align-items:center;gap:10px;">'+av(m.name)+'<div><a onclick="openUser('+m.id+')" style="font-weight:500;color:#374151;cursor:pointer;">'+esc(m.name||m.email)+'</a><p style="font-size:11px;color:#9ca3af;">'+esc(m.email)+'</p></div></div></td><td class="td">'+statusBadge(m.teamRoles[team.name]||'member')+'</td><td class="td">'+(m.twofa?badge('On','badge-green'):badge('Off','badge-slate'))+'</td><td class="td" style="font-size:12px;color:#9ca3af;">'+esc(m.lastLogin)+'</td><td class="td"><button class="action-btn indigo" onclick="openUser('+m.id+')">View</button><span class="divider">|</span><button class="action-btn amber">Change Role</button><span class="divider">|</span><button class="action-btn red" onclick="confirm_(\'Remove from team?\',\''+esc(m.name)+' will be removed from '+esc(team.name)+'.\')">Remove</button></td></tr>').join('');
   return backBtn()
-    +'<div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;"><div style="width:48px;height:48px;border-radius:12px;background:#dbeafe;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">&#x1F465;</div><div style="flex:1;"><div style="display:flex;align-items:center;gap:10px;"><h1 class="page-title">'+esc(team.name)+'</h1>'+(team.isDefault?badge('Default','badge-blue'):'')+'</div><p class="page-sub">in <a onclick="push({type:\'org\',orgId:'+org.id+'})" style="color:#4f46e5;cursor:pointer;">'+esc(org.name)+'</a> &middot; '+esc(org.domain)+' &middot; '+members.length+' members</p></div><div style="display:flex;gap:8px;"><button class="btn-secondary">Edit</button>'+(team.isDefault?'':'<button class="btn-danger" onclick="confirm_(\'Delete '+esc(team.name)+'?\',\'Members stay in the org.\')">Delete</button>')+'</div></div>'
+    +'<div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;"><div style="width:48px;height:48px;border-radius:12px;background:#dbeafe;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">&#x1F465;</div><div style="flex:1;"><div style="display:flex;align-items:center;gap:10px;"><h1 class="page-title">'+esc(team.name)+'</h1>'+(team.isDefault?badge('Default','badge-blue'):'')+'</div><p class="page-sub">in <a onclick="push({type:\'org\',orgId:'+org.id+'})" style="color:#4f46e5;cursor:pointer;">'+esc(org.name)+'</a> &middot; '+members.length+' members</p></div><div style="display:flex;gap:8px;"><button class="btn-secondary">Edit</button>'+(team.isDefault?'':'<button class="btn-danger" onclick="confirm_(\'Delete '+esc(team.name)+'?\',\'Members stay in the org.\')">Delete</button>')+'</div></div>'
     +'<div class="card"><div class="card-header"><span style="font-size:14px;font-weight:600;">Members ('+members.length+')</span><button class="btn-primary" style="font-size:12px;padding:5px 10px;"><svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>Add Member</button></div>'
     +tbl(['User','Team Role','2FA','Last Login','Actions'],rows)+'</div>';
 }
@@ -644,7 +662,7 @@ function showDropdown(v){
   const sec=(label)=>'<div style="padding:8px 12px 4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af;'+(html?'border-top:1px solid #f3f4f6;margin-top:4px;':'')+'">'+label+'</div>';
   if(r.orgs.length){
     html+=sec('Organisations');
-    html+=r.orgs.map(o=>'<div class="search-result" onclick="searchNav(\'org\','+o.id+')"><div style="width:28px;height:28px;border-radius:7px;background:#e0e7ff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#4338ca;flex-shrink:0;">'+esc(o.name[0])+'</div><div><p class="sr-primary" style="font-size:13px;font-weight:500;color:#111827;">'+hl(o.name,q)+'</p><p style="font-size:11px;color:#9ca3af;">'+esc(o.domain)+' &middot; '+o.members.length+' members</p></div></div>').join('');
+    html+=r.orgs.map(o=>'<div class="search-result" onclick="searchNav(\'org\','+o.id+')"><div style="width:28px;height:28px;border-radius:7px;background:#e0e7ff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#4338ca;flex-shrink:0;">'+esc(o.name[0])+'</div><div><p class="sr-primary" style="font-size:13px;font-weight:500;color:#111827;">'+hl(o.name,q)+'</p><p style="font-size:11px;color:#9ca3af;">'+esc(o.slug)+' &middot; '+o.members.length+' members</p></div></div>').join('');
   }
   if(r.teams.length){
     html+=sec('Teams');
@@ -660,7 +678,7 @@ function showDropdown(v){
 
 function searchAll(q){
   const lq=q.toLowerCase();
-  const orgs=DATA.orgs.filter(o=>o.name.toLowerCase().includes(lq)||o.slug.includes(lq)||o.domain.includes(lq)).slice(0,4);
+  const orgs=DATA.orgs.filter(o=>o.name.toLowerCase().includes(lq)||o.slug.includes(lq)).slice(0,4);
   const teams=[]; DATA.orgs.forEach(org=>org.teams.forEach(t=>{ if(t.name.toLowerCase().includes(lq)) teams.push(Object.assign({},t,{orgId:org.id,orgName:org.name})); }));
   const users=DATA.users.filter(u=>(u.name&&u.name.toLowerCase().includes(lq))||u.email.toLowerCase().includes(lq)).slice(0,5);
   return {orgs,teams:teams.slice(0,4),users};
@@ -692,20 +710,53 @@ function hl(text,q){
 function generateSecret(){ const c='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'; return Array.from({length:48},()=>c[Math.floor(Math.random()*c.length)]).join(''); }
 
 function openNewOrgModal(){
+  _emailDomainRules=[];
+  _preapproved=[];
   document.getElementById('new-org-name').value='';
   document.getElementById('new-org-slug').value='';
   document.getElementById('new-org-desc').value='';
   document.getElementById('new-org-owner').value='';
   document.getElementById('new-org-preapprove-input').value='';
-  document.getElementById('new-org-preapproved-list').innerHTML='';
-  const sel=document.getElementById('new-org-domain');
-  sel.innerHTML='<option value="">— Select a domain —</option>'+DATA.domains.map(d=>'<option value="'+d.id+'">'+esc(d.name)+(d.label?' ('+esc(d.label)+')':'')+'</option>').join('');
+  document.getElementById('new-org-domain-input').value='';
+  renderEmailDomainRules();
+  renderPreapproved();
   openModal('modal-new-org');
   setTimeout(()=>document.getElementById('new-org-name').focus(),80);
 }
 
 function autoSlug(name){
   document.getElementById('new-org-slug').value=name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+}
+
+let _emailDomainRules=[];
+function addEmailDomainRule(){
+  const inp=document.getElementById('new-org-domain-input');
+  const role=document.getElementById('new-org-domain-role').value;
+  const verification=document.getElementById('new-org-domain-verification').value;
+  const domain=inp.value.trim().toLowerCase().replace(/^@/,'').replace(/^https?:\/\//,'');
+  if(!domain||!domain.includes('.')) return;
+  if(_emailDomainRules.find(r=>r.domain===domain)) return;
+  _emailDomainRules.push({domain,role,verification});
+  inp.value='';
+  renderEmailDomainRules();
+  inp.focus();
+}
+function removeEmailDomainRule(domain){
+  _emailDomainRules=_emailDomainRules.filter(r=>r.domain!==domain);
+  renderEmailDomainRules();
+}
+function renderEmailDomainRules(){
+  const el=document.getElementById('new-org-domain-rules-list');
+  if(!el) return;
+  if(!_emailDomainRules.length){ el.innerHTML='<p style="font-size:12px;color:#9ca3af;">No auto-enrolment rules yet.</p>'; return; }
+  const verLabel={any:'Any verified',email:'Email link',google:'Google',github:'GitHub'};
+  el.innerHTML=_emailDomainRules.map(r=>'<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;">'
+    +'<code style="flex:1;font-size:12px;color:#166534;background:#f0fdf4;padding:1px 6px;border-radius:4px;">@'+esc(r.domain)+'</code>'
+    +'<span style="font-size:11px;color:#6b7280;background:#e5e7eb;padding:1px 7px;border-radius:999px;">→ '+esc(r.role)+'</span>'
+    +'<span style="font-size:11px;color:#6b7280;">via '+esc(verLabel[r.verification]||r.verification)+'</span>'
+    +'<button onclick="removeEmailDomainRule(\''+esc(r.domain)+'\')" style="color:#9ca3af;cursor:pointer;background:none;border:none;line-height:1;" title="Remove">'
+    +'<svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button>'
+    +'</div>').join('');
 }
 
 let _preapproved=[];
