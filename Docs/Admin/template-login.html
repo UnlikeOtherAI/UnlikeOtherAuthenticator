@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UOA Admin — Sign In</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="h-full bg-slate-950">
+
+  <div class="min-h-full flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+
+    <!-- Logo / Brand -->
+    <div class="sm:mx-auto sm:w-full sm:max-w-md">
+      <div class="flex items-center justify-center gap-3">
+        <div class="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center">
+          <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+          </svg>
+        </div>
+        <span class="text-white text-2xl font-semibold tracking-tight">UOA Admin</span>
+      </div>
+      <p class="mt-2 text-center text-sm text-slate-400">
+        Unlike Other Authenticator — System Administration
+      </p>
+    </div>
+
+    <!-- Card -->
+    <div class="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
+      <div class="bg-slate-900 border border-slate-800 py-8 px-6 shadow-2xl rounded-2xl sm:px-10">
+
+        <h2 class="text-slate-100 text-lg font-semibold mb-6">Sign in to your account</h2>
+
+        <form class="space-y-5" action="#" method="POST">
+
+          <!-- Email -->
+          <div>
+            <label for="email" class="block text-sm font-medium text-slate-300 mb-1.5">
+              Admin email
+            </label>
+            <input
+              id="email"
+              name="email"
+              type="email"
+              autocomplete="email"
+              required
+              placeholder="admin@example.com"
+              class="block w-full rounded-lg bg-slate-800 border border-slate-700 text-slate-100 placeholder-slate-500
+                     px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500
+                     transition-colors"
+            />
+          </div>
+
+          <!-- Password -->
+          <div>
+            <label for="password" class="block text-sm font-medium text-slate-300 mb-1.5">
+              Password
+            </label>
+            <input
+              id="password"
+              name="password"
+              type="password"
+              autocomplete="current-password"
+              required
+              placeholder="••••••••"
+              class="block w-full rounded-lg bg-slate-800 border border-slate-700 text-slate-100 placeholder-slate-500
+                     px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500
+                     transition-colors"
+            />
+          </div>
+
+          <!-- Remember me + Forgot -->
+          <div class="flex items-center justify-between">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" class="w-4 h-4 rounded border-slate-600 bg-slate-800 text-indigo-600
+                                            focus:ring-indigo-500 focus:ring-offset-slate-900" />
+              <span class="text-sm text-slate-400">Remember this device</span>
+            </label>
+          </div>
+
+          <!-- Submit -->
+          <button
+            type="submit"
+            class="w-full flex justify-center items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5
+                   text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus:outline-none
+                   focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-slate-900
+                   transition-colors"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+            </svg>
+            Sign in
+          </button>
+
+        </form>
+
+        <!-- Divider + Notice -->
+        <div class="mt-6 border-t border-slate-800 pt-5">
+          <p class="text-xs text-slate-500 text-center">
+            Access restricted to system administrators.<br />
+            All sessions are logged and monitored.
+          </p>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <p class="mt-6 text-center text-xs text-slate-600">
+      Unlike Other Authenticator &mdash; Admin v1.0
+    </p>
+
+  </div>
+
+</body>
+</html>

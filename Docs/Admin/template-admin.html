@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UOA Admin — Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; }
+    .nav-link { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-radius: 8px; font-size: 14px; font-weight: 500; color: #94a3b8; text-decoration: none; cursor: pointer; transition: all 0.15s; }
+    .nav-link:hover { color: #fff; background: #1e293b; }
+    .nav-link.active { color: #fff; background: #4f46e5; }
+    .nav-link.active:hover { background: #4338ca; }
+    .nav-section { font-size: 11px; font-weight: 600; color: #475569; text-transform: uppercase; letter-spacing: 0.08em; padding: 0 12px; margin: 20px 0 4px; }
+    .badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 500; }
+    .badge-green { background: #dcfce7; color: #16a34a; }
+    .badge-red { background: #fee2e2; color: #dc2626; }
+    .badge-amber { background: #fef3c7; color: #d97706; }
+    .badge-blue { background: #dbeafe; color: #2563eb; }
+    .badge-slate { background: #f1f5f9; color: #475569; }
+    .section { display: none; }
+    .section.active { display: block; }
+    .tab-btn { padding: 8px 16px; font-size: 14px; font-weight: 500; border-radius: 8px; cursor: pointer; transition: all 0.15s; color: #6b7280; background: transparent; border: none; }
+    .tab-btn:hover { background: #f3f4f6; color: #111827; }
+    .tab-btn.active { background: #fff; color: #111827; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 50; align-items: center; justify-content: center; }
+    .modal-overlay.open { display: flex; }
+    tr:hover td { background: #f9fafb; }
+    .expand-row { display: none; }
+    .expand-row.open { display: table-row; }
+  </style>
+</head>
+<body class="h-full bg-gray-50">
+
+<div class="flex h-full">
+
+  <!-- ── Sidebar ── -->
+  <aside class="w-64 flex-shrink-0 bg-slate-900 flex flex-col h-screen sticky top-0 overflow-y-auto">
+
+    <div class="flex items-center gap-3 px-4 h-16 border-b border-slate-800 flex-shrink-0">
+      <div class="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center flex-shrink-0">
+        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+        </svg>
+      </div>
+      <div>
+        <p class="text-white text-sm font-semibold leading-tight">UOA Admin</p>
+        <p class="text-slate-500 text-xs">System Administration</p>
+      </div>
+    </div>
+
+    <nav class="flex-1 px-2 py-2">
+      <p class="nav-section" style="margin-top:8px;">Overview</p>
+      <a class="nav-link active" onclick="showSection('dashboard')">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+        Dashboard
+      </a>
+      <p class="nav-section">Configuration</p>
+      <a class="nav-link" onclick="showSection('domains')">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/></svg>
+        Domains &amp; Secrets
+        <span class="ml-auto text-xs px-1.5 py-0.5 rounded-full" style="background:#1e293b;color:#94a3b8;">12</span>
+      </a>
+      <p class="nav-section">Directory</p>
+      <a class="nav-link" onclick="showSection('orgs')">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 8h2v-8h2v8h2"/></svg>
+        Organisations
+        <span class="ml-auto text-xs px-1.5 py-0.5 rounded-full" style="background:#1e293b;color:#94a3b8;">34</span>
+      </a>
+      <a class="nav-link" onclick="showSection('teams')">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+        Teams
+        <span class="ml-auto text-xs px-1.5 py-0.5 rounded-full" style="background:#1e293b;color:#94a3b8;">89</span>
+      </a>
+      <a class="nav-link" onclick="showSection('users')">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+        Users
+        <span class="ml-auto text-xs px-1.5 py-0.5 rounded-full" style="background:#1e293b;color:#94a3b8;">1.2k</span>
+      </a>
+      <p class="nav-section">Security</p>
+      <a class="nav-link" onclick="showSection('bans')">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>
+        Email Bans
+        <span class="ml-auto text-xs px-1.5 py-0.5 rounded-full" style="background:#450a0a;color:#fca5a5;">7</span>
+      </a>
+      <a class="nav-link" onclick="showSection('logs')">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        Login Logs
+      </a>
+    </nav>
+
+    <div class="border-t border-slate-800 px-3 py-3 flex-shrink-0">
+      <div class="flex items-center gap-3 px-2 py-1.5 rounded-lg hover:bg-slate-800 cursor-pointer" style="transition:background .15s;">
+        <div class="w-8 h-8 bg-indigo-700 rounded-full flex items-center justify-center flex-shrink-0">
+          <span class="text-white text-xs font-semibold">SA</span>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-slate-200 text-sm font-medium truncate">sys_admin</p>
+          <p class="text-slate-500 text-xs truncate">admin@system.local</p>
+        </div>
+        <svg class="w-4 h-4 text-slate-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── Main ── -->
+  <div class="flex-1 flex flex-col min-w-0 overflow-auto">
+
+    <!-- Top bar -->
+    <header class="bg-white border-b border-gray-200 h-16 flex items-center px-6 gap-4 flex-shrink-0 sticky top-0 z-10">
+      <nav class="flex items-center gap-1.5 text-sm flex-1" id="breadcrumb">
+        <span class="text-gray-400">Admin</span>
+        <svg class="w-3.5 h-3.5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        <span class="text-gray-900 font-medium" id="breadcrumb-current">Dashboard</span>
+      </nav>
+      <div class="relative w-72">
+        <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        <input type="search" placeholder="Search users, domains, orgs…"
+          class="w-full pl-9 pr-3 py-1.5 text-sm bg-gray-50 border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
+      </div>
+      <button class="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 relative">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+        <span class="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+      </button>
+    </header>
+
+    <main class="flex-1 p-6">
+
+      <!-- ══ DASHBOARD ══ -->
+      <div class="section active" id="s-dashboard">
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h1 class="text-xl font-semibold text-gray-900">Dashboard</h1>
+            <p class="text-sm text-gray-500 mt-0.5">System health and recent activity</p>
+          </div>
+          <span class="text-xs text-gray-400">Last updated: just now</span>
+        </div>
+
+        <!-- Stats grid -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div class="bg-white rounded-xl border border-gray-200 p-5">
+            <p class="text-xs font-medium text-gray-500 uppercase tracking-wide">Total Users</p>
+            <p class="text-3xl font-bold text-gray-900 mt-1">1,247</p>
+            <p class="text-xs text-green-600 mt-1">+23 this week</p>
+          </div>
+          <div class="bg-white rounded-xl border border-gray-200 p-5">
+            <p class="text-xs font-medium text-gray-500 uppercase tracking-wide">Active Domains</p>
+            <p class="text-3xl font-bold text-gray-900 mt-1">12</p>
+            <p class="text-xs text-gray-400 mt-1">2 pending setup</p>
+          </div>
+          <div class="bg-white rounded-xl border border-gray-200 p-5">
+            <p class="text-xs font-medium text-gray-500 uppercase tracking-wide">Organisations</p>
+            <p class="text-3xl font-bold text-gray-900 mt-1">34</p>
+            <p class="text-xs text-blue-600 mt-1">across 8 domains</p>
+          </div>
+          <div class="bg-white rounded-xl border border-gray-200 p-5">
+            <p class="text-xs font-medium text-gray-500 uppercase tracking-wide">Logins Today</p>
+            <p class="text-3xl font-bold text-gray-900 mt-1">389</p>
+            <p class="text-xs text-amber-600 mt-1">3 failed attempts</p>
+          </div>
+        </div>
+
+        <!-- Two columns: recent logins + alerts -->
+        <div class="grid grid-cols-3 gap-4">
+          <div class="col-span-2 bg-white rounded-xl border border-gray-200">
+            <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <h2 class="text-sm font-semibold text-gray-900">Recent Login Activity</h2>
+              <a href="#" onclick="showSection('logs')" class="text-xs text-indigo-600 hover:text-indigo-700">View all</a>
+            </div>
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-gray-100">
+                  <th class="text-left px-5 py-2.5 text-xs font-medium text-gray-500">User</th>
+                  <th class="text-left px-5 py-2.5 text-xs font-medium text-gray-500">Domain</th>
+                  <th class="text-left px-5 py-2.5 text-xs font-medium text-gray-500">Method</th>
+                  <th class="text-left px-5 py-2.5 text-xs font-medium text-gray-500">Time</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td class="px-5 py-2.5 text-gray-900">alice@acme.com</td><td class="px-5 py-2.5 text-gray-500">app.acme.com</td><td class="px-5 py-2.5"><span class="badge badge-blue">google</span></td><td class="px-5 py-2.5 text-gray-400 text-xs">2 min ago</td></tr>
+                <tr><td class="px-5 py-2.5 text-gray-900">bob@widgets.io</td><td class="px-5 py-2.5 text-gray-500">widgets.io</td><td class="px-5 py-2.5"><span class="badge badge-slate">email</span></td><td class="px-5 py-2.5 text-gray-400 text-xs">5 min ago</td></tr>
+                <tr><td class="px-5 py-2.5 text-gray-900">carol@example.com</td><td class="px-5 py-2.5 text-gray-500">portal.example.com</td><td class="px-5 py-2.5"><span class="badge badge-slate">email</span></td><td class="px-5 py-2.5 text-gray-400 text-xs">11 min ago</td></tr>
+                <tr><td class="px-5 py-2.5 text-gray-900">dan@acme.com</td><td class="px-5 py-2.5 text-gray-500">app.acme.com</td><td class="px-5 py-2.5"><span class="badge badge-blue">github</span></td><td class="px-5 py-2.5 text-gray-400 text-xs">18 min ago</td></tr>
+                <tr><td class="px-5 py-2.5 text-gray-900">eve@startup.dev</td><td class="px-5 py-2.5 text-gray-500">startup.dev</td><td class="px-5 py-2.5"><span class="badge badge-slate">email</span></td><td class="px-5 py-2.5 text-gray-400 text-xs">34 min ago</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="bg-white rounded-xl border border-gray-200">
+            <div class="px-5 py-4 border-b border-gray-100">
+              <h2 class="text-sm font-semibold text-gray-900">Alerts</h2>
+            </div>
+            <div class="divide-y divide-gray-100">
+              <div class="px-5 py-3 flex gap-3">
+                <div class="w-2 h-2 bg-amber-400 rounded-full mt-1.5 flex-shrink-0"></div>
+                <div><p class="text-xs font-medium text-gray-800">Secret rotation needed</p><p class="text-xs text-gray-500 mt-0.5">widgets.io secret is 89 days old</p></div>
+              </div>
+              <div class="px-5 py-3 flex gap-3">
+                <div class="w-2 h-2 bg-red-400 rounded-full mt-1.5 flex-shrink-0"></div>
+                <div><p class="text-xs font-medium text-gray-800">3 failed login attempts</p><p class="text-xs text-gray-500 mt-0.5">From 185.220.101.x today</p></div>
+              </div>
+              <div class="px-5 py-3 flex gap-3">
+                <div class="w-2 h-2 bg-blue-400 rounded-full mt-1.5 flex-shrink-0"></div>
+                <div><p class="text-xs font-medium text-gray-800">New domain registered</p><p class="text-xs text-gray-500 mt-0.5">beta.newproduct.com added 2h ago</p></div>
+              </div>
+              <div class="px-5 py-3 flex gap-3">
+                <div class="w-2 h-2 bg-green-400 rounded-full mt-1.5 flex-shrink-0"></div>
+                <div><p class="text-xs font-medium text-gray-800">All systems operational</p><p class="text-xs text-gray-500 mt-0.5">DB, email, social providers OK</p></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ DOMAINS & SECRETS ══ -->
+      <div class="section" id="s-domains">
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h1 class="text-xl font-semibold text-gray-900">Domains &amp; Secrets</h1>
+            <p class="text-sm text-gray-500 mt-0.5">Manage registered client domains and their access secrets</p>
+          </div>
+          <button onclick="document.getElementById('modal-domain').classList.add('open')"
+            class="flex items-center gap-2 bg-indigo-600 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-indigo-500 transition-colors">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+            Add Domain
+          </button>
+        </div>
+
+        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div class="px-5 py-3 border-b border-gray-100 flex items-center gap-3">
+            <input type="search" placeholder="Filter by domain…" class="text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 w-64 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
+            <select class="text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <option>All statuses</option>
+              <option>Active</option>
+              <option>Inactive</option>
+            </select>
+          </div>
+          <table class="w-full text-sm">
+            <thead class="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Domain</th>
+                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Client Hash</th>
+                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Secret Age</th>
+                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Users</th>
+                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Orgs</th>
+                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Status</th>
+                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Actions</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+              <tr>
+                <td class="px-5 py-3"><p class="font-medium text-gray-900">app.acme.com</p><p class="text-xs text-gray-400 mt-0.5">Added 2024-01-15</p></td>
+                <td class="px-5 py-3"><code class="text-xs bg-gray-100 px-2 py-0.5 rounded font-mono text-gray-600">a3f8d2c1…</code></td>
+                <td class="px-5 py-3"><span class="badge badge-green">12 days</span></td>
+                <td class="px-5 py-3 text-gray-700">487</td>
+                <td class="px-5 py-3 text-gray-700">8</td>
+                <td class="px-5 py-3"><span class="badge badge-green">Active</span></td>
+                <td class="px-5 py-3">
+                  <div class="flex items-center gap-2">
+                    <button class="text-xs text-indigo-600 hover:text-indigo-800 font-medium">Edit</button>
+                    <span class="text-gray-300">|</span>
+                    <button class="text-xs text-amber-600 hover:text-amber-800 font-medium">Rotate</button>
+                    <span class="text-gray-300">|</span>
+                    <button class="text-xs text-red-500 hover:text-red-700 font-medium">Disable</button>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td class="px-5 py-3"><p class="font-medium text-gray-900">widgets.io</p><p class="text-xs text-gray-400 mt-0.5">Added 2023-11-02</p></td>
+                <td class="px-5 py-3"><code class="text-xs bg-gray-100 px-2 py-0.5 rounded font-mono text-gray-600">b7e2f9a4…</code></td>
+                <td class="px-5 py-3"><span class="badge badge-amber">89 days</span></td>
+                <td class="px-5 py-3 text-gray-700">312</td>
+                <td class="px-5 py-3 text-gray-700">5</td>
+                <td class="px-5 py-3"><span class="badge badge-green">Active</span></td>
+                <td class="px-5 py-3">
+                  <div class="flex items-center gap-2">
+                    <button class="text-xs text-indigo-600 hover:text-indigo-800 font-medium">Edit</button>
+                    <span class="text-gray-300">|</span>
+                    <button class="text-xs text-amber-600 hover:text-amber-800 font-medium">Rotate</button>
+                    <span class="text-gray-300">|</span>
+                    <button class="text-xs text-red-500 hover:text-red-700 font-medium">Disable</button>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td class="px-5 py-3"><p class="font-medium text-gray-900">portal.example.com</p><p class="text-xs text-gray-400 mt-0.5">Added 2024-03-01</p></td>
+                <td class="px-5 py-3"><code class="text-xs bg-gray-100 px-2 py-0.5 rounded font-mono text-gray-600">c1d4e8b3…</code></td>
+                <td class="px-5 py-3"><span class="badge badge-green">5 days</span></td>
+                <td class="px-5 py-3 text-gray-700">198</td>
+                <td class="px-5 py-3 text-gray-700">3</td>
+                <td class="px-5 py-3"><span class="badge badge-green">Active</span></td>
+                <td class="px-5 py-3">
+                  <div class="flex items-center gap-2">
+                    <button class="text-xs text-indigo-600 hover:text-indigo-800 font-medium">Edit</button>
+                    <span class="text-gray-300">|</span>
+                    <button class="text-xs text-amber-600 hover:text-amber-800 font-medium">Rotate</button>
+                    <span class="text-gray-300">|</span>
+                    <button class="text-xs text-red-500 hover:text-red-700 font-medium">Disable</button>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td class="px-5 py-3"><p class="font-medium text-gray-900">old-product.com</p><p class="text-xs text-gray-400 mt-0.5">Added 2023-06-10</p></td>
+                <td class="px-5 py-3"><code class="text-xs bg-gray-100 px-2 py-0.5 rounded font-mono text-gray-600">d9c3a7e2…</code></td>
+                <td class="px-5 py-3"><span class="badge badge-slate">—</span></td>
+                <td class="px-5 py-3 text-gray-400">89</td>
+                <td class="px-5 py-3 text-gray-400">2</td>
+                <td class="px-5 py-3"><span class="badge badge-red">Disabled</span></td>
+                <td class="px-5 py-3">
+                  <div class="flex items-center gap-2">
+                    <button class="text-xs text-indigo-600 hover:text-indigo-800 font-medium">Edit</button>
+                    <span class="text-gray-300">|</span>
+                    <button class="text-xs text-green-600 hover:text-green-800 font-medium">Enable</button>
+                    <span class="text-gray-300">|</span>
+                    <button class="text-xs text-red-500 hover:text-red-700 font-medium">Delete</button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="px-5 py-3 border-t border-gray-100 flex items-center justify-between">
+            <p class="text-xs text-gray-500">Showing 4 of 12 domains</p>
+            <div class="flex gap-1">
+              <button class="px-2.5 py-1 text-xs text-gray-500 border border-gray-200 rounded hover:bg-gray-50">Prev</button>
+              <button class="px-2.5 py-1 text-xs text-white bg-indigo-600 rounded">1</button>
+              <button class="px-2.5 py-1 text-xs text-gray-500 border border-gray-200 rounded hover:bg-gray-50">2</button>
+              <button class="px-2.5 py-1 text-xs text-gray-500 border border-gray-200 rounded hover:bg-gray-50">Next</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Domain Access Log -->
+        <div class="bg-white rounded-xl border border-gray-200 mt-4">
+          <div class="px-5 py-4 border-b border-gray-100">
+            <h2 class="text-sm font-semibold text-gray-900">Domain Request Log</h2>
+            <p class="text-xs text-gray-500 mt-0.5">All auth initiations by domain — last 7 days</p>
+          </div>
+          <table class="w-full text-sm">
+            <thead class="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500">Domain</th>
+                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500">Requests</th>
+                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500">Unique Users</th>
+                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500">Failed Auth</th>
+                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500">Last Request</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+              <tr><td class="px-5 py-2.5 font-medium text-gray-900">app.acme.com</td><td class="px-5 py-2.5 text-gray-700">2,341</td><td class="px-5 py-2.5 text-gray-700">487</td><td class="px-5 py-2.5"><span class="badge badge-slate">12</span></td><td class="px-5 py-2.5 text-gray-400 text-xs">2 min ago</td></tr>
+              <tr><td class="px-5 py-2.5 font-medium text-gray-900">widgets.io</td><td class="px-5 py-2.5 text-gray-700">981</td><td class="px-5 py-2.5 text-gray-700">312</td><td class="px-5 py-2.5"><span class="badge badge-red">3</span></td><td class="px-5 py-2.5 text-gray-400 text-xs">8 min ago</td></tr>
+              <tr><td class="px-5 py-2.5 font-medium text-gray-900">portal.example.com</td><td class="px-5 py-2.5 text-gray-700">543</td><td class="px-5 py-2.5 text-gray-700">198</td><td class="px-5 py-2.5"><span class="badge badge-slate">1</span></td><td class="px-5 py-2.5 text-gray-400 text-xs">34 min ago</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ══ ORGANISATIONS ══ -->
+      <div class="section" id="s-orgs">
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h1 class="text-xl font-semibold text-gray-900">Organisations</h1>
+            <p class="text-sm text-gray-500 mt-0.5">All organisations across all domains</p>
+          </div>
+          <button class="flex items-center gap-2 bg-indigo-600 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-indigo-500 transition-colors">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+            New Organisation
+          </button>
+        </div>
+
+        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div class="px-5 py-3 border-b border-gray-100 flex items-center gap-3">
+            <input type="search" placeholder="Search orgs…" class="text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 w-64 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
+            <select class="text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <option>All domains</option>
+              <option>app.acme.com</option>
+              <option>widgets.io</option>
+            </select>
+          </div>
+          <table class="w-full text-sm">
+            <thead class="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th class="w-8 px-3 py-3"></th>
+                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Organisation</th>
+                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Domain</th>
+                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Owner</th>
+                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Members</th>
+                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Teams</th>
+                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Created</th>
+                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- Org row -->
+              <tr id="org-1-row">
+                <td class="px-3 py-3 text-center">
+                  <button onclick="toggleExpand('org-1')" class="text-gray-400 hover:text-gray-600">
+                    <svg id="org-1-chevron" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                  </button>
+                </td>
+                <td class="px-5 py-3">
+                  <p class="font-medium text-gray-900">Acme Engineering</p>
+                  <p class="text-xs text-gray-400">acme-engineering</p>
+                </td>
+                <td class="px-5 py-3 text-gray-500 text-xs">app.acme.com</td>
+                <td class="px-5 py-3"><span class="text-gray-700">alice@acme.com</span></td>
+                <td class="px-5 py-3 text-gray-700">42</td>
+                <td class="px-5 py-3 text-gray-700">6</td>
+                <td class="px-5 py-3 text-gray-400 text-xs">Jan 15, 2024</td>
+                <td class="px-5 py-3">
+                  <div class="flex items-center gap-2">
+                    <button class="text-xs text-indigo-600 font-medium">Edit</button>
+                    <span class="text-gray-300">|</span>
+                    <button class="text-xs text-amber-600 font-medium">Transfer</button>
+                    <span class="text-gray-300">|</span>
+                    <button class="text-xs text-red-500 font-medium">Delete</button>
+                  </div>
+                </td>
+              </tr>
+              <!-- Expanded: teams inside org -->
+              <tr class="expand-row open" id="org-1-expand">
+                <td colspan="8" class="bg-indigo-50 border-l-4 border-indigo-400">
+                  <div class="px-10 py-3">
+                    <p class="text-xs font-semibold text-indigo-700 mb-2">Teams in Acme Engineering</p>
+                    <table class="w-full text-sm bg-white rounded-lg overflow-hidden shadow-sm">
+                      <thead class="bg-gray-50 border-b border-gray-200">
+                        <tr>
+                          <th class="text-left px-4 py-2 text-xs font-medium text-gray-500">Team</th>
+                          <th class="text-left px-4 py-2 text-xs font-medium text-gray-500">Members</th>
+                          <th class="text-left px-4 py-2 text-xs font-medium text-gray-500">Type</th>
+                          <th class="text-left px-4 py-2 text-xs font-medium text-gray-500">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody class="divide-y divide-gray-100">
+                        <tr><td class="px-4 py-2 font-medium text-gray-800">General</td><td class="px-4 py-2 text-gray-600">42</td><td class="px-4 py-2"><span class="badge badge-blue">Default</span></td><td class="px-4 py-2"><div class="flex gap-2"><button class="text-xs text-indigo-600">View</button><span class="text-gray-300">|</span><button class="text-xs text-indigo-600">Edit</button></div></td></tr>
+                        <tr><td class="px-4 py-2 font-medium text-gray-800">Backend</td><td class="px-4 py-2 text-gray-600">14</td><td class="px-4 py-2"><span class="badge badge-slate">Team</span></td><td class="px-4 py-2"><div class="flex gap-2"><button class="text-xs text-indigo-600">View</button><span class="text-gray-300">|</span><button class="text-xs text-indigo-600">Edit</button><span class="text-gray-300">|</span><button class="text-xs text-red-500">Delete</button></div></td></tr>
+                        <tr><td class="px-4 py-2 font-medium text-gray-800">Frontend</td><td class="px-4 py-2 text-gray-600">11</td><td class="px-4 py-2"><span class="badge badge-slate">Team</span></td><td class="px-4 py-2"><div class="flex gap-2"><button class="text-xs text-indigo-600">View</button><span class="text-gray-300">|</span><button class="text-xs text-indigo-600">Edit</button><span class="text-gray-300">|</span><button class="text-xs text-red-500">Delete</button></div></td></tr>
+                      </tbody>
+                    </table>
+                    <button class="mt-2 text-xs text-indigo-600 font-medium flex items-center gap-1">
+                      <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                      Add team
+                    </button>
+                  </div>
+                </td>
+              </tr>
+              <!-- More orgs -->
+              <tr>
+                <td class="px-3 py-3 text-center"><button onclick="toggleExpand('org-2')" class="text-gray-400 hover:text-gray-600"><svg id="org-2-chevron" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg></button></td>
+                <td class="px-5 py-3"><p class="font-medium text-gray-900">Acme Design</p><p class="text-xs text-gray-400">acme-design</p></td>
+                <td class="px-5 py-3 text-gray-500 text-xs">app.acme.com</td>
+                <td class="px-5 py-3 text-gray-700">bob@acme.com</td>
+                <td class="px-5 py-3 text-gray-700">18</td>
+                <td class="px-5 py-3 text-gray-700">3</td>
+                <td class="px-5 py-3 text-gray-400 text-xs">Feb 3, 2024</td>
+                <td class="px-5 py-3"><div class="flex items-center gap-2"><button class="text-xs text-indigo-600 font-medium">Edit</button><span class="text-gray-300">|</span><button class="text-xs text-amber-600 font-medium">Transfer</button><span class="text-gray-300">|</span><button class="text-xs text-red-500 font-medium">Delete</button></div></td>
+              </tr>
+              <tr class="expand-row" id="org-2-expand"><td colspan="8" class="bg-indigo-50 border-l-4 border-indigo-400"><div class="px-10 py-3"><p class="text-xs text-indigo-600">Loading teams…</p></div></td></tr>
+              <tr>
+                <td class="px-3 py-3 text-center"><button onclick="toggleExpand('org-3')" class="text-gray-400 hover:text-gray-600"><svg id="org-3-chevron" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg></button></td>
+                <td class="px-5 py-3"><p class="font-medium text-gray-900">Widgets Core</p><p class="text-xs text-gray-400">widgets-core</p></td>
+                <td class="px-5 py-3 text-gray-500 text-xs">widgets.io</td>
+                <td class="px-5 py-3 text-gray-700">carol@widgets.io</td>
+                <td class="px-5 py-3 text-gray-700">91</td>
+                <td class="px-5 py-3 text-gray-700">9</td>
+                <td class="px-5 py-3 text-gray-400 text-xs">Nov 2, 2023</td>
+                <td class="px-5 py-3"><div class="flex items-center gap-2"><button class="text-xs text-indigo-600 font-medium">Edit</button><span class="text-gray-300">|</span><button class="text-xs text-amber-600 font-medium">Transfer</button><span class="text-gray-300">|</span><button class="text-xs text-red-500 font-medium">Delete</button></div></td>
+              </tr>
+              <tr class="expand-row" id="org-3-expand"><td colspan="8" class="bg-indigo-50 border-l-4 border-indigo-400"><div class="px-10 py-3"><p class="text-xs text-indigo-600">Click chevron to expand</p></div></td></tr>
+            </tbody>
+          </table>
+          <div class="px-5 py-3 border-t border-gray-100 flex items-center justify-between">
+            <p class="text-xs text-gray-500">Showing 3 of 34 organisations</p>
+            <div class="flex gap-1">
+              <button class="px-2.5 py-1 text-xs text-gray-500 border border-gray-200 rounded hover:bg-gray-50">Prev</button>
+              <button class="px-2.5 py-1 text-xs text-white bg-indigo-600 rounded">1</button>
+              <button class="px-2.5 py-1 text-xs text-gray-500 border border-gray-200 rounded hover:bg-gray-50">2</button>
+              <button class="px-2.5 py-1 text-xs text-gray-500 border border-gray-200 rounded hover:bg-gray-50">Next</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ TEAMS ══ -->
+      <div class="section" id="s-teams">
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h1 class="text-xl font-semibold text-gray-900">Teams</h1>
+            <p class="text-sm text-gray-500 mt-0.5">Browse and manage all teams across all organisations</p>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div class="px-5 py-3 border-b border-gray-100 flex items-center gap-3">
+            <input type="search" placeholder="Search teams…" class="text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 w-64 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
+            <select class="text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <option>All organisations</option>
+              <option>Acme Engineering</option>
+              <option>Widgets Core</option>
+            </select>
+          </div>
+          <table class="w-full text-sm">
+            <thead class="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th class="w-8 px-3 py-3"></th>
+                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Team</th>
+                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Organisation</th>
+                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Domain</th>
+                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Members</th>
+                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Type</th>
+                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="px-3 py-3 text-center"><button onclick="toggleExpand('team-1')" class="text-gray-400 hover:text-gray-600"><svg id="team-1-chevron" class="w-4 h-4 rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg></button></td>
+                <td class="px-5 py-3 font-medium text-gray-900">Backend</td>
+                <td class="px-5 py-3 text-gray-500">Acme Engineering</td>
+                <td class="px-5 py-3 text-gray-400 text-xs">app.acme.com</td>
+                <td class="px-5 py-3 text-gray-700">14</td>
+                <td class="px-5 py-3"><span class="badge badge-slate">Team</span></td>
+                <td class="px-5 py-3"><div class="flex gap-2"><button class="text-xs text-indigo-600 font-medium">Edit</button><span class="text-gray-300">|</span><button class="text-xs text-red-500 font-medium">Delete</button></div></td>
+              </tr>
+              <!-- Expanded team: members list -->
+              <tr class="expand-row open" id="team-1-expand">
+                <td colspan="7" class="bg-sky-50 border-l-4 border-sky-400">
+                  <div class="px-10 py-3">
+                    <p class="text-xs font-semibold text-sky-700 mb-2">Members of Backend team</p>
+                    <table class="w-full text-sm bg-white rounded-lg overflow-hidden shadow-sm">
+                      <thead class="bg-gray-50 border-b border-gray-200">
+                        <tr>
+                          <th class="text-left px-4 py-2 text-xs font-medium text-gray-500">User</th>
+                          <th class="text-left px-4 py-2 text-xs font-medium text-gray-500">Email</th>
+                          <th class="text-left px-4 py-2 text-xs font-medium text-gray-500">Role</th>
+                          <th class="text-left px-4 py-2 text-xs font-medium text-gray-500">Joined</th>
+                          <th class="text-left px-4 py-2 text-xs font-medium text-gray-500">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody class="divide-y divide-gray-100">
+                        <tr><td class="px-4 py-2 font-medium text-gray-800">Alice Chen</td><td class="px-4 py-2 text-gray-500">alice@acme.com</td><td class="px-4 py-2"><span class="badge badge-blue">lead</span></td><td class="px-4 py-2 text-gray-400 text-xs">Jan 15</td><td class="px-4 py-2"><div class="flex gap-2"><button class="text-xs text-indigo-600">Change Role</button><span class="text-gray-300">|</span><button class="text-xs text-red-500">Remove</button></div></td></tr>
+                        <tr><td class="px-4 py-2 font-medium text-gray-800">Bob Smith</td><td class="px-4 py-2 text-gray-500">bob@acme.com</td><td class="px-4 py-2"><span class="badge badge-slate">member</span></td><td class="px-4 py-2 text-gray-400 text-xs">Jan 20</td><td class="px-4 py-2"><div class="flex gap-2"><button class="text-xs text-indigo-600">Change Role</button><span class="text-gray-300">|</span><button class="text-xs text-red-500">Remove</button></div></td></tr>
+                        <tr><td class="px-4 py-2 font-medium text-gray-800">Carol Davis</td><td class="px-4 py-2 text-gray-500">carol@acme.com</td><td class="px-4 py-2"><span class="badge badge-slate">member</span></td><td class="px-4 py-2 text-gray-400 text-xs">Feb 3</td><td class="px-4 py-2"><div class="flex gap-2"><button class="text-xs text-indigo-600">Change Role</button><span class="text-gray-300">|</span><button class="text-xs text-red-500">Remove</button></div></td></tr>
+                      </tbody>
+                    </table>
+                    <button class="mt-2 text-xs text-sky-600 font-medium flex items-center gap-1">
+                      <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                      Add member
+                    </button>
+                  </div>
+                </td>
+              </tr>
+              <tr><td class="px-3 py-3 text-center"><button onclick="toggleExpand('team-2')" class="text-gray-400"><svg id="team-2-chevron" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg></button></td><td class="px-5 py-3 font-medium text-gray-900">General</td><td class="px-5 py-3 text-gray-500">Acme Engineering</td><td class="px-5 py-3 text-gray-400 text-xs">app.acme.com</td><td class="px-5 py-3 text-gray-700">42</td><td class="px-5 py-3"><span class="badge badge-blue">Default</span></td><td class="px-5 py-3"><div class="flex gap-2"><button class="text-xs text-indigo-600 font-medium">Edit</button></div></td></tr>
+              <tr class="expand-row" id="team-2-expand"><td colspan="7" class="bg-sky-50 border-l-4 border-sky-400"><div class="px-10 py-3 text-xs text-sky-600">Click chevron to see members</div></td></tr>
+              <tr><td class="px-3 py-3 text-center"><button class="text-gray-400"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg></button></td><td class="px-5 py-3 font-medium text-gray-900">Widget Builders</td><td class="px-5 py-3 text-gray-500">Widgets Core</td><td class="px-5 py-3 text-gray-400 text-xs">widgets.io</td><td class="px-5 py-3 text-gray-700">28</td><td class="px-5 py-3"><span class="badge badge-slate">Team</span></td><td class="px-5 py-3"><div class="flex gap-2"><button class="text-xs text-indigo-600 font-medium">Edit</button><span class="text-gray-300">|</span><button class="text-xs text-red-500 font-medium">Delete</button></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ══ USERS ══ -->
+      <div class="section" id="s-users">
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h1 class="text-xl font-semibold text-gray-900">Users</h1>
+            <p class="text-sm text-gray-500 mt-0.5">All users across all domains — search, edit, or ban</p>
+          </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit mb-5">
+          <button class="tab-btn active" onclick="switchUserTab('all', this)">All Users</button>
+          <button class="tab-btn" onclick="switchUserTab('banned', this)">Banned</button>
+          <button class="tab-btn" onclick="switchUserTab('super', this)">Superusers</button>
+        </div>
+
+        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div class="px-5 py-3 border-b border-gray-100 flex items-center gap-3">
+            <input type="search" placeholder="Search by email or name…" class="text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 w-72 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
+            <select class="text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <option>All domains</option>
+              <option>app.acme.com</option>
+              <option>widgets.io</option>
+            </select>
+            <select class="text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <option>All methods</option>
+              <option>email</option>
+              <option>google</option>
+              <option>github</option>
+            </select>
+          </div>
+          <table class="w-full text-sm">
+            <thead class="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">User</th>
+                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Domains</th>
+                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">2FA</th>
+                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Last Login</th>
+                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Status</th>
+                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Actions</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+              <tr>
+                <td class="px-5 py-3">
+                  <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center flex-shrink-0">
+                      <span class="text-indigo-700 text-xs font-semibold">AC</span>
+                    </div>
+                    <div>
+                      <p class="font-medium text-gray-900">Alice Chen</p>
+                      <p class="text-xs text-gray-400">alice@acme.com</p>
+                    </div>
+                  </div>
+                </td>
+                <td class="px-5 py-3"><span class="badge badge-slate">app.acme.com</span></td>
+                <td class="px-5 py-3"><span class="badge badge-green">Enabled</span></td>
+                <td class="px-5 py-3 text-gray-400 text-xs">2 min ago</td>
+                <td class="px-5 py-3"><span class="badge badge-green">Active</span></td>
+                <td class="px-5 py-3">
+                  <div class="flex items-center gap-2">
+                    <button onclick="document.getElementById('modal-user').classList.add('open')" class="text-xs text-indigo-600 font-medium">View</button>
+                    <span class="text-gray-300">|</span>
+                    <button class="text-xs text-amber-600 font-medium">Reset 2FA</button>
+                    <span class="text-gray-300">|</span>
+                    <button class="text-xs text-red-500 font-medium">Ban</button>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td class="px-5 py-3">
+                  <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center flex-shrink-0">
+                      <span class="text-emerald-700 text-xs font-semibold">BS</span>
+                    </div>
+                    <div>
+                      <p class="font-medium text-gray-900">Bob Smith</p>
+                      <p class="text-xs text-gray-400">bob@widgets.io</p>
+                    </div>
+                  </div>
+                </td>
+                <td class="px-5 py-3"><span class="badge badge-slate">widgets.io</span></td>
+                <td class="px-5 py-3"><span class="badge badge-amber">Disabled</span></td>
+                <td class="px-5 py-3 text-gray-400 text-xs">3 days ago</td>
+                <td class="px-5 py-3"><span class="badge badge-green">Active</span></td>
+                <td class="px-5 py-3"><div class="flex items-center gap-2"><button class="text-xs text-indigo-600 font-medium">View</button><span class="text-gray-300">|</span><button class="text-xs text-amber-600 font-medium">Reset 2FA</button><span class="text-gray-300">|</span><button class="text-xs text-red-500 font-medium">Ban</button></div></td>
+              </tr>
+              <tr>
+                <td class="px-5 py-3">
+                  <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
+                      <span class="text-red-700 text-xs font-semibold">SP</span>
+                    </div>
+                    <div>
+                      <p class="font-medium text-gray-400 line-through">spam@evil.ru</p>
+                      <p class="text-xs text-red-400">Banned user</p>
+                    </div>
+                  </div>
+                </td>
+                <td class="px-5 py-3"><span class="badge badge-slate">portal.example.com</span></td>
+                <td class="px-5 py-3"><span class="badge badge-slate">—</span></td>
+                <td class="px-5 py-3 text-gray-400 text-xs">Never</td>
+                <td class="px-5 py-3"><span class="badge badge-red">Banned</span></td>
+                <td class="px-5 py-3"><div class="flex items-center gap-2"><button class="text-xs text-indigo-600 font-medium">View</button><span class="text-gray-300">|</span><button class="text-xs text-green-600 font-medium">Unban</button><span class="text-gray-300">|</span><button class="text-xs text-red-500 font-medium">Delete</button></div></td>
+              </tr>
+              <tr>
+                <td class="px-5 py-3">
+                  <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0">
+                      <span class="text-purple-700 text-xs font-semibold">CD</span>
+                    </div>
+                    <div>
+                      <p class="font-medium text-gray-900">Carol Davis</p>
+                      <p class="text-xs text-gray-400">carol@acme.com</p>
+                    </div>
+                  </div>
+                </td>
+                <td class="px-5 py-3">
+                  <div class="flex gap-1 flex-wrap">
+                    <span class="badge badge-slate">app.acme.com</span>
+                    <span class="badge badge-slate">widgets.io</span>
+                  </div>
+                </td>
+                <td class="px-5 py-3"><span class="badge badge-green">Enabled</span></td>
+                <td class="px-5 py-3 text-gray-400 text-xs">1 hour ago</td>
+                <td class="px-5 py-3"><span class="badge badge-green">Active</span></td>
+                <td class="px-5 py-3"><div class="flex items-center gap-2"><button class="text-xs text-indigo-600 font-medium">View</button><span class="text-gray-300">|</span><button class="text-xs text-amber-600 font-medium">Reset 2FA</button><span class="text-gray-300">|</span><button class="text-xs text-red-500 font-medium">Ban</button></div></td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="px-5 py-3 border-t border-gray-100 flex items-center justify-between">
+            <p class="text-xs text-gray-500">Showing 4 of 1,247 users</p>
+            <div class="flex gap-1">
+              <button class="px-2.5 py-1 text-xs text-gray-500 border border-gray-200 rounded hover:bg-gray-50">Prev</button>
+              <button class="px-2.5 py-1 text-xs text-white bg-indigo-600 rounded">1</button>
+              <button class="px-2.5 py-1 text-xs text-gray-500 border border-gray-200 rounded hover:bg-gray-50">2</button>
+              <button class="px-2.5 py-1 text-xs text-gray-500 border border-gray-200 rounded hover:bg-gray-50">…</button>
+              <button class="px-2.5 py-1 text-xs text-gray-500 border border-gray-200 rounded hover:bg-gray-50">Next</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ EMAIL BANS ══ -->
+      <div class="section" id="s-bans">
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h1 class="text-xl font-semibold text-gray-900">Email Bans</h1>
+            <p class="text-sm text-gray-500 mt-0.5">Block specific emails or patterns from registering or logging in</p>
+          </div>
+          <button onclick="document.getElementById('modal-ban').classList.add('open')"
+            class="flex items-center gap-2 bg-red-600 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-red-500 transition-colors">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>
+            Add Ban
+          </button>
+        </div>
+
+        <!-- Two panels side by side -->
+        <div class="grid grid-cols-2 gap-4">
+
+          <!-- Banned emails -->
+          <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div class="px-5 py-4 border-b border-gray-100">
+              <h2 class="text-sm font-semibold text-gray-900">Banned Emails</h2>
+              <p class="text-xs text-gray-500 mt-0.5">Exact email address matches</p>
+            </div>
+            <table class="w-full text-sm">
+              <thead class="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th class="text-left px-5 py-2.5 text-xs font-medium text-gray-500">Email</th>
+                  <th class="text-left px-5 py-2.5 text-xs font-medium text-gray-500">Banned</th>
+                  <th class="text-left px-5 py-2.5 text-xs font-medium text-gray-500">Reason</th>
+                  <th class="px-5 py-2.5"></th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100">
+                <tr><td class="px-5 py-2.5 font-mono text-xs text-gray-700">spam@evil.ru</td><td class="px-5 py-2.5 text-gray-400 text-xs">3 days ago</td><td class="px-5 py-2.5 text-gray-500 text-xs">Spam</td><td class="px-5 py-2.5 text-right"><button class="text-xs text-red-500 hover:text-red-700">Remove</button></td></tr>
+                <tr><td class="px-5 py-2.5 font-mono text-xs text-gray-700">abuse@tempmail.org</td><td class="px-5 py-2.5 text-gray-400 text-xs">1 week ago</td><td class="px-5 py-2.5 text-gray-500 text-xs">Abuse</td><td class="px-5 py-2.5 text-right"><button class="text-xs text-red-500 hover:text-red-700">Remove</button></td></tr>
+                <tr><td class="px-5 py-2.5 font-mono text-xs text-gray-700">test123@disposable.xyz</td><td class="px-5 py-2.5 text-gray-400 text-xs">2 weeks ago</td><td class="px-5 py-2.5 text-gray-500 text-xs">Disposable</td><td class="px-5 py-2.5 text-right"><button class="text-xs text-red-500 hover:text-red-700">Remove</button></td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Banned patterns -->
+          <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div class="px-5 py-4 border-b border-gray-100">
+              <h2 class="text-sm font-semibold text-gray-900">Banned Patterns</h2>
+              <p class="text-xs text-gray-500 mt-0.5">Domain or pattern-based blocks (e.g. *@domain.com)</p>
+            </div>
+            <table class="w-full text-sm">
+              <thead class="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th class="text-left px-5 py-2.5 text-xs font-medium text-gray-500">Pattern</th>
+                  <th class="text-left px-5 py-2.5 text-xs font-medium text-gray-500">Banned</th>
+                  <th class="text-left px-5 py-2.5 text-xs font-medium text-gray-500">Hits</th>
+                  <th class="px-5 py-2.5"></th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100">
+                <tr><td class="px-5 py-2.5 font-mono text-xs text-gray-700">*@tempmail.org</td><td class="px-5 py-2.5 text-gray-400 text-xs">1 month ago</td><td class="px-5 py-2.5"><span class="badge badge-red">42</span></td><td class="px-5 py-2.5 text-right"><button class="text-xs text-red-500 hover:text-red-700">Remove</button></td></tr>
+                <tr><td class="px-5 py-2.5 font-mono text-xs text-gray-700">*@disposable.xyz</td><td class="px-5 py-2.5 text-gray-400 text-xs">3 weeks ago</td><td class="px-5 py-2.5"><span class="badge badge-red">17</span></td><td class="px-5 py-2.5 text-right"><button class="text-xs text-red-500 hover:text-red-700">Remove</button></td></tr>
+                <tr><td class="px-5 py-2.5 font-mono text-xs text-gray-700">*+test*@*</td><td class="px-5 py-2.5 text-gray-400 text-xs">5 days ago</td><td class="px-5 py-2.5"><span class="badge badge-slate">3</span></td><td class="px-5 py-2.5 text-right"><button class="text-xs text-red-500 hover:text-red-700">Remove</button></td></tr>
+                <tr><td class="px-5 py-2.5 font-mono text-xs text-gray-700">*.ru (country block)</td><td class="px-5 py-2.5 text-gray-400 text-xs">2 months ago</td><td class="px-5 py-2.5"><span class="badge badge-red">128</span></td><td class="px-5 py-2.5 text-right"><button class="text-xs text-red-500 hover:text-red-700">Remove</button></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Banned user accounts panel -->
+        <div class="bg-white rounded-xl border border-gray-200 mt-4 overflow-hidden">
+          <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+            <div>
+              <h2 class="text-sm font-semibold text-gray-900">Banned User Accounts</h2>
+              <p class="text-xs text-gray-500 mt-0.5">Users with banned account status — can log in but are blocked from app access</p>
+            </div>
+          </div>
+          <table class="w-full text-sm">
+            <thead class="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500">User</th>
+                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500">Domain</th>
+                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500">Banned</th>
+                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500">Reason</th>
+                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500">Actions</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+              <tr>
+                <td class="px-5 py-3"><p class="font-medium text-gray-700">spam@evil.ru</p></td>
+                <td class="px-5 py-3 text-gray-500 text-xs">portal.example.com</td>
+                <td class="px-5 py-3 text-gray-400 text-xs">Apr 4, 2026</td>
+                <td class="px-5 py-3 text-gray-500 text-sm">Spam account</td>
+                <td class="px-5 py-3"><div class="flex gap-2"><button class="text-xs text-green-600 font-medium">Unban</button><span class="text-gray-300">|</span><button class="text-xs text-red-500 font-medium">Delete Account</button></div></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ══ LOGIN LOGS ══ -->
+      <div class="section" id="s-logs">
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h1 class="text-xl font-semibold text-gray-900">Login Logs</h1>
+            <p class="text-sm text-gray-500 mt-0.5">All authentication events across all domains (90-day retention)</p>
+          </div>
+          <button class="flex items-center gap-2 border border-gray-200 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            Export CSV
+          </button>
+        </div>
+
+        <!-- Filters -->
+        <div class="bg-white rounded-xl border border-gray-200 px-5 py-4 mb-4 flex items-center gap-3 flex-wrap">
+          <div>
+            <label class="text-xs font-medium text-gray-500 block mb-1">Date range</label>
+            <div class="flex items-center gap-2">
+              <input type="date" value="2026-04-01" class="text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
+              <span class="text-gray-400">—</span>
+              <input type="date" value="2026-04-07" class="text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
+            </div>
+          </div>
+          <div>
+            <label class="text-xs font-medium text-gray-500 block mb-1">Domain</label>
+            <select class="text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <option>All domains</option>
+              <option>app.acme.com</option>
+              <option>widgets.io</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-xs font-medium text-gray-500 block mb-1">Auth method</label>
+            <select class="text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <option>All methods</option>
+              <option>email</option>
+              <option>google</option>
+              <option>github</option>
+              <option>apple</option>
+            </select>
+          </div>
+          <div class="self-end">
+            <button class="text-sm bg-indigo-600 text-white px-4 py-1.5 rounded-lg hover:bg-indigo-500 transition-colors">Apply</button>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <table class="w-full text-sm">
+            <thead class="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Timestamp</th>
+                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">User</th>
+                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Domain</th>
+                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Method</th>
+                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">IP Address</th>
+                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">User Agent</th>
+                <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Result</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+              <tr><td class="px-5 py-2.5 text-gray-400 text-xs whitespace-nowrap">2026-04-07 09:42:11</td><td class="px-5 py-2.5 text-gray-700">alice@acme.com</td><td class="px-5 py-2.5 text-gray-500 text-xs">app.acme.com</td><td class="px-5 py-2.5"><span class="badge badge-blue">google</span></td><td class="px-5 py-2.5 font-mono text-xs text-gray-500">84.198.12.xx</td><td class="px-5 py-2.5 text-gray-400 text-xs truncate max-w-xs">Chrome 123 / macOS</td><td class="px-5 py-2.5"><span class="badge badge-green">OK</span></td></tr>
+              <tr><td class="px-5 py-2.5 text-gray-400 text-xs whitespace-nowrap">2026-04-07 09:39:05</td><td class="px-5 py-2.5 text-gray-700">bob@widgets.io</td><td class="px-5 py-2.5 text-gray-500 text-xs">widgets.io</td><td class="px-5 py-2.5"><span class="badge badge-slate">email</span></td><td class="px-5 py-2.5 font-mono text-xs text-gray-500">31.41.59.xx</td><td class="px-5 py-2.5 text-gray-400 text-xs truncate max-w-xs">Firefox 124 / Windows</td><td class="px-5 py-2.5"><span class="badge badge-green">OK</span></td></tr>
+              <tr><td class="px-5 py-2.5 text-gray-400 text-xs whitespace-nowrap">2026-04-07 09:31:22</td><td class="px-5 py-2.5 text-gray-700">carol@example.com</td><td class="px-5 py-2.5 text-gray-500 text-xs">portal.example.com</td><td class="px-5 py-2.5"><span class="badge badge-slate">email</span></td><td class="px-5 py-2.5 font-mono text-xs text-gray-500">192.168.1.xx</td><td class="px-5 py-2.5 text-gray-400 text-xs truncate max-w-xs">Safari 17 / iOS</td><td class="px-5 py-2.5"><span class="badge badge-green">OK</span></td></tr>
+              <tr><td class="px-5 py-2.5 text-gray-400 text-xs whitespace-nowrap">2026-04-07 09:18:44</td><td class="px-5 py-2.5 text-gray-400 text-xs italic">unknown</td><td class="px-5 py-2.5 text-gray-500 text-xs">app.acme.com</td><td class="px-5 py-2.5"><span class="badge badge-slate">email</span></td><td class="px-5 py-2.5 font-mono text-xs text-red-400">185.220.101.xx</td><td class="px-5 py-2.5 text-gray-400 text-xs truncate max-w-xs">python-requests/2.31</td><td class="px-5 py-2.5"><span class="badge badge-red">FAIL</span></td></tr>
+              <tr><td class="px-5 py-2.5 text-gray-400 text-xs whitespace-nowrap">2026-04-07 09:05:11</td><td class="px-5 py-2.5 text-gray-700">dan@acme.com</td><td class="px-5 py-2.5 text-gray-500 text-xs">app.acme.com</td><td class="px-5 py-2.5"><span class="badge badge-blue">github</span></td><td class="px-5 py-2.5 font-mono text-xs text-gray-500">77.99.201.xx</td><td class="px-5 py-2.5 text-gray-400 text-xs truncate max-w-xs">Chrome 123 / Linux</td><td class="px-5 py-2.5"><span class="badge badge-green">OK</span></td></tr>
+              <tr><td class="px-5 py-2.5 text-gray-400 text-xs whitespace-nowrap">2026-04-07 08:47:33</td><td class="px-5 py-2.5 text-gray-700">eve@startup.dev</td><td class="px-5 py-2.5 text-gray-500 text-xs">startup.dev</td><td class="px-5 py-2.5"><span class="badge badge-slate">email</span></td><td class="px-5 py-2.5 font-mono text-xs text-gray-500">93.184.216.xx</td><td class="px-5 py-2.5 text-gray-400 text-xs truncate max-w-xs">Edge 123 / Windows</td><td class="px-5 py-2.5"><span class="badge badge-green">OK</span></td></tr>
+            </tbody>
+          </table>
+          <div class="px-5 py-3 border-t border-gray-100 flex items-center justify-between">
+            <p class="text-xs text-gray-500">6 of 2,847 log entries — filtered to last 7 days</p>
+            <div class="flex gap-1">
+              <button class="px-2.5 py-1 text-xs text-gray-500 border border-gray-200 rounded hover:bg-gray-50">Prev</button>
+              <button class="px-2.5 py-1 text-xs text-white bg-indigo-600 rounded">1</button>
+              <button class="px-2.5 py-1 text-xs text-gray-500 border border-gray-200 rounded hover:bg-gray-50">2</button>
+              <button class="px-2.5 py-1 text-xs text-gray-500 border border-gray-200 rounded hover:bg-gray-50">Next</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+</div>
+
+<!-- ══ MODAL: Add Domain ══ -->
+<div class="modal-overlay" id="modal-domain">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+      <h2 class="text-base font-semibold text-gray-900">Add Domain</h2>
+      <button onclick="document.getElementById('modal-domain').classList.remove('open')" class="text-gray-400 hover:text-gray-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="px-6 py-5 space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1.5">Domain name</label>
+        <input type="text" placeholder="app.example.com" class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
+        <p class="text-xs text-gray-400 mt-1">Must match the domain claim in config JWTs</p>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1.5">Friendly name</label>
+        <input type="text" placeholder="My App" class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1.5">Client secret</label>
+        <div class="flex gap-2">
+          <input type="text" placeholder="Paste or generate a secret" class="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
+          <button class="text-sm border border-gray-200 px-3 py-2 rounded-lg hover:bg-gray-50 text-gray-600 whitespace-nowrap">Generate</button>
+        </div>
+        <p class="text-xs text-gray-400 mt-1">This secret is used by the client backend to sign config JWTs</p>
+      </div>
+      <div class="bg-amber-50 border border-amber-200 rounded-lg p-3">
+        <p class="text-xs text-amber-800">
+          <strong>Note:</strong> The client backend must set this secret as their <code class="bg-amber-100 px-1 rounded">SHARED_SECRET</code> environment variable. Store it securely — it cannot be recovered after creation.
+        </p>
+      </div>
+    </div>
+    <div class="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50">
+      <button onclick="document.getElementById('modal-domain').classList.remove('open')" class="text-sm text-gray-600 px-4 py-2 rounded-lg hover:bg-gray-100">Cancel</button>
+      <button class="text-sm bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-500">Add Domain</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL: View User ══ -->
+<div class="modal-overlay" id="modal-user">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+      <h2 class="text-base font-semibold text-gray-900">User Details</h2>
+      <button onclick="document.getElementById('modal-user').classList.remove('open')" class="text-gray-400 hover:text-gray-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="px-6 py-5">
+      <!-- User header -->
+      <div class="flex items-center gap-4 mb-5">
+        <div class="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center">
+          <span class="text-indigo-700 font-semibold">AC</span>
+        </div>
+        <div>
+          <p class="font-semibold text-gray-900">Alice Chen</p>
+          <p class="text-sm text-gray-500">alice@acme.com</p>
+          <span class="badge badge-green mt-1">Active</span>
+        </div>
+        <div class="ml-auto flex flex-col gap-1.5">
+          <button class="text-sm text-amber-600 border border-amber-200 px-3 py-1 rounded-lg hover:bg-amber-50">Reset 2FA</button>
+          <button class="text-sm text-red-600 border border-red-200 px-3 py-1 rounded-lg hover:bg-red-50">Ban User</button>
+        </div>
+      </div>
+      <!-- Details grid -->
+      <div class="grid grid-cols-2 gap-4 text-sm">
+        <div class="bg-gray-50 rounded-lg p-3">
+          <p class="text-xs text-gray-500 mb-1">User ID</p>
+          <p class="font-mono text-xs text-gray-700 truncate">cm8x2f4k00001abc…</p>
+        </div>
+        <div class="bg-gray-50 rounded-lg p-3">
+          <p class="text-xs text-gray-500 mb-1">Registered</p>
+          <p class="text-gray-700">Jan 15, 2024</p>
+        </div>
+        <div class="bg-gray-50 rounded-lg p-3">
+          <p class="text-xs text-gray-500 mb-1">2FA</p>
+          <p class="text-gray-700">TOTP Enabled</p>
+        </div>
+        <div class="bg-gray-50 rounded-lg p-3">
+          <p class="text-xs text-gray-500 mb-1">Last Login</p>
+          <p class="text-gray-700">2 min ago</p>
+        </div>
+        <div class="bg-gray-50 rounded-lg p-3 col-span-2">
+          <p class="text-xs text-gray-500 mb-1">Active Domains</p>
+          <div class="flex gap-1.5 flex-wrap mt-1">
+            <span class="badge badge-slate">app.acme.com (superuser)</span>
+            <span class="badge badge-slate">portal.example.com</span>
+          </div>
+        </div>
+      </div>
+      <!-- Orgs/Teams -->
+      <div class="mt-4">
+        <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Organisations &amp; Teams</p>
+        <div class="space-y-2">
+          <div class="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
+            <div>
+              <p class="text-sm font-medium text-gray-800">Acme Engineering</p>
+              <p class="text-xs text-gray-500">Backend, Frontend</p>
+            </div>
+            <span class="badge badge-blue">admin</span>
+          </div>
+        </div>
+      </div>
+      <!-- Recent logins -->
+      <div class="mt-4">
+        <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Recent Logins</p>
+        <div class="space-y-1.5">
+          <div class="flex items-center justify-between text-xs">
+            <span class="text-gray-600">Apr 7, 09:42 — google — Chrome/macOS</span>
+            <span class="badge badge-green">OK</span>
+          </div>
+          <div class="flex items-center justify-between text-xs">
+            <span class="text-gray-600">Apr 6, 14:15 — google — Chrome/macOS</span>
+            <span class="badge badge-green">OK</span>
+          </div>
+          <div class="flex items-center justify-between text-xs">
+            <span class="text-gray-600">Apr 5, 09:01 — google — Safari/iOS</span>
+            <span class="badge badge-green">OK</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="flex justify-end px-6 py-4 border-t border-gray-200 bg-gray-50">
+      <button onclick="document.getElementById('modal-user').classList.remove('open')" class="text-sm text-gray-600 px-4 py-2 rounded-lg hover:bg-gray-100">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL: Add Ban ══ -->
+<div class="modal-overlay" id="modal-ban">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+      <h2 class="text-base font-semibold text-gray-900">Add Email Ban</h2>
+      <button onclick="document.getElementById('modal-ban').classList.remove('open')" class="text-gray-400 hover:text-gray-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="px-6 py-5 space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1.5">Ban type</label>
+        <div class="flex gap-1 bg-gray-100 p-1 rounded-lg">
+          <button class="tab-btn active flex-1 text-center">Exact email</button>
+          <button class="tab-btn flex-1 text-center">Pattern</button>
+        </div>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1.5">Email or pattern</label>
+        <input type="text" placeholder="e.g. spam@evil.com or *@evil.com" class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 font-mono focus:outline-none focus:ring-2 focus:ring-red-500"/>
+        <p class="text-xs text-gray-400 mt-1">Use <code class="bg-gray-100 px-1 rounded">*</code> as wildcard. Example: <code class="bg-gray-100 px-1 rounded">*@disposable.net</code></p>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1.5">Scope</label>
+        <select class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500">
+          <option>Global (all domains)</option>
+          <option>app.acme.com only</option>
+          <option>widgets.io only</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1.5">Reason (optional)</label>
+        <input type="text" placeholder="e.g. Spam, abuse, disposable" class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500"/>
+      </div>
+      <div class="flex items-start gap-2">
+        <input type="checkbox" id="ban-existing" class="mt-0.5 rounded border-gray-300"/>
+        <label for="ban-existing" class="text-sm text-gray-700">Also ban any existing accounts matching this pattern</label>
+      </div>
+    </div>
+    <div class="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50">
+      <button onclick="document.getElementById('modal-ban').classList.remove('open')" class="text-sm text-gray-600 px-4 py-2 rounded-lg hover:bg-gray-100">Cancel</button>
+      <button class="text-sm bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-500">Add Ban</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  function showSection(id) {
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    document.getElementById('s-' + id).classList.add('active');
+
+    document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+    event.currentTarget.classList.add('active');
+
+    const labels = { dashboard: 'Dashboard', domains: 'Domains & Secrets', orgs: 'Organisations', teams: 'Teams', users: 'Users', bans: 'Email Bans', logs: 'Login Logs' };
+    document.getElementById('breadcrumb-current').textContent = labels[id] || id;
+  }
+
+  function toggleExpand(id) {
+    const row = document.getElementById(id + '-expand');
+    const chevron = document.getElementById(id + '-chevron');
+    if (!row) return;
+    row.classList.toggle('open');
+    if (chevron) chevron.style.transform = row.classList.contains('open') ? 'rotate(90deg)' : '';
+  }
+
+  function switchUserTab(tab, btn) {
+    document.querySelectorAll('#s-users .tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  }
+</script>
+
+</body>
+</html>
