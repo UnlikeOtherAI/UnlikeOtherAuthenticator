@@ -75,13 +75,14 @@ The API is the central OAuth/auth server. It handles:
 
 ### Internal API
 
-- `POST /internal/org/organisations/:orgId/groups` — create group
-- `PUT /internal/org/organisations/:orgId/groups/:groupId` — update group
-- `DELETE /internal/org/organisations/:orgId/groups/:groupId` — delete group
-- `POST /internal/org/organisations/:orgId/groups/:groupId/members` — add group member
-- `PUT /internal/org/organisations/:orgId/groups/:groupId/members/:userId` — toggle `is_admin`
-- `DELETE /internal/org/organisations/:orgId/groups/:groupId/members/:userId` — remove group member
-- `PUT /internal/org/organisations/:orgId/teams/:teamId/group` — assign/unassign team
+* `POST /internal/org/organisations/:orgId/groups` — create group
+* `PUT /internal/org/organisations/:orgId/groups/:groupId` — update group
+* `DELETE /internal/org/organisations/:orgId/groups/:groupId` — delete group
+* `POST /internal/org/organisations/:orgId/groups/:groupId/members` — add group member
+* `PUT /internal/org/organisations/:orgId/groups/:groupId/members/:userId` — toggle `is_admin`
+* `DELETE /internal/org/organisations/:orgId/groups/:groupId/members/:userId` — remove group member
+* `PUT /internal/org/organisations/:orgId/teams/:teamId/group` — assign/unassign team
+* `/internal/admin/*` is the planned system-admin route family for the admin panel; see `Docs/Requirements/roles-and-acl.md` and `Docs/Admin/architecture-admin.md`
 
 ---
 
@@ -116,6 +117,76 @@ The auth window is the user-facing UI rendered inside the OAuth popup. It is a *
 
 ---
 
+## Admin Panel (`/Admin`)
+
+The admin panel is a separate authenticated frontend application for UOA operators.
+
+It should be implemented as a **React CSR** app, not SSR.
+
+`Docs/Admin/architecture-admin.md` is the canonical admin architecture document.
+
+### Existing Template Baseline
+
+The admin panel templates already exist in [`Docs/Admin/README.md`](./Admin/README.md).
+
+Do not rebuild the admin UI from scratch.
+
+Use these existing template files as the visual and structural baseline:
+
+* `Docs/Admin/template-login.html`
+* `Docs/Admin/template-folder.html`
+* `Docs/Admin/template-admin.html`
+
+The React implementation should translate those templates into reusable components and route layouts.
+
+### Recommended Stack
+
+* **React** — frontend UI runtime
+* **TypeScript** — required for all admin code
+* **Vite** — frontend build tool
+* **React Router** — client-side routing
+* **Tailwind CSS** — the only styling system
+* **TanStack Query** — server-state and cache management
+* **native `fetch` via a shared client** — HTTP transport
+* **react-hook-form + Zod** — form state and validation at the boundary
+* **React Context** — small shared UI state only (selected org, shell state, user preferences). Do not add Zustand unless the state shape actually outgrows Context.
+* **Vitest** — frontend unit/component test runner
+
+### Key Decisions
+
+* CSR only for authenticated admin workflows
+* Architecture, module boundaries, forms, and auth rules live in `Docs/Admin/architecture-admin.md`
+* No Prisma or backend-only models in frontend code
+* The admin app must be under strict linting and strict TypeScript rules
+
+### Environment and API Wiring
+
+* The admin app must read its API base URL from Vite environment configuration, for example `VITE_API_BASE_URL`
+* Do not hardcode hosts or protocols in components or services
+* Keep API client creation centralized so headers, error mapping, and auth behavior are not duplicated
+
+### Assets and Icons
+
+* Reuse `/assets` for UOA-owned branding assets such as app icons, favicons, and admin brand marks
+* For product UI action icons, use inline SVG components consistently rather than mixing icon sources
+
+### Quality Gate
+
+* `Admin` source files must be covered by ESLint
+* Lint must fail the build on violations
+* Strict TypeScript settings must remain enabled
+* Components should remain small and composable
+* Avoid `any`, dead exports, and page-local duplicated UI patterns
+
+### Canonical Documentation Rule
+
+* `Docs/Admin/README.md` is the canonical template-baseline document
+* `Docs/Admin/architecture-admin.md` is the canonical admin architecture document
+* `Docs/techstack.md` is the canonical admin stack and environment document
+* Implementation plans should reference these documents rather than restating their rules in full
+
+---
+
 ## Database
 
 - **PostgreSQL** — the database
@@ -140,21 +211,23 @@ The auth window is the user-facing UI rendered inside the OAuth popup. It is a *
 
 All secrets and configuration live in environment variables. Nothing is hardcoded.
 
-- `SHARED_SECRET` — the single global shared secret for domain hashing and server-issued bearer secrets
-- `AUTH_SERVICE_IDENTIFIER` — auth service identifier (expected `aud` for config JWTs)
-- `CONFIG_JWKS_URL` — trusted JWKS endpoint for RS256 config JWT verification by `kid`
-- `DATABASE_URL` — database connection string
-- Social provider credentials (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, etc.)
-- Email service credentials:
-  - `EMAIL_PROVIDER` — `disabled` (default behavior) or `smtp`
-  - `EMAIL_FROM` — required for `smtp`
-  - `EMAIL_REPLY_TO` — optional reply-to address
-  - `SMTP_HOST` — required for `smtp`
-  - `SMTP_PORT` — optional (default: 587)
-  - `SMTP_SECURE` — optional (`true`/`false`, default: `false`)
-  - `SMTP_USER` / `SMTP_PASSWORD` — optional (SMTP auth)
-- AI translation service credentials
-- `ACCESS_TOKEN_TTL` — access token lifetime (minutes-only, 15m–60m; default: 30m)
-- `TOKEN_PRUNE_RETENTION_DAYS` — days after refresh-token expiry before expired refresh token rows are pruned (default: 7, max 365)
-- `LOG_RETENTION_DAYS` — login log retention window (default: 90, max 365)
-- `DEBUG_ENABLED` — include internal error/debug details in responses when set to `true` (default: `false`)
+* `SHARED_SECRET` — the single global shared secret for domain hashing and server-issued bearer secrets
+* `AUTH_SERVICE_IDENTIFIER` — auth service identifier (expected `aud` for config JWTs)
+* `CONFIG_JWKS_URL` — trusted JWKS endpoint for RS256 config JWT verification by `kid`
+* `DATABASE_URL` — database connection string
+* Social provider credentials (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, etc.)
+* Email service credentials:
+  * `EMAIL_PROVIDER` — `disabled` (default behavior) or `smtp`
+  * `EMAIL_FROM` — required for `smtp`
+  * `EMAIL_REPLY_TO` — optional reply-to address
+  * `SMTP_HOST` — required for `smtp`
+  * `SMTP_PORT` — optional (default: 587)
+  * `SMTP_SECURE` — optional (`true`/`false`, default: `false`)
+  * `SMTP_USER` / `SMTP_PASSWORD` — optional (SMTP auth)
+* AI translation service credentials
+* `ACCESS_TOKEN_TTL` — access token lifetime (minutes-only, 15m–60m; default: 30m)
+* `TOKEN_PRUNE_RETENTION_DAYS` — days after refresh-token expiry before expired refresh token rows are pruned (default: 7, max 365)
+* `LOG_RETENTION_DAYS` — login log retention window (default: 90, max 365)
+* `DEBUG_ENABLED` — include internal error/debug details in responses when set to `true` (default: `false`)
+* `VITE_API_BASE_URL` — admin frontend API base URL
+* `VITE_ADMIN_BYPASS_AUTH` — development-only admin auth bypass flag; must not be relied on in production

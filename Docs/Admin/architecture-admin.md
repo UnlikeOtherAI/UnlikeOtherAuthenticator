@@ -1,0 +1,178 @@
+# Admin Panel Architecture
+
+This document defines the architecture for the React admin panel in `/Admin`.
+
+Read this together with:
+
+- `Docs/Admin/README.md` for the template baseline
+- `Docs/techstack.md` for the overall repository stack
+- `Docs/Requirements/roles-and-acl.md` for system-admin and `/internal/admin/*` auth requirements
+
+## 1. Purpose
+
+The admin panel is the authenticated operational frontend for UOA operators.
+
+It is not a marketing site and it is not the auth popup UI.
+
+It must be implemented as a React CSR app that translates the existing HTML templates in `Docs/Admin/` into reusable components.
+
+## 2. Visual Baseline
+
+The canonical visual baseline already exists:
+
+- `Docs/Admin/template-login.html`
+- `Docs/Admin/template-folder.html`
+- `Docs/Admin/template-admin.html`
+
+Do not rebuild the interface from scratch.
+
+The implementation task is to convert these templates into reusable layouts, pages, and UI primitives while preserving the established information architecture and visual language.
+
+## 3. Architecture Overview
+
+Use a separate frontend application in `/Admin`.
+
+Required stack:
+
+- React
+- TypeScript
+- Vite
+- React Router
+- Tailwind CSS
+- TanStack Query
+- native `fetch` wrapped in a shared API client layer
+- react-hook-form
+- Zod
+- Vitest
+
+State model:
+
+- TanStack Query for server state
+- local component state for local-only concerns
+- focused React Context for small shared UI state such as shell state, selected org context, and user preferences
+- do not introduce Zustand unless the Context-based approach becomes materially insufficient
+
+## 4. Module Boundaries
+
+Use this structure:
+
+```text
+/Admin
+  /src
+    /app
+    /layouts
+    /pages
+    /components
+    /features
+    /hooks
+    /services
+    /schemas
+    /config
+    /utils
+```
+
+Rules:
+
+- `pages` own route composition only
+- `layouts` own shell composition only
+- `components` hold reusable UI pieces
+- `features` hold feature-specific views, hooks, and orchestration
+- `services` own API clients and transport mapping
+- `config` owns runtime config, env parsing, and request-client setup
+- `schemas` own frontend validation schemas and UI-facing contracts
+- `utils` stay small and generic
+
+## 4.1 Route Map
+
+The initial React Router tree should mirror the existing templates and current admin scope:
+
+- `/login` — admin sign-in screen from `template-login.html`
+- `/` — admin shell landing page from `template-folder.html`
+- `/dashboard` — dashboard/home inside the admin shell
+- `/organisations` — organisation listing and search
+- `/teams` — team listing and search
+- `/users` — user listing and search
+- `/domains` — domains and secrets view
+- `/logs` — login logs and audit surfaces
+- `/settings` — system-level settings
+
+If a template demonstrates a section but not a final route name, use this route map rather than inventing a new page tree.
+
+## 5. Data and API Rules
+
+- The admin app talks to the API over HTTP only
+- Frontend code must not import Prisma, database models, or backend-only utilities
+- API access must be centralized behind services/query hooks
+- Components must not decode raw transport payloads ad hoc
+- Shared API error handling should map backend responses into a consistent UI-facing shape
+
+## 6. Forms
+
+- Use `react-hook-form` for non-trivial forms
+- Use Zod schemas at the boundary
+- Keep validation and normalization outside presentational components where possible
+- Do not hand-roll inconsistent form state patterns per page
+
+## 7. Auth Boundary
+
+Known constraints from the existing documentation:
+
+- `system_admin` is separate from org/team membership
+- `/internal/admin/*` is the backend system-admin route family
+- browser code must not use the domain-hash shared-secret mechanism directly
+
+Current implementation rule:
+
+- until a browser-safe production admin session contract is documented, keep frontend admin auth behind a stubbed guard or mock session adapter for development only
+- gate any bypass behind an explicit development-only environment flag
+- do not ship a production build that depends on the bypass
+
+Required temporary interface:
+
+- implement the stub in `Admin/src/features/auth/admin-session.ts`
+- expose `useAdminSession(): { adminUser: { email: string } | null; isLoading: boolean; isAuthenticated: boolean }`
+- expose an `AdminSessionGuard` component that blocks protected routes when `isAuthenticated` is false
+- keep page and layout code dependent on this interface only, so the production session implementation can replace the stub without page-level rewrites
+
+Forward direction:
+
+- design the frontend auth boundary so it can later swap to a dedicated browser-safe admin session endpoint without rewriting page or component logic
+- the intended landing zone is a dedicated admin session route family, for example `/internal/admin/session`, documented before any production implementation
+
+Acceptance rule for removing the bypass:
+
+- only remove the development bypass after the production admin session contract is documented in this file and the corresponding endpoints are described in the root schema and `/llm`
+
+## 8. Reuse Rules
+
+- If the same pattern appears more than once, extract it
+- Do not duplicate shell markup across pages
+- Prefer reusable table, filter, badge, dialog, and form primitives
+- Keep feature-specific composition in `features`, not global primitives
+
+## 8.1 Icons and UI States
+
+- use one icon approach consistently for admin product-action icons: inline SVG components checked into the repo
+- reserve `/assets` for UOA-owned branding assets such as app icons, favicons, and brand marks
+- use consistent loading states: skeletons for tables/cards, inline spinners for short actions, and page-level empty/error states for failed queries
+- keep query error presentation centralized rather than inventing per-page ad hoc patterns
+
+## 9. Quality Gate
+
+- ESLint must cover all `/Admin` source files
+- TypeScript strictness must remain enabled
+- Lint failures must fail the build
+- Vitest must cover reusable logic and component behavior as the app grows
+- Avoid `any`, dead code, and unused exports
+- Keep components small and composable
+
+## 10. Environment
+
+The admin app must read configuration from Vite environment variables.
+
+Current required frontend variables:
+
+- `VITE_API_BASE_URL`
+- `VITE_ADMIN_BYPASS_AUTH` for development-only auth bypass
+
+Do not hardcode hosts or protocols in components.

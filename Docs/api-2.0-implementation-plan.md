@@ -69,6 +69,22 @@ Current persisted data already includes:
 
 These are the correct seam lines for 2.0. The 2.0 work should extend these rather than bypass them.
 
+### 2.4 Existing Admin Template Baseline
+
+The repository already contains admin UI templates in `Docs/Admin/`.
+
+These are:
+
+- `Docs/Admin/template-login.html`
+- `Docs/Admin/template-folder.html`
+- `Docs/Admin/template-admin.html`
+
+For future admin implementation work:
+
+- use `Docs/Admin/README.md` as the template-baseline source
+- use `Docs/Admin/architecture-admin.md` as the canonical admin architecture source
+- use `Docs/techstack.md` as the canonical admin stack source
+
 ## 3. 2.0 Goals
 
 ### 3.1 Primary Goals
@@ -116,6 +132,7 @@ Non-breaking:
 - adding new optional request fields
 - adding new endpoints
 - strengthening `/llm` and `/` documentation
+- extending the shared JSON error envelope with additive fields while keeping existing top-level compatibility
 
 Breaking:
 
@@ -123,6 +140,7 @@ Breaking:
 - changing auth requirements for an existing route
 - changing list envelope shape
 - changing token exchange response semantics
+- removing previously returned response shapes without a compatibility window
 
 ## 5. Shared API Conventions for 2.0
 
@@ -142,10 +160,20 @@ The shared JSON error envelope should remain:
 
 2.0 requirement:
 
-- all JSON failures use the shared formatter
-- route-specific generic `{ error: "Request failed" }` payloads are eliminated
+- machine-consumable and developer-facing JSON failures use the shared formatter
+- route-specific generic `{ error: "Request failed" }` payloads should be extended into the shared envelope without breaking strict consumers unexpectedly
 - HTML auth flows may still render a debug page when appropriate
 - machine-consumable routes always return structured JSON
+
+Security boundary:
+
+- user-facing auth flows must continue to return generic user-safe errors
+- structured `code`, `summary`, `details`, and `hints` are for machine-consumable, developer-facing, and debug endpoints such as `/config/verify`, `/`, and `/llm`
+
+Compatibility rule:
+
+- if any existing machine consumer depends on the legacy generic-only payload shape, introduce the full envelope via additive rollout or versioning rather than silently removing the old contract
+- treat payloads explicitly documented in `/` or `/llm` as strict public contracts that cannot be silently broken
 
 ### 5.2 Response Envelope Policy
 
@@ -162,12 +190,18 @@ Use these conventions consistently:
 
 ### 5.3 Auth Header Policy
 
-- domain backend routes:
+- domain-only routes:
   - `Authorization: Bearer <sha256(domain + SHARED_SECRET)>`
-- user-scoped routes:
+- user-scoped org routes:
   - `X-UOA-Access-Token: <jwt>`
+  - `Authorization: Bearer <sha256(domain + SHARED_SECRET)>` when the route is also domain/config-bound
 - config-bound routes:
   - `config_url` query param unless the route intentionally accepts raw config input
+
+Decision rule:
+
+- treat an `/org/*` route as domain/config-bound when it operates inside a domain tenant context and the current route wiring applies both `requireDomainHashAuth*` and `requireOrgRole`
+- in the current codebase, this means the existing `/org/*` family should keep its current dual-header model unless a route is explicitly redesigned and documented otherwise
 
 ## 6. Data Model Changes
 
@@ -597,7 +631,7 @@ This is the safest place to introduce user-profile data without inventing an ent
 2.0 work:
 
 - no direct pronouns impact
-- keep domain-hash auth
+- keep the existing `/org/*` auth model: user access token via `X-UOA-Access-Token` plus domain-hash bearer auth where the route is domain/config-bound
 - keep default team creation transactional
 
 #### Organisation Member CRUD
@@ -728,6 +762,30 @@ The architecture doc already anticipates `/internal/admin/*`, but this route fam
 
 - do not implement all internal admin routes in the same first pronouns/config milestone
 - once profile support exists, internal admin user/member responses should also include pronouns summary
+
+### 8.10 Admin Panel Architecture Alignment
+
+The admin panel implementation is not a blank-sheet design task.
+
+Implementation rules:
+
+- use `Docs/Admin/README.md` for the template baseline
+- use `Docs/Admin/architecture-admin.md` for the admin architecture rules
+- use `Docs/techstack.md` for stack and environment rules
+- keep the admin panel under strict linting and strict TypeScript rules from the first commit
+
+### 8.11 Existing `/config/verify` Endpoint
+
+`/config/verify` already exists in the current API surface.
+
+2.0 work extends this route; it does not introduce a separate replacement endpoint.
+
+The expected 2.0 changes are:
+
+- broader accepted input forms
+- clearer staged validation output
+- more explicit machine-readable failure reasons
+- stronger documentation in `/` and `/llm`
 
 ## 9. Service Plan
 
@@ -869,6 +927,7 @@ Existing tests must continue to cover:
 - finalize 2.0 route/resource decisions
 - write `/` and `/llm` additions
 - lock response examples
+- define the rule that route changes update `/` and `/llm` in the same PR
 
 ### Phase 2: Persistence
 
@@ -892,7 +951,7 @@ Existing tests must continue to cover:
 ### Phase 5: Contract Validation
 
 - complete tests
-- update `/` and `/llm`
+- audit `/` and `/llm` for completeness after the earlier per-PR updates
 - ensure root schema is fully in sync
 
 ### Phase 6: Staging Deployment
@@ -957,8 +1016,11 @@ The 2.0 implementation is complete only when all of the following exist:
 - unit + integration tests
 - successful lint, typecheck, and full test run
 - staging deploy verification
+- documented browser-safe admin session contract before any production admin-panel auth implementation replaces the stub
 
 ## 16. Immediate Next Step
+
+This section is a condensed vertical-slice recommendation after Phase 1 documentation lock.
 
 The first implementation PR on `api-2.0` should be:
 
