@@ -28,11 +28,12 @@ This plan is based on the current codebase state on branch `api-2.0`, cut from r
   - `/llm`
   - `/health`
   - `/config/verify`
-  - `/auth/*`
+  - `/auth/*` (includes `/auth/domain-mapping`)
   - `/2fa/*`
-  - `/i18n/get`
+  - `/i18n/:language`
   - `/domain/*`
   - `/org/*`
+  - `/internal/org/*` (group CRUD, group members, team↔group assignment — backend-to-backend only)
 
 ### 2.2 Existing Prisma Models
 
@@ -60,12 +61,17 @@ Current persisted data already includes:
 
 ### 2.3 Existing Cross-Cutting Middleware
 
-- `config-verifier.ts`
-- `domain-hash-auth.ts`
-- `org-role-guard.ts`
-- `org-permission.ts`
-- `team-permission.ts`
-- `error-handler.ts`
+- `config-verifier.ts` — fetches config URL, verifies JWT, attaches config to request
+- `domain-hash-auth.ts` — verifies SHA-256(domain + SHARED_SECRET) bearer token
+- `org-role-guard.ts` — validates user access token and org membership/role
+- `org-permission.ts` — [NOT YET IMPLEMENTED] `requireOrgRole(minRole)` — org-level role enforcement (owner > admin > member). Specified in `architecture-api.md` but no file exists yet.
+- `team-permission.ts` — [NOT YET IMPLEMENTED] `requireTeamRole(minRole)` — team-level role enforcement with org fallback. Specified in `architecture-api.md` but no file exists yet.
+- `superuser-access-token.ts` — validates user access token and requires superuser role (used by `/domain/debug`)
+- `org-features.ts` — returns 404 when `org_features.enabled` is false in config
+- `groups-enabled.ts` — returns 404 when `org_features.groups_enabled` is false
+- `rate-limiter.ts` — rate limiting for write operations
+- `error-handler.ts` — generic user-facing errors, detailed internal logs
+- `scim-auth.ts` — [DEFERRED] SCIM bearer token validation
 
 These are the correct seam lines for 2.0. The 2.0 work should extend these rather than bypass them.
 
@@ -170,6 +176,19 @@ Security boundary:
 - user-facing auth flows must continue to return generic user-safe errors
 - structured `code`, `summary`, `details`, and `hints` are for machine-consumable, developer-facing, and debug endpoints such as `/config/verify`, `/`, and `/llm`
 
+Current state:
+
+- `error-handler.ts` returns `{ error: "Request failed" }` (or the message from `AppError`) for all user-facing routes
+- `config-debug.service.ts` already uses structured `issues[]` arrays with `stage`, `code`, `summary`, `details` fields
+- no existing route returns the full `code` + `summary` + `details` + `hints` envelope proposed above
+
+Transition strategy:
+
+- the full structured envelope (`code`, `summary`, `details`, `hints`) applies only to machine-consumable and debug endpoints: `/config/verify`, `GET /`, `GET /llm`, and future internal admin responses
+- auth-flow routes (`/auth/*`, `/2fa/*`, `/org/*`, `/domain/*`) keep the existing generic `{ error: "Request failed" }` shape — no change
+- the `error` field remains present in all error responses for backwards compatibility; `code`, `summary`, `details`, and `hints` are additive fields that existing consumers can ignore
+- do not refactor `error-handler.ts` to emit the full envelope globally — keep it targeted to routes that opt in
+
 Compatibility rule:
 
 - if any existing machine consumer depends on the legacy generic-only payload shape, introduce the full envelope via additive rollout or versioning rather than silently removing the old contract
@@ -227,7 +246,13 @@ Recommended preset values:
 - `prefer_not_to_say`
 - `custom`
 
-### 6.2 User Validation Rules
+### 6.2 Domain Scoping Clarification
+
+The `Organisation` model has no `domain` column. Domain scoping in org queries is indirect: the caller supplies a `domain` query parameter, and the service layer joins through `User.domain` or uses domain-aware lookups. Do not assume `prisma.organisation.findMany({ where: { domain } })` will work — it will not.
+
+This matters for `profile.service.ts`: the user lookup must go through `userId` (from the access token), not through domain-based filtering on the `Organisation` table.
+
+### 6.3 User Validation Rules
 
 - both fields nullable
 - if `pronouns_preset = null`, `pronouns_custom = null`
@@ -235,7 +260,7 @@ Recommended preset values:
 - if `pronouns_preset != custom`, `pronouns_custom = null`
 - reject empty custom values after trim
 
-### 6.3 Prisma Migration Plan
+### 6.4 Prisma Migration Plan
 
 Migration 1:
 
@@ -244,7 +269,7 @@ Migration 1:
 
 No backfill is required because both fields are nullable.
 
-### 6.4 API Serialization Shape
+### 6.5 API Serialization Shape
 
 Expose:
 
@@ -260,6 +285,24 @@ Expose:
 ```
 
 `pronouns_display` should be derived server-side to keep clients dumb.
+
+Derivation mapping:
+
+| `pronouns_preset` | `pronouns_display` |
+|---|---|
+| `null` | `null` |
+| `he_him` | `"he/him"` |
+| `she_her` | `"she/her"` |
+| `they_them` | `"they/them"` |
+| `any_pronouns` | `"any pronouns"` |
+| `ask_me` | `"ask me"` |
+| `prefer_not_to_say` | `null` |
+| `custom` | value of `pronouns_custom` |
+
+Notes:
+
+- `prefer_not_to_say` returns `null` for display because exposing the preference itself is a form of disclosure
+- unknown preset values should return `null` rather than crash (forward compatibility for future presets)
 
 ## 7. Database Connection and Persistence Plan
 
@@ -526,6 +569,16 @@ Purpose:
 - unchanged at contract level
 - only ensure shared error shape and docs consistency
 
+#### `GET /auth/domain-mapping`
+
+Purpose:
+
+- domain to org/team mapping lookup
+
+2.0 work:
+
+- unchanged
+
 #### `GET /auth/social/:provider`
 #### `GET /auth/callback/:provider`
 
@@ -547,15 +600,23 @@ Purpose:
 
 ### 8.5 Translation Endpoint
 
-#### `GET /i18n/get`
+#### `GET /i18n/:language`
 
 Purpose:
 
-- fetch translation payload for current config language
+- fetch translation payload for the specified language (path parameter, not query param)
+
+Auth:
+
+- config-verifier (config_url required)
+
+Existing schema discrepancy:
+
+- `schema.ts` currently documents this endpoint as `GET /i18n/get` with a `lang` query param, but the actual route is `GET /i18n/:language` using a path parameter. This must be corrected in Phase 1 contract work.
 
 2.0 work:
 
-- no route change
+- fix schema.ts path and param documentation to match the real route
 - ensure `/llm` documents translation fallback behavior clearly
 
 ### 8.6 Domain Endpoints
@@ -585,7 +646,12 @@ Purpose:
 
 Purpose:
 
-- domain-level debugging endpoint gated by config
+- domain-level debugging endpoint
+
+Auth:
+
+- `superuser-access-token.ts` middleware (requires a valid user access token with superuser role, not just config presence)
+- also requires domain-hash bearer token
 
 2.0 work:
 
@@ -600,12 +666,35 @@ Purpose:
 
 - current user org context
 
-2.0 change:
+Auth note:
 
-- include user profile block:
+- `me.ts` does **not** use `org-role-guard.ts`. It calls `verifyAccessToken()` directly inline and checks domain match manually. This is an outlier among `/org/*` routes. The new `access-token-auth.ts` middleware proposed in §10.2 should be patterned after this inline code in `me.ts`, not after `org-role-guard.ts`.
+
+Current response shape:
 
 ```json
 {
+  "ok": true,
+  "org": {
+    "org_id": "org_123",
+    "org_role": "admin",
+    "teams": ["team_1"],
+    "team_roles": { "team_1": "member" },
+    "groups": ["group_1"],
+    "group_admin": ["group_1"]
+  }
+}
+```
+
+Note: the `org` key is **absent** (not `null`) when the user has no org membership. The response is just `{ "ok": true }` in that case.
+
+2.0 change:
+
+- add a `user` block alongside the existing `org` block (additive, non-breaking):
+
+```json
+{
+  "ok": true,
   "user": {
     "id": "usr_123",
     "email": "user@example.com",
@@ -613,9 +702,18 @@ Purpose:
     "pronouns_preset": "they_them",
     "pronouns_custom": null,
     "pronouns_display": "they/them"
-  }
+  },
+  "org": { ... }
 }
 ```
+
+- the `user` block should **always** be present (the user is always authenticated), while `org` remains conditional on membership
+
+Implementation note:
+
+- `org-context.service.ts` does not fetch user records — it only resolves org/team/group memberships.
+- The route handler in `me.ts` must call `profile.service.ts` (or a lightweight user lookup) separately to hydrate the `user` block.
+- Do not add user-fetching logic into `org-context.service.ts`; keep the concerns separate.
 
 This is the safest place to introduce user-profile data without inventing an entirely separate client bootstrap endpoint.
 
@@ -627,6 +725,9 @@ This is the safest place to introduce user-profile data without inventing an ent
 - `PUT /org/organisations/:orgId`
 - `DELETE /org/organisations/:orgId`
 - `POST /org/organisations/:orgId/ownership-transfer`
+- `POST /org/organisations/:orgId/transfer-ownership` (alias — both routes share the same handler)
+
+Note: the duplicate ownership-transfer route exists for backwards compatibility. Consider deprecating one in a future pass.
 
 2.0 work:
 
@@ -710,6 +811,12 @@ Auth:
 
 - access token (`X-UOA-Access-Token`)
 
+Domain scoping note:
+
+- The `User` model is domain-scoped (email is not globally unique because `user_scope` can be `per_domain`).
+- The access token's `userId` claim already identifies a specific domain-bound user record, so no additional `domain` query parameter is needed.
+- Pronouns are stored on the `User` record and are therefore per-domain-user. A person using the service on two different domains would set pronouns independently on each.
+
 Response:
 
 ```json
@@ -744,8 +851,9 @@ Body:
 
 Rules:
 
-- partial update supported
-- pronoun validation rules enforced centrally
+- partial update supported (only provided fields are changed)
+- pronoun validation rules from §6.3 enforced centrally in `profile.service.ts`
+- `name` validation: trimmed, 1–200 characters, reject empty after trim
 - audit log optional later, not required for first implementation
 
 Why separate profile route:
@@ -756,12 +864,13 @@ Why separate profile route:
 
 ### 8.9 Internal Admin Endpoints
 
-The architecture doc already anticipates `/internal/admin/*`, but this route family is not yet present in the current root schema.
+The architecture doc specifies `/internal/admin/*` routes (orgs listing, member management, domain rules, SCIM token management), but these route files do not exist yet. The `/internal/org/*` routes (group CRUD, group members, team↔group assignment) are implemented and live.
 
 2.0 plan:
 
-- do not implement all internal admin routes in the same first pronouns/config milestone
+- do not implement `/internal/admin/*` routes in the same first pronouns/config milestone
 - once profile support exists, internal admin user/member responses should also include pronouns summary
+- `/internal/org/*` group routes are unaffected by 2.0 work but should appear in the `GET /` endpoint list if not already present
 
 ### 8.10 Admin Panel Architecture Alignment
 
@@ -774,7 +883,21 @@ Implementation rules:
 - use `Docs/techstack.md` for stack and environment rules
 - keep the admin panel under strict linting and strict TypeScript rules from the first commit
 
-### 8.11 Existing `/config/verify` Endpoint
+### 8.11 Route Families Specified But Not Yet Implemented
+
+The architecture doc (`Docs/Auth/architecture-api.md`) specifies the following route families that do not yet have implementation files. These are **out of scope for 2.0** unless noted otherwise:
+
+- `/org/:orgId/domain-rules` — email domain auto-enrolment rules (GET/POST/DELETE)
+- `/org/:orgId/teams/:teamId/roles` — custom role CRUD
+- `/internal/admin/*` — admin panel API (orgs, members, domain rules, SCIM tokens, SCIM group mappings)
+- `/apps/*` — app CRUD, kill switches, feature flags, flag matrix, flag overrides, flag queries, startup payload
+- `/killswitch/check` — standalone kill switch query
+- `/scim/v2/*` — [DEFERRED] SCIM provisioning endpoints
+- `social/microsoft.service.ts` — Microsoft Entra ID (Azure AD) OIDC provider
+
+These do not affect the 2.0 pronouns/config/profile work but should be accounted for in the `GET /` endpoint schema once implemented.
+
+### 8.12 Existing `/config/verify` Endpoint
 
 `/config/verify` already exists in the current API surface.
 
@@ -928,6 +1051,13 @@ Existing tests must continue to cover:
 - write `/` and `/llm` additions
 - lock response examples
 - define the rule that route changes update `/` and `/llm` in the same PR
+- fix existing `schema.ts` inaccuracies:
+  - `GET /i18n/get` → `GET /i18n/:language` (path param, not query param)
+  - `POST /org/organisations` body: remove `owner_id` (owner is inferred from access token, not passed in body)
+  - `GET /domain/debug` auth: add `x-uoa-access-token` (superuser) to documented auth requirements
+  - `POST /config/verify` response: add `config_summary` field to schema documentation (already returned by `config-debug.service.ts`)
+  - add `/org/organisations/:orgId/transfer-ownership` alias to endpoint list, or document why it is intentionally omitted
+  - add `/internal/org/*` routes to endpoint list if not already present
 
 ### Phase 2: Persistence
 
@@ -937,10 +1067,17 @@ Existing tests must continue to cover:
 
 ### Phase 3: Profile Service and Routes
 
-- implement access-token-only middleware if needed
+- implement access-token-only middleware if needed (pattern after `me.ts` inline auth, not `org-role-guard`)
 - add `profile.service.ts`
 - add `GET /profile/me`
 - add `PATCH /profile/me`
+- update `llm.ts` in the same PR — add:
+  - profile API contract (`GET /profile/me`, `PATCH /profile/me`)
+  - pronouns field semantics (preset values, custom rules, validation)
+  - `pronouns_display` derivation mapping
+  - example `GET /profile/me` response
+  - example `PATCH /profile/me` request/response
+- update `schema.ts` in the same PR — add profile endpoints to endpoint list
 
 ### Phase 4: Response Propagation
 
@@ -1016,7 +1153,7 @@ The 2.0 implementation is complete only when all of the following exist:
 - unit + integration tests
 - successful lint, typecheck, and full test run
 - staging deploy verification
-- documented browser-safe admin session contract before any production admin-panel auth implementation replaces the stub
+- documented browser-safe admin session contract before any production admin-panel auth implementation replaces the stub (this means: a written spec in `Docs/Admin/` defining how the admin panel authenticates — whether it uses the same access token flow, a separate session cookie, or an admin-specific JWT — covering token storage, expiry, refresh, and CSRF protection for browser-based use)
 
 ## 16. Immediate Next Step
 
