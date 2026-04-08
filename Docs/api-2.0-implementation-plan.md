@@ -248,7 +248,21 @@ Recommended preset values:
 
 ### 6.2 Domain Scoping Clarification
 
-The `Organisation` model has no `domain` column. Domain scoping in org queries is indirect: the caller supplies a `domain` query parameter, and the service layer joins through `User.domain` or uses domain-aware lookups. Do not assume `prisma.organisation.findMany({ where: { domain } })` will work — it will not.
+The current `schema.prisma` has no `domain` column on the `Organisation` model — it was removed in commit `abec919` (ReBAC schema overhaul). However, the original migration (`20260215143000`) created the `organisations` table WITH a `domain TEXT NOT NULL` column, and **no migration exists to drop it**. The database still has the column.
+
+**Critical: existing service code still references `Organisation.domain`.** The following files use `org: { domain }` relation filters or `organisation.create({ data: { domain, ... } })`:
+- `organisation.service.organisation.ts` — `listOrganisationsForDomain`, `createOrganisation`, `updateOrganisation`
+- `organisation.service.members.ts` — domain-scoped membership uniqueness checks
+- `access-request.service.base.ts` — `ensureUserAssignedToConfiguredAccessTarget`
+- `user-team-requirement.service.ts` — personal org/team creation
+
+This means the Prisma client was generated from the **old** schema (before `abec919`). Running `prisma generate` against the current `schema.prisma` will break all of these files at compile time. This must be reconciled before any 2.0 Prisma migration work.
+
+**Resolution options:**
+1. **Restore `domain` to schema.prisma** — re-add the field to match the database and existing code. No migration needed (column exists).
+2. **Remove `domain` from the database** — create a migration dropping the column, then update all service code to use indirect domain lookups through `User.domain` or `OrgMember → User` joins. This is a significant refactor.
+
+Pick one approach in Phase 1 and execute it before Phase 2 (pronouns migration), because `prisma migrate dev` or `prisma generate` will expose the mismatch.
 
 This matters for `profile.service.ts`: the user lookup must go through `userId` (from the access token), not through domain-based filtering on the `Organisation` table.
 
@@ -1045,8 +1059,9 @@ Existing tests must continue to cover:
 
 ## 13. Rollout Sequence
 
-### Phase 1: Contract and Docs
+### Phase 1: Contract, Docs, and Schema Reconciliation
 
+- **reconcile Organisation.domain schema mismatch** (see §6.2): either restore `domain` to `schema.prisma` or create a migration to drop it and update all service code. This is blocking — `prisma generate` or `prisma migrate dev` will fail without it.
 - finalize 2.0 route/resource decisions
 - write `/` and `/llm` additions
 - lock response examples
@@ -1106,6 +1121,16 @@ Existing tests must continue to cover:
 - verify health and targeted smoke tests
 
 ## 14. Risks and Mitigations
+
+### Risk: Organisation.domain Schema/Code Mismatch Blocks Prisma Operations
+
+The `schema.prisma` Organisation model has no `domain` column, but the database table does (from migration `20260215143000`), and multiple service files reference it. Running `prisma generate`, `prisma migrate dev`, or `prisma db push` against the current schema will either break TypeScript compilation or create schema drift.
+
+Mitigation:
+
+- resolve in Phase 1 before any other Prisma work
+- choose restore-to-schema or drop-from-database approach (see §6.2)
+- verify all org service files compile after the change
 
 ### Risk: Contract Drift Between `/`, `/llm`, and Actual Routes
 
