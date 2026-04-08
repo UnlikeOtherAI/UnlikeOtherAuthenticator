@@ -33,7 +33,7 @@ This plan is based on the current codebase state on branch `api-2.0`, cut from r
   - `/i18n/:language`
   - `/domain/*`
   - `/org/*`
-  - `/internal/org/*` (group CRUD, group members, team↔group assignment — backend-to-backend only)
+  - `/internal/org/*` (group write ops [POST/PUT/DELETE], group member write ops, team↔group assignment — no GET/list routes; backend-to-backend only)
 
 ### 2.2 Existing Prisma Models
 
@@ -178,16 +178,18 @@ Security boundary:
 
 Current state:
 
-- `error-handler.ts` returns `{ error: "Request failed" }` (or the message from `AppError`) for all user-facing routes
-- `config-debug.service.ts` already uses structured `issues[]` arrays with `stage`, `code`, `summary`, `details` fields
-- no existing route returns the full `code` + `summary` + `details` + `hints` envelope proposed above
+- `error-handler.ts` already calls `buildPublicErrorBody()` for all JSON error responses globally (not just debug endpoints). The returned shape is `{ error: "Request failed", code, summary, hints?, details? }` — the `PublicErrorBody` type in `error-response.ts` requires `error`, `code`, and `summary`; `details` and `hints` are optional but `hints` is usually populated via `DEFAULT_HINTS`.
+- `config-debug.service.ts` uses a separate success response shape: `{ ok, source, schema_valid, jwt_signature_valid, audience_valid, domain_match, checks, issues[], config_summary }` — this is NOT the error envelope; it is a verification result object.
+- HTML error rendering is used for `GET` requests with `Accept: text/html` and for auth debug pages. All other error responses get the full structured JSON envelope.
+- The structured envelope is therefore NOT a 2.0 addition — it already ships on every JSON error response across all route families.
 
 Transition strategy:
 
-- the full structured envelope (`code`, `summary`, `details`, `hints`) applies only to machine-consumable and debug endpoints: `/config/verify`, `GET /`, `GET /llm`, and future internal admin responses
-- auth-flow routes (`/auth/*`, `/2fa/*`, `/org/*`, `/domain/*`) keep the existing generic `{ error: "Request failed" }` shape — no change
-- the `error` field remains present in all error responses for backwards compatibility; `code`, `summary`, `details`, and `hints` are additive fields that existing consumers can ignore
-- do not refactor `error-handler.ts` to emit the full envelope globally — keep it targeted to routes that opt in
+- the structured envelope is already global — no opt-in mechanism is needed
+- the `error` field value remains `"Request failed"` for all routes (via `PUBLIC_ERROR_MESSAGE` constant)
+- `code`, `summary`, `details`, and `hints` are already present and can be relied on by consumers
+- `/config/verify` success responses use their own shape (see above) and should not be conflated with the error envelope
+- do not regress the envelope — any route that currently emits `code/summary/hints` must continue to do so
 
 Compatibility rule:
 
@@ -264,7 +266,7 @@ This means the Prisma client was generated from the **old** schema (before `abec
 
 Pick one approach in Phase 1 and execute it before Phase 2 (pronouns migration), because `prisma migrate dev` or `prisma generate` will expose the mismatch.
 
-This matters for `profile.service.ts`: the user lookup must go through `userId` (from the access token), not through domain-based filtering on the `Organisation` table.
+This matters for `profile.service.ts`: the user lookup must go through the user ID (JWT `sub` claim, mapped to `userId` by `access-token.service.ts`), not through domain-based filtering on the `Organisation` table.
 
 ### 6.3 User Validation Rules
 
@@ -643,8 +645,7 @@ Purpose:
 
 2.0 work:
 
-- extend returned user shape to include profile fields needed by admin/integrator views:
-  - `name`
+- extend returned user shape to include pronouns fields (`name` is already returned):
   - `pronouns_preset`
   - `pronouns_custom`
   - `pronouns_display`
@@ -682,7 +683,7 @@ Purpose:
 
 Auth note:
 
-- `me.ts` does **not** use `org-role-guard.ts`. It calls `verifyAccessToken()` directly inline and checks domain match manually. This is an outlier among `/org/*` routes. The new `access-token-auth.ts` middleware proposed in §10.2 should be patterned after this inline code in `me.ts`, not after `org-role-guard.ts`.
+- `me.ts` does **not** use `org-role-guard.ts`. It calls `verifyAccessToken()` directly inline and checks domain match manually. This is not unique — several other `/org/*` routes also skip `org-role-guard`: `GET /org/organisations` has no access-token guard at all, and team-invitation and access-request routes use only config/domain middleware without `requireOrgRole()` or inline `verifyAccessToken()`. The new `access-token-auth.ts` middleware proposed in §10.2 should be patterned after the inline code in `me.ts`, not after `org-role-guard.ts`.
 
 Current response shape:
 
@@ -828,7 +829,7 @@ Auth:
 Domain scoping note:
 
 - The `User` model is domain-scoped (email is not globally unique because `user_scope` can be `per_domain`).
-- The access token's `userId` claim already identifies a specific domain-bound user record, so no additional `domain` query parameter is needed.
+- The access token's `sub` claim contains the user ID (mapped to `userId` by `access-token.service.ts`), which already identifies a specific domain-bound user record, so no additional `domain` query parameter is needed.
 - Pronouns are stored on the `User` record and are therefore per-domain-user. A person using the service on two different domains would set pronouns independently on each.
 
 Response:
@@ -878,13 +879,13 @@ Why separate profile route:
 
 ### 8.9 Internal Admin Endpoints
 
-The architecture doc specifies `/internal/admin/*` routes (orgs listing, member management, domain rules, SCIM token management), but these route files do not exist yet. The `/internal/org/*` routes (group CRUD, group members, team↔group assignment) are implemented and live.
+The architecture doc specifies `/internal/admin/*` routes (orgs listing, member management, domain rules, SCIM token management), but these route files do not exist yet. The `/internal/org/*` routes (group write ops [POST/PUT/DELETE], group member write ops, team↔group assignment — no GET/list routes) are implemented and live.
 
 2.0 plan:
 
 - do not implement `/internal/admin/*` routes in the same first pronouns/config milestone
 - once profile support exists, internal admin user/member responses should also include pronouns summary
-- `/internal/org/*` group routes are unaffected by 2.0 work but should appear in the `GET /` endpoint list if not already present
+- `/internal/org/*` group routes are unaffected by 2.0 work. **Do NOT add them to the `GET /` endpoint list** — an existing integration test (`root.test.ts`) explicitly asserts that `/internal` routes must not appear in the public endpoint schema. Internal routes are tested separately in `internal-org-endpoints.test.ts`.
 
 ### 8.10 Admin Panel Architecture Alignment
 
@@ -915,14 +916,17 @@ These do not affect the 2.0 pronouns/config/profile work but should be accounted
 
 `/config/verify` already exists in the current API surface.
 
-2.0 work extends this route; it does not introduce a separate replacement endpoint.
+The current implementation already supports:
 
-The expected 2.0 changes are:
+- multiple input forms: `config` (raw), `config_jwt`, `config_url`, `shared_secret`, `auth_service_identifier`
+- staged validation output via `checks` object with per-stage results
+- structured `issues[]` array with `stage`, `code`, `summary`, `details` fields
+- response shape: `{ ok, source, schema_valid, jwt_signature_valid, audience_valid, domain_match, checks, issues, config_summary }`
 
-- broader accepted input forms
-- clearer staged validation output
-- more explicit machine-readable failure reasons
+2.0 work for this endpoint is documentation-only:
+
 - stronger documentation in `/` and `/llm`
+- ensure `schema.config-debug.ts` documents all response fields including `source` and `config_summary` (both currently omitted from the schema docs but returned by the service)
 
 ## 9. Service Plan
 
@@ -1038,7 +1042,15 @@ Add tests for:
 
 ### 12.2 Integration Tests
 
-Add tests for:
+Add tests for Phase 1 contract fixes:
+
+- `GET /` endpoint list includes `GET /i18n/:language` (not `/i18n/get`)
+- `GET /` endpoint list documents correct auth for `/domain/debug`
+- `GET /` endpoint list documents correct body for `POST /org/organisations`
+- `POST /config/verify` response includes `source` and `config_summary` fields
+- `GET /` continues to exclude `/internal` routes (existing test — verify it still passes)
+
+Add tests for profile work:
 
 - `GET /profile/me`
 - `PATCH /profile/me`
@@ -1070,9 +1082,9 @@ Existing tests must continue to cover:
   - `GET /i18n/get` → `GET /i18n/:language` (path param, not query param)
   - `POST /org/organisations` body: remove `owner_id` (owner is inferred from access token, not passed in body)
   - `GET /domain/debug` auth: add `x-uoa-access-token` (superuser) to documented auth requirements
-  - `POST /config/verify` response: add `config_summary` field to schema documentation (already returned by `config-debug.service.ts`)
+  - `POST /config/verify` response: add `config_summary` and `source` fields to schema documentation (both already returned by `config-debug.service.ts` but missing from `schema.config-debug.ts`)
   - add `/org/organisations/:orgId/transfer-ownership` alias to endpoint list, or document why it is intentionally omitted
-  - add `/internal/org/*` routes to endpoint list if not already present
+  - do NOT add `/internal/org/*` routes to the public `GET /` endpoint list — an existing test enforces that `/internal` routes are excluded from the public schema
 
 ### Phase 2: Persistence
 
@@ -1164,6 +1176,7 @@ Mitigation:
 
 The 2.0 implementation is complete only when all of the following exist:
 
+- Organisation.domain schema/code reconciliation (see §6.2) — must be completed before any other Prisma work
 - Prisma migration for pronouns
 - updated `User` model
 - profile service
@@ -1184,7 +1197,9 @@ The 2.0 implementation is complete only when all of the following exist:
 
 This section is a condensed vertical-slice recommendation after Phase 1 documentation lock.
 
-The first implementation PR on `api-2.0` should be:
+The first implementation PR on `api-2.0` must resolve the Organisation.domain schema mismatch (§6.2). This is prerequisite to any `prisma generate` or `prisma migrate dev`.
+
+The second PR should be the pronouns vertical slice:
 
 1. add Prisma pronouns fields
 2. add `profile.service.ts`
