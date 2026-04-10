@@ -181,6 +181,43 @@ describe('GET /auth (config validation)', () => {
     await app.close();
   });
 
+  it('renders provider gating details for HTML social auth requests when allowed_social_providers omits the clicked provider', async () => {
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.AUTH_SERVICE_IDENTIFIER =
+      process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
+
+    const jwt = await new SignJWT(
+      baseClientConfigPayload({
+        enabled_auth_methods: ['google'],
+      }),
+    )
+      .setProtectedHeader({ alg: 'HS256' })
+      .setAudience(process.env.AUTH_SERVICE_IDENTIFIER)
+      .sign(new TextEncoder().encode(process.env.SHARED_SECRET));
+
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 })));
+
+    const app = await createApp();
+    await app.ready();
+
+    const configUrl = 'https://client.example.com/auth-config';
+    const res = await app.inject({
+      method: 'GET',
+      url: `/auth/social/google?config_url=${encodeURIComponent(configUrl)}`,
+      headers: { accept: 'text/html' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.headers['content-type']).toContain('text/html');
+    expect(res.body).toContain('SOCIAL_PROVIDER_DISABLED');
+    expect(res.body).toContain('The requested social provider is not enabled for this client config.');
+    expect(res.body).toContain('config_url was fetched successfully and the config JWT passed signature, schema, and domain checks.');
+    expect(res.body).toContain('The auth UI requested a social provider that is not listed in config.allowed_social_providers.');
+    expect(res.body).toContain('Add the provider to allowed_social_providers in the signed config.');
+
+    await app.close();
+  });
+
   it('returns generic 400 when config JWT aud is missing', async () => {
     process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
     process.env.AUTH_SERVICE_IDENTIFIER =

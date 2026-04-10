@@ -90,8 +90,13 @@ function readEnabledSocialProviders(config: unknown): SocialProvider[] {
 
   const c = config as Record<string, unknown>;
   const methods = Array.isArray(c.enabled_auth_methods) ? c.enabled_auth_methods : [];
+  const allowedProviders = Array.isArray(c.allowed_social_providers)
+    ? c.allowed_social_providers
+    : [];
 
-  return SOCIAL_PROVIDERS.filter((p) => methods.includes(p));
+  return SOCIAL_PROVIDERS.filter(
+    (provider) => methods.includes(provider) && allowedProviders.includes(provider),
+  );
 }
 
 export function SocialButtons(): React.JSX.Element | null {

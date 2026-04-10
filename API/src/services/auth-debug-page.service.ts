@@ -372,6 +372,24 @@ export function enrichAuthDebugForAppError(
         'Use a full http:// or https:// callback URL and make sure it exactly matches a value in config.redirect_urls.',
       ],
     });
+    return;
+  }
+
+  if (code === 'SOCIAL_PROVIDER_DISABLED') {
+    mergeAuthDebugInfo(request, {
+      stage: 'request',
+      code,
+      summary: 'The requested social provider is not enabled for this client config.',
+      details: [
+        configValidatedDetail,
+        'The auth UI requested a social provider that is not listed in config.allowed_social_providers.',
+      ],
+      hints: [
+        'Add the provider to allowed_social_providers in the signed config.',
+        'Render social buttons from the same allowlist the server enforces.',
+      ],
+    });
+    return;
   }
 }
 

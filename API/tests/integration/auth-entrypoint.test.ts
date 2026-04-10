@@ -186,6 +186,37 @@ describe('GET /auth', () => {
     await app.close();
   });
 
+  it('does not render social buttons when enabled_auth_methods includes a provider but allowed_social_providers omits it', async () => {
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.AUTH_SERVICE_IDENTIFIER =
+      process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
+
+    const jwt = await new SignJWT(baseClientConfigPayload({
+      enabled_auth_methods: ['email_password', 'google'],
+    }))
+      .setProtectedHeader({ alg: 'HS256' })
+      .setAudience(process.env.AUTH_SERVICE_IDENTIFIER)
+      .sign(new TextEncoder().encode(process.env.SHARED_SECRET));
+
+    const fetchMock = vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const app = await createApp();
+    await app.ready();
+
+    const configUrl = 'https://client.example.com/auth-config';
+    const res = await app.inject({
+      method: 'GET',
+      url: `/auth?config_url=${encodeURIComponent(configUrl)}`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).not.toContain('/auth/social/google?');
+    expect(res.body).not.toContain('Continue with');
+
+    await app.close();
+  });
+
   it('renders an SVG logo URL from the client theme config', async () => {
     process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
     process.env.AUTH_SERVICE_IDENTIFIER =
