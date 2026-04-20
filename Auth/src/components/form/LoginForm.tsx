@@ -37,7 +37,16 @@ export function LoginForm(): React.JSX.Element {
   const passwordId = useId();
   const rememberMeId = useId();
   const { t } = useTranslation();
-  const { configUrl, config, redirectUrl, redirectTo, setView, requestAccess } = usePopup();
+  const {
+    configUrl,
+    config,
+    redirectUrl,
+    codeChallenge,
+    codeChallengeMethod,
+    redirectTo,
+    setView,
+    requestAccess,
+  } = usePopup();
   const { rememberMeEnabled, rememberMeDefault } = readSessionConfig(config);
 
   const [email, setEmail] = useState('');
@@ -56,6 +65,10 @@ export function LoginForm(): React.JSX.Element {
       url.searchParams.set('config_url', configUrl);
       if (redirectUrl) {
         url.searchParams.set('redirect_url', redirectUrl);
+      }
+      if (codeChallenge && codeChallengeMethod) {
+        url.searchParams.set('code_challenge', codeChallenge);
+        url.searchParams.set('code_challenge_method', codeChallengeMethod);
       }
       if (requestAccess) {
         url.searchParams.set('request_access', 'true');

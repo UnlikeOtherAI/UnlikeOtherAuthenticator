@@ -4,6 +4,8 @@ export type AuthView = 'login' | 'register' | 'reset-password' | 'set-password' 
 
 export type PopupQueryParams = {
   redirectUrl: string | null;
+  codeChallenge: string | null;
+  codeChallengeMethod: 'S256' | null;
   twoFaToken: string | null;
   requestAccess: boolean;
   requestAccessStatus: 'pending' | null;
@@ -40,6 +42,8 @@ export function parsePopupQueryParams(search: string): PopupQueryParams {
   if (!s) {
     return {
       redirectUrl: null,
+      codeChallenge: null,
+      codeChallengeMethod: null,
       twoFaToken: null,
       requestAccess: false,
       requestAccessStatus: null,
@@ -51,6 +55,8 @@ export function parsePopupQueryParams(search: string): PopupQueryParams {
   const params = new URLSearchParams(s);
 
   const redirectUrl = params.get('redirect_url') ?? params.get('redirect_uri');
+  const codeChallenge = params.get('code_challenge');
+  const codeChallengeMethod = params.get('code_challenge_method');
   const twoFaToken = params.get('twofa_token');
   const requestAccess = ['1', 'true', 'yes'].includes((params.get('request_access') ?? '').toLowerCase());
   const requestAccessStatus = params.get('request_access_status') === 'pending' ? 'pending' : null;
@@ -64,6 +70,8 @@ export function parsePopupQueryParams(search: string): PopupQueryParams {
 
   return {
     redirectUrl: redirectUrl && redirectUrl.trim() ? redirectUrl : null,
+    codeChallenge: codeChallenge && codeChallenge.trim() ? codeChallenge : null,
+    codeChallengeMethod: codeChallengeMethod === 'S256' ? 'S256' : null,
     twoFaToken: twoFaToken && twoFaToken.trim() ? twoFaToken : null,
     requestAccess,
     requestAccessStatus,
@@ -113,6 +121,8 @@ export function PopupProvider(props: {
       configUrl: props.configUrl,
       config: props.config,
       redirectUrl: parsed.redirectUrl,
+      codeChallenge: parsed.codeChallenge,
+      codeChallengeMethod: parsed.codeChallengeMethod,
       twoFaToken: parsed.twoFaToken,
       requestAccess: parsed.requestAccess,
       requestAccessStatus: parsed.requestAccessStatus,
@@ -125,7 +135,20 @@ export function PopupProvider(props: {
         window.location.assign(url);
       },
     };
-  }, [parsed.redirectUrl, parsed.twoFaToken, parsed.requestAccess, parsed.requestAccessStatus, parsed.emailToken, parsed.emailTokenType, view, setView, props.configUrl, props.config]);
+  }, [
+    parsed.redirectUrl,
+    parsed.codeChallenge,
+    parsed.codeChallengeMethod,
+    parsed.twoFaToken,
+    parsed.requestAccess,
+    parsed.requestAccessStatus,
+    parsed.emailToken,
+    parsed.emailTokenType,
+    view,
+    setView,
+    props.configUrl,
+    props.config,
+  ]);
 
   return <PopupContext.Provider value={value}>{props.children}</PopupContext.Provider>;
 }

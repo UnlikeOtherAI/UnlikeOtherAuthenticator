@@ -205,6 +205,8 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
           authMethod: provider,
           rememberMe,
           requestAccess: socialState.request_access === true,
+          codeChallenge: socialState.code_challenge,
+          codeChallengeMethod: socialState.code_challenge_method,
           sharedSecret: SHARED_SECRET,
           audience: AUTH_SERVICE_IDENTIFIER,
         });
@@ -227,6 +229,8 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         redirectUrl,
         rememberMe,
         requestAccess: socialState.request_access === true,
+        codeChallenge: socialState.code_challenge,
+        codeChallengeMethod: socialState.code_challenge_method,
       });
 
       try {

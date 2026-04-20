@@ -73,11 +73,11 @@ export function registerLlmRoute(app: FastifyInstance): void {
         step_2:
           'Before wiring the auth popup, POST /config/verify with either config, config_jwt, or config_url. Use shared_secret and auth_service_identifier when you want the auth service to confirm signature/audience problems separately from schema problems.',
         step_3:
-          'Open the auth popup/redirect to: GET /auth?config_url=<your_config_endpoint_url>&redirect_url=<your_callback_url> (redirect_uri is also accepted as an alias for redirect_url)',
+          'Open the auth popup/redirect to: GET /auth?config_url=<your_config_endpoint_url>&redirect_url=<your_callback_url>&code_challenge=<S256_challenge>&code_challenge_method=S256 (redirect_uri is also accepted as an alias for redirect_url)',
         step_4:
           'After authentication, the user is redirected to your redirect_url with ?code=<authorization_code>.',
         step_5:
-          'Exchange the code from your backend: POST /auth/token with { "code": "<auth_code>", "redirect_url": "<same_callback_url_used_for_login>" }, Authorization: Bearer SHA256(domain+SHARED_SECRET), and config_url query param.',
+          'Exchange the code from your backend: POST /auth/token with { "code": "<auth_code>", "redirect_url": "<same_callback_url_used_for_login>", "code_verifier": "<PKCE_verifier_if_challenge_was_used>" }, Authorization: Bearer SHA256(domain+SHARED_SECRET), and config_url query param.',
         step_6:
           'Store the refresh_token server-side. Use the access_token for API calls. Refresh via POST /auth/token with { "grant_type": "refresh_token", "refresh_token": "<token>" }.',
         step_7: 'On logout, call POST /auth/revoke with the refresh_token to revoke the session.',

@@ -53,7 +53,10 @@ function buildRegistrationEmailLandingLink(params: {
   baseUrl: string;
   token: string;
   configUrl: string;
+  redirectUrl?: string;
   requestAccess?: boolean;
+  codeChallenge?: string;
+  codeChallengeMethod?: 'S256';
 }): string {
   const baseUrl = normalizeBaseUrl(params.baseUrl);
   // Neutral landing route for registration flows (existing-user login link vs new-user
@@ -61,8 +64,15 @@ function buildRegistrationEmailLandingLink(params: {
   const url = new URL(`${baseUrl}/auth/email/link`);
   url.searchParams.set('token', params.token);
   url.searchParams.set('config_url', params.configUrl);
+  if (params.redirectUrl) {
+    url.searchParams.set('redirect_url', params.redirectUrl);
+  }
   if (params.requestAccess) {
     url.searchParams.set('request_access', 'true');
+  }
+  if (params.codeChallenge) {
+    url.searchParams.set('code_challenge', params.codeChallenge);
+    url.searchParams.set('code_challenge_method', params.codeChallengeMethod ?? 'S256');
   }
   return url.toString();
 }
@@ -111,7 +121,10 @@ export async function requestRegistrationInstructions(
     email: string;
     config: ClientConfig;
     configUrl: string;
+    redirectUrl?: string;
     requestAccess?: boolean;
+    codeChallenge?: string;
+    codeChallengeMethod?: 'S256';
   },
   deps?: RegisterDeps,
 ): Promise<void> {
@@ -187,7 +200,10 @@ export async function requestRegistrationInstructions(
     baseUrl,
     token,
     configUrl: params.configUrl,
+    redirectUrl: params.redirectUrl,
     requestAccess: params.requestAccess,
+    codeChallenge: params.codeChallenge,
+    codeChallengeMethod: params.codeChallengeMethod,
   });
   if (type === 'VERIFY_EMAIL') {
     await (deps?.sendVerifyEmailEmail ?? sendVerifyEmailEmail)({

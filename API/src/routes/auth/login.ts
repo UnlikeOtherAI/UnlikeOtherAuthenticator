@@ -11,6 +11,7 @@ import {
 import { recordLoginLog } from '../../services/login-log.service.js';
 import { signTwoFaChallenge } from '../../services/twofactor-challenge.service.js';
 import { selectRedirectUrl } from '../../services/token.service.js';
+import { parsePkceChallenge } from '../../utils/pkce.js';
 import { loginRateLimiter } from './rate-limit-keys.js';
 
 const LoginBodySchema = z
@@ -24,6 +25,8 @@ const LoginBodySchema = z
 const LoginQuerySchema = z
   .object({
     redirect_url: z.string().min(1).optional(),
+    code_challenge: z.string().min(1).optional(),
+    code_challenge_method: z.string().min(1).optional(),
     request_access: z.string().optional(),
   })
   .passthrough();
@@ -36,7 +39,12 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
     },
     async (request, reply) => {
       const { email, password, remember_me } = LoginBodySchema.parse(request.body);
-      const { redirect_url, request_access } = LoginQuerySchema.parse(request.query);
+      const { redirect_url, code_challenge, code_challenge_method, request_access } =
+        LoginQuerySchema.parse(request.query);
+      const pkce = parsePkceChallenge({
+        codeChallenge: code_challenge,
+        codeChallengeMethod: code_challenge_method,
+      });
 
       // configVerifier guarantees request.config is set on success.
       const config = request.config;
@@ -72,6 +80,8 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
           authMethod: 'email_password',
           rememberMe,
           requestAccess: parseRequestAccessFlag(request_access),
+          codeChallenge: pkce?.codeChallenge,
+          codeChallengeMethod: pkce?.codeChallengeMethod,
           sharedSecret: SHARED_SECRET,
           audience: AUTH_SERVICE_IDENTIFIER,
         });
@@ -87,6 +97,8 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
         redirectUrl,
         rememberMe,
         requestAccess: parseRequestAccessFlag(request_access),
+        codeChallenge: pkce?.codeChallenge,
+        codeChallengeMethod: pkce?.codeChallengeMethod,
       });
 
       try {

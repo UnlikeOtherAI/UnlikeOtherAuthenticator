@@ -13,6 +13,8 @@ const SocialStateSchema = z
     config_url: z.string().min(1),
     redirect_url: z.string().min(1),
     request_access: z.boolean().optional(),
+    code_challenge: z.string().min(1).optional(),
+    code_challenge_method: z.literal('S256').optional(),
   });
 
 export type SocialState = z.infer<typeof SocialStateSchema>;
@@ -30,6 +32,8 @@ export async function signSocialState(params: {
   configUrl: string;
   redirectUrl: string;
   requestAccess?: boolean;
+  codeChallenge?: string;
+  codeChallengeMethod?: 'S256';
   sharedSecret: string;
   audience: string;
   baseUrlForIssuer: string;
@@ -46,6 +50,8 @@ export async function signSocialState(params: {
       config_url: params.configUrl,
       redirect_url: params.redirectUrl,
       request_access: params.requestAccess ?? false,
+      code_challenge: params.codeChallenge,
+      code_challenge_method: params.codeChallengeMethod,
     })
       .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
       .setAudience(params.audience)

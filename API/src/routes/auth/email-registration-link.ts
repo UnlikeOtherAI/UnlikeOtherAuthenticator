@@ -12,12 +12,15 @@ import { selectRedirectUrl } from '../../services/token.service.js';
 import { verifyEmailToken } from '../../services/auth-verify-email.service.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
 import { AppError } from '../../utils/errors.js';
+import { parsePkceChallenge } from '../../utils/pkce.js';
 import { tokenConsumeRateLimiter } from './rate-limit-keys.js';
 
 const QuerySchema = z
   .object({
     token: z.string().min(1),
     redirect_url: z.string().min(1).optional(),
+    code_challenge: z.string().min(1).optional(),
+    code_challenge_method: z.string().min(1).optional(),
     request_access: z.string().optional(),
   })
   .passthrough();
@@ -29,7 +32,12 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
       preHandler: [tokenConsumeRateLimiter, configVerifier],
     },
     async (request, reply) => {
-      const { token, redirect_url, request_access } = QuerySchema.parse(request.query);
+      const { token, redirect_url, code_challenge, code_challenge_method, request_access } =
+        QuerySchema.parse(request.query);
+      const pkce = parsePkceChallenge({
+        codeChallenge: code_challenge,
+        codeChallengeMethod: code_challenge_method,
+      });
 
       if (!request.config || !request.configUrl) {
         throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
@@ -62,6 +70,8 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
             redirectUrl,
             rememberMe: request.config.session?.remember_me_default ?? true,
             requestAccess: parseRequestAccessFlag(request_access),
+            codeChallenge: pkce?.codeChallenge,
+            codeChallengeMethod: pkce?.codeChallengeMethod,
           });
 
           try {
@@ -102,6 +112,7 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
           token,
           type,
           parseRequestAccessFlag(request_access),
+          pkce,
         ),
       });
       reply.type('text/html; charset=utf-8').status(200).send(html);
@@ -115,10 +126,15 @@ function buildAuthUrl(
   token: string,
   type: string,
   requestAccess: boolean,
+  pkce: ReturnType<typeof parsePkceChallenge>,
 ): string {
   const params = new URLSearchParams();
   params.set('config_url', configUrl);
   if (redirectUrl) params.set('redirect_url', redirectUrl);
+  if (pkce) {
+    params.set('code_challenge', pkce.codeChallenge);
+    params.set('code_challenge_method', pkce.codeChallengeMethod);
+  }
   params.set('email_token', token);
   params.set('email_token_type', type);
   if (requestAccess) params.set('request_access', 'true');

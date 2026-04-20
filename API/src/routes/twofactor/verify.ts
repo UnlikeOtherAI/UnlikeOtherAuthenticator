@@ -69,6 +69,8 @@ export function registerTwoFactorVerifyRoute(app: FastifyInstance): void {
         redirectUrl,
         rememberMe: challenge.rememberMe,
         requestAccess: challenge.requestAccess,
+        codeChallenge: challenge.codeChallenge,
+        codeChallengeMethod: challenge.codeChallengeMethod,
       });
 
       try {

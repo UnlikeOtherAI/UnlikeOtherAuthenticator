@@ -14,6 +14,8 @@ const TwoFaChallengeSchema = z.object({
   auth_method: z.string().min(1),
   remember_me: z.boolean().optional(),
   request_access: z.boolean().optional(),
+  code_challenge: z.string().min(1).optional(),
+  code_challenge_method: z.literal('S256').optional(),
 });
 
 export type TwoFaChallenge = {
@@ -24,6 +26,8 @@ export type TwoFaChallenge = {
   authMethod: string;
   rememberMe: boolean;
   requestAccess: boolean;
+  codeChallenge?: string;
+  codeChallengeMethod?: 'S256';
 };
 
 function sharedSecretKey(sharedSecret: string): Uint8Array {
@@ -44,6 +48,8 @@ export async function signTwoFaChallenge(params: {
   authMethod: string;
   rememberMe?: boolean;
   requestAccess?: boolean;
+  codeChallenge?: string;
+  codeChallengeMethod?: 'S256';
   sharedSecret: string;
   audience: string;
   now?: Date;
@@ -61,6 +67,8 @@ export async function signTwoFaChallenge(params: {
       auth_method: params.authMethod,
       remember_me: params.rememberMe ?? false,
       request_access: params.requestAccess ?? false,
+      code_challenge: params.codeChallenge,
+      code_challenge_method: params.codeChallengeMethod,
     })
       .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
       .setAudience(params.audience)
@@ -107,5 +115,7 @@ export async function verifyTwoFaChallenge(params: {
     authMethod: parsed.auth_method,
     rememberMe: parsed.remember_me ?? false,
     requestAccess: parsed.request_access ?? false,
+    codeChallenge: parsed.code_challenge,
+    codeChallengeMethod: parsed.code_challenge_method,
   };
 }

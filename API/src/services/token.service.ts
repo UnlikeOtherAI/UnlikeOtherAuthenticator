@@ -12,6 +12,7 @@ import { createClientId } from '../utils/hash.js';
 import { AppError } from '../utils/errors.js';
 import type { ClientConfig } from './config.service.js';
 import { tryParseHttpUrl } from '../utils/http-url.js';
+import { verifyPkceCodeVerifier } from '../utils/pkce.js';
 import { getUserOrgContext, type OrgContext } from './org-context.service.js';
 import { ensureUserHasRequiredTeam } from './user-team-requirement.service.js';
 
@@ -90,6 +91,8 @@ export async function issueAuthorizationCode(
     domain: string;
     configUrl: string;
     redirectUrl: string;
+    codeChallenge?: string;
+    codeChallengeMethod?: 'S256';
     rememberMe?: boolean;
   },
   deps?: TokenDeps,
@@ -120,6 +123,8 @@ export async function issueAuthorizationCode(
           domain: params.domain,
           configUrl: params.configUrl,
           redirectUrl: params.redirectUrl,
+          codeChallenge: params.codeChallenge,
+          codeChallengeMethod: params.codeChallengeMethod,
           rememberMe: params.rememberMe ?? false,
           expiresAt,
         },
@@ -143,6 +148,7 @@ async function consumeAuthorizationCode(params: {
   configUrl: string;
   domain: string;
   redirectUrl: string;
+  codeVerifier?: string;
   now: Date;
   sharedSecret: string;
   prisma: TokenPrisma;
@@ -156,6 +162,8 @@ async function consumeAuthorizationCode(params: {
       domain: true,
       configUrl: true,
       redirectUrl: true,
+      codeChallenge: true,
+      codeChallengeMethod: true,
       rememberMe: true,
       expiresAt: true,
       usedAt: true,
@@ -169,6 +177,14 @@ async function consumeAuthorizationCode(params: {
     throw new AppError('UNAUTHORIZED', 401, 'INVALID_AUTH_CODE');
   if (row.redirectUrl !== params.redirectUrl)
     throw new AppError('UNAUTHORIZED', 401, 'INVALID_AUTH_CODE');
+  if (row.codeChallenge) {
+    if (row.codeChallengeMethod !== 'S256')
+      throw new AppError('UNAUTHORIZED', 401, 'INVALID_AUTH_CODE');
+    verifyPkceCodeVerifier({
+      codeVerifier: params.codeVerifier,
+      codeChallenge: row.codeChallenge,
+    });
+  }
   if (row.usedAt) throw new AppError('UNAUTHORIZED', 401, 'INVALID_AUTH_CODE');
   if (row.expiresAt.getTime() <= params.now.getTime())
     throw new AppError('UNAUTHORIZED', 401, 'INVALID_AUTH_CODE');
@@ -346,6 +362,7 @@ export async function exchangeAuthorizationCodeForTokens(
     config: ClientConfig;
     configUrl: string;
     redirectUrl: string;
+    codeVerifier?: string;
   },
   deps?: TokenIssuerDeps,
 ): Promise<IssuedTokenPair> {
@@ -365,6 +382,7 @@ export async function exchangeAuthorizationCodeForTokens(
     configUrl: params.configUrl,
     domain: params.config.domain,
     redirectUrl: params.redirectUrl,
+    codeVerifier: params.codeVerifier,
     now,
     sharedSecret,
     prisma,

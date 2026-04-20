@@ -18,7 +18,17 @@ export function SetPasswordForm(): React.JSX.Element {
   const passwordId = useId();
   const confirmId = useId();
   const { t } = useTranslation();
-  const { configUrl, redirectUrl, redirectTo, emailToken, emailTokenType, setView, requestAccess } = usePopup();
+  const {
+    configUrl,
+    redirectUrl,
+    codeChallenge,
+    codeChallengeMethod,
+    redirectTo,
+    emailToken,
+    emailTokenType,
+    setView,
+    requestAccess,
+  } = usePopup();
 
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -69,6 +79,10 @@ export function SetPasswordForm(): React.JSX.Element {
         url.searchParams.set('config_url', configUrl);
         if (redirectUrl) {
           url.searchParams.set('redirect_url', redirectUrl);
+        }
+        if (codeChallenge && codeChallengeMethod) {
+          url.searchParams.set('code_challenge', codeChallenge);
+          url.searchParams.set('code_challenge_method', codeChallengeMethod);
         }
         if (requestAccess) {
           url.searchParams.set('request_access', 'true');

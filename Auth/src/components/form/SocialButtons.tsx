@@ -121,6 +121,8 @@ export function SocialButtons(): React.JSX.Element | null {
           popup.configUrl,
           provider,
           popup.redirectUrl,
+          popup.codeChallenge,
+          popup.codeChallengeMethod,
           popup.requestAccess,
         );
 
@@ -139,6 +141,8 @@ function buildSocialUrl(
   configUrl: string,
   provider: SocialProvider,
   redirectUrl: string | null,
+  codeChallenge: string | null,
+  codeChallengeMethod: 'S256' | null,
   requestAccess: boolean,
 ): string {
   // Auth UI runs inside the authenticator popup, so use relative URLs.
@@ -146,6 +150,10 @@ function buildSocialUrl(
   params.set('config_url', configUrl);
   if (redirectUrl) {
     params.set('redirect_url', redirectUrl);
+  }
+  if (codeChallenge && codeChallengeMethod) {
+    params.set('code_challenge', codeChallenge);
+    params.set('code_challenge_method', codeChallengeMethod);
   }
   if (requestAccess) {
     params.set('request_access', 'true');

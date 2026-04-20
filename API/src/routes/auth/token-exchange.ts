@@ -15,6 +15,7 @@ const AuthorizationCodeGrantSchema = z
     grant_type: z.literal('authorization_code').optional(),
     code: z.string().min(1),
     redirect_url: z.string().min(1),
+    code_verifier: z.string().min(1).optional(),
   })
   .strict();
 
@@ -26,7 +27,12 @@ const RefreshTokenGrantSchema = z
   .strict();
 
 type TokenExchangeBody =
-  | { grant_type?: 'authorization_code'; code: string; redirect_url: string }
+  | {
+      grant_type?: 'authorization_code';
+      code: string;
+      redirect_url: string;
+      code_verifier?: string;
+    }
   | { grant_type: 'refresh_token'; refresh_token: string };
 
 function parseTokenExchangeBody(body: unknown): TokenExchangeBody {
@@ -69,6 +75,7 @@ export function registerAuthTokenExchangeRoute(app: FastifyInstance): void {
               config: request.config,
               configUrl: request.configUrl,
               redirectUrl: body.redirect_url,
+              codeVerifier: body.code_verifier,
             });
 
       // Keep response OAuth-ish without being overly strict about fields.

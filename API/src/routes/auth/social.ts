@@ -13,6 +13,7 @@ import { signSocialState } from '../../services/social/social-state.service.js';
 import { parseRequestAccessFlag } from '../../services/access-request-flow.service.js';
 import { selectRedirectUrl } from '../../services/token.service.js';
 import { AppError } from '../../utils/errors.js';
+import { parsePkceChallenge } from '../../utils/pkce.js';
 
 const ParamsSchema = z.object({
   provider: z.enum(['google', 'apple', 'facebook', 'github', 'linkedin']),
@@ -22,6 +23,8 @@ const QuerySchema = z
   .object({
     redirect_url: z.string().min(1).optional(),
     redirect_uri: z.string().min(1).optional(),
+    code_challenge: z.string().min(1).optional(),
+    code_challenge_method: z.string().min(1).optional(),
     request_access: z.string().optional(),
   })
   .passthrough();
@@ -43,7 +46,8 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
     },
     async (request, reply) => {
       const { provider } = ParamsSchema.parse(request.params);
-      const { redirect_url, redirect_uri, request_access } = QuerySchema.parse(request.query);
+      const { redirect_url, redirect_uri, code_challenge, code_challenge_method, request_access } =
+        QuerySchema.parse(request.query);
 
       const config = request.config;
       if (!config || !request.configUrl) throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
@@ -53,6 +57,10 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
       const redirectUrl = selectRedirectUrl({
         allowedRedirectUrls: config.redirect_urls,
         requestedRedirectUrl: redirect_url ?? redirect_uri,
+      });
+      const pkce = parsePkceChallenge({
+        codeChallenge: code_challenge,
+        codeChallengeMethod: code_challenge_method,
       });
 
       const env = getEnv();
@@ -74,6 +82,8 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
           configUrl: request.configUrl,
           redirectUrl,
           requestAccess: parseRequestAccessFlag(request_access),
+          codeChallenge: pkce?.codeChallenge,
+          codeChallengeMethod: pkce?.codeChallengeMethod,
           sharedSecret: SHARED_SECRET,
           audience: AUTH_SERVICE_IDENTIFIER,
           baseUrlForIssuer: baseUrl,
@@ -106,6 +116,8 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
           configUrl: request.configUrl,
           redirectUrl,
           requestAccess: parseRequestAccessFlag(request_access),
+          codeChallenge: pkce?.codeChallenge,
+          codeChallengeMethod: pkce?.codeChallengeMethod,
           sharedSecret: SHARED_SECRET,
           audience: AUTH_SERVICE_IDENTIFIER,
           baseUrlForIssuer: baseUrl,
@@ -138,6 +150,8 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
           configUrl: request.configUrl,
           redirectUrl,
           requestAccess: parseRequestAccessFlag(request_access),
+          codeChallenge: pkce?.codeChallenge,
+          codeChallengeMethod: pkce?.codeChallengeMethod,
           sharedSecret: SHARED_SECRET,
           audience: AUTH_SERVICE_IDENTIFIER,
           baseUrlForIssuer: baseUrl,
@@ -175,6 +189,8 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
           configUrl: request.configUrl,
           redirectUrl,
           requestAccess: parseRequestAccessFlag(request_access),
+          codeChallenge: pkce?.codeChallenge,
+          codeChallengeMethod: pkce?.codeChallengeMethod,
           sharedSecret: SHARED_SECRET,
           audience: AUTH_SERVICE_IDENTIFIER,
           baseUrlForIssuer: baseUrl,
@@ -207,6 +223,8 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
           configUrl: request.configUrl,
           redirectUrl,
           requestAccess: parseRequestAccessFlag(request_access),
+          codeChallenge: pkce?.codeChallenge,
+          codeChallengeMethod: pkce?.codeChallengeMethod,
           sharedSecret: SHARED_SECRET,
           audience: AUTH_SERVICE_IDENTIFIER,
           baseUrlForIssuer: baseUrl,

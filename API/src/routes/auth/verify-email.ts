@@ -13,6 +13,7 @@ import {
   parseRequestAccessFlag,
 } from '../../services/access-request-flow.service.js';
 import { selectRedirectUrl } from '../../services/token.service.js';
+import { parsePkceChallenge } from '../../utils/pkce.js';
 import { tokenConsumeRateLimiter } from './rate-limit-keys.js';
 
 const BodySchema = z
@@ -25,6 +26,8 @@ const BodySchema = z
 const QuerySchema = z
   .object({
     redirect_url: z.string().min(1).optional(),
+    code_challenge: z.string().min(1).optional(),
+    code_challenge_method: z.string().min(1).optional(),
     request_access: z.string().optional(),
   })
   .passthrough();
@@ -39,7 +42,12 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
     },
     async (request, reply) => {
       const { token, password } = BodySchema.parse(request.body);
-      const { redirect_url, request_access } = QuerySchema.parse(request.query);
+      const { redirect_url, code_challenge, code_challenge_method, request_access } =
+        QuerySchema.parse(request.query);
+      const pkce = parsePkceChallenge({
+        codeChallenge: code_challenge,
+        codeChallengeMethod: code_challenge_method,
+      });
 
       if (!request.config || !request.configUrl) {
         throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
@@ -73,6 +81,8 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
         redirectUrl,
         rememberMe: request.config.session?.remember_me_default ?? true,
         requestAccess: parseRequestAccessFlag(request_access),
+        codeChallenge: pkce?.codeChallenge,
+        codeChallengeMethod: pkce?.codeChallengeMethod,
       });
 
       try {

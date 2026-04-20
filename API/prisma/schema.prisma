@@ -108,6 +108,8 @@ model AuthorizationCode {
   domain      String
   configUrl   String    @map("config_url")
   redirectUrl String    @map("redirect_url")
+  codeChallenge       String?   @map("code_challenge")
+  codeChallengeMethod String?   @map("code_challenge_method")
   rememberMe  Boolean   @default(false) @map("remember_me")
   expiresAt   DateTime  @map("expires_at")
   usedAt      DateTime? @map("used_at")

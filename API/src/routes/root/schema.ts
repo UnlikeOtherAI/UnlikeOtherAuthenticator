@@ -24,6 +24,8 @@ const authEndpoints: EndpointSchema[] = [
     query: {
       config_url: 'string (required) — URL to fetch signed config JWT',
       redirect_url: 'string (optional) — OAuth redirect URL override (redirect_uri also accepted)',
+      code_challenge: 'string (optional) — PKCE S256 challenge',
+      code_challenge_method: '"S256" when code_challenge is sent',
     },
   },
   {
@@ -33,6 +35,8 @@ const authEndpoints: EndpointSchema[] = [
     auth: 'config_url query param',
     query: {
       redirect_url: 'string (optional, redirect_uri also accepted)',
+      code_challenge: 'string (optional) — PKCE S256 challenge',
+      code_challenge_method: '"S256" when code_challenge is sent',
       request_access:
         'string (optional) — when truthy, authenticate first and then either auto-grant or create a pending access request for the configured team',
     },
@@ -57,8 +61,11 @@ const authEndpoints: EndpointSchema[] = [
     description: 'User registration — sends verification email',
     auth: 'config_url query param',
     query: {
+      redirect_url: 'string (optional)',
       request_access:
         'string (optional) — when truthy, bypass registration gating so the user can authenticate and request access to the configured team',
+      code_challenge: 'string (optional) — PKCE S256 challenge preserved through email verification',
+      code_challenge_method: '"S256" when code_challenge is sent',
     },
     body: { email: 'string (required)' },
     response: { message: '"We sent instructions to your email" (always, no enumeration)' },
@@ -70,6 +77,8 @@ const authEndpoints: EndpointSchema[] = [
     auth: 'config_url query param',
     query: {
       redirect_url: 'string (optional)',
+      code_challenge: 'string (optional) — PKCE S256 challenge',
+      code_challenge_method: '"S256" when code_challenge is sent',
       request_access:
         'string (optional) — when truthy, authenticate first and then either auto-grant or create a pending access request',
     },
@@ -95,6 +104,7 @@ const authEndpoints: EndpointSchema[] = [
       'code?': 'authorization code (for authorization_code grant)',
       'redirect_url?':
         'required for authorization_code grant; must match the URL used when the code was issued',
+      'code_verifier?': 'required for authorization_code grant when the code was issued with PKCE',
       'refresh_token?': 'refresh token (for refresh_token grant)',
     },
     response: {
@@ -149,6 +159,8 @@ const authEndpoints: EndpointSchema[] = [
       token: 'string (required)',
       config_url: 'string (required)',
       redirect_url: 'string (optional)',
+      code_challenge: 'string (optional) — PKCE S256 challenge preserved through email verification',
+      code_challenge_method: '"S256" when code_challenge is sent',
       request_access:
         'string (optional) — preserves access-request intent when the user authenticates through an email link',
     },
@@ -181,6 +193,8 @@ const authEndpoints: EndpointSchema[] = [
     query: {
       config_url: 'string (required)',
       redirect_url: 'string (optional)',
+      code_challenge: 'string (optional) — PKCE S256 challenge',
+      code_challenge_method: '"S256" when code_challenge is sent',
       request_access:
         'string (optional) — when truthy, successful social auth is routed through the access-request policy for the configured team',
     },

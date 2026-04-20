@@ -30,6 +30,8 @@ export async function finalizeAuthenticatedUser(params: {
   redirectUrl: string;
   rememberMe: boolean;
   requestAccess: boolean;
+  codeChallenge?: string;
+  codeChallengeMethod?: 'S256';
 }): Promise<
   | { status: 'granted'; redirectTo: string; code: string }
   | { status: 'requested'; redirectTo: string }
@@ -56,6 +58,8 @@ export async function finalizeAuthenticatedUser(params: {
     domain: params.config.domain,
     configUrl: params.configUrl,
     redirectUrl: params.redirectUrl,
+    codeChallenge: params.codeChallenge,
+    codeChallengeMethod: params.codeChallengeMethod,
     rememberMe: params.rememberMe,
   });
 
