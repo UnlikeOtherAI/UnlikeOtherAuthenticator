@@ -140,7 +140,7 @@ model RefreshToken {
 
 model LoginLog {
   id         String   @id @default(cuid())
-  userId     String   @map("user_id")
+  userId     String?  @map("user_id")
   email      String
   domain     String
   authMethod String   @map("auth_method")
@@ -148,7 +148,7 @@ model LoginLog {
   userAgent  String?  @map("user_agent")
   createdAt  DateTime @default(now()) @map("created_at")
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([domain, createdAt])
@@ -309,7 +309,7 @@ model AccessRequest {
 
   org        Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
   team       Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  user       User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user       User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
   reviewedBy User?        @relation("ReviewedAccessRequests", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
 
   @@index([orgId, teamId, status])

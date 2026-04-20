@@ -16,7 +16,7 @@ type LoginLogDeps = {
 
 export type LoginLogRecord = {
   id: string;
-  userId: string;
+  userId: string | null;
   email: string;
   domain: string;
   authMethod: string;
