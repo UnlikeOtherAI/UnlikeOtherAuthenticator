@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildAccessRequestNotificationTemplate,
+  buildAccountExistsTemplate,
+  buildRegistrationLinkTemplate,
   buildLoginLinkTemplate,
   buildPasswordResetTemplate,
   buildTeamInviteTemplate,
@@ -18,13 +20,14 @@ describe('buildVerifyEmailSetPasswordTemplate', () => {
 
     expect(tpl.subject).toBe('Your sign-in link');
     expect(tpl.text).toContain(link);
+    expect(tpl.text).toContain('access your account or finish signing up');
     expect(tpl.text).not.toContain('login-link');
     expect(tpl.text).not.toContain('verify-set-password');
     expect(tpl.text).toMatch(/expires in 30 minutes/i);
     expect(tpl.text).toMatch(/ignore this email/i);
     expect(tpl.text).not.toMatch(/set your password/i);
 
-    expect(tpl.html).toContain('Continue signing in');
+    expect(tpl.html).toContain('Continue to your account');
     expect(tpl.html).toContain('Continue');
     expect(tpl.html).toContain(`href="${escapedLink}"`);
     expect(tpl.html).not.toContain('login-link');
@@ -48,15 +51,15 @@ describe('buildVerifyEmailTemplate', () => {
     const tpl = buildVerifyEmailTemplate({ link });
     const escapedLink = link.replaceAll('&', '&amp;');
 
-    expect(tpl.subject).toBe('Verify your email and sign in');
+    expect(tpl.subject).toBe('Your sign-in link');
     expect(tpl.text).toContain(link);
-    expect(tpl.text).toMatch(/verify your email/i);
+    expect(tpl.text).toContain('access your account or finish signing up');
     expect(tpl.text).toMatch(/expires in 30 minutes/i);
     expect(tpl.text).toMatch(/ignore this email/i);
     expect(tpl.text).not.toContain('set your password');
 
-    expect(tpl.html).toContain('Verify your email and sign in');
-    expect(tpl.html).toContain('Verify email');
+    expect(tpl.html).toContain('Continue to your account');
+    expect(tpl.html).toContain('Continue');
     expect(tpl.html).toContain(`href="${escapedLink}"`);
     expect(tpl.html).not.toContain('set your password');
   });
@@ -107,12 +110,13 @@ describe('buildLoginLinkTemplate', () => {
 
     expect(tpl.subject).toBe('Your sign-in link');
     expect(tpl.text).toContain(link);
+    expect(tpl.text).toContain('access your account or finish signing up');
     expect(tpl.text).not.toContain('login-link');
     expect(tpl.text).not.toContain('verify-set-password');
     expect(tpl.text).toMatch(/expires in 30 minutes/i);
     expect(tpl.text).toMatch(/ignore this email/i);
 
-    expect(tpl.html).toContain('Continue signing in');
+    expect(tpl.html).toContain('Continue to your account');
     expect(tpl.html).toContain('Continue');
     expect(tpl.html).toContain(`href="${escapedLink}"`);
     expect(tpl.html).not.toContain('login-link');
@@ -127,6 +131,21 @@ describe('buildLoginLinkTemplate', () => {
     expect(tpl.html).toContain('href="https://example.com/path?x=1&amp;y=2"');
     expect(tpl.html).toContain('https://example.com/path?x=1&amp;y=2');
     expect(tpl.html).not.toContain('href="https://example.com/path?x=1&y=2"');
+  });
+});
+
+describe('registration link template aliases', () => {
+  it('uses one neutral template for new-user, existing-user, and login-link emails', () => {
+    const link = 'https://auth.example.com/auth/email/link?token=t&config_url=https%3A%2F%2Fcfg.example.com%2Fconfig.jwt';
+    const neutral = buildRegistrationLinkTemplate({ link });
+
+    expect(buildVerifyEmailSetPasswordTemplate({ link })).toEqual(neutral);
+    expect(buildVerifyEmailTemplate({ link })).toEqual(neutral);
+    expect(buildLoginLinkTemplate({ link })).toEqual(neutral);
+    expect(buildAccountExistsTemplate({ link })).toEqual(neutral);
+    expect(neutral.subject).toBe('Your sign-in link');
+    expect(neutral.text).not.toMatch(/already have an account|verify your email/i);
+    expect(neutral.html).not.toMatch(/already have an account|reset password/i);
   });
 });
 

@@ -78,18 +78,6 @@ function buildRegistrationEmailLandingLink(params: {
   return url.toString();
 }
 
-function buildPasswordResetLink(params: {
-  baseUrl: string;
-  token: string;
-  configUrl: string;
-}): string {
-  const baseUrl = normalizeBaseUrl(params.baseUrl);
-  const url = new URL(`${baseUrl}/auth/email/reset-password`);
-  url.searchParams.set('token', params.token);
-  url.searchParams.set('config_url', params.configUrl);
-  return url.toString();
-}
-
 function isNewUserEmailRegistrationAllowed(params: {
   email: string;
   config: ClientConfig;
@@ -161,7 +149,7 @@ export async function requestRegistrationInstructions(
   const expiresAt = new Date(now.getTime() + EMAIL_TOKEN_TTL_MS);
 
   const type = existing
-    ? 'PASSWORD_RESET'
+    ? 'LOGIN_LINK'
     : params.config.registration_mode === 'passwordless'
       ? 'VERIFY_EMAIL'
       : 'VERIFY_EMAIL_SET_PASSWORD';
@@ -185,10 +173,14 @@ export async function requestRegistrationInstructions(
   const theme = extractEmailTheme(params.config);
 
   if (existing) {
-    const link = buildPasswordResetLink({
+    const link = buildRegistrationEmailLandingLink({
       baseUrl,
       token,
       configUrl: params.configUrl,
+      redirectUrl: params.redirectUrl,
+      requestAccess: params.requestAccess,
+      codeChallenge: params.codeChallenge,
+      codeChallengeMethod: params.codeChallengeMethod,
     });
     await (deps?.sendAccountExistsEmail ?? sendAccountExistsEmail)({ to: email, link, theme });
     return;

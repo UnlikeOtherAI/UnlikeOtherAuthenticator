@@ -59,7 +59,7 @@ function baseConfig(overrides?: Partial<ClientConfig>): ClientConfig {
 }
 
 describe('requestRegistrationInstructions', () => {
-  it('creates a PASSWORD_RESET token and sends account-exists email for an existing user', async () => {
+  it('creates a LOGIN_LINK token and sends neutral registration email for an existing user', async () => {
     const findUnique = vi
       .fn<PrismaStub['user']['findUnique']>()
       .mockResolvedValue({ id: 'u1' });
@@ -107,7 +107,7 @@ describe('requestRegistrationInstructions', () => {
 
     expect(createToken).toHaveBeenCalledWith({
       data: expect.objectContaining({
-        type: 'PASSWORD_RESET',
+        type: 'LOGIN_LINK',
         email: 'existing@example.com',
         userKey: 'existing@example.com',
         domain: null,
@@ -119,7 +119,7 @@ describe('requestRegistrationInstructions', () => {
 
     expect(sendAccountExistsEmail).toHaveBeenCalledWith(expect.objectContaining({
       to: 'existing@example.com',
-      link: 'https://auth.example.com/auth/email/reset-password?token=token123&config_url=https%3A%2F%2Fclient.example.com%2Fauth-config',
+      link: 'https://auth.example.com/auth/email/link?token=token123&config_url=https%3A%2F%2Fclient.example.com%2Fauth-config',
     }));
     expect(sendVerifyEmailSetPasswordEmail).not.toHaveBeenCalled();
     expect(sendVerifyEmailEmail).not.toHaveBeenCalled();
@@ -375,7 +375,7 @@ describe('requestRegistrationInstructions', () => {
     expect(sendVerifyEmailSetPasswordEmail).not.toHaveBeenCalled();
   });
 
-  it('still sends account-exists email for existing users even when domain restrictions are configured', async () => {
+  it('still sends neutral registration email for existing users even when domain restrictions are configured', async () => {
     const findUnique = vi
       .fn<PrismaStub['user']['findUnique']>()
       .mockResolvedValue({ id: 'u2' });
@@ -420,7 +420,7 @@ describe('requestRegistrationInstructions', () => {
 
     expect(createToken).toHaveBeenCalledWith({
       data: expect.objectContaining({
-        type: 'PASSWORD_RESET',
+        type: 'LOGIN_LINK',
         email: 'existing@gmail.com',
         userId: 'u2',
       }),

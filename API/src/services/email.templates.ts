@@ -157,15 +157,15 @@ function buildEmailHtml(params: {
 </html>`;
 }
 
-export function buildVerifyEmailSetPasswordTemplate(params: { link: string; theme?: Partial<EmailTheme> }): EmailTemplate {
+export function buildRegistrationLinkTemplate(params: { link: string; theme?: Partial<EmailTheme> }): EmailTemplate {
   const minutes = tokenTtlMinutes();
   const theme = resolveTheme(params.theme);
 
   const subject = 'Your sign-in link';
   const text = [
-    'Continue signing in',
+    'Continue to your account',
     '',
-    'Use this link to continue:',
+    'Use this link to access your account or finish signing up:',
     params.link,
     '',
     `This link expires in ${minutes} minutes and can only be used once.`,
@@ -176,72 +176,26 @@ export function buildVerifyEmailSetPasswordTemplate(params: { link: string; them
   const html = buildEmailHtml({
     theme,
     subject,
-    heading: 'Continue signing in',
-    body: 'Click the button below to continue.',
+    heading: 'Continue to your account',
+    body: 'Click the button below to access your account or finish signing up.',
     buttonLabel: 'Continue',
     buttonUrl: params.link,
     minutes,
   });
 
   return { subject, text, html };
+}
+
+export function buildVerifyEmailSetPasswordTemplate(params: { link: string; theme?: Partial<EmailTheme> }): EmailTemplate {
+  return buildRegistrationLinkTemplate(params);
 }
 
 export function buildVerifyEmailTemplate(params: { link: string; theme?: Partial<EmailTheme> }): EmailTemplate {
-  const minutes = tokenTtlMinutes();
-  const theme = resolveTheme(params.theme);
-
-  const subject = 'Verify your email and sign in';
-  const text = [
-    'Verify your email and sign in',
-    '',
-    'Use this link to verify your email:',
-    params.link,
-    '',
-    `This link expires in ${minutes} minutes and can only be used once.`,
-    '',
-    'If you did not request this, you can ignore this email.',
-  ].join('\n');
-
-  const html = buildEmailHtml({
-    theme,
-    subject,
-    heading: 'Verify your email and sign in',
-    body: 'Click the button below to verify your email.',
-    buttonLabel: 'Verify email',
-    buttonUrl: params.link,
-    minutes,
-  });
-
-  return { subject, text, html };
+  return buildRegistrationLinkTemplate(params);
 }
 
 export function buildLoginLinkTemplate(params: { link: string; theme?: Partial<EmailTheme> }): EmailTemplate {
-  const minutes = tokenTtlMinutes();
-  const theme = resolveTheme(params.theme);
-
-  const subject = 'Your sign-in link';
-  const text = [
-    'Continue signing in',
-    '',
-    'Use this link to continue:',
-    params.link,
-    '',
-    `This link expires in ${minutes} minutes and can only be used once.`,
-    '',
-    'If you did not request this, you can ignore this email.',
-  ].join('\n');
-
-  const html = buildEmailHtml({
-    theme,
-    subject,
-    heading: 'Continue signing in',
-    body: 'Click the button below to continue.',
-    buttonLabel: 'Continue',
-    buttonUrl: params.link,
-    minutes,
-  });
-
-  return { subject, text, html };
+  return buildRegistrationLinkTemplate(params);
 }
 
 export function buildTeamInviteTemplate(params: {
@@ -348,33 +302,7 @@ export function buildAccessRequestNotificationTemplate(params: {
 }
 
 export function buildAccountExistsTemplate(params: { link: string; theme?: Partial<EmailTheme> }): EmailTemplate {
-  const minutes = tokenTtlMinutes();
-  const theme = resolveTheme(params.theme);
-
-  const subject = 'You already have an account';
-  const text = [
-    'You already have an account',
-    '',
-    'Someone tried to create an account with this email, but you already have one.',
-    'If this was you, you can reset your password using the link below:',
-    params.link,
-    '',
-    `This link expires in ${minutes} minutes and can only be used once.`,
-    '',
-    'If you did not request this, you can ignore this email.',
-  ].join('\n');
-
-  const html = buildEmailHtml({
-    theme,
-    subject,
-    heading: 'You already have an account',
-    body: 'Someone tried to create an account with this email, but you already have one. If this was you, you can reset your password using the button below.',
-    buttonLabel: 'Reset password',
-    buttonUrl: params.link,
-    minutes,
-  });
-
-  return { subject, text, html };
+  return buildRegistrationLinkTemplate(params);
 }
 
 export function buildPasswordResetTemplate(params: { link: string; theme?: Partial<EmailTheme> }): EmailTemplate {
