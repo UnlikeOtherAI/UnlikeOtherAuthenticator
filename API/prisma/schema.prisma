@@ -53,8 +53,9 @@ model User {
   @@map("users")
 }
 
-// TODO(VM5/M8): Add OrgEmailDomainRule.teamId index and the partial unique
-// index for nullable team_id once the OrgEmailDomainRule model/table lands.
+// TODO(VM5/M8/VL11): Add OrgEmailDomainRule.teamId index, the partial unique
+// index for nullable team_id, and FACEBOOK/LINKEDIN VerificationMethod values
+// once the OrgEmailDomainRule model/table lands.
 
 model DomainRole {
   domain    String

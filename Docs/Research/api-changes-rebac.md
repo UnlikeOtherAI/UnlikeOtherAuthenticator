@@ -49,6 +49,8 @@ enum VerificationMethod {
   EMAIL     // email link only
   GOOGLE
   GITHUB
+  FACEBOOK
+  LINKEDIN
   MICROSOFT // Microsoft Entra ID / Azure AD OIDC
   APPLE     // Apple Sign In
 }
