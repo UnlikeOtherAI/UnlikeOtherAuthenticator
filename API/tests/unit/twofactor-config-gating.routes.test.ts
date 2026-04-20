@@ -5,6 +5,8 @@ import { expectJsonError } from '../helpers/error-response.js';
 import { testUiTheme } from '../helpers/test-config.js';
 
 let currentConfig: ClientConfig | null = null;
+const pkceQuery =
+  '&code_challenge=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ&code_challenge_method=S256';
 
 const loginWithEmailPasswordMock = vi.fn();
 const issueAuthorizationCodeMock = vi.fn();
@@ -98,7 +100,7 @@ describe('2FA gated by config `2fa_enabled`', () => {
 
     const res = await app.inject({
       method: 'POST',
-      url: '/auth/login?config_url=https%3A%2F%2Fclient.example.com%2Fauth-config',
+      url: `/auth/login?config_url=https%3A%2F%2Fclient.example.com%2Fauth-config${pkceQuery}`,
       payload: { email: 'user@example.com', password: 'Abcdef1!' },
     });
 
@@ -127,7 +129,7 @@ describe('2FA gated by config `2fa_enabled`', () => {
 
     const res = await app.inject({
       method: 'POST',
-      url: '/auth/login?config_url=https%3A%2F%2Fclient.example.com%2Fauth-config',
+      url: `/auth/login?config_url=https%3A%2F%2Fclient.example.com%2Fauth-config${pkceQuery}`,
       payload: { email: 'user@example.com', password: 'Abcdef1!' },
     });
 

@@ -11,7 +11,7 @@ import {
 import { recordLoginLog } from '../../services/login-log.service.js';
 import { signTwoFaChallenge } from '../../services/twofactor-challenge.service.js';
 import { selectRedirectUrl } from '../../services/token.service.js';
-import { parsePkceChallenge } from '../../utils/pkce.js';
+import { parseRequiredPkceChallenge } from '../../utils/pkce.js';
 import { loginRateLimiter } from './rate-limit-keys.js';
 
 const LoginBodySchema = z
@@ -42,7 +42,7 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
       const { email, password, remember_me } = LoginBodySchema.parse(request.body);
       const { redirect_url, code_challenge, code_challenge_method, request_access } =
         LoginQuerySchema.parse(request.query);
-      const pkce = parsePkceChallenge({
+      const pkce = parseRequiredPkceChallenge({
         codeChallenge: code_challenge,
         codeChallengeMethod: code_challenge_method,
       });

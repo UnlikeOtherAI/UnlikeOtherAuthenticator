@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 
 import { getEnv, requireEnv } from '../../config/env.js';
@@ -13,7 +13,7 @@ import { signSocialState } from '../../services/social/social-state.service.js';
 import { parseRequestAccessFlag } from '../../services/access-request-flow.service.js';
 import { selectRedirectUrl } from '../../services/token.service.js';
 import { AppError } from '../../utils/errors.js';
-import { parsePkceChallenge } from '../../utils/pkce.js';
+import { parseRequiredPkceChallenge } from '../../utils/pkce.js';
 
 const ParamsSchema = z.object({
   provider: z.enum(['google', 'apple', 'facebook', 'github', 'linkedin']),
@@ -39,6 +39,12 @@ function resolvePublicBaseUrl(): string {
   return env.PUBLIC_BASE_URL ? normalizeBaseUrl(env.PUBLIC_BASE_URL) : `http://${env.HOST}:${env.PORT}`;
 }
 
+function redirectNoStore(reply: FastifyReply, url: string): void {
+  reply.header('Cache-Control', 'no-store');
+  reply.header('Pragma', 'no-cache');
+  reply.redirect(url, 302);
+}
+
 export function registerAuthSocialRoute(app: FastifyInstance): void {
   app.get(
     '/auth/social/:provider',
@@ -59,7 +65,7 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
         allowedRedirectUrls: config.redirect_urls,
         requestedRedirectUrl: redirect_url ?? redirect_uri,
       });
-      const pkce = parsePkceChallenge({
+      const pkce = parseRequiredPkceChallenge({
         codeChallenge: code_challenge,
         codeChallengeMethod: code_challenge_method,
       });
@@ -95,7 +101,7 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
           redirectUri,
           state,
         });
-        reply.redirect(url, 302);
+        redirectNoStore(reply, url);
         return;
       }
 
@@ -129,7 +135,7 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
           redirectUri,
           state,
         });
-        reply.redirect(url, 302);
+        redirectNoStore(reply, url);
         return;
       }
 
@@ -163,7 +169,7 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
           redirectUri,
           state,
         });
-        reply.redirect(url, 302);
+        redirectNoStore(reply, url);
         return;
       }
 
@@ -202,7 +208,7 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
           redirectUri,
           state,
         });
-        reply.redirect(url, 302);
+        redirectNoStore(reply, url);
         return;
       }
 
@@ -236,7 +242,7 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
           redirectUri,
           state,
         });
-        reply.redirect(url, 302);
+        redirectNoStore(reply, url);
         return;
       }
 

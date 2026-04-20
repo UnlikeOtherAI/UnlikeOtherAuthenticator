@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 
 import { configVerifier } from '../../middleware/config-verifier.js';
@@ -12,7 +12,7 @@ import { selectRedirectUrl } from '../../services/token.service.js';
 import { verifyEmailToken } from '../../services/auth-verify-email.service.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
 import { AppError } from '../../utils/errors.js';
-import { parsePkceChallenge } from '../../utils/pkce.js';
+import { parseRequiredPkceChallenge } from '../../utils/pkce.js';
 import { tokenConsumeRateLimiter } from './rate-limit-keys.js';
 
 const QuerySchema = z
@@ -26,6 +26,12 @@ const QuerySchema = z
   })
   .strict();
 
+function redirectNoStore(reply: FastifyReply, url: string): void {
+  reply.header('Cache-Control', 'no-store');
+  reply.header('Pragma', 'no-cache');
+  reply.redirect(url, 302);
+}
+
 export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): void {
   app.get(
     '/auth/email/link',
@@ -35,7 +41,7 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
     async (request, reply) => {
       const { token, redirect_url, code_challenge, code_challenge_method, request_access } =
         QuerySchema.parse(request.query);
-      const pkce = parsePkceChallenge({
+      const pkce = parseRequiredPkceChallenge({
         codeChallenge: code_challenge,
         codeChallengeMethod: code_challenge_method,
       });
@@ -92,7 +98,7 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
 
           const finalUrl = finalResult.redirectTo;
           if (finalUrl) {
-            reply.redirect(finalUrl, 302);
+            redirectNoStore(reply, finalUrl);
             return;
           }
         } catch (err) {

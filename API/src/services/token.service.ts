@@ -106,6 +106,10 @@ export async function issueAuthorizationCode(
   // Validate redirectUrl again at the boundary; routes should select it via `selectRedirectUrl`.
   parseHttpUrl(params.redirectUrl);
 
+  if (!params.codeChallenge || params.codeChallengeMethod !== 'S256') {
+    throw new AppError('BAD_REQUEST', 400, 'PKCE_REQUIRED');
+  }
+
   // Extremely low probability collision; retry a couple times to be safe.
   for (let attempt = 0; attempt < 3; attempt++) {
     const code = generateAuthorizationCode();

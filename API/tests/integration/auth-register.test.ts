@@ -4,6 +4,8 @@ import { createApp } from '../../src/app.js';
 import { createTestConfigFetchHandler, signTestConfigJwt } from '../helpers/test-config.js';
 
 describe('POST /auth/register', () => {
+  const pkceChallenge = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ';
+
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
@@ -22,7 +24,7 @@ describe('POST /auth/register', () => {
     await app.ready();
 
     const configUrl = 'https://client.example.com/auth-config';
-    const url = `/auth/register?config_url=${encodeURIComponent(configUrl)}`;
+    const url = `/auth/register?config_url=${encodeURIComponent(configUrl)}&code_challenge=${pkceChallenge}&code_challenge_method=S256`;
 
     const res1 = await app.inject({
       method: 'POST',

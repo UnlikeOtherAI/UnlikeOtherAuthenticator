@@ -8,7 +8,7 @@ export type PkceChallenge = {
 };
 
 const CODE_VERIFIER_PATTERN = /^[A-Za-z0-9._~-]{43,128}$/;
-const CODE_CHALLENGE_PATTERN = /^[A-Za-z0-9_-]{43,128}$/;
+const CODE_CHALLENGE_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 
 function base64UrlSha256(value: string): string {
   return createHash('sha256').update(value, 'utf8').digest('base64url');
@@ -39,6 +39,17 @@ export function parsePkceChallenge(params: {
   }
 
   return { codeChallenge, codeChallengeMethod };
+}
+
+export function parseRequiredPkceChallenge(params: {
+  codeChallenge?: string;
+  codeChallengeMethod?: string;
+}): PkceChallenge {
+  const challenge = parsePkceChallenge(params);
+  if (!challenge) {
+    throw new AppError('BAD_REQUEST', 400, 'INVALID_PKCE_CHALLENGE');
+  }
+  return challenge;
 }
 
 export function verifyPkceCodeVerifier(params: {

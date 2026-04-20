@@ -13,6 +13,8 @@ import {
 } from '../helpers/test-config.js';
 
 const hasDatabase = Boolean(process.env.DATABASE_URL);
+const pkceQuery =
+  '&code_challenge=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ&code_challenge_method=S256';
 
 async function createSignedConfigJwt(
   sharedSecret: string,
@@ -123,7 +125,7 @@ describe.skipIf(!hasDatabase)('POST /auth/login', () => {
     const configUrl = 'https://client.example.com/auth-config';
     const res = await app.inject({
       method: 'POST',
-      url: `/auth/login?config_url=${encodeURIComponent(configUrl)}`,
+      url: `/auth/login?config_url=${encodeURIComponent(configUrl)}${pkceQuery}`,
       payload: { email: 'user@example.com', password: 'Abcdef1!' },
     });
 
@@ -196,7 +198,7 @@ describe.skipIf(!hasDatabase)('POST /auth/login', () => {
       const configUrl = 'https://client.example.com/auth-config';
       const loginRes = await app.inject({
         method: 'POST',
-        url: `/auth/login?config_url=${encodeURIComponent(configUrl)}`,
+        url: `/auth/login?config_url=${encodeURIComponent(configUrl)}${pkceQuery}`,
         payload: { email: 'user@example.com', password: 'Abcdef1!' },
       });
 
@@ -279,7 +281,7 @@ describe.skipIf(!hasDatabase)('POST /auth/login', () => {
     await app.ready();
 
     const configUrl = 'https://client.example.com/auth-config';
-    const baseUrl = `/auth/login?config_url=${encodeURIComponent(configUrl)}`;
+    const baseUrl = `/auth/login?config_url=${encodeURIComponent(configUrl)}${pkceQuery}`;
 
     const wrongPassword = await app.inject({
       method: 'POST',

@@ -13,7 +13,7 @@ import {
   parseRequestAccessFlag,
 } from '../../services/access-request-flow.service.js';
 import { selectRedirectUrl } from '../../services/token.service.js';
-import { parsePkceChallenge } from '../../utils/pkce.js';
+import { parseRequiredPkceChallenge } from '../../utils/pkce.js';
 import { tokenConsumeRateLimiter } from './rate-limit-keys.js';
 
 const BodySchema = z
@@ -45,7 +45,7 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
       const { token, password } = BodySchema.parse(request.body);
       const { redirect_url, code_challenge, code_challenge_method, request_access } =
         QuerySchema.parse(request.query);
-      const pkce = parsePkceChallenge({
+      const pkce = parseRequiredPkceChallenge({
         codeChallenge: code_challenge,
         codeChallengeMethod: code_challenge_method,
       });

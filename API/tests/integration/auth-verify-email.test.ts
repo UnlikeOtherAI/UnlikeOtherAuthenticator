@@ -20,6 +20,8 @@ import {
 } from '../helpers/test-config.js';
 
 const hasDatabase = Boolean(process.env.DATABASE_URL);
+const pkceQuery =
+  '&code_challenge=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ&code_challenge_method=S256';
 
 async function createSignedConfigJwt(
   sharedSecret: string,
@@ -99,7 +101,7 @@ describe.skipIf(!hasDatabase)('Email verification flow', () => {
     const app = await createApp();
     await app.ready();
 
-    const baseQuery = `config_url=${encodeURIComponent(configUrl)}`;
+    const baseQuery = `config_url=${encodeURIComponent(configUrl)}${pkceQuery}`;
 
     const landing = await app.inject({
       method: 'GET',
@@ -186,7 +188,7 @@ describe.skipIf(!hasDatabase)('Email verification flow', () => {
     await app.ready();
 
     const configUrl = 'https://client.example.com/auth-config';
-    const baseQuery = `config_url=${encodeURIComponent(configUrl)}`;
+    const baseQuery = `config_url=${encodeURIComponent(configUrl)}${pkceQuery}`;
 
     const res = await app.inject({
       method: 'POST',
@@ -230,7 +232,7 @@ describe.skipIf(!hasDatabase)('Email verification flow', () => {
     const app = await createApp();
     await app.ready();
 
-    const baseQuery = `config_url=${encodeURIComponent(configUrl)}`;
+    const baseQuery = `config_url=${encodeURIComponent(configUrl)}${pkceQuery}`;
     const landing = await app.inject({
       method: 'GET',
       url: `/auth/email/link?${baseQuery}&token=${encodeURIComponent(rawToken)}`,
@@ -367,7 +369,7 @@ describe.skipIf(!hasDatabase)('Email verification flow', () => {
     const app = await createApp();
     await app.ready();
 
-    const baseQuery = `config_url=${encodeURIComponent(configUrl)}`;
+    const baseQuery = `config_url=${encodeURIComponent(configUrl)}${pkceQuery}`;
     const verify = await app.inject({
       method: 'POST',
       url: `/auth/verify-email?${baseQuery}`,
@@ -436,7 +438,7 @@ describe.skipIf(!hasDatabase)('Email verification flow', () => {
     const app = await createApp();
     await app.ready();
 
-    const baseQuery = `config_url=${encodeURIComponent(configUrl)}`;
+    const baseQuery = `config_url=${encodeURIComponent(configUrl)}${pkceQuery}`;
     const res = await app.inject({
       method: 'POST',
       url: `/auth/verify-email?${baseQuery}`,

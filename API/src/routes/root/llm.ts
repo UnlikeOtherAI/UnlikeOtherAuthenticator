@@ -85,7 +85,7 @@ export function registerLlmRoute(app: FastifyInstance): void {
         step_4:
           'After authentication, the user is redirected to your redirect_url with ?code=<authorization_code>.',
         step_5:
-          'Exchange the code from your backend: POST /auth/token with { "code": "<auth_code>", "redirect_url": "<same_callback_url_used_for_login>", "code_verifier": "<PKCE_verifier_if_challenge_was_used>" }, Authorization: Bearer SHA256(domain+SHARED_SECRET), and config_url query param.',
+          'Exchange the code from your backend: POST /auth/token with { "code": "<auth_code>", "redirect_url": "<same_callback_url_used_for_login>", "code_verifier": "<PKCE_verifier>" }, Authorization: Bearer SHA256(domain+SHARED_SECRET), and config_url query param.',
         step_6:
           'Store the refresh_token server-side. Use the access_token for API calls. Refresh via POST /auth/token with { "grant_type": "refresh_token", "refresh_token": "<token>" }.',
         step_7: 'On logout, call POST /auth/revoke with the refresh_token to revoke the session.',

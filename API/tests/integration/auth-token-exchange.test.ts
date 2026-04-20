@@ -16,6 +16,7 @@ const configUrl = 'https://client.example.com/auth-config';
 const redirectUrl = 'https://client.example.com/oauth/callback';
 const userEmail = 'user@example.com';
 const userPassword = 'Abcdef1!';
+const defaultCodeVerifier = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ';
 
 type TokenBody = {
   access_token: string;
@@ -114,6 +115,9 @@ describe.skipIf(!hasDatabase)('POST /auth/token', () => {
     if (pkce) {
       url.searchParams.set('code_challenge', pkce.codeChallenge);
       url.searchParams.set('code_challenge_method', 'S256');
+    } else {
+      url.searchParams.set('code_challenge', pkceChallenge(defaultCodeVerifier));
+      url.searchParams.set('code_challenge_method', 'S256');
     }
 
     const loginRes = await app.inject({
@@ -143,7 +147,7 @@ describe.skipIf(!hasDatabase)('POST /auth/token', () => {
 
   async function issueTokenPair(app: Awaited<ReturnType<typeof createApp>>): Promise<TokenBody> {
     const code = await issueAuthorizationCode(app);
-    const tokenRes = await exchangeAuthorizationCode(app, code);
+    const tokenRes = await exchangeAuthorizationCode(app, code, defaultCodeVerifier);
     expect(tokenRes.statusCode).toBe(200);
     return tokenRes.json() as TokenBody;
   }
@@ -358,7 +362,7 @@ describe.skipIf(!hasDatabase)('POST /auth/token', () => {
     const { app } = await createConfiguredApp();
 
     const code = await issueAuthorizationCode(app);
-    const first = await exchangeAuthorizationCode(app, code);
+    const first = await exchangeAuthorizationCode(app, code, defaultCodeVerifier);
     expect(first.statusCode).toBe(200);
 
     const second = await exchangeAuthorizationCode(app, code);

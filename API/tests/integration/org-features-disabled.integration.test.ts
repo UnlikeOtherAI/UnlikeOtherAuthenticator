@@ -1,4 +1,5 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createHash } from 'node:crypto';
 import { jwtVerify } from 'jose';
 
 import { ACCESS_TOKEN_AUDIENCE } from '../../src/config/jwt.js';
@@ -16,6 +17,11 @@ import {
 
 const sampleDomain = 'client.example.com';
 const sampleConfigUrl = 'https://client.example.com/auth-config';
+const pkceVerifier = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ';
+
+function pkceChallenge(codeVerifier: string): string {
+  return createHash('sha256').update(codeVerifier, 'utf8').digest('base64url');
+}
 
 describe.skipIf(!hasDatabase)('org features disabled behaviour', () => {
   let handle: Awaited<ReturnType<typeof createTestDb>>;
@@ -209,7 +215,7 @@ describe.skipIf(!hasDatabase)('org features disabled behaviour', () => {
 
     const loginRes = await app.inject({
       method: 'POST',
-      url: `/auth/login?config_url=${encodeURIComponent(sampleConfigUrl)}`,
+      url: `/auth/login?config_url=${encodeURIComponent(sampleConfigUrl)}&code_challenge=${pkceChallenge(pkceVerifier)}&code_challenge_method=S256`,
       payload: {
         email: 'org-disabled-user@example.com',
         password,
@@ -224,7 +230,11 @@ describe.skipIf(!hasDatabase)('org features disabled behaviour', () => {
       headers: {
         authorization: `Bearer ${createClientId(sampleDomain, process.env.SHARED_SECRET!)}`,
       },
-      payload: { code, redirect_url: 'https://client.example.com/oauth/callback' },
+      payload: {
+        code,
+        redirect_url: 'https://client.example.com/oauth/callback',
+        code_verifier: pkceVerifier,
+      },
     });
     expect(tokenRes.statusCode).toBe(200);
 

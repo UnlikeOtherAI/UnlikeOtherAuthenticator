@@ -8,6 +8,7 @@ import {
   it,
   vi,
 } from 'vitest';
+import { createHash } from 'node:crypto';
 
 import { jwtVerify } from 'jose';
 
@@ -31,6 +32,12 @@ type OrgClaim = {
   groups?: string[];
   group_admin?: string[];
 };
+
+const pkceVerifier = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ';
+
+function pkceChallenge(codeVerifier: string): string {
+  return createHash('sha256').update(codeVerifier, 'utf8').digest('base64url');
+}
 
 describe.skipIf(!hasDatabase)('POST /auth/token with org context from org flow', () => {
   let handle: Awaited<ReturnType<typeof createTestDb>>;
@@ -191,7 +198,7 @@ describe.skipIf(!hasDatabase)('POST /auth/token with org context from org flow',
 
     const loginResponse = await app.inject({
       method: 'POST',
-      url: `/auth/login?config_url=${encodeURIComponent(configUrl)}`,
+      url: `/auth/login?config_url=${encodeURIComponent(configUrl)}&code_challenge=${pkceChallenge(pkceVerifier)}&code_challenge_method=S256`,
       payload: {
         email: 'org-member-flow@example.com',
         password,
@@ -210,6 +217,8 @@ describe.skipIf(!hasDatabase)('POST /auth/token with org context from org flow',
       },
       payload: {
         code: loginBody.code,
+        redirect_url: 'https://client.example.com/oauth/callback',
+        code_verifier: pkceVerifier,
       },
     });
     expect(tokenResponse.statusCode).toBe(200);

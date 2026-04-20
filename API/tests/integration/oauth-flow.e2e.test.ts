@@ -1,4 +1,5 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createHash } from 'node:crypto';
 import { jwtVerify } from 'jose';
 
 import { ACCESS_TOKEN_AUDIENCE } from '../../src/config/jwt.js';
@@ -9,6 +10,11 @@ import { createTestDb } from '../helpers/test-db.js';
 import { createTestConfigFetchHandler, signTestConfigJwt } from '../helpers/test-config.js';
 
 const hasDatabase = Boolean(process.env.DATABASE_URL);
+const pkceVerifier = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ';
+
+function pkceChallenge(codeVerifier: string): string {
+  return createHash('sha256').update(codeVerifier, 'utf8').digest('base64url');
+}
 
 async function createSignedConfigJwt(sharedSecret: string): Promise<string> {
   void sharedSecret;
@@ -85,7 +91,7 @@ describe.skipIf(!hasDatabase)('E2E OAuth flow (config_url -> /auth -> login -> t
     // 2) User authenticates and receives an authorization code and a redirect URL (popup would navigate).
     const loginRes = await app.inject({
       method: 'POST',
-      url: `/auth/login?config_url=${encodeURIComponent(configUrl)}`,
+      url: `/auth/login?config_url=${encodeURIComponent(configUrl)}&code_challenge=${pkceChallenge(pkceVerifier)}&code_challenge_method=S256`,
       payload: { email: 'user@example.com', password: 'Abcdef1!' },
     });
     expect(loginRes.statusCode).toBe(200);
@@ -108,7 +114,11 @@ describe.skipIf(!hasDatabase)('E2E OAuth flow (config_url -> /auth -> login -> t
       headers: {
         authorization: `Bearer ${createClientId('client.example.com', process.env.SHARED_SECRET!)}`,
       },
-      payload: { code: loginBody.code, redirect_url: 'https://client.example.com/oauth/callback' },
+      payload: {
+        code: loginBody.code,
+        redirect_url: 'https://client.example.com/oauth/callback',
+        code_verifier: pkceVerifier,
+      },
     });
     expect(tokenRes.statusCode).toBe(200);
     const tokenBody = tokenRes.json() as { access_token: string; token_type: string };

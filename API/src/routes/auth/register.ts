@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { configVerifier } from '../../middleware/config-verifier.js';
 import { parseRequestAccessFlag } from '../../services/access-request-flow.service.js';
 import { requestRegistrationInstructions } from '../../services/auth-register.service.js';
-import { parsePkceChallenge } from '../../utils/pkce.js';
+import { parseRequiredPkceChallenge } from '../../utils/pkce.js';
 import { registerRateLimiter } from './rate-limit-keys.js';
 
 const SUCCESS_MESSAGE = 'We sent instructions to your email';
@@ -38,7 +38,7 @@ export function registerAuthRegisterRoute(app: FastifyInstance): void {
       const email = parsed.success ? parsed.data.email : null;
       const { redirect_url, code_challenge, code_challenge_method, request_access } =
         RegisterQuerySchema.parse(request.query);
-      const pkce = parsePkceChallenge({
+      const pkce = parseRequiredPkceChallenge({
         codeChallenge: code_challenge,
         codeChallengeMethod: code_challenge_method,
       });
