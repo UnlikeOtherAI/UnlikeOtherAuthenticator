@@ -32,6 +32,18 @@ function resolveDomain(request: FastifyRequest): string | undefined {
   return normaliseDomain(queryDomain) || normaliseDomain(request.config?.domain);
 }
 
+function resolveVerifiedConfigDomain(request: RequestWithConfig): string | undefined {
+  const configDomain = normaliseDomain(request.config?.domain);
+  const queryDomain = (request.query as { domain?: unknown } | undefined)?.domain;
+  const normalizedQueryDomain = normaliseDomain(queryDomain);
+
+  if (configDomain && normalizedQueryDomain && normalizedQueryDomain !== configDomain) {
+    throw new AppError('UNAUTHORIZED', 401);
+  }
+
+  return configDomain;
+}
+
 function getAuthorizationToken(request: FastifyRequest) {
   const token = request.headers.authorization;
   if (token !== undefined) return token;
@@ -78,6 +90,19 @@ async function domainHashAuth(request: RequestWithConfig) {
     throw new AppError('BAD_REQUEST', 400);
   }
 
+  await verifyDomainHashAuth(request, domain);
+}
+
+async function domainHashAuthForVerifiedConfig(request: RequestWithConfig) {
+  const domain = resolveVerifiedConfigDomain(request);
+  if (!domain) {
+    throw new AppError('BAD_REQUEST', 400);
+  }
+
+  await verifyDomainHashAuth(request, domain);
+}
+
+async function verifyDomainHashAuth(request: FastifyRequest, domain: string) {
   const token = parseAuthHeader(getAuthorizationToken(request));
 
   if (!token) {
@@ -105,7 +130,7 @@ export function requireDomainHashAuthForDomainQuery(
 }
 
 export const requireDomainHashAuth = (request: RequestWithConfig): Promise<void> => {
-  return requireDomainHashAuthForDomainQuery(request);
+  return domainHashAuthForVerifiedConfig(request);
 };
 
 export default requireDomainHashAuthForDomainQuery;
