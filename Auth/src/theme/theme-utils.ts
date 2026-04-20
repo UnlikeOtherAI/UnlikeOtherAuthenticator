@@ -78,8 +78,57 @@ function parseFontFamily(value: unknown): FontFamily | '' {
   if (typeof value !== 'string') return '';
   const trimmed = value.trim();
   if (!trimmed) return '';
-  if (!/^[A-Za-z0-9 _-]+$/.test(trimmed)) return '';
-  return trimmed;
+
+  const tokens = splitFontFamily(trimmed);
+  if (!tokens || tokens.length === 0) return '';
+  if (!tokens.every(isSafeFontFamilyToken)) return '';
+  return tokens.join(', ');
+}
+
+function splitFontFamily(value: string): string[] | null {
+  const tokens: string[] = [];
+  let current = '';
+  let quote: '"' | "'" | null = null;
+
+  for (const char of value) {
+    if ((char === '"' || char === "'") && quote === null) {
+      quote = char;
+      current += char;
+      continue;
+    }
+
+    if (char === quote) {
+      quote = null;
+      current += char;
+      continue;
+    }
+
+    if (char === ',' && quote === null) {
+      tokens.push(current.trim());
+      current = '';
+      continue;
+    }
+
+    current += char;
+  }
+
+  if (quote !== null) return null;
+  tokens.push(current.trim());
+  return tokens;
+}
+
+function isSafeFontFamilyToken(token: string): boolean {
+  if (!token) return false;
+  if (/<\//.test(token) || /[{};]|url\s*\(|expression\s*\(/i.test(token)) return false;
+
+  const first = token[0];
+  const last = token[token.length - 1];
+  if ((first === '"' || first === "'") && last === first) {
+    const inner = token.slice(1, -1).trim();
+    return Boolean(inner) && /^[A-Za-z0-9 _-]+$/.test(inner);
+  }
+
+  return /^[A-Za-z0-9 _-]+$/.test(token);
 }
 
 function parseBaseTextSize(value: unknown): BaseTextSize | '' {
