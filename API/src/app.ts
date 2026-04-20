@@ -1,3 +1,4 @@
+import helmet from '@fastify/helmet';
 import fastify, { type FastifyInstance } from 'fastify';
 
 import { getEnv } from './config/env.js';
@@ -10,6 +11,7 @@ export async function createApp(): Promise<FastifyInstance> {
   const env = getEnv();
 
   const app = fastify({
+    trustProxy: true,
     // Never log bearer tokens or other secrets. Additionally, avoid automatic request
     // logging to prevent sensitive query params (like config_url) from being persisted.
     disableRequestLogging: true,
@@ -40,6 +42,33 @@ export async function createApp(): Promise<FastifyInstance> {
               censor: '[REDACTED]',
             },
           },
+  });
+
+  await app.register(helmet, {
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        baseUri: ["'none'"],
+        connectSrc: ["'self'", 'https:'],
+        fontSrc: ["'self'", 'https:', 'data:'],
+        formAction: ["'self'"],
+        frameAncestors: ["'none'"],
+        imgSrc: ["'self'", 'https:', 'data:'],
+        objectSrc: ["'none'"],
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        styleSrc: ["'self'", "'unsafe-inline'", 'https:'],
+        upgradeInsecureRequests: [],
+      },
+    },
+    crossOriginEmbedderPolicy: false,
+    hsts: {
+      maxAge: 31_536_000,
+      includeSubDomains: true,
+      preload: true,
+    },
+    frameguard: { action: 'deny' },
+    noSniff: true,
+    referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
   });
 
   if (env.DATABASE_URL) {
