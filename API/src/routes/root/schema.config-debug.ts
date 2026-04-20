@@ -10,8 +10,8 @@ export const configDebugEndpoints: EndpointSchema[] = [
       'config?': 'object — raw config payload to schema-validate directly',
       'config_jwt?': 'string — signed config JWT to decode and validate',
       'config_url?': 'string — URL that should return the signed config JWT',
-      'shared_secret?':
-        'string — candidate secret used to verify the JWT signature and report shared-secret problems explicitly',
+      'jwks_url?':
+        'string — JWKS URL used to verify the RS256 JWT signature; defaults to CONFIG_JWKS_URL',
       'auth_service_identifier?':
         'string — expected JWT audience; defaults to the auth service environment when omitted',
     },

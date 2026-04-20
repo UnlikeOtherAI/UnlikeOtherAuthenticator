@@ -51,9 +51,11 @@ export const configExample = {
 
 export const configJwtDocumentation = {
   description:
-    'The config JWT is a signed JWT containing all client-specific settings. The payload is the config. The signature must be created with the shared secret and the JWT aud must match AUTH_SERVICE_IDENTIFIER.',
+    'The config JWT is a signed JWT containing all client-specific settings. The payload is the config. The signature must be RS256, the protected header must include kid, and the JWT aud must match AUTH_SERVICE_IDENTIFIER.',
   signing: {
-    algorithms: ['HS256', 'HS384', 'HS512'],
+    algorithms: ['RS256'],
+    key_selection:
+      'The JWT protected header must include kid. The auth service resolves that kid from CONFIG_JWKS_URL and rejects tokens without kid.',
     audience:
       'The JWT aud claim must match the auth service identifier configured in AUTH_SERVICE_IDENTIFIER.',
   },
@@ -185,11 +187,11 @@ export const configVerificationEndpointDocumentation = {
     config:
       'object (optional) — raw config payload to schema-validate directly. This skips JWT signature checking unless config_jwt or config_url is also supplied instead.',
     config_jwt:
-      'string (optional) — signed config JWT to decode, inspect, schema-validate, and optionally verify with shared_secret.',
+      'string (optional) — signed config JWT to decode, inspect, schema-validate, and verify with a JWKS.',
     config_url:
       'string (optional) — URL that should return the signed config JWT. The endpoint fetches it and then runs the same checks.',
-    shared_secret:
-      'string (optional) — candidate secret used to verify config_jwt or the JWT fetched from config_url. If it is wrong, the response explicitly reports the shared secret/signature check failure.',
+    jwks_url:
+      'string (optional) — JWKS URL used to verify config_jwt or the JWT fetched from config_url. Defaults to CONFIG_JWKS_URL.',
     auth_service_identifier:
       'string (optional) — expected JWT aud. Defaults to this auth service environment when omitted.',
   },

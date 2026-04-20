@@ -1,4 +1,4 @@
-import { decodeJwt, decodeProtectedHeader, jwtVerify, type JWTPayload } from 'jose';
+import { decodeJwt, decodeProtectedHeader, type JWTPayload } from 'jose';
 import { z } from 'zod';
 
 import { getEnv } from '../config/env.js';
@@ -7,17 +7,16 @@ import {
   assertConfigDomainMatchesConfigUrl,
   fetchConfigJwtFromUrl,
   validateConfigFields,
+  verifyConfigJwtSignature,
   type ClientConfig,
 } from './config.service.js';
-
-const CONFIG_JWT_ALLOWED_ALGS = ['HS256', 'HS384', 'HS512'] as const;
 
 const VerifyConfigBodySchema = z
   .object({
     config: z.record(z.unknown()).optional(),
     config_jwt: z.string().trim().min(1).optional(),
     config_url: z.string().trim().min(1).optional(),
-    shared_secret: z.string().trim().min(1).optional(),
+    jwks_url: z.string().trim().url().optional(),
     auth_service_identifier: z.string().trim().min(1).optional(),
   })
   .superRefine((value, ctx) => {
@@ -58,10 +57,6 @@ export type VerifyConfigResponse = {
   issues: VerifyConfigIssue[];
   config_summary: Record<string, unknown> | null;
 };
-
-function sharedSecretKey(sharedSecret: string): Uint8Array {
-  return new TextEncoder().encode(sharedSecret);
-}
 
 function normalizeHostname(value: string): string {
   return value.trim().toLowerCase().replace(/\.$/, '');
@@ -159,6 +154,9 @@ export async function verifyClientConfig(
 
   let payload: JWTPayload | undefined;
   let configJwt: string | undefined;
+  const env = getEnv();
+  const expectedAudience = params.auth_service_identifier?.trim() || env.AUTH_SERVICE_IDENTIFIER;
+  const jwksUrl = params.jwks_url?.trim() || env.CONFIG_JWKS_URL;
 
   passedCheck(response, 'source', `Using ${source} as the configuration source.`);
 
@@ -210,37 +208,32 @@ export async function verifyClientConfig(
       return response;
     }
 
-    if (params.shared_secret) {
+    if (jwksUrl) {
       try {
-        await jwtVerify(configJwt, sharedSecretKey(params.shared_secret), {
-          algorithms: [...CONFIG_JWT_ALLOWED_ALGS],
-        });
+        await verifyConfigJwtSignature(configJwt, jwksUrl, expectedAudience);
         response.jwt_signature_valid = true;
-        passedCheck(response, 'signature', 'The provided shared_secret verified the config JWT signature.');
+        passedCheck(response, 'signature', 'The configured JWKS verified the RS256 config JWT signature.');
       } catch {
         response.jwt_signature_valid = false;
         failedCheck(
           response,
           'signature',
-          'CONFIG_SHARED_SECRET_INVALID',
-          'The provided shared_secret did not verify the config JWT signature.',
-          ['Check that the client backend and auth service use the same shared secret.'],
+          'CONFIG_JWKS_SIGNATURE_INVALID',
+          'The configured JWKS did not verify the config JWT signature and audience.',
+          ['Check that the JWT header includes a valid kid, uses RS256, and matches the configured JWKS.'],
         );
       }
     } else {
       skippedCheck(
         response,
         'signature',
-        'Signature verification was skipped because shared_secret was not provided.',
+        'Signature verification was skipped because no JWKS URL was configured.',
       );
     }
   } else {
     skippedCheck(response, 'decode', 'JWT decode was skipped because a raw config object was provided.');
     skippedCheck(response, 'signature', 'Signature verification was skipped because no JWT was provided.');
   }
-
-  const expectedAudience =
-    params.auth_service_identifier?.trim() || getEnv().AUTH_SERVICE_IDENTIFIER;
 
   if (payload && source !== 'config') {
     const audiences = readAudienceClaim(payload);

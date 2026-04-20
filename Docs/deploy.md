@@ -63,6 +63,7 @@ Set via Cloud Run service config:
 | Variable | Source |
 |----------|--------|
 | `AUTH_SERVICE_IDENTIFIER` | Plain value: `authentication.unlikeotherai.com` |
+| `CONFIG_JWKS_URL` | Plain value: trusted JWKS URL for RS256 config JWT verification |
 | `PUBLIC_BASE_URL` | Plain value: `https://authentication.unlikeotherai.com` |
 | `DATABASE_URL` | Secret Manager: `uoa-auth-database-url` |
 | `SHARED_SECRET` | Secret Manager: `uoa-auth-shared-secret` |

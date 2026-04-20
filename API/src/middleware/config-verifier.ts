@@ -1,3 +1,4 @@
+import { randomInt } from 'node:crypto';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
@@ -39,14 +40,16 @@ export async function configVerifier(
 
   // Shared secret must never be exposed publicly. Defensively reject requests that
   // try to embed it in the config URL (even though clients should never do this).
-  const { SHARED_SECRET, AUTH_SERVICE_IDENTIFIER } = requireEnv(
+  const { SHARED_SECRET, AUTH_SERVICE_IDENTIFIER, CONFIG_JWKS_URL } = requireEnv(
     'SHARED_SECRET',
     'AUTH_SERVICE_IDENTIFIER',
+    'CONFIG_JWKS_URL',
   );
   if (
     config_url.includes(SHARED_SECRET) ||
     config_url.includes(encodeURIComponent(SHARED_SECRET))
   ) {
+    await sleep(randomInt(0, 26));
     mergeAuthDebugInfo(request, {
       stage: 'config_url',
       code: 'CONFIG_URL_REJECTED',
@@ -67,12 +70,12 @@ export async function configVerifier(
     throw err;
   }
 
-  // Task 2.3 + 2.6: verify JWT signature using the shared secret and enforce expected `aud`.
+  // Task 2.3 + 2.6: verify JWT signature using configured JWKS and enforce expected `aud`.
   let payload;
   try {
     payload = await verifyConfigJwtSignature(
       request.configJwt,
-      SHARED_SECRET,
+      CONFIG_JWKS_URL,
       AUTH_SERVICE_IDENTIFIER,
     );
   } catch (err) {
@@ -122,6 +125,12 @@ export async function configVerifier(
     });
     throw err;
   }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 function containsSecretValue(value: unknown, secret: string): boolean {

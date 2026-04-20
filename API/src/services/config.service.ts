@@ -1,11 +1,12 @@
+import { createRemoteJWKSet, decodeProtectedHeader, jwtVerify, type JWTPayload } from 'jose';
 import { AppError } from '../utils/errors.js';
-import { jwtVerify, type JWTPayload } from 'jose';
 import { z } from 'zod';
 import { tryParseHttpUrl } from '../utils/http-url.js';
 
 const DEFAULT_CONFIG_FETCH_TIMEOUT_MS = 5_000;
 
-const CONFIG_JWT_ALLOWED_ALGS = ['HS256', 'HS384', 'HS512'] as const;
+const CONFIG_JWT_ALLOWED_ALGS = ['RS256'] as const;
+const configJwksCache = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
 
 const RedirectUrlSchema = z
   .string()
@@ -284,12 +285,35 @@ function warnUnreachableRegistrationDomainMappings(config: ClientConfig): void {
   );
 }
 
-function sharedSecretKey(sharedSecret: string): Uint8Array {
-  return new TextEncoder().encode(sharedSecret);
-}
-
 function normalizeHostname(value: string): string {
   return value.trim().toLowerCase().replace(/\.$/, '');
+}
+
+function getConfigJwks(jwksUrl: string): ReturnType<typeof createRemoteJWKSet> {
+  let parsed: URL;
+  try {
+    parsed = new URL(jwksUrl);
+  } catch {
+    throw new AppError('INTERNAL', 500, 'CONFIG_JWKS_URL_INVALID');
+  }
+
+  const cacheKey = parsed.toString();
+  let jwks = configJwksCache.get(cacheKey);
+  if (!jwks) {
+    jwks = createRemoteJWKSet(parsed);
+    configJwksCache.set(cacheKey, jwks);
+  }
+  return jwks;
+}
+
+function assertConfigJwtHeader(configJwt: string): void {
+  const header = decodeProtectedHeader(configJwt);
+  if (header.alg !== 'RS256') {
+    throw new AppError('BAD_REQUEST', 400);
+  }
+  if (typeof header.kid !== 'string' || !header.kid.trim()) {
+    throw new AppError('BAD_REQUEST', 400);
+  }
 }
 
 function extractJwtFromBody(bodyText: string): string {
@@ -366,20 +390,22 @@ export async function fetchConfigJwtFromUrl(
 }
 
 /**
- * Task 2.3: Verify the config JWT signature using the global shared secret.
+ * Task 2.3: Verify the config JWT signature using the configured JWKS.
  *
  * Task 2.6: Enforce expected `aud` (auth service identifier) so config JWTs minted
  * for one auth service are not accepted by another.
  */
 export async function verifyConfigJwtSignature(
   configJwt: string,
-  sharedSecret: string,
+  jwksUrl: string,
   expectedAudience: string,
 ): Promise<JWTPayload> {
   try {
-    const { payload } = await jwtVerify(configJwt, sharedSecretKey(sharedSecret), {
+    assertConfigJwtHeader(configJwt);
+    const { payload } = await jwtVerify(configJwt, getConfigJwks(jwksUrl), {
       algorithms: [...CONFIG_JWT_ALLOWED_ALGS],
       audience: expectedAudience,
+      clockTolerance: 30,
     });
     return payload;
   } catch {
@@ -392,8 +418,8 @@ export async function verifyConfigJwtSignature(
  * Task 2.8: Validate `domain` claim matches the origin of the request.
  *
  * We treat the config URL host as the deterministic "origin" for this auth initiation.
- * This prevents a client who knows the shared secret from minting a valid config JWT for a
- * different domain while hosting it on their own infrastructure.
+ * This prevents a client from hosting a valid config JWT for a different domain on their
+ * own infrastructure.
  */
 export function assertConfigDomainMatchesConfigUrl(
   domainClaim: string,

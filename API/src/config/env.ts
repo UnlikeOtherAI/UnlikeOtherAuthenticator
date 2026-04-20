@@ -31,10 +31,13 @@ const EnvSchema = z.object({
   LOG_LEVEL: z
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace'])
     .default('info'),
-  // Single global shared secret used for config JWT verification and domain hashing.
+  // Single global shared secret used for domain hashing and server-issued bearer secrets.
   SHARED_SECRET: z.string().min(32),
   // Identifier for this auth service instance. Used as expected `aud` for config JWTs.
   AUTH_SERVICE_IDENTIFIER: z.string().min(1),
+  // Trusted JWKS endpoint used to verify client config JWTs. Config JWTs must be RS256
+  // and include a kid that resolves to a key from this JWKS.
+  CONFIG_JWKS_URL: z.string().url(),
   DATABASE_URL: z.string().min(1).optional(),
   // Email provider abstraction (brief phase 11.1). Provider can be swapped via env without code changes.
   EMAIL_PROVIDER: z.enum(['disabled', 'smtp', 'ses', 'sendgrid']).optional(),

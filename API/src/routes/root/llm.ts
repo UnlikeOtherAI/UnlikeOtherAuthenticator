@@ -7,7 +7,7 @@ export function registerLlmRoute(app: FastifyInstance): void {
     return {
       service: 'UnlikeOtherAuthenticator',
       description:
-        'Centralized OAuth and authentication service. All client configuration is delivered via a signed JWT fetched from a config_url. The JWT is signed with a shared HMAC secret (HS256/HS384/HS512) and verified on every request.',
+        'Centralized OAuth and authentication service. All client configuration is delivered via a signed JWT fetched from a config_url. The JWT must be signed with RS256, include a kid, and verify against the configured JWKS on every request.',
 
       authentication: {
         overview:
@@ -26,6 +26,8 @@ export function registerLlmRoute(app: FastifyInstance): void {
           SHARED_SECRET: 'HMAC secret shared between the auth service and client backends',
           AUTH_SERVICE_IDENTIFIER:
             'Audience claim for config JWTs. Must match the aud in signed config JWTs.',
+          CONFIG_JWKS_URL:
+            'Trusted JWKS endpoint used to verify RS256 config JWT signatures by kid.',
         },
         optional: {
           NODE_ENV: '"development" | "test" | "production" (default: "development")',
@@ -71,7 +73,7 @@ export function registerLlmRoute(app: FastifyInstance): void {
         step_1:
           'Create a config JWT endpoint on your backend that returns a signed JWT with your domain, redirect_urls, enabled_auth_methods, ui_theme, and language_config.',
         step_2:
-          'Before wiring the auth popup, POST /config/verify with either config, config_jwt, or config_url. Use shared_secret and auth_service_identifier when you want the auth service to confirm signature/audience problems separately from schema problems.',
+          'Before wiring the auth popup, POST /config/verify with either config, config_jwt, or config_url. Use jwks_url and auth_service_identifier when you want the auth service to confirm signature/audience problems separately from schema problems.',
         step_3:
           'Open the auth popup/redirect to: GET /auth?config_url=<your_config_endpoint_url>&redirect_url=<your_callback_url>&code_challenge=<S256_challenge>&code_challenge_method=S256 (redirect_uri is also accepted as an alias for redirect_url)',
         step_4:
