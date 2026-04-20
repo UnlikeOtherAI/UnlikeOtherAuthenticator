@@ -1,14 +1,15 @@
 import { createHash } from 'node:crypto';
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { jwtVerify, SignJWT } from 'jose';
+import { jwtVerify } from 'jose';
 
+import { ACCESS_TOKEN_AUDIENCE } from '../../src/config/jwt.js';
 import { createApp } from '../../src/app.js';
 import { hashPassword } from '../../src/services/password.service.js';
 import { createClientId } from '../../src/utils/hash.js';
 import { expectJsonError } from '../helpers/error-response.js';
 import { createTestDb } from '../helpers/test-db.js';
-import { baseClientConfigPayload } from '../helpers/test-config.js';
+import { createTestConfigFetchHandler, signTestConfigJwt } from '../helpers/test-config.js';
 
 const hasDatabase = Boolean(process.env.DATABASE_URL);
 const configUrl = 'https://client.example.com/auth-config';
@@ -25,11 +26,8 @@ type TokenBody = {
 };
 
 async function createSignedConfigJwt(sharedSecret: string): Promise<string> {
-  const aud = process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
-  return await new SignJWT(baseClientConfigPayload())
-    .setProtectedHeader({ alg: 'HS256' })
-    .setAudience(aud)
-    .sign(new TextEncoder().encode(sharedSecret));
+  void sharedSecret;
+  return await signTestConfigJwt();
 }
 
 function authorizationHeader(): string {
@@ -65,7 +63,7 @@ describe.skipIf(!hasDatabase)('POST /auth/token', () => {
   });
 
   beforeEach(async () => {
-    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER =
       process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
     process.env.ACCESS_TOKEN_TTL = '15m';
@@ -98,7 +96,7 @@ describe.skipIf(!hasDatabase)('POST /auth/token', () => {
 
   async function createConfiguredApp() {
     const jwt = await createSignedConfigJwt(process.env.SHARED_SECRET!);
-    const fetchMock = vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 }));
+    const fetchMock = vi.fn(await createTestConfigFetchHandler(jwt));
     vi.stubGlobal('fetch', fetchMock);
 
     const app = await createApp();
@@ -184,7 +182,7 @@ describe.skipIf(!hasDatabase)('POST /auth/token', () => {
     const { payload } = await jwtVerify(
       tokenBody.access_token,
       new TextEncoder().encode(process.env.SHARED_SECRET!),
-      { issuer: process.env.AUTH_SERVICE_IDENTIFIER },
+      { issuer: process.env.AUTH_SERVICE_IDENTIFIER, audience: ACCESS_TOKEN_AUDIENCE },
     );
 
     expect(payload.sub).toBe(created.id);

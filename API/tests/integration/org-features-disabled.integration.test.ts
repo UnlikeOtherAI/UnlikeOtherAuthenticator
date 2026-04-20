@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { jwtVerify } from 'jose';
 
+import { ACCESS_TOKEN_AUDIENCE } from '../../src/config/jwt.js';
 import { createApp } from '../../src/app.js';
 import { hashPassword } from '../../src/services/password.service.js';
 import { createClientId } from '../../src/utils/hash.js';
@@ -43,7 +44,7 @@ describe.skipIf(!hasDatabase)('org features disabled behaviour', () => {
   });
 
   beforeEach(async () => {
-    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER = process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
 
     if (!handle) return;
@@ -232,6 +233,7 @@ describe.skipIf(!hasDatabase)('org features disabled behaviour', () => {
 
     const { payload } = await jwtVerify(tokenBody.access_token, new TextEncoder().encode(process.env.SHARED_SECRET!), {
       issuer: process.env.AUTH_SERVICE_IDENTIFIER,
+      audience: ACCESS_TOKEN_AUDIENCE,
     });
 
     expect(payload.org).toBeUndefined();

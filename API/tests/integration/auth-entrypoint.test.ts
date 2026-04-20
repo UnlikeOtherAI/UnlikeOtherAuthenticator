@@ -1,21 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { SignJWT } from 'jose';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { createApp } from '../../src/app.js';
 import { expectJsonError } from '../helpers/error-response.js';
-import { baseClientConfigPayload } from '../helpers/test-config.js';
-
-async function createSignedConfigJwt(sharedSecret: string): Promise<string> {
-  // Minimal payload satisfying required config fields (Task 2.4).
-  const aud = process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
-  return await new SignJWT(baseClientConfigPayload())
-    .setProtectedHeader({ alg: 'HS256' })
-    .setAudience(aud)
-    .sign(new TextEncoder().encode(sharedSecret));
-}
+import {
+  baseClientConfigPayload,
+  createTestConfigFetchHandler,
+  signTestConfigJwt,
+} from '../helpers/test-config.js';
 
 function base64UrlEncodeJson(value: unknown): string {
   return Buffer.from(JSON.stringify(value)).toString('base64url');
@@ -33,6 +27,10 @@ function extractFirstMatch(re: RegExp, text: string): string {
   return m[1];
 }
 
+function countFetchesTo(fetchMock: ReturnType<typeof vi.fn>, url: string): number {
+  return fetchMock.mock.calls.filter((call) => call[0] === url).length;
+}
+
 describe('GET /auth', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -40,12 +38,12 @@ describe('GET /auth', () => {
   });
 
   it('fetches config JWT from config_url and renders the auth UI HTML', async () => {
-    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER =
       process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
-    const jwt = await createSignedConfigJwt(process.env.SHARED_SECRET);
+    const jwt = await signTestConfigJwt();
 
-    const fetchMock = vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 }));
+    const fetchMock = vi.fn(await createTestConfigFetchHandler(jwt));
     vi.stubGlobal('fetch', fetchMock);
 
     const app = await createApp();
@@ -67,7 +65,7 @@ describe('GET /auth', () => {
     // Brief 8: single language config should not show a selector.
     expect(res.body).not.toContain('data-testid="language-selector"');
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(countFetchesTo(fetchMock, configUrl)).toBe(1);
     expect(fetchMock.mock.calls[0]?.[0]).toBe(configUrl);
     expect(fetchMock.mock.calls[0]?.[1]).toEqual(
       expect.objectContaining({
@@ -79,22 +77,20 @@ describe('GET /auth', () => {
   });
 
   it('re-fetches and re-verifies config on every /auth initiation (no caching)', async () => {
-    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER =
       process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
 
-    const okJwt = await createSignedConfigJwt(process.env.SHARED_SECRET);
-    const mismatchedDomainJwt = await new SignJWT(baseClientConfigPayload({
+    const okJwt = await signTestConfigJwt();
+    const mismatchedDomainJwt = await signTestConfigJwt(baseClientConfigPayload({
       domain: 'attacker.example.com',
-    }))
-      .setProtectedHeader({ alg: 'HS256' })
-      .setAudience(process.env.AUTH_SERVICE_IDENTIFIER)
-      .sign(new TextEncoder().encode(process.env.SHARED_SECRET));
+    }));
 
-    const fetchMock = vi
-      .fn()
-      .mockImplementationOnce(async () => new Response(okJwt, { status: 200 }))
-      .mockImplementationOnce(async () => new Response(mismatchedDomainJwt, { status: 200 }));
+    const fetchMock = vi.fn(
+      await createTestConfigFetchHandler({
+        'https://client.example.com/auth-config': okJwt,
+      }),
+    );
     vi.stubGlobal('fetch', fetchMock);
 
     const app = await createApp();
@@ -106,31 +102,31 @@ describe('GET /auth', () => {
     const okRes = await app.inject({ method: 'GET', url });
     expect(okRes.statusCode).toBe(200);
 
+    fetchMock.mockImplementation(
+      await createTestConfigFetchHandler({
+        [configUrl]: mismatchedDomainJwt,
+      }),
+    );
     const badRes = await app.inject({ method: 'GET', url });
     expect(badRes.statusCode).toBe(400);
     expectJsonError(badRes.json());
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(fetchMock.mock.calls[0]?.[0]).toBe(configUrl);
-    expect(fetchMock.mock.calls[1]?.[0]).toBe(configUrl);
+    expect(countFetchesTo(fetchMock, configUrl)).toBe(2);
 
     await app.close();
   });
 
   it('renders the language selector when multiple languages are provided', async () => {
-    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER =
       process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
 
-    const jwt = await new SignJWT(baseClientConfigPayload({
+    const jwt = await signTestConfigJwt(baseClientConfigPayload({
       language_config: ['en', 'es'],
       language: 'es',
-    }))
-      .setProtectedHeader({ alg: 'HS256' })
-      .setAudience(process.env.AUTH_SERVICE_IDENTIFIER)
-      .sign(new TextEncoder().encode(process.env.SHARED_SECRET));
+    }));
 
-    const fetchMock = vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 }));
+    const fetchMock = vi.fn(await createTestConfigFetchHandler(jwt));
     vi.stubGlobal('fetch', fetchMock);
 
     const app = await createApp();
@@ -151,20 +147,17 @@ describe('GET /auth', () => {
   });
 
   it('renders UI HTML when optional config fields are present', async () => {
-    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER =
       process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
-    const jwt = await new SignJWT(baseClientConfigPayload({
+    const jwt = await signTestConfigJwt(baseClientConfigPayload({
       user_scope: 'per_domain',
       '2fa_enabled': true,
       debug_enabled: true,
       allowed_social_providers: ['google', 'github'],
-    }))
-      .setProtectedHeader({ alg: 'HS256' })
-      .setAudience(process.env.AUTH_SERVICE_IDENTIFIER)
-      .sign(new TextEncoder().encode(process.env.SHARED_SECRET));
+    }));
 
-    const fetchMock = vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 }));
+    const fetchMock = vi.fn(await createTestConfigFetchHandler(jwt));
     vi.stubGlobal('fetch', fetchMock);
 
     const app = await createApp();
@@ -187,18 +180,15 @@ describe('GET /auth', () => {
   });
 
   it('does not render social buttons when enabled_auth_methods includes a provider but allowed_social_providers omits it', async () => {
-    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER =
       process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
 
-    const jwt = await new SignJWT(baseClientConfigPayload({
+    const jwt = await signTestConfigJwt(baseClientConfigPayload({
       enabled_auth_methods: ['email_password', 'google'],
-    }))
-      .setProtectedHeader({ alg: 'HS256' })
-      .setAudience(process.env.AUTH_SERVICE_IDENTIFIER)
-      .sign(new TextEncoder().encode(process.env.SHARED_SECRET));
+    }));
 
-    const fetchMock = vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 }));
+    const fetchMock = vi.fn(await createTestConfigFetchHandler(jwt));
     vi.stubGlobal('fetch', fetchMock);
 
     const app = await createApp();
@@ -218,11 +208,11 @@ describe('GET /auth', () => {
   });
 
   it('renders an SVG logo URL from the client theme config', async () => {
-    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER =
       process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
 
-    const jwt = await new SignJWT(baseClientConfigPayload({
+    const jwt = await signTestConfigJwt(baseClientConfigPayload({
       ui_theme: {
         ...baseClientConfigPayload().ui_theme,
         logo: {
@@ -231,12 +221,9 @@ describe('GET /auth', () => {
           text: 'Client',
         },
       },
-    }))
-      .setProtectedHeader({ alg: 'HS256' })
-      .setAudience(process.env.AUTH_SERVICE_IDENTIFIER)
-      .sign(new TextEncoder().encode(process.env.SHARED_SECRET));
+    }));
 
-    const fetchMock = vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 }));
+    const fetchMock = vi.fn(await createTestConfigFetchHandler(jwt));
     vi.stubGlobal('fetch', fetchMock);
 
     const app = await createApp();
@@ -255,19 +242,16 @@ describe('GET /auth', () => {
   });
 
   it('strips unknown config claims before bootstrapping the Auth UI', async () => {
-    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER =
       process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
 
-    const jwt = await new SignJWT({
+    const jwt = await signTestConfigJwt({
       ...baseClientConfigPayload(),
       extra_claim: 'should_not_render',
-    })
-      .setProtectedHeader({ alg: 'HS256' })
-      .setAudience(process.env.AUTH_SERVICE_IDENTIFIER)
-      .sign(new TextEncoder().encode(process.env.SHARED_SECRET));
+    });
 
-    const fetchMock = vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 }));
+    const fetchMock = vi.fn(await createTestConfigFetchHandler(jwt));
     vi.stubGlobal('fetch', fetchMock);
 
     const app = await createApp();
@@ -306,7 +290,7 @@ describe('GET /auth', () => {
   });
 
   it('returns generic 400 when config_url contains the shared secret', async () => {
-    process.env.SHARED_SECRET = 'test-shared-secret';
+    process.env.SHARED_SECRET = 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER =
       process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
 
@@ -331,12 +315,12 @@ describe('GET /auth', () => {
   });
 
   it('returns generic 400 when config JWT signature is invalid', async () => {
-    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER =
       process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
-    const jwt = await createSignedConfigJwt('different-secret');
+    const jwt = await signTestConfigJwt(baseClientConfigPayload(), { kid: 'unknown-test-kid' });
 
-    const fetchMock = vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 }));
+    const fetchMock = vi.fn(await createTestConfigFetchHandler(jwt));
     vi.stubGlobal('fetch', fetchMock);
 
     const app = await createApp();
@@ -351,25 +335,22 @@ describe('GET /auth', () => {
     expect(res.statusCode).toBe(400);
     expectJsonError(res.json());
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(countFetchesTo(fetchMock, configUrl)).toBe(1);
 
     await app.close();
   });
 
   it('returns generic 400 when config payload contains the shared secret', async () => {
-    process.env.SHARED_SECRET = 'test-shared-secret';
+    process.env.SHARED_SECRET = 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER =
       process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
 
-    const jwt = await new SignJWT({
+    const jwt = await signTestConfigJwt({
       ...baseClientConfigPayload(),
       leak: process.env.SHARED_SECRET,
-    })
-      .setProtectedHeader({ alg: 'HS256' })
-      .setAudience(process.env.AUTH_SERVICE_IDENTIFIER)
-      .sign(new TextEncoder().encode(process.env.SHARED_SECRET));
+    });
 
-    const fetchMock = vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 }));
+    const fetchMock = vi.fn(await createTestConfigFetchHandler(jwt));
     vi.stubGlobal('fetch', fetchMock);
 
     const app = await createApp();
@@ -384,13 +365,13 @@ describe('GET /auth', () => {
     expect(res.statusCode).toBe(400);
     expectJsonError(res.json());
     expect(res.body).not.toContain(process.env.SHARED_SECRET);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(countFetchesTo(fetchMock, configUrl)).toBe(1);
 
     await app.close();
   });
 
   it('returns generic 400 when config JWT is unsigned (alg=none)', async () => {
-    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER =
       process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
 
@@ -422,11 +403,11 @@ describe('GET /auth', () => {
   });
 
   it('returns generic 400 when config JWT is tampered', async () => {
-    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER =
       process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
 
-    const jwt = await createSignedConfigJwt(process.env.SHARED_SECRET);
+    const jwt = await signTestConfigJwt();
     const parts = jwt.split('.');
     expect(parts).toHaveLength(3);
 
@@ -437,9 +418,7 @@ describe('GET /auth', () => {
     parts[1] = base64UrlEncodeJson(decodedPayload);
     const tamperedJwt = parts.join('.');
 
-    const fetchMock = vi
-      .fn()
-      .mockImplementation(async () => new Response(tamperedJwt, { status: 200 }));
+    const fetchMock = vi.fn(await createTestConfigFetchHandler(tamperedJwt));
     vi.stubGlobal('fetch', fetchMock);
 
     const app = await createApp();
@@ -458,18 +437,15 @@ describe('GET /auth', () => {
   });
 
   it('returns generic 400 when domain claim does not match config_url host', async () => {
-    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER =
       process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
 
-    const jwt = await new SignJWT(baseClientConfigPayload({
+    const jwt = await signTestConfigJwt(baseClientConfigPayload({
       domain: 'attacker.example.com',
-    }))
-      .setProtectedHeader({ alg: 'HS256' })
-      .setAudience(process.env.AUTH_SERVICE_IDENTIFIER)
-      .sign(new TextEncoder().encode(process.env.SHARED_SECRET));
+    }));
 
-    const fetchMock = vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 }));
+    const fetchMock = vi.fn(await createTestConfigFetchHandler(jwt));
     vi.stubGlobal('fetch', fetchMock);
 
     const app = await createApp();
@@ -488,7 +464,7 @@ describe('GET /auth', () => {
   });
 
   it('returns generic 400 when config_url is missing', async () => {
-    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER =
       process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
 

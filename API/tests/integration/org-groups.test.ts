@@ -1,11 +1,16 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SignJWT } from 'jose';
 
+import { ACCESS_TOKEN_AUDIENCE } from '../../src/config/jwt.js';
 import { createApp } from '../../src/app.js';
 import { createClientId } from '../../src/utils/hash.js';
 import { expectJsonError } from '../helpers/error-response.js';
 import { createTestDb } from '../helpers/test-db.js';
-import { baseClientConfigPayload } from '../helpers/test-config.js';
+import {
+  baseClientConfigPayload,
+  createTestConfigFetchHandler,
+  signTestConfigJwt,
+} from '../helpers/test-config.js';
 
 const hasDatabase = Boolean(process.env.DATABASE_URL);
 
@@ -17,17 +22,14 @@ async function createSignedConfigJwt(
   sharedSecret: string,
   orgFeatures: Record<string, unknown>,
 ): Promise<string> {
-  const aud = process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
+  void sharedSecret;
   const payload = baseClientConfigPayload({
     org_features: {
       enabled: true,
       ...orgFeatures,
     },
   });
-  return await new SignJWT(payload)
-    .setProtectedHeader({ alg: 'HS256' })
-    .setAudience(aud)
-    .sign(secretKey(sharedSecret));
+  return await signTestConfigJwt(payload);
 }
 
 function orgNameDateSuffix(suffix: string): string {
@@ -55,6 +57,7 @@ async function signOrgAccessToken(params: {
   })
     .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
     .setIssuer(params.issuer)
+    .setAudience(ACCESS_TOKEN_AUDIENCE)
     .setSubject(params.subject)
     .setIssuedAt()
     .setExpirationTime('30m')
@@ -87,7 +90,7 @@ describe.skipIf(!hasDatabase)('GET /org/organisations/:orgId/groups', () => {
   });
 
   beforeEach(async () => {
-    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER = process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
 
     if (!handle) return;
@@ -151,7 +154,7 @@ describe.skipIf(!hasDatabase)('GET /org/organisations/:orgId/groups', () => {
     const configJwt = await createSignedConfigJwt(process.env.SHARED_SECRET!, {
       groups_enabled: true,
     });
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(configJwt, { status: 200 })));
+    vi.stubGlobal('fetch', vi.fn(await createTestConfigFetchHandler(configJwt)));
 
     const accessToken = await signOrgAccessToken({
       subject: user.id,
@@ -227,7 +230,7 @@ describe.skipIf(!hasDatabase)('GET /org/organisations/:orgId/groups', () => {
     const configJwt = await createSignedConfigJwt(process.env.SHARED_SECRET!, {
       groups_enabled: false,
     });
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(configJwt, { status: 200 })));
+    vi.stubGlobal('fetch', vi.fn(await createTestConfigFetchHandler(configJwt)));
 
     const accessToken = await signOrgAccessToken({
       subject: user.id,
@@ -273,7 +276,7 @@ describe.skipIf(!hasDatabase)('GET /org/organisations/:orgId/groups', () => {
     const configJwt = await createSignedConfigJwt(process.env.SHARED_SECRET!, {
       groups_enabled: true,
     });
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(configJwt, { status: 200 })));
+    vi.stubGlobal('fetch', vi.fn(await createTestConfigFetchHandler(configJwt)));
 
     const org = await handle!.prisma.organisation.create({
       data: {

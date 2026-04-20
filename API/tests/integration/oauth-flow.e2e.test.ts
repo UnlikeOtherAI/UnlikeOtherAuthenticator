@@ -1,20 +1,18 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { jwtVerify, SignJWT } from 'jose';
+import { jwtVerify } from 'jose';
 
+import { ACCESS_TOKEN_AUDIENCE } from '../../src/config/jwt.js';
 import { createApp } from '../../src/app.js';
 import { hashPassword } from '../../src/services/password.service.js';
 import { createClientId } from '../../src/utils/hash.js';
 import { createTestDb } from '../helpers/test-db.js';
-import { baseClientConfigPayload } from '../helpers/test-config.js';
+import { createTestConfigFetchHandler, signTestConfigJwt } from '../helpers/test-config.js';
 
 const hasDatabase = Boolean(process.env.DATABASE_URL);
 
 async function createSignedConfigJwt(sharedSecret: string): Promise<string> {
-  const aud = process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
-  return await new SignJWT(baseClientConfigPayload())
-    .setProtectedHeader({ alg: 'HS256' })
-    .setAudience(aud)
-    .sign(new TextEncoder().encode(sharedSecret));
+  void sharedSecret;
+  return await signTestConfigJwt();
 }
 
 describe.skipIf(!hasDatabase)('E2E OAuth flow (config_url -> /auth -> login -> token exchange)', () => {
@@ -38,7 +36,7 @@ describe.skipIf(!hasDatabase)('E2E OAuth flow (config_url -> /auth -> login -> t
   });
 
   beforeEach(async () => {
-    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER =
       process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
 
@@ -69,7 +67,7 @@ describe.skipIf(!hasDatabase)('E2E OAuth flow (config_url -> /auth -> login -> t
     const configUrl = 'https://client.example.com/auth-config';
     const jwt = await createSignedConfigJwt(process.env.SHARED_SECRET!);
 
-    const fetchMock = vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 }));
+    const fetchMock = vi.fn(await createTestConfigFetchHandler(jwt));
     vi.stubGlobal('fetch', fetchMock);
 
     const app = await createApp();
@@ -121,7 +119,7 @@ describe.skipIf(!hasDatabase)('E2E OAuth flow (config_url -> /auth -> login -> t
     const { payload } = await jwtVerify(
       tokenBody.access_token,
       new TextEncoder().encode(process.env.SHARED_SECRET!),
-      { issuer: process.env.AUTH_SERVICE_IDENTIFIER },
+      { issuer: process.env.AUTH_SERVICE_IDENTIFIER, audience: ACCESS_TOKEN_AUDIENCE },
     );
     expect(payload.sub).toBe(created.id);
     expect(payload.email).toBe('user@example.com');

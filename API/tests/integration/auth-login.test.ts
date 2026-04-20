@@ -1,5 +1,4 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { SignJWT } from 'jose';
 import { createHmac } from 'node:crypto';
 
 import { createApp } from '../../src/app.js';
@@ -7,7 +6,11 @@ import { hashPassword } from '../../src/services/password.service.js';
 import { expectJsonError } from '../helpers/error-response.js';
 import { createTestDb } from '../helpers/test-db.js';
 import { encryptTwoFaSecret } from '../../src/utils/twofa-secret.js';
-import { baseClientConfigPayload } from '../helpers/test-config.js';
+import {
+  baseClientConfigPayload,
+  createTestConfigFetchHandler,
+  signTestConfigJwt,
+} from '../helpers/test-config.js';
 
 const hasDatabase = Boolean(process.env.DATABASE_URL);
 
@@ -15,11 +18,8 @@ async function createSignedConfigJwt(
   sharedSecret: string,
   overrides?: Record<string, unknown>,
 ): Promise<string> {
-  const aud = process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
-  return await new SignJWT(baseClientConfigPayload(overrides))
-    .setProtectedHeader({ alg: 'HS256' })
-    .setAudience(aud)
-    .sign(new TextEncoder().encode(sharedSecret));
+  void sharedSecret;
+  return await signTestConfigJwt(baseClientConfigPayload(overrides));
 }
 
 function base32Decode(value: string): Uint8Array {
@@ -97,7 +97,7 @@ describe.skipIf(!hasDatabase)('POST /auth/login', () => {
   });
 
   it('returns 200 on correct credentials', async () => {
-    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER =
       process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
 
@@ -114,7 +114,7 @@ describe.skipIf(!hasDatabase)('POST /auth/login', () => {
     const jwt = await createSignedConfigJwt(process.env.SHARED_SECRET);
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 })),
+      vi.fn(await createTestConfigFetchHandler(jwt)),
     );
 
     const app = await createApp();
@@ -162,7 +162,7 @@ describe.skipIf(!hasDatabase)('POST /auth/login', () => {
   it('requires 2FA when enabled in config and on the user record', async () => {
     let app: Awaited<ReturnType<typeof createApp>> | null = null;
     try {
-      process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+      process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
       process.env.AUTH_SERVICE_IDENTIFIER =
         process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
 
@@ -187,7 +187,7 @@ describe.skipIf(!hasDatabase)('POST /auth/login', () => {
       const jwt = await createSignedConfigJwt(process.env.SHARED_SECRET, { '2fa_enabled': true });
       vi.stubGlobal(
         'fetch',
-        vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 })),
+        vi.fn(await createTestConfigFetchHandler(jwt)),
       );
 
       app = await createApp();
@@ -256,7 +256,7 @@ describe.skipIf(!hasDatabase)('POST /auth/login', () => {
   }, 20_000);
 
   it('returns generic 401 for wrong password and unknown email (no enumeration)', async () => {
-    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER =
       process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
 
@@ -272,7 +272,7 @@ describe.skipIf(!hasDatabase)('POST /auth/login', () => {
     const jwt = await createSignedConfigJwt(process.env.SHARED_SECRET);
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 })),
+      vi.fn(await createTestConfigFetchHandler(jwt)),
     );
 
     const app = await createApp();

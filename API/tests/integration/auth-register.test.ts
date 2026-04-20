@@ -1,16 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { SignJWT } from 'jose';
 
 import { createApp } from '../../src/app.js';
-import { baseClientConfigPayload } from '../helpers/test-config.js';
-
-async function createSignedConfigJwt(sharedSecret: string): Promise<string> {
-  const aud = process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
-  return await new SignJWT(baseClientConfigPayload())
-    .setProtectedHeader({ alg: 'HS256' })
-    .setAudience(aud)
-    .sign(new TextEncoder().encode(sharedSecret));
-}
+import { createTestConfigFetchHandler, signTestConfigJwt } from '../helpers/test-config.js';
 
 describe('POST /auth/register', () => {
   afterEach(() => {
@@ -19,14 +10,12 @@ describe('POST /auth/register', () => {
   });
 
   it('always responds with the same success message (no enumeration)', async () => {
-    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER =
       process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
-    const jwt = await createSignedConfigJwt(process.env.SHARED_SECRET);
+    const jwt = await signTestConfigJwt();
 
-    const fetchMock = vi
-      .fn()
-      .mockImplementation(async () => new Response(jwt, { status: 200 }));
+    const fetchMock = vi.fn(await createTestConfigFetchHandler(jwt));
     vi.stubGlobal('fetch', fetchMock);
 
     const app = await createApp();

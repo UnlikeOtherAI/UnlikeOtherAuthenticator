@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { SignJWT } from 'jose';
 
 import { createApp } from '../../src/app.js';
 import { expectJsonError } from '../helpers/error-response.js';
-import { baseClientConfigPayload } from '../helpers/test-config.js';
+import {
+  baseClientConfigPayload,
+  createTestConfigFetchHandler,
+  signTestConfigJwt,
+} from '../helpers/test-config.js';
 
 type RouteCase = {
   name: string;
@@ -21,10 +24,8 @@ async function createSignedConfigJwt(params: {
   sharedSecret: string;
   audience: string;
 }): Promise<string> {
-  return await new SignJWT(baseClientConfigPayload())
-    .setProtectedHeader({ alg: 'HS256' })
-    .setAudience(params.audience)
-    .sign(new TextEncoder().encode(params.sharedSecret));
+  void params.sharedSecret;
+  return await signTestConfigJwt(baseClientConfigPayload(), { audience: params.audience });
 }
 
 function createUnsignedConfigJwt(params: { audience: string }): string {
@@ -57,7 +58,7 @@ describe('Config JWT integrity is enforced across all config-verifier routes', (
   const originalSharedSecret = process.env.SHARED_SECRET;
   const originalAud = process.env.AUTH_SERVICE_IDENTIFIER;
 
-  const sharedSecret = 'test-shared-secret';
+  const sharedSecret = 'test-shared-secret-with-enough-length';
   const audience = 'uoa-auth-service';
   const configUrl = 'https://client.example.com/auth-config';
   const q = `config_url=${encodeURIComponent(configUrl)}`;
@@ -163,18 +164,28 @@ describe('Config JWT integrity is enforced across all config-verifier routes', (
     ],
   ])('returns generic 400 for %s config JWTs on all routes', async (_name, makeJwt) => {
     const jwt = await makeJwt();
-    const fetchMock = vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 }));
+    const fetchMock = vi.fn(await createTestConfigFetchHandler(jwt));
     vi.stubGlobal('fetch', fetchMock);
 
     const app = await createApp();
     await app.ready();
 
     for (const route of routes) {
+      const routeIndex = routes.indexOf(route);
+      const remoteOctet = routeIndex + (_name === 'tampered' ? 101 : 1);
+      const payload =
+        route.payload && typeof route.payload === 'object' && 'email' in route.payload
+          ? {
+              ...route.payload,
+              email: `integrity-${String(_name).replace(/[^a-z0-9]+/gi, '-')}-${routeIndex}@example.com`,
+            }
+          : route.payload;
       const res = await app.inject({
         method: route.method,
         url: route.url,
-        payload: route.payload,
+        payload,
         headers: route.headers,
+        remoteAddress: `198.51.100.${remoteOctet}`,
       });
 
       expect(
@@ -184,7 +195,8 @@ describe('Config JWT integrity is enforced across all config-verifier routes', (
       expectJsonError(res.json());
     }
 
-    expect(fetchMock).toHaveBeenCalledTimes(routes.length);
+    const configFetchCount = fetchMock.mock.calls.filter((call) => call[0] === configUrl).length;
+    expect(configFetchCount).toBe(routes.length);
     await app.close();
   });
 });

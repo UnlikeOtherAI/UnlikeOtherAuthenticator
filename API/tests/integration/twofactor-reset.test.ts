@@ -8,24 +8,19 @@ import {
   it,
   vi,
 } from 'vitest';
-import { SignJWT } from 'jose';
 
 import { createApp } from '../../src/app.js';
 import { createTestDb } from '../helpers/test-db.js';
 import { expectJsonError } from '../helpers/error-response.js';
 import { hashEmailToken } from '../../src/utils/verification-token.js';
 import { encryptTwoFaSecret } from '../../src/utils/twofa-secret.js';
-import { baseClientConfigPayload } from '../helpers/test-config.js';
+import {
+  baseClientConfigPayload,
+  createTestConfigFetchHandler,
+  signTestConfigJwt,
+} from '../helpers/test-config.js';
 
 const hasDatabase = Boolean(process.env.DATABASE_URL);
-
-async function createSignedConfigJwt(sharedSecret: string): Promise<string> {
-  const aud = process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
-  return await new SignJWT(baseClientConfigPayload({ user_scope: 'global', '2fa_enabled': true }))
-    .setProtectedHeader({ alg: 'HS256' })
-    .setAudience(aud)
-    .sign(new TextEncoder().encode(sharedSecret));
-}
 
 describe('POST /2fa/reset/request', () => {
   afterEach(() => {
@@ -34,14 +29,16 @@ describe('POST /2fa/reset/request', () => {
   });
 
   it('always responds with the same success message (no enumeration)', async () => {
-    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER =
       process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
-    const jwt = await createSignedConfigJwt(process.env.SHARED_SECRET);
+    const jwt = await signTestConfigJwt(
+      baseClientConfigPayload({ user_scope: 'global', '2fa_enabled': true }),
+    );
 
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 })),
+      vi.fn(await createTestConfigFetchHandler(jwt)),
     );
 
     const app = await createApp();
@@ -119,14 +116,16 @@ describe.skipIf(!hasDatabase)('2FA reset flow', () => {
   });
 
   it('resets 2FA on GET email link (one-time token)', async () => {
-    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER =
       process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
 
-    const jwt = await createSignedConfigJwt(process.env.SHARED_SECRET);
+    const jwt = await signTestConfigJwt(
+      baseClientConfigPayload({ user_scope: 'global', '2fa_enabled': true }),
+    );
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 })),
+      vi.fn(await createTestConfigFetchHandler(jwt)),
     );
 
     const configUrl = 'https://client.example.com/auth-config';

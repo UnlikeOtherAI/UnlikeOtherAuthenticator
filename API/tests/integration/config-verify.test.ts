@@ -1,14 +1,17 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { SignJWT } from 'jose';
 import type { FastifyInstance } from 'fastify';
 
 import { createApp } from '../../src/app.js';
-import { baseClientConfigPayload } from '../helpers/test-config.js';
+import {
+  baseClientConfigPayload,
+  createTestConfigFetchHandler,
+  signTestConfigJwt,
+} from '../helpers/test-config.js';
 
 let app: FastifyInstance;
 
 beforeAll(async () => {
-  process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+  process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
   process.env.AUTH_SERVICE_IDENTIFIER =
     process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
 
@@ -66,18 +69,15 @@ describe('POST /config/verify', () => {
     expect(body.issues[0].details.join(' ')).toContain('ui_theme.colors');
   });
 
-  it('reports a shared-secret failure separately from schema validation', async () => {
-    const jwt = await new SignJWT(baseClientConfigPayload())
-      .setProtectedHeader({ alg: 'HS256' })
-      .setAudience(process.env.AUTH_SERVICE_IDENTIFIER!)
-      .sign(new TextEncoder().encode(process.env.SHARED_SECRET!));
+  it('reports a JWKS signature failure separately from schema validation', async () => {
+    const jwt = await signTestConfigJwt(baseClientConfigPayload(), { kid: 'unknown-test-kid' });
+    vi.stubGlobal('fetch', vi.fn(await createTestConfigFetchHandler(jwt)));
 
     const res = await app.inject({
       method: 'POST',
       url: '/config/verify',
       payload: {
         config_jwt: jwt,
-        shared_secret: 'wrong-shared-secret',
       },
     });
 
@@ -91,29 +91,25 @@ describe('POST /config/verify', () => {
     expect(body.issues).toContainEqual(
       expect.objectContaining({
         stage: 'signature',
-        code: 'CONFIG_SHARED_SECRET_INVALID',
+        code: 'CONFIG_JWKS_SIGNATURE_INVALID',
       }),
     );
   });
 
   it('validates a fetched config_url and reports domain mismatches explicitly', async () => {
-    const jwt = await new SignJWT(
+    const jwt = await signTestConfigJwt(
       baseClientConfigPayload({
         domain: 'different.example.com',
       }),
-    )
-      .setProtectedHeader({ alg: 'HS256' })
-      .setAudience(process.env.AUTH_SERVICE_IDENTIFIER!)
-      .sign(new TextEncoder().encode(process.env.SHARED_SECRET!));
+    );
 
-    vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 })));
+    vi.stubGlobal('fetch', vi.fn(await createTestConfigFetchHandler(jwt)));
 
     const res = await app.inject({
       method: 'POST',
       url: '/config/verify',
       payload: {
         config_url: 'https://client.example.com/auth-config',
-        shared_secret: process.env.SHARED_SECRET,
       },
     });
 

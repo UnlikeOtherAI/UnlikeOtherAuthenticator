@@ -1,7 +1,8 @@
 import { SignJWT } from 'jose';
 
+import { ACCESS_TOKEN_AUDIENCE } from '../../src/config/jwt.js';
 import { createClientId } from '../../src/utils/hash.js';
-import { baseClientConfigPayload } from './test-config.js';
+import { baseClientConfigPayload, signTestConfigJwt } from './test-config.js';
 
 export const hasDatabase = Boolean(process.env.DATABASE_URL);
 
@@ -123,7 +124,7 @@ export async function createSignedConfigJwt(
   sharedSecret: string,
   orgFeatures: Record<string, unknown>,
 ): Promise<string> {
-  const aud = process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
+  void sharedSecret;
   const payload = baseClientConfigPayload({
     org_features: {
       enabled: true,
@@ -131,10 +132,7 @@ export async function createSignedConfigJwt(
     },
   });
 
-  return await new SignJWT(payload)
-    .setProtectedHeader({ alg: 'HS256' })
-    .setAudience(aud)
-    .sign(secretKey(sharedSecret));
+  return await signTestConfigJwt(payload);
 }
 
 export async function signAccessToken(params: {
@@ -171,6 +169,7 @@ export async function signAccessToken(params: {
   return await new SignJWT(claims)
     .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
     .setIssuer(params.issuer)
+    .setAudience(ACCESS_TOKEN_AUDIENCE)
     .setSubject(params.subject)
     .setIssuedAt()
     .setExpirationTime('30m')

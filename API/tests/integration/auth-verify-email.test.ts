@@ -8,13 +8,16 @@ import {
   it,
   vi,
 } from 'vitest';
-import { SignJWT } from 'jose';
 
 import { createApp } from '../../src/app.js';
 import { createTestDb } from '../helpers/test-db.js';
 import { expectJsonError } from '../helpers/error-response.js';
 import { hashEmailToken } from '../../src/utils/verification-token.js';
-import { baseClientConfigPayload } from '../helpers/test-config.js';
+import {
+  baseClientConfigPayload,
+  createTestConfigFetchHandler,
+  signTestConfigJwt,
+} from '../helpers/test-config.js';
 
 const hasDatabase = Boolean(process.env.DATABASE_URL);
 
@@ -22,11 +25,8 @@ async function createSignedConfigJwt(
   sharedSecret: string,
   overrides?: Record<string, unknown>,
 ): Promise<string> {
-  const aud = process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
-  return await new SignJWT(baseClientConfigPayload({ user_scope: 'global', ...overrides }))
-    .setProtectedHeader({ alg: 'HS256' })
-    .setAudience(aud)
-    .sign(new TextEncoder().encode(sharedSecret));
+  void sharedSecret;
+  return await signTestConfigJwt(baseClientConfigPayload({ user_scope: 'global', ...overrides }));
 }
 
 describe.skipIf(!hasDatabase)('Email verification flow', () => {
@@ -69,14 +69,14 @@ describe.skipIf(!hasDatabase)('Email verification flow', () => {
   });
 
   it('validates the link on GET and creates a user on POST (one-time token)', async () => {
-    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER =
       process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
 
     const jwt = await createSignedConfigJwt(process.env.SHARED_SECRET);
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 })),
+      vi.fn(await createTestConfigFetchHandler(jwt)),
     );
 
     const configUrl = 'https://client.example.com/auth-config';
@@ -172,14 +172,14 @@ describe.skipIf(!hasDatabase)('Email verification flow', () => {
   });
 
   it('returns generic 400 for invalid tokens', async () => {
-    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER =
       process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
 
     const jwt = await createSignedConfigJwt(process.env.SHARED_SECRET);
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 })),
+      vi.fn(await createTestConfigFetchHandler(jwt)),
     );
 
     const app = await createApp();
@@ -201,14 +201,14 @@ describe.skipIf(!hasDatabase)('Email verification flow', () => {
   });
 
   it('consumes VERIFY_EMAIL tokens without requiring password and creates a null-password user', async () => {
-    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER =
       process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
 
     const jwt = await createSignedConfigJwt(process.env.SHARED_SECRET);
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 })),
+      vi.fn(await createTestConfigFetchHandler(jwt)),
     );
 
     const configUrl = 'https://client.example.com/auth-config';
@@ -277,7 +277,7 @@ describe.skipIf(!hasDatabase)('Email verification flow', () => {
   });
 
   it('auto-places a newly verified user into mapped org/team when registration_domain_mapping matches', async () => {
-    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER =
       process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
 
@@ -345,7 +345,7 @@ describe.skipIf(!hasDatabase)('Email verification flow', () => {
     });
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 })),
+      vi.fn(await createTestConfigFetchHandler(jwt)),
     );
 
     const configUrl = 'https://client.example.com/auth-config';
@@ -407,14 +407,14 @@ describe.skipIf(!hasDatabase)('Email verification flow', () => {
   });
 
   it('returns generic 400 when VERIFY_EMAIL_SET_PASSWORD token is consumed without password', async () => {
-    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER =
       process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
 
     const jwt = await createSignedConfigJwt(process.env.SHARED_SECRET);
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 })),
+      vi.fn(await createTestConfigFetchHandler(jwt)),
     );
 
     const configUrl = 'https://client.example.com/auth-config';

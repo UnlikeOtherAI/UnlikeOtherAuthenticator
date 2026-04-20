@@ -1,4 +1,3 @@
-import { SignJWT } from 'jose';
 import {
   afterAll,
   afterEach,
@@ -12,21 +11,14 @@ import {
 
 import { createApp } from '../../src/app.js';
 import { expectJsonError } from '../helpers/error-response.js';
-import { baseClientConfigPayload } from '../helpers/test-config.js';
+import {
+  baseClientConfigPayload,
+  createTestConfigFetchHandler,
+  signTestConfigJwt,
+} from '../helpers/test-config.js';
 import { createTestDb } from '../helpers/test-db.js';
 
 const hasDatabase = Boolean(process.env.DATABASE_URL);
-
-async function createSignedConfigJwt(
-  sharedSecret: string,
-  overrides?: Record<string, unknown>,
-): Promise<string> {
-  const aud = process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
-  return await new SignJWT(baseClientConfigPayload(overrides))
-    .setProtectedHeader({ alg: 'HS256' })
-    .setAudience(aud)
-    .sign(new TextEncoder().encode(sharedSecret));
-}
 
 describe('GET /auth/domain-mapping (config + rate limiting)', () => {
   afterEach(() => {
@@ -35,7 +27,7 @@ describe('GET /auth/domain-mapping (config + rate limiting)', () => {
   });
 
   it('returns generic 400 when config_url is missing', async () => {
-    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER =
       process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
 
@@ -54,7 +46,7 @@ describe('GET /auth/domain-mapping (config + rate limiting)', () => {
   });
 
   it('returns generic 400 when config JWT is invalid', async () => {
-    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER =
       process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
 
@@ -79,14 +71,14 @@ describe('GET /auth/domain-mapping (config + rate limiting)', () => {
   });
 
   it('rate limits requests per IP', async () => {
-    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER =
       process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
 
-    const jwt = await createSignedConfigJwt(process.env.SHARED_SECRET);
+    const jwt = await signTestConfigJwt();
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockImplementation(async () => new Response(jwt, { status: 200 })),
+      vi.fn(await createTestConfigFetchHandler(jwt)),
     );
 
     const app = await createApp();
@@ -139,7 +131,7 @@ describe.skipIf(!hasDatabase)('GET /auth/domain-mapping (mapping resolution)', (
   });
 
   beforeEach(async () => {
-    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER =
       process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
 
@@ -191,7 +183,7 @@ describe.skipIf(!hasDatabase)('GET /auth/domain-mapping (mapping resolution)', (
       select: { id: true, name: true },
     });
 
-    const jwt = await createSignedConfigJwt(process.env.SHARED_SECRET!, {
+    const jwt = await signTestConfigJwt(baseClientConfigPayload({
       registration_domain_mapping: [
         {
           email_domain: 'company.com',
@@ -199,10 +191,10 @@ describe.skipIf(!hasDatabase)('GET /auth/domain-mapping (mapping resolution)', (
           team_id: team.id,
         },
       ],
-    });
+    }));
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(new Response(jwt, { status: 200 })),
+      vi.fn(await createTestConfigFetchHandler(jwt)),
     );
 
     const app = await createApp();
@@ -228,17 +220,17 @@ describe.skipIf(!hasDatabase)('GET /auth/domain-mapping (mapping resolution)', (
   });
 
   it('returns mapped=false when domain is not configured in registration_domain_mapping', async () => {
-    const jwt = await createSignedConfigJwt(process.env.SHARED_SECRET!, {
+    const jwt = await signTestConfigJwt(baseClientConfigPayload({
       registration_domain_mapping: [
         {
           email_domain: 'other.com',
           org_id: 'org_missing',
         },
       ],
-    });
+    }));
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(new Response(jwt, { status: 200 })),
+      vi.fn(await createTestConfigFetchHandler(jwt)),
     );
 
     const app = await createApp();
@@ -258,17 +250,17 @@ describe.skipIf(!hasDatabase)('GET /auth/domain-mapping (mapping resolution)', (
   });
 
   it('returns mapped=false when mapping references a missing organisation', async () => {
-    const jwt = await createSignedConfigJwt(process.env.SHARED_SECRET!, {
+    const jwt = await signTestConfigJwt(baseClientConfigPayload({
       registration_domain_mapping: [
         {
           email_domain: 'company.com',
           org_id: 'org_does_not_exist',
         },
       ],
-    });
+    }));
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(new Response(jwt, { status: 200 })),
+      vi.fn(await createTestConfigFetchHandler(jwt)),
     );
 
     const app = await createApp();
@@ -307,17 +299,17 @@ describe.skipIf(!hasDatabase)('GET /auth/domain-mapping (mapping resolution)', (
       select: { id: true },
     });
 
-    const jwt = await createSignedConfigJwt(process.env.SHARED_SECRET!, {
+    const jwt = await signTestConfigJwt(baseClientConfigPayload({
       registration_domain_mapping: [
         {
           email_domain: 'company.com',
           org_id: org.id,
         },
       ],
-    });
+    }));
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(new Response(jwt, { status: 200 })),
+      vi.fn(await createTestConfigFetchHandler(jwt)),
     );
 
     const app = await createApp();
@@ -356,7 +348,7 @@ describe.skipIf(!hasDatabase)('GET /auth/domain-mapping (mapping resolution)', (
       select: { id: true },
     });
 
-    const jwt = await createSignedConfigJwt(process.env.SHARED_SECRET!, {
+    const jwt = await signTestConfigJwt(baseClientConfigPayload({
       registration_domain_mapping: [
         {
           email_domain: 'company.com',
@@ -364,10 +356,10 @@ describe.skipIf(!hasDatabase)('GET /auth/domain-mapping (mapping resolution)', (
           team_id: 'team_does_not_exist',
         },
       ],
-    });
+    }));
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(new Response(jwt, { status: 200 })),
+      vi.fn(await createTestConfigFetchHandler(jwt)),
     );
 
     const app = await createApp();
