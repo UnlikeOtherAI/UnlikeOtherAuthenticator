@@ -7,10 +7,7 @@ import { AUTHORIZATION_CODE_TTL_MS } from '../config/constants.js';
 import { getEnv, requireEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
 import { ensureDomainRoleForUser } from './domain-role.service.js';
-import {
-  exchangeRefreshToken,
-  issueRefreshToken,
-} from './refresh-token.service.js';
+import { exchangeRefreshToken, issueRefreshToken } from './refresh-token.service.js';
 import { createClientId } from '../utils/hash.js';
 import { AppError } from '../utils/errors.js';
 import type { ClientConfig } from './config.service.js';
@@ -145,6 +142,7 @@ async function consumeAuthorizationCode(params: {
   code: string;
   configUrl: string;
   domain: string;
+  redirectUrl: string;
   now: Date;
   sharedSecret: string;
   prisma: TokenPrisma;
@@ -157,6 +155,7 @@ async function consumeAuthorizationCode(params: {
       userId: true,
       domain: true,
       configUrl: true,
+      redirectUrl: true,
       rememberMe: true,
       expiresAt: true,
       usedAt: true,
@@ -167,6 +166,8 @@ async function consumeAuthorizationCode(params: {
   if (!row) throw new AppError('UNAUTHORIZED', 401, 'INVALID_AUTH_CODE');
   if (row.domain !== params.domain) throw new AppError('UNAUTHORIZED', 401, 'INVALID_AUTH_CODE');
   if (row.configUrl !== params.configUrl)
+    throw new AppError('UNAUTHORIZED', 401, 'INVALID_AUTH_CODE');
+  if (row.redirectUrl !== params.redirectUrl)
     throw new AppError('UNAUTHORIZED', 401, 'INVALID_AUTH_CODE');
   if (row.usedAt) throw new AppError('UNAUTHORIZED', 401, 'INVALID_AUTH_CODE');
   if (row.expiresAt.getTime() <= params.now.getTime())
@@ -344,6 +345,7 @@ export async function exchangeAuthorizationCodeForTokens(
     code: string;
     config: ClientConfig;
     configUrl: string;
+    redirectUrl: string;
   },
   deps?: TokenIssuerDeps,
 ): Promise<IssuedTokenPair> {
@@ -362,6 +364,7 @@ export async function exchangeAuthorizationCodeForTokens(
     code: params.code,
     configUrl: params.configUrl,
     domain: params.config.domain,
+    redirectUrl: params.redirectUrl,
     now,
     sharedSecret,
     prisma,

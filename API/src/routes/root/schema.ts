@@ -47,7 +47,8 @@ const authEndpoints: EndpointSchema[] = [
       redirect_to: 'full redirect URL with code',
       twofa_required: 'true (only if 2FA needed)',
       twofa_token: 'challenge token (only if 2FA needed)',
-      access_request_status: '"pending" (only when request_access created a pending access request)',
+      access_request_status:
+        '"pending" (only when request_access created a pending access request)',
     },
   },
   {
@@ -80,7 +81,8 @@ const authEndpoints: EndpointSchema[] = [
       ok: 'true',
       code: 'authorization code',
       redirect_to: 'redirect URL',
-      access_request_status: '"pending" (only when request_access created a pending access request)',
+      access_request_status:
+        '"pending" (only when request_access created a pending access request)',
     },
   },
   {
@@ -91,6 +93,8 @@ const authEndpoints: EndpointSchema[] = [
     body: {
       'grant_type?': '"authorization_code" (default) or "refresh_token"',
       'code?': 'authorization code (for authorization_code grant)',
+      'redirect_url?':
+        'required for authorization_code grant; must match the URL used when the code was issued',
       'refresh_token?': 'refresh token (for refresh_token grant)',
     },
     response: {
@@ -203,7 +207,8 @@ const authEndpoints: EndpointSchema[] = [
       ok: 'true',
       code: 'authorization code',
       redirect_to: 'redirect URL',
-      access_request_status: '"pending" (only when request_access created a pending access request)',
+      access_request_status:
+        '"pending" (only when request_access created a pending access request)',
     },
   },
   {
@@ -343,7 +348,8 @@ const orgEndpoints: EndpointSchema[] = [
     auth: 'domain hash bearer token',
     body: {
       name: 'string (required)',
-      'slug?': 'string — optional custom team slug; if omitted, a unique slug is derived from the name',
+      'slug?':
+        'string — optional custom team slug; if omitted, a unique slug is derived from the name',
       description: 'string (optional)',
     },
     response: {
@@ -388,12 +394,10 @@ const orgEndpoints: EndpointSchema[] = [
     body: {
       'redirectUrl?': 'string — optional final OAuth redirect URL',
       'invitedBy?': 'object — optional inviter metadata { userId?, name?, email? }',
-      invites:
-        'array (required, 1-200) — [{ email: string, name?: string, teamRole?: string }]',
+      invites: 'array (required, 1-200) — [{ email: string, name?: string, teamRole?: string }]',
     },
     response: {
-      results:
-        'array — per-email status: invited | resent_existing | already_member | conflict',
+      results: 'array — per-email status: invited | resent_existing | already_member | conflict',
     },
   },
   {
@@ -402,8 +406,7 @@ const orgEndpoints: EndpointSchema[] = [
     description: 'List invitation history for a team',
     auth: 'domain hash bearer token',
     response: {
-      data:
-        'array — team invite records with status, inviter metadata, send/open timestamps, and accepted/declined state',
+      data: 'array — team invite records with status, inviter metadata, send/open timestamps, and accepted/declined state',
     },
   },
   {
@@ -423,8 +426,7 @@ const orgEndpoints: EndpointSchema[] = [
       status: 'string (optional) — pending | approved | rejected',
     },
     response: {
-      data:
-        'array — access request records with requester identity, status, requested/reviewed timestamps, and reviewer metadata',
+      data: 'array — access request records with requester identity, status, requested/reviewed timestamps, and reviewer metadata',
     },
   },
   {
