@@ -138,6 +138,7 @@ model RefreshToken {
   @@index([familyId])
   @@index([userId])
   @@index([domain])
+  @@index([clientId])
   @@index([expiresAt])
   @@index([createdAt])
   @@map("refresh_tokens")
