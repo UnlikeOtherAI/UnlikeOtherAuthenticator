@@ -33,7 +33,11 @@ function normalizeBaseUrl(value: string): string {
   return value.trim().replace(/\/+$/, '');
 }
 
-function buildTwoFaResetLink(params: { baseUrl: string; token: string; configUrl: string }): string {
+function buildTwoFaResetLink(params: {
+  baseUrl: string;
+  token: string;
+  configUrl: string;
+}): string {
   const baseUrl = normalizeBaseUrl(params.baseUrl);
   const url = new URL(`${baseUrl}/auth/email/twofa-reset`);
   url.searchParams.set('token', params.token);
@@ -184,6 +188,7 @@ export async function resetTwoFaWithToken(
       data: {
         twoFaEnabled: false,
         twoFaSecret: null,
+        twoFaLastAcceptedCounter: null,
       },
       select: { id: true },
     });
@@ -207,4 +212,3 @@ export async function resetTwoFaWithToken(
     return { userId: user.id };
   });
 }
-

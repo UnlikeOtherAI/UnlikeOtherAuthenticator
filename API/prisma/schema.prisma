@@ -21,36 +21,40 @@ enum VerificationTokenType {
 }
 
 model User {
-  id             String    @id @default(cuid())
+  id                       String   @id @default(cuid())
   // Note: email is not globally unique because `user_scope` can be "per_domain".
   // Uniqueness is enforced via `user_key` instead (global: email, per_domain: domain|email).
-  email          String
-  userKey        String    @unique @map("user_key")
-  domain         String?
-  passwordHash   String?   @map("password_hash")
-  name           String?
-  twoFaEnabled   Boolean   @default(false) @map("2fa_enabled")
-  twoFaSecret    String?   @map("2fa_secret")
-  avatarUrl      String?   @map("avatar_url")
-  createdAt      DateTime  @default(now()) @map("created_at")
+  email                    String   @db.Citext
+  userKey                  String   @unique @map("user_key")
+  domain                   String?
+  passwordHash             String?  @map("password_hash")
+  name                     String?
+  twoFaEnabled             Boolean  @default(false) @map("2fa_enabled")
+  twoFaSecret              String?  @map("2fa_secret")
+  twoFaLastAcceptedCounter Int?     @map("2fa_last_accepted_counter")
+  avatarUrl                String?  @map("avatar_url")
+  createdAt                DateTime @default(now()) @map("created_at")
 
   domainRoles            DomainRole[]
   tokens                 VerificationToken[]
   authorizationCodes     AuthorizationCode[]
   refreshTokens          RefreshToken[]
   loginLogs              LoginLog[]
-  ownedOrgs              Organisation[]   @relation("OrgOwner")
+  ownedOrgs              Organisation[]      @relation("OrgOwner")
   orgMembers             OrgMember[]
   teamMembers            TeamMember[]
   groupMembers           GroupMember[]
-  acceptedTeamInvites    TeamInvite[] @relation("AcceptedTeamInvites")
+  acceptedTeamInvites    TeamInvite[]        @relation("AcceptedTeamInvites")
   accessRequests         AccessRequest[]
-  reviewedAccessRequests AccessRequest[] @relation("ReviewedAccessRequests")
+  reviewedAccessRequests AccessRequest[]     @relation("ReviewedAccessRequests")
 
   @@index([email])
   @@index([domain])
   @@map("users")
 }
+
+// TODO(VM5/M8): Add OrgEmailDomainRule.teamId index and the partial unique
+// index for nullable team_id once the OrgEmailDomainRule model/table lands.
 
 model DomainRole {
   domain    String
@@ -86,23 +90,24 @@ model VerificationToken {
   @@index([userKey])
   @@index([expiresAt])
   @@index([createdAt])
+  @@index([userId])
   @@index([teamInviteId])
   @@map("verification_tokens")
 }
 
 model AuthorizationCode {
-  id          String    @id @default(cuid())
-  codeHash    String    @unique @map("code_hash")
-  userId      String    @map("user_id")
-  domain      String
-  configUrl   String    @map("config_url")
-  redirectUrl String    @map("redirect_url")
+  id                  String    @id @default(cuid())
+  codeHash            String    @unique @map("code_hash")
+  userId              String    @map("user_id")
+  domain              String
+  configUrl           String    @map("config_url")
+  redirectUrl         String    @map("redirect_url")
   codeChallenge       String?   @map("code_challenge")
   codeChallengeMethod String?   @map("code_challenge_method")
-  rememberMe  Boolean   @default(false) @map("remember_me")
-  expiresAt   DateTime  @map("expires_at")
-  usedAt      DateTime? @map("used_at")
-  createdAt   DateTime  @default(now()) @map("created_at")
+  rememberMe          Boolean   @default(false) @map("remember_me")
+  expiresAt           DateTime  @map("expires_at")
+  usedAt              DateTime? @map("used_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -165,12 +170,12 @@ model Organisation {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  owner            User                 @relation("OrgOwner", fields: [ownerId], references: [id], onDelete: Restrict)
-  members          OrgMember[]
-  teams            Team[]
-  groups           Group[]
-  invites          TeamInvite[]
-  accessRequests   AccessRequest[]
+  owner          User            @relation("OrgOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  members        OrgMember[]
+  teams          Team[]
+  groups         Group[]
+  invites        TeamInvite[]
+  accessRequests AccessRequest[]
 
   @@unique([domain, slug])
   @@index([domain])
@@ -205,11 +210,11 @@ model Team {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  org              Organisation      @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  group            Group?            @relation(fields: [groupId], references: [id], onDelete: SetNull)
-  members          TeamMember[]
-  invites          TeamInvite[]
-  accessRequests   AccessRequest[]
+  org            Organisation    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  group          Group?          @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  members        TeamMember[]
+  invites        TeamInvite[]
+  accessRequests AccessRequest[]
 
   @@unique([orgId, name])
   @@unique([orgId, slug])
@@ -239,11 +244,11 @@ model TeamInvite {
   orgId           String    @map("org_id")
   teamId          String    @map("team_id")
   email           String
-  inviteName      String?   @db.VarChar(120) @map("invite_name")
+  inviteName      String?   @map("invite_name") @db.VarChar(120)
   teamRole        String    @default("member") @map("team_role")
   redirectUrl     String?   @map("redirect_url")
   invitedByUserId String?   @map("invited_by_user_id")
-  invitedByName   String?   @db.VarChar(120) @map("invited_by_name")
+  invitedByName   String?   @map("invited_by_name") @db.VarChar(120)
   invitedByEmail  String?   @map("invited_by_email")
   acceptedUserId  String?   @map("accepted_user_id")
   acceptedAt      DateTime? @map("accepted_at")
@@ -255,9 +260,9 @@ model TeamInvite {
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
-  org          Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  team         Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  acceptedUser User?        @relation("AcceptedTeamInvites", fields: [acceptedUserId], references: [id], onDelete: SetNull)
+  org          Organisation        @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  team         Team                @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  acceptedUser User?               @relation("AcceptedTeamInvites", fields: [acceptedUserId], references: [id], onDelete: SetNull)
   tokens       VerificationToken[]
 
   @@index([orgId])
@@ -275,7 +280,7 @@ model Group {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  org     Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  org     Organisation  @relation(fields: [orgId], references: [id], onDelete: Cascade)
   teams   Team[]
   members GroupMember[]
 
@@ -295,12 +300,12 @@ model AccessRequest {
   orgId            String              @map("org_id")
   teamId           String              @map("team_id")
   email            String
-  requestName      String?             @db.VarChar(120) @map("request_name")
+  requestName      String?             @map("request_name") @db.VarChar(120)
   status           AccessRequestStatus @default(PENDING)
   requestedAt      DateTime            @default(now()) @map("requested_at")
   lastRequestedAt  DateTime            @map("last_requested_at")
   reviewedAt       DateTime?           @map("reviewed_at")
-  reviewReason     String?             @db.VarChar(500) @map("review_reason")
+  reviewReason     String?             @map("review_reason") @db.VarChar(500)
   notifiedAt       DateTime?           @map("notified_at")
   createdAt        DateTime            @default(now()) @map("created_at")
   updatedAt        DateTime            @updatedAt @map("updated_at")
@@ -315,6 +320,7 @@ model AccessRequest {
   @@index([orgId, teamId, status])
   @@index([teamId, email, status])
   @@index([userId])
+  @@index([reviewedByUserId])
   @@map("access_requests")
 }
 

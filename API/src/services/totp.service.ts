@@ -152,10 +152,12 @@ function computeTotp(params: {
   const secretBytes = base32Decode(params.secret);
 
   const period = params.period;
-  if (!Number.isFinite(period) || period <= 0) throw new AppError('BAD_REQUEST', 400, 'INVALID_TOTP_PERIOD');
+  if (!Number.isFinite(period) || period <= 0)
+    throw new AppError('BAD_REQUEST', 400, 'INVALID_TOTP_PERIOD');
 
   const nowMs = params.nowMs;
-  if (!Number.isFinite(nowMs) || nowMs < 0) throw new AppError('BAD_REQUEST', 400, 'INVALID_TOTP_TIME');
+  if (!Number.isFinite(nowMs) || nowMs < 0)
+    throw new AppError('BAD_REQUEST', 400, 'INVALID_TOTP_TIME');
 
   const counter = BigInt(Math.floor(nowMs / 1000 / period));
   const counterBuf = Buffer.alloc(8);
@@ -173,19 +175,11 @@ function computeTotp(params: {
   const byte1 = mac[offset + 1];
   const byte2 = mac[offset + 2];
   const byte3 = mac[offset + 3];
-  if (
-    byte0 === undefined ||
-    byte1 === undefined ||
-    byte2 === undefined ||
-    byte3 === undefined
-  ) {
+  if (byte0 === undefined || byte1 === undefined || byte2 === undefined || byte3 === undefined) {
     throw new AppError('BAD_REQUEST', 400, 'INVALID_TOTP_SECRET');
   }
   const binCode =
-    ((byte0 & 0x7f) << 24) |
-    ((byte1 & 0xff) << 16) |
-    ((byte2 & 0xff) << 8) |
-    (byte3 & 0xff);
+    ((byte0 & 0x7f) << 24) | ((byte1 & 0xff) << 16) | ((byte2 & 0xff) << 8) | (byte3 & 0xff);
 
   const mod = params.digits === 8 ? 100_000_000 : 1_000_000;
   const otp = binCode % mod;
@@ -198,7 +192,7 @@ function computeTotp(params: {
  * For UX, we allow a small time skew window (default +/- 1 step).
  * Callers are responsible for rate limiting and generic user-facing errors.
  */
-export function verifyTotpCode(params: {
+export function findMatchingTotpCounter(params: {
   secret: string;
   code: string;
   now?: Date;
@@ -206,7 +200,7 @@ export function verifyTotpCode(params: {
   digits?: 6 | 8;
   period?: number;
   window?: number;
-}): boolean {
+}): number | null {
   const algorithm = params.algorithm ?? 'SHA1';
   const digits = params.digits ?? 6;
   const period = params.period ?? 30;
@@ -221,12 +215,16 @@ export function verifyTotpCode(params: {
   }
 
   const baseNowMs = (params.now ?? new Date()).getTime();
+  const baseCounter = Math.floor(baseNowMs / 1000 / period);
   const expected = Buffer.from(params.code.trim(), 'utf8');
 
   for (let step = -window; step <= window; step += 1) {
+    const counter = baseCounter + step;
+    if (counter < 0) continue;
+
     const candidate = computeTotp({
       secret: params.secret,
-      nowMs: baseNowMs + step * period * 1000,
+      nowMs: counter * period * 1000,
       algorithm,
       digits,
       period,
@@ -234,10 +232,22 @@ export function verifyTotpCode(params: {
 
     const candidateBuf = Buffer.from(candidate, 'utf8');
     if (candidateBuf.length !== expected.length) continue;
-    if (timingSafeEqual(candidateBuf, expected)) return true;
+    if (timingSafeEqual(candidateBuf, expected)) return counter;
   }
 
-  return false;
+  return null;
+}
+
+export function verifyTotpCode(params: {
+  secret: string;
+  code: string;
+  now?: Date;
+  algorithm?: 'SHA1' | 'SHA256' | 'SHA512';
+  digits?: 6 | 8;
+  period?: number;
+  window?: number;
+}): boolean {
+  return findMatchingTotpCounter(params) !== null;
 }
 
 /**
@@ -245,9 +255,7 @@ export function verifyTotpCode(params: {
  *
  * Returns a `data:image/svg+xml;base64,...` URL suitable for `<img src="...">`.
  */
-export async function renderTotpQrCodeDataUrl(params: {
-  otpAuthUri: string;
-}): Promise<string> {
+export async function renderTotpQrCodeDataUrl(params: { otpAuthUri: string }): Promise<string> {
   const value = (params.otpAuthUri ?? '').trim();
   if (!value) throw new AppError('BAD_REQUEST', 400, 'INVALID_OTPAUTH_URI');
   if (!value.startsWith('otpauth://')) {

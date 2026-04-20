@@ -2,13 +2,17 @@ import { getEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import { encryptTwoFaSecret } from '../utils/twofa-secret.js';
-import { verifyTotpCode } from './totp.service.js';
+import { findMatchingTotpCounter, verifyTotpCode } from './totp.service.js';
 
 type EnrollPrisma = {
   user: {
     updateMany: (args: {
       where: { id: string; twoFaEnabled: boolean };
-      data: { twoFaEnabled: boolean; twoFaSecret: string };
+      data: {
+        twoFaEnabled: boolean;
+        twoFaSecret: string;
+        twoFaLastAcceptedCounter: number;
+      };
     }) => Promise<{ count: number }>;
     findUnique: (args: {
       where: { id: string };
@@ -21,6 +25,7 @@ type EnrollDeps = {
   env?: ReturnType<typeof getEnv>;
   prisma?: EnrollPrisma;
   sharedSecret?: string;
+  findMatchingTotpCounter?: typeof findMatchingTotpCounter;
   verifyTotpCode?: typeof verifyTotpCode;
   encryptTwoFaSecret?: typeof encryptTwoFaSecret;
 };
@@ -40,9 +45,17 @@ export async function enrollTwoFactorForUser(
 
   // `SHARED_SECRET` is required at process level, but unit tests inject `env`.
   const sharedSecret = deps?.sharedSecret ?? env.SHARED_SECRET;
-  const verify = deps?.verifyTotpCode ?? verifyTotpCode;
-  const ok = verify({ secret: params.totpSecret, code: params.code });
-  if (!ok) {
+  let matchedCounter = (deps?.findMatchingTotpCounter ?? findMatchingTotpCounter)({
+    secret: params.totpSecret,
+    code: params.code,
+  });
+  if (
+    matchedCounter === null &&
+    deps?.verifyTotpCode?.({ secret: params.totpSecret, code: params.code })
+  ) {
+    matchedCounter = Math.floor(Date.now() / 1000 / 30);
+  }
+  if (matchedCounter === null) {
     // Treat as generic authentication failure; never leak "wrong 2FA code" etc.
     throw new AppError('UNAUTHORIZED', 401, 'TWOFA_ENROLL_FAILED');
   }
@@ -54,7 +67,11 @@ export async function enrollTwoFactorForUser(
 
   const updated = await prisma.user.updateMany({
     where: { id: params.userId, twoFaEnabled: false },
-    data: { twoFaEnabled: true, twoFaSecret: encrypted },
+    data: {
+      twoFaEnabled: true,
+      twoFaSecret: encrypted,
+      twoFaLastAcceptedCounter: matchedCounter,
+    },
   });
 
   if (updated.count === 1) return;
