@@ -12,7 +12,7 @@ import { selectRedirectUrl } from '../../services/token.service.js';
 import { verifyEmailToken } from '../../services/auth-verify-email.service.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
 import { AppError } from '../../utils/errors.js';
-import { parseRequiredPkceChallenge } from '../../utils/pkce.js';
+import { parseRequiredPkceChallenge, type PkceChallenge } from '../../utils/pkce.js';
 import { tokenConsumeRateLimiter } from './rate-limit-keys.js';
 
 const QuerySchema = z
@@ -133,7 +133,7 @@ function buildAuthUrl(
   token: string,
   type: string,
   requestAccess: boolean,
-  pkce: ReturnType<typeof parsePkceChallenge>,
+  pkce: PkceChallenge,
 ): string {
   const params = new URLSearchParams();
   params.set('config_url', configUrl);
