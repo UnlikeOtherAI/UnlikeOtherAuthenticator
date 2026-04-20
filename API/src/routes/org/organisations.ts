@@ -441,17 +441,4 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
     transferOwnershipHandler,
   );
 
-  app.post(
-    '/org/organisations/:orgId/ownership-transfer',
-    {
-      preValidation: [
-        parseDomainContextHook,
-        requireDomainHashAuthForDomainQuery(),
-        configVerifier,
-        requireOrgFeatures,
-        requireOrgRole(),
-      ],
-    },
-    transferOwnershipHandler,
-  );
 }

@@ -336,7 +336,7 @@ const orgEndpoints: EndpointSchema[] = [
   },
   {
     method: 'POST',
-    path: '/org/organisations/:orgId/ownership-transfer',
+    path: '/org/organisations/:orgId/transfer-ownership',
     description: 'Transfer organisation ownership',
     auth: 'domain hash bearer token',
     body: { new_owner_id: 'string (required)' },
