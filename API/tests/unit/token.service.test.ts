@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
 
 import type { PrismaClient } from '@prisma/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -9,7 +9,7 @@ import { exchangeAuthorizationCodeForTokens } from '../../src/services/token.ser
 import { verifyAccessToken } from '../../src/services/access-token.service.js';
 
 function hashAuthorizationCode(code: string, sharedSecret: string): string {
-  return createHash('sha256').update(`${code}.${sharedSecret}`, 'utf8').digest('hex');
+  return createHmac('sha256', sharedSecret).update(code, 'utf8').digest('hex');
 }
 
 function pkceChallenge(codeVerifier: string): string {
@@ -418,5 +418,10 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
 
     expect(result.accessToken).toBeTypeOf('string');
     expect(result.refreshToken).toBeTypeOf('string');
+    expect(prisma.authorizationCode.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { codeHash: hashAuthorizationCode(code, sharedSecret) },
+      }),
+    );
   });
 });
