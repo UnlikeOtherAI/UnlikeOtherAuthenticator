@@ -5,6 +5,7 @@ import { TWOFA_CHALLENGE_TTL_MS } from '../config/constants.js';
 import { AppError } from '../utils/errors.js';
 
 const TWOFA_CHALLENGE_ALLOWED_ALGS = ['HS256'] as const;
+const TWOFA_CHALLENGE_ISSUER = 'uoa:twofa-challenge';
 
 const TwoFaChallengeSchema = z.object({
   sub: z.string().min(1),
@@ -71,6 +72,7 @@ export async function signTwoFaChallenge(params: {
       code_challenge_method: params.codeChallengeMethod,
     })
       .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
+      .setIssuer(TWOFA_CHALLENGE_ISSUER)
       .setAudience(params.audience)
       .setSubject(params.userId)
       .setIssuedAt(Math.floor(now.getTime() / 1000))
@@ -91,6 +93,7 @@ export async function verifyTwoFaChallenge(params: {
   try {
     const res = await jwtVerify(params.token, sharedSecretKey(params.sharedSecret), {
       algorithms: [...TWOFA_CHALLENGE_ALLOWED_ALGS],
+      issuer: TWOFA_CHALLENGE_ISSUER,
       audience: params.audience,
       currentDate: params.now,
     });

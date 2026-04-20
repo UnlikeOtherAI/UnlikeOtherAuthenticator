@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest';
+import { SignJWT } from 'jose';
 
 import {
   signTwoFaChallenge,
   verifyTwoFaChallenge,
 } from '../../src/services/twofactor-challenge.service.js';
+
+function secretKey(secret: string): Uint8Array {
+  return new TextEncoder().encode(secret);
+}
 
 describe('twofactor-challenge.service', () => {
   it('signs and verifies a 2FA challenge token', async () => {
@@ -86,6 +91,33 @@ describe('twofactor-challenge.service', () => {
         token,
         sharedSecret: 'test-shared-secret',
         audience: 'different-aud',
+        now,
+      }),
+    ).rejects.toMatchObject({ statusCode: 401 });
+  });
+
+  it('rejects verification when the issuer is missing', async () => {
+    const now = new Date('2026-02-10T00:00:00.000Z');
+    const token = await new SignJWT({
+      config_url: 'https://client.example.com/auth-config',
+      redirect_url: 'https://client.example.com/oauth/callback',
+      domain: 'client.example.com',
+      auth_method: 'email_password',
+      remember_me: false,
+      request_access: false,
+    })
+      .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
+      .setAudience('uoa-auth-service')
+      .setSubject('u1')
+      .setIssuedAt(Math.floor(now.getTime() / 1000))
+      .setExpirationTime(Math.floor((now.getTime() + 5 * 60 * 1000) / 1000))
+      .sign(secretKey('test-shared-secret'));
+
+    await expect(
+      verifyTwoFaChallenge({
+        token,
+        sharedSecret: 'test-shared-secret',
+        audience: 'uoa-auth-service',
         now,
       }),
     ).rejects.toMatchObject({ statusCode: 401 });
