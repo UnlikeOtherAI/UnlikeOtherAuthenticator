@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 import { configVerifier } from '../../middleware/config-verifier.js';
 import { validatePasswordResetToken } from '../../services/auth-reset-password.service.js';
-import { renderAuthEntrypointHtml } from '../../services/auth-ui.service.js';
+import { renderAuthEntrypointHtml, sendAuthHtml } from '../../services/auth-ui.service.js';
 import { selectRedirectUrl } from '../../services/token.service.js';
 import { AppError } from '../../utils/errors.js';
 import { tokenConsumeRateLimiter } from './rate-limit-keys.js';
@@ -56,7 +56,7 @@ export function registerAuthEmailResetPasswordRoute(app: FastifyInstance): void 
         configUrl: request.configUrl,
         requestUrl: `/auth?${params.toString()}`,
       });
-      reply.type('text/html; charset=utf-8').status(200).send(html);
+      sendAuthHtml(reply, html);
     },
   );
 }

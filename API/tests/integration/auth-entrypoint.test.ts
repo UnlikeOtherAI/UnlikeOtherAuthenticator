@@ -57,6 +57,8 @@ describe('GET /auth', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.headers['content-type']).toContain('text/html');
+    expect(res.headers['cache-control']).toBe('no-store, no-cache');
+    expect(res.headers.pragma).toBe('no-cache');
     expect(res.body).toMatch(/<div\s+id=(["'])root\1[^>]*>/i);
     // SSR should inject initial markup into #root (the client then hydrates).
     expect(res.body).toMatch(/<div\s+id=(["'])root\1[^>]*>\s*<div/i);

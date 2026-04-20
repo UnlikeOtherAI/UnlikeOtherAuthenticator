@@ -5,6 +5,7 @@ import { configVerifier } from '../../middleware/config-verifier.js';
 import {
   readAuthUiAsset,
   renderAuthEntrypointHtml,
+  sendAuthHtml,
 } from '../../services/auth-ui.service.js';
 
 export function registerAuthEntrypointRoute(app: FastifyInstance): void {
@@ -25,7 +26,7 @@ export function registerAuthEntrypointRoute(app: FastifyInstance): void {
         configUrl: request.configUrl,
         requestUrl,
       });
-      reply.type('text/html; charset=utf-8').status(200).send(html);
+      sendAuthHtml(reply, html);
     },
   );
 

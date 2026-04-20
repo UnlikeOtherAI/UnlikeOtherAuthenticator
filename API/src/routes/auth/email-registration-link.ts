@@ -7,7 +7,7 @@ import {
   finalizeAuthenticatedUser,
   parseRequestAccessFlag,
 } from '../../services/access-request-flow.service.js';
-import { renderAuthEntrypointHtml } from '../../services/auth-ui.service.js';
+import { renderAuthEntrypointHtml, sendAuthHtml } from '../../services/auth-ui.service.js';
 import { selectRedirectUrl } from '../../services/token.service.js';
 import { verifyEmailToken } from '../../services/auth-verify-email.service.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
@@ -122,7 +122,7 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
           pkce,
         ),
       });
-      reply.type('text/html; charset=utf-8').status(200).send(html);
+      sendAuthHtml(reply, html);
     },
   );
 }

@@ -2,6 +2,8 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+import type { FastifyReply } from 'fastify';
+
 import type { ClientConfig } from './config.service.js';
 import { AppError } from '../utils/errors.js';
 
@@ -131,6 +133,12 @@ export async function renderAuthEntrypointHtml(params: {
 
   // Fail open for HTML formatting differences; ensure bootstrap is still present.
   return `${bootstrap}${base}`;
+}
+
+export function sendAuthHtml(reply: FastifyReply, html: string): void {
+  reply.header('Cache-Control', 'no-store, no-cache');
+  reply.header('Pragma', 'no-cache');
+  reply.type('text/html; charset=utf-8').status(200).send(html);
 }
 
 function contentTypeForExt(ext: string): string {
