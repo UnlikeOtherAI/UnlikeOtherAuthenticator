@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import { signSocialState, verifySocialState } from '../../src/services/social/social-state.service.js';
 
+const SOCIAL_STATE_ISSUER = 'https://auth.example.com/social-state';
+
 describe('social-state.service', () => {
   it('signs and verifies a social state JWT', async () => {
     const jwt = await signSocialState({
@@ -19,6 +21,7 @@ describe('social-state.service', () => {
       stateJwt: jwt,
       sharedSecret: 'test-shared-secret',
       audience: 'uoa-auth-service',
+      issuer: SOCIAL_STATE_ISSUER,
       now: new Date('2026-01-01T00:00:30.000Z'),
     });
 
@@ -49,6 +52,7 @@ describe('social-state.service', () => {
       stateJwt: jwt,
       sharedSecret: 'test-shared-secret',
       audience: 'uoa-auth-service',
+      issuer: SOCIAL_STATE_ISSUER,
       now: new Date('2026-01-01T00:00:30.000Z'),
     });
 
@@ -76,7 +80,31 @@ describe('social-state.service', () => {
         stateJwt: jwt,
         sharedSecret: 'test-shared-secret',
         audience: 'uoa-auth-service',
+        issuer: SOCIAL_STATE_ISSUER,
         now: new Date('2026-01-01T00:00:02.000Z'),
+      }),
+    ).rejects.toThrow();
+  });
+
+  it('rejects social state JWTs from a different issuer', async () => {
+    const jwt = await signSocialState({
+      provider: 'google',
+      configUrl: 'https://client.example.com/auth-config',
+      redirectUrl: 'https://client.example.com/oauth/callback',
+      sharedSecret: 'test-shared-secret',
+      audience: 'uoa-auth-service',
+      baseUrlForIssuer: 'https://other-auth.example.com',
+      now: new Date('2026-01-01T00:00:00.000Z'),
+      ttlMs: 60_000,
+    });
+
+    await expect(
+      verifySocialState({
+        stateJwt: jwt,
+        sharedSecret: 'test-shared-secret',
+        audience: 'uoa-auth-service',
+        issuer: SOCIAL_STATE_ISSUER,
+        now: new Date('2026-01-01T00:00:30.000Z'),
       }),
     ).rejects.toThrow();
   });
@@ -106,6 +134,7 @@ describe('social-state.service', () => {
         stateJwt: tampered,
         sharedSecret: 'test-shared-secret',
         audience: 'uoa-auth-service',
+        issuer: SOCIAL_STATE_ISSUER,
       }),
     ).rejects.toThrow();
   });

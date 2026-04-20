@@ -48,6 +48,10 @@ function resolvePublicBaseUrl(): string {
     : `http://${env.HOST}:${env.PORT}`;
 }
 
+function socialStateIssuer(baseUrl: string): string {
+  return `${normalizeBaseUrl(baseUrl)}/social-state`;
+}
+
 function buildAuthFailedRedirectUrl(redirectUrl: string): string {
   const u = new URL(redirectUrl);
   u.searchParams.set('error', 'auth_failed');
@@ -75,11 +79,13 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         'SHARED_SECRET',
         'AUTH_SERVICE_IDENTIFIER',
       );
+      const baseUrl = resolvePublicBaseUrl();
 
       const socialState = await verifySocialState({
         stateJwt: state,
         sharedSecret: SHARED_SECRET,
         audience: AUTH_SERVICE_IDENTIFIER,
+        issuer: socialStateIssuer(baseUrl),
       });
 
       if (socialState.provider !== provider) {
@@ -107,7 +113,6 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
       });
 
       const env = getEnv();
-      const baseUrl = resolvePublicBaseUrl();
 
       let profile: SocialProfile;
       if (provider === 'google') {

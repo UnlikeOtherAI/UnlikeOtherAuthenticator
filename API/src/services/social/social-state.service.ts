@@ -68,6 +68,7 @@ export async function verifySocialState(params: {
   stateJwt: string;
   sharedSecret: string;
   audience: string;
+  issuer: string;
   now?: Date;
 }): Promise<SocialState> {
   let payload: JWTPayload;
@@ -75,6 +76,7 @@ export async function verifySocialState(params: {
     const res = await jwtVerify(params.stateJwt, sharedSecretKey(params.sharedSecret), {
       algorithms: [...SOCIAL_STATE_ALLOWED_ALGS],
       audience: params.audience,
+      issuer: params.issuer,
       currentDate: params.now,
     });
     payload = res.payload;
