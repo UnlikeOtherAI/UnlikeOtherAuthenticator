@@ -115,7 +115,7 @@ describe.skipIf(!hasDatabase)('2FA reset flow', () => {
     vi.restoreAllMocks();
   });
 
-  it('resets 2FA on GET email link (one-time token)', async () => {
+  it('resets 2FA only after explicit POST confirmation', async () => {
     process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER =
       process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
@@ -172,7 +172,36 @@ describe.skipIf(!hasDatabase)('2FA reset flow', () => {
     });
 
     expect(landing.statusCode).toBe(200);
-    expect(landing.json()).toEqual({ ok: true });
+    expect(landing.headers['content-type']).toContain('text/html');
+    expect(landing.headers['cache-control']).toBe('no-store, no-cache');
+    expect(landing.body).toContain('/auth/email/twofa-reset/confirm?');
+
+    const unchangedUser = await handle!.prisma.user.findUnique({
+      where: { userKey: 'user@example.com' },
+      select: { id: true, twoFaEnabled: true, twoFaSecret: true },
+    });
+    expect(unchangedUser).not.toBeNull();
+    expect(unchangedUser!.id).toBe(user.id);
+    expect(unchangedUser!.twoFaEnabled).toBe(true);
+    expect(unchangedUser!.twoFaSecret).toBeTruthy();
+
+    const unusedTokenRow = await handle!.prisma.verificationToken.findUnique({
+      where: { tokenHash },
+      select: { usedAt: true, userId: true },
+    });
+    expect(unusedTokenRow).not.toBeNull();
+    expect(unusedTokenRow!.usedAt).toBeNull();
+    expect(unusedTokenRow!.userId).toBe(user.id);
+
+    const confirm = await app.inject({
+      method: 'POST',
+      url: `/auth/email/twofa-reset/confirm?${baseQuery}&token=${encodeURIComponent(rawToken)}`,
+    });
+
+    expect(confirm.statusCode).toBe(200);
+    expect(confirm.headers['content-type']).toContain('text/html');
+    expect(confirm.headers['cache-control']).toBe('no-store, no-cache');
+    expect(confirm.body).toContain('Two-factor authentication reset');
 
     const updatedUser = await handle!.prisma.user.findUnique({
       where: { userKey: 'user@example.com' },
@@ -193,8 +222,8 @@ describe.skipIf(!hasDatabase)('2FA reset flow', () => {
 
     // Second use should fail (one-time token).
     const reuse = await app.inject({
-      method: 'GET',
-      url: `/auth/email/twofa-reset?${baseQuery}&token=${encodeURIComponent(rawToken)}`,
+      method: 'POST',
+      url: `/auth/email/twofa-reset/confirm?${baseQuery}&token=${encodeURIComponent(rawToken)}`,
     });
     expect(reuse.statusCode).toBe(400);
     expectJsonError(reuse.json());

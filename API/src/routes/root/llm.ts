@@ -105,6 +105,8 @@ export function registerLlmRoute(app: FastifyInstance): void {
           'Team records now expose a unique slug per organisation. POST /org/organisations/:orgId/teams accepts an optional slug; if omitted, the service derives one from the team name and appends a number when needed. PUT /org/organisations/:orgId/teams/:teamId also accepts an optional slug, while omitting it leaves the existing slug unchanged. Existing teams are backfilled during the team-slug migration.',
         step_15:
           'If org_features.user_needs_team=true, token issuance self-heals before building the access-token org claim. Users already in a domain org but with zero teams get a personal "<name>\'s team" with teamRole=lead and member->admin promotion when org_roles includes admin. Users with no org on the domain get a new personal org plus a default personal team.',
+        step_16:
+          '2FA reset emails land on GET /auth/email/twofa-reset, which only renders a no-store confirmation page. The one-time token is consumed only by an explicit POST to /auth/email/twofa-reset/confirm with the same token and config_url query parameters.',
       },
     };
   });

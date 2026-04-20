@@ -75,6 +75,9 @@ describe('GET /', () => {
       expect.objectContaining({ method: 'POST', path: '/auth/reset-password/request' }),
     );
     expect(body.endpoints).toContainEqual(
+      expect.objectContaining({ method: 'POST', path: '/auth/email/twofa-reset/confirm' }),
+    );
+    expect(body.endpoints).toContainEqual(
       expect.objectContaining({ method: 'POST', path: '/2fa/verify' }),
     );
     expect(body.endpoints).toContainEqual(
@@ -141,5 +144,6 @@ describe('GET /llm', () => {
     expect(body.integration_guide.step_11).toContain('request_access=true');
     expect(body.integration_guide.step_13).toContain('/teams/:teamId/access-requests');
     expect(body.integration_guide.step_14).toContain('optional slug');
+    expect(body.integration_guide.step_16).toContain('/auth/email/twofa-reset/confirm');
   });
 });

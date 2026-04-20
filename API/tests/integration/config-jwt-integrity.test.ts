@@ -111,6 +111,11 @@ describe('Config JWT integrity is enforced across all config-verifier routes', (
       url: `/auth/email/twofa-reset?${q}&token=test-token`,
     },
     {
+      name: 'email 2fa-reset confirm',
+      method: 'POST',
+      url: `/auth/email/twofa-reset/confirm?${q}&token=test-token`,
+    },
+    {
       name: 'social auth init',
       method: 'GET',
       url: `/auth/social/google?${q}`,
