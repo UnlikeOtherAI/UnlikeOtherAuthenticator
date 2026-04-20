@@ -27,8 +27,8 @@ export function registerTeamInvitationRoutes(app: FastifyInstance): void {
     {
       preValidation: [
         parseDomainContextHook,
-        configVerifier,
         requireDomainHashAuthForDomainQuery(),
+        configVerifier,
         requireOrgFeatures,
         createRateLimiter({
           limit: 20,
@@ -68,8 +68,8 @@ export function registerTeamInvitationRoutes(app: FastifyInstance): void {
     {
       preValidation: [
         parseDomainContextHook,
-        configVerifier,
         requireDomainHashAuthForDomainQuery(),
+        configVerifier,
         requireOrgFeatures,
       ],
     },
@@ -93,8 +93,8 @@ export function registerTeamInvitationRoutes(app: FastifyInstance): void {
     {
       preValidation: [
         parseDomainContextHook,
-        configVerifier,
         requireDomainHashAuthForDomainQuery(),
+        configVerifier,
         requireOrgFeatures,
       ],
     },

@@ -38,8 +38,8 @@ export function registerTeamRoutes(app: FastifyInstance): void {
     {
       preValidation: [
         parseDomainContextHook,
-        configVerifier,
         requireDomainHashAuthForDomainQuery(),
+        configVerifier,
         requireOrgFeatures,
         requireOrgRole(),
       ],
@@ -66,8 +66,8 @@ export function registerTeamRoutes(app: FastifyInstance): void {
     {
       preValidation: [
         parseDomainContextHook,
-        configVerifier,
         requireDomainHashAuthForDomainQuery(),
+        configVerifier,
         requireOrgFeatures,
         requireOrgRole(),
         createRateLimiter({
@@ -105,8 +105,8 @@ export function registerTeamRoutes(app: FastifyInstance): void {
     {
       preValidation: [
         parseDomainContextHook,
-        configVerifier,
         requireDomainHashAuthForDomainQuery(),
+        configVerifier,
         requireOrgFeatures,
         requireOrgRole(),
       ],
@@ -131,7 +131,13 @@ export function registerTeamRoutes(app: FastifyInstance): void {
   app.put(
     '/org/organisations/:orgId/teams/:teamId',
     {
-      preValidation: [parseDomainContextHook, configVerifier, requireDomainHashAuthForDomainQuery(), requireOrgFeatures, requireOrgRole()],
+      preValidation: [
+        parseDomainContextHook,
+        requireDomainHashAuthForDomainQuery(),
+        configVerifier,
+        requireOrgFeatures,
+        requireOrgRole(),
+      ],
     },
     async (request, reply) => {
       const { domain } = parseDomainContext(request);
@@ -140,7 +146,11 @@ export function registerTeamRoutes(app: FastifyInstance): void {
       const actorUserId = getActorUserId(request as RequestWithClaims);
       const body = TeamUpdateBodySchema.parse(request.body ?? {});
 
-      if (!Object.hasOwn(body, 'name') && !Object.hasOwn(body, 'slug') && !Object.hasOwn(body, 'description')) {
+      if (
+        !Object.hasOwn(body, 'name') &&
+        !Object.hasOwn(body, 'slug') &&
+        !Object.hasOwn(body, 'description')
+      ) {
         throw new AppError('BAD_REQUEST', 400);
       }
 
@@ -161,7 +171,13 @@ export function registerTeamRoutes(app: FastifyInstance): void {
   app.delete(
     '/org/organisations/:orgId/teams/:teamId',
     {
-      preValidation: [parseDomainContextHook, configVerifier, requireDomainHashAuthForDomainQuery(), requireOrgFeatures, requireOrgRole()],
+      preValidation: [
+        parseDomainContextHook,
+        requireDomainHashAuthForDomainQuery(),
+        configVerifier,
+        requireOrgFeatures,
+        requireOrgRole(),
+      ],
     },
     async (request, reply) => {
       const { domain } = parseDomainContext(request);
@@ -183,7 +199,13 @@ export function registerTeamRoutes(app: FastifyInstance): void {
   app.post(
     '/org/organisations/:orgId/teams/:teamId/members',
     {
-      preValidation: [parseDomainContextHook, configVerifier, requireDomainHashAuthForDomainQuery(), requireOrgFeatures, requireOrgRole()],
+      preValidation: [
+        parseDomainContextHook,
+        requireDomainHashAuthForDomainQuery(),
+        configVerifier,
+        requireOrgFeatures,
+        requireOrgRole(),
+      ],
     },
     async (request, reply) => {
       const { domain } = parseDomainContext(request);
@@ -212,7 +234,13 @@ export function registerTeamRoutes(app: FastifyInstance): void {
   app.put(
     '/org/organisations/:orgId/teams/:teamId/members/:userId',
     {
-      preValidation: [parseDomainContextHook, configVerifier, requireDomainHashAuthForDomainQuery(), requireOrgFeatures, requireOrgRole()],
+      preValidation: [
+        parseDomainContextHook,
+        requireDomainHashAuthForDomainQuery(),
+        configVerifier,
+        requireOrgFeatures,
+        requireOrgRole(),
+      ],
     },
     async (request, reply) => {
       const { domain } = parseDomainContext(request);
@@ -238,7 +266,13 @@ export function registerTeamRoutes(app: FastifyInstance): void {
   app.delete(
     '/org/organisations/:orgId/teams/:teamId/members/:userId',
     {
-      preValidation: [parseDomainContextHook, configVerifier, requireDomainHashAuthForDomainQuery(), requireOrgFeatures, requireOrgRole()],
+      preValidation: [
+        parseDomainContextHook,
+        requireDomainHashAuthForDomainQuery(),
+        configVerifier,
+        requireOrgFeatures,
+        requireOrgRole(),
+      ],
     },
     async (request, reply) => {
       const { domain } = parseDomainContext(request);

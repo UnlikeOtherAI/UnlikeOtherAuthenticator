@@ -146,10 +146,17 @@ function keyAddMemberRateLimit(request: FastifyRequest) {
 }
 
 export function registerOrganisationRoutes(app: FastifyInstance) {
+  // VM2: this list endpoint is intentionally backend-to-backend. The domain hash
+  // bearer token is the authorization boundary; user-scoped reads use /org/me.
   app.get(
     '/org/organisations',
     {
-      preValidation: [parseDomainContextHook, configVerifier, requireDomainHashAuthForDomainQuery(), requireOrgFeatures],
+      preValidation: [
+        parseDomainContextHook,
+        requireDomainHashAuthForDomainQuery(),
+        configVerifier,
+        requireOrgFeatures,
+      ],
     },
     async (request, reply) => {
       const { domain, limit, cursor } = parseLimitCursor(request);
@@ -168,8 +175,8 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
     {
       preValidation: [
         parseDomainContextHook,
-        configVerifier,
         requireDomainHashAuthForDomainQuery(),
+        configVerifier,
         requireOrgFeatures,
         requireOrgRole(),
         createRateLimiter({
@@ -202,8 +209,8 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
     {
       preValidation: [
         parseDomainContextHook,
-        configVerifier,
         requireDomainHashAuthForDomainQuery(),
+        configVerifier,
         requireOrgFeatures,
         requireOrgRole(),
       ],
@@ -223,8 +230,8 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
     {
       preValidation: [
         parseDomainContextHook,
-        configVerifier,
         requireDomainHashAuthForDomainQuery(),
+        configVerifier,
         requireOrgFeatures,
         requireOrgRole(),
       ],
@@ -255,8 +262,8 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
     {
       preValidation: [
         parseDomainContextHook,
-        configVerifier,
         requireDomainHashAuthForDomainQuery(),
+        configVerifier,
         requireOrgFeatures,
         requireOrgRole(),
       ],
@@ -281,8 +288,8 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
     {
       preValidation: [
         parseDomainContextHook,
-        configVerifier,
         requireDomainHashAuthForDomainQuery(),
+        configVerifier,
         requireOrgFeatures,
         requireOrgRole(),
       ],
@@ -308,8 +315,8 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
     {
       preValidation: [
         parseDomainContextHook,
-        configVerifier,
         requireDomainHashAuthForDomainQuery(),
+        configVerifier,
         requireOrgFeatures,
         requireOrgRole(),
         createRateLimiter({
@@ -344,7 +351,13 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
   app.put(
     '/org/organisations/:orgId/members/:userId',
     {
-      preValidation: [parseDomainContextHook, configVerifier, requireDomainHashAuthForDomainQuery(), requireOrgFeatures, requireOrgRole()],
+      preValidation: [
+        parseDomainContextHook,
+        requireDomainHashAuthForDomainQuery(),
+        configVerifier,
+        requireOrgFeatures,
+        requireOrgRole(),
+      ],
     },
     async (request, reply) => {
       const { domain } = parseDomainContext(request);
@@ -372,7 +385,13 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
   app.delete(
     '/org/organisations/:orgId/members/:userId',
     {
-      preValidation: [parseDomainContextHook, configVerifier, requireDomainHashAuthForDomainQuery(), requireOrgFeatures, requireOrgRole()],
+      preValidation: [
+        parseDomainContextHook,
+        requireDomainHashAuthForDomainQuery(),
+        configVerifier,
+        requireOrgFeatures,
+        requireOrgRole(),
+      ],
     },
     async (request, reply) => {
       const { domain } = parseDomainContext(request);
@@ -391,10 +410,7 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
     },
   );
 
-  const transferOwnershipHandler = async (
-    request: FastifyRequest,
-    reply: FastifyReply,
-  ) => {
+  const transferOwnershipHandler = async (request: FastifyRequest, reply: FastifyReply) => {
     const { domain } = parseDomainContext(request);
     const orgId = getOrgIdFromParams(request.params);
     const newOwnerId = getTransferOwnerId((request.body ?? {}) as Record<string, unknown>);
@@ -411,23 +427,27 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
     reply.status(200).send(org);
   };
 
-  app.post('/org/organisations/:orgId/transfer-ownership', {
-    preValidation: [
-      parseDomainContextHook,
-      configVerifier,
-      requireDomainHashAuthForDomainQuery(),
-      requireOrgFeatures,
-      requireOrgRole(),
-    ],
-  }, transferOwnershipHandler);
+  app.post(
+    '/org/organisations/:orgId/transfer-ownership',
+    {
+      preValidation: [
+        parseDomainContextHook,
+        requireDomainHashAuthForDomainQuery(),
+        configVerifier,
+        requireOrgFeatures,
+        requireOrgRole(),
+      ],
+    },
+    transferOwnershipHandler,
+  );
 
   app.post(
     '/org/organisations/:orgId/ownership-transfer',
     {
       preValidation: [
         parseDomainContextHook,
-        configVerifier,
         requireDomainHashAuthForDomainQuery(),
+        configVerifier,
         requireOrgFeatures,
         requireOrgRole(),
       ],

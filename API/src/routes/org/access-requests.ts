@@ -13,7 +13,11 @@ import { AppError } from '../../utils/errors.js';
 
 const DomainQuerySchema = z
   .object({
-    domain: z.string().trim().min(1).transform((value) => value.toLowerCase().replace(/\.$/, '')),
+    domain: z
+      .string()
+      .trim()
+      .min(1)
+      .transform((value) => value.toLowerCase().replace(/\.$/, '')),
     config_url: z.string().trim().min(1),
     status: z.string().trim().min(1).optional(),
   })
@@ -52,8 +56,8 @@ export function registerAccessRequestRoutes(app: FastifyInstance): void {
     {
       preValidation: [
         parseDomainContextHook,
-        configVerifier,
         requireDomainHashAuthForDomainQuery(),
+        configVerifier,
         requireOrgFeatures,
       ],
     },
@@ -79,8 +83,8 @@ export function registerAccessRequestRoutes(app: FastifyInstance): void {
     {
       preValidation: [
         parseDomainContextHook,
-        configVerifier,
         requireDomainHashAuthForDomainQuery(),
+        configVerifier,
         requireOrgFeatures,
       ],
     },
@@ -109,8 +113,8 @@ export function registerAccessRequestRoutes(app: FastifyInstance): void {
     {
       preValidation: [
         parseDomainContextHook,
-        configVerifier,
         requireDomainHashAuthForDomainQuery(),
+        configVerifier,
         requireOrgFeatures,
       ],
     },

@@ -5,7 +5,11 @@ import { configVerifier } from '../../../middleware/config-verifier.js';
 import { requireGroupsEnabled } from '../../../middleware/groups-enabled.js';
 import requireDomainHashAuthForDomainQuery from '../../../middleware/domain-hash-auth.js';
 import { requireOrgFeatures } from '../../../middleware/org-features.js';
-import { addGroupMember, removeGroupMember, updateGroupMemberAdmin } from '../../../services/group.service.js';
+import {
+  addGroupMember,
+  removeGroupMember,
+  updateGroupMemberAdmin,
+} from '../../../services/group.service.js';
 import { AppError } from '../../../utils/errors.js';
 
 const DomainQuerySchema = z
@@ -73,8 +77,8 @@ export function registerInternalGroupMemberRoutes(app: FastifyInstance): void {
     {
       preValidation: [
         parseDomainContextHook,
-        configVerifier,
         requireDomainHashAuthForDomainQuery(),
+        configVerifier,
         requireOrgFeatures,
         requireGroupsEnabled,
       ],
@@ -106,8 +110,8 @@ export function registerInternalGroupMemberRoutes(app: FastifyInstance): void {
     {
       preValidation: [
         parseDomainContextHook,
-        configVerifier,
         requireDomainHashAuthForDomainQuery(),
+        configVerifier,
         requireOrgFeatures,
         requireGroupsEnabled,
       ],
@@ -138,8 +142,8 @@ export function registerInternalGroupMemberRoutes(app: FastifyInstance): void {
     {
       preValidation: [
         parseDomainContextHook,
-        configVerifier,
         requireDomainHashAuthForDomainQuery(),
+        configVerifier,
         requireOrgFeatures,
         requireGroupsEnabled,
       ],

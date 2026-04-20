@@ -67,8 +67,8 @@ export function registerInternalGroupRoutes(app: FastifyInstance): void {
     {
       preValidation: [
         parseDomainContextHook,
-        configVerifier,
         requireDomainHashAuthForDomainQuery(),
+        configVerifier,
         requireOrgFeatures,
         requireGroupsEnabled,
       ],
@@ -98,8 +98,8 @@ export function registerInternalGroupRoutes(app: FastifyInstance): void {
     {
       preValidation: [
         parseDomainContextHook,
-        configVerifier,
         requireDomainHashAuthForDomainQuery(),
+        configVerifier,
         requireOrgFeatures,
         requireGroupsEnabled,
       ],
@@ -134,8 +134,8 @@ export function registerInternalGroupRoutes(app: FastifyInstance): void {
     {
       preValidation: [
         parseDomainContextHook,
-        configVerifier,
         requireDomainHashAuthForDomainQuery(),
+        configVerifier,
         requireOrgFeatures,
         requireGroupsEnabled,
       ],

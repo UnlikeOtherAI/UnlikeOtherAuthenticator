@@ -34,7 +34,7 @@ export function registerOrgMeRoute(app: FastifyInstance): void {
   app.get(
     '/org/me',
     {
-      preHandler: [configVerifier, requireDomainHashAuthForDomainQuery, requireOrgFeaturesEnabled],
+      preHandler: [requireDomainHashAuthForDomainQuery, configVerifier, requireOrgFeaturesEnabled],
     },
     async (request, reply) => {
       const { domain } = QuerySchema.parse(request.query);

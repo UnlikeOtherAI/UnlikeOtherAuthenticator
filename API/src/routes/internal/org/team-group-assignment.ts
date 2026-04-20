@@ -61,8 +61,8 @@ export function registerInternalTeamGroupAssignmentRoutes(app: FastifyInstance):
     {
       preValidation: [
         parseDomainContextHook,
-        configVerifier,
         requireDomainHashAuthForDomainQuery(),
+        configVerifier,
         requireOrgFeatures,
         requireGroupsEnabled,
       ],
