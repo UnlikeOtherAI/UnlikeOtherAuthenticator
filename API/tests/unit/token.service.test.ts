@@ -12,6 +12,10 @@ function hashAuthorizationCode(code: string, sharedSecret: string): string {
   return createHash('sha256').update(`${code}.${sharedSecret}`, 'utf8').digest('hex');
 }
 
+function pkceChallenge(codeVerifier: string): string {
+  return createHash('sha256').update(codeVerifier, 'utf8').digest('base64url');
+}
+
 function makeConfig(overrides?: Partial<ClientConfig['org_features']>): ClientConfig {
   return {
     domain: 'client.example.com',
@@ -65,6 +69,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
       groups_enabled: true,
     });
     const configUrl = 'https://client.example.com/auth-config';
+    const redirectUrl = 'https://client.example.com/oauth/callback';
 
     const prisma = {
       authorizationCode: {
@@ -96,6 +101,9 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
       userId: 'user-1',
       domain: config.domain,
       configUrl,
+      redirectUrl,
+      codeChallenge: null,
+      codeChallengeMethod: null,
       expiresAt: new Date(now.getTime() + 60_000),
       usedAt: null,
       codeHash: hashAuthorizationCode(code, sharedSecret),
@@ -122,7 +130,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
     ]);
 
     const { accessToken, refreshToken } = await exchangeAuthorizationCodeForTokens(
-      { code, config, configUrl },
+      { code, config, configUrl, redirectUrl },
       {
         now: () => now,
         sharedSecret,
@@ -164,6 +172,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
     const code = 'code-without-org';
     const config = makeConfig({ enabled: false });
     const configUrl = 'https://client.example.com/auth-config';
+    const redirectUrl = 'https://client.example.com/oauth/callback';
 
     const prisma = {
       authorizationCode: {
@@ -195,6 +204,9 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
       userId: 'user-2',
       domain: config.domain,
       configUrl,
+      redirectUrl,
+      codeChallenge: null,
+      codeChallengeMethod: null,
       expiresAt: new Date(now.getTime() + 60_000),
       usedAt: null,
       codeHash: hashAuthorizationCode(code, sharedSecret),
@@ -209,7 +221,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
     prisma.user.findUnique.mockResolvedValue({ email: 'user2@example.com' });
 
     const { accessToken, refreshToken } = await exchangeAuthorizationCodeForTokens(
-      { code, config, configUrl },
+      { code, config, configUrl, redirectUrl },
       {
         now: () => now,
         sharedSecret,
@@ -247,6 +259,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
       groups_enabled: true,
     });
     const configUrl = 'https://client.example.com/auth-config';
+    const redirectUrl = 'https://client.example.com/oauth/callback';
 
     const prisma = {
       authorizationCode: {
@@ -278,6 +291,9 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
       userId: 'user-3',
       domain: config.domain,
       configUrl,
+      redirectUrl,
+      codeChallenge: null,
+      codeChallengeMethod: null,
       expiresAt: new Date(now.getTime() + 60_000),
       usedAt: null,
       codeHash: hashAuthorizationCode(code, sharedSecret),
@@ -293,7 +309,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
     prisma.orgMember.findFirst.mockResolvedValue(null);
 
     const { accessToken, refreshToken } = await exchangeAuthorizationCodeForTokens(
-      { code, config, configUrl },
+      { code, config, configUrl, redirectUrl },
       {
         now: () => now,
         sharedSecret,
@@ -319,5 +335,88 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
     expect(prisma.teamMember.findMany).not.toHaveBeenCalled();
     expect(prisma.groupMember.findMany).not.toHaveBeenCalled();
     expect(refreshToken).toBeTypeOf('string');
+  });
+
+  it('requires a matching PKCE verifier when the authorization code has a challenge', async () => {
+    const now = new Date('2026-02-15T00:00:03.000Z');
+    const sharedSecret = process.env.SHARED_SECRET!;
+    const code = 'code-with-pkce';
+    const codeVerifier = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ';
+    const config = makeConfig({ enabled: false });
+    const configUrl = 'https://client.example.com/auth-config';
+    const redirectUrl = 'https://client.example.com/oauth/callback';
+
+    const prisma = {
+      authorizationCode: {
+        findUnique: vi.fn(),
+        updateMany: vi.fn(),
+      },
+      refreshToken: {
+        create: vi.fn(),
+      },
+      user: {
+        findUnique: vi.fn(),
+      },
+      domainRole: {
+        findUnique: vi.fn(),
+      },
+      orgMember: {
+        findFirst: vi.fn(),
+      },
+      teamMember: {
+        findMany: vi.fn(),
+      },
+      groupMember: {
+        findMany: vi.fn(),
+      },
+    } as unknown as PrismaClient;
+
+    prisma.authorizationCode.findUnique.mockResolvedValue({
+      id: 'auth-code-pkce',
+      userId: 'user-pkce',
+      domain: config.domain,
+      configUrl,
+      redirectUrl,
+      codeChallenge: pkceChallenge(codeVerifier),
+      codeChallengeMethod: 'S256',
+      expiresAt: new Date(now.getTime() + 60_000),
+      usedAt: null,
+      codeHash: hashAuthorizationCode(code, sharedSecret),
+    });
+    prisma.authorizationCode.updateMany.mockResolvedValue({ count: 1 });
+    prisma.refreshToken.create.mockResolvedValue({ id: 'refresh-token-pkce' });
+    prisma.domainRole.findUnique.mockResolvedValue({
+      role: 'USER',
+      domain: config.domain,
+      userId: 'user-pkce',
+    });
+    prisma.user.findUnique.mockResolvedValue({ email: 'pkce@example.com' });
+
+    await expect(
+      exchangeAuthorizationCodeForTokens(
+        { code, config, configUrl, redirectUrl },
+        {
+          now: () => now,
+          sharedSecret,
+          authServiceIdentifier: process.env.AUTH_SERVICE_IDENTIFIER,
+          accessTokenTtl: '15m',
+          prisma,
+        },
+      ),
+    ).rejects.toMatchObject({ statusCode: 401 });
+
+    const result = await exchangeAuthorizationCodeForTokens(
+      { code, config, configUrl, redirectUrl, codeVerifier },
+      {
+        now: () => now,
+        sharedSecret,
+        authServiceIdentifier: process.env.AUTH_SERVICE_IDENTIFIER,
+        accessTokenTtl: '15m',
+        prisma,
+      },
+    );
+
+    expect(result.accessToken).toBeTypeOf('string');
+    expect(result.refreshToken).toBeTypeOf('string');
   });
 });

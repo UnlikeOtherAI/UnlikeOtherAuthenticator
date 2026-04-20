@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { jwtVerify, SignJWT } from 'jose';
 
@@ -10,6 +12,7 @@ import { baseClientConfigPayload } from '../helpers/test-config.js';
 
 const hasDatabase = Boolean(process.env.DATABASE_URL);
 const configUrl = 'https://client.example.com/auth-config';
+const redirectUrl = 'https://client.example.com/oauth/callback';
 const userEmail = 'user@example.com';
 const userPassword = 'Abcdef1!';
 
@@ -31,6 +34,10 @@ async function createSignedConfigJwt(sharedSecret: string): Promise<string> {
 
 function authorizationHeader(): string {
   return `Bearer ${createClientId('client.example.com', process.env.SHARED_SECRET!)}`;
+}
+
+function pkceChallenge(codeVerifier: string): string {
+  return createHash('sha256').update(codeVerifier, 'utf8').digest('base64url');
 }
 
 describe.skipIf(!hasDatabase)('POST /auth/token', () => {
@@ -99,10 +106,21 @@ describe.skipIf(!hasDatabase)('POST /auth/token', () => {
     return { app, fetchMock };
   }
 
-  async function issueAuthorizationCode(app: Awaited<ReturnType<typeof createApp>>): Promise<string> {
+  async function issueAuthorizationCode(
+    app: Awaited<ReturnType<typeof createApp>>,
+    pkce?: { codeChallenge: string },
+  ): Promise<string> {
+    const url = new URL('/auth/login', 'http://localhost');
+    url.searchParams.set('config_url', configUrl);
+    url.searchParams.set('redirect_url', redirectUrl);
+    if (pkce) {
+      url.searchParams.set('code_challenge', pkce.codeChallenge);
+      url.searchParams.set('code_challenge_method', 'S256');
+    }
+
     const loginRes = await app.inject({
       method: 'POST',
-      url: `/auth/login?config_url=${encodeURIComponent(configUrl)}`,
+      url: `${url.pathname}${url.search}`,
       payload: { email: userEmail, password: userPassword },
     });
     expect(loginRes.statusCode).toBe(200);
@@ -113,6 +131,7 @@ describe.skipIf(!hasDatabase)('POST /auth/token', () => {
   async function exchangeAuthorizationCode(
     app: Awaited<ReturnType<typeof createApp>>,
     code: string,
+    codeVerifier?: string,
   ) {
     return await app.inject({
       method: 'POST',
@@ -120,7 +139,7 @@ describe.skipIf(!hasDatabase)('POST /auth/token', () => {
       headers: {
         authorization: authorizationHeader(),
       },
-      payload: { code },
+      payload: { code, redirect_url: redirectUrl, code_verifier: codeVerifier },
     });
   }
 
@@ -351,6 +370,28 @@ describe.skipIf(!hasDatabase)('POST /auth/token', () => {
     await app.close();
   });
 
+  it('requires a matching PKCE verifier for a challenged authorization code', async () => {
+    await seedUser();
+    const { app } = await createConfiguredApp();
+    const codeVerifier = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ';
+    const code = await issueAuthorizationCode(app, {
+      codeChallenge: pkceChallenge(codeVerifier),
+    });
+
+    const missingVerifier = await exchangeAuthorizationCode(app, code);
+    expect(missingVerifier.statusCode).toBe(401);
+    expectJsonError(missingVerifier.json());
+
+    const wrongVerifier = await exchangeAuthorizationCode(app, code, `${codeVerifier}x`);
+    expect(wrongVerifier.statusCode).toBe(401);
+    expectJsonError(wrongVerifier.json());
+
+    const correctVerifier = await exchangeAuthorizationCode(app, code, codeVerifier);
+    expect(correctVerifier.statusCode).toBe(200);
+
+    await app.close();
+  });
+
   it('rejects exchanging a code without a domain-hash bearer token', async () => {
     await seedUser();
     const { app } = await createConfiguredApp();
@@ -359,7 +400,7 @@ describe.skipIf(!hasDatabase)('POST /auth/token', () => {
     const tokenRes = await app.inject({
       method: 'POST',
       url: `/auth/token?config_url=${encodeURIComponent(configUrl)}`,
-      payload: { code },
+      payload: { code, redirect_url: redirectUrl },
     });
     expect(tokenRes.statusCode).toBe(401);
     expectJsonError(tokenRes.json());

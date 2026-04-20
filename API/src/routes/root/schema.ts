@@ -37,8 +37,7 @@ const authEndpoints: EndpointSchema[] = [
       redirect_url: 'string (optional, redirect_uri also accepted)',
       code_challenge: 'string (optional) — PKCE S256 challenge',
       code_challenge_method: '"S256" when code_challenge is sent',
-      request_access:
-        'string (optional) — when truthy, authenticate first and then either auto-grant or create a pending access request for the configured team',
+      request_access: 'string (optional) — when truthy, auto-grant or create a pending access request',
     },
     body: {
       email: 'string (required)',
@@ -51,8 +50,7 @@ const authEndpoints: EndpointSchema[] = [
       redirect_to: 'full redirect URL with code',
       twofa_required: 'true (only if 2FA needed)',
       twofa_token: 'challenge token (only if 2FA needed)',
-      access_request_status:
-        '"pending" (only when request_access created a pending access request)',
+      access_request_status: '"pending" when request_access created a pending access request',
     },
   },
   {
@@ -62,8 +60,7 @@ const authEndpoints: EndpointSchema[] = [
     auth: 'config_url query param',
     query: {
       redirect_url: 'string (optional)',
-      request_access:
-        'string (optional) — when truthy, bypass registration gating so the user can authenticate and request access to the configured team',
+      request_access: 'string (optional) — bypass gating and request configured-team access',
       code_challenge: 'string (optional) — PKCE S256 challenge preserved through email verification',
       code_challenge_method: '"S256" when code_challenge is sent',
     },
@@ -79,8 +76,7 @@ const authEndpoints: EndpointSchema[] = [
       redirect_url: 'string (optional)',
       code_challenge: 'string (optional) — PKCE S256 challenge',
       code_challenge_method: '"S256" when code_challenge is sent',
-      request_access:
-        'string (optional) — when truthy, authenticate first and then either auto-grant or create a pending access request',
+      request_access: 'string (optional) — auto-grant or create a pending access request',
     },
     body: {
       token: 'string (required) — email verification token',
@@ -90,8 +86,7 @@ const authEndpoints: EndpointSchema[] = [
       ok: 'true',
       code: 'authorization code',
       redirect_to: 'redirect URL',
-      access_request_status:
-        '"pending" (only when request_access created a pending access request)',
+      access_request_status: '"pending" when request_access created a pending access request',
     },
   },
   {
@@ -102,8 +97,7 @@ const authEndpoints: EndpointSchema[] = [
     body: {
       'grant_type?': '"authorization_code" (default) or "refresh_token"',
       'code?': 'authorization code (for authorization_code grant)',
-      'redirect_url?':
-        'required for authorization_code grant; must match the URL used when the code was issued',
+      'redirect_url?': 'required for authorization_code grant; must match issued URL',
       'code_verifier?': 'required for authorization_code grant when the code was issued with PKCE',
       'refresh_token?': 'refresh token (for refresh_token grant)',
     },
@@ -161,8 +155,7 @@ const authEndpoints: EndpointSchema[] = [
       redirect_url: 'string (optional)',
       code_challenge: 'string (optional) — PKCE S256 challenge preserved through email verification',
       code_challenge_method: '"S256" when code_challenge is sent',
-      request_access:
-        'string (optional) — preserves access-request intent when the user authenticates through an email link',
+      request_access: 'string (optional) — preserves access-request intent through email auth',
     },
   },
   {
@@ -195,8 +188,7 @@ const authEndpoints: EndpointSchema[] = [
       redirect_url: 'string (optional)',
       code_challenge: 'string (optional) — PKCE S256 challenge',
       code_challenge_method: '"S256" when code_challenge is sent',
-      request_access:
-        'string (optional) — when truthy, successful social auth is routed through the access-request policy for the configured team',
+      request_access: 'string (optional) — routes social auth through configured-team access policy',
     },
   },
   {
@@ -221,8 +213,7 @@ const authEndpoints: EndpointSchema[] = [
       ok: 'true',
       code: 'authorization code',
       redirect_to: 'redirect URL',
-      access_request_status:
-        '"pending" (only when request_access created a pending access request)',
+      access_request_status: '"pending" when request_access created a pending access request',
     },
   },
   {
@@ -351,9 +342,7 @@ const orgEndpoints: EndpointSchema[] = [
     path: '/org/organisations/:orgId/teams',
     description: 'List teams',
     auth: 'domain hash bearer token',
-    response: {
-      data: 'array — team records including id, name, slug, description, groupId, and isDefault',
-    },
+    response: { data: 'array — team records including id, name, slug, description, groupId, isDefault' },
   },
   {
     method: 'POST',
@@ -362,8 +351,7 @@ const orgEndpoints: EndpointSchema[] = [
     auth: 'domain hash bearer token',
     body: {
       name: 'string (required)',
-      'slug?':
-        'string — optional custom team slug; if omitted, a unique slug is derived from the name',
+      'slug?': 'string — optional custom team slug; otherwise derived from name',
       description: 'string (optional)',
     },
     response: {
@@ -410,18 +398,14 @@ const orgEndpoints: EndpointSchema[] = [
       'invitedBy?': 'object — optional inviter metadata { userId?, name?, email? }',
       invites: 'array (required, 1-200) — [{ email: string, name?: string, teamRole?: string }]',
     },
-    response: {
-      results: 'array — per-email status: invited | resent_existing | already_member | conflict',
-    },
+    response: { results: 'array — per-email status: invited | resent_existing | already_member | conflict' },
   },
   {
     method: 'GET',
     path: '/org/organisations/:orgId/teams/:teamId/invitations',
     description: 'List invitation history for a team',
     auth: 'domain hash bearer token',
-    response: {
-      data: 'array — team invite records with status, inviter metadata, send/open timestamps, and accepted/declined state',
-    },
+    response: { data: 'array — invite records with status, inviter, send/open, accepted/declined state' },
   },
   {
     method: 'POST',
@@ -439,9 +423,7 @@ const orgEndpoints: EndpointSchema[] = [
       domain: 'string (required) — must match the config domain for domain-hash auth',
       status: 'string (optional) — pending | approved | rejected',
     },
-    response: {
-      data: 'array — access request records with requester identity, status, requested/reviewed timestamps, and reviewer metadata',
-    },
+    response: { data: 'array — access requests with requester, status, timestamps, reviewer metadata' },
   },
   {
     method: 'POST',

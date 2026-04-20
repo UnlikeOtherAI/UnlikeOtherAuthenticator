@@ -223,7 +223,7 @@ describe.skipIf(!hasDatabase)('org features disabled behaviour', () => {
       headers: {
         authorization: `Bearer ${createClientId(sampleDomain, process.env.SHARED_SECRET!)}`,
       },
-      payload: { code },
+      payload: { code, redirect_url: 'https://client.example.com/oauth/callback' },
     });
     expect(tokenRes.statusCode).toBe(200);
 

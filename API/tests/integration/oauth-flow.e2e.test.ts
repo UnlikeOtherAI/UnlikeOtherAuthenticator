@@ -110,7 +110,7 @@ describe.skipIf(!hasDatabase)('E2E OAuth flow (config_url -> /auth -> login -> t
       headers: {
         authorization: `Bearer ${createClientId('client.example.com', process.env.SHARED_SECRET!)}`,
       },
-      payload: { code: loginBody.code },
+      payload: { code: loginBody.code, redirect_url: 'https://client.example.com/oauth/callback' },
     });
     expect(tokenRes.statusCode).toBe(200);
     const tokenBody = tokenRes.json() as { access_token: string; token_type: string };

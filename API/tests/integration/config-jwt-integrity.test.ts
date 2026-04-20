@@ -118,7 +118,7 @@ describe('Config JWT integrity is enforced across all config-verifier routes', (
       name: 'token exchange',
       method: 'POST',
       url: `/auth/token?${q}`,
-      payload: { code: 'test-code' },
+      payload: { code: 'test-code', redirect_url: 'https://client.example.com/oauth/callback' },
     },
     {
       name: '2fa reset request',
