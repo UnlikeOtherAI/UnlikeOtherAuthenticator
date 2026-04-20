@@ -1,9 +1,13 @@
 import type { ClientConfig } from './config.service.js';
 import type { EmailTheme } from './email.templates.js';
 
-function optionalString(value: unknown): string | undefined {
-  return typeof value === 'string' && value ? value : undefined;
-}
+import {
+  parseFontFamily,
+  sanitizeCssLength,
+  sanitizeFontImportUrl,
+  sanitizeFontWeight,
+  sanitizeHexColor,
+} from '../utils/theme-sanitizer.js';
 
 /** Extracts email-safe theme colors from the client config's ui_theme. */
 export function extractEmailTheme(config: ClientConfig): Partial<EmailTheme> {
@@ -22,10 +26,14 @@ export function extractEmailTheme(config: ClientConfig): Partial<EmailTheme> {
     logoUrl: ui_theme.logo.url || undefined,
     logoAlt: ui_theme.logo.alt,
     logoText: ui_theme.logo.text || undefined,
-    logoFontSize: ui_theme.logo.font_size || undefined,
-    logoFontWeight: optionalString(ui_theme.logo.font_weight),
-    logoFontFamily: logoStyle?.['font-family'] || undefined,
-    logoColor: ui_theme.logo.color || undefined,
-    fontImportUrl: ui_theme.typography.font_import_url || undefined,
+    logoFontSize: sanitizeCssLength(
+      ui_theme.logo.font_size ?? logoStyle?.fontSize ?? logoStyle?.['font-size'],
+    ),
+    logoFontWeight: sanitizeFontWeight(
+      ui_theme.logo.font_weight ?? logoStyle?.fontWeight ?? logoStyle?.['font-weight'],
+    ),
+    logoFontFamily: parseFontFamily(logoStyle?.fontFamily ?? logoStyle?.['font-family']),
+    logoColor: sanitizeHexColor(ui_theme.logo.color ?? logoStyle?.color),
+    fontImportUrl: sanitizeFontImportUrl(ui_theme.typography.font_import_url),
   };
 }
