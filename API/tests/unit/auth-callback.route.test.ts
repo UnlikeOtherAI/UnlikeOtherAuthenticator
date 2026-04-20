@@ -90,6 +90,7 @@ describe('GET /auth/callback/:provider', () => {
     process.env.NODE_ENV = 'test';
     process.env.SHARED_SECRET = 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER = 'uoa-auth-service';
+    process.env.CONFIG_JWKS_URL = 'https://auth.example.com/.well-known/jwks.json';
     process.env.GOOGLE_CLIENT_ID = 'google-client-id';
     process.env.GOOGLE_CLIENT_SECRET = 'google-client-secret';
     delete process.env.DATABASE_URL;
@@ -145,6 +146,13 @@ describe('GET /auth/callback/:provider', () => {
 
     expect(res.statusCode).toBe(302);
     expect(res.headers.location).toBe('https://client.example.com/oauth/callback?error=auth_failed');
+    expect(res.headers['cache-control']).toBe('no-store');
+    expect(res.headers.pragma).toBe('no-cache');
+    expect(verifyConfigJwtSignatureMock).toHaveBeenCalledWith(
+      'config-jwt',
+      'https://auth.example.com/.well-known/jwks.json',
+      'uoa-auth-service',
+    );
     expect(loginWithSocialProfileMock).toHaveBeenCalledTimes(1);
     expect(issueAuthorizationCodeMock).not.toHaveBeenCalled();
 

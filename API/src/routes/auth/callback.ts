@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 
 import { getEnv, requireEnv } from '../../config/env.js';
@@ -58,6 +58,12 @@ function buildAuthFailedRedirectUrl(redirectUrl: string): string {
   return u.toString();
 }
 
+function redirectNoStore(reply: FastifyReply, url: string): void {
+  reply.header('Cache-Control', 'no-store');
+  reply.header('Pragma', 'no-cache');
+  reply.redirect(url, 302);
+}
+
 export function registerAuthCallbackRoute(app: FastifyInstance): void {
   app.get(
     '/auth/callback/:provider',
@@ -75,9 +81,10 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         throw new AppError('BAD_REQUEST', 400, 'MISSING_SOCIAL_CALLBACK_PARAMS');
       }
 
-      const { SHARED_SECRET, AUTH_SERVICE_IDENTIFIER } = requireEnv(
+      const { SHARED_SECRET, AUTH_SERVICE_IDENTIFIER, CONFIG_JWKS_URL } = requireEnv(
         'SHARED_SECRET',
         'AUTH_SERVICE_IDENTIFIER',
+        'CONFIG_JWKS_URL',
       );
       const baseUrl = resolvePublicBaseUrl();
 
@@ -99,7 +106,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
       const configJwt = await fetchConfigJwtFromUrl(configUrl);
       const payload = await verifyConfigJwtSignature(
         configJwt,
-        SHARED_SECRET,
+        CONFIG_JWKS_URL,
         AUTH_SERVICE_IDENTIFIER,
       );
       const config = validateConfigFields(payload);
@@ -196,7 +203,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
           codeChallenge: socialState.code_challenge,
           codeChallengeMethod: socialState.code_challenge_method,
         });
-        reply.redirect(buildAuthFailedRedirectUrl(redirectUrl), 302);
+        redirectNoStore(reply, buildAuthFailedRedirectUrl(redirectUrl));
         return;
       }
 
@@ -207,7 +214,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
       });
 
       if (socialLoginResult.status === 'blocked') {
-        reply.redirect(buildAuthFailedRedirectUrl(redirectUrl), 302);
+        redirectNoStore(reply, buildAuthFailedRedirectUrl(redirectUrl));
         return;
       }
 
@@ -238,7 +245,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         if (socialState.request_access === true) {
           u.searchParams.set('request_access', 'true');
         }
-        reply.redirect(u.toString(), 302);
+        redirectNoStore(reply, u.toString());
         return;
       }
 
@@ -269,7 +276,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         request.log.error({ err }, 'failed to record login log');
       }
 
-      reply.redirect(finalResult.redirectTo, 302);
+      redirectNoStore(reply, finalResult.redirectTo);
     },
   );
 }
