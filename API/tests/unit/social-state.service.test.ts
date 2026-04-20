@@ -30,6 +30,35 @@ describe('social-state.service', () => {
     });
   });
 
+  it('round-trips PKCE challenge metadata', async () => {
+    const jwt = await signSocialState({
+      provider: 'google',
+      configUrl: 'https://client.example.com/auth-config',
+      redirectUrl: 'https://client.example.com/oauth/callback',
+      requestAccess: true,
+      codeChallenge: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+      codeChallengeMethod: 'S256',
+      sharedSecret: 'test-shared-secret',
+      audience: 'uoa-auth-service',
+      baseUrlForIssuer: 'https://auth.example.com',
+      now: new Date('2026-01-01T00:00:00.000Z'),
+      ttlMs: 60_000,
+    });
+
+    const state = await verifySocialState({
+      stateJwt: jwt,
+      sharedSecret: 'test-shared-secret',
+      audience: 'uoa-auth-service',
+      now: new Date('2026-01-01T00:00:30.000Z'),
+    });
+
+    expect(state).toMatchObject({
+      request_access: true,
+      code_challenge: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+      code_challenge_method: 'S256',
+    });
+  });
+
   it('rejects expired social state JWTs', async () => {
     const jwt = await signSocialState({
       provider: 'google',

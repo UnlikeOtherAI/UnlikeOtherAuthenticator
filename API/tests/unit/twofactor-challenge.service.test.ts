@@ -38,6 +38,35 @@ describe('twofactor-challenge.service', () => {
     });
   });
 
+  it('round-trips PKCE challenge metadata', async () => {
+    const now = new Date('2026-02-10T00:00:00.000Z');
+    const token = await signTwoFaChallenge({
+      userId: 'u1',
+      domain: 'client.example.com',
+      configUrl: 'https://client.example.com/auth-config',
+      redirectUrl: 'https://client.example.com/oauth/callback',
+      authMethod: 'email_password',
+      codeChallenge: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+      codeChallengeMethod: 'S256',
+      sharedSecret: 'test-shared-secret',
+      audience: 'uoa-auth-service',
+      now,
+      ttlMs: 5 * 60 * 1000,
+    });
+
+    const decoded = await verifyTwoFaChallenge({
+      token,
+      sharedSecret: 'test-shared-secret',
+      audience: 'uoa-auth-service',
+      now,
+    });
+
+    expect(decoded).toMatchObject({
+      codeChallenge: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+      codeChallengeMethod: 'S256',
+    });
+  });
+
   it('rejects verification when the audience is wrong', async () => {
     const now = new Date('2026-02-10T00:00:00.000Z');
     const token = await signTwoFaChallenge({

@@ -107,7 +107,7 @@ export async function verifyTwoFaChallenge(params: {
     throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
   }
 
-  return {
+  const challenge: TwoFaChallenge = {
     userId: parsed.sub,
     configUrl: parsed.config_url,
     redirectUrl: parsed.redirect_url,
@@ -115,7 +115,10 @@ export async function verifyTwoFaChallenge(params: {
     authMethod: parsed.auth_method,
     rememberMe: parsed.remember_me ?? false,
     requestAccess: parsed.request_access ?? false,
-    codeChallenge: parsed.code_challenge,
-    codeChallengeMethod: parsed.code_challenge_method,
   };
+  if (parsed.code_challenge) {
+    challenge.codeChallenge = parsed.code_challenge;
+    challenge.codeChallengeMethod = parsed.code_challenge_method;
+  }
+  return challenge;
 }
