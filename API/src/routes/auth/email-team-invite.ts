@@ -10,10 +10,11 @@ import { tokenConsumeRateLimiter } from './rate-limit-keys.js';
 
 const QuerySchema = z
   .object({
+    config_url: z.string().trim().min(1),
     token: z.string().trim().min(1),
     redirect_url: z.string().trim().min(1).optional(),
   })
-  .passthrough();
+  .strict();
 
 function escapeHtml(value: string): string {
   return value

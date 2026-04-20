@@ -11,9 +11,10 @@ const DOMAIN_MAPPING_LOOKUP_WINDOW_MS = 60 * 1000;
 
 const QuerySchema = z
   .object({
+    config_url: z.string().min(1),
     email_domain: z.string().trim().toLowerCase().min(1),
   })
-  .passthrough();
+  .strict();
 
 function keyDomainMappingLookupRateLimit(request: FastifyRequest): string {
   return `auth:domain-mapping:${request.ip ?? 'unknown'}`;

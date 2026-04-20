@@ -12,12 +12,12 @@ export const DomainQuerySchema = z
       .transform((value) => value.toLowerCase().replace(/\.$/, '')),
     config_url: z.string().trim().min(1),
   })
-  .passthrough();
+  .strict();
 
 export const ListQuerySchema = DomainQuerySchema.extend({
   limit: z.coerce.number().int().positive().max(200).optional(),
   cursor: z.string().trim().min(1).optional(),
-}).passthrough();
+}).strict();
 
 export const OrgPathSchema = z.object({
   orgId: z.string().trim().min(1),

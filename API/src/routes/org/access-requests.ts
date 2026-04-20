@@ -21,7 +21,7 @@ const DomainQuerySchema = z
     config_url: z.string().trim().min(1),
     status: z.string().trim().min(1).optional(),
   })
-  .passthrough();
+  .strict();
 
 const PathSchema = z.object({
   orgId: z.string().trim().min(1),

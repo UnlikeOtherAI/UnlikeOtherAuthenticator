@@ -21,7 +21,7 @@ const DomainQuerySchema = z
       .transform((value) => value.toLowerCase().replace(/\.$/, '')),
     config_url: z.string().trim().min(1),
   })
-  .passthrough();
+  .strict();
 
 const GroupPathSchema = z.object({
   orgId: z.string().trim().min(1),

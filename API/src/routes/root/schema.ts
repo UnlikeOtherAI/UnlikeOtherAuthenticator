@@ -205,7 +205,10 @@ const authEndpoints: EndpointSchema[] = [
     path: '/auth/domain-mapping',
     description: 'Look up org/team mapping for an email domain',
     auth: 'config_url query param + domain hash bearer token',
-    query: { email_domain: 'string (required)' },
+    query: {
+      config_url: 'string (required)',
+      email_domain: 'string (required)',
+    },
   },
   {
     method: 'POST',
@@ -249,21 +252,27 @@ const domainEndpoints: EndpointSchema[] = [
     path: '/domain/users',
     description: 'List users for a domain',
     auth: 'domain hash bearer token',
-    query: { config_url: 'string (required)' },
+    query: {
+      domain: 'string (required)',
+      limit: 'number (optional)',
+    },
   },
   {
     method: 'GET',
     path: '/domain/logs',
     description: 'Login logs for a domain',
     auth: 'domain hash bearer token',
-    query: { config_url: 'string (required)' },
+    query: {
+      domain: 'string (required)',
+      limit: 'number (optional)',
+    },
   },
   {
     method: 'GET',
     path: '/domain/debug',
     description: 'Debug info (requires debug_enabled in config)',
     auth: 'domain hash bearer token',
-    query: { config_url: 'string (required)' },
+    query: { domain: 'string (required)' },
   },
 ];
 

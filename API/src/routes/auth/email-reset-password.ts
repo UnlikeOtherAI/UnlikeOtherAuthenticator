@@ -10,10 +10,11 @@ import { tokenConsumeRateLimiter } from './rate-limit-keys.js';
 
 const QuerySchema = z
   .object({
+    config_url: z.string().min(1),
     token: z.string().min(1),
     redirect_url: z.string().min(1).optional(),
   })
-  .passthrough();
+  .strict();
 
 export function registerAuthEmailResetPasswordRoute(app: FastifyInstance): void {
   // Email link landing for password reset. Validates the token, then renders

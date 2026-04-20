@@ -9,7 +9,7 @@ const QuerySchema = z
     domain: z.string().trim().min(1),
     limit: z.coerce.number().int().positive().optional(),
   })
-  .passthrough();
+  .strict();
 
 export function registerDomainUsersRoute(app: FastifyInstance): void {
   app.get(
@@ -37,4 +37,3 @@ export function registerDomainUsersRoute(app: FastifyInstance): void {
     },
   );
 }
-

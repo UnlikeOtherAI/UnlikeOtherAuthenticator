@@ -11,8 +11,9 @@ import { configVerifier } from '../../middleware/config-verifier.js';
 const QuerySchema = z
   .object({
     domain: z.string().trim().min(1),
+    config_url: z.string().trim().min(1),
   })
-  .passthrough();
+  .strict();
 
 function parseBearerOrRawToken(value: unknown): string | null {
   if (typeof value !== 'string') return null;

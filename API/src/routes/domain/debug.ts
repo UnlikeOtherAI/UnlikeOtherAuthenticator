@@ -10,7 +10,7 @@ const QuerySchema = z
   .object({
     domain: z.string().trim().min(1),
   })
-  .passthrough();
+  .strict();
 
 function normalizeDomain(value: string): string {
   return value.trim().toLowerCase().replace(/\.$/, '');

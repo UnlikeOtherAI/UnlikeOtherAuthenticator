@@ -17,12 +17,13 @@ const RegisterBodySchema = z
 
 const RegisterQuerySchema = z
   .object({
+    config_url: z.string().min(1),
     redirect_url: z.string().min(1).optional(),
     code_challenge: z.string().min(1).optional(),
     code_challenge_method: z.string().min(1).optional(),
     request_access: z.string().optional(),
   })
-  .passthrough();
+  .strict();
 
 export function registerAuthRegisterRoute(app: FastifyInstance): void {
   app.post(
