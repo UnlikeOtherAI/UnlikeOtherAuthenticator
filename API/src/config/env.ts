@@ -32,7 +32,7 @@ const EnvSchema = z.object({
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace'])
     .default('info'),
   // Single global shared secret used for config JWT verification and domain hashing.
-  SHARED_SECRET: z.string().min(1),
+  SHARED_SECRET: z.string().min(32),
   // Identifier for this auth service instance. Used as expected `aud` for config JWTs.
   AUTH_SERVICE_IDENTIFIER: z.string().min(1),
   DATABASE_URL: z.string().min(1).optional(),
