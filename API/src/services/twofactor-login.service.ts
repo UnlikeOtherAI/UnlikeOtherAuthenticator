@@ -4,7 +4,7 @@ import { getEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import { decryptTwoFaSecret } from '../utils/twofa-secret.js';
-import { findMatchingTotpCounter, verifyTotpCode } from './totp.service.js';
+import { findMatchingTotpCounter } from './totp.service.js';
 
 type TwoFaLoginPrisma = {
   user: Pick<PrismaClient['user'], 'findUnique' | 'updateMany'>;
@@ -16,7 +16,6 @@ type TwoFaLoginDeps = {
   sharedSecret?: string;
   decryptTwoFaSecret?: typeof decryptTwoFaSecret;
   findMatchingTotpCounter?: typeof findMatchingTotpCounter;
-  verifyTotpCode?: typeof verifyTotpCode;
   now?: () => Date;
 };
 
@@ -51,18 +50,11 @@ export async function verifyTwoFactorForLogin(
   const totpSecret = decrypt({ encryptedSecret: user.twoFaSecret, sharedSecret });
   const now = deps?.now ? deps.now() : new Date();
 
-  let matchedCounter = (deps?.findMatchingTotpCounter ?? findMatchingTotpCounter)({
+  const matchedCounter = (deps?.findMatchingTotpCounter ?? findMatchingTotpCounter)({
     secret: totpSecret,
     code: params.code,
     now,
   });
-
-  if (
-    matchedCounter === null &&
-    deps?.verifyTotpCode?.({ secret: totpSecret, code: params.code, now })
-  ) {
-    matchedCounter = Math.floor(now.getTime() / 1000 / 30);
-  }
 
   if (matchedCounter === null) {
     throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');

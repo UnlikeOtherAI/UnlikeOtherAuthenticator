@@ -45,7 +45,7 @@ describe('verifyTwoFactorForLogin', () => {
           env: testEnv(),
           prisma,
           decryptTwoFaSecret: () => 'JBSWY3DPEHPK3PXP',
-          verifyTotpCode: () => true,
+          findMatchingTotpCounter: () => 1,
         },
       ),
     ).resolves.toBeUndefined();
@@ -70,7 +70,7 @@ describe('verifyTwoFactorForLogin', () => {
           env: testEnv(),
           prisma,
           decryptTwoFaSecret: () => 'JBSWY3DPEHPK3PXP',
-          verifyTotpCode: () => false,
+          findMatchingTotpCounter: () => null,
         },
       ),
     ).rejects.toMatchObject({ statusCode: 401 });
