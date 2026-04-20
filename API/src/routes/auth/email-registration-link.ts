@@ -77,8 +77,8 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
             redirectUrl,
             rememberMe: request.config.session?.remember_me_default ?? true,
             requestAccess: parseRequestAccessFlag(request_access),
-            codeChallenge: pkce?.codeChallenge,
-            codeChallengeMethod: pkce?.codeChallengeMethod,
+            codeChallenge: pkce.codeChallenge,
+            codeChallengeMethod: pkce.codeChallengeMethod,
           });
 
           try {
@@ -138,10 +138,8 @@ function buildAuthUrl(
   const params = new URLSearchParams();
   params.set('config_url', configUrl);
   if (redirectUrl) params.set('redirect_url', redirectUrl);
-  if (pkce) {
-    params.set('code_challenge', pkce.codeChallenge);
-    params.set('code_challenge_method', pkce.codeChallengeMethod);
-  }
+  params.set('code_challenge', pkce.codeChallenge);
+  params.set('code_challenge_method', pkce.codeChallengeMethod);
   params.set('email_token', token);
   params.set('email_token_type', type);
   if (requestAccess) params.set('request_access', 'true');

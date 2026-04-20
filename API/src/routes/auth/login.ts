@@ -81,8 +81,8 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
           authMethod: 'email_password',
           rememberMe,
           requestAccess: parseRequestAccessFlag(request_access),
-          codeChallenge: pkce?.codeChallenge,
-          codeChallengeMethod: pkce?.codeChallengeMethod,
+          codeChallenge: pkce.codeChallenge,
+          codeChallengeMethod: pkce.codeChallengeMethod,
           sharedSecret: SHARED_SECRET,
           audience: AUTH_SERVICE_IDENTIFIER,
         });
@@ -98,8 +98,8 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
         redirectUrl,
         rememberMe,
         requestAccess: parseRequestAccessFlag(request_access),
-        codeChallenge: pkce?.codeChallenge,
-        codeChallengeMethod: pkce?.codeChallengeMethod,
+        codeChallenge: pkce.codeChallenge,
+        codeChallengeMethod: pkce.codeChallengeMethod,
       });
 
       try {

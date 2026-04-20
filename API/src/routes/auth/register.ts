@@ -51,8 +51,8 @@ export function registerAuthRegisterRoute(app: FastifyInstance): void {
             configUrl: request.configUrl,
             redirectUrl: redirect_url,
             requestAccess: parseRequestAccessFlag(request_access),
-            codeChallenge: pkce?.codeChallenge,
-            codeChallengeMethod: pkce?.codeChallengeMethod,
+            codeChallenge: pkce.codeChallenge,
+            codeChallengeMethod: pkce.codeChallengeMethod,
           });
         } catch (err) {
           // Never leak internal failures; always return the generic success response.

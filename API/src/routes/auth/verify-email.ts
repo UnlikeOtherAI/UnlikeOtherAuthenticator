@@ -82,8 +82,8 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
         redirectUrl,
         rememberMe: request.config.session?.remember_me_default ?? true,
         requestAccess: parseRequestAccessFlag(request_access),
-        codeChallenge: pkce?.codeChallenge,
-        codeChallengeMethod: pkce?.codeChallengeMethod,
+        codeChallenge: pkce.codeChallenge,
+        codeChallengeMethod: pkce.codeChallengeMethod,
       });
 
       try {
