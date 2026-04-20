@@ -79,7 +79,7 @@ export function registerLlmRoute(app: FastifyInstance): void {
         step_1:
           'Create an HTTPS config JWT endpoint on your backend that returns a signed JWT with your domain, redirect_urls, enabled_auth_methods, ui_theme, and language_config.',
         step_2:
-          'Before wiring the auth popup, POST /config/verify with either config, config_jwt, or config_url. Use jwks_url and auth_service_identifier when you want the auth service to confirm signature/audience problems separately from schema problems.',
+          'In non-production environments with DEBUG_ENABLED=true, POST /config/verify with either config, config_jwt, or config_url before wiring the auth popup. Use jwks_url and auth_service_identifier when you want the auth service to confirm signature/audience problems separately from schema problems.',
         step_3:
           'Open the auth popup/redirect to: GET /auth?config_url=<your_config_endpoint_url>&redirect_url=<your_callback_url>&code_challenge=<S256_challenge>&code_challenge_method=S256 (redirect_uri is also accepted as an alias for redirect_url)',
         step_4:

@@ -5,7 +5,8 @@ export const configDebugEndpoints: EndpointSchema[] = [
     method: 'POST',
     path: '/config/verify',
     description:
-      'Debug configuration validation for raw config JSON, config JWTs, or config_url fetch targets',
+      'Non-production DEBUG_ENABLED-only configuration validation for raw config JSON, config JWTs, or config_url fetch targets',
+    auth: 'Available only when DEBUG_ENABLED=true and NODE_ENV is not production; IP rate limited',
     body: {
       'config?': 'object — raw config payload to schema-validate directly',
       'config_jwt?': 'string — signed config JWT to decode and validate',

@@ -177,7 +177,8 @@ export const configVerificationEndpointDocumentation = {
   path: '/config/verify',
   method: 'POST',
   description:
-    'Debug endpoint that validates raw config JSON, a signed config JWT, or a config_url fetch target. It reports schema problems separately from signature, audience, and config_url/domain issues.',
+    'Non-production DEBUG_ENABLED-only debug endpoint that validates raw config JSON, a signed config JWT, or a config_url fetch target. It reports schema problems separately from signature, audience, and config_url/domain issues.',
+  auth: 'Available only when DEBUG_ENABLED=true and NODE_ENV is not production; IP rate limited.',
   body: {
     config:
       'object (optional) — raw config payload to schema-validate directly. This skips JWT signature checking unless config_jwt or config_url is also supplied instead.',

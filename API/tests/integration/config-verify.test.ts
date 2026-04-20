@@ -9,11 +9,13 @@ import {
 } from '../helpers/test-config.js';
 
 let app: FastifyInstance;
+const originalDebugEnabled = process.env.DEBUG_ENABLED;
 
 beforeAll(async () => {
   process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
   process.env.AUTH_SERVICE_IDENTIFIER =
     process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
+  process.env.DEBUG_ENABLED = 'true';
 
   app = await createApp();
   await app.ready();
@@ -25,10 +27,33 @@ afterEach(() => {
 });
 
 afterAll(async () => {
+  if (originalDebugEnabled === undefined) {
+    delete process.env.DEBUG_ENABLED;
+  } else {
+    process.env.DEBUG_ENABLED = originalDebugEnabled;
+  }
   await app.close();
 });
 
 describe('POST /config/verify', () => {
+  it('is hidden when DEBUG_ENABLED is false', async () => {
+    process.env.DEBUG_ENABLED = 'false';
+
+    try {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/config/verify',
+        payload: {
+          config: baseClientConfigPayload(),
+        },
+      });
+
+      expect(res.statusCode).toBe(404);
+    } finally {
+      process.env.DEBUG_ENABLED = 'true';
+    }
+  });
+
   it('reports schema errors for raw config payloads without requiring JWT checks', async () => {
     const res = await app.inject({
       method: 'POST',
