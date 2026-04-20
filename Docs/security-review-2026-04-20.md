@@ -344,3 +344,46 @@ Multiple verifiers independently CONFIRMED these original findings against sourc
 - **H8 reframe** — 2FA challenge JWT DOES include `domain` in the signed payload (`twofactor-challenge.service.ts:60`). The original framing was wrong. The real issue: no `issuer` is set or enforced on the 2FA challenge JWT, so cross-service confusion with other shared-secret JWTs of the same audience is possible. Update H8 in the Status register accordingly.
 - **H12 reframe** — Globally unique `Organisation.slug` is not the security issue; the issue is schema/migration/code drift (VC2 above). Update H12 to reference VC2.
 - **C1 scope** — The rate-limiter IS wired on `POST /org/organisations` (`organisations.ts:175-179`) and `POST /org/organisations/:orgId/members` (line 315-319), in addition to `domain-mapping.ts`. The "only two routes" claim was too narrow; the auth-route gap remains the core issue.
+
+---
+
+## Verifier Pass 2 Addendum (2026-04-20)
+
+Second-pass verification by 3 parallel `codex exec` runs (crit/high, medium/low, architecture/schema) plus 10 parallel `max` agents across orthogonal focus areas (injection, IDOR, SSRF, low/info re-verify, auth-flow, SCIM, hook ordering, redirects, refresh tokens, environment). All findings below were cross-validated against current source.
+
+### NEW — Medium
+
+- **VM10 — Error responses leak `code`, `summary`, `details`, `hints` to unauthenticated clients** (`API/src/utils/error-response.ts:543-549`, `middleware/error-handler.ts:30-86`). `buildPublicErrorBody` always returns `{ error, code, summary, details, hints }` regardless of environment or debug gating. For a service whose brief mandates "all auth errors are generic to the user" (CLAUDE.md § Security), the presence of `code: "invalid_credentials"`, `summary: "…"`, and `hints: […]` in 401/400 bodies is a direct violation. Also renders `auth-debug.html` from `shouldRenderAuthDebug` on `GET /auth*` unconditionally. Fix: gate `code/summary/details/hints` behind an explicit `debug_enabled` config flag; default production to `{ error }` only.
+- **VM11 — `font_import_url` injected as raw `<link rel=stylesheet>`** (`Auth/src/theme/ThemeProvider.tsx:38`). Any attacker-controlled theme (config JWT compromise or misconfigured upstream) loads arbitrary CSS/font URLs via `<link href={theme.typography.fontImportUrl}>`. Reviewer must sanitize protocol (https only), origin allowlist, or switch to `@font-face` served from trusted CDN.
+- **VM12 — `Logo.tsx` spreads arbitrary `theme.logo.style` into React `style` prop** (`Auth/src/components/ui/Logo.tsx:20-35`). `style={{ ...theme.logo.style, ... }}` allows a malicious theme payload to set arbitrary CSS properties (including `background-image: url(...)` exfiltration vectors and `content: attr(...)` disclosure). Restrict the allowed keys to a whitelist (`color`, `fontSize`, `fontWeight`, `letterSpacing`).
+- **VM13 — `fetchConfigJwtFromUrl` has no response body size cap** (`API/src/services/config.service.ts:339-353`). Timeout exists (line 339) but `await res.text()` can buffer arbitrary bytes. Hostile config server → memory pressure / OOM. Wrap with a streaming reader enforcing a max (e.g., 64 KB).
+- **VM14 — `configVerifier` runs before `requireDomainHashAuthForDomainQuery` on org routes** (`API/src/routes/org/organisations.ts:149-164` and siblings). An unauthenticated caller can trigger the outbound `config_url` fetch by attaching any `config_url` query parameter, because the config fetch/verify step precedes the domain-hash auth gate. This is an SSRF amplification vector. Flip the order: domain-hash auth first, then config.
+- **VM15 — Schema drift is broader than SCIM** (`API/prisma/schema.prisma` vs generated client). Models/fields present in schema but not in migration history include SCIM tables, `OrgEmailDomainRule`, `TeamCustomRole`, `User.scimExternalId`, `Organisation.dormant`, `TeamMember.customRole`. Any prisma generate/deploy will either fail or silently diverge. Consolidate into a single migration and regenerate client before next deploy.
+- **VM16 — `QrCodeDisplay.tsx:33` renders `<img src={dataUri}>` with no protocol guard**. TOTP `otpauth://` URLs are converted to data URIs server-side by `qrcode` lib; if a future refactor lets the URL field originate from config or an untrusted source, arbitrary `src` (including `javascript:` on legacy browsers or `http://attacker/...` tracking pixels) becomes possible. Add a `data:image/png;base64,` prefix check.
+- **VM17 — `email-reset-password.ts:38-49` forwards `redirect_url` to Auth UI without `selectRedirectUrl` validation**. All other auth-entry routes (login, verify-email, email-registration-link) pass `redirect_url` through the allowlist. This route forwards the raw query param, enabling an attacker-controlled link in a legitimately delivered reset email to redirect the user post-reset.
+- **VM18 — Pino redact list misses snake_case variants and several sensitive fields** (`API/src/app.ts:21-41`). The current redact list covers `authorization`, `x-uoa-access-token`, `password`, and a few camelCase body paths. Missing: `code` (authorization code), `twofa_token`, `email_token`, `refresh_token`, `client_secret`, `shared_secret` in snake_case bodies. Since Fastify logs full bodies on 4xx in some error paths, these can land in logs.
+
+### NEW — Low
+
+- **VL11 — `VerificationMethod` enum missing FACEBOOK/LINKEDIN** (`API/prisma/schema.prisma:23`). Social verification paths use only GOOGLE/GITHUB/APPLE in enum, but the login service code branches on Facebook/LinkedIn too. Logging `verificationMethod` for these providers would break on the enum write. Add the enum values.
+- **VL12 — `LOG_RETENTION_DAYS` has no upper bound** (`API/src/config/env.ts:78`). A misconfigured value of `100000` silently turns off log pruning. Cap at 365 or 730 days.
+- **VL13 — `domain-hash-auth.ts:12` reads `process.env.SHARED_SECRET` directly** instead of the validated `env` export. Bypasses the Zod parse that enforces non-empty / minimum length. Should import from `config/env.ts`.
+- **VL14 — `Auth/src/main.tsx:10` consumes `window.__UOA_INITIAL_SEARCH__` without validation**. Server-injected string passes through to URLSearchParams. The server is trusted, so this is defense-in-depth only, but a regression in the HTML renderer could let attacker-controlled content land in router state.
+- **VL15 — Partial unique "one superuser per domain" index not expressible in Prisma schema**. Brief implies each domain can designate at most one superuser, but Prisma has no partial unique syntax; enforcement currently lives only in application code. Add a raw SQL migration for `CREATE UNIQUE INDEX ... WHERE is_superuser = true`.
+
+### Corrections to earlier findings
+
+- **L3 CORRECTED** — Original L3 claimed `config.service.ts:173` had a specific issue; re-verification locates the actual finding at `config.service.ts:82` (`HttpUrlOrEmptySchema` protocol-only validation, no origin allowlist). Updating the line reference; the underlying issue remains valid.
+- **L12 REFUTED** — Original L12 flagged missing `onUpdate` cascade on `TeamMember`/`GroupMember` FKs (`schema.prisma:279-280,369-370`). Prisma defaults and Postgres FK semantics make `onUpdate: Cascade` the default for this relation shape and no production write path updates the parent PK. Remove L12 from the action list.
+- **H8 reframe (re-confirmed)** — 2FA challenge JWT DOES include `domain` in signed payload but omits `issuer`. Fix is to set `iss` at sign and enforce at verify.
+- **H12 reframe (re-confirmed)** — The issue is schema/migration/code drift (VC2 / VM15), not `Organisation.slug` global uniqueness.
+
+### Rejected verifier claims (pass 2)
+
+- **"`org/access-requests` approve/reject missing `requireOrgRole()` = High"** (max-7). REJECTED. These routes use `requireDomainHashAuthForDomainQuery()` which is the server-to-server trust model per brief; the calling product backend is responsible for role enforcement. Same rationale applies to max-7's claim on `org/team-invitations` create/resend and the internal org group/member routes. If any guidance is added, it should be a code comment documenting the deliberate server-to-server contract, not additional middleware.
+- **"`org/access-requests` rate-limiter positioned last in preValidation"** (max-7 INFO). REJECTED as non-issue. Rate limiters in this codebase are auth-aware (key on `userId` or `orgId` when present); running them after auth is intentional.
+- **"Refresh-token rotation has a race window"** (max-9). REJECTED. The analysis confirms that under Postgres READ COMMITTED, the `updateMany` with `replacedByTokenId: null` predicate collapses races safely — the second writer always fails and triggers family revocation. Current implementation is correct.
+
+### Verifier cross-confirmations (pass 2, already in report)
+
+Pass-2 verifiers independently CONFIRMED: L1, L2, L3 (with line correction), L4, L5, L6, L7, L8, L9, L10, L11 (duplicate `extractEmailDomain`), VL1–VL10, I1–I10, and all M1–M13 / VM1–VM9. No additional deltas to the main report.
