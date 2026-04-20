@@ -5,7 +5,15 @@ import { App } from './App.js';
 import './index.css';
 
 const MAX_INITIAL_SEARCH_LENGTH = 4096;
-const CONTROL_CHAR_PATTERN = /[\u0000-\u001F\u007F]/;
+const DEL_CHAR_CODE = 0x7f;
+
+function hasControlChar(value: string): boolean {
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    if (code < 0x20 || code === DEL_CHAR_CODE) return true;
+  }
+  return false;
+}
 
 const container = document.getElementById('root');
 if (!container) throw new Error('Missing #root element');
@@ -18,7 +26,7 @@ function readInitialSearch(value: unknown): string | undefined {
   if (value === '') return '';
   if (value.length > MAX_INITIAL_SEARCH_LENGTH) return undefined;
   if (!value.startsWith('?')) return undefined;
-  if (value.includes('#') || CONTROL_CHAR_PATTERN.test(value)) return undefined;
+  if (value.includes('#') || hasControlChar(value)) return undefined;
 
   try {
     new URLSearchParams(value);
