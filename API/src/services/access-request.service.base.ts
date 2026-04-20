@@ -2,6 +2,7 @@ import type { AccessRequestStatus, PrismaClient } from '@prisma/client';
 import type { ClientConfig } from './config.service.js';
 
 import { getEnv } from '../config/env.js';
+import { extractEmailDomain } from '../utils/email-domain.js';
 import { AppError } from '../utils/errors.js';
 import {
   assertDatabaseEnabled,
@@ -82,16 +83,13 @@ export function assertConfiguredAccessTarget(params: {
   }
 }
 
-export function isAutoGrantDomain(params: {
-  email: string;
-  config: ClientConfig;
-}): boolean {
+export function isAutoGrantDomain(params: { email: string; config: ClientConfig }): boolean {
   const domains = params.config.access_requests?.auto_grant_domains;
   if (!domains?.length) return false;
 
-  const atIndex = params.email.lastIndexOf('@');
-  if (atIndex < 0 || atIndex === params.email.length - 1) return false;
-  return domains.includes(params.email.slice(atIndex + 1).toLowerCase());
+  const emailDomain = extractEmailDomain(params.email);
+  if (!emailDomain) return false;
+  return domains.includes(emailDomain);
 }
 
 export function buildAdminReviewUrl(config: ClientConfig): string {

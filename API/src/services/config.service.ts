@@ -2,8 +2,10 @@ import { createRemoteJWKSet, decodeProtectedHeader, jwtVerify, type JWTPayload }
 import { AppError } from '../utils/errors.js';
 import { z } from 'zod';
 import { tryParseHttpUrl } from '../utils/http-url.js';
+import { getAppLogger } from '../utils/app-logger.js';
 
 const DEFAULT_CONFIG_FETCH_TIMEOUT_MS = 5_000;
+const MAX_CONFIG_JWT_RESPONSE_BYTES = 64 * 1024;
 
 const CONFIG_JWT_ALLOWED_ALGS = ['RS256'] as const;
 const configJwksCache = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
@@ -18,7 +20,11 @@ const HexColorSchema = z
   .string()
   .trim()
   .min(1)
-  .refine((value) => value === 'transparent' || /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(value));
+  .refine(
+    (value) =>
+      value === 'transparent' ||
+      /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(value),
+  );
 
 const CssLengthSchema = z
   .string()
@@ -36,7 +42,11 @@ const SafeCssValueSchema = z
 const HttpUrlOrEmptySchema = z
   .string()
   .trim()
-  .refine((value) => value === '' || Boolean(tryParseHttpUrl(value)));
+  .refine((value) => {
+    if (value === '') return true;
+    const parsed = tryParseHttpUrl(value);
+    return Boolean(parsed && parsed.protocol === 'https:');
+  });
 
 const UiThemeSchema = z
   .object({
@@ -93,19 +103,15 @@ const UiThemeSchema = z
   })
   .passthrough();
 
-const RequiredConfigSchema = z
-  .object({
-    domain: z.string().min(1),
-    // Brief 6.6: validate redirect URLs from config before redirecting.
-    redirect_urls: z.array(RedirectUrlSchema).min(1),
-    enabled_auth_methods: z.array(z.string().min(1)).min(1),
-    ui_theme: UiThemeSchema,
-    // Brief: either single language or array of languages (dropdown enabled).
-    language_config: z.union([
-      z.string().min(1),
-      z.array(z.string().min(1)).min(1),
-    ]),
-  });
+const RequiredConfigSchema = z.object({
+  domain: z.string().min(1),
+  // Brief 6.6: validate redirect URLs from config before redirecting.
+  redirect_urls: z.array(RedirectUrlSchema).min(1),
+  enabled_auth_methods: z.array(z.string().min(1)).min(1),
+  ui_theme: UiThemeSchema,
+  // Brief: either single language or array of languages (dropdown enabled).
+  language_config: z.union([z.string().min(1), z.array(z.string().min(1)).min(1)]),
+});
 
 export type RequiredClientConfig = z.infer<typeof RequiredConfigSchema>;
 
@@ -142,7 +148,12 @@ const AccessRequestConfigSchema = z
     target_team_id: z.string().trim().min(1).optional(),
     auto_grant_domains: z.array(z.string().trim().toLowerCase().min(1)).optional(),
     notify_org_roles: z.array(z.string().trim().min(1).max(50)).default(['owner', 'admin']),
-    admin_review_url: z.string().trim().min(1).refine((value) => Boolean(tryParseHttpUrl(value))).optional(),
+    admin_review_url: z
+      .string()
+      .trim()
+      .min(1)
+      .refine((value) => Boolean(tryParseHttpUrl(value)))
+      .optional(),
   })
   .superRefine((config, ctx) => {
     if (!config.enabled) {
@@ -180,10 +191,7 @@ const ClientConfigSchema = RequiredConfigSchema.extend({
     .enum(['password_required', 'passwordless'])
     .optional()
     .default('password_required'),
-  allowed_registration_domains: z
-    .array(z.string().trim().toLowerCase().min(1))
-    .min(1)
-    .optional(),
+  allowed_registration_domains: z.array(z.string().trim().toLowerCase().min(1)).min(1).optional(),
   registration_domain_mapping: RegistrationDomainMappingSchema,
   access_requests: AccessRequestConfigSchema.optional().default({
     enabled: false,
@@ -237,6 +245,19 @@ const ClientConfigSchema = RequiredConfigSchema.extend({
       org_roles: ['owner', 'admin', 'member'],
     }),
 }).superRefine((config, ctx) => {
+  const logoUrl = config.ui_theme.logo.url.trim();
+  if (logoUrl) {
+    const logoHost = normalizeHostname(new URL(logoUrl).hostname);
+    const configHost = normalizeHostname(config.domain);
+    if (logoHost !== configHost) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'ui_theme.logo.url must use the same origin as config.domain',
+        path: ['ui_theme', 'logo', 'url'],
+      });
+    }
+  }
+
   if (config.allow_registration === false && config.registration_mode === 'passwordless') {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
@@ -272,16 +293,17 @@ function warnUnreachableRegistrationDomainMappings(config: ClientConfig): void {
   }
 
   const allowedSet = new Set(allowed);
-  const unreachable = [...new Set(mappings.map((entry) => entry.email_domain))]
-    .filter((domain) => !allowedSet.has(domain));
+  const unreachable = [...new Set(mappings.map((entry) => entry.email_domain))].filter(
+    (domain) => !allowedSet.has(domain),
+  );
 
   if (!unreachable.length) {
     return;
   }
 
-  console.warn(
-    '[config]',
-    `registration_domain_mapping contains domains not in allowed_registration_domains for "${config.domain}": ${unreachable.join(', ')}`,
+  getAppLogger().warn(
+    { domain: config.domain, unreachable },
+    'registration_domain_mapping contains domains not in allowed_registration_domains',
   );
 }
 
@@ -332,8 +354,7 @@ function extractJwtFromBody(bodyText: string): string {
       if (typeof parsed === 'string') return parsed.trim();
       if (parsed && typeof parsed === 'object') {
         const obj = parsed as Record<string, unknown>;
-        const candidate =
-          obj.jwt ?? obj.token ?? obj.config_jwt ?? obj.configJwt ?? obj.configJWT;
+        const candidate = obj.jwt ?? obj.token ?? obj.config_jwt ?? obj.configJwt ?? obj.configJWT;
         if (typeof candidate === 'string') return candidate.trim();
       }
     } catch {
@@ -342,6 +363,34 @@ function extractJwtFromBody(bodyText: string): string {
   }
 
   return trimmed;
+}
+
+async function readResponseTextWithLimit(res: Response): Promise<string> {
+  if (!res.body) return '';
+
+  const reader = res.body.getReader();
+  const chunks: Buffer[] = [];
+  let total = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+
+      total += value.byteLength;
+      if (total > MAX_CONFIG_JWT_RESPONSE_BYTES) {
+        await reader.cancel();
+        throw new AppError('BAD_REQUEST', 400);
+      }
+
+      chunks.push(Buffer.from(value));
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  return Buffer.concat(chunks, total).toString('utf8');
 }
 
 export async function fetchConfigJwtFromUrl(
@@ -355,7 +404,7 @@ export async function fetchConfigJwtFromUrl(
     throw new AppError('BAD_REQUEST', 400);
   }
 
-  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+  if (url.protocol !== 'https:') {
     throw new AppError('BAD_REQUEST', 400);
   }
 
@@ -374,7 +423,7 @@ export async function fetchConfigJwtFromUrl(
       throw new AppError('BAD_REQUEST', 400);
     }
 
-    const jwt = extractJwtFromBody(await res.text());
+    const jwt = extractJwtFromBody(await readResponseTextWithLimit(res));
     if (!jwt) {
       throw new AppError('BAD_REQUEST', 400);
     }
@@ -421,10 +470,7 @@ export async function verifyConfigJwtSignature(
  * This prevents a client from hosting a valid config JWT for a different domain on their
  * own infrastructure.
  */
-export function assertConfigDomainMatchesConfigUrl(
-  domainClaim: string,
-  configUrl: string,
-): void {
+export function assertConfigDomainMatchesConfigUrl(domainClaim: string, configUrl: string): void {
   let url: URL;
   try {
     url = new URL(configUrl);
@@ -448,9 +494,7 @@ export function assertConfigDomainMatchesConfigUrl(
  * Deeper validation (aud/iss enforcement, domain/origin matching, redirect URL allowlisting)
  * is handled in subsequent tasks.
  */
-export function validateRequiredConfigFields(
-  payload: JWTPayload,
-): RequiredClientConfig {
+export function validateRequiredConfigFields(payload: JWTPayload): RequiredClientConfig {
   // JWTPayload is already JSON-ish but typed as unknown values; validate explicitly.
   return RequiredConfigSchema.parse(payload);
 }

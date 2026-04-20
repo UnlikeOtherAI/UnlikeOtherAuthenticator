@@ -15,7 +15,7 @@ export function registerLlmRoute(app: FastifyInstance): void {
         domain_auth:
           'Backend-to-backend endpoints (POST /auth/token, POST /auth/revoke, /domain/*, server-driven team invite routes under /org/organisations/:orgId/teams/:teamId/invitations*, and access-request review routes under /org/organisations/:orgId/teams/:teamId/access-requests*) require a domain hash bearer token: SHA-256(domain + SHARED_SECRET). This is sent as Authorization: Bearer <hash>.',
         config_url:
-          'Most endpoints require a config_url query parameter pointing to a URL that returns the signed config JWT. The server fetches and verifies this JWT on every request.',
+          'Most endpoints require a config_url query parameter pointing to an HTTPS URL that returns the signed config JWT. The server fetches and verifies this JWT on every request.',
         access_tokens:
           'Access tokens are JWTs with issuer AUTH_SERVICE_IDENTIFIER and audience uoa:access-token. Consumers must verify both iss and aud.',
       },
@@ -37,6 +37,8 @@ export function registerLlmRoute(app: FastifyInstance): void {
           PORT: 'Listen port (default: 3000)',
           PUBLIC_BASE_URL: 'Public origin for email links (e.g. "https://auth.example.com")',
           LOG_LEVEL: '"fatal" | "error" | "warn" | "info" | "debug" | "trace" (default: "info")',
+          DEBUG_ENABLED:
+            'Set true to include internal error code, summary, details, hints, and auth debug HTML in responses. Default false.',
           DATABASE_URL: 'PostgreSQL connection string',
           ACCESS_TOKEN_TTL:
             'JWT access token lifetime, minutes only (default: "30m", range: 15m-60m)',
@@ -75,7 +77,7 @@ export function registerLlmRoute(app: FastifyInstance): void {
 
       integration_guide: {
         step_1:
-          'Create a config JWT endpoint on your backend that returns a signed JWT with your domain, redirect_urls, enabled_auth_methods, ui_theme, and language_config.',
+          'Create an HTTPS config JWT endpoint on your backend that returns a signed JWT with your domain, redirect_urls, enabled_auth_methods, ui_theme, and language_config.',
         step_2:
           'Before wiring the auth popup, POST /config/verify with either config, config_jwt, or config_url. Use jwks_url and auth_service_identifier when you want the auth service to confirm signature/audience problems separately from schema problems.',
         step_3:

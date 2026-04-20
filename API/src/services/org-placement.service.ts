@@ -2,6 +2,8 @@ import { Prisma, type PrismaClient } from '@prisma/client';
 
 import type { ClientConfig } from './config.service.js';
 import { getPrisma } from '../db/prisma.js';
+import { getAppLogger } from '../utils/app-logger.js';
+import { extractEmailDomain } from '../utils/email-domain.js';
 
 type OrgPlacementPrisma = Pick<PrismaClient, '$transaction'> & {
   organisation: Pick<PrismaClient['organisation'], 'findUnique'>;
@@ -44,12 +46,6 @@ function normalizeDomain(value: string): string {
   return value.trim().toLowerCase().replace(/\.$/, '');
 }
 
-function extractEmailDomain(email: string): string | null {
-  const atIndex = email.lastIndexOf('@');
-  if (atIndex < 0 || atIndex === email.length - 1) return null;
-  return email.slice(atIndex + 1).toLowerCase();
-}
-
 function findMappingForEmailDomain(params: {
   config: ClientConfig;
   emailDomain: string;
@@ -70,14 +66,17 @@ function isConstraintViolation(err: unknown): err is Prisma.PrismaClientKnownReq
 }
 
 function defaultLogError(message: string, details: Record<string, unknown>): void {
-  console.error('[org-placement]', message, details);
+  getAppLogger().error(details, message);
 }
 
-export async function placeUserInConfiguredOrganisation(params: {
-  userId: string;
-  email: string;
-  config: ClientConfig;
-}, deps?: OrgPlacementDeps): Promise<RegistrationOrgPlacementResult> {
+export async function placeUserInConfiguredOrganisation(
+  params: {
+    userId: string;
+    email: string;
+    config: ClientConfig;
+  },
+  deps?: OrgPlacementDeps,
+): Promise<RegistrationOrgPlacementResult> {
   if (!params.config.org_features?.enabled) {
     return { status: 'skipped', reason: 'org_features_disabled' };
   }

@@ -22,7 +22,7 @@ const authEndpoints: EndpointSchema[] = [
     path: '/auth',
     description: 'OAuth entrypoint — renders the auth UI',
     query: {
-      config_url: 'string (required) — URL to fetch signed config JWT',
+      config_url: 'string (required) — HTTPS URL to fetch signed config JWT',
       redirect_url: 'string (optional) — OAuth redirect URL override (redirect_uri also accepted)',
       code_challenge: 'string (optional) — PKCE S256 challenge',
       code_challenge_method: '"S256" when code_challenge is sent',
@@ -37,7 +37,8 @@ const authEndpoints: EndpointSchema[] = [
       redirect_url: 'string (optional, redirect_uri also accepted)',
       code_challenge: 'string (optional) — PKCE S256 challenge',
       code_challenge_method: '"S256" when code_challenge is sent',
-      request_access: 'string (optional) — when truthy, auto-grant or create a pending access request',
+      request_access:
+        'string (optional) — when truthy, auto-grant or create a pending access request',
     },
     body: {
       email: 'string (required)',
@@ -61,7 +62,8 @@ const authEndpoints: EndpointSchema[] = [
     query: {
       redirect_url: 'string (optional)',
       request_access: 'string (optional) — bypass gating and request configured-team access',
-      code_challenge: 'string (optional) — PKCE S256 challenge preserved through email verification',
+      code_challenge:
+        'string (optional) — PKCE S256 challenge preserved through email verification',
       code_challenge_method: '"S256" when code_challenge is sent',
     },
     body: { email: 'string (required)' },
@@ -153,7 +155,8 @@ const authEndpoints: EndpointSchema[] = [
       token: 'string (required)',
       config_url: 'string (required)',
       redirect_url: 'string (optional)',
-      code_challenge: 'string (optional) — PKCE S256 challenge preserved through email verification',
+      code_challenge:
+        'string (optional) — PKCE S256 challenge preserved through email verification',
       code_challenge_method: '"S256" when code_challenge is sent',
       request_access: 'string (optional) — preserves access-request intent through email auth',
     },
@@ -188,7 +191,8 @@ const authEndpoints: EndpointSchema[] = [
       redirect_url: 'string (optional)',
       code_challenge: 'string (optional) — PKCE S256 challenge',
       code_challenge_method: '"S256" when code_challenge is sent',
-      request_access: 'string (optional) — routes social auth through configured-team access policy',
+      request_access:
+        'string (optional) — routes social auth through configured-team access policy',
     },
   },
   {
@@ -342,7 +346,9 @@ const orgEndpoints: EndpointSchema[] = [
     path: '/org/organisations/:orgId/teams',
     description: 'List teams',
     auth: 'domain hash bearer token',
-    response: { data: 'array — team records including id, name, slug, description, groupId, isDefault' },
+    response: {
+      data: 'array — team records including id, name, slug, description, groupId, isDefault',
+    },
   },
   {
     method: 'POST',
@@ -398,14 +404,18 @@ const orgEndpoints: EndpointSchema[] = [
       'invitedBy?': 'object — optional inviter metadata { userId?, name?, email? }',
       invites: 'array (required, 1-200) — [{ email: string, name?: string, teamRole?: string }]',
     },
-    response: { results: 'array — per-email status: invited | resent_existing | already_member | conflict' },
+    response: {
+      results: 'array — per-email status: invited | resent_existing | already_member | conflict',
+    },
   },
   {
     method: 'GET',
     path: '/org/organisations/:orgId/teams/:teamId/invitations',
     description: 'List invitation history for a team',
     auth: 'domain hash bearer token',
-    response: { data: 'array — invite records with status, inviter, send/open, accepted/declined state' },
+    response: {
+      data: 'array — invite records with status, inviter, send/open, accepted/declined state',
+    },
   },
   {
     method: 'POST',
@@ -423,7 +433,9 @@ const orgEndpoints: EndpointSchema[] = [
       domain: 'string (required) — must match the config domain for domain-hash auth',
       status: 'string (optional) — pending | approved | rejected',
     },
-    response: { data: 'array — access requests with requester, status, timestamps, reviewer metadata' },
+    response: {
+      data: 'array — access requests with requester, status, timestamps, reviewer metadata',
+    },
   },
   {
     method: 'POST',

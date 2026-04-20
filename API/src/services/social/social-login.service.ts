@@ -3,6 +3,8 @@ import type { PrismaClient } from '@prisma/client';
 import type { ClientConfig } from '../config.service.js';
 import { getEnv } from '../../config/env.js';
 import { getPrisma } from '../../db/prisma.js';
+import { getAppLogger } from '../../utils/app-logger.js';
+import { extractEmailDomain } from '../../utils/email-domain.js';
 import { AppError } from '../../utils/errors.js';
 import { buildUserIdentity } from '../user-scope.service.js';
 import { ensureDomainRoleForUser } from '../domain-role.service.js';
@@ -24,12 +26,6 @@ type SocialLoginDeps = {
 type SocialLoginResult =
   | { status: 'authenticated'; userId: string; twoFaEnabled: boolean }
   | { status: 'blocked' };
-
-function extractEmailDomain(email: string): string | null {
-  const atIndex = email.lastIndexOf('@');
-  if (atIndex < 0 || atIndex === email.length - 1) return null;
-  return email.slice(atIndex + 1).toLowerCase();
-}
 
 function isAllowedByRegistrationDomainPolicy(params: {
   email: string;
@@ -92,7 +88,10 @@ export async function loginWithSocialProfile(
     userId = updated.id;
     twoFaEnabled = updated.twoFaEnabled;
   } else {
-    if (!params.requestAccess && !isAllowedByRegistrationDomainPolicy({ email, config: params.config })) {
+    if (
+      !params.requestAccess &&
+      !isAllowedByRegistrationDomainPolicy({ email, config: params.config })
+    ) {
       return { status: 'blocked' };
     }
 
@@ -127,11 +126,14 @@ export async function loginWithSocialProfile(
         config: params.config,
       });
     } catch (err) {
-      console.error('[org-placement]', 'failed while attempting social registration placement', {
-        domain: params.config.domain,
-        userId,
-        errorName: err instanceof Error ? err.name : 'unknown',
-      });
+      getAppLogger().error(
+        {
+          domain: params.config.domain,
+          userId,
+          errorName: err instanceof Error ? err.name : 'unknown',
+        },
+        'failed while attempting social registration placement',
+      );
     }
   }
 

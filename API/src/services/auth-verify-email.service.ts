@@ -3,6 +3,7 @@ import type { ClientConfig } from './config.service.js';
 
 import { getEnv, requireEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
+import { getAppLogger } from '../utils/app-logger.js';
 import { AppError } from '../utils/errors.js';
 import { hashEmailToken } from '../utils/verification-token.js';
 import { hashPassword } from './password.service.js';
@@ -39,7 +40,9 @@ type VerifyEmailTokenRow = Prisma.VerificationTokenGetPayload<{
 
 export type VerifyEmailTokenType = 'VERIFY_EMAIL_SET_PASSWORD' | 'VERIFY_EMAIL';
 
-function assertVerifyEmailTokenType(type: VerifyEmailTokenRow['type']): asserts type is VerifyEmailTokenType {
+function assertVerifyEmailTokenType(
+  type: VerifyEmailTokenRow['type'],
+): asserts type is VerifyEmailTokenType {
   if (type !== 'VERIFY_EMAIL_SET_PASSWORD' && type !== 'VERIFY_EMAIL') {
     throw new AppError('BAD_REQUEST', 400, 'INVALID_TOKEN_TYPE');
   }
@@ -265,11 +268,14 @@ export async function verifyEmailToken(
         config: params.config,
       });
     } catch (err) {
-      console.error('[org-placement]', 'failed while attempting automatic registration placement', {
-        domain: params.config.domain,
-        userId: consumed.userId,
-        errorName: err instanceof Error ? err.name : 'unknown',
-      });
+      getAppLogger().error(
+        {
+          domain: params.config.domain,
+          userId: consumed.userId,
+          errorName: err instanceof Error ? err.name : 'unknown',
+        },
+        'failed while attempting automatic registration placement',
+      );
     }
   }
 

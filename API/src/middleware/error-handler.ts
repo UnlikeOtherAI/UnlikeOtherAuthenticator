@@ -1,7 +1,11 @@
 import type { FastifyInstance } from 'fastify';
 import { ZodError } from 'zod';
 
-import { enrichAuthDebugForAppError, renderAuthDebugHtml } from '../services/auth-debug-page.service.js';
+import { getEnv } from '../config/env.js';
+import {
+  enrichAuthDebugForAppError,
+  renderAuthDebugHtml,
+} from '../services/auth-debug-page.service.js';
 import { isAppError } from '../utils/errors.js';
 import { buildPublicErrorBody } from '../utils/error-response.js';
 
@@ -29,15 +33,24 @@ function shouldRenderAuthDebug(request: {
 
 export function registerErrorHandler(app: FastifyInstance): void {
   app.setErrorHandler((error, request, reply) => {
+    const debugEnabled = getEnv().DEBUG_ENABLED;
+
     // Internal logs can contain specifics; user-facing responses must remain generic.
     request.log.error({ err: error }, 'request failed');
 
     if (error instanceof ZodError) {
-      if (shouldRenderAuthDebug(request)) {
+      if (debugEnabled && shouldRenderAuthDebug(request)) {
         reply
           .type('text/html; charset=utf-8')
           .status(400)
-          .send(renderAuthDebugHtml({ statusCode: 400, requestUrl: request.raw.url, error, debug: request.authDebug }));
+          .send(
+            renderAuthDebugHtml({
+              statusCode: 400,
+              requestUrl: request.raw.url,
+              error,
+              debug: request.authDebug,
+            }),
+          );
         return;
       }
       if (wantsHtml(request)) {
@@ -49,12 +62,19 @@ export function registerErrorHandler(app: FastifyInstance): void {
     }
 
     if (isAppError(error)) {
-      if (shouldRenderAuthDebug(request)) {
+      if (debugEnabled && shouldRenderAuthDebug(request)) {
         enrichAuthDebugForAppError(request, error);
         reply
           .type('text/html; charset=utf-8')
           .status(error.statusCode)
-          .send(renderAuthDebugHtml({ statusCode: error.statusCode, requestUrl: request.raw.url, error, debug: request.authDebug }));
+          .send(
+            renderAuthDebugHtml({
+              statusCode: error.statusCode,
+              requestUrl: request.raw.url,
+              error,
+              debug: request.authDebug,
+            }),
+          );
         return;
       }
       if (wantsHtml(request)) {
@@ -70,11 +90,18 @@ export function registerErrorHandler(app: FastifyInstance): void {
       return;
     }
 
-    if (shouldRenderAuthDebug(request)) {
+    if (debugEnabled && shouldRenderAuthDebug(request)) {
       reply
         .type('text/html; charset=utf-8')
         .status(500)
-        .send(renderAuthDebugHtml({ statusCode: 500, requestUrl: request.raw.url, error, debug: request.authDebug }));
+        .send(
+          renderAuthDebugHtml({
+            statusCode: 500,
+            requestUrl: request.raw.url,
+            error,
+            debug: request.authDebug,
+          }),
+        );
       return;
     }
     if (wantsHtml(request)) {

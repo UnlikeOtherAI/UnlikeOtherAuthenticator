@@ -13,6 +13,7 @@ import {
   buildVerifyEmailTemplate,
   buildVerifyEmailSetPasswordTemplate,
 } from './email.templates.js';
+import { getAppLogger } from '../utils/app-logger.js';
 
 type SesModule = typeof import('@aws-sdk/client-ses');
 
@@ -112,7 +113,10 @@ function createSmtpProvider(env: Env, deps?: EmailProviderDeps): EmailProvider {
     host,
     port,
     secure,
-    auth: env.SMTP_USER && env.SMTP_PASSWORD ? { user: env.SMTP_USER, pass: env.SMTP_PASSWORD } : undefined,
+    auth:
+      env.SMTP_USER && env.SMTP_PASSWORD
+        ? { user: env.SMTP_USER, pass: env.SMTP_PASSWORD }
+        : undefined,
   });
 
   return {
@@ -353,12 +357,15 @@ async function dispatchEmail(message: EmailMessage): Promise<void> {
   } catch (err) {
     // Brief 11 / 13: never leak specifics. Email sending failures should not reveal anything to users.
     // Avoid logging bearer links/tokens; include only minimal metadata.
-    console.error('[email:error]', {
-      provider: provider.name,
-      to: message.to,
-      subject: message.subject,
-      ...toSafeErrorContext(err),
-    });
+    getAppLogger().error(
+      {
+        provider: provider.name,
+        to: message.to,
+        subject: message.subject,
+        ...toSafeErrorContext(err),
+      },
+      'email dispatch failed',
+    );
 
     // Keep API behavior stable (especially registration) even if email fails.
     // The caller should still respond with a generic message.
@@ -368,7 +375,11 @@ async function dispatchEmail(message: EmailMessage): Promise<void> {
   }
 }
 
-export async function sendLoginLinkEmail(params: { to: string; link: string; theme?: Partial<EmailTheme> }): Promise<void> {
+export async function sendLoginLinkEmail(params: {
+  to: string;
+  link: string;
+  theme?: Partial<EmailTheme>;
+}): Promise<void> {
   const env = getEnv();
   const template = buildLoginLinkTemplate({ link: params.link, theme: params.theme });
   await dispatchEmail({
@@ -447,7 +458,11 @@ export async function sendVerifyEmailSetPasswordEmail(params: {
   });
 }
 
-export async function sendVerifyEmailEmail(params: { to: string; link: string; theme?: Partial<EmailTheme> }): Promise<void> {
+export async function sendVerifyEmailEmail(params: {
+  to: string;
+  link: string;
+  theme?: Partial<EmailTheme>;
+}): Promise<void> {
   const env = getEnv();
   const template = buildVerifyEmailTemplate({ link: params.link, theme: params.theme });
   await dispatchEmail({
@@ -460,7 +475,11 @@ export async function sendVerifyEmailEmail(params: { to: string; link: string; t
   });
 }
 
-export async function sendAccountExistsEmail(params: { to: string; link: string; theme?: Partial<EmailTheme> }): Promise<void> {
+export async function sendAccountExistsEmail(params: {
+  to: string;
+  link: string;
+  theme?: Partial<EmailTheme>;
+}): Promise<void> {
   const env = getEnv();
   const template = buildAccountExistsTemplate({ link: params.link, theme: params.theme });
   await dispatchEmail({
@@ -473,7 +492,11 @@ export async function sendAccountExistsEmail(params: { to: string; link: string;
   });
 }
 
-export async function sendPasswordResetEmail(params: { to: string; link: string; theme?: Partial<EmailTheme> }): Promise<void> {
+export async function sendPasswordResetEmail(params: {
+  to: string;
+  link: string;
+  theme?: Partial<EmailTheme>;
+}): Promise<void> {
   const env = getEnv();
   const template = buildPasswordResetTemplate({ link: params.link, theme: params.theme });
   await dispatchEmail({
@@ -486,7 +509,11 @@ export async function sendPasswordResetEmail(params: { to: string; link: string;
   });
 }
 
-export async function sendTwoFaResetEmail(params: { to: string; link: string; theme?: Partial<EmailTheme> }): Promise<void> {
+export async function sendTwoFaResetEmail(params: {
+  to: string;
+  link: string;
+  theme?: Partial<EmailTheme>;
+}): Promise<void> {
   const env = getEnv();
   const template = buildTwoFaResetTemplate({ link: params.link, theme: params.theme });
   await dispatchEmail({

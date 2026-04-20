@@ -79,6 +79,8 @@ export function registerAuthTokenExchangeRoute(app: FastifyInstance): void {
             });
 
       // Keep response OAuth-ish without being overly strict about fields.
+      reply.header('Cache-Control', 'no-store');
+      reply.header('Pragma', 'no-cache');
       reply.status(200).send({
         access_token: tokenPair.accessToken,
         expires_in: tokenPair.expiresInSeconds,

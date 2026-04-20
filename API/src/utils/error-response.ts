@@ -2,6 +2,7 @@ import type { FastifyRequest } from 'fastify';
 import { ZodError } from 'zod';
 
 import { PUBLIC_ERROR_MESSAGE } from '../config/constants.js';
+import { getEnv } from '../config/env.js';
 import {
   createAuthDebugInfo,
   enrichAuthDebugForAppError,
@@ -11,8 +12,8 @@ import { isAppError } from './errors.js';
 
 export type PublicErrorBody = {
   error: string;
-  code: string;
-  summary: string;
+  code?: string;
+  summary?: string;
   details?: string[];
   hints?: string[];
 };
@@ -24,6 +25,7 @@ type PublicExplanation = {
 };
 
 const DEFAULT_HINTS = ['Check the request shape and server logs for more context.'];
+const GENERIC_PUBLIC_ERROR_BODY: PublicErrorBody = { error: PUBLIC_ERROR_MESSAGE };
 
 function titleCase(value: string): string {
   return value
@@ -50,7 +52,8 @@ function defaultExplanation(code: string, statusCode: number): PublicExplanation
 
   if (statusCode === 403) {
     return {
-      summary: 'The request was understood, but the current identity does not have permission to perform it.',
+      summary:
+        'The request was understood, but the current identity does not have permission to perform it.',
       hints: ['Check the caller role, domain scope, and access token claims.'],
     };
   }
@@ -106,7 +109,8 @@ function explainKnownCode(
       };
     case 'MISSING_CONFIG':
       return {
-        summary: 'This route requires a verified client config, but no config was attached to the request.',
+        summary:
+          'This route requires a verified client config, but no config was attached to the request.',
         hints: [
           'Check that config_url is present and valid.',
           'Check that config verification middleware ran successfully before this handler.',
@@ -132,7 +136,9 @@ function explainKnownCode(
       return {
         summary: 'The configured email provider is missing required environment variables.',
         details: error instanceof Error ? [error.message] : undefined,
-        hints: ['Set the missing email-provider environment variables for the selected EMAIL_PROVIDER.'],
+        hints: [
+          'Set the missing email-provider environment variables for the selected EMAIL_PROVIDER.',
+        ],
       };
     case 'EMAIL_PROVIDER_UNSUPPORTED':
       return {
@@ -142,7 +148,8 @@ function explainKnownCode(
       };
     case 'SENDGRID_MODULE_INVALID':
       return {
-        summary: 'The SendGrid integration could not be initialized because the loaded module shape was invalid.',
+        summary:
+          'The SendGrid integration could not be initialized because the loaded module shape was invalid.',
         hints: ['Check the installed @sendgrid/mail package version and runtime bundling.'],
       };
     case 'CONFIG_URL_REJECTED':
@@ -171,7 +178,9 @@ function explainKnownCode(
     case 'CONFIG_SCHEMA_INVALID':
       return {
         summary: 'The config JWT passed fetch and signature checks but failed schema validation.',
-        hints: ['Check required config fields such as domain, redirect_urls, enabled_auth_methods, ui_theme, and language_config.'],
+        hints: [
+          'Check required config fields such as domain, redirect_urls, enabled_auth_methods, ui_theme, and language_config.',
+        ],
       };
     case 'CONFIG_DOMAIN_MISMATCH':
       return {
@@ -194,11 +203,14 @@ function explainKnownCode(
     case 'REDIRECT_URL_NOT_ALLOWED':
       return {
         summary: 'The supplied redirect_url is not allowlisted by the client config.',
-        hints: ['Add the exact redirect URL to config.redirect_urls or send an already allowlisted URL.'],
+        hints: [
+          'Add the exact redirect URL to config.redirect_urls or send an already allowlisted URL.',
+        ],
       };
     case 'MISSING_REDIRECT_URL':
       return {
-        summary: 'No usable redirect_url was provided and the client config did not provide a fallback.',
+        summary:
+          'No usable redirect_url was provided and the client config did not provide a fallback.',
         hints: ['Send redirect_url or add at least one entry to config.redirect_urls.'],
       };
     case 'DATABASE_DISABLED':
@@ -218,12 +230,14 @@ function explainKnownCode(
       };
     case 'INVALID_AUTH_CODE':
       return {
-        summary: 'The supplied authorization code is invalid, expired, already used, or does not match this client request.',
+        summary:
+          'The supplied authorization code is invalid, expired, already used, or does not match this client request.',
         hints: ['Start a fresh login flow and exchange the new authorization code once.'],
       };
     case 'INVALID_REFRESH_TOKEN':
       return {
-        summary: 'The supplied refresh token is invalid, expired, revoked, or belongs to a different token family.',
+        summary:
+          'The supplied refresh token is invalid, expired, revoked, or belongs to a different token family.',
         hints: ['Authenticate again to obtain a fresh refresh token.'],
       };
     case 'INVALID_TOKEN':
@@ -264,11 +278,14 @@ function explainKnownCode(
     case 'PASSWORD_POLICY_VIOLATION':
       return {
         summary: 'The supplied password does not satisfy the password policy.',
-        hints: ['Use at least 8 characters including uppercase, lowercase, number, and special character.'],
+        hints: [
+          'Use at least 8 characters including uppercase, lowercase, number, and special character.',
+        ],
       };
     case 'USER_ALREADY_HAS_PASSWORD':
       return {
-        summary: 'This user already has a password set, so this password-setup flow cannot be used again.',
+        summary:
+          'This user already has a password set, so this password-setup flow cannot be used again.',
         hints: ['Use the standard login or password-reset flow instead.'],
       };
     case 'USER_NOT_FOUND':
@@ -284,7 +301,9 @@ function explainKnownCode(
     case 'MISSING_DOMAIN':
       return {
         summary: 'This route requires a domain parameter, but none was provided.',
-        hints: ['Provide the required domain parameter or ensure it is present in the verified config.'],
+        hints: [
+          'Provide the required domain parameter or ensure it is present in the verified config.',
+        ],
       };
     case 'ACCESS_TOKEN_DOMAIN_MISMATCH':
       return {
@@ -293,7 +312,8 @@ function explainKnownCode(
       };
     case 'INSUFFICIENT_ORG_ROLE':
       return {
-        summary: 'The current user does not have the organisation role required for this operation.',
+        summary:
+          'The current user does not have the organisation role required for this operation.',
         hints: ['Check the caller role and the minimum role required by this route.'],
       };
     case 'NOT_SUPERUSER':
@@ -308,13 +328,16 @@ function explainKnownCode(
       };
     case 'SOCIAL_PROVIDER_MISMATCH':
       return {
-        summary: 'The social callback provider does not match the provider stored in the signed state.',
+        summary:
+          'The social callback provider does not match the provider stored in the signed state.',
         hints: ['Restart the social login flow instead of reusing a stale callback URL.'],
       };
     case 'SOCIAL_PROVIDER_ERROR':
       return {
         summary: 'The OAuth provider returned an error during the social login callback.',
-        hints: ['Check the provider error query parameters and the provider-side app configuration.'],
+        hints: [
+          'Check the provider error query parameters and the provider-side app configuration.',
+        ],
       };
     case 'MISSING_SOCIAL_CALLBACK_PARAMS':
       return {
@@ -323,7 +346,8 @@ function explainKnownCode(
       };
     case 'INVALID_SOCIAL_STATE':
       return {
-        summary: 'The social login state token is invalid, expired, or does not match this auth service.',
+        summary:
+          'The social login state token is invalid, expired, or does not match this auth service.',
         hints: ['Restart the social login flow to obtain a fresh state token.'],
       };
     case 'SOCIAL_STATE_SIGN_FAILED':
@@ -333,13 +357,17 @@ function explainKnownCode(
       };
     case 'SOCIAL_EMAIL_NOT_VERIFIED':
       return {
-        summary: 'The social provider did not return a verified email address, so the login was rejected.',
+        summary:
+          'The social provider did not return a verified email address, so the login was rejected.',
         hints: ['Use an account with a provider-verified email address.'],
       };
     case 'AI_TRANSLATION_DISABLED':
       return {
-        summary: 'AI translation fallback was requested, but no AI translation provider is enabled.',
-        hints: ['Enable a supported AI translation provider or pre-populate the required translations.'],
+        summary:
+          'AI translation fallback was requested, but no AI translation provider is enabled.',
+        hints: [
+          'Enable a supported AI translation provider or pre-populate the required translations.',
+        ],
       };
     case 'OPENAI_API_KEY_MISSING':
       return {
@@ -349,7 +377,9 @@ function explainKnownCode(
     case 'AI_TRANSLATION_FAILED':
       return {
         summary: 'The AI translation provider request failed.',
-        hints: ['Check the provider credentials, model configuration, and outbound network access.'],
+        hints: [
+          'Check the provider credentials, model configuration, and outbound network access.',
+        ],
       };
   }
 
@@ -365,7 +395,9 @@ function explainKnownCode(
     const provider = providerNameFromCode(code);
     return {
       summary: `The server could not exchange the authorization code with ${provider}.`,
-      hints: [`Check the ${provider} OAuth client credentials, callback URL, and provider-side app configuration.`],
+      hints: [
+        `Check the ${provider} OAuth client credentials, callback URL, and provider-side app configuration.`,
+      ],
     };
   }
 
@@ -381,7 +413,9 @@ function explainKnownCode(
     const provider = providerNameFromCode(code);
     return {
       summary: `${provider} did not return an email address, so the login was rejected.`,
-      hints: ['Use an account that exposes an email address to the provider or choose another login method.'],
+      hints: [
+        'Use an account that exposes an email address to the provider or choose another login method.',
+      ],
     };
   }
 
@@ -396,7 +430,9 @@ function explainKnownCode(
   if (/^INVALID_TOTP_/.test(code) || code === 'INVALID_OTPAUTH_URI') {
     return {
       summary: 'The 2FA/TOTP value supplied to the server is invalid.',
-      hints: ['Check the TOTP secret, code length, issuer, account name, and time-window settings.'],
+      hints: [
+        'Check the TOTP secret, code length, issuer, account name, and time-window settings.',
+      ],
     };
   }
 
@@ -416,7 +452,8 @@ function explainKnownCode(
 
   if (code === 'DEFAULT_TEAM_MISSING' || /_SLUG_COLLISION_RETRY_EXHAUSTED$/.test(code)) {
     return {
-      summary: 'The server could not complete the organisation/team operation because required internal records could not be created or resolved.',
+      summary:
+        'The server could not complete the organisation/team operation because required internal records could not be created or resolved.',
       hints: ['Check the organisation/team data integrity and retry the operation.'],
     };
   }
@@ -518,6 +555,10 @@ export function buildPublicErrorBody(params: {
   details?: string[];
   hints?: string[];
 }): PublicErrorBody {
+  if (!getEnv().DEBUG_ENABLED) {
+    return GENERIC_PUBLIC_ERROR_BODY;
+  }
+
   if (params.request && params.error) {
     const authDebugBody = buildAuthDebugBody(params.request, params.error, params.statusCode);
     if (authDebugBody) return authDebugBody;

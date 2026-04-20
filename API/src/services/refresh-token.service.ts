@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 
 import type { PrismaClient } from '@prisma/client';
 
@@ -23,10 +23,6 @@ type RefreshTokenContext = {
   domain: string;
 };
 
-function sha256Hex(input: string): string {
-  return createHash('sha256').update(input, 'utf8').digest('hex');
-}
-
 function generateRefreshTokenValue(): string {
   return randomBytes(48).toString('base64url');
 }
@@ -36,7 +32,7 @@ function generateRefreshTokenFamilyId(): string {
 }
 
 function hashRefreshToken(token: string, pepper: string): string {
-  return sha256Hex(`${token}.${pepper}`);
+  return createHmac('sha256', pepper).update(token, 'utf8').digest('hex');
 }
 
 function nowDate(deps?: RefreshTokenDeps): Date {

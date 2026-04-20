@@ -21,6 +21,14 @@ function isValidAccessTokenTtl(value: string): boolean {
   return minutes >= 15 && minutes <= 60;
 }
 
+function normalizeBoolean(input: unknown): unknown {
+  if (typeof input !== 'string') return input;
+  const normalized = input.trim().toLowerCase();
+  if (normalized === 'true' || normalized === '1') return true;
+  if (normalized === 'false' || normalized === '0' || normalized === '') return false;
+  return input;
+}
+
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   HOST: z.string().default('127.0.0.1'),
@@ -28,9 +36,8 @@ const EnvSchema = z.object({
   // Public origin used when generating links sent by email (magic links, verification, reset).
   // If unset, we fall back to `http://${HOST}:${PORT}`.
   PUBLIC_BASE_URL: z.string().min(1).optional(),
-  LOG_LEVEL: z
-    .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace'])
-    .default('info'),
+  LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+  DEBUG_ENABLED: z.preprocess(normalizeBoolean, z.boolean().default(false)),
   // Single global shared secret used for domain hashing and server-issued bearer secrets.
   SHARED_SECRET: z.string().min(32),
   // Identifier for this auth service instance. Used as expected `aud` for config JWTs.
@@ -70,12 +77,9 @@ const EnvSchema = z.object({
   APPLE_PRIVATE_KEY: z.string().min(1).optional(),
   ACCESS_TOKEN_TTL: z.preprocess(
     normalizeAccessTokenTtl,
-    z
-      .string()
-      .default('30m')
-      .refine(isValidAccessTokenTtl, {
-        message: 'ACCESS_TOKEN_TTL must be minutes-only between 15m and 60m (e.g. "30m")',
-      }),
+    z.string().default('30m').refine(isValidAccessTokenTtl, {
+      message: 'ACCESS_TOKEN_TTL must be minutes-only between 15m and 60m (e.g. "30m")',
+    }),
   ),
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(30),
   TOKEN_PRUNE_RETENTION_DAYS: z.coerce.number().int().min(0).max(365).default(7),

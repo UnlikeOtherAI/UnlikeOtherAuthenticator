@@ -8,8 +8,8 @@ For the full product specification, see [brief.md](./brief.md).
 
 ## Runtime & Language
 
-* **Node.js** — server runtime for the API
-* **JavaScript/TypeScript** — all code in the project
+- **Node.js** — server runtime for the API
+- **JavaScript/TypeScript** — all code in the project
 
 ---
 
@@ -17,14 +17,14 @@ For the full product specification, see [brief.md](./brief.md).
 
 The API is the central OAuth/auth server. It handles:
 
-* Config JWT fetching and verification
-* User registration, login, and password management
-* Social OAuth provider callbacks
-* Authorization code generation and token exchange
-* 2FA setup and verification
-* Domain-scoped APIs (user list, login logs, debug)
-* Organisation, team, and group management APIs (`/org/*` and `/internal/org/*`)
-* Email dispatch (verification, password reset, login links)
+- Config JWT fetching and verification
+- User registration, login, and password management
+- Social OAuth provider callbacks
+- Authorization code generation and token exchange
+- 2FA setup and verification
+- Domain-scoped APIs (user list, login logs, debug)
+- Organisation, team, and group management APIs (`/org/*` and `/internal/org/*`)
+- Email dispatch (verification, password reset, login links)
 
 ### Structure
 
@@ -43,45 +43,45 @@ The API is the central OAuth/auth server. It handles:
 
 ### Key Decisions
 
-* RESTful, stateless endpoints
-* JWT for both config verification and access tokens (separate concerns, separate validation)
-* Shared secret loaded from environment variables only
-* All error responses are generic to the user — specifics in internal logs only
-* Organisational models: `organisations`, `org_members`, `teams`, `team_members`, `groups`, `group_members`
+- RESTful, stateless endpoints
+- JWT for both config verification and access tokens (separate concerns, separate validation)
+- Shared secret loaded from environment variables only
+- All error responses are generic to the user — specifics in internal logs only
+- Organisational models: `organisations`, `org_members`, `teams`, `team_members`, `groups`, `group_members`
 
 ### Organisational Endpoints
 
-* `POST /org/organisations` — create an organisation (also creates default team)
-* `GET /org/organisations` — list organisations on a domain
-* `GET /org/organisations/:orgId` — read org details
-* `PUT /org/organisations/:orgId` — update org metadata
-* `DELETE /org/organisations/:orgId` — delete org and nested data
-* `GET /org/organisations/:orgId/members` — list org members
-* `POST /org/organisations/:orgId/members` — add org member
-* `PUT /org/organisations/:orgId/members/:userId` — change org role
-* `DELETE /org/organisations/:orgId/members/:userId` — remove org member
-* `POST /org/organisations/:orgId/transfer-ownership` — transfer org ownership
-* `GET /org/organisations/:orgId/teams` — list teams
-* `POST /org/organisations/:orgId/teams` — create team
-* `GET /org/organisations/:orgId/teams/:teamId` — read team details
-* `PUT /org/organisations/:orgId/teams/:teamId` — update team
-* `DELETE /org/organisations/:orgId/teams/:teamId` — delete team
-* `POST /org/organisations/:orgId/teams/:teamId/members` — add team member
-* `PUT /org/organisations/:orgId/teams/:teamId/members/:userId` — change team role
-* `DELETE /org/organisations/:orgId/teams/:teamId/members/:userId` — remove team member
-* `GET /org/organisations/:orgId/groups` — list groups
-* `GET /org/organisations/:orgId/groups/:groupId` — read group details
-* `GET /org/me` — current user org context
+- `POST /org/organisations` — create an organisation (also creates default team)
+- `GET /org/organisations` — list organisations on a domain
+- `GET /org/organisations/:orgId` — read org details
+- `PUT /org/organisations/:orgId` — update org metadata
+- `DELETE /org/organisations/:orgId` — delete org and nested data
+- `GET /org/organisations/:orgId/members` — list org members
+- `POST /org/organisations/:orgId/members` — add org member
+- `PUT /org/organisations/:orgId/members/:userId` — change org role
+- `DELETE /org/organisations/:orgId/members/:userId` — remove org member
+- `POST /org/organisations/:orgId/transfer-ownership` — transfer org ownership
+- `GET /org/organisations/:orgId/teams` — list teams
+- `POST /org/organisations/:orgId/teams` — create team
+- `GET /org/organisations/:orgId/teams/:teamId` — read team details
+- `PUT /org/organisations/:orgId/teams/:teamId` — update team
+- `DELETE /org/organisations/:orgId/teams/:teamId` — delete team
+- `POST /org/organisations/:orgId/teams/:teamId/members` — add team member
+- `PUT /org/organisations/:orgId/teams/:teamId/members/:userId` — change team role
+- `DELETE /org/organisations/:orgId/teams/:teamId/members/:userId` — remove team member
+- `GET /org/organisations/:orgId/groups` — list groups
+- `GET /org/organisations/:orgId/groups/:groupId` — read group details
+- `GET /org/me` — current user org context
 
 ### Internal API
 
-* `POST /internal/org/organisations/:orgId/groups` — create group
-* `PUT /internal/org/organisations/:orgId/groups/:groupId` — update group
-* `DELETE /internal/org/organisations/:orgId/groups/:groupId` — delete group
-* `POST /internal/org/organisations/:orgId/groups/:groupId/members` — add group member
-* `PUT /internal/org/organisations/:orgId/groups/:groupId/members/:userId` — toggle `is_admin`
-* `DELETE /internal/org/organisations/:orgId/groups/:groupId/members/:userId` — remove group member
-* `PUT /internal/org/organisations/:orgId/teams/:teamId/group` — assign/unassign team
+- `POST /internal/org/organisations/:orgId/groups` — create group
+- `PUT /internal/org/organisations/:orgId/groups/:groupId` — update group
+- `DELETE /internal/org/organisations/:orgId/groups/:groupId` — delete group
+- `POST /internal/org/organisations/:orgId/groups/:groupId/members` — add group member
+- `PUT /internal/org/organisations/:orgId/groups/:groupId/members/:userId` — toggle `is_admin`
+- `DELETE /internal/org/organisations/:orgId/groups/:groupId/members/:userId` — remove group member
+- `PUT /internal/org/organisations/:orgId/teams/:teamId/group` — assign/unassign team
 
 ---
 
@@ -89,9 +89,9 @@ The API is the central OAuth/auth server. It handles:
 
 The auth window is the user-facing UI rendered inside the OAuth popup. It is a **React** application.
 
-* **All frontend files are React** — no other UI frameworks
-* **Tailwind CSS** — the only CSS framework allowed
-* All theming is config-driven — no hardcoded client styles
+- **All frontend files are React** — no other UI frameworks
+- **Tailwind CSS** — the only CSS framework allowed
+- All theming is config-driven — no hardcoded client styles
 
 ### Structure
 
@@ -109,30 +109,30 @@ The auth window is the user-facing UI rendered inside the OAuth popup. It is a *
 
 ### Key Decisions
 
-* Server-side rendered where needed for the initial auth UI load
-* Theme properties (colors, radii, typography, logo, density) all sourced from config JWT
-* Language selector only shown when config provides multiple languages
-* Popup communicates back to client via authorization code redirect, not postMessage
+- Server-side rendered where needed for the initial auth UI load
+- Theme properties (colors, radii, typography, logo, density) all sourced from config JWT
+- Language selector only shown when config provides multiple languages
+- Popup communicates back to client via authorization code redirect, not postMessage
 
 ---
 
 ## Database
 
-* **PostgreSQL** — the database
-* **Prisma** — ORM and migration tool
-* Tables: `users`, `domain_roles`, `login_logs`, `verification_tokens`
-* Organisational tables: `organisations`, `org_members`, `teams`, `team_members`, `groups`, `group_members`
-* All schema changes go through Prisma migrations — no manual SQL
-* Prisma schema lives in `/API/prisma/schema.prisma`
-* Superuser race condition resolved at DB constraint level (unique constraint, first insert wins)
+- **PostgreSQL** — the database
+- **Prisma** — ORM and migration tool
+- Tables: `users`, `domain_roles`, `login_logs`, `verification_tokens`
+- Organisational tables: `organisations`, `org_members`, `teams`, `team_members`, `groups`, `group_members`
+- All schema changes go through Prisma migrations — no manual SQL
+- Prisma schema lives in `/API/prisma/schema.prisma`
+- Superuser race condition resolved at DB constraint level (unique constraint, first insert wins)
 
 ---
 
 ## External Integrations
 
-* **Social OAuth Providers** — Google, Apple, Facebook, GitHub, LinkedIn, Microsoft (Entra ID / Azure AD OIDC) (one set of credentials for the auth service, not per-client)
-* **Email Service** — provider-abstracted (e.g. SendGrid, SES), swappable without code changes
-* **AI Translation Service** — for missing translation fallback, results cached permanently
+- **Social OAuth Providers** — Google, Apple, Facebook, GitHub, LinkedIn, Microsoft (Entra ID / Azure AD OIDC) (one set of credentials for the auth service, not per-client)
+- **Email Service** — provider-abstracted (e.g. SendGrid, SES), swappable without code changes
+- **AI Translation Service** — for missing translation fallback, results cached permanently
 
 ---
 
@@ -140,20 +140,21 @@ The auth window is the user-facing UI rendered inside the OAuth popup. It is a *
 
 All secrets and configuration live in environment variables. Nothing is hardcoded.
 
-* `SHARED_SECRET` — the single global shared secret for domain hashing and server-issued bearer secrets
-* `AUTH_SERVICE_IDENTIFIER` — auth service identifier (expected `aud` for config JWTs)
-* `CONFIG_JWKS_URL` — trusted JWKS endpoint for RS256 config JWT verification by `kid`
-* `DATABASE_URL` — database connection string
-* Social provider credentials (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, etc.)
-* Email service credentials:
-  * `EMAIL_PROVIDER` — `disabled` (default behavior) or `smtp`
-  * `EMAIL_FROM` — required for `smtp`
-  * `EMAIL_REPLY_TO` — optional reply-to address
-  * `SMTP_HOST` — required for `smtp`
-  * `SMTP_PORT` — optional (default: 587)
-  * `SMTP_SECURE` — optional (`true`/`false`, default: `false`)
-  * `SMTP_USER` / `SMTP_PASSWORD` — optional (SMTP auth)
-* AI translation service credentials
-* `ACCESS_TOKEN_TTL` — access token lifetime (minutes-only, 15m–60m; default: 30m)
-* `TOKEN_PRUNE_RETENTION_DAYS` — days after refresh-token expiry before expired refresh token rows are pruned (default: 7, max 365)
-* `LOG_RETENTION_DAYS` — login log retention window (default: 90, max 365)
+- `SHARED_SECRET` — the single global shared secret for domain hashing and server-issued bearer secrets
+- `AUTH_SERVICE_IDENTIFIER` — auth service identifier (expected `aud` for config JWTs)
+- `CONFIG_JWKS_URL` — trusted JWKS endpoint for RS256 config JWT verification by `kid`
+- `DATABASE_URL` — database connection string
+- Social provider credentials (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, etc.)
+- Email service credentials:
+  - `EMAIL_PROVIDER` — `disabled` (default behavior) or `smtp`
+  - `EMAIL_FROM` — required for `smtp`
+  - `EMAIL_REPLY_TO` — optional reply-to address
+  - `SMTP_HOST` — required for `smtp`
+  - `SMTP_PORT` — optional (default: 587)
+  - `SMTP_SECURE` — optional (`true`/`false`, default: `false`)
+  - `SMTP_USER` / `SMTP_PASSWORD` — optional (SMTP auth)
+- AI translation service credentials
+- `ACCESS_TOKEN_TTL` — access token lifetime (minutes-only, 15m–60m; default: 30m)
+- `TOKEN_PRUNE_RETENTION_DAYS` — days after refresh-token expiry before expired refresh token rows are pruned (default: 7, max 365)
+- `LOG_RETENTION_DAYS` — login log retention window (default: 90, max 365)
+- `DEBUG_ENABLED` — include internal error/debug details in responses when set to `true` (default: `false`)

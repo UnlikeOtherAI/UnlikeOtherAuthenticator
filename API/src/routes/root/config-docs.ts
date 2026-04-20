@@ -37,8 +37,8 @@ export const configExample = {
       font_size: '24px',
       color: '#0f172a',
       style: {
-        'font-weight': '800',
-        'letter-spacing': '-0.02em',
+        fontWeight: '800',
+        letterSpacing: '0.02em',
       },
     },
   },
@@ -61,7 +61,7 @@ export const configJwtDocumentation = {
   },
   required_fields: {
     domain:
-      'string — client domain. This must exactly match the hostname of config_url when the auth service fetches the JWT.',
+      'string — client domain. This must exactly match the hostname of the HTTPS config_url when the auth service fetches the JWT.',
     redirect_urls:
       'string[] — non-empty list of absolute HTTP/HTTPS callback URLs. redirect_url matching is exact.',
     enabled_auth_methods:
@@ -84,8 +84,7 @@ export const configJwtDocumentation = {
             'danger',
             'danger_text',
           ],
-          value_format:
-            'hex color only (#RGB, #RGBA, #RRGGBB, #RRGGBBAA) or transparent',
+          value_format: 'hex color only (#RGB, #RGBA, #RRGGBB, #RRGGBBAA) or transparent',
         },
         radii: {
           required_keys: ['card', 'button', 'input'],
@@ -95,10 +94,10 @@ export const configJwtDocumentation = {
         typography: {
           required_keys: ['font_family', 'base_text_size'],
           font_family:
-            'Preset values like sans, serif, mono are valid. Custom CSS font-family names are also valid.',
+            'Preset values like sans, serif, mono are valid. Custom font names must match /^[A-Za-z0-9 _-]+$/.',
           base_text_size: 'sm | md | lg',
           font_import_url:
-            'optional HTTP/HTTPS stylesheet URL. Use this when font_family depends on a remote font import.',
+            'optional HTTPS stylesheet URL. The Auth UI silently drops font imports outside fonts.googleapis.com, fonts.gstatic.com, and fonts.bunny.net.',
         },
         button: {
           required_keys: ['style'],
@@ -110,18 +109,17 @@ export const configJwtDocumentation = {
         },
         logo: {
           required_keys: ['url', 'alt'],
-          url: 'HTTP/HTTPS URL or empty string',
+          url: 'HTTPS URL on the same host as config.domain, or empty string',
           alt: 'required non-empty string',
           text: 'optional text logo, max 100 chars, used when url is empty',
           font_size: 'optional CSS length string',
           color: 'optional hex color',
           style:
-            'optional flat object of CSS property -> safe CSS value. Do not include semicolons, braces, url(), or expression().',
+            'optional flat object. The Auth UI applies only color, fontSize, fontWeight, and letterSpacing.',
         },
       },
       optional_sections: {
-        css_vars:
-          'Record<string, string> — optional advanced CSS variable overrides.',
+        css_vars: 'Record<string, string> — optional advanced CSS variable overrides.',
       },
       common_failures: [
         'Missing one of the required ui_theme sections such as colors, radii, button, card, typography, or logo.',
@@ -139,10 +137,8 @@ export const configJwtDocumentation = {
     allowed_social_providers: 'string[] — subset of enabled social providers',
     user_scope: '"global" | "per_domain" (default "global")',
     allow_registration: 'boolean (default true)',
-    registration_mode:
-      '"password_required" | "passwordless" (default "password_required")',
-    allowed_registration_domains:
-      'string[] — lowercase email domains allowed to register',
+    registration_mode: '"password_required" | "passwordless" (default "password_required")',
+    allowed_registration_domains: 'string[] — lowercase email domains allowed to register',
     registration_domain_mapping:
       'array of { email_domain, org_id, team_id? } — email-domain-based org/team placement',
     language: 'string — currently selected language override',
@@ -163,8 +159,7 @@ export const configJwtDocumentation = {
       max_members_per_team: 'number (default 200, max 5000)',
       max_members_per_group: 'number (default 500, max 5000)',
       max_team_memberships_per_user: 'number (default 50, max 200)',
-      org_roles:
-        'string[] (default ["owner", "admin", "member"]). Must include "owner".',
+      org_roles: 'string[] (default ["owner", "admin", "member"]). Must include "owner".',
     },
     access_requests: {
       enabled: 'boolean (default false)',
@@ -199,10 +194,10 @@ export const configVerificationEndpointDocumentation = {
   response: {
     ok: 'boolean — true when every executed check passed',
     schema_valid: 'boolean',
-    jwt_signature_valid:
-      'boolean | null — null when signature checking was skipped',
+    jwt_signature_valid: 'boolean | null — null when signature checking was skipped',
     audience_valid: 'boolean | null — null when no audience check was possible',
-    domain_match: 'boolean | null — null when config_url was not part of the request or schema parsing failed',
+    domain_match:
+      'boolean | null — null when config_url was not part of the request or schema parsing failed',
     checks:
       'object — per-stage results for source, fetch, decode, signature, audience, schema, and domain_match',
     issues: 'array — structured stage-specific failures and warnings',

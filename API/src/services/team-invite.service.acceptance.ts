@@ -27,6 +27,7 @@ export async function acceptTeamInviteWithinTransaction(params: {
       id: true,
       orgId: true,
       teamId: true,
+      email: true,
       inviteName: true,
       teamRole: true,
       acceptedUserId: true,
@@ -58,9 +59,13 @@ export async function acceptTeamInviteWithinTransaction(params: {
 
   const user = await params.prisma.user.findUnique({
     where: { id: params.userId },
-    select: { id: true, name: true },
+    select: { id: true, email: true, name: true },
   });
   if (!user) {
+    throw new AppError('BAD_REQUEST', 400);
+  }
+
+  if (user.email.toLowerCase() !== invite.email.toLowerCase()) {
     throw new AppError('BAD_REQUEST', 400);
   }
 

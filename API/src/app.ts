@@ -6,6 +6,7 @@ import { connectPrisma, disconnectPrisma } from './db/prisma.js';
 import { registerErrorHandler } from './middleware/error-handler.js';
 import { registerRoutes } from './routes/index.js';
 import { pruneExpiredSecurityData } from './services/retention-pruning.service.js';
+import { setAppLogger } from './utils/app-logger.js';
 
 export async function createApp(): Promise<FastifyInstance> {
   const env = getEnv();
@@ -32,17 +33,26 @@ export async function createApp(): Promise<FastifyInstance> {
                 'headers.cookie',
                 'headers["x-uoa-access-token"]',
                 'token',
+                'code',
                 'access_token',
                 'refresh_token',
+                'twofa_token',
+                'email_token',
+                'client_secret',
+                'shared_secret',
                 'configJwt',
                 'config_jwt',
                 'sharedSecret',
                 'SHARED_SECRET',
+                'req.body.password',
+                'req.body.code',
+                'req.body.code_verifier',
               ],
               censor: '[REDACTED]',
             },
           },
   });
+  setAppLogger(app.log);
 
   await app.register(helmet, {
     contentSecurityPolicy: {

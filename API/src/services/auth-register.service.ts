@@ -11,6 +11,7 @@ import {
   sendVerifyEmailEmail,
   sendVerifyEmailSetPasswordEmail,
 } from './email.service.js';
+import { extractEmailDomain } from '../utils/email-domain.js';
 import { generateEmailToken, hashEmailToken } from '../utils/verification-token.js';
 
 /**
@@ -89,12 +90,6 @@ function buildPasswordResetLink(params: {
   return url.toString();
 }
 
-function extractEmailDomain(email: string): string | null {
-  const atIndex = email.lastIndexOf('@');
-  if (atIndex < 0 || atIndex === email.length - 1) return null;
-  return email.slice(atIndex + 1).toLowerCase();
-}
-
 function isNewUserEmailRegistrationAllowed(params: {
   email: string;
   config: ClientConfig;
@@ -145,10 +140,14 @@ export async function requestRegistrationInstructions(
     select: { id: true },
   });
 
-  if (!existing && !params.requestAccess && !isNewUserEmailRegistrationAllowed({
-    email,
-    config: params.config,
-  })) {
+  if (
+    !existing &&
+    !params.requestAccess &&
+    !isNewUserEmailRegistrationAllowed({
+      email,
+      config: params.config,
+    })
+  ) {
     return;
   }
 
@@ -161,12 +160,11 @@ export async function requestRegistrationInstructions(
   const now = deps?.now ? deps.now() : new Date();
   const expiresAt = new Date(now.getTime() + EMAIL_TOKEN_TTL_MS);
 
-  const type =
-    existing
-      ? 'PASSWORD_RESET'
-      : params.config.registration_mode === 'passwordless'
-        ? 'VERIFY_EMAIL'
-        : 'VERIFY_EMAIL_SET_PASSWORD';
+  const type = existing
+    ? 'PASSWORD_RESET'
+    : params.config.registration_mode === 'passwordless'
+      ? 'VERIFY_EMAIL'
+      : 'VERIFY_EMAIL_SET_PASSWORD';
   await prisma.verificationToken.create({
     data: {
       type,

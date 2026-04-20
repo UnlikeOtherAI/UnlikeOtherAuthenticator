@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { configVerifier } from '../../middleware/config-verifier.js';
 import { validatePasswordResetToken } from '../../services/auth-reset-password.service.js';
 import { renderAuthEntrypointHtml } from '../../services/auth-ui.service.js';
+import { selectRedirectUrl } from '../../services/token.service.js';
 import { AppError } from '../../utils/errors.js';
 import { tokenConsumeRateLimiter } from './rate-limit-keys.js';
 
@@ -36,9 +37,16 @@ export function registerAuthEmailResetPasswordRoute(app: FastifyInstance): void 
       });
 
       // Token is valid — render the Auth UI with the token context.
+      const redirectUrl = redirect_url
+        ? selectRedirectUrl({
+            allowedRedirectUrls: request.config.redirect_urls,
+            requestedRedirectUrl: redirect_url,
+          })
+        : undefined;
+
       const params = new URLSearchParams();
       params.set('config_url', request.configUrl);
-      if (redirect_url) params.set('redirect_url', redirect_url);
+      if (redirectUrl) params.set('redirect_url', redirectUrl);
       params.set('email_token', token);
       params.set('email_token_type', 'PASSWORD_RESET');
 
