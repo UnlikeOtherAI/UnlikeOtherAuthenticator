@@ -4,11 +4,17 @@ import { z } from 'zod';
 import { tryParseHttpUrl } from '../utils/http-url.js';
 import { getAppLogger } from '../utils/app-logger.js';
 
-const DEFAULT_CONFIG_FETCH_TIMEOUT_MS = 5_000;
-const MAX_CONFIG_JWT_RESPONSE_BYTES = 64 * 1024;
-
 const CONFIG_JWT_ALLOWED_ALGS = ['RS256'] as const;
-const configJwksCache = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
+const CONFIG_JWKS_CACHE_TTL_MS = 10 * 60 * 1000;
+
+type ConfigJwksCacheEntry = {
+  expiresAt: number;
+  jwks: ReturnType<typeof createRemoteJWKSet>;
+};
+
+const configJwksCache = new Map<string, ConfigJwksCacheEntry>();
+
+export { fetchConfigJwtFromUrl } from './config-fetch.service.js';
 
 const RedirectUrlSchema = z
   .string()
@@ -320,11 +326,25 @@ function getConfigJwks(jwksUrl: string): ReturnType<typeof createRemoteJWKSet> {
   }
 
   const cacheKey = parsed.toString();
-  let jwks = configJwksCache.get(cacheKey);
-  if (!jwks) {
-    jwks = createRemoteJWKSet(parsed);
-    configJwksCache.set(cacheKey, jwks);
+  const now = Date.now();
+  for (const [key, entry] of configJwksCache.entries()) {
+    if (entry.expiresAt <= now) {
+      configJwksCache.delete(key);
+    }
   }
+
+  const cached = configJwksCache.get(cacheKey);
+  if (cached) {
+    return cached.jwks;
+  }
+
+  const jwks = createRemoteJWKSet(parsed, {
+    cacheMaxAge: CONFIG_JWKS_CACHE_TTL_MS,
+  });
+  configJwksCache.set(cacheKey, {
+    expiresAt: now + CONFIG_JWKS_CACHE_TTL_MS,
+    jwks,
+  });
   return jwks;
 }
 
@@ -335,106 +355,6 @@ function assertConfigJwtHeader(configJwt: string): void {
   }
   if (typeof header.kid !== 'string' || !header.kid.trim()) {
     throw new AppError('BAD_REQUEST', 400);
-  }
-}
-
-function extractJwtFromBody(bodyText: string): string {
-  const trimmed = bodyText.trim();
-  if (!trimmed) return '';
-
-  // Common convenience: allow "Bearer <jwt>" responses.
-  if (trimmed.toLowerCase().startsWith('bearer ')) {
-    return trimmed.slice('bearer '.length).trim();
-  }
-
-  // Some client backends may return JSON. Support a minimal shape without overfitting.
-  if (trimmed.startsWith('{')) {
-    try {
-      const parsed: unknown = JSON.parse(trimmed);
-      if (typeof parsed === 'string') return parsed.trim();
-      if (parsed && typeof parsed === 'object') {
-        const obj = parsed as Record<string, unknown>;
-        const candidate = obj.jwt ?? obj.token ?? obj.config_jwt ?? obj.configJwt ?? obj.configJWT;
-        if (typeof candidate === 'string') return candidate.trim();
-      }
-    } catch {
-      // Fall through and treat as plain text.
-    }
-  }
-
-  return trimmed;
-}
-
-async function readResponseTextWithLimit(res: Response): Promise<string> {
-  if (!res.body) return '';
-
-  const reader = res.body.getReader();
-  const chunks: Buffer[] = [];
-  let total = 0;
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (!value) continue;
-
-      total += value.byteLength;
-      if (total > MAX_CONFIG_JWT_RESPONSE_BYTES) {
-        await reader.cancel();
-        throw new AppError('BAD_REQUEST', 400);
-      }
-
-      chunks.push(Buffer.from(value));
-    }
-  } finally {
-    reader.releaseLock();
-  }
-
-  return Buffer.concat(chunks, total).toString('utf8');
-}
-
-export async function fetchConfigJwtFromUrl(
-  configUrl: string,
-  opts?: { timeoutMs?: number },
-): Promise<string> {
-  let url: URL;
-  try {
-    url = new URL(configUrl);
-  } catch {
-    throw new AppError('BAD_REQUEST', 400);
-  }
-
-  if (url.protocol !== 'https:') {
-    throw new AppError('BAD_REQUEST', 400);
-  }
-
-  const controller = new AbortController();
-  const timeoutMs = opts?.timeoutMs ?? DEFAULT_CONFIG_FETCH_TIMEOUT_MS;
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
-  try {
-    const res = await fetch(url.toString(), {
-      method: 'GET',
-      headers: { accept: 'text/plain, application/json' },
-      signal: controller.signal,
-    });
-
-    if (!res.ok) {
-      throw new AppError('BAD_REQUEST', 400);
-    }
-
-    const jwt = extractJwtFromBody(await readResponseTextWithLimit(res));
-    if (!jwt) {
-      throw new AppError('BAD_REQUEST', 400);
-    }
-
-    return jwt;
-  } catch (err) {
-    // Normalize fetch/network/abort errors into a generic, user-safe error.
-    if (err instanceof AppError) throw err;
-    throw new AppError('BAD_REQUEST', 400);
-  } finally {
-    clearTimeout(timeoutId);
   }
 }
 

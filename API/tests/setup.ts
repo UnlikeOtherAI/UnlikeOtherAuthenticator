@@ -1,8 +1,26 @@
-import { afterAll, beforeAll } from 'vitest';
+import { afterAll, beforeAll, vi } from 'vitest';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
 import { testConfigJwks } from './helpers/test-config.js';
+
+vi.mock('node:dns/promises', async () => {
+  const actual = await vi.importActual<typeof import('node:dns/promises')>(
+    'node:dns/promises',
+  );
+
+  return {
+    ...actual,
+    lookup: vi.fn((hostname: string, options?: { all?: boolean }) => {
+      if (hostname === 'example.com' || hostname.endsWith('.example.com')) {
+        const resolved = { address: '93.184.216.34', family: 4 };
+        return Promise.resolve(options?.all ? [resolved] : resolved);
+      }
+
+      return actual.lookup(hostname, options);
+    }),
+  };
+});
 
 process.env.NODE_ENV = process.env.NODE_ENV ?? 'test';
 process.env.SHARED_SECRET =
