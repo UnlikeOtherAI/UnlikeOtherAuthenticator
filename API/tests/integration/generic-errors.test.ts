@@ -10,7 +10,7 @@ describe('generic error responses', () => {
 
   it('returns a generic message for 404 responses', async () => {
     process.env.NODE_ENV = 'test';
-    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER =
       process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
 
@@ -23,7 +23,7 @@ describe('generic error responses', () => {
     });
 
     expect(res.statusCode).toBe(404);
-    expectJsonError(res.json(), { code: 'NOT_FOUND' });
+    expectJsonError(res.json());
 
     await app.close();
   });

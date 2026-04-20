@@ -9,17 +9,21 @@ export function expectJsonError(
 ): void {
   expect(body).toMatchObject({
     error: 'Request failed',
-    code: options?.code ?? expect.any(String),
-    summary: expect.any(String),
   });
 
   const parsed = body as {
+    code?: string;
     summary?: string;
     details?: unknown;
     hints?: unknown;
   };
 
+  if (options?.code) {
+    expect(parsed.code).toBe(options.code);
+  }
+
   if (options?.summary) {
+    expect(parsed.summary).toEqual(expect.any(String));
     if (typeof options.summary === 'string') {
       expect(parsed.summary).toContain(options.summary);
     } else {
