@@ -1,5 +1,7 @@
-import { createHash } from 'node:crypto';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
+
+import { requireEnv } from '../config/env.js';
 import { AppError } from '../utils/errors.js';
 
 type RequestWithConfig = FastifyRequest & {
@@ -9,8 +11,8 @@ type RequestWithConfig = FastifyRequest & {
 };
 
 function getSecret() {
-  const secret = process.env.SHARED_SECRET;
-  if (!secret?.trim()) {
+  const secret = requireEnv('SHARED_SECRET').SHARED_SECRET;
+  if (!secret.trim()) {
     throw new AppError('INTERNAL', 500, 'Missing shared secret');
   }
   return secret;
@@ -49,13 +51,25 @@ function parseAuthHeader(value: unknown) {
     return undefined;
   }
 
-  return token.toLowerCase().startsWith('bearer ')
-    ? token.slice('bearer '.length).trim()
-    : token;
+  return token.toLowerCase().startsWith('bearer ') ? token.slice('bearer '.length).trim() : token;
 }
 
 function expectedDomainHash(domain: string, secret: string) {
   return createHash('sha256').update(`${domain}${secret}`).digest('hex');
+}
+
+function domainHashesEqual(actual: string, expected: string): boolean {
+  if (actual.length !== expected.length) {
+    return false;
+  }
+
+  const actualBytes = Buffer.from(actual, 'hex');
+  const expectedBytes = Buffer.from(expected, 'hex');
+  if (actualBytes.length !== expectedBytes.length) {
+    return false;
+  }
+
+  return timingSafeEqual(actualBytes, expectedBytes);
 }
 
 async function domainHashAuth(request: RequestWithConfig) {
@@ -73,7 +87,7 @@ async function domainHashAuth(request: RequestWithConfig) {
   const secret = getSecret();
   const expected = expectedDomainHash(domain, secret);
 
-  if (token !== expected) {
+  if (!domainHashesEqual(token, expected)) {
     throw new AppError('UNAUTHORIZED', 401);
   }
 }
@@ -90,9 +104,7 @@ export function requireDomainHashAuthForDomainQuery(
   return domainHashAuth;
 }
 
-export const requireDomainHashAuth = (
-  request: RequestWithConfig,
-): Promise<void> => {
+export const requireDomainHashAuth = (request: RequestWithConfig): Promise<void> => {
   return requireDomainHashAuthForDomainQuery(request);
 };
 
