@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { createHmac, randomBytes } from 'node:crypto';
 
 import type { PrismaClient } from '@prisma/client';
 import { SignJWT } from 'jose';
@@ -26,10 +26,6 @@ type TokenDeps = {
   sharedSecret?: string;
 };
 
-function sha256Hex(input: string): string {
-  return createHash('sha256').update(input, 'utf8').digest('hex');
-}
-
 function generateAuthorizationCode(): string {
   // 32 bytes -> 256 bits of entropy; base64url for safe transport in URLs.
   return randomBytes(32).toString('base64url');
@@ -37,7 +33,7 @@ function generateAuthorizationCode(): string {
 
 function hashAuthorizationCode(code: string, pepper: string): string {
   // Store only a hashed code. The raw code is a bearer secret; treat it like email tokens.
-  return sha256Hex(`${code}.${pepper}`);
+  return createHmac('sha256', pepper).update(code, 'utf8').digest('hex');
 }
 
 function sharedSecretKey(sharedSecret: string): Uint8Array {
