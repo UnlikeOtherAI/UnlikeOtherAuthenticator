@@ -12,7 +12,7 @@ export async function createApp(): Promise<FastifyInstance> {
   const env = getEnv();
 
   const app = fastify({
-    trustProxy: true,
+    trustProxy: 1,
     // Never log bearer tokens or other secrets. Additionally, avoid automatic request
     // logging to prevent sensitive query params (like config_url) from being persisted.
     disableRequestLogging: true,
@@ -47,6 +47,12 @@ export async function createApp(): Promise<FastifyInstance> {
                 'req.body.password',
                 'req.body.code',
                 'req.body.code_verifier',
+                'req.body.access_token',
+                'req.body.refresh_token',
+                'req.body.twofa_token',
+                'req.body.email_token',
+                'req.body.client_secret',
+                'req.body.shared_secret',
               ],
               censor: '[REDACTED]',
             },
@@ -74,7 +80,7 @@ export async function createApp(): Promise<FastifyInstance> {
     hsts: {
       maxAge: 31_536_000,
       includeSubDomains: true,
-      preload: true,
+      preload: false,
     },
     frameguard: { action: 'deny' },
     noSniff: true,
