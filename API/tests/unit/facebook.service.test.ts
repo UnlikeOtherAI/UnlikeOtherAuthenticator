@@ -56,7 +56,7 @@ describe('facebook.service', () => {
     expect(profile).toEqual({
       provider: 'facebook',
       email: 'user@example.com',
-      emailVerified: true,
+      emailVerified: false,
       name: 'User Example',
       avatarUrl: 'https://example.com/avatar.png',
     });
@@ -82,4 +82,3 @@ describe('facebook.service', () => {
     ).rejects.toThrow(/FACEBOOK_EMAIL_MISSING/);
   });
 });
-

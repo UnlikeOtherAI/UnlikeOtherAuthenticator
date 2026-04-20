@@ -20,6 +20,7 @@ import { loginWithSocialProfile } from '../../services/social/social-login.servi
 import { verifySocialState } from '../../services/social/social-state.service.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
 import { finalizeAuthenticatedUser } from '../../services/access-request-flow.service.js';
+import { requestRegistrationInstructions } from '../../services/auth-register.service.js';
 import { signTwoFaChallenge } from '../../services/twofactor-challenge.service.js';
 import { selectRedirectUrl } from '../../services/token.service.js';
 import { socialCallbackRateLimiter } from './rate-limit-keys.js';
@@ -178,6 +179,20 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         });
       } else {
         throw new AppError('BAD_REQUEST', 400);
+      }
+
+      if (!profile.emailVerified) {
+        await requestRegistrationInstructions({
+          email: profile.email,
+          config,
+          configUrl,
+          redirectUrl,
+          requestAccess: socialState.request_access === true,
+          codeChallenge: socialState.code_challenge,
+          codeChallengeMethod: socialState.code_challenge_method,
+        });
+        reply.redirect(buildAuthFailedRedirectUrl(redirectUrl), 302);
+        return;
       }
 
       const socialLoginResult = await loginWithSocialProfile({

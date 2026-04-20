@@ -123,11 +123,10 @@ export async function getFacebookProfileFromCode(params: {
   return validateSocialProfile({
     provider: 'facebook',
     email,
-    // Facebook doesn't provide an explicit email verification flag via the basic profile.
-    // Treat the presence of an email on the authenticated user profile as provider-verified.
-    emailVerified: true,
+    // Facebook's basic profile does not expose a reliable verified-email signal.
+    // Fail closed; the callback route sends generic email verification instructions.
+    emailVerified: false,
     name: normalizeOptionalString(obj.name),
     avatarUrl: extractPictureUrl(obj),
   });
 }
-
