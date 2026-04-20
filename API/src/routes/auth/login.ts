@@ -10,9 +10,8 @@ import {
 } from '../../services/access-request-flow.service.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
 import { signTwoFaChallenge } from '../../services/twofactor-challenge.service.js';
-import {
-  selectRedirectUrl,
-} from '../../services/token.service.js';
+import { selectRedirectUrl } from '../../services/token.service.js';
+import { loginRateLimiter } from './rate-limit-keys.js';
 
 const LoginBodySchema = z
   .object({
@@ -33,7 +32,7 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
   app.post(
     '/auth/login',
     {
-      preHandler: [configVerifier],
+      preHandler: [loginRateLimiter, configVerifier],
     },
     async (request, reply) => {
       const { email, password, remember_me } = LoginBodySchema.parse(request.body);
@@ -97,7 +96,10 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
           domain: config.domain,
           authMethod: 'email_password',
           ip: request.ip ?? null,
-          userAgent: typeof request.headers['user-agent'] === 'string' ? request.headers['user-agent'] : null,
+          userAgent:
+            typeof request.headers['user-agent'] === 'string'
+              ? request.headers['user-agent']
+              : null,
         });
       } catch (err) {
         request.log.error({ err }, 'failed to record login log');

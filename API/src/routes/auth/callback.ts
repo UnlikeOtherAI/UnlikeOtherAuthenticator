@@ -21,9 +21,8 @@ import { verifySocialState } from '../../services/social/social-state.service.js
 import { recordLoginLog } from '../../services/login-log.service.js';
 import { finalizeAuthenticatedUser } from '../../services/access-request-flow.service.js';
 import { signTwoFaChallenge } from '../../services/twofactor-challenge.service.js';
-import {
-  selectRedirectUrl,
-} from '../../services/token.service.js';
+import { selectRedirectUrl } from '../../services/token.service.js';
+import { socialCallbackRateLimiter } from './rate-limit-keys.js';
 
 const ParamsSchema = z.object({
   provider: z.enum(['google', 'apple', 'facebook', 'github', 'linkedin']),
@@ -43,7 +42,9 @@ function normalizeBaseUrl(value: string): string {
 
 function resolvePublicBaseUrl(): string {
   const env = getEnv();
-  return env.PUBLIC_BASE_URL ? normalizeBaseUrl(env.PUBLIC_BASE_URL) : `http://${env.HOST}:${env.PORT}`;
+  return env.PUBLIC_BASE_URL
+    ? normalizeBaseUrl(env.PUBLIC_BASE_URL)
+    : `http://${env.HOST}:${env.PORT}`;
 }
 
 function buildAuthFailedRedirectUrl(redirectUrl: string): string {
@@ -53,191 +54,198 @@ function buildAuthFailedRedirectUrl(redirectUrl: string): string {
 }
 
 export function registerAuthCallbackRoute(app: FastifyInstance): void {
-  app.get('/auth/callback/:provider', async (request, reply) => {
-    const { provider } = ParamsSchema.parse(request.params);
-    const { code, state, error } = QuerySchema.parse(request.query);
+  app.get(
+    '/auth/callback/:provider',
+    { preHandler: [socialCallbackRateLimiter] },
+    async (request, reply) => {
+      const { provider } = ParamsSchema.parse(request.params);
+      const { code, state, error } = QuerySchema.parse(request.query);
 
-    // Any provider error is a generic auth failure. Don't leak specifics.
-    if (error) {
-      throw new AppError('UNAUTHORIZED', 401, 'SOCIAL_PROVIDER_ERROR');
-    }
-
-    if (!code || !state) {
-      throw new AppError('BAD_REQUEST', 400, 'MISSING_SOCIAL_CALLBACK_PARAMS');
-    }
-
-    const { SHARED_SECRET, AUTH_SERVICE_IDENTIFIER } = requireEnv(
-      'SHARED_SECRET',
-      'AUTH_SERVICE_IDENTIFIER',
-    );
-
-    const socialState = await verifySocialState({
-      stateJwt: state,
-      sharedSecret: SHARED_SECRET,
-      audience: AUTH_SERVICE_IDENTIFIER,
-    });
-
-    if (socialState.provider !== provider) {
-      throw new AppError('BAD_REQUEST', 400, 'SOCIAL_PROVIDER_MISMATCH');
-    }
-
-    const configUrl = socialState.config_url;
-    const requestedRedirectUrl = socialState.redirect_url;
-
-    // Brief 22.1 + 22.4: fetch and verify config on each auth initiation.
-    const configJwt = await fetchConfigJwtFromUrl(configUrl);
-    const payload = await verifyConfigJwtSignature(
-      configJwt,
-      SHARED_SECRET,
-      AUTH_SERVICE_IDENTIFIER,
-    );
-    const config = validateConfigFields(payload);
-    assertConfigDomainMatchesConfigUrl(config.domain, configUrl);
-    assertSocialProviderAllowed({ config, provider });
-
-    // Re-validate redirect URL against current config (config can change between initiation and callback).
-    const redirectUrl = selectRedirectUrl({
-      allowedRedirectUrls: config.redirect_urls,
-      requestedRedirectUrl,
-    });
-
-    const env = getEnv();
-    const baseUrl = resolvePublicBaseUrl();
-
-    let profile: SocialProfile;
-    if (provider === 'google') {
-      if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
-        throw new AppError('INTERNAL', 500, 'GOOGLE_ENV_MISSING');
+      // Any provider error is a generic auth failure. Don't leak specifics.
+      if (error) {
+        throw new AppError('UNAUTHORIZED', 401, 'SOCIAL_PROVIDER_ERROR');
       }
 
-      const redirectUri = `${baseUrl}/auth/callback/google`;
-      profile = await getGoogleProfileFromCode({
-        code,
-        clientId: env.GOOGLE_CLIENT_ID,
-        clientSecret: env.GOOGLE_CLIENT_SECRET,
-        redirectUri,
-      });
-    } else if (provider === 'facebook') {
-      if (!env.FACEBOOK_CLIENT_ID || !env.FACEBOOK_CLIENT_SECRET) {
-        throw new AppError('INTERNAL', 500, 'FACEBOOK_ENV_MISSING');
+      if (!code || !state) {
+        throw new AppError('BAD_REQUEST', 400, 'MISSING_SOCIAL_CALLBACK_PARAMS');
       }
 
-      const redirectUri = `${baseUrl}/auth/callback/facebook`;
-      profile = await getFacebookProfileFromCode({
-        code,
-        clientId: env.FACEBOOK_CLIENT_ID,
-        clientSecret: env.FACEBOOK_CLIENT_SECRET,
-        redirectUri,
-      });
-    } else if (provider === 'github') {
-      if (!env.GITHUB_CLIENT_ID || !env.GITHUB_CLIENT_SECRET) {
-        throw new AppError('INTERNAL', 500, 'GITHUB_ENV_MISSING');
-      }
+      const { SHARED_SECRET, AUTH_SERVICE_IDENTIFIER } = requireEnv(
+        'SHARED_SECRET',
+        'AUTH_SERVICE_IDENTIFIER',
+      );
 
-      const redirectUri = `${baseUrl}/auth/callback/github`;
-      profile = await getGitHubProfileFromCode({
-        code,
-        clientId: env.GITHUB_CLIENT_ID,
-        clientSecret: env.GITHUB_CLIENT_SECRET,
-        redirectUri,
-      });
-    } else if (provider === 'apple') {
-      if (
-        !env.APPLE_CLIENT_ID ||
-        !env.APPLE_TEAM_ID ||
-        !env.APPLE_KEY_ID ||
-        !env.APPLE_PRIVATE_KEY
-      ) {
-        throw new AppError('INTERNAL', 500, 'APPLE_ENV_MISSING');
-      }
-
-      const redirectUri = `${baseUrl}/auth/callback/apple`;
-      profile = await getAppleProfileFromCode({
-        code,
-        clientId: env.APPLE_CLIENT_ID,
-        teamId: env.APPLE_TEAM_ID,
-        keyId: env.APPLE_KEY_ID,
-        privateKeyPem: env.APPLE_PRIVATE_KEY,
-        redirectUri,
-      });
-    } else if (provider === 'linkedin') {
-      if (!env.LINKEDIN_CLIENT_ID || !env.LINKEDIN_CLIENT_SECRET) {
-        throw new AppError('INTERNAL', 500, 'LINKEDIN_ENV_MISSING');
-      }
-
-      const redirectUri = `${baseUrl}/auth/callback/linkedin`;
-      profile = await getLinkedInProfileFromCode({
-        code,
-        clientId: env.LINKEDIN_CLIENT_ID,
-        clientSecret: env.LINKEDIN_CLIENT_SECRET,
-        redirectUri,
-      });
-    } else {
-      throw new AppError('BAD_REQUEST', 400);
-    }
-
-    const socialLoginResult = await loginWithSocialProfile({
-      profile,
-      config,
-      requestAccess: socialState.request_access === true,
-    });
-
-    if (socialLoginResult.status === 'blocked') {
-      reply.redirect(buildAuthFailedRedirectUrl(redirectUrl), 302);
-      return;
-    }
-
-    const { userId, twoFaEnabled } = socialLoginResult;
-
-    // Brief 13 / Phase 8.6 + 8.7: enforce 2FA verification during login when enabled via config.
-    const rememberMe = config.session?.remember_me_default ?? true;
-
-    if (config['2fa_enabled'] && twoFaEnabled) {
-      const twofa_token = await signTwoFaChallenge({
-        userId,
-        domain: config.domain,
-        configUrl,
-        redirectUrl,
-        authMethod: provider,
-        rememberMe,
-        requestAccess: socialState.request_access === true,
+      const socialState = await verifySocialState({
+        stateJwt: state,
         sharedSecret: SHARED_SECRET,
         audience: AUTH_SERVICE_IDENTIFIER,
       });
 
-      const u = new URL(`${baseUrl}/auth`);
-      u.searchParams.set('config_url', configUrl);
-      u.searchParams.set('redirect_url', redirectUrl);
-      u.searchParams.set('twofa_token', twofa_token);
-      if (socialState.request_access === true) {
-        u.searchParams.set('request_access', 'true');
+      if (socialState.provider !== provider) {
+        throw new AppError('BAD_REQUEST', 400, 'SOCIAL_PROVIDER_MISMATCH');
       }
-      reply.redirect(u.toString(), 302);
-      return;
-    }
 
-    const finalResult = await finalizeAuthenticatedUser({
-      userId,
-      config,
-      configUrl,
-      redirectUrl,
-      rememberMe,
-      requestAccess: socialState.request_access === true,
-    });
+      const configUrl = socialState.config_url;
+      const requestedRedirectUrl = socialState.redirect_url;
 
-    try {
-      await recordLoginLog({
-        userId,
-        email: profile.email,
-        domain: config.domain,
-        authMethod: provider,
-        ip: request.ip ?? null,
-        userAgent: typeof request.headers['user-agent'] === 'string' ? request.headers['user-agent'] : null,
+      // Brief 22.1 + 22.4: fetch and verify config on each auth initiation.
+      const configJwt = await fetchConfigJwtFromUrl(configUrl);
+      const payload = await verifyConfigJwtSignature(
+        configJwt,
+        SHARED_SECRET,
+        AUTH_SERVICE_IDENTIFIER,
+      );
+      const config = validateConfigFields(payload);
+      assertConfigDomainMatchesConfigUrl(config.domain, configUrl);
+      assertSocialProviderAllowed({ config, provider });
+
+      // Re-validate redirect URL against current config (config can change between initiation and callback).
+      const redirectUrl = selectRedirectUrl({
+        allowedRedirectUrls: config.redirect_urls,
+        requestedRedirectUrl,
       });
-    } catch (err) {
-      request.log.error({ err }, 'failed to record login log');
-    }
 
-    reply.redirect(finalResult.redirectTo, 302);
-  });
+      const env = getEnv();
+      const baseUrl = resolvePublicBaseUrl();
+
+      let profile: SocialProfile;
+      if (provider === 'google') {
+        if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
+          throw new AppError('INTERNAL', 500, 'GOOGLE_ENV_MISSING');
+        }
+
+        const redirectUri = `${baseUrl}/auth/callback/google`;
+        profile = await getGoogleProfileFromCode({
+          code,
+          clientId: env.GOOGLE_CLIENT_ID,
+          clientSecret: env.GOOGLE_CLIENT_SECRET,
+          redirectUri,
+        });
+      } else if (provider === 'facebook') {
+        if (!env.FACEBOOK_CLIENT_ID || !env.FACEBOOK_CLIENT_SECRET) {
+          throw new AppError('INTERNAL', 500, 'FACEBOOK_ENV_MISSING');
+        }
+
+        const redirectUri = `${baseUrl}/auth/callback/facebook`;
+        profile = await getFacebookProfileFromCode({
+          code,
+          clientId: env.FACEBOOK_CLIENT_ID,
+          clientSecret: env.FACEBOOK_CLIENT_SECRET,
+          redirectUri,
+        });
+      } else if (provider === 'github') {
+        if (!env.GITHUB_CLIENT_ID || !env.GITHUB_CLIENT_SECRET) {
+          throw new AppError('INTERNAL', 500, 'GITHUB_ENV_MISSING');
+        }
+
+        const redirectUri = `${baseUrl}/auth/callback/github`;
+        profile = await getGitHubProfileFromCode({
+          code,
+          clientId: env.GITHUB_CLIENT_ID,
+          clientSecret: env.GITHUB_CLIENT_SECRET,
+          redirectUri,
+        });
+      } else if (provider === 'apple') {
+        if (
+          !env.APPLE_CLIENT_ID ||
+          !env.APPLE_TEAM_ID ||
+          !env.APPLE_KEY_ID ||
+          !env.APPLE_PRIVATE_KEY
+        ) {
+          throw new AppError('INTERNAL', 500, 'APPLE_ENV_MISSING');
+        }
+
+        const redirectUri = `${baseUrl}/auth/callback/apple`;
+        profile = await getAppleProfileFromCode({
+          code,
+          clientId: env.APPLE_CLIENT_ID,
+          teamId: env.APPLE_TEAM_ID,
+          keyId: env.APPLE_KEY_ID,
+          privateKeyPem: env.APPLE_PRIVATE_KEY,
+          redirectUri,
+        });
+      } else if (provider === 'linkedin') {
+        if (!env.LINKEDIN_CLIENT_ID || !env.LINKEDIN_CLIENT_SECRET) {
+          throw new AppError('INTERNAL', 500, 'LINKEDIN_ENV_MISSING');
+        }
+
+        const redirectUri = `${baseUrl}/auth/callback/linkedin`;
+        profile = await getLinkedInProfileFromCode({
+          code,
+          clientId: env.LINKEDIN_CLIENT_ID,
+          clientSecret: env.LINKEDIN_CLIENT_SECRET,
+          redirectUri,
+        });
+      } else {
+        throw new AppError('BAD_REQUEST', 400);
+      }
+
+      const socialLoginResult = await loginWithSocialProfile({
+        profile,
+        config,
+        requestAccess: socialState.request_access === true,
+      });
+
+      if (socialLoginResult.status === 'blocked') {
+        reply.redirect(buildAuthFailedRedirectUrl(redirectUrl), 302);
+        return;
+      }
+
+      const { userId, twoFaEnabled } = socialLoginResult;
+
+      // Brief 13 / Phase 8.6 + 8.7: enforce 2FA verification during login when enabled via config.
+      const rememberMe = config.session?.remember_me_default ?? true;
+
+      if (config['2fa_enabled'] && twoFaEnabled) {
+        const twofa_token = await signTwoFaChallenge({
+          userId,
+          domain: config.domain,
+          configUrl,
+          redirectUrl,
+          authMethod: provider,
+          rememberMe,
+          requestAccess: socialState.request_access === true,
+          sharedSecret: SHARED_SECRET,
+          audience: AUTH_SERVICE_IDENTIFIER,
+        });
+
+        const u = new URL(`${baseUrl}/auth`);
+        u.searchParams.set('config_url', configUrl);
+        u.searchParams.set('redirect_url', redirectUrl);
+        u.searchParams.set('twofa_token', twofa_token);
+        if (socialState.request_access === true) {
+          u.searchParams.set('request_access', 'true');
+        }
+        reply.redirect(u.toString(), 302);
+        return;
+      }
+
+      const finalResult = await finalizeAuthenticatedUser({
+        userId,
+        config,
+        configUrl,
+        redirectUrl,
+        rememberMe,
+        requestAccess: socialState.request_access === true,
+      });
+
+      try {
+        await recordLoginLog({
+          userId,
+          email: profile.email,
+          domain: config.domain,
+          authMethod: provider,
+          ip: request.ip ?? null,
+          userAgent:
+            typeof request.headers['user-agent'] === 'string'
+              ? request.headers['user-agent']
+              : null,
+        });
+      } catch (err) {
+        request.log.error({ err }, 'failed to record login log');
+      }
+
+      reply.redirect(finalResult.redirectTo, 302);
+    },
+  );
 }

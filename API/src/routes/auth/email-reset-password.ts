@@ -5,6 +5,7 @@ import { configVerifier } from '../../middleware/config-verifier.js';
 import { validatePasswordResetToken } from '../../services/auth-reset-password.service.js';
 import { renderAuthEntrypointHtml } from '../../services/auth-ui.service.js';
 import { AppError } from '../../utils/errors.js';
+import { tokenConsumeRateLimiter } from './rate-limit-keys.js';
 
 const QuerySchema = z
   .object({
@@ -19,7 +20,7 @@ export function registerAuthEmailResetPasswordRoute(app: FastifyInstance): void 
   app.get(
     '/auth/email/reset-password',
     {
-      preHandler: [configVerifier],
+      preHandler: [tokenConsumeRateLimiter, configVerifier],
     },
     async (request, reply) => {
       const { token, redirect_url } = QuerySchema.parse(request.query);

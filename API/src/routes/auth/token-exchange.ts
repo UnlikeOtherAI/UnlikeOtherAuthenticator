@@ -8,6 +8,7 @@ import {
   exchangeAuthorizationCodeForTokens,
   exchangeRefreshTokenForTokens,
 } from '../../services/token.service.js';
+import { tokenExchangeRateLimiter } from './rate-limit-keys.js';
 
 const AuthorizationCodeGrantSchema = z
   .object({
@@ -46,7 +47,7 @@ export function registerAuthTokenExchangeRoute(app: FastifyInstance): void {
   app.post(
     '/auth/token',
     {
-      preHandler: [configVerifier, requireDomainHashAuth],
+      preHandler: [tokenExchangeRateLimiter, configVerifier, requireDomainHashAuth],
     },
     async (request, reply) => {
       const body = parseTokenExchangeBody(request.body);

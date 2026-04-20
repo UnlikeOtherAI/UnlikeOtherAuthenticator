@@ -12,6 +12,7 @@ import { selectRedirectUrl } from '../../services/token.service.js';
 import { verifyEmailToken } from '../../services/auth-verify-email.service.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
 import { AppError } from '../../utils/errors.js';
+import { tokenConsumeRateLimiter } from './rate-limit-keys.js';
 
 const QuerySchema = z
   .object({
@@ -25,7 +26,7 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
   app.get(
     '/auth/email/link',
     {
-      preHandler: [configVerifier],
+      preHandler: [tokenConsumeRateLimiter, configVerifier],
     },
     async (request, reply) => {
       const { token, redirect_url, request_access } = QuerySchema.parse(request.query);
@@ -95,7 +96,13 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
       const html = await renderAuthEntrypointHtml({
         config: request.config,
         configUrl: request.configUrl,
-        requestUrl: buildAuthUrl(request.configUrl, redirect_url, token, type, parseRequestAccessFlag(request_access)),
+        requestUrl: buildAuthUrl(
+          request.configUrl,
+          redirect_url,
+          token,
+          type,
+          parseRequestAccessFlag(request_access),
+        ),
       });
       reply.type('text/html; charset=utf-8').status(200).send(html);
     },

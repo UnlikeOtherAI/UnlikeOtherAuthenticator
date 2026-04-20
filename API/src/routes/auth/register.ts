@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { configVerifier } from '../../middleware/config-verifier.js';
 import { parseRequestAccessFlag } from '../../services/access-request-flow.service.js';
 import { requestRegistrationInstructions } from '../../services/auth-register.service.js';
+import { registerRateLimiter } from './rate-limit-keys.js';
 
 const SUCCESS_MESSAGE = 'We sent instructions to your email';
 
@@ -17,7 +18,7 @@ export function registerAuthRegisterRoute(app: FastifyInstance): void {
   app.post(
     '/auth/register',
     {
-      preHandler: [configVerifier],
+      preHandler: [registerRateLimiter, configVerifier],
     },
     async (request, reply) => {
       // Brief 11: no email enumeration. Always return the same success message regardless

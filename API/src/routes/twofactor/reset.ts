@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { configVerifier } from '../../middleware/config-verifier.js';
 import { requestTwoFaReset, resetTwoFaWithToken } from '../../services/twofactor-reset.service.js';
 import { AppError } from '../../utils/errors.js';
+import { resetRequestRateLimiter, tokenConsumeRateLimiter } from '../auth/rate-limit-keys.js';
 
 const SUCCESS_MESSAGE = 'We sent instructions to your email';
 
@@ -24,7 +25,7 @@ export function registerTwoFactorResetRoutes(app: FastifyInstance): void {
   app.post(
     '/2fa/reset/request',
     {
-      preHandler: [configVerifier],
+      preHandler: [resetRequestRateLimiter, configVerifier],
     },
     async (request, reply) => {
       const parsed = RequestBodySchema.safeParse(request.body);
@@ -50,7 +51,7 @@ export function registerTwoFactorResetRoutes(app: FastifyInstance): void {
   app.post(
     '/2fa/reset',
     {
-      preHandler: [configVerifier],
+      preHandler: [tokenConsumeRateLimiter, configVerifier],
     },
     async (request, reply) => {
       const { token } = ResetBodySchema.parse(request.body);

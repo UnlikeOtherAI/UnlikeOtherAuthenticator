@@ -7,10 +7,9 @@ import { recordLoginLog } from '../../services/login-log.service.js';
 import { finalizeAuthenticatedUser } from '../../services/access-request-flow.service.js';
 import { verifyTwoFaChallenge } from '../../services/twofactor-challenge.service.js';
 import { verifyTwoFactorForLogin } from '../../services/twofactor-login.service.js';
-import {
-  selectRedirectUrl,
-} from '../../services/token.service.js';
+import { selectRedirectUrl } from '../../services/token.service.js';
 import { AppError } from '../../utils/errors.js';
+import { twoFactorVerifyRateLimiter } from '../auth/rate-limit-keys.js';
 
 const BodySchema = z
   .object({
@@ -23,7 +22,7 @@ export function registerTwoFactorVerifyRoute(app: FastifyInstance): void {
   app.post(
     '/2fa/verify',
     {
-      preHandler: [configVerifier],
+      preHandler: [twoFactorVerifyRateLimiter, configVerifier],
     },
     async (request, reply) => {
       const { twofa_token, code } = BodySchema.parse(request.body);

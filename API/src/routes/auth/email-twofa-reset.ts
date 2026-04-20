@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { configVerifier } from '../../middleware/config-verifier.js';
 import { resetTwoFaWithToken } from '../../services/twofactor-reset.service.js';
 import { AppError } from '../../utils/errors.js';
+import { tokenConsumeRateLimiter } from './rate-limit-keys.js';
 
 const QuerySchema = z
   .object({
@@ -17,7 +18,7 @@ export function registerAuthEmailTwoFaResetRoute(app: FastifyInstance): void {
   app.get(
     '/auth/email/twofa-reset',
     {
-      preHandler: [configVerifier],
+      preHandler: [tokenConsumeRateLimiter, configVerifier],
     },
     async (request, reply) => {
       const { token } = QuerySchema.parse(request.query);

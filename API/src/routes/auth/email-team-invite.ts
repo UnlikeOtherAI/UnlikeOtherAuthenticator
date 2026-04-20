@@ -6,6 +6,7 @@ import {
   declineTeamInviteByToken,
   getTeamInviteLandingData,
 } from '../../services/team-invite.service.js';
+import { tokenConsumeRateLimiter } from './rate-limit-keys.js';
 
 const QuerySchema = z
   .object({
@@ -37,10 +38,7 @@ function buildAcceptUrl(params: {
   return `/auth/email/link?${query.toString()}`;
 }
 
-function buildDeclineUrl(params: {
-  token: string;
-  configUrl: string;
-}): string {
+function buildDeclineUrl(params: { token: string; configUrl: string }): string {
   const query = new URLSearchParams();
   query.set('token', params.token);
   query.set('config_url', params.configUrl);
@@ -83,18 +81,21 @@ export function registerAuthEmailTeamInviteRoute(app: FastifyInstance): void {
   app.get(
     '/auth/email/team-invite',
     {
-      preHandler: [configVerifier],
+      preHandler: [tokenConsumeRateLimiter, configVerifier],
     },
     async (request, reply) => {
       const { token, redirect_url } = QuerySchema.parse(request.query);
 
       if (!request.config || !request.configUrl) {
-        reply.status(400).type('text/html; charset=utf-8').send(
-          renderInviteHtml({
-            title: 'Invitation unavailable',
-            body: 'This invitation is no longer available.',
-          }),
-        );
+        reply
+          .status(400)
+          .type('text/html; charset=utf-8')
+          .send(
+            renderInviteHtml({
+              title: 'Invitation unavailable',
+              body: 'This invitation is no longer available.',
+            }),
+          );
         return;
       }
 
@@ -124,12 +125,15 @@ export function registerAuthEmailTeamInviteRoute(app: FastifyInstance): void {
             }),
           );
       } catch {
-        reply.status(400).type('text/html; charset=utf-8').send(
-          renderInviteHtml({
-            title: 'Invitation unavailable',
-            body: 'This invitation is no longer available.',
-          }),
-        );
+        reply
+          .status(400)
+          .type('text/html; charset=utf-8')
+          .send(
+            renderInviteHtml({
+              title: 'Invitation unavailable',
+              body: 'This invitation is no longer available.',
+            }),
+          );
       }
     },
   );
@@ -137,18 +141,21 @@ export function registerAuthEmailTeamInviteRoute(app: FastifyInstance): void {
   app.get(
     '/auth/email/team-invite/decline',
     {
-      preHandler: [configVerifier],
+      preHandler: [tokenConsumeRateLimiter, configVerifier],
     },
     async (request, reply) => {
       const { token } = QuerySchema.parse(request.query);
 
       if (!request.config || !request.configUrl) {
-        reply.status(400).type('text/html; charset=utf-8').send(
-          renderInviteHtml({
-            title: 'Invitation unavailable',
-            body: 'This invitation is no longer available.',
-          }),
-        );
+        reply
+          .status(400)
+          .type('text/html; charset=utf-8')
+          .send(
+            renderInviteHtml({
+              title: 'Invitation unavailable',
+              body: 'This invitation is no longer available.',
+            }),
+          );
         return;
       }
 
@@ -159,19 +166,25 @@ export function registerAuthEmailTeamInviteRoute(app: FastifyInstance): void {
           configUrl: request.configUrl,
         });
 
-        reply.status(200).type('text/html; charset=utf-8').send(
-          renderInviteHtml({
-            title: 'Invitation declined',
-            body: `${invite.inviteName ?? invite.email} declined the invitation to join ${invite.teamName} on ${invite.organisationName}.`,
-          }),
-        );
+        reply
+          .status(200)
+          .type('text/html; charset=utf-8')
+          .send(
+            renderInviteHtml({
+              title: 'Invitation declined',
+              body: `${invite.inviteName ?? invite.email} declined the invitation to join ${invite.teamName} on ${invite.organisationName}.`,
+            }),
+          );
       } catch {
-        reply.status(400).type('text/html; charset=utf-8').send(
-          renderInviteHtml({
-            title: 'Invitation unavailable',
-            body: 'This invitation is no longer available.',
-          }),
-        );
+        reply
+          .status(400)
+          .type('text/html; charset=utf-8')
+          .send(
+            renderInviteHtml({
+              title: 'Invitation unavailable',
+              body: 'This invitation is no longer available.',
+            }),
+          );
       }
     },
   );

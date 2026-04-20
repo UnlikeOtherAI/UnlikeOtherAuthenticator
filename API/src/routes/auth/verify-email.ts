@@ -12,9 +12,8 @@ import {
   finalizeAuthenticatedUser,
   parseRequestAccessFlag,
 } from '../../services/access-request-flow.service.js';
-import {
-  selectRedirectUrl,
-} from '../../services/token.service.js';
+import { selectRedirectUrl } from '../../services/token.service.js';
+import { tokenConsumeRateLimiter } from './rate-limit-keys.js';
 
 const BodySchema = z
   .object({
@@ -36,7 +35,7 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
   app.post(
     '/auth/verify-email',
     {
-      preHandler: [configVerifier],
+      preHandler: [tokenConsumeRateLimiter, configVerifier],
     },
     async (request, reply) => {
       const { token, password } = BodySchema.parse(request.body);

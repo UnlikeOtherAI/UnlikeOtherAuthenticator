@@ -2,10 +2,14 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 import { configVerifier } from '../../middleware/config-verifier.js';
-import { requestPasswordReset, resetPasswordWithToken } from '../../services/auth-reset-password.service.js';
+import {
+  requestPasswordReset,
+  resetPasswordWithToken,
+} from '../../services/auth-reset-password.service.js';
 import { AppError } from '../../utils/errors.js';
+import { resetRequestRateLimiter, tokenConsumeRateLimiter } from './rate-limit-keys.js';
 
-const SUCCESS_MESSAGE = 'If you have an account with us, we\'ve sent you instructions';
+const SUCCESS_MESSAGE = "If you have an account with us, we've sent you instructions";
 
 const RequestBodySchema = z
   .object({
@@ -25,7 +29,7 @@ export function registerAuthResetPasswordRoutes(app: FastifyInstance): void {
   app.post(
     '/auth/reset-password/request',
     {
-      preHandler: [configVerifier],
+      preHandler: [resetRequestRateLimiter, configVerifier],
     },
     async (request, reply) => {
       const parsed = RequestBodySchema.safeParse(request.body);
@@ -51,7 +55,7 @@ export function registerAuthResetPasswordRoutes(app: FastifyInstance): void {
   app.post(
     '/auth/reset-password',
     {
-      preHandler: [configVerifier],
+      preHandler: [tokenConsumeRateLimiter, configVerifier],
     },
     async (request, reply) => {
       const { token, password } = ResetBodySchema.parse(request.body);
