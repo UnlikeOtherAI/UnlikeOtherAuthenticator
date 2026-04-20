@@ -1,12 +1,10 @@
 import React from 'react';
 
-export function QrCodeDisplay(props: {
-  src?: string;
-  alt?: string;
-}): React.JSX.Element {
+export function QrCodeDisplay(props: { src?: string; alt?: string }): React.JSX.Element {
   const alt = props.alt ?? '2FA setup QR code';
+  const dataUri = props.src?.trim();
 
-  if (!props.src) {
+  if (!dataUri || !dataUri.startsWith('data:image/')) {
     return (
       <div
         aria-label={alt}
@@ -30,7 +28,7 @@ export function QrCodeDisplay(props: {
       ].join(' ')}
     >
       <img
-        src={props.src}
+        src={dataUri}
         alt={alt}
         className="h-auto w-full max-w-[260px] select-none"
         draggable={false}
@@ -38,4 +36,3 @@ export function QrCodeDisplay(props: {
     </div>
   );
 }
-

@@ -50,6 +50,25 @@ function sanitizeHttpUrl(value: string): string {
   }
 }
 
+const ALLOWED_FONT_IMPORT_HOSTS = new Set([
+  'fonts.googleapis.com',
+  'fonts.gstatic.com',
+  'fonts.bunny.net',
+]);
+
+function sanitizeFontImportUrl(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  try {
+    const u = new URL(trimmed);
+    if (u.protocol !== 'https:') return '';
+    if (!ALLOWED_FONT_IMPORT_HOSTS.has(u.hostname.toLowerCase())) return '';
+    return u.toString();
+  } catch {
+    return '';
+  }
+}
+
 function parseDensity(value: unknown): Density | '' {
   if (value === 'compact' || value === 'comfortable' || value === 'spacious') return value;
   return '';
@@ -59,6 +78,7 @@ function parseFontFamily(value: unknown): FontFamily | '' {
   if (typeof value !== 'string') return '';
   const trimmed = value.trim();
   if (!trimmed) return '';
+  if (!/^[A-Za-z0-9 _-]+$/.test(trimmed)) return '';
   return trimmed;
 }
 
@@ -137,8 +157,7 @@ function parseThemeVars(uiTheme: Record<string, unknown>): ThemeVars {
   if (explicit) {
     for (const name of THEME_CSS_VAR_NAMES) {
       const raw = readString(explicit, name);
-      const v =
-        name.startsWith('--uoa-color-') ? sanitizeHexColor(raw) : sanitizeCssLength(raw);
+      const v = name.startsWith('--uoa-color-') ? sanitizeHexColor(raw) : sanitizeCssLength(raw);
       if (v) vars[name] = v;
     }
   }
@@ -167,7 +186,7 @@ export function buildThemeFromConfig(config: unknown): Theme {
   if (!fontFamily || !baseTextSize) throw new Error('Invalid theme config');
 
   const rawFontImportUrl = typography ? readString(typography, 'font_import_url').trim() : '';
-  const fontImportUrl = rawFontImportUrl ? sanitizeHttpUrl(rawFontImportUrl) : undefined;
+  const fontImportUrl = rawFontImportUrl ? sanitizeFontImportUrl(rawFontImportUrl) : undefined;
 
   // For custom (non-preset) font families, expose via CSS variable.
   if (!isPresetFont(fontFamily)) {
@@ -196,9 +215,10 @@ export function buildThemeFromConfig(config: unknown): Theme {
   const logoFontSize = rawLogoFontSize ? sanitizeCssLength(rawLogoFontSize) : undefined;
   const rawLogoColor = logo ? readString(logo, 'color').trim() : '';
   const logoColor = rawLogoColor ? sanitizeHexColor(rawLogoColor) : undefined;
-  const logoStyle = logo && isRecord(logo.style)
-    ? sanitizeCssRecord(logo.style as Record<string, unknown>)
-    : undefined;
+  const logoStyle =
+    logo && isRecord(logo.style)
+      ? sanitizeCssRecord(logo.style as Record<string, unknown>)
+      : undefined;
 
   return {
     vars,

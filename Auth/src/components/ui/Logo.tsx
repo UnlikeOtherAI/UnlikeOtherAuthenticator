@@ -18,11 +18,15 @@ export function Logo(): React.JSX.Element | null {
   }
 
   if (theme.logo.text) {
-    const style: React.CSSProperties = {
-      ...theme.logo.style,
-      ...(theme.logo.fontSize ? { fontSize: theme.logo.fontSize } : {}),
-      ...(theme.logo.color ? { color: theme.logo.color } : {}),
-    };
+    const style: React.CSSProperties = {};
+    const allowedStyle = theme.logo.style ?? {};
+
+    if (allowedStyle.color) style.color = allowedStyle.color;
+    if (allowedStyle.fontSize) style.fontSize = allowedStyle.fontSize;
+    if (allowedStyle.fontWeight) style.fontWeight = allowedStyle.fontWeight;
+    if (allowedStyle.letterSpacing) style.letterSpacing = allowedStyle.letterSpacing;
+    if (theme.logo.fontSize) style.fontSize = theme.logo.fontSize;
+    if (theme.logo.color) style.color = theme.logo.color;
 
     return (
       <span
