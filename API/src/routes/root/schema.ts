@@ -102,7 +102,7 @@ const authEndpoints: EndpointSchema[] = [
       'refresh_token?': 'refresh token (for refresh_token grant)',
     },
     response: {
-      access_token: 'JWT',
+      access_token: 'JWT with aud="uoa:access-token"',
       expires_in: 'seconds',
       refresh_token: 'opaque token',
       refresh_token_expires_in: 'seconds',

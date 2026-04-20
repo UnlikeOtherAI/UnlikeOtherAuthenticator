@@ -16,6 +16,8 @@ export function registerLlmRoute(app: FastifyInstance): void {
           'Backend-to-backend endpoints (POST /auth/token, POST /auth/revoke, /domain/*, server-driven team invite routes under /org/organisations/:orgId/teams/:teamId/invitations*, and access-request review routes under /org/organisations/:orgId/teams/:teamId/access-requests*) require a domain hash bearer token: SHA-256(domain + SHARED_SECRET). This is sent as Authorization: Bearer <hash>.',
         config_url:
           'Most endpoints require a config_url query parameter pointing to a URL that returns the signed config JWT. The server fetches and verifies this JWT on every request.',
+        access_tokens:
+          'Access tokens are JWTs with issuer AUTH_SERVICE_IDENTIFIER and audience uoa:access-token. Consumers must verify both iss and aud.',
       },
 
       config_jwt: configJwtDocumentation,

@@ -2,6 +2,7 @@ import { jwtVerify } from 'jose';
 import { z } from 'zod';
 
 import { requireEnv } from '../config/env.js';
+import { ACCESS_TOKEN_AUDIENCE } from '../config/jwt.js';
 import { AppError } from '../utils/errors.js';
 
 const ACCESS_TOKEN_ALLOWED_ALGS = ['HS256'] as const;
@@ -62,6 +63,7 @@ export async function verifyAccessToken(
     const { payload } = await jwtVerify(token, sharedSecretKey(sharedSecret), {
       algorithms: [...ACCESS_TOKEN_ALLOWED_ALGS],
       issuer,
+      audience: ACCESS_TOKEN_AUDIENCE,
     });
 
     const parsed = AccessTokenClaimsSchema.parse(payload);

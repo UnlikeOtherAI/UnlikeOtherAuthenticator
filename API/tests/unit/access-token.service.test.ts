@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SignJWT } from 'jose';
 
+import { ACCESS_TOKEN_AUDIENCE } from '../../src/config/jwt.js';
 import { verifyAccessToken } from '../../src/services/access-token.service.js';
 
 function secretKey(secret: string): Uint8Array {
@@ -11,6 +12,7 @@ async function signAccessToken(params: {
   sharedSecret: string;
   issuer: string;
   subject?: string;
+  audience?: string | null;
   alg?: 'HS256' | 'HS512';
   ttl?: string;
   org?: {
@@ -38,6 +40,7 @@ async function signAccessToken(params: {
     .setIssuedAt()
     .setExpirationTime(ttl);
 
+  if (params.audience !== null) jwt.setAudience(params.audience ?? ACCESS_TOKEN_AUDIENCE);
   if (params.subject != null) jwt.setSubject(params.subject);
 
   return await jwt.sign(secretKey(params.sharedSecret));
@@ -138,5 +141,23 @@ describe('verifyAccessToken', () => {
       alg: 'HS512',
     });
     await expect(verifyAccessToken(wrongAlgToken)).rejects.toMatchObject({ statusCode: 401 });
+  });
+
+  it('rejects tokens with missing or wrong audience', async () => {
+    const missingAudienceToken = await signAccessToken({
+      sharedSecret: process.env.SHARED_SECRET!,
+      issuer: process.env.AUTH_SERVICE_IDENTIFIER!,
+      subject: 'u1',
+      audience: null,
+    });
+    await expect(verifyAccessToken(missingAudienceToken)).rejects.toMatchObject({ statusCode: 401 });
+
+    const wrongAudienceToken = await signAccessToken({
+      sharedSecret: process.env.SHARED_SECRET!,
+      issuer: process.env.AUTH_SERVICE_IDENTIFIER!,
+      subject: 'u1',
+      audience: 'someone-else',
+    });
+    await expect(verifyAccessToken(wrongAudienceToken)).rejects.toMatchObject({ statusCode: 401 });
   });
 });

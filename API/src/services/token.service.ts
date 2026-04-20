@@ -5,6 +5,7 @@ import { SignJWT } from 'jose';
 
 import { AUTHORIZATION_CODE_TTL_MS } from '../config/constants.js';
 import { getEnv, requireEnv } from '../config/env.js';
+import { ACCESS_TOKEN_AUDIENCE } from '../config/jwt.js';
 import { getPrisma } from '../db/prisma.js';
 import { ensureDomainRoleForUser } from './domain-role.service.js';
 import { exchangeRefreshToken, issueRefreshToken } from './refresh-token.service.js';
@@ -238,6 +239,7 @@ async function signAccessToken(params: {
     return await new SignJWT(payload)
       .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
       .setIssuer(params.issuer)
+      .setAudience(ACCESS_TOKEN_AUDIENCE)
       .setSubject(params.userId)
       .setIssuedAt()
       .setExpirationTime(params.ttl)
