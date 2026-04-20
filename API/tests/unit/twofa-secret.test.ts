@@ -4,7 +4,7 @@ import { decryptTwoFaSecret, encryptTwoFaSecret } from '../../src/utils/twofa-se
 
 describe('twofa-secret', () => {
   it('encrypts and decrypts a secret using a derived key', () => {
-    const sharedSecret = 'test-shared-secret';
+    const sharedSecret = 'test-shared-secret-with-enough-length';
     const secret = 'JBSWY3DPEHPK3PXP';
 
     const encrypted = encryptTwoFaSecret({ secret, sharedSecret });
@@ -16,7 +16,7 @@ describe('twofa-secret', () => {
   });
 
   it('uses a random IV (encrypting the same secret twice yields different values)', () => {
-    const sharedSecret = 'test-shared-secret';
+    const sharedSecret = 'test-shared-secret-with-enough-length';
     const secret = 'JBSWY3DPEHPK3PXP';
 
     const a = encryptTwoFaSecret({ secret, sharedSecret });

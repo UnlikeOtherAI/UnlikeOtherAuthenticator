@@ -44,7 +44,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
 
   beforeEach(() => {
     process.env.DATABASE_URL = 'postgres://localhost:5432/authenticator_test';
-    process.env.SHARED_SECRET = 'test-shared-secret';
+    process.env.SHARED_SECRET = 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER = 'uoa-auth-service';
     process.env.ACCESS_TOKEN_TTL = '30m';
     process.env.REFRESH_TOKEN_TTL_DAYS = '30';

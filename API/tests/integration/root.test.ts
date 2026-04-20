@@ -6,7 +6,7 @@ import type { FastifyInstance } from 'fastify';
 let app: FastifyInstance;
 
 beforeAll(async () => {
-  process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+  process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
   process.env.AUTH_SERVICE_IDENTIFIER =
     process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
 

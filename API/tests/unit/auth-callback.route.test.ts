@@ -88,7 +88,7 @@ function baseConfig(overrides?: Partial<ClientConfig>): ClientConfig {
 describe('GET /auth/callback/:provider', () => {
   beforeEach(() => {
     process.env.NODE_ENV = 'test';
-    process.env.SHARED_SECRET = 'test-shared-secret';
+    process.env.SHARED_SECRET = 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER = 'uoa-auth-service';
     process.env.GOOGLE_CLIENT_ID = 'google-client-id';
     process.env.GOOGLE_CLIENT_SECRET = 'google-client-secret';

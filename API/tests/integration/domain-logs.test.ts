@@ -35,7 +35,7 @@ describe.skipIf(!hasDatabase)('GET /domain/logs', () => {
   });
 
   it('returns recent logs for a domain when authorized', async () => {
-    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
 
     const user = await handle!.prisma.user.create({
       data: {
@@ -110,7 +110,7 @@ describe.skipIf(!hasDatabase)('GET /domain/logs', () => {
   });
 
   it('returns 401 when the domain hash token is invalid', async () => {
-    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
 
     const app = await createApp();
     await app.ready();

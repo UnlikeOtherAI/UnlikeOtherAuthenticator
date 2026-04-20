@@ -19,7 +19,7 @@ describe('twofactor-challenge.service', () => {
       configUrl: 'https://client.example.com/auth-config',
       redirectUrl: 'https://client.example.com/oauth/callback',
       authMethod: 'email_password',
-      sharedSecret: 'test-shared-secret',
+      sharedSecret: 'test-shared-secret-with-enough-length',
       audience: 'uoa-auth-service',
       now,
       ttlMs: 5 * 60 * 1000,
@@ -27,7 +27,7 @@ describe('twofactor-challenge.service', () => {
 
     const decoded = await verifyTwoFaChallenge({
       token,
-      sharedSecret: 'test-shared-secret',
+      sharedSecret: 'test-shared-secret-with-enough-length',
       audience: 'uoa-auth-service',
       now,
     });
@@ -53,7 +53,7 @@ describe('twofactor-challenge.service', () => {
       authMethod: 'email_password',
       codeChallenge: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
       codeChallengeMethod: 'S256',
-      sharedSecret: 'test-shared-secret',
+      sharedSecret: 'test-shared-secret-with-enough-length',
       audience: 'uoa-auth-service',
       now,
       ttlMs: 5 * 60 * 1000,
@@ -61,7 +61,7 @@ describe('twofactor-challenge.service', () => {
 
     const decoded = await verifyTwoFaChallenge({
       token,
-      sharedSecret: 'test-shared-secret',
+      sharedSecret: 'test-shared-secret-with-enough-length',
       audience: 'uoa-auth-service',
       now,
     });
@@ -80,7 +80,7 @@ describe('twofactor-challenge.service', () => {
       configUrl: 'https://client.example.com/auth-config',
       redirectUrl: 'https://client.example.com/oauth/callback',
       authMethod: 'email_password',
-      sharedSecret: 'test-shared-secret',
+      sharedSecret: 'test-shared-secret-with-enough-length',
       audience: 'uoa-auth-service',
       now,
       ttlMs: 5 * 60 * 1000,
@@ -89,7 +89,7 @@ describe('twofactor-challenge.service', () => {
     await expect(
       verifyTwoFaChallenge({
         token,
-        sharedSecret: 'test-shared-secret',
+        sharedSecret: 'test-shared-secret-with-enough-length',
         audience: 'different-aud',
         now,
       }),
@@ -111,12 +111,12 @@ describe('twofactor-challenge.service', () => {
       .setSubject('u1')
       .setIssuedAt(Math.floor(now.getTime() / 1000))
       .setExpirationTime(Math.floor((now.getTime() + 5 * 60 * 1000) / 1000))
-      .sign(secretKey('test-shared-secret'));
+      .sign(secretKey('test-shared-secret-with-enough-length'));
 
     await expect(
       verifyTwoFaChallenge({
         token,
-        sharedSecret: 'test-shared-secret',
+        sharedSecret: 'test-shared-secret-with-enough-length',
         audience: 'uoa-auth-service',
         now,
       }),
@@ -131,7 +131,7 @@ describe('twofactor-challenge.service', () => {
       configUrl: 'https://client.example.com/auth-config',
       redirectUrl: 'https://client.example.com/oauth/callback',
       authMethod: 'email_password',
-      sharedSecret: 'test-shared-secret',
+      sharedSecret: 'test-shared-secret-with-enough-length',
       audience: 'uoa-auth-service',
       now,
       ttlMs: 1000,
@@ -140,7 +140,7 @@ describe('twofactor-challenge.service', () => {
     await expect(
       verifyTwoFaChallenge({
         token,
-        sharedSecret: 'test-shared-secret',
+        sharedSecret: 'test-shared-secret-with-enough-length',
         audience: 'uoa-auth-service',
         now: new Date(now.getTime() + 5000),
       }),

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { JWTPayload } from 'jose';
 
 import { validateConfigFields } from '../../src/services/config.service.js';
+import { setAppLogger } from '../../src/utils/app-logger.js';
 import { baseClientConfigPayload } from '../helpers/test-config.js';
 
 function basePayload(): JWTPayload {
@@ -100,7 +101,8 @@ describe('validateConfigFields', () => {
   });
 
   it('warns when registration_domain_mapping contains domains outside allowed_registration_domains', () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warnSpy = vi.fn();
+    setAppLogger({ warn: warnSpy } as never);
 
     const cfg = validateConfigFields({
       ...basePayload(),
@@ -113,9 +115,9 @@ describe('validateConfigFields', () => {
 
     expect(cfg.registration_domain_mapping).toHaveLength(2);
     expect(warnSpy).toHaveBeenCalledTimes(1);
-    expect(warnSpy.mock.calls[0][0]).toBe('[config]');
-
-    warnSpy.mockRestore();
+    expect(warnSpy.mock.calls[0][1]).toBe(
+      'registration_domain_mapping contains domains not in allowed_registration_domains',
+    );
   });
 
   it('rejects invalid user_scope values', () => {

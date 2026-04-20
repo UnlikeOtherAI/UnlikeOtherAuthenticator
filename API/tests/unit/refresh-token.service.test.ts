@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHmac } from 'node:crypto';
 
 import type { PrismaClient } from '@prisma/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -10,14 +10,14 @@ import {
 } from '../../src/services/refresh-token.service.js';
 
 function hashRefreshToken(token: string, sharedSecret: string): string {
-  return createHash('sha256').update(`${token}.${sharedSecret}`, 'utf8').digest('hex');
+  return createHmac('sha256', sharedSecret).update(token, 'utf8').digest('hex');
 }
 
 describe('refresh-token.service (unit)', () => {
   const originalSharedSecret = process.env.SHARED_SECRET;
   const originalRefreshTokenTtlDays = process.env.REFRESH_TOKEN_TTL_DAYS;
 
-  const sharedSecret = 'test-shared-secret';
+  const sharedSecret = 'test-shared-secret-with-enough-length';
   const now = new Date('2026-03-10T13:30:00.000Z');
   const context = {
     clientId: 'client-id',

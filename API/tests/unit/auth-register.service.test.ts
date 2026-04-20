@@ -30,7 +30,7 @@ function testEnv(overrides?: Partial<Env>): Env {
     PORT: 3000,
     PUBLIC_BASE_URL: 'https://auth.example.com',
     LOG_LEVEL: 'info',
-    SHARED_SECRET: 'test-shared-secret',
+    SHARED_SECRET: 'test-shared-secret-with-enough-length',
     AUTH_SERVICE_IDENTIFIER: 'uoa-auth-service',
     DATABASE_URL: 'postgres://example.invalid/db',
     ACCESS_TOKEN_TTL: '30m',

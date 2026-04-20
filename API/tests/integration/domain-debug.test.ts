@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { SignJWT } from 'jose';
 
 import { createApp } from '../../src/app.js';
+import { ACCESS_TOKEN_AUDIENCE } from '../../src/config/jwt.js';
 import { createClientId } from '../../src/utils/hash.js';
 import { expectJsonError } from '../helpers/error-response.js';
 
@@ -28,6 +29,7 @@ async function signTestAccessToken(params: {
   })
     .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
     .setIssuer(params.issuer)
+    .setAudience(ACCESS_TOKEN_AUDIENCE)
     .setSubject(params.userId)
     .setIssuedAt()
     .setExpirationTime('30m')
@@ -44,7 +46,7 @@ describe('GET /domain/debug', () => {
   });
 
   it('returns debug info when authorized with domain hash and superuser access token', async () => {
-    process.env.SHARED_SECRET = 'test-shared-secret';
+    process.env.SHARED_SECRET = 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER = 'uoa-auth-service';
 
     const domain = 'client.example.com';
@@ -82,7 +84,7 @@ describe('GET /domain/debug', () => {
   });
 
   it('returns 401 when x-uoa-access-token is missing', async () => {
-    process.env.SHARED_SECRET = 'test-shared-secret';
+    process.env.SHARED_SECRET = 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER = 'uoa-auth-service';
 
     const domain = 'client.example.com';
@@ -104,7 +106,7 @@ describe('GET /domain/debug', () => {
   });
 
   it('returns 403 when access token role is not superuser', async () => {
-    process.env.SHARED_SECRET = 'test-shared-secret';
+    process.env.SHARED_SECRET = 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER = 'uoa-auth-service';
 
     const domain = 'client.example.com';
@@ -137,7 +139,7 @@ describe('GET /domain/debug', () => {
   });
 
   it('returns 403 when access token domain does not match query domain', async () => {
-    process.env.SHARED_SECRET = 'test-shared-secret';
+    process.env.SHARED_SECRET = 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER = 'uoa-auth-service';
 
     const domain = 'client.example.com';

@@ -76,7 +76,7 @@ describe('Group service', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.NODE_ENV = 'test';
-    process.env.SHARED_SECRET = 'test-shared-secret';
+    process.env.SHARED_SECRET = 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER = 'uoa-auth-service';
     process.env.DATABASE_URL = 'postgres://example.invalid/db';
   });

@@ -10,10 +10,13 @@ function testEnv(overrides?: Partial<Env>): Env {
     PORT: 3000,
     PUBLIC_BASE_URL: 'https://auth.example.com',
     LOG_LEVEL: 'info',
-    SHARED_SECRET: 'test-shared-secret',
+    SHARED_SECRET: 'test-shared-secret-with-enough-length',
     AUTH_SERVICE_IDENTIFIER: 'uoa-auth-service',
+    CONFIG_JWKS_URL: 'https://auth.example.com/.well-known/jwks.json',
     DATABASE_URL: 'postgres://example.invalid/db',
     ACCESS_TOKEN_TTL: '30m',
+    REFRESH_TOKEN_TTL_DAYS: 30,
+    TOKEN_PRUNE_RETENTION_DAYS: 7,
     LOG_RETENTION_DAYS: 90,
     AI_TRANSLATION_PROVIDER: 'disabled',
     OPENAI_API_KEY: undefined,
@@ -26,7 +29,12 @@ describe('verifyTwoFactorForLogin', () => {
   it('verifies code for a 2FA-enabled user', async () => {
     const prisma = {
       user: {
-        findUnique: async () => ({ twoFaEnabled: true, twoFaSecret: 'enc' }),
+        findUnique: async () => ({
+          twoFaEnabled: true,
+          twoFaSecret: 'enc',
+          twoFaLastAcceptedCounter: null,
+        }),
+        updateMany: async () => ({ count: 1 }),
       },
     };
 
@@ -46,7 +54,12 @@ describe('verifyTwoFactorForLogin', () => {
   it('throws UNAUTHORIZED when the code does not verify', async () => {
     const prisma = {
       user: {
-        findUnique: async () => ({ twoFaEnabled: true, twoFaSecret: 'enc' }),
+        findUnique: async () => ({
+          twoFaEnabled: true,
+          twoFaSecret: 'enc',
+          twoFaLastAcceptedCounter: null,
+        }),
+        updateMany: async () => ({ count: 0 }),
       },
     };
 

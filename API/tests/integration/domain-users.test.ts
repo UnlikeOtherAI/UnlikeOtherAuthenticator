@@ -35,7 +35,7 @@ describe.skipIf(!hasDatabase)('GET /domain/users', () => {
   });
 
   it('returns users for a domain when authorized', async () => {
-    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
 
     const now = Date.now();
     const older = new Date(now - 60_000);
@@ -118,7 +118,7 @@ describe.skipIf(!hasDatabase)('GET /domain/users', () => {
   });
 
   it('returns 401 when the domain hash token is invalid', async () => {
-    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
 
     const app = await createApp();
     await app.ready();

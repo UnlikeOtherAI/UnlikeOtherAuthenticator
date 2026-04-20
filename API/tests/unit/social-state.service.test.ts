@@ -10,7 +10,7 @@ describe('social-state.service', () => {
       provider: 'google',
       configUrl: 'https://client.example.com/auth-config',
       redirectUrl: 'https://client.example.com/oauth/callback',
-      sharedSecret: 'test-shared-secret',
+      sharedSecret: 'test-shared-secret-with-enough-length',
       audience: 'uoa-auth-service',
       baseUrlForIssuer: 'https://auth.example.com',
       now: new Date('2026-01-01T00:00:00.000Z'),
@@ -19,7 +19,7 @@ describe('social-state.service', () => {
 
     const state = await verifySocialState({
       stateJwt: jwt,
-      sharedSecret: 'test-shared-secret',
+      sharedSecret: 'test-shared-secret-with-enough-length',
       audience: 'uoa-auth-service',
       issuer: SOCIAL_STATE_ISSUER,
       now: new Date('2026-01-01T00:00:30.000Z'),
@@ -41,7 +41,7 @@ describe('social-state.service', () => {
       requestAccess: true,
       codeChallenge: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
       codeChallengeMethod: 'S256',
-      sharedSecret: 'test-shared-secret',
+      sharedSecret: 'test-shared-secret-with-enough-length',
       audience: 'uoa-auth-service',
       baseUrlForIssuer: 'https://auth.example.com',
       now: new Date('2026-01-01T00:00:00.000Z'),
@@ -50,7 +50,7 @@ describe('social-state.service', () => {
 
     const state = await verifySocialState({
       stateJwt: jwt,
-      sharedSecret: 'test-shared-secret',
+      sharedSecret: 'test-shared-secret-with-enough-length',
       audience: 'uoa-auth-service',
       issuer: SOCIAL_STATE_ISSUER,
       now: new Date('2026-01-01T00:00:30.000Z'),
@@ -68,7 +68,7 @@ describe('social-state.service', () => {
       provider: 'google',
       configUrl: 'https://client.example.com/auth-config',
       redirectUrl: 'https://client.example.com/oauth/callback',
-      sharedSecret: 'test-shared-secret',
+      sharedSecret: 'test-shared-secret-with-enough-length',
       audience: 'uoa-auth-service',
       baseUrlForIssuer: 'https://auth.example.com',
       now: new Date('2026-01-01T00:00:00.000Z'),
@@ -78,7 +78,7 @@ describe('social-state.service', () => {
     await expect(
       verifySocialState({
         stateJwt: jwt,
-        sharedSecret: 'test-shared-secret',
+        sharedSecret: 'test-shared-secret-with-enough-length',
         audience: 'uoa-auth-service',
         issuer: SOCIAL_STATE_ISSUER,
         now: new Date('2026-01-01T00:00:02.000Z'),
@@ -91,7 +91,7 @@ describe('social-state.service', () => {
       provider: 'google',
       configUrl: 'https://client.example.com/auth-config',
       redirectUrl: 'https://client.example.com/oauth/callback',
-      sharedSecret: 'test-shared-secret',
+      sharedSecret: 'test-shared-secret-with-enough-length',
       audience: 'uoa-auth-service',
       baseUrlForIssuer: 'https://other-auth.example.com',
       now: new Date('2026-01-01T00:00:00.000Z'),
@@ -101,7 +101,7 @@ describe('social-state.service', () => {
     await expect(
       verifySocialState({
         stateJwt: jwt,
-        sharedSecret: 'test-shared-secret',
+        sharedSecret: 'test-shared-secret-with-enough-length',
         audience: 'uoa-auth-service',
         issuer: SOCIAL_STATE_ISSUER,
         now: new Date('2026-01-01T00:00:30.000Z'),
@@ -114,7 +114,7 @@ describe('social-state.service', () => {
       provider: 'google',
       configUrl: 'https://client.example.com/auth-config',
       redirectUrl: 'https://client.example.com/oauth/callback',
-      sharedSecret: 'test-shared-secret',
+      sharedSecret: 'test-shared-secret-with-enough-length',
       audience: 'uoa-auth-service',
       baseUrlForIssuer: 'https://auth.example.com',
       now: new Date('2026-01-01T00:00:00.000Z'),
@@ -132,7 +132,7 @@ describe('social-state.service', () => {
     await expect(
       verifySocialState({
         stateJwt: tampered,
-        sharedSecret: 'test-shared-secret',
+        sharedSecret: 'test-shared-secret-with-enough-length',
         audience: 'uoa-auth-service',
         issuer: SOCIAL_STATE_ISSUER,
       }),

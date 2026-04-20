@@ -161,7 +161,7 @@ describe('team invite services', () => {
           PORT: 3000,
           PUBLIC_BASE_URL: 'https://auth.example.com',
           LOG_LEVEL: 'info',
-          SHARED_SECRET: 'test-shared-secret',
+          SHARED_SECRET: 'test-shared-secret-with-enough-length',
           AUTH_SERVICE_IDENTIFIER: 'uoa-auth-service',
           DATABASE_URL: 'postgres://example.invalid/db',
           ACCESS_TOKEN_TTL: '30m',
@@ -172,7 +172,7 @@ describe('team invite services', () => {
         },
         prisma,
         now: () => new Date('2026-03-01T00:00:00.000Z'),
-        sharedSecret: 'test-shared-secret',
+        sharedSecret: 'test-shared-secret-with-enough-length',
         generateEmailToken: () => 'token-123',
         hashEmailToken: () => 'hash-123',
         sendTeamInviteEmail,
@@ -207,6 +207,7 @@ describe('team invite services', () => {
       id: 'invite-1',
       orgId: 'org-1',
       teamId: 'team-1',
+      email: 'invited@example.com',
       inviteName: 'Invited User',
       teamRole: 'lead',
       acceptedUserId: null,
@@ -219,6 +220,7 @@ describe('team invite services', () => {
     });
     tx.user.findUnique.mockResolvedValue({
       id: 'user-1',
+      email: 'invited@example.com',
       name: null,
     });
     tx.user.update.mockResolvedValue({
@@ -347,7 +349,7 @@ describe('team invite services', () => {
           PORT: 3000,
           PUBLIC_BASE_URL: 'https://auth.example.com',
           LOG_LEVEL: 'info',
-          SHARED_SECRET: 'test-shared-secret',
+          SHARED_SECRET: 'test-shared-secret-with-enough-length',
           AUTH_SERVICE_IDENTIFIER: 'uoa-auth-service',
           DATABASE_URL: 'postgres://example.invalid/db',
           ACCESS_TOKEN_TTL: '30m',
@@ -358,7 +360,7 @@ describe('team invite services', () => {
         },
         prisma,
         now: () => new Date('2026-03-03T00:00:00.000Z'),
-        sharedSecret: 'test-shared-secret',
+        sharedSecret: 'test-shared-secret-with-enough-length',
         generateEmailToken: () => 'token-456',
         hashEmailToken: () => 'hash-456',
         sendTeamInviteEmail: vi.fn(async () => undefined),

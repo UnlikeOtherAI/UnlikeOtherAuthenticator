@@ -76,7 +76,7 @@ describe('2FA gated by config `2fa_enabled`', () => {
     verifyTwoFaChallengeMock.mockReset();
     verifyTwoFactorForLoginMock.mockReset();
 
-    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER =
       process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
   });
