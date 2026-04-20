@@ -42,7 +42,9 @@ export function registerLlmRoute(app: FastifyInstance): void {
             'JWT access token lifetime, minutes only (default: "30m", range: 15m-60m)',
           REFRESH_TOKEN_TTL_DAYS:
             'Fallback refresh token lifetime in days (default: 30, range: 1-90). Overridden by config session settings.',
-          LOG_RETENTION_DAYS: 'Login log retention (default: 90)',
+          TOKEN_PRUNE_RETENTION_DAYS:
+            'Days after refresh-token expiry before expired refresh token rows are pruned (default: 7, max: 365)',
+          LOG_RETENTION_DAYS: 'Login log retention in days (default: 90, max: 365)',
           EMAIL_PROVIDER: '"disabled" | "smtp" | "ses" | "sendgrid"',
           EMAIL_FROM: 'Sender email address',
           EMAIL_REPLY_TO: 'Reply-to email address',

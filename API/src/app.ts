@@ -5,7 +5,7 @@ import { getEnv } from './config/env.js';
 import { connectPrisma, disconnectPrisma } from './db/prisma.js';
 import { registerErrorHandler } from './middleware/error-handler.js';
 import { registerRoutes } from './routes/index.js';
-import { pruneLoginLogs } from './services/login-log.service.js';
+import { pruneExpiredSecurityData } from './services/retention-pruning.service.js';
 
 export async function createApp(): Promise<FastifyInstance> {
   const env = getEnv();
@@ -77,14 +77,14 @@ export async function createApp(): Promise<FastifyInstance> {
       await disconnectPrisma();
     });
 
-    // Brief 22.8: login log retention must be finite. Run a periodic prune so retention
-    // doesn't depend on new login events.
+    // Brief 22.8/H13: token and login-log retention must be finite. Run a periodic
+    // prune so retention doesn't depend on new login events.
     if (env.NODE_ENV !== 'test') {
       const runPrune = async (): Promise<void> => {
         try {
-          await pruneLoginLogs();
+          await pruneExpiredSecurityData();
         } catch (err) {
-          app.log.error({ err }, 'failed to prune login logs');
+          app.log.error({ err }, 'failed to prune expired security data');
         }
       };
 

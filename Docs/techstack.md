@@ -155,4 +155,5 @@ All secrets and configuration live in environment variables. Nothing is hardcode
   * `SMTP_USER` / `SMTP_PASSWORD` — optional (SMTP auth)
 * AI translation service credentials
 * `ACCESS_TOKEN_TTL` — access token lifetime (minutes-only, 15m–60m; default: 30m)
-* `LOG_RETENTION_DAYS` — login log retention window (default: 90)
+* `TOKEN_PRUNE_RETENTION_DAYS` — days after refresh-token expiry before expired refresh token rows are pruned (default: 7, max 365)
+* `LOG_RETENTION_DAYS` — login log retention window (default: 90, max 365)

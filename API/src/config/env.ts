@@ -78,7 +78,8 @@ const EnvSchema = z.object({
       }),
   ),
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(30),
-  LOG_RETENTION_DAYS: z.coerce.number().int().positive().default(90),
+  TOKEN_PRUNE_RETENTION_DAYS: z.coerce.number().int().min(0).max(365).default(7),
+  LOG_RETENTION_DAYS: z.coerce.number().int().positive().max(365).default(90),
   // Brief 8 / Phase 10: AI translation service credentials (optional; the UI falls back to English if disabled).
   AI_TRANSLATION_PROVIDER: z.enum(['disabled', 'openai']).default('disabled'),
   OPENAI_API_KEY: z.string().min(1).optional(),
