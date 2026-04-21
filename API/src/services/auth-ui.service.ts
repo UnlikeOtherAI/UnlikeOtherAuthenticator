@@ -5,7 +5,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { FastifyReply } from 'fastify';
 
 import type { ClientConfig } from './config.service.js';
-import { AppError } from '../utils/errors.js';
+import { readStaticFileUnderRoot } from '../utils/static-file.js';
 
 function repoRootFrom(metaUrl: string): string {
   // Works in both src/ and dist/ because the relative depth from this file to repo root is stable:
@@ -141,57 +141,10 @@ export function sendAuthHtml(reply: FastifyReply, html: string): void {
   reply.type('text/html; charset=utf-8').status(200).send(html);
 }
 
-function contentTypeForExt(ext: string): string {
-  switch (ext) {
-    case '.js':
-      return 'application/javascript; charset=utf-8';
-    case '.css':
-      return 'text/css; charset=utf-8';
-    case '.map':
-      return 'application/json; charset=utf-8';
-    case '.svg':
-      return 'image/svg+xml; charset=utf-8';
-    case '.png':
-      return 'image/png';
-    case '.jpg':
-    case '.jpeg':
-      return 'image/jpeg';
-    case '.webp':
-      return 'image/webp';
-    case '.ico':
-      return 'image/x-icon';
-    default:
-      return 'application/octet-stream';
-  }
-}
-
 export async function readAuthUiAsset(params: {
   // e.g. "assets/index-abc.js" (no leading slash)
   relativePath: string;
 }): Promise<{ body: Buffer; contentType: string }> {
   const distDir = authDistDirFrom(import.meta.url);
-
-  // Basic traversal hardening.
-  const rel = params.relativePath.replace(/^\/+/, '');
-  const normalized = path.normalize(rel);
-  if (!normalized || normalized.startsWith('..') || normalized.includes(`..${path.sep}`)) {
-    throw new AppError('BAD_REQUEST', 400);
-  }
-
-  const abs = path.join(distDir, normalized);
-  const distPrefix = distDir.endsWith(path.sep) ? distDir : `${distDir}${path.sep}`;
-  if (!abs.startsWith(distPrefix)) {
-    throw new AppError('BAD_REQUEST', 400);
-  }
-
-  let body: Buffer;
-  try {
-    body = await readFile(abs);
-  } catch (err) {
-    const code = (err as { code?: unknown } | null)?.code;
-    if (code === 'ENOENT') throw new AppError('NOT_FOUND', 404);
-    throw new AppError('INTERNAL', 500);
-  }
-  const ext = path.extname(abs).toLowerCase();
-  return { body, contentType: contentTypeForExt(ext) };
+  return readStaticFileUnderRoot({ rootDir: distDir, relativePath: params.relativePath });
 }

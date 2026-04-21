@@ -10,15 +10,21 @@ This is a **centralized OAuth / authentication service** used by multiple produc
 
 ### Sources of Truth
 
-These two documents define **what** we're building and **how**:
+These documents define **what** we're building and **how**:
 
 - **[`Docs/brief.md`](./Docs/brief.md)** — The full build brief. Defines the product, features, security model, constraints, and task breakdown. This is the single source of truth for what we're building.
 - **[`Docs/techstack.md`](./Docs/techstack.md)** — The tech stack and project structure. Defines technology choices (Node.js, React, Tailwind, PostgreSQL + Prisma), folder layout (`/API`, `/Auth`), and environment variables. This is the single source of truth for how it's built.
 - **[`Docs/Auth/architecture-api.md`](./Docs/Auth/architecture-api.md)** — API architecture. Defines the layered structure (routes → middleware → services → Prisma), directory layout, error handling patterns, and file organization rules for `/API`.
 - **[`Docs/Auth/architecture-auth.md`](./Docs/Auth/architecture-auth.md)** — Auth window architecture. Defines the React component structure, theming system, i18n approach, and auth flow navigation for `/Auth`.
+- **[`Docs/Admin/architecture-admin.md`](./Docs/Admin/architecture-admin.md)** — Admin panel architecture. Defines the React CSR structure, auth boundary, quality gate, and component/data-layer rules for `/Admin`.
+- **[`Docs/Admin/README.md`](./Docs/Admin/README.md)** — Admin template baseline. Identifies the existing HTML templates that the React admin app must translate rather than redesign.
+- **[`Docs/Requirements/roles-and-acl.md`](./Docs/Requirements/roles-and-acl.md)** — Role and admin-auth requirements. Defines `system_admin`, `/internal/admin/*` auth boundaries, and org/team role semantics.
 - **[`Docs/deploy.md`](./Docs/deploy.md)** — Deployment to Google Cloud Run (build, deploy, env vars, service config).
+- **[`Docs/api-2.0-implementation-plan.md`](./Docs/api-2.0-implementation-plan.md)** — Branch-specific implementation plan for `api-2.0`. Read this as the execution guide when working on that branch.
 
 Before making any architectural, design, or implementation decisions, read all documents above in full.
+
+If you are working on branch `api-2.0`, read [`Docs/api-2.0-implementation-plan.md`](./Docs/api-2.0-implementation-plan.md) before implementation work.
 
 ---
 
@@ -45,7 +51,7 @@ Before making any architectural, design, or implementation decisions, read all d
 - No features beyond what the brief specifies
 - Tailwind-only for UI — no other CSS frameworks
 - Stateless where possible
-- Follow the architecture docs: [`architecture-api.md`](./Docs/Auth/architecture-api.md) for API, [`architecture-auth.md`](./Docs/Auth/architecture-auth.md) for the auth window
+- Follow the architecture docs: [`architecture-api.md`](./Docs/Auth/architecture-api.md) for API, [`architecture-auth.md`](./Docs/Auth/architecture-auth.md) for the auth window, [`architecture-admin.md`](./Docs/Admin/architecture-admin.md) for the admin panel
 
 ### Security
 
@@ -64,14 +70,14 @@ Before making any architectural, design, or implementation decisions, read all d
 
 ### What Not To Build
 
-These are explicitly out of scope (see brief section 20):
+These are explicitly out of scope unless noted otherwise (see brief section 20):
 
-- ~~No admin dashboard~~ — now in scope, see `Docs/Admin/`
+- Admin dashboard is now in scope; see `Docs/Admin/`
 - No local avatar storage
 - No per-client OAuth secrets
 - No user-visible error specificity
 - No unsigned configs accepted
-- ~~No refresh tokens~~ — now implemented, see `Docs/Auth/long-lived-tokens.md`
+- Refresh tokens are now implemented; see `Docs/Auth/long-lived-tokens.md`
 - No backup codes for 2FA
 
 ---
@@ -87,7 +93,11 @@ Docs/
   Auth/
     architecture-api.md     — API architecture (/API)
     architecture-auth.md    — Auth window architecture (/Auth)
-  Admin/                    — Admin panel documentation
+  Admin/
+    architecture-admin.md   — Admin panel architecture (/Admin)
+    README.md               — Admin template baseline
+  Requirements/
+    roles-and-acl.md        — Roles, ACL, and system-admin auth requirements
 API/                        — Node.js auth server (see Docs/Auth/architecture-api.md)
 Auth/                       — React auth UI (see Docs/Auth/architecture-auth.md)
 Admin/                      — Admin panel UI
@@ -99,6 +109,7 @@ Admin/                      — Admin panel UI
 
 1. Read `Docs/brief.md` before doing anything
 2. Read this file (`CLAUDE.md`) for working rules
-3. When in doubt, ask — don't assume
-4. Commit messages should be clear and describe the "why"
-5. Don't create files unless necessary — prefer editing existing ones
+3. On branch `api-2.0`, read `Docs/api-2.0-implementation-plan.md` before implementation work
+4. When in doubt, ask — don't assume
+5. Commit messages should be clear and describe the "why"
+6. Don't create files unless necessary — prefer editing existing ones

@@ -5,6 +5,7 @@ import { getPrisma } from '../db/prisma.js';
 
 type RetentionPrisma = {
   authorizationCode: Pick<PrismaClient['authorizationCode'], 'deleteMany'>;
+  handshakeErrorLog: Pick<PrismaClient['handshakeErrorLog'], 'deleteMany'>;
   loginLog: Pick<PrismaClient['loginLog'], 'deleteMany'>;
   refreshToken: Pick<PrismaClient['refreshToken'], 'deleteMany'>;
   verificationToken: Pick<PrismaClient['verificationToken'], 'deleteMany'>;
@@ -18,6 +19,7 @@ type RetentionPruneDeps = {
 
 export type RetentionPruneResult = {
   authorizationCodesDeleted: number;
+  handshakeErrorLogsDeleted: number;
   loginLogsDeleted: number;
   refreshTokensDeleted: number;
   verificationTokensDeleted: number;
@@ -30,6 +32,7 @@ function subtractDays(date: Date, days: number): Date {
 function emptyResult(): RetentionPruneResult {
   return {
     authorizationCodesDeleted: 0,
+    handshakeErrorLogsDeleted: 0,
     loginLogsDeleted: 0,
     refreshTokensDeleted: 0,
     verificationTokensDeleted: 0,
@@ -47,23 +50,28 @@ export async function pruneExpiredSecurityData(
   const tokenCutoff = subtractDays(now, env.TOKEN_PRUNE_RETENTION_DAYS);
   const loginLogCutoff = subtractDays(now, env.LOG_RETENTION_DAYS);
 
-  const [refreshTokens, authorizationCodes, verificationTokens, loginLogs] = await Promise.all([
-    prisma.refreshToken.deleteMany({
-      where: { expiresAt: { lt: tokenCutoff } },
-    }),
-    prisma.authorizationCode.deleteMany({
-      where: { expiresAt: { lt: now } },
-    }),
-    prisma.verificationToken.deleteMany({
-      where: { expiresAt: { lt: now } },
-    }),
-    prisma.loginLog.deleteMany({
-      where: { createdAt: { lt: loginLogCutoff } },
-    }),
-  ]);
+  const [refreshTokens, authorizationCodes, verificationTokens, loginLogs, handshakeErrorLogs] =
+    await Promise.all([
+      prisma.refreshToken.deleteMany({
+        where: { expiresAt: { lt: tokenCutoff } },
+      }),
+      prisma.authorizationCode.deleteMany({
+        where: { expiresAt: { lt: now } },
+      }),
+      prisma.verificationToken.deleteMany({
+        where: { expiresAt: { lt: now } },
+      }),
+      prisma.loginLog.deleteMany({
+        where: { createdAt: { lt: loginLogCutoff } },
+      }),
+      prisma.handshakeErrorLog.deleteMany({
+        where: { createdAt: { lt: loginLogCutoff } },
+      }),
+    ]);
 
   return {
     authorizationCodesDeleted: authorizationCodes.count,
+    handshakeErrorLogsDeleted: handshakeErrorLogs.count,
     loginLogsDeleted: loginLogs.count,
     refreshTokensDeleted: refreshTokens.count,
     verificationTokensDeleted: verificationTokens.count,

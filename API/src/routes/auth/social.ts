@@ -14,6 +14,7 @@ import { parseRequestAccessFlag } from '../../services/access-request-flow.servi
 import { selectRedirectUrl } from '../../services/token.service.js';
 import { AppError } from '../../utils/errors.js';
 import { parseRequiredPkceChallenge } from '../../utils/pkce.js';
+import { configFetchRateLimiter } from './rate-limit-keys.js';
 
 const ParamsSchema = z.object({
   provider: z.enum(['google', 'apple', 'facebook', 'github', 'linkedin']),
@@ -49,7 +50,7 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
   app.get(
     '/auth/social/:provider',
     {
-      preHandler: [configVerifier],
+      preHandler: [configFetchRateLimiter, configVerifier],
     },
     async (request, reply) => {
       const { provider } = ParamsSchema.parse(request.params);

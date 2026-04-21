@@ -1,8 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 
 import { buildPublicErrorBody } from '../utils/error-response.js';
+import { registerAdminUiRoutes } from './admin-ui.js';
 import { registerAuthRoutes } from './auth/index.js';
 import { registerDomainRoutes } from './domain/index.js';
+import { registerInternalAdminRoutes } from './internal/admin/index.js';
 import { registerInternalOrgRoutes } from './internal/org/index.js';
 import { registerHealthRoutes } from './health/index.js';
 import { registerI18nRoutes } from './i18n/index.js';
@@ -13,8 +15,10 @@ import { registerTwoFactorRoutes } from './twofactor/index.js';
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
   registerRootRoute(app);
   registerHealthRoutes(app);
+  registerAdminUiRoutes(app);
   registerAuthRoutes(app);
   registerDomainRoutes(app);
+  registerInternalAdminRoutes(app);
   registerInternalOrgRoutes(app);
   registerOrgRoutes(app);
   registerI18nRoutes(app);

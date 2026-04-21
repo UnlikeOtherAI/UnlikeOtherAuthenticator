@@ -15,7 +15,7 @@ These control who can administer the UOA backend itself — the org and team str
 
 Users who are neither `owner` nor `admin` have no named UOA system role — they are plain members whose significance is defined entirely by their custom role.
 
-`system_admin` is a separate global role for UOA's own admin panel operators and is not visible to org/team users. It is stored as the string value `"system_admin"` on the internal `AdminUser` model (separate from `OrgMember`/`TeamMember`). System admin identity is verified via domain-hash auth against the admin domain + the UOA `SHARED_SECRET` (same mechanism as other internal routes). Endpoints under `/internal/admin/` require system admin auth and bypass all org/team permission middleware.
+Admin access is first-party UOA auth. Earlier drafts described a separate `system_admin`/`AdminUser` model with domain-hash auth; that is superseded. Browser calls to `/internal/admin/*` use `Authorization: Bearer <access_token>`. The browser-safe `POST /internal/admin/token` endpoint exchanges an admin-domain authorization code and PKCE verifier for an access token without requiring domain-hash auth and without returning a refresh token. Admin access tokens are signed with `ADMIN_ACCESS_TOKEN_SECRET`, an auth-service-only secret that client backends do not receive. Only tokens with `role: "superuser"` for the configured UOA admin domain are accepted. When the database is enabled, the token subject must also have a `SUPERUSER` `domain_roles` row for that admin domain. The admin browser must not use domain-hash shared-secret auth.
 
 ### 2. Consumer-defined roles (external, custom)
 

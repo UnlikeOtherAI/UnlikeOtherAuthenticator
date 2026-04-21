@@ -5,6 +5,7 @@ import { configVerifier } from '../../middleware/config-verifier.js';
 import type { ClientConfig } from '../../services/config.service.js';
 import { getAuthUiTranslations } from '../../services/translation.service.js';
 import { AppError } from '../../utils/errors.js';
+import { configFetchRateLimiter } from '../auth/rate-limit-keys.js';
 
 const ParamsSchema = z.object({
   language: z.string().trim().min(1).max(32),
@@ -23,7 +24,7 @@ export function registerI18nGetRoute(app: FastifyInstance): void {
   app.get(
     '/i18n/:language',
     {
-      preHandler: [configVerifier],
+      preHandler: [configFetchRateLimiter, configVerifier],
     },
     async (request, reply) => {
       const { language } = ParamsSchema.parse(request.params);

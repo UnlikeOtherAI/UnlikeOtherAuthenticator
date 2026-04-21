@@ -17,7 +17,9 @@ export function registerLlmRoute(app: FastifyInstance): void {
         config_url:
           'Most endpoints require a config_url query parameter pointing to an HTTPS URL that returns the signed config JWT. The server fetches and verifies this JWT on every request.',
         access_tokens:
-          'Access tokens are JWTs with issuer AUTH_SERVICE_IDENTIFIER and audience uoa:access-token. Consumers must verify both iss and aud.',
+          'Access tokens are JWTs with issuer AUTH_SERVICE_IDENTIFIER and audience uoa:access-token. Client-domain tokens are signed with SHARED_SECRET. Tokens issued for ADMIN_AUTH_DOMAIN are signed with ADMIN_ACCESS_TOKEN_SECRET. Consumers must verify both iss and aud.',
+        admin:
+          'The first-party Admin UI is served by the API service at /admin in production and authenticates through UOA itself. Browser code exchanges the Admin authorization code at POST /internal/admin/token with config_url, redirect_url, code, and PKCE verifier; this endpoint requires the verified config domain to match ADMIN_AUTH_DOMAIN and returns only a short-lived access token, never a refresh token. Admin access tokens are signed with ADMIN_ACCESS_TOKEN_SECRET, which is auth-service-only and not shared with client backends. Protected endpoints under /internal/admin/* require Authorization: Bearer <access_token> where the token role is superuser and the token domain matches ADMIN_AUTH_DOMAIN, defaulting to AUTH_SERVICE_IDENTIFIER. When DATABASE_URL is configured, the token subject must also have a SUPERUSER domain_roles row for that admin domain. Browser admin code must never use the domain-hash shared-secret mechanism.',
       },
 
       config_jwt: configJwtDocumentation,
@@ -28,6 +30,8 @@ export function registerLlmRoute(app: FastifyInstance): void {
           SHARED_SECRET: 'HMAC secret shared between the auth service and client backends',
           AUTH_SERVICE_IDENTIFIER:
             'Audience claim for config JWTs. Must match the aud in signed config JWTs.',
+          ADMIN_ACCESS_TOKEN_SECRET:
+            'Auth-service-only HMAC secret used for ADMIN_AUTH_DOMAIN access tokens. Required because /internal/admin/* is always registered.',
           CONFIG_JWKS_URL:
             'Trusted JWKS endpoint used to verify RS256 config JWT signatures by kid.',
         },
@@ -36,6 +40,8 @@ export function registerLlmRoute(app: FastifyInstance): void {
           HOST: 'Bind address (default: "127.0.0.1")',
           PORT: 'Listen port (default: 3000)',
           PUBLIC_BASE_URL: 'Public origin for email links (e.g. "https://auth.example.com")',
+          ADMIN_AUTH_DOMAIN:
+            'Domain whose superuser tokens may access /internal/admin/* (default: AUTH_SERVICE_IDENTIFIER)',
           LOG_LEVEL: '"fatal" | "error" | "warn" | "info" | "debug" | "trace" (default: "info")',
           DEBUG_ENABLED:
             'Set true to include internal error code, summary, details, hints, and auth debug HTML in responses. Default false.',
@@ -107,6 +113,8 @@ export function registerLlmRoute(app: FastifyInstance): void {
           'If org_features.user_needs_team=true, token issuance self-heals before building the access-token org claim. Users already in a domain org but with zero teams get a personal "<name>\'s team" with teamRole=lead and member->admin promotion when org_roles includes admin. Users with no org on the domain get a new personal org plus a default personal team.',
         step_16:
           '2FA reset emails land on GET /auth/email/twofa-reset, which only renders a no-store confirmation page. The one-time token is consumed only by an explicit POST to /auth/email/twofa-reset/confirm with the same token and config_url query parameters.',
+        step_17:
+          'Open the Admin UI at /admin on the API origin. Authenticate through UOA itself using a config whose domain is ADMIN_AUTH_DOMAIN, then exchange the authorization code at POST /internal/admin/token with config_url, redirect_url, code, and code_verifier. This browser-safe endpoint does not require domain-hash auth and does not return a refresh token. Call /internal/admin/session with Authorization: Bearer <access_token>. Only access tokens with role=superuser for ADMIN_AUTH_DOMAIN are accepted, and DB-backed deployments also require a SUPERUSER domain_roles row for that subject and domain. Use the same bearer token for /internal/admin/dashboard, domains, organisations, teams, users, logs, handshake-errors, settings, and search.',
       },
     };
   });

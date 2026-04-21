@@ -1,0 +1,4 @@
+packages:
+  - API
+  - Auth
+  - Admin

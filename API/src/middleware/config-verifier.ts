@@ -1,5 +1,6 @@
-import { randomInt } from 'node:crypto';
+import { randomInt, randomUUID } from 'node:crypto';
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import { decodeJwt, decodeProtectedHeader } from 'jose';
 import { z } from 'zod';
 
 import { requireEnv } from '../config/env.js';
@@ -16,10 +17,93 @@ import {
   verifyConfigJwtSignature,
   type ClientConfig,
 } from '../services/config.service.js';
+import { recordHandshakeErrorLog, type HandshakeErrorPhase } from '../services/handshake-error-log.service.js';
 
 const QuerySchema = z.object({
   config_url: z.string().min(1),
 });
+
+const safeJwtHeaderKeys = new Set(['alg', 'typ', 'kid']);
+const safeConfigJwtPayloadKeys = new Set([
+  'iss',
+  'sub',
+  'aud',
+  'exp',
+  'nbf',
+  'iat',
+  'jti',
+  'domain',
+  'redirect_urls',
+  'registration_redirect_urls',
+  'enabled_auth_methods',
+  'ui_theme',
+  'language_config',
+  '2fa_enabled',
+  'debug_enabled',
+  'allowed_social_providers',
+  'user_scope',
+  'allow_registration',
+  'registration_mode',
+  'allowed_registration_domains',
+  'registration_domain_mapping',
+  'access_requests',
+  'language',
+  'session',
+  'org_features',
+]);
+const emptyAllowedKeys = new Set<string>();
+const safeConfigJwtNestedKeys = new Map<string, ReadonlySet<string>>([
+  [
+    'payload.ui_theme',
+    new Set(['colors', 'radii', 'density', 'typography', 'button', 'card', 'logo', 'css_vars']),
+  ],
+  [
+    'payload.ui_theme.colors',
+    new Set(['bg', 'surface', 'text', 'muted', 'primary', 'primary_text', 'border', 'danger', 'danger_text']),
+  ],
+  ['payload.ui_theme.radii', new Set(['card', 'button', 'input'])],
+  ['payload.ui_theme.typography', new Set(['font_family', 'base_text_size', 'font_import_url'])],
+  ['payload.ui_theme.button', new Set(['style'])],
+  ['payload.ui_theme.card', new Set(['style'])],
+  ['payload.ui_theme.logo', new Set(['url', 'alt', 'text', 'font_size', 'color', 'style'])],
+  ['payload.registration_domain_mapping', new Set(['email_domain', 'org_id', 'team_id'])],
+  [
+    'payload.access_requests',
+    new Set([
+      'enabled',
+      'target_org_id',
+      'target_team_id',
+      'auto_grant_domains',
+      'notify_org_roles',
+      'admin_review_url',
+    ]),
+  ],
+  [
+    'payload.session',
+    new Set([
+      'remember_me_enabled',
+      'remember_me_default',
+      'short_refresh_token_ttl_hours',
+      'long_refresh_token_ttl_days',
+      'access_token_ttl_minutes',
+    ]),
+  ],
+  [
+    'payload.org_features',
+    new Set([
+      'enabled',
+      'groups_enabled',
+      'user_needs_team',
+      'max_teams_per_org',
+      'max_groups_per_org',
+      'max_members_per_org',
+      'max_members_per_team',
+      'max_members_per_group',
+      'max_team_memberships_per_user',
+      'org_roles',
+    ]),
+  ],
+]);
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -67,6 +151,14 @@ export async function configVerifier(
       code: 'CONFIG_FETCH_FAILED',
       summary: 'The auth service could not fetch a usable config JWT from config_url.',
     });
+    void recordConfigVerifierError(request, {
+      configUrl: config_url,
+      phase: 'config_fetch',
+      statusCode: 400,
+      errorCode: 'CONFIG_FETCH_FAILED',
+      summary: 'The auth service could not fetch a usable config JWT from config_url.',
+      details: ['Config URL fetch failed before a JWT payload could be decoded.'],
+    });
     throw err;
   }
 
@@ -83,6 +175,15 @@ export async function configVerifier(
       stage: 'config_verify',
       code: 'CONFIG_JWT_INVALID',
       summary: 'The fetched config JWT could not be verified for this auth service.',
+    });
+    void recordConfigVerifierError(request, {
+      configJwt: request.configJwt,
+      configUrl: config_url,
+      phase: 'jwt_verify',
+      statusCode: 401,
+      errorCode: 'CONFIG_JWT_INVALID',
+      summary: 'The fetched config JWT could not be verified for this auth service.',
+      details: ['JWT signature, issuer, audience, or key lookup failed.'],
     });
     throw err;
   }
@@ -109,6 +210,16 @@ export async function configVerifier(
         summary: 'The config JWT passed fetch and signature checks but failed schema validation.',
         details: formatZodIssues(err),
       });
+      void recordConfigVerifierError(request, {
+        configJwt: request.configJwt,
+        configUrl: config_url,
+        phase: 'startup',
+        statusCode: 400,
+        errorCode: 'CONFIG_SCHEMA_INVALID',
+        summary: 'The config JWT passed fetch and signature checks but failed schema validation.',
+        details: formatZodIssues(err),
+        missingClaims: err.issues.map((issue) => issue.path.join('.')).filter(Boolean),
+      });
       throw new AppError('BAD_REQUEST', 400, 'CONFIG_SCHEMA_INVALID');
     }
     throw err;
@@ -122,6 +233,15 @@ export async function configVerifier(
       stage: 'config_domain',
       code: 'CONFIG_DOMAIN_MISMATCH',
       summary: 'The config JWT domain does not match the hostname of config_url.',
+    });
+    void recordConfigVerifierError(request, {
+      configJwt: request.configJwt,
+      configUrl: config_url,
+      phase: 'config_domain',
+      statusCode: 422,
+      errorCode: 'CONFIG_DOMAIN_MISMATCH',
+      summary: 'The config JWT domain does not match the hostname of config_url.',
+      details: ['The config domain claim did not match the config_url hostname.'],
     });
     throw err;
   }
@@ -164,4 +284,194 @@ function containsSecretValue(value: unknown, secret: string): boolean {
   }
 
   return false;
+}
+
+function requestHost(configUrl: string): string {
+  try {
+    return normalizeDomain(new URL(configUrl).hostname);
+  } catch {
+    return 'unknown';
+  }
+}
+
+function endpointPath(request: FastifyRequest): string {
+  try {
+    return new URL(request.url, 'http://uoa.local').pathname;
+  } catch {
+    return 'unknown';
+  }
+}
+
+function normalizeDomain(value: string): string {
+  return value.trim().toLowerCase().replace(/\.$/, '');
+}
+
+export function sanitizeConfigJwtForHandshakeLog(configJwt: string | undefined): {
+  header: Record<string, unknown>;
+  payload: Record<string, unknown>;
+  redactions: string[];
+} {
+  const redactions: string[] = [];
+  let header: Record<string, unknown> = {};
+  let payload: Record<string, unknown> = {};
+
+  if (configJwt) {
+    try {
+      header = sanitizeObject(decodeProtectedHeader(configJwt), redactions, 'header');
+    } catch {
+      redactions.push('header_undecodable');
+    }
+
+    try {
+      payload = sanitizeObject(decodeJwt(configJwt), redactions, 'payload');
+    } catch {
+      redactions.push('payload_undecodable');
+      redactions.push('undecodable_jwt');
+    }
+  }
+
+  return { header, payload, redactions };
+}
+
+function sanitizeObject(
+  value: unknown,
+  redactions: string[],
+  path = '',
+): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+
+  const allowedKeys = allowedKeysForPath(path);
+  const sanitized: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value)) {
+    const nextPath = path ? `${path}.${key}` : key;
+    if (isSensitiveKey(key)) {
+      sanitized[key] = '[redacted]';
+      redactions.push(nextPath);
+      continue;
+    }
+
+    if (allowedKeys && !allowedKeys.has(key)) {
+      sanitized[key] = '[redacted_unrecognized]';
+      redactions.push(nextPath);
+      continue;
+    }
+
+    sanitized[key] = sanitizeValue(item, redactions, nextPath);
+  }
+  return sanitized;
+}
+
+function sanitizeValue(value: unknown, redactions: string[], path: string): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item, index) => sanitizeValue(item, redactions, `${path}[${index}]`));
+  }
+
+  if (value && typeof value === 'object') {
+    return sanitizeObject(value, redactions, path);
+  }
+
+  if (typeof value === 'string') {
+    return sanitizeStringValue(value, redactions, path);
+  }
+
+  return value;
+}
+
+function allowedKeysForPath(path: string): ReadonlySet<string> | undefined {
+  const normalized = normalizeSanitizePath(path);
+  if (normalized === 'header') return safeJwtHeaderKeys;
+  if (normalized === 'payload') return safeConfigJwtPayloadKeys;
+  return (
+    safeConfigJwtNestedKeys.get(normalized) ??
+    (normalized.startsWith('payload.') ? emptyAllowedKeys : undefined)
+  );
+}
+
+function normalizeSanitizePath(path: string): string {
+  return path.replace(/\[\d+\]/g, '');
+}
+
+function sanitizeStringValue(value: string, redactions: string[], path: string): string {
+  if (!shouldStripUrlQuery(path)) return value;
+
+  try {
+    const url = new URL(value);
+    if (url.search || url.hash) {
+      url.search = '';
+      url.hash = '';
+      redactions.push(path);
+    }
+    return url.toString();
+  } catch {
+    const queryIndex = value.search(/[?#]/);
+    if (queryIndex >= 0) {
+      redactions.push(path);
+      return value.slice(0, queryIndex) || '[redacted_url]';
+    }
+    return value;
+  }
+}
+
+function shouldStripUrlQuery(path: string): boolean {
+  const normalized = normalizeSanitizePath(path);
+  return (
+    normalized === 'payload.redirect_urls' ||
+    normalized === 'payload.registration_redirect_urls' ||
+    normalized.endsWith('_url') ||
+    normalized.endsWith('_urls') ||
+    normalized.endsWith('.url') ||
+    normalized.endsWith('.font_import_url') ||
+    normalized.endsWith('.admin_review_url')
+  );
+}
+
+function isSensitiveKey(key: string): boolean {
+  const normalized = key.toLowerCase();
+  return (
+    normalized.includes('secret') ||
+    normalized.includes('password') ||
+    normalized.includes('token') ||
+    normalized.includes('key')
+  );
+}
+
+function userAgent(request: FastifyRequest): string | null {
+  const value = request.headers['user-agent'];
+  return typeof value === 'string' ? value : null;
+}
+
+function recordConfigVerifierError(
+  request: FastifyRequest,
+  params: {
+    configUrl: string;
+    configJwt?: string;
+    phase: HandshakeErrorPhase;
+    statusCode: number;
+    errorCode: string;
+    summary: string;
+    details: string[];
+    missingClaims?: string[];
+  },
+): Promise<void> {
+  const { header, payload, redactions } = sanitizeConfigJwtForHandshakeLog(params.configJwt);
+  const domain = requestHost(params.configUrl);
+
+  return recordHandshakeErrorLog({
+    domain,
+    endpoint: endpointPath(request),
+    phase: params.phase,
+    statusCode: params.statusCode,
+    errorCode: params.errorCode,
+    summary: params.summary,
+    details: params.details,
+    missingClaims: params.missingClaims ?? [],
+    ip: request.ip,
+    userAgent: userAgent(request),
+    requestId: randomUUID(),
+    jwtHeader: header,
+    jwtPayload: payload,
+    redactions,
+  }).catch((err) => {
+    request.log.warn({ err }, 'failed to record handshake error');
+  });
 }
