@@ -13,7 +13,6 @@ const securityHeaders = {
 export default defineConfig({
   plugins: [react()],
   server: {
-    headers: securityHeaders,
     port: 5174,
   },
   preview: {
