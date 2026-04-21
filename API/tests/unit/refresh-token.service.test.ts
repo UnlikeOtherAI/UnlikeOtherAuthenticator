@@ -163,6 +163,51 @@ describe('refresh-token.service (unit)', () => {
     expect(rotated.refreshToken).not.toBe(currentRefreshToken);
   });
 
+  it('falls back to the configured TTL when the inherited TTL is below the floor', async () => {
+    const currentRefreshToken = 'short-refresh-token';
+    const prisma = {
+      refreshToken: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: 'refresh-token-1',
+          familyId: 'family-1',
+          userId: 'user-1',
+          domain: context.domain,
+          clientId: context.clientId,
+          configUrl: context.configUrl,
+          createdAt: new Date(now.getTime() - 1_000),
+          expiresAt: new Date(now.getTime() + 30_000),
+          revokedAt: null,
+          replacedByTokenId: null,
+        }),
+        create: vi.fn().mockResolvedValue({ id: 'refresh-token-2' }),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
+    } as unknown as PrismaClient;
+
+    const rotated = await exchangeRefreshToken(
+      {
+        ...context,
+        refreshToken: currentRefreshToken,
+      },
+      {
+        now: () => now,
+        prisma,
+        refreshTokenTtlDays: 30,
+        sharedSecret,
+      },
+    );
+
+    expect(prisma.refreshToken.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        expiresAt: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
+      }),
+      select: {
+        id: true,
+      },
+    });
+    expect(rotated.expiresInSeconds).toBe(30 * 24 * 60 * 60);
+  });
+
   it('rejects expired refresh tokens without rotating them', async () => {
     const prisma = {
       refreshToken: {

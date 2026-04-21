@@ -6,6 +6,8 @@ import { getEnv, requireEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 
+const MIN_INHERITED_REFRESH_TTL_SECONDS = 5 * 60;
+
 type RefreshTokenPrisma = Pick<PrismaClient, 'refreshToken'>;
 
 type RefreshTokenDeps = {
@@ -181,6 +183,11 @@ export async function exchangeRefreshToken(
   const inheritedTtlSeconds = Math.round(
     (row.expiresAt.getTime() - row.createdAt.getTime()) / 1000,
   );
+  const refreshTokenTtlSeconds =
+    inheritedTtlSeconds < MIN_INHERITED_REFRESH_TTL_SECONDS
+      ? undefined
+      : inheritedTtlSeconds;
+
   const nextRefreshToken = await issueRefreshToken(
     {
       userId: row.userId,
@@ -192,7 +199,7 @@ export async function exchangeRefreshToken(
     },
     {
       ...deps,
-      refreshTokenTtlSeconds: inheritedTtlSeconds > 0 ? inheritedTtlSeconds : undefined,
+      refreshTokenTtlSeconds,
     },
   );
 
