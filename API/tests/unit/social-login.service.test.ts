@@ -18,7 +18,6 @@ describe('social-login.service', () => {
       allow_registration: true,
       '2fa_enabled': false,
       debug_enabled: false,
-      allowed_social_providers: ['google'],
     };
 
     await expect(
@@ -119,7 +118,6 @@ describe('social-login.service', () => {
       allow_registration: true,
       '2fa_enabled': false,
       debug_enabled: false,
-      allowed_social_providers: ['google'],
     };
 
     const first = await loginWithSocialProfile(
@@ -206,7 +204,6 @@ describe('social-login.service', () => {
       allowed_registration_domains: ['company.com'],
       '2fa_enabled': false,
       debug_enabled: false,
-      allowed_social_providers: ['google'],
     };
 
     const result = await loginWithSocialProfile(
@@ -266,7 +263,6 @@ describe('social-login.service', () => {
       allow_registration: false,
       '2fa_enabled': false,
       debug_enabled: false,
-      allowed_social_providers: ['google'],
     };
 
     const result = await loginWithSocialProfile(
@@ -335,7 +331,6 @@ describe('social-login.service', () => {
       allowed_registration_domains: ['company.com'],
       '2fa_enabled': false,
       debug_enabled: false,
-      allowed_social_providers: ['google'],
     };
 
     const result = await loginWithSocialProfile(

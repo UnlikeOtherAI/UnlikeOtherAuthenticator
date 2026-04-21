@@ -181,7 +181,6 @@ describe('GET /auth/callback/:provider', () => {
       baseConfig({
         domain: 'admin.example.com',
         redirect_urls: ['https://admin.example.com/admin/auth/callback'],
-        allowed_social_providers: ['google'],
         allow_registration: false,
       }),
     );

@@ -57,7 +57,7 @@ Configuration is delivered as a **signed JWT** with the following properties:
 
 - `domain` — Client domain (e.g., `app.example.com`)
 - `redirect_urls` — Array of allowed OAuth redirect URLs
-- `enabled_auth_methods` — Array of enabled methods: `["email", "google", "apple", "facebook", "github", "linkedin"]`
+- `enabled_auth_methods` — Array of enabled methods: `["email_password", "google", "apple", "facebook", "github", "linkedin"]`; social provider names here are both enabled and allowed
 - `ui_theme` — Complete theme object (colors, radii, typography, logo URL, density)
 - `language_config` — Single language string or array of language codes
 
@@ -65,7 +65,6 @@ Configuration is delivered as a **signed JWT** with the following properties:
 
 - `2fa_enabled` — Boolean to enable/disable 2FA (default: `false`)
 - `debug_enabled` — Boolean to enable debug endpoints (default: `false`)
-- `allowed_social_providers` — Array of social provider names to enable
 - `user_scope` — `"global"` (default) or `"per_domain"` (isolate users per domain)
 - `language` — Selected language (must be in `language_config` if provided)
 - `org_features` — Organisation/team/group feature configuration (see below)
@@ -343,7 +342,7 @@ import jwt from 'jsonwebtoken';
 const config = {
   domain: 'app.example.com',
   redirect_urls: ['https://app.example.com/auth/callback'],
-  enabled_auth_methods: ['email', 'google'],
+  enabled_auth_methods: ['email_password', 'google'],
   ui_theme: {
     colors: { primary: '#3b82f6', secondary: '#64748b' },
     borderRadius: '0.5rem',

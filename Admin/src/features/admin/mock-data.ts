@@ -167,7 +167,7 @@ export const mockAdminData: AdminData = {
         domain: 'staging.startup.dev',
         app_identifier: 'dev.startup.portal',
         redirect_urls: ['https://startup.dev/callback'],
-        enabled_auth_methods: ['email', 'google'],
+        enabled_auth_methods: ['email_password', 'google'],
         shared_secret: '[redacted]',
       },
       ['shared_secret', 'signature'],

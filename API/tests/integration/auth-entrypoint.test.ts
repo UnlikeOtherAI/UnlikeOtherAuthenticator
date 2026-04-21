@@ -156,7 +156,7 @@ describe('GET /auth', () => {
       user_scope: 'per_domain',
       '2fa_enabled': true,
       debug_enabled: true,
-      allowed_social_providers: ['google', 'github'],
+      enabled_auth_methods: ['email_password', 'google', 'github'],
     }));
 
     const fetchMock = vi.fn(await createTestConfigFetchHandler(jwt));
@@ -176,12 +176,13 @@ describe('GET /auth', () => {
     expect(res.body).toMatch(/<div\s+id=(["'])root\1[^>]*>/i);
     expect(res.body).toMatch(/<div\s+id=(["'])root\1[^>]*>\s*<div/i);
     expect(res.body).toContain('window.__UOA_CLIENT_CONFIG__');
-    expect(res.body).toContain('allowed_social_providers');
+    expect(res.body).toContain('enabled_auth_methods');
+    expect(res.body).toContain('google');
 
     await app.close();
   });
 
-  it('does not render social buttons when enabled_auth_methods includes a provider but allowed_social_providers omits it', async () => {
+  it('renders social buttons when enabled_auth_methods includes a provider', async () => {
     process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER =
       process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
@@ -203,8 +204,9 @@ describe('GET /auth', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(res.body).not.toContain('/auth/social/google?');
-    expect(res.body).not.toContain('Continue with');
+    expect(res.body).toContain('/auth/social/google?');
+    expect(res.body).toContain('Continue with');
+    expect(res.body).toContain('Google</a>');
 
     await app.close();
   });

@@ -81,7 +81,7 @@ Use this checklist when installing a new app as an SSO client:
 - Browser clients must use PKCE. The same \`redirect_url\` and \`code_verifier\` must be used during token exchange.
 - Backend token exchange and revoke calls must use the domain-hash Authorization header, never browser credentials.
 - Domain-hash Authorization is now backed by per-domain client secrets from Admin > Domains & Secrets. The old global shared secret is not accepted for customer/domain bearer auth.
-- If any social provider is listed in \`enabled_auth_methods\`, it must also be listed in \`allowed_social_providers\`.
+- Social providers listed in \`enabled_auth_methods\` are both enabled and allowed; there is no separate social-provider allowlist.
 - If \`allow_registration=false\`, social login will not create a user. The user must already exist or the callback redirects with a generic \`auth_failed\`.
 - For org/team installs, decide whether the user can sign in without an assigned team before enabling \`org_features.user_needs_team\`.
 
@@ -113,7 +113,6 @@ Use this checklist when installing a new app as an SSO client:
 
 ## Important optional config fields
 
-- \`allowed_social_providers\`: social providers allowed by this client config.
 - \`allow_registration\`: set to \`false\` to block new user creation, including social-login user creation.
 - \`registration_mode\`: \`password_required\` or \`passwordless\`.
 - \`allowed_registration_domains\`: email domains allowed to register.

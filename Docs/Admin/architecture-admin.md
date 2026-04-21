@@ -120,7 +120,7 @@ Production contract:
 - Admin identity is first-party UOA identity.
 - In production, the API service serves the Admin app from `/admin` on the same origin as the auth API.
 - `/admin/login` starts the normal UOA auth flow with PKCE and the signed config served from `/internal/admin/config`.
-- The first-party admin config must disable registration and allow only Google (`enabled_auth_methods: ["google"]`, `allowed_social_providers: ["google"]`, `allow_registration: false`).
+- The first-party admin config must disable registration and allow only Google (`enabled_auth_methods: ["google"]`, `allow_registration: false`).
 - `/admin/auth/callback` exchanges the returned authorization code with `POST /internal/admin/token`.
 - Admin access tokens are issued by `POST /internal/admin/token` when the verified config domain is `ADMIN_AUTH_DOMAIN`.
 - The admin token exchange accepts an authorization code and PKCE verifier, does not require browser code to know the domain-hash shared secret, and never returns refresh tokens.

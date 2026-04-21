@@ -153,7 +153,6 @@ describe('GET /auth (config validation)', () => {
       baseClientConfigPayload({
         redirect_urls: ['https://client.example.com/auth/callback'],
         enabled_auth_methods: ['google'],
-        allowed_social_providers: ['google'],
       }),
     );
 
@@ -184,7 +183,7 @@ describe('GET /auth (config validation)', () => {
     await app.close();
   });
 
-  it('renders provider gating details for HTML social auth requests when allowed_social_providers omits the clicked provider', async () => {
+  it('renders provider gating details for HTML social auth requests when enabled_auth_methods omits the clicked provider', async () => {
     process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER =
       process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
@@ -192,7 +191,7 @@ describe('GET /auth (config validation)', () => {
 
     const jwt = await signTestConfigJwt(
       baseClientConfigPayload({
-        enabled_auth_methods: ['google'],
+        enabled_auth_methods: ['email_password'],
       }),
     );
 
@@ -213,10 +212,55 @@ describe('GET /auth (config validation)', () => {
     expect(res.body).toContain('SOCIAL_PROVIDER_DISABLED');
     expect(res.body).toContain('The requested social provider is not enabled for this client config.');
     expect(res.body).toContain('config_url was fetched successfully and the config JWT passed signature, schema, and domain checks.');
-    expect(res.body).toContain('The auth UI requested a social provider that is not listed in config.allowed_social_providers.');
-    expect(res.body).toContain('Add the provider to allowed_social_providers in the signed config.');
+    expect(res.body).toContain('The auth UI requested a social provider that is not listed in config.enabled_auth_methods.');
+    expect(res.body).toContain('Add the provider to enabled_auth_methods in the signed config.');
 
     await app.close();
+  });
+
+  it('accepts a social auth request when enabled_auth_methods includes the provider', async () => {
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
+    process.env.AUTH_SERVICE_IDENTIFIER =
+      process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
+    const originalGoogleClientId = process.env.GOOGLE_CLIENT_ID;
+    const originalGoogleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    process.env.GOOGLE_CLIENT_ID = 'google-client-id';
+    process.env.GOOGLE_CLIENT_SECRET = 'google-client-secret';
+
+    const jwt = await signTestConfigJwt(
+      baseClientConfigPayload({
+        enabled_auth_methods: ['email_password', 'google'],
+      }),
+    );
+
+    vi.stubGlobal('fetch', vi.fn(await createTestConfigFetchHandler(jwt)));
+
+    const app = await createApp();
+    await app.ready();
+
+    try {
+      const configUrl = 'https://client.example.com/auth-config';
+      const res = await app.inject({
+        method: 'GET',
+        url: `/auth/social/google?config_url=${encodeURIComponent(configUrl)}&code_challenge=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ&code_challenge_method=S256`,
+      });
+
+      expect(res.statusCode).toBe(302);
+      expect(res.headers.location).toContain('https://accounts.google.com/o/oauth2/v2/auth');
+      expect(res.headers.location).toContain('client_id=google-client-id');
+    } finally {
+      if (originalGoogleClientId === undefined) {
+        delete process.env.GOOGLE_CLIENT_ID;
+      } else {
+        process.env.GOOGLE_CLIENT_ID = originalGoogleClientId;
+      }
+      if (originalGoogleClientSecret === undefined) {
+        delete process.env.GOOGLE_CLIENT_SECRET;
+      } else {
+        process.env.GOOGLE_CLIENT_SECRET = originalGoogleClientSecret;
+      }
+      await app.close();
+    }
   });
 
   it('accepts config JWTs without an aud claim', async () => {

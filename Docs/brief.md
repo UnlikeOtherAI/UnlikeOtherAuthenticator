@@ -124,9 +124,10 @@ This service is **stateless where possible**, standards-based, and API-first.
 
 * `2fa_enabled`
 * `debug_enabled`
-* `allowed_social_providers`
 * `user_scope` — `"global"` (default) or `"per_domain"`
 * `org_features` — feature-gated organisations/teams/groups configuration (default: disabled)
+
+`allowed_social_providers` has been merged into `enabled_auth_methods`. Social provider names in `enabled_auth_methods` are both enabled and allowed; clients must not send a separate `allowed_social_providers` field.
 
 ---
 
@@ -1211,7 +1212,7 @@ Each task references the line number(s) where the relevant specification lives i
 | 2.2 | Build config URL fetcher — auth entrypoint fetches JWT from client-provided URL | L405–410 |
 | 2.3 | Implement JWT config signature verification using shared secret | L85–100 |
 | 2.4 | Validate required config fields: `domain`, `redirect_urls`, `enabled_auth_methods`, `ui_theme`, `language_config` | L106–112 |
-| 2.5 | Parse optional config fields: `2fa_enabled`, `debug_enabled`, `allowed_social_providers`, `user_scope` | L114–119 |
+| 2.5 | Parse optional config fields: `2fa_enabled`, `debug_enabled`, `user_scope` | L114–119 |
 | 2.6 | Config JWT `aud` is not required; validate signature and domain instead | L414–420 |
 | 2.7 | Reject unsigned or tampered config JWTs | L98–100 |
 | 2.8 | Validate `domain` claim matches the origin of the request | L434–440 |
@@ -1283,7 +1284,7 @@ Each task references the line number(s) where the relevant specification lives i
 | 7.5 | Implement LinkedIn OAuth login | L180 |
 | 7.6 | Enforce provider-verified email only — reject unverified emails | L453–457 |
 | 7.7 | Implement account unification: same email = same user, auto-merge across providers | L187–191 |
-| 7.8 | Enable/disable providers per-client based on config `allowed_social_providers` | L118, L182–185 |
+| 7.8 | Enable/disable providers per-client based on config `enabled_auth_methods` | L118, L182–185 |
 | 7.9 | Overwrite avatar URL on every social login | L317–318, L461–466 |
 
 ---

@@ -190,13 +190,32 @@ describe('POST /config/validate', () => {
     }
   });
 
-  it('reports social providers that are enabled but not allowed by runtime policy', async () => {
+  it('accepts social providers listed in enabled_auth_methods as runtime-allowed', async () => {
     const res = await app.inject({
       method: 'POST',
       url: '/config/validate',
       payload: {
         config: baseClientConfigPayload({
           enabled_auth_methods: ['email_password', 'google'],
+        }),
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+
+    const body = res.json();
+    expect(body.ok).toBe(true);
+    expect(body.checks.runtime_policy.status).toBe('passed');
+    expect(body.issues).toEqual([]);
+  });
+
+  it('reports unsupported enabled_auth_methods in runtime policy details', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/config/validate',
+      payload: {
+        config: baseClientConfigPayload({
+          enabled_auth_methods: ['email_password', 'google', 'unknown_provider'],
         }),
       },
     });
@@ -212,6 +231,8 @@ describe('POST /config/validate', () => {
         code: 'CONFIG_RUNTIME_POLICY_INVALID',
       }),
     );
-    expect(body.issues[0].details.join(' ')).toContain('allowed_social_providers');
+    expect(body.issues[0].details.join(' ')).toContain(
+      'Unsupported enabled_auth_methods: unknown_provider',
+    );
   });
 });

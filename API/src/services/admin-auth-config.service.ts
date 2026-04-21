@@ -28,14 +28,9 @@ export function adminCallbackUrl(): string {
 
 function assertExactlyGoogleOnly(config: ClientConfig): void {
   const enabledMethods = config.enabled_auth_methods;
-  const allowedProviders = config.allowed_social_providers ?? [];
 
   if (enabledMethods.length !== 1 || enabledMethods[0] !== 'google') {
     throw new AppError('INTERNAL', 500, 'ADMIN_CONFIG_MUST_BE_GOOGLE_ONLY');
-  }
-
-  if (allowedProviders.length !== 1 || allowedProviders[0] !== 'google') {
-    throw new AppError('INTERNAL', 500, 'ADMIN_CONFIG_MUST_ALLOW_ONLY_GOOGLE');
   }
 }
 
