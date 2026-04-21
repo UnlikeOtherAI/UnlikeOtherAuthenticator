@@ -17,9 +17,11 @@
 - Push to `main` triggers GitHub Actions workflow [deploy-main.yml](/System/Volumes/Data/.internal/projects/Projects/UnlikeOtherAuthenticator/.github/workflows/deploy-main.yml).
 - The workflow:
   - authenticates to Google Cloud via GitHub OIDC workload identity
-  - builds and pushes the container image to Artifact Registry
+  - builds the API, Auth UI, and Admin UI into one container image and pushes it to Artifact Registry
   - deploys the new image to Cloud Run service `uoa-auth`
   - checks `https://authentication.unlikeotherai.com/health`
+
+The production Admin UI is served by that Cloud Run API service at `https://authentication.unlikeotherai.com/admin`.
 
 ### GitHub Actions configuration
 

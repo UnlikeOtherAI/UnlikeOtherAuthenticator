@@ -7,6 +7,7 @@ import { AppProviders } from './app/AppProviders';
 import './index.css';
 
 const root = document.getElementById('root');
+const routerBasename = import.meta.env.BASE_URL.replace(/\/$/, '') || undefined;
 
 if (!root) {
   throw new Error('Root element not found.');
@@ -14,7 +15,7 @@ if (!root) {
 
 createRoot(root).render(
   <StrictMode>
-    <BrowserRouter>
+    <BrowserRouter basename={routerBasename}>
       <AppProviders>
         <App />
       </AppProviders>

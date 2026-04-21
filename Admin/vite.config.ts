@@ -10,7 +10,8 @@ const securityHeaders = {
   'X-Frame-Options': 'DENY',
 };
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
+  base: command === 'build' ? '/admin/' : '/',
   plugins: [react()],
   server: {
     port: 5174,
@@ -19,4 +20,4 @@ export default defineConfig({
     headers: securityHeaders,
     port: 4174,
   },
-});
+}));

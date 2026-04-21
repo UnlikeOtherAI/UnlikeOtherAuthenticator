@@ -118,6 +118,7 @@ If a template demonstrates a section but not a final route name, use this route 
 Production contract:
 
 - Admin identity is first-party UOA identity.
+- In production, the API service serves the Admin app from `/admin` on the same origin as the auth API.
 - Admin access tokens are issued by `POST /internal/admin/token` when the verified config domain is `ADMIN_AUTH_DOMAIN`.
 - The admin token exchange accepts an authorization code and PKCE verifier, does not require browser code to know the domain-hash shared secret, and never returns refresh tokens.
 - Admin access-token claims must not expose the domain-hash client identifier because browser code can decode JWT payloads.

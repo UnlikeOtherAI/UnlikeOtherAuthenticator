@@ -122,6 +122,7 @@ The auth window is the user-facing UI rendered inside the OAuth popup. It is a *
 The admin panel is a separate authenticated frontend application for UOA operators.
 
 It should be implemented as a **React CSR** app, not SSR.
+In production, the API service serves the built Admin app from `/admin` so it runs on the same origin as the auth API.
 
 `Docs/Admin/architecture-admin.md` is the canonical admin architecture document.
 
