@@ -36,9 +36,19 @@ export function ConnectionErrorsPage() {
   const { pageItems, pagination } = usePagination(filteredErrors);
   const selectedError = errors.find((error) => error.id === selectedErrorId) ?? filteredErrors[0] ?? null;
 
+  function exportFilteredErrors() {
+    const blob = new Blob([JSON.stringify(filteredErrors, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'connection-errors.json';
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <>
-      <PageHeader title="Connection Errors" description="Rejected app handshakes, config JWT failures, and SDK startup errors" actions={<Button icon="download">Export JSON</Button>} />
+      <PageHeader title="Connection Errors" description="Rejected app handshakes, config JWT failures, and SDK startup errors" actions={<Button icon="download" onClick={exportFilteredErrors}>Export JSON</Button>} />
       <Card className="mb-4 p-4">
         <div className="flex flex-wrap items-end gap-3">
           <FieldShell label="Search">

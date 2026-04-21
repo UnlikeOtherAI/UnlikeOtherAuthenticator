@@ -1,11 +1,15 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { SignJWT } from 'jose';
 
 import { createApp } from '../../src/app.js';
 import { ACCESS_TOKEN_AUDIENCE } from '../../src/config/jwt.js';
+import { digestDomainClientHash } from '../../src/services/domain-secret.service.js';
 import { createClientId } from '../../src/utils/hash.js';
 import { expectJsonError } from '../helpers/error-response.js';
+import { createTestDb } from '../helpers/test-db.js';
+
+const hasDatabase = Boolean(process.env.DATABASE_URL);
 
 function sharedSecretKey(sharedSecret: string): Uint8Array {
   return new TextEncoder().encode(sharedSecret);
@@ -36,21 +40,60 @@ async function signTestAccessToken(params: {
     .sign(sharedSecretKey(params.sharedSecret));
 }
 
-describe('GET /domain/debug', () => {
+describe.skipIf(!hasDatabase)('GET /domain/debug', () => {
+  let handle: Awaited<ReturnType<typeof createTestDb>>;
+
+  const originalDatabaseUrl = process.env.DATABASE_URL;
   const originalSharedSecret = process.env.SHARED_SECRET;
   const originalIssuer = process.env.AUTH_SERVICE_IDENTIFIER;
+
+  beforeAll(async () => {
+    handle = await createTestDb();
+    if (!handle) throw new Error('DATABASE_URL is required for DB-backed tests');
+    process.env.DATABASE_URL = handle.databaseUrl;
+  });
+
+  afterAll(async () => {
+    process.env.DATABASE_URL = originalDatabaseUrl;
+    if (handle) await handle.cleanup();
+  });
+
+  beforeEach(async () => {
+    if (!handle) return;
+    await handle.prisma.clientDomainSecret.deleteMany();
+    await handle.prisma.clientDomain.deleteMany();
+  });
 
   afterEach(() => {
     process.env.SHARED_SECRET = originalSharedSecret;
     process.env.AUTH_SERVICE_IDENTIFIER = originalIssuer;
   });
 
+  async function seedDomainSecret(domain: string, clientSecret: string): Promise<string> {
+    const clientHash = createClientId(domain, clientSecret);
+    await handle!.prisma.clientDomain.create({
+      data: {
+        domain,
+        label: domain,
+        status: 'active',
+        secrets: {
+          create: {
+            active: true,
+            hashPrefix: clientHash.slice(0, 12),
+            secretDigest: digestDomainClientHash(clientHash),
+          },
+        },
+      },
+    });
+    return clientHash;
+  }
+
   it('returns debug info when authorized with domain hash and superuser access token', async () => {
     process.env.SHARED_SECRET = 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER = 'uoa-auth-service';
 
     const domain = 'client.example.com';
-    const domainHash = createClientId(domain, process.env.SHARED_SECRET);
+    const domainHash = await seedDomainSecret(domain, process.env.SHARED_SECRET);
     const accessToken = await signTestAccessToken({
       userId: 'user_1',
       email: 'admin@example.com',
@@ -88,7 +131,7 @@ describe('GET /domain/debug', () => {
     process.env.AUTH_SERVICE_IDENTIFIER = 'uoa-auth-service';
 
     const domain = 'client.example.com';
-    const domainHash = createClientId(domain, process.env.SHARED_SECRET);
+    const domainHash = await seedDomainSecret(domain, process.env.SHARED_SECRET);
 
     const app = await createApp();
     await app.ready();
@@ -110,7 +153,7 @@ describe('GET /domain/debug', () => {
     process.env.AUTH_SERVICE_IDENTIFIER = 'uoa-auth-service';
 
     const domain = 'client.example.com';
-    const domainHash = createClientId(domain, process.env.SHARED_SECRET);
+    const domainHash = await seedDomainSecret(domain, process.env.SHARED_SECRET);
     const accessToken = await signTestAccessToken({
       userId: 'user_2',
       email: 'user@example.com',
@@ -145,7 +188,7 @@ describe('GET /domain/debug', () => {
     const domain = 'client.example.com';
     const otherDomain = 'other.example.com';
 
-    const domainHash = createClientId(domain, process.env.SHARED_SECRET);
+    const domainHash = await seedDomainSecret(domain, process.env.SHARED_SECRET);
     const accessToken = await signTestAccessToken({
       userId: 'user_1',
       email: 'admin@example.com',

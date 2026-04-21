@@ -1,22 +1,26 @@
-import { createHash } from 'node:crypto';
-
 import type { FastifyRequest } from 'fastify';
-import { afterEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   requireDomainHashAuth,
   requireDomainHashAuthForDomainQuery,
 } from '../domain-hash-auth.js';
+import { verifyDomainAuthToken } from '../../services/domain-secret.service.js';
 
-function domainHash(domain: string, secret: string): string {
-  return createHash('sha256').update(`${domain}${secret}`).digest('hex');
-}
+vi.mock('../../services/domain-secret.service.js', () => ({
+  verifyDomainAuthToken: vi.fn(async ({ domain, token }: { domain: string; token: string }) => ({
+    clientId: token,
+    domain,
+    hashPrefix: token.slice(0, 12),
+  })),
+}));
+
+const verifyDomainAuthTokenMock = vi.mocked(verifyDomainAuthToken);
 
 function makeRequest(params: {
-  authorizationDomain: string;
   configDomain?: string;
   queryDomain?: string;
-  sharedSecret: string;
+  token?: string;
 }): FastifyRequest {
   const query =
     params.queryDomain === undefined
@@ -27,7 +31,7 @@ function makeRequest(params: {
 
   return {
     headers: {
-      authorization: `Bearer ${domainHash(params.authorizationDomain, params.sharedSecret)}`,
+      authorization: `Bearer ${params.token ?? 'a'.repeat(64)}`,
     },
     query,
     config: params.configDomain ? { domain: params.configDomain } : undefined,
@@ -35,49 +39,48 @@ function makeRequest(params: {
 }
 
 describe('domain hash auth middleware', () => {
-  const originalSharedSecret = process.env.SHARED_SECRET;
-  const sharedSecret = 'test-shared-secret-with-enough-length';
-
-  afterEach(() => {
-    process.env.SHARED_SECRET = originalSharedSecret;
+  beforeEach(() => {
+    verifyDomainAuthTokenMock.mockClear();
   });
 
   it('uses the verified config domain for post-config auth', async () => {
-    process.env.SHARED_SECRET = sharedSecret;
     const request = makeRequest({
-      authorizationDomain: 'client.example.com',
       configDomain: 'client.example.com',
       queryDomain: 'attacker.example.com',
-      sharedSecret,
     });
 
     await expect(requireDomainHashAuth(request)).rejects.toMatchObject({
       code: 'UNAUTHORIZED',
       statusCode: 401,
     });
+    expect(verifyDomainAuthTokenMock).not.toHaveBeenCalled();
   });
 
   it('accepts a matching query domain on post-config auth', async () => {
-    process.env.SHARED_SECRET = sharedSecret;
     const request = makeRequest({
-      authorizationDomain: 'client.example.com',
       configDomain: 'client.example.com',
       queryDomain: 'client.example.com',
-      sharedSecret,
     });
 
     await expect(requireDomainHashAuth(request)).resolves.toBeUndefined();
+    expect(verifyDomainAuthTokenMock).toHaveBeenCalledWith({
+      domain: 'client.example.com',
+      token: 'a'.repeat(64),
+    });
+    expect(request.domainAuthClientId).toBe('a'.repeat(64));
   });
 
   it('keeps the domain-query helper query-first for domain scoped routes', async () => {
-    process.env.SHARED_SECRET = sharedSecret;
     const request = makeRequest({
-      authorizationDomain: 'attacker.example.com',
       configDomain: 'client.example.com',
       queryDomain: 'attacker.example.com',
-      sharedSecret,
+      token: 'b'.repeat(64),
     });
 
     await expect(requireDomainHashAuthForDomainQuery(request)).resolves.toBeUndefined();
+    expect(verifyDomainAuthTokenMock).toHaveBeenCalledWith({
+      domain: 'attacker.example.com',
+      token: 'b'.repeat(64),
+    });
   });
 });

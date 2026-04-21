@@ -51,7 +51,7 @@ export function UserDetailsModal() {
                   Reset 2FA
                 </Button>
               ) : null}
-              <Button size="sm" variant={user.status === 'banned' ? 'secondary' : 'danger'} onClick={() => confirm(`${user.status === 'banned' ? 'Unban' : 'Ban'} ${user.email}?`, 'This is mocked for now; API wiring will replace the action handler.')}>
+              <Button size="sm" variant={user.status === 'banned' ? 'secondary' : 'danger'} onClick={() => confirm(`${user.status === 'banned' ? 'Unban' : 'Ban'} ${user.email}?`, 'A production write endpoint is required before this can change stored user state.')}>
                 {user.status === 'banned' ? 'Unban' : 'Ban User'}
               </Button>
             </div>
@@ -80,7 +80,7 @@ export function UserDetailsModal() {
                 })}
               </div>
             ) : (
-              <p className="text-sm text-gray-400">No organisation memberships in sample data.</p>
+              <p className="text-sm text-gray-400">No organisation memberships found.</p>
             )}
           </section>
           <section>

@@ -69,6 +69,7 @@ export function registerAuthTokenExchangeRoute(app: FastifyInstance): void {
               refreshToken: body.refresh_token,
               config: request.config,
               configUrl: request.configUrl,
+              clientId: request.domainAuthClientId,
             })
           : await exchangeAuthorizationCodeForTokens({
               code: body.code,
@@ -76,6 +77,7 @@ export function registerAuthTokenExchangeRoute(app: FastifyInstance): void {
               configUrl: request.configUrl,
               redirectUrl: body.redirect_url,
               codeVerifier: body.code_verifier,
+              clientId: request.domainAuthClientId,
             });
 
       // Keep response OAuth-ish without being overly strict about fields.

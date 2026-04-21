@@ -1,6 +1,5 @@
 import { Link } from 'react-router-dom';
 
-import { Badge } from '../components/ui/Badge';
 import { Card, CardHeader } from '../components/ui/Card';
 import { PageHeader } from '../components/ui/PageHeader';
 import { MethodBadge } from '../components/ui/Status';
@@ -16,10 +15,26 @@ export function DashboardPage() {
   }
 
   const stats = [
-    { label: 'Total Users', value: data.stats.users.toLocaleString(), sub: '+23 this week', color: 'text-green-600' },
-    { label: 'Active Domains', value: data.stats.domains.toString(), sub: '2 pending setup', color: 'text-gray-500' },
-    { label: 'Organisations', value: data.stats.orgs.toString(), sub: 'across 8 domains', color: 'text-blue-600' },
-    { label: 'Logins Today', value: data.stats.loginsToday.toString(), sub: '3 failed attempts', color: 'text-amber-600' },
+    { label: 'Total Users', value: data.stats.users.toLocaleString(), sub: 'registered accounts', color: 'text-green-600' },
+    { label: 'Active Domains', value: data.stats.domains.toString(), sub: 'seen in roles, orgs, or logs', color: 'text-gray-500' },
+    { label: 'Organisations', value: data.stats.orgs.toString(), sub: 'stored organisations', color: 'text-blue-600' },
+    { label: 'Logins Today', value: data.stats.loginsToday.toString(), sub: 'successful auth events', color: 'text-amber-600' },
+  ];
+  const alerts = [
+    ...data.handshakeErrors.slice(0, 3).map((error) => ({
+      color: 'bg-red-500',
+      title: error.errorCode,
+      description: `${error.domain} · ${error.phase}`,
+    })),
+    ...(data.handshakeErrors.length === 0
+      ? [
+          {
+            color: 'bg-green-500',
+            title: 'No handshake errors',
+            description: 'Recent config and JWT handshakes look clean',
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -50,7 +65,7 @@ export function DashboardPage() {
                 <Td>
                   <MethodBadge method={log.method} />
                 </Td>
-                <Td className="text-xs text-gray-400">recent</Td>
+                <Td className="text-xs text-gray-400">{log.ts}</Td>
               </tr>
             ))}
           </DataTable>
@@ -61,13 +76,9 @@ export function DashboardPage() {
             <span className="text-sm font-semibold text-gray-900">Alerts</span>
           </CardHeader>
           <div className="divide-y divide-gray-50">
-            <AlertRow color="bg-amber-500" title="Secret rotation needed" description="widgets.io secret 89 days old" />
-            <AlertRow color="bg-red-500" title="Failed logins" description="3 from 185.220.101.x today" />
-            <AlertRow color="bg-blue-500" title="New domain added" description="beta.newproduct.com 2h ago" />
-            <AlertRow color="bg-green-500" title="Systems operational" description="DB, email, social OK" />
-          </div>
-          <div className="border-t border-gray-50 px-4 py-3">
-            <Badge variant="green">Mock data ready</Badge>
+            {alerts.map((alert) => (
+              <AlertRow key={`${alert.title}-${alert.description}`} {...alert} />
+            ))}
           </div>
         </Card>
       </div>

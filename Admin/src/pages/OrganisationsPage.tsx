@@ -67,7 +67,7 @@ export function OrganisationsPage() {
                     <ActionDivider />
                     <ActionButton tone="amber" onClick={() => openDialog({ type: 'transfer-ownership', organisation: org })}>Transfer</ActionButton>
                     <ActionDivider />
-                    <ActionButton tone="red" onClick={() => confirm(`Delete ${org.name}?`, 'Deletes all teams and memberships in the sample UI.')}>Delete</ActionButton>
+                    <ActionButton tone="red" onClick={() => confirm(`Delete ${org.name}?`, 'A production write endpoint is required before this can delete stored organisations.')}>Delete</ActionButton>
                   </Td>
                 </tr>
               ))}

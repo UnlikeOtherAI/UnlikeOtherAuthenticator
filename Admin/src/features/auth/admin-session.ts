@@ -11,19 +11,17 @@ import {
 import { Navigate, useLocation } from 'react-router-dom';
 
 import { adminEnv } from '../../config/env';
-
-const storageKey = 'uoa-admin-session';
+import {
+  clearStoredAdminSession,
+  readStoredAdminSession,
+  writeStoredAdminSession,
+} from './admin-session-storage';
 
 type AdminUser = {
   id?: string;
   email: string;
   domain?: string;
   role?: 'superuser';
-};
-
-type StoredSession = {
-  accessToken: string;
-  expiresAt: number;
 };
 
 type AdminSessionContextValue = {
@@ -40,12 +38,12 @@ export function AdminSessionProvider({ children }: PropsWithChildren) {
   const [adminUser, setAdminUser] = useState<AdminUser | null>(() =>
     adminEnv.bypassAuth ? { email: 'admin@system.local', role: 'superuser' } : null,
   );
-  const [isLoading, setIsLoading] = useState(() => !adminEnv.bypassAuth && Boolean(readStoredSession()));
+  const [isLoading, setIsLoading] = useState(() => !adminEnv.bypassAuth && Boolean(readStoredAdminSession()));
 
   useEffect(() => {
     if (adminEnv.bypassAuth) return;
 
-    const storedSession = readStoredSession();
+    const storedSession = readStoredAdminSession();
     if (!storedSession) {
       setIsLoading(false);
       return;
@@ -60,7 +58,7 @@ export function AdminSessionProvider({ children }: PropsWithChildren) {
       })
       .catch(() => {
         if (cancelled) return;
-        clearStoredSession();
+        clearStoredAdminSession();
         setAdminUser(null);
         setIsLoading(false);
       });
@@ -76,13 +74,13 @@ export function AdminSessionProvider({ children }: PropsWithChildren) {
       isAuthenticated: Boolean(adminUser),
       isLoading,
       async completeSignIn(accessToken, expiresInSeconds) {
-        writeStoredSession(accessToken, expiresInSeconds);
+        writeStoredAdminSession(accessToken, expiresInSeconds);
         const nextUser = await fetchAdminUser(accessToken);
         setAdminUser(nextUser);
         return nextUser;
       },
       signOut() {
-        clearStoredSession();
+        clearStoredAdminSession();
         setAdminUser(null);
       },
     }),
@@ -134,35 +132,6 @@ function useRequiredAdminSessionContext() {
   }
 
   return session;
-}
-
-function readStoredSession(): StoredSession | null {
-  try {
-    const storedValue = window.sessionStorage.getItem(storageKey);
-    if (!storedValue) return null;
-
-    const parsed = JSON.parse(storedValue) as StoredSession;
-    if (!parsed.accessToken || parsed.expiresAt <= Date.now() + 5_000) {
-      clearStoredSession();
-      return null;
-    }
-
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-function clearStoredSession(): void {
-  window.sessionStorage.removeItem(storageKey);
-}
-
-function writeStoredSession(accessToken: string, expiresInSeconds: number): void {
-  const storedSession: StoredSession = {
-    accessToken,
-    expiresAt: Date.now() + expiresInSeconds * 1_000,
-  };
-  window.sessionStorage.setItem(storageKey, JSON.stringify(storedSession));
 }
 
 function apiUrl(path: string): string {

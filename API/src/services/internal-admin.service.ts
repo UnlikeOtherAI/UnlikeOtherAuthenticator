@@ -8,6 +8,7 @@ type AdminMethod = 'email' | 'google' | 'github' | 'apple' | 'facebook' | 'linke
 
 const DEFAULT_LIST_LIMIT = 100;
 const MAX_LIST_LIMIT = 200;
+const SECRET_OLD_MS = 90 * 24 * 60 * 60 * 1000;
 
 const adminOrganisationArgs = {
   include: {
@@ -38,6 +39,13 @@ function displayDate(value: Date): string {
 
 function displayTimestamp(value: Date): string {
   return value.toISOString().replace('T', ' ').slice(0, 19);
+}
+
+function secretAge(value: Date | null): string | null {
+  if (!value) return null;
+  const days = Math.max(0, Math.floor((Date.now() - value.getTime()) / (24 * 60 * 60 * 1000)));
+  if (days === 0) return 'today';
+  return `${days}d`;
 }
 
 function method(value: string | null | undefined): AdminMethod {
@@ -173,7 +181,7 @@ export async function getAdminDomains(limit?: number) {
   if (!isDatabaseEnabled()) return [];
 
   const prisma = getPrisma();
-  const [roles, orgs, logs] = await Promise.all([
+  const [roles, orgs, logs, registries] = await Promise.all([
     prisma.domainRole.groupBy({
       by: ['domain'],
       _count: { userId: true },
@@ -184,8 +192,12 @@ export async function getAdminDomains(limit?: number) {
       _count: { id: true },
     }),
     prisma.loginLog.findMany({ distinct: ['domain'], select: { domain: true } }),
+    prisma.clientDomain.findMany({
+      include: { secrets: { where: { active: true }, orderBy: { createdAt: 'desc' }, take: 1 } },
+    }),
   ]);
   const domains = new Map<string, { createdAt: Date | null; orgs: number; users: number }>();
+  const registryByDomain = new Map(registries.map((registry) => [normalizeDomain(registry.domain), registry]));
 
   const ensure = (domain: string) => {
     const normalized = normalizeDomain(domain);
@@ -205,22 +217,30 @@ export async function getAdminDomains(limit?: number) {
     ensure(org.domain).orgs = org._count.id;
   });
   logs.forEach((log) => ensure(log.domain));
+  registries.forEach((registry) => {
+    const entry = ensure(registry.domain);
+    if (!entry.createdAt || registry.createdAt < entry.createdAt) entry.createdAt = registry.createdAt;
+  });
 
   return Array.from(domains.entries())
     .sort(([a], [b]) => a.localeCompare(b))
     .slice(0, listLimit(limit))
-    .map(([domain, entry]) => ({
-      id: domain,
-      name: domain,
-      label: domain,
-      secretAge: null,
-      secretOld: false,
-      users: entry.users,
-      orgs: entry.orgs,
-      status: 'active',
-      created: entry.createdAt ? displayDate(entry.createdAt) : '',
-      hash: '',
-    }));
+    .map(([domain, entry]) => {
+      const registry = registryByDomain.get(domain);
+      const activeSecret = registry?.secrets[0] ?? null;
+      return {
+        id: domain,
+        name: domain,
+        label: registry?.label ?? domain,
+        secretAge: secretAge(activeSecret?.createdAt ?? null),
+        secretOld: activeSecret ? Date.now() - activeSecret.createdAt.getTime() > SECRET_OLD_MS : false,
+        users: entry.users,
+        orgs: entry.orgs,
+        status: registry?.status === 'disabled' ? 'disabled' : 'active',
+        created: entry.createdAt ? displayDate(entry.createdAt) : '',
+        hash: activeSecret ? `sha256:${activeSecret.hashPrefix}...` : 'not configured',
+      };
+    });
 }
 
 export async function getAdminLogs(limit = 100) {

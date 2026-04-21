@@ -9,7 +9,6 @@ import { ACCESS_TOKEN_AUDIENCE } from '../config/jwt.js';
 import { getPrisma } from '../db/prisma.js';
 import { ensureDomainRoleForUser } from './domain-role.service.js';
 import { exchangeRefreshToken, issueRefreshToken } from './refresh-token.service.js';
-import { createClientId } from '../utils/hash.js';
 import { AppError } from '../utils/errors.js';
 import { normalizeDomain } from '../utils/domain.js';
 import type { ClientConfig } from './config.service.js';
@@ -28,12 +27,10 @@ type TokenDeps = {
 };
 
 function generateAuthorizationCode(): string {
-  // 32 bytes -> 256 bits of entropy; base64url for safe transport in URLs.
   return randomBytes(32).toString('base64url');
 }
 
 function hashAuthorizationCode(code: string, pepper: string): string {
-  // Store only a hashed code. The raw code is a bearer secret; treat it like email tokens.
   return createHmac('sha256', pepper).update(code, 'utf8').digest('hex');
 }
 
@@ -48,9 +45,7 @@ function parseHttpUrl(value: string): URL {
 }
 
 export function selectRedirectUrl(params: {
-  // `redirect_urls` from verified config JWT.
   allowedRedirectUrls: string[];
-  // Optional client-requested redirect URL; must be allowlisted by config.
   requestedRedirectUrl?: string;
 }): string {
   const requested = params.requestedRedirectUrl?.trim();
@@ -58,7 +53,6 @@ export function selectRedirectUrl(params: {
     if (!params.allowedRedirectUrls.includes(requested)) {
       throw new AppError('BAD_REQUEST', 400, 'REDIRECT_URL_NOT_ALLOWED');
     }
-    // Validate it's a sane URL (prevents "javascript:" etc even if config is malicious).
     parseHttpUrl(requested);
     return requested;
   }
@@ -68,7 +62,6 @@ export function selectRedirectUrl(params: {
     throw new AppError('BAD_REQUEST', 400, 'MISSING_REDIRECT_URL');
   }
 
-  // Brief 6.6: validate redirect URLs before redirecting.
   parseHttpUrl(candidate);
   return candidate;
 }
@@ -79,10 +72,6 @@ export function buildRedirectToUrl(params: { redirectUrl: string; code: string }
   return u.toString();
 }
 
-/**
- * Brief 22.13: after a successful authentication, issue a one-time authorization code
- * that can be exchanged by the client backend for an access token.
- */
 export async function issueAuthorizationCode(
   params: {
     userId: string;
@@ -104,14 +93,12 @@ export async function issueAuthorizationCode(
   const now = deps?.now ? deps.now() : new Date();
   const sharedSecret = deps?.sharedSecret ?? requireEnv('SHARED_SECRET').SHARED_SECRET;
 
-  // Validate redirectUrl again at the boundary; routes should select it via `selectRedirectUrl`.
   parseHttpUrl(params.redirectUrl);
 
   if (!params.codeChallenge || params.codeChallengeMethod !== 'S256') {
     throw new AppError('BAD_REQUEST', 400, 'PKCE_REQUIRED');
   }
 
-  // Extremely low probability collision; retry a couple times to be safe.
   for (let attempt = 0; attempt < 3; attempt++) {
     const code = generateAuthorizationCode();
     const codeHash = hashAuthorizationCode(code, sharedSecret);
@@ -136,7 +123,6 @@ export async function issueAuthorizationCode(
       return { code };
     } catch (err) {
       const codeValue = (err as { code?: unknown } | null)?.code;
-      // Prisma unique constraint violation code. Avoid importing Prisma types here.
       if (codeValue === 'P2002') continue;
       throw err;
     }
@@ -172,7 +158,6 @@ async function consumeAuthorizationCode(params: {
     },
   });
 
-  // Treat all failures as generic auth failure; never leak "expired" vs "unknown" etc.
   if (!row) throw new AppError('UNAUTHORIZED', 401, 'INVALID_AUTH_CODE');
   if (row.domain !== params.domain) throw new AppError('UNAUTHORIZED', 401, 'INVALID_AUTH_CODE');
   if (row.configUrl !== params.configUrl)
@@ -246,7 +231,6 @@ async function signAccessToken(params: {
       .setExpirationTime(params.ttl)
       .sign(sharedSecretKey(params.sharedSecret));
   } catch {
-    // Normalize token signing failures into a generic error.
     throw new AppError('INTERNAL', 500, 'TOKEN_SIGN_FAILED');
   }
 }
@@ -276,6 +260,7 @@ function resolveRefreshTokenTtlSeconds(config: ClientConfig, rememberMe: boolean
 }
 
 function resolveAccessTokenContext(params: {
+  clientId?: string;
   domain: string;
   env: ReturnType<typeof getEnv>;
   issuer: string;
@@ -283,8 +268,9 @@ function resolveAccessTokenContext(params: {
 }): { clientId: string; sharedSecret: string } {
   const adminDomain = normalizeDomain(params.env.ADMIN_AUTH_DOMAIN ?? params.issuer);
   if (normalizeDomain(params.domain) !== adminDomain) {
+    if (!params.clientId) throw new AppError('INTERNAL', 500, 'CLIENT_ID_REQUIRED');
     return {
-      clientId: createClientId(params.domain, params.sharedSecret),
+      clientId: params.clientId,
       sharedSecret: params.sharedSecret,
     };
   }
@@ -315,6 +301,7 @@ async function issueTokenPairForUser(
   params: {
     config: ClientConfig;
     configUrl: string;
+    clientId?: string;
     refreshToken: string;
     refreshTokenExpiresInSeconds: number;
     userId: string;
@@ -345,6 +332,7 @@ async function issueTokenPairForUser(
     domain: params.config.domain,
     env,
     issuer,
+    clientId: params.clientId,
     sharedSecret,
   });
   await ensureUserHasRequiredTeam(
@@ -385,9 +373,6 @@ async function issueTokenPairForUser(
   };
 }
 
-/**
- * Client backend exchanges the authorization code for an access token and refresh token pair.
- */
 export async function exchangeAuthorizationCodeForTokens(
   params: {
     code: string;
@@ -395,6 +380,7 @@ export async function exchangeAuthorizationCodeForTokens(
     configUrl: string;
     redirectUrl: string;
     codeVerifier?: string;
+    clientId?: string;
   },
   deps?: TokenIssuerDeps,
 ): Promise<IssuedTokenPair> {
@@ -407,7 +393,12 @@ export async function exchangeAuthorizationCodeForTokens(
   const now = deps?.now ? deps.now() : new Date();
   const sharedSecret = deps?.sharedSecret ?? requireEnv('SHARED_SECRET').SHARED_SECRET;
   const prisma = deps?.prisma ?? getPrisma();
-  const clientId = createClientId(params.config.domain, sharedSecret);
+  const clientId = params.clientId ?? resolveAccessTokenContext({
+    domain: params.config.domain,
+    env,
+    issuer: deps?.authServiceIdentifier ?? requireEnv('AUTH_SERVICE_IDENTIFIER').AUTH_SERVICE_IDENTIFIER,
+    sharedSecret,
+  }).clientId;
 
   const { userId, rememberMe } = await consumeAuthorizationCode({
     code: params.code,
@@ -442,6 +433,7 @@ export async function exchangeAuthorizationCodeForTokens(
       userId,
       config: params.config,
       configUrl: params.configUrl,
+      clientId,
       refreshToken: issuedRefreshToken.refreshToken,
       refreshTokenExpiresInSeconds: issuedRefreshToken.expiresInSeconds,
     },
@@ -454,6 +446,7 @@ export async function exchangeRefreshTokenForTokens(
     config: ClientConfig;
     configUrl: string;
     refreshToken: string;
+    clientId?: string;
   },
   deps?: TokenIssuerDeps,
 ): Promise<IssuedTokenPair> {
@@ -465,7 +458,12 @@ export async function exchangeRefreshTokenForTokens(
 
   const sharedSecret = deps?.sharedSecret ?? requireEnv('SHARED_SECRET').SHARED_SECRET;
   const prisma = deps?.prisma ?? getPrisma();
-  const clientId = createClientId(params.config.domain, sharedSecret);
+  const clientId = params.clientId ?? resolveAccessTokenContext({
+    domain: params.config.domain,
+    env,
+    issuer: deps?.authServiceIdentifier ?? requireEnv('AUTH_SERVICE_IDENTIFIER').AUTH_SERVICE_IDENTIFIER,
+    sharedSecret,
+  }).clientId;
 
   const rotatedRefreshToken = await exchangeRefreshToken(
     {
@@ -487,6 +485,7 @@ export async function exchangeRefreshTokenForTokens(
       userId: rotatedRefreshToken.userId,
       config: params.config,
       configUrl: params.configUrl,
+      clientId,
       refreshToken: rotatedRefreshToken.refreshToken,
       refreshTokenExpiresInSeconds: rotatedRefreshToken.expiresInSeconds,
     },

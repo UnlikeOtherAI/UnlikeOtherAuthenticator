@@ -68,6 +68,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
       enabled: true,
       groups_enabled: true,
     });
+    const clientId = createClientId(config.domain, sharedSecret);
     const configUrl = 'https://client.example.com/auth-config';
     const redirectUrl = 'https://client.example.com/oauth/callback';
 
@@ -130,7 +131,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
     ]);
 
     const { accessToken, refreshToken } = await exchangeAuthorizationCodeForTokens(
-      { code, config, configUrl, redirectUrl },
+      { code, config, configUrl, redirectUrl, clientId },
       {
         now: () => now,
         sharedSecret,
@@ -149,7 +150,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
       userId: 'user-1',
       email: 'user@example.com',
       domain: config.domain,
-      clientId: createClientId(config.domain, sharedSecret),
+      clientId,
       role: 'user',
       org: {
         org_id: 'org-1',
@@ -171,6 +172,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
     const sharedSecret = process.env.SHARED_SECRET!;
     const code = 'code-without-org';
     const config = makeConfig({ enabled: false });
+    const clientId = createClientId(config.domain, sharedSecret);
     const configUrl = 'https://client.example.com/auth-config';
     const redirectUrl = 'https://client.example.com/oauth/callback';
 
@@ -221,7 +223,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
     prisma.user.findUnique.mockResolvedValue({ email: 'user2@example.com' });
 
     const { accessToken, refreshToken } = await exchangeAuthorizationCodeForTokens(
-      { code, config, configUrl, redirectUrl },
+      { code, config, configUrl, redirectUrl, clientId },
       {
         now: () => now,
         sharedSecret,
@@ -240,7 +242,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
       userId: 'user-2',
       email: 'user2@example.com',
       domain: config.domain,
-      clientId: createClientId(config.domain, sharedSecret),
+      clientId,
       role: 'user',
     });
     expect(claims.org).toBeUndefined();
@@ -258,6 +260,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
       enabled: true,
       groups_enabled: true,
     });
+    const clientId = createClientId(config.domain, sharedSecret);
     const configUrl = 'https://client.example.com/auth-config';
     const redirectUrl = 'https://client.example.com/oauth/callback';
 
@@ -309,7 +312,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
     prisma.orgMember.findFirst.mockResolvedValue(null);
 
     const { accessToken, refreshToken } = await exchangeAuthorizationCodeForTokens(
-      { code, config, configUrl, redirectUrl },
+      { code, config, configUrl, redirectUrl, clientId },
       {
         now: () => now,
         sharedSecret,
@@ -328,7 +331,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
       userId: 'user-3',
       email: 'user3@example.com',
       domain: config.domain,
-      clientId: createClientId(config.domain, sharedSecret),
+      clientId,
       role: 'user',
     });
     expect(claims.org).toBeUndefined();
@@ -343,6 +346,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
     const code = 'code-with-pkce';
     const codeVerifier = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ';
     const config = makeConfig({ enabled: false });
+    const clientId = createClientId(config.domain, sharedSecret);
     const configUrl = 'https://client.example.com/auth-config';
     const redirectUrl = 'https://client.example.com/oauth/callback';
 
@@ -394,7 +398,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
 
     await expect(
       exchangeAuthorizationCodeForTokens(
-        { code, config, configUrl, redirectUrl },
+        { code, config, configUrl, redirectUrl, clientId },
         {
           now: () => now,
           sharedSecret,
@@ -406,7 +410,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
     ).rejects.toMatchObject({ statusCode: 401 });
 
     const result = await exchangeAuthorizationCodeForTokens(
-      { code, config, configUrl, redirectUrl, codeVerifier },
+      { code, config, configUrl, redirectUrl, codeVerifier, clientId },
       {
         now: () => now,
         sharedSecret,

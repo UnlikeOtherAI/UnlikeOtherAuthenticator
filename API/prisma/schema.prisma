@@ -192,6 +192,36 @@ model HandshakeErrorLog {
   @@map("handshake_error_logs")
 }
 
+model ClientDomain {
+  id        String   @id @default(cuid())
+  domain    String   @unique
+  label     String   @db.VarChar(120)
+  status    String   @default("active") @db.VarChar(20)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  secrets ClientDomainSecret[]
+
+  @@index([status])
+  @@map("client_domains")
+}
+
+model ClientDomainSecret {
+  id            String    @id @default(cuid())
+  domainId      String    @map("domain_id")
+  secretDigest  String    @map("secret_digest")
+  hashPrefix    String    @map("hash_prefix") @db.VarChar(16)
+  active        Boolean   @default(true)
+  createdAt     DateTime  @default(now()) @map("created_at")
+  deactivatedAt DateTime? @map("deactivated_at")
+
+  domain ClientDomain @relation(fields: [domainId], references: [id], onDelete: Cascade)
+
+  @@index([domainId, active])
+  @@index([secretDigest])
+  @@map("client_domain_secrets")
+}
+
 model Organisation {
   id        String   @id @default(cuid())
   domain    String

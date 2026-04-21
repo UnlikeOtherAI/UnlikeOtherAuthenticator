@@ -5,6 +5,11 @@ import { useAdminUi } from '../features/shell/admin-ui';
 export function ConfirmDialog() {
   const { closeConfirmation, confirmation } = useAdminUi();
 
+  async function confirmAction() {
+    await confirmation?.onConfirm?.();
+    closeConfirmation();
+  }
+
   return (
     <Modal
       isOpen={Boolean(confirmation)}
@@ -14,7 +19,7 @@ export function ConfirmDialog() {
       footer={
         <>
           <Button onClick={closeConfirmation}>Cancel</Button>
-          <Button variant="danger" onClick={closeConfirmation}>
+          <Button variant="danger" onClick={confirmAction}>
             Confirm
           </Button>
         </>

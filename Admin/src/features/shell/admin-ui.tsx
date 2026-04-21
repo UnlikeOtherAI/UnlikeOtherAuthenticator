@@ -5,6 +5,7 @@ import type { AppFlagSummary, BanRecord, Domain, FeatureFlagDefinition, KillSwit
 type Confirmation = {
   title: string;
   body: string;
+  onConfirm?: () => Promise<void> | void;
 } | null;
 
 export type AdminDialog =
@@ -40,7 +41,7 @@ type AdminUiContextValue = {
   closeConfirmation: () => void;
   closeSidebar: () => void;
   closeUser: () => void;
-  confirm: (title: string, body: string) => void;
+  confirm: (title: string, body: string, onConfirm?: () => Promise<void> | void) => void;
   openDialog: (dialog: AdminDialog) => void;
   openUser: (userId: string) => void;
   toggleSidebar: () => void;
@@ -64,7 +65,7 @@ export function AdminUiProvider({ children }: PropsWithChildren) {
       closeConfirmation: () => setConfirmation(null),
       closeSidebar: () => setIsSidebarOpen(false),
       closeUser: () => setSelectedUserId(null),
-      confirm: (title, body) => setConfirmation({ title, body }),
+      confirm: (title, body, onConfirm) => setConfirmation({ title, body, onConfirm }),
       openDialog: setActiveDialog,
       openUser: setSelectedUserId,
       toggleSidebar: () => setIsSidebarOpen((current) => !current),

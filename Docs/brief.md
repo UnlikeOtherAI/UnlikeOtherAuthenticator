@@ -76,6 +76,13 @@ This service is **stateless where possible**, standards-based, and API-first.
   * OAuth server environment variable
 * Never exposed publicly
 
+### 2026-04 Admin Update: Domain Client Secrets
+
+* Domain-scoped backend auth now uses **per-domain client secrets** managed in Admin > Domains & Secrets.
+* The domain bearer token is still derived as `SHA256(domain + domain_client_secret)`, but the auth server stores only a server-peppered digest of that derived hash plus a short display prefix.
+* The legacy global `SHARED_SECRET` is **not accepted** as customer/domain bearer auth.
+* `SHARED_SECRET` remains a server-internal/self-login secret until token signing, email-token hashing, social state, 2FA, and refresh-token hashing are split onto dedicated keys.
+
 ---
 
 ## 5. Config Delivery & Integrity
@@ -448,6 +455,7 @@ The following tighten ambiguities in the brief to prevent misinterpretation duri
 * There is **no secret rotation UI**
 * There are **no storage tables for secrets**
 * The secret lives exclusively in environment variables on both the client backend and the auth server
+* Superseded for domain-scoped bearer auth by the 2026-04 Admin Update above. Keep this historical scope in mind for remaining internal token/signing uses only.
 
 ---
 

@@ -32,7 +32,7 @@ GET /auth?config_url=<your_config_endpoint_url>&redirect_url=<your_callback_url>
 
 \`\`\`text
 POST /auth/token?config_url=<your_config_endpoint_url>
-Authorization: Bearer SHA256(domain + SHARED_SECRET)
+Authorization: Bearer SHA256(domain + domain_client_secret)
 Content-Type: application/json
 
 {
@@ -81,6 +81,7 @@ Use this checklist when installing a new app as an SSO client:
 - Every \`redirect_url\` sent to \`/auth\` must be listed exactly in \`redirect_urls\`.
 - Browser clients must use PKCE. The same \`redirect_url\` and \`code_verifier\` must be used during token exchange.
 - Backend token exchange and revoke calls must use the domain-hash Authorization header, never browser credentials.
+- Domain-hash Authorization is now backed by per-domain client secrets from Admin > Domains & Secrets. The old global shared secret is not accepted for customer/domain bearer auth.
 - If any social provider is listed in \`enabled_auth_methods\`, it must also be listed in \`allowed_social_providers\`.
 - If \`allow_registration=false\`, social login will not create a user. The user must already exist or the callback redirects with a generic \`auth_failed\`.
 - For org/team installs, decide whether the user can sign in without an assigned team before enabling \`org_features.user_needs_team\`.
@@ -126,10 +127,10 @@ Use this checklist when installing a new app as an SSO client:
 Domain-scoped backend endpoints use:
 
 \`\`\`text
-Authorization: Bearer SHA256(domain + SHARED_SECRET)
+Authorization: Bearer SHA256(domain + domain_client_secret)
 \`\`\`
 
-This applies to token exchange, token revoke, domain APIs, server-driven team invites, and access-request review APIs. Browser code must never use the domain-hash shared-secret mechanism.
+The per-domain client secret is created or rotated in the Admin UI under Domains & Secrets. Store it only in the client backend environment. The auth service stores only a server-peppered digest of the derived client hash plus a short display prefix. This applies to token exchange, token revoke, domain APIs, server-driven team invites, and access-request review APIs. Browser code must never use the domain-hash mechanism.
 
 ## Admin access
 

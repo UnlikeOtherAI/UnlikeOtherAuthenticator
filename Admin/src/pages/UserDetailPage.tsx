@@ -58,7 +58,7 @@ export function UserDetailPage() {
             <Button onClick={() => openDialog({ type: 'edit-user', user })}>Edit User</Button>
             <Button variant="primary" onClick={() => openDialog({ type: 'add-user-to-team', user, organisations })}>Add to Team</Button>
             <Button onClick={() => confirm(`Reset 2FA for ${user.email}?`, 'They will need to re-enroll before completing a protected login.')}>Reset 2FA</Button>
-            <Button variant={user.status === 'banned' ? 'secondary' : 'danger'} onClick={() => confirm(`${user.status === 'banned' ? 'Unban' : 'Ban'} ${user.email}?`, 'This is mocked until the admin API is available.')}>
+            <Button variant={user.status === 'banned' ? 'secondary' : 'danger'} onClick={() => confirm(`${user.status === 'banned' ? 'Unban' : 'Ban'} ${user.email}?`, 'A production write endpoint is required before this can change stored user state.')}>
               {user.status === 'banned' ? 'Unban' : 'Ban User'}
             </Button>
           </>

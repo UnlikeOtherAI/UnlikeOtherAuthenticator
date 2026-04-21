@@ -52,7 +52,7 @@ function BansSettings() {
               <Td className="text-xs text-gray-400">{ban.bannedAt}</Td>
               <Td className="text-xs text-gray-400">{ban.reason}</Td>
               <Td className="text-right" onClick={(event) => event.stopPropagation()}>
-                <ActionButton tone="red" onClick={() => confirm(`Remove ${ban.value}?`, 'This only updates the sample UI for now.')}>Remove</ActionButton>
+                <ActionButton tone="red" onClick={() => confirm(`Remove ${ban.value}?`, 'A production write endpoint is required before this can remove stored bans.')}>Remove</ActionButton>
               </Td>
             </tr>
           ))}
@@ -91,7 +91,7 @@ function SystemSettings() {
   return (
     <Card className="p-5">
       <p className="text-sm font-semibold text-gray-900">Admin session boundary</p>
-      <p className="mt-1 max-w-2xl text-sm text-gray-500">The current panel uses the documented stub interface while the browser-safe production admin session contract is pending. Development bypass is only honored when Vite runs in development mode.</p>
+      <p className="mt-1 max-w-2xl text-sm text-gray-500">Admin sessions are issued by the authentication service and stored in browser session storage. Development bypass is only honored when Vite runs in development mode.</p>
     </Card>
   );
 }

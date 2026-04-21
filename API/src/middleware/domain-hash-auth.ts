@@ -1,7 +1,6 @@
-import { createHash, timingSafeEqual } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
 
-import { requireEnv } from '../config/env.js';
+import { verifyDomainAuthToken } from '../services/domain-secret.service.js';
 import { AppError } from '../utils/errors.js';
 
 type RequestWithConfig = FastifyRequest & {
@@ -10,12 +9,10 @@ type RequestWithConfig = FastifyRequest & {
   };
 };
 
-function getSecret() {
-  const secret = requireEnv('SHARED_SECRET').SHARED_SECRET;
-  if (!secret.trim()) {
-    throw new AppError('INTERNAL', 500, 'Missing shared secret');
+declare module 'fastify' {
+  interface FastifyRequest {
+    domainAuthClientId?: string;
   }
-  return secret;
 }
 
 function normaliseDomain(rawDomain: unknown) {
@@ -66,24 +63,6 @@ function parseAuthHeader(value: unknown) {
   return token.toLowerCase().startsWith('bearer ') ? token.slice('bearer '.length).trim() : token;
 }
 
-function expectedDomainHash(domain: string, secret: string) {
-  return createHash('sha256').update(`${domain}${secret}`).digest('hex');
-}
-
-function domainHashesEqual(actual: string, expected: string): boolean {
-  if (actual.length !== expected.length) {
-    return false;
-  }
-
-  const actualBytes = Buffer.from(actual, 'hex');
-  const expectedBytes = Buffer.from(expected, 'hex');
-  if (actualBytes.length !== expectedBytes.length) {
-    return false;
-  }
-
-  return timingSafeEqual(actualBytes, expectedBytes);
-}
-
 async function domainHashAuth(request: RequestWithConfig) {
   const domain = resolveDomain(request);
   if (!domain) {
@@ -109,12 +88,8 @@ async function verifyDomainHashAuth(request: FastifyRequest, domain: string) {
     throw new AppError('UNAUTHORIZED', 401);
   }
 
-  const secret = getSecret();
-  const expected = expectedDomainHash(domain, secret);
-
-  if (!domainHashesEqual(token, expected)) {
-    throw new AppError('UNAUTHORIZED', 401);
-  }
+  const result = await verifyDomainAuthToken({ domain, token });
+  request.domainAuthClientId = result.clientId;
 }
 
 export function requireDomainHashAuthForDomainQuery(): typeof domainHashAuth;

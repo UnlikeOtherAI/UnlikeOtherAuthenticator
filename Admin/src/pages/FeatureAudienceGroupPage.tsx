@@ -85,7 +85,7 @@ function AudienceGroupEditor({ app, group, isNew, onBack, users }: { app: AppFla
         onBack={onBack}
         actions={
           <>
-            <Button onClick={() => confirm('Save audience group?', 'This is mocked until the admin API is available.')}>Save Group</Button>
+            <Button onClick={() => confirm('Save audience group?', 'A production write endpoint is required before this can change stored audience groups.')}>Save Group</Button>
             <Button variant="primary" onClick={() => setIsAddUserOpen(true)} disabled={userMode === 'all'}>Add User</Button>
           </>
         }

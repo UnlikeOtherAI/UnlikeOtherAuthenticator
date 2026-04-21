@@ -1,13 +1,44 @@
+import { useEffect, useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+
 import { Button } from '../components/ui/Button';
 import { FieldShell, SelectField, TextAreaField, TextField } from '../components/ui/FormFields';
 import { Modal } from '../components/ui/Modal';
 import { PLATFORM_KIND_OPTIONS } from '../features/admin/platforms';
 import { useAdminUi, type AdminDialog } from '../features/shell/admin-ui';
+import { adminService } from '../services/admin-service';
 import { FeatureFlagDialogBody, KillSwitchDialogBody } from './AdminFeatureDialogBodies';
 import { AddUserToTeamDialogBody, EditUserDialogBody, ReadOnlyUser } from './AdminUserDialogBodies';
 
+type DomainFormState = {
+  label: string;
+  status: 'active' | 'disabled';
+};
+
 export function AdminActionDialog() {
   const { activeDialog, closeDialog } = useAdminUi();
+  const queryClient = useQueryClient();
+  const [domainForm, setDomainForm] = useState<DomainFormState>({ label: '', status: 'active' });
+  const updateDomain = useMutation({
+    mutationFn: (input: { domain: string; values: DomainFormState }) =>
+      adminService.updateDomain(input.domain, input.values),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin'] }),
+  });
+
+  useEffect(() => {
+    if (activeDialog?.type !== 'edit-domain') return;
+    setDomainForm({
+      label: activeDialog.domain.label,
+      status: activeDialog.domain.status === 'disabled' ? 'disabled' : 'active',
+    });
+  }, [activeDialog]);
+
+  async function submitDialog() {
+    if (activeDialog?.type === 'edit-domain') {
+      await updateDomain.mutateAsync({ domain: activeDialog.domain.name, values: domainForm });
+    }
+    closeDialog();
+  }
 
   return (
     <Modal
@@ -18,27 +49,35 @@ export function AdminActionDialog() {
       footer={
         <>
           <Button onClick={closeDialog}>Cancel</Button>
-          <Button icon="check" variant="primary" onClick={closeDialog}>{activeDialog ? submitLabel(activeDialog) : 'Save'}</Button>
+          <Button icon="check" variant="primary" onClick={submitDialog}>{activeDialog ? submitLabel(activeDialog) : 'Save'}</Button>
         </>
       }
     >
-      {activeDialog ? <DialogBody dialog={activeDialog} /> : null}
+      {activeDialog ? <DialogBody dialog={activeDialog} domainForm={domainForm} setDomainForm={setDomainForm} /> : null}
     </Modal>
   );
 }
 
-function DialogBody({ dialog }: { dialog: AdminDialog }) {
+function DialogBody({
+  dialog,
+  domainForm,
+  setDomainForm,
+}: {
+  dialog: AdminDialog;
+  domainForm: DomainFormState;
+  setDomainForm: (value: DomainFormState) => void;
+}) {
   if (dialog.type === 'edit-domain') {
     return (
       <div className="space-y-4">
         <FieldShell label="Domain name" hint="Must match the domain claim in config JWTs.">
-          <TextField defaultValue={dialog.domain.name} />
+          <TextField disabled value={dialog.domain.name} />
         </FieldShell>
         <FieldShell label="Friendly name">
-          <TextField defaultValue={dialog.domain.label} />
+          <TextField value={domainForm.label} onChange={(event) => setDomainForm({ ...domainForm, label: event.target.value })} />
         </FieldShell>
         <FieldShell label="Status">
-          <SelectField defaultValue={dialog.domain.status}>
+          <SelectField value={domainForm.status} onChange={(event) => setDomainForm({ ...domainForm, status: event.target.value === 'disabled' ? 'disabled' : 'active' })}>
             <option value="active">Active</option>
             <option value="disabled">Disabled</option>
           </SelectField>
@@ -70,7 +109,7 @@ function DialogBody({ dialog }: { dialog: AdminDialog }) {
             ))}
           </SelectField>
         </FieldShell>
-        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">Ownership transfer is mocked here. The API implementation should enforce owner-only access and prevent removing the final owner.</p>
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">A production write endpoint is required before this can transfer stored ownership. The endpoint must enforce owner-only access and prevent removing the final owner.</p>
       </div>
     );
   }
@@ -101,7 +140,7 @@ function DialogBody({ dialog }: { dialog: AdminDialog }) {
   if (dialog.type === 'add-member') {
     return (
       <div className="space-y-4">
-        <FieldShell label="User email or ID" hint="The final API should add by user ID to avoid enumeration. This mock accepts either for layout only.">
+        <FieldShell label="User email or ID" hint="The production endpoint should add by user ID to avoid enumeration.">
           <TextField placeholder="user@example.com" />
         </FieldShell>
         <FieldShell label="Org role">

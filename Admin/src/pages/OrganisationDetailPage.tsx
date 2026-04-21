@@ -47,7 +47,7 @@ export function OrganisationDetailPage() {
           <>
             <Button onClick={() => openDialog({ type: 'edit-org', organisation: org })}>Edit</Button>
             <Button onClick={() => openDialog({ type: 'transfer-ownership', organisation: org })}>Transfer Ownership</Button>
-            <Button variant="danger" onClick={() => confirm(`Delete ${org.name}?`, 'Permanently deletes the org and all teams in the sample UI.')}>Delete</Button>
+            <Button variant="danger" onClick={() => confirm(`Delete ${org.name}?`, 'A production write endpoint is required before this can delete stored organisations.')}>Delete</Button>
           </>
         }
       />

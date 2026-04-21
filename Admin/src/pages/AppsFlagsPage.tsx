@@ -55,7 +55,7 @@ export function FeatureFlagsPage() {
                   <Td className="whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
                     <ActionButton tone="amber" onClick={() => openDialog({ type: 'app-settings', app })}>Settings</ActionButton>
                     <ActionDivider />
-                    <ActionButton tone="red" onClick={() => confirm(`Delete ${app.name}?`, 'This removes the app registration in the sample UI.')}>Delete</ActionButton>
+                    <ActionButton tone="red" onClick={() => confirm(`Delete ${app.name}?`, 'A production write endpoint is required before this can change stored app registrations.')}>Delete</ActionButton>
                   </Td>
                 </tr>
               ))}

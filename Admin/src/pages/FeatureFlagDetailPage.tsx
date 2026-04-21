@@ -147,13 +147,13 @@ export function FeatureFlagDetailPage() {
                   <p className="mt-0.5 text-xs text-gray-400">{flag.description}</p>
                 </Td>
                 <Td onClick={(event) => event.stopPropagation()}>
-                  <Switch checked={flag.defaultState} label={flag.defaultState ? 'Enabled' : 'Disabled'} onClick={() => confirm(`${flag.defaultState ? 'Disable' : 'Enable'} ${flag.key}?`, 'This changes the mocked flag default.')} />
+                  <Switch checked={flag.defaultState} label={flag.defaultState ? 'Enabled' : 'Disabled'} onClick={() => confirm(`${flag.defaultState ? 'Disable' : 'Enable'} ${flag.key}?`, 'A production write endpoint is required before this can change stored flag defaults.')} />
                 </Td>
                 <Td><Badge variant={flag.platformMode === 'all' ? 'green' : 'blue'}>{flag.platformMode === 'all' ? 'All platforms' : 'Selected'}</Badge></Td>
                 <Td className="text-xs text-gray-500">{featureFlagPlatformLabel(app, flag)}</Td>
                 <Td className="text-xs text-gray-400">{flag.updated}</Td>
                 <Td className="whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
-                  <ActionButton aria-label={`Delete ${flag.key}`} tone="red" onClick={() => confirm(`Delete ${flag.key}?`, 'Deletes the mocked flag definition and assignments.')}>Delete</ActionButton>
+                  <ActionButton aria-label={`Delete ${flag.key}`} tone="red" onClick={() => confirm(`Delete ${flag.key}?`, 'A production write endpoint is required before this can delete stored flag definitions.')}>Delete</ActionButton>
                 </Td>
               </tr>
             ))}
@@ -193,11 +193,11 @@ export function FeatureFlagDetailPage() {
                 <Td className="text-xs text-gray-500">{killSwitch.latestVersion ?? '-'}</Td>
                 <Td className="text-xs text-gray-500">{killSwitchAudienceSummary(app, killSwitch, users)}</Td>
                 <Td onClick={(event) => event.stopPropagation()}>
-                  <Switch checked={killSwitch.active} label={killSwitch.active ? 'Active' : 'Paused'} tone="danger" onClick={() => confirm(`${killSwitch.active ? 'Pause' : 'Activate'} ${killSwitch.name}?`, 'This only updates the mocked kill switch status.')} />
+                  <Switch checked={killSwitch.active} label={killSwitch.active ? 'Active' : 'Paused'} tone="danger" onClick={() => confirm(`${killSwitch.active ? 'Pause' : 'Activate'} ${killSwitch.name}?`, 'A production write endpoint is required before this can change stored kill switch status.')} />
                 </Td>
                 <Td>{killSwitch.priority}</Td>
                 <Td className="whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
-                  <ActionButton aria-label={`Delete ${killSwitch.name}`} tone="red" onClick={() => confirm(`Delete ${killSwitch.name}?`, 'Deletes this mocked version rule.')}>Delete</ActionButton>
+                  <ActionButton aria-label={`Delete ${killSwitch.name}`} tone="red" onClick={() => confirm(`Delete ${killSwitch.name}?`, 'A production write endpoint is required before this can delete stored version rules.')}>Delete</ActionButton>
                 </Td>
               </tr>
             ))}
@@ -238,7 +238,7 @@ export function FeatureFlagDetailPage() {
                 <Td><Badge variant={group.active ? 'green' : 'slate'}>{group.active ? 'Active' : 'Paused'}</Badge></Td>
                 <Td className="text-xs text-gray-400">{group.updated}</Td>
                 <Td className="whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
-                  <ActionButton aria-label={`Delete ${group.name}`} tone="red" onClick={() => confirm(`Delete ${group.name}?`, 'Deletes this mocked audience group.')}>Delete</ActionButton>
+                  <ActionButton aria-label={`Delete ${group.name}`} tone="red" onClick={() => confirm(`Delete ${group.name}?`, 'A production write endpoint is required before this can delete stored audience groups.')}>Delete</ActionButton>
                 </Td>
               </tr>
             ))}
