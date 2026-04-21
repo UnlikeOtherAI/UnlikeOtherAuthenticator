@@ -7,6 +7,7 @@ import { Avatar } from '../components/ui/Avatar';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Card, CardHeader } from '../components/ui/Card';
+import { PageHeader } from '../components/ui/PageHeader';
 import { StatusBadge } from '../components/ui/Status';
 import { DataTable, PaginationFooter, Td, usePagination } from '../components/ui/Table';
 import { SegmentedTabs } from '../components/ui/Tabs';
@@ -35,22 +36,20 @@ export function OrganisationDetailPage() {
 
   return (
     <>
-      <Button className="mb-4" icon="back" onClick={() => navigate('/organisations')}>Back</Button>
-      <div className="mb-5 flex flex-wrap items-center gap-3">
-        <Avatar label={org.name} shape="square" size="md" />
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="truncate text-lg font-semibold text-gray-900">{org.name}</h1>
-            <Badge variant="green">Active</Badge>
-          </div>
-          <p className="mt-0.5 text-sm text-gray-500">{org.slug} · Created {org.created}</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button onClick={() => openDialog({ type: 'edit-org', organisation: org })}>Edit</Button>
-          <Button onClick={() => openDialog({ type: 'transfer-ownership', organisation: org })}>Transfer Ownership</Button>
-          <Button variant="danger" onClick={() => confirm(`Delete ${org.name}?`, 'Permanently deletes the org and all teams in the sample UI.')}>Delete</Button>
-        </div>
-      </div>
+      <PageHeader
+        title={org.name}
+        description={`${org.slug} · Created ${org.created}`}
+        leading={<Avatar label={org.name} shape="square" size="md" />}
+        badges={<Badge variant="green">Active</Badge>}
+        onBack={() => navigate('/organisations')}
+        actions={
+          <>
+            <Button onClick={() => openDialog({ type: 'edit-org', organisation: org })}>Edit</Button>
+            <Button onClick={() => openDialog({ type: 'transfer-ownership', organisation: org })}>Transfer Ownership</Button>
+            <Button variant="danger" onClick={() => confirm(`Delete ${org.name}?`, 'Permanently deletes the org and all teams in the sample UI.')}>Delete</Button>
+          </>
+        }
+      />
       <div className="mb-5 grid gap-3 md:grid-cols-[2fr_1fr_1fr]">
         <MetricCard label="Owner" value={org.owner.name ?? org.owner.email} action={<button className="text-xs font-medium text-indigo-600 hover:text-indigo-900" type="button" onClick={() => openUser(org.owner.id)}>{org.owner.email}</button>} />
         <MetricCard label="Members" value={String(org.members.length)} />

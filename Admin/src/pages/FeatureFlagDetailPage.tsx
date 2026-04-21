@@ -10,8 +10,22 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { Switch } from '../components/ui/Switch';
 import { DataTable, PaginationFooter, Td, usePagination } from '../components/ui/Table';
 import { SegmentedTabs } from '../components/ui/Tabs';
+import {
+  defaultSelectedPlatformId,
+  featureFlagNames,
+  featureFlagPlatformLabel,
+  filterFlagsByPlatform,
+  filterGroupsByPlatform,
+  filterKillSwitchesByPlatform,
+  groupUserSummary,
+  killSwitchAudienceSummary,
+  killSwitchNames,
+  killSwitchPlatformLabel,
+  platformCoverage,
+} from '../features/admin/feature-audience';
 import { useSettingsQuery, useUsersQuery } from '../features/admin/admin-queries';
-import type { AppFlagSummary, FeatureAudienceGroup, FeatureFlagDefinition, KillSwitchEntry, UserSummary } from '../features/admin/types';
+import { ALL_PLATFORMS_ID } from '../features/admin/platforms';
+import type { KillSwitchEntry } from '../features/admin/types';
 import { useAdminUi } from '../features/shell/admin-ui';
 import { useCookieState } from '../utils/cookie-state';
 
@@ -26,7 +40,7 @@ export function FeatureFlagDetailPage() {
   const { data: users = [] } = useUsersQuery();
   const { confirm, openDialog } = useAdminUi();
   const app = data?.apps.find((item) => item.id === appId);
-  const [selectedPlatformId, setSelectedPlatformId] = useState('general');
+  const [selectedPlatformId, setSelectedPlatformId] = useState(defaultSelectedPlatformId);
   const [tab, setTab] = useCookieState<AppDetailTab>(`uoa-admin-feature-flags-tab-${appId ?? 'unknown'}`, 'flags', appDetailTabs);
 
   const visibleFlags = useMemo(() => {
@@ -34,28 +48,23 @@ export function FeatureFlagDetailPage() {
       return [];
     }
 
-    return app.flagDefinitions.filter((flag) => flag.platformMode === 'all' || flag.platformIds.includes(selectedPlatformId));
+    return filterFlagsByPlatform(app.flagDefinitions, selectedPlatformId);
   }, [app, selectedPlatformId]);
 
   const visibleKillSwitches = useMemo(() => {
-    if (!app || selectedPlatformId === 'general') {
-      return app?.killSwitches ?? [];
-    }
-
-    const selectedPlatform = app.platforms.find((platform) => platform.id === selectedPlatformId);
-    if (!selectedPlatform || (selectedPlatform.kind !== 'ios' && selectedPlatform.kind !== 'android')) {
+    if (!app) {
       return [];
     }
 
-    return app.killSwitches.filter((killSwitch) => killSwitch.platform === selectedPlatform.kind || killSwitch.platform === 'both');
+    return filterKillSwitchesByPlatform(app.killSwitches, selectedPlatformId);
   }, [app, selectedPlatformId]);
 
   const visibleGroups = useMemo(() => {
-    if (!app || selectedPlatformId === 'general') {
-      return app?.audienceGroups ?? [];
+    if (!app) {
+      return [];
     }
 
-    return app.audienceGroups.filter((group) => group.platformMode === 'all' || group.platformIds.includes(selectedPlatformId));
+    return filterGroupsByPlatform(app.audienceGroups, selectedPlatformId);
   }, [app, selectedPlatformId]);
 
   const { pageItems: flagPageItems, pagination: flagPagination } = usePagination(visibleFlags);
@@ -70,14 +79,15 @@ export function FeatureFlagDetailPage() {
     return <p className="text-sm text-gray-400">App not found.</p>;
   }
 
-  const selectedPlatform = app.platforms.find((platform) => platform.id === selectedPlatformId) ?? app.platforms[0];
+  const selectedPlatform = app.platforms.find((platform) => platform.id === selectedPlatformId);
+  const selectedPlatformName = selectedPlatform?.name ?? 'All platforms';
 
   return (
     <>
-      <Button className="mb-4" icon="back" onClick={() => navigate('/feature-flags')}>Back</Button>
       <PageHeader
         title={app.name}
         description={`${app.identifier} · ${app.domain} · ${app.org}`}
+        onBack={() => navigate('/feature-flags')}
         actions={<Button icon="plus" variant="primary" onClick={() => openDialog({ type: 'register-platform', app })}>Add Platform</Button>}
       />
       <div className="mb-4 grid gap-3 lg:grid-cols-[1fr_auto]">
@@ -85,13 +95,15 @@ export function FeatureFlagDetailPage() {
           <div className="flex flex-wrap items-center gap-3">
             <label className="block w-72 max-w-full">
               <span className="mb-1.5 block text-sm font-medium text-gray-700">Platform</span>
-              <SelectField className="w-full" value={selectedPlatform?.id ?? 'general'} onChange={(event) => setSelectedPlatformId(event.target.value)}>
+              <SelectField className="w-full" value={selectedPlatformId} onChange={(event) => setSelectedPlatformId(event.target.value)}>
+                <option value={ALL_PLATFORMS_ID}>All platforms</option>
                 {app.platforms.map((platform) => (
                   <option key={platform.id} value={platform.id}>{platform.name}</option>
                 ))}
               </SelectField>
             </label>
-            <div className="flex flex-wrap gap-2 pt-6">
+            <div aria-hidden="true" className="flex flex-wrap gap-2 pt-6">
+              <Badge variant={selectedPlatformId === ALL_PLATFORMS_ID ? 'blue' : 'slate'}>All platforms</Badge>
               {app.platforms.map((platform) => (
                 <Badge key={platform.id} variant={platform.id === selectedPlatformId ? 'blue' : 'slate'}>{platform.name}</Badge>
               ))}
@@ -113,7 +125,7 @@ export function FeatureFlagDetailPage() {
           <CardHeader>
             <div>
               <span className="text-sm font-semibold text-gray-900">Feature Flags</span>
-              <p className="mt-0.5 text-xs text-gray-400">{selectedPlatform?.name ?? 'All platforms'}</p>
+              <p className="mt-0.5 text-xs text-gray-400">{selectedPlatformName}</p>
             </div>
             <Button icon="plus" size="sm" variant="primary" onClick={() => openDialog({ type: 'add-feature-flag', app })}>Add Flag</Button>
           </CardHeader>
@@ -138,10 +150,10 @@ export function FeatureFlagDetailPage() {
                   <Switch checked={flag.defaultState} label={flag.defaultState ? 'Enabled' : 'Disabled'} onClick={() => confirm(`${flag.defaultState ? 'Disable' : 'Enable'} ${flag.key}?`, 'This changes the mocked flag default.')} />
                 </Td>
                 <Td><Badge variant={flag.platformMode === 'all' ? 'green' : 'blue'}>{flag.platformMode === 'all' ? 'All platforms' : 'Selected'}</Badge></Td>
-                <Td className="text-xs text-gray-500">{platformNames(app, flag)}</Td>
+                <Td className="text-xs text-gray-500">{featureFlagPlatformLabel(app, flag)}</Td>
                 <Td className="text-xs text-gray-400">{flag.updated}</Td>
                 <Td className="whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
-                  <ActionButton tone="red" onClick={() => confirm(`Delete ${flag.key}?`, 'Deletes the mocked flag definition and assignments.')}>Delete</ActionButton>
+                  <ActionButton aria-label={`Delete ${flag.key}`} tone="red" onClick={() => confirm(`Delete ${flag.key}?`, 'Deletes the mocked flag definition and assignments.')}>Delete</ActionButton>
                 </Td>
               </tr>
             ))}
@@ -175,7 +187,7 @@ export function FeatureFlagDetailPage() {
                   <span className="font-semibold text-gray-900">{killSwitch.name}</span>
                   <p className="mt-0.5 text-xs text-gray-400">Cache {killSwitch.cacheTtl}s · {killSwitch.updated}</p>
                 </Td>
-                <Td><Badge variant="blue">{killSwitch.platform}</Badge></Td>
+                <Td><Badge variant="blue">{killSwitchPlatformLabel(app, killSwitch)}</Badge></Td>
                 <Td><Badge variant={killSwitch.type === 'hard' || killSwitch.type === 'maintenance' ? 'red' : 'amber'}>{killSwitch.type}</Badge></Td>
                 <Td className="text-xs text-gray-500">{versionMatch(killSwitch)}</Td>
                 <Td className="text-xs text-gray-500">{killSwitch.latestVersion ?? '-'}</Td>
@@ -185,7 +197,7 @@ export function FeatureFlagDetailPage() {
                 </Td>
                 <Td>{killSwitch.priority}</Td>
                 <Td className="whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
-                  <ActionButton tone="red" onClick={() => confirm(`Delete ${killSwitch.name}?`, 'Deletes this mocked version rule.')}>Delete</ActionButton>
+                  <ActionButton aria-label={`Delete ${killSwitch.name}`} tone="red" onClick={() => confirm(`Delete ${killSwitch.name}?`, 'Deletes this mocked version rule.')}>Delete</ActionButton>
                 </Td>
               </tr>
             ))}
@@ -198,9 +210,9 @@ export function FeatureFlagDetailPage() {
           <CardHeader>
             <div>
               <span className="text-sm font-semibold text-gray-900">Groups</span>
-              <p className="mt-0.5 text-xs text-gray-400">{selectedPlatform?.name ?? 'All platforms'}</p>
+              <p className="mt-0.5 text-xs text-gray-400">{selectedPlatformName}</p>
             </div>
-            <Button icon="plus" size="sm" variant="primary" onClick={() => openDialog({ type: 'add-audience-group', app, users })}>Add Group</Button>
+            <Button icon="plus" size="sm" variant="primary" onClick={() => navigate(`/feature-flags/${app.id}/groups/new`)}>Add Group</Button>
           </CardHeader>
           <DataTable headers={['Group', 'Users', 'Platforms', 'Feature Flags', 'Kill Switches', 'Status', 'Updated', 'Actions']}>
             {groupPageItems.map((group) => (
@@ -208,10 +220,10 @@ export function FeatureFlagDetailPage() {
                 key={group.id}
                 className="cursor-pointer transition-colors hover:bg-gray-50"
                 tabIndex={0}
-                onClick={() => openDialog({ type: 'edit-audience-group', app, group, users })}
+                onClick={() => navigate(`/feature-flags/${app.id}/groups/${group.id}`)}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') {
-                    openDialog({ type: 'edit-audience-group', app, group, users });
+                    navigate(`/feature-flags/${app.id}/groups/${group.id}`);
                   }
                 }}
               >
@@ -226,7 +238,7 @@ export function FeatureFlagDetailPage() {
                 <Td><Badge variant={group.active ? 'green' : 'slate'}>{group.active ? 'Active' : 'Paused'}</Badge></Td>
                 <Td className="text-xs text-gray-400">{group.updated}</Td>
                 <Td className="whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
-                  <ActionButton tone="red" onClick={() => confirm(`Delete ${group.name}?`, 'Deletes this mocked audience group.')}>Delete</ActionButton>
+                  <ActionButton aria-label={`Delete ${group.name}`} tone="red" onClick={() => confirm(`Delete ${group.name}?`, 'Deletes this mocked audience group.')}>Delete</ActionButton>
                 </Td>
               </tr>
             ))}
@@ -245,100 +257,6 @@ function Metric({ label, value }: { label: string; value: string }) {
       <p className="mt-1 text-lg font-semibold text-gray-900">{value}</p>
     </div>
   );
-}
-
-function platformNames(app: AppFlagSummary, flag: FeatureFlagDefinition) {
-  if (flag.platformMode === 'all') {
-    return 'All platforms';
-  }
-
-  return flag.platformIds
-    .map((platformId) => app.platforms.find((platform) => platform.id === platformId)?.name)
-    .filter(Boolean)
-    .join(', ');
-}
-
-function platformCoverage(app: AppFlagSummary, platformMode: FeatureAudienceGroup['platformMode'], platformIds: string[]) {
-  if (platformMode === 'all') {
-    return 'All platforms';
-  }
-
-  return platformIds
-    .map((platformId) => app.platforms.find((platform) => platform.id === platformId)?.name)
-    .filter(Boolean)
-    .join(', ');
-}
-
-function groupUserSummary(app: AppFlagSummary, group: FeatureAudienceGroup, users: UserSummary[]) {
-  const targetUsers = usersForGroup(app, group, users);
-
-  if (group.userMode === 'all') {
-    return `All eligible users (${targetUsers.length})`;
-  }
-
-  return `${userPreview(targetUsers)} (${targetUsers.length})`;
-}
-
-function killSwitchAudienceSummary(app: AppFlagSummary, killSwitch: KillSwitchEntry, users: UserSummary[]) {
-  const groups = app.audienceGroups.filter((group) => group.killSwitchIds.includes(killSwitch.id));
-
-  if (groups.length === 0) {
-    return 'No group';
-  }
-
-  const hasAllUsersGroup = groups.some((group) => group.userMode === 'all');
-  const targetUsers = uniqueUsers(groups.flatMap((group) => usersForGroup(app, group, users)));
-
-  if (hasAllUsersGroup) {
-    return `All eligible users (${targetUsers.length})`;
-  }
-
-  return `${userPreview(targetUsers)} (${targetUsers.length})`;
-}
-
-function featureFlagNames(app: AppFlagSummary, group: FeatureAudienceGroup) {
-  const names = group.featureFlagIds
-    .map((flagId) => app.flagDefinitions.find((flag) => flag.id === flagId)?.key)
-    .filter(Boolean);
-
-  return names.length > 0 ? names.join(', ') : '-';
-}
-
-function killSwitchNames(app: AppFlagSummary, group: FeatureAudienceGroup) {
-  const names = group.killSwitchIds
-    .map((killSwitchId) => app.killSwitches.find((killSwitch) => killSwitch.id === killSwitchId)?.name)
-    .filter(Boolean);
-
-  return names.length > 0 ? names.join(', ') : '-';
-}
-
-function usersForGroup(app: AppFlagSummary, group: FeatureAudienceGroup, users: UserSummary[]) {
-  if (group.userMode === 'all') {
-    return eligibleUsers(app, users);
-  }
-
-  const selectedUserIds = new Set(group.userIds);
-  return users.filter((user) => selectedUserIds.has(user.id));
-}
-
-function eligibleUsers(app: AppFlagSummary, users: UserSummary[]) {
-  const appDomains = new Set(app.domains);
-  return users.filter((user) => user.domains.some((domain) => appDomains.has(domain)));
-}
-
-function uniqueUsers(users: UserSummary[]) {
-  return Array.from(new Map(users.map((user) => [user.id, user])).values());
-}
-
-function userPreview(users: UserSummary[]) {
-  if (users.length === 0) {
-    return 'No users';
-  }
-
-  const preview = users.slice(0, 2).map((user) => user.name ?? user.email).join(', ');
-  const remaining = users.length - 2;
-
-  return remaining > 0 ? `${preview}, +${remaining}` : preview;
 }
 
 function versionMatch(killSwitch: KillSwitchEntry) {

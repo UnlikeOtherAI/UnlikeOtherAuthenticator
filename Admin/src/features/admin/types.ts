@@ -110,13 +110,13 @@ export type AppFlagSummary = {
   status: EntityStatus;
 };
 
-export type AppPlatformKind = 'ios' | 'android' | 'web' | 'macos' | 'windows' | 'other';
+export type AppPlatformKind = 'ios' | 'android' | 'web' | 'macos' | 'windows' | 'linux' | 'iot' | 'tv' | 'console' | 'other';
 
 export type FeaturePlatform = {
   id: string;
   name: string;
   key: string;
-  kind: AppPlatformKind | 'general';
+  kind: AppPlatformKind;
   identifier?: string;
 };
 
@@ -133,7 +133,8 @@ export type FeatureFlagDefinition = {
 export type KillSwitchEntry = {
   id: string;
   name: string;
-  platform: 'ios' | 'android' | 'both';
+  platformMode: 'all' | 'selected';
+  platformIds: string[];
   type: 'hard' | 'soft' | 'info' | 'maintenance';
   versionField: 'versionName' | 'versionCode' | 'buildNumber';
   operator: 'lt' | 'lte' | 'eq' | 'gte' | 'gt' | 'range';

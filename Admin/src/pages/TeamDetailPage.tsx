@@ -1,10 +1,11 @@
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 
 import { ActionButton, ActionDivider } from '../components/ui/ActionButton';
 import { Avatar } from '../components/ui/Avatar';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Card, CardHeader } from '../components/ui/Card';
+import { PageHeader } from '../components/ui/PageHeader';
 import { StatusBadge } from '../components/ui/Status';
 import { DataTable, PaginationFooter, Td, usePagination } from '../components/ui/Table';
 import { useTeamQuery } from '../features/admin/admin-queries';
@@ -31,21 +32,19 @@ export function TeamDetailPage() {
 
   return (
     <>
-      <Button className="mb-4" icon="back" onClick={() => navigate(`/organisations/${org.id}`)}>Back</Button>
-      <div className="mb-5 flex flex-wrap items-center gap-3">
-        <Avatar label={team.name} shape="square" size="md" />
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="truncate text-lg font-semibold text-gray-900">{team.name}</h1>
-            {team.isDefault ? <Badge variant="blue">Default</Badge> : null}
-          </div>
-          <p className="mt-0.5 text-sm text-gray-500">in <Link to={`/organisations/${org.id}`} className="text-indigo-600 hover:text-indigo-900">{org.name}</Link> · {members.length} members</p>
-        </div>
-        <div className="flex gap-2">
-          <Button onClick={() => openDialog({ type: 'edit-team', organisation: org, team })}>Edit</Button>
-          {!team.isDefault ? <Button variant="danger" onClick={() => confirm(`Delete ${team.name}?`, 'Members stay in the organisation.')}>Delete</Button> : null}
-        </div>
-      </div>
+      <PageHeader
+        title={team.name}
+        description={`${org.name} · ${members.length} members`}
+        leading={<Avatar label={team.name} shape="square" size="md" />}
+        badges={team.isDefault ? <Badge variant="blue">Default</Badge> : null}
+        onBack={() => navigate(`/organisations/${org.id}`)}
+        actions={
+          <>
+            <Button onClick={() => openDialog({ type: 'edit-team', organisation: org, team })}>Edit</Button>
+            {!team.isDefault ? <Button variant="danger" onClick={() => confirm(`Delete ${team.name}?`, 'Members stay in the organisation.')}>Delete</Button> : null}
+          </>
+        }
+      />
       <Card>
         <CardHeader>
           <span className="text-sm font-semibold text-gray-900">Members ({members.length})</span>

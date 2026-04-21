@@ -1,6 +1,6 @@
 import { createContext, useContext, useMemo, useState, type PropsWithChildren } from 'react';
 
-import type { AppFlagSummary, BanRecord, Domain, FeatureAudienceGroup, FeatureFlagDefinition, KillSwitchEntry, Organisation, OrganisationMember, PreapprovedMember, Team, UserSummary } from '../admin/types';
+import type { AppFlagSummary, BanRecord, Domain, FeatureFlagDefinition, KillSwitchEntry, Organisation, OrganisationMember, PreapprovedMember, Team, UserSummary } from '../admin/types';
 
 type Confirmation = {
   title: string;
@@ -29,9 +29,7 @@ export type AdminDialog =
   | { type: 'add-feature-flag'; app: AppFlagSummary }
   | { type: 'edit-feature-flag'; app: AppFlagSummary; flag: FeatureFlagDefinition }
   | { type: 'add-kill-switch'; app: AppFlagSummary }
-  | { type: 'edit-kill-switch'; app: AppFlagSummary; killSwitch: KillSwitchEntry }
-  | { type: 'add-audience-group'; app: AppFlagSummary; users: UserSummary[] }
-  | { type: 'edit-audience-group'; app: AppFlagSummary; group: FeatureAudienceGroup; users: UserSummary[] };
+  | { type: 'edit-kill-switch'; app: AppFlagSummary; killSwitch: KillSwitchEntry };
 
 type AdminUiContextValue = {
   activeDialog: AdminDialog | null;

@@ -1,4 +1,5 @@
 import type { AdminData, AppFlagSummary, FeatureAudienceGroup, FeatureFlagDefinition, FeaturePlatform, KillSwitchEntry, OrganisationMember, PreapprovedMember, Team, UserSummary } from './types';
+import { createFeaturePlatform } from './platforms';
 
 const acmeMembers: OrganisationMember[] = [
   member('u101', 'Alice Chen', 'alice@acme.com', 'owner', ['General', 'Backend'], { General: 'member', Backend: 'admin' }, true, '2 min ago', 'google'),
@@ -128,20 +129,19 @@ export const mockAdminData: AdminData = {
       true,
       true,
       [
-        platform('general', 'All platforms', 'general', 'general'),
-        platform('ios', 'iOS', 'ios', 'ios', 'com.acme.main.ios'),
-        platform('android', 'Android', 'android', 'android', 'com.acme.main.android'),
-        platform('web', 'Web', 'web', 'web', 'app.acme.com'),
+        platform('ios', { name: 'iOS', identifier: 'com.acme.main.ios' }),
+        platform('android', { name: 'Android', identifier: 'com.acme.main.android' }),
+        platform('web', { name: 'Web', identifier: 'app.acme.com' }),
       ],
       [
-        flag('f1', 'new_checkout', 'New checkout flow', true, 'all', ['general', 'ios', 'android', 'web'], 'Apr 20, 2026'),
+        flag('f1', 'new_checkout', 'New checkout flow', true, 'all', [], 'Apr 20, 2026'),
         flag('f2', 'native_billing', 'Native billing handoff', false, 'selected', ['ios', 'android'], 'Apr 18, 2026'),
         flag('f3', 'web_beta_nav', 'Web dashboard navigation test', false, 'selected', ['web'], 'Apr 17, 2026'),
-        flag('f4', 'instant_refunds', 'Instant refund controls', false, 'all', ['general', 'ios', 'android', 'web'], 'Apr 14, 2026'),
+        flag('f4', 'instant_refunds', 'Instant refund controls', false, 'all', [], 'Apr 14, 2026'),
       ],
       [
-        killSwitch('ks1', 'Block legacy iOS builds', 'ios', 'hard', 'versionName', 'lt', '2.1.0', null, 'semver', '2.1.0', true, 100, 300, 'Apr 20, 2026'),
-        killSwitch('ks2', 'Warn Android beta users', 'android', 'soft', 'versionCode', 'range', '104', '118', 'integer', '120', true, 40, 900, 'Apr 18, 2026'),
+        killSwitch('ks1', 'Block legacy iOS builds', 'selected', ['ios'], 'hard', 'versionName', 'lt', '2.1.0', null, 'semver', '2.1.0', true, 100, 300, 'Apr 20, 2026'),
+        killSwitch('ks2', 'Warn Android beta users', 'selected', ['android'], 'soft', 'versionCode', 'range', '104', '118', 'integer', '120', true, 40, 900, 'Apr 18, 2026'),
       ],
       [
         audienceGroup('ag1', 'Checkout beta testers', 'Selected users for new checkout and billing feature tests.', 'selected', ['u101', 'u102', 'u103'], 'selected', ['ios', 'android'], ['f1', 'f2'], [], true, 'Apr 20, 2026'),
@@ -160,19 +160,31 @@ export const mockAdminData: AdminData = {
       true,
       false,
       [
-        platform('general', 'All platforms', 'general', 'general'),
-        platform('web', 'Web', 'web', 'web', 'widgets.io'),
-        platform('ios', 'iOS companion', 'ios', 'ios', 'io.widgets.dashboard.ios'),
+        platform('web', { name: 'Web', identifier: 'widgets.io' }),
+        platform('ios', { name: 'iOS companion', identifier: 'io.widgets.dashboard.ios' }),
+        platform('android', { name: 'Android companion', identifier: 'io.widgets.dashboard.android' }),
+        platform('macos', { id: 'mac', name: 'Mac desktop', identifier: 'io.widgets.dashboard.mac' }),
+        platform('windows', { id: 'pc', name: 'PC desktop', identifier: 'io.widgets.dashboard.windows' }),
+        platform('iot', { id: 'kiosk', name: 'IoT kiosk', identifier: 'widgets.kiosk' }),
       ],
       [
-        flag('f5', 'integrations_v2', 'New integrations workspace', true, 'all', ['general', 'web', 'ios'], 'Apr 19, 2026'),
+        flag('f5', 'integrations_v2', 'New integrations workspace', true, 'all', [], 'Apr 19, 2026'),
         flag('f6', 'mobile_uploads', 'Mobile upload queue', false, 'selected', ['ios'], 'Apr 12, 2026'),
         flag('f7', 'usage_export', 'Usage export beta', false, 'selected', ['web'], 'Apr 9, 2026'),
+        flag('f8', 'android_quick_scan', 'Android companion scanner', false, 'selected', ['android'], 'Apr 8, 2026'),
+        flag('f9', 'desktop_command_center', 'Desktop command center layout', false, 'selected', ['mac', 'pc'], 'Apr 7, 2026'),
+        flag('f10', 'kiosk_pairing', 'IoT kiosk pairing flow', false, 'selected', ['kiosk'], 'Apr 6, 2026'),
       ],
-      [killSwitch('ks3', 'Legacy companion warning', 'ios', 'info', 'buildNumber', 'lte', '80', null, 'integer', '1.4.0', true, 10, 1800, 'Apr 15, 2026')],
+      [
+        killSwitch('ks3', 'Legacy companion warning', 'selected', ['ios'], 'info', 'buildNumber', 'lte', '80', null, 'integer', '1.4.0', true, 10, 1800, 'Apr 15, 2026'),
+        killSwitch('ks4', 'Block unsupported desktop shells', 'selected', ['mac', 'pc'], 'hard', 'versionName', 'lt', '3.0.0', null, 'semver', '3.0.0', true, 80, 600, 'Apr 14, 2026'),
+        killSwitch('ks5', 'Pause kiosk onboarding', 'selected', ['kiosk'], 'maintenance', 'versionCode', 'lte', '42', null, 'integer', '44', false, 60, 300, 'Apr 10, 2026'),
+      ],
       [
         audienceGroup('ag3', 'Widgets QA cohort', 'Known users used to test integrations and iOS companion gating.', 'selected', ['u301', 'u303', 'u304'], 'selected', ['web', 'ios'], ['f5', 'f6'], ['ks3'], true, 'Apr 19, 2026'),
-        audienceGroup('ag4', 'All dashboard users', 'Every eligible Widgets Dashboard user across all configured platforms.', 'all', [], 'all', ['general', 'web', 'ios'], ['f5'], [], true, 'Apr 17, 2026'),
+        audienceGroup('ag4', 'All dashboard users', 'Every eligible Widgets Dashboard user across all configured platforms.', 'all', [], 'all', [], ['f5'], [], true, 'Apr 17, 2026'),
+        audienceGroup('ag5', 'Desktop pilot', 'Internal users testing desktop shells before public release.', 'selected', ['u302', 'u304'], 'selected', ['mac', 'pc'], ['f9'], ['ks4'], true, 'Apr 16, 2026'),
+        audienceGroup('ag6', 'Kiosk rollout', 'Users validating custom IoT platform onboarding.', 'selected', ['u301'], 'selected', ['kiosk'], ['f10'], ['ks5'], false, 'Apr 12, 2026'),
       ],
     ),
     app(
@@ -187,8 +199,7 @@ export const mockAdminData: AdminData = {
       false,
       false,
       [
-        platform('general', 'All platforms', 'general', 'general'),
-        platform('web', 'Web', 'web', 'web', 'startup.dev'),
+        platform('web', { name: 'Web', identifier: 'startup.dev' }),
       ],
       [],
       [],
@@ -236,8 +247,8 @@ function app(
   };
 }
 
-function platform(id: string, name: string, key: string, kind: FeaturePlatform['kind'], identifier?: string): FeaturePlatform {
-  return { id, name, key, kind, identifier };
+function platform(kind: FeaturePlatform['kind'], options: { id?: string; name?: string; identifier?: string } = {}): FeaturePlatform {
+  return createFeaturePlatform(kind, options);
 }
 
 function flag(
@@ -255,7 +266,8 @@ function flag(
 function killSwitch(
   id: string,
   name: string,
-  platformKind: KillSwitchEntry['platform'],
+  platformMode: KillSwitchEntry['platformMode'],
+  platformIds: string[],
   type: KillSwitchEntry['type'],
   versionField: KillSwitchEntry['versionField'],
   operator: KillSwitchEntry['operator'],
@@ -268,7 +280,7 @@ function killSwitch(
   cacheTtl: number,
   updated: string,
 ): KillSwitchEntry {
-  return { id, name, platform: platformKind, type, versionField, operator, versionValue, versionMax, versionScheme, latestVersion, active, priority, cacheTtl, updated };
+  return { id, name, platformMode, platformIds, type, versionField, operator, versionValue, versionMax, versionScheme, latestVersion, active, priority, cacheTtl, updated };
 }
 
 function audienceGroup(

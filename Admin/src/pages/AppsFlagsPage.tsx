@@ -8,6 +8,7 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { Switch } from '../components/ui/Switch';
 import { DataTable, PaginationFooter, Td, usePagination } from '../components/ui/Table';
 import { useSettingsQuery } from '../features/admin/admin-queries';
+import { platformKindLabel } from '../features/admin/platforms';
 import { useAdminUi } from '../features/shell/admin-ui';
 
 export function FeatureFlagsPage() {
@@ -44,7 +45,7 @@ export function FeatureFlagsPage() {
                 >
                   <Td>
                     <p className="font-semibold text-indigo-600">{app.name}</p>
-                    <p className="mt-0.5 text-xs text-gray-400">{app.platform}</p>
+                    <p className="mt-0.5 text-xs text-gray-400">{platformKindLabel(app.platform)}</p>
                   </Td>
                   <Td><code className="text-xs">{app.identifier}</code></Td>
                   <Td><code>{app.domain}</code></Td>

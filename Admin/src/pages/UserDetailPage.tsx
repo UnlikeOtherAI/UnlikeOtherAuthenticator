@@ -5,6 +5,7 @@ import { Avatar } from '../components/ui/Avatar';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Card, CardHeader } from '../components/ui/Card';
+import { PageHeader } from '../components/ui/PageHeader';
 import { MethodBadge, StatusBadge } from '../components/ui/Status';
 import { DataTable, PaginationFooter, Td, usePagination } from '../components/ui/Table';
 import { useLogsQuery, useOrganisationsQuery, useUserQuery } from '../features/admin/admin-queries';
@@ -40,27 +41,29 @@ export function UserDetailPage() {
 
   return (
     <>
-      <Button className="mb-4" icon="back" onClick={() => navigate('/users')}>Back</Button>
-      <div className="mb-5 flex flex-wrap items-center gap-3">
-        <Avatar label={user.name ?? user.email} size="md" />
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="truncate text-lg font-semibold text-gray-900">{user.name ?? user.email}</h1>
+      <PageHeader
+        title={user.name ?? user.email}
+        description={`${user.email} · Registered ${user.created}`}
+        leading={<Avatar label={user.name ?? user.email} size="md" />}
+        badges={
+          <>
             <StatusBadge status={user.status} />
             <StatusBadge status={user.twofa ? 'On' : 'Off'} />
             <MethodBadge method={user.method} />
-          </div>
-          <p className="mt-0.5 text-sm text-gray-500">{user.email} · Registered {user.created}</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button onClick={() => openDialog({ type: 'edit-user', user })}>Edit User</Button>
-          <Button variant="primary" onClick={() => openDialog({ type: 'add-user-to-team', user, organisations })}>Add to Team</Button>
-          <Button onClick={() => confirm(`Reset 2FA for ${user.email}?`, 'They will need to re-enroll before completing a protected login.')}>Reset 2FA</Button>
-          <Button variant={user.status === 'banned' ? 'secondary' : 'danger'} onClick={() => confirm(`${user.status === 'banned' ? 'Unban' : 'Ban'} ${user.email}?`, 'This is mocked until the admin API is available.')}>
-            {user.status === 'banned' ? 'Unban' : 'Ban User'}
-          </Button>
-        </div>
-      </div>
+          </>
+        }
+        onBack={() => navigate('/users')}
+        actions={
+          <>
+            <Button onClick={() => openDialog({ type: 'edit-user', user })}>Edit User</Button>
+            <Button variant="primary" onClick={() => openDialog({ type: 'add-user-to-team', user, organisations })}>Add to Team</Button>
+            <Button onClick={() => confirm(`Reset 2FA for ${user.email}?`, 'They will need to re-enroll before completing a protected login.')}>Reset 2FA</Button>
+            <Button variant={user.status === 'banned' ? 'secondary' : 'danger'} onClick={() => confirm(`${user.status === 'banned' ? 'Unban' : 'Ban'} ${user.email}?`, 'This is mocked until the admin API is available.')}>
+              {user.status === 'banned' ? 'Unban' : 'Ban User'}
+            </Button>
+          </>
+        }
+      />
       <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Metric label="Domains" value={user.domains.length > 0 ? user.domains.join(', ') : 'Linked by org'} />
         <Metric label="Organisations" value={String(new Set(memberships.map((membership) => membership.organisation.id)).size)} />

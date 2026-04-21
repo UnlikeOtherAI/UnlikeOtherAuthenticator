@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { AdminSessionGuard } from '../features/auth/admin-session';
 import { AdminUiProvider } from '../features/shell/admin-ui';
 import { AdminLayout } from '../layouts/AdminLayout';
+import { FeatureAudienceGroupPage } from '../pages/FeatureAudienceGroupPage';
 import { FeatureFlagDetailPage } from '../pages/FeatureFlagDetailPage';
 import { FeatureFlagsPage } from '../pages/AppsFlagsPage';
 import { DashboardPage } from '../pages/DashboardPage';
@@ -41,6 +42,7 @@ export function App() {
         <Route path="users/:userId" element={<UserDetailPage />} />
         <Route path="logs" element={<LogsPage />} />
         <Route path="feature-flags" element={<FeatureFlagsPage />} />
+        <Route path="feature-flags/:appId/groups/:groupId" element={<FeatureAudienceGroupPage />} />
         <Route path="feature-flags/:appId" element={<FeatureFlagDetailPage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>

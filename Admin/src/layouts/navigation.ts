@@ -52,6 +52,10 @@ export function navLabelForPath(pathname: string) {
     return 'Organisation';
   }
 
+  if (pathname.startsWith('/feature-flags/') && pathname.includes('/groups/')) {
+    return 'Audience Group';
+  }
+
   if (pathname.startsWith('/feature-flags/')) {
     return 'Feature Flags';
   }

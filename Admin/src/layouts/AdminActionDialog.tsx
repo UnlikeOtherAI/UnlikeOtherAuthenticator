@@ -1,8 +1,9 @@
 import { Button } from '../components/ui/Button';
 import { FieldShell, SelectField, TextAreaField, TextField } from '../components/ui/FormFields';
 import { Modal } from '../components/ui/Modal';
+import { PLATFORM_KIND_OPTIONS } from '../features/admin/platforms';
 import { useAdminUi, type AdminDialog } from '../features/shell/admin-ui';
-import { AudienceGroupDialogBody, FeatureFlagDialogBody, KillSwitchDialogBody } from './AdminFeatureDialogBodies';
+import { FeatureFlagDialogBody, KillSwitchDialogBody } from './AdminFeatureDialogBodies';
 import { AddUserToTeamDialogBody, EditUserDialogBody, ReadOnlyUser } from './AdminUserDialogBodies';
 
 export function AdminActionDialog() {
@@ -224,12 +225,9 @@ function DialogBody({ dialog }: { dialog: AdminDialog }) {
         </FieldShell>
         <FieldShell label="Platform">
           <SelectField defaultValue="web">
-            <option value="ios">iOS</option>
-            <option value="android">Android</option>
-            <option value="web">Web</option>
-            <option value="macos">macOS</option>
-            <option value="windows">Windows</option>
-            <option value="other">Other</option>
+            {PLATFORM_KIND_OPTIONS.map((platform) => (
+              <option key={platform.value} value={platform.value}>{platform.label}</option>
+            ))}
           </SelectField>
         </FieldShell>
         <FieldShell label="Domain">
@@ -284,12 +282,9 @@ function DialogBody({ dialog }: { dialog: AdminDialog }) {
         </FieldShell>
         <FieldShell label="Platform kind">
           <SelectField defaultValue="ios">
-            <option value="ios">iOS</option>
-            <option value="android">Android</option>
-            <option value="web">Web</option>
-            <option value="macos">macOS</option>
-            <option value="windows">Windows</option>
-            <option value="other">Other</option>
+            {PLATFORM_KIND_OPTIONS.map((platform) => (
+              <option key={platform.value} value={platform.value}>{platform.label}</option>
+            ))}
           </SelectField>
         </FieldShell>
         <FieldShell label="Identifier">
@@ -307,10 +302,6 @@ function DialogBody({ dialog }: { dialog: AdminDialog }) {
     return <KillSwitchDialogBody app={dialog.app} killSwitch={dialog.type === 'edit-kill-switch' ? dialog.killSwitch : null} />;
   }
 
-  if (dialog.type === 'add-audience-group' || dialog.type === 'edit-audience-group') {
-    return <AudienceGroupDialogBody app={dialog.app} group={dialog.type === 'edit-audience-group' ? dialog.group : null} users={dialog.users} />;
-  }
-
   return (
     <div className="space-y-4">
       <p className="text-sm text-gray-500">No editor is available for this action yet.</p>
@@ -320,7 +311,6 @@ function DialogBody({ dialog }: { dialog: AdminDialog }) {
 
 function dialogTitle(dialog: AdminDialog) {
   const titles: Record<AdminDialog['type'], string> = {
-    'add-audience-group': 'Add Audience Group',
     'add-ban': `Add ${dialog.type === 'add-ban' ? dialog.kind : ''} ban`,
     'add-feature-flag': 'Add Feature Flag',
     'add-kill-switch': 'Add Kill Switch',
@@ -333,7 +323,6 @@ function dialogTitle(dialog: AdminDialog) {
     'change-org-role': 'Change Organisation Role',
     'change-team-role': 'Change Team Role',
     'edit-ban': `Edit ${dialog.type === 'edit-ban' ? dialog.kind : ''} ban`,
-    'edit-audience-group': 'Edit Audience Group',
     'edit-domain': 'Edit Domain',
     'edit-feature-flag': 'Edit Feature Flag',
     'edit-org': 'Edit Organisation',
@@ -350,7 +339,7 @@ function dialogTitle(dialog: AdminDialog) {
 }
 
 function submitLabel(dialog: AdminDialog) {
-  if (dialog.type === 'add-audience-group' || dialog.type === 'add-ban' || dialog.type === 'add-feature-flag' || dialog.type === 'add-kill-switch' || dialog.type === 'add-member' || dialog.type === 'add-team' || dialog.type === 'add-preapproval' || dialog.type === 'add-user-to-team' || dialog.type === 'register-app' || dialog.type === 'register-platform') {
+  if (dialog.type === 'add-ban' || dialog.type === 'add-feature-flag' || dialog.type === 'add-kill-switch' || dialog.type === 'add-member' || dialog.type === 'add-team' || dialog.type === 'add-preapproval' || dialog.type === 'add-user-to-team' || dialog.type === 'register-app' || dialog.type === 'register-platform') {
     return 'Add';
   }
 
