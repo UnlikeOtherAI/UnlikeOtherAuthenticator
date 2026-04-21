@@ -16,6 +16,7 @@ export const adminService = {
   getUsers: () => resolve(mockAdminData.users),
   getUser: (userId: string) => resolve(findUser(userId)),
   getLogs: () => resolve(mockAdminData.logs),
+  getHandshakeErrors: () => resolve(mockAdminData.handshakeErrors),
   getSettings: () => resolve({ bans: mockAdminData.bans, apps: mockAdminData.apps }),
   search: (query: string) => resolve(searchAll(query)),
 };

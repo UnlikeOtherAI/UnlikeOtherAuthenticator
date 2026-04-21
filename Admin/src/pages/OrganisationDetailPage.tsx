@@ -12,6 +12,7 @@ import { StatusBadge } from '../components/ui/Status';
 import { DataTable, PaginationFooter, Td, usePagination } from '../components/ui/Table';
 import { SegmentedTabs } from '../components/ui/Tabs';
 import { useOrganisationQuery } from '../features/admin/admin-queries';
+import { TeamTable } from '../features/admin/TeamTable';
 import { useAdminUi } from '../features/shell/admin-ui';
 
 type OrgTab = 'teams' | 'members' | 'preapproved';
@@ -62,37 +63,7 @@ export function OrganisationDetailPage() {
             <span className="text-sm font-semibold text-gray-900">Teams</span>
             <Button icon="plus" size="sm" variant="primary" onClick={() => openDialog({ type: 'add-team', organisation: org })}>Add Team</Button>
           </CardHeader>
-          <DataTable headers={['Team', 'Description', 'Members', 'Actions']}>
-            {teamPageItems.map((team) => (
-              <tr
-                key={team.id}
-                className="cursor-pointer transition-colors hover:bg-gray-50"
-                tabIndex={0}
-                onClick={() => navigate(`/organisations/${org.id}/teams/${team.id}`)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    navigate(`/organisations/${org.id}/teams/${team.id}`);
-                  }
-                }}
-              >
-                <Td>
-                  <Link to={`/organisations/${org.id}/teams/${team.id}`} className="font-semibold text-indigo-600 hover:text-indigo-900" onClick={(event) => event.stopPropagation()}>{team.name}</Link>
-                  {team.isDefault ? <Badge className="ml-2" variant="blue">Default</Badge> : null}
-                </Td>
-                <Td className="text-xs text-gray-400">{team.description || '—'}</Td>
-                <Td>{team.members}</Td>
-                <Td className="whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
-                  <ActionButton onClick={() => openDialog({ type: 'edit-team', organisation: org, team })}>Edit</ActionButton>
-                  {!team.isDefault ? (
-                    <>
-                      <ActionDivider />
-                      <ActionButton tone="red" onClick={() => confirm(`Delete ${team.name}?`, 'Members stay in the organisation.')}>Delete</ActionButton>
-                    </>
-                  ) : null}
-                </Td>
-              </tr>
-            ))}
-          </DataTable>
+          <TeamTable teams={teamPageItems} showDescription />
           <PaginationFooter {...teamPagination} />
         </Card>
       ) : null}

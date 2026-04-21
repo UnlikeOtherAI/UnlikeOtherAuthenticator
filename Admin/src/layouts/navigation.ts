@@ -31,10 +31,13 @@ export const navSections: NavSection[] = [
   },
   {
     label: 'Security',
-    items: [{ label: 'Login Logs', path: '/logs', icon: 'logs' }],
+    items: [
+      { label: 'Login Logs', path: '/logs', icon: 'logs' },
+      { label: 'Connection Errors', path: '/connection-errors', icon: 'alert' },
+    ],
   },
   {
-    label: 'Flags & Roles',
+    label: 'Flags',
     items: [{ label: 'Feature Flags', path: '/feature-flags', icon: 'key' }],
   },
   {

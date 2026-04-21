@@ -78,6 +78,28 @@ export type LoginLog = {
   result: 'ok' | 'fail';
 };
 
+export type HandshakeErrorLog = {
+  id: string;
+  ts: string;
+  app: string;
+  appId: string;
+  domain: string;
+  organisation: string;
+  endpoint: string;
+  phase: 'config_fetch' | 'jwt_verify' | 'startup' | 'token_exchange';
+  statusCode: number;
+  errorCode: string;
+  summary: string;
+  details: string[];
+  missingClaims: string[];
+  ip: string;
+  userAgent: string;
+  requestId: string;
+  jwtHeader: Record<string, string>;
+  jwtPayload: Record<string, unknown>;
+  redactions: string[];
+};
+
 export type BanRecord = {
   id: string;
   value: string;
@@ -100,8 +122,6 @@ export type AppFlagSummary = {
   storeUrl?: string;
   offlinePolicy: 'allow' | 'block' | 'cached';
   pollIntervalSeconds: number;
-  flagsEnabled: boolean;
-  matrixEnabled: boolean;
   flags: number;
   platforms: FeaturePlatform[];
   flagDefinitions: FeatureFlagDefinition[];
@@ -173,6 +193,7 @@ export type AdminData = {
   organisations: Organisation[];
   users: UserSummary[];
   logs: LoginLog[];
+  handshakeErrors: HandshakeErrorLog[];
   bans: {
     emails: BanRecord[];
     patterns: BanRecord[];

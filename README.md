@@ -1,5 +1,23 @@
 # Unlike Other Authenticator
 
+<table border="0" cellspacing="0" cellpadding="0" style="border:0;border-collapse:collapse;">
+  <tr style="border:0;">
+    <td style="border:0;padding:4px;"><a href="./Docs/Admin/screenshots/01-dashboard.png"><img src="./Docs/Admin/screenshots/01-dashboard.png" alt="Admin dashboard" width="240"></a></td>
+    <td style="border:0;padding:4px;"><a href="./Docs/Admin/screenshots/02-domains.png"><img src="./Docs/Admin/screenshots/02-domains.png" alt="Domains and secrets" width="240"></a></td>
+    <td style="border:0;padding:4px;"><a href="./Docs/Admin/screenshots/03-organisations.png"><img src="./Docs/Admin/screenshots/03-organisations.png" alt="Organisations directory" width="240"></a></td>
+  </tr>
+  <tr style="border:0;">
+    <td style="border:0;padding:4px;"><a href="./Docs/Admin/screenshots/04-organisation-preapprovals.png"><img src="./Docs/Admin/screenshots/04-organisation-preapprovals.png" alt="Organisation pre-approved users" width="240"></a></td>
+    <td style="border:0;padding:4px;"><a href="./Docs/Admin/screenshots/05-teams.png"><img src="./Docs/Admin/screenshots/05-teams.png" alt="Teams directory" width="240"></a></td>
+    <td style="border:0;padding:4px;"><a href="./Docs/Admin/screenshots/06-users.png"><img src="./Docs/Admin/screenshots/06-users.png" alt="Users directory" width="240"></a></td>
+  </tr>
+  <tr style="border:0;">
+    <td style="border:0;padding:4px;"><a href="./Docs/Admin/screenshots/07-user-detail.png"><img src="./Docs/Admin/screenshots/07-user-detail.png" alt="User detail" width="240"></a></td>
+    <td style="border:0;padding:4px;"><a href="./Docs/Admin/screenshots/08-connection-errors.png"><img src="./Docs/Admin/screenshots/08-connection-errors.png" alt="Connection errors" width="240"></a></td>
+    <td style="border:0;padding:4px;"><a href="./Docs/Admin/screenshots/09-feature-groups.png"><img src="./Docs/Admin/screenshots/09-feature-groups.png" alt="Feature groups" width="240"></a></td>
+  </tr>
+</table>
+
 A **centralized OAuth & authentication service** designed to provide unified login across multiple products with configurable branding, UI, and security features.
 
 ## What It Does

@@ -236,12 +236,6 @@ function DialogBody({ dialog }: { dialog: AdminDialog }) {
         <FieldShell label="Organisation">
           <TextField placeholder="Acme Engineering" />
         </FieldShell>
-        <FieldShell label="Feature flags">
-          <SelectField defaultValue="enabled">
-            <option value="enabled">Enabled</option>
-            <option value="disabled">Disabled</option>
-          </SelectField>
-        </FieldShell>
       </div>
     );
   }
@@ -254,18 +248,6 @@ function DialogBody({ dialog }: { dialog: AdminDialog }) {
         </FieldShell>
         <FieldShell label="Identifier">
           <TextField className="font-mono" defaultValue={dialog.app.identifier} />
-        </FieldShell>
-        <FieldShell label="Feature flags">
-          <SelectField defaultValue={dialog.app.flagsEnabled ? 'enabled' : 'disabled'}>
-            <option value="enabled">Enabled</option>
-            <option value="disabled">Disabled</option>
-          </SelectField>
-        </FieldShell>
-        <FieldShell label="Role matrix">
-          <SelectField defaultValue={dialog.app.matrixEnabled ? 'enabled' : 'disabled'}>
-            <option value="enabled">Enabled</option>
-            <option value="disabled">Disabled</option>
-          </SelectField>
         </FieldShell>
       </div>
     );

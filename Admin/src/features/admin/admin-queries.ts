@@ -50,6 +50,10 @@ export function useLogsQuery() {
   return useQuery({ queryKey: ['admin', 'logs'], queryFn: adminService.getLogs });
 }
 
+export function useHandshakeErrorsQuery() {
+  return useQuery({ queryKey: ['admin', 'handshake-errors'], queryFn: adminService.getHandshakeErrors });
+}
+
 export function useSettingsQuery() {
   return useQuery({ queryKey: ['admin', 'settings'], queryFn: adminService.getSettings });
 }
