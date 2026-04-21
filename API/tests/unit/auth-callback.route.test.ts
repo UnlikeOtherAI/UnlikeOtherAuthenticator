@@ -164,7 +164,6 @@ describe('GET /auth/callback/:provider', () => {
     expect(verifyConfigJwtSignatureMock).toHaveBeenCalledWith(
       'config-jwt',
       'https://auth.example.com/.well-known/jwks.json',
-      'uoa-auth-service',
     );
     expect(loginWithSocialProfileMock).toHaveBeenCalledTimes(1);
     expect(issueAuthorizationCodeMock).not.toHaveBeenCalled();
@@ -204,7 +203,6 @@ describe('GET /auth/callback/:provider', () => {
     expect(verifyConfigJwtSignatureMock).toHaveBeenCalledWith(
       'admin-config-jwt',
       'https://auth.example.com/.well-known/jwks.json',
-      'uoa-auth-service',
     );
 
     await app.close();

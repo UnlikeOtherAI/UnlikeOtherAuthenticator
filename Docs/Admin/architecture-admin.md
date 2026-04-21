@@ -130,7 +130,7 @@ Production contract:
 - When the database is enabled, the API also verifies the token subject has a `SUPERUSER` `domain_roles` row for the admin domain.
 - `/internal/admin/*` is the backend admin route family.
 - `/internal/admin/*` accepts `Authorization: Bearer <access_token>` and validates it server-side.
-- `ADMIN_AUTH_DOMAIN` is the domain allowed for admin superuser tokens; it defaults to `AUTH_SERVICE_IDENTIFIER`.
+- `ADMIN_AUTH_DOMAIN` is the domain allowed for admin superuser tokens; it defaults to the resolved auth service identifier, usually the `PUBLIC_BASE_URL` host.
 - browser code must not use the domain-hash shared-secret mechanism directly
 
 Frontend session interface:

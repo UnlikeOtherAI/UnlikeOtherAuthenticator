@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseEnv } from '../../src/config/env.js';
+import { getAdminAuthDomain, getAuthServiceIdentifier, parseEnv } from '../../src/config/env.js';
 
 function baseInput(overrides?: Partial<NodeJS.ProcessEnv>): NodeJS.ProcessEnv {
   return {
@@ -55,6 +55,34 @@ describe('env', () => {
         }),
       ).ADMIN_AUTH_DOMAIN,
     ).toBe('admin.example.com');
+  });
+
+  it('does not require AUTH_SERVICE_IDENTIFIER when PUBLIC_BASE_URL is set', () => {
+    const input = baseInput();
+    Reflect.deleteProperty(input, 'AUTH_SERVICE_IDENTIFIER');
+
+    const env = parseEnv(input);
+
+    expect(env.AUTH_SERVICE_IDENTIFIER).toBeUndefined();
+    expect(getAuthServiceIdentifier(env)).toBe('auth.example.com');
+    expect(getAdminAuthDomain(env)).toBe('auth.example.com');
+  });
+
+  it('falls back to HOST:PORT when no public URL or identifier is set', () => {
+    const input = baseInput();
+    Reflect.deleteProperty(input, 'AUTH_SERVICE_IDENTIFIER');
+    Reflect.deleteProperty(input, 'PUBLIC_BASE_URL');
+
+    const env = parseEnv(input);
+
+    expect(getAuthServiceIdentifier(env)).toBe('127.0.0.1:3000');
+    expect(getAdminAuthDomain(env)).toBe('127.0.0.1:3000');
+  });
+
+  it('uses ADMIN_AUTH_DOMAIN as the normalized admin domain when set', () => {
+    const env = parseEnv(baseInput({ ADMIN_AUTH_DOMAIN: 'Admin.Example.Com.' }));
+
+    expect(getAdminAuthDomain(env)).toBe('admin.example.com');
   });
 
   it('accepts ACCESS_TOKEN_TTL in the 15m-60m window (inclusive)', () => {

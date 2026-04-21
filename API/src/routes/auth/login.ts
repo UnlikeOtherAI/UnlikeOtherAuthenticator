@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
-import { requireEnv } from '../../config/env.js';
+import { getAuthServiceIdentifier, requireEnv } from '../../config/env.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
 import { loginWithEmailPassword } from '../../services/auth-login.service.js';
 import {
@@ -68,10 +68,7 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
 
       // Brief 13 / Phase 8.6 + 8.7: enforce 2FA verification during login when enabled via config.
       if (config['2fa_enabled'] && twoFaEnabled) {
-        const { SHARED_SECRET, AUTH_SERVICE_IDENTIFIER } = requireEnv(
-          'SHARED_SECRET',
-          'AUTH_SERVICE_IDENTIFIER',
-        );
+        const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
 
         const twofa_token = await signTwoFaChallenge({
           userId,
@@ -84,7 +81,7 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
           codeChallenge: pkce.codeChallenge,
           codeChallengeMethod: pkce.codeChallengeMethod,
           sharedSecret: SHARED_SECRET,
-          audience: AUTH_SERVICE_IDENTIFIER,
+          audience: getAuthServiceIdentifier(),
         });
 
         reply.status(200).send({ ok: true, twofa_required: true, twofa_token });

@@ -64,8 +64,8 @@ Set via Cloud Run service config:
 
 | Variable | Source |
 |----------|--------|
-| `AUTH_SERVICE_IDENTIFIER` | Plain value: `authentication.unlikeotherai.com` |
-| `ADMIN_AUTH_DOMAIN` | Plain value: `authentication.unlikeotherai.com` |
+| `AUTH_SERVICE_IDENTIFIER` | Optional plain override; internal issuer/audience for service-issued tokens. Defaults to the `PUBLIC_BASE_URL` host and is not required in client config JWTs |
+| `ADMIN_AUTH_DOMAIN` | Optional plain override; domain allowed into the Admin panel. Defaults to the resolved auth service identifier |
 | `ADMIN_ACCESS_TOKEN_SECRET` | Secret Manager: `uoa-admin-access-token-secret`; used to sign tokens issued for `ADMIN_AUTH_DOMAIN`; route-level requirement for admin access |
 | `ADMIN_CONFIG_JWT` | Secret Manager: `uoa-admin-config-jwt`; signed RS256 config JWT served from `/internal/admin/config`; must disable registration and allow only Google |
 | `CONFIG_JWKS_URL` | Plain value: `https://authentication.unlikeotherai.com/.well-known/jwks.json`; trusted JWKS URL for RS256 config JWT verification; route-level requirement for config-backed auth |

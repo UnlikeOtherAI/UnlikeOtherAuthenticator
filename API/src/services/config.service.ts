@@ -360,20 +360,15 @@ function assertConfigJwtHeader(configJwt: string): void {
 
 /**
  * Task 2.3: Verify the config JWT signature using the configured JWKS.
- *
- * Task 2.6: Enforce expected `aud` (auth service identifier) so config JWTs minted
- * for one auth service are not accepted by another.
  */
 export async function verifyConfigJwtSignature(
   configJwt: string,
   jwksUrl: string,
-  expectedAudience: string,
 ): Promise<JWTPayload> {
   try {
     assertConfigJwtHeader(configJwt);
     const { payload } = await jwtVerify(configJwt, getConfigJwks(jwksUrl), {
       algorithms: [...CONFIG_JWT_ALLOWED_ALGS],
-      audience: expectedAudience,
       clockTolerance: 30,
     });
     return payload;
@@ -411,8 +406,8 @@ export function assertConfigDomainMatchesConfigUrl(domainClaim: string, configUr
  *
  * This asserts required keys and validates the UI theme shape so the Auth UI can be
  * fully config-driven (no hardcoded client styles).
- * Deeper validation (aud/iss enforcement, domain/origin matching, redirect URL allowlisting)
- * is handled in subsequent tasks.
+   * Deeper validation such as domain/origin matching and redirect URL allowlisting is handled
+   * in subsequent tasks.
  */
 export function validateRequiredConfigFields(payload: JWTPayload): RequiredClientConfig {
   // JWTPayload is already JSON-ish but typed as unknown values; validate explicitly.

@@ -149,7 +149,7 @@ function deriveStageHints(stage: AuthDebugStage, code: string): string[] {
       ];
     case 'CONFIG_JWT_INVALID':
       return [
-        'The fetched config JWT could not be verified for this auth service. Check the shared secret and the aud claim.',
+        'The fetched config JWT could not be verified. Check the signing key, JWT algorithm, and kid.',
       ];
     case 'CONFIG_PAYLOAD_SECRET_REJECTED':
       return ['The config JWT payload must not contain the shared secret or any embedded secret value.'];

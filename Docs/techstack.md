@@ -214,8 +214,8 @@ The React implementation should translate those templates into reusable componen
 All secrets and configuration live in environment variables. Nothing is hardcoded.
 
 * `SHARED_SECRET` — the single global shared secret for domain hashing and client-domain access tokens
-* `AUTH_SERVICE_IDENTIFIER` — auth service identifier (expected `aud` for config JWTs)
-* `ADMIN_AUTH_DOMAIN` — domain whose superuser access tokens may access the Admin panel; defaults to `AUTH_SERVICE_IDENTIFIER`
+* `AUTH_SERVICE_IDENTIFIER` — optional internal auth-service issuer/audience override for service-issued tokens; defaults to the `PUBLIC_BASE_URL` host and is not required in client config JWTs
+* `ADMIN_AUTH_DOMAIN` — domain whose superuser access tokens may access the Admin panel; defaults to the resolved auth service identifier
 * `ADMIN_ACCESS_TOKEN_SECRET` — auth-service-only signing secret used for access tokens issued to `ADMIN_AUTH_DOMAIN`; required by admin routes, not process boot
 * `ADMIN_CONFIG_JWT` — signed RS256 config JWT served from `/internal/admin/config` for `/admin/login`; required before the production Admin login handoff can work
 * `CONFIG_JWKS_URL` — trusted JWKS endpoint for RS256 config JWT verification by `kid`; required by config-backed auth routes, not process boot

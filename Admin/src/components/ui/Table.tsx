@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useState, type ReactNode, type TdHTMLAttributes } from 'react';
 
 import { cn } from '../../utils/cn';
+import { useCookieState } from '../../utils/cookie-state';
+
+const tablePageSizeCookieName = 'uoa-admin-table-page-size';
+const tablePageSizeOptions = [5, 10, 25, 50] as const;
+const tablePageSizeOptionValues = ['5', '10', '25', '50'] as const;
+
+type TablePageSizeOption = (typeof tablePageSizeOptionValues)[number];
 
 type DataTableProps = {
   headers: string[];
@@ -40,15 +47,24 @@ type PaginationProps = {
   onPageSizeChange: (pageSize: number) => void;
   page: number;
   pageSize: number;
-  pageSizeOptions?: number[];
+  pageSizeOptions?: readonly number[];
   totalItems: number;
 };
 
 export function usePagination<T>(items: T[], initialPageSize = 10) {
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(initialPageSize);
+  const [storedPageSize, setStoredPageSize] = useCookieState<TablePageSizeOption>(
+    tablePageSizeCookieName,
+    toPageSizeOption(initialPageSize),
+    tablePageSizeOptionValues,
+  );
+  const pageSize = Number(storedPageSize);
   const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
   const currentPage = Math.min(page, totalPages);
+
+  useEffect(() => {
+    setPage(1);
+  }, [pageSize]);
 
   useEffect(() => {
     setPage((current) => Math.min(current, totalPages));
@@ -64,7 +80,7 @@ export function usePagination<T>(items: T[], initialPageSize = 10) {
     pagination: {
       onPageChange: setPage,
       onPageSizeChange: (nextPageSize: number) => {
-        setPageSize(nextPageSize);
+        setStoredPageSize(toPageSizeOption(nextPageSize));
         setPage(1);
       },
       page: currentPage,
@@ -74,7 +90,7 @@ export function usePagination<T>(items: T[], initialPageSize = 10) {
   };
 }
 
-export function PaginationFooter({ onPageChange, onPageSizeChange, page, pageSize, pageSizeOptions = [5, 10, 25, 50], totalItems }: PaginationProps) {
+export function PaginationFooter({ onPageChange, onPageSizeChange, page, pageSize, pageSizeOptions = tablePageSizeOptions, totalItems }: PaginationProps) {
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
   const start = totalItems === 0 ? 0 : (page - 1) * pageSize + 1;
   const end = Math.min(page * pageSize, totalItems);
@@ -108,4 +124,10 @@ export function PaginationFooter({ onPageChange, onPageSizeChange, page, pageSiz
       </div>
     </div>
   );
+}
+
+function toPageSizeOption(pageSize: number): TablePageSizeOption {
+  const stringValue = String(pageSize) as TablePageSizeOption;
+
+  return tablePageSizeOptionValues.includes(stringValue) ? stringValue : '10';
 }

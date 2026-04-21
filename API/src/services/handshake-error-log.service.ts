@@ -31,6 +31,8 @@ export type HandshakeErrorRecord = {
   ip: string;
   userAgent: string;
   requestId: string;
+  requestJson: Record<string, unknown>;
+  responseJson: Record<string, unknown>;
   jwtHeader: Record<string, unknown>;
   jwtPayload: Record<string, unknown>;
   redactions: string[];
@@ -51,6 +53,8 @@ export type RecordHandshakeErrorParams = {
   ip?: string | null;
   userAgent?: string | null;
   requestId: string;
+  requestJson?: Record<string, unknown>;
+  responseJson?: Record<string, unknown>;
   jwtHeader?: Record<string, unknown>;
   jwtPayload?: Record<string, unknown>;
   redactions?: string[];
@@ -93,6 +97,8 @@ function toRecord(row: HandshakeErrorLog): HandshakeErrorRecord {
     ip: row.ip ?? '',
     userAgent: row.userAgent ?? '',
     requestId: row.requestId,
+    requestJson: jsonObject(row.requestJson),
+    responseJson: jsonObject(row.responseJson),
     jwtHeader: jsonObject(row.jwtHeader),
     jwtPayload: jsonObject(row.jwtPayload),
     redactions: jsonArray(row.redactions),
@@ -140,6 +146,8 @@ export async function recordHandshakeErrorLog(
       ip: params.ip ?? null,
       userAgent: params.userAgent ?? null,
       requestId: params.requestId,
+      requestJson: (params.requestJson ?? {}) as Prisma.InputJsonValue,
+      responseJson: (params.responseJson ?? {}) as Prisma.InputJsonValue,
       jwtHeader: (params.jwtHeader ?? {}) as Prisma.InputJsonValue,
       jwtPayload: (params.jwtPayload ?? {}) as Prisma.InputJsonValue,
       redactions: params.redactions ?? [],

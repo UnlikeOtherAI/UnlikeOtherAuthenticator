@@ -179,6 +179,8 @@ model HandshakeErrorLog {
   ip            String?
   userAgent     String?  @map("user_agent")
   requestId     String   @map("request_id")
+  requestJson   Json     @map("request_json")
+  responseJson  Json     @map("response_json")
   jwtHeader     Json     @map("jwt_header")
   jwtPayload    Json     @map("jwt_payload")
   redactions    Json

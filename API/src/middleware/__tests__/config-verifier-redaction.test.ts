@@ -1,7 +1,12 @@
 import { SignJWT } from 'jose';
+import type { FastifyRequest } from 'fastify';
 import { describe, expect, it } from 'vitest';
 
 import { sanitizeConfigJwtForHandshakeLog } from '../config-verifier.js';
+import {
+  buildHandshakeRequestJson,
+  configFetchFailureDetails,
+} from '../../services/handshake-log-context.service.js';
 
 const sharedSecret = 'test-shared-secret-with-enough-length';
 
@@ -108,5 +113,94 @@ describe('config verifier handshake log JWT redaction', () => {
     expect(result.header).toEqual({});
     expect(result.payload).toEqual({});
     expect(result.redactions).toContain('undecodable_jwt');
+  });
+
+  it('captures auth request context without leaking query secrets', () => {
+    const redactions: string[] = [];
+    const request = {
+      id: 'req-1',
+      method: 'GET',
+      url: '/auth?config_url=https%3A%2F%2Fclient.example.com%2Fconfig%3Ftoken%3Dsecret&redirect_url=https%3A%2F%2Fclient.example.com%2Fcallback%3Fstate%3Dsecret-state&code=oauth-code&code_challenge=pkce-challenge&code_challenge_method=S256',
+      raw: {
+        url: '/auth?config_url=https%3A%2F%2Fclient.example.com%2Fconfig%3Ftoken%3Dsecret&redirect_url=https%3A%2F%2Fclient.example.com%2Fcallback%3Fstate%3Dsecret-state&code=oauth-code&code_challenge=pkce-challenge&code_challenge_method=S256',
+      },
+      ip: '203.0.113.10',
+      headers: {
+        host: 'authentication.example.com',
+        referer: 'https://app.example.com/start?token=secret',
+        'user-agent': 'test-agent',
+        'x-forwarded-for': '203.0.113.10',
+        'x-cloud-trace-context': 'trace-id/span;o=1',
+      },
+    } as unknown as FastifyRequest;
+
+    const result = buildHandshakeRequestJson({
+      request,
+      configUrl: 'https://client.example.com/config?token=secret',
+      redactions,
+      configFetchRequest: {
+        method: 'GET',
+        config_url: 'https://client.example.com/config',
+      },
+    });
+
+    expect(result).toMatchObject({
+      auth_request: {
+        id: 'req-1',
+        method: 'GET',
+        path: '/auth',
+        query: {
+          config_url: 'https://client.example.com/config',
+          redirect_url: 'https://client.example.com/callback',
+          code: '[redacted]',
+          code_challenge: 'pkce-challenge',
+          code_challenge_method: 'S256',
+        },
+        ip: '203.0.113.10',
+        headers: {
+          host: 'authentication.example.com',
+          referer: 'https://app.example.com/start',
+          user_agent: 'test-agent',
+          x_cloud_trace_context: 'trace-id/span;o=1',
+        },
+      },
+      config_fetch_request: {
+        method: 'GET',
+        config_url: 'https://client.example.com/config',
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain('secret');
+    expect(JSON.stringify(result)).not.toContain('oauth-code');
+    expect(redactions).toEqual(
+      expect.arrayContaining([
+        'request.auth_request.query.config_url',
+        'request.auth_request.query.redirect_url',
+        'request.auth_request.query.code',
+        'request.auth_request.headers.referer',
+      ]),
+    );
+  });
+
+  it('turns config fetch diagnostics into useful details', () => {
+    const details = configFetchFailureDetails('https://client.example.com/config', {
+      request: { method: 'GET', config_url: 'https://client.example.com/config' },
+      response: {
+        reason: 'CONFIG_URL_HTTP_STATUS_REJECTED',
+        final_url: 'https://client.example.com/config',
+        status: 404,
+        status_text: 'Not Found',
+        content_type: 'text/html',
+      },
+      redactions: [],
+    });
+
+    expect(details).toEqual(
+      expect.arrayContaining([
+        'Config fetch attempted: GET https://client.example.com/config',
+        'Fetch reason: CONFIG_URL_HTTP_STATUS_REJECTED.',
+        'Config endpoint HTTP status: 404 Not Found.',
+        'Response content type: text/html.',
+      ]),
+    );
   });
 });

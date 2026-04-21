@@ -3,6 +3,7 @@ import { isIP } from 'node:net';
 import { Agent, fetch as undiciFetch } from 'undici';
 
 import { AppError } from '../utils/errors.js';
+import { configFetchFailure, errorName, responseDiagnostics } from './config-fetch-diagnostics.service.js';
 
 const DEFAULT_CONFIG_FETCH_TIMEOUT_MS = 5_000;
 const MAX_CONFIG_JWT_RESPONSE_BYTES = 64 * 1024;
@@ -286,7 +287,13 @@ export async function fetchConfigJwtFromUrl(
   configUrl: string,
   opts?: { timeoutMs?: number },
 ): Promise<string> {
-  let url = parseHttpsUrl(configUrl);
+  let url: URL;
+  try {
+    url = parseHttpsUrl(configUrl);
+  } catch {
+    throw configFetchFailure(configUrl, 'INVALID_OR_NON_HTTPS_CONFIG_URL');
+  }
+
   const controller = new AbortController();
   const timeoutMs = opts?.timeoutMs ?? DEFAULT_CONFIG_FETCH_TIMEOUT_MS;
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -294,7 +301,14 @@ export async function fetchConfigJwtFromUrl(
   try {
     redirectLoop:
     for (let redirectCount = 0; redirectCount <= MAX_CONFIG_FETCH_REDIRECTS; redirectCount++) {
-      const destinations = await resolvePublicDestinations(url);
+      let destinations: PublicDestination[];
+      try {
+        destinations = await resolvePublicDestinations(url);
+      } catch {
+        throw configFetchFailure(configUrl, 'CONFIG_URL_DNS_OR_DESTINATION_REJECTED', {
+          final_url: url.toString(),
+        });
+      }
       let lastNetworkError: unknown;
 
       for (const destination of destinations) {
@@ -313,20 +327,54 @@ export async function fetchConfigJwtFromUrl(
             const location = res.headers.get('location');
             await cancelResponseBody(res);
             if (!location || redirectCount === MAX_CONFIG_FETCH_REDIRECTS) {
-              throw new AppError('BAD_REQUEST', 400);
+              throw configFetchFailure(configUrl, location ? 'TOO_MANY_REDIRECTS' : 'REDIRECT_WITHOUT_LOCATION', {
+                final_url: url.toString(),
+                status: res.status,
+                location: location ? new URL(location, url).toString() : null,
+              });
             }
 
-            url = parseHttpsUrl(new URL(location, url).toString());
+            try {
+              url = parseHttpsUrl(new URL(location, url).toString());
+            } catch {
+              throw configFetchFailure(configUrl, 'REDIRECT_TARGET_REJECTED', {
+                final_url: url.toString(),
+                status: res.status,
+              });
+            }
             continue redirectLoop;
           }
 
           if (!res.ok) {
-            throw new AppError('BAD_REQUEST', 400);
+            const redactions: string[] = [];
+            const bodyText = await readResponseTextWithLimit(res).catch(() => '');
+            throw configFetchFailure(
+              configUrl,
+              'CONFIG_URL_HTTP_STATUS_REJECTED',
+              responseDiagnostics(res, url, bodyText, redactions),
+              redactions,
+            );
           }
 
-          const jwt = extractJwtFromBody(await readResponseTextWithLimit(res));
+          let bodyText: string;
+          try {
+            bodyText = await readResponseTextWithLimit(res);
+          } catch {
+            throw configFetchFailure(configUrl, 'CONFIG_RESPONSE_TOO_LARGE', {
+              final_url: url.toString(),
+              status: res.status,
+            });
+          }
+
+          const jwt = extractJwtFromBody(bodyText);
           if (!jwt) {
-            throw new AppError('BAD_REQUEST', 400);
+            const redactions: string[] = [];
+            throw configFetchFailure(
+              configUrl,
+              'CONFIG_RESPONSE_EMPTY',
+              responseDiagnostics(res, url, bodyText, redactions),
+              redactions,
+            );
           }
 
           return jwt;
@@ -338,14 +386,19 @@ export async function fetchConfigJwtFromUrl(
         }
       }
 
-      if (lastNetworkError) throw lastNetworkError;
+      if (lastNetworkError) {
+        throw configFetchFailure(configUrl, 'CONFIG_URL_NETWORK_ERROR', {
+          final_url: url.toString(),
+          error: errorName(lastNetworkError),
+        });
+      }
     }
 
-    throw new AppError('BAD_REQUEST', 400);
+    throw configFetchFailure(configUrl, 'TOO_MANY_REDIRECTS');
   } catch (err) {
     // Normalize fetch/network/abort errors into a generic, user-safe error.
     if (err instanceof AppError) throw err;
-    throw new AppError('BAD_REQUEST', 400);
+    throw configFetchFailure(configUrl, 'CONFIG_FETCH_FAILED', { error: errorName(err) });
   } finally {
     clearTimeout(timeoutId);
   }

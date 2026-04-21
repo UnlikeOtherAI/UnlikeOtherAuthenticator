@@ -1,6 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
-import { getEnv } from '../config/env.js';
+import { getAdminAuthDomain, getEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
 import { verifyAccessToken, type AccessTokenClaims } from '../services/access-token.service.js';
 import { normalizeDomain } from '../utils/domain.js';
@@ -43,7 +43,7 @@ export async function requireAdminSuperuser(
     throw new AppError('FORBIDDEN', 403, 'NOT_SUPERUSER');
   }
 
-  const adminDomain = normalizeDomain(env.ADMIN_AUTH_DOMAIN ?? env.AUTH_SERVICE_IDENTIFIER);
+  const adminDomain = normalizeDomain(getAdminAuthDomain(env));
   if (normalizeDomain(claims.domain) !== adminDomain) {
     throw new AppError('FORBIDDEN', 403, 'ADMIN_DOMAIN_MISMATCH');
   }

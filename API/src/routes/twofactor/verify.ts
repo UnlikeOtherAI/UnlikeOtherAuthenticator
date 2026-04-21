@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
-import { requireEnv } from '../../config/env.js';
+import { getAuthServiceIdentifier, requireEnv } from '../../config/env.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
 import { finalizeAuthenticatedUser } from '../../services/access-request-flow.service.js';
@@ -35,15 +35,12 @@ export function registerTwoFactorVerifyRoute(app: FastifyInstance): void {
         throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
       }
 
-      const { SHARED_SECRET, AUTH_SERVICE_IDENTIFIER } = requireEnv(
-        'SHARED_SECRET',
-        'AUTH_SERVICE_IDENTIFIER',
-      );
+      const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
 
       const challenge = await verifyTwoFaChallenge({
         token: twofa_token,
         sharedSecret: SHARED_SECRET,
-        audience: AUTH_SERVICE_IDENTIFIER,
+        audience: getAuthServiceIdentifier(),
       });
 
       // Bind the challenge token to this config URL and domain.

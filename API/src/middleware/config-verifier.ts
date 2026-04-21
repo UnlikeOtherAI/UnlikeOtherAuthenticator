@@ -17,8 +17,13 @@ import {
   type ClientConfig,
 } from '../services/config.service.js';
 import { containsSecretValue } from '../services/config-secret-scan.service.js';
+import { getConfigFetchDiagnostics } from '../services/config-fetch-diagnostics.service.js';
 import { readConfigJwtFromTrustedSource } from '../services/config-jwt-source.service.js';
 import { recordHandshakeErrorLog, type HandshakeErrorPhase } from '../services/handshake-error-log.service.js';
+import {
+  buildHandshakeRequestJson,
+  configFetchFailureDetails,
+} from '../services/handshake-log-context.service.js';
 
 const QuerySchema = z.object({
   config_url: z.string().min(1),
@@ -125,9 +130,8 @@ export async function configVerifier(
 
   // Shared secret must never be exposed publicly. Defensively reject requests that
   // try to embed it in the config URL (even though clients should never do this).
-  const { SHARED_SECRET, AUTH_SERVICE_IDENTIFIER, CONFIG_JWKS_URL } = requireEnv(
+  const { SHARED_SECRET, CONFIG_JWKS_URL } = requireEnv(
     'SHARED_SECRET',
-    'AUTH_SERVICE_IDENTIFIER',
     'CONFIG_JWKS_URL',
   );
   if (
@@ -147,6 +151,7 @@ export async function configVerifier(
   try {
     request.configJwt = await readConfigJwtFromTrustedSource(config_url);
   } catch (err) {
+    const diagnostics = getConfigFetchDiagnostics(err);
     mergeAuthDebugInfo(request, {
       stage: 'config_fetch',
       code: 'CONFIG_FETCH_FAILED',
@@ -158,18 +163,20 @@ export async function configVerifier(
       statusCode: 400,
       errorCode: 'CONFIG_FETCH_FAILED',
       summary: 'The auth service could not fetch a usable config JWT from config_url.',
-      details: ['Config URL fetch failed before a JWT payload could be decoded.'],
+      details: configFetchFailureDetails(config_url, diagnostics),
+      requestJson: diagnostics?.request,
+      responseJson: diagnostics?.response,
+      extraRedactions: diagnostics?.redactions,
     });
     throw err;
   }
 
-  // Task 2.3 + 2.6: verify JWT signature using configured JWKS and enforce expected `aud`.
+  // Verify the config JWT signature using the configured JWKS.
   let payload;
   try {
     payload = await verifyConfigJwtSignature(
       request.configJwt,
       CONFIG_JWKS_URL,
-      AUTH_SERVICE_IDENTIFIER,
     );
   } catch (err) {
     mergeAuthDebugInfo(request, {
@@ -184,7 +191,7 @@ export async function configVerifier(
       statusCode: 401,
       errorCode: 'CONFIG_JWT_INVALID',
       summary: 'The fetched config JWT could not be verified for this auth service.',
-      details: ['JWT signature, issuer, audience, or key lookup failed.'],
+      details: ['JWT signature, algorithm, or key lookup failed.'],
     });
     throw err;
   }
@@ -419,10 +426,14 @@ function recordConfigVerifierError(
     summary: string;
     details: string[];
     missingClaims?: string[];
+    requestJson?: Record<string, unknown>;
+    responseJson?: Record<string, unknown>;
+    extraRedactions?: string[];
   },
 ): Promise<void> {
   const { header, payload, redactions } = sanitizeConfigJwtForHandshakeLog(params.configJwt);
   const domain = requestHost(params.configUrl);
+  const allRedactions = [...redactions, ...(params.extraRedactions ?? [])];
 
   return recordHandshakeErrorLog({
     domain,
@@ -436,9 +447,16 @@ function recordConfigVerifierError(
     ip: request.ip,
     userAgent: userAgent(request),
     requestId: randomUUID(),
+    requestJson: buildHandshakeRequestJson({
+      request,
+      configUrl: params.configUrl,
+      redactions: allRedactions,
+      configFetchRequest: params.requestJson,
+    }),
+    responseJson: params.responseJson ?? {},
     jwtHeader: header,
     jwtPayload: payload,
-    redactions,
+    redactions: [...new Set(allRedactions)],
   }).catch((err) => {
     request.log.warn({ err }, 'failed to record handshake error');
   });

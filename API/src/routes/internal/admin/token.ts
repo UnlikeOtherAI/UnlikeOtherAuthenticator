@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
-import { getEnv } from '../../../config/env.js';
+import { getAdminAuthDomain, getAuthServiceIdentifier, getEnv } from '../../../config/env.js';
 import { getPrisma } from '../../../db/prisma.js';
 import { configVerifier } from '../../../middleware/config-verifier.js';
 import { verifyAccessToken } from '../../../services/access-token.service.js';
@@ -35,7 +35,7 @@ function assertAdminConfigDomain(domain: string): void {
     throw new AppError('INTERNAL', 500, 'ADMIN_ACCESS_TOKEN_SECRET_REQUIRED');
   }
 
-  const adminDomain = normalizeDomain(env.ADMIN_AUTH_DOMAIN ?? env.AUTH_SERVICE_IDENTIFIER);
+  const adminDomain = normalizeDomain(getAdminAuthDomain(env));
   if (normalizeDomain(domain) !== adminDomain) {
     throw new AppError('FORBIDDEN', 403, 'ADMIN_DOMAIN_MISMATCH');
   }
@@ -49,9 +49,9 @@ async function assertAdminAccessTokenIsSuperuser(accessToken: string): Promise<v
 
   const claims = await verifyAccessToken(accessToken, {
     sharedSecret: env.ADMIN_ACCESS_TOKEN_SECRET,
-    issuer: env.AUTH_SERVICE_IDENTIFIER,
+    issuer: getAuthServiceIdentifier(env),
   });
-  const adminDomain = normalizeDomain(env.ADMIN_AUTH_DOMAIN ?? env.AUTH_SERVICE_IDENTIFIER);
+  const adminDomain = normalizeDomain(getAdminAuthDomain(env));
 
   if (claims.role !== 'superuser') {
     throw new AppError('FORBIDDEN', 403, 'NOT_SUPERUSER');

@@ -20,7 +20,7 @@ For machine-readable JSON, endpoint schemas, and config contracts, use [/api](/a
 
 1. Create a backend endpoint on your application that returns a signed config JWT.
 2. The JWT header must use \`alg: "RS256"\` and include a \`kid\` that resolves through the configured JWKS.
-3. The JWT audience must match \`AUTH_SERVICE_IDENTIFIER\`.
+3. The JWT payload \`domain\` must match the hostname of \`config_url\`.
 4. Open the auth UI with:
 
 \`\`\`text
@@ -58,12 +58,12 @@ Content-Type: application/json
 }
 \`\`\`
 
-It can also accept \`config_jwt\` or raw \`config\`. A \`config_url\` is the best final check because the auth service performs the same server-side fetch, JWT decode, JWKS signature check, audience check, schema validation, domain match, runtime policy checks, and customization guidance.
+It can also accept \`config_jwt\` or raw \`config\`. A \`config_url\` is the best final check because the auth service performs the same server-side fetch, JWT decode, JWKS signature check, schema validation, domain match, runtime policy checks, and customization guidance.
 
 The response includes:
 
 - \`ok\`: whether the configuration is ready for the auth runtime.
-- \`checks\`: stage-by-stage results for source, fetch, decode, secret_scan, signature, audience, schema, runtime_policy, and domain_match.
+- \`checks\`: stage-by-stage results for source, fetch, decode, secret_scan, signature, schema, runtime_policy, and domain_match.
 - \`issues\`: blocking problems with stage, code, summary, and details.
 - \`recommendations\`: required next steps, operational notes, and optional customizations such as logo URL, custom font, language selector, token TTL, org features, and access requests.
 
@@ -75,7 +75,6 @@ Use this checklist when installing a new app as an SSO client:
 - The \`domain\` claim in the config JWT must exactly match the hostname of \`config_url\`.
 - The config JWT must be signed with RS256, include a \`kid\`, and verify against the auth service \`CONFIG_JWKS_URL\`.
 - The JWKS must publish only public key material. Never expose a private JWK, client secret, shared secret, refresh token, or OAuth code.
-- \`AUTH_SERVICE_IDENTIFIER\` must match the config JWT \`aud\` and the social-state JWT audience.
 - \`PUBLIC_BASE_URL\` must be the real external origin of the auth service. Provider callbacks are built from it, for example \`/auth/callback/google\`.
 - OAuth provider dashboards must allow the exact callback URLs produced by this service.
 - Every \`redirect_url\` sent to \`/auth\` must be listed exactly in \`redirect_urls\`.
@@ -99,7 +98,7 @@ Use this checklist when installing a new app as an SSO client:
 
 - \`Request failed\` after returning from Google usually means the callback route rejected social state, config fetch, config JWT verification, redirect URL validation, or social-login policy. Check server logs around \`/auth/callback/google\`.
 - \`CONFIG_FETCH_FAILED\` means the service could not fetch a usable config JWT from \`config_url\`, or a first-party config was not handled locally.
-- \`CONFIG_JWT_INVALID\` means the JWT signature, \`kid\`, issuer, audience, algorithm, or JWKS lookup failed.
+- \`CONFIG_JWT_INVALID\` means the JWT signature, \`kid\`, algorithm, or JWKS lookup failed.
 - \`CONFIG_DOMAIN_MISMATCH\` means the JWT \`domain\` does not match the \`config_url\` hostname.
 - \`auth_failed\` on the final redirect is intentionally generic. With \`allow_registration=false\`, first check whether the user already exists and is permitted for that domain.
 - Google \`redirect_uri_mismatch\` means the provider dashboard does not contain the exact callback URL built from \`PUBLIC_BASE_URL\`.
@@ -143,19 +142,20 @@ The first-party Admin UI is served from [/admin](/admin). Admin login uses the s
 - \`/admin/auth/callback\` exchanges the authorization code at \`POST /internal/admin/token\`.
 - Admin access tokens are signed with \`ADMIN_ACCESS_TOKEN_SECRET\`.
 - Only \`role: "superuser"\` tokens for \`ADMIN_AUTH_DOMAIN\` can access \`/internal/admin/*\`.
+- \`ADMIN_AUTH_DOMAIN\` defaults to the resolved auth service identifier, which is inferred from \`PUBLIC_BASE_URL\` unless \`AUTH_SERVICE_IDENTIFIER\` explicitly overrides it.
 - DB-backed deployments also require a \`SUPERUSER\` row in \`domain_roles\` for that admin domain.
 - The admin callback must read the exact first-party admin config locally, not by fetching its own public edge URL.
 
 ## Debugging config problems
 
-Use \`POST /config/validate\` in every environment. In non-production environments with \`DEBUG_ENABLED=true\`, \`POST /config/verify\` additionally accepts \`jwks_url\` and \`auth_service_identifier\` overrides for local setup debugging.
+Use \`POST /config/validate\` in every environment. In non-production environments with \`DEBUG_ENABLED=true\`, \`POST /config/verify\` additionally accepts a \`jwks_url\` override for local setup debugging.
 
 ## Related operational endpoints
 
 - \`GET /domain/users\`: list users for a domain.
 - \`GET /domain/logs\`: domain login logs.
 - \`GET /org/me\`: current user's org context.
-- \`GET /internal/admin/handshake-errors\`: sanitized app handshake and config JWT errors for superusers.
+- \`GET /internal/admin/handshake-errors\`: sanitized app handshake and config JWT errors for superusers, including redacted request/response context when config_url fetches fail before a JWT can be decoded.
 
 Use [/api](/api) for the complete JSON endpoint schema.`;
 }

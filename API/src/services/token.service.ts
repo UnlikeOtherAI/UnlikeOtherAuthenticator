@@ -4,7 +4,7 @@ import type { PrismaClient } from '@prisma/client';
 import { SignJWT } from 'jose';
 
 import { AUTHORIZATION_CODE_TTL_MS } from '../config/constants.js';
-import { getEnv, requireEnv } from '../config/env.js';
+import { getAdminAuthDomain, getAuthServiceIdentifier, getEnv, requireEnv } from '../config/env.js';
 import { ACCESS_TOKEN_AUDIENCE } from '../config/jwt.js';
 import { getPrisma } from '../db/prisma.js';
 import { ensureDomainRoleForUser } from './domain-role.service.js';
@@ -263,10 +263,9 @@ function resolveAccessTokenContext(params: {
   clientId?: string;
   domain: string;
   env: ReturnType<typeof getEnv>;
-  issuer: string;
   sharedSecret: string;
 }): { clientId: string; sharedSecret: string } {
-  const adminDomain = normalizeDomain(params.env.ADMIN_AUTH_DOMAIN ?? params.issuer);
+  const adminDomain = normalizeDomain(getAdminAuthDomain(params.env));
   if (normalizeDomain(params.domain) !== adminDomain) {
     if (!params.clientId) throw new AppError('INTERNAL', 500, 'CLIENT_ID_REQUIRED');
     return {
@@ -310,8 +309,7 @@ async function issueTokenPairForUser(
 ): Promise<IssuedTokenPair> {
   const env = getEnv();
   const sharedSecret = deps?.sharedSecret ?? requireEnv('SHARED_SECRET').SHARED_SECRET;
-  const issuer =
-    deps?.authServiceIdentifier ?? requireEnv('AUTH_SERVICE_IDENTIFIER').AUTH_SERVICE_IDENTIFIER;
+  const issuer = deps?.authServiceIdentifier ?? getAuthServiceIdentifier(env);
   const ttl = deps?.accessTokenTtl ?? env.ACCESS_TOKEN_TTL;
   const prisma = deps?.prisma ?? getPrisma();
 
@@ -331,7 +329,6 @@ async function issueTokenPairForUser(
   const accessTokenContext = resolveAccessTokenContext({
     domain: params.config.domain,
     env,
-    issuer,
     clientId: params.clientId,
     sharedSecret,
   });
@@ -396,7 +393,6 @@ export async function exchangeAuthorizationCodeForTokens(
   const clientId = params.clientId ?? resolveAccessTokenContext({
     domain: params.config.domain,
     env,
-    issuer: deps?.authServiceIdentifier ?? requireEnv('AUTH_SERVICE_IDENTIFIER').AUTH_SERVICE_IDENTIFIER,
     sharedSecret,
   }).clientId;
 
@@ -461,7 +457,6 @@ export async function exchangeRefreshTokenForTokens(
   const clientId = params.clientId ?? resolveAccessTokenContext({
     domain: params.config.domain,
     env,
-    issuer: deps?.authServiceIdentifier ?? requireEnv('AUTH_SERVICE_IDENTIFIER').AUTH_SERVICE_IDENTIFIER,
     sharedSecret,
   }).clientId;
 

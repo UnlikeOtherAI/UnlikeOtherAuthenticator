@@ -168,7 +168,7 @@ function explainKnownCode(
     case 'CONFIG_JWT_INVALID':
       return {
         summary: 'The fetched config JWT could not be verified for this auth service.',
-        hints: ['Check the shared secret and the config JWT aud claim.'],
+        hints: ['Check the signing key, JWT algorithm, and kid.'],
       };
     case 'CONFIG_PAYLOAD_SECRET_REJECTED':
       return {

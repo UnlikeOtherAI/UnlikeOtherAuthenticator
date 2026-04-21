@@ -179,7 +179,7 @@ Security boundary:
 Current state:
 
 - `error-handler.ts` already calls `buildPublicErrorBody()` for all JSON error responses globally (not just debug endpoints). The returned shape is `{ error: "Request failed", code, summary, hints?, details? }` — the `PublicErrorBody` type in `error-response.ts` requires `error`, `code`, and `summary`; `details` and `hints` are optional but `hints` is usually populated via `DEFAULT_HINTS`.
-- `config-debug.service.ts` uses a separate success response shape: `{ ok, source, schema_valid, jwt_signature_valid, audience_valid, domain_match, checks, issues[], config_summary }` — this is NOT the error envelope; it is a verification result object.
+- `config-debug.service.ts` uses a separate success response shape: `{ ok, source, schema_valid, jwt_signature_valid, domain_match, checks, issues[], config_summary }` — this is NOT the error envelope; it is a verification result object.
 - HTML error rendering is used for `GET` requests with `Accept: text/html` and for auth debug pages. All other error responses get the full structured JSON envelope.
 - The structured envelope is therefore NOT a 2.0 addition — it already ships on every JSON error response across all route families.
 
@@ -440,25 +440,22 @@ Accepted inputs:
 - `config`
 - `config_jwt`
 - `config_url`
-- optional `shared_secret`
-- optional `auth_service_identifier`
+- optional `jwks_url` on the non-production debug endpoint
 
 Checks:
 
 1. source selection
 2. `config_url` fetch
 3. JWT decode
-4. signature validation using provided `shared_secret`
-5. audience validation using provided or env auth service identifier
-6. schema validation
-7. domain-to-`config_url` hostname match
+4. signature validation using the configured JWKS
+5. schema validation
+6. domain-to-`config_url` hostname match
 
 Required behavior:
 
-- if the shared secret is wrong, say so explicitly
 - if schema is valid but signature fails, report both facts distinctly
 - if `config_url` fetch fails, do not fabricate later-stage failures
-- if raw `config` is provided, skip signature/audience checks cleanly
+- if raw `config` is provided, skip signature checks cleanly
 
 2.0 additions:
 
@@ -918,10 +915,10 @@ These do not affect the 2.0 pronouns/config/profile work but should be accounted
 
 The current implementation already supports:
 
-- multiple input forms: `config` (raw), `config_jwt`, `config_url`, `shared_secret`, `auth_service_identifier`
+- multiple input forms: `config` (raw), `config_jwt`, `config_url`
 - staged validation output via `checks` object with per-stage results
 - structured `issues[]` array with `stage`, `code`, `summary`, `details` fields
-- response shape: `{ ok, source, schema_valid, jwt_signature_valid, audience_valid, domain_match, checks, issues, config_summary }`
+- response shape: `{ ok, source, schema_valid, jwt_signature_valid, domain_match, checks, issues, config_summary }`
 
 2.0 work for this endpoint is documentation-only:
 

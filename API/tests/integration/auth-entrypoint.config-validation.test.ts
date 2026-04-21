@@ -219,10 +219,8 @@ describe('GET /auth (config validation)', () => {
     await app.close();
   });
 
-  it('returns generic 400 when config JWT aud is missing', async () => {
+  it('accepts config JWTs without an aud claim', async () => {
     process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
-    process.env.AUTH_SERVICE_IDENTIFIER =
-      process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
 
     const jwt = await signTestConfigJwt(baseClientConfigPayload(), { audience: null });
 
@@ -238,16 +236,14 @@ describe('GET /auth (config validation)', () => {
       url: `/auth?config_url=${encodeURIComponent(configUrl)}`,
     });
 
-    expect(res.statusCode).toBe(400);
-    expectJsonError(res.json());
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toContain('text/html');
 
     await app.close();
   });
 
-  it('returns generic 400 when config JWT aud does not match', async () => {
+  it('ignores config JWT aud because domain and signature are authoritative', async () => {
     process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
-    process.env.AUTH_SERVICE_IDENTIFIER =
-      process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
 
     const jwt = await signTestConfigJwt(baseClientConfigPayload(), {
       audience: 'some-other-auth-service',
@@ -265,8 +261,8 @@ describe('GET /auth (config validation)', () => {
       url: `/auth?config_url=${encodeURIComponent(configUrl)}`,
     });
 
-    expect(res.statusCode).toBe(400);
-    expectJsonError(res.json());
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toContain('text/html');
 
     await app.close();
   });

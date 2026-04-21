@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 
-import { getEnv, requireEnv } from '../../config/env.js';
+import { getAuthServiceIdentifier, getEnv, requireEnv } from '../../config/env.js';
 import { AppError } from '../../utils/errors.js';
 import {
   assertConfigDomainMatchesConfigUrl,
@@ -81,17 +81,17 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         throw new AppError('BAD_REQUEST', 400, 'MISSING_SOCIAL_CALLBACK_PARAMS');
       }
 
-      const { SHARED_SECRET, AUTH_SERVICE_IDENTIFIER, CONFIG_JWKS_URL } = requireEnv(
+      const { SHARED_SECRET, CONFIG_JWKS_URL } = requireEnv(
         'SHARED_SECRET',
-        'AUTH_SERVICE_IDENTIFIER',
         'CONFIG_JWKS_URL',
       );
+      const authServiceIdentifier = getAuthServiceIdentifier();
       const baseUrl = resolvePublicBaseUrl();
 
       const socialState = await verifySocialState({
         stateJwt: state,
         sharedSecret: SHARED_SECRET,
-        audience: AUTH_SERVICE_IDENTIFIER,
+        audience: authServiceIdentifier,
         issuer: socialStateIssuer(baseUrl),
       });
 
@@ -107,7 +107,6 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
       const payload = await verifyConfigJwtSignature(
         configJwt,
         CONFIG_JWKS_URL,
-        AUTH_SERVICE_IDENTIFIER,
       );
       const config = validateConfigFields(payload);
       assertConfigDomainMatchesConfigUrl(config.domain, configUrl);
@@ -235,7 +234,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
           codeChallenge: socialState.code_challenge,
           codeChallengeMethod: socialState.code_challenge_method,
           sharedSecret: SHARED_SECRET,
-          audience: AUTH_SERVICE_IDENTIFIER,
+          audience: authServiceIdentifier,
         });
 
         const u = new URL(`${baseUrl}/auth`);

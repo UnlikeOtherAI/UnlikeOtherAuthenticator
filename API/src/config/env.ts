@@ -41,10 +41,11 @@ const EnvSchema = z
     DEBUG_ENABLED: z.preprocess(normalizeBoolean, z.boolean().default(false)),
     // Single global shared secret used for domain hashing and client-domain access tokens.
     SHARED_SECRET: z.string().min(32),
-    // Identifier for this auth service instance. Used as expected `aud` for config JWTs.
-    AUTH_SERVICE_IDENTIFIER: z.string().min(1),
+    // Optional override for the internal issuer/audience used by service-issued tokens.
+    // Defaults to the PUBLIC_BASE_URL host, or HOST:PORT when PUBLIC_BASE_URL is unset.
+    AUTH_SERVICE_IDENTIFIER: z.string().min(1).optional(),
     // Domain whose superusers may access the first-party UOA Admin panel.
-    // Defaults to AUTH_SERVICE_IDENTIFIER when unset.
+    // Defaults to the resolved auth service identifier when unset.
     ADMIN_AUTH_DOMAIN: z.string().min(1).optional(),
     // Auth-service-only signing secret for first-party admin access tokens.
     ADMIN_ACCESS_TOKEN_SECRET: z.string().min(32).optional(),
@@ -132,6 +133,30 @@ export function getEnv(): Env {
   cachedEnv ??= parseEnv(process.env);
   maybeLogSesProductionWarning(cachedEnv);
   return cachedEnv;
+}
+
+function stripTrailingDot(value: string): string {
+  return value.trim().replace(/\.$/, '');
+}
+
+export function getAuthServiceIdentifier(env: Env = getEnv()): string {
+  const explicit = env.AUTH_SERVICE_IDENTIFIER?.trim();
+  if (explicit) return stripTrailingDot(explicit);
+
+  const publicBaseUrl = env.PUBLIC_BASE_URL?.trim();
+  if (publicBaseUrl) {
+    try {
+      return stripTrailingDot(new URL(publicBaseUrl).host);
+    } catch {
+      // parseEnv intentionally keeps PUBLIC_BASE_URL loose for legacy deployments.
+    }
+  }
+
+  return stripTrailingDot(`${env.HOST}:${env.PORT}`);
+}
+
+export function getAdminAuthDomain(env: Env = getEnv()): string {
+  return stripTrailingDot(env.ADMIN_AUTH_DOMAIN ?? getAuthServiceIdentifier(env)).toLowerCase();
 }
 
 export function requireEnv<K extends keyof Env>(...keys: K[]): { [P in K]-?: NonNullable<Env[P]> } {

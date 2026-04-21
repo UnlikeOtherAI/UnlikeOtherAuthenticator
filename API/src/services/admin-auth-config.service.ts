@@ -1,6 +1,6 @@
 import { decodeJwt } from 'jose';
 
-import { getEnv, requireEnv } from '../config/env.js';
+import { getAdminAuthDomain, getEnv, requireEnv } from '../config/env.js';
 import { normalizeDomain } from '../utils/domain.js';
 import { AppError } from '../utils/errors.js';
 import { validateConfigFields, type ClientConfig } from './config.service.js';
@@ -15,8 +15,7 @@ function publicBaseUrl(): string {
 }
 
 function adminAuthDomain(): string {
-  const env = getEnv();
-  return normalizeDomain(env.ADMIN_AUTH_DOMAIN ?? env.AUTH_SERVICE_IDENTIFIER);
+  return normalizeDomain(getAdminAuthDomain(getEnv()));
 }
 
 export function adminConfigUrl(): string {

@@ -6,7 +6,7 @@ export const configDebugEndpoints: EndpointSchema[] = [
     path: '/config/validate',
     description:
       'Production-safe configuration validation for raw config JSON, signed config JWTs, or config_url fetch targets',
-    auth: 'Public, IP rate limited; uses this deployment CONFIG_JWKS_URL and AUTH_SERVICE_IDENTIFIER',
+    auth: 'Public, IP rate limited; uses this deployment CONFIG_JWKS_URL for config JWT signature verification',
     body: {
       'config?': 'object — raw config payload to schema-validate directly',
       'config_jwt?': 'string — signed config JWT to decode and validate',
@@ -16,10 +16,9 @@ export const configDebugEndpoints: EndpointSchema[] = [
       ok: 'boolean — true when every executed validation and runtime-policy check passed',
       schema_valid: 'boolean — true when the config payload matches the schema',
       jwt_signature_valid: 'boolean|null — null when signature validation was skipped',
-      audience_valid: 'boolean|null — null when audience validation was skipped',
       domain_match: 'boolean|null — null when config_url/domain matching was not applicable',
       checks:
-        'object — stage-by-stage results for source, fetch, decode, secret_scan, signature, audience, schema, runtime_policy, and domain_match',
+        'object — stage-by-stage results for source, fetch, decode, secret_scan, signature, schema, runtime_policy, and domain_match',
       issues: 'array — explicit validation/debug issues with stage, code, summary, and details',
       recommendations:
         'array — required next steps, operational notes, and optional customization guidance',
@@ -37,17 +36,14 @@ export const configDebugEndpoints: EndpointSchema[] = [
       'config_url?': 'string — HTTPS URL that should return the signed config JWT',
       'jwks_url?':
         'string — JWKS URL used to verify the RS256 JWT signature; defaults to CONFIG_JWKS_URL',
-      'auth_service_identifier?':
-        'string — expected JWT audience; defaults to the auth service environment when omitted',
     },
     response: {
       ok: 'boolean — true when every executed validation check passed',
       schema_valid: 'boolean — true when the config payload matches the schema',
       jwt_signature_valid: 'boolean|null — null when signature validation was skipped',
-      audience_valid: 'boolean|null — null when audience validation was skipped',
       domain_match: 'boolean|null — null when config_url/domain matching was not applicable',
       checks:
-        'object — stage-by-stage results for source, fetch, decode, signature, audience, schema, and domain_match',
+        'object — stage-by-stage results for source, fetch, decode, signature, schema, and domain_match',
       issues: 'array — explicit validation/debug issues with stage, code, summary, and details',
     },
   },

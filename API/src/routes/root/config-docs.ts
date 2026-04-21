@@ -52,13 +52,11 @@ export const configExample = {
 
 export const configJwtDocumentation = {
   description:
-    'The config JWT is a signed JWT containing all client-specific settings. The payload is the config. The signature must be RS256, the protected header must include kid, and the JWT aud must match AUTH_SERVICE_IDENTIFIER.',
+    'The config JWT is a signed JWT containing all client-specific settings. The payload is the config. The signature must be RS256 and the protected header must include kid.',
   signing: {
     algorithms: ['RS256'],
     key_selection:
       'The JWT protected header must include kid. The auth service resolves that kid from CONFIG_JWKS_URL and rejects tokens without kid.',
-    audience:
-      'The JWT aud claim must match the auth service identifier configured in AUTH_SERVICE_IDENTIFIER.',
   },
   required_fields: {
     domain:
@@ -179,8 +177,8 @@ export const configValidationEndpointDocumentation = {
   path: '/config/validate',
   method: 'POST',
   description:
-    'Production-safe configuration validation endpoint for raw config JSON, a signed config JWT, or a config_url fetch target. It reports schema, signature, audience, config_url/domain, runtime-policy, and optional customization guidance.',
-  auth: 'Public, IP rate limited. Uses the deployment CONFIG_JWKS_URL and AUTH_SERVICE_IDENTIFIER.',
+    'Production-safe configuration validation endpoint for raw config JSON, a signed config JWT, or a config_url fetch target. It reports schema, signature, config_url/domain, runtime-policy, and optional customization guidance.',
+  auth: 'Public, IP rate limited. Uses the deployment CONFIG_JWKS_URL for config JWT signature verification.',
   body: {
     config:
       'object (optional) — raw config payload to schema-validate directly. This skips JWT signature checking unless config_jwt or config_url is also supplied instead.',
@@ -194,11 +192,10 @@ export const configValidationEndpointDocumentation = {
     ok: 'boolean — true when every executed check passed',
     schema_valid: 'boolean',
     jwt_signature_valid: 'boolean | null — null when signature checking was skipped',
-    audience_valid: 'boolean | null — null when no audience check was possible',
     domain_match:
       'boolean | null — null when config_url was not part of the request or schema parsing failed',
     checks:
-      'object — per-stage results for source, fetch, decode, secret_scan, signature, audience, schema, runtime_policy, and domain_match',
+      'object — per-stage results for source, fetch, decode, secret_scan, signature, schema, runtime_policy, and domain_match',
     issues: 'array — structured stage-specific failures and warnings',
     recommendations:
       'array — required next steps, operational notes, and optional customization guidance',
@@ -211,13 +208,11 @@ export const configVerificationEndpointDocumentation = {
   ...configValidationEndpointDocumentation,
   path: '/config/verify',
   description:
-    'Non-production DEBUG_ENABLED-only debug endpoint that validates raw config JSON, a signed config JWT, or a config_url fetch target. It also accepts jwks_url and auth_service_identifier overrides for local setup debugging.',
+    'Non-production DEBUG_ENABLED-only debug endpoint that validates raw config JSON, a signed config JWT, or a config_url fetch target. It also accepts a jwks_url override for local setup debugging.',
   auth: 'Available only when DEBUG_ENABLED=true and NODE_ENV is not production; IP rate limited.',
   body: {
     ...configValidationEndpointDocumentation.body,
     jwks_url:
       'string (optional) — JWKS URL used to verify config_jwt or the JWT fetched from config_url. Defaults to CONFIG_JWKS_URL',
-    auth_service_identifier:
-      'string (optional) — expected JWT aud. Defaults to the auth service environment when omitted',
   },
 };

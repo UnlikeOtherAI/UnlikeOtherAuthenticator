@@ -99,6 +99,8 @@ This service is **stateless where possible**, standards-based, and API-first.
 * Signature = tamper protection
 * No separate hash field required
 
+> **2026-04 config-signing update:** The original shared-secret config-signing text is superseded. Config JWTs are signed with RS256, include a `kid`, and are verified with the auth service's configured JWKS. Config trust is based on the verified signature plus exact `domain` / `config_url` hostname match.
+
 ### Verification Flow
 
 1. Client generates JWT config
@@ -441,9 +443,9 @@ The following tighten ambiguities in the brief to prevent misinterpretation duri
 ### 22.2 JWT Audience / Issuer Expectations
 
 * The config JWT is used for **config delivery only** — it is not a user token
-* Expected `aud`: the auth service identifier
+* The config JWT does **not** require an `aud` claim
 * `exp` is **optional** on config JWTs (configs are verified on every request, not cached by trust)
-* Config JWTs signed for one service **must not** be accepted by another
+* Config trust is based on the verified JWT signature and exact `domain` / `config_url` hostname match
 * Do not reuse user-token validation rules for config JWTs — they are separate concerns
 
 ---
@@ -1210,7 +1212,7 @@ Each task references the line number(s) where the relevant specification lives i
 | 2.3 | Implement JWT config signature verification using shared secret | L85–100 |
 | 2.4 | Validate required config fields: `domain`, `redirect_urls`, `enabled_auth_methods`, `ui_theme`, `language_config` | L106–112 |
 | 2.5 | Parse optional config fields: `2fa_enabled`, `debug_enabled`, `allowed_social_providers`, `user_scope` | L114–119 |
-| 2.6 | Enforce `aud` claim on config JWT (must match auth service identifier) | L414–420 |
+| 2.6 | Config JWT `aud` is not required; validate signature and domain instead | L414–420 |
 | 2.7 | Reject unsigned or tampered config JWTs | L98–100 |
 | 2.8 | Validate `domain` claim matches the origin of the request | L434–440 |
 

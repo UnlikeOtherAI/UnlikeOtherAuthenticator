@@ -35,7 +35,7 @@ Unlike Other Authenticator is a stateless, API-first authentication service that
 
 ### Trust Model
 
-1. **Client Identification**: Each client is identified by a verified domain. The hash of `(domain + shared secret)` becomes the client ID.
+1. **Client Identification**: Each client is identified by a verified domain. Backend-only calls use per-domain client secrets managed in Admin > Domains & Secrets.
 2. **Config Delivery**: All client configuration is delivered as a signed JWT. The OAuth server verifies the JWT signature before trusting any config.
 3. **OAuth Flow**: Uses the standard authorization code flow. Client popup redirects with a code, which the client backend exchanges for an access token.
 4. **Token Pair**: Access tokens remain short-lived JWTs (15–60 minutes). Client backends also receive rotating refresh tokens for server-side session renewal.
@@ -91,9 +91,9 @@ When enabled, the access token JWT includes an `org` claim with the user's organ
 
 ### JWT Signing
 
-All config JWTs must be signed with the shared secret using HS256. Expected claims:
+All config JWTs must be signed and include the client domain. Expected claims:
 
-- `aud` — Auth service identifier (set in `AUTH_SERVICE_IDENTIFIER` env var)
+- `domain` — Client domain; must match the hostname of `config_url`
 - `exp` — Optional expiration (configs are verified on every request)
 
 ## Installation
@@ -129,7 +129,6 @@ Create `.env` files in both `/API` and `/Auth` directories.
 ```bash
 # Required
 SHARED_SECRET=your-secret-key-here
-AUTH_SERVICE_IDENTIFIER=auth.yourservice.com
 DATABASE_URL=postgresql://user:password@localhost:5432/auth_db
 
 # Social OAuth Providers
@@ -355,9 +354,9 @@ const config = {
   user_scope: 'global'
 };
 
-const configJWT = jwt.sign(config, process.env.SHARED_SECRET, {
-  audience: 'auth.yourservice.com',
-  algorithm: 'HS256'
+const configJWT = jwt.sign(config, process.env.CONFIG_PRIVATE_KEY_PEM, {
+  algorithm: 'RS256',
+  keyid: process.env.CONFIG_KEY_ID
 });
 
 // Serve this JWT at a URL accessible to the auth server

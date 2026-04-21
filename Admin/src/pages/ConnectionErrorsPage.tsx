@@ -5,10 +5,17 @@ import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Card, CardHeader } from '../components/ui/Card';
 import { FieldShell, SelectField, TextField } from '../components/ui/FormFields';
+import { Icon } from '../components/icons/Icon';
 import { PageHeader } from '../components/ui/PageHeader';
 import { DataTable, PaginationFooter, Td, usePagination } from '../components/ui/Table';
 import { useHandshakeErrorsQuery } from '../features/admin/admin-queries';
 import type { HandshakeErrorLog } from '../features/admin/types';
+import { useCookieState } from '../utils/cookie-state';
+
+const detailSectionIds = ['summary', 'rejection', 'request', 'response', 'jwt'] as const;
+const detailSectionCookieName = 'uoa-admin-connection-error-open-sections';
+const detailSectionCookieValues = sectionCookieValues(detailSectionIds);
+type DetailSectionId = (typeof detailSectionIds)[number];
 
 export function ConnectionErrorsPage() {
   const { data: errors = [], isLoading } = useHandshakeErrorsQuery();
@@ -121,10 +128,26 @@ export function ConnectionErrorsPage() {
 }
 
 function ErrorDetail({ error }: { error: HandshakeErrorLog | null }) {
+  const [openSectionValue, setOpenSectionValue] = useCookieState<string>(
+    detailSectionCookieName,
+    '',
+    detailSectionCookieValues,
+  );
+  const openSections = useMemo(() => new Set(openSectionValue.split(',').filter(Boolean) as DetailSectionId[]), [openSectionValue]);
+  const toggleSection = (sectionId: DetailSectionId) => {
+    const next = new Set(openSections);
+    if (next.has(sectionId)) {
+      next.delete(sectionId);
+    } else {
+      next.add(sectionId);
+    }
+    setOpenSectionValue(detailSectionIds.filter((id) => next.has(id)).join(','));
+  };
+
   if (!error) {
     return (
       <Card className="p-5">
-        <p className="text-sm text-gray-400">Select an error to inspect the sanitized request payload.</p>
+        <p className="text-sm text-gray-400">Select an error to inspect the sanitized request and response context.</p>
       </Card>
     );
   }
@@ -138,25 +161,47 @@ function ErrorDetail({ error }: { error: HandshakeErrorLog | null }) {
         </div>
         <Badge variant="red">{error.errorCode}</Badge>
       </CardHeader>
-      <div className="space-y-4 p-5">
-        <DetailGrid error={error} />
-        <DetailSection title="Rejected because">
+      <div className="space-y-3 p-5">
+        <CollapsibleDetailSection id="summary" title="Summary" openSections={openSections} onToggle={toggleSection}>
+          <DetailGrid error={error} />
+          <div className="mt-4 space-y-3">
+            <div>
+              <p className="mb-2 text-sm font-semibold text-gray-900">Missing claims</p>
+              {error.missingClaims.length > 0 ? <TokenList values={error.missingClaims} variant="amber" /> : <p className="text-sm text-gray-400">No required claims were missing.</p>}
+            </div>
+            <div>
+              <p className="mb-2 text-sm font-semibold text-gray-900">Redactions applied</p>
+              {error.redactions.length > 0 ? <TokenList values={error.redactions} variant="slate" /> : <p className="text-sm text-gray-400">No redactions were recorded.</p>}
+            </div>
+          </div>
+        </CollapsibleDetailSection>
+        <CollapsibleDetailSection id="rejection" title="Rejection Details" openSections={openSections} onToggle={toggleSection}>
           <ul className="space-y-2">
             {error.details.map((detail) => <li key={detail} className="text-sm text-gray-600">{detail}</li>)}
           </ul>
-        </DetailSection>
-        <DetailSection title="Missing claims">
-          {error.missingClaims.length > 0 ? <TokenList values={error.missingClaims} variant="amber" /> : <p className="text-sm text-gray-400">No required claims were missing.</p>}
-        </DetailSection>
-        <DetailSection title="Redactions applied">
-          <TokenList values={error.redactions} variant="slate" />
-        </DetailSection>
-        <DetailSection title="JWT header">
-          <JsonBlock value={error.jwtHeader} />
-        </DetailSection>
-        <DetailSection title="Sanitized JWT payload">
-          <JsonBlock value={error.jwtPayload} />
-        </DetailSection>
+        </CollapsibleDetailSection>
+        <CollapsibleDetailSection id="request" title="Auth Request & Config Fetch" openSections={openSections} onToggle={toggleSection}>
+          {hasJsonContent(error.requestJson) ? (
+            <JsonBlock value={error.requestJson} />
+          ) : <p className="text-sm text-gray-400">No request context was captured by this revision.</p>}
+        </CollapsibleDetailSection>
+        <CollapsibleDetailSection id="response" title="Config Endpoint Response" openSections={openSections} onToggle={toggleSection}>
+          {hasJsonContent(error.responseJson) ? (
+            <JsonBlock value={error.responseJson} />
+          ) : <p className="text-sm text-gray-400">No config endpoint response context was captured.</p>}
+        </CollapsibleDetailSection>
+        <CollapsibleDetailSection id="jwt" title="JWT Header & Payload" openSections={openSections} onToggle={toggleSection}>
+          <div className="space-y-3">
+            <div>
+              <p className="mb-2 text-sm font-semibold text-gray-900">JWT header</p>
+              <JsonBlock value={error.jwtHeader} />
+            </div>
+            <div>
+              <p className="mb-2 text-sm font-semibold text-gray-900">Sanitized JWT payload</p>
+              <JsonBlock value={error.jwtPayload} />
+            </div>
+          </div>
+        </CollapsibleDetailSection>
       </div>
     </Card>
   );
@@ -184,11 +229,33 @@ function DetailGrid({ error }: { error: HandshakeErrorLog }) {
   );
 }
 
-function DetailSection({ children, title }: { children: ReactNode; title: string }) {
+function CollapsibleDetailSection({
+  children,
+  id,
+  onToggle,
+  openSections,
+  title,
+}: {
+  children: ReactNode;
+  id: DetailSectionId;
+  onToggle: (sectionId: DetailSectionId) => void;
+  openSections: Set<DetailSectionId>;
+  title: string;
+}) {
+  const isOpen = openSections.has(id);
+
   return (
-    <div>
-      <p className="mb-2 text-sm font-semibold text-gray-900">{title}</p>
-      {children}
+    <div className="rounded-lg border border-gray-100">
+      <button
+        type="button"
+        className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left text-sm font-semibold text-gray-900"
+        aria-expanded={isOpen}
+        onClick={() => onToggle(id)}
+      >
+        <span>{title}</span>
+        <Icon name="chevronRight" className={`h-3.5 w-3.5 shrink-0 text-gray-400 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
+      </button>
+      {isOpen ? <div className="border-t border-gray-100 p-3">{children}</div> : null}
     </div>
   );
 }
@@ -203,10 +270,14 @@ function TokenList({ values, variant }: { values: string[]; variant: 'amber' | '
 
 function JsonBlock({ value }: { value: unknown }) {
   return (
-    <pre className="max-h-72 overflow-auto rounded-lg bg-slate-950 p-3 text-xs leading-5 text-slate-100">
+    <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-slate-950 p-3 text-xs leading-5 text-slate-100">
       {JSON.stringify(value, null, 2)}
     </pre>
   );
+}
+
+function hasJsonContent(value: Record<string, unknown>) {
+  return Object.keys(value).length > 0;
 }
 
 function phaseLabel(phase: HandshakeErrorLog['phase']) {
@@ -219,4 +290,11 @@ function phaseLabel(phase: HandshakeErrorLog['phase']) {
   };
 
   return labels[phase];
+}
+
+function sectionCookieValues(ids: readonly string[]) {
+  return ids.reduce<string[]>(
+    (values, id) => [...values, ...values.map((value) => (value ? `${value},${id}` : id))],
+    [''],
+  );
 }

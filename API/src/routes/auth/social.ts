@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 
-import { getEnv, requireEnv } from '../../config/env.js';
+import { getAuthServiceIdentifier, getEnv, requireEnv } from '../../config/env.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
 import { buildAppleAuthorizationUrl } from '../../services/social/apple.service.js';
 import { buildFacebookAuthorizationUrl } from '../../services/social/facebook.service.js';
@@ -78,10 +78,8 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
           throw new AppError('INTERNAL', 500, 'GOOGLE_ENV_MISSING');
         }
 
-        const { SHARED_SECRET, AUTH_SERVICE_IDENTIFIER } = requireEnv(
-          'SHARED_SECRET',
-          'AUTH_SERVICE_IDENTIFIER',
-        );
+        const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
+        const authServiceIdentifier = getAuthServiceIdentifier(env);
         const baseUrl = resolvePublicBaseUrl();
         const redirectUri = `${baseUrl}/auth/callback/google`;
 
@@ -93,7 +91,7 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
           codeChallenge: pkce.codeChallenge,
           codeChallengeMethod: pkce.codeChallengeMethod,
           sharedSecret: SHARED_SECRET,
-          audience: AUTH_SERVICE_IDENTIFIER,
+          audience: authServiceIdentifier,
           baseUrlForIssuer: baseUrl,
         });
 
@@ -112,10 +110,8 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
           throw new AppError('INTERNAL', 500, 'FACEBOOK_ENV_MISSING');
         }
 
-        const { SHARED_SECRET, AUTH_SERVICE_IDENTIFIER } = requireEnv(
-          'SHARED_SECRET',
-          'AUTH_SERVICE_IDENTIFIER',
-        );
+        const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
+        const authServiceIdentifier = getAuthServiceIdentifier(env);
         const baseUrl = resolvePublicBaseUrl();
         const redirectUri = `${baseUrl}/auth/callback/facebook`;
 
@@ -127,7 +123,7 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
           codeChallenge: pkce.codeChallenge,
           codeChallengeMethod: pkce.codeChallengeMethod,
           sharedSecret: SHARED_SECRET,
-          audience: AUTH_SERVICE_IDENTIFIER,
+          audience: authServiceIdentifier,
           baseUrlForIssuer: baseUrl,
         });
 
@@ -146,10 +142,8 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
           throw new AppError('INTERNAL', 500, 'GITHUB_ENV_MISSING');
         }
 
-        const { SHARED_SECRET, AUTH_SERVICE_IDENTIFIER } = requireEnv(
-          'SHARED_SECRET',
-          'AUTH_SERVICE_IDENTIFIER',
-        );
+        const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
+        const authServiceIdentifier = getAuthServiceIdentifier(env);
         const baseUrl = resolvePublicBaseUrl();
         const redirectUri = `${baseUrl}/auth/callback/github`;
 
@@ -161,7 +155,7 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
           codeChallenge: pkce.codeChallenge,
           codeChallengeMethod: pkce.codeChallengeMethod,
           sharedSecret: SHARED_SECRET,
-          audience: AUTH_SERVICE_IDENTIFIER,
+          audience: authServiceIdentifier,
           baseUrlForIssuer: baseUrl,
         });
 
@@ -185,10 +179,8 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
           throw new AppError('INTERNAL', 500, 'APPLE_ENV_MISSING');
         }
 
-        const { SHARED_SECRET, AUTH_SERVICE_IDENTIFIER } = requireEnv(
-          'SHARED_SECRET',
-          'AUTH_SERVICE_IDENTIFIER',
-        );
+        const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
+        const authServiceIdentifier = getAuthServiceIdentifier(env);
         const baseUrl = resolvePublicBaseUrl();
         const redirectUri = `${baseUrl}/auth/callback/apple`;
 
@@ -200,7 +192,7 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
           codeChallenge: pkce.codeChallenge,
           codeChallengeMethod: pkce.codeChallengeMethod,
           sharedSecret: SHARED_SECRET,
-          audience: AUTH_SERVICE_IDENTIFIER,
+          audience: authServiceIdentifier,
           baseUrlForIssuer: baseUrl,
         });
 
@@ -219,10 +211,8 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
           throw new AppError('INTERNAL', 500, 'LINKEDIN_ENV_MISSING');
         }
 
-        const { SHARED_SECRET, AUTH_SERVICE_IDENTIFIER } = requireEnv(
-          'SHARED_SECRET',
-          'AUTH_SERVICE_IDENTIFIER',
-        );
+        const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
+        const authServiceIdentifier = getAuthServiceIdentifier(env);
         const baseUrl = resolvePublicBaseUrl();
         const redirectUri = `${baseUrl}/auth/callback/linkedin`;
 
@@ -234,7 +224,7 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
           codeChallenge: pkce.codeChallenge,
           codeChallengeMethod: pkce.codeChallengeMethod,
           sharedSecret: SHARED_SECRET,
-          audience: AUTH_SERVICE_IDENTIFIER,
+          audience: authServiceIdentifier,
           baseUrlForIssuer: baseUrl,
         });
 

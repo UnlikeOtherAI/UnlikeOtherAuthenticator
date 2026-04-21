@@ -24,7 +24,6 @@ const VerifyConfigBodySchema = z
     config_jwt: z.string().trim().min(1).optional(),
     config_url: z.string().trim().min(1).optional(),
     jwks_url: z.string().trim().url().optional(),
-    auth_service_identifier: z.string().trim().min(1).optional(),
   })
   .superRefine((value, ctx) => {
     if (!value.config && !value.config_jwt && !value.config_url) {
@@ -76,7 +75,6 @@ export type VerifyConfigResponse = {
   source: 'config' | 'config_jwt' | 'config_url';
   schema_valid: boolean;
   jwt_signature_valid: boolean | null;
-  audience_valid: boolean | null;
   domain_match: boolean | null;
   checks: Record<string, CheckResult>;
   issues: VerifyConfigIssue[];
@@ -86,16 +84,6 @@ export type VerifyConfigResponse = {
 
 function normalizeHostname(value: string): string {
   return value.trim().toLowerCase().replace(/\.$/, '');
-}
-
-function readAudienceClaim(payload: JWTPayload): string[] {
-  if (typeof payload.aud === 'string') {
-    return [payload.aud];
-  }
-  if (Array.isArray(payload.aud)) {
-    return payload.aud.filter((value): value is string => typeof value === 'string');
-  }
-  return [];
 }
 
 function validateRuntimePolicy(response: VerifyConfigResponse, config: ClientConfig): void {
@@ -177,7 +165,6 @@ export async function verifyClientConfig(
     source,
     schema_valid: false,
     jwt_signature_valid: null,
-    audience_valid: null,
     domain_match: null,
     checks: {},
     issues: [],
@@ -188,7 +175,6 @@ export async function verifyClientConfig(
   let payload: JWTPayload | undefined;
   let configJwt: string | undefined;
   const env = getEnv();
-  const expectedAudience = params.auth_service_identifier?.trim() || env.AUTH_SERVICE_IDENTIFIER;
   const jwksUrl = params.jwks_url?.trim() || env.CONFIG_JWKS_URL;
 
   passedCheck(response, 'source', `Using ${source} as the configuration source.`);
@@ -211,7 +197,6 @@ export async function verifyClientConfig(
       skippedCheck(response, 'decode', 'JWT decode was skipped because fetch failed.');
       skippedCheck(response, 'secret_scan', 'Secret scan was skipped because fetch failed.');
       skippedCheck(response, 'signature', 'Signature verification was skipped because no JWT was available.');
-      skippedCheck(response, 'audience', 'Audience verification was skipped because no JWT payload was available.');
       skippedCheck(response, 'schema', 'Schema validation was skipped because no config payload was available.');
       skippedCheck(response, 'runtime_policy', 'Runtime policy checks were skipped because no config payload was available.');
       skippedCheck(response, 'domain_match', 'Domain matching was skipped because no parsed config was available.');
@@ -238,7 +223,6 @@ export async function verifyClientConfig(
       );
       skippedCheck(response, 'signature', 'Signature verification was skipped because JWT decode failed.');
       skippedCheck(response, 'secret_scan', 'Secret scan was skipped because JWT decode failed.');
-      skippedCheck(response, 'audience', 'Audience verification was skipped because JWT decode failed.');
       skippedCheck(response, 'schema', 'Schema validation was skipped because JWT decode failed.');
       skippedCheck(response, 'runtime_policy', 'Runtime policy checks were skipped because JWT decode failed.');
       skippedCheck(response, 'domain_match', 'Domain matching was skipped because no parsed config was available.');
@@ -247,7 +231,7 @@ export async function verifyClientConfig(
 
     if (jwksUrl) {
       try {
-        await verifyConfigJwtSignature(configJwt, jwksUrl, expectedAudience);
+        await verifyConfigJwtSignature(configJwt, jwksUrl);
         response.jwt_signature_valid = true;
         passedCheck(response, 'signature', 'The configured JWKS verified the RS256 config JWT signature.');
       } catch {
@@ -256,7 +240,7 @@ export async function verifyClientConfig(
           response,
           'signature',
           'CONFIG_JWKS_SIGNATURE_INVALID',
-          'The configured JWKS did not verify the config JWT signature and audience.',
+          'The configured JWKS did not verify the config JWT signature.',
           ['Check that the JWT header includes a valid kid, uses RS256, and matches the configured JWKS.'],
         );
       }
@@ -286,40 +270,6 @@ export async function verifyClientConfig(
     }
   } else {
     skippedCheck(response, 'secret_scan', 'Secret scan was skipped because no config payload was available.');
-  }
-
-  if (payload && source !== 'config') {
-    const audiences = readAudienceClaim(payload);
-    if (!audiences.length) {
-      response.audience_valid = false;
-      failedCheck(
-        response,
-        'audience',
-        'CONFIG_AUDIENCE_MISSING',
-        'The config JWT is missing an aud claim.',
-        [`Expected auth_service_identifier: ${expectedAudience}`],
-      );
-    } else if (!audiences.includes(expectedAudience)) {
-      response.audience_valid = false;
-      failedCheck(
-        response,
-        'audience',
-        'CONFIG_AUDIENCE_INVALID',
-        'The config JWT aud claim does not include the expected auth_service_identifier.',
-        [`Expected: ${expectedAudience}`, `Received: ${audiences.join(', ')}`],
-      );
-    } else {
-      response.audience_valid = true;
-      passedCheck(response, 'audience', 'The config JWT aud claim matches the expected auth_service_identifier.');
-    }
-  } else {
-    skippedCheck(
-      response,
-      'audience',
-      source === 'config'
-        ? 'Audience verification was skipped because a raw config object was provided.'
-        : 'Audience verification was skipped because no config payload was available.',
-    );
   }
 
   let config: ClientConfig | undefined;

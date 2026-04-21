@@ -1,7 +1,7 @@
 import { jwtVerify } from 'jose';
 import { z } from 'zod';
 
-import { requireEnv } from '../config/env.js';
+import { getAuthServiceIdentifier, requireEnv } from '../config/env.js';
 import { ACCESS_TOKEN_AUDIENCE } from '../config/jwt.js';
 import { AppError } from '../utils/errors.js';
 
@@ -51,13 +51,10 @@ export async function verifyAccessToken(
   token: string,
   deps?: { sharedSecret?: string; issuer?: string },
 ): Promise<AccessTokenClaims> {
-  const { SHARED_SECRET, AUTH_SERVICE_IDENTIFIER } = requireEnv(
-    'SHARED_SECRET',
-    'AUTH_SERVICE_IDENTIFIER',
-  );
+  const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
 
   const sharedSecret = deps?.sharedSecret ?? SHARED_SECRET;
-  const issuer = deps?.issuer ?? AUTH_SERVICE_IDENTIFIER;
+  const issuer = deps?.issuer ?? getAuthServiceIdentifier();
 
   try {
     const { payload } = await jwtVerify(token, sharedSecretKey(sharedSecret), {

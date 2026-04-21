@@ -83,8 +83,8 @@ describe('POST /config/verify', () => {
     expect(body.source).toBe('config');
     expect(body.schema_valid).toBe(false);
     expect(body.jwt_signature_valid).toBeNull();
-    expect(body.audience_valid).toBeNull();
-    expect(body.checks.audience.status).toBe('skipped');
+    expect(body).not.toHaveProperty('audience_valid');
+    expect(body.checks).not.toHaveProperty('audience');
     expect(body.issues).toContainEqual(
       expect.objectContaining({
         stage: 'schema',
@@ -112,7 +112,7 @@ describe('POST /config/verify', () => {
     expect(body.ok).toBe(false);
     expect(body.schema_valid).toBe(true);
     expect(body.jwt_signature_valid).toBe(false);
-    expect(body.audience_valid).toBe(true);
+    expect(body).not.toHaveProperty('audience_valid');
     expect(body.issues).toContainEqual(
       expect.objectContaining({
         stage: 'signature',
