@@ -128,6 +128,10 @@ function isNat64WellKnownPrefix(hextets: number[]): boolean {
   );
 }
 
+function isNat64LocalUsePrefix(hextets: number[]): boolean {
+  return hextets[0] === 0x0064 && hextets[1] === 0xff9b && hextets[2] === 0x0001;
+}
+
 function isBlockedIpv6(address: string): boolean {
   const hextets = expandIpv6(address);
   if (!hextets) return true;
@@ -136,11 +140,7 @@ function isBlockedIpv6(address: string): boolean {
     return isBlockedIpv4(decodeTrailingIpv4(hextets));
   }
 
-  const isNat64WellKnown = isNat64WellKnownPrefix(hextets);
-  const isBlockedNat64EmbeddedIpv4 = isNat64WellKnown
-    ? isBlockedIpv4(decodeTrailingIpv4(hextets))
-    : false;
-  if (isNat64WellKnown || isBlockedNat64EmbeddedIpv4) return true;
+  if (isNat64WellKnownPrefix(hextets) || isNat64LocalUsePrefix(hextets)) return true;
 
   const isUnspecified = hextets.every((hextet) => hextet === 0);
   const isLoopback =

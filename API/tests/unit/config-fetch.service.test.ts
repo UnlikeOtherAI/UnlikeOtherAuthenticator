@@ -49,6 +49,8 @@ describe('fetchConfigJwtFromUrl', () => {
     '64:ff9b::a00:1',
     '64:ff9b::c0a8:1',
     '64:ff9b::8.8.8.8',
+    '64:ff9b:1::1',
+    '64:ff9b:1:abc::1',
     'ff02::1',
   ])('rejects blocked IPv6 config URLs (%s)', async (address) => {
     const fetchMock = vi.fn();
@@ -76,15 +78,18 @@ describe('fetchConfigJwtFromUrl', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('allows documentation IPv6 config URLs', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response('config.jwt.value', { status: 200 }));
-    vi.stubGlobal('fetch', fetchMock);
+  it.each(['2001:db8::1', '64:ff9c::1'])(
+    'allows unblocked IPv6 config URLs (%s)',
+    async (address) => {
+      const fetchMock = vi.fn().mockResolvedValue(new Response('config.jwt.value', { status: 200 }));
+      vi.stubGlobal('fetch', fetchMock);
 
-    await expect(fetchConfigJwtFromUrl('https://[2001:db8::1]/config')).resolves.toBe(
-      'config.jwt.value',
-    );
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-  });
+      await expect(fetchConfigJwtFromUrl(`https://[${address}]/config`)).resolves.toBe(
+        'config.jwt.value',
+      );
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it('uses manual redirects and revalidates each redirect target', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
