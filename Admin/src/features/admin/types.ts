@@ -19,6 +19,13 @@ export type Domain = {
   hash: string;
 };
 
+export type DomainDirectoryDetail = {
+  domain: Domain;
+  organisations: Organisation[];
+  teams: Array<Team & { orgName: string }>;
+  users: UserSummary[];
+};
+
 export type Team = {
   id: string;
   orgId: string;
@@ -95,6 +102,8 @@ export type HandshakeErrorLog = {
   ip: string;
   userAgent: string;
   requestId: string;
+  requestJson: Record<string, unknown>;
+  responseJson: Record<string, unknown>;
   jwtHeader: Record<string, string>;
   jwtPayload: Record<string, unknown>;
   redactions: string[];

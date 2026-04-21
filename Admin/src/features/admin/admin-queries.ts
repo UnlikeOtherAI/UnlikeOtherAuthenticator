@@ -10,6 +10,14 @@ export function useDomainsQuery() {
   return useQuery({ queryKey: ['admin', 'domains'], queryFn: adminService.getDomains });
 }
 
+export function useDomainQuery(domain: string | undefined) {
+  return useQuery({
+    queryKey: ['admin', 'domain', domain],
+    queryFn: () => adminService.getDomain(domain ?? ''),
+    enabled: Boolean(domain),
+  });
+}
+
 export function useOrganisationsQuery() {
   return useQuery({ queryKey: ['admin', 'organisations'], queryFn: adminService.getOrganisations });
 }

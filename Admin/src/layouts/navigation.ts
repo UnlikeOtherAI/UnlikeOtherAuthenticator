@@ -19,11 +19,12 @@ export const navSections: NavSection[] = [
   },
   {
     label: 'Configuration',
-    items: [{ label: 'Domains & Secrets', path: '/domains', icon: 'globe', badgeKey: 'domains' }],
+    items: [{ label: 'Secrets', path: '/secrets', icon: 'globe', badgeKey: 'domains' }],
   },
   {
     label: 'Directory',
     items: [
+      { label: 'Domains', path: '/domains', icon: 'globe', badgeKey: 'domains' },
       { label: 'Organisations', path: '/organisations', icon: 'building', badgeKey: 'orgs' },
       { label: 'Teams', path: '/teams', icon: 'users', badgeKey: 'teams' },
       { label: 'Users', path: '/users', icon: 'user', badgeKey: 'users' },
@@ -53,6 +54,10 @@ export function navLabelForPath(pathname: string) {
 
   if (pathname.startsWith('/organisations/')) {
     return 'Organisation';
+  }
+
+  if (pathname.startsWith('/domains/')) {
+    return 'Domain';
   }
 
   if (pathname.startsWith('/feature-flags/') && pathname.includes('/groups/')) {

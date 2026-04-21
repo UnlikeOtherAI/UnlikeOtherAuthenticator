@@ -17,7 +17,7 @@ import { useAdminUi } from '../features/shell/admin-ui';
 import { DomainFormSchema, type DomainFormValues } from '../schemas/admin';
 import { adminService, type DomainSecretResponse } from '../services/admin-service';
 
-export function DomainsPage() {
+export function SecretsPage() {
   const { data = [], isLoading } = useDomainsQuery();
   const { confirm, openDialog } = useAdminUi();
   const queryClient = useQueryClient();
@@ -54,7 +54,7 @@ export function DomainsPage() {
 
   return (
     <>
-      <PageHeader title="Domains & Secrets" description="Registered client domains and access secrets" actions={<Button icon="plus" variant="primary" onClick={() => setIsModalOpen(true)}>Add Domain</Button>} />
+      <PageHeader title="Secrets" description="Registered client domains and access secrets" actions={<Button icon="plus" variant="primary" onClick={() => setIsModalOpen(true)}>Add Domain</Button>} />
       <Card>
         <div className="flex flex-wrap gap-2 border-b border-gray-100 px-4 py-3">
           <TextField className="w-60" placeholder="Filter by domain..." type="search" value={query} onChange={(event) => setQuery(event.target.value)} />

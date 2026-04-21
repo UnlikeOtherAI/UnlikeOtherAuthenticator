@@ -5,6 +5,7 @@ import { requireAdminSuperuser } from '../../../middleware/admin-superuser.js';
 import { listHandshakeErrorLogs } from '../../../services/handshake-error-log.service.js';
 import {
   getAdminDashboard,
+  getAdminDomain,
   getAdminDomains,
   getAdminLogs,
   getAdminOrganisation,
@@ -17,6 +18,7 @@ import {
   getAdminUsers,
   searchAdmin,
 } from '../../../services/internal-admin.service.js';
+import { normalizeDomain } from '../../../utils/domain.js';
 import { AppError } from '../../../utils/errors.js';
 
 const IdParamsSchema = z.object({ orgId: z.string().trim().min(1) });
@@ -25,6 +27,7 @@ const TeamParamsSchema = z.object({
   teamId: z.string().trim().min(1),
 });
 const UserParamsSchema = z.object({ userId: z.string().trim().min(1) });
+const DomainParamsSchema = z.object({ domain: z.string().trim().min(3).transform(normalizeDomain) });
 const LimitQuerySchema = z.object({ limit: z.coerce.number().int().positive().optional() }).strict();
 const SearchQuerySchema = z.object({ q: z.string().trim().default('') }).strict();
 
@@ -131,5 +134,10 @@ export function registerInternalAdminReadRoutes(app: FastifyInstance): void {
   app.get('/internal/admin/users/:userId', adminRoute(nullableObjectSchema), async (request) => {
     const { userId } = UserParamsSchema.parse(request.params);
     return getAdminUser(userId);
+  });
+
+  app.get('/internal/admin/domains/:domain', adminRoute(nullableObjectSchema), async (request) => {
+    const { domain } = DomainParamsSchema.parse(request.params);
+    return getAdminDomain(domain);
   });
 }

@@ -69,6 +69,13 @@ export const internalAdminEndpoints: EndpointSchema[] = [
     response: { 200: 'Updated domain registry row', '401/403': authFailures },
   },
   {
+    method: 'GET',
+    path: '/internal/admin/domains/:domain',
+    description: 'Get one domain with its organisations, teams, and users for directory browsing',
+    auth: adminAuth,
+    response: { 200: '{ domain, organisations, teams, users } or null', '401/403': authFailures },
+  },
+  {
     method: 'POST',
     path: '/internal/admin/domains/:domain/rotate-secret',
     description: 'Rotate a domain client secret and deactivate previous active secrets',
@@ -132,10 +139,10 @@ export const internalAdminEndpoints: EndpointSchema[] = [
   {
     method: 'GET',
     path: '/internal/admin/handshake-errors',
-    description: 'List sanitized app handshake and config JWT errors',
+    description: 'List sanitized app handshake and config JWT errors, including redacted request/response context for config fetch failures',
     auth: adminAuth,
     query: { limit: 'number (optional, max 500)' },
-    response: { 200: 'Sanitized handshake error log array', '401/403': authFailures },
+    response: { 200: 'Sanitized handshake error log array with requestJson, responseJson, jwtHeader, jwtPayload, and redactions', '401/403': authFailures },
   },
   {
     method: 'GET',

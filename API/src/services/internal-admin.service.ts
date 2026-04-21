@@ -379,6 +379,80 @@ export async function getAdminOrganisation(orgId: string) {
   return formatAdminOrganisation(org, latestLogsByUser(logs));
 }
 
+export async function getAdminDomain(domain: string) {
+  if (!isDatabaseEnabled()) return null;
+
+  const normalized = normalizeDomain(domain);
+  const prisma = getPrisma();
+  const [registry, roles, orgs, userIdsRaw] = await Promise.all([
+    prisma.clientDomain.findUnique({
+      where: { domain: normalized },
+      include: { secrets: { where: { active: true }, orderBy: { createdAt: 'desc' }, take: 1 } },
+    }),
+    prisma.domainRole.findMany({ where: { domain: normalized } }),
+    prisma.organisation.findMany({
+      where: { domain: normalized },
+      ...adminOrganisationArgs,
+    }),
+    prisma.domainRole.findMany({ where: { domain: normalized }, select: { userId: true }, distinct: ['userId'] }),
+  ]);
+  const orgRoleDomainPresent = orgs.length > 0 || roles.length > 0 || Boolean(registry);
+  if (!orgRoleDomainPresent) return null;
+
+  const userIds = userIdsRaw.map((row) => row.userId);
+  const [users, logs] = await Promise.all([
+    userIds.length ? prisma.user.findMany({ where: { id: { in: userIds } } }) : Promise.resolve([]),
+    userIds.length
+      ? prisma.loginLog.findMany({
+          where: { userId: { in: userIds } },
+          orderBy: { createdAt: 'desc' },
+          take: Math.max(userIds.length * 5, DEFAULT_LIST_LIMIT),
+        })
+      : Promise.resolve([]),
+  ]);
+  const latestByUser = latestLogsByUser(logs);
+  const rolesByUser = new Map<string, string[]>();
+  roles.forEach((role) => {
+    const list = rolesByUser.get(role.userId) ?? [];
+    list.push(role.role);
+    rolesByUser.set(role.userId, list);
+  });
+
+  const organisations = orgs.map((org) => formatAdminOrganisation(org, latestByUser));
+  const teams = organisations.flatMap((org) => org.teams.map((team) => ({ ...team, orgName: org.name })));
+  const userSummaries = users.map((user) => {
+    const latestLog = latestByUser.get(user.id);
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      domains: [normalized],
+      twofa: user.twoFaEnabled,
+      lastLogin: latestLog ? displayTimestamp(latestLog.createdAt) : 'Never',
+      status: 'active',
+      method: method(latestLog?.authMethod),
+      created: displayDate(user.createdAt),
+      domainRoles: rolesByUser.get(user.id) ?? [],
+    };
+  });
+
+  const activeSecret = registry?.secrets[0] ?? null;
+  const domainSummary = {
+    id: normalized,
+    name: normalized,
+    label: registry?.label ?? normalized,
+    secretAge: secretAge(activeSecret?.createdAt ?? null),
+    secretOld: activeSecret ? Date.now() - activeSecret.createdAt.getTime() > SECRET_OLD_MS : false,
+    users: userSummaries.length,
+    orgs: organisations.length,
+    status: registry?.status === 'disabled' ? 'disabled' : 'active',
+    created: registry ? displayDate(registry.createdAt) : '',
+    hash: activeSecret ? `sha256:${activeSecret.hashPrefix}...` : 'not configured',
+  };
+
+  return { domain: domainSummary, organisations, teams, users: userSummaries };
+}
+
 export async function getAdminTeams(limit?: number) {
   const orgs = await getAdminOrganisations(limit);
   return orgs

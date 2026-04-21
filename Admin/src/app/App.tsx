@@ -9,8 +9,10 @@ import { FeatureAudienceGroupPage } from '../pages/FeatureAudienceGroupPage';
 import { FeatureFlagDetailPage } from '../pages/FeatureFlagDetailPage';
 import { FeatureFlagsPage } from '../pages/AppsFlagsPage';
 import { DashboardPage } from '../pages/DashboardPage';
-import { DomainsPage } from '../pages/DomainsPage';
+import { DirectoryDomainsPage } from '../pages/DirectoryDomainsPage';
+import { DomainDetailPage } from '../pages/DomainDetailPage';
 import { LogsPage } from '../pages/LogsPage';
+import { SecretsPage } from '../pages/SecretsPage';
 import { LoginPage } from '../pages/LoginPage';
 import { OrganisationDetailPage } from '../pages/OrganisationDetailPage';
 import { OrganisationsPage } from '../pages/OrganisationsPage';
@@ -36,7 +38,9 @@ export function App() {
       >
         <Route index element={<DashboardPage />} />
         <Route path="dashboard" element={<DashboardPage />} />
-        <Route path="domains" element={<DomainsPage />} />
+        <Route path="secrets" element={<SecretsPage />} />
+        <Route path="domains" element={<DirectoryDomainsPage />} />
+        <Route path="domains/:domainId" element={<DomainDetailPage />} />
         <Route path="organisations" element={<OrganisationsPage />} />
         <Route path="organisations/:orgId" element={<OrganisationDetailPage />} />
         <Route path="organisations/:orgId/teams/:teamId" element={<TeamDetailPage />} />

@@ -1,4 +1,4 @@
-import type { AdminData, Domain, SearchResult, Team, UserSummary } from '../features/admin/types';
+import type { AdminData, Domain, DomainDirectoryDetail, SearchResult, Team, UserSummary } from '../features/admin/types';
 import { createApiClient } from './api-client';
 
 const api = createApiClient();
@@ -13,6 +13,8 @@ export type DomainSecretResponse = {
 export const adminService = {
   getDashboard: () => api.get<AdminData>('/internal/admin/dashboard'),
   getDomains: () => api.get<AdminData['domains']>('/internal/admin/domains'),
+  getDomain: (domain: string) =>
+    api.get<DomainDirectoryDetail | null>(`/internal/admin/domains/${encodeURIComponent(domain)}`),
   createDomain: (input: { clientSecret: string; domain: string; label: string }) =>
     api.post<DomainSecretResponse>('/internal/admin/domains', {
       client_secret: input.clientSecret,
