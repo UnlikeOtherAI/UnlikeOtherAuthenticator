@@ -289,6 +289,10 @@ function resolveAccessTokenContext(params: {
     };
   }
 
+  if (!params.env.ADMIN_ACCESS_TOKEN_SECRET) {
+    throw new AppError('INTERNAL', 500, 'ADMIN_ACCESS_TOKEN_SECRET_REQUIRED');
+  }
+
   return {
     clientId: `admin:${adminDomain}`,
     sharedSecret: params.env.ADMIN_ACCESS_TOKEN_SECRET,

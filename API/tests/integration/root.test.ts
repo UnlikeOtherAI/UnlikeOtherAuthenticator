@@ -19,8 +19,28 @@ afterAll(async () => {
 });
 
 describe('GET /', () => {
-  it('returns API information with version, repo link, config docs, and endpoints', async () => {
+  it('returns a Tailwind holding page linking to Admin, LLM docs, and API schema', async () => {
     const res = await app.inject({ method: 'GET', url: '/' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toContain('text/html');
+    expect(res.body).toContain('Unlike Other Authenticator');
+    expect(res.body).toContain('class="');
+    expect(res.body).toContain('href="/admin"');
+    expect(res.body).toContain('href="/llm"');
+    expect(res.body).toContain('href="/api"');
+  });
+
+  it('returns no-store headers for the holding page', async () => {
+    const res = await app.inject({ method: 'GET', url: '/' });
+
+    expect(res.headers['cache-control']).toContain('no-store');
+  });
+});
+
+describe('GET /api', () => {
+  it('returns API information with version, repo link, config docs, and endpoints', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api' });
 
     expect(res.statusCode).toBe(200);
 
@@ -32,6 +52,8 @@ describe('GET /', () => {
     expect(body.repository).toBe(
       'https://github.com/UnlikeOtherAI/UnlikeOtherAuthenticator',
     );
+    expect(body.home).toBe('/');
+    expect(body.api).toBe('/api');
     expect(body.config_jwt.required_fields.ui_theme.required_sections.colors.required_keys).toContain(
       'primary',
     );
@@ -50,9 +72,12 @@ describe('GET /', () => {
       );
     }
 
-    // The root endpoint itself is listed
+    // The root holding page and API schema endpoint are listed
     expect(body.endpoints).toContainEqual(
       expect.objectContaining({ method: 'GET', path: '/' }),
+    );
+    expect(body.endpoints).toContainEqual(
+      expect.objectContaining({ method: 'GET', path: '/api' }),
     );
 
     // Spot-check well-known routes with correct methods and paths
@@ -124,7 +149,7 @@ describe('GET /', () => {
   });
 
   it('returns a valid semver-like version string from package.json', async () => {
-    const res = await app.inject({ method: 'GET', url: '/' });
+    const res = await app.inject({ method: 'GET', url: '/api' });
     const body = res.json();
 
     // Version should match the pattern from package.json (digits.digits.digits with optional pre-release)
@@ -132,7 +157,7 @@ describe('GET /', () => {
   });
 
   it('returns correct content-type', async () => {
-    const res = await app.inject({ method: 'GET', url: '/' });
+    const res = await app.inject({ method: 'GET', url: '/api' });
 
     expect(res.headers['content-type']).toContain('application/json');
   });

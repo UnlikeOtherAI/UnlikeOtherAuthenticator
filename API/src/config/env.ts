@@ -47,10 +47,10 @@ const EnvSchema = z
     // Defaults to AUTH_SERVICE_IDENTIFIER when unset.
     ADMIN_AUTH_DOMAIN: z.string().min(1).optional(),
     // Auth-service-only signing secret for first-party admin access tokens.
-    ADMIN_ACCESS_TOKEN_SECRET: z.string().min(32),
+    ADMIN_ACCESS_TOKEN_SECRET: z.string().min(32).optional(),
     // Trusted JWKS endpoint used to verify client config JWTs. Config JWTs must be RS256
     // and include a kid that resolves to a key from this JWKS.
-    CONFIG_JWKS_URL: z.string().url(),
+    CONFIG_JWKS_URL: z.string().url().optional(),
     DATABASE_URL: z.string().min(1).optional(),
     // Email provider abstraction (brief phase 11.1). Provider can be swapped via env without code changes.
     EMAIL_PROVIDER: z.enum(['disabled', 'smtp', 'ses', 'sendgrid']).optional(),
@@ -129,11 +129,11 @@ export function getEnv(): Env {
   return cachedEnv;
 }
 
-export function requireEnv<K extends keyof Env>(...keys: K[]): Pick<Env, K> {
+export function requireEnv<K extends keyof Env>(...keys: K[]): { [P in K]-?: NonNullable<Env[P]> } {
   const env = getEnv();
   const missing = keys.filter((k) => env[k] == null || env[k] === '');
   if (missing.length > 0) {
     throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
   }
-  return env as Pick<Env, K>;
+  return env as unknown as { [P in K]-?: NonNullable<Env[P]> };
 }

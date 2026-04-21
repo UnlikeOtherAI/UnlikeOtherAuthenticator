@@ -38,12 +38,12 @@ describe('env', () => {
     expect(() => parseEnv(baseInput({ EMAIL_PROVIDER: 'mailgun' }))).toThrow();
   });
 
-  it('requires ADMIN_ACCESS_TOKEN_SECRET', () => {
-    expect(() => {
-      const input = baseInput();
-      Reflect.deleteProperty(input, 'ADMIN_ACCESS_TOKEN_SECRET');
-      parseEnv(input);
-    }).toThrow(/ADMIN_ACCESS_TOKEN_SECRET/);
+  it('allows admin and JWKS secrets to be transferred after boot', () => {
+    const input = baseInput();
+    Reflect.deleteProperty(input, 'ADMIN_ACCESS_TOKEN_SECRET');
+    Reflect.deleteProperty(input, 'CONFIG_JWKS_URL');
+    expect(parseEnv(input).ADMIN_ACCESS_TOKEN_SECRET).toBeUndefined();
+    expect(parseEnv(input).CONFIG_JWKS_URL).toBeUndefined();
     expect(
       parseEnv(
         baseInput({

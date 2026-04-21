@@ -21,7 +21,7 @@
   - deploys the new image to Cloud Run service `uoa-auth`
   - checks `https://authentication.unlikeotherai.com/health`
 
-The production Admin UI is served by that Cloud Run API service at `https://authentication.unlikeotherai.com/admin`.
+The production root `https://authentication.unlikeotherai.com/` is a Tailwind holding page with links to Admin, `/llm`, and `/api`. The Admin UI is served by the same Cloud Run API service at `https://authentication.unlikeotherai.com/admin`.
 
 ### GitHub Actions configuration
 
@@ -66,8 +66,8 @@ Set via Cloud Run service config:
 |----------|--------|
 | `AUTH_SERVICE_IDENTIFIER` | Plain value: `authentication.unlikeotherai.com` |
 | `ADMIN_AUTH_DOMAIN` | Plain value: `authentication.unlikeotherai.com` |
-| `ADMIN_ACCESS_TOKEN_SECRET` | Secret Manager: `uoa-admin-access-token-secret`; used to sign tokens issued for `ADMIN_AUTH_DOMAIN` |
-| `CONFIG_JWKS_URL` | Plain value: trusted JWKS URL for RS256 config JWT verification |
+| `ADMIN_ACCESS_TOKEN_SECRET` | Secret Manager: `uoa-admin-access-token-secret`; used to sign tokens issued for `ADMIN_AUTH_DOMAIN`; route-level requirement for admin access |
+| `CONFIG_JWKS_URL` | Plain value: trusted JWKS URL for RS256 config JWT verification; route-level requirement for config-backed auth |
 | `PUBLIC_BASE_URL` | Plain value: `https://authentication.unlikeotherai.com` |
 | `DATABASE_URL` | Secret Manager: `uoa-auth-database-url` |
 | `SHARED_SECRET` | Secret Manager: `uoa-auth-shared-secret` |

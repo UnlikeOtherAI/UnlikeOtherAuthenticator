@@ -8,6 +8,12 @@ export function registerLlmRoute(app: FastifyInstance): void {
       service: 'UnlikeOtherAuthenticator',
       description:
         'Centralized OAuth and authentication service. All client configuration is delivered via a signed JWT fetched from a config_url. The JWT must be signed with RS256, include a kid, and verify against the configured JWKS on every request.',
+      service_discovery: {
+        home: '/ — Tailwind holding page with links to Admin, /llm, and /api',
+        api: '/api — machine-readable endpoint schema and config contract',
+        admin: '/admin — first-party Admin CSR app served from this API origin',
+        llm: '/llm — LLM-facing integration guide',
+      },
 
       authentication: {
         overview:
@@ -30,10 +36,6 @@ export function registerLlmRoute(app: FastifyInstance): void {
           SHARED_SECRET: 'HMAC secret shared between the auth service and client backends',
           AUTH_SERVICE_IDENTIFIER:
             'Audience claim for config JWTs. Must match the aud in signed config JWTs.',
-          ADMIN_ACCESS_TOKEN_SECRET:
-            'Auth-service-only HMAC secret used for ADMIN_AUTH_DOMAIN access tokens. Required because /internal/admin/* is always registered.',
-          CONFIG_JWKS_URL:
-            'Trusted JWKS endpoint used to verify RS256 config JWT signatures by kid.',
         },
         optional: {
           NODE_ENV: '"development" | "test" | "production" (default: "development")',
@@ -42,6 +44,10 @@ export function registerLlmRoute(app: FastifyInstance): void {
           PUBLIC_BASE_URL: 'Public origin for email links (e.g. "https://auth.example.com")',
           ADMIN_AUTH_DOMAIN:
             'Domain whose superuser tokens may access /internal/admin/* (default: AUTH_SERVICE_IDENTIFIER)',
+          ADMIN_ACCESS_TOKEN_SECRET:
+            'Auth-service-only HMAC secret used for ADMIN_AUTH_DOMAIN access tokens. Required before admin token exchange or protected admin reads can work.',
+          CONFIG_JWKS_URL:
+            'Trusted JWKS endpoint used to verify RS256 config JWT signatures by kid. Required before config-backed auth routes can verify client config JWTs unless a route explicitly supplies jwks_url.',
           LOG_LEVEL: '"fatal" | "error" | "warn" | "info" | "debug" | "trace" (default: "info")',
           DEBUG_ENABLED:
             'Set true to include internal error code, summary, details, hints, and auth debug HTML in responses. Default false.',

@@ -123,6 +123,7 @@ The admin panel is a separate authenticated frontend application for UOA operato
 
 It should be implemented as a **React CSR** app, not SSR.
 In production, the API service serves the built Admin app from `/admin` so it runs on the same origin as the auth API.
+The API root `/` is a Tailwind holding page linking operators and integrators to `/admin`, `/llm`, and `/api`.
 
 `Docs/Admin/architecture-admin.md` is the canonical admin architecture document.
 
@@ -215,8 +216,8 @@ All secrets and configuration live in environment variables. Nothing is hardcode
 * `SHARED_SECRET` — the single global shared secret for domain hashing and client-domain access tokens
 * `AUTH_SERVICE_IDENTIFIER` — auth service identifier (expected `aud` for config JWTs)
 * `ADMIN_AUTH_DOMAIN` — domain whose superuser access tokens may access the Admin panel; defaults to `AUTH_SERVICE_IDENTIFIER`
-* `ADMIN_ACCESS_TOKEN_SECRET` — auth-service-only signing secret used for access tokens issued to `ADMIN_AUTH_DOMAIN`
-* `CONFIG_JWKS_URL` — trusted JWKS endpoint for RS256 config JWT verification by `kid`
+* `ADMIN_ACCESS_TOKEN_SECRET` — auth-service-only signing secret used for access tokens issued to `ADMIN_AUTH_DOMAIN`; required by admin routes, not process boot
+* `CONFIG_JWKS_URL` — trusted JWKS endpoint for RS256 config JWT verification by `kid`; required by config-backed auth routes, not process boot
 * `DATABASE_URL` — database connection string
 * Social provider credentials (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, etc.)
 * Email service credentials:

@@ -63,7 +63,8 @@ If you are working on branch `api-2.0`, read [`Docs/api-2.0-implementation-plan.
 
 ### API Schema & /llm Endpoint
 
-- `GET /` must always return the full endpoint schema for all routes (method, path, description, auth, query, body, response)
+- `GET /api` must always return the full endpoint schema for all routes (method, path, description, auth, query, body, response)
+- `GET /` is the public holding page linking to `/admin`, `/llm`, and `/api`
 - `GET /llm` must always return comprehensive configuration documentation (config JWT fields, env vars, integration guide)
 - When adding, removing, or changing any endpoint, update both `API/src/routes/root/index.ts` and `API/src/routes/root/llm.ts`
 - These endpoints are the machine-readable contract for the API — they must never fall out of sync

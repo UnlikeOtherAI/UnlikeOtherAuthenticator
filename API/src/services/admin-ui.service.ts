@@ -14,12 +14,36 @@ function adminDistDirFrom(metaUrl: string): string {
 }
 
 let cachedIndexHtml: string | null = null;
+let cachedIndexAssets: { iconHref: string; stylesheetHref: string } | null = null;
 
 export async function readAdminIndexHtml(): Promise<string> {
   if (cachedIndexHtml) return cachedIndexHtml;
   const distDir = adminDistDirFrom(import.meta.url);
   cachedIndexHtml = await readFile(path.join(distDir, 'index.html'), 'utf8');
   return cachedIndexHtml;
+}
+
+export async function readAdminIndexAssetUrls(): Promise<{
+  iconHref: string;
+  stylesheetHref: string;
+}> {
+  if (cachedIndexAssets) return cachedIndexAssets;
+  let html: string;
+  try {
+    html = await readAdminIndexHtml();
+  } catch (err) {
+    const code = (err as { code?: unknown } | null)?.code;
+    if (process.env.NODE_ENV !== 'production' && code === 'ENOENT') {
+      return { iconHref: '', stylesheetHref: '' };
+    }
+    throw err;
+  }
+  cachedIndexAssets = {
+    iconHref: html.match(/<link[^>]+rel="icon"[^>]+href="([^"]+)"/i)?.[1] ?? '',
+    stylesheetHref:
+      html.match(/<link[^>]+rel="stylesheet"[^>]+href="([^"]+)"/i)?.[1] ?? '',
+  };
+  return cachedIndexAssets;
 }
 
 export function isAdminStaticAssetPath(relativePath: string): boolean {
