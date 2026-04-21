@@ -136,4 +136,22 @@ describe('fetchConfigJwtFromUrl', () => {
       redirect: 'manual',
     });
   });
+
+  it('tries the next public DNS address when an earlier address cannot be reached', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError('network unavailable'))
+      .mockResolvedValueOnce(new Response('config.jwt.value', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    vi.mocked(lookup).mockResolvedValueOnce([
+      { address: '2001:4860:4860::8888', family: 6 },
+      { address: '8.8.8.8', family: 4 },
+    ]);
+
+    await expect(fetchConfigJwtFromUrl('https://client.example.com/config')).resolves.toBe(
+      'config.jwt.value',
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
 });

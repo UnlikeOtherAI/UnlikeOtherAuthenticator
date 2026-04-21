@@ -168,14 +168,14 @@ function isBlockedIpAddress(address: string): boolean {
   return true;
 }
 
-async function resolvePublicDestination(url: URL): Promise<PublicDestination> {
+async function resolvePublicDestinations(url: URL): Promise<PublicDestination[]> {
   const hostname = stripIpv6Brackets(url.hostname);
   const ipFamily = isIP(hostname);
   if (ipFamily === 4 || ipFamily === 6) {
     if (isBlockedIpAddress(hostname)) {
       throw new AppError('BAD_REQUEST', 400);
     }
-    return { address: hostname, family: ipFamily };
+    return [{ address: hostname, family: ipFamily }];
   }
 
   let addresses: PublicDestination[];
@@ -195,7 +195,7 @@ async function resolvePublicDestination(url: URL): Promise<PublicDestination> {
     throw new AppError('BAD_REQUEST', 400);
   }
 
-  return addresses[0];
+  return addresses;
 }
 
 function createPinnedAgent(url: URL, destination: PublicDestination): Agent {
@@ -292,43 +292,53 @@ export async function fetchConfigJwtFromUrl(
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
+    redirectLoop:
     for (let redirectCount = 0; redirectCount <= MAX_CONFIG_FETCH_REDIRECTS; redirectCount++) {
-      const destination = await resolvePublicDestination(url);
-      const agent = createPinnedAgent(url, destination);
+      const destinations = await resolvePublicDestinations(url);
+      let lastNetworkError: unknown;
 
-      try {
-        const res = await undiciFetch(url.toString(), {
-          method: 'GET',
-          headers: { accept: 'text/plain, application/json' },
-          redirect: 'manual',
-          signal: controller.signal,
-          dispatcher: agent,
-        });
+      for (const destination of destinations) {
+        const agent = createPinnedAgent(url, destination);
 
-        if ([301, 302, 303, 307, 308].includes(res.status)) {
-          const location = res.headers.get('location');
-          await cancelResponseBody(res);
-          if (!location || redirectCount === MAX_CONFIG_FETCH_REDIRECTS) {
+        try {
+          const res = await undiciFetch(url.toString(), {
+            method: 'GET',
+            headers: { accept: 'text/plain, application/json' },
+            redirect: 'manual',
+            signal: controller.signal,
+            dispatcher: agent,
+          });
+
+          if ([301, 302, 303, 307, 308].includes(res.status)) {
+            const location = res.headers.get('location');
+            await cancelResponseBody(res);
+            if (!location || redirectCount === MAX_CONFIG_FETCH_REDIRECTS) {
+              throw new AppError('BAD_REQUEST', 400);
+            }
+
+            url = parseHttpsUrl(new URL(location, url).toString());
+            continue redirectLoop;
+          }
+
+          if (!res.ok) {
             throw new AppError('BAD_REQUEST', 400);
           }
 
-          url = parseHttpsUrl(new URL(location, url).toString());
-          continue;
-        }
+          const jwt = extractJwtFromBody(await readResponseTextWithLimit(res));
+          if (!jwt) {
+            throw new AppError('BAD_REQUEST', 400);
+          }
 
-        if (!res.ok) {
-          throw new AppError('BAD_REQUEST', 400);
+          return jwt;
+        } catch (err) {
+          if (err instanceof AppError) throw err;
+          lastNetworkError = err;
+        } finally {
+          await closeAgent(agent);
         }
-
-        const jwt = extractJwtFromBody(await readResponseTextWithLimit(res));
-        if (!jwt) {
-          throw new AppError('BAD_REQUEST', 400);
-        }
-
-        return jwt;
-      } finally {
-        await closeAgent(agent);
       }
+
+      if (lastNetworkError) throw lastNetworkError;
     }
 
     throw new AppError('BAD_REQUEST', 400);
