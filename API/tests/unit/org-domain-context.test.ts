@@ -35,4 +35,15 @@ describe('org domain context', () => {
       expect(err).toMatchObject({ message: 'DOMAIN_MISMATCH', statusCode: 400 });
     }
   });
+
+  it('fails loudly when domain context is parsed before config verification', () => {
+    const request = {} as FastifyRequest;
+
+    try {
+      assertVerifiedDomainMatchesQuery(request, 'client.example.com');
+      throw new Error('expected missing config rejection');
+    } catch (err) {
+      expect(err).toMatchObject({ message: 'CONFIG_NOT_VERIFIED', statusCode: 500 });
+    }
+  });
 });

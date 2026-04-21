@@ -37,9 +37,9 @@ export function registerTeamRoutes(app: FastifyInstance): void {
     '/org/organisations/:orgId/teams',
     {
       preValidation: [
-        parseDomainContextHook,
         requireDomainHashAuthForDomainQuery(),
         configVerifier,
+        parseDomainContextHook,
         requireOrgFeatures,
         requireOrgRole(),
       ],
@@ -65,9 +65,9 @@ export function registerTeamRoutes(app: FastifyInstance): void {
     '/org/organisations/:orgId/teams',
     {
       preValidation: [
-        parseDomainContextHook,
         requireDomainHashAuthForDomainQuery(),
         configVerifier,
+        parseDomainContextHook,
         requireOrgFeatures,
         requireOrgRole(),
         createRateLimiter({
@@ -104,9 +104,9 @@ export function registerTeamRoutes(app: FastifyInstance): void {
     '/org/organisations/:orgId/teams/:teamId',
     {
       preValidation: [
-        parseDomainContextHook,
         requireDomainHashAuthForDomainQuery(),
         configVerifier,
+        parseDomainContextHook,
         requireOrgFeatures,
         requireOrgRole(),
       ],
@@ -132,9 +132,9 @@ export function registerTeamRoutes(app: FastifyInstance): void {
     '/org/organisations/:orgId/teams/:teamId',
     {
       preValidation: [
-        parseDomainContextHook,
         requireDomainHashAuthForDomainQuery(),
         configVerifier,
+        parseDomainContextHook,
         requireOrgFeatures,
         requireOrgRole(),
       ],
@@ -172,9 +172,9 @@ export function registerTeamRoutes(app: FastifyInstance): void {
     '/org/organisations/:orgId/teams/:teamId',
     {
       preValidation: [
-        parseDomainContextHook,
         requireDomainHashAuthForDomainQuery(),
         configVerifier,
+        parseDomainContextHook,
         requireOrgFeatures,
         requireOrgRole(),
       ],
@@ -200,9 +200,9 @@ export function registerTeamRoutes(app: FastifyInstance): void {
     '/org/organisations/:orgId/teams/:teamId/members',
     {
       preValidation: [
-        parseDomainContextHook,
         requireDomainHashAuthForDomainQuery(),
         configVerifier,
+        parseDomainContextHook,
         requireOrgFeatures,
         requireOrgRole(),
       ],
@@ -235,9 +235,9 @@ export function registerTeamRoutes(app: FastifyInstance): void {
     '/org/organisations/:orgId/teams/:teamId/members/:userId',
     {
       preValidation: [
-        parseDomainContextHook,
         requireDomainHashAuthForDomainQuery(),
         configVerifier,
+        parseDomainContextHook,
         requireOrgFeatures,
         requireOrgRole(),
       ],
@@ -267,9 +267,9 @@ export function registerTeamRoutes(app: FastifyInstance): void {
     '/org/organisations/:orgId/teams/:teamId/members/:userId',
     {
       preValidation: [
-        parseDomainContextHook,
         requireDomainHashAuthForDomainQuery(),
         configVerifier,
+        parseDomainContextHook,
         requireOrgFeatures,
         requireOrgRole(),
       ],

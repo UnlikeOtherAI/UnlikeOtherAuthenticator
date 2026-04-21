@@ -152,9 +152,9 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
     '/org/organisations',
     {
       preValidation: [
-        parseDomainContextHook,
         requireDomainHashAuthForDomainQuery(),
         configVerifier,
+        parseDomainContextHook,
         requireOrgFeatures,
       ],
     },
@@ -174,9 +174,9 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
     '/org/organisations',
     {
       preValidation: [
-        parseDomainContextHook,
         requireDomainHashAuthForDomainQuery(),
         configVerifier,
+        parseDomainContextHook,
         requireOrgFeatures,
         requireOrgRole(),
         createRateLimiter({
@@ -208,9 +208,9 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
     '/org/organisations/:orgId',
     {
       preValidation: [
-        parseDomainContextHook,
         requireDomainHashAuthForDomainQuery(),
         configVerifier,
+        parseDomainContextHook,
         requireOrgFeatures,
         requireOrgRole(),
       ],
@@ -229,9 +229,9 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
     '/org/organisations/:orgId',
     {
       preValidation: [
-        parseDomainContextHook,
         requireDomainHashAuthForDomainQuery(),
         configVerifier,
+        parseDomainContextHook,
         requireOrgFeatures,
         requireOrgRole(),
       ],
@@ -261,9 +261,9 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
     '/org/organisations/:orgId',
     {
       preValidation: [
-        parseDomainContextHook,
         requireDomainHashAuthForDomainQuery(),
         configVerifier,
+        parseDomainContextHook,
         requireOrgFeatures,
         requireOrgRole(),
       ],
@@ -287,9 +287,9 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
     '/org/organisations/:orgId/members',
     {
       preValidation: [
-        parseDomainContextHook,
         requireDomainHashAuthForDomainQuery(),
         configVerifier,
+        parseDomainContextHook,
         requireOrgFeatures,
         requireOrgRole(),
       ],
@@ -314,9 +314,9 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
     '/org/organisations/:orgId/members',
     {
       preValidation: [
-        parseDomainContextHook,
         requireDomainHashAuthForDomainQuery(),
         configVerifier,
+        parseDomainContextHook,
         requireOrgFeatures,
         requireOrgRole(),
         createRateLimiter({
@@ -352,9 +352,9 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
     '/org/organisations/:orgId/members/:userId',
     {
       preValidation: [
-        parseDomainContextHook,
         requireDomainHashAuthForDomainQuery(),
         configVerifier,
+        parseDomainContextHook,
         requireOrgFeatures,
         requireOrgRole(),
       ],
@@ -386,9 +386,9 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
     '/org/organisations/:orgId/members/:userId',
     {
       preValidation: [
-        parseDomainContextHook,
         requireDomainHashAuthForDomainQuery(),
         configVerifier,
+        parseDomainContextHook,
         requireOrgFeatures,
         requireOrgRole(),
       ],
@@ -431,9 +431,9 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
     '/org/organisations/:orgId/transfer-ownership',
     {
       preValidation: [
-        parseDomainContextHook,
         requireDomainHashAuthForDomainQuery(),
         configVerifier,
+        parseDomainContextHook,
         requireOrgFeatures,
         requireOrgRole(),
       ],

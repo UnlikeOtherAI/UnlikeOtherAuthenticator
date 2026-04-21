@@ -53,9 +53,9 @@ export function registerAccessRequestRoutes(app: FastifyInstance): void {
     '/org/organisations/:orgId/teams/:teamId/access-requests',
     {
       preValidation: [
-        parseDomainContextHook,
         requireDomainHashAuthForDomainQuery(),
         configVerifier,
+        parseDomainContextHook,
         requireOrgFeatures,
       ],
     },
@@ -80,9 +80,9 @@ export function registerAccessRequestRoutes(app: FastifyInstance): void {
     '/org/organisations/:orgId/teams/:teamId/access-requests/:requestId/approve',
     {
       preValidation: [
-        parseDomainContextHook,
         requireDomainHashAuthForDomainQuery(),
         configVerifier,
+        parseDomainContextHook,
         requireOrgFeatures,
       ],
     },
@@ -110,9 +110,9 @@ export function registerAccessRequestRoutes(app: FastifyInstance): void {
     '/org/organisations/:orgId/teams/:teamId/access-requests/:requestId/reject',
     {
       preValidation: [
-        parseDomainContextHook,
         requireDomainHashAuthForDomainQuery(),
         configVerifier,
+        parseDomainContextHook,
         requireOrgFeatures,
       ],
     },

@@ -61,9 +61,9 @@ export function registerInternalTeamGroupAssignmentRoutes(app: FastifyInstance):
     '/internal/org/organisations/:orgId/teams/:teamId/group',
     {
       preValidation: [
-        parseDomainContextHook,
         requireDomainHashAuthForDomainQuery(),
         configVerifier,
+        parseDomainContextHook,
         requireOrgFeatures,
         requireGroupsEnabled,
       ],
