@@ -17,6 +17,7 @@ import {
   verifyConfigJwtSignature,
   type ClientConfig,
 } from '../services/config.service.js';
+import { adminConfigUrl, readAdminConfigJwt } from '../services/admin-auth-config.service.js';
 import { recordHandshakeErrorLog, type HandshakeErrorPhase } from '../services/handshake-error-log.service.js';
 
 const QuerySchema = z.object({
@@ -105,6 +106,30 @@ const safeConfigJwtNestedKeys = new Map<string, ReadonlySet<string>>([
   ],
 ]);
 
+function normalizeExactUrl(value: string): string | null {
+  try {
+    return new URL(value).toString();
+  } catch {
+    return null;
+  }
+}
+
+function isFirstPartyAdminConfigUrl(configUrl: string): boolean {
+  const normalizedConfigUrl = normalizeExactUrl(configUrl);
+  const normalizedAdminConfigUrl = normalizeExactUrl(adminConfigUrl());
+  if (!normalizedConfigUrl) return false;
+  if (!normalizedAdminConfigUrl) return false;
+  return normalizedConfigUrl === normalizedAdminConfigUrl;
+}
+
+async function readConfigJwtForVerifier(configUrl: string): Promise<string> {
+  if (isFirstPartyAdminConfigUrl(configUrl)) {
+    return readAdminConfigJwt();
+  }
+
+  return await fetchConfigJwtFromUrl(configUrl);
+}
+
 declare module 'fastify' {
   interface FastifyRequest {
     configUrl?: string;
@@ -144,7 +169,7 @@ export async function configVerifier(
 
   // Task 2.2: fetch the signed config JWT from the client-provided URL.
   try {
-    request.configJwt = await fetchConfigJwtFromUrl(config_url);
+    request.configJwt = await readConfigJwtForVerifier(config_url);
   } catch (err) {
     mergeAuthDebugInfo(request, {
       stage: 'config_fetch',

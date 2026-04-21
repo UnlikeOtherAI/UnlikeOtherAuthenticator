@@ -60,7 +60,8 @@ describe('internal admin auth', () => {
     process.env.ADMIN_AUTH_DOMAIN = adminDomain;
     process.env.ADMIN_ACCESS_TOKEN_SECRET = adminSecret;
     process.env.PUBLIC_BASE_URL = `https://${adminDomain}`;
-    process.env.CONFIG_JWKS_URL = 'https://auth.example.com/.well-known/jwks.json';
+    process.env.CONFIG_JWKS_URL =
+      process.env.CONFIG_JWKS_URL ?? 'https://auth.example.com/.well-known/jwks.json';
     Reflect.deleteProperty(process.env, 'DATABASE_URL');
 
     app = await createApp();
@@ -135,5 +136,31 @@ describe('internal admin auth', () => {
     expect(response.statusCode).toBe(200);
     expect(response.headers['cache-control']).toBe('no-store');
     expect(response.body).toBe(configJwt);
+  });
+
+  it('uses the exact first-party admin config URL without self-fetching over the public edge', async () => {
+    const configJwt = await signTestConfigJwt(
+      baseClientConfigPayload({
+        domain: adminDomain,
+        redirect_urls: [`https://${adminDomain}/admin/auth/callback`],
+        enabled_auth_methods: ['google'],
+        allowed_social_providers: ['google'],
+        allow_registration: false,
+      }),
+      { audience: issuer },
+    );
+    process.env.ADMIN_CONFIG_JWT = configJwt;
+
+    const response = await app!.inject({
+      method: 'GET',
+      url: `/auth?config_url=${encodeURIComponent(
+        `https://${adminDomain}/internal/admin/config`,
+      )}&redirect_url=${encodeURIComponent(
+        `https://${adminDomain}/admin/auth/callback`,
+      )}&code_challenge=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ&code_challenge_method=S256`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['content-type']).toContain('text/html');
   });
 });
