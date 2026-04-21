@@ -46,7 +46,6 @@ const safeConfigJwtPayloadKeys = new Set([
   'language_config',
   '2fa_enabled',
   'debug_enabled',
-  'allowed_social_providers',
   'user_scope',
   'allow_registration',
   'registration_mode',

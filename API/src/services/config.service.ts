@@ -189,8 +189,6 @@ const ClientConfigSchema = RequiredConfigSchema.extend({
   // Note: property name starts with a digit, so it must be accessed using bracket notation.
   '2fa_enabled': z.boolean().optional().default(false),
   debug_enabled: z.boolean().optional().default(false),
-  // Keep this as a generic string list for now; provider key validation is handled in later tasks.
-  allowed_social_providers: z.array(z.string().min(1)).optional(),
   user_scope: z.enum(['global', 'per_domain']).optional().default('global'),
   allow_registration: z.boolean().optional().default(true),
   registration_mode: z

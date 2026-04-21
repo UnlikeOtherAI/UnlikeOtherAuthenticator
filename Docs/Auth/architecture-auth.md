@@ -107,7 +107,7 @@ PopupContainer
 
 * **`/ui`** — Primitive building blocks. Button, Card, Input, etc. Styled entirely from theme config via Tailwind classes.
 * **`/form`** — Auth-specific form components. Each form handles its own input state and validation. Forms call the API client, they don't manage auth flow.
-* **`/social`** — Social login button rendering. Reads `allowed_social_providers` from config to decide what to show.
+* **`/social`** — Social login button rendering. Reads social provider names from `enabled_auth_methods` to decide what to show.
 * **`/layout`** — Structural wrappers. AuthLayout applies the theme card, logo, and language selector. PopupContainer manages the popup lifecycle.
 * **`/twofactor`** — 2FA-specific components. QR code display and setup flow.
 

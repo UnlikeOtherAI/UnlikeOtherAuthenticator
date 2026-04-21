@@ -178,7 +178,6 @@ function buildConfigExample(debug: AuthDebugInfo): string | null {
     domain,
     redirect_urls: [redirect],
     enabled_auth_methods: ['email_password', 'google'],
-    allowed_social_providers: ['google'],
     ui_theme: {
       colors: {
         bg: '#0f172a',
@@ -382,11 +381,11 @@ export function enrichAuthDebugForAppError(
       summary: 'The requested social provider is not enabled for this client config.',
       details: [
         configValidatedDetail,
-        'The auth UI requested a social provider that is not listed in config.allowed_social_providers.',
+        'The auth UI requested a social provider that is not listed in config.enabled_auth_methods.',
       ],
       hints: [
-        'Add the provider to allowed_social_providers in the signed config.',
-        'Render social buttons from the same allowlist the server enforces.',
+        'Add the provider to enabled_auth_methods in the signed config.',
+        'Render social buttons from enabled_auth_methods, which is the same list the server enforces.',
       ],
     });
     return;
@@ -429,13 +428,10 @@ export function renderAuthDebugHtml(params: {
   const configExample = buildConfigExample(debug);
   const configExampleHtml = configExample
     ? [
-        '<section>',
-        '<details>',
-        '<summary>Full config example</summary>',
+        '<section><details><summary>Full config example</summary>',
         '<p>Use this as a valid starting point, then replace the placeholder values for your client.</p>',
         `<pre>${escapeHtml(configExample)}</pre>`,
-        '</details>',
-        '</section>',
+        '</details></section>',
       ].join('')
     : '';
 
@@ -467,10 +463,7 @@ export function renderAuthDebugHtml(params: {
     'pre{margin:0;overflow:auto;padding:16px;border-radius:14px;background:#020617;border:1px solid #334155;color:#cbd5e1;font-size:12px;line-height:1.6;}',
     '.note{margin-top:18px;color:#94a3b8;font-size:13px;}',
     '</style>',
-    '</head>',
-    '<body>',
-    '<main>',
-    '<div class="card">',
+    '</head><body><main><div class="card">',
     '<h1>Auth configuration error</h1>',
     '<p>The auth service could not render this sign-in request. The details below are sanitized so they can be shared with the client team without exposing secrets.</p>',
     '<div class="chips">',
@@ -498,9 +491,6 @@ export function renderAuthDebugHtml(params: {
     '</section>',
     configExampleHtml,
     '<p class="note">Secrets, bearer tokens, and raw config JWT contents are intentionally not shown on this page.</p>',
-    '</div>',
-    '</main>',
-    '</body>',
-    '</html>',
+    '</div></main></body></html>',
   ].join('');
 }

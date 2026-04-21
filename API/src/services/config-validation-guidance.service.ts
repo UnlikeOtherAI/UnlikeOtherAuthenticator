@@ -19,7 +19,6 @@ export function buildConfigSummary(config: ClientConfig): Record<string, unknown
     domain: config.domain,
     redirect_url_count: config.redirect_urls.length,
     enabled_auth_methods: config.enabled_auth_methods,
-    allowed_social_providers: config.allowed_social_providers ?? [],
     has_multiple_languages: Array.isArray(config.language_config),
     has_custom_font_import: Boolean(config.ui_theme.typography.font_import_url),
     uses_text_logo: Boolean(config.ui_theme.logo.text?.trim()),
@@ -35,28 +34,10 @@ export function collectRuntimePolicyDetails(config: ClientConfig): string[] {
   const unknownMethods = config.enabled_auth_methods.filter(
     (method) => !supportedAuthMethods.has(method),
   );
-  const enabledSocial = config.enabled_auth_methods.filter((method) =>
-    socialProviderKeys.includes(method as (typeof socialProviderKeys)[number]),
-  );
-  const allowedSocial = config.allowed_social_providers ?? [];
-  const blockedSocial = enabledSocial.filter((provider) => !allowedSocial.includes(provider));
-  const allowedButDisabled = allowedSocial.filter(
-    (provider) => !config.enabled_auth_methods.includes(provider),
-  );
   const details: string[] = [];
 
   if (unknownMethods.length) {
     details.push(`Unsupported enabled_auth_methods: ${unknownMethods.join(', ')}`);
-  }
-  if (blockedSocial.length) {
-    details.push(
-      `Social providers missing from allowed_social_providers: ${blockedSocial.join(', ')}`,
-    );
-  }
-  if (allowedButDisabled.length) {
-    details.push(
-      `allowed_social_providers not present in enabled_auth_methods: ${allowedButDisabled.join(', ')}`,
-    );
   }
 
   return details;

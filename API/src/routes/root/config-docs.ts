@@ -43,7 +43,6 @@ export const configExample = {
     },
   },
   language_config: 'en',
-  allowed_social_providers: ['google'],
   debug_enabled: true,
   allow_registration: true,
   registration_mode: 'password_required',
@@ -64,7 +63,7 @@ export const configJwtDocumentation = {
     redirect_urls:
       'string[] — non-empty list of absolute HTTP/HTTPS callback URLs. redirect_url matching is exact.',
     enabled_auth_methods:
-      'string[] — non-empty list. Supported values are email_password, google, facebook, github, linkedin, apple.',
+      'string[] — non-empty list. Supported values are email_password, google, facebook, github, linkedin, apple. Social provider names here are both enabled and allowed.',
     language_config:
       'string | string[] — either one language code or a non-empty array of language codes.',
     ui_theme: {
@@ -133,8 +132,6 @@ export const configJwtDocumentation = {
   optional_fields: {
     '2fa_enabled': 'boolean (default false)',
     debug_enabled: 'boolean (default false)',
-    allowed_social_providers:
-      'string[] — social providers allowed at runtime. If enabled_auth_methods includes google, facebook, github, linkedin, or apple, include each provider here too.',
     user_scope: '"global" | "per_domain" (default "global")',
     allow_registration: 'boolean (default true)',
     registration_mode: '"password_required" | "passwordless" (default "password_required")',

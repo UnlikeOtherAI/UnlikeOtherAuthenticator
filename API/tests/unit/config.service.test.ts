@@ -20,7 +20,6 @@ describe('validateConfigFields', () => {
     expect(cfg.registration_mode).toBe('password_required');
     expect(cfg.allowed_registration_domains).toBeUndefined();
     expect(cfg.registration_domain_mapping).toBeUndefined();
-    expect(cfg.allowed_social_providers).toBeUndefined();
   });
 
   it('parses optional fields when provided', () => {
@@ -29,6 +28,7 @@ describe('validateConfigFields', () => {
       user_scope: 'per_domain',
       '2fa_enabled': true,
       debug_enabled: true,
+      enabled_auth_methods: ['email_password', 'google', 'github'],
       allow_registration: false,
       registration_mode: 'password_required',
       allowed_registration_domains: ['  EXAMPLE.COM ', 'subsidiary.co.uk'],
@@ -39,7 +39,6 @@ describe('validateConfigFields', () => {
           team_id: ' team-1 ',
         },
       ],
-      allowed_social_providers: ['google', 'github'],
       language: '  es  ',
     });
 
@@ -56,7 +55,7 @@ describe('validateConfigFields', () => {
         team_id: 'team-1',
       },
     ]);
-    expect(cfg.allowed_social_providers).toEqual(['google', 'github']);
+    expect(cfg.enabled_auth_methods).toEqual(['email_password', 'google', 'github']);
     expect(cfg.language).toBe('es');
   });
 
@@ -126,22 +125,6 @@ describe('validateConfigFields', () => {
         ...basePayload(),
         user_scope: 'nope',
       } as unknown as JWTPayload),
-    ).toThrow();
-  });
-
-  it('rejects invalid allowed_social_providers shapes', () => {
-    expect(() =>
-      validateConfigFields({
-        ...basePayload(),
-        allowed_social_providers: 'google',
-      } as unknown as JWTPayload),
-    ).toThrow();
-
-    expect(() =>
-      validateConfigFields({
-        ...basePayload(),
-        allowed_social_providers: [''],
-      }),
     ).toThrow();
   });
 
