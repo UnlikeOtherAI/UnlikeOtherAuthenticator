@@ -5,12 +5,12 @@ import { getEnv } from '../config/env.js';
 import { formatZodIssues } from './auth-debug-page.service.js';
 import {
   assertConfigDomainMatchesConfigUrl,
-  fetchConfigJwtFromUrl,
   validateConfigFields,
   verifyConfigJwtSignature,
   type ClientConfig,
 } from './config.service.js';
 import { containsSecretValue } from './config-secret-scan.service.js';
+import { readConfigJwtFromTrustedSource } from './config-jwt-source.service.js';
 import {
   buildConfigGuidance,
   buildConfigSummary,
@@ -199,7 +199,7 @@ export async function verifyClientConfig(
     configJwt = params.config_jwt?.trim();
   } else {
     try {
-      configJwt = await fetchConfigJwtFromUrl(params.config_url ?? '');
+      configJwt = await readConfigJwtFromTrustedSource(params.config_url ?? '');
       passedCheck(response, 'fetch', 'Fetched a config JWT from config_url.');
     } catch {
       failedCheck(
