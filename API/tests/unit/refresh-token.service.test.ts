@@ -163,7 +163,7 @@ describe('refresh-token.service (unit)', () => {
     expect(rotated.refreshToken).not.toBe(currentRefreshToken);
   });
 
-  it('falls back to the configured TTL when the inherited TTL is below the floor', async () => {
+  it('clamps the inherited TTL when it is below the floor', async () => {
     const currentRefreshToken = 'short-refresh-token';
     const prisma = {
       refreshToken: {
@@ -199,13 +199,13 @@ describe('refresh-token.service (unit)', () => {
 
     expect(prisma.refreshToken.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
-        expiresAt: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
+        expiresAt: new Date(now.getTime() + 5 * 60 * 1000),
       }),
       select: {
         id: true,
       },
     });
-    expect(rotated.expiresInSeconds).toBe(30 * 24 * 60 * 60);
+    expect(rotated.expiresInSeconds).toBe(5 * 60);
   });
 
   it('rejects expired refresh tokens without rotating them', async () => {

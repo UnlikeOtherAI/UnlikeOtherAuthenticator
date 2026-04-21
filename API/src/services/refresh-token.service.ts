@@ -183,10 +183,10 @@ export async function exchangeRefreshToken(
   const inheritedTtlSeconds = Math.round(
     (row.expiresAt.getTime() - row.createdAt.getTime()) / 1000,
   );
-  const refreshTokenTtlSeconds =
-    inheritedTtlSeconds < MIN_INHERITED_REFRESH_TTL_SECONDS
-      ? undefined
-      : inheritedTtlSeconds;
+  const refreshTokenTtlSeconds = Math.max(
+    inheritedTtlSeconds,
+    MIN_INHERITED_REFRESH_TTL_SECONDS,
+  );
 
   const nextRefreshToken = await issueRefreshToken(
     {
