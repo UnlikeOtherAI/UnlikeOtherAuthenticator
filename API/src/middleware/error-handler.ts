@@ -1,7 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { ZodError } from 'zod';
 
-import { getEnv } from '../config/env.js';
 import {
   enrichAuthDebugForAppError,
   renderAuthDebugHtml,
@@ -33,13 +32,11 @@ function shouldRenderAuthDebug(request: {
 
 export function registerErrorHandler(app: FastifyInstance): void {
   app.setErrorHandler((error, request, reply) => {
-    const debugEnabled = getEnv().DEBUG_ENABLED;
-
     // Internal logs can contain specifics; user-facing responses must remain generic.
     request.log.error({ err: error }, 'request failed');
 
     if (error instanceof ZodError) {
-      if (debugEnabled && shouldRenderAuthDebug(request)) {
+      if (shouldRenderAuthDebug(request)) {
         reply
           .type('text/html; charset=utf-8')
           .status(400)
@@ -62,7 +59,7 @@ export function registerErrorHandler(app: FastifyInstance): void {
     }
 
     if (isAppError(error)) {
-      if (debugEnabled && shouldRenderAuthDebug(request)) {
+      if (shouldRenderAuthDebug(request)) {
         enrichAuthDebugForAppError(request, error);
         reply
           .type('text/html; charset=utf-8')
@@ -90,7 +87,7 @@ export function registerErrorHandler(app: FastifyInstance): void {
       return;
     }
 
-    if (debugEnabled && shouldRenderAuthDebug(request)) {
+    if (shouldRenderAuthDebug(request)) {
       reply
         .type('text/html; charset=utf-8')
         .status(500)
