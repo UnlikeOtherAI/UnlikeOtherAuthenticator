@@ -16,11 +16,11 @@ function restoreEnv(key: string, value: string | undefined): void {
 }
 
 function expectRichAuthHtml(
-  response: { statusCode: number; headers: Record<string, string | string[] | undefined>; body: string },
+  response: { statusCode: number; headers: Record<string, unknown>; body: string },
   params: { statusCode: number; code: string; summary: string },
 ): void {
   expect(response.statusCode).toBe(params.statusCode);
-  expect(response.headers['content-type']).toContain('text/html');
+  expect(String(response.headers['content-type'])).toContain('text/html');
   expect(response.body).toContain('Auth configuration error');
   expect(response.body).toContain(`<span class="chip">${params.code}</span>`);
   expect(response.body).toContain('<h2>Summary</h2>');
@@ -157,7 +157,7 @@ describe('error handler auth HTML rendering', () => {
       });
 
       expect(response.statusCode).toBe(500);
-      expect(response.headers['content-type']).toContain('text/html');
+      expect(String(response.headers['content-type'])).toContain('text/html');
       expect(response.body).toContain('<h1>Request failed</h1>');
       expect(response.body).not.toContain('Auth configuration error');
       expect(response.body).not.toContain(rawUnknownErrorMessage);
