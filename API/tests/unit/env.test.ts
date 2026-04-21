@@ -13,6 +13,7 @@ function baseInput(overrides?: Partial<NodeJS.ProcessEnv>): NodeJS.ProcessEnv {
     AUTH_SERVICE_IDENTIFIER: 'uoa-auth-service',
     ADMIN_ACCESS_TOKEN_SECRET: 'admin-token-secret-with-enough-length',
     CONFIG_JWKS_URL: 'https://auth.example.com/.well-known/jwks.json',
+    CONFIG_JWKS_JSON: '{"keys":[{"kty":"RSA","kid":"test","n":"abc","e":"AQAB"}]}',
     DATABASE_URL: 'postgres://example.invalid/db',
     ACCESS_TOKEN_TTL: '30m',
     REFRESH_TOKEN_TTL_DAYS: '30',
@@ -42,8 +43,10 @@ describe('env', () => {
     const input = baseInput();
     Reflect.deleteProperty(input, 'ADMIN_ACCESS_TOKEN_SECRET');
     Reflect.deleteProperty(input, 'CONFIG_JWKS_URL');
+    Reflect.deleteProperty(input, 'CONFIG_JWKS_JSON');
     expect(parseEnv(input).ADMIN_ACCESS_TOKEN_SECRET).toBeUndefined();
     expect(parseEnv(input).CONFIG_JWKS_URL).toBeUndefined();
+    expect(parseEnv(input).CONFIG_JWKS_JSON).toBeUndefined();
     expect(
       parseEnv(
         baseInput({

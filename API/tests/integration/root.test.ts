@@ -2,6 +2,7 @@ import { describe, expect, it, beforeAll, afterAll } from 'vitest';
 
 import { createApp } from '../../src/app.js';
 import type { FastifyInstance } from 'fastify';
+import { testConfigJwks } from '../helpers/test-config.js';
 
 let app: FastifyInstance;
 
@@ -85,6 +86,9 @@ describe('GET /api', () => {
       expect.objectContaining({ method: 'GET', path: '/health' }),
     );
     expect(body.endpoints).toContainEqual(
+      expect.objectContaining({ method: 'GET', path: '/.well-known/jwks.json' }),
+    );
+    expect(body.endpoints).toContainEqual(
       expect.objectContaining({ method: 'POST', path: '/config/verify' }),
     );
     expect(body.endpoints).toContainEqual(
@@ -163,6 +167,59 @@ describe('GET /api', () => {
   });
 });
 
+describe('GET /.well-known/jwks.json', () => {
+  it('serves the configured public JWKS without private key material', async () => {
+    const originalJwksJson = process.env.CONFIG_JWKS_JSON;
+    process.env.CONFIG_JWKS_JSON = JSON.stringify(await testConfigJwks());
+
+    try {
+      const res = await app.inject({ method: 'GET', url: '/.well-known/jwks.json' });
+      const body = res.json();
+
+      expect(res.statusCode).toBe(200);
+      expect(res.headers['content-type']).toContain('application/json');
+      expect(res.headers['cache-control']).toContain('max-age=300');
+      expect(body.keys).toHaveLength(1);
+      expect(body.keys[0]).toEqual(
+        expect.objectContaining({
+          kty: 'RSA',
+          kid: expect.any(String),
+          n: expect.any(String),
+          e: expect.any(String),
+        }),
+      );
+      expect(body.keys[0]).not.toHaveProperty('d');
+      expect(body.keys[0]).not.toHaveProperty('p');
+      expect(body.keys[0]).not.toHaveProperty('q');
+    } finally {
+      if (originalJwksJson === undefined) {
+        Reflect.deleteProperty(process.env, 'CONFIG_JWKS_JSON');
+      } else {
+        process.env.CONFIG_JWKS_JSON = originalJwksJson;
+      }
+    }
+  });
+
+  it('rejects configured JWKS values that contain private key material', async () => {
+    const originalJwksJson = process.env.CONFIG_JWKS_JSON;
+    process.env.CONFIG_JWKS_JSON = JSON.stringify({
+      keys: [{ kty: 'RSA', kid: 'private', n: 'abc', e: 'AQAB', d: 'secret' }],
+    });
+
+    try {
+      const res = await app.inject({ method: 'GET', url: '/.well-known/jwks.json' });
+
+      expect(res.statusCode).toBe(500);
+    } finally {
+      if (originalJwksJson === undefined) {
+        Reflect.deleteProperty(process.env, 'CONFIG_JWKS_JSON');
+      } else {
+        process.env.CONFIG_JWKS_JSON = originalJwksJson;
+      }
+    }
+  });
+});
+
 describe('GET /llm', () => {
   it('returns Markdown instructions and links JSON consumers to /api', async () => {
     const res = await app.inject({ method: 'GET', url: '/llm' });
@@ -173,6 +230,7 @@ describe('GET /llm', () => {
     expect(res.body).toContain('For machine-readable JSON');
     expect(res.body).toContain('[/api](/api)');
     expect(res.body).toContain('POST /config/verify');
+    expect(res.body).toContain('/.well-known/jwks.json');
     expect(res.body).toContain('/internal/admin/token');
     expect(res.body).toContain('allow_registration');
   });

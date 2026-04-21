@@ -13,6 +13,7 @@ For machine-readable JSON, endpoint schemas, and config contracts, use [/api](/a
 - Admin UI: [/admin](/admin)
 - LLM guide: [/llm](/llm)
 - JSON API schema: [/api](/api)
+- Config JWKS: [/.well-known/jwks.json](/.well-known/jwks.json)
 - Health check: [/health](/health)
 
 ## Core auth flow
@@ -78,6 +79,7 @@ The first-party Admin UI is served from [/admin](/admin). Admin login uses the s
 
 - \`/admin/login\` redirects into \`/auth\` with PKCE.
 - The admin config is served from \`/internal/admin/config\`.
+- The admin config JWT verifies through the public JWKS at \`/.well-known/jwks.json\`.
 - The admin config must use the admin domain, disable registration, and allow only Google.
 - \`/admin/auth/callback\` exchanges the authorization code at \`POST /internal/admin/token\`.
 - Admin access tokens are signed with \`ADMIN_ACCESS_TOKEN_SECRET\`.

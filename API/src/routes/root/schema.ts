@@ -16,6 +16,13 @@ const baseEndpoints: EndpointSchema[] = [
   { method: 'GET', path: '/', description: 'Holding page linking to Admin, /llm, and /api' },
   { method: 'GET', path: '/api', description: 'API information and full endpoint schema' },
   { method: 'GET', path: '/llm', description: 'Markdown integration guide for LLMs and humans; links /api for JSON schema' },
+  {
+    method: 'GET',
+    path: '/.well-known/jwks.json',
+    description: 'Public JWKS used to verify RS256 config JWT signatures',
+    auth: 'public',
+    response: { keys: 'array — public RSA JWKs only; private key members are rejected at boot-time use' },
+  },
   { method: 'GET', path: '/health', description: 'Health check' },
   {
     method: 'GET',

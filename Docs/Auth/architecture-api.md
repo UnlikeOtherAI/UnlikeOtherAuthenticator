@@ -25,6 +25,7 @@ For the full product spec, see [brief.md](./brief.md). For tech stack, see [tech
       /root
         index.ts              — GET / (Tailwind holding page), GET /api (full endpoint schema)
         llm.ts                — GET /llm (Markdown config documentation for LLM consumers)
+      config-jwks.ts          — GET /.well-known/jwks.json (public config JWT verification keys)
       /apps
         apps.ts               — CRUD for /org/:orgId/apps[/:appId]
         killswitches.ts       — CRUD for /org/:orgId/apps/:appId/killswitches[/:id]

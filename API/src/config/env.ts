@@ -54,6 +54,8 @@ const EnvSchema = z
     // Trusted JWKS endpoint used to verify client config JWTs. Config JWTs must be RS256
     // and include a kid that resolves to a key from this JWKS.
     CONFIG_JWKS_URL: z.string().url().optional(),
+    // Public JWKS JSON served from /.well-known/jwks.json. Must contain public keys only.
+    CONFIG_JWKS_JSON: z.string().min(1).optional(),
     DATABASE_URL: z.string().min(1).optional(),
     // Email provider abstraction (brief phase 11.1). Provider can be swapped via env without code changes.
     EMAIL_PROVIDER: z.enum(['disabled', 'smtp', 'ses', 'sendgrid']).optional(),
