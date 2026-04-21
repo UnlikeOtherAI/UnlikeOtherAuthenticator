@@ -99,21 +99,24 @@ function readEnabledSocialProviders(config: unknown): SocialProvider[] {
   );
 }
 
-export function SocialButtons(): React.JSX.Element | null {
+export function SocialButtons(props?: { showDivider?: boolean }): React.JSX.Element | null {
   const popup = usePopup();
   const { classNames } = useTheme();
   const { t } = useTranslation();
+  const showDivider = props?.showDivider ?? true;
 
   const providers = readEnabledSocialProviders(popup.config);
   if (providers.length === 0) return null;
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-3 text-[var(--uoa-color-muted)]">
-        <div className="h-px flex-1 bg-[var(--uoa-color-border)]" />
-        <span className="text-xs uppercase tracking-wider">{t('social.divider')}</span>
-        <div className="h-px flex-1 bg-[var(--uoa-color-border)]" />
-      </div>
+      {showDivider ? (
+        <div className="flex items-center gap-3 text-[var(--uoa-color-muted)]">
+          <div className="h-px flex-1 bg-[var(--uoa-color-border)]" />
+          <span className="text-xs uppercase tracking-wider">{t('social.divider')}</span>
+          <div className="h-px flex-1 bg-[var(--uoa-color-border)]" />
+        </div>
+      ) : null}
       {providers.map((provider) => {
         const Icon = PROVIDER_ICONS[provider];
         const label = PROVIDER_LABELS[provider];

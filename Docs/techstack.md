@@ -217,6 +217,7 @@ All secrets and configuration live in environment variables. Nothing is hardcode
 * `AUTH_SERVICE_IDENTIFIER` — auth service identifier (expected `aud` for config JWTs)
 * `ADMIN_AUTH_DOMAIN` — domain whose superuser access tokens may access the Admin panel; defaults to `AUTH_SERVICE_IDENTIFIER`
 * `ADMIN_ACCESS_TOKEN_SECRET` — auth-service-only signing secret used for access tokens issued to `ADMIN_AUTH_DOMAIN`; required by admin routes, not process boot
+* `ADMIN_CONFIG_JWT` — signed RS256 config JWT served from `/internal/admin/config` for `/admin/login`; required before the production Admin login handoff can work
 * `CONFIG_JWKS_URL` — trusted JWKS endpoint for RS256 config JWT verification by `kid`; required by config-backed auth routes, not process boot
 * `DATABASE_URL` — database connection string
 * Social provider credentials (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, etc.)

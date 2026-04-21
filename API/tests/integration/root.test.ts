@@ -164,23 +164,16 @@ describe('GET /api', () => {
 });
 
 describe('GET /llm', () => {
-  it('documents config styling/debugging and backend review endpoints', async () => {
+  it('returns Markdown instructions and links JSON consumers to /api', async () => {
     const res = await app.inject({ method: 'GET', url: '/llm' });
 
     expect(res.statusCode).toBe(200);
-
-    const body = res.json();
-
-    expect(body.config_jwt.required_fields.ui_theme.required_sections.logo.alt).toContain(
-      'required non-empty string',
-    );
-    expect(body.config_verification.path).toBe('/config/verify');
-    expect(body.integration_guide.step_2).toContain('/config/verify');
-    expect(body.integration_guide.step_11).toContain('request_access=true');
-    expect(body.integration_guide.step_13).toContain('/teams/:teamId/access-requests');
-    expect(body.integration_guide.step_14).toContain('optional slug');
-    expect(body.integration_guide.step_16).toContain('/auth/email/twofa-reset/confirm');
-    expect(body.integration_guide.step_17).toContain('/internal/admin/token');
-    expect(body.integration_guide.step_17).toContain('/internal/admin/session');
+    expect(res.headers['content-type']).toContain('text/markdown');
+    expect(res.body).toContain('# UnlikeOtherAuthenticator integration guide');
+    expect(res.body).toContain('For machine-readable JSON');
+    expect(res.body).toContain('[/api](/api)');
+    expect(res.body).toContain('POST /config/verify');
+    expect(res.body).toContain('/internal/admin/token');
+    expect(res.body).toContain('allow_registration');
   });
 });

@@ -4,6 +4,7 @@ import { Button } from '../ui/Button.js';
 import { Switch } from '../ui/Switch.js';
 import { usePopup } from '../../hooks/use-popup.js';
 import { useTranslation } from '../../i18n/use-translation.js';
+import { isRegistrationAllowed } from '../../utils/auth-config.js';
 
 function fieldInputClasses(): string {
   return [
@@ -47,6 +48,7 @@ export function LoginForm(): React.JSX.Element {
     setView,
     requestAccess,
   } = usePopup();
+  const registrationAllowed = isRegistrationAllowed(config);
   const { rememberMeEnabled, rememberMeDefault } = readSessionConfig(config);
 
   const [email, setEmail] = useState('');
@@ -173,13 +175,15 @@ export function LoginForm(): React.JSX.Element {
         >
           {t('nav.forgotPassword')}
         </button>
-        <button
-          type="button"
-          className="text-[var(--uoa-color-primary)] hover:underline"
-          onClick={() => setView('register')}
-        >
-          {t('nav.createAccount')}
-        </button>
+        {registrationAllowed ? (
+          <button
+            type="button"
+            className="text-[var(--uoa-color-primary)] hover:underline"
+            onClick={() => setView('register')}
+          >
+            {t('nav.createAccount')}
+          </button>
+        ) : null}
       </div>
     </form>
   );

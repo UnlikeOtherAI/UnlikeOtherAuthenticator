@@ -2,7 +2,9 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 import { getEnv } from '../../../config/env.js';
+import { getPrisma } from '../../../db/prisma.js';
 import { configVerifier } from '../../../middleware/config-verifier.js';
+import { verifyAccessToken } from '../../../services/access-token.service.js';
 import { exchangeAuthorizationCodeForTokens } from '../../../services/token.service.js';
 import { AppError } from '../../../utils/errors.js';
 import { normalizeDomain } from '../../../utils/domain.js';
@@ -39,6 +41,37 @@ function assertAdminConfigDomain(domain: string): void {
   }
 }
 
+async function assertAdminAccessTokenIsSuperuser(accessToken: string): Promise<void> {
+  const env = getEnv();
+  if (!env.ADMIN_ACCESS_TOKEN_SECRET) {
+    throw new AppError('INTERNAL', 500, 'ADMIN_ACCESS_TOKEN_SECRET_REQUIRED');
+  }
+
+  const claims = await verifyAccessToken(accessToken, {
+    sharedSecret: env.ADMIN_ACCESS_TOKEN_SECRET,
+    issuer: env.AUTH_SERVICE_IDENTIFIER,
+  });
+  const adminDomain = normalizeDomain(env.ADMIN_AUTH_DOMAIN ?? env.AUTH_SERVICE_IDENTIFIER);
+
+  if (claims.role !== 'superuser') {
+    throw new AppError('FORBIDDEN', 403, 'NOT_SUPERUSER');
+  }
+
+  if (normalizeDomain(claims.domain) !== adminDomain) {
+    throw new AppError('FORBIDDEN', 403, 'ADMIN_DOMAIN_MISMATCH');
+  }
+
+  if (env.DATABASE_URL) {
+    const adminRole = await getPrisma().domainRole.findUnique({
+      where: { domain_userId: { domain: adminDomain, userId: claims.userId } },
+      select: { role: true },
+    });
+    if (adminRole?.role !== 'SUPERUSER') {
+      throw new AppError('FORBIDDEN', 403, 'ADMIN_ROLE_NOT_GRANTED');
+    }
+  }
+}
+
 export function registerInternalAdminTokenRoute(app: FastifyInstance): void {
   app.post(
     '/internal/admin/token',
@@ -60,6 +93,7 @@ export function registerInternalAdminTokenRoute(app: FastifyInstance): void {
         redirectUrl: body.redirect_url,
         codeVerifier: body.code_verifier,
       });
+      await assertAdminAccessTokenIsSuperuser(tokenPair.accessToken);
 
       reply.header('Cache-Control', 'no-store');
       reply.header('Pragma', 'no-cache');

@@ -1,127 +1,106 @@
 import type { FastifyInstance } from 'fastify';
 
-import { configJwtDocumentation, configVerificationEndpointDocumentation } from './config-docs.js';
+function renderLlmMarkdown(): string {
+  return `# UnlikeOtherAuthenticator integration guide
+
+UnlikeOtherAuthenticator is a centralized OAuth and authentication service. Client applications do not post raw configuration to the service. They expose a HTTPS \`config_url\` that returns a signed RS256 config JWT, and the auth service fetches and verifies that JWT on every auth request.
+
+For machine-readable JSON, endpoint schemas, and config contracts, use [/api](/api).
+
+## Service discovery
+
+- Home: [/](./)
+- Admin UI: [/admin](/admin)
+- LLM guide: [/llm](/llm)
+- JSON API schema: [/api](/api)
+- Health check: [/health](/health)
+
+## Core auth flow
+
+1. Create a backend endpoint on your application that returns a signed config JWT.
+2. The JWT header must use \`alg: "RS256"\` and include a \`kid\` that resolves through the configured JWKS.
+3. The JWT audience must match \`AUTH_SERVICE_IDENTIFIER\`.
+4. Open the auth UI with:
+
+\`\`\`text
+GET /auth?config_url=<your_config_endpoint_url>&redirect_url=<your_callback_url>&code_challenge=<S256_challenge>&code_challenge_method=S256
+\`\`\`
+
+5. After the user authenticates, this service redirects to your \`redirect_url\` with \`?code=<authorization_code>\`.
+6. Your backend exchanges the code:
+
+\`\`\`text
+POST /auth/token?config_url=<your_config_endpoint_url>
+Authorization: Bearer SHA256(domain + SHARED_SECRET)
+Content-Type: application/json
+
+{
+  "code": "<authorization_code>",
+  "redirect_url": "<same callback URL used for login>",
+  "code_verifier": "<PKCE verifier>"
+}
+\`\`\`
+
+7. Store refresh tokens server-side only. Browser clients must not receive or persist refresh tokens.
+8. Revoke refresh tokens on logout with \`POST /auth/revoke\`.
+
+## Required config JWT fields
+
+- \`domain\`: client domain. It must match the hostname of \`config_url\`.
+- \`redirect_urls\`: non-empty list of exact callback URLs.
+- \`enabled_auth_methods\`: non-empty list. Supported values are \`email_password\`, \`google\`, \`facebook\`, \`github\`, \`linkedin\`, and \`apple\`.
+- \`ui_theme\`: colors, radii, typography, button, card, and logo configuration.
+- \`language_config\`: one language code or a non-empty array of language codes.
+
+## Important optional config fields
+
+- \`allowed_social_providers\`: social providers allowed by this client config.
+- \`allow_registration\`: set to \`false\` to block new user creation, including social-login user creation.
+- \`registration_mode\`: \`password_required\` or \`passwordless\`.
+- \`allowed_registration_domains\`: email domains allowed to register.
+- \`2fa_enabled\`: enables TOTP enforcement when the user has enrolled 2FA.
+- \`session.access_token_ttl_minutes\`: optional 15-60 minute access-token override.
+- \`org_features\`: enables organisations, teams, groups, access requests, and feature flags for the domain.
+
+## Backend-to-backend auth
+
+Domain-scoped backend endpoints use:
+
+\`\`\`text
+Authorization: Bearer SHA256(domain + SHARED_SECRET)
+\`\`\`
+
+This applies to token exchange, token revoke, domain APIs, server-driven team invites, and access-request review APIs. Browser code must never use the domain-hash shared-secret mechanism.
+
+## Admin access
+
+The first-party Admin UI is served from [/admin](/admin). Admin login uses the same auth system with its own first-party config:
+
+- \`/admin/login\` redirects into \`/auth\` with PKCE.
+- The admin config is served from \`/internal/admin/config\`.
+- The admin config must use the admin domain, disable registration, and allow only Google.
+- \`/admin/auth/callback\` exchanges the authorization code at \`POST /internal/admin/token\`.
+- Admin access tokens are signed with \`ADMIN_ACCESS_TOKEN_SECRET\`.
+- Only \`role: "superuser"\` tokens for \`ADMIN_AUTH_DOMAIN\` can access \`/internal/admin/*\`.
+- DB-backed deployments also require a \`SUPERUSER\` row in \`domain_roles\` for that admin domain.
+
+## Debugging config problems
+
+In non-production environments with \`DEBUG_ENABLED=true\`, use \`POST /config/verify\` with \`config\`, \`config_jwt\`, or \`config_url\`. It separates fetch, signature, audience, schema, and domain-match failures.
+
+## Related operational endpoints
+
+- \`GET /domain/users\`: list users for a domain.
+- \`GET /domain/logs\`: domain login logs.
+- \`GET /org/me\`: current user's org context.
+- \`GET /internal/admin/handshake-errors\`: sanitized app handshake and config JWT errors for superusers.
+
+Use [/api](/api) for the complete JSON endpoint schema.`;
+}
 
 export function registerLlmRoute(app: FastifyInstance): void {
-  app.get('/llm', async () => {
-    return {
-      service: 'UnlikeOtherAuthenticator',
-      description:
-        'Centralized OAuth and authentication service. All client configuration is delivered via a signed JWT fetched from a config_url. The JWT must be signed with RS256, include a kid, and verify against the configured JWKS on every request.',
-      service_discovery: {
-        home: '/ — Tailwind holding page with links to Admin, /llm, and /api',
-        api: '/api — machine-readable endpoint schema and config contract',
-        admin: '/admin — first-party Admin CSR app served from this API origin',
-        llm: '/llm — LLM-facing integration guide',
-      },
-
-      authentication: {
-        overview:
-          'Clients integrate via the OAuth 2.0 authorization code flow. The auth UI is rendered by this service at /auth. After authentication, an authorization code is returned to the client redirect_url. The client backend exchanges that code for tokens at POST /auth/token.',
-        domain_auth:
-          'Backend-to-backend endpoints (POST /auth/token, POST /auth/revoke, /domain/*, server-driven team invite routes under /org/organisations/:orgId/teams/:teamId/invitations*, and access-request review routes under /org/organisations/:orgId/teams/:teamId/access-requests*) require a domain hash bearer token: SHA-256(domain + SHARED_SECRET). This is sent as Authorization: Bearer <hash>.',
-        config_url:
-          'Most endpoints require a config_url query parameter pointing to an HTTPS URL that returns the signed config JWT. The server fetches and verifies this JWT on every request.',
-        access_tokens:
-          'Access tokens are JWTs with issuer AUTH_SERVICE_IDENTIFIER and audience uoa:access-token. Client-domain tokens are signed with SHARED_SECRET. Tokens issued for ADMIN_AUTH_DOMAIN are signed with ADMIN_ACCESS_TOKEN_SECRET. Consumers must verify both iss and aud.',
-        admin:
-          'The first-party Admin UI is served by the API service at /admin in production and authenticates through UOA itself. Browser code exchanges the Admin authorization code at POST /internal/admin/token with config_url, redirect_url, code, and PKCE verifier; this endpoint requires the verified config domain to match ADMIN_AUTH_DOMAIN and returns only a short-lived access token, never a refresh token. Admin access tokens are signed with ADMIN_ACCESS_TOKEN_SECRET, which is auth-service-only and not shared with client backends. Protected endpoints under /internal/admin/* require Authorization: Bearer <access_token> where the token role is superuser and the token domain matches ADMIN_AUTH_DOMAIN, defaulting to AUTH_SERVICE_IDENTIFIER. When DATABASE_URL is configured, the token subject must also have a SUPERUSER domain_roles row for that admin domain. Browser admin code must never use the domain-hash shared-secret mechanism.',
-      },
-
-      config_jwt: configJwtDocumentation,
-      config_verification: configVerificationEndpointDocumentation,
-
-      environment_variables: {
-        required: {
-          SHARED_SECRET: 'HMAC secret shared between the auth service and client backends',
-          AUTH_SERVICE_IDENTIFIER:
-            'Audience claim for config JWTs. Must match the aud in signed config JWTs.',
-        },
-        optional: {
-          NODE_ENV: '"development" | "test" | "production" (default: "development")',
-          HOST: 'Bind address (default: "127.0.0.1")',
-          PORT: 'Listen port (default: 3000)',
-          PUBLIC_BASE_URL: 'Public origin for email links (e.g. "https://auth.example.com")',
-          ADMIN_AUTH_DOMAIN:
-            'Domain whose superuser tokens may access /internal/admin/* (default: AUTH_SERVICE_IDENTIFIER)',
-          ADMIN_ACCESS_TOKEN_SECRET:
-            'Auth-service-only HMAC secret used for ADMIN_AUTH_DOMAIN access tokens. Required before admin token exchange or protected admin reads can work.',
-          CONFIG_JWKS_URL:
-            'Trusted JWKS endpoint used to verify RS256 config JWT signatures by kid. Required before config-backed auth routes can verify client config JWTs unless a route explicitly supplies jwks_url.',
-          LOG_LEVEL: '"fatal" | "error" | "warn" | "info" | "debug" | "trace" (default: "info")',
-          DEBUG_ENABLED:
-            'Set true to include internal error code, summary, details, hints, and auth debug HTML in responses. Default false.',
-          DATABASE_URL: 'PostgreSQL connection string',
-          ACCESS_TOKEN_TTL:
-            'JWT access token lifetime, minutes only (default: "30m", range: 15m-60m)',
-          REFRESH_TOKEN_TTL_DAYS:
-            'Fallback refresh token lifetime in days (default: 30, range: 1-90). Overridden by config session settings.',
-          TOKEN_PRUNE_RETENTION_DAYS:
-            'Days after refresh-token expiry before expired refresh token rows are pruned (default: 7, max: 365)',
-          LOG_RETENTION_DAYS: 'Login log retention in days (default: 90, max: 365)',
-          EMAIL_PROVIDER: '"disabled" | "smtp" | "ses" | "sendgrid"',
-          EMAIL_FROM: 'Sender email address',
-          EMAIL_REPLY_TO: 'Reply-to email address',
-          AWS_REGION: 'AWS region for SES',
-          SENDGRID_API_KEY: 'SendGrid API key',
-          SMTP_HOST: 'SMTP server hostname',
-          SMTP_PORT: 'SMTP server port',
-          SMTP_SECURE: '"true" | "false" for implicit TLS',
-          SMTP_USER: 'SMTP username',
-          SMTP_PASSWORD: 'SMTP password',
-          GOOGLE_CLIENT_ID: 'Google OAuth client ID',
-          GOOGLE_CLIENT_SECRET: 'Google OAuth client secret',
-          FACEBOOK_CLIENT_ID: 'Facebook OAuth app ID',
-          FACEBOOK_CLIENT_SECRET: 'Facebook OAuth app secret',
-          GITHUB_CLIENT_ID: 'GitHub OAuth app ID',
-          GITHUB_CLIENT_SECRET: 'GitHub OAuth app secret',
-          LINKEDIN_CLIENT_ID: 'LinkedIn OAuth app ID',
-          LINKEDIN_CLIENT_SECRET: 'LinkedIn OAuth app secret',
-          APPLE_CLIENT_ID: 'Apple Sign In service ID',
-          APPLE_TEAM_ID: 'Apple developer team ID',
-          APPLE_KEY_ID: 'Apple key ID',
-          APPLE_PRIVATE_KEY: 'Apple private key PEM contents',
-          AI_TRANSLATION_PROVIDER: '"disabled" | "openai" (default: "disabled")',
-          OPENAI_API_KEY: 'OpenAI API key for AI translations',
-          OPENAI_MODEL: 'OpenAI model for AI translations',
-        },
-      },
-
-      integration_guide: {
-        step_1:
-          'Create an HTTPS config JWT endpoint on your backend that returns a signed JWT with your domain, redirect_urls, enabled_auth_methods, ui_theme, and language_config.',
-        step_2:
-          'In non-production environments with DEBUG_ENABLED=true, POST /config/verify with either config, config_jwt, or config_url before wiring the auth popup. Use jwks_url and auth_service_identifier when you want the auth service to confirm signature/audience problems separately from schema problems.',
-        step_3:
-          'Open the auth popup/redirect to: GET /auth?config_url=<your_config_endpoint_url>&redirect_url=<your_callback_url>&code_challenge=<S256_challenge>&code_challenge_method=S256 (redirect_uri is also accepted as an alias for redirect_url)',
-        step_4:
-          'After authentication, the user is redirected to your redirect_url with ?code=<authorization_code>.',
-        step_5:
-          'Exchange the code from your backend: POST /auth/token with { "code": "<auth_code>", "redirect_url": "<same_callback_url_used_for_login>", "code_verifier": "<PKCE_verifier>" }, Authorization: Bearer SHA256(domain+SHARED_SECRET), and config_url query param.',
-        step_6:
-          'Store the refresh_token server-side. Use the access_token for API calls. Refresh via POST /auth/token with { "grant_type": "refresh_token", "refresh_token": "<token>" }.',
-        step_7: 'On logout, call POST /auth/revoke with the refresh_token to revoke the session.',
-        step_8:
-          'To invite a batch of users into a team from your backend, call POST /org/organisations/:orgId/teams/:teamId/invitations with Authorization: Bearer SHA256(domain+SHARED_SECRET), config_url, optional invitedBy metadata, and invites: [{ email, name?, teamRole? }]. If the same team/email is invited again before acceptance, the old active invite is replaced and a fresh email is sent.',
-        step_9:
-          'Invite emails land on GET /auth/email/team-invite, where the recipient can explicitly accept or decline the invitation. Decline is handled by GET /auth/email/team-invite/decline and recorded on the invite row.',
-        step_10:
-          'Invite emails include a tracking pixel at GET /auth/email/team-invite-open/:inviteId.gif. Team invite records expose openedAt/openCount so your backend can see whether an invite email was opened at all. This is best-effort because some mail clients proxy or block remote images.',
-        step_11:
-          'To let a user ask for access to one configured team, send them through the normal auth flow with request_access=true on /auth/login, /auth/register, /auth/verify-email, /auth/email/link, or /auth/social/:provider. The user authenticates first; then the service either auto-grants them to access_requests.target_team_id if their verified email domain matches access_requests.auto_grant_domains, or creates/refreshes a pending access request.',
-        step_12:
-          'When a pending access request is created, notification emails go to the configured org roles. The email includes access_requests.admin_review_url if provided, otherwise it falls back to https://<domain>/. The user is redirected back to /auth with request_access_status=pending so the popup can render an "access requested" confirmation state instead of issuing an authorization code.',
-        step_13:
-          'Your backend can list and review access requests with GET /org/organisations/:orgId/teams/:teamId/access-requests plus POST .../:requestId/approve or POST .../:requestId/reject. These endpoints are domain-hash protected and only work for the exact org/team configured in access_requests.',
-        step_14:
-          'Team records now expose a unique slug per organisation. POST /org/organisations/:orgId/teams accepts an optional slug; if omitted, the service derives one from the team name and appends a number when needed. PUT /org/organisations/:orgId/teams/:teamId also accepts an optional slug, while omitting it leaves the existing slug unchanged. Existing teams are backfilled during the team-slug migration.',
-        step_15:
-          'If org_features.user_needs_team=true, token issuance self-heals before building the access-token org claim. Users already in a domain org but with zero teams get a personal "<name>\'s team" with teamRole=lead and member->admin promotion when org_roles includes admin. Users with no org on the domain get a new personal org plus a default personal team.',
-        step_16:
-          '2FA reset emails land on GET /auth/email/twofa-reset, which only renders a no-store confirmation page. The one-time token is consumed only by an explicit POST to /auth/email/twofa-reset/confirm with the same token and config_url query parameters.',
-        step_17:
-          'Open the Admin UI at /admin on the API origin. Authenticate through UOA itself using a config whose domain is ADMIN_AUTH_DOMAIN, then exchange the authorization code at POST /internal/admin/token with config_url, redirect_url, code, and code_verifier. This browser-safe endpoint does not require domain-hash auth and does not return a refresh token. Call /internal/admin/session with Authorization: Bearer <access_token>. Only access tokens with role=superuser for ADMIN_AUTH_DOMAIN are accepted, and DB-backed deployments also require a SUPERUSER domain_roles row for that subject and domain. Use the same bearer token for /internal/admin/dashboard, domains, organisations, teams, users, logs, handshake-errors, settings, and search.',
-      },
-    };
+  app.get('/llm', async (_request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    reply.type('text/markdown; charset=utf-8').send(renderLlmMarkdown());
   });
 }

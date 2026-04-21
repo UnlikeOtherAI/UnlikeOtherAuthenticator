@@ -119,6 +119,9 @@ Production contract:
 
 - Admin identity is first-party UOA identity.
 - In production, the API service serves the Admin app from `/admin` on the same origin as the auth API.
+- `/admin/login` starts the normal UOA auth flow with PKCE and the signed config served from `/internal/admin/config`.
+- The first-party admin config must disable registration and allow only Google (`enabled_auth_methods: ["google"]`, `allowed_social_providers: ["google"]`, `allow_registration: false`).
+- `/admin/auth/callback` exchanges the returned authorization code with `POST /internal/admin/token`.
 - Admin access tokens are issued by `POST /internal/admin/token` when the verified config domain is `ADMIN_AUTH_DOMAIN`.
 - The admin token exchange accepts an authorization code and PKCE verifier, does not require browser code to know the domain-hash shared secret, and never returns refresh tokens.
 - Admin access-token claims must not expose the domain-hash client identifier because browser code can decode JWT payloads.
@@ -130,27 +133,14 @@ Production contract:
 - `ADMIN_AUTH_DOMAIN` is the domain allowed for admin superuser tokens; it defaults to `AUTH_SERVICE_IDENTIFIER`.
 - browser code must not use the domain-hash shared-secret mechanism directly
 
-Current implementation rule:
+Frontend session interface:
 
-- until a browser-safe production admin session contract is documented, keep frontend admin auth behind a stubbed guard or mock session adapter for development only
-- gate any bypass behind an explicit development-only environment flag
-- do not ship a production build that depends on the bypass
-
-Required temporary interface:
-
-- implement the stub in `Admin/src/features/auth/admin-session.ts`
+- `Admin/src/features/auth/admin-session.ts` stores only the short-lived admin access token in `sessionStorage`.
+- on load, call `/internal/admin/session` with `Authorization: Bearer <access_token>` before rendering protected pages
+- any missing, expired, invalid, non-admin-domain, or non-superuser token must clear the session and kick the user back to `/admin/login`
 - expose `useAdminSession(): { adminUser: { email: string } | null; isLoading: boolean; isAuthenticated: boolean }`
 - expose an `AdminSessionGuard` component that blocks protected routes when `isAuthenticated` is false
-- keep page and layout code dependent on this interface only, so the production session implementation can replace the stub without page-level rewrites
-
-Forward direction:
-
-- design the frontend auth boundary so it can swap from the development stub to `/internal/admin/token` and `/internal/admin/session` without rewriting page or component logic
-- `/internal/admin/session` is the browser-safe admin session check; it returns the current superuser admin identity when the bearer access token is valid for the admin domain
-
-Acceptance rule for removing the bypass:
-
-- only remove the development bypass after the Admin login flow obtains and stores a UOA access token without exposing refresh tokens or the shared secret to browser JavaScript
+- a development-only bypass may exist only behind `VITE_ADMIN_BYPASS_AUTH=true` and must not affect production builds
 
 ## 8. Reuse Rules
 

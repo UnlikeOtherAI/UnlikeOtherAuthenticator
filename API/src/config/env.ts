@@ -48,6 +48,9 @@ const EnvSchema = z
     ADMIN_AUTH_DOMAIN: z.string().min(1).optional(),
     // Auth-service-only signing secret for first-party admin access tokens.
     ADMIN_ACCESS_TOKEN_SECRET: z.string().min(32).optional(),
+    // Signed RS256 config JWT served to the first-party Admin UI. The payload must be
+    // Google-only, registration-disabled, and scoped to ADMIN_AUTH_DOMAIN.
+    ADMIN_CONFIG_JWT: z.string().min(1).optional(),
     // Trusted JWKS endpoint used to verify client config JWTs. Config JWTs must be RS256
     // and include a kid that resolves to a key from this JWKS.
     CONFIG_JWKS_URL: z.string().url().optional(),

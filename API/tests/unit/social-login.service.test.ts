@@ -229,6 +229,67 @@ describe('social-login.service', () => {
     expect(placeUserInConfiguredOrganisation).not.toHaveBeenCalled();
   });
 
+  it('blocks new social users when registration is disabled, even during access requests', async () => {
+    const prisma = {
+      user: {
+        findUnique: vi.fn(async () => null),
+        create: vi.fn(async () => {
+          return { id: 'user_1', twoFaEnabled: false };
+        }),
+        update: vi.fn(),
+      },
+    };
+
+    const ensureDomainRoleForUser = vi.fn();
+    const placeUserInConfiguredOrganisation = vi.fn();
+
+    const env: Env = {
+      NODE_ENV: 'test',
+      HOST: '127.0.0.1',
+      PORT: 3000,
+      PUBLIC_BASE_URL: 'https://auth.example.com',
+      LOG_LEVEL: 'info',
+      SHARED_SECRET: 'test-shared-secret-with-enough-length',
+      AUTH_SERVICE_IDENTIFIER: 'uoa-auth-service',
+      DATABASE_URL: 'postgres://example.invalid/db',
+      ACCESS_TOKEN_TTL: '30m',
+      LOG_RETENTION_DAYS: 90,
+    };
+
+    const config: ClientConfig = {
+      domain: 'client.example.com',
+      redirect_urls: ['https://client.example.com/oauth/callback'],
+      enabled_auth_methods: ['google'],
+      ui_theme: testUiTheme(),
+      language_config: 'en',
+      user_scope: 'global',
+      allow_registration: false,
+      '2fa_enabled': false,
+      debug_enabled: false,
+      allowed_social_providers: ['google'],
+    };
+
+    const result = await loginWithSocialProfile(
+      {
+        profile: {
+          provider: 'google',
+          email: 'user@company.com',
+          emailVerified: true,
+          name: 'User',
+          avatarUrl: null,
+        },
+        config,
+        requestAccess: true,
+      },
+      { env, prisma, ensureDomainRoleForUser, placeUserInConfiguredOrganisation },
+    );
+
+    expect(result).toEqual({ status: 'blocked' });
+    expect(prisma.user.create).not.toHaveBeenCalled();
+    expect(ensureDomainRoleForUser).not.toHaveBeenCalled();
+    expect(placeUserInConfiguredOrganisation).not.toHaveBeenCalled();
+  });
+
   it('allows existing social users even when their email domain is not allowed for new registration', async () => {
     const prisma = {
       user: {

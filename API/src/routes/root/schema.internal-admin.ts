@@ -7,6 +7,13 @@ const authFailures = '401 when bearer token is missing/invalid; 403 when token i
 
 export const internalAdminEndpoints: EndpointSchema[] = [
   {
+    method: 'GET',
+    path: '/internal/admin/config',
+    description: 'Serve the signed first-party Admin config JWT used by /admin/login',
+    auth: 'Public, no-store. The returned JWT must verify through CONFIG_JWKS_URL and contain the admin domain, Google-only auth, and allow_registration=false.',
+    response: { 200: 'Signed RS256 config JWT as text/plain' },
+  },
+  {
     method: 'POST',
     path: '/internal/admin/token',
     description: 'Browser-safe Admin UI authorization-code exchange; returns an admin access token only',

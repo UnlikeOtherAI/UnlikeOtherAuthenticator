@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { AdminSessionGuard } from '../features/auth/admin-session';
 import { AdminUiProvider } from '../features/shell/admin-ui';
 import { AdminLayout } from '../layouts/AdminLayout';
+import { AdminAuthCallbackPage } from '../pages/AdminAuthCallbackPage';
 import { ConnectionErrorsPage } from '../pages/ConnectionErrorsPage';
 import { FeatureAudienceGroupPage } from '../pages/FeatureAudienceGroupPage';
 import { FeatureFlagDetailPage } from '../pages/FeatureFlagDetailPage';
@@ -23,6 +24,7 @@ export function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/auth/callback" element={<AdminAuthCallbackPage />} />
       <Route
         element={
           <AdminSessionGuard>

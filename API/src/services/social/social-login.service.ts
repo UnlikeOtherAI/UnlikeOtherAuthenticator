@@ -30,7 +30,14 @@ type SocialLoginResult =
 function isAllowedByRegistrationDomainPolicy(params: {
   email: string;
   config: ClientConfig;
+  requestAccess?: boolean;
 }): boolean {
+  if (params.config.allow_registration === false) {
+    return false;
+  }
+
+  if (params.requestAccess) return true;
+
   const domains = params.config.allowed_registration_domains;
   if (!domains?.length) return true;
 
@@ -88,10 +95,11 @@ export async function loginWithSocialProfile(
     userId = updated.id;
     twoFaEnabled = updated.twoFaEnabled;
   } else {
-    if (
-      !params.requestAccess &&
-      !isAllowedByRegistrationDomainPolicy({ email, config: params.config })
-    ) {
+    if (!isAllowedByRegistrationDomainPolicy({
+      email,
+      config: params.config,
+      requestAccess: params.requestAccess,
+    })) {
       return { status: 'blocked' };
     }
 

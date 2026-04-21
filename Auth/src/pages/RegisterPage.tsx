@@ -1,15 +1,25 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 
 import { RegisterForm } from '../components/form/RegisterForm.js';
 import { SocialButtons } from '../components/form/SocialButtons.js';
 import { usePopup } from '../hooks/use-popup.js';
 import { useTheme } from '../hooks/use-theme.js';
 import { useTranslation } from '../i18n/use-translation.js';
+import { isRegistrationAllowed } from '../utils/auth-config.js';
 
 export function RegisterPage(): React.JSX.Element {
   const { classNames } = useTheme();
   const { t } = useTranslation();
-  const { setView } = usePopup();
+  const { config, setView } = usePopup();
+  const registrationAllowed = isRegistrationAllowed(config);
+
+  useEffect(() => {
+    if (!registrationAllowed) setView('login');
+  }, [registrationAllowed, setView]);
+
+  if (!registrationAllowed) {
+    return <div />;
+  }
 
   return (
     <div>

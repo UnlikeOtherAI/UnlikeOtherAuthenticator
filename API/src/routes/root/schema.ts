@@ -15,7 +15,7 @@ export type EndpointSchema = {
 const baseEndpoints: EndpointSchema[] = [
   { method: 'GET', path: '/', description: 'Holding page linking to Admin, /llm, and /api' },
   { method: 'GET', path: '/api', description: 'API information and full endpoint schema' },
-  { method: 'GET', path: '/llm', description: 'LLM-friendly configuration and integration guide' },
+  { method: 'GET', path: '/llm', description: 'Markdown integration guide for LLMs and humans; links /api for JSON schema' },
   { method: 'GET', path: '/health', description: 'Health check' },
   {
     method: 'GET',

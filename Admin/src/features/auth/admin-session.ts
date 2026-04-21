@@ -1,4 +1,13 @@
-import { Fragment, createContext, createElement, useContext, useMemo, useState, type PropsWithChildren } from 'react';
+import {
+  Fragment,
+  createContext,
+  createElement,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type PropsWithChildren,
+} from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 
 import { adminEnv } from '../../config/env';
@@ -6,45 +15,78 @@ import { adminEnv } from '../../config/env';
 const storageKey = 'uoa-admin-session';
 
 type AdminUser = {
+  id?: string;
   email: string;
+  domain?: string;
+  role?: 'superuser';
+};
+
+type StoredSession = {
+  accessToken: string;
+  expiresAt: number;
 };
 
 type AdminSessionContextValue = {
   adminUser: AdminUser | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  signIn: (email: string) => boolean;
+  completeSignIn: (accessToken: string, expiresInSeconds: number) => Promise<AdminUser>;
   signOut: () => void;
 };
 
 const AdminSessionContext = createContext<AdminSessionContextValue | null>(null);
 
 export function AdminSessionProvider({ children }: PropsWithChildren) {
-  const [storedUser, setStoredUser] = useState<AdminUser | null>(() => readStoredSession());
+  const [adminUser, setAdminUser] = useState<AdminUser | null>(() =>
+    adminEnv.bypassAuth ? { email: 'admin@system.local', role: 'superuser' } : null,
+  );
+  const [isLoading, setIsLoading] = useState(() => !adminEnv.bypassAuth && Boolean(readStoredSession()));
 
-  const adminUser = useMemo(() => (adminEnv.bypassAuth ? { email: 'admin@system.local' } : storedUser), [storedUser]);
+  useEffect(() => {
+    if (adminEnv.bypassAuth) return;
+
+    const storedSession = readStoredSession();
+    if (!storedSession) {
+      setIsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    void fetchAdminUser(storedSession.accessToken)
+      .then((nextUser) => {
+        if (cancelled) return;
+        setAdminUser(nextUser);
+        setIsLoading(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        clearStoredSession();
+        setAdminUser(null);
+        setIsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const value = useMemo<AdminSessionContextValue>(
     () => ({
       adminUser,
       isAuthenticated: Boolean(adminUser),
-      isLoading: false,
-      signIn(email) {
-        if (!import.meta.env.DEV) {
-          return false;
-        }
-
-        const nextUser = { email };
-        window.localStorage.setItem(storageKey, JSON.stringify(nextUser));
-        setStoredUser(nextUser);
-        return true;
+      isLoading,
+      async completeSignIn(accessToken, expiresInSeconds) {
+        writeStoredSession(accessToken, expiresInSeconds);
+        const nextUser = await fetchAdminUser(accessToken);
+        setAdminUser(nextUser);
+        return nextUser;
       },
       signOut() {
-        window.localStorage.removeItem(storageKey);
-        setStoredUser(null);
+        clearStoredSession();
+        setAdminUser(null);
       },
     }),
-    [adminUser],
+    [adminUser, isLoading],
   );
 
   return createElement(AdminSessionContext.Provider, { value }, children);
@@ -64,7 +106,7 @@ export function useAdminSessionActions() {
   const session = useRequiredAdminSessionContext();
 
   return {
-    signIn: session.signIn,
+    completeSignIn: session.completeSignIn,
     signOut: session.signOut,
   };
 }
@@ -94,15 +136,56 @@ function useRequiredAdminSessionContext() {
   return session;
 }
 
-function readStoredSession(): AdminUser | null {
-  if (!import.meta.env.DEV) {
-    return null;
-  }
-
+function readStoredSession(): StoredSession | null {
   try {
-    const storedValue = window.localStorage.getItem(storageKey);
-    return storedValue ? (JSON.parse(storedValue) as AdminUser) : null;
+    const storedValue = window.sessionStorage.getItem(storageKey);
+    if (!storedValue) return null;
+
+    const parsed = JSON.parse(storedValue) as StoredSession;
+    if (!parsed.accessToken || parsed.expiresAt <= Date.now() + 5_000) {
+      clearStoredSession();
+      return null;
+    }
+
+    return parsed;
   } catch {
     return null;
   }
+}
+
+function clearStoredSession(): void {
+  window.sessionStorage.removeItem(storageKey);
+}
+
+function writeStoredSession(accessToken: string, expiresInSeconds: number): void {
+  const storedSession: StoredSession = {
+    accessToken,
+    expiresAt: Date.now() + expiresInSeconds * 1_000,
+  };
+  window.sessionStorage.setItem(storageKey, JSON.stringify(storedSession));
+}
+
+function apiUrl(path: string): string {
+  const baseUrl = adminEnv.apiBaseUrl || window.location.origin;
+  return new URL(path, baseUrl).toString();
+}
+
+async function fetchAdminUser(accessToken: string): Promise<AdminUser> {
+  const response = await fetch(apiUrl('/internal/admin/session'), {
+    headers: {
+      Accept: 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error('Admin session rejected.');
+  }
+
+  const body = (await response.json()) as { adminUser?: AdminUser };
+  if (!body.adminUser?.email) {
+    throw new Error('Admin session response was invalid.');
+  }
+
+  return body.adminUser;
 }
