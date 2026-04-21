@@ -22,8 +22,9 @@ export function registerConfigJwksRoute(app: FastifyInstance): void {
     '/.well-known/jwks.json',
     { schema: { response: { 200: configJwksResponseSchema } } },
     async (_request, reply) => {
+      const jwks = readPublicConfigJwks();
       reply.header('Cache-Control', 'public, max-age=300');
-      reply.type('application/json; charset=utf-8').send(readPublicConfigJwks());
+      reply.type('application/json; charset=utf-8').send(jwks);
     },
   );
 }

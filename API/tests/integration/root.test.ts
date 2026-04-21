@@ -210,6 +210,7 @@ describe('GET /.well-known/jwks.json', () => {
       const res = await app.inject({ method: 'GET', url: '/.well-known/jwks.json' });
 
       expect(res.statusCode).toBe(500);
+      expect(String(res.headers['cache-control'] ?? '')).not.toContain('max-age=300');
     } finally {
       if (originalJwksJson === undefined) {
         Reflect.deleteProperty(process.env, 'CONFIG_JWKS_JSON');
