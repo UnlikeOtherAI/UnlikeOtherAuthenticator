@@ -110,34 +110,49 @@ function expandIpv6(address: string): number[] | null {
   return [...leftHextets, ...Array<number>(omittedCount).fill(0), ...rightHextets];
 }
 
-function decodeIpv4MappedIpv6(address: string): string | null {
-  const hextets = expandIpv6(address);
-  if (!hextets) return null;
-
-  const isMapped =
-    hextets.slice(0, 5).every((hextet) => hextet === 0) && hextets[5] === 0xffff;
-  if (!isMapped) return null;
-
+function decodeTrailingIpv4(hextets: number[]): string {
   const high = hextets[6];
   const low = hextets[7];
   return [high >> 8, high & 0xff, low >> 8, low & 0xff].join('.');
 }
 
+function isIpv4MappedIpv6(hextets: number[]): boolean {
+  return hextets.slice(0, 5).every((hextet) => hextet === 0) && hextets[5] === 0xffff;
+}
+
+function isNat64WellKnownPrefix(hextets: number[]): boolean {
+  return (
+    hextets[0] === 0x0064 &&
+    hextets[1] === 0xff9b &&
+    hextets.slice(2, 6).every((hextet) => hextet === 0)
+  );
+}
+
 function isBlockedIpv6(address: string): boolean {
-  const normalized = address.toLowerCase();
-  const mappedIpv4 = decodeIpv4MappedIpv6(address);
-  if (mappedIpv4) {
-    return isBlockedIpv4(mappedIpv4);
+  const hextets = expandIpv6(address);
+  if (!hextets) return true;
+
+  if (isIpv4MappedIpv6(hextets)) {
+    return isBlockedIpv4(decodeTrailingIpv4(hextets));
   }
 
-  const first = normalized.split(':')[0] ?? '';
-  const firstHextet = Number.parseInt(first || '0', 16);
+  const isNat64WellKnown = isNat64WellKnownPrefix(hextets);
+  const isBlockedNat64EmbeddedIpv4 = isNat64WellKnown
+    ? isBlockedIpv4(decodeTrailingIpv4(hextets))
+    : false;
+  if (isNat64WellKnown || isBlockedNat64EmbeddedIpv4) return true;
+
+  const isUnspecified = hextets.every((hextet) => hextet === 0);
+  const isLoopback =
+    hextets.slice(0, 7).every((hextet) => hextet === 0) && hextets[7] === 1;
+  const firstHextet = hextets[0];
 
   return (
-    normalized === '::' ||
-    normalized === '::1' ||
-    (Number.isInteger(firstHextet) && (firstHextet & 0xffc0) === 0xfe80) ||
-    (Number.isInteger(firstHextet) && (firstHextet & 0xfe00) === 0xfc00)
+    isUnspecified ||
+    isLoopback ||
+    (firstHextet & 0xffc0) === 0xfe80 ||
+    (firstHextet & 0xfe00) === 0xfc00 ||
+    firstHextet >= 0xff00
   );
 }
 
