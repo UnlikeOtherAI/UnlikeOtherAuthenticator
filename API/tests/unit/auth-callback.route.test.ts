@@ -8,6 +8,8 @@ const fetchConfigJwtFromUrlMock = vi.fn();
 const verifyConfigJwtSignatureMock = vi.fn();
 const validateConfigFieldsMock = vi.fn();
 const assertConfigDomainMatchesConfigUrlMock = vi.fn();
+const adminConfigUrlMock = vi.fn();
+const readAdminConfigJwtMock = vi.fn();
 
 const assertSocialProviderAllowedMock = vi.fn();
 const getGoogleProfileFromCodeMock = vi.fn();
@@ -30,6 +32,13 @@ vi.mock('../../src/services/config.service.js', async () => {
     validateConfigFields: (...args: unknown[]) => validateConfigFieldsMock(...args),
     assertConfigDomainMatchesConfigUrl: (...args: unknown[]) =>
       assertConfigDomainMatchesConfigUrlMock(...args),
+  };
+});
+
+vi.mock('../../src/services/admin-auth-config.service.js', () => {
+  return {
+    adminConfigUrl: (...args: unknown[]) => adminConfigUrlMock(...args),
+    readAdminConfigJwt: (...args: unknown[]) => readAdminConfigJwtMock(...args),
   };
 });
 
@@ -99,6 +108,8 @@ describe('GET /auth/callback/:provider', () => {
     verifyConfigJwtSignatureMock.mockReset();
     validateConfigFieldsMock.mockReset();
     assertConfigDomainMatchesConfigUrlMock.mockReset();
+    adminConfigUrlMock.mockReset();
+    readAdminConfigJwtMock.mockReset();
     assertSocialProviderAllowedMock.mockReset();
     getGoogleProfileFromCodeMock.mockReset();
     verifySocialStateMock.mockReset();
@@ -109,6 +120,8 @@ describe('GET /auth/callback/:provider', () => {
 
     fetchConfigJwtFromUrlMock.mockResolvedValue('config-jwt');
     verifyConfigJwtSignatureMock.mockResolvedValue({} as JWTPayload);
+    adminConfigUrlMock.mockReturnValue('https://admin.example.com/internal/admin/config');
+    readAdminConfigJwtMock.mockReturnValue('admin-config-jwt');
     validateConfigFieldsMock.mockReturnValue(
       baseConfig({
         allowed_registration_domains: ['company.com'],
@@ -155,6 +168,44 @@ describe('GET /auth/callback/:provider', () => {
     );
     expect(loginWithSocialProfileMock).toHaveBeenCalledTimes(1);
     expect(issueAuthorizationCodeMock).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('uses the exact first-party admin config URL locally during social callback', async () => {
+    verifySocialStateMock.mockResolvedValue({
+      provider: 'google',
+      config_url: 'https://admin.example.com/internal/admin/config',
+      redirect_url: 'https://admin.example.com/admin/auth/callback',
+    });
+    validateConfigFieldsMock.mockReturnValue(
+      baseConfig({
+        domain: 'admin.example.com',
+        redirect_urls: ['https://admin.example.com/admin/auth/callback'],
+        allowed_social_providers: ['google'],
+        allow_registration: false,
+      }),
+    );
+    selectRedirectUrlMock.mockReturnValue('https://admin.example.com/admin/auth/callback');
+
+    const { createApp } = await import('../../src/app.js');
+    const app = await createApp();
+    await app.ready();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/auth/callback/google?code=provider-code&state=state-token',
+    });
+
+    expect(res.statusCode).toBe(302);
+    expect(res.headers.location).toBe('https://admin.example.com/admin/auth/callback?error=auth_failed');
+    expect(fetchConfigJwtFromUrlMock).not.toHaveBeenCalled();
+    expect(readAdminConfigJwtMock).toHaveBeenCalledTimes(1);
+    expect(verifyConfigJwtSignatureMock).toHaveBeenCalledWith(
+      'admin-config-jwt',
+      'https://auth.example.com/.well-known/jwks.json',
+      'uoa-auth-service',
+    );
 
     await app.close();
   });

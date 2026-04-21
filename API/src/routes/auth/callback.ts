@@ -5,10 +5,10 @@ import { getEnv, requireEnv } from '../../config/env.js';
 import { AppError } from '../../utils/errors.js';
 import {
   assertConfigDomainMatchesConfigUrl,
-  fetchConfigJwtFromUrl,
   validateConfigFields,
   verifyConfigJwtSignature,
 } from '../../services/config.service.js';
+import { readConfigJwtFromTrustedSource } from '../../services/config-jwt-source.service.js';
 import { assertSocialProviderAllowed } from '../../services/social/index.js';
 import { getAppleProfileFromCode } from '../../services/social/apple.service.js';
 import { getFacebookProfileFromCode } from '../../services/social/facebook.service.js';
@@ -103,7 +103,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
       const requestedRedirectUrl = socialState.redirect_url;
 
       // Brief 22.1 + 22.4: fetch and verify config on each auth initiation.
-      const configJwt = await fetchConfigJwtFromUrl(configUrl);
+      const configJwt = await readConfigJwtFromTrustedSource(configUrl);
       const payload = await verifyConfigJwtSignature(
         configJwt,
         CONFIG_JWKS_URL,

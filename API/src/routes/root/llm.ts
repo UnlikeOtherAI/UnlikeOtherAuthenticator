@@ -45,6 +45,41 @@ Content-Type: application/json
 7. Store refresh tokens server-side only. Browser clients must not receive or persist refresh tokens.
 8. Revoke refresh tokens on logout with \`POST /auth/revoke\`.
 
+## SSO installation checklist
+
+Use this checklist when installing a new app as an SSO client:
+
+- The client app must expose a public HTTPS \`config_url\`; loopback, private IP, and internal-only DNS targets are rejected.
+- The \`domain\` claim in the config JWT must exactly match the hostname of \`config_url\`.
+- The config JWT must be signed with RS256, include a \`kid\`, and verify against the auth service \`CONFIG_JWKS_URL\`.
+- The JWKS must publish only public key material. Never expose a private JWK, client secret, shared secret, refresh token, or OAuth code.
+- \`AUTH_SERVICE_IDENTIFIER\` must match the config JWT \`aud\` and the social-state JWT audience.
+- \`PUBLIC_BASE_URL\` must be the real external origin of the auth service. Provider callbacks are built from it, for example \`/auth/callback/google\`.
+- OAuth provider dashboards must allow the exact callback URLs produced by this service.
+- Every \`redirect_url\` sent to \`/auth\` must be listed exactly in \`redirect_urls\`.
+- Browser clients must use PKCE. The same \`redirect_url\` and \`code_verifier\` must be used during token exchange.
+- Backend token exchange and revoke calls must use the domain-hash Authorization header, never browser credentials.
+- If \`allow_registration=false\`, social login will not create a user. The user must already exist or the callback redirects with a generic \`auth_failed\`.
+- For org/team installs, decide whether the user can sign in without an assigned team before enabling \`org_features.user_needs_team\`.
+
+## What not to assume during setup
+
+- Do not assume the first successful \`/auth\` page means the full callback path is configured. The callback re-validates config after the provider returns.
+- Do not assume a config endpoint reachable from a browser is reachable from Cloud Run or from the auth service. Check DNS, TLS, and private-address rejection.
+- Do not assume Google login can register users when registration is disabled for a client config.
+- Do not assume admin login uses a separate identity system. The Admin UI uses this same auth system with a first-party config and stricter superuser checks.
+- Do not assume provider callback errors will reveal secrets or detailed causes to users. Production pages are intentionally generic; use logs and sanitized handshake-error reporting.
+- Do not replay OAuth \`code\` values from logs or chat. They are one-time credentials and should be treated as sensitive.
+
+## Common setup failures
+
+- \`Request failed\` after returning from Google usually means the callback route rejected social state, config fetch, config JWT verification, redirect URL validation, or social-login policy. Check server logs around \`/auth/callback/google\`.
+- \`CONFIG_FETCH_FAILED\` means the service could not fetch a usable config JWT from \`config_url\`, or a first-party config was not handled locally.
+- \`CONFIG_JWT_INVALID\` means the JWT signature, \`kid\`, issuer, audience, algorithm, or JWKS lookup failed.
+- \`CONFIG_DOMAIN_MISMATCH\` means the JWT \`domain\` does not match the \`config_url\` hostname.
+- \`auth_failed\` on the final redirect is intentionally generic. With \`allow_registration=false\`, first check whether the user already exists and is permitted for that domain.
+- Google \`redirect_uri_mismatch\` means the provider dashboard does not contain the exact callback URL built from \`PUBLIC_BASE_URL\`.
+
 ## Required config JWT fields
 
 - \`domain\`: client domain. It must match the hostname of \`config_url\`.
@@ -85,6 +120,7 @@ The first-party Admin UI is served from [/admin](/admin). Admin login uses the s
 - Admin access tokens are signed with \`ADMIN_ACCESS_TOKEN_SECRET\`.
 - Only \`role: "superuser"\` tokens for \`ADMIN_AUTH_DOMAIN\` can access \`/internal/admin/*\`.
 - DB-backed deployments also require a \`SUPERUSER\` row in \`domain_roles\` for that admin domain.
+- The admin callback must read the exact first-party admin config locally, not by fetching its own public edge URL.
 
 ## Debugging config problems
 
