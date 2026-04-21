@@ -1,4 +1,4 @@
-import type { AdminData, AppFlagSummary, FeatureFlagDefinition, FeaturePlatform, KillSwitchEntry, OrganisationMember, PreapprovedMember, Team, UserSummary } from './types';
+import type { AdminData, AppFlagSummary, FeatureAudienceGroup, FeatureFlagDefinition, FeaturePlatform, KillSwitchEntry, OrganisationMember, PreapprovedMember, Team, UserSummary } from './types';
 
 const acmeMembers: OrganisationMember[] = [
   member('u101', 'Alice Chen', 'alice@acme.com', 'owner', ['General', 'Backend'], { General: 'member', Backend: 'admin' }, true, '2 min ago', 'google'),
@@ -85,6 +85,8 @@ export const mockAdminData: AdminData = {
     user('u201', 'Emily Park', 'emily@acme.com', ['app.acme.com'], true, '30 min ago', 'active', 'google', 'Feb 3, 2024'),
     user('u301', 'Carol Johnson', 'carol@widgets.io', ['widgets.io'], true, '1 day ago', 'active', 'email', 'Nov 2, 2023'),
     user('u302', 'Dave Brown', 'dave@widgets.io', ['widgets.io'], true, '4 hours ago', 'active', 'email', 'Nov 5, 2023'),
+    user('u303', 'Eve Martinez', 'eve@widgets.io', ['widgets.io'], false, '2 hours ago', 'active', 'github', 'Nov 8, 2023'),
+    user('u304', 'Henry Park', 'henry@widgets.io', ['widgets.io'], true, '6 hours ago', 'active', 'email', 'Nov 12, 2023'),
     user('u999', null, 'spam@evil.example', ['portal.example.com'], false, 'Never', 'banned', 'email', 'Apr 4, 2026'),
   ],
   logs: [
@@ -141,6 +143,10 @@ export const mockAdminData: AdminData = {
         killSwitch('ks1', 'Block legacy iOS builds', 'ios', 'hard', 'versionName', 'lt', '2.1.0', null, 'semver', '2.1.0', true, 100, 300, 'Apr 20, 2026'),
         killSwitch('ks2', 'Warn Android beta users', 'android', 'soft', 'versionCode', 'range', '104', '118', 'integer', '120', true, 40, 900, 'Apr 18, 2026'),
       ],
+      [
+        audienceGroup('ag1', 'Checkout beta testers', 'Selected users for new checkout and billing feature tests.', 'selected', ['u101', 'u102', 'u103'], 'selected', ['ios', 'android'], ['f1', 'f2'], [], true, 'Apr 20, 2026'),
+        audienceGroup('ag2', 'All mobile users', 'Broad mobile audience for versioned kill-switch validation.', 'all', [], 'selected', ['ios', 'android'], [], ['ks1', 'ks2'], true, 'Apr 19, 2026'),
+      ],
     ),
     app(
       'app2',
@@ -164,6 +170,10 @@ export const mockAdminData: AdminData = {
         flag('f7', 'usage_export', 'Usage export beta', false, 'selected', ['web'], 'Apr 9, 2026'),
       ],
       [killSwitch('ks3', 'Legacy companion warning', 'ios', 'info', 'buildNumber', 'lte', '80', null, 'integer', '1.4.0', true, 10, 1800, 'Apr 15, 2026')],
+      [
+        audienceGroup('ag3', 'Widgets QA cohort', 'Known users used to test integrations and iOS companion gating.', 'selected', ['u301', 'u303', 'u304'], 'selected', ['web', 'ios'], ['f5', 'f6'], ['ks3'], true, 'Apr 19, 2026'),
+        audienceGroup('ag4', 'All dashboard users', 'Every eligible Widgets Dashboard user across all configured platforms.', 'all', [], 'all', ['general', 'web', 'ios'], ['f5'], [], true, 'Apr 17, 2026'),
+      ],
     ),
     app(
       'app3',
@@ -180,6 +190,7 @@ export const mockAdminData: AdminData = {
         platform('general', 'All platforms', 'general', 'general'),
         platform('web', 'Web', 'web', 'web', 'startup.dev'),
       ],
+      [],
       [],
       [],
     ),
@@ -200,6 +211,7 @@ function app(
   platforms: FeaturePlatform[],
   flagDefinitions: FeatureFlagDefinition[],
   killSwitches: KillSwitchEntry[],
+  audienceGroups: FeatureAudienceGroup[] = [],
 ): AppFlagSummary {
   return {
     id,
@@ -219,6 +231,7 @@ function app(
     platforms,
     flagDefinitions,
     killSwitches,
+    audienceGroups,
     status: 'active',
   };
 }
@@ -256,6 +269,22 @@ function killSwitch(
   updated: string,
 ): KillSwitchEntry {
   return { id, name, platform: platformKind, type, versionField, operator, versionValue, versionMax, versionScheme, latestVersion, active, priority, cacheTtl, updated };
+}
+
+function audienceGroup(
+  id: string,
+  name: string,
+  description: string,
+  userMode: FeatureAudienceGroup['userMode'],
+  userIds: string[],
+  platformMode: FeatureAudienceGroup['platformMode'],
+  platformIds: string[],
+  featureFlagIds: string[],
+  killSwitchIds: string[],
+  active: boolean,
+  updated: string,
+): FeatureAudienceGroup {
+  return { id, name, description, userMode, userIds, platformMode, platformIds, featureFlagIds, killSwitchIds, active, updated };
 }
 
 function org(

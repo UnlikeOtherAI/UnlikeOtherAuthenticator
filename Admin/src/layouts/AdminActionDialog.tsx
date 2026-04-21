@@ -2,6 +2,7 @@ import { Button } from '../components/ui/Button';
 import { FieldShell, SelectField, TextAreaField, TextField } from '../components/ui/FormFields';
 import { Modal } from '../components/ui/Modal';
 import { useAdminUi, type AdminDialog } from '../features/shell/admin-ui';
+import { AudienceGroupDialogBody, FeatureFlagDialogBody, KillSwitchDialogBody } from './AdminFeatureDialogBodies';
 import { AddUserToTeamDialogBody, EditUserDialogBody, ReadOnlyUser } from './AdminUserDialogBodies';
 
 export function AdminActionDialog() {
@@ -299,111 +300,15 @@ function DialogBody({ dialog }: { dialog: AdminDialog }) {
   }
 
   if (dialog.type === 'add-feature-flag' || dialog.type === 'edit-feature-flag' || dialog.type === 'app-flags') {
-    const flag = dialog.type === 'edit-feature-flag' ? dialog.flag : null;
-    const app = dialog.app;
-    const selectedPlatformIds = new Set(flag?.platformIds ?? app.platforms.map((platform) => platform.id));
-
-    return (
-      <div className="space-y-4">
-        <FieldShell label="Flag key">
-          <TextField className="font-mono" defaultValue={flag?.key ?? ''} placeholder="new_checkout" />
-        </FieldShell>
-        <FieldShell label="Description">
-          <TextField defaultValue={flag?.description ?? ''} placeholder="New checkout flow" />
-        </FieldShell>
-        <FieldShell label="Default state">
-          <SelectField defaultValue={flag?.defaultState ? 'enabled' : 'disabled'}>
-            <option value="disabled">Disabled</option>
-            <option value="enabled">Enabled</option>
-          </SelectField>
-        </FieldShell>
-        <FieldShell label="Platform coverage">
-          <SelectField defaultValue={flag?.platformMode ?? 'all'}>
-            <option value="all">All platforms</option>
-            <option value="selected">Selected platforms</option>
-          </SelectField>
-        </FieldShell>
-        <div>
-          <p className="mb-2 text-sm font-medium text-gray-700">Platforms</p>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {app.platforms.map((platform) => (
-              <label key={platform.id} className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700">
-                <input className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" type="checkbox" defaultChecked={platform.kind === 'general' || selectedPlatformIds.has(platform.id)} disabled={platform.kind === 'general'} />
-                <span>{platform.name}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
+    return <FeatureFlagDialogBody app={dialog.app} flag={dialog.type === 'edit-feature-flag' ? dialog.flag : null} />;
   }
 
   if (dialog.type === 'add-kill-switch' || dialog.type === 'edit-kill-switch') {
-    const killSwitch = dialog.type === 'edit-kill-switch' ? dialog.killSwitch : null;
+    return <KillSwitchDialogBody app={dialog.app} killSwitch={dialog.type === 'edit-kill-switch' ? dialog.killSwitch : null} />;
+  }
 
-    return (
-      <div className="space-y-4">
-        <FieldShell label="Rule name">
-          <TextField defaultValue={killSwitch?.name ?? ''} placeholder="Block legacy iOS builds" />
-        </FieldShell>
-        <FieldShell label="Platform">
-          <SelectField defaultValue={killSwitch?.platform ?? 'ios'}>
-            <option value="ios">iOS</option>
-            <option value="android">Android</option>
-            <option value="both">iOS + Android</option>
-          </SelectField>
-        </FieldShell>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <FieldShell label="Type">
-            <SelectField defaultValue={killSwitch?.type ?? 'hard'}>
-              <option value="hard">Hard block</option>
-              <option value="soft">Soft warning</option>
-              <option value="info">Info</option>
-              <option value="maintenance">Maintenance</option>
-            </SelectField>
-          </FieldShell>
-          <FieldShell label="Version field">
-            <SelectField defaultValue={killSwitch?.versionField ?? 'versionName'}>
-              <option value="versionName">versionName</option>
-              <option value="versionCode">versionCode</option>
-              <option value="buildNumber">buildNumber</option>
-            </SelectField>
-          </FieldShell>
-          <FieldShell label="Operator">
-            <SelectField defaultValue={killSwitch?.operator ?? 'lt'}>
-              <option value="lt">Less than</option>
-              <option value="lte">Less than or equal</option>
-              <option value="eq">Equals</option>
-              <option value="gte">Greater than or equal</option>
-              <option value="gt">Greater than</option>
-              <option value="range">Range</option>
-            </SelectField>
-          </FieldShell>
-          <FieldShell label="Version scheme">
-            <SelectField defaultValue={killSwitch?.versionScheme ?? 'semver'}>
-              <option value="semver">semver</option>
-              <option value="integer">integer</option>
-              <option value="date">date</option>
-              <option value="custom">custom</option>
-            </SelectField>
-          </FieldShell>
-          <FieldShell label="Minimum / value">
-            <TextField defaultValue={killSwitch?.versionValue ?? ''} placeholder="2.1.0" />
-          </FieldShell>
-          <FieldShell label="Maximum">
-            <TextField defaultValue={killSwitch?.versionMax ?? ''} placeholder="Only for ranges" />
-          </FieldShell>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <FieldShell label="Latest version">
-            <TextField defaultValue={killSwitch?.latestVersion ?? ''} placeholder="2.1.0" />
-          </FieldShell>
-          <FieldShell label="Priority">
-            <TextField defaultValue={String(killSwitch?.priority ?? 0)} type="number" />
-          </FieldShell>
-        </div>
-      </div>
-    );
+  if (dialog.type === 'add-audience-group' || dialog.type === 'edit-audience-group') {
+    return <AudienceGroupDialogBody app={dialog.app} group={dialog.type === 'edit-audience-group' ? dialog.group : null} users={dialog.users} />;
   }
 
   return (
@@ -415,6 +320,7 @@ function DialogBody({ dialog }: { dialog: AdminDialog }) {
 
 function dialogTitle(dialog: AdminDialog) {
   const titles: Record<AdminDialog['type'], string> = {
+    'add-audience-group': 'Add Audience Group',
     'add-ban': `Add ${dialog.type === 'add-ban' ? dialog.kind : ''} ban`,
     'add-feature-flag': 'Add Feature Flag',
     'add-kill-switch': 'Add Kill Switch',
@@ -427,6 +333,7 @@ function dialogTitle(dialog: AdminDialog) {
     'change-org-role': 'Change Organisation Role',
     'change-team-role': 'Change Team Role',
     'edit-ban': `Edit ${dialog.type === 'edit-ban' ? dialog.kind : ''} ban`,
+    'edit-audience-group': 'Edit Audience Group',
     'edit-domain': 'Edit Domain',
     'edit-feature-flag': 'Edit Feature Flag',
     'edit-org': 'Edit Organisation',
@@ -443,7 +350,7 @@ function dialogTitle(dialog: AdminDialog) {
 }
 
 function submitLabel(dialog: AdminDialog) {
-  if (dialog.type === 'add-ban' || dialog.type === 'add-feature-flag' || dialog.type === 'add-kill-switch' || dialog.type === 'add-member' || dialog.type === 'add-team' || dialog.type === 'add-preapproval' || dialog.type === 'add-user-to-team' || dialog.type === 'register-app' || dialog.type === 'register-platform') {
+  if (dialog.type === 'add-audience-group' || dialog.type === 'add-ban' || dialog.type === 'add-feature-flag' || dialog.type === 'add-kill-switch' || dialog.type === 'add-member' || dialog.type === 'add-team' || dialog.type === 'add-preapproval' || dialog.type === 'add-user-to-team' || dialog.type === 'register-app' || dialog.type === 'register-platform') {
     return 'Add';
   }
 

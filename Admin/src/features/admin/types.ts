@@ -106,6 +106,7 @@ export type AppFlagSummary = {
   platforms: FeaturePlatform[];
   flagDefinitions: FeatureFlagDefinition[];
   killSwitches: KillSwitchEntry[];
+  audienceGroups: FeatureAudienceGroup[];
   status: EntityStatus;
 };
 
@@ -143,6 +144,20 @@ export type KillSwitchEntry = {
   active: boolean;
   priority: number;
   cacheTtl: number;
+  updated: string;
+};
+
+export type FeatureAudienceGroup = {
+  id: string;
+  name: string;
+  description: string;
+  userMode: 'all' | 'selected';
+  userIds: string[];
+  platformMode: 'all' | 'selected';
+  platformIds: string[];
+  featureFlagIds: string[];
+  killSwitchIds: string[];
+  active: boolean;
   updated: string;
 };
 
