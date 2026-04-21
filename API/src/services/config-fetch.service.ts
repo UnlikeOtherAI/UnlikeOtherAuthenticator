@@ -62,10 +62,71 @@ function isBlockedIpv4(address: string): boolean {
   );
 }
 
+function ipv4PartsToHextets(parts: number[]): [number, number] {
+  return [(parts[0] << 8) | parts[1], (parts[2] << 8) | parts[3]];
+}
+
+function parseIpv6Part(part: string): number[] | null {
+  if (part.includes('.')) {
+    const ipv4Parts = parseIpv4(part);
+    return ipv4Parts ? ipv4PartsToHextets(ipv4Parts) : null;
+  }
+
+  if (!/^[0-9a-f]{1,4}$/i.test(part)) return null;
+  return [Number.parseInt(part, 16)];
+}
+
+function parseIpv6Parts(parts: string[]): number[] | null {
+  const hextets: number[] = [];
+  for (const part of parts) {
+    const parsed = parseIpv6Part(part);
+    if (!parsed) return null;
+    hextets.push(...parsed);
+  }
+
+  return hextets;
+}
+
+function expandIpv6(address: string): number[] | null {
+  if (isIP(address) !== 6) return null;
+
+  const normalized = address.toLowerCase();
+  const compressed = normalized.split('::');
+  if (compressed.length > 2) return null;
+
+  const left = compressed[0] ? compressed[0].split(':') : [];
+  const right = compressed.length === 2 && compressed[1] ? compressed[1].split(':') : [];
+  const leftHextets = parseIpv6Parts(left);
+  const rightHextets = parseIpv6Parts(right);
+  if (!leftHextets || !rightHextets) return null;
+
+  if (compressed.length === 1) {
+    return leftHextets.length === 8 ? leftHextets : null;
+  }
+
+  const omittedCount = 8 - leftHextets.length - rightHextets.length;
+  if (omittedCount < 1) return null;
+
+  return [...leftHextets, ...Array<number>(omittedCount).fill(0), ...rightHextets];
+}
+
+function decodeIpv4MappedIpv6(address: string): string | null {
+  const hextets = expandIpv6(address);
+  if (!hextets) return null;
+
+  const isMapped =
+    hextets.slice(0, 5).every((hextet) => hextet === 0) && hextets[5] === 0xffff;
+  if (!isMapped) return null;
+
+  const high = hextets[6];
+  const low = hextets[7];
+  return [high >> 8, high & 0xff, low >> 8, low & 0xff].join('.');
+}
+
 function isBlockedIpv6(address: string): boolean {
   const normalized = address.toLowerCase();
-  const mappedIpv4 = normalized.startsWith('::ffff:') ? normalized.slice('::ffff:'.length) : '';
-  if (mappedIpv4.includes('.')) {
+  const mappedIpv4 = decodeIpv4MappedIpv6(address);
+  if (mappedIpv4) {
     return isBlockedIpv4(mappedIpv4);
   }
 

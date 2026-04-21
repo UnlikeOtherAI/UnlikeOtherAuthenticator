@@ -18,6 +18,32 @@ describe('fetchConfigJwtFromUrl', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it.each([
+    '::ffff:127.0.0.1',
+    '::ffff:7f00:1',
+    '::ffff:0a00:1',
+    '::ffff:c0a8:1',
+    '::ffff:a9fe:1',
+  ])('rejects blocked IPv4-mapped IPv6 config URLs (%s)', async (address) => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchConfigJwtFromUrl(`https://[${address}]/config`)).rejects.toMatchObject({
+      statusCode: 400,
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('allows public IPv4-mapped IPv6 config URLs', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('config.jwt.value', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchConfigJwtFromUrl('https://[::ffff:8.8.8.8]/config')).resolves.toBe(
+      'config.jwt.value',
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('uses manual redirects and revalidates each redirect target', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response('', {
