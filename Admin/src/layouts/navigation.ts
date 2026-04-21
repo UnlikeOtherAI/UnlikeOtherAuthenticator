@@ -56,6 +56,10 @@ export function navLabelForPath(pathname: string) {
     return 'Feature Flags';
   }
 
+  if (pathname.startsWith('/users/')) {
+    return 'User';
+  }
+
   const item = navSections.flatMap((section) => section.items).find((entry) => entry.path === pathname);
   return item?.label ?? 'Dashboard';
 }

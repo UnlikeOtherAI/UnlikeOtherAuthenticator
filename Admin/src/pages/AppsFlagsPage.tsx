@@ -59,8 +59,6 @@ export function FeatureFlagsPage() {
                     </span>
                   </Td>
                   <Td className="whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
-                    <ActionButton onClick={() => navigate(`/feature-flags/${app.id}`)}>Open</ActionButton>
-                    <ActionDivider />
                     <ActionButton tone="amber" onClick={() => openDialog({ type: 'app-settings', app })}>Settings</ActionButton>
                     <ActionDivider />
                     <ActionButton tone="red" onClick={() => confirm(`Delete ${app.name}?`, 'This removes the app registration in the sample UI.')}>Delete</ActionButton>

@@ -175,8 +175,6 @@ export function OrganisationDetailPage() {
                 <Td><Badge variant={preapproval.status === 'claimed' ? 'green' : 'amber'}>{preapproval.status}</Badge></Td>
                 <Td className="text-xs text-gray-400">{preapproval.created}</Td>
                 <Td className="whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
-                  <ActionButton onClick={() => openDialog({ type: 'edit-preapproval', organisation: org, preapproval })}>Edit</ActionButton>
-                  <ActionDivider />
                   <ActionButton tone="red" onClick={() => confirm(`Revoke ${preapproval.email}?`, 'This removes the pre-approval entry, not an active user account.')}>Revoke</ActionButton>
                 </Td>
               </tr>

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
-import { ActionButton, ActionDivider } from '../components/ui/ActionButton';
+import { ActionButton } from '../components/ui/ActionButton';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Card, CardHeader } from '../components/ui/Card';
@@ -9,9 +9,12 @@ import { SelectField } from '../components/ui/FormFields';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Switch } from '../components/ui/Switch';
 import { DataTable, PaginationFooter, Td, usePagination } from '../components/ui/Table';
+import { SegmentedTabs } from '../components/ui/Tabs';
 import { useSettingsQuery } from '../features/admin/admin-queries';
 import type { AppFlagSummary, FeatureFlagDefinition, KillSwitchEntry } from '../features/admin/types';
 import { useAdminUi } from '../features/shell/admin-ui';
+
+type AppDetailTab = 'flags' | 'killswitches';
 
 export function FeatureFlagDetailPage() {
   const { appId } = useParams();
@@ -20,6 +23,7 @@ export function FeatureFlagDetailPage() {
   const { confirm, openDialog } = useAdminUi();
   const app = data?.apps.find((item) => item.id === appId);
   const [selectedPlatformId, setSelectedPlatformId] = useState('general');
+  const [tab, setTab] = useState<AppDetailTab>('flags');
 
   const visibleFlags = useMemo(() => {
     if (!app) {
@@ -88,90 +92,91 @@ export function FeatureFlagDetailPage() {
           </div>
         </Card>
       </div>
-      <Card>
-        <CardHeader>
-          <div>
-            <span className="text-sm font-semibold text-gray-900">Feature Flags</span>
-            <p className="mt-0.5 text-xs text-gray-400">{selectedPlatform?.name ?? 'All platforms'}</p>
-          </div>
-          <Button icon="plus" size="sm" variant="primary" onClick={() => openDialog({ type: 'add-feature-flag', app })}>Add Flag</Button>
-        </CardHeader>
-        <DataTable headers={['Flag', 'Default', 'Scope', 'Platforms', 'Updated', 'Actions']}>
-          {flagPageItems.map((flag) => (
-            <tr
-              key={flag.id}
-              className="cursor-pointer transition-colors hover:bg-gray-50"
-              tabIndex={0}
-              onClick={() => openDialog({ type: 'edit-feature-flag', app, flag })}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  openDialog({ type: 'edit-feature-flag', app, flag });
-                }
-              }}
-            >
-              <Td>
-                <code className="font-semibold text-gray-900">{flag.key}</code>
-                <p className="mt-0.5 text-xs text-gray-400">{flag.description}</p>
-              </Td>
-              <Td onClick={(event) => event.stopPropagation()}>
-                <Switch checked={flag.defaultState} label={flag.defaultState ? 'Enabled' : 'Disabled'} onClick={() => confirm(`${flag.defaultState ? 'Disable' : 'Enable'} ${flag.key}?`, 'This changes the mocked flag default.')} />
-              </Td>
-              <Td><Badge variant={flag.platformMode === 'all' ? 'green' : 'blue'}>{flag.platformMode === 'all' ? 'All platforms' : 'Selected'}</Badge></Td>
-              <Td className="text-xs text-gray-500">{platformNames(app, flag)}</Td>
-              <Td className="text-xs text-gray-400">{flag.updated}</Td>
-              <Td className="whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
-                <ActionButton onClick={() => openDialog({ type: 'edit-feature-flag', app, flag })}>Edit</ActionButton>
-                <ActionDivider />
-                <ActionButton tone="red" onClick={() => confirm(`Delete ${flag.key}?`, 'Deletes the mocked flag definition and assignments.')}>Delete</ActionButton>
-              </Td>
-            </tr>
-          ))}
-        </DataTable>
-        <PaginationFooter {...flagPagination} />
-      </Card>
-      <Card className="mt-4">
-        <CardHeader>
-          <div>
-            <span className="text-sm font-semibold text-gray-900">Kill Switches</span>
-            <p className="mt-0.5 text-xs text-gray-400">Version entries for mobile SDK startup checks</p>
-          </div>
-          <Button icon="plus" size="sm" variant="danger" onClick={() => openDialog({ type: 'add-kill-switch', app })}>Add Kill Switch</Button>
-        </CardHeader>
-        <DataTable headers={['Name', 'Platform', 'Type', 'Version Match', 'Latest', 'Status', 'Priority', 'Actions']}>
-          {killSwitchPageItems.map((killSwitch) => (
-            <tr
-              key={killSwitch.id}
-              className="cursor-pointer transition-colors hover:bg-gray-50"
-              tabIndex={0}
-              onClick={() => openDialog({ type: 'edit-kill-switch', app, killSwitch })}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  openDialog({ type: 'edit-kill-switch', app, killSwitch });
-                }
-              }}
-            >
-              <Td>
-                <span className="font-semibold text-gray-900">{killSwitch.name}</span>
-                <p className="mt-0.5 text-xs text-gray-400">Cache {killSwitch.cacheTtl}s · {killSwitch.updated}</p>
-              </Td>
-              <Td><Badge variant="blue">{killSwitch.platform}</Badge></Td>
-              <Td><Badge variant={killSwitch.type === 'hard' || killSwitch.type === 'maintenance' ? 'red' : 'amber'}>{killSwitch.type}</Badge></Td>
-              <Td className="text-xs text-gray-500">{versionMatch(killSwitch)}</Td>
-              <Td className="text-xs text-gray-500">{killSwitch.latestVersion ?? '-'}</Td>
-              <Td onClick={(event) => event.stopPropagation()}>
-                <Switch checked={killSwitch.active} label={killSwitch.active ? 'Active' : 'Paused'} tone="danger" onClick={() => confirm(`${killSwitch.active ? 'Pause' : 'Activate'} ${killSwitch.name}?`, 'This only updates the mocked kill switch status.')} />
-              </Td>
-              <Td>{killSwitch.priority}</Td>
-              <Td className="whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
-                <ActionButton onClick={() => openDialog({ type: 'edit-kill-switch', app, killSwitch })}>Edit</ActionButton>
-                <ActionDivider />
-                <ActionButton tone="red" onClick={() => confirm(`Delete ${killSwitch.name}?`, 'Deletes this mocked version rule.')}>Delete</ActionButton>
-              </Td>
-            </tr>
-          ))}
-        </DataTable>
-        <PaginationFooter {...killSwitchPagination} />
-      </Card>
+      <SegmentedTabs<AppDetailTab> value={tab} onChange={setTab} options={[{ label: 'Feature Flags', value: 'flags' }, { label: 'Kill Switches', value: 'killswitches' }]} />
+      {tab === 'flags' ? (
+        <Card>
+          <CardHeader>
+            <div>
+              <span className="text-sm font-semibold text-gray-900">Feature Flags</span>
+              <p className="mt-0.5 text-xs text-gray-400">{selectedPlatform?.name ?? 'All platforms'}</p>
+            </div>
+            <Button icon="plus" size="sm" variant="primary" onClick={() => openDialog({ type: 'add-feature-flag', app })}>Add Flag</Button>
+          </CardHeader>
+          <DataTable headers={['Flag', 'Default', 'Scope', 'Platforms', 'Updated', 'Actions']}>
+            {flagPageItems.map((flag) => (
+              <tr
+                key={flag.id}
+                className="cursor-pointer transition-colors hover:bg-gray-50"
+                tabIndex={0}
+                onClick={() => openDialog({ type: 'edit-feature-flag', app, flag })}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    openDialog({ type: 'edit-feature-flag', app, flag });
+                  }
+                }}
+              >
+                <Td>
+                  <code className="font-semibold text-gray-900">{flag.key}</code>
+                  <p className="mt-0.5 text-xs text-gray-400">{flag.description}</p>
+                </Td>
+                <Td onClick={(event) => event.stopPropagation()}>
+                  <Switch checked={flag.defaultState} label={flag.defaultState ? 'Enabled' : 'Disabled'} onClick={() => confirm(`${flag.defaultState ? 'Disable' : 'Enable'} ${flag.key}?`, 'This changes the mocked flag default.')} />
+                </Td>
+                <Td><Badge variant={flag.platformMode === 'all' ? 'green' : 'blue'}>{flag.platformMode === 'all' ? 'All platforms' : 'Selected'}</Badge></Td>
+                <Td className="text-xs text-gray-500">{platformNames(app, flag)}</Td>
+                <Td className="text-xs text-gray-400">{flag.updated}</Td>
+                <Td className="whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
+                  <ActionButton tone="red" onClick={() => confirm(`Delete ${flag.key}?`, 'Deletes the mocked flag definition and assignments.')}>Delete</ActionButton>
+                </Td>
+              </tr>
+            ))}
+          </DataTable>
+          <PaginationFooter {...flagPagination} />
+        </Card>
+      ) : null}
+      {tab === 'killswitches' ? (
+        <Card>
+          <CardHeader>
+            <div>
+              <span className="text-sm font-semibold text-gray-900">Kill Switches</span>
+              <p className="mt-0.5 text-xs text-gray-400">Version entries for mobile SDK startup checks</p>
+            </div>
+            <Button icon="plus" size="sm" variant="danger" onClick={() => openDialog({ type: 'add-kill-switch', app })}>Add Kill Switch</Button>
+          </CardHeader>
+          <DataTable headers={['Name', 'Platform', 'Type', 'Version Match', 'Latest', 'Status', 'Priority', 'Actions']}>
+            {killSwitchPageItems.map((killSwitch) => (
+              <tr
+                key={killSwitch.id}
+                className="cursor-pointer transition-colors hover:bg-gray-50"
+                tabIndex={0}
+                onClick={() => openDialog({ type: 'edit-kill-switch', app, killSwitch })}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    openDialog({ type: 'edit-kill-switch', app, killSwitch });
+                  }
+                }}
+              >
+                <Td>
+                  <span className="font-semibold text-gray-900">{killSwitch.name}</span>
+                  <p className="mt-0.5 text-xs text-gray-400">Cache {killSwitch.cacheTtl}s · {killSwitch.updated}</p>
+                </Td>
+                <Td><Badge variant="blue">{killSwitch.platform}</Badge></Td>
+                <Td><Badge variant={killSwitch.type === 'hard' || killSwitch.type === 'maintenance' ? 'red' : 'amber'}>{killSwitch.type}</Badge></Td>
+                <Td className="text-xs text-gray-500">{versionMatch(killSwitch)}</Td>
+                <Td className="text-xs text-gray-500">{killSwitch.latestVersion ?? '-'}</Td>
+                <Td onClick={(event) => event.stopPropagation()}>
+                  <Switch checked={killSwitch.active} label={killSwitch.active ? 'Active' : 'Paused'} tone="danger" onClick={() => confirm(`${killSwitch.active ? 'Pause' : 'Activate'} ${killSwitch.name}?`, 'This only updates the mocked kill switch status.')} />
+                </Td>
+                <Td>{killSwitch.priority}</Td>
+                <Td className="whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
+                  <ActionButton tone="red" onClick={() => confirm(`Delete ${killSwitch.name}?`, 'Deletes this mocked version rule.')}>Delete</ActionButton>
+                </Td>
+              </tr>
+            ))}
+          </DataTable>
+          <PaginationFooter {...killSwitchPagination} />
+        </Card>
+      ) : null}
     </>
   );
 }

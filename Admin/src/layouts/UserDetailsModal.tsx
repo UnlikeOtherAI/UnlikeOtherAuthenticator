@@ -1,3 +1,5 @@
+import { useNavigate } from 'react-router-dom';
+
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
@@ -6,7 +8,8 @@ import { useLogsQuery, useOrganisationsQuery, useUserQuery } from '../features/a
 import { useAdminUi } from '../features/shell/admin-ui';
 
 export function UserDetailsModal() {
-  const { closeUser, confirm, selectedUserId } = useAdminUi();
+  const navigate = useNavigate();
+  const { closeUser, confirm, openDialog, selectedUserId } = useAdminUi();
   const userQuery = useUserQuery(selectedUserId);
   const orgsQuery = useOrganisationsQuery();
   const logsQuery = useLogsQuery();
@@ -19,7 +22,13 @@ export function UserDetailsModal() {
       isOpen={Boolean(selectedUserId)}
       onClose={closeUser}
       title="User Details"
-      footer={<Button onClick={closeUser}>Close</Button>}
+      footer={
+        <>
+          {user ? <Button onClick={() => { closeUser(); openDialog({ type: 'edit-user', user }); }}>Edit User</Button> : null}
+          {user ? <Button variant="primary" onClick={() => { closeUser(); navigate(`/users/${user.id}`); }}>Open Detail</Button> : null}
+          <Button onClick={closeUser}>Close</Button>
+        </>
+      }
     >
       {user ? (
         <div className="space-y-5">
@@ -35,6 +44,8 @@ export function UserDetailsModal() {
               </div>
             </div>
             <div className="flex shrink-0 flex-col gap-2">
+              <Button size="sm" onClick={() => { closeUser(); openDialog({ type: 'edit-user', user }); }}>Edit User</Button>
+              <Button size="sm" onClick={() => { closeUser(); openDialog({ type: 'add-user-to-team', user, organisations: orgsQuery.data ?? [] }); }}>Add to Team</Button>
               {user.twofa ? (
                 <Button size="sm" onClick={() => confirm(`Reset 2FA for ${user.email}?`, 'They will need to re-enroll before completing a protected login.')}>
                   Reset 2FA

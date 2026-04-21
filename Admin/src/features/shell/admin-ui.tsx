@@ -1,6 +1,6 @@
 import { createContext, useContext, useMemo, useState, type PropsWithChildren } from 'react';
 
-import type { AppFlagSummary, BanRecord, Domain, FeatureFlagDefinition, KillSwitchEntry, Organisation, OrganisationMember, PreapprovedMember, Team } from '../admin/types';
+import type { AppFlagSummary, BanRecord, Domain, FeatureFlagDefinition, KillSwitchEntry, Organisation, OrganisationMember, PreapprovedMember, Team, UserSummary } from '../admin/types';
 
 type Confirmation = {
   title: string;
@@ -14,6 +14,8 @@ export type AdminDialog =
   | { type: 'add-team'; organisation: Organisation }
   | { type: 'edit-team'; organisation: Organisation; team: Team }
   | { type: 'add-member'; organisation: Organisation; team?: Team }
+  | { type: 'edit-user'; user: UserSummary }
+  | { type: 'add-user-to-team'; user: UserSummary; organisations: Organisation[] }
   | { type: 'change-org-role'; organisation: Organisation; member: OrganisationMember }
   | { type: 'change-team-role'; organisation: Organisation; team: Team; member: OrganisationMember }
   | { type: 'edit-ban'; ban: BanRecord; kind: 'email' | 'ip' | 'pattern' }

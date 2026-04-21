@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import { ActionButton, ActionDivider } from '../components/ui/ActionButton';
+import { ActionButton } from '../components/ui/ActionButton';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Card, CardHeader } from '../components/ui/Card';
@@ -52,8 +52,6 @@ function BansSettings() {
               <Td className="text-xs text-gray-400">{ban.bannedAt}</Td>
               <Td className="text-xs text-gray-400">{ban.reason}</Td>
               <Td className="text-right" onClick={(event) => event.stopPropagation()}>
-                <ActionButton onClick={() => openDialog({ type: 'edit-ban', kind: 'email', ban })}>Edit</ActionButton>
-                <ActionDivider />
                 <ActionButton tone="red" onClick={() => confirm(`Remove ${ban.value}?`, 'This only updates the sample UI for now.')}>Remove</ActionButton>
               </Td>
             </tr>
@@ -78,8 +76,6 @@ function BansSettings() {
               <Td><Badge variant={(ban.hits ?? 0) > 50 ? 'red' : 'amber'}>{ban.hits}</Badge></Td>
               <Td className="text-xs text-gray-400">{ban.expiry ?? 'Permanent'}</Td>
               <Td className="text-right" onClick={(event) => event.stopPropagation()}>
-                <ActionButton tone="amber" onClick={() => openDialog({ type: 'edit-ban', kind: 'ip', ban })}>Edit</ActionButton>
-                <ActionDivider />
                 <ActionButton tone="red">Remove</ActionButton>
               </Td>
             </tr>

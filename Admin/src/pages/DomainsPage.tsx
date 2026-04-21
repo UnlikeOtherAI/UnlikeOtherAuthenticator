@@ -60,8 +60,6 @@ export function DomainsPage() {
                   <Td>{domain.orgs}</Td>
                   <Td><StatusBadge status={domain.status} /></Td>
                   <Td className="whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
-                    <ActionButton onClick={() => openDialog({ type: 'edit-domain', domain })}>Edit</ActionButton>
-                    <ActionDivider />
                     <ActionButton tone="amber" onClick={() => confirm(`Rotate ${domain.name}?`, 'The new shared secret will need to be deployed by the client backend.')}>Rotate</ActionButton>
                     <ActionDivider />
                     <ActionButton tone="red" onClick={() => confirm(`${domain.status === 'active' ? 'Disable' : 'Enable'} ${domain.name}?`, 'This is mocked until the admin API is available.')}>{domain.status === 'active' ? 'Disable' : 'Enable'}</ActionButton>

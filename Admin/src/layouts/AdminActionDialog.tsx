@@ -2,6 +2,7 @@ import { Button } from '../components/ui/Button';
 import { FieldShell, SelectField, TextAreaField, TextField } from '../components/ui/FormFields';
 import { Modal } from '../components/ui/Modal';
 import { useAdminUi, type AdminDialog } from '../features/shell/admin-ui';
+import { AddUserToTeamDialogBody, EditUserDialogBody, ReadOnlyUser } from './AdminUserDialogBodies';
 
 export function AdminActionDialog() {
   const { activeDialog, closeDialog } = useAdminUi();
@@ -85,6 +86,14 @@ function DialogBody({ dialog }: { dialog: AdminDialog }) {
         {team?.isDefault ? <p className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">Default teams can be renamed, but cannot be deleted or have their default status changed.</p> : null}
       </div>
     );
+  }
+
+  if (dialog.type === 'edit-user') {
+    return <EditUserDialogBody user={dialog.user} />;
+  }
+
+  if (dialog.type === 'add-user-to-team') {
+    return <AddUserToTeamDialogBody organisations={dialog.organisations} user={dialog.user} />;
   }
 
   if (dialog.type === 'add-member') {
@@ -334,7 +343,7 @@ function DialogBody({ dialog }: { dialog: AdminDialog }) {
 
     return (
       <div className="space-y-4">
-        <FieldShell label="Name">
+        <FieldShell label="Rule name">
           <TextField defaultValue={killSwitch?.name ?? ''} placeholder="Block legacy iOS builds" />
         </FieldShell>
         <FieldShell label="Platform">
@@ -404,15 +413,6 @@ function DialogBody({ dialog }: { dialog: AdminDialog }) {
   );
 }
 
-function ReadOnlyUser({ email, name }: { email: string; name: string }) {
-  return (
-    <div className="rounded-lg bg-gray-50 px-3 py-2">
-      <p className="text-sm font-medium text-gray-900">{name}</p>
-      <p className="text-xs text-gray-500">{email}</p>
-    </div>
-  );
-}
-
 function dialogTitle(dialog: AdminDialog) {
   const titles: Record<AdminDialog['type'], string> = {
     'add-ban': `Add ${dialog.type === 'add-ban' ? dialog.kind : ''} ban`,
@@ -421,6 +421,7 @@ function dialogTitle(dialog: AdminDialog) {
     'add-member': 'Add Member',
     'add-preapproval': 'Add Pre-Approved User',
     'add-team': 'Add Team',
+    'add-user-to-team': 'Add User to Team',
     'app-flags': 'Manage Flags',
     'app-settings': 'App Settings',
     'change-org-role': 'Change Organisation Role',
@@ -432,6 +433,7 @@ function dialogTitle(dialog: AdminDialog) {
     'edit-kill-switch': 'Edit Kill Switch',
     'edit-preapproval': 'Edit Pre-Approved User',
     'edit-team': 'Edit Team',
+    'edit-user': 'Edit User',
     'register-app': 'Register App',
     'register-platform': 'Add Platform',
     'transfer-ownership': 'Transfer Ownership',
@@ -441,7 +443,7 @@ function dialogTitle(dialog: AdminDialog) {
 }
 
 function submitLabel(dialog: AdminDialog) {
-  if (dialog.type === 'add-ban' || dialog.type === 'add-feature-flag' || dialog.type === 'add-kill-switch' || dialog.type === 'add-member' || dialog.type === 'add-team' || dialog.type === 'add-preapproval' || dialog.type === 'register-app' || dialog.type === 'register-platform') {
+  if (dialog.type === 'add-ban' || dialog.type === 'add-feature-flag' || dialog.type === 'add-kill-switch' || dialog.type === 'add-member' || dialog.type === 'add-team' || dialog.type === 'add-preapproval' || dialog.type === 'add-user-to-team' || dialog.type === 'register-app' || dialog.type === 'register-platform') {
     return 'Add';
   }
 
