@@ -58,6 +58,7 @@ describe('GET /api', () => {
     expect(body.config_jwt.required_fields.ui_theme.required_sections.colors.required_keys).toContain(
       'primary',
     );
+    expect(body.config_validation.path).toBe('/config/validate');
     expect(body.config_verification.path).toBe('/config/verify');
     expect(body.endpoints).toEqual(expect.any(Array));
     expect(body.endpoints.length).toBeGreaterThan(0);
@@ -90,6 +91,9 @@ describe('GET /api', () => {
     );
     expect(body.endpoints).toContainEqual(
       expect.objectContaining({ method: 'POST', path: '/config/verify' }),
+    );
+    expect(body.endpoints).toContainEqual(
+      expect.objectContaining({ method: 'POST', path: '/config/validate' }),
     );
     expect(body.endpoints).toContainEqual(
       expect.objectContaining({ method: 'POST', path: '/auth/login' }),
@@ -230,6 +234,7 @@ describe('GET /llm', () => {
     expect(res.body).toContain('# UnlikeOtherAuthenticator integration guide');
     expect(res.body).toContain('For machine-readable JSON');
     expect(res.body).toContain('[/api](/api)');
+    expect(res.body).toContain('POST /config/validate');
     expect(res.body).toContain('POST /config/verify');
     expect(res.body).toContain('/.well-known/jwks.json');
     expect(res.body).toContain('/internal/admin/token');

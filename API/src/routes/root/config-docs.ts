@@ -43,6 +43,7 @@ export const configExample = {
     },
   },
   language_config: 'en',
+  allowed_social_providers: ['google'],
   debug_enabled: true,
   allow_registration: true,
   registration_mode: 'password_required',
@@ -134,7 +135,8 @@ export const configJwtDocumentation = {
   optional_fields: {
     '2fa_enabled': 'boolean (default false)',
     debug_enabled: 'boolean (default false)',
-    allowed_social_providers: 'string[] — subset of enabled social providers',
+    allowed_social_providers:
+      'string[] — social providers allowed at runtime. If enabled_auth_methods includes google, facebook, github, linkedin, or apple, include each provider here too.',
     user_scope: '"global" | "per_domain" (default "global")',
     allow_registration: 'boolean (default true)',
     registration_mode: '"password_required" | "passwordless" (default "password_required")',
@@ -173,12 +175,12 @@ export const configJwtDocumentation = {
   example_payload: configExample,
 };
 
-export const configVerificationEndpointDocumentation = {
-  path: '/config/verify',
+export const configValidationEndpointDocumentation = {
+  path: '/config/validate',
   method: 'POST',
   description:
-    'Non-production DEBUG_ENABLED-only debug endpoint that validates raw config JSON, a signed config JWT, or a config_url fetch target. It reports schema problems separately from signature, audience, and config_url/domain issues.',
-  auth: 'Available only when DEBUG_ENABLED=true and NODE_ENV is not production; IP rate limited.',
+    'Production-safe configuration validation endpoint for raw config JSON, a signed config JWT, or a config_url fetch target. It reports schema, signature, audience, config_url/domain, runtime-policy, and optional customization guidance.',
+  auth: 'Public, IP rate limited. Uses the deployment CONFIG_JWKS_URL and AUTH_SERVICE_IDENTIFIER.',
   body: {
     config:
       'object (optional) — raw config payload to schema-validate directly. This skips JWT signature checking unless config_jwt or config_url is also supplied instead.',
@@ -186,10 +188,6 @@ export const configVerificationEndpointDocumentation = {
       'string (optional) — signed config JWT to decode, inspect, schema-validate, and verify with a JWKS.',
     config_url:
       'string (optional) — URL that should return the signed config JWT. The endpoint fetches it and then runs the same checks.',
-    jwks_url:
-      'string (optional) — JWKS URL used to verify config_jwt or the JWT fetched from config_url. Defaults to CONFIG_JWKS_URL.',
-    auth_service_identifier:
-      'string (optional) — expected JWT aud. Defaults to this auth service environment when omitted.',
   },
   source_priority: ['config', 'config_jwt', 'config_url'],
   response: {
@@ -200,9 +198,26 @@ export const configVerificationEndpointDocumentation = {
     domain_match:
       'boolean | null — null when config_url was not part of the request or schema parsing failed',
     checks:
-      'object — per-stage results for source, fetch, decode, signature, audience, schema, and domain_match',
+      'object — per-stage results for source, fetch, decode, secret_scan, signature, audience, schema, runtime_policy, and domain_match',
     issues: 'array — structured stage-specific failures and warnings',
+    recommendations:
+      'array — required next steps, operational notes, and optional customization guidance',
     config_summary:
       'object | null — safe summary of the parsed config when schema validation succeeds',
+  },
+};
+
+export const configVerificationEndpointDocumentation = {
+  ...configValidationEndpointDocumentation,
+  path: '/config/verify',
+  description:
+    'Non-production DEBUG_ENABLED-only debug endpoint that validates raw config JSON, a signed config JWT, or a config_url fetch target. It also accepts jwks_url and auth_service_identifier overrides for local setup debugging.',
+  auth: 'Available only when DEBUG_ENABLED=true and NODE_ENV is not production; IP rate limited.',
+  body: {
+    ...configValidationEndpointDocumentation.body,
+    jwks_url:
+      'string (optional) — JWKS URL used to verify config_jwt or the JWT fetched from config_url. Defaults to CONFIG_JWKS_URL',
+    auth_service_identifier:
+      'string (optional) — expected JWT aud. Defaults to the auth service environment when omitted',
   },
 };

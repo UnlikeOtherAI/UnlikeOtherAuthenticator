@@ -4,7 +4,12 @@ import { fileURLToPath } from 'node:url';
 
 import type { FastifyInstance } from 'fastify';
 
-import { configJwtDocumentation, configVerificationEndpointDocumentation } from './config-docs.js';
+import {
+  configJwtDocumentation,
+  configValidationEndpointDocumentation,
+  configVerificationEndpointDocumentation,
+} from './config-docs.js';
+import { registerConfigValidateRoute } from './config-validate.js';
 import { registerConfigVerifyRoute } from './config-verify.js';
 import { registerLlmRoute } from './llm.js';
 import { endpoints } from './schema.js';
@@ -25,6 +30,7 @@ try {
 
 export function registerRootRoute(app: FastifyInstance): void {
   registerLlmRoute(app);
+  registerConfigValidateRoute(app);
   registerConfigVerifyRoute(app);
 
   app.get('/', async (_request, reply) => {
@@ -45,6 +51,7 @@ export function registerRootRoute(app: FastifyInstance): void {
       docs: '/llm',
       api: '/api',
       config_jwt: configJwtDocumentation,
+      config_validation: configValidationEndpointDocumentation,
       config_verification: configVerificationEndpointDocumentation,
       endpoints,
     };

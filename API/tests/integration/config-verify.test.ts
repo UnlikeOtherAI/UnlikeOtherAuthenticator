@@ -154,3 +154,64 @@ describe('POST /config/verify', () => {
     );
   });
 });
+
+describe('POST /config/validate', () => {
+  it('is available without DEBUG_ENABLED and returns installer guidance', async () => {
+    process.env.DEBUG_ENABLED = 'false';
+    const jwt = await signTestConfigJwt(baseClientConfigPayload());
+    vi.stubGlobal('fetch', vi.fn(await createTestConfigFetchHandler(jwt)));
+
+    try {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/config/validate',
+        payload: {
+          config_url: 'https://client.example.com/auth-config',
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+
+      const body = res.json();
+      expect(body.ok).toBe(true);
+      expect(body.source).toBe('config_url');
+      expect(body.schema_valid).toBe(true);
+      expect(body.jwt_signature_valid).toBe(true);
+      expect(body.domain_match).toBe(true);
+      expect(body.checks.runtime_policy.status).toBe('passed');
+      expect(body.recommendations).toContainEqual(
+        expect.objectContaining({
+          kind: 'optional_customization',
+          code: 'LOGO_URL_OPTIONAL',
+        }),
+      );
+    } finally {
+      process.env.DEBUG_ENABLED = 'true';
+    }
+  });
+
+  it('reports social providers that are enabled but not allowed by runtime policy', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/config/validate',
+      payload: {
+        config: baseClientConfigPayload({
+          enabled_auth_methods: ['email_password', 'google'],
+        }),
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+
+    const body = res.json();
+    expect(body.ok).toBe(false);
+    expect(body.schema_valid).toBe(true);
+    expect(body.issues).toContainEqual(
+      expect.objectContaining({
+        stage: 'runtime_policy',
+        code: 'CONFIG_RUNTIME_POLICY_INVALID',
+      }),
+    );
+    expect(body.issues[0].details.join(' ')).toContain('allowed_social_providers');
+  });
+});

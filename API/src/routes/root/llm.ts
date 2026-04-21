@@ -45,6 +45,28 @@ Content-Type: application/json
 7. Store refresh tokens server-side only. Browser clients must not receive or persist refresh tokens.
 8. Revoke refresh tokens on logout with \`POST /auth/revoke\`.
 
+## Validate before integrating
+
+Start by reading the machine-readable schema at [/api](/api), then use the production-safe validator before wiring the app into a real login flow:
+
+\`\`\`text
+POST /config/validate
+Content-Type: application/json
+
+{
+  "config_url": "https://client.example.com/auth-config"
+}
+\`\`\`
+
+It can also accept \`config_jwt\` or raw \`config\`. A \`config_url\` is the best final check because the auth service performs the same server-side fetch, JWT decode, JWKS signature check, audience check, schema validation, domain match, runtime policy checks, and customization guidance.
+
+The response includes:
+
+- \`ok\`: whether the configuration is ready for the auth runtime.
+- \`checks\`: stage-by-stage results for source, fetch, decode, secret_scan, signature, audience, schema, runtime_policy, and domain_match.
+- \`issues\`: blocking problems with stage, code, summary, and details.
+- \`recommendations\`: required next steps, operational notes, and optional customizations such as logo URL, custom font, language selector, token TTL, org features, and access requests.
+
 ## SSO installation checklist
 
 Use this checklist when installing a new app as an SSO client:
@@ -59,6 +81,7 @@ Use this checklist when installing a new app as an SSO client:
 - Every \`redirect_url\` sent to \`/auth\` must be listed exactly in \`redirect_urls\`.
 - Browser clients must use PKCE. The same \`redirect_url\` and \`code_verifier\` must be used during token exchange.
 - Backend token exchange and revoke calls must use the domain-hash Authorization header, never browser credentials.
+- If any social provider is listed in \`enabled_auth_methods\`, it must also be listed in \`allowed_social_providers\`.
 - If \`allow_registration=false\`, social login will not create a user. The user must already exist or the callback redirects with a generic \`auth_failed\`.
 - For org/team installs, decide whether the user can sign in without an assigned team before enabling \`org_features.user_needs_team\`.
 
@@ -124,7 +147,7 @@ The first-party Admin UI is served from [/admin](/admin). Admin login uses the s
 
 ## Debugging config problems
 
-In non-production environments with \`DEBUG_ENABLED=true\`, use \`POST /config/verify\` with \`config\`, \`config_jwt\`, or \`config_url\`. It separates fetch, signature, audience, schema, and domain-match failures.
+Use \`POST /config/validate\` in every environment. In non-production environments with \`DEBUG_ENABLED=true\`, \`POST /config/verify\` additionally accepts \`jwks_url\` and \`auth_service_identifier\` overrides for local setup debugging.
 
 ## Related operational endpoints
 

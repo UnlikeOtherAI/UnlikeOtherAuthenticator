@@ -10,6 +10,13 @@ import {
   verifyConfigJwtSignature,
   type ClientConfig,
 } from './config.service.js';
+import { containsSecretValue } from './config-secret-scan.service.js';
+import {
+  buildConfigGuidance,
+  buildConfigSummary,
+  collectRuntimePolicyDetails,
+  type ConfigValidationGuidance,
+} from './config-validation-guidance.service.js';
 
 const VerifyConfigBodySchema = z
   .object({
@@ -29,6 +36,23 @@ const VerifyConfigBodySchema = z
     }
   });
 
+const ValidateConfigBodySchema = z
+  .object({
+    config: z.record(z.unknown()).optional(),
+    config_jwt: z.string().trim().min(1).optional(),
+    config_url: z.string().trim().min(1).optional(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (!value.config && !value.config_jwt && !value.config_url) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Provide config, config_jwt, or config_url.',
+        path: ['config'],
+      });
+    }
+  });
+
 type CheckStatus = 'passed' | 'failed' | 'skipped';
 
 type CheckResult = {
@@ -38,6 +62,7 @@ type CheckResult = {
 };
 
 type VerifyConfigRequest = z.infer<typeof VerifyConfigBodySchema>;
+type ValidateConfigRequest = z.infer<typeof ValidateConfigBodySchema>;
 
 type VerifyConfigIssue = {
   stage: string;
@@ -55,6 +80,7 @@ export type VerifyConfigResponse = {
   domain_match: boolean | null;
   checks: Record<string, CheckResult>;
   issues: VerifyConfigIssue[];
+  recommendations: ConfigValidationGuidance[];
   config_summary: Record<string, unknown> | null;
 };
 
@@ -72,19 +98,21 @@ function readAudienceClaim(payload: JWTPayload): string[] {
   return [];
 }
 
-function buildConfigSummary(config: ClientConfig): Record<string, unknown> {
-  return {
-    domain: config.domain,
-    redirect_url_count: config.redirect_urls.length,
-    enabled_auth_methods: config.enabled_auth_methods,
-    has_multiple_languages: Array.isArray(config.language_config),
-    has_custom_font_import: Boolean(config.ui_theme.typography.font_import_url),
-    uses_text_logo: Boolean(config.ui_theme.logo.text?.trim()),
-    org_features_enabled: config.org_features.enabled,
-    groups_enabled: config.org_features.groups_enabled,
-    access_requests_enabled: config.access_requests.enabled,
-    debug_enabled: config.debug_enabled,
-  };
+function validateRuntimePolicy(response: VerifyConfigResponse, config: ClientConfig): void {
+  const details = collectRuntimePolicyDetails(config);
+
+  if (!details.length) {
+    passedCheck(response, 'runtime_policy', 'Runtime auth policy checks passed.');
+    return;
+  }
+
+  failedCheck(
+    response,
+    'runtime_policy',
+    'CONFIG_RUNTIME_POLICY_INVALID',
+    'The configuration passed schema validation but would fail or confuse auth runtime policy.',
+    details,
+  );
 }
 
 function failedCheck(
@@ -131,6 +159,10 @@ export function parseVerifyConfigRequest(input: unknown): VerifyConfigRequest {
   return VerifyConfigBodySchema.parse(input);
 }
 
+export function parseValidateConfigRequest(input: unknown): ValidateConfigRequest {
+  return ValidateConfigBodySchema.parse(input);
+}
+
 export async function verifyClientConfig(
   params: VerifyConfigRequest,
 ): Promise<VerifyConfigResponse> {
@@ -149,6 +181,7 @@ export async function verifyClientConfig(
     domain_match: null,
     checks: {},
     issues: [],
+    recommendations: [],
     config_summary: null,
   };
 
@@ -176,9 +209,11 @@ export async function verifyClientConfig(
         'The auth service could not fetch a usable config JWT from config_url.',
       );
       skippedCheck(response, 'decode', 'JWT decode was skipped because fetch failed.');
+      skippedCheck(response, 'secret_scan', 'Secret scan was skipped because fetch failed.');
       skippedCheck(response, 'signature', 'Signature verification was skipped because no JWT was available.');
       skippedCheck(response, 'audience', 'Audience verification was skipped because no JWT payload was available.');
       skippedCheck(response, 'schema', 'Schema validation was skipped because no config payload was available.');
+      skippedCheck(response, 'runtime_policy', 'Runtime policy checks were skipped because no config payload was available.');
       skippedCheck(response, 'domain_match', 'Domain matching was skipped because no parsed config was available.');
       return response;
     }
@@ -202,8 +237,10 @@ export async function verifyClientConfig(
         'The supplied config JWT could not be decoded.',
       );
       skippedCheck(response, 'signature', 'Signature verification was skipped because JWT decode failed.');
+      skippedCheck(response, 'secret_scan', 'Secret scan was skipped because JWT decode failed.');
       skippedCheck(response, 'audience', 'Audience verification was skipped because JWT decode failed.');
       skippedCheck(response, 'schema', 'Schema validation was skipped because JWT decode failed.');
+      skippedCheck(response, 'runtime_policy', 'Runtime policy checks were skipped because JWT decode failed.');
       skippedCheck(response, 'domain_match', 'Domain matching was skipped because no parsed config was available.');
       return response;
     }
@@ -233,6 +270,22 @@ export async function verifyClientConfig(
   } else {
     skippedCheck(response, 'decode', 'JWT decode was skipped because a raw config object was provided.');
     skippedCheck(response, 'signature', 'Signature verification was skipped because no JWT was provided.');
+  }
+
+  if (payload) {
+    if (containsSecretValue(payload, env.SHARED_SECRET)) {
+      failedCheck(
+        response,
+        'secret_scan',
+        'CONFIG_PAYLOAD_SECRET_REJECTED',
+        'The configuration payload contains this auth service shared secret.',
+        ['Remove shared secrets, OAuth secrets, refresh tokens, and private keys from config payloads.'],
+      );
+    } else {
+      passedCheck(response, 'secret_scan', 'No auth service shared secret was found in the config payload.');
+    }
+  } else {
+    skippedCheck(response, 'secret_scan', 'Secret scan was skipped because no config payload was available.');
   }
 
   if (payload && source !== 'config') {
@@ -276,6 +329,8 @@ export async function verifyClientConfig(
       response.schema_valid = true;
       response.config_summary = buildConfigSummary(config);
       passedCheck(response, 'schema', 'The configuration payload passed schema validation.');
+      validateRuntimePolicy(response, config);
+      response.recommendations.push(...buildConfigGuidance(config, payload));
     } catch (err) {
       if (err instanceof z.ZodError) {
         response.schema_valid = false;
@@ -286,12 +341,14 @@ export async function verifyClientConfig(
           'The configuration payload failed schema validation.',
           formatZodIssues(err),
         );
+        skippedCheck(response, 'runtime_policy', 'Runtime policy checks were skipped because schema validation failed.');
       } else {
         throw err;
       }
     }
   } else {
     skippedCheck(response, 'schema', 'Schema validation was skipped because no config payload was available.');
+    skippedCheck(response, 'runtime_policy', 'Runtime policy checks were skipped because no config payload was available.');
   }
 
   if (config && params.config_url) {
