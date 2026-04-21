@@ -2,6 +2,7 @@ import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
 import { AppError } from '../../utils/errors.js';
+import { assertVerifiedDomainMatchesQuery, normalizeDomain } from './domain-context.js';
 
 export const DomainQuerySchema = z
   .object({
@@ -9,7 +10,7 @@ export const DomainQuerySchema = z
       .string()
       .trim()
       .min(1)
-      .transform((value) => value.toLowerCase().replace(/\.$/, '')),
+      .transform(normalizeDomain),
     config_url: z.string().trim().min(1),
   })
   .strict();
@@ -92,11 +93,7 @@ export type RequestWithClaims = FastifyRequest & {
 
 export function parseDomainContext(request: FastifyRequest) {
   const parsed = DomainQuerySchema.parse(request.query);
-
-  request.config = {
-    ...(request.config ?? {}),
-    domain: parsed.domain,
-  } as typeof request.config;
+  assertVerifiedDomainMatchesQuery(request, parsed.domain);
 
   return parsed;
 }
@@ -107,11 +104,14 @@ export async function parseDomainContextHook(request: FastifyRequest): Promise<v
 
 export function parseDomainFromRequest(request: FastifyRequest): string {
   const parsed = DomainQuerySchema.parse(request.query);
+  assertVerifiedDomainMatchesQuery(request, parsed.domain);
   return parsed.domain;
 }
 
 export function parseLimitCursor(request: FastifyRequest) {
-  return ListQuerySchema.parse(request.query);
+  const parsed = ListQuerySchema.parse(request.query);
+  assertVerifiedDomainMatchesQuery(request, parsed.domain);
+  return parsed;
 }
 
 export function getActorUserId(request: RequestWithClaims): string {

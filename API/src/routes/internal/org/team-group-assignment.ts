@@ -7,6 +7,10 @@ import requireDomainHashAuthForDomainQuery from '../../../middleware/domain-hash
 import { requireOrgFeatures } from '../../../middleware/org-features.js';
 import { assignTeamToGroup } from '../../../services/group.service.js';
 import { AppError } from '../../../utils/errors.js';
+import {
+  assertVerifiedDomainMatchesQuery,
+  normalizeDomain,
+} from '../../org/domain-context.js';
 
 const DomainQuerySchema = z
   .object({
@@ -14,7 +18,7 @@ const DomainQuerySchema = z
       .string()
       .trim()
       .min(1)
-      .transform((value) => value.toLowerCase().replace(/\.$/, '')),
+      .transform(normalizeDomain),
     config_url: z.string().trim().min(1),
   })
   .strict();
@@ -34,10 +38,7 @@ const TeamGroupBodySchema = z.object({
 
 function parseDomainContext(request: FastifyRequest) {
   const parsed = DomainQuerySchema.parse(request.query);
-  request.config = {
-    ...(request.config ?? {}),
-    domain: parsed.domain,
-  } as typeof request.config;
+  assertVerifiedDomainMatchesQuery(request, parsed.domain);
   return parsed;
 }
 

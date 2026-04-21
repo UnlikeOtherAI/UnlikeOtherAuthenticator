@@ -21,6 +21,7 @@ import { createRateLimiter } from '../../middleware/rate-limiter.js';
 import { requireOrgFeatures } from '../../middleware/org-features.js';
 import { requireOrgRole } from '../../middleware/org-role-guard.js';
 import { AppError } from '../../utils/errors.js';
+import { assertVerifiedDomainMatchesQuery, normalizeDomain } from './domain-context.js';
 
 const DomainQuerySchema = z
   .object({
@@ -28,7 +29,7 @@ const DomainQuerySchema = z
       .string()
       .trim()
       .min(1)
-      .transform((value) => value.toLowerCase().replace(/\.$/, '')),
+      .transform(normalizeDomain),
     config_url: z.string().trim().min(1),
   })
   .strict();
@@ -88,11 +89,7 @@ type RequestWithClaims = FastifyRequest & {
 
 function parseDomainContext(request: FastifyRequest) {
   const parsed = DomainQuerySchema.parse(request.query);
-
-  request.config = {
-    ...(request.config ?? {}),
-    domain: parsed.domain,
-  } as typeof request.config;
+  assertVerifiedDomainMatchesQuery(request, parsed.domain);
 
   return parsed;
 }
@@ -106,11 +103,14 @@ async function parseDomainContextHook(request: FastifyRequest): Promise<void> {
 
 function parseDomainFromRequest(request: FastifyRequest): string {
   const parsed = DomainQuerySchema.parse(request.query);
+  assertVerifiedDomainMatchesQuery(request, parsed.domain);
   return parsed.domain;
 }
 
 function parseLimitCursor(request: FastifyRequest) {
-  return ListQuerySchema.parse(request.query);
+  const parsed = ListQuerySchema.parse(request.query);
+  assertVerifiedDomainMatchesQuery(request, parsed.domain);
+  return parsed;
 }
 
 function getActorUserId(request: RequestWithClaims): string {

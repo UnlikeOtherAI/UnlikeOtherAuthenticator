@@ -7,6 +7,7 @@ import { verifyAccessToken } from '../../services/access-token.service.js';
 import { getUserOrgContext } from '../../services/org-context.service.js';
 import { AppError } from '../../utils/errors.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
+import { assertVerifiedDomainMatchesQuery, normalizeDomain } from './domain-context.js';
 
 const QuerySchema = z
   .object({
@@ -27,10 +28,6 @@ function parseBearerOrRawToken(value: unknown): string | null {
   return token || null;
 }
 
-function normalizeDomain(value: string): string {
-  return value.trim().toLowerCase().replace(/\.$/, '');
-}
-
 export function registerOrgMeRoute(app: FastifyInstance): void {
   app.get(
     '/org/me',
@@ -40,6 +37,7 @@ export function registerOrgMeRoute(app: FastifyInstance): void {
     async (request, reply) => {
       const { domain } = QuerySchema.parse(request.query);
       const normalizedDomain = normalizeDomain(domain);
+      assertVerifiedDomainMatchesQuery(request, normalizedDomain);
 
       const token = parseBearerOrRawToken(request.headers['x-uoa-access-token']);
       if (!token) {

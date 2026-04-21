@@ -10,6 +10,7 @@ import {
   rejectAccessRequest,
 } from '../../services/access-request.service.js';
 import { AppError } from '../../utils/errors.js';
+import { assertVerifiedDomainMatchesQuery, normalizeDomain } from './domain-context.js';
 
 const DomainQuerySchema = z
   .object({
@@ -17,7 +18,7 @@ const DomainQuerySchema = z
       .string()
       .trim()
       .min(1)
-      .transform((value) => value.toLowerCase().replace(/\.$/, '')),
+      .transform(normalizeDomain),
     config_url: z.string().trim().min(1),
     status: z.string().trim().min(1).optional(),
   })
@@ -39,10 +40,7 @@ const ReviewBodySchema = z.object({
 
 function parseDomainContext(request: FastifyRequest) {
   const parsed = DomainQuerySchema.parse(request.query);
-  request.config = {
-    ...(request.config ?? {}),
-    domain: parsed.domain,
-  } as typeof request.config;
+  assertVerifiedDomainMatchesQuery(request, parsed.domain);
   return parsed;
 }
 
