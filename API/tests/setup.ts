@@ -4,6 +4,15 @@ import type { AddressInfo } from 'node:net';
 
 import { testConfigJwks } from './helpers/test-config.js';
 
+vi.mock('undici', async () => {
+  const actual = await vi.importActual<typeof import('undici')>('undici');
+
+  return {
+    ...actual,
+    fetch: vi.fn((input: RequestInfo | URL, init?: RequestInit) => globalThis.fetch(input, init)),
+  };
+});
+
 vi.mock('node:dns/promises', async () => {
   const actual = await vi.importActual<typeof import('node:dns/promises')>(
     'node:dns/promises',

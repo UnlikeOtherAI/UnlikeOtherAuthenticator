@@ -1,11 +1,17 @@
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
+import { Agent, fetch as undiciFetch } from 'undici';
 
 import { AppError } from '../utils/errors.js';
 
 const DEFAULT_CONFIG_FETCH_TIMEOUT_MS = 5_000;
 const MAX_CONFIG_JWT_RESPONSE_BYTES = 64 * 1024;
 const MAX_CONFIG_FETCH_REDIRECTS = 3;
+
+type PublicDestination = {
+  address: string;
+  family: 4 | 6;
+};
 
 function parseHttpsUrl(value: string): URL {
   let url: URL;
@@ -74,30 +80,74 @@ function isBlockedIpv6(address: string): boolean {
   );
 }
 
+function stripIpv6Brackets(address: string): string {
+  return address.startsWith('[') && address.endsWith(']') ? address.slice(1, -1) : address;
+}
+
 function isBlockedIpAddress(address: string): boolean {
-  const family = isIP(address);
-  if (family === 4) return isBlockedIpv4(address);
-  if (family === 6) return isBlockedIpv6(address);
+  const normalizedAddress = stripIpv6Brackets(address);
+  const family = isIP(normalizedAddress);
+  if (family === 4) return isBlockedIpv4(normalizedAddress);
+  if (family === 6) return isBlockedIpv6(normalizedAddress);
   return true;
 }
 
-async function assertPublicDestination(url: URL): Promise<void> {
-  if (isIP(url.hostname)) {
-    if (isBlockedIpAddress(url.hostname)) {
+async function resolvePublicDestination(url: URL): Promise<PublicDestination> {
+  const hostname = stripIpv6Brackets(url.hostname);
+  const ipFamily = isIP(hostname);
+  if (ipFamily === 4 || ipFamily === 6) {
+    if (isBlockedIpAddress(hostname)) {
       throw new AppError('BAD_REQUEST', 400);
     }
-    return;
+    return { address: hostname, family: ipFamily };
   }
 
-  let addresses: { address: string }[];
+  let addresses: PublicDestination[];
   try {
-    addresses = await lookup(url.hostname, { all: true, verbatim: true });
+    const resolved = await lookup(url.hostname, { all: true, verbatim: true });
+    addresses = resolved.map((entry) => {
+      if (entry.family !== 4 && entry.family !== 6) {
+        throw new AppError('BAD_REQUEST', 400);
+      }
+      return { address: entry.address, family: entry.family };
+    });
   } catch {
     throw new AppError('BAD_REQUEST', 400);
   }
 
   if (!addresses.length || addresses.some((entry) => isBlockedIpAddress(entry.address))) {
     throw new AppError('BAD_REQUEST', 400);
+  }
+
+  return addresses[0];
+}
+
+function createPinnedAgent(url: URL, destination: PublicDestination): Agent {
+  const servername = isIP(stripIpv6Brackets(url.hostname)) ? undefined : url.hostname;
+
+  return new Agent({
+    connect: {
+      ...(servername ? { servername } : {}),
+      lookup: (_hostname, _options, callback) => {
+        callback(null, destination.address, destination.family);
+      },
+    },
+  });
+}
+
+async function closeAgent(agent: Agent): Promise<void> {
+  try {
+    await agent.close();
+  } catch {
+    // Ignore close failures; fetch errors are handled separately.
+  }
+}
+
+async function cancelResponseBody(res: Response): Promise<void> {
+  try {
+    await res.body?.cancel();
+  } catch {
+    // Ignore cancellation failures while rejecting or redirecting.
   }
 }
 
@@ -167,35 +217,42 @@ export async function fetchConfigJwtFromUrl(
 
   try {
     for (let redirectCount = 0; redirectCount <= MAX_CONFIG_FETCH_REDIRECTS; redirectCount++) {
-      await assertPublicDestination(url);
+      const destination = await resolvePublicDestination(url);
+      const agent = createPinnedAgent(url, destination);
 
-      const res = await fetch(url.toString(), {
-        method: 'GET',
-        headers: { accept: 'text/plain, application/json' },
-        redirect: 'manual',
-        signal: controller.signal,
-      });
+      try {
+        const res = await undiciFetch(url.toString(), {
+          method: 'GET',
+          headers: { accept: 'text/plain, application/json' },
+          redirect: 'manual',
+          signal: controller.signal,
+          dispatcher: agent,
+        });
 
-      if ([301, 302, 303, 307, 308].includes(res.status)) {
-        const location = res.headers.get('location');
-        if (!location || redirectCount === MAX_CONFIG_FETCH_REDIRECTS) {
+        if ([301, 302, 303, 307, 308].includes(res.status)) {
+          const location = res.headers.get('location');
+          await cancelResponseBody(res);
+          if (!location || redirectCount === MAX_CONFIG_FETCH_REDIRECTS) {
+            throw new AppError('BAD_REQUEST', 400);
+          }
+
+          url = parseHttpsUrl(new URL(location, url).toString());
+          continue;
+        }
+
+        if (!res.ok) {
           throw new AppError('BAD_REQUEST', 400);
         }
 
-        url = parseHttpsUrl(new URL(location, url).toString());
-        continue;
-      }
+        const jwt = extractJwtFromBody(await readResponseTextWithLimit(res));
+        if (!jwt) {
+          throw new AppError('BAD_REQUEST', 400);
+        }
 
-      if (!res.ok) {
-        throw new AppError('BAD_REQUEST', 400);
+        return jwt;
+      } finally {
+        await closeAgent(agent);
       }
-
-      const jwt = extractJwtFromBody(await readResponseTextWithLimit(res));
-      if (!jwt) {
-        throw new AppError('BAD_REQUEST', 400);
-      }
-
-      return jwt;
     }
 
     throw new AppError('BAD_REQUEST', 400);

@@ -31,6 +31,36 @@ describe('fetchConfigJwtFromUrl', () => {
       statusCode: 400,
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ redirect: 'manual' });
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
+      dispatcher: expect.any(Object),
+      redirect: 'manual',
+    });
+  });
+
+  it('pins a validated dispatcher for each redirect hop', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response('', {
+          status: 302,
+          headers: { location: 'https://next.example.com/config' },
+        }),
+      )
+      .mockResolvedValueOnce(new Response('config.jwt.value', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchConfigJwtFromUrl('https://client.example.com/config')).resolves.toBe(
+      'config.jwt.value',
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
+      dispatcher: expect.any(Object),
+      redirect: 'manual',
+    });
+    expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({
+      dispatcher: expect.any(Object),
+      redirect: 'manual',
+    });
   });
 });
