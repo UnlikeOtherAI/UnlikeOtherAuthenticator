@@ -4,16 +4,18 @@
   "version": "0.0.0",
   "workspaces": [
     "API",
-    "Auth"
+    "Auth",
+    "Admin"
   ],
   "scripts": {
-    "dev:api": "npm run dev --workspace API",
-    "dev:auth": "npm run dev --workspace Auth",
-    "build": "npm run build --workspaces --if-present",
-    "lint": "npm run lint --workspaces --if-present",
+    "dev:api": "pnpm --filter @uoa/api dev",
+    "dev:auth": "pnpm --filter @uoa/auth dev",
+    "dev:admin": "pnpm --filter @uoa/admin dev",
+    "build": "pnpm -r --if-present build",
+    "lint": "pnpm -r --if-present lint",
     "format": "prettier -w .",
-    "typecheck": "npm run typecheck --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present"
+    "typecheck": "pnpm -r --if-present typecheck",
+    "test": "pnpm -r --if-present test"
   },
   "devDependencies": {
     "@eslint/js": "^9.19.0",

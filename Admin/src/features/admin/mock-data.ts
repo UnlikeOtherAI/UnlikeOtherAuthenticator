@@ -1,0 +1,147 @@
+import type { AdminData, OrganisationMember, Team, UserSummary } from './types';
+
+const acmeMembers: OrganisationMember[] = [
+  member('u101', 'Alice Chen', 'alice@acme.com', 'owner', ['General', 'Backend'], { General: 'member', Backend: 'admin' }, true, '2 min ago', 'google'),
+  member('u102', 'Bob Smith', 'bob@acme.com', 'admin', ['General', 'Frontend'], { General: 'member', Frontend: 'admin' }, false, '1 hour ago', 'email'),
+  member('u103', 'Carol Davis', 'carol@acme.com', 'member', ['General', 'Backend'], { General: 'member', Backend: 'member' }, true, '3 days ago', 'email'),
+  member('u104', 'Dan Lee', 'dan@acme.com', 'member', ['General', 'DevOps'], { General: 'member', DevOps: 'admin' }, false, '1 week ago', 'github'),
+  member('u105', 'Eva Torres', 'eva@acme.com', 'member', ['General', 'QA'], { General: 'member', QA: 'admin' }, true, '2 days ago', 'google'),
+];
+
+const designMembers: OrganisationMember[] = [
+  member('u201', 'Emily Park', 'emily@acme.com', 'owner', ['General', 'Brand'], { General: 'member', Brand: 'admin' }, true, '30 min ago', 'google'),
+  member('u202', 'Frank Wu', 'frank@acme.com', 'admin', ['General', 'UX Research'], { General: 'member', 'UX Research': 'admin' }, false, '2 days ago', 'email'),
+  member('u203', 'Grace Kim', 'grace@acme.com', 'member', ['General', 'Brand'], { General: 'member', Brand: 'member' }, true, '5 hours ago', 'email'),
+];
+
+const widgetsMembers: OrganisationMember[] = [
+  member('u301', 'Carol Johnson', 'carol@widgets.io', 'owner', ['General', 'Platform'], { General: 'member', Platform: 'admin' }, true, '1 day ago', 'email'),
+  member('u302', 'Dave Brown', 'dave@widgets.io', 'admin', ['General', 'Integrations'], { General: 'member', Integrations: 'admin' }, true, '4 hours ago', 'email'),
+  member('u303', 'Eve Martinez', 'eve@widgets.io', 'member', ['General', 'Mobile'], { General: 'member', Mobile: 'member' }, false, '2 hours ago', 'github'),
+  member('u304', 'Henry Park', 'henry@widgets.io', 'member', ['General', 'Platform', 'Integrations'], { General: 'member', Platform: 'member', Integrations: 'member' }, true, '6 hours ago', 'email'),
+];
+
+const startupMembers: OrganisationMember[] = [
+  member('u401', 'Ian Chen', 'ian@startup.dev', 'owner', ['General', 'Product'], { General: 'member', Product: 'admin' }, false, '1 hour ago', 'google'),
+  member('u402', 'Julia Ross', 'julia@startup.dev', 'member', ['General', 'Product'], { General: 'member', Product: 'member' }, false, '3 hours ago', 'email'),
+];
+
+const fordMembers: OrganisationMember[] = [
+  member('u501', 'James Ford', 'james.ford@ford.com', 'owner', ['General'], { General: 'admin' }, true, 'Yesterday', 'microsoft'),
+];
+
+export const mockAdminData: AdminData = {
+  stats: { users: 1247, domains: 12, orgs: 34, loginsToday: 389 },
+  domains: [
+    { id: 'd1', name: 'app.acme.com', label: 'Acme App', secretAge: '12 days', secretOld: false, users: 487, orgs: 8, status: 'active', created: '2024-01-15', hash: 'a3f8d2c1...' },
+    { id: 'd2', name: 'widgets.io', label: 'Widgets', secretAge: '89 days', secretOld: true, users: 312, orgs: 5, status: 'active', created: '2023-11-02', hash: 'b7e2f9a4...' },
+    { id: 'd3', name: 'portal.example.com', label: 'Example Portal', secretAge: '5 days', secretOld: false, users: 198, orgs: 3, status: 'active', created: '2024-03-01', hash: 'c1d4e8b3...' },
+    { id: 'd4', name: 'startup.dev', label: 'Startup Dev', secretAge: '22 days', secretOld: false, users: 104, orgs: 2, status: 'active', created: '2024-02-10', hash: 'e4b7c9f1...' },
+    { id: 'd5', name: 'old-product.com', label: 'Old Product', secretAge: null, secretOld: false, users: 89, orgs: 2, status: 'disabled', created: '2023-06-10', hash: 'd9c3a7e2...' },
+  ],
+  organisations: [
+    org('o1', 'Acme Engineering', 'acme-engineering', 'Jan 15, 2024', acmeMembers[0], [
+      team('t11', 'o1', 'General', 'All members', true, 42),
+      team('t12', 'o1', 'Backend', 'Backend engineers', false, 14),
+      team('t13', 'o1', 'Frontend', 'Frontend engineers', false, 11),
+      team('t14', 'o1', 'DevOps', 'Infrastructure', false, 6),
+      team('t15', 'o1', 'QA', 'Quality assurance', false, 5),
+    ], acmeMembers),
+    org('o2', 'Acme Design', 'acme-design', 'Feb 3, 2024', designMembers[0], [
+      team('t21', 'o2', 'General', 'All members', true, 18),
+      team('t22', 'o2', 'Brand', 'Brand design', false, 8),
+      team('t23', 'o2', 'UX Research', 'User experience', false, 7),
+    ], designMembers),
+    org('o3', 'Widgets Core', 'widgets-core', 'Nov 2, 2023', widgetsMembers[0], [
+      team('t31', 'o3', 'General', 'All members', true, 91),
+      team('t32', 'o3', 'Platform', 'Core platform', false, 22),
+      team('t33', 'o3', 'Integrations', 'Third-party integrations', false, 18),
+      team('t34', 'o3', 'Mobile', 'Mobile apps', false, 15),
+    ], widgetsMembers),
+    org('o4', 'Startup Alpha', 'startup-alpha', 'Feb 10, 2024', startupMembers[0], [
+      team('t41', 'o4', 'General', 'All members', true, 12),
+      team('t42', 'o4', 'Product', 'Product team', false, 5),
+    ], startupMembers),
+    org('o5', 'Ford Enterprise', 'ford-enterprise', 'Mar 1, 2024', fordMembers[0], [
+      team('t51', 'o5', 'General', 'All employees', true, 1),
+      team('t52', 'o5', 'Engineering', 'Engineering staff', false, 0),
+    ], fordMembers),
+  ],
+  users: [
+    user('u101', 'Alice Chen', 'alice@acme.com', ['app.acme.com'], true, '2 min ago', 'active', 'google', 'Jan 15, 2024'),
+    user('u102', 'Bob Smith', 'bob@acme.com', ['app.acme.com'], false, '1 hour ago', 'active', 'email', 'Jan 20, 2024'),
+    user('u103', 'Carol Davis', 'carol@acme.com', ['app.acme.com', 'widgets.io'], true, '1 hour ago', 'active', 'email', 'Feb 3, 2024'),
+    user('u104', 'Dan Lee', 'dan@acme.com', ['app.acme.com'], false, '1 week ago', 'active', 'github', 'Mar 1, 2024'),
+    user('u201', 'Emily Park', 'emily@acme.com', ['app.acme.com'], true, '30 min ago', 'active', 'google', 'Feb 3, 2024'),
+    user('u301', 'Carol Johnson', 'carol@widgets.io', ['widgets.io'], true, '1 day ago', 'active', 'email', 'Nov 2, 2023'),
+    user('u302', 'Dave Brown', 'dave@widgets.io', ['widgets.io'], true, '4 hours ago', 'active', 'email', 'Nov 5, 2023'),
+    user('u999', null, 'spam@evil.example', ['portal.example.com'], false, 'Never', 'banned', 'email', 'Apr 4, 2026'),
+  ],
+  logs: [
+    { id: 'l1', ts: '2026-04-07 09:42:11', user: 'alice@acme.com', domain: 'app.acme.com', method: 'google', ip: '84.198.12.xx', userAgent: 'Chrome 123 / macOS', result: 'ok' },
+    { id: 'l2', ts: '2026-04-07 09:39:05', user: 'bob@widgets.io', domain: 'widgets.io', method: 'email', ip: '31.41.59.xx', userAgent: 'Firefox 124 / Windows', result: 'ok' },
+    { id: 'l3', ts: '2026-04-07 09:31:22', user: 'carol@example.com', domain: 'portal.example.com', method: 'email', ip: '192.168.1.xx', userAgent: 'Safari 17 / iOS', result: 'ok' },
+    { id: 'l4', ts: '2026-04-07 09:18:44', user: null, domain: 'app.acme.com', method: 'email', ip: '185.220.101.xx', userAgent: 'python-requests/2.31', result: 'fail' },
+    { id: 'l5', ts: '2026-04-07 09:05:11', user: 'dan@acme.com', domain: 'app.acme.com', method: 'github', ip: '77.99.201.xx', userAgent: 'Chrome 123 / Linux', result: 'ok' },
+    { id: 'l6', ts: '2026-04-07 08:47:33', user: 'eve@startup.dev', domain: 'startup.dev', method: 'email', ip: '93.184.216.xx', userAgent: 'Edge 123 / Windows', result: 'ok' },
+  ],
+  bans: {
+    emails: [
+      { id: 'be1', value: 'spam@evil.example', bannedAt: '3 days ago', reason: 'Spam' },
+      { id: 'be2', value: 'abuse@tempmail.example', bannedAt: '1 week ago', reason: 'Abuse' },
+      { id: 'be3', value: 'test123@disposable.example', bannedAt: '2 weeks ago', reason: 'Disposable' },
+    ],
+    patterns: [
+      { id: 'bp1', value: '*@tempmail.example', bannedAt: '1 month ago', hits: 42 },
+      { id: 'bp2', value: '*@disposable.example', bannedAt: '3 weeks ago', hits: 17 },
+      { id: 'bp3', value: '*+test*@*', bannedAt: '5 days ago', hits: 3 },
+    ],
+    ips: [
+      { id: 'bi1', value: '185.220.101.0/24', label: 'Tor exit range', bannedAt: '1 week ago', hits: 128, expiry: null },
+      { id: 'bi2', value: '45.12.33.199', label: 'Brute force source', bannedAt: '2 days ago', hits: 7, expiry: 'Apr 14, 2026' },
+      { id: 'bi3', value: '91.108.56.0/22', label: 'Known spam subnet', bannedAt: '3 weeks ago', hits: 54, expiry: null },
+    ],
+    users: [{ id: 'bu1', value: 'spam@evil.example', label: 'portal.example.com', bannedAt: 'Apr 4, 2026', reason: 'Spam account' }],
+  },
+  apps: [
+    { id: 'app1', name: 'Acme Main App', domain: 'app.acme.com', org: 'Acme Engineering', flagsEnabled: true, matrixEnabled: true, flags: 8, status: 'active' },
+    { id: 'app2', name: 'Widgets Dashboard', domain: 'widgets.io', org: 'Widgets Core', flagsEnabled: true, matrixEnabled: false, flags: 3, status: 'active' },
+    { id: 'app3', name: 'Startup Portal', domain: 'startup.dev', org: 'Startup Alpha', flagsEnabled: false, matrixEnabled: false, flags: 0, status: 'active' },
+  ],
+};
+
+function org(id: string, name: string, slug: string, created: string, owner: OrganisationMember, teams: Team[], members: OrganisationMember[]) {
+  return { id, name, slug, created, owner: { id: owner.id, name: owner.name, email: owner.email }, teams, members };
+}
+
+function team(id: string, orgId: string, name: string, description: string, isDefault: boolean, members: number): Team {
+  return { id, orgId, name, description, isDefault, members };
+}
+
+function member(
+  id: string,
+  name: string,
+  email: string,
+  role: OrganisationMember['role'],
+  teams: string[],
+  teamRoles: OrganisationMember['teamRoles'],
+  twofa: boolean,
+  lastLogin: string,
+  method: OrganisationMember['method'],
+): OrganisationMember {
+  return { id, name, email, role, teams, teamRoles, twofa, lastLogin, status: 'active', method };
+}
+
+function user(
+  id: string,
+  name: string | null,
+  email: string,
+  domains: string[],
+  twofa: boolean,
+  lastLogin: string,
+  status: UserSummary['status'],
+  method: UserSummary['method'],
+  created: string,
+): UserSummary {
+  return { id, name, email, domains, twofa, lastLogin, status, method, created };
+}

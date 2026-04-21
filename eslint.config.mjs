@@ -30,7 +30,7 @@ export default [
     },
   },
   {
-    files: ['Auth/**/*.{ts,tsx,js,jsx}'],
+    files: ['Auth/**/*.{ts,tsx,js,jsx}', 'Admin/**/*.{ts,tsx,js,jsx}'],
     languageOptions: {
       globals: {
         ...globals.browser,
