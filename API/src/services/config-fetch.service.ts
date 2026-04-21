@@ -205,7 +205,14 @@ function createPinnedAgent(url: URL, destination: PublicDestination): Agent {
   return new Agent({
     connect: {
       ...(servername ? { servername } : {}),
-      lookup: (_hostname, _options, callback) => {
+      lookup: (_hostname, options, callback) => {
+        if (options && (options as { all?: boolean }).all) {
+          (callback as (err: NodeJS.ErrnoException | null, addresses: { address: string; family: number }[]) => void)(
+            null,
+            [{ address: destination.address, family: destination.family }],
+          );
+          return;
+        }
         callback(null, destination.address, destination.family);
       },
     },
