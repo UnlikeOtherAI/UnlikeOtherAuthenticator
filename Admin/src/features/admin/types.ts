@@ -54,6 +54,17 @@ export type Organisation = {
   owner: Pick<UserSummary, 'id' | 'name' | 'email'>;
   teams: Team[];
   members: OrganisationMember[];
+  preapprovedMembers: PreapprovedMember[];
+};
+
+export type PreapprovedMember = {
+  id: string;
+  email: string;
+  role: UoaRole;
+  targetTeam: string;
+  method: 'ANY' | 'EMAIL' | 'GOOGLE' | 'GITHUB' | 'MICROSOFT' | 'APPLE';
+  status: 'pending' | 'claimed';
+  created: string;
 };
 
 export type LoginLog = {
@@ -80,12 +91,59 @@ export type BanRecord = {
 export type AppFlagSummary = {
   id: string;
   name: string;
+  identifier: string;
   domain: string;
   org: string;
+  orgId: string;
+  platform: AppPlatformKind;
+  domains: string[];
+  storeUrl?: string;
+  offlinePolicy: 'allow' | 'block' | 'cached';
+  pollIntervalSeconds: number;
   flagsEnabled: boolean;
   matrixEnabled: boolean;
   flags: number;
+  platforms: FeaturePlatform[];
+  flagDefinitions: FeatureFlagDefinition[];
+  killSwitches: KillSwitchEntry[];
   status: EntityStatus;
+};
+
+export type AppPlatformKind = 'ios' | 'android' | 'web' | 'macos' | 'windows' | 'other';
+
+export type FeaturePlatform = {
+  id: string;
+  name: string;
+  key: string;
+  kind: AppPlatformKind | 'general';
+  identifier?: string;
+};
+
+export type FeatureFlagDefinition = {
+  id: string;
+  key: string;
+  description: string;
+  defaultState: boolean;
+  platformMode: 'all' | 'selected';
+  platformIds: string[];
+  updated: string;
+};
+
+export type KillSwitchEntry = {
+  id: string;
+  name: string;
+  platform: 'ios' | 'android' | 'both';
+  type: 'hard' | 'soft' | 'info' | 'maintenance';
+  versionField: 'versionName' | 'versionCode' | 'buildNumber';
+  operator: 'lt' | 'lte' | 'eq' | 'gte' | 'gt' | 'range';
+  versionValue: string;
+  versionMax: string | null;
+  versionScheme: 'semver' | 'integer' | 'date' | 'custom';
+  latestVersion?: string;
+  active: boolean;
+  priority: number;
+  cacheTtl: number;
+  updated: string;
 };
 
 export type AdminData = {

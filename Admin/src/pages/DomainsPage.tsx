@@ -10,15 +10,16 @@ import { FieldShell, SelectField, TextField } from '../components/ui/FormFields'
 import { Modal } from '../components/ui/Modal';
 import { PageHeader } from '../components/ui/PageHeader';
 import { StatusBadge } from '../components/ui/Status';
-import { DataTable, PaginationFooter, Td } from '../components/ui/Table';
+import { DataTable, PaginationFooter, Td, usePagination } from '../components/ui/Table';
 import { useDomainsQuery } from '../features/admin/admin-queries';
 import { useAdminUi } from '../features/shell/admin-ui';
 import { DomainFormSchema, type DomainFormValues } from '../schemas/admin';
 
 export function DomainsPage() {
   const { data = [], isLoading } = useDomainsQuery();
-  const { confirm } = useAdminUi();
+  const { confirm, openDialog } = useAdminUi();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const { pageItems, pagination } = usePagination(data);
 
   return (
     <>
@@ -37,8 +38,18 @@ export function DomainsPage() {
         ) : (
           <>
             <DataTable headers={['Domain', 'Client Hash', 'Secret Age', 'Users', 'Orgs', 'Status', 'Actions']}>
-              {data.map((domain) => (
-                <tr key={domain.id} className="transition-colors hover:bg-gray-50">
+              {pageItems.map((domain) => (
+                <tr
+                  key={domain.id}
+                  className="cursor-pointer transition-colors hover:bg-gray-50"
+                  tabIndex={0}
+                  onClick={() => openDialog({ type: 'edit-domain', domain })}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      openDialog({ type: 'edit-domain', domain });
+                    }
+                  }}
+                >
                   <Td>
                     <p className="font-medium text-gray-900">{domain.name}</p>
                     <p className="mt-0.5 text-xs text-gray-400">{domain.label} · Added {domain.created}</p>
@@ -48,8 +59,8 @@ export function DomainsPage() {
                   <Td>{domain.users}</Td>
                   <Td>{domain.orgs}</Td>
                   <Td><StatusBadge status={domain.status} /></Td>
-                  <Td>
-                    <ActionButton>Edit</ActionButton>
+                  <Td className="whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
+                    <ActionButton onClick={() => openDialog({ type: 'edit-domain', domain })}>Edit</ActionButton>
                     <ActionDivider />
                     <ActionButton tone="amber" onClick={() => confirm(`Rotate ${domain.name}?`, 'The new shared secret will need to be deployed by the client backend.')}>Rotate</ActionButton>
                     <ActionDivider />
@@ -58,7 +69,7 @@ export function DomainsPage() {
                 </tr>
               ))}
             </DataTable>
-            <PaginationFooter />
+            <PaginationFooter {...pagination} />
           </>
         )}
       </Card>

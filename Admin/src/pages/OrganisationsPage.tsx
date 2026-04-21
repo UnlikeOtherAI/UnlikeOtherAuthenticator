@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 
@@ -10,15 +10,17 @@ import { Card } from '../components/ui/Card';
 import { FieldShell, SelectField, TextAreaField, TextField } from '../components/ui/FormFields';
 import { Modal } from '../components/ui/Modal';
 import { PageHeader } from '../components/ui/PageHeader';
-import { DataTable, PaginationFooter, Td } from '../components/ui/Table';
+import { DataTable, PaginationFooter, Td, usePagination } from '../components/ui/Table';
 import { useOrganisationsQuery } from '../features/admin/admin-queries';
 import { useAdminUi } from '../features/shell/admin-ui';
 import { NewOrganisationFormSchema, type NewOrganisationFormValues } from '../schemas/admin';
 
 export function OrganisationsPage() {
   const { data = [], isLoading } = useOrganisationsQuery();
-  const { confirm, openUser } = useAdminUi();
+  const navigate = useNavigate();
+  const { confirm, openDialog, openUser } = useAdminUi();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const { pageItems, pagination } = usePagination(data);
 
   return (
     <>
@@ -32,35 +34,45 @@ export function OrganisationsPage() {
         ) : (
           <>
             <DataTable headers={['Organisation', 'Owner', 'Members', 'Teams', 'Created', 'Actions']}>
-              {data.map((org) => (
-                <tr key={org.id} className="transition-colors hover:bg-gray-50">
+              {pageItems.map((org) => (
+                <tr
+                  key={org.id}
+                  className="cursor-pointer transition-colors hover:bg-gray-50"
+                  tabIndex={0}
+                  onClick={() => navigate(`/organisations/${org.id}`)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      navigate(`/organisations/${org.id}`);
+                    }
+                  }}
+                >
                   <Td>
                     <div className="flex items-center gap-2">
                       <Avatar label={org.name} shape="square" />
                       <div>
-                        <Link to={`/organisations/${org.id}`} className="text-sm font-semibold text-indigo-600 hover:text-indigo-900">{org.name}</Link>
+                        <Link to={`/organisations/${org.id}`} className="text-sm font-semibold text-indigo-600 hover:text-indigo-900" onClick={(event) => event.stopPropagation()}>{org.name}</Link>
                         <p className="mt-0.5 text-xs text-gray-400">{org.slug}</p>
                       </div>
                     </div>
                   </Td>
                   <Td>
-                    <button className="text-left text-sm text-gray-700 hover:text-indigo-700" type="button" onClick={() => openUser(org.owner.id)}>{org.owner.name}</button>
+                    <button className="text-left text-sm text-gray-700 hover:text-indigo-700" type="button" onClick={(event) => { event.stopPropagation(); openUser(org.owner.id); }}>{org.owner.name}</button>
                     <p className="text-xs text-gray-400">{org.owner.email}</p>
                   </Td>
                   <Td>{org.members.length}</Td>
                   <Td>{org.teams.length}</Td>
                   <Td className="text-xs text-gray-400">{org.created}</Td>
-                  <Td>
-                    <Link className="text-xs font-medium text-indigo-600 transition-colors hover:text-indigo-900" to={`/organisations/${org.id}`}>View</Link>
+                  <Td className="whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
+                    <ActionButton onClick={() => openDialog({ type: 'edit-org', organisation: org })}>Edit</ActionButton>
                     <ActionDivider />
-                    <ActionButton tone="amber">Transfer</ActionButton>
+                    <ActionButton tone="amber" onClick={() => openDialog({ type: 'transfer-ownership', organisation: org })}>Transfer</ActionButton>
                     <ActionDivider />
                     <ActionButton tone="red" onClick={() => confirm(`Delete ${org.name}?`, 'Deletes all teams and memberships in the sample UI.')}>Delete</ActionButton>
                   </Td>
                 </tr>
               ))}
             </DataTable>
-            <PaginationFooter />
+            <PaginationFooter {...pagination} />
           </>
         )}
       </Card>

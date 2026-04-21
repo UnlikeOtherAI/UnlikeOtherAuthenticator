@@ -8,19 +8,22 @@ import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Card, CardHeader } from '../components/ui/Card';
 import { StatusBadge } from '../components/ui/Status';
-import { DataTable, Td } from '../components/ui/Table';
+import { DataTable, PaginationFooter, Td, usePagination } from '../components/ui/Table';
 import { SegmentedTabs } from '../components/ui/Tabs';
 import { useOrganisationQuery } from '../features/admin/admin-queries';
 import { useAdminUi } from '../features/shell/admin-ui';
 
-type OrgTab = 'teams' | 'members';
+type OrgTab = 'teams' | 'members' | 'preapproved';
 
 export function OrganisationDetailPage() {
   const { orgId } = useParams();
   const navigate = useNavigate();
-  const { confirm, openUser } = useAdminUi();
+  const { confirm, openDialog, openUser } = useAdminUi();
   const { data: org, isLoading } = useOrganisationQuery(orgId);
   const [tab, setTab] = useState<OrgTab>('teams');
+  const { pageItems: teamPageItems, pagination: teamPagination } = usePagination(org?.teams ?? []);
+  const { pageItems: memberPageItems, pagination: memberPagination } = usePagination(org?.members ?? []);
+  const { pageItems: preapprovalPageItems, pagination: preapprovalPagination } = usePagination(org?.preapprovedMembers ?? []);
 
   if (isLoading) {
     return <p className="text-sm text-gray-400">Loading organisation...</p>;
@@ -43,8 +46,8 @@ export function OrganisationDetailPage() {
           <p className="mt-0.5 text-sm text-gray-500">{org.slug} · Created {org.created}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button>Edit</Button>
-          <Button>Transfer Ownership</Button>
+          <Button onClick={() => openDialog({ type: 'edit-org', organisation: org })}>Edit</Button>
+          <Button onClick={() => openDialog({ type: 'transfer-ownership', organisation: org })}>Transfer Ownership</Button>
           <Button variant="danger" onClick={() => confirm(`Delete ${org.name}?`, 'Permanently deletes the org and all teams in the sample UI.')}>Delete</Button>
         </div>
       </div>
@@ -53,26 +56,34 @@ export function OrganisationDetailPage() {
         <MetricCard label="Members" value={String(org.members.length)} />
         <MetricCard label="Teams" value={String(org.teams.length)} />
       </div>
-      <SegmentedTabs<OrgTab> value={tab} onChange={setTab} options={[{ label: 'Teams', value: 'teams' }, { label: 'Members', value: 'members' }]} />
+      <SegmentedTabs<OrgTab> value={tab} onChange={setTab} options={[{ label: 'Teams', value: 'teams' }, { label: 'Members', value: 'members' }, { label: 'Pre-approved', value: 'preapproved' }]} />
       {tab === 'teams' ? (
         <Card>
           <CardHeader>
             <span className="text-sm font-semibold text-gray-900">Teams</span>
-            <Button icon="plus" size="sm" variant="primary">Add Team</Button>
+            <Button icon="plus" size="sm" variant="primary" onClick={() => openDialog({ type: 'add-team', organisation: org })}>Add Team</Button>
           </CardHeader>
           <DataTable headers={['Team', 'Description', 'Members', 'Actions']}>
-            {org.teams.map((team) => (
-              <tr key={team.id} className="transition-colors hover:bg-gray-50">
+            {teamPageItems.map((team) => (
+              <tr
+                key={team.id}
+                className="cursor-pointer transition-colors hover:bg-gray-50"
+                tabIndex={0}
+                onClick={() => navigate(`/organisations/${org.id}/teams/${team.id}`)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    navigate(`/organisations/${org.id}/teams/${team.id}`);
+                  }
+                }}
+              >
                 <Td>
-                  <Link to={`/organisations/${org.id}/teams/${team.id}`} className="font-semibold text-indigo-600 hover:text-indigo-900">{team.name}</Link>
+                  <Link to={`/organisations/${org.id}/teams/${team.id}`} className="font-semibold text-indigo-600 hover:text-indigo-900" onClick={(event) => event.stopPropagation()}>{team.name}</Link>
                   {team.isDefault ? <Badge className="ml-2" variant="blue">Default</Badge> : null}
                 </Td>
                 <Td className="text-xs text-gray-400">{team.description || '—'}</Td>
                 <Td>{team.members}</Td>
-                <Td>
-                  <Link className="text-xs font-medium text-indigo-600 hover:text-indigo-900" to={`/organisations/${org.id}/teams/${team.id}`}>View</Link>
-                  <ActionDivider />
-                  <ActionButton>Edit</ActionButton>
+                <Td className="whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
+                  <ActionButton onClick={() => openDialog({ type: 'edit-team', organisation: org, team })}>Edit</ActionButton>
                   {!team.isDefault ? (
                     <>
                       <ActionDivider />
@@ -83,21 +94,33 @@ export function OrganisationDetailPage() {
               </tr>
             ))}
           </DataTable>
+          <PaginationFooter {...teamPagination} />
         </Card>
-      ) : (
+      ) : null}
+      {tab === 'members' ? (
         <Card>
           <CardHeader>
             <span className="text-sm font-semibold text-gray-900">Members</span>
-            <Button icon="plus" size="sm" variant="primary">Add Member</Button>
+            <Button icon="plus" size="sm" variant="primary" onClick={() => openDialog({ type: 'add-member', organisation: org })}>Add Member</Button>
           </CardHeader>
           <DataTable headers={['User', 'Role', 'Teams', 'Last Login', 'Actions']}>
-            {org.members.map((member) => (
-              <tr key={member.id} className="transition-colors hover:bg-gray-50">
+            {memberPageItems.map((member) => (
+              <tr
+                key={member.id}
+                className="cursor-pointer transition-colors hover:bg-gray-50"
+                tabIndex={0}
+                onClick={() => openUser(member.id)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    openUser(member.id);
+                  }
+                }}
+              >
                 <Td>
                   <div className="flex items-center gap-2">
                     <Avatar label={member.name ?? member.email} />
                     <div>
-                      <button className="font-medium text-gray-700 hover:text-indigo-700" type="button" onClick={() => openUser(member.id)}>{member.name ?? member.email}</button>
+                      <span className="font-medium text-gray-700">{member.name ?? member.email}</span>
                       <p className="text-xs text-gray-400">{member.email}</p>
                     </div>
                   </div>
@@ -107,23 +130,61 @@ export function OrganisationDetailPage() {
                   <div className="flex flex-wrap gap-1">
                     {member.teams.map((teamName) => {
                       const team = org.teams.find((item) => item.name === teamName);
-                      return team ? <Link key={team.id} className="text-xs text-indigo-600 hover:text-indigo-900" to={`/organisations/${org.id}/teams/${team.id}`}>{teamName}</Link> : <span key={teamName}>{teamName}</span>;
+                      return team ? <Link key={team.id} className="text-xs text-indigo-600 hover:text-indigo-900" to={`/organisations/${org.id}/teams/${team.id}`} onClick={(event) => event.stopPropagation()}>{teamName}</Link> : <span key={teamName}>{teamName}</span>;
                     })}
                   </div>
                 </Td>
                 <Td className="text-xs text-gray-400">{member.lastLogin}</Td>
-                <Td>
-                  <ActionButton onClick={() => openUser(member.id)}>View</ActionButton>
-                  <ActionDivider />
-                  <ActionButton tone="amber">Change Role</ActionButton>
+                <Td className="whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
+                  <ActionButton tone="amber" onClick={() => openDialog({ type: 'change-org-role', organisation: org, member })}>Change Role</ActionButton>
                   <ActionDivider />
                   <ActionButton tone="red" onClick={() => confirm(`Remove ${member.name ?? member.email}?`, 'Removes them from all teams in this org.')}>Remove</ActionButton>
                 </Td>
               </tr>
             ))}
           </DataTable>
+          <PaginationFooter {...memberPagination} />
         </Card>
-      )}
+      ) : null}
+      {tab === 'preapproved' ? (
+        <Card>
+          <CardHeader>
+            <div>
+              <span className="text-sm font-semibold text-gray-900">Pre-approved Users</span>
+              <p className="mt-0.5 text-xs text-gray-400">Email allow-list entries that become members on first verified login.</p>
+            </div>
+            <Button icon="plus" size="sm" variant="primary" onClick={() => openDialog({ type: 'add-preapproval', organisation: org })}>Add Pre-approval</Button>
+          </CardHeader>
+          <DataTable headers={['Email', 'Target Team', 'Role', 'Method', 'Status', 'Created', 'Actions']}>
+            {preapprovalPageItems.map((preapproval) => (
+              <tr
+                key={preapproval.id}
+                className="cursor-pointer transition-colors hover:bg-gray-50"
+                tabIndex={0}
+                onClick={() => openDialog({ type: 'edit-preapproval', organisation: org, preapproval })}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    openDialog({ type: 'edit-preapproval', organisation: org, preapproval });
+                  }
+                }}
+              >
+                <Td><code className="text-xs">{preapproval.email}</code></Td>
+                <Td>{preapproval.targetTeam}</Td>
+                <Td><StatusBadge status={preapproval.role} /></Td>
+                <Td><Badge>{preapproval.method}</Badge></Td>
+                <Td><Badge variant={preapproval.status === 'claimed' ? 'green' : 'amber'}>{preapproval.status}</Badge></Td>
+                <Td className="text-xs text-gray-400">{preapproval.created}</Td>
+                <Td className="whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
+                  <ActionButton onClick={() => openDialog({ type: 'edit-preapproval', organisation: org, preapproval })}>Edit</ActionButton>
+                  <ActionDivider />
+                  <ActionButton tone="red" onClick={() => confirm(`Revoke ${preapproval.email}?`, 'This removes the pre-approval entry, not an active user account.')}>Revoke</ActionButton>
+                </Td>
+              </tr>
+            ))}
+          </DataTable>
+          <PaginationFooter {...preapprovalPagination} />
+        </Card>
+      ) : null}
     </>
   );
 }

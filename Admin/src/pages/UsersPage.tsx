@@ -4,7 +4,7 @@ import { Card } from '../components/ui/Card';
 import { SelectField, TextField } from '../components/ui/FormFields';
 import { PageHeader } from '../components/ui/PageHeader';
 import { MethodBadge, StatusBadge } from '../components/ui/Status';
-import { DataTable, PaginationFooter, Td } from '../components/ui/Table';
+import { DataTable, PaginationFooter, Td, usePagination } from '../components/ui/Table';
 import { useDomainsQuery, useUsersQuery } from '../features/admin/admin-queries';
 import { useAdminUi } from '../features/shell/admin-ui';
 
@@ -12,6 +12,7 @@ export function UsersPage() {
   const { data: users = [], isLoading } = useUsersQuery();
   const { data: domains = [] } = useDomainsQuery();
   const { confirm, openUser } = useAdminUi();
+  const { pageItems, pagination } = usePagination(users);
 
   return (
     <>
@@ -34,13 +35,23 @@ export function UsersPage() {
         ) : (
           <>
             <DataTable headers={['User', 'Domains', 'Method', '2FA', 'Last Login', 'Status', 'Actions']}>
-              {users.map((user) => (
-                <tr key={user.id} className="transition-colors hover:bg-gray-50">
+              {pageItems.map((user) => (
+                <tr
+                  key={user.id}
+                  className="cursor-pointer transition-colors hover:bg-gray-50"
+                  tabIndex={0}
+                  onClick={() => openUser(user.id)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      openUser(user.id);
+                    }
+                  }}
+                >
                   <Td>
                     <div className="flex items-center gap-2">
                       <Avatar label={user.name ?? user.email} />
                       <div>
-                        <button className="font-medium text-gray-700 hover:text-indigo-700 disabled:text-gray-400" type="button" onClick={() => openUser(user.id)}>{user.name ?? user.email}</button>
+                        <span className="font-medium text-gray-700">{user.name ?? user.email}</span>
                         <p className="text-xs text-gray-400">{user.email}</p>
                       </div>
                     </div>
@@ -54,9 +65,7 @@ export function UsersPage() {
                   <Td><StatusBadge status={user.twofa ? 'On' : 'Off'} /></Td>
                   <Td className="text-xs text-gray-400">{user.lastLogin}</Td>
                   <Td><StatusBadge status={user.status} /></Td>
-                  <Td>
-                    <ActionButton onClick={() => openUser(user.id)}>View</ActionButton>
-                    <ActionDivider />
+                  <Td className="whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
                     {user.twofa ? (
                       <>
                         <ActionButton tone="amber" onClick={() => confirm(`Reset 2FA for ${user.email}?`, 'They will need to re-enroll.')}>Reset 2FA</ActionButton>
@@ -64,7 +73,7 @@ export function UsersPage() {
                       </>
                     ) : null}
                     {user.status === 'banned' ? (
-                      <ActionButton tone="green">Unban</ActionButton>
+                      <ActionButton tone="green" onClick={() => confirm(`Unban ${user.email}?`, 'Restores access in the sample UI.')}>Unban</ActionButton>
                     ) : (
                       <ActionButton tone="red" onClick={() => confirm(`Ban ${user.email}?`, 'Blocks access to all services in the sample UI.')}>Ban</ActionButton>
                     )}
@@ -72,7 +81,7 @@ export function UsersPage() {
                 </tr>
               ))}
             </DataTable>
-            <PaginationFooter />
+            <PaginationFooter {...pagination} />
           </>
         )}
       </Card>

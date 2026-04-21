@@ -3,12 +3,13 @@ import { Card } from '../components/ui/Card';
 import { FieldShell, SelectField, TextField } from '../components/ui/FormFields';
 import { PageHeader } from '../components/ui/PageHeader';
 import { MethodBadge, StatusBadge } from '../components/ui/Status';
-import { DataTable, PaginationFooter, Td } from '../components/ui/Table';
+import { DataTable, PaginationFooter, Td, usePagination } from '../components/ui/Table';
 import { useDomainsQuery, useLogsQuery } from '../features/admin/admin-queries';
 
 export function LogsPage() {
   const { data: logs = [], isLoading } = useLogsQuery();
   const { data: domains = [] } = useDomainsQuery();
+  const { pageItems, pagination } = usePagination(logs);
 
   return (
     <>
@@ -53,7 +54,7 @@ export function LogsPage() {
         ) : (
           <>
             <DataTable headers={['Timestamp', 'User', 'Domain', 'Method', 'IP Address', 'User Agent', 'Result']}>
-              {logs.map((log) => (
+              {pageItems.map((log) => (
                 <tr key={log.id} className="transition-colors hover:bg-gray-50">
                   <Td className="whitespace-nowrap text-xs text-gray-400">{log.ts}</Td>
                   <Td>{log.user ?? <span className="italic text-gray-400">unknown</span>}</Td>
@@ -65,7 +66,7 @@ export function LogsPage() {
                 </tr>
               ))}
             </DataTable>
-            <PaginationFooter />
+            <PaginationFooter {...pagination} />
           </>
         )}
       </Card>

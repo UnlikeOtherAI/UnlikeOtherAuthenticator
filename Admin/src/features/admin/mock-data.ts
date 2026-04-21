@@ -1,4 +1,4 @@
-import type { AdminData, OrganisationMember, Team, UserSummary } from './types';
+import type { AdminData, AppFlagSummary, FeatureFlagDefinition, FeaturePlatform, KillSwitchEntry, OrganisationMember, PreapprovedMember, Team, UserSummary } from './types';
 
 const acmeMembers: OrganisationMember[] = [
   member('u101', 'Alice Chen', 'alice@acme.com', 'owner', ['General', 'Backend'], { General: 'member', Backend: 'admin' }, true, '2 min ago', 'google'),
@@ -46,26 +46,36 @@ export const mockAdminData: AdminData = {
       team('t13', 'o1', 'Frontend', 'Frontend engineers', false, 11),
       team('t14', 'o1', 'DevOps', 'Infrastructure', false, 6),
       team('t15', 'o1', 'QA', 'Quality assurance', false, 5),
-    ], acmeMembers),
+    ], acmeMembers, [
+      { id: 'pa1', email: 'new.backend@acme.com', role: 'member', targetTeam: 'Backend', method: 'EMAIL', status: 'pending', created: 'Apr 18, 2026' },
+      { id: 'pa2', email: 'platform.admin@acme.com', role: 'admin', targetTeam: 'General', method: 'ANY', status: 'pending', created: 'Apr 17, 2026' },
+      { id: 'pa3', email: 'eva@acme.com', role: 'member', targetTeam: 'QA', method: 'GOOGLE', status: 'claimed', created: 'Apr 10, 2026' },
+    ]),
     org('o2', 'Acme Design', 'acme-design', 'Feb 3, 2024', designMembers[0], [
       team('t21', 'o2', 'General', 'All members', true, 18),
       team('t22', 'o2', 'Brand', 'Brand design', false, 8),
       team('t23', 'o2', 'UX Research', 'User experience', false, 7),
-    ], designMembers),
+    ], designMembers, [
+      { id: 'pa4', email: 'contractor@acme.com', role: 'member', targetTeam: 'Brand', method: 'ANY', status: 'pending', created: 'Apr 16, 2026' },
+    ]),
     org('o3', 'Widgets Core', 'widgets-core', 'Nov 2, 2023', widgetsMembers[0], [
       team('t31', 'o3', 'General', 'All members', true, 91),
       team('t32', 'o3', 'Platform', 'Core platform', false, 22),
       team('t33', 'o3', 'Integrations', 'Third-party integrations', false, 18),
       team('t34', 'o3', 'Mobile', 'Mobile apps', false, 15),
-    ], widgetsMembers),
+    ], widgetsMembers, [
+      { id: 'pa5', email: 'integrations@widgets.io', role: 'admin', targetTeam: 'Integrations', method: 'EMAIL', status: 'pending', created: 'Apr 15, 2026' },
+    ]),
     org('o4', 'Startup Alpha', 'startup-alpha', 'Feb 10, 2024', startupMembers[0], [
       team('t41', 'o4', 'General', 'All members', true, 12),
       team('t42', 'o4', 'Product', 'Product team', false, 5),
-    ], startupMembers),
+    ], startupMembers, []),
     org('o5', 'Ford Enterprise', 'ford-enterprise', 'Mar 1, 2024', fordMembers[0], [
       team('t51', 'o5', 'General', 'All employees', true, 1),
       team('t52', 'o5', 'Engineering', 'Engineering staff', false, 0),
-    ], fordMembers),
+    ], fordMembers, [
+      { id: 'pa6', email: 'employee@ford.com', role: 'member', targetTeam: 'General', method: 'MICROSOFT', status: 'pending', created: 'Apr 19, 2026' },
+    ]),
   ],
   users: [
     user('u101', 'Alice Chen', 'alice@acme.com', ['app.acme.com'], true, '2 min ago', 'active', 'google', 'Jan 15, 2024'),
@@ -104,14 +114,161 @@ export const mockAdminData: AdminData = {
     users: [{ id: 'bu1', value: 'spam@evil.example', label: 'portal.example.com', bannedAt: 'Apr 4, 2026', reason: 'Spam account' }],
   },
   apps: [
-    { id: 'app1', name: 'Acme Main App', domain: 'app.acme.com', org: 'Acme Engineering', flagsEnabled: true, matrixEnabled: true, flags: 8, status: 'active' },
-    { id: 'app2', name: 'Widgets Dashboard', domain: 'widgets.io', org: 'Widgets Core', flagsEnabled: true, matrixEnabled: false, flags: 3, status: 'active' },
-    { id: 'app3', name: 'Startup Portal', domain: 'startup.dev', org: 'Startup Alpha', flagsEnabled: false, matrixEnabled: false, flags: 0, status: 'active' },
+    app(
+      'app1',
+      'Acme Main App',
+      'com.acme.main',
+      'app.acme.com',
+      'Acme Engineering',
+      'o1',
+      'ios',
+      ['app.acme.com'],
+      true,
+      true,
+      [
+        platform('general', 'All platforms', 'general', 'general'),
+        platform('ios', 'iOS', 'ios', 'ios', 'com.acme.main.ios'),
+        platform('android', 'Android', 'android', 'android', 'com.acme.main.android'),
+        platform('web', 'Web', 'web', 'web', 'app.acme.com'),
+      ],
+      [
+        flag('f1', 'new_checkout', 'New checkout flow', true, 'all', ['general', 'ios', 'android', 'web'], 'Apr 20, 2026'),
+        flag('f2', 'native_billing', 'Native billing handoff', false, 'selected', ['ios', 'android'], 'Apr 18, 2026'),
+        flag('f3', 'web_beta_nav', 'Web dashboard navigation test', false, 'selected', ['web'], 'Apr 17, 2026'),
+        flag('f4', 'instant_refunds', 'Instant refund controls', false, 'all', ['general', 'ios', 'android', 'web'], 'Apr 14, 2026'),
+      ],
+      [
+        killSwitch('ks1', 'Block legacy iOS builds', 'ios', 'hard', 'versionName', 'lt', '2.1.0', null, 'semver', '2.1.0', true, 100, 300, 'Apr 20, 2026'),
+        killSwitch('ks2', 'Warn Android beta users', 'android', 'soft', 'versionCode', 'range', '104', '118', 'integer', '120', true, 40, 900, 'Apr 18, 2026'),
+      ],
+    ),
+    app(
+      'app2',
+      'Widgets Dashboard',
+      'io.widgets.dashboard',
+      'widgets.io',
+      'Widgets Core',
+      'o3',
+      'web',
+      ['widgets.io'],
+      true,
+      false,
+      [
+        platform('general', 'All platforms', 'general', 'general'),
+        platform('web', 'Web', 'web', 'web', 'widgets.io'),
+        platform('ios', 'iOS companion', 'ios', 'ios', 'io.widgets.dashboard.ios'),
+      ],
+      [
+        flag('f5', 'integrations_v2', 'New integrations workspace', true, 'all', ['general', 'web', 'ios'], 'Apr 19, 2026'),
+        flag('f6', 'mobile_uploads', 'Mobile upload queue', false, 'selected', ['ios'], 'Apr 12, 2026'),
+        flag('f7', 'usage_export', 'Usage export beta', false, 'selected', ['web'], 'Apr 9, 2026'),
+      ],
+      [killSwitch('ks3', 'Legacy companion warning', 'ios', 'info', 'buildNumber', 'lte', '80', null, 'integer', '1.4.0', true, 10, 1800, 'Apr 15, 2026')],
+    ),
+    app(
+      'app3',
+      'Startup Portal',
+      'dev.startup.portal',
+      'startup.dev',
+      'Startup Alpha',
+      'o4',
+      'web',
+      ['startup.dev'],
+      false,
+      false,
+      [
+        platform('general', 'All platforms', 'general', 'general'),
+        platform('web', 'Web', 'web', 'web', 'startup.dev'),
+      ],
+      [],
+      [],
+    ),
   ],
 };
 
-function org(id: string, name: string, slug: string, created: string, owner: OrganisationMember, teams: Team[], members: OrganisationMember[]) {
-  return { id, name, slug, created, owner: { id: owner.id, name: owner.name, email: owner.email }, teams, members };
+function app(
+  id: string,
+  name: string,
+  identifier: string,
+  domain: string,
+  org: string,
+  orgId: string,
+  platformKind: AppFlagSummary['platform'],
+  domains: string[],
+  flagsEnabled: boolean,
+  matrixEnabled: boolean,
+  platforms: FeaturePlatform[],
+  flagDefinitions: FeatureFlagDefinition[],
+  killSwitches: KillSwitchEntry[],
+): AppFlagSummary {
+  return {
+    id,
+    name,
+    identifier,
+    domain,
+    org,
+    orgId,
+    platform: platformKind,
+    domains,
+    storeUrl: platformKind === 'ios' ? 'https://apps.apple.com/app/example/id123456789' : undefined,
+    offlinePolicy: 'allow',
+    pollIntervalSeconds: 300,
+    flagsEnabled,
+    matrixEnabled,
+    flags: flagDefinitions.length,
+    platforms,
+    flagDefinitions,
+    killSwitches,
+    status: 'active',
+  };
+}
+
+function platform(id: string, name: string, key: string, kind: FeaturePlatform['kind'], identifier?: string): FeaturePlatform {
+  return { id, name, key, kind, identifier };
+}
+
+function flag(
+  id: string,
+  key: string,
+  description: string,
+  defaultState: boolean,
+  platformMode: FeatureFlagDefinition['platformMode'],
+  platformIds: string[],
+  updated: string,
+): FeatureFlagDefinition {
+  return { id, key, description, defaultState, platformMode, platformIds, updated };
+}
+
+function killSwitch(
+  id: string,
+  name: string,
+  platformKind: KillSwitchEntry['platform'],
+  type: KillSwitchEntry['type'],
+  versionField: KillSwitchEntry['versionField'],
+  operator: KillSwitchEntry['operator'],
+  versionValue: string,
+  versionMax: string | null,
+  versionScheme: KillSwitchEntry['versionScheme'],
+  latestVersion: string | undefined,
+  active: boolean,
+  priority: number,
+  cacheTtl: number,
+  updated: string,
+): KillSwitchEntry {
+  return { id, name, platform: platformKind, type, versionField, operator, versionValue, versionMax, versionScheme, latestVersion, active, priority, cacheTtl, updated };
+}
+
+function org(
+  id: string,
+  name: string,
+  slug: string,
+  created: string,
+  owner: OrganisationMember,
+  teams: Team[],
+  members: OrganisationMember[],
+  preapprovedMembers: PreapprovedMember[],
+) {
+  return { id, name, slug, created, owner: { id: owner.id, name: owner.name, email: owner.email }, teams, members, preapprovedMembers };
 }
 
 function team(id: string, orgId: string, name: string, description: string, isDefault: boolean, members: number): Team {

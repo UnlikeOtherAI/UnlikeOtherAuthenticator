@@ -3,6 +3,8 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { AdminSessionGuard } from '../features/auth/admin-session';
 import { AdminUiProvider } from '../features/shell/admin-ui';
 import { AdminLayout } from '../layouts/AdminLayout';
+import { FeatureFlagDetailPage } from '../pages/FeatureFlagDetailPage';
+import { FeatureFlagsPage } from '../pages/AppsFlagsPage';
 import { DashboardPage } from '../pages/DashboardPage';
 import { DomainsPage } from '../pages/DomainsPage';
 import { LogsPage } from '../pages/LogsPage';
@@ -36,6 +38,8 @@ export function App() {
         <Route path="teams" element={<TeamsPage />} />
         <Route path="users" element={<UsersPage />} />
         <Route path="logs" element={<LogsPage />} />
+        <Route path="feature-flags" element={<FeatureFlagsPage />} />
+        <Route path="feature-flags/:appId" element={<FeatureFlagDetailPage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

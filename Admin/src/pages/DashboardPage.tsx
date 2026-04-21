@@ -4,11 +4,12 @@ import { Badge } from '../components/ui/Badge';
 import { Card, CardHeader } from '../components/ui/Card';
 import { PageHeader } from '../components/ui/PageHeader';
 import { MethodBadge } from '../components/ui/Status';
-import { DataTable, Td } from '../components/ui/Table';
+import { DataTable, PaginationFooter, Td, usePagination } from '../components/ui/Table';
 import { useDashboardQuery } from '../features/admin/admin-queries';
 
 export function DashboardPage() {
   const { data, isLoading } = useDashboardQuery();
+  const { pageItems: logPageItems, pagination: logPagination } = usePagination(data?.logs ?? [], 5);
 
   if (isLoading || !data) {
     return <p className="text-sm text-gray-400">Loading dashboard...</p>;
@@ -42,7 +43,7 @@ export function DashboardPage() {
             </Link>
           </CardHeader>
           <DataTable headers={['User', 'Domain', 'Method', 'Time']}>
-            {data.logs.slice(0, 5).map((log) => (
+            {logPageItems.map((log) => (
               <tr key={log.id} className="transition-colors hover:bg-gray-50">
                 <Td>{log.user ?? <span className="italic text-gray-400">unknown</span>}</Td>
                 <Td className="text-xs text-gray-400">{log.domain}</Td>
@@ -53,6 +54,7 @@ export function DashboardPage() {
               </tr>
             ))}
           </DataTable>
+          <PaginationFooter {...logPagination} />
         </Card>
         <Card>
           <CardHeader>
