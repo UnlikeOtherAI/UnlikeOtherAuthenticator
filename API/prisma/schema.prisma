@@ -163,6 +163,35 @@ model LoginLog {
   @@map("login_logs")
 }
 
+model HandshakeErrorLog {
+  id            String   @id @default(cuid())
+  app           String?
+  appId         String?  @map("app_id")
+  domain        String
+  organisation  String?
+  endpoint      String
+  phase         String
+  statusCode    Int      @map("status_code")
+  errorCode     String   @map("error_code")
+  summary       String
+  details       Json
+  missingClaims Json     @map("missing_claims")
+  ip            String?
+  userAgent     String?  @map("user_agent")
+  requestId     String   @map("request_id")
+  jwtHeader     Json     @map("jwt_header")
+  jwtPayload    Json     @map("jwt_payload")
+  redactions    Json
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@index([domain, createdAt])
+  @@index([phase, createdAt])
+  @@index([errorCode, createdAt])
+  @@index([requestId])
+  @@map("handshake_error_logs")
+}
+
 model Organisation {
   id        String   @id @default(cuid())
   domain    String

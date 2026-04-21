@@ -49,6 +49,7 @@ export function ConnectionErrorsPage() {
             <SelectField value={phase} onChange={(event) => setPhase(event.target.value)}>
               <option value="all">All phases</option>
               <option value="config_fetch">Config fetch</option>
+              <option value="config_domain">Config domain</option>
               <option value="jwt_verify">JWT verify</option>
               <option value="startup">Startup</option>
               <option value="token_exchange">Token exchange</option>
@@ -201,6 +202,7 @@ function JsonBlock({ value }: { value: unknown }) {
 function phaseLabel(phase: HandshakeErrorLog['phase']) {
   const labels: Record<HandshakeErrorLog['phase'], string> = {
     config_fetch: 'Config fetch',
+    config_domain: 'Config domain',
     jwt_verify: 'JWT verify',
     startup: 'Startup',
     token_exchange: 'Token exchange',

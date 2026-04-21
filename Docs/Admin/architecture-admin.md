@@ -115,10 +115,18 @@ If a template demonstrates a section but not a final route name, use this route 
 
 ## 7. Auth Boundary
 
-Known constraints from the existing documentation:
+Production contract:
 
-- `system_admin` is separate from org/team membership
-- `/internal/admin/*` is the backend system-admin route family
+- Admin identity is first-party UOA identity.
+- Admin access tokens are issued by `POST /internal/admin/token` when the verified config domain is `ADMIN_AUTH_DOMAIN`.
+- The admin token exchange accepts an authorization code and PKCE verifier, does not require browser code to know the domain-hash shared secret, and never returns refresh tokens.
+- Admin access-token claims must not expose the domain-hash client identifier because browser code can decode JWT payloads.
+- Admin access tokens are signed with `ADMIN_ACCESS_TOKEN_SECRET`, an auth-service-only secret that is not shared with client backends.
+- A user can access the admin only when their admin access token has `role: "superuser"` for the configured UOA admin domain.
+- When the database is enabled, the API also verifies the token subject has a `SUPERUSER` `domain_roles` row for the admin domain.
+- `/internal/admin/*` is the backend admin route family.
+- `/internal/admin/*` accepts `Authorization: Bearer <access_token>` and validates it server-side.
+- `ADMIN_AUTH_DOMAIN` is the domain allowed for admin superuser tokens; it defaults to `AUTH_SERVICE_IDENTIFIER`.
 - browser code must not use the domain-hash shared-secret mechanism directly
 
 Current implementation rule:
@@ -136,12 +144,12 @@ Required temporary interface:
 
 Forward direction:
 
-- design the frontend auth boundary so it can later swap to a dedicated browser-safe admin session endpoint without rewriting page or component logic
-- the intended landing zone is a dedicated admin session route family, for example `/internal/admin/session`, documented before any production implementation
+- design the frontend auth boundary so it can swap from the development stub to `/internal/admin/token` and `/internal/admin/session` without rewriting page or component logic
+- `/internal/admin/session` is the browser-safe admin session check; it returns the current superuser admin identity when the bearer access token is valid for the admin domain
 
 Acceptance rule for removing the bypass:
 
-- only remove the development bypass after the production admin session contract is documented in this file and the corresponding endpoints are described in the root schema and `/llm`
+- only remove the development bypass after the Admin login flow obtains and stores a UOA access token without exposing refresh tokens or the shared secret to browser JavaScript
 
 ## 8. Reuse Rules
 

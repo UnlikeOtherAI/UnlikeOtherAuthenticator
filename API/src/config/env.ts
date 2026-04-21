@@ -29,66 +29,72 @@ function normalizeBoolean(input: unknown): unknown {
   return input;
 }
 
-const EnvSchema = z.object({
-  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  HOST: z.string().default('127.0.0.1'),
-  PORT: z.coerce.number().int().positive().default(3000),
-  // Public origin used when generating links sent by email (magic links, verification, reset).
-  // If unset, we fall back to `http://${HOST}:${PORT}`.
-  PUBLIC_BASE_URL: z.string().min(1).optional(),
-  LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
-  DEBUG_ENABLED: z.preprocess(normalizeBoolean, z.boolean().default(false)),
-  // Single global shared secret used for domain hashing and server-issued bearer secrets.
-  SHARED_SECRET: z.string().min(32),
-  // Identifier for this auth service instance. Used as expected `aud` for config JWTs.
-  AUTH_SERVICE_IDENTIFIER: z.string().min(1),
-  // Trusted JWKS endpoint used to verify client config JWTs. Config JWTs must be RS256
-  // and include a kid that resolves to a key from this JWKS.
-  CONFIG_JWKS_URL: z.string().url(),
-  DATABASE_URL: z.string().min(1).optional(),
-  // Email provider abstraction (brief phase 11.1). Provider can be swapped via env without code changes.
-  EMAIL_PROVIDER: z.enum(['disabled', 'smtp', 'ses', 'sendgrid']).optional(),
-  EMAIL_FROM: z.string().min(1).optional(),
-  EMAIL_REPLY_TO: z.string().min(1).optional(),
-  // AWS SES provider configuration.
-  AWS_REGION: z.string().min(1).optional(),
-  // SendGrid provider configuration.
-  SENDGRID_API_KEY: z.string().min(1).optional(),
-  SMTP_HOST: z.string().min(1).optional(),
-  SMTP_PORT: z.coerce.number().int().positive().optional(),
-  // "true"/"false" for whether to use implicit TLS. If unset, the provider defaults to "false".
-  SMTP_SECURE: z.enum(['true', 'false']).optional(),
-  SMTP_USER: z.string().min(1).optional(),
-  SMTP_PASSWORD: z.string().min(1).optional(),
-  // Social providers (one set of credentials for the auth service, not per-client).
-  GOOGLE_CLIENT_ID: z.string().min(1).optional(),
-  GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
-  FACEBOOK_CLIENT_ID: z.string().min(1).optional(),
-  FACEBOOK_CLIENT_SECRET: z.string().min(1).optional(),
-  GITHUB_CLIENT_ID: z.string().min(1).optional(),
-  GITHUB_CLIENT_SECRET: z.string().min(1).optional(),
-  LINKEDIN_CLIENT_ID: z.string().min(1).optional(),
-  LINKEDIN_CLIENT_SECRET: z.string().min(1).optional(),
-  APPLE_CLIENT_ID: z.string().min(1).optional(),
-  APPLE_TEAM_ID: z.string().min(1).optional(),
-  APPLE_KEY_ID: z.string().min(1).optional(),
-  // Apple private key contents (typically a .p8 PEM). May be provided with literal newlines
-  // or with escaped newlines ("\\n") depending on the deployment environment.
-  APPLE_PRIVATE_KEY: z.string().min(1).optional(),
-  ACCESS_TOKEN_TTL: z.preprocess(
-    normalizeAccessTokenTtl,
-    z.string().default('30m').refine(isValidAccessTokenTtl, {
-      message: 'ACCESS_TOKEN_TTL must be minutes-only between 15m and 60m (e.g. "30m")',
-    }),
-  ),
-  REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(30),
-  TOKEN_PRUNE_RETENTION_DAYS: z.coerce.number().int().min(0).max(365).default(7),
-  LOG_RETENTION_DAYS: z.coerce.number().int().positive().max(365).default(90),
-  // Brief 8 / Phase 10: AI translation service credentials (optional; the UI falls back to English if disabled).
-  AI_TRANSLATION_PROVIDER: z.enum(['disabled', 'openai']).default('disabled'),
-  OPENAI_API_KEY: z.string().min(1).optional(),
-  OPENAI_MODEL: z.string().min(1).optional(),
-});
+const EnvSchema = z
+  .object({
+    NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+    HOST: z.string().default('127.0.0.1'),
+    PORT: z.coerce.number().int().positive().default(3000),
+    // Public origin used when generating links sent by email (magic links, verification, reset).
+    // If unset, we fall back to `http://${HOST}:${PORT}`.
+    PUBLIC_BASE_URL: z.string().min(1).optional(),
+    LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+    DEBUG_ENABLED: z.preprocess(normalizeBoolean, z.boolean().default(false)),
+    // Single global shared secret used for domain hashing and client-domain access tokens.
+    SHARED_SECRET: z.string().min(32),
+    // Identifier for this auth service instance. Used as expected `aud` for config JWTs.
+    AUTH_SERVICE_IDENTIFIER: z.string().min(1),
+    // Domain whose superusers may access the first-party UOA Admin panel.
+    // Defaults to AUTH_SERVICE_IDENTIFIER when unset.
+    ADMIN_AUTH_DOMAIN: z.string().min(1).optional(),
+    // Auth-service-only signing secret for first-party admin access tokens.
+    ADMIN_ACCESS_TOKEN_SECRET: z.string().min(32),
+    // Trusted JWKS endpoint used to verify client config JWTs. Config JWTs must be RS256
+    // and include a kid that resolves to a key from this JWKS.
+    CONFIG_JWKS_URL: z.string().url(),
+    DATABASE_URL: z.string().min(1).optional(),
+    // Email provider abstraction (brief phase 11.1). Provider can be swapped via env without code changes.
+    EMAIL_PROVIDER: z.enum(['disabled', 'smtp', 'ses', 'sendgrid']).optional(),
+    EMAIL_FROM: z.string().min(1).optional(),
+    EMAIL_REPLY_TO: z.string().min(1).optional(),
+    // AWS SES provider configuration.
+    AWS_REGION: z.string().min(1).optional(),
+    // SendGrid provider configuration.
+    SENDGRID_API_KEY: z.string().min(1).optional(),
+    SMTP_HOST: z.string().min(1).optional(),
+    SMTP_PORT: z.coerce.number().int().positive().optional(),
+    // "true"/"false" for whether to use implicit TLS. If unset, the provider defaults to "false".
+    SMTP_SECURE: z.enum(['true', 'false']).optional(),
+    SMTP_USER: z.string().min(1).optional(),
+    SMTP_PASSWORD: z.string().min(1).optional(),
+    // Social providers (one set of credentials for the auth service, not per-client).
+    GOOGLE_CLIENT_ID: z.string().min(1).optional(),
+    GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
+    FACEBOOK_CLIENT_ID: z.string().min(1).optional(),
+    FACEBOOK_CLIENT_SECRET: z.string().min(1).optional(),
+    GITHUB_CLIENT_ID: z.string().min(1).optional(),
+    GITHUB_CLIENT_SECRET: z.string().min(1).optional(),
+    LINKEDIN_CLIENT_ID: z.string().min(1).optional(),
+    LINKEDIN_CLIENT_SECRET: z.string().min(1).optional(),
+    APPLE_CLIENT_ID: z.string().min(1).optional(),
+    APPLE_TEAM_ID: z.string().min(1).optional(),
+    APPLE_KEY_ID: z.string().min(1).optional(),
+    // Apple private key contents (typically a .p8 PEM). May be provided with literal newlines
+    // or with escaped newlines ("\\n") depending on the deployment environment.
+    APPLE_PRIVATE_KEY: z.string().min(1).optional(),
+    ACCESS_TOKEN_TTL: z.preprocess(
+      normalizeAccessTokenTtl,
+      z.string().default('30m').refine(isValidAccessTokenTtl, {
+        message: 'ACCESS_TOKEN_TTL must be minutes-only between 15m and 60m (e.g. "30m")',
+      }),
+    ),
+    REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(30),
+    TOKEN_PRUNE_RETENTION_DAYS: z.coerce.number().int().min(0).max(365).default(7),
+    LOG_RETENTION_DAYS: z.coerce.number().int().positive().max(365).default(90),
+    // Brief 8 / Phase 10: AI translation service credentials (optional; the UI falls back to English if disabled).
+    AI_TRANSLATION_PROVIDER: z.enum(['disabled', 'openai']).default('disabled'),
+    OPENAI_API_KEY: z.string().min(1).optional(),
+    OPENAI_MODEL: z.string().min(1).optional(),
+  });
 
 export type Env = z.infer<typeof EnvSchema>;
 

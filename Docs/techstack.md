@@ -211,8 +211,10 @@ The React implementation should translate those templates into reusable componen
 
 All secrets and configuration live in environment variables. Nothing is hardcoded.
 
-* `SHARED_SECRET` — the single global shared secret for domain hashing and server-issued bearer secrets
+* `SHARED_SECRET` — the single global shared secret for domain hashing and client-domain access tokens
 * `AUTH_SERVICE_IDENTIFIER` — auth service identifier (expected `aud` for config JWTs)
+* `ADMIN_AUTH_DOMAIN` — domain whose superuser access tokens may access the Admin panel; defaults to `AUTH_SERVICE_IDENTIFIER`
+* `ADMIN_ACCESS_TOKEN_SECRET` — auth-service-only signing secret used for access tokens issued to `ADMIN_AUTH_DOMAIN`
 * `CONFIG_JWKS_URL` — trusted JWKS endpoint for RS256 config JWT verification by `kid`
 * `DATABASE_URL` — database connection string
 * Social provider credentials (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, etc.)

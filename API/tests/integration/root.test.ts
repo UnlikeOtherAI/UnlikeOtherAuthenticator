@@ -101,16 +101,26 @@ describe('GET /', () => {
         path: '/org/organisations/:orgId/teams/:teamId/access-requests/:requestId/approve',
       }),
     );
-  });
-
-  it('does not expose internal admin routes', async () => {
-    const res = await app.inject({ method: 'GET', url: '/' });
-    const body = res.json();
-
-    const hasInternal = body.endpoints.some(
-      (ep: { path: string }) => ep.path.startsWith('/internal'),
+    expect(body.endpoints).toContainEqual(
+      expect.objectContaining({
+        method: 'POST',
+        path: '/internal/admin/token',
+        auth: expect.stringContaining('PKCE'),
+      }),
     );
-    expect(hasInternal).toBe(false);
+    expect(body.endpoints).toContainEqual(
+      expect.objectContaining({
+        method: 'GET',
+        path: '/internal/admin/dashboard',
+        auth: expect.stringContaining('superuser'),
+      }),
+    );
+    expect(body.endpoints).toContainEqual(
+      expect.objectContaining({
+        method: 'GET',
+        path: '/internal/admin/handshake-errors',
+      }),
+    );
   });
 
   it('returns a valid semver-like version string from package.json', async () => {
@@ -145,5 +155,7 @@ describe('GET /llm', () => {
     expect(body.integration_guide.step_13).toContain('/teams/:teamId/access-requests');
     expect(body.integration_guide.step_14).toContain('optional slug');
     expect(body.integration_guide.step_16).toContain('/auth/email/twofa-reset/confirm');
+    expect(body.integration_guide.step_17).toContain('/internal/admin/token');
+    expect(body.integration_guide.step_17).toContain('/internal/admin/session');
   });
 });

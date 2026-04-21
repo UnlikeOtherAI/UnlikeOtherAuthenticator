@@ -51,6 +51,12 @@ describe('retention-pruning.service', () => {
           return { count: 4 };
         },
       },
+      handshakeErrorLog: {
+        deleteMany: async (args: unknown) => {
+          calls.handshakeErrorLog = args;
+          return { count: 5 };
+        },
+      },
     };
 
     const result = await pruneExpiredSecurityData({
@@ -71,8 +77,12 @@ describe('retention-pruning.service', () => {
     expect(calls.loginLog).toMatchObject({
       where: { createdAt: { lt: new Date('2026-01-20T12:00:00.000Z') } },
     });
+    expect(calls.handshakeErrorLog).toMatchObject({
+      where: { createdAt: { lt: new Date('2026-01-20T12:00:00.000Z') } },
+    });
     expect(result).toEqual({
       authorizationCodesDeleted: 2,
+      handshakeErrorLogsDeleted: 5,
       loginLogsDeleted: 4,
       refreshTokensDeleted: 1,
       verificationTokensDeleted: 3,

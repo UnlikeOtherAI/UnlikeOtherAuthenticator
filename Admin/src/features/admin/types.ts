@@ -86,7 +86,7 @@ export type HandshakeErrorLog = {
   domain: string;
   organisation: string;
   endpoint: string;
-  phase: 'config_fetch' | 'jwt_verify' | 'startup' | 'token_exchange';
+  phase: 'config_fetch' | 'config_domain' | 'jwt_verify' | 'startup' | 'token_exchange';
   statusCode: number;
   errorCode: string;
   summary: string;

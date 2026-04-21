@@ -82,3 +82,5 @@ export const tokenExchangeRateLimiter = ipRateLimiter('auth:token-exchange', 10,
 export const twoFactorVerifyRateLimiter = ipRateLimiter('auth:twofa-verify', 5, 15 * MINUTE_MS);
 
 export const socialCallbackRateLimiter = ipRateLimiter('auth:social-callback', 20, MINUTE_MS);
+
+export const configFetchRateLimiter = ipRateLimiter('auth:config-fetch', 60, MINUTE_MS);

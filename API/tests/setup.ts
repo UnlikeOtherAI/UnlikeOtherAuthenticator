@@ -36,6 +36,8 @@ process.env.SHARED_SECRET =
   process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
 process.env.AUTH_SERVICE_IDENTIFIER =
   process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
+process.env.ADMIN_ACCESS_TOKEN_SECRET =
+  process.env.ADMIN_ACCESS_TOKEN_SECRET ?? 'test-admin-token-secret-with-enough-length';
 
 let jwksServer: Server | undefined;
 

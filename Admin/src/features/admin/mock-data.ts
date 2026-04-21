@@ -157,7 +157,7 @@ export const mockAdminData: AdminData = {
       'startup.dev',
       'Startup Alpha',
       '/config/verify',
-      'config_fetch',
+      'config_domain',
       422,
       'DOMAIN_MISMATCH',
       'Config domain did not match the request host.',

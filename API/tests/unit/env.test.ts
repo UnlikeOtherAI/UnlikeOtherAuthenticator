@@ -11,6 +11,7 @@ function baseInput(overrides?: Partial<NodeJS.ProcessEnv>): NodeJS.ProcessEnv {
     LOG_LEVEL: 'info',
     SHARED_SECRET: 'test-shared-secret-with-enough-length',
     AUTH_SERVICE_IDENTIFIER: 'uoa-auth-service',
+    ADMIN_ACCESS_TOKEN_SECRET: 'admin-token-secret-with-enough-length',
     CONFIG_JWKS_URL: 'https://auth.example.com/.well-known/jwks.json',
     DATABASE_URL: 'postgres://example.invalid/db',
     ACCESS_TOKEN_TTL: '30m',
@@ -35,6 +36,22 @@ describe('env', () => {
 
   it('rejects unsupported EMAIL_PROVIDER values', () => {
     expect(() => parseEnv(baseInput({ EMAIL_PROVIDER: 'mailgun' }))).toThrow();
+  });
+
+  it('requires ADMIN_ACCESS_TOKEN_SECRET', () => {
+    expect(() => {
+      const input = baseInput();
+      Reflect.deleteProperty(input, 'ADMIN_ACCESS_TOKEN_SECRET');
+      parseEnv(input);
+    }).toThrow(/ADMIN_ACCESS_TOKEN_SECRET/);
+    expect(
+      parseEnv(
+        baseInput({
+          ADMIN_AUTH_DOMAIN: 'admin.example.com',
+          ADMIN_ACCESS_TOKEN_SECRET: 'admin-token-secret-with-enough-length',
+        }),
+      ).ADMIN_AUTH_DOMAIN,
+    ).toBe('admin.example.com');
   });
 
   it('accepts ACCESS_TOKEN_TTL in the 15m-60m window (inclusive)', () => {

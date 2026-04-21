@@ -11,6 +11,7 @@ import { ensureDomainRoleForUser } from './domain-role.service.js';
 import { exchangeRefreshToken, issueRefreshToken } from './refresh-token.service.js';
 import { createClientId } from '../utils/hash.js';
 import { AppError } from '../utils/errors.js';
+import { normalizeDomain } from '../utils/domain.js';
 import type { ClientConfig } from './config.service.js';
 import { tryParseHttpUrl } from '../utils/http-url.js';
 import { verifyPkceCodeVerifier } from '../utils/pkce.js';
@@ -274,6 +275,26 @@ function resolveRefreshTokenTtlSeconds(config: ClientConfig, rememberMe: boolean
   return hours * 60 * 60;
 }
 
+function resolveAccessTokenContext(params: {
+  domain: string;
+  env: ReturnType<typeof getEnv>;
+  issuer: string;
+  sharedSecret: string;
+}): { clientId: string; sharedSecret: string } {
+  const adminDomain = normalizeDomain(params.env.ADMIN_AUTH_DOMAIN ?? params.issuer);
+  if (normalizeDomain(params.domain) !== adminDomain) {
+    return {
+      clientId: createClientId(params.domain, params.sharedSecret),
+      sharedSecret: params.sharedSecret,
+    };
+  }
+
+  return {
+    clientId: `admin:${adminDomain}`,
+    sharedSecret: params.env.ADMIN_ACCESS_TOKEN_SECRET,
+  };
+}
+
 type TokenIssuerDeps = TokenDeps & {
   accessTokenTtl?: string;
   authServiceIdentifier?: string;
@@ -316,7 +337,12 @@ async function issueTokenPairForUser(
   if (!user) throw new AppError('INTERNAL', 500, 'MISSING_USER');
 
   const role = domainRole.role === 'SUPERUSER' ? 'superuser' : 'user';
-  const clientId = createClientId(params.config.domain, sharedSecret);
+  const accessTokenContext = resolveAccessTokenContext({
+    domain: params.config.domain,
+    env,
+    issuer,
+    sharedSecret,
+  });
   await ensureUserHasRequiredTeam(
     {
       userId: params.userId,
@@ -340,8 +366,8 @@ async function issueTokenPairForUser(
     email: user.email,
     domain: params.config.domain,
     role,
-    clientId,
-    sharedSecret,
+    clientId: accessTokenContext.clientId,
+    sharedSecret: accessTokenContext.sharedSecret,
     ttl,
     issuer,
     org,

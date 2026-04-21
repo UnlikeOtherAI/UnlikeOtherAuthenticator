@@ -7,13 +7,14 @@ import {
   renderAuthEntrypointHtml,
   sendAuthHtml,
 } from '../../services/auth-ui.service.js';
+import { configFetchRateLimiter } from './rate-limit-keys.js';
 
 export function registerAuthEntrypointRoute(app: FastifyInstance): void {
   // OAuth popup entrypoint. This must start by fetching the config JWT from a URL supplied by the client.
   app.get(
     '/auth',
     {
-      preHandler: [configVerifier],
+      preHandler: [configFetchRateLimiter, configVerifier],
     },
     async (request, reply) => {
       if (!request.config || !request.configUrl) {
