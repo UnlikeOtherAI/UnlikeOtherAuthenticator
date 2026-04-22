@@ -1,11 +1,13 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
+import { asPrismaClient } from '../../db/tenant-context.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
 import { requireOrgRole } from '../../middleware/org-role-guard.js';
 import requireDomainHashAuthForDomainQuery from '../../middleware/domain-hash-auth.js';
 import { requireOrgFeatures } from '../../middleware/org-features.js';
 import { requireGroupsEnabled } from '../../middleware/groups-enabled.js';
+import { setTenantContextFromRequest } from '../../plugins/tenant-context.plugin.js';
 import { getGroup, listGroups } from '../../services/group.service.js';
 import { AppError } from '../../utils/errors.js';
 import { assertVerifiedDomainMatchesQuery, normalizeDomain } from './domain-context.js';
@@ -81,13 +83,13 @@ export function registerGroupRoutes(app: FastifyInstance): void {
 
       const orgId = getOrgIdFromParams(request.params);
 
-      const groups = await listGroups({
-        orgId,
-        domain,
-        config,
-        limit,
-        cursor,
-      });
+      setTenantContextFromRequest(request, { orgId });
+      const groups = await request.withTenantTx((tx) =>
+        listGroups(
+          { orgId, domain, config, limit, cursor },
+          { prisma: asPrismaClient(tx) },
+        ),
+      );
 
       reply.status(200).send(groups);
     },
@@ -113,12 +115,13 @@ export function registerGroupRoutes(app: FastifyInstance): void {
       const orgId = getOrgIdFromParams(request.params);
       const groupId = getGroupIdFromParams(request.params);
 
-      const group = await getGroup({
-        orgId,
-        groupId,
-        domain,
-        config,
-      });
+      setTenantContextFromRequest(request, { orgId });
+      const group = await request.withTenantTx((tx) =>
+        getGroup(
+          { orgId, groupId, domain, config },
+          { prisma: asPrismaClient(tx) },
+        ),
+      );
 
       reply.status(200).send(group);
     },

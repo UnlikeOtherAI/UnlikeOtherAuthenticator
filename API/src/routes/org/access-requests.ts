@@ -1,9 +1,11 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
+import { asPrismaClient } from '../../db/tenant-context.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
 import requireDomainHashAuthForDomainQuery from '../../middleware/domain-hash-auth.js';
 import { requireOrgFeatures } from '../../middleware/org-features.js';
+import { setTenantContextFromRequest } from '../../plugins/tenant-context.plugin.js';
 import {
   approveAccessRequest,
   listAccessRequests,
@@ -65,12 +67,13 @@ export function registerAccessRequestRoutes(app: FastifyInstance): void {
       if (!config) throw new AppError('UNAUTHORIZED', 401, 'MISSING_CONFIG');
       const { orgId, teamId } = PathSchema.parse(request.params);
 
-      const result = await listAccessRequests({
-        orgId,
-        teamId,
-        config,
-        status,
-      });
+      setTenantContextFromRequest(request, { orgId });
+      const result = await request.withTenantTx((tx) =>
+        listAccessRequests(
+          { orgId, teamId, config, status },
+          { prisma: asPrismaClient(tx) },
+        ),
+      );
 
       reply.status(200).send(result);
     },
@@ -93,14 +96,20 @@ export function registerAccessRequestRoutes(app: FastifyInstance): void {
       const { orgId, teamId, requestId } = RequestPathSchema.parse(request.params);
       const body = ReviewBodySchema.parse(request.body ?? {});
 
-      const result = await approveAccessRequest({
-        orgId,
-        teamId,
-        requestId,
-        config,
-        reviewedByUserId: body.reviewedByUserId,
-        reviewReason: body.reviewReason,
-      });
+      setTenantContextFromRequest(request, { orgId });
+      const result = await request.withTenantTx((tx) =>
+        approveAccessRequest(
+          {
+            orgId,
+            teamId,
+            requestId,
+            config,
+            reviewedByUserId: body.reviewedByUserId,
+            reviewReason: body.reviewReason,
+          },
+          { prisma: asPrismaClient(tx) },
+        ),
+      );
 
       reply.status(200).send(result);
     },
@@ -123,14 +132,20 @@ export function registerAccessRequestRoutes(app: FastifyInstance): void {
       const { orgId, teamId, requestId } = RequestPathSchema.parse(request.params);
       const body = ReviewBodySchema.parse(request.body ?? {});
 
-      const result = await rejectAccessRequest({
-        orgId,
-        teamId,
-        requestId,
-        config,
-        reviewedByUserId: body.reviewedByUserId,
-        reviewReason: body.reviewReason,
-      });
+      setTenantContextFromRequest(request, { orgId });
+      const result = await request.withTenantTx((tx) =>
+        rejectAccessRequest(
+          {
+            orgId,
+            teamId,
+            requestId,
+            config,
+            reviewedByUserId: body.reviewedByUserId,
+            reviewReason: body.reviewReason,
+          },
+          { prisma: asPrismaClient(tx) },
+        ),
+      );
 
       reply.status(200).send(result);
     },

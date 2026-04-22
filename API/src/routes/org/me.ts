@@ -1,8 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
+import { asPrismaClient } from '../../db/tenant-context.js';
 import { requireDomainHashAuthForDomainQuery } from '../../middleware/domain-hash-auth.js';
 import { requireOrgFeaturesEnabled } from '../../middleware/org-features.js';
+import { setTenantContextFromRequest } from '../../plugins/tenant-context.plugin.js';
 import { verifyAccessToken } from '../../services/access-token.service.js';
 import { getUserOrgContext } from '../../services/org-context.service.js';
 import { AppError } from '../../utils/errors.js';
@@ -54,11 +56,17 @@ export function registerOrgMeRoute(app: FastifyInstance): void {
         throw new AppError('UNAUTHORIZED', 401, 'MISSING_CONFIG');
       }
 
-      const org = await getUserOrgContext({
-        userId: claims.userId,
-        domain: normalizedDomain,
-        config,
-      });
+      // /org/me uses the organisations bootstrap predicate (domain + membership);
+      // app.org_id is deliberately left empty here — see row-level-security.md §7.
+      request.accessTokenClaims = claims;
+      setTenantContextFromRequest(request, { orgId: null, userId: claims.userId });
+
+      const org = await request.withTenantTx((tx) =>
+        getUserOrgContext(
+          { userId: claims.userId, domain: normalizedDomain, config },
+          { prisma: asPrismaClient(tx) },
+        ),
+      );
 
       const response: { ok: true; org?: typeof org } = { ok: true };
       if (org) response.org = org;

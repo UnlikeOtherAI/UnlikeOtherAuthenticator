@@ -1,8 +1,10 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
+import { asPrismaClient } from '../../db/tenant-context.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
 import requireDomainHashAuthForDomainQuery from '../../middleware/domain-hash-auth.js';
+import { setTenantContextFromRequest } from '../../plugins/tenant-context.plugin.js';
 import {
   createOrganisation,
   deleteOrganisation,
@@ -160,11 +162,15 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
     },
     async (request, reply) => {
       const { domain, limit, cursor } = parseLimitCursor(request);
-      const page = await listOrganisationsForDomain({
-        domain,
-        limit,
-        cursor,
-      });
+      // /org/organisations list uses organisations bootstrap predicate
+      // (domain + membership); app.org_id left empty intentionally.
+      setTenantContextFromRequest(request, { orgId: null });
+      const page = await request.withTenantTx((tx) =>
+        listOrganisationsForDomain(
+          { domain, limit, cursor },
+          { prisma: asPrismaClient(tx) },
+        ),
+      );
 
       reply.status(200).send(page);
     },
@@ -193,12 +199,15 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
       const config = request.config;
       if (!config) throw new AppError('UNAUTHORIZED', 401, 'MISSING_CONFIG');
 
-      const org = await createOrganisation({
-        domain,
-        name,
-        ownerId: actorUserId,
-        config,
-      });
+      // Create uses the organisations bootstrap branch (domain + owner_id matches
+      // app.user_id); app.org_id is not yet known.
+      setTenantContextFromRequest(request, { orgId: null, userId: actorUserId });
+      const org = await request.withTenantTx((tx) =>
+        createOrganisation(
+          { domain, name, ownerId: actorUserId, config },
+          { prisma: asPrismaClient(tx) },
+        ),
+      );
 
       reply.status(200).send(org);
     },
@@ -219,7 +228,10 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
       const { domain } = parseDomainContext(request);
       const orgId = getOrgIdFromParams(request.params);
 
-      const org = await getOrganisation({ orgId, domain });
+      setTenantContextFromRequest(request, { orgId });
+      const org = await request.withTenantTx((tx) =>
+        getOrganisation({ orgId, domain }, { prisma: asPrismaClient(tx) }),
+      );
 
       reply.status(200).send(org);
     },
@@ -245,13 +257,13 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
       const actorUserId = getActorUserId(request as RequestWithClaims);
       const { name } = OrgBodySchema.parse(request.body ?? {});
 
-      const org = await updateOrganisation({
-        orgId,
-        domain,
-        name,
-        actorUserId,
-        config,
-      });
+      setTenantContextFromRequest(request, { orgId, userId: actorUserId });
+      const org = await request.withTenantTx((tx) =>
+        updateOrganisation(
+          { orgId, domain, name, actorUserId, config },
+          { prisma: asPrismaClient(tx) },
+        ),
+      );
 
       reply.status(200).send(org);
     },
@@ -273,11 +285,13 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
       const orgId = getOrgIdFromParams(request.params);
       const actorUserId = getActorUserId(request as RequestWithClaims);
 
-      await deleteOrganisation({
-        orgId,
-        domain,
-        actorUserId,
-      });
+      setTenantContextFromRequest(request, { orgId, userId: actorUserId });
+      await request.withTenantTx((tx) =>
+        deleteOrganisation(
+          { orgId, domain, actorUserId },
+          { prisma: asPrismaClient(tx) },
+        ),
+      );
 
       reply.status(200).send({ ok: true });
     },
@@ -299,12 +313,13 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
       const orgId = getOrgIdFromParams(request.params);
       const { limit, cursor } = parseLimitCursor(request);
 
-      const members = await listOrganisationMembers({
-        orgId,
-        domain,
-        limit,
-        cursor,
-      });
+      setTenantContextFromRequest(request, { orgId });
+      const members = await request.withTenantTx((tx) =>
+        listOrganisationMembers(
+          { orgId, domain, limit, cursor },
+          { prisma: asPrismaClient(tx) },
+        ),
+      );
 
       reply.status(200).send(members);
     },
@@ -335,14 +350,13 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
       const actorUserId = getActorUserId(request as RequestWithClaims);
       const { userId, role } = AddMemberBodySchema.parse(request.body ?? {});
 
-      const member = await addOrganisationMember({
-        orgId,
-        domain,
-        actorUserId,
-        userId,
-        role: role ?? 'member',
-        config,
-      });
+      setTenantContextFromRequest(request, { orgId, userId: actorUserId });
+      const member = await request.withTenantTx((tx) =>
+        addOrganisationMember(
+          { orgId, domain, actorUserId, userId, role: role ?? 'member', config },
+          { prisma: asPrismaClient(tx) },
+        ),
+      );
 
       reply.status(200).send(member);
     },
@@ -369,14 +383,13 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
       const actorUserId = getActorUserId(request as RequestWithClaims);
       const { role } = SetRoleBodySchema.parse(request.body ?? {});
 
-      const member = await changeOrganisationMemberRole({
-        orgId,
-        domain,
-        actorUserId,
-        userId,
-        role,
-        config,
-      });
+      setTenantContextFromRequest(request, { orgId, userId: actorUserId });
+      const member = await request.withTenantTx((tx) =>
+        changeOrganisationMemberRole(
+          { orgId, domain, actorUserId, userId, role, config },
+          { prisma: asPrismaClient(tx) },
+        ),
+      );
 
       reply.status(200).send(member);
     },
@@ -399,12 +412,13 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
       const userId = z.object({ userId: z.string().trim().min(1) }).parse(request.params).userId;
       const actorUserId = getActorUserId(request as RequestWithClaims);
 
-      await removeOrganisationMember({
-        orgId,
-        domain,
-        actorUserId,
-        userId,
-      });
+      setTenantContextFromRequest(request, { orgId, userId: actorUserId });
+      await request.withTenantTx((tx) =>
+        removeOrganisationMember(
+          { orgId, domain, actorUserId, userId },
+          { prisma: asPrismaClient(tx) },
+        ),
+      );
 
       reply.status(200).send({ ok: true });
     },
@@ -417,12 +431,13 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
 
     const actorUserId = getActorUserId(request as RequestWithClaims);
 
-    const org = await transferOrganisationOwnership({
-      orgId,
-      domain,
-      actorUserId,
-      newOwnerId,
-    });
+    setTenantContextFromRequest(request, { orgId, userId: actorUserId });
+    const org = await request.withTenantTx((tx) =>
+      transferOrganisationOwnership(
+        { orgId, domain, actorUserId, newOwnerId },
+        { prisma: asPrismaClient(tx) },
+      ),
+    );
 
     reply.status(200).send(org);
   };
