@@ -377,6 +377,67 @@ export function buildIntegrationApprovedTemplate(params: {
   return { subject, text, html };
 }
 
+export function buildIntegrationRequestNotificationTemplate(params: {
+  domain: string;
+  contactEmail: string;
+  adminUrl: string;
+  theme?: Partial<EmailTheme>;
+}): EmailTemplate {
+  const theme = resolveTheme(params.theme);
+  const subject = `New integration request: ${params.domain}`;
+  const text = [
+    'New integration request pending review',
+    '',
+    `A partner at ${params.domain} has submitted a signed config JWT and is waiting for approval.`,
+    '',
+    `Domain: ${params.domain}`,
+    `Contact: ${params.contactEmail}`,
+    '',
+    'Review it here:',
+    params.adminUrl,
+  ].join('\n');
+
+  const html = `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>${escapeHtml(subject)}</title>
+  </head>
+  <body style="margin:0;padding:0;background-color:${theme.bg};" bgcolor="${theme.bg}">
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color:${theme.bg};padding:24px 12px;" bgcolor="${theme.bg}">
+      <tr>
+        <td align="center" bgcolor="${theme.bg}">
+          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:560px;background-color:${theme.surface};border-radius:${theme.cardRadius};overflow:hidden;border:1px solid ${theme.border};" bgcolor="${theme.surface}">
+            ${logoHtml(theme)}
+            <tr>
+              <td style="padding:24px 24px 8px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:${theme.text};">
+                <h1 style="margin:0;font-size:20px;line-height:28px;color:${theme.text};">New integration request</h1>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:0 24px 16px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:${theme.text};font-size:14px;line-height:22px;">
+                A partner at <strong>${escapeHtml(params.domain)}</strong> has submitted a signed config JWT and is waiting for approval.<br/>
+                Contact: <strong>${escapeHtml(params.contactEmail)}</strong>
+              </td>
+            </tr>
+            <tr>
+              <td align="center" style="padding:0 24px 20px 24px;">
+                <a href="${escapeHtml(params.adminUrl)}" style="display:inline-block;background-color:${theme.primary};color:${theme.primaryText};text-decoration:none;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:20px;padding:12px 16px;border-radius:${theme.buttonRadius};">
+                  Review request
+                </a>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+
+  return { subject, text, html };
+}
+
 export function buildTwoFaResetTemplate(params: { link: string; theme?: Partial<EmailTheme> }): EmailTemplate {
   const minutes = tokenTtlMinutes();
   const theme = resolveTheme(params.theme);

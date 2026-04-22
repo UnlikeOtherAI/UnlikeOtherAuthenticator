@@ -167,25 +167,30 @@ export async function consumeClaim(
     const encrypted = toEncrypted(row);
     if (!encrypted) return { state: 'expired' } as const;
 
-    const clientSecret = decryptClaimSecret(encrypted, { sharedSecret: deps?.sharedSecret });
+    // Conditional update: if a concurrent request consumed the token between our
+    // findUnique and this write, `count` is 0 and we report `already_used`
+    // without decrypting or returning the client secret. Prisma's default
+    // READ COMMITTED isolation does not prevent two callers from both reading
+    // `usedAt: null`, so the uniqueness must be enforced by a predicate-scoped
+    // update rather than the prior read.
+    const { count } = await tx.integrationClaimToken.updateMany({
+      where: { id: row.id, usedAt: null },
+      data: {
+        usedAt: now,
+        encryptedSecret: null,
+        encryptionIv: null,
+        encryptionTag: null,
+      },
+    });
+    if (count === 0) return { state: 'already_used' } as const;
 
-    const updated = toRow(
-      await tx.integrationClaimToken.update({
-        where: { id: row.id },
-        data: {
-          usedAt: now,
-          encryptedSecret: null,
-          encryptionIv: null,
-          encryptionTag: null,
-        },
-      }),
-    );
+    const clientSecret = decryptClaimSecret(encrypted, { sharedSecret: deps?.sharedSecret });
 
     return {
       state: 'consumed',
       integrationId: row.integrationId,
       clientSecret,
-      usedAt: updated.usedAt ?? now,
+      usedAt: now,
     } as const;
   });
 }

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   consumeClaim,
   createClaimToken,
+  generateClaimToken,
   hashClaimToken,
   peekClaim,
   replaceClaimToken,
@@ -94,14 +95,24 @@ function makePrisma(initial: Row[] = []): {
       where,
       data,
     }: {
-      where: { expiresAt: { lt: Date }; encryptedSecret: { not: null } };
+      where:
+        | { expiresAt: { lt: Date }; encryptedSecret: { not: null } }
+        | { id: string; usedAt: null };
       data: Partial<Row>;
     }) => {
       let count = 0;
-      for (const row of rows) {
-        if (row.expiresAt.getTime() < where.expiresAt.lt.getTime() && row.encryptedSecret) {
+      if ('id' in where) {
+        const row = rows.find((r) => r.id === where.id && r.usedAt === where.usedAt);
+        if (row) {
           Object.assign(row, data);
-          count += 1;
+          count = 1;
+        }
+      } else {
+        for (const row of rows) {
+          if (row.expiresAt.getTime() < where.expiresAt.lt.getTime() && row.encryptedSecret) {
+            Object.assign(row, data);
+            count += 1;
+          }
         }
       }
       return { count };
@@ -221,6 +232,55 @@ describe('integration-claim.service', () => {
 
       const second = await consumeClaim(created.rawToken, { prisma, sharedSecret });
       expect(second).toEqual({ state: 'already_used' });
+    });
+
+    it('returns already_used when a concurrent consume wins the update race', async () => {
+      // Regression test for H1 (2026-04-22 audit). The prior implementation read the
+      // row, decrypted the secret, then unconditionally updated — two simultaneous
+      // POSTs could both observe `usedAt: null` and both receive the plaintext.
+      // The current implementation issues a predicate-scoped updateMany({ id, usedAt: null })
+      // and reports `already_used` when affected count is 0.
+      const { rawToken, tokenHash } = generateClaimToken();
+      const enc = encryptClaimSecret('real-secret-value-plenty-long-enough', { sharedSecret });
+      const row: Row = {
+        id: 'row-1',
+        integrationId: 'int-1',
+        tokenHash,
+        encryptedSecret: enc.ciphertext,
+        encryptionIv: enc.iv,
+        encryptionTag: enc.tag,
+        expiresAt: new Date(Date.now() + 60_000),
+        usedAt: null,
+        createdAt: new Date(),
+      };
+
+      // findUnique returns a snapshot with usedAt: null, then the canonical row gets
+      // marked used before our updateMany runs (simulating a racing consumer).
+      const client = {
+        integrationClaimToken: {
+          findUnique: vi.fn(async () => {
+            const snapshot = { ...row };
+            row.usedAt = new Date();
+            row.encryptedSecret = null;
+            row.encryptionIv = null;
+            row.encryptionTag = null;
+            return snapshot;
+          }),
+          updateMany: vi.fn(
+            async ({ where, data }: { where: { id: string; usedAt: null }; data: Partial<Row> }) => {
+              if (row.id === where.id && row.usedAt === where.usedAt) {
+                Object.assign(row, data);
+                return { count: 1 };
+              }
+              return { count: 0 };
+            },
+          ),
+        },
+        $transaction: async <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => fn(client),
+      } as unknown as Parameters<typeof consumeClaim>[1] extends { prisma?: infer P } ? P : never;
+
+      const result = await consumeClaim(rawToken, { prisma: client, sharedSecret });
+      expect(result).toEqual({ state: 'already_used' });
     });
   });
 

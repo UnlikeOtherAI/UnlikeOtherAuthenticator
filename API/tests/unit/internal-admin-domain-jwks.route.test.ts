@@ -9,10 +9,6 @@ const clientJwkMocks = vi.hoisted(() => ({
   deactivateJwk: vi.fn(),
 }));
 
-const auditLogMocks = vi.hoisted(() => ({
-  writeAuditLog: vi.fn(),
-}));
-
 const prismaMocks = vi.hoisted(() => ({
   getPrisma: vi.fn(() => ({})),
   getAdminPrisma: vi.fn(() => ({})),
@@ -26,8 +22,6 @@ vi.mock('../../src/services/client-jwk.service.js', async () => {
   );
   return { ...actual, ...clientJwkMocks };
 });
-
-vi.mock('../../src/services/audit-log.service.js', () => auditLogMocks);
 
 vi.mock('../../src/db/prisma.js', () => prismaMocks);
 
@@ -94,7 +88,6 @@ describe('/internal/admin/domains/:domain/jwks', () => {
     clientJwkMocks.listJwksForDomain.mockReset().mockResolvedValue([]);
     clientJwkMocks.addJwkForDomain.mockReset();
     clientJwkMocks.deactivateJwk.mockReset();
-    auditLogMocks.writeAuditLog.mockReset().mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -146,7 +139,7 @@ describe('/internal/admin/domains/:domain/jwks', () => {
     }
   });
 
-  it('adds a JWK and writes an audit log', async () => {
+  it('adds a JWK with the actor email', async () => {
     clientJwkMocks.addJwkForDomain.mockResolvedValue(jwkRow({ kid: 'kid-new' }));
 
     const { createApp } = await import('../../src/app.js');
@@ -166,21 +159,14 @@ describe('/internal/admin/domains/:domain/jwks', () => {
       expect(clientJwkMocks.addJwkForDomain).toHaveBeenCalledWith({
         domain: 'client.example.com',
         jwk: { kty: 'RSA', kid: 'kid-new', n: 'nnn', e: 'AQAB' },
-        createdByEmail: 'admin@example.com',
+        actorEmail: 'admin@example.com',
       });
-      expect(auditLogMocks.writeAuditLog).toHaveBeenCalledWith(
-        expect.objectContaining({
-          action: 'jwk.added',
-          targetDomain: 'client.example.com',
-          actorEmail: 'admin@example.com',
-        }),
-      );
     } finally {
       await app.close();
     }
   });
 
-  it('deactivates a JWK and writes an audit log', async () => {
+  it('deactivates a JWK with the actor email', async () => {
     clientJwkMocks.deactivateJwk.mockResolvedValue(
       jwkRow({ active: false, deactivatedAt: new Date('2026-04-22T13:00:00Z') }),
     );
@@ -200,10 +186,8 @@ describe('/internal/admin/domains/:domain/jwks', () => {
       expect(clientJwkMocks.deactivateJwk).toHaveBeenCalledWith({
         domain: 'client.example.com',
         kid: 'kid-1',
+        actorEmail: 'admin@example.com',
       });
-      expect(auditLogMocks.writeAuditLog).toHaveBeenCalledWith(
-        expect.objectContaining({ action: 'jwk.deactivated', targetDomain: 'client.example.com' }),
-      );
     } finally {
       await app.close();
     }

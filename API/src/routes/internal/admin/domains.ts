@@ -9,6 +9,7 @@ import {
   updateAdminDomain,
 } from '../../../services/domain-secret.service.js';
 import { normalizeDomain } from '../../../utils/domain.js';
+import { AppError } from '../../../utils/errors.js';
 
 const DomainParamsSchema = z.object({
   domain: z.string().trim().min(3).transform(normalizeDomain),
@@ -75,13 +76,21 @@ function toAdminDomain(row: DomainMutationResult['domain']) {
   };
 }
 
+function requireActorEmail(request: { adminAccessTokenClaims?: { email: string } }): string {
+  const email = request.adminAccessTokenClaims?.email;
+  if (!email) throw new AppError('INTERNAL', 500, 'MISSING_ADMIN_CLAIMS');
+  return email;
+}
+
 export function registerInternalAdminDomainRoutes(app: FastifyInstance): void {
   app.post('/internal/admin/domains', adminRoute(mutationSchema), async (request) => {
     const body = DomainCreateSchema.parse(request.body);
+    const actorEmail = requireActorEmail(request);
     const result = await createAdminDomain({
       domain: body.domain,
       label: body.label,
       clientSecret: body.client_secret,
+      actorEmail,
     });
 
     return {
@@ -95,13 +104,21 @@ export function registerInternalAdminDomainRoutes(app: FastifyInstance): void {
   app.put('/internal/admin/domains/:domain', adminRoute(objectSchema), async (request) => {
     const { domain } = DomainParamsSchema.parse(request.params);
     const body = DomainUpdateSchema.parse(request.body);
-    return toAdminDomain(await updateAdminDomain({ domain, label: body.label, status: body.status }));
+    const actorEmail = requireActorEmail(request);
+    return toAdminDomain(
+      await updateAdminDomain({ domain, label: body.label, status: body.status, actorEmail }),
+    );
   });
 
   app.post('/internal/admin/domains/:domain/rotate-secret', adminRoute(mutationSchema), async (request) => {
     const { domain } = DomainParamsSchema.parse(request.params);
     const body = DomainRotateSchema.parse(request.body ?? {});
-    const result = await rotateAdminDomainSecret({ domain, clientSecret: body.client_secret });
+    const actorEmail = requireActorEmail(request);
+    const result = await rotateAdminDomainSecret({
+      domain,
+      clientSecret: body.client_secret,
+      actorEmail,
+    });
 
     return {
       domain: toAdminDomain(result.domain),

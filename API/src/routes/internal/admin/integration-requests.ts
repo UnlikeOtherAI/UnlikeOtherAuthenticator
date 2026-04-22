@@ -3,7 +3,6 @@ import { z } from 'zod';
 
 import { getEnv } from '../../../config/env.js';
 import { requireAdminSuperuser } from '../../../middleware/admin-superuser.js';
-import { writeAuditLog } from '../../../services/audit-log.service.js';
 import { sendIntegrationApprovedEmail } from '../../../services/email.service.js';
 import {
   acceptIntegrationRequest,
@@ -160,17 +159,6 @@ export function registerInternalAdminIntegrationRequestRoutes(app: FastifyInstan
         domain: result.integration.domain,
       });
 
-      await writeAuditLog({
-        actorEmail: reviewerEmail,
-        action: 'integration.accepted',
-        targetDomain: result.integration.domain,
-        metadata: {
-          integrationRequestId: result.integration.id,
-          clientDomainId: result.clientDomainId,
-          hashPrefix: result.hashPrefix,
-        },
-      });
-
       return toAdminDetail(result.integration);
     },
   );
@@ -182,19 +170,12 @@ export function registerInternalAdminIntegrationRequestRoutes(app: FastifyInstan
       const { id } = IdParamsSchema.parse(request.params);
       const actorEmail = requireActorEmail(request);
 
-      const result = await resendIntegrationClaim({ id });
+      const result = await resendIntegrationClaim({ id, actorEmail });
 
       dispatchClaimEmail({
         to: result.integration.contactEmail,
         link: buildClaimUrl(result.claim.rawToken),
         domain: result.integration.domain,
-      });
-
-      await writeAuditLog({
-        actorEmail,
-        action: 'integration.claim_resent',
-        targetDomain: result.integration.domain,
-        metadata: { integrationRequestId: result.integration.id },
       });
 
       return toAdminDetail(result.integration);
@@ -209,12 +190,6 @@ export function registerInternalAdminIntegrationRequestRoutes(app: FastifyInstan
       const { reason } = DeclineBodySchema.parse(request.body ?? {});
       const reviewerEmail = requireActorEmail(request);
       const row = await declineIntegrationRequest({ id, reason, reviewerEmail });
-      await writeAuditLog({
-        actorEmail: reviewerEmail,
-        action: 'integration.declined',
-        targetDomain: row.domain,
-        metadata: { integrationRequestId: row.id, reason },
-      });
       return toAdminDetail(row);
     },
   );
@@ -225,13 +200,7 @@ export function registerInternalAdminIntegrationRequestRoutes(app: FastifyInstan
     async (request) => {
       const { id } = IdParamsSchema.parse(request.params);
       const actorEmail = requireActorEmail(request);
-      const row = await deleteIntegrationRequest(id);
-      await writeAuditLog({
-        actorEmail,
-        action: 'integration.deleted',
-        targetDomain: row.domain,
-        metadata: { integrationRequestId: row.id, priorStatus: row.status },
-      });
+      await deleteIntegrationRequest({ id, actorEmail });
       return { ok: true };
     },
   );

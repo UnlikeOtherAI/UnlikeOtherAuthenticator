@@ -13,7 +13,7 @@ export type AdminAuditAction =
   | 'domain.enabled'
   | 'domain.secret_rotated';
 
-type AuditLogPrisma = Pick<PrismaClient, 'adminAuditLog'>;
+export type AuditLogPrisma = Pick<PrismaClient, 'adminAuditLog'>;
 
 function prismaClient(deps?: { prisma?: AuditLogPrisma }): AuditLogPrisma {
   return deps?.prisma ?? (getAdminPrisma() as unknown as AuditLogPrisma);

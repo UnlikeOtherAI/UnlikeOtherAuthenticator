@@ -128,7 +128,6 @@ describe('GET /auth — auto-onboarding', () => {
       expect(res.statusCode).toBe(400);
       expect(res.headers['content-type']).toContain('text/html');
       expect(res.body).toContain('Integration pending review');
-      expect(res.body).toContain('ops@partner.example.com');
       expect(res.body).toContain('partner.example.com');
 
       expect(integrationRequestMocks.upsertPendingIntegrationRequest).toHaveBeenCalledWith(

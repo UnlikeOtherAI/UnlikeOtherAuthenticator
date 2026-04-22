@@ -17,6 +17,7 @@ import {
   type IntegrationRequestRow,
   type UpsertPendingOutcome,
 } from './integration-request.service.js';
+import { dispatchNewIntegrationRequestNotification } from './integration-request-notify.service.js';
 
 const CONFIG_JWT_ALLOWED_ALGS = ['RS256'] as const;
 
@@ -198,6 +199,14 @@ export async function tryAutoOnboard(
     contactEmail,
     configSummary: summary,
   });
+
+  if (outcome.kind === 'created') {
+    dispatchNewIntegrationRequestNotification({
+      requestId: outcome.row.id,
+      domain: outcome.row.domain,
+      contactEmail: outcome.row.contactEmail,
+    });
+  }
 
   return {
     kind: 'pending',

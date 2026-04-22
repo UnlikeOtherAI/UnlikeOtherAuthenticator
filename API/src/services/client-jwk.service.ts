@@ -7,10 +7,11 @@ import { z } from 'zod';
 import { getAdminPrisma } from '../db/prisma.js';
 import { normalizeDomain } from '../utils/domain.js';
 import { AppError } from '../utils/errors.js';
+import { writeAuditLog, type AuditLogPrisma } from './audit-log.service.js';
 
 type ClientJwkPrisma = Pick<
   PrismaClient,
-  'clientDomain' | 'clientDomainJwk' | '$transaction'
+  'clientDomain' | 'clientDomainJwk' | 'adminAuditLog' | '$transaction'
 >;
 
 const privateJwkMembers = ['d', 'p', 'q', 'dp', 'dq', 'qi', 'oth'] as const;
@@ -141,7 +142,7 @@ export async function findJwkByKidDb(
 }
 
 export async function addJwkForDomain(
-  params: { domain: string; jwk: unknown; createdByEmail?: string | null },
+  params: { domain: string; jwk: unknown; actorEmail: string },
   deps?: { prisma?: ClientJwkPrisma },
 ): Promise<ClientDomainJwkRow> {
   const normalized = normalizeDomain(params.domain);
@@ -149,68 +150,94 @@ export async function addJwkForDomain(
   const fingerprint = computeJwkFingerprint(jwk);
 
   const prisma = prismaClient(deps);
-  const domainRow = await prisma.clientDomain.findUnique({
-    where: { domain: normalized },
-    select: { id: true },
-  });
-  if (!domainRow) throw new AppError('NOT_FOUND', 404, 'DOMAIN_NOT_FOUND');
-
-  const existing = await prisma.clientDomainJwk.findUnique({
-    where: { kid: jwk.kid },
-    select: { id: true, domainId: true },
-  });
-  if (existing && existing.domainId !== domainRow.id) {
-    throw new AppError('BAD_REQUEST', 400, 'JWK_KID_CONFLICT');
-  }
-
-  if (existing) {
-    return prisma.clientDomainJwk.update({
-      where: { id: existing.id },
-      data: {
-        jwk: jwk as unknown as Prisma.InputJsonValue,
-        fingerprint,
-        active: true,
-        deactivatedAt: null,
-        createdByEmail: params.createdByEmail ?? undefined,
-      },
+  return prisma.$transaction(async (tx) => {
+    const domainRow = await tx.clientDomain.findUnique({
+      where: { domain: normalized },
+      select: { id: true },
     });
-  }
+    if (!domainRow) throw new AppError('NOT_FOUND', 404, 'DOMAIN_NOT_FOUND');
 
-  return prisma.clientDomainJwk.create({
-    data: {
-      domainId: domainRow.id,
-      kid: jwk.kid,
-      jwk: jwk as unknown as Prisma.InputJsonValue,
-      fingerprint,
-      active: true,
-      createdByEmail: params.createdByEmail ?? null,
-    },
+    const existing = await tx.clientDomainJwk.findUnique({
+      where: { kid: jwk.kid },
+      select: { id: true, domainId: true },
+    });
+    if (existing && existing.domainId !== domainRow.id) {
+      throw new AppError('BAD_REQUEST', 400, 'JWK_KID_CONFLICT');
+    }
+
+    const row = existing
+      ? await tx.clientDomainJwk.update({
+          where: { id: existing.id },
+          data: {
+            jwk: jwk as unknown as Prisma.InputJsonValue,
+            fingerprint,
+            active: true,
+            deactivatedAt: null,
+            createdByEmail: params.actorEmail,
+          },
+        })
+      : await tx.clientDomainJwk.create({
+          data: {
+            domainId: domainRow.id,
+            kid: jwk.kid,
+            jwk: jwk as unknown as Prisma.InputJsonValue,
+            fingerprint,
+            active: true,
+            createdByEmail: params.actorEmail,
+          },
+        });
+
+    await writeAuditLog(
+      {
+        actorEmail: params.actorEmail,
+        action: 'jwk.added',
+        targetDomain: normalized,
+        metadata: { kid: row.kid, fingerprint: row.fingerprint },
+      },
+      { prisma: tx as unknown as AuditLogPrisma },
+    );
+
+    return row;
   });
 }
 
 export async function deactivateJwk(
-  params: { domain: string; kid: string },
+  params: { domain: string; kid: string; actorEmail: string },
   deps?: { prisma?: ClientJwkPrisma },
 ): Promise<ClientDomainJwkRow> {
   const normalized = normalizeDomain(params.domain);
   const prisma = prismaClient(deps);
-  const domainRow = await prisma.clientDomain.findUnique({
-    where: { domain: normalized },
-    select: { id: true },
-  });
-  if (!domainRow) throw new AppError('NOT_FOUND', 404, 'DOMAIN_NOT_FOUND');
+  return prisma.$transaction(async (tx) => {
+    const domainRow = await tx.clientDomain.findUnique({
+      where: { domain: normalized },
+      select: { id: true },
+    });
+    if (!domainRow) throw new AppError('NOT_FOUND', 404, 'DOMAIN_NOT_FOUND');
 
-  const jwk = await prisma.clientDomainJwk.findUnique({
-    where: { kid: params.kid },
-  });
-  if (!jwk || jwk.domainId !== domainRow.id) {
-    throw new AppError('NOT_FOUND', 404, 'JWK_NOT_FOUND');
-  }
-  if (!jwk.active) return jwk;
+    const jwk = await tx.clientDomainJwk.findUnique({
+      where: { kid: params.kid },
+    });
+    if (!jwk || jwk.domainId !== domainRow.id) {
+      throw new AppError('NOT_FOUND', 404, 'JWK_NOT_FOUND');
+    }
+    if (!jwk.active) return jwk;
 
-  return prisma.clientDomainJwk.update({
-    where: { id: jwk.id },
-    data: { active: false, deactivatedAt: new Date() },
+    const row = await tx.clientDomainJwk.update({
+      where: { id: jwk.id },
+      data: { active: false, deactivatedAt: new Date() },
+    });
+
+    await writeAuditLog(
+      {
+        actorEmail: params.actorEmail,
+        action: 'jwk.deactivated',
+        targetDomain: normalized,
+        metadata: { kid: row.kid, fingerprint: row.fingerprint },
+      },
+      { prisma: tx as unknown as AuditLogPrisma },
+    );
+
+    return row;
   });
 }
 

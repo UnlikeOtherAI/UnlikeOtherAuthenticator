@@ -16,7 +16,12 @@ const integrationRequestMocks = vi.hoisted(() => ({
   upsertPendingIntegrationRequest: vi.fn(),
 }));
 
+const notifyMocks = vi.hoisted(() => ({
+  dispatchNewIntegrationRequestNotification: vi.fn(),
+}));
+
 vi.mock('../../src/services/integration-request.service.js', () => integrationRequestMocks);
+vi.mock('../../src/services/integration-request-notify.service.js', () => notifyMocks);
 
 const CONFIG_URL = 'https://client.example.com/config';
 

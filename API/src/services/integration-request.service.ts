@@ -3,9 +3,13 @@ import { Prisma, type PrismaClient } from '@prisma/client';
 import { getAdminPrisma } from '../db/prisma.js';
 import { normalizeDomain } from '../utils/domain.js';
 import { AppError } from '../utils/errors.js';
+import { writeAuditLog, type AuditLogPrisma } from './audit-log.service.js';
 import type { PublicRsaJwk } from './client-jwk.service.js';
 
-type IntegrationRequestPrisma = Pick<PrismaClient, 'clientDomainIntegrationRequest'>;
+type IntegrationRequestPrisma = Pick<
+  PrismaClient,
+  'clientDomainIntegrationRequest' | 'adminAuditLog' | '$transaction'
+>;
 
 function prismaClient(deps?: { prisma?: IntegrationRequestPrisma }): IntegrationRequestPrisma {
   return deps?.prisma ?? (getAdminPrisma() as unknown as IntegrationRequestPrisma);
@@ -158,39 +162,65 @@ export async function declineIntegrationRequest(
   deps?: { prisma?: IntegrationRequestPrisma },
 ): Promise<IntegrationRequestRow> {
   const prisma = prismaClient(deps);
-  const existing = (await prisma.clientDomainIntegrationRequest.findUnique({
-    where: { id: params.id },
-  })) as IntegrationRequestRow | null;
-  if (!existing) throw new AppError('NOT_FOUND', 404, 'INTEGRATION_REQUEST_NOT_FOUND');
-  if (existing.status !== 'PENDING') {
-    throw new AppError('BAD_REQUEST', 400, 'INTEGRATION_REQUEST_NOT_PENDING');
-  }
+  return prisma.$transaction(async (tx) => {
+    const existing = (await tx.clientDomainIntegrationRequest.findUnique({
+      where: { id: params.id },
+    })) as IntegrationRequestRow | null;
+    if (!existing) throw new AppError('NOT_FOUND', 404, 'INTEGRATION_REQUEST_NOT_FOUND');
+    if (existing.status !== 'PENDING') {
+      throw new AppError('BAD_REQUEST', 400, 'INTEGRATION_REQUEST_NOT_PENDING');
+    }
 
-  const row = (await prisma.clientDomainIntegrationRequest.update({
-    where: { id: existing.id },
-    data: {
-      status: 'DECLINED',
-      declineReason: params.reason,
-      reviewedAt: new Date(),
-      reviewedByEmail: params.reviewerEmail,
-    },
-  })) as IntegrationRequestRow;
-  return row;
+    const row = (await tx.clientDomainIntegrationRequest.update({
+      where: { id: existing.id },
+      data: {
+        status: 'DECLINED',
+        declineReason: params.reason,
+        reviewedAt: new Date(),
+        reviewedByEmail: params.reviewerEmail,
+      },
+    })) as IntegrationRequestRow;
+
+    await writeAuditLog(
+      {
+        actorEmail: params.reviewerEmail,
+        action: 'integration.declined',
+        targetDomain: row.domain,
+        metadata: { integrationRequestId: row.id, reason: params.reason },
+      },
+      { prisma: tx as unknown as AuditLogPrisma },
+    );
+
+    return row;
+  });
 }
 
 export async function deleteIntegrationRequest(
-  id: string,
+  params: { id: string; actorEmail: string },
   deps?: { prisma?: IntegrationRequestPrisma },
 ): Promise<IntegrationRequestRow> {
   const prisma = prismaClient(deps);
-  const existing = (await prisma.clientDomainIntegrationRequest.findUnique({
-    where: { id },
-  })) as IntegrationRequestRow | null;
-  if (!existing) throw new AppError('NOT_FOUND', 404, 'INTEGRATION_REQUEST_NOT_FOUND');
-  if (existing.status === 'PENDING') {
-    throw new AppError('BAD_REQUEST', 400, 'INTEGRATION_REQUEST_STILL_PENDING');
-  }
+  return prisma.$transaction(async (tx) => {
+    const existing = (await tx.clientDomainIntegrationRequest.findUnique({
+      where: { id: params.id },
+    })) as IntegrationRequestRow | null;
+    if (!existing) throw new AppError('NOT_FOUND', 404, 'INTEGRATION_REQUEST_NOT_FOUND');
+    if (existing.status === 'PENDING') {
+      throw new AppError('BAD_REQUEST', 400, 'INTEGRATION_REQUEST_STILL_PENDING');
+    }
 
-  await prisma.clientDomainIntegrationRequest.delete({ where: { id: existing.id } });
-  return existing;
+    await tx.clientDomainIntegrationRequest.delete({ where: { id: existing.id } });
+
+    await writeAuditLog(
+      {
+        actorEmail: params.actorEmail,
+        action: 'integration.deleted',
+        targetDomain: existing.domain,
+        metadata: { integrationRequestId: existing.id, priorStatus: existing.status },
+      },
+      { prisma: tx as unknown as AuditLogPrisma },
+    );
+
+    return existing;
+  });
 }

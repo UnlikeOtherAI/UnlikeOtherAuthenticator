@@ -3,6 +3,7 @@ import type { Prisma, PrismaClient } from '@prisma/client';
 import { getAdminPrisma } from '../db/prisma.js';
 import { decryptClaimSecret } from '../utils/claim-secret-crypto.js';
 import { AppError } from '../utils/errors.js';
+import { writeAuditLog, type AuditLogPrisma } from './audit-log.service.js';
 import {
   computeJwkFingerprint,
   parsePublicRsaJwk,
@@ -27,6 +28,7 @@ type AcceptPrisma = Pick<
   | 'clientDomainSecret'
   | 'clientDomainIntegrationRequest'
   | 'integrationClaimToken'
+  | 'adminAuditLog'
   | '$transaction'
 >;
 
@@ -149,6 +151,20 @@ export async function acceptIntegrationRequest(
       },
     })) as IntegrationRequestRow;
 
+    await writeAuditLog(
+      {
+        actorEmail: params.reviewerEmail,
+        action: 'integration.accepted',
+        targetDomain: domain,
+        metadata: {
+          integrationRequestId: updated.id,
+          clientDomainId: clientDomain.id,
+          hashPrefix,
+        },
+      },
+      { prisma: tx as unknown as AuditLogPrisma },
+    );
+
     return {
       integration: updated,
       clientDomainId: clientDomain.id,
@@ -162,6 +178,7 @@ export async function acceptIntegrationRequest(
 
 export type ResendClaimParams = {
   id: string;
+  actorEmail: string;
   ttlMs?: number;
   now?: Date;
 };
@@ -222,6 +239,16 @@ export async function resendIntegrationClaim(
         now,
       },
       { prisma: tx as unknown as AcceptPrisma, sharedSecret: deps?.sharedSecret },
+    );
+
+    await writeAuditLog(
+      {
+        actorEmail: params.actorEmail,
+        action: 'integration.claim_resent',
+        targetDomain: existing.domain,
+        metadata: { integrationRequestId: existing.id },
+      },
+      { prisma: tx as unknown as AuditLogPrisma },
     );
 
     return { integration: existing, claim };

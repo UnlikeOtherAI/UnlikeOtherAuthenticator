@@ -6,8 +6,12 @@ import { getEnv, requireEnv } from '../config/env.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { normalizeDomain } from '../utils/domain.js';
 import { AppError } from '../utils/errors.js';
+import { writeAuditLog, type AuditLogPrisma } from './audit-log.service.js';
 
-type DomainSecretPrisma = Pick<PrismaClient, 'clientDomain' | 'clientDomainSecret' | '$transaction'>;
+type DomainSecretPrisma = Pick<
+  PrismaClient,
+  'clientDomain' | 'clientDomainSecret' | 'adminAuditLog' | '$transaction'
+>;
 
 const activeSecretArgs = {
   where: { active: true },
@@ -109,52 +113,91 @@ export async function verifyDomainAuthToken(
 }
 
 export async function createAdminDomain(
-  params: { clientSecret?: string; domain: string; label?: string },
+  params: { clientSecret?: string; domain: string; label?: string; actorEmail: string },
   deps?: { prisma?: DomainSecretPrisma },
 ): Promise<DomainMutationResult> {
   const prisma = prismaClient(deps);
   const domain = normalizeDomain(params.domain);
-  const existing = await prisma.clientDomain.findUnique({ where: { domain }, select: { id: true } });
-  if (existing) throw new AppError('BAD_REQUEST', 400, 'DOMAIN_ALREADY_EXISTS');
-
   const secret = await createSecretData(domain, params.clientSecret);
-  const row = await prisma.clientDomain.create({
-    data: {
-      domain,
-      label: labelForDomain(domain, params.label),
-      status: 'active',
-      secrets: {
-        create: {
-          active: true,
-          hashPrefix: secret.hashPrefix,
-          secretDigest: secret.secretDigest,
+
+  const row = await prisma.$transaction(async (tx) => {
+    const existing = await tx.clientDomain.findUnique({ where: { domain }, select: { id: true } });
+    if (existing) throw new AppError('BAD_REQUEST', 400, 'DOMAIN_ALREADY_EXISTS');
+
+    const created = await tx.clientDomain.create({
+      data: {
+        domain,
+        label: labelForDomain(domain, params.label),
+        status: 'active',
+        secrets: {
+          create: {
+            active: true,
+            hashPrefix: secret.hashPrefix,
+            secretDigest: secret.secretDigest,
+          },
         },
       },
-    },
-    ...domainWithActiveSecret,
+      ...domainWithActiveSecret,
+    });
+
+    await writeAuditLog(
+      {
+        actorEmail: params.actorEmail,
+        action: 'domain.enabled',
+        targetDomain: domain,
+        metadata: { hashPrefix: secret.hashPrefix, created: true },
+      },
+      { prisma: tx as unknown as AuditLogPrisma },
+    );
+
+    return created;
   });
 
   return { clientHash: secret.clientHash, clientHashPrefix: secret.hashPrefix, clientSecret: secret.clientSecret, domain: row };
 }
 
 export async function updateAdminDomain(
-  params: { domain: string; label?: string; status?: DomainStatus },
+  params: { domain: string; label?: string; status?: DomainStatus; actorEmail: string },
   deps?: { prisma?: DomainSecretPrisma },
 ): Promise<DomainWithActiveSecret> {
+  const prisma = prismaClient(deps);
   const domain = normalizeDomain(params.domain);
   const label = params.label === undefined ? undefined : labelForDomain(domain, params.label);
   const status = params.status === undefined ? undefined : normalizeStatus(params.status);
 
-  return prismaClient(deps).clientDomain.upsert({
-    where: { domain },
-    create: { domain, label: label ?? domain, status: status ?? 'active' },
-    update: { ...(label ? { label } : {}), ...(status ? { status } : {}) },
-    ...domainWithActiveSecret,
+  return prisma.$transaction(async (tx) => {
+    const prior = await tx.clientDomain.findUnique({
+      where: { domain },
+      select: { status: true },
+    });
+
+    const row = await tx.clientDomain.upsert({
+      where: { domain },
+      create: { domain, label: label ?? domain, status: status ?? 'active' },
+      update: { ...(label ? { label } : {}), ...(status ? { status } : {}) },
+      ...domainWithActiveSecret,
+    });
+
+    const priorStatus = prior ? normalizeStatus(prior.status) : undefined;
+    const nextStatus = normalizeStatus(row.status);
+    if (status !== undefined && priorStatus !== nextStatus) {
+      await writeAuditLog(
+        {
+          actorEmail: params.actorEmail,
+          action: nextStatus === 'disabled' ? 'domain.disabled' : 'domain.enabled',
+          targetDomain: domain,
+          metadata: { priorStatus: priorStatus ?? null, nextStatus },
+        },
+        { prisma: tx as unknown as AuditLogPrisma },
+      );
+    }
+
+    return row;
   });
 }
 
 export async function rotateAdminDomainSecret(
-  params: { clientSecret?: string; domain: string },
+  params: { clientSecret?: string; domain: string; actorEmail: string },
   deps?: { prisma?: DomainSecretPrisma },
 ): Promise<DomainMutationResult> {
   const prisma = prismaClient(deps);
@@ -181,6 +224,17 @@ export async function rotateAdminDomainSecret(
         secretDigest: secret.secretDigest,
       },
     });
+
+    await writeAuditLog(
+      {
+        actorEmail: params.actorEmail,
+        action: 'domain.secret_rotated',
+        targetDomain: domain,
+        metadata: { hashPrefix: secret.hashPrefix },
+      },
+      { prisma: tx as unknown as AuditLogPrisma },
+    );
+
     return tx.clientDomain.findUniqueOrThrow({ where: { domain }, ...domainWithActiveSecret });
   });
 

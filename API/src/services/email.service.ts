@@ -4,6 +4,7 @@ import {
   buildAccessRequestNotificationTemplate,
   buildAccountExistsTemplate,
   buildIntegrationApprovedTemplate,
+  buildIntegrationRequestNotificationTemplate,
   buildLoginLinkTemplate,
   buildPasswordResetTemplate,
   buildTeamInviteTemplate,
@@ -211,6 +212,30 @@ export async function sendIntegrationApprovedEmail(params: {
     link: params.link,
     domain: params.domain,
     ttlHours: params.ttlHours,
+    theme: params.theme,
+  });
+  await dispatchEmail({
+    to: params.to,
+    from: env.EMAIL_FROM,
+    replyTo: env.EMAIL_REPLY_TO,
+    subject: template.subject,
+    text: template.text,
+    html: template.html,
+  });
+}
+
+export async function sendIntegrationRequestNotificationEmail(params: {
+  to: string;
+  domain: string;
+  contactEmail: string;
+  adminUrl: string;
+  theme?: Partial<EmailTheme>;
+}): Promise<void> {
+  const env = getEnv();
+  const template = buildIntegrationRequestNotificationTemplate({
+    domain: params.domain,
+    contactEmail: params.contactEmail,
+    adminUrl: params.adminUrl,
     theme: params.theme,
   });
   await dispatchEmail({

@@ -19,10 +19,6 @@ const emailMocks = vi.hoisted(() => ({
   sendIntegrationApprovedEmail: vi.fn(async () => {}),
 }));
 
-const auditLogMocks = vi.hoisted(() => ({
-  writeAuditLog: vi.fn(),
-}));
-
 const prismaMocks = vi.hoisted(() => ({
   getPrisma: vi.fn(() => ({})),
   getAdminPrisma: vi.fn(() => ({})),
@@ -45,8 +41,6 @@ vi.mock('../../src/services/email.service.js', async () => {
   );
   return { ...actual, ...emailMocks };
 });
-
-vi.mock('../../src/services/audit-log.service.js', () => auditLogMocks);
 
 vi.mock('../../src/db/prisma.js', () => prismaMocks);
 
@@ -125,7 +119,6 @@ describe('/internal/admin/integration-requests', () => {
     integrationAcceptMocks.acceptIntegrationRequest.mockReset();
     integrationAcceptMocks.resendIntegrationClaim.mockReset();
     emailMocks.sendIntegrationApprovedEmail.mockReset().mockResolvedValue(undefined);
-    auditLogMocks.writeAuditLog.mockReset().mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -213,7 +206,7 @@ describe('/internal/admin/integration-requests', () => {
     }
   });
 
-  it('declines a pending request and writes an audit log', async () => {
+  it('declines a pending request', async () => {
     integrationRequestMocks.declineIntegrationRequest.mockResolvedValue(
       row({
         status: 'DECLINED',
@@ -246,13 +239,6 @@ describe('/internal/admin/integration-requests', () => {
         reason: 'suspicious',
         reviewerEmail: 'admin@example.com',
       });
-      expect(auditLogMocks.writeAuditLog).toHaveBeenCalledWith(
-        expect.objectContaining({
-          actorEmail: 'admin@example.com',
-          action: 'integration.declined',
-          targetDomain: 'client.example.com',
-        }),
-      );
     } finally {
       await app.close();
     }
@@ -278,7 +264,7 @@ describe('/internal/admin/integration-requests', () => {
     }
   });
 
-  it('accepts a pending request, emails the claim link, and writes an audit log', async () => {
+  it('accepts a pending request and emails the claim link', async () => {
     integrationAcceptMocks.acceptIntegrationRequest.mockResolvedValue({
       integration: row({
         status: 'ACCEPTED',
@@ -329,18 +315,6 @@ describe('/internal/admin/integration-requests', () => {
         link: 'https://auth.example.com/integrations/claim/raw-claim-token-abc',
         domain: 'client.example.com',
       });
-      expect(auditLogMocks.writeAuditLog).toHaveBeenCalledWith(
-        expect.objectContaining({
-          actorEmail: 'admin@example.com',
-          action: 'integration.accepted',
-          targetDomain: 'client.example.com',
-          metadata: expect.objectContaining({
-            integrationRequestId: 'req-1',
-            clientDomainId: 'cd-1',
-            hashPrefix: 'abcdabcdabcd',
-          }),
-        }),
-      );
     } finally {
       await app.close();
       Reflect.deleteProperty(process.env, 'PUBLIC_BASE_URL');
@@ -367,7 +341,7 @@ describe('/internal/admin/integration-requests', () => {
     }
   });
 
-  it('resends a claim link and writes an audit log', async () => {
+  it('resends a claim link', async () => {
     integrationAcceptMocks.resendIntegrationClaim.mockResolvedValue({
       integration: row({
         status: 'ACCEPTED',
@@ -394,28 +368,23 @@ describe('/internal/admin/integration-requests', () => {
       });
 
       expect(res.statusCode).toBe(200);
-      expect(integrationAcceptMocks.resendIntegrationClaim).toHaveBeenCalledWith({ id: 'req-1' });
+      expect(integrationAcceptMocks.resendIntegrationClaim).toHaveBeenCalledWith({
+        id: 'req-1',
+        actorEmail: 'admin@example.com',
+      });
       await new Promise((r) => setImmediate(r));
       expect(emailMocks.sendIntegrationApprovedEmail).toHaveBeenCalledWith({
         to: 'ops@client.example.com',
         link: 'https://auth.example.com/integrations/claim/fresh-claim-token',
         domain: 'client.example.com',
       });
-      expect(auditLogMocks.writeAuditLog).toHaveBeenCalledWith(
-        expect.objectContaining({
-          actorEmail: 'admin@example.com',
-          action: 'integration.claim_resent',
-          targetDomain: 'client.example.com',
-          metadata: { integrationRequestId: 'req-1' },
-        }),
-      );
     } finally {
       await app.close();
       Reflect.deleteProperty(process.env, 'PUBLIC_BASE_URL');
     }
   });
 
-  it('deletes a declined request and writes an audit log', async () => {
+  it('deletes a declined request', async () => {
     integrationRequestMocks.deleteIntegrationRequest.mockResolvedValue(
       row({ status: 'DECLINED' }),
     );
@@ -433,13 +402,10 @@ describe('/internal/admin/integration-requests', () => {
 
       expect(res.statusCode).toBe(200);
       expect(res.json()).toEqual({ ok: true });
-      expect(auditLogMocks.writeAuditLog).toHaveBeenCalledWith(
-        expect.objectContaining({
-          action: 'integration.deleted',
-          targetDomain: 'client.example.com',
-          metadata: expect.objectContaining({ integrationRequestId: 'req-1', priorStatus: 'DECLINED' }),
-        }),
-      );
+      expect(integrationRequestMocks.deleteIntegrationRequest).toHaveBeenCalledWith({
+        id: 'req-1',
+        actorEmail: 'admin@example.com',
+      });
     } finally {
       await app.close();
     }

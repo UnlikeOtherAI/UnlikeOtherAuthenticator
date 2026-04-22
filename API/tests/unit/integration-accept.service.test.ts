@@ -67,11 +67,17 @@ function makePrisma(init: {
   integration: IntegrationRow | null;
   conflict?: { id: string } | null;
   claimTokens?: ClaimRow[];
-}): { prisma: unknown; claimRows: ClaimRow[]; domainCreate: ReturnType<typeof vi.fn> } {
+}): {
+  prisma: unknown;
+  claimRows: ClaimRow[];
+  domainCreate: ReturnType<typeof vi.fn>;
+  auditCreate: ReturnType<typeof vi.fn>;
+} {
   const integrationRow = init.integration;
   const claimRows = init.claimTokens ? [...init.claimTokens] : [];
 
   const domainCreate = vi.fn(async () => ({ id: 'cd-1' }));
+  const auditCreate = vi.fn(async () => ({}));
 
   const tx = {
     clientDomainIntegrationRequest: {
@@ -88,6 +94,7 @@ function makePrisma(init: {
     },
     clientDomainJwk: {},
     clientDomainSecret: {},
+    adminAuditLog: { create: auditCreate },
     integrationClaimToken: {
       create: vi.fn(async ({ data }: { data: Omit<ClaimRow, 'id' | 'createdAt' | 'usedAt'> }) => {
         const row: ClaimRow = {
@@ -135,7 +142,7 @@ function makePrisma(init: {
     $transaction: async <T>(fn: (innerTx: unknown) => Promise<T>): Promise<T> => fn(tx),
   };
 
-  return { prisma, claimRows, domainCreate };
+  return { prisma, claimRows, domainCreate, auditCreate };
 }
 
 describe('acceptIntegrationRequest', () => {
@@ -150,8 +157,8 @@ describe('acceptIntegrationRequest', () => {
     else process.env.SHARED_SECRET = originalSharedSecret;
   });
 
-  it('creates a ClientDomain, writes a claim token, and flips the request to ACCEPTED', async () => {
-    const { prisma, claimRows, domainCreate } = makePrisma({ integration: baseRow() });
+  it('creates a ClientDomain, writes a claim token, flips the request to ACCEPTED, and emits an audit log inside the tx', async () => {
+    const { prisma, claimRows, domainCreate, auditCreate } = makePrisma({ integration: baseRow() });
 
     const result = await acceptIntegrationRequest(
       { id: 'req-1', reviewerEmail: 'admin@example.com', label: 'Client Inc' },
@@ -177,6 +184,14 @@ describe('acceptIntegrationRequest', () => {
     expect(result.rawClientSecret.length).toBeGreaterThanOrEqual(32);
     expect(result.clientHash).toMatch(/^[a-f0-9]{64}$/);
     expect(result.claim.rawToken).toMatch(/^[A-Za-z0-9_-]+$/);
+
+    expect(auditCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        actorEmail: 'admin@example.com',
+        action: 'integration.accepted',
+        targetDomain: 'client.example.com',
+      }),
+    });
   });
 
   it('rejects when the request is already accepted', async () => {
@@ -242,13 +257,13 @@ describe('resendIntegrationClaim', () => {
       usedAt: null,
       createdAt: new Date('2026-04-22T10:00:00Z'),
     };
-    const { prisma, claimRows } = makePrisma({
+    const { prisma, claimRows, auditCreate } = makePrisma({
       integration: baseRow({ status: 'ACCEPTED' }),
       claimTokens: [existingClaim],
     });
 
     const result = await resendIntegrationClaim(
-      { id: 'req-1' },
+      { id: 'req-1', actorEmail: 'admin@example.com' },
       { prisma: prisma as never, sharedSecret },
     );
 
@@ -257,6 +272,14 @@ describe('resendIntegrationClaim', () => {
     // Old row was deleted and a fresh one was created.
     expect(claimRows).toHaveLength(1);
     expect(claimRows[0].id).not.toBe('claim-old');
+
+    expect(auditCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        actorEmail: 'admin@example.com',
+        action: 'integration.claim_resent',
+        targetDomain: 'client.example.com',
+      }),
+    });
   });
 
   it('rejects when no unused claim token remains (already claimed)', async () => {
@@ -267,7 +290,7 @@ describe('resendIntegrationClaim', () => {
 
     await expect(
       resendIntegrationClaim(
-        { id: 'req-1' },
+        { id: 'req-1', actorEmail: 'admin@example.com' },
         { prisma: prisma as never, sharedSecret },
       ),
     ).rejects.toMatchObject({ statusCode: 400, message: 'CLAIM_ALREADY_CLAIMED' });
@@ -278,7 +301,7 @@ describe('resendIntegrationClaim', () => {
 
     await expect(
       resendIntegrationClaim(
-        { id: 'req-1' },
+        { id: 'req-1', actorEmail: 'admin@example.com' },
         { prisma: prisma as never, sharedSecret },
       ),
     ).rejects.toMatchObject({ statusCode: 400, message: 'INTEGRATION_REQUEST_NOT_ACCEPTED' });

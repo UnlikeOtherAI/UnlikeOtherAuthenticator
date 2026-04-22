@@ -17,8 +17,9 @@ const jwk = {
   e: 'AQAB',
 };
 
-function makePrisma(findFirst: ReturnType<typeof vi.fn>, extras?: Partial<PrismaClient['clientDomainIntegrationRequest']>): PrismaClient {
-  return {
+function makePrisma(findFirst: ReturnType<typeof vi.fn>, extras?: Partial<PrismaClient['clientDomainIntegrationRequest']>): PrismaClient & { __auditCreate: ReturnType<typeof vi.fn> } {
+  const auditCreate = vi.fn().mockResolvedValue({});
+  const client = {
     clientDomainIntegrationRequest: {
       findFirst,
       findUnique: vi.fn().mockResolvedValue(null),
@@ -30,7 +31,11 @@ function makePrisma(findFirst: ReturnType<typeof vi.fn>, extras?: Partial<Prisma
       delete: vi.fn().mockImplementation(({ where }) => Promise.resolve({ id: where.id })),
       ...extras,
     },
-  } as unknown as PrismaClient;
+    adminAuditLog: { create: auditCreate },
+    $transaction: vi.fn(async <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => fn(client)),
+    __auditCreate: auditCreate,
+  };
+  return client as unknown as PrismaClient & { __auditCreate: ReturnType<typeof vi.fn> };
 }
 
 describe('findOpenIntegrationRequest', () => {
@@ -203,9 +208,17 @@ describe('declineIntegrationRequest', () => {
     ).rejects.toMatchObject({ statusCode: 400, message: 'INTEGRATION_REQUEST_NOT_PENDING' });
   });
 
-  it('updates status to DECLINED with reason + reviewer', async () => {
-    const findUnique = vi.fn().mockResolvedValue({ id: 'req-1', status: 'PENDING' });
-    const update = vi.fn().mockImplementation(({ where, data }) => ({ id: where.id, ...data }));
+  it('updates status to DECLINED with reason + reviewer and writes an audit log inside the transaction', async () => {
+    const findUnique = vi.fn().mockResolvedValue({
+      id: 'req-1',
+      status: 'PENDING',
+      domain: 'client.example.com',
+    });
+    const update = vi.fn().mockImplementation(({ where, data }) => ({
+      id: where.id,
+      domain: 'client.example.com',
+      ...data,
+    }));
     const prisma = makePrisma(vi.fn(), {
       findUnique,
       update,
@@ -226,6 +239,13 @@ describe('declineIntegrationRequest', () => {
       }),
     });
     expect(row.status).toBe('DECLINED');
+    expect(prisma.__auditCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        actorEmail: 'admin@example.com',
+        action: 'integration.declined',
+        targetDomain: 'client.example.com',
+      }),
+    });
   });
 });
 
@@ -235,7 +255,9 @@ describe('deleteIntegrationRequest', () => {
       findUnique: vi.fn().mockResolvedValue(null),
     } as Partial<PrismaClient['clientDomainIntegrationRequest']>);
 
-    await expect(deleteIntegrationRequest('missing', { prisma })).rejects.toMatchObject({
+    await expect(
+      deleteIntegrationRequest({ id: 'missing', actorEmail: 'admin@example.com' }, { prisma }),
+    ).rejects.toMatchObject({
       statusCode: 404,
       message: 'INTEGRATION_REQUEST_NOT_FOUND',
     });
@@ -246,13 +268,15 @@ describe('deleteIntegrationRequest', () => {
       findUnique: vi.fn().mockResolvedValue({ id: 'req-1', status: 'PENDING' }),
     } as Partial<PrismaClient['clientDomainIntegrationRequest']>);
 
-    await expect(deleteIntegrationRequest('req-1', { prisma })).rejects.toMatchObject({
+    await expect(
+      deleteIntegrationRequest({ id: 'req-1', actorEmail: 'admin@example.com' }, { prisma }),
+    ).rejects.toMatchObject({
       statusCode: 400,
       message: 'INTEGRATION_REQUEST_STILL_PENDING',
     });
   });
 
-  it('deletes a DECLINED row', async () => {
+  it('deletes a DECLINED row and writes an audit log inside the transaction', async () => {
     const findUnique = vi.fn().mockResolvedValue({ id: 'req-1', status: 'DECLINED', domain: 'c.example.com' });
     const del = vi.fn().mockResolvedValue({ id: 'req-1' });
     const prisma = makePrisma(vi.fn(), {
@@ -260,8 +284,18 @@ describe('deleteIntegrationRequest', () => {
       delete: del,
     } as Partial<PrismaClient['clientDomainIntegrationRequest']>);
 
-    const row = await deleteIntegrationRequest('req-1', { prisma });
+    const row = await deleteIntegrationRequest(
+      { id: 'req-1', actorEmail: 'admin@example.com' },
+      { prisma },
+    );
     expect(del).toHaveBeenCalledWith({ where: { id: 'req-1' } });
     expect(row.status).toBe('DECLINED');
+    expect(prisma.__auditCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        actorEmail: 'admin@example.com',
+        action: 'integration.deleted',
+        targetDomain: 'c.example.com',
+      }),
+    });
   });
 });

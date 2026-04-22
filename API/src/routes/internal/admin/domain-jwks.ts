@@ -2,7 +2,6 @@ import type { FastifyInstance, RouteShorthandOptions } from 'fastify';
 import { z } from 'zod';
 
 import { requireAdminSuperuser } from '../../../middleware/admin-superuser.js';
-import { writeAuditLog } from '../../../services/audit-log.service.js';
 import {
   addJwkForDomain,
   deactivateJwk,
@@ -81,13 +80,7 @@ export function registerInternalAdminDomainJwkRoutes(app: FastifyInstance): void
       const { jwk } = AddJwkBodySchema.parse(request.body ?? {});
       const actorEmail = requireActorEmail(request);
 
-      const row = await addJwkForDomain({ domain, jwk, createdByEmail: actorEmail });
-      await writeAuditLog({
-        actorEmail,
-        action: 'jwk.added',
-        targetDomain: domain,
-        metadata: { kid: row.kid, fingerprint: row.fingerprint },
-      });
+      const row = await addJwkForDomain({ domain, jwk, actorEmail });
       return toAdminJwk(row);
     },
   );
@@ -99,13 +92,7 @@ export function registerInternalAdminDomainJwkRoutes(app: FastifyInstance): void
       const { domain, kid } = DomainKidParamsSchema.parse(request.params);
       const actorEmail = requireActorEmail(request);
 
-      const row = await deactivateJwk({ domain, kid });
-      await writeAuditLog({
-        actorEmail,
-        action: 'jwk.deactivated',
-        targetDomain: domain,
-        metadata: { kid: row.kid, fingerprint: row.fingerprint },
-      });
+      const row = await deactivateJwk({ domain, kid, actorEmail });
       return toAdminJwk(row);
     },
   );

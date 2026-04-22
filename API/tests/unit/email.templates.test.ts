@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildAccessRequestNotificationTemplate,
   buildAccountExistsTemplate,
+  buildIntegrationRequestNotificationTemplate,
   buildRegistrationLinkTemplate,
   buildLoginLinkTemplate,
   buildPasswordResetTemplate,
