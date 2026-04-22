@@ -16,6 +16,18 @@ UOA uses two independent secrets. They cover different things and are stored in 
 | **RS256 signing key + JWKS** | Signing the config JWT returned by your \`config_url\`. UOA verifies the signature on every fetch. | The PUBLIC JWK is registered with UOA (Phase 0 below). The PRIVATE key stays in your client backend only. | Asymmetric. RS256. UOA never sees the private key. |
 | **Per-domain client secret** | Bearer authorization for backend-to-backend calls (\`/auth/token\`, \`/auth/revoke\`, \`/domain/*\`, etc.). | Created in the UOA Admin UI under **Configuration > Secrets** for one specific domain. Shown once. | Symmetric. \`SHA256(domain + clientSecret)\` is the bearer token. UOA stores only an HMAC digest of that hash. |
 
+## Identifying UOA-issued values at a glance
+
+Everything UOA mints is prefixed so you never mistake it for some other opaque string:
+
+| Value | Prefix | Example |
+|---|---|---|
+| \`client_secret\` (per-domain) | \`uoa_sec_\` | \`uoa_sec_2b9Xf…\` |
+| Claim token (embedded in claim URL) | \`uoa_claim_\` | \`uoa_claim_7d4X…\` |
+| Public-JWK fingerprint (shown in admin + /api) | \`uoa_fp_\` | \`uoa_fp_OYO4_OIgDb1…\` |
+
+The hashing rule is unchanged: **the entire string you were given** is the input. When UOA hands you \`uoa_sec_abc123…\`, pass that whole string as \`clientSecret\` into \`SHA256(domain + clientSecret)\`. Do not strip the prefix. \`client_hash\` is still the 64-hex SHA256 output; \`hash_prefix\` is still its first 12 hex chars.
+
 You need BOTH to ship a working integration. Phase 0 + Phase 1 below cover them in order.
 
 ## Service discovery

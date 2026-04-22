@@ -3,6 +3,8 @@ import type {
   Domain,
   DomainDirectoryDetail,
   DomainJwk,
+  IntegrationClaimCredentials,
+  IntegrationClaimDeliveryMode,
   IntegrationRequestDetail,
   IntegrationRequestDetailWithCredentials,
   IntegrationRequestStatus,
@@ -25,8 +27,10 @@ export type DomainSecretResponse = {
 export type DomainRotateResponse = {
   domain: string;
   contact_email: string;
+  delivery_mode: IntegrationClaimDeliveryMode;
   email_dispatched: boolean;
   hash_prefix: string;
+  credentials?: IntegrationClaimCredentials;
 };
 
 export const adminService = {
@@ -42,8 +46,11 @@ export const adminService = {
     }),
   updateDomain: (domain: string, input: { label?: string; status?: 'active' | 'disabled' }) =>
     api.put<Domain>(`/internal/admin/domains/${encodeURIComponent(domain)}`, input),
-  rotateDomainSecret: (domain: string) =>
-    api.post<DomainRotateResponse>(`/internal/admin/domains/${encodeURIComponent(domain)}/rotate-secret`),
+  rotateDomainSecret: (domain: string, deliveryMode: IntegrationClaimDeliveryMode = 'email') =>
+    api.post<DomainRotateResponse>(
+      `/internal/admin/domains/${encodeURIComponent(domain)}/rotate-secret`,
+      { deliveryMode },
+    ),
   getOrganisations: () => api.get<AdminData['organisations']>('/internal/admin/organisations'),
   getOrganisation: (orgId: string) =>
     api.get<AdminData['organisations'][number] | null>(`/internal/admin/organisations/${encodeURIComponent(orgId)}`),

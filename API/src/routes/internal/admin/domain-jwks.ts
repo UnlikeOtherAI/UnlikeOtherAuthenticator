@@ -7,6 +7,7 @@ import {
   deactivateJwk,
   listJwksForDomain,
 } from '../../../services/client-jwk.service.js';
+import { displayJwkFingerprint } from '../../../utils/display-prefixes.js';
 import { normalizeDomain } from '../../../utils/domain.js';
 import { AppError } from '../../../utils/errors.js';
 
@@ -47,7 +48,7 @@ function toAdminJwk(row: {
   return {
     id: row.id,
     kid: row.kid,
-    fingerprint: row.fingerprint,
+    fingerprint: displayJwkFingerprint(row.fingerprint),
     active: row.active,
     created_at: row.createdAt.toISOString(),
     deactivated_at: row.deactivatedAt?.toISOString() ?? null,

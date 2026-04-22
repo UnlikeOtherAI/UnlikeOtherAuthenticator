@@ -79,8 +79,10 @@ export function hashClaimToken(rawToken: string): string {
  * Generate a 32-byte base64url claim token and its SHA-256 hash (hex). The raw
  * token is only surfaced to the caller — persist the hash, not the raw value.
  */
+export const CLAIM_TOKEN_PREFIX = 'uoa_claim_';
+
 export function generateClaimToken(): { rawToken: string; tokenHash: string } {
-  const rawToken = randomBytes(32).toString('base64url');
+  const rawToken = `${CLAIM_TOKEN_PREFIX}${randomBytes(32).toString('base64url')}`;
   return { rawToken, tokenHash: hashClaimToken(rawToken) };
 }
 

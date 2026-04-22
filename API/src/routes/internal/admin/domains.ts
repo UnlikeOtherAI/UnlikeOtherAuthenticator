@@ -36,6 +36,7 @@ const DomainUpdateSchema = z
 const DomainRotateSchema = z
   .object({
     client_secret: z.string().trim().min(32).optional(),
+    deliveryMode: z.enum(['email', 'reveal']).optional(),
   })
   .strict();
 
@@ -54,13 +55,25 @@ const mutationSchema = {
 
 const rotateResponseSchema = {
   type: 'object',
-  required: ['domain', 'contact_email', 'email_dispatched', 'hash_prefix'],
+  required: ['domain', 'contact_email', 'delivery_mode', 'email_dispatched', 'hash_prefix'],
   additionalProperties: false,
   properties: {
     domain: { type: 'string' },
     contact_email: { type: 'string' },
+    delivery_mode: { type: 'string' },
     email_dispatched: { type: 'boolean' },
     hash_prefix: { type: 'string' },
+    credentials: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['domain', 'client_secret', 'client_hash', 'hash_prefix'],
+      properties: {
+        domain: { type: 'string' },
+        client_secret: { type: 'string' },
+        client_hash: { type: 'string' },
+        hash_prefix: { type: 'string' },
+      },
+    },
   },
 } as const;
 
@@ -167,17 +180,31 @@ export function registerInternalAdminDomainRoutes(app: FastifyInstance): void {
         actorEmail,
       });
 
-      const emailDispatched = await dispatchRotationClaimEmail({
-        to: result.contactEmail,
-        link: buildClaimUrl(result.claim.rawToken),
-        domain: result.domain,
-      });
+      const deliveryMode = body.deliveryMode ?? 'email';
+      const emailDispatched = deliveryMode === 'email'
+        ? await dispatchRotationClaimEmail({
+            to: result.contactEmail,
+            link: buildClaimUrl(result.claim.rawToken),
+            domain: result.domain,
+          })
+        : false;
 
       return {
         domain: result.domain,
         contact_email: result.contactEmail,
+        delivery_mode: deliveryMode,
         email_dispatched: emailDispatched,
         hash_prefix: result.hashPrefix,
+        ...(deliveryMode === 'reveal'
+          ? {
+              credentials: {
+                domain: result.domain,
+                client_secret: result.rawClientSecret,
+                client_hash: result.clientHash,
+                hash_prefix: result.hashPrefix,
+              },
+            }
+          : {}),
       };
     },
   );

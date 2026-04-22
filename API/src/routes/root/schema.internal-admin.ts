@@ -79,14 +79,16 @@ export const internalAdminEndpoints: EndpointSchema[] = [
     method: 'POST',
     path: '/internal/admin/domains/:domain/rotate-secret',
     description:
-      'Issue a rotation claim link for the domain. Emails the partner contact_email from the most recent ACCEPTED integration request and leaves the previous secret active until the partner consumes the claim. Does NOT return the raw client secret.',
+      'Rotate the domain client secret. deliveryMode=email (default) mints a 24h one-time claim link and emails it to the partner; the previous secret keeps working until the claim is consumed. deliveryMode=reveal returns the freshly minted credentials once in the response for out-of-band delivery and skips email. Self-supplied or generated secrets are prefixed with `uoa_sec_` and the hashing rule is still `sha256(domain + client_secret)` — prefix is part of the hashed input.',
     auth: adminAuth,
     body: {
       client_secret:
-        'string (optional, min 32); omitted means the API generates one. Only delivered to the partner via the one-time claim link.',
+        'string (optional, min 32); omit to let the API generate one. Generated secrets start with `uoa_sec_`.',
+      deliveryMode:
+        '"email" (default) or "reveal" — reveal returns credentials once and skips email',
     },
     response: {
-      200: '{ domain, contact_email, email_dispatched, hash_prefix }',
+      200: '{ domain, contact_email, delivery_mode, email_dispatched, hash_prefix, credentials? }. credentials = { domain, client_secret, client_hash, hash_prefix } is only present when delivery_mode=reveal and will never appear again.',
       '401/403': authFailures,
     },
   },

@@ -17,6 +17,7 @@ import {
   type IntegrationRequestStatus,
 } from '../../../services/integration-request.service.js';
 import { getAppLogger } from '../../../utils/app-logger.js';
+import { displayJwkFingerprint } from '../../../utils/display-prefixes.js';
 import { AppError } from '../../../utils/errors.js';
 
 const ListQuerySchema = z
@@ -76,7 +77,7 @@ function toAdminRow(row: IntegrationRequestRow) {
     status: row.status,
     contact_email: row.contactEmail,
     kid: row.kid,
-    jwk_fingerprint: row.jwkFingerprint,
+    jwk_fingerprint: displayJwkFingerprint(row.jwkFingerprint),
     jwks_url: row.jwksUrl,
     config_url: row.configUrl,
     decline_reason: row.declineReason,

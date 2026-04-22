@@ -133,7 +133,7 @@ describe('/internal/admin/domains/:domain/jwks', () => {
       expect(clientJwkMocks.listJwksForDomain).toHaveBeenCalledWith('client.example.com');
       const body = res.json();
       expect(body).toHaveLength(1);
-      expect(body[0]).toMatchObject({ kid: 'kid-1', fingerprint: 'fp-hash', active: true });
+      expect(body[0]).toMatchObject({ kid: 'kid-1', fingerprint: 'uoa_fp_fp-hash', active: true });
     } finally {
       await app.close();
     }

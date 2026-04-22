@@ -3,8 +3,10 @@ import { createHash, createHmac, randomBytes } from 'node:crypto';
 import { requireEnv } from '../config/env.js';
 import { normalizeDomain } from './domain.js';
 
+export const CLIENT_SECRET_PREFIX = 'uoa_sec_';
+
 export function generateClientSecret(): string {
-  return randomBytes(36).toString('base64url');
+  return `${CLIENT_SECRET_PREFIX}${randomBytes(36).toString('base64url')}`;
 }
 
 export function createDomainClientHash(domain: string, clientSecret: string): string {

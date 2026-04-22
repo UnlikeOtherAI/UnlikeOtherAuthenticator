@@ -203,6 +203,8 @@ export type RotateDomainSecretResult = {
   domain: string;
   contactEmail: string;
   hashPrefix: string;
+  rawClientSecret: string;
+  clientHash: string;
   claim: ClaimTokenCreated;
 };
 
@@ -229,7 +231,8 @@ export async function rotateAdminDomainSecret(
   if (rawClientSecret.length < 32) {
     throw new AppError('BAD_REQUEST', 400, 'CLIENT_SECRET_TOO_SHORT');
   }
-  const hashPrefix = createDomainClientHash(domain, rawClientSecret).slice(0, 12);
+  const clientHash = createDomainClientHash(domain, rawClientSecret);
+  const hashPrefix = clientHash.slice(0, 12);
 
   return prisma.$transaction(async (tx) => {
     const clientDomain = await tx.clientDomain.findUnique({
@@ -286,6 +289,8 @@ export async function rotateAdminDomainSecret(
       domain,
       contactEmail: integration.contactEmail,
       hashPrefix,
+      rawClientSecret,
+      clientHash,
       claim,
     };
   });

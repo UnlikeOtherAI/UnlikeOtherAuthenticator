@@ -36,7 +36,8 @@ export function SecretsPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin'] }),
   });
   const rotateSecret = useMutation({
-    mutationFn: adminService.rotateDomainSecret,
+    mutationFn: (input: { domain: string; deliveryMode: 'email' | 'reveal' }) =>
+      adminService.rotateDomainSecret(input.domain, input.deliveryMode),
     onSuccess: (result) => {
       setRotateResult(result);
       void queryClient.invalidateQueries({ queryKey: ['admin'] });
@@ -88,14 +89,27 @@ export function SecretsPage() {
                     <ActionButton
                       tone="amber"
                       onClick={() => confirm(
-                        `Rotate ${domain.name}?`,
+                        `Email claim link for ${domain.name}?`,
                         'A one-time claim link will be emailed to the partner contact. The current secret keeps working until the partner claims the new one.',
                         async () => {
-                          await rotateSecret.mutateAsync(domain.name);
+                          await rotateSecret.mutateAsync({ domain: domain.name, deliveryMode: 'email' });
                         },
                       )}
                     >
                       Rotate
+                    </ActionButton>
+                    <ActionDivider />
+                    <ActionButton
+                      tone="amber"
+                      onClick={() => confirm(
+                        `Rotate ${domain.name} and reveal the new secret?`,
+                        'A fresh secret will be generated and shown in the admin UI once. No email is sent — deliver the credentials to the partner through your own secure channel. The current secret keeps working until the partner switches to the new one.',
+                        async () => {
+                          await rotateSecret.mutateAsync({ domain: domain.name, deliveryMode: 'reveal' });
+                        },
+                      )}
+                    >
+                      Rotate &amp; reveal
                     </ActionButton>
                     <ActionDivider />
                     <ActionButton
@@ -138,9 +152,16 @@ function RotateNoticeModal({
   onClose: () => void;
   result: DomainRotateResponse | null;
 }) {
+  const reveal = result?.delivery_mode === 'reveal' && result.credentials;
   const dispatched = result?.email_dispatched ?? false;
-  const title = dispatched ? 'Rotation claim sent' : 'Rotation claim not delivered';
-  const description = dispatched
+  const title = reveal
+    ? 'New credentials (shown once)'
+    : dispatched
+    ? 'Rotation claim sent'
+    : 'Rotation claim not delivered';
+  const description = reveal
+    ? `Copy the secret below now — it will not be displayed again. The previous secret keeps working until the partner switches to the new one. Deliver these to ${result?.contact_email ?? 'the partner contact'} through your own secure channel.`
+    : dispatched
     ? `A one-time claim link has been emailed to ${result?.contact_email ?? 'the partner contact'}. The previous secret stays active until they open the link and confirm.`
     : `A claim token was created but the email to ${result?.contact_email ?? 'the partner contact'} could not be dispatched. Retry the rotation or deliver the link out-of-band.`;
 
@@ -151,8 +172,28 @@ function RotateNoticeModal({
       title={title}
       footer={<Button variant="primary" onClick={onClose}>Done</Button>}
     >
-      <div className="space-y-2 text-sm text-gray-600">
+      <div className="space-y-3 text-sm text-gray-600">
         <p>{description}</p>
+        {result?.credentials ? (
+          <dl className="grid grid-cols-1 gap-2 rounded border border-amber-200 bg-amber-50 p-3 text-xs">
+            <div>
+              <dt className="font-semibold text-amber-900">domain</dt>
+              <dd className="break-all font-mono text-gray-800">{result.credentials.domain}</dd>
+            </div>
+            <div>
+              <dt className="font-semibold text-amber-900">client_secret</dt>
+              <dd className="break-all font-mono text-gray-800">{result.credentials.client_secret}</dd>
+            </div>
+            <div>
+              <dt className="font-semibold text-amber-900">client_hash</dt>
+              <dd className="break-all font-mono text-gray-800">{result.credentials.client_hash}</dd>
+            </div>
+            <div>
+              <dt className="font-semibold text-amber-900">hash_prefix</dt>
+              <dd className="break-all font-mono text-gray-800">{result.credentials.hash_prefix}</dd>
+            </div>
+          </dl>
+        ) : null}
         {result ? (
           <p className="text-xs text-gray-400">
             Domain: <span className="font-mono">{result.domain}</span> · Hash prefix:{' '}
