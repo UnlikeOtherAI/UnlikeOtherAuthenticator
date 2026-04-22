@@ -8,7 +8,13 @@ import type { AdminData } from '../features/admin/types';
 import { useAdminSession, useAdminSessionActions } from '../features/auth/admin-session';
 import { useAdminUi } from '../features/shell/admin-ui';
 import { cn } from '../utils/cn';
+import { formatCompactCount } from '../utils/format-count';
 import { navSections, type NavItem } from './navigation';
+
+type SidebarBadge = {
+  label: string;
+  tone: 'alert' | 'default';
+};
 
 export function Sidebar() {
   const { data } = useDashboardQuery();
@@ -43,7 +49,7 @@ export function Sidebar() {
                 <SidebarLink
                   key={item.path}
                   item={item}
-                  count={getBadgeCount(item, data, pendingIntegrationCount)}
+                  badge={getSidebarBadge(item, data, pendingIntegrationCount)}
                   onClick={closeSidebar}
                 />
               ))}
@@ -65,7 +71,7 @@ export function Sidebar() {
   );
 }
 
-function SidebarLink({ count, item, onClick }: { count?: string; item: NavItem; onClick: () => void }) {
+function SidebarLink({ badge, item, onClick }: { badge?: SidebarBadge; item: NavItem; onClick: () => void }) {
   return (
     <NavLink
       to={item.path}
@@ -79,18 +85,39 @@ function SidebarLink({ count, item, onClick }: { count?: string; item: NavItem; 
     >
       <Icon name={item.icon} className="h-4 w-4 shrink-0" />
       <span className="min-w-0 flex-1 truncate">{item.label}</span>
-      {count ? <Badge className="bg-slate-700 text-slate-300">{count}</Badge> : null}
+      {badge ? (
+        <Badge
+          className={cn(
+            'shrink-0',
+            badge.tone === 'alert' ? 'bg-red-900 text-red-300' : 'bg-slate-700 text-slate-300',
+          )}
+        >
+          {badge.label}
+        </Badge>
+      ) : null}
     </NavLink>
   );
 }
 
-function getBadgeCount(item: NavItem, data: AdminData | undefined, pendingIntegrationCount: number) {
+function getSidebarBadge(item: NavItem, data: AdminData | undefined, pendingIntegrationCount: number): SidebarBadge | undefined {
+  const value = getBadgeValue(item, data, pendingIntegrationCount);
+  if (value === undefined) {
+    return undefined;
+  }
+
+  return {
+    label: formatCompactCount(value),
+    tone: item.badgeKey === 'integrationRequests' ? 'alert' : 'default',
+  };
+}
+
+function getBadgeValue(item: NavItem, data: AdminData | undefined, pendingIntegrationCount: number) {
   if (!item.badgeKey) {
     return undefined;
   }
 
   if (item.badgeKey === 'integrationRequests') {
-    return pendingIntegrationCount > 0 ? String(pendingIntegrationCount) : undefined;
+    return pendingIntegrationCount > 0 ? pendingIntegrationCount : undefined;
   }
 
   if (!data) {
@@ -98,12 +125,12 @@ function getBadgeCount(item: NavItem, data: AdminData | undefined, pendingIntegr
   }
 
   if (item.badgeKey === 'users') {
-    return '1.2k';
+    return data.stats.users;
   }
 
   if (item.badgeKey === 'teams') {
-    return String(data.organisations.reduce((total, org) => total + org.teams.length, 0));
+    return data.organisations.reduce((total, org) => total + org.teams.length, 0);
   }
 
-  return String(data.stats[item.badgeKey]);
+  return data.stats[item.badgeKey];
 }
