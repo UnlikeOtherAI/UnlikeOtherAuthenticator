@@ -10,6 +10,15 @@ const integrationRequestMocks = vi.hoisted(() => ({
   deleteIntegrationRequest: vi.fn(),
 }));
 
+const integrationAcceptMocks = vi.hoisted(() => ({
+  acceptIntegrationRequest: vi.fn(),
+  resendIntegrationClaim: vi.fn(),
+}));
+
+const emailMocks = vi.hoisted(() => ({
+  sendIntegrationApprovedEmail: vi.fn(async () => {}),
+}));
+
 const auditLogMocks = vi.hoisted(() => ({
   writeAuditLog: vi.fn(),
 }));
@@ -25,6 +34,15 @@ vi.mock('../../src/services/integration-request.service.js', async () => {
     '../../src/services/integration-request.service.js',
   );
   return { ...actual, ...integrationRequestMocks };
+});
+
+vi.mock('../../src/services/integration-accept.service.js', () => integrationAcceptMocks);
+
+vi.mock('../../src/services/email.service.js', async () => {
+  const actual = await vi.importActual<typeof import('../../src/services/email.service.js')>(
+    '../../src/services/email.service.js',
+  );
+  return { ...actual, ...emailMocks };
 });
 
 vi.mock('../../src/services/audit-log.service.js', () => auditLogMocks);
@@ -103,6 +121,9 @@ describe('/internal/admin/integration-requests', () => {
     integrationRequestMocks.getIntegrationRequestById.mockReset().mockResolvedValue(null);
     integrationRequestMocks.declineIntegrationRequest.mockReset();
     integrationRequestMocks.deleteIntegrationRequest.mockReset();
+    integrationAcceptMocks.acceptIntegrationRequest.mockReset();
+    integrationAcceptMocks.resendIntegrationClaim.mockReset();
+    emailMocks.sendIntegrationApprovedEmail.mockReset().mockResolvedValue(undefined);
     auditLogMocks.writeAuditLog.mockReset().mockResolvedValue(undefined);
   });
 
@@ -253,6 +274,143 @@ describe('/internal/admin/integration-requests', () => {
       expect(integrationRequestMocks.declineIntegrationRequest).not.toHaveBeenCalled();
     } finally {
       await app.close();
+    }
+  });
+
+  it('accepts a pending request, emails the claim link, and writes an audit log', async () => {
+    integrationAcceptMocks.acceptIntegrationRequest.mockResolvedValue({
+      integration: row({
+        status: 'ACCEPTED',
+        reviewedAt: new Date('2026-04-22T12:00:00Z'),
+        reviewedByEmail: 'admin@example.com',
+        clientDomainId: 'cd-1',
+      }),
+      clientDomainId: 'cd-1',
+      clientHash: 'abcd'.repeat(16),
+      hashPrefix: 'abcdabcdabcd',
+      rawClientSecret: 'raw-secret-long-enough-to-pass-min',
+      claim: {
+        rawToken: 'raw-claim-token-abc',
+        tokenHash: 'hash-abc',
+        expiresAt: new Date('2026-04-23T12:00:00Z'),
+      },
+    });
+    process.env.PUBLIC_BASE_URL = 'https://auth.example.com';
+
+    const { createApp } = await import('../../src/app.js');
+    const app = await createApp();
+    await app.ready();
+
+    try {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/internal/admin/integration-requests/req-1/accept',
+        headers: { authorization: `Bearer ${await accessToken('superuser')}` },
+        payload: { label: 'Client Inc' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({
+        status: 'ACCEPTED',
+        reviewed_by_email: 'admin@example.com',
+        client_domain_id: 'cd-1',
+      });
+      expect(integrationAcceptMocks.acceptIntegrationRequest).toHaveBeenCalledWith({
+        id: 'req-1',
+        reviewerEmail: 'admin@example.com',
+        label: 'Client Inc',
+        clientSecret: undefined,
+      });
+      // Email dispatch is fire-and-forget; let microtasks flush.
+      await new Promise((r) => setImmediate(r));
+      expect(emailMocks.sendIntegrationApprovedEmail).toHaveBeenCalledWith({
+        to: 'ops@client.example.com',
+        link: 'https://auth.example.com/integrations/claim/raw-claim-token-abc',
+        domain: 'client.example.com',
+      });
+      expect(auditLogMocks.writeAuditLog).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorEmail: 'admin@example.com',
+          action: 'integration.accepted',
+          targetDomain: 'client.example.com',
+          metadata: expect.objectContaining({
+            integrationRequestId: 'req-1',
+            clientDomainId: 'cd-1',
+            hashPrefix: 'abcdabcdabcd',
+          }),
+        }),
+      );
+    } finally {
+      await app.close();
+      Reflect.deleteProperty(process.env, 'PUBLIC_BASE_URL');
+    }
+  });
+
+  it('rejects accept with a client secret shorter than 32 chars', async () => {
+    const { createApp } = await import('../../src/app.js');
+    const app = await createApp();
+    await app.ready();
+
+    try {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/internal/admin/integration-requests/req-1/accept',
+        headers: { authorization: `Bearer ${await accessToken('superuser')}` },
+        payload: { clientSecret: 'too-short' },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(integrationAcceptMocks.acceptIntegrationRequest).not.toHaveBeenCalled();
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('resends a claim link and writes an audit log', async () => {
+    integrationAcceptMocks.resendIntegrationClaim.mockResolvedValue({
+      integration: row({
+        status: 'ACCEPTED',
+        reviewedByEmail: 'admin@example.com',
+        clientDomainId: 'cd-1',
+      }),
+      claim: {
+        rawToken: 'fresh-claim-token',
+        tokenHash: 'hash-fresh',
+        expiresAt: new Date('2026-04-23T12:00:00Z'),
+      },
+    });
+    process.env.PUBLIC_BASE_URL = 'https://auth.example.com/';
+
+    const { createApp } = await import('../../src/app.js');
+    const app = await createApp();
+    await app.ready();
+
+    try {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/internal/admin/integration-requests/req-1/resend-claim',
+        headers: { authorization: `Bearer ${await accessToken('superuser')}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(integrationAcceptMocks.resendIntegrationClaim).toHaveBeenCalledWith({ id: 'req-1' });
+      await new Promise((r) => setImmediate(r));
+      expect(emailMocks.sendIntegrationApprovedEmail).toHaveBeenCalledWith({
+        to: 'ops@client.example.com',
+        link: 'https://auth.example.com/integrations/claim/fresh-claim-token',
+        domain: 'client.example.com',
+      });
+      expect(auditLogMocks.writeAuditLog).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorEmail: 'admin@example.com',
+          action: 'integration.claim_resent',
+          targetDomain: 'client.example.com',
+          metadata: { integrationRequestId: 'req-1' },
+        }),
+      );
+    } finally {
+      await app.close();
+      Reflect.deleteProperty(process.env, 'PUBLIC_BASE_URL');
     }
   });
 

@@ -94,9 +94,12 @@ function buildEmailHtml(params: {
   buttonLabel: string;
   buttonUrl: string;
   minutes: number;
+  expiryLabel?: string;
 }): string {
   const t = params.theme;
   const escapedLink = escapeHtml(params.buttonUrl);
+  const expiryLabel =
+    params.expiryLabel ?? `This link expires in ${params.minutes} minutes and can only be used once.`;
 
   const fontLink = t.fontImportUrl
     ? `<link rel="stylesheet" href="${escapeHtml(t.fontImportUrl)}" />`
@@ -135,7 +138,7 @@ function buildEmailHtml(params: {
             </tr>
             <tr>
               <td style="padding:0 24px 16px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:${t.muted};font-size:12px;line-height:18px;">
-                This link expires in ${params.minutes} minutes and can only be used once.
+                ${escapeHtml(expiryLabel)}
               </td>
             </tr>
             <tr>
@@ -329,6 +332,46 @@ export function buildPasswordResetTemplate(params: { link: string; theme?: Parti
     buttonLabel: 'Reset password',
     buttonUrl: params.link,
     minutes,
+  });
+
+  return { subject, text, html };
+}
+
+export function buildIntegrationApprovedTemplate(params: {
+  link: string;
+  domain: string;
+  ttlHours?: number;
+  theme?: Partial<EmailTheme>;
+}): EmailTemplate {
+  const theme = resolveTheme(params.theme);
+  const ttlHours = params.ttlHours ?? 24;
+  const minutes = Math.max(1, Math.round(ttlHours * 60));
+  const domain = params.domain;
+
+  const subject = 'Your UnlikeOtherAuthenticator integration is approved';
+  const text = [
+    `Your integration for ${domain} has been approved.`,
+    '',
+    'Open this one-time link to copy your client_secret and client_hash:',
+    params.link,
+    '',
+    `This link expires in ${ttlHours} hours and can only be used once.`,
+    'The client secret is only displayed once — store it somewhere safe before leaving the page.',
+    '',
+    'If you did not expect this email, you can ignore it.',
+  ].join('\n');
+
+  const html = buildEmailHtml({
+    theme,
+    subject,
+    heading: 'Integration approved',
+    body:
+      `Your integration for ${domain} has been approved. Open the one-time link below to copy your client_secret and client_hash. ` +
+      'The secret is only displayed once — store it somewhere safe before leaving the page.',
+    buttonLabel: 'Reveal client secret',
+    buttonUrl: params.link,
+    minutes,
+    expiryLabel: `This link expires in ${ttlHours} hours and can only be used once.`,
   });
 
   return { subject, text, html };

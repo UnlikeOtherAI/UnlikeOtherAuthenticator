@@ -5,6 +5,7 @@ import { getEnv } from './config/env.js';
 import { connectPrisma, disconnectPrisma } from './db/prisma.js';
 import { registerErrorHandler } from './middleware/error-handler.js';
 import { registerRoutes } from './routes/index.js';
+import { sweepExpiredClaims } from './services/integration-claim.service.js';
 import { pruneExpiredSecurityData } from './services/retention-pruning.service.js';
 import { setAppLogger } from './utils/app-logger.js';
 
@@ -104,11 +105,21 @@ export async function createApp(): Promise<FastifyInstance> {
         }
       };
 
+      const runClaimSweep = async (): Promise<void> => {
+        try {
+          await sweepExpiredClaims();
+        } catch (err) {
+          app.log.error({ err }, 'failed to sweep expired integration claim tokens');
+        }
+      };
+
       void runPrune();
+      void runClaimSweep();
 
       const intervalMs = 6 * 60 * 60 * 1000;
       const timer = setInterval(() => {
         void runPrune();
+        void runClaimSweep();
       }, intervalMs);
       timer.unref();
 

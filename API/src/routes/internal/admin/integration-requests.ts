@@ -1,8 +1,14 @@
 import type { FastifyInstance, RouteShorthandOptions } from 'fastify';
 import { z } from 'zod';
 
+import { getEnv } from '../../../config/env.js';
 import { requireAdminSuperuser } from '../../../middleware/admin-superuser.js';
 import { writeAuditLog } from '../../../services/audit-log.service.js';
+import { sendIntegrationApprovedEmail } from '../../../services/email.service.js';
+import {
+  acceptIntegrationRequest,
+  resendIntegrationClaim,
+} from '../../../services/integration-accept.service.js';
 import {
   declineIntegrationRequest,
   deleteIntegrationRequest,
@@ -11,6 +17,7 @@ import {
   type IntegrationRequestRow,
   type IntegrationRequestStatus,
 } from '../../../services/integration-request.service.js';
+import { getAppLogger } from '../../../utils/app-logger.js';
 import { AppError } from '../../../utils/errors.js';
 
 const ListQuerySchema = z
@@ -27,6 +34,14 @@ const DeclineBodySchema = z
     reason: z.string().trim().min(1).max(1000),
   })
   .strict();
+
+const AcceptBodySchema = z
+  .object({
+    label: z.string().trim().min(1).max(255).optional(),
+    clientSecret: z.string().trim().min(32).max(512).optional(),
+  })
+  .strict()
+  .optional();
 
 const objectSchema = { type: 'object', additionalProperties: true } as const;
 const arraySchema = { type: 'array', items: objectSchema } as const;
@@ -79,6 +94,27 @@ function requireActorEmail(request: { adminAccessTokenClaims?: { email: string }
   return email;
 }
 
+function resolveClaimBaseUrl(): string {
+  const env = getEnv();
+  const raw = env.PUBLIC_BASE_URL?.trim();
+  if (raw) return raw.replace(/\/+$/, '');
+  return `http://${env.HOST}:${env.PORT}`;
+}
+
+function buildClaimUrl(rawToken: string): string {
+  return `${resolveClaimBaseUrl()}/integrations/claim/${encodeURIComponent(rawToken)}`;
+}
+
+function dispatchClaimEmail(params: { to: string; link: string; domain: string }): void {
+  // Fire-and-forget: email failures must never roll back the accept/resend transaction.
+  void sendIntegrationApprovedEmail(params).catch((err) => {
+    getAppLogger().error(
+      { err, domain: params.domain },
+      'failed to dispatch integration approval email',
+    );
+  });
+}
+
 export function registerInternalAdminIntegrationRequestRoutes(app: FastifyInstance): void {
   app.get(
     '/internal/admin/integration-requests',
@@ -100,6 +136,68 @@ export function registerInternalAdminIntegrationRequestRoutes(app: FastifyInstan
       const { id } = IdParamsSchema.parse(request.params);
       const row = await getIntegrationRequestById(id);
       return row ? toAdminDetail(row) : null;
+    },
+  );
+
+  app.post(
+    '/internal/admin/integration-requests/:id/accept',
+    adminRoute(objectSchema),
+    async (request) => {
+      const { id } = IdParamsSchema.parse(request.params);
+      const body = AcceptBodySchema.parse(request.body ?? undefined);
+      const reviewerEmail = requireActorEmail(request);
+
+      const result = await acceptIntegrationRequest({
+        id,
+        reviewerEmail,
+        label: body?.label,
+        clientSecret: body?.clientSecret,
+      });
+
+      dispatchClaimEmail({
+        to: result.integration.contactEmail,
+        link: buildClaimUrl(result.claim.rawToken),
+        domain: result.integration.domain,
+      });
+
+      await writeAuditLog({
+        actorEmail: reviewerEmail,
+        action: 'integration.accepted',
+        targetDomain: result.integration.domain,
+        metadata: {
+          integrationRequestId: result.integration.id,
+          clientDomainId: result.clientDomainId,
+          hashPrefix: result.hashPrefix,
+        },
+      });
+
+      return toAdminDetail(result.integration);
+    },
+  );
+
+  app.post(
+    '/internal/admin/integration-requests/:id/resend-claim',
+    adminRoute(objectSchema),
+    async (request) => {
+      const { id } = IdParamsSchema.parse(request.params);
+      const actorEmail = requireActorEmail(request);
+
+      const result = await resendIntegrationClaim({ id });
+
+      dispatchClaimEmail({
+        to: result.integration.contactEmail,
+        link: buildClaimUrl(result.claim.rawToken),
+        domain: result.integration.domain,
+      });
+
+      await writeAuditLog({
+        actorEmail,
+        action: 'integration.claim_resent',
+        targetDomain: result.integration.domain,
+        metadata: { integrationRequestId: result.integration.id },
+      });
+
+      return toAdminDetail(result.integration);
     },
   );
 
