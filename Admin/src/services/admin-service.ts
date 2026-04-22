@@ -21,6 +21,13 @@ export type DomainSecretResponse = {
   domain: Domain;
 };
 
+export type DomainRotateResponse = {
+  domain: string;
+  contact_email: string;
+  email_dispatched: boolean;
+  hash_prefix: string;
+};
+
 export const adminService = {
   getDashboard: () => api.get<AdminData>('/internal/admin/dashboard'),
   getDomains: () => api.get<AdminData['domains']>('/internal/admin/domains'),
@@ -35,7 +42,7 @@ export const adminService = {
   updateDomain: (domain: string, input: { label?: string; status?: 'active' | 'disabled' }) =>
     api.put<Domain>(`/internal/admin/domains/${encodeURIComponent(domain)}`, input),
   rotateDomainSecret: (domain: string) =>
-    api.post<DomainSecretResponse>(`/internal/admin/domains/${encodeURIComponent(domain)}/rotate-secret`),
+    api.post<DomainRotateResponse>(`/internal/admin/domains/${encodeURIComponent(domain)}/rotate-secret`),
   getOrganisations: () => api.get<AdminData['organisations']>('/internal/admin/organisations'),
   getOrganisation: (orgId: string) =>
     api.get<AdminData['organisations'][number] | null>(`/internal/admin/organisations/${encodeURIComponent(orgId)}`),

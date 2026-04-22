@@ -2,6 +2,11 @@ import { Prisma, type PrismaClient } from '@prisma/client';
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { decryptClaimSecret } from '../utils/claim-secret-crypto.js';
+import {
+  createDomainClientHash,
+  digestDomainClientHash,
+  generateClientSecret,
+} from '../utils/client-hash.js';
 import { AppError } from '../utils/errors.js';
 import { writeAuditLog, type AuditLogPrisma } from './audit-log.service.js';
 import {
@@ -9,11 +14,6 @@ import {
   parsePublicRsaJwk,
   type PublicRsaJwk,
 } from './client-jwk.service.js';
-import {
-  createDomainClientHash,
-  digestDomainClientHash,
-  generateClientSecret,
-} from './domain-secret.service.js';
 import {
   createClaimToken,
   type ClaimTokenCreated,

@@ -4,7 +4,7 @@ import { SignJWT } from 'jose';
 
 import { createApp } from '../../src/app.js';
 import { ACCESS_TOKEN_AUDIENCE } from '../../src/config/jwt.js';
-import { digestDomainClientHash } from '../../src/services/domain-secret.service.js';
+import { digestDomainClientHash } from '../../src/utils/client-hash.js';
 import { createClientId } from '../../src/utils/hash.js';
 import { expectJsonError } from '../helpers/error-response.js';
 import { createTestDb } from '../helpers/test-db.js';

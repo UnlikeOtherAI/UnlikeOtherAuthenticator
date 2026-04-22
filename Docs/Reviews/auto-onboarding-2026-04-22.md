@@ -10,6 +10,8 @@
 
 No remote-exploitable vulnerability. Seven HIGH findings violate real invariants (one-shot claim, host binding, audit completeness, fail-closed on DB error). Cryptographic core, RBAC gates, SSRF IP guards, and data-model migrations are sound.
 
+**Status (2026-04-22):** All 7 HIGH findings fixed. H1, H2, H4, H5, H6, H7 landed earlier in the day; H3 (rotate → claim flow) landed last.
+
 ---
 
 ## Tier 1 — HIGH (fix before next partner onboards)
@@ -24,10 +26,10 @@ No remote-exploitable vulnerability. Seven HIGH findings violate real invariants
 **Bug:** `assertJwksHostMatchesDomain` checks the *initial* URL only. `fetchPartnerJwks` then follows up to 3 redirects to any public HTTPS host. An open redirect on the partner's domain lets an attacker host the JWKS on attacker.com while the host-equality check still passes. Same pattern in the config fetcher.
 **Fix:** After each redirect hop, re-run `assertJwksHostMatchesDomain(redirectUrl, domain)`. Or refuse redirects entirely on the JWKS path — JWKS URLs should be stable.
 
-### H3. Secret rotation bypasses the claim flow (spec deviation)
-**Files:** `API/src/routes/internal/admin/domains.ts:101-111`, `domain-secret.service.ts:156-187`, `Admin/src/pages/SecretsPage.tsx:88-99`
-**Bug:** Spec §4.7 + §6.3 requires rotation to (1) generate new secret, (2) email claim link to partner, (3) only deactivate old secret after claim. Current code returns the raw secret to admin and immediately deactivates the old one. Partner is never emailed.
-**Fix:** Rewrite `/internal/admin/domains/:domain/rotate-secret` to mirror the accept-then-claim pattern.
+### H3. Secret rotation bypasses the claim flow (spec deviation) — FIXED
+**Files:** `API/src/routes/internal/admin/domains.ts`, `API/src/services/domain-secret.service.ts`, `API/src/services/integration-claim.service.ts`, `Admin/src/pages/SecretsPage.tsx`
+**Bug:** Spec §4.7 + §6.3 requires rotation to (1) generate new secret, (2) email claim link to partner, (3) only deactivate old secret after claim. Prior code returned the raw secret to admin and immediately deactivated the old one. Partner was never emailed.
+**Fix (2026-04-22):** `/internal/admin/domains/:domain/rotate-secret` now mirrors the accept-then-claim pattern. `rotateAdminDomainSecret` finds the most recent ACCEPTED integration request for the domain, deletes any unused outstanding claim, mints a fresh rotation claim token tagged with the `ClientDomain.id`, and emails the claim link to `contact_email`. Raw secret is never surfaced to the admin. `consumeClaim` was extended to — when the token carries `clientDomainId` — atomically deactivate the previously active `ClientDomainSecret` and insert the new one in the same transaction as marking the token used. If the partner never claims, the old secret stays live. Migration `20260422131343_add_claim_token_client_domain_fk` adds the `client_domain_id` column with `ON DELETE CASCADE`. Admin UI now displays a dispatch-status confirmation instead of revealing the secret. Regression tests: `rotateAdminDomainSecret` (404, DOMAIN_HAS_NO_CLAIM_CONTACT, no secret activation at rotate time, claim tagged with `clientDomainId`), `consumeClaim` rotation-on-consume (old secret deactivated + new active row inserted atomically).
 
 ### H4. Audit logs written outside the mutation transaction
 **Files:** `integration-requests.ts:150-173`, `domain-jwks.ts:84-91`, `integration-requests.ts:102-109`

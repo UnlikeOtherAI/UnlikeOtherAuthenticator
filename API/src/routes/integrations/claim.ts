@@ -1,9 +1,7 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 
-import {
-  createDomainClientHash,
-} from '../../services/domain-secret.service.js';
+import { createDomainClientHash } from '../../utils/client-hash.js';
 import {
   consumeClaim,
   peekClaim,

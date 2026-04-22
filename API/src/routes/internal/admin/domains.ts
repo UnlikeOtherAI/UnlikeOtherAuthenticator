@@ -1,13 +1,16 @@
 import type { FastifyInstance, RouteShorthandOptions } from 'fastify';
 import { z } from 'zod';
 
+import { getEnv } from '../../../config/env.js';
 import { requireAdminSuperuser } from '../../../middleware/admin-superuser.js';
+import { sendIntegrationApprovedEmail } from '../../../services/email.service.js';
 import {
   createAdminDomain,
   type DomainMutationResult,
   rotateAdminDomainSecret,
   updateAdminDomain,
 } from '../../../services/domain-secret.service.js';
+import { getAppLogger } from '../../../utils/app-logger.js';
 import { normalizeDomain } from '../../../utils/domain.js';
 import { AppError } from '../../../utils/errors.js';
 
@@ -49,6 +52,18 @@ const mutationSchema = {
   },
 } as const;
 
+const rotateResponseSchema = {
+  type: 'object',
+  required: ['domain', 'contact_email', 'email_dispatched', 'hash_prefix'],
+  additionalProperties: false,
+  properties: {
+    domain: { type: 'string' },
+    contact_email: { type: 'string' },
+    email_dispatched: { type: 'boolean' },
+    hash_prefix: { type: 'string' },
+  },
+} as const;
+
 function adminRoute(responseSchema: Record<string, unknown>): RouteShorthandOptions {
   return {
     preHandler: [requireAdminSuperuser],
@@ -82,6 +97,34 @@ function requireActorEmail(request: { adminAccessTokenClaims?: { email: string }
   return email;
 }
 
+function resolveClaimBaseUrl(): string {
+  const env = getEnv();
+  const raw = env.PUBLIC_BASE_URL?.trim();
+  if (raw) return raw.replace(/\/+$/, '');
+  return `http://${env.HOST}:${env.PORT}`;
+}
+
+function buildClaimUrl(rawToken: string): string {
+  return `${resolveClaimBaseUrl()}/integrations/claim/${encodeURIComponent(rawToken)}`;
+}
+
+async function dispatchRotationClaimEmail(params: {
+  to: string;
+  link: string;
+  domain: string;
+}): Promise<boolean> {
+  try {
+    await sendIntegrationApprovedEmail(params);
+    return true;
+  } catch (err) {
+    getAppLogger().error(
+      { err, domain: params.domain },
+      'failed to dispatch domain secret rotation claim email',
+    );
+    return false;
+  }
+}
+
 export function registerInternalAdminDomainRoutes(app: FastifyInstance): void {
   app.post('/internal/admin/domains', adminRoute(mutationSchema), async (request) => {
     const body = DomainCreateSchema.parse(request.body);
@@ -110,21 +153,32 @@ export function registerInternalAdminDomainRoutes(app: FastifyInstance): void {
     );
   });
 
-  app.post('/internal/admin/domains/:domain/rotate-secret', adminRoute(mutationSchema), async (request) => {
-    const { domain } = DomainParamsSchema.parse(request.params);
-    const body = DomainRotateSchema.parse(request.body ?? {});
-    const actorEmail = requireActorEmail(request);
-    const result = await rotateAdminDomainSecret({
-      domain,
-      clientSecret: body.client_secret,
-      actorEmail,
-    });
+  app.post(
+    '/internal/admin/domains/:domain/rotate-secret',
+    adminRoute(rotateResponseSchema),
+    async (request) => {
+      const { domain } = DomainParamsSchema.parse(request.params);
+      const body = DomainRotateSchema.parse(request.body ?? {});
+      const actorEmail = requireActorEmail(request);
 
-    return {
-      domain: toAdminDomain(result.domain),
-      client_secret: result.clientSecret,
-      client_hash: result.clientHash,
-      client_hash_prefix: result.clientHashPrefix,
-    };
-  });
+      const result = await rotateAdminDomainSecret({
+        domain,
+        clientSecret: body.client_secret,
+        actorEmail,
+      });
+
+      const emailDispatched = await dispatchRotationClaimEmail({
+        to: result.contactEmail,
+        link: buildClaimUrl(result.claim.rawToken),
+        domain: result.domain,
+      });
+
+      return {
+        domain: result.domain,
+        contact_email: result.contactEmail,
+        email_dispatched: emailDispatched,
+        hash_prefix: result.hashPrefix,
+      };
+    },
+  );
 }

@@ -19,6 +19,7 @@ const sharedSecret = 'test-shared-secret-with-enough-length';
 type Row = {
   id: string;
   integrationId: string;
+  clientDomainId: string | null;
   tokenHash: string;
   encryptedSecret: Uint8Array | null;
   encryptionIv: Uint8Array | null;
@@ -43,6 +44,7 @@ function makePrisma(initial: Row[] = []): {
       id: `row-${rows.length + 1}`,
       createdAt: new Date(),
       usedAt: null,
+      clientDomainId: null,
       ...data,
     } as Row;
     rows.push(row);
@@ -245,6 +247,7 @@ describe('integration-claim.service', () => {
       const row: Row = {
         id: 'row-1',
         integrationId: 'int-1',
+        clientDomainId: null,
         tokenHash,
         encryptedSecret: enc.ciphertext,
         encryptionIv: enc.iv,
@@ -282,6 +285,91 @@ describe('integration-claim.service', () => {
       const result = await consumeClaim(rawToken, { prisma: client, sharedSecret });
       expect(result).toEqual({ state: 'already_used' });
     });
+
+    it('rotates the active domain secret atomically when clientDomainId is set', async () => {
+      // Regression guard for H3 (2026-04-22 audit). Rotation claims (minted by the
+      // admin Rotate flow) must swap the active client_domain_secrets row inside
+      // the same transaction that marks the token used — otherwise the old secret
+      // could stay live after the partner claimed the new one, or a crash between
+      // steps could leave the domain with no active secret.
+      const { rawToken, tokenHash } = generateClaimToken();
+      const plaintext = 'rotation-client-secret-plenty-long-enough';
+      const enc = encryptClaimSecret(plaintext, { sharedSecret });
+      const row: Row = {
+        id: 'claim-1',
+        integrationId: 'int-1',
+        clientDomainId: 'cd-1',
+        tokenHash,
+        encryptedSecret: enc.ciphertext,
+        encryptionIv: enc.iv,
+        encryptionTag: enc.tag,
+        expiresAt: new Date(Date.now() + 60_000),
+        usedAt: null,
+        createdAt: new Date(),
+      };
+
+      type Secret = { id: string; domainId: string; active: boolean; hashPrefix: string; secretDigest: string };
+      const secrets: Secret[] = [
+        { id: 'sec-old', domainId: 'cd-1', active: true, hashPrefix: 'oldprefix000', secretDigest: 'olddigest' },
+      ];
+
+      const client = {
+        integrationClaimToken: {
+          findUnique: vi.fn(async () => ({ ...row })),
+          updateMany: vi.fn(
+            async ({ where, data }: { where: { id: string; usedAt: null }; data: Partial<Row> }) => {
+              if (row.id === where.id && row.usedAt === where.usedAt) {
+                Object.assign(row, data);
+                return { count: 1 };
+              }
+              return { count: 0 };
+            },
+          ),
+        },
+        clientDomain: {
+          findUnique: vi.fn(async ({ where }: { where: { id: string } }) => {
+            if (where.id === 'cd-1') return { domain: 'partner.example.com' };
+            return null;
+          }),
+        },
+        clientDomainSecret: {
+          updateMany: vi.fn(
+            async ({ where, data }: { where: { domainId: string; active: boolean }; data: Partial<Secret> }) => {
+              let count = 0;
+              for (const s of secrets) {
+                if (s.domainId === where.domainId && s.active === where.active) {
+                  Object.assign(s, data);
+                  count += 1;
+                }
+              }
+              return { count };
+            },
+          ),
+          create: vi.fn(async ({ data }: { data: Omit<Secret, 'id'> }) => {
+            const created: Secret = { id: `sec-${secrets.length + 1}`, ...data };
+            secrets.push(created);
+            return created;
+          }),
+        },
+        $transaction: async <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => fn(client),
+      } as unknown as Parameters<typeof consumeClaim>[1] extends { prisma?: infer P } ? P : never;
+
+      const result = await consumeClaim(rawToken, { prisma: client, sharedSecret });
+      expect(result).toMatchObject({
+        state: 'consumed',
+        integrationId: 'int-1',
+        clientDomainId: 'cd-1',
+        rotated: true,
+      });
+      if (result.state !== 'consumed') throw new Error('expected consumed');
+      expect(result.clientSecret).toBe(plaintext);
+
+      // Prior active secret is now inactive, a new active row has been created.
+      expect(secrets).toHaveLength(2);
+      expect(secrets[0]).toMatchObject({ id: 'sec-old', active: false });
+      expect(secrets[1]).toMatchObject({ domainId: 'cd-1', active: true });
+      expect(secrets[1].hashPrefix).toHaveLength(12);
+    });
   });
 
   describe('replaceClaimToken', () => {
@@ -313,6 +401,7 @@ describe('integration-claim.service', () => {
         {
           id: 'expired',
           integrationId: 'int-1',
+          clientDomainId: null,
           tokenHash: 'h1',
           encryptedSecret: expired.ciphertext,
           encryptionIv: expired.iv,
@@ -324,6 +413,7 @@ describe('integration-claim.service', () => {
         {
           id: 'live',
           integrationId: 'int-2',
+          clientDomainId: null,
           tokenHash: 'h2',
           encryptedSecret: expired.ciphertext,
           encryptionIv: expired.iv,

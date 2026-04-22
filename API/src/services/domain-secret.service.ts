@@ -1,16 +1,31 @@
-import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { timingSafeEqual } from 'node:crypto';
 
 import type { Prisma, PrismaClient } from '@prisma/client';
 
-import { getEnv, requireEnv } from '../config/env.js';
+import { getEnv } from '../config/env.js';
 import { getAdminPrisma } from '../db/prisma.js';
+import {
+  createDomainClientHash,
+  digestDomainClientHash,
+  generateClientSecret,
+} from '../utils/client-hash.js';
 import { normalizeDomain } from '../utils/domain.js';
 import { AppError } from '../utils/errors.js';
 import { writeAuditLog, type AuditLogPrisma } from './audit-log.service.js';
+import {
+  createClaimToken,
+  type ClaimTokenCreated,
+  type ClaimTokenPrisma,
+} from './integration-claim.service.js';
 
 type DomainSecretPrisma = Pick<
   PrismaClient,
-  'clientDomain' | 'clientDomainSecret' | 'adminAuditLog' | '$transaction'
+  | 'clientDomain'
+  | 'clientDomainSecret'
+  | 'clientDomainIntegrationRequest'
+  | 'integrationClaimToken'
+  | 'adminAuditLog'
+  | '$transaction'
 >;
 
 const activeSecretArgs = {
@@ -64,18 +79,6 @@ function secureEqualHex(a: string, b: string): boolean {
   const aBytes = Buffer.from(a, 'hex');
   const bBytes = Buffer.from(b, 'hex');
   return aBytes.length === bBytes.length && timingSafeEqual(aBytes, bBytes);
-}
-
-export function generateClientSecret(): string {
-  return randomBytes(36).toString('base64url');
-}
-
-export function createDomainClientHash(domain: string, clientSecret: string): string {
-  return createHash('sha256').update(`${normalizeDomain(domain)}${clientSecret}`).digest('hex');
-}
-
-export function digestDomainClientHash(clientHash: string, pepper = requireEnv('SHARED_SECRET').SHARED_SECRET): string {
-  return createHmac('sha256', pepper).update(clientHash, 'utf8').digest('hex');
 }
 
 async function createSecretData(domain: string, clientSecret?: string) {
@@ -196,47 +199,94 @@ export async function updateAdminDomain(
   });
 }
 
+export type RotateDomainSecretResult = {
+  domain: string;
+  contactEmail: string;
+  hashPrefix: string;
+  claim: ClaimTokenCreated;
+};
+
+/**
+ * Issue a rotation claim. Instead of revealing the new secret to the admin, the
+ * rotate flow mints a claim link bound to the ClientDomain and emails it to the
+ * partner's most recent `contact_email`. The previously active secret stays
+ * active until the partner consumes the claim, at which point `consumeClaim`
+ * deactivates it and activates the new secret atomically.
+ */
 export async function rotateAdminDomainSecret(
-  params: { clientSecret?: string; domain: string; actorEmail: string },
-  deps?: { prisma?: DomainSecretPrisma },
-): Promise<DomainMutationResult> {
+  params: {
+    clientSecret?: string;
+    domain: string;
+    actorEmail: string;
+    ttlMs?: number;
+    now?: Date;
+  },
+  deps?: { prisma?: DomainSecretPrisma; sharedSecret?: string },
+): Promise<RotateDomainSecretResult> {
   const prisma = prismaClient(deps);
   const domain = normalizeDomain(params.domain);
-  const secret = await createSecretData(domain, params.clientSecret);
-  const now = new Date();
+  const rawClientSecret = params.clientSecret?.trim() || generateClientSecret();
+  if (rawClientSecret.length < 32) {
+    throw new AppError('BAD_REQUEST', 400, 'CLIENT_SECRET_TOO_SHORT');
+  }
+  const hashPrefix = createDomainClientHash(domain, rawClientSecret).slice(0, 12);
 
-  const row = await prisma.$transaction(async (tx) => {
-    const registry = await tx.clientDomain.upsert({
+  return prisma.$transaction(async (tx) => {
+    const clientDomain = await tx.clientDomain.findUnique({
       where: { domain },
-      create: { domain, label: domain, status: 'active' },
-      update: { status: 'active' },
       select: { id: true },
     });
-    await tx.clientDomainSecret.updateMany({
-      where: { domainId: registry.id, active: true },
-      data: { active: false, deactivatedAt: now },
+    if (!clientDomain) throw new AppError('NOT_FOUND', 404, 'DOMAIN_NOT_FOUND');
+
+    const integration = await tx.clientDomainIntegrationRequest.findFirst({
+      where: { domain, status: 'ACCEPTED', clientDomainId: clientDomain.id },
+      orderBy: { reviewedAt: 'desc' },
+      select: { id: true, contactEmail: true },
     });
-    await tx.clientDomainSecret.create({
-      data: {
-        domainId: registry.id,
-        active: true,
-        hashPrefix: secret.hashPrefix,
-        secretDigest: secret.secretDigest,
+    if (!integration) {
+      throw new AppError('BAD_REQUEST', 400, 'DOMAIN_HAS_NO_CLAIM_CONTACT');
+    }
+
+    // Any outstanding unused claim for this integration (from a prior rotate or a
+    // still-unclaimed accept) is invalidated so the partner never has two
+    // competing claim links in flight.
+    await tx.integrationClaimToken.deleteMany({
+      where: { integrationId: integration.id, usedAt: null },
+    });
+
+    const claim = await createClaimToken(
+      {
+        integrationId: integration.id,
+        clientDomainId: clientDomain.id,
+        clientSecret: rawClientSecret,
+        ttlMs: params.ttlMs,
+        now: params.now,
       },
-    });
+      {
+        prisma: tx as unknown as ClaimTokenPrisma,
+        sharedSecret: deps?.sharedSecret,
+      },
+    );
 
     await writeAuditLog(
       {
         actorEmail: params.actorEmail,
         action: 'domain.secret_rotated',
         targetDomain: domain,
-        metadata: { hashPrefix: secret.hashPrefix },
+        metadata: {
+          hashPrefix,
+          integrationRequestId: integration.id,
+          claimIssued: true,
+        },
       },
       { prisma: tx as unknown as AuditLogPrisma },
     );
 
-    return tx.clientDomain.findUniqueOrThrow({ where: { domain }, ...domainWithActiveSecret });
+    return {
+      domain,
+      contactEmail: integration.contactEmail,
+      hashPrefix,
+      claim,
+    };
   });
-
-  return { clientHash: secret.clientHash, clientHashPrefix: secret.hashPrefix, clientSecret: secret.clientSecret, domain: row };
 }

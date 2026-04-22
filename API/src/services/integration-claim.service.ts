@@ -4,12 +4,19 @@ import type { PrismaClient } from '@prisma/client';
 
 import { getAdminPrisma } from '../db/prisma.js';
 import {
+  createDomainClientHash,
+  digestDomainClientHash,
+} from '../utils/client-hash.js';
+import {
   decryptClaimSecret,
   encryptClaimSecret,
   type EncryptedClaimSecret,
 } from '../utils/claim-secret-crypto.js';
 
-type ClaimTokenPrisma = Pick<PrismaClient, 'integrationClaimToken' | '$transaction'>;
+export type ClaimTokenPrisma = Pick<
+  PrismaClient,
+  'clientDomain' | 'clientDomainSecret' | 'integrationClaimToken' | '$transaction'
+>;
 
 const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -25,6 +32,7 @@ function toBytes(buf: Uint8Array): Uint8Array<ArrayBuffer> {
 export type IntegrationClaimTokenRow = {
   id: string;
   integrationId: string;
+  clientDomainId: string | null;
   tokenHash: string;
   encryptedSecret: Uint8Array | null;
   encryptionIv: Uint8Array | null;
@@ -50,8 +58,10 @@ export type ClaimConsumeResult =
   | {
       state: 'consumed';
       integrationId: string;
+      clientDomainId: string | null;
       clientSecret: string;
       usedAt: Date;
+      rotated: boolean;
     }
   | { state: 'missing' }
   | { state: 'expired' }
@@ -90,6 +100,14 @@ function toEncrypted(row: IntegrationClaimTokenRow): EncryptedClaimSecret | null
 export type CreateClaimTokenParams = {
   integrationId: string;
   clientSecret: string;
+  /**
+   * Set for rotation claims. When present, `consumeClaim` activates a new
+   * `client_domain_secrets` row for this domain and deactivates the previous
+   * active secret in the same transaction as marking the token used. Leave
+   * unset for the initial accept flow (the accept transaction persists the
+   * first secret up-front).
+   */
+  clientDomainId?: string;
   ttlMs?: number;
   now?: Date;
 };
@@ -112,6 +130,7 @@ export async function createClaimToken(
   await prismaClient(deps).integrationClaimToken.create({
     data: {
       integrationId: params.integrationId,
+      clientDomainId: params.clientDomainId ?? null,
       tokenHash,
       encryptedSecret: toBytes(encrypted.ciphertext),
       encryptionIv: toBytes(encrypted.iv),
@@ -147,6 +166,11 @@ export async function peekClaim(
  * Atomically validate, decrypt, and consume a claim token. On success returns the
  * decrypted `clientSecret`; the row's `usedAt` is set and the encrypted blob is
  * nulled in the same transaction, so the plaintext is only ever available once.
+ *
+ * When the token was minted by the admin Rotate flow (`clientDomainId` is set),
+ * a new active `client_domain_secrets` row is inserted and any previously active
+ * secret for that domain is deactivated inside the same transaction. This keeps
+ * the old secret working until the partner actually claims the new one.
  */
 export async function consumeClaim(
   rawToken: string,
@@ -186,11 +210,37 @@ export async function consumeClaim(
 
     const clientSecret = decryptClaimSecret(encrypted, { sharedSecret: deps?.sharedSecret });
 
+    let rotated = false;
+    if (row.clientDomainId) {
+      const clientDomain = await tx.clientDomain.findUnique({
+        where: { id: row.clientDomainId },
+        select: { domain: true },
+      });
+      if (clientDomain) {
+        const rotatedHash = createDomainClientHash(clientDomain.domain, clientSecret);
+        await tx.clientDomainSecret.updateMany({
+          where: { domainId: row.clientDomainId, active: true },
+          data: { active: false, deactivatedAt: now },
+        });
+        await tx.clientDomainSecret.create({
+          data: {
+            domainId: row.clientDomainId,
+            active: true,
+            hashPrefix: rotatedHash.slice(0, 12),
+            secretDigest: digestDomainClientHash(rotatedHash, deps?.sharedSecret),
+          },
+        });
+        rotated = true;
+      }
+    }
+
     return {
       state: 'consumed',
       integrationId: row.integrationId,
+      clientDomainId: row.clientDomainId,
       clientSecret,
       usedAt: now,
+      rotated,
     } as const;
   });
 }

@@ -5,20 +5,20 @@ import { ActionButton, ActionDivider } from '../components/ui/ActionButton';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
-import { FieldShell, SelectField, TextField } from '../components/ui/FormFields';
+import { SelectField, TextField } from '../components/ui/FormFields';
 import { Modal } from '../components/ui/Modal';
 import { PageHeader } from '../components/ui/PageHeader';
 import { StatusBadge } from '../components/ui/Status';
 import { DataTable, PaginationFooter, Td, usePagination } from '../components/ui/Table';
 import { useDomainsQuery } from '../features/admin/admin-queries';
 import { useAdminUi } from '../features/shell/admin-ui';
-import { adminService, type DomainSecretResponse } from '../services/admin-service';
+import { adminService, type DomainRotateResponse } from '../services/admin-service';
 
 export function SecretsPage() {
   const { data = [], isLoading } = useDomainsQuery();
   const { confirm, openDialog } = useAdminUi();
   const queryClient = useQueryClient();
-  const [revealedSecret, setRevealedSecret] = useState<DomainSecretResponse | null>(null);
+  const [rotateResult, setRotateResult] = useState<DomainRotateResponse | null>(null);
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('all');
   const filteredDomains = useMemo(() => {
@@ -38,7 +38,7 @@ export function SecretsPage() {
   const rotateSecret = useMutation({
     mutationFn: adminService.rotateDomainSecret,
     onSuccess: (result) => {
-      setRevealedSecret(result);
+      setRotateResult(result);
       void queryClient.invalidateQueries({ queryKey: ['admin'] });
     },
   });
@@ -89,7 +89,7 @@ export function SecretsPage() {
                       tone="amber"
                       onClick={() => confirm(
                         `Rotate ${domain.name}?`,
-                        'A new domain client secret will be generated and the previous active secret will stop working.',
+                        'A one-time claim link will be emailed to the partner contact. The current secret keeps working until the partner claims the new one.',
                         async () => {
                           await rotateSecret.mutateAsync(domain.name);
                         },
@@ -126,29 +126,39 @@ export function SecretsPage() {
           </>
         )}
       </Card>
-      <SecretModal result={revealedSecret} onClose={() => setRevealedSecret(null)} />
+      <RotateNoticeModal result={rotateResult} onClose={() => setRotateResult(null)} />
     </>
   );
 }
 
-function SecretModal({ onClose, result }: { onClose: () => void; result: DomainSecretResponse | null }) {
+function RotateNoticeModal({
+  onClose,
+  result,
+}: {
+  onClose: () => void;
+  result: DomainRotateResponse | null;
+}) {
+  const dispatched = result?.email_dispatched ?? false;
+  const title = dispatched ? 'Rotation claim sent' : 'Rotation claim not delivered';
+  const description = dispatched
+    ? `A one-time claim link has been emailed to ${result?.contact_email ?? 'the partner contact'}. The previous secret stays active until they open the link and confirm.`
+    : `A claim token was created but the email to ${result?.contact_email ?? 'the partner contact'} could not be dispatched. Retry the rotation or deliver the link out-of-band.`;
+
   return (
     <Modal
       isOpen={Boolean(result)}
       onClose={onClose}
-      title="Client Secret"
+      title={title}
       footer={<Button variant="primary" onClick={onClose}>Done</Button>}
     >
-      <div className="space-y-4">
-        <FieldShell label="Domain">
-          <TextField readOnly value={result?.domain.name ?? ''} />
-        </FieldShell>
-        <FieldShell label="Client secret" hint="Store this in the client backend. It will not be shown again.">
-          <TextField readOnly className="font-mono" value={result?.client_secret ?? ''} />
-        </FieldShell>
-        <FieldShell label="Client hash" hint="Use this hash as the backend Authorization bearer token.">
-          <TextField readOnly className="font-mono" value={result?.client_hash ?? ''} />
-        </FieldShell>
+      <div className="space-y-2 text-sm text-gray-600">
+        <p>{description}</p>
+        {result ? (
+          <p className="text-xs text-gray-400">
+            Domain: <span className="font-mono">{result.domain}</span> · Hash prefix:{' '}
+            <span className="font-mono">{result.hash_prefix}</span>
+          </p>
+        ) : null}
       </div>
     </Modal>
   );

@@ -78,10 +78,17 @@ export const internalAdminEndpoints: EndpointSchema[] = [
   {
     method: 'POST',
     path: '/internal/admin/domains/:domain/rotate-secret',
-    description: 'Rotate a domain client secret and deactivate previous active secrets',
+    description:
+      'Issue a rotation claim link for the domain. Emails the partner contact_email from the most recent ACCEPTED integration request and leaves the previous secret active until the partner consumes the claim. Does NOT return the raw client secret.',
     auth: adminAuth,
-    body: { client_secret: 'string (optional, min 32); omitted means the API generates one' },
-    response: { 200: '{ domain, client_secret, client_hash, client_hash_prefix }', '401/403': authFailures },
+    body: {
+      client_secret:
+        'string (optional, min 32); omitted means the API generates one. Only delivered to the partner via the one-time claim link.',
+    },
+    response: {
+      200: '{ domain, contact_email, email_dispatched, hash_prefix }',
+      '401/403': authFailures,
+    },
   },
   {
     method: 'GET',
