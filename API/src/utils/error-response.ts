@@ -194,6 +194,7 @@ function explainKnownCode(
         summary: 'The supplied redirect_url is not allowlisted by the client config.',
         hints: [
           'Add the exact redirect URL to config.redirect_urls or send an already allowlisted URL.',
+          'Matching is byte-for-byte including the query string. Common cause: the bare URL is allowlisted but a per-request ?state=… (or other query parameter) was appended at redirect time. Carry CSRF / PKCE state out-of-band (sessionStorage, first-party cookie) instead of mutating the URL.',
         ],
       };
     case 'MISSING_REDIRECT_URL':

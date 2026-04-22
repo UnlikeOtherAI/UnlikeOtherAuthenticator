@@ -61,7 +61,7 @@ export const configJwtDocumentation = {
     domain:
       'string — client domain. This must exactly match the hostname of the HTTPS config_url when the auth service fetches the JWT.',
     redirect_urls:
-      'string[] — non-empty list of absolute HTTP/HTTPS callback URLs. redirect_url matching is exact.',
+      'string[] — non-empty list of absolute HTTP/HTTPS callback URLs. The runtime redirect_url must match an entry byte-for-byte, including scheme, host, port, path, AND query string. No normalization, no prefix matching, no query wildcards. Do NOT append per-request state (?state=…) to the redirect — carry it out-of-band via sessionStorage or a first-party cookie.',
     enabled_auth_methods:
       'string[] — non-empty list. Supported values are email_password, google, facebook, github, linkedin, apple. Social provider names here are both enabled and allowed.',
     language_config:

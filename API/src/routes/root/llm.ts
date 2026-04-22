@@ -215,7 +215,7 @@ Anything else (HTML, error JSON, empty body) fails with \`CONFIG_FETCH_FAILED\`.
 
 - \`domain\` MUST exactly equal the hostname of the \`config_url\` UOA fetched. Mismatch fails with \`CONFIG_DOMAIN_MISMATCH\`.
 - \`jwks_url\` and \`contact_email\` are **required on the first auto-onboarding call** and optional thereafter. \`jwks_url\` MUST be HTTPS and share the hostname of \`domain\`. \`contact_email\` is where UOA sends the one-time claim link on approval. See Phase 1 for the full flow.
-- \`redirect_urls\` MUST be a non-empty array of absolute HTTP/HTTPS URLs. Matching at \`/auth\` is exact (scheme + host + port + path + query).
+- \`redirect_urls\` MUST be a non-empty array of absolute HTTP/HTTPS URLs. The runtime \`redirect_url\` must match one of these entries **byte-for-byte**, including scheme, host, port, path, AND query string. No normalization, no prefix matching, no query wildcards. If you need to propagate per-request CSRF / PKCE state, carry it out-of-band (\`sessionStorage\`, first-party cookie) — never on the URL. See Phase 3.1.
 - \`enabled_auth_methods\` MUST be a non-empty array. Allowed values: \`email_password\`, \`google\`, \`facebook\`, \`github\`, \`linkedin\`, \`apple\`. There is no separate social-provider allowlist — listing a provider here both enables and allows it.
 - \`ui_theme\` is required. See \`/api\` for the full contract (colors as hex only, radii/font sizes as CSS lengths, button + card styles, logo with required \`url\` and \`alt\`).
 - \`language_config\` is one IETF code or a non-empty array of codes.
@@ -257,6 +257,43 @@ GET /auth?config_url=<your_config_endpoint_url>
 - PKCE is mandatory: generate a random 43-128 char \`code_verifier\`, hash it with SHA-256, base64url-encode, and pass as \`code_challenge\`. \`code_challenge_method\` MUST be \`S256\`.
 
 After the user authenticates, UOA redirects to \`<redirect_url>?code=<authorization_code>\`. The code is single-use and short-lived; treat it as sensitive.
+
+### 3.1 Carrying CSRF / PKCE state across the callback
+
+\`redirect_url\` is matched byte-for-byte against \`config.redirect_urls\`, **including the query string**. If you normally round-trip OAuth state as a query parameter (\`?state=…\`), UOA will reject the request with \`REDIRECT_URL_NOT_ALLOWED\`.
+
+Pick one of these transports instead:
+
+- **\`sessionStorage\` (recommended).** On \`/start\`, return the opaque state token alongside the redirect URL. Stash it in \`sessionStorage\` under a provider-scoped key, then read-and-delete on the callback page before POSTing to your token-exchange endpoint. Binds the token to the originating tab and avoids URL mutation.
+- **First-party cookie.** Set a \`__Host-sso_state\` cookie with \`SameSite=Lax; Secure; HttpOnly; Path=/auth/callback\`. Works across full page reloads; requires a same-origin callback.
+- **Fragment (\`#state=…\`).** Only viable if the callback is a SPA; the browser strips fragments before the request hits UOA, so UOA won't see it. Fragile and easy to misuse — prefer \`sessionStorage\`.
+
+Do NOT append \`state\` (or any per-request query parameter) to \`redirect_url\`. The allowlist match is exact, and every added byte will be rejected.
+
+**Worked example — sessionStorage round-trip.**
+
+\`\`\`ts
+// /start — backend returns the redirect URL and an opaque state token separately.
+// GET https://app.example.com/sso/start -> { redirectUrl, stateToken }
+
+// Caller (Admin UI):
+const { redirectUrl, stateToken } = await fetch('/sso/start').then((r) => r.json());
+sessionStorage.setItem('sso:state:google', stateToken);
+window.location.assign(redirectUrl); // redirectUrl == one of config.redirect_urls, verbatim
+
+// /auth/callback — UOA has appended ?code=… to the exact allowlisted URL.
+const code = new URLSearchParams(window.location.search).get('code');
+const stateToken = sessionStorage.getItem('sso:state:google');
+sessionStorage.removeItem('sso:state:google'); // read-and-delete: single use
+
+await fetch('/sso/exchange', {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ code, stateToken }), // backend validates stateToken, then calls POST /auth/token
+});
+\`\`\`
+
+The backend validates \`stateToken\` against whatever it issued in \`/start\` (short TTL, single use, bound to session) before calling \`POST /auth/token\`. The state token never touches \`redirect_url\`.
 
 ---
 
@@ -329,6 +366,7 @@ In a non-production deployment with \`DEBUG_ENABLED=true\` you can additionally 
 | \`INTEGRATION_PENDING_REVIEW\` | Auto-discovery | A valid request has been captured and is waiting for a UOA superuser to approve. Wait for the email to \`contact_email\`; do not retry in a loop. |
 | \`INTEGRATION_DECLINED\` | Auto-discovery | A UOA superuser declined your integration request for this domain. Contact support. |
 | \`CONFIG_DOMAIN_MISMATCH\` | Post-decode | \`payload.domain\` does not exactly match the hostname of the \`config_url\` UOA fetched. Hostnames are compared case-insensitively but must otherwise be identical (no trailing dot, no port mismatch). |
+| \`REDIRECT_URL_NOT_ALLOWED\` | \`/auth\` + \`/auth/token\` | \`redirect_url\` is not in \`config.redirect_urls\`. **Common cause:** the bare URL is allowlisted but a per-request \`?state=…\` (or any query parameter) was appended — matching is byte-for-byte including the query string. Carry state out-of-band (see Phase 3.1), do not mutate the URL. |
 | Schema validation failures | Schema stage | A required field is missing or malformed. \`/config/validate\` returns the exact JSON path and reason in \`issues\`. |
 | \`auth_failed\` (final redirect) | Post-callback | Intentionally generic. With \`allow_registration: false\`, social login does not create users — the user must already exist for that domain. Check \`/internal/admin/handshake-errors\`. |
 | Google \`redirect_uri_mismatch\` | Provider | Your Google OAuth client does not list the exact callback URL UOA generated from \`PUBLIC_BASE_URL\` + \`/auth/callback/google\`. |
@@ -347,6 +385,7 @@ For deep diagnostics of failed \`/auth\` requests, a UOA superuser can open **/a
 - Do NOT assume a \`200\` from your \`config_url\` in a browser implies UOA can fetch it — UOA enforces SSRF rules a browser does not.
 - Do NOT replay OAuth \`code\` values from logs or chat. They are one-time credentials.
 - Do NOT skip \`/config/validate\` before pointing real users at UOA.
+- Do NOT append \`?state=…\` (or any per-request query) to \`redirect_url\`. The allowlist match is byte-for-byte; your \`/start\` endpoint must return the state token **separately** so the caller can stash it in \`sessionStorage\` or a first-party cookie. See Phase 3.1.
 
 ---
 
