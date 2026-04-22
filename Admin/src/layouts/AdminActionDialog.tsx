@@ -7,6 +7,7 @@ import { Modal } from '../components/ui/Modal';
 import { PLATFORM_KIND_OPTIONS } from '../features/admin/platforms';
 import { useAdminUi, type AdminDialog } from '../features/shell/admin-ui';
 import { adminService } from '../services/admin-service';
+import { DomainSigningKeysSection } from './DomainSigningKeysSection';
 import { FeatureFlagDialogBody, KillSwitchDialogBody } from './AdminFeatureDialogBodies';
 import { AddUserToTeamDialogBody, EditUserDialogBody, ReadOnlyUser } from './AdminUserDialogBodies';
 
@@ -69,7 +70,7 @@ function DialogBody({
 }) {
   if (dialog.type === 'edit-domain') {
     return (
-      <div className="space-y-4">
+      <div className="space-y-5">
         <FieldShell label="Domain name" hint="Must match the domain claim in config JWTs.">
           <TextField disabled value={dialog.domain.name} />
         </FieldShell>
@@ -82,6 +83,7 @@ function DialogBody({
             <option value="disabled">Disabled</option>
           </SelectField>
         </FieldShell>
+        <DomainSigningKeysSection domain={dialog.domain.name} />
       </div>
     );
   }

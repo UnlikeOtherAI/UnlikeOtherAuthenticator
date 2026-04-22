@@ -3,7 +3,7 @@ import { NavLink } from 'react-router-dom';
 import { Icon } from '../components/icons/Icon';
 import { Badge } from '../components/ui/Badge';
 import { adminAssets } from '../config/assets';
-import { useDashboardQuery } from '../features/admin/admin-queries';
+import { useDashboardQuery, useIntegrationRequestsQuery } from '../features/admin/admin-queries';
 import type { AdminData } from '../features/admin/types';
 import { useAdminSession, useAdminSessionActions } from '../features/auth/admin-session';
 import { useAdminUi } from '../features/shell/admin-ui';
@@ -12,6 +12,8 @@ import { navSections, type NavItem } from './navigation';
 
 export function Sidebar() {
   const { data } = useDashboardQuery();
+  const { data: integrationRequests } = useIntegrationRequestsQuery('PENDING');
+  const pendingIntegrationCount = integrationRequests?.length ?? 0;
   const { adminUser } = useAdminSession();
   const { signOut } = useAdminSessionActions();
   const { closeSidebar, isSidebarOpen } = useAdminUi();
@@ -38,7 +40,12 @@ export function Sidebar() {
             <div key={section.label}>
               <p className="mb-1 mt-4 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-600 first:mt-2">{section.label}</p>
               {section.items.map((item) => (
-                <SidebarLink key={item.path} item={item} count={getBadgeCount(item, data)} onClick={closeSidebar} />
+                <SidebarLink
+                  key={item.path}
+                  item={item}
+                  count={getBadgeCount(item, data, pendingIntegrationCount)}
+                  onClick={closeSidebar}
+                />
               ))}
             </div>
           ))}
@@ -77,8 +84,16 @@ function SidebarLink({ count, item, onClick }: { count?: string; item: NavItem; 
   );
 }
 
-function getBadgeCount(item: NavItem, data: AdminData | undefined) {
-  if (!item.badgeKey || !data) {
+function getBadgeCount(item: NavItem, data: AdminData | undefined, pendingIntegrationCount: number) {
+  if (!item.badgeKey) {
+    return undefined;
+  }
+
+  if (item.badgeKey === 'integrationRequests') {
+    return pendingIntegrationCount > 0 ? String(pendingIntegrationCount) : undefined;
+  }
+
+  if (!data) {
     return undefined;
   }
 

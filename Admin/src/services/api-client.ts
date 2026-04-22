@@ -2,6 +2,7 @@ import { adminEnv } from '../config/env';
 import { readAdminAccessToken } from '../features/auth/admin-session-storage';
 
 export type ApiClient = {
+  delete<T>(path: string, init?: RequestInit): Promise<T>;
   get<T>(path: string, init?: RequestInit): Promise<T>;
   post<T>(path: string, body?: unknown, init?: RequestInit): Promise<T>;
   put<T>(path: string, body?: unknown, init?: RequestInit): Promise<T>;
@@ -31,6 +32,9 @@ export function createApiClient(baseUrl = adminEnv.apiBaseUrl): ApiClient {
   }
 
   return {
+    async delete<T>(path: string, init?: RequestInit) {
+      return request<T>('DELETE', path, undefined, init);
+    },
     async get<T>(path: string, init?: RequestInit) {
       return request<T>('GET', path, undefined, init);
     },

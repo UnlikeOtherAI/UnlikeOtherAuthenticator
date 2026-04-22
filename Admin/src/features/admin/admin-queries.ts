@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { adminService } from '../../services/admin-service';
+import type { IntegrationRequestStatus } from './types';
 
 export function useDashboardQuery() {
   return useQuery({ queryKey: ['admin', 'dashboard'], queryFn: adminService.getDashboard });
@@ -64,4 +65,27 @@ export function useHandshakeErrorsQuery() {
 
 export function useSettingsQuery() {
   return useQuery({ queryKey: ['admin', 'settings'], queryFn: adminService.getSettings });
+}
+
+export function useIntegrationRequestsQuery(status?: IntegrationRequestStatus) {
+  return useQuery({
+    queryKey: ['admin', 'integration-requests', status ?? 'all'],
+    queryFn: () => adminService.getIntegrationRequests(status),
+  });
+}
+
+export function useIntegrationRequestQuery(id: string | null | undefined) {
+  return useQuery({
+    queryKey: ['admin', 'integration-request', id],
+    queryFn: () => adminService.getIntegrationRequest(id ?? ''),
+    enabled: Boolean(id),
+  });
+}
+
+export function useDomainJwksQuery(domain: string | null | undefined) {
+  return useQuery({
+    queryKey: ['admin', 'domain-jwks', domain],
+    queryFn: () => adminService.getDomainJwks(domain ?? ''),
+    enabled: Boolean(domain),
+  });
 }

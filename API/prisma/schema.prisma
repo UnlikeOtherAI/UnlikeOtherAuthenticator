@@ -20,6 +20,12 @@ enum VerificationTokenType {
   TWOFA_RESET
 }
 
+enum ClientDomainIntegrationStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
 model User {
   id                       String   @id @default(cuid())
   // Note: email is not globally unique because `user_scope` can be "per_domain".
@@ -203,6 +209,7 @@ model ClientDomain {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   secrets ClientDomainSecret[]
+  jwks    ClientDomainJwk[]
 
   @@index([status])
   @@map("client_domains")
@@ -222,6 +229,78 @@ model ClientDomainSecret {
   @@index([domainId, active])
   @@index([secretDigest])
   @@map("client_domain_secrets")
+}
+
+model ClientDomainJwk {
+  id             String    @id @default(cuid())
+  domainId       String    @map("domain_id")
+  kid            String    @unique
+  jwk            Json
+  fingerprint    String
+  active         Boolean   @default(true)
+  createdAt      DateTime  @default(now()) @map("created_at")
+  deactivatedAt  DateTime? @map("deactivated_at")
+  createdByEmail String?   @map("created_by_email")
+
+  domain ClientDomain @relation(fields: [domainId], references: [id], onDelete: Cascade)
+
+  @@index([domainId, active])
+  @@map("client_domain_jwks")
+}
+
+model ClientDomainIntegrationRequest {
+  id                  String                        @id @default(cuid())
+  domain              String
+  status              ClientDomainIntegrationStatus @default(PENDING)
+  contactEmail        String                        @map("contact_email")
+  publicJwk           Json                          @map("public_jwk")
+  jwkFingerprint      String                        @map("jwk_fingerprint")
+  kid                 String
+  jwksUrl             String                        @map("jwks_url")
+  configUrl           String?                       @map("config_url")
+  configSummary       Json?                         @map("config_summary")
+  preValidationResult Json?                         @map("pre_validation_result")
+  declineReason       String?                       @map("decline_reason")
+  reviewedAt          DateTime?                     @map("reviewed_at")
+  reviewedByEmail     String?                       @map("reviewed_by_email")
+  clientDomainId      String?                       @map("client_domain_id")
+  submittedAt         DateTime                      @default(now()) @map("submitted_at")
+  lastSeenAt          DateTime                      @default(now()) @map("last_seen_at")
+
+  claimTokens IntegrationClaimToken[]
+
+  @@index([status, submittedAt])
+  @@map("client_domain_integration_requests")
+}
+
+model IntegrationClaimToken {
+  id              String    @id @default(cuid())
+  integrationId   String    @map("integration_id")
+  tokenHash       String    @unique @map("token_hash")
+  encryptedSecret Bytes?    @map("encrypted_secret")
+  encryptionIv    Bytes?    @map("encryption_iv")
+  encryptionTag   Bytes?    @map("encryption_tag")
+  expiresAt       DateTime  @map("expires_at")
+  usedAt          DateTime? @map("used_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  integration ClientDomainIntegrationRequest @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  @@index([integrationId])
+  @@map("integration_claim_tokens")
+}
+
+model AdminAuditLog {
+  id           String   @id @default(cuid())
+  actorEmail   String   @map("actor_email")
+  action       String
+  targetDomain String?  @map("target_domain")
+  metadata     Json     @default("{}")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([action, createdAt])
+  @@index([targetDomain, createdAt])
+  @@map("admin_audit_log")
 }
 
 model Organisation {

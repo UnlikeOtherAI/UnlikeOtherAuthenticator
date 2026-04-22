@@ -212,6 +212,41 @@ export type AdminData = {
   apps: AppFlagSummary[];
 };
 
+export type IntegrationRequestStatus = 'PENDING' | 'ACCEPTED' | 'DECLINED';
+
+export type IntegrationRequestSummary = {
+  id: string;
+  domain: string;
+  status: IntegrationRequestStatus;
+  contact_email: string;
+  kid: string;
+  jwk_fingerprint: string;
+  jwks_url: string;
+  config_url: string | null;
+  decline_reason: string | null;
+  reviewed_at: string | null;
+  reviewed_by_email: string | null;
+  client_domain_id: string | null;
+  submitted_at: string;
+  last_seen_at: string;
+};
+
+export type IntegrationRequestDetail = IntegrationRequestSummary & {
+  public_jwk: Record<string, unknown>;
+  config_summary: Record<string, unknown> | null;
+  pre_validation_result: Record<string, unknown> | null;
+};
+
+export type DomainJwk = {
+  id: string;
+  kid: string;
+  fingerprint: string;
+  active: boolean;
+  created_at: string;
+  deactivated_at: string | null;
+  created_by_email: string | null;
+};
+
 export type SearchResult =
   | { type: 'organisation'; organisation: Organisation }
   | { type: 'team'; organisation: Organisation; team: Team }

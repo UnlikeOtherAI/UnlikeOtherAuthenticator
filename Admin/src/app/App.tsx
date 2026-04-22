@@ -11,6 +11,7 @@ import { FeatureFlagsPage } from '../pages/AppsFlagsPage';
 import { DashboardPage } from '../pages/DashboardPage';
 import { DirectoryDomainsPage } from '../pages/DirectoryDomainsPage';
 import { DomainDetailPage } from '../pages/DomainDetailPage';
+import { IntegrationRequestsPage } from '../pages/IntegrationRequestsPage';
 import { LogsPage } from '../pages/LogsPage';
 import { SecretsPage } from '../pages/SecretsPage';
 import { LoginPage } from '../pages/LoginPage';
@@ -38,6 +39,7 @@ export function App() {
       >
         <Route index element={<DashboardPage />} />
         <Route path="dashboard" element={<DashboardPage />} />
+        <Route path="integrations" element={<IntegrationRequestsPage />} />
         <Route path="secrets" element={<SecretsPage />} />
         <Route path="domains" element={<DirectoryDomainsPage />} />
         <Route path="domains/:domainId" element={<DomainDetailPage />} />

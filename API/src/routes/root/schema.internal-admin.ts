@@ -85,6 +85,93 @@ export const internalAdminEndpoints: EndpointSchema[] = [
   },
   {
     method: 'GET',
+    path: '/internal/admin/domains/:domain/jwks',
+    description: 'List signing JWKs registered for a domain (active and deactivated)',
+    auth: adminAuth,
+    response: {
+      200: 'Array of { id, kid, fingerprint, active, created_at, deactivated_at, created_by_email }',
+      '401/403': authFailures,
+    },
+  },
+  {
+    method: 'POST',
+    path: '/internal/admin/domains/:domain/jwks',
+    description:
+      'Add a public RSA JWK to a registered domain. Validator enforces kty=RSA, required kid/n/e, and rejects any private members.',
+    auth: adminAuth,
+    body: { jwk: 'object (required) — public RSA JWK with kty, kid, n, e' },
+    response: {
+      200: 'Inserted { id, kid, fingerprint, active, created_at, deactivated_at, created_by_email }',
+      '401/403': authFailures,
+    },
+  },
+  {
+    method: 'DELETE',
+    path: '/internal/admin/domains/:domain/jwks/:kid',
+    description: 'Soft-deactivate a domain JWK by kid. Config JWTs signed with this kid will stop verifying.',
+    auth: adminAuth,
+    response: {
+      200: 'Deactivated { id, kid, fingerprint, active, created_at, deactivated_at, created_by_email }',
+      '401/403': authFailures,
+    },
+  },
+  {
+    method: 'GET',
+    path: '/internal/admin/integration-requests',
+    description:
+      'List auto-onboarding integration requests captured when unknown partner domains called /auth with jwks_url + contact_email in their config JWT.',
+    auth: adminAuth,
+    query: {
+      status: 'PENDING | ACCEPTED | DECLINED (optional)',
+      limit: 'number (optional, max 200)',
+    },
+    response: { 200: 'Array of integration request summary rows', '401/403': authFailures },
+  },
+  {
+    method: 'GET',
+    path: '/internal/admin/integration-requests/:id',
+    description: 'Get one integration request including public_jwk, config_summary, and pre_validation_result',
+    auth: adminAuth,
+    response: { 200: 'Integration request detail object or null', '401/403': authFailures },
+  },
+  {
+    method: 'POST',
+    path: '/internal/admin/integration-requests/:id/accept',
+    description:
+      'Approve a pending integration request. Creates the ClientDomain, the first ClientDomainJwk, and a ClientDomainSecret in one transaction, then emails a 24h one-time claim link to contact_email.',
+    auth: adminAuth,
+    body: {
+      label: 'string (optional) — friendly label stored on the created ClientDomain',
+      client_secret: 'string (optional, min 32) — omit to let the API generate one',
+    },
+    response: { 200: 'Updated integration request detail (status=ACCEPTED)', '401/403': authFailures },
+  },
+  {
+    method: 'POST',
+    path: '/internal/admin/integration-requests/:id/decline',
+    description: 'Decline a pending integration request with a required internal reason. The partner is NOT emailed.',
+    auth: adminAuth,
+    body: { reason: 'string (required, max 1000) — internal audit reason' },
+    response: { 200: 'Updated integration request detail (status=DECLINED)', '401/403': authFailures },
+  },
+  {
+    method: 'POST',
+    path: '/internal/admin/integration-requests/:id/resend-claim',
+    description:
+      'Generate a fresh 24h claim token for an ACCEPTED request and email the link again. Old token is revoked.',
+    auth: adminAuth,
+    response: { 200: 'Integration request detail', '401/403': authFailures },
+  },
+  {
+    method: 'DELETE',
+    path: '/internal/admin/integration-requests/:id',
+    description:
+      'Remove an integration request row. Any created ClientDomain is NOT deleted; this only clears the request record.',
+    auth: adminAuth,
+    response: { 200: '{ ok: true }', '401/403': authFailures },
+  },
+  {
+    method: 'GET',
     path: '/internal/admin/organisations',
     description: 'List organisations with teams, members, and pre-approval rows',
     auth: adminAuth,

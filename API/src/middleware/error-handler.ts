@@ -1,11 +1,12 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { ZodError } from 'zod';
 
 import {
   enrichAuthDebugForAppError,
   renderAuthDebugHtml,
 } from '../services/auth-debug-page.service.js';
-import { isAppError } from '../utils/errors.js';
+import { renderIntegrationStatusHtml } from '../services/integration-status-page.service.js';
+import { isAppError, type AppError } from '../utils/errors.js';
 import { buildPublicErrorBody } from '../utils/error-response.js';
 
 function wantsHtml(request: { method: string; headers: { accept?: string } }): boolean {
@@ -28,6 +29,21 @@ function shouldRenderAuthDebug(request: {
   if (request.authDebug) return true;
   const requestUrl = request.raw.url ?? '';
   return requestUrl.startsWith('/auth');
+}
+
+function maybeRenderIntegrationStatusPage(
+  request: FastifyRequest,
+  error: AppError,
+): string | null {
+  const outcome = request.integrationOutcome;
+  if (!outcome) return null;
+  const code = error.message || error.code;
+  if (code !== 'INTEGRATION_PENDING_REVIEW' && code !== 'INTEGRATION_DECLINED') return null;
+  return renderIntegrationStatusHtml({
+    kind: outcome.kind,
+    domain: outcome.domain,
+    contactEmail: outcome.kind === 'pending' ? outcome.contactEmail : null,
+  });
 }
 
 export function registerErrorHandler(app: FastifyInstance): void {
@@ -59,6 +75,16 @@ export function registerErrorHandler(app: FastifyInstance): void {
     }
 
     if (isAppError(error)) {
+      if (wantsHtml(request)) {
+        const integrationHtml = maybeRenderIntegrationStatusPage(request, error);
+        if (integrationHtml) {
+          reply
+            .type('text/html; charset=utf-8')
+            .status(error.statusCode)
+            .send(integrationHtml);
+          return;
+        }
+      }
       if (shouldRenderAuthDebug(request)) {
         enrichAuthDebugForAppError(request, error);
         reply

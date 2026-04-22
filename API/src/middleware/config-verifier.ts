@@ -3,7 +3,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { decodeJwt, decodeProtectedHeader } from 'jose';
 import { z } from 'zod';
 
-import { requireEnv } from '../config/env.js';
+import { getEnv, requireEnv } from '../config/env.js';
 import {
   createAuthDebugInfo,
   formatZodIssues,
@@ -24,6 +24,11 @@ import {
   buildHandshakeRequestJson,
   configFetchFailureDetails,
 } from '../services/handshake-log-context.service.js';
+import {
+  readOptInFields,
+  tryAutoOnboard,
+  type AutoOnboardingOutcome,
+} from '../services/auto-onboarding.service.js';
 
 const QuerySchema = z.object({
   config_url: z.string().min(1),
@@ -115,6 +120,7 @@ declare module 'fastify' {
     configUrl?: string;
     configJwt?: string;
     config?: ClientConfig;
+    integrationOutcome?: AutoOnboardingOutcome;
   }
 }
 
@@ -178,6 +184,22 @@ export async function configVerifier(
       CONFIG_JWKS_URL,
     );
   } catch (err) {
+    // If the partner opted into auto-onboarding, attempt to self-register the request
+    // against the JWKS they publish. Trust is still gated on superuser approval — even
+    // when auto-onboarding succeeds we end the /auth flow with a friendly pending page.
+    if (getEnv().DATABASE_URL && readOptInFields(request.configJwt)) {
+      const outcome = await tryAutoOnboard(request.configJwt, config_url);
+      request.integrationOutcome = outcome;
+      const code =
+        outcome.kind === 'declined' ? 'INTEGRATION_DECLINED' : 'INTEGRATION_PENDING_REVIEW';
+      const summary =
+        outcome.kind === 'declined'
+          ? 'This integration was previously declined. Contact support.'
+          : 'This integration is pending review. A superuser has been notified.';
+      mergeAuthDebugInfo(request, { stage: 'config_verify', code, summary });
+      throw new AppError('BAD_REQUEST', 400, code);
+    }
+
     mergeAuthDebugInfo(request, {
       stage: 'config_verify',
       code: 'CONFIG_JWT_INVALID',

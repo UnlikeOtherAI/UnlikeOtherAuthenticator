@@ -1,4 +1,15 @@
-import type { AdminData, Domain, DomainDirectoryDetail, SearchResult, Team, UserSummary } from '../features/admin/types';
+import type {
+  AdminData,
+  Domain,
+  DomainDirectoryDetail,
+  DomainJwk,
+  IntegrationRequestDetail,
+  IntegrationRequestStatus,
+  IntegrationRequestSummary,
+  SearchResult,
+  Team,
+  UserSummary,
+} from '../features/admin/types';
 import { createApiClient } from './api-client';
 
 const api = createApiClient();
@@ -39,6 +50,38 @@ export const adminService = {
   getHandshakeErrors: () => api.get<AdminData['handshakeErrors']>('/internal/admin/handshake-errors'),
   getSettings: () => api.get<Pick<AdminData, 'bans' | 'apps'>>('/internal/admin/settings'),
   search: (query: string) => api.get<SearchResult[]>(`/internal/admin/search?q=${encodeURIComponent(query)}`),
+  getIntegrationRequests: (status?: IntegrationRequestStatus) => {
+    const suffix = status ? `?status=${status}` : '';
+    return api.get<IntegrationRequestSummary[]>(`/internal/admin/integration-requests${suffix}`);
+  },
+  getIntegrationRequest: (id: string) =>
+    api.get<IntegrationRequestDetail | null>(`/internal/admin/integration-requests/${encodeURIComponent(id)}`),
+  acceptIntegrationRequest: (id: string, body?: { label?: string; clientSecret?: string }) =>
+    api.post<IntegrationRequestDetail>(
+      `/internal/admin/integration-requests/${encodeURIComponent(id)}/accept`,
+      body && Object.keys(body).length > 0
+        ? { label: body.label, client_secret: body.clientSecret }
+        : undefined,
+    ),
+  declineIntegrationRequest: (id: string, reason: string) =>
+    api.post<IntegrationRequestDetail>(
+      `/internal/admin/integration-requests/${encodeURIComponent(id)}/decline`,
+      { reason },
+    ),
+  deleteIntegrationRequest: (id: string) =>
+    api.delete<{ ok: boolean }>(`/internal/admin/integration-requests/${encodeURIComponent(id)}`),
+  resendIntegrationClaim: (id: string) =>
+    api.post<IntegrationRequestDetail>(
+      `/internal/admin/integration-requests/${encodeURIComponent(id)}/resend-claim`,
+    ),
+  getDomainJwks: (domain: string) =>
+    api.get<DomainJwk[]>(`/internal/admin/domains/${encodeURIComponent(domain)}/jwks`),
+  addDomainJwk: (domain: string, jwk: Record<string, unknown>) =>
+    api.post<DomainJwk>(`/internal/admin/domains/${encodeURIComponent(domain)}/jwks`, { jwk }),
+  deactivateDomainJwk: (domain: string, kid: string) =>
+    api.delete<DomainJwk>(
+      `/internal/admin/domains/${encodeURIComponent(domain)}/jwks/${encodeURIComponent(kid)}`,
+    ),
 };
 
 export type AdminServiceData = AdminData;
