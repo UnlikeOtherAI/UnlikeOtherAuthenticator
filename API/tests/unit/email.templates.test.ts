@@ -221,3 +221,35 @@ describe('buildTwoFaResetTemplate', () => {
     expect(tpl.html).not.toContain('href="https://example.com/path?x=1&y=2"');
   });
 });
+
+describe('buildIntegrationRequestNotificationTemplate', () => {
+  it('renders domain, contact email, and admin URL in subject/text/html', () => {
+    const tpl = buildIntegrationRequestNotificationTemplate({
+      domain: 'api.partner.example',
+      contactEmail: 'ops@partner.example',
+      adminUrl: 'https://auth.example/admin/integrations?focus=abc123',
+    });
+
+    expect(tpl.subject).toBe('New integration request: api.partner.example');
+    expect(tpl.text).toContain('api.partner.example');
+    expect(tpl.text).toContain('ops@partner.example');
+    expect(tpl.text).toContain('https://auth.example/admin/integrations?focus=abc123');
+
+    expect(tpl.html).toContain('New integration request');
+    expect(tpl.html).toContain('api.partner.example');
+    expect(tpl.html).toContain('ops@partner.example');
+    expect(tpl.html).toContain('href="https://auth.example/admin/integrations?focus=abc123"');
+  });
+
+  it('escapes attacker-controlled domain and contact email in HTML', () => {
+    const tpl = buildIntegrationRequestNotificationTemplate({
+      domain: 'evil"><script>alert(1)</script>',
+      contactEmail: 'x"@y<script>',
+      adminUrl: 'https://auth.example/admin/integrations',
+    });
+
+    expect(tpl.html).not.toContain('<script>alert(1)</script>');
+    expect(tpl.html).toContain('evil&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;');
+    expect(tpl.html).toContain('x&quot;@y&lt;script&gt;');
+  });
+});
