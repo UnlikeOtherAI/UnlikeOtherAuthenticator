@@ -366,6 +366,37 @@ Domain admin APIs (\`/domain/users\`, \`/domain/logs\`, etc.) and team-invite / 
 
 ---
 
+## Phase 5 — Server startup payload: kill switch + feature flags
+
+Your backend can request the startup payload using the same signed config JWT trust path as \`/auth/login\` and \`/auth/register\`: pass \`config_url\`, UOA fetches the RS256 config JWT, verifies the signature, validates the payload, and checks that \`domain\` matches the \`config_url\` hostname.
+
+\`\`\`text
+GET /apps/startup?config_url=<your_config_endpoint_url>&appIdentifier=com.acme.ios&platform=ios&versionName=1.5.0&buildNumber=142
+\`\`\`
+
+Optional query params:
+
+- \`userId\` — applies per-user flag overrides and kill-switch test targeting when the user belongs to the app's org.
+- \`versionCode\` — Android numeric version code.
+- \`teamId\` — reserved for multi-team flag resolution.
+
+Response:
+
+\`\`\`json
+{
+  "killSwitch": null,
+  "flags": { "dark_mode": true, "new_checkout": false },
+  "cacheTtl": 300,
+  "serverTime": "2026-04-22T12:00:00.000Z"
+}
+\`\`\`
+
+- Unknown, inactive, or cross-domain apps return a clear startup payload: \`killSwitch: null\`, \`flags: {}\`.
+- Feature flags return a flat key-to-boolean map. If feature flags are disabled for the App, \`flags\` is \`{}\`.
+- A matched hard or maintenance kill switch appears in \`killSwitch\`; callers should block startup before loading app content.
+
+---
+
 ## Validate at every step
 
 UOA ships a production-safe validator that runs the same pipeline as the auth runtime:

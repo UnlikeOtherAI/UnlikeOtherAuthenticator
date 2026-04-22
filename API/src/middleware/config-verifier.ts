@@ -111,6 +111,9 @@ const safeConfigJwtNestedKeys = new Map<string, ReadonlySet<string>>([
       'max_members_per_group',
       'max_team_memberships_per_user',
       'org_roles',
+      'max_flags_per_app',
+      'scim_override_retention',
+      'global_missing_flag_default',
     ]),
   ],
 ]);

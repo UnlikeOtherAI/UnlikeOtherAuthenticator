@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 
 import { buildPublicErrorBody } from '../utils/error-response.js';
 import { registerAdminUiRoutes } from './admin-ui.js';
+import { registerAppRoutes } from './apps/index.js';
 import { registerAuthRoutes } from './auth/index.js';
 import { registerConfigJwksRoute } from './config-jwks.js';
 import { registerDomainRoutes } from './domain/index.js';
@@ -19,6 +20,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   registerConfigJwksRoute(app);
   registerHealthRoutes(app);
   registerAdminUiRoutes(app);
+  registerAppRoutes(app);
   registerAuthRoutes(app);
   registerDomainRoutes(app);
   registerIntegrationRoutes(app);

@@ -282,15 +282,16 @@ Configurable per App:
 
 To avoid multiple round trips, the SDK can request everything it needs in one call at app launch:
 
-**Authentication:** Same as `/killswitch/check` — publicly accessible by `appIdentifier`. If the user is authenticated, pass `userId` and the user's UOA access token in `X-UOA-Access-Token` header. When the access token is present and valid, the user's per-user flag overrides are applied. Without it, flags resolve against the role default or flag default only.
+**Authentication:** signed RS256 config JWT via `config_url`, using the same verifier as `/auth/login` and `/auth/register`. UOA fetches the config JWT from `config_url`, verifies the signature, validates the payload, and requires the config `domain` to match the `config_url` hostname. If `userId` is provided and belongs to the App's org, per-user flag overrides and kill-switch test targeting are applied. Without `userId`, flags resolve to App defaults.
 
 ```
 GET /apps/startup
-  ?appIdentifier=com.acme.ios
+  ?config_url=https://api.acme.com/auth/config
+  &appIdentifier=com.acme.ios
   &platform=ios
   &versionName=1.5.0
   &buildNumber=142
-  &userId=user_123         (optional — when authenticated; required for per-user flag overrides)
+  &userId=user_123         (optional — applies per-user flag overrides and test targeting)
   &teamId=team_xyz         (optional — for multi-team flag resolution; see feature-flags.md multi-team rule)
 ```
 
@@ -320,8 +321,8 @@ One endpoint. SDK checks kill switch first — if `hard` or `maintenance` block,
 |---|---|
 | Unknown `appIdentifier` | `{ "killSwitch": null, "flags": {}, "cacheTtl": 3600, "serverTime": "..." }` |
 | App `active: false` | Same as unknown — `{ "killSwitch": null, "flags": {}, "cacheTtl": 3600, "serverTime": "..." }` (no information leaked) |
-| Missing or expired `X-UOA-Access-Token` | Proceed without per-user overrides; resolve flags against role default. No error. |
-| Invalid (tampered) `X-UOA-Access-Token` | Treated as absent — resolve flags against role default. No error. |
+| Missing, invalid, or unverifiable `config_url` / config JWT | HTTP 400/401, `{ "error": "Request failed" }` |
+| `userId` omitted or not a member of the App's org | Proceed without per-user overrides; resolve flags against defaults. No error. |
 | Feature flags service disabled for App | `flags: {}` in response; kill switch check proceeds normally. |
 | User listed in `testUserIds` of an inactive/scheduled entry | Entry is evaluated for this user regardless of `active` flag and `activateAt`. |
 | Invalid `platform` value | HTTP 400, `{ "error": "Request failed" }` |

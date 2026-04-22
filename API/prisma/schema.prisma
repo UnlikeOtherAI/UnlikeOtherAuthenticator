@@ -53,6 +53,7 @@ model User {
   acceptedTeamInvites    TeamInvite[]        @relation("AcceptedTeamInvites")
   accessRequests         AccessRequest[]
   reviewedAccessRequests AccessRequest[]     @relation("ReviewedAccessRequests")
+  featureFlagOverrides   FeatureFlagUserOverride[]
 
   @@index([email])
   @@index([domain])
@@ -322,6 +323,7 @@ model Organisation {
   groups         Group[]
   invites        TeamInvite[]
   accessRequests AccessRequest[]
+  apps           App[]
 
   @@unique([domain, slug])
   @@index([domain])
@@ -343,6 +345,126 @@ model OrgMember {
   @@unique([orgId, userId])
   @@index([userId])
   @@map("org_members")
+}
+
+model App {
+  id                    String   @id @default(cuid())
+  orgId                 String   @map("org_id")
+  name                  String   @db.VarChar(120)
+  identifier            String   @db.VarChar(160)
+  platform              String   @db.VarChar(20)
+  domains               Json     @default("[]")
+  storeUrl              String?  @map("store_url")
+  offlinePolicy         String   @default("allow") @map("offline_policy") @db.VarChar(20)
+  pollIntervalSeconds   Int      @default(300) @map("poll_interval_seconds")
+  featureFlagsEnabled   Boolean  @default(false) @map("feature_flags_enabled")
+  roleFlagMatrixEnabled Boolean  @default(false) @map("role_flag_matrix_enabled")
+  active                Boolean  @default(true)
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  org            Organisation            @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  killSwitches   KillSwitchEntry[]
+  flags          FeatureFlagDefinition[]
+  roleValues     FeatureFlagRoleValue[]
+  userOverrides  FeatureFlagUserOverride[]
+
+  @@unique([orgId, identifier])
+  @@index([identifier])
+  @@index([orgId])
+  @@map("apps")
+}
+
+model KillSwitchEntry {
+  id                 String    @id @default(cuid())
+  appId              String    @map("app_id")
+  platform           String    @db.VarChar(20)
+  type               String    @db.VarChar(20)
+  versionField       String    @map("version_field") @db.VarChar(20)
+  operator           String    @default("eq") @db.VarChar(10)
+  versionValue       String    @map("version_value") @db.VarChar(80)
+  versionMax         String?   @map("version_max") @db.VarChar(80)
+  versionScheme      String    @map("version_scheme") @db.VarChar(20)
+  name               String?   @db.VarChar(120)
+  storeUrl           String?   @map("store_url")
+  titleKey           String?   @map("title_key") @db.VarChar(160)
+  title              String?
+  messageKey         String?   @map("message_key") @db.VarChar(160)
+  message            String?
+  primaryButtonKey   String?   @map("primary_button_key") @db.VarChar(160)
+  primaryButton      String?   @map("primary_button")
+  secondaryButtonKey String?   @map("secondary_button_key") @db.VarChar(160)
+  secondaryButton    String?   @map("secondary_button")
+  latestVersion      String?   @map("latest_version") @db.VarChar(80)
+  active             Boolean   @default(true)
+  activateAt         DateTime? @map("activate_at")
+  deactivateAt       DateTime? @map("deactivate_at")
+  priority           Int       @default(0)
+  testUserIds        Json      @default("[]") @map("test_user_ids")
+  cacheTtl           Int       @default(3600) @map("cache_ttl")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  app App @relation(fields: [appId], references: [id], onDelete: Cascade)
+
+  @@index([appId])
+  @@index([appId, active, priority])
+  @@index([activateAt])
+  @@map("kill_switch_entries")
+}
+
+model FeatureFlagDefinition {
+  id           String   @id @default(cuid())
+  appId        String   @map("app_id")
+  key          String   @db.VarChar(80)
+  description  String?  @db.VarChar(500)
+  defaultState Boolean  @default(false) @map("default_state")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  app           App                       @relation(fields: [appId], references: [id], onDelete: Cascade)
+  roleValues    FeatureFlagRoleValue[]
+  userOverrides FeatureFlagUserOverride[]
+
+  @@unique([appId, key])
+  @@index([appId])
+  @@map("feature_flag_definitions")
+}
+
+model FeatureFlagRoleValue {
+  id        String   @id @default(cuid())
+  appId     String   @map("app_id")
+  flagKey   String   @map("flag_key") @db.VarChar(80)
+  roleName  String   @map("role_name") @db.VarChar(100)
+  value     Boolean
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  app  App                   @relation(fields: [appId], references: [id], onDelete: Cascade)
+  flag FeatureFlagDefinition @relation(fields: [appId, flagKey], references: [appId, key], onDelete: Cascade)
+
+  @@unique([appId, roleName, flagKey])
+  @@index([appId, flagKey])
+  @@map("feature_flag_role_values")
+}
+
+model FeatureFlagUserOverride {
+  id        String   @id @default(cuid())
+  appId     String   @map("app_id")
+  flagKey   String   @map("flag_key") @db.VarChar(80)
+  userId    String   @map("user_id")
+  value     Boolean
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  app  App                   @relation(fields: [appId], references: [id], onDelete: Cascade)
+  flag FeatureFlagDefinition @relation(fields: [appId, flagKey], references: [appId, key], onDelete: Cascade)
+  user User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([appId, userId, flagKey])
+  @@index([userId])
+  @@index([appId, flagKey])
+  @@map("feature_flag_user_overrides")
 }
 
 model Team {

@@ -163,6 +163,9 @@ export const configJwtDocumentation = {
       max_members_per_group: 'number (default 500, max 5000)',
       max_team_memberships_per_user: 'number (default 50, max 200)',
       org_roles: 'string[] (default ["owner", "admin", "member"]). Must include "owner".',
+      max_flags_per_app: 'number (default 100, max 500)',
+      scim_override_retention: '"retain" | "clear" (default "retain")',
+      global_missing_flag_default: '"enabled" | "disabled" (default "disabled")',
     },
     access_requests: {
       enabled: 'boolean (default false)',

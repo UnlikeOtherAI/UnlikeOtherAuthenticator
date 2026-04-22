@@ -63,6 +63,32 @@ const domainEndpoints: EndpointSchema[] = [
   },
 ];
 
+const appEndpoints: EndpointSchema[] = [
+  {
+    method: 'GET',
+    path: '/apps/startup',
+    description: 'Server-facing startup payload combining kill switch state and resolved feature flags',
+    auth: 'signed RS256 config JWT fetched from config_url, same verification path as /auth/login and /auth/register',
+    query: {
+      config_url: 'string (required) — HTTPS URL to fetch signed config JWT',
+      appIdentifier: 'string (required) — registered app identifier, e.g. com.acme.ios',
+      platform: 'string (required) — ios | android | web | macos | windows | other',
+      versionName: 'string (optional) — semantic/display version',
+      versionCode: 'string (optional) — Android numeric version code',
+      buildNumber: 'string (optional) — iOS/macOS build number',
+      userId: 'string (optional) — applies per-user flag overrides and kill-switch test targeting',
+      teamId: 'string (optional) — reserved for multi-team flag resolution',
+    },
+    response: {
+      killSwitch: 'object|null — matched kill-switch entry, or null when clear',
+      flags: 'object — all resolved feature flags for the app as key:boolean',
+      cacheTtl: 'number — seconds the caller may cache the response',
+      serverTime: 'string — ISO timestamp',
+      activatesIn: 'number (optional) — seconds until a pending kill switch activates',
+    },
+  },
+];
+
 const orgEndpoints: EndpointSchema[] = [
   {
     method: 'GET',
@@ -299,6 +325,7 @@ export const endpoints: EndpointSchema[] = [
   ...baseEndpoints,
   ...configDebugEndpoints,
   ...authEndpoints,
+  ...appEndpoints,
   ...domainEndpoints,
   ...orgEndpoints,
   ...integrationsEndpoints,

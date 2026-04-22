@@ -53,7 +53,7 @@ The global missing-flag default means consuming apps never get an error for an u
 GET /apps/:appId/flags?userId=user_123[&teamId=team_xyz]
 ```
 
-**Auth:** Domain-hash auth (consuming app calling server-side). The `userId` param must correspond to a real user in the calling app's org — the server validates this. When called from a client SDK context, use the `/apps/startup` endpoint instead (which accepts an `X-UOA-Access-Token` header and derives `userId` from it).
+**Auth:** Domain-hash auth (consuming app calling server-side). The `userId` param must correspond to a real user in the calling app's org — the server validates this. For the combined kill-switch + flag payload, use the `/apps/startup` endpoint with `config_url`; it uses the same signed config JWT verification path as `/auth/login` and `/auth/register`.
 
 `teamId` is optional. When omitted and the user has a single team membership relevant to this App, that team's role is used. When the user has multiple team memberships, `teamId` must be provided or the multi-team fallback rule (see resolution order above) applies.
 

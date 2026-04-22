@@ -239,6 +239,9 @@ const ClientConfigSchema = RequiredConfigSchema.extend({
         .array(z.string().min(1).max(50))
         .refine((roles) => roles.includes('owner'), { message: 'org_roles must include "owner"' })
         .default(['owner', 'admin', 'member']),
+      max_flags_per_app: z.number().int().positive().max(500).default(100),
+      scim_override_retention: z.enum(['retain', 'clear']).default('retain'),
+      global_missing_flag_default: z.enum(['enabled', 'disabled']).default('disabled'),
     })
     .optional()
     .default({
@@ -255,6 +258,9 @@ const ClientConfigSchema = RequiredConfigSchema.extend({
       max_members_per_group: 500,
       max_team_memberships_per_user: 50,
       org_roles: ['owner', 'admin', 'member'],
+      max_flags_per_app: 100,
+      scim_override_retention: 'retain',
+      global_missing_flag_default: 'disabled',
     }),
 }).superRefine((config, ctx) => {
   const logoUrl = config.ui_theme.logo.url.trim();

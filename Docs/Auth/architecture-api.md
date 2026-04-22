@@ -33,7 +33,7 @@ For the full product spec, see [brief.md](./brief.md). For tech stack, see [tech
         flag-matrix.ts        — GET/PATCH /org/:orgId/apps/:appId/flags/matrix[/:roleName/:flagKey]
         flag-overrides.ts     — GET/PUT/DELETE /org/:orgId/apps/:appId/flags/overrides/:userId[/:flagKey]
         flag-query.ts         — GET /apps/:appId/flags (resolved flag map for a user; domain-hash auth, no orgId in path)
-        startup.ts            — GET /apps/startup (combined kill switch + flags; public)
+        startup.ts            — GET /apps/startup (combined kill switch + flags; config JWT auth)
         killswitch-check.ts   — GET /killswitch/check (standalone kill switch query; public)
         index.ts              — Route registration for /apps and /killswitch
       /auth
@@ -175,7 +175,7 @@ Request → Route → Middleware → Service → Database (Prisma)
 
 ### Middleware
 
-* **config-verifier** — runs on all OAuth entry points. Fetches config from URL, verifies JWT, attaches parsed config to the request context. **Bypass exceptions** (SDK-facing or unauthenticated documentation endpoints called without a backend config context): `GET /killswitch/check`, `GET /apps/startup`, `GET /` (holding page), `GET /api` (JSON schema), `GET /llm` (Markdown config docs). All `/scim/v2/*` endpoints also bypass config-verifier (they use SCIM bearer token auth instead) — noted here for when SCIM is implemented [DEFERRED].
+* **config-verifier** — runs on all OAuth entry points and the server-facing `GET /apps/startup` endpoint. Fetches config from URL, verifies JWT, attaches parsed config to the request context. **Bypass exceptions** (SDK-facing or unauthenticated documentation endpoints called without a backend config context): `GET /killswitch/check`, `GET /` (holding page), `GET /api` (JSON schema), `GET /llm` (Markdown config docs). All `/scim/v2/*` endpoints also bypass config-verifier (they use SCIM bearer token auth instead) — noted here for when SCIM is implemented [DEFERRED].
 * **domain-hash-auth** — runs on domain-scoped API routes. Verifies the domain hash token
 * **superuser-access-token** — validates user access tokens for superuser-only domain endpoints
 * **org-features** — rejects org endpoints when `org_features.enabled` is false
