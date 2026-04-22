@@ -5,6 +5,7 @@ import {
   enrichAuthDebugForAppError,
   renderAuthDebugHtml,
 } from '../services/auth-debug-page.service.js';
+import { renderClaimInvalidHtml } from '../services/integration-claim-page.service.js';
 import { renderIntegrationStatusHtml } from '../services/integration-status-page.service.js';
 import { isAppError, type AppError } from '../utils/errors.js';
 import { buildPublicErrorBody } from '../utils/error-response.js';
@@ -12,6 +13,10 @@ import { buildPublicErrorBody } from '../utils/error-response.js';
 function wantsHtml(request: { method: string; headers: { accept?: string } }): boolean {
   const accept = request.headers.accept ?? '';
   return request.method === 'GET' && accept.toLowerCase().includes('text/html');
+}
+
+function isIntegrationClaimRequest(request: { raw: { url?: string } }): boolean {
+  return (request.raw.url ?? '').startsWith('/integrations/claim/');
 }
 
 function renderGenericErrorHtml(): string {
@@ -49,6 +54,15 @@ export function registerErrorHandler(app: FastifyInstance): void {
   app.setErrorHandler((error, request, reply) => {
     // Internal logs can contain specifics; user-facing responses must remain generic.
     request.log.error({ err: error }, 'request failed');
+
+    // Claim flow is always a browser context. Any failure (bad content-type,
+    // AppError, unexpected crash) must produce the friendly invalid-link page
+    // rather than the JSON generic, including on POST /confirm.
+    if (isIntegrationClaimRequest(request)) {
+      const status = isAppError(error) ? error.statusCode : 404;
+      reply.type('text/html; charset=utf-8').status(status).send(renderClaimInvalidHtml('missing'));
+      return;
+    }
 
     if (error instanceof ZodError) {
       if (shouldRenderAuthDebug(request)) {

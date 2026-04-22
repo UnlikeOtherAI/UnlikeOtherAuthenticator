@@ -62,6 +62,18 @@ export async function createApp(): Promise<FastifyInstance> {
   });
   setAppLogger(app.log);
 
+  // The integration claim confirm page is a plain HTML form that browsers submit
+  // as application/x-www-form-urlencoded. We do not use the body (the token is
+  // in the path), so accept the content-type and drop the payload rather than
+  // 500-ing with FST_ERR_CTP_INVALID_MEDIA_TYPE.
+  app.addContentTypeParser(
+    'application/x-www-form-urlencoded',
+    { parseAs: 'string' },
+    (_request, _body, done) => {
+      done(null, {});
+    },
+  );
+
   await app.register(helmet, {
     contentSecurityPolicy: {
       directives: {

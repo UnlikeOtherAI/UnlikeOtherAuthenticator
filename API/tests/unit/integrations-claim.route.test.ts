@@ -159,6 +159,63 @@ describe('/integrations/claim/:token', () => {
     }
   });
 
+  it('POST /confirm accepts application/x-www-form-urlencoded bodies from HTML forms', async () => {
+    claimMocks.consumeClaim.mockResolvedValue({
+      state: 'consumed',
+      integrationId: 'req-1',
+      clientSecret: 'real-plaintext-client-secret-12345678',
+      usedAt: new Date('2026-04-22T12:00:00Z'),
+    });
+    integrationRequestMocks.getIntegrationRequestById.mockResolvedValue({
+      id: 'req-1',
+      domain: 'client.example.com',
+      contactEmail: 'ops@client.example.com',
+      status: 'ACCEPTED',
+    });
+
+    const { createApp } = await import('../../src/app.js');
+    const app = await createApp();
+    await app.ready();
+
+    try {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/integrations/claim/raw-token-abc/confirm',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        payload: '',
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.headers['content-type']).toContain('text/html');
+      expect(res.body).toContain('real-plaintext-client-secret-12345678');
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('POST /confirm renders the invalid HTML page when the service throws', async () => {
+    claimMocks.consumeClaim.mockRejectedValue(new Error('database offline'));
+
+    const { createApp } = await import('../../src/app.js');
+    const app = await createApp();
+    await app.ready();
+
+    try {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/integrations/claim/raw-token-abc/confirm',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        payload: '',
+      });
+
+      expect(res.headers['content-type']).toContain('text/html');
+      expect(res.body).toContain('claim link');
+      expect(res.body).not.toContain('"error"');
+    } finally {
+      await app.close();
+    }
+  });
+
   it('POST /confirm returns the invalid page when the token is expired', async () => {
     claimMocks.consumeClaim.mockResolvedValue({ state: 'expired' });
 
