@@ -8,7 +8,7 @@ import { requireAdminSuperuser } from '../admin-superuser.js';
 const domainRoleFindUnique = vi.hoisted(() => vi.fn());
 
 vi.mock('../../db/prisma.js', () => ({
-  getPrisma: () => ({
+  getAdminPrisma: () => ({
     domainRole: {
       findUnique: domainRoleFindUnique,
     },

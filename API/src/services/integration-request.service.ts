@@ -1,6 +1,6 @@
 import { Prisma, type PrismaClient } from '@prisma/client';
 
-import { getPrisma } from '../db/prisma.js';
+import { getAdminPrisma } from '../db/prisma.js';
 import { normalizeDomain } from '../utils/domain.js';
 import { AppError } from '../utils/errors.js';
 import type { PublicRsaJwk } from './client-jwk.service.js';
@@ -8,7 +8,7 @@ import type { PublicRsaJwk } from './client-jwk.service.js';
 type IntegrationRequestPrisma = Pick<PrismaClient, 'clientDomainIntegrationRequest'>;
 
 function prismaClient(deps?: { prisma?: IntegrationRequestPrisma }): IntegrationRequestPrisma {
-  return deps?.prisma ?? (getPrisma() as unknown as IntegrationRequestPrisma);
+  return deps?.prisma ?? (getAdminPrisma() as unknown as IntegrationRequestPrisma);
 }
 
 export type IntegrationRequestStatus = 'PENDING' | 'ACCEPTED' | 'DECLINED';

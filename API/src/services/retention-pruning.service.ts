@@ -1,7 +1,7 @@
 import type { PrismaClient } from '@prisma/client';
 
 import { getEnv } from '../config/env.js';
-import { getPrisma } from '../db/prisma.js';
+import { getAdminPrisma } from '../db/prisma.js';
 
 type RetentionPrisma = {
   authorizationCode: Pick<PrismaClient['authorizationCode'], 'deleteMany'>;
@@ -45,7 +45,7 @@ export async function pruneExpiredSecurityData(
   const env = deps?.env ?? getEnv();
   if (!env.DATABASE_URL) return emptyResult();
 
-  const prisma = deps?.prisma ?? (getPrisma() as unknown as RetentionPrisma);
+  const prisma = deps?.prisma ?? (getAdminPrisma() as unknown as RetentionPrisma);
   const now = deps?.now ? deps.now() : new Date();
   const tokenCutoff = subtractDays(now, env.TOKEN_PRUNE_RETENTION_DAYS);
   const loginLogCutoff = subtractDays(now, env.LOG_RETENTION_DAYS);

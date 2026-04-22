@@ -1,6 +1,6 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 
-import { getPrisma } from '../db/prisma.js';
+import { getAdminPrisma } from '../db/prisma.js';
 
 export type AdminAuditAction =
   | 'integration.accepted'
@@ -16,7 +16,7 @@ export type AdminAuditAction =
 type AuditLogPrisma = Pick<PrismaClient, 'adminAuditLog'>;
 
 function prismaClient(deps?: { prisma?: AuditLogPrisma }): AuditLogPrisma {
-  return deps?.prisma ?? (getPrisma() as unknown as AuditLogPrisma);
+  return deps?.prisma ?? (getAdminPrisma() as unknown as AuditLogPrisma);
 }
 
 export async function writeAuditLog(

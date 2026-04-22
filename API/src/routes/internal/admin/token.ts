@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 import { getAdminAuthDomain, getAuthServiceIdentifier, getEnv } from '../../../config/env.js';
-import { getPrisma } from '../../../db/prisma.js';
+import { getAdminPrisma } from '../../../db/prisma.js';
 import { configVerifier } from '../../../middleware/config-verifier.js';
 import { verifyAccessToken } from '../../../services/access-token.service.js';
 import { exchangeAuthorizationCodeForTokens } from '../../../services/token.service.js';
@@ -62,7 +62,7 @@ async function assertAdminAccessTokenIsSuperuser(accessToken: string): Promise<v
   }
 
   if (env.DATABASE_URL) {
-    const adminRole = await getPrisma().domainRole.findUnique({
+    const adminRole = await getAdminPrisma().domainRole.findUnique({
       where: { domain_userId: { domain: adminDomain, userId: claims.userId } },
       select: { role: true },
     });

@@ -25,6 +25,7 @@ const auditLogMocks = vi.hoisted(() => ({
 
 const prismaMocks = vi.hoisted(() => ({
   getPrisma: vi.fn(() => ({})),
+  getAdminPrisma: vi.fn(() => ({})),
   connectPrisma: vi.fn(async () => {}),
   disconnectPrisma: vi.fn(async () => {}),
 }));

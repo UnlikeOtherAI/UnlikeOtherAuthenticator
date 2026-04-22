@@ -12,6 +12,7 @@ vi.mock('../../src/services/integration-request.service.js', () => integrationRe
 
 vi.mock('../../src/db/prisma.js', () => ({
   getPrisma: vi.fn(() => ({})),
+  getAdminPrisma: vi.fn(() => ({})),
   connectPrisma: vi.fn(async () => {}),
   disconnectPrisma: vi.fn(async () => {}),
 }));

@@ -4,7 +4,7 @@ import type { Prisma, PrismaClient } from '@prisma/client';
 import { importJWK, type JWK, type KeyLike } from 'jose';
 import { z } from 'zod';
 
-import { getPrisma } from '../db/prisma.js';
+import { getAdminPrisma } from '../db/prisma.js';
 import { normalizeDomain } from '../utils/domain.js';
 import { AppError } from '../utils/errors.js';
 
@@ -48,7 +48,7 @@ export const PublicRsaJwksSchema = z
 export type PublicRsaJwks = z.infer<typeof PublicRsaJwksSchema>;
 
 function prismaClient(deps?: { prisma?: ClientJwkPrisma }): ClientJwkPrisma {
-  return deps?.prisma ?? (getPrisma() as unknown as ClientJwkPrisma);
+  return deps?.prisma ?? (getAdminPrisma() as unknown as ClientJwkPrisma);
 }
 
 function base64url(buf: Buffer): string {

@@ -58,6 +58,10 @@ const EnvSchema = z
     // Public JWKS JSON served from /.well-known/jwks.json. Must contain public keys only.
     CONFIG_JWKS_JSON: z.string().min(1).optional(),
     DATABASE_URL: z.string().min(1).optional(),
+    // BYPASSRLS role used for pre-context and admin DB paths (domain-hash auth, admin routes,
+    // auto-onboarding, claim flow, retention pruning, etc.). Defaults to DATABASE_URL when unset,
+    // so local/dev without RLS keeps working unchanged. See Docs/Requirements/row-level-security.md.
+    DATABASE_ADMIN_URL: z.string().min(1).optional(),
     // Email provider abstraction (brief phase 11.1). Provider can be swapped via env without code changes.
     EMAIL_PROVIDER: z.enum(['disabled', 'smtp', 'ses', 'sendgrid']).optional(),
     EMAIL_FROM: z.string().min(1).optional(),

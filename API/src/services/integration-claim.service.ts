@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 
 import type { PrismaClient } from '@prisma/client';
 
-import { getPrisma } from '../db/prisma.js';
+import { getAdminPrisma } from '../db/prisma.js';
 import {
   decryptClaimSecret,
   encryptClaimSecret,
@@ -58,7 +58,7 @@ export type ClaimConsumeResult =
   | { state: 'already_used' };
 
 function prismaClient(deps?: { prisma?: ClaimTokenPrisma }): ClaimTokenPrisma {
-  return deps?.prisma ?? (getPrisma() as unknown as ClaimTokenPrisma);
+  return deps?.prisma ?? (getAdminPrisma() as unknown as ClaimTokenPrisma);
 }
 
 export function hashClaimToken(rawToken: string): string {

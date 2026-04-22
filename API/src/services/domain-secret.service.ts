@@ -3,7 +3,7 @@ import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypt
 import type { Prisma, PrismaClient } from '@prisma/client';
 
 import { getEnv, requireEnv } from '../config/env.js';
-import { getPrisma } from '../db/prisma.js';
+import { getAdminPrisma } from '../db/prisma.js';
 import { normalizeDomain } from '../utils/domain.js';
 import { AppError } from '../utils/errors.js';
 
@@ -37,7 +37,7 @@ export type DomainMutationResult = {
 
 function prismaClient(deps?: { prisma?: DomainSecretPrisma }): DomainSecretPrisma {
   if (!getEnv().DATABASE_URL) throw new AppError('INTERNAL', 500, 'DOMAIN_SECRETS_DATABASE_REQUIRED');
-  return deps?.prisma ?? (getPrisma() as unknown as DomainSecretPrisma);
+  return deps?.prisma ?? (getAdminPrisma() as unknown as DomainSecretPrisma);
 }
 
 function normalizeStatus(status: string | undefined): DomainStatus {

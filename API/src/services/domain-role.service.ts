@@ -1,7 +1,7 @@
 import type { DomainRole, PrismaClient, UserRole } from '@prisma/client';
 import { Prisma } from '@prisma/client';
 
-import { getPrisma } from '../db/prisma.js';
+import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 
 function normalizeDomain(value: string): string {
@@ -31,7 +31,7 @@ export async function ensureDomainRoleForUser(params: {
   userId: string;
   prisma?: PrismaClient | Prisma.TransactionClient;
 }): Promise<DomainRole> {
-  const prisma = params.prisma ?? getPrisma();
+  const prisma = params.prisma ?? getAdminPrisma();
   const domain = normalizeDomain(params.domain);
   if (!domain) throw new AppError('BAD_REQUEST', 400);
   if (!params.userId) throw new AppError('BAD_REQUEST', 400);

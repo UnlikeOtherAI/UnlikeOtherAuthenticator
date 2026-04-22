@@ -1,6 +1,6 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 
-import { getPrisma } from '../db/prisma.js';
+import { getAdminPrisma } from '../db/prisma.js';
 import { decryptClaimSecret } from '../utils/claim-secret-crypto.js';
 import { AppError } from '../utils/errors.js';
 import {
@@ -31,7 +31,7 @@ type AcceptPrisma = Pick<
 >;
 
 function prismaClient(deps?: { prisma?: AcceptPrisma }): AcceptPrisma {
-  return deps?.prisma ?? (getPrisma() as unknown as AcceptPrisma);
+  return deps?.prisma ?? (getAdminPrisma() as unknown as AcceptPrisma);
 }
 
 function labelFor(domain: string, label?: string): string {

@@ -1,7 +1,7 @@
 import type { HandshakeErrorLog, Prisma, PrismaClient } from '@prisma/client';
 
 import { getEnv } from '../config/env.js';
-import { getPrisma } from '../db/prisma.js';
+import { getAdminPrisma } from '../db/prisma.js';
 
 type HandshakeErrorPrisma = {
   handshakeErrorLog: Pick<PrismaClient['handshakeErrorLog'], 'create' | 'findMany'>;
@@ -112,7 +112,7 @@ export async function listHandshakeErrorLogs(
   const env = deps?.env ?? getEnv();
   if (!env.DATABASE_URL) return [];
 
-  const prisma = deps?.prisma ?? (getPrisma() as unknown as HandshakeErrorPrisma);
+  const prisma = deps?.prisma ?? (getAdminPrisma() as unknown as HandshakeErrorPrisma);
   const limit = Math.max(1, Math.min(500, params.limit ?? 100));
   const rows = await prisma.handshakeErrorLog.findMany({
     orderBy: { createdAt: 'desc' },
@@ -129,7 +129,7 @@ export async function recordHandshakeErrorLog(
   const env = deps?.env ?? getEnv();
   if (!env.DATABASE_URL) return;
 
-  const prisma = deps?.prisma ?? (getPrisma() as unknown as HandshakeErrorPrisma);
+  const prisma = deps?.prisma ?? (getAdminPrisma() as unknown as HandshakeErrorPrisma);
   await prisma.handshakeErrorLog.create({
     data: {
       app: params.app ?? null,

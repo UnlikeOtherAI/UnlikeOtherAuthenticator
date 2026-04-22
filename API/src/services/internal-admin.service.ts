@@ -1,7 +1,7 @@
 import type { Prisma } from '@prisma/client';
 
 import { getEnv } from '../config/env.js';
-import { getPrisma } from '../db/prisma.js';
+import { getAdminPrisma } from '../db/prisma.js';
 import { listHandshakeErrorLogs } from './handshake-error-log.service.js';
 
 type AdminMethod = 'email' | 'google' | 'github' | 'apple' | 'facebook' | 'linkedin' | 'microsoft';
@@ -144,7 +144,7 @@ function emptyData() {
 async function getAdminStats() {
   if (!isDatabaseEnabled()) return emptyData().stats;
 
-  const prisma = getPrisma();
+  const prisma = getAdminPrisma();
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -180,7 +180,7 @@ export async function getAdminSession(claims: { userId: string; email: string; d
 export async function getAdminDomains(limit?: number) {
   if (!isDatabaseEnabled()) return [];
 
-  const prisma = getPrisma();
+  const prisma = getAdminPrisma();
   const [roles, orgs, logs, registries] = await Promise.all([
     prisma.domainRole.groupBy({
       by: ['domain'],
@@ -246,7 +246,7 @@ export async function getAdminDomains(limit?: number) {
 export async function getAdminLogs(limit = 100) {
   if (!isDatabaseEnabled()) return [];
 
-  const rows = await getPrisma().loginLog.findMany({
+  const rows = await getAdminPrisma().loginLog.findMany({
     orderBy: { createdAt: 'desc' },
     take: Math.max(1, Math.min(500, limit)),
     select: {
@@ -276,7 +276,7 @@ export async function getAdminLogs(limit = 100) {
 export async function getAdminUsers(limit?: number) {
   if (!isDatabaseEnabled()) return [];
 
-  const prisma = getPrisma();
+  const prisma = getAdminPrisma();
   const users = await prisma.user.findMany({ orderBy: { createdAt: 'desc' }, take: listLimit(limit) });
   const userIds = users.map((user) => user.id);
   const [roles, logs] = await Promise.all([
@@ -318,7 +318,7 @@ export async function getAdminUsers(limit?: number) {
 export async function getAdminUser(userId: string) {
   if (!isDatabaseEnabled()) return null;
 
-  const prisma = getPrisma();
+  const prisma = getAdminPrisma();
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) return null;
 
@@ -343,7 +343,7 @@ export async function getAdminUser(userId: string) {
 export async function getAdminOrganisations(limit?: number) {
   if (!isDatabaseEnabled()) return [];
 
-  const prisma = getPrisma();
+  const prisma = getAdminPrisma();
   const orgs = await prisma.organisation.findMany({
     orderBy: { createdAt: 'desc' },
     take: listLimit(limit),
@@ -363,7 +363,7 @@ export async function getAdminOrganisations(limit?: number) {
 export async function getAdminOrganisation(orgId: string) {
   if (!isDatabaseEnabled()) return null;
 
-  const prisma = getPrisma();
+  const prisma = getAdminPrisma();
   const org = await prisma.organisation.findUnique({ where: { id: orgId }, ...adminOrganisationArgs });
   if (!org) return null;
 
@@ -383,7 +383,7 @@ export async function getAdminDomain(domain: string) {
   if (!isDatabaseEnabled()) return null;
 
   const normalized = normalizeDomain(domain);
-  const prisma = getPrisma();
+  const prisma = getAdminPrisma();
   const [registry, roles, orgs, userIdsRaw] = await Promise.all([
     prisma.clientDomain.findUnique({
       where: { domain: normalized },
