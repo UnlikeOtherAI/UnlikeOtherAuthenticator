@@ -288,6 +288,9 @@ describe('resendIntegrationClaim', () => {
 
     expect(result.integration.status).toBe('ACCEPTED');
     expect(result.claim.rawToken).toMatch(/^[A-Za-z0-9_-]+$/);
+    expect(result.rawClientSecret).toBe(plaintext);
+    expect(result.clientHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(result.hashPrefix).toBe(result.clientHash.slice(0, 12));
     // Old row was deleted and a fresh one was created.
     expect(claimRows).toHaveLength(1);
     expect(claimRows[0].id).not.toBe('claim-old');

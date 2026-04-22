@@ -4,6 +4,7 @@ import type {
   DomainDirectoryDetail,
   DomainJwk,
   IntegrationRequestDetail,
+  IntegrationRequestDetailWithCredentials,
   IntegrationRequestStatus,
   IntegrationRequestSummary,
   SearchResult,
@@ -63,11 +64,18 @@ export const adminService = {
   },
   getIntegrationRequest: (id: string) =>
     api.get<IntegrationRequestDetail | null>(`/internal/admin/integration-requests/${encodeURIComponent(id)}`),
-  acceptIntegrationRequest: (id: string, body?: { label?: string; clientSecret?: string }) =>
-    api.post<IntegrationRequestDetail>(
+  acceptIntegrationRequest: (
+    id: string,
+    body?: { label?: string; clientSecret?: string; deliveryMode?: 'email' | 'reveal' },
+  ) =>
+    api.post<IntegrationRequestDetailWithCredentials>(
       `/internal/admin/integration-requests/${encodeURIComponent(id)}/accept`,
       body && Object.keys(body).length > 0
-        ? { label: body.label, client_secret: body.clientSecret }
+        ? {
+            label: body.label,
+            clientSecret: body.clientSecret,
+            deliveryMode: body.deliveryMode,
+          }
         : undefined,
     ),
   declineIntegrationRequest: (id: string, reason: string) =>
@@ -77,9 +85,10 @@ export const adminService = {
     ),
   deleteIntegrationRequest: (id: string) =>
     api.delete<{ ok: boolean }>(`/internal/admin/integration-requests/${encodeURIComponent(id)}`),
-  resendIntegrationClaim: (id: string) =>
-    api.post<IntegrationRequestDetail>(
+  resendIntegrationClaim: (id: string, deliveryMode: 'email' | 'reveal' = 'email') =>
+    api.post<IntegrationRequestDetailWithCredentials>(
       `/internal/admin/integration-requests/${encodeURIComponent(id)}/resend-claim`,
+      { deliveryMode },
     ),
   getDomainJwks: (domain: string) =>
     api.get<DomainJwk[]>(`/internal/admin/domains/${encodeURIComponent(domain)}/jwks`),

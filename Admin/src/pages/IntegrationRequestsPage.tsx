@@ -15,11 +15,17 @@ import {
 import { useAdminUi } from '../features/shell/admin-ui';
 import { adminService } from '../services/admin-service';
 import type {
+  IntegrationClaimCredentials,
+  IntegrationClaimDeliveryMode,
   IntegrationRequestDetail,
   IntegrationRequestStatus,
   IntegrationRequestSummary,
 } from '../features/admin/types';
-import { AcceptIntegrationModal, DeclineIntegrationModal } from './integration-request-modals';
+import {
+  AcceptIntegrationModal,
+  CredentialsRevealModal,
+  DeclineIntegrationModal,
+} from './integration-request-modals';
 
 type StatusFilter = 'ALL' | IntegrationRequestStatus;
 
@@ -218,10 +224,14 @@ function IntegrationDecisionControls({
   const queryClient = useQueryClient();
   const [showAccept, setShowAccept] = useState(false);
   const [showDecline, setShowDecline] = useState(false);
+  const [revealCredentials, setRevealCredentials] = useState<IntegrationClaimCredentials | null>(null);
 
   const acceptMutation = useMutation({
-    mutationFn: (input: { label?: string; clientSecret?: string }) =>
-      adminService.acceptIntegrationRequest(detail.id, input),
+    mutationFn: (input: {
+      label?: string;
+      clientSecret?: string;
+      deliveryMode: IntegrationClaimDeliveryMode;
+    }) => adminService.acceptIntegrationRequest(detail.id, input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin'] }),
   });
   const declineMutation = useMutation({
@@ -229,7 +239,8 @@ function IntegrationDecisionControls({
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin'] }),
   });
   const resendMutation = useMutation({
-    mutationFn: () => adminService.resendIntegrationClaim(detail.id),
+    mutationFn: (deliveryMode: IntegrationClaimDeliveryMode) =>
+      adminService.resendIntegrationClaim(detail.id, deliveryMode),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin'] }),
   });
   const deleteMutation = useMutation({
@@ -248,12 +259,23 @@ function IntegrationDecisionControls({
     );
   }
 
-  function runResend() {
+  function runResendEmail() {
     confirm(
-      `Resend claim link to ${detail.contact_email}?`,
+      `Email claim link to ${detail.contact_email}?`,
       'A fresh 24h one-time claim link will be emailed.',
       async () => {
-        await resendMutation.mutateAsync();
+        await resendMutation.mutateAsync('email');
+      },
+    );
+  }
+
+  function runResendReveal() {
+    confirm(
+      `Reveal client secret for ${detail.domain}?`,
+      'The secret will be shown once in this admin. Copy it now; closing the dialog without saving it requires a rotate.',
+      async () => {
+        const result = await resendMutation.mutateAsync('reveal');
+        if (result.credentials) setRevealCredentials(result.credentials);
       },
     );
   }
@@ -271,9 +293,14 @@ function IntegrationDecisionControls({
         </>
       ) : null}
       {detail.status === 'ACCEPTED' ? (
-        <Button icon="bell" onClick={runResend}>
-          Resend Claim Link
-        </Button>
+        <>
+          <Button icon="key" variant="primary" onClick={runResendReveal}>
+            Reveal Secret Here
+          </Button>
+          <Button icon="bell" onClick={runResendEmail}>
+            Email Claim Link
+          </Button>
+        </>
       ) : null}
       {detail.status !== 'PENDING' ? (
         <Button variant="danger" onClick={runDelete}>
@@ -285,8 +312,11 @@ function IntegrationDecisionControls({
         isOpen={showAccept}
         onClose={() => setShowAccept(false)}
         onSubmit={async (input) => {
-          await acceptMutation.mutateAsync(input);
+          const result = await acceptMutation.mutateAsync(input);
           setShowAccept(false);
+          if (input.deliveryMode === 'reveal' && result.credentials) {
+            setRevealCredentials(result.credentials);
+          }
         }}
       />
       <DeclineIntegrationModal
@@ -297,6 +327,11 @@ function IntegrationDecisionControls({
           await declineMutation.mutateAsync(reason);
           setShowDecline(false);
         }}
+      />
+      <CredentialsRevealModal
+        credentials={revealCredentials}
+        isOpen={Boolean(revealCredentials)}
+        onClose={() => setRevealCredentials(null)}
       />
     </div>
   );

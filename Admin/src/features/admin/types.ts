@@ -237,6 +237,21 @@ export type IntegrationRequestDetail = IntegrationRequestSummary & {
   pre_validation_result: Record<string, unknown> | null;
 };
 
+export type IntegrationClaimCredentials = {
+  domain: string;
+  client_secret: string;
+  client_hash: string;
+  hash_prefix: string;
+};
+
+export type IntegrationClaimDeliveryMode = 'email' | 'reveal';
+
+export type IntegrationRequestDetailWithCredentials = IntegrationRequestDetail & {
+  delivery_mode?: IntegrationClaimDeliveryMode;
+  email_dispatched?: boolean;
+  credentials?: IntegrationClaimCredentials;
+};
+
 export type DomainJwk = {
   id: string;
   kid: string;

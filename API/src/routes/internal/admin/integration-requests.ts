@@ -34,10 +34,20 @@ const DeclineBodySchema = z
   })
   .strict();
 
+const DeliveryModeSchema = z.enum(['email', 'reveal']);
+
 const AcceptBodySchema = z
   .object({
     label: z.string().trim().min(1).max(255).optional(),
     clientSecret: z.string().trim().min(32).max(512).optional(),
+    deliveryMode: DeliveryModeSchema.optional(),
+  })
+  .strict()
+  .optional();
+
+const ResendBodySchema = z
+  .object({
+    deliveryMode: DeliveryModeSchema.optional(),
   })
   .strict()
   .optional();
@@ -164,13 +174,30 @@ export function registerInternalAdminIntegrationRequestRoutes(app: FastifyInstan
         clientSecret: body?.clientSecret,
       });
 
-      const emailDispatched = await dispatchClaimEmail({
-        to: result.integration.contactEmail,
-        link: buildClaimUrl(result.claim.rawToken),
-        domain: result.integration.domain,
-      });
+      const deliveryMode = body?.deliveryMode ?? 'email';
+      const emailDispatched = deliveryMode === 'email'
+        ? await dispatchClaimEmail({
+            to: result.integration.contactEmail,
+            link: buildClaimUrl(result.claim.rawToken),
+            domain: result.integration.domain,
+          })
+        : false;
 
-      return { ...toAdminDetail(result.integration), email_dispatched: emailDispatched };
+      return {
+        ...toAdminDetail(result.integration),
+        delivery_mode: deliveryMode,
+        email_dispatched: emailDispatched,
+        ...(deliveryMode === 'reveal'
+          ? {
+              credentials: {
+                domain: result.integration.domain,
+                client_secret: result.rawClientSecret,
+                client_hash: result.clientHash,
+                hash_prefix: result.hashPrefix,
+              },
+            }
+          : {}),
+      };
     },
   );
 
@@ -179,17 +206,35 @@ export function registerInternalAdminIntegrationRequestRoutes(app: FastifyInstan
     adminRoute(objectSchema),
     async (request) => {
       const { id } = IdParamsSchema.parse(request.params);
+      const body = ResendBodySchema.parse(request.body ?? undefined);
       const actorEmail = requireActorEmail(request);
 
       const result = await resendIntegrationClaim({ id, actorEmail });
 
-      const emailDispatched = await dispatchClaimEmail({
-        to: result.integration.contactEmail,
-        link: buildClaimUrl(result.claim.rawToken),
-        domain: result.integration.domain,
-      });
+      const deliveryMode = body?.deliveryMode ?? 'email';
+      const emailDispatched = deliveryMode === 'email'
+        ? await dispatchClaimEmail({
+            to: result.integration.contactEmail,
+            link: buildClaimUrl(result.claim.rawToken),
+            domain: result.integration.domain,
+          })
+        : false;
 
-      return { ...toAdminDetail(result.integration), email_dispatched: emailDispatched };
+      return {
+        ...toAdminDetail(result.integration),
+        delivery_mode: deliveryMode,
+        email_dispatched: emailDispatched,
+        ...(deliveryMode === 'reveal'
+          ? {
+              credentials: {
+                domain: result.integration.domain,
+                client_secret: result.rawClientSecret,
+                client_hash: result.clientHash,
+                hash_prefix: result.hashPrefix,
+              },
+            }
+          : {}),
+      };
     },
   );
 

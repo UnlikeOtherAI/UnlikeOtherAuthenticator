@@ -198,6 +198,9 @@ export type ResendClaimParams = {
 export type ResendClaimResult = {
   integration: IntegrationRequestRow;
   claim: ClaimTokenCreated;
+  clientHash: string;
+  hashPrefix: string;
+  rawClientSecret: string;
 };
 
 /**
@@ -237,6 +240,8 @@ export async function resendIntegrationClaim(
       },
       { sharedSecret: deps?.sharedSecret },
     );
+    const clientHash = createDomainClientHash(existing.domain, clientSecret);
+    const hashPrefix = clientHash.slice(0, 12);
 
     await tx.integrationClaimToken.deleteMany({
       where: { integrationId: existing.id, usedAt: null },
@@ -263,6 +268,12 @@ export async function resendIntegrationClaim(
       { prisma: tx as unknown as AuditLogPrisma },
     );
 
-    return { integration: existing, claim };
+    return {
+      integration: existing,
+      claim,
+      clientHash,
+      hashPrefix,
+      rawClientSecret: clientSecret,
+    };
   });
 }
