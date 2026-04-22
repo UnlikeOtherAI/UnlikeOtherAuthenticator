@@ -93,6 +93,8 @@ export const authEndpoints: EndpointSchema[] = [
       refresh_token: 'opaque token',
       refresh_token_expires_in: 'seconds',
       token_type: '"Bearer"',
+      'firstLogin?':
+        'object { memberships: { orgs, teams }, pending_invites, capabilities { can_create_org, can_accept_invite } } — included on authorization_code exchange when org_features.enabled is true so the client can render onboarding UX',
     },
   },
   {

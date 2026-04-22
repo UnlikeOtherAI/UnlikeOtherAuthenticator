@@ -83,6 +83,7 @@ const TransferOwnershipBodySchema = z
 type RequestWithClaims = FastifyRequest & {
   accessTokenClaims?: {
     userId: string;
+    role?: 'superuser' | 'user';
     org?: {
       org_id: string;
     };
@@ -198,6 +199,12 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
       const actorUserId = getActorUserId(request as RequestWithClaims);
       const config = request.config;
       if (!config) throw new AppError('UNAUTHORIZED', 401, 'MISSING_CONFIG');
+
+      const claims = (request as RequestWithClaims).accessTokenClaims;
+      const isSuperuser = claims?.role === 'superuser';
+      if (!isSuperuser && !config.org_features?.allow_user_create_org) {
+        throw new AppError('FORBIDDEN', 403, 'ORG_CREATION_NOT_ALLOWED');
+      }
 
       // Create uses the organisations bootstrap branch (domain + owner_id matches
       // app.user_id); app.org_id is not yet known.

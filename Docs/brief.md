@@ -586,6 +586,9 @@ The claim is optional and defaults to disabled. The object shape and defaults ar
   "enabled": false,
   "groups_enabled": false,
   "user_needs_team": false,
+  "auto_create_personal_org_on_first_login": false,
+  "allow_user_create_org": false,
+  "pending_invites_block_auto_create": true,
   "max_teams_per_org": 100,
   "max_groups_per_org": 20,
   "max_members_per_org": 1000,
@@ -604,6 +607,9 @@ The claim is optional and defaults to disabled. The object shape and defaults ar
 | `enabled` | boolean | `false` | Whether org/team features are enabled for this domain |
 | `groups_enabled` | boolean | `false` | Whether groups are enabled (requires `enabled: true`) |
 | `user_needs_team` | boolean | `false` | On successful auth, ensure the user ends up in a team. Existing org members with zero teams get a personal team; users with no org get a new personal org plus default team. |
+| `auto_create_personal_org_on_first_login` | boolean | `false` | On **first** verified login only, if the user ends up without an org after invite/mapping resolution, create a personal org with them as owner (plus default team per 24.3). One-shot, not a self-heal. See 24.14. |
+| `allow_user_create_org` | boolean | `false` | Whether end-users may call `POST /org/organisations` with their own access token. `false` means org creation is admin-only (via Internal API or domain-hash). See 24.14. |
+| `pending_invites_block_auto_create` | boolean | `true` | When `true`, a pending invite matching the user's email suppresses `auto_create_personal_org_on_first_login` so the user is offered the invite choice instead of being force-placed into a fresh org. |
 | `max_teams_per_org` | integer | `100` | Maximum teams per organisation (max 1000) |
 | `max_groups_per_org` | integer | `20` | Maximum groups per organisation (max 200) |
 | `max_members_per_org` | integer | `1000` | Maximum members per organisation (max 10000) |
@@ -627,6 +633,9 @@ org_features: z.object({
   enabled: z.boolean().default(false),
   groups_enabled: z.boolean().default(false),
   user_needs_team: z.boolean().default(false),
+  auto_create_personal_org_on_first_login: z.boolean().default(false),
+  allow_user_create_org: z.boolean().default(false),
+  pending_invites_block_auto_create: z.boolean().default(true),
   max_teams_per_org: z.number().int().positive().max(1000).default(100),
   max_groups_per_org: z.number().int().positive().max(200).default(20),
   max_members_per_org: z.number().int().positive().max(10000).default(1000),
@@ -642,6 +651,9 @@ org_features: z.object({
   global_missing_flag_default: z.enum(['enabled', 'disabled']).default('disabled'),
 }).optional().default({
   enabled: false, groups_enabled: false, user_needs_team: false,
+  auto_create_personal_org_on_first_login: false,
+  allow_user_create_org: false,
+  pending_invites_block_auto_create: true,
   max_teams_per_org: 100, max_groups_per_org: 20,
   max_members_per_org: 1000, max_members_per_team: 200,
   max_members_per_group: 500, max_team_memberships_per_user: 50,
@@ -1184,6 +1196,80 @@ If `org_roles` changes and existing members have roles no longer in the list, th
 14. **Group writes are internal-only.** Via `/internal/org/`.
 15. **Member addition by userId, not email.** No enumeration.
 16. **IDOR prevention.** Verify full ownership chain: domain → org → team/group → member.
+
+---
+
+### 24.14 First-Login Behaviour & Capabilities
+
+On successful **first** verified login — email-password registration after verifying, or first-time social login — the authenticator always creates the `User` record. It **never** auto-creates an organisation or team unless the config explicitly opts in. The consuming product drives onboarding UX using capabilities echoed in the auth response.
+
+"First login" is defined as the authentication that transitions the user from nonexistent to created. It runs exactly once per user and MUST NOT re-run on subsequent logins.
+
+#### Precedence (highest → lowest)
+
+Apply exactly one branch on first verified login:
+
+1. **Matching pending invite.** If an invite for this email exists → surface in `firstLogin.pending_invites`. Do not auto-place, do not auto-create. The client UI presents the invite choice.
+2. **Matching `registration_domain_mapping`.** If the email domain matches a configured mapping rule → add as `member` to the mapped org + team (and default team if no team specified).
+3. **`auto_create_personal_org_on_first_login: true`.** Create a personal org with the user as `owner` (default team created alongside per 24.3). Skipped if branch 1 matched and `pending_invites_block_auto_create: true`.
+4. **None of the above.** User record exists; no org, no team, no memberships. Client renders onboarding based on `firstLogin.capabilities`.
+
+`user_needs_team` (24.1) is **orthogonal**: it runs on every successful auth as a self-heal, not just first login. First-login behaviour runs once; `user_needs_team` runs forever.
+
+#### Design notes
+
+* There is no `auto_create_default_team_on_first_login` flag. Teams only exist under orgs, and every org gets a default team at creation (24.3). A standalone flag is meaningless.
+* There is no separate `allow_user_create_team` flag. Team-create permission derives from org role (`owner` / `admin`); a user with no org has no team to create.
+* `auto_create_personal_org_on_first_login` creates the org inside the same transaction as the `User` row where possible, matching the ownership-atomicity requirement in 24.3.
+
+#### Auth Response Addition: `firstLogin`
+
+The authorization-code exchange response (`POST /auth/token`) gains an optional `firstLogin` block. **One-shot**: present only on the access token response immediately following first-login user creation. Subsequent refresh-token exchanges and re-logins MUST omit it.
+
+```json
+{
+  "access_token": "...",
+  "refresh_token": "...",
+  "token_type": "Bearer",
+  "expires_in": 3600,
+  "firstLogin": {
+    "memberships": {
+      "orgs": [{ "orgId": "...", "role": "member" }],
+      "teams": [{ "teamId": "...", "orgId": "...", "role": "member" }]
+    },
+    "pending_invites": [
+      { "inviteId": "...", "type": "team", "targetId": "...", "targetName": "..." }
+    ],
+    "capabilities": {
+      "can_create_org": false,
+      "can_accept_invite": true
+    }
+  }
+}
+```
+
+* `memberships` reflects state **after** precedence rules ran (mapping placements and auto-create included).
+* `capabilities.can_create_org` echoes `org_features.allow_user_create_org` for the caller's domain. The client MUST treat this as authoritative and NOT re-derive from config — the server stays in control.
+* `capabilities.can_accept_invite` is `true` iff `pending_invites` is non-empty.
+* Empty `memberships` + empty `pending_invites` + `can_create_org: true` is the "create your own workspace" entrypoint — client renders org-creation flow.
+* If `org_features.enabled: false`, `firstLogin` is omitted entirely (no memberships, no capabilities concept).
+
+#### Write-Path Gate
+
+`POST /org/organisations` enforces `allow_user_create_org`:
+
+* Caller is system-admin (Internal API or domain-hash auth) → allowed unconditionally.
+* Caller is an end-user (bearer access token) → allowed iff `org_features.allow_user_create_org: true` for the caller's domain config. Otherwise returns the standard generic error.
+
+This lets pre-provisioned B2B tenants disable self-service org creation while still allowing admin-driven onboarding via `/internal/org/`.
+
+#### Examples
+
+* **Restaurant SaaS (self-service).** `auto_create_personal_org_on_first_login: true`, `allow_user_create_org: true`. New user signs up → immediately owns an org → can invite staff. No client-side "create org" screen needed.
+* **Enterprise product (admin-provisioned).** `registration_domain_mapping` covers `@acme.com` → Acme org; `allow_user_create_org: false`; `auto_create_personal_org_on_first_login: false`. Employees auto-land in Acme; cannot fork side-orgs.
+* **Marketplace (invite-first).** All auto-create flags `false`, `allow_user_create_org: true`, `pending_invites_block_auto_create: true`. Default users land empty. Invitees see the invite; uninvited users see "Create your workspace" and call `POST /org/organisations` explicitly.
+
+---
 
 ## 25. Task Breakdown by Phase
 

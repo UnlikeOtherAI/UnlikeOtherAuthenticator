@@ -88,8 +88,12 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
       },
       orgMember: {
         findFirst: vi.fn(),
+        findMany: vi.fn(),
       },
       teamMember: {
+        findMany: vi.fn(),
+      },
+      teamInvite: {
         findMany: vi.fn(),
       },
       groupMember: {
@@ -121,10 +125,12 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
       orgId: 'org-1',
       role: 'admin',
     });
+    prisma.orgMember.findMany.mockResolvedValue([{ orgId: 'org-1', role: 'admin' }]);
     prisma.teamMember.findMany.mockResolvedValue([
-      { teamId: 'team-1', teamRole: 'lead' },
-      { teamId: 'team-2', teamRole: 'member' },
+      { teamId: 'team-1', teamRole: 'lead', team: { orgId: 'org-1' } },
+      { teamId: 'team-2', teamRole: 'member', team: { orgId: 'org-1' } },
     ]);
+    prisma.teamInvite.findMany.mockResolvedValue([]);
     prisma.groupMember.findMany.mockResolvedValue([
       { groupId: 'group-1', isAdmin: true },
       { groupId: 'group-2', isAdmin: false },
@@ -280,8 +286,12 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
       },
       orgMember: {
         findFirst: vi.fn(),
+        findMany: vi.fn(),
       },
       teamMember: {
+        findMany: vi.fn(),
+      },
+      teamInvite: {
         findMany: vi.fn(),
       },
       groupMember: {
@@ -310,6 +320,9 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
     });
     prisma.user.findUnique.mockResolvedValue({ email: 'user3@example.com' });
     prisma.orgMember.findFirst.mockResolvedValue(null);
+    prisma.orgMember.findMany.mockResolvedValue([]);
+    prisma.teamMember.findMany.mockResolvedValue([]);
+    prisma.teamInvite.findMany.mockResolvedValue([]);
 
     const { accessToken, refreshToken } = await exchangeAuthorizationCodeForTokens(
       { code, config, configUrl, redirectUrl, clientId },
@@ -335,7 +348,6 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
       role: 'user',
     });
     expect(claims.org).toBeUndefined();
-    expect(prisma.teamMember.findMany).not.toHaveBeenCalled();
     expect(prisma.groupMember.findMany).not.toHaveBeenCalled();
     expect(refreshToken).toBeTypeOf('string');
   });

@@ -16,6 +16,7 @@ import { tryParseHttpUrl } from '../utils/http-url.js';
 import { verifyPkceCodeVerifier } from '../utils/pkce.js';
 import { getUserOrgContext, type OrgContext } from './org-context.service.js';
 import { ensureUserHasRequiredTeam } from './user-team-requirement.service.js';
+import { buildFirstLoginBlock, type FirstLoginBlock } from './first-login.service.js';
 
 type TokenPrisma = PrismaClient;
 
@@ -294,6 +295,7 @@ type IssuedTokenPair = {
   expiresInSeconds: number;
   refreshToken: string;
   refreshTokenExpiresInSeconds: number;
+  firstLogin?: FirstLoginBlock;
 };
 
 async function issueTokenPairForUser(
@@ -304,6 +306,7 @@ async function issueTokenPairForUser(
     refreshToken: string;
     refreshTokenExpiresInSeconds: number;
     userId: string;
+    includeFirstLogin?: boolean;
   },
   deps?: TokenIssuerDeps,
 ): Promise<IssuedTokenPair> {
@@ -362,11 +365,17 @@ async function issueTokenPairForUser(
     org,
   });
 
+  const firstLogin = params.includeFirstLogin
+    ? (await buildFirstLoginBlock({ userId: params.userId, config: params.config }, { prisma })) ??
+      undefined
+    : undefined;
+
   return {
     accessToken,
     expiresInSeconds: accessTokenExpiresInSeconds(ttl),
     refreshToken: params.refreshToken,
     refreshTokenExpiresInSeconds: params.refreshTokenExpiresInSeconds,
+    firstLogin,
   };
 }
 
@@ -432,6 +441,7 @@ export async function exchangeAuthorizationCodeForTokens(
       clientId,
       refreshToken: issuedRefreshToken.refreshToken,
       refreshTokenExpiresInSeconds: issuedRefreshToken.expiresInSeconds,
+      includeFirstLogin: true,
     },
     { ...deps, accessTokenTtl: accessTtl },
   );

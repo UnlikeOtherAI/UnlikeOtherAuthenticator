@@ -100,13 +100,17 @@ export function registerAuthTokenExchangeRoute(app: FastifyInstance): void {
       // Keep response OAuth-ish without being overly strict about fields.
       reply.header('Cache-Control', 'no-store');
       reply.header('Pragma', 'no-cache');
-      reply.status(200).send({
+      const responseBody: Record<string, unknown> = {
         access_token: tokenPair.accessToken,
         expires_in: tokenPair.expiresInSeconds,
         refresh_token: tokenPair.refreshToken,
         refresh_token_expires_in: tokenPair.refreshTokenExpiresInSeconds,
         token_type: 'Bearer',
-      });
+      };
+      if (tokenPair.firstLogin) {
+        responseBody.firstLogin = tokenPair.firstLogin;
+      }
+      reply.status(200).send(responseBody);
     },
   );
 }

@@ -329,6 +329,29 @@ Content-Type: application/json
 
 Response contains an access token, a refresh token, expiry metadata, and the user profile. Store the refresh token server-side ONLY; browser clients never receive or persist refresh tokens.
 
+When \`org_features.enabled\` is \`true\`, the authorization-code exchange response also includes a \`firstLogin\` object:
+
+\`\`\`json
+{
+  "firstLogin": {
+    "memberships": {
+      "orgs": [{ "orgId": "...", "role": "member" }],
+      "teams": [{ "teamId": "...", "orgId": "...", "role": "member" }]
+    },
+    "pending_invites": [{ "inviteId": "...", "type": "team", "orgId": "...", "teamId": "...", "teamName": "..." }],
+    "capabilities": { "can_create_org": false, "can_accept_invite": true }
+  }
+}
+\`\`\`
+
+Use \`firstLogin\` to render first-login UX: an empty \`memberships\` combined with \`capabilities.can_create_org = true\` signals that the client can offer a "Create your organisation" flow (which calls \`POST /org/organisations\`). When \`capabilities.can_create_org\` is \`false\`, organisations must be provisioned by an admin; suppress any self-service org creation UI. Refresh-token grants never include \`firstLogin\`.
+
+Server-side behaviour on first verified login is controlled by \`org_features\`:
+
+- \`registration_domain_mapping\` (top-level config) places the user into a configured org + team when the email domain matches.
+- \`auto_create_personal_org_on_first_login\` (default \`false\`) creates a personal org with the user as \`owner\` plus a default team when no mapping matches. Skipped when \`pending_invites_block_auto_create\` is \`true\` and a pending invite exists for the email.
+- \`allow_user_create_org\` (default \`false\`) gates \`POST /org/organisations\` for end-users. Superusers bypass. Keep \`false\` for admin-provisioned tenants.
+
 To revoke on logout:
 
 \`\`\`text

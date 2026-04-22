@@ -4,14 +4,24 @@ import type { ClientConfig } from './config.service.js';
 import { getPrisma } from '../db/prisma.js';
 import { getAppLogger } from '../utils/app-logger.js';
 import { extractEmailDomain } from '../utils/email-domain.js';
+import {
+  deriveSlugWithValidation,
+  ensureOrgName,
+} from './organisation.service.base.js';
+import { deriveUniqueTeamSlug } from './team.service.base.js';
 
 type OrgPlacementPrisma = Pick<PrismaClient, '$transaction'> & {
-  organisation: Pick<PrismaClient['organisation'], 'findUnique'>;
-  team: Pick<PrismaClient['team'], 'findFirst'>;
-  orgMember: Pick<PrismaClient['orgMember'], 'findFirst'>;
+  organisation: Pick<PrismaClient['organisation'], 'findUnique' | 'create' | 'findFirst'>;
+  team: Pick<PrismaClient['team'], 'findFirst' | 'create'>;
+  orgMember: Pick<PrismaClient['orgMember'], 'findFirst' | 'create'>;
+  teamMember: Pick<PrismaClient['teamMember'], 'create'>;
+  teamInvite: Pick<PrismaClient['teamInvite'], 'findFirst'>;
+  user: Pick<PrismaClient['user'], 'findUnique'>;
 };
 
 type OrgPlacementTx = Prisma.TransactionClient & {
+  organisation: Pick<Prisma.TransactionClient['organisation'], 'create' | 'findFirst'>;
+  team: Pick<Prisma.TransactionClient['team'], 'create' | 'findFirst'>;
   orgMember: Pick<Prisma.TransactionClient['orgMember'], 'findFirst' | 'create'>;
   teamMember: Pick<Prisma.TransactionClient['teamMember'], 'create'>;
 };
@@ -26,6 +36,8 @@ type OrgPlacementDeps = {
 export type RegistrationOrgPlacementSkipReason =
   | 'org_features_disabled'
   | 'mapping_not_found'
+  | 'no_placement_configured'
+  | 'pending_invite_blocks_auto_create'
   | 'invalid_email'
   | 'member_role_not_allowed'
   | 'org_not_found'
@@ -33,14 +45,19 @@ export type RegistrationOrgPlacementSkipReason =
   | 'team_not_found'
   | 'default_team_missing'
   | 'already_member_for_domain'
+  | 'auto_create_failed'
   | 'transaction_failed';
 
 export type RegistrationOrgPlacementResult =
   | { status: 'placed'; orgId: string; teamId: string }
+  | { status: 'auto_created'; orgId: string; teamId: string }
   | { status: 'skipped'; reason: RegistrationOrgPlacementSkipReason };
 
 const DEFAULT_MEMBER_ROLE = 'member';
 const DEFAULT_TEAM_ROLE = 'member';
+const OWNER_ROLE = 'owner';
+const DEFAULT_TEAM_NAME = 'General';
+const MAX_ORG_NAME_LENGTH = 100;
 
 function normalizeDomain(value: string): string {
   return value.trim().toLowerCase().replace(/\.$/, '');
@@ -69,94 +86,188 @@ function defaultLogError(message: string, details: Record<string, unknown>): voi
   getAppLogger().error(details, message);
 }
 
-export async function placeUserInConfiguredOrganisation(
-  params: {
-    userId: string;
-    email: string;
-    config: ClientConfig;
-  },
-  deps?: OrgPlacementDeps,
-): Promise<RegistrationOrgPlacementResult> {
-  if (!params.config.org_features?.enabled) {
-    return { status: 'skipped', reason: 'org_features_disabled' };
-  }
+function deriveOrgNameFromUser(params: { name?: string | null; email: string }): string {
+  const base = params.name?.trim() || params.email.split('@')[0]?.trim() || 'My';
+  const candidate = `${base}'s organisation`;
+  return candidate.slice(0, MAX_ORG_NAME_LENGTH);
+}
 
-  const emailDomain = extractEmailDomain(params.email);
-  if (!emailDomain) {
-    return { status: 'skipped', reason: 'invalid_email' };
-  }
-
-  const mapping = findMappingForEmailDomain({
-    config: params.config,
-    emailDomain,
+async function hasPendingInviteForEmail(params: {
+  prisma: OrgPlacementPrisma;
+  email: string;
+}): Promise<boolean> {
+  const invite = await params.prisma.teamInvite.findFirst({
+    where: {
+      email: params.email,
+      acceptedAt: null,
+      declinedAt: null,
+      revokedAt: null,
+    },
+    select: { id: true },
   });
-  if (!mapping) {
-    return { status: 'skipped', reason: 'mapping_not_found' };
+  return Boolean(invite);
+}
+
+async function autoCreatePersonalOrgForUser(params: {
+  userId: string;
+  email: string;
+  domain: string;
+  prisma: OrgPlacementPrisma;
+  logError: OrgPlacementLogger;
+}): Promise<RegistrationOrgPlacementResult> {
+  const user = await params.prisma.user.findUnique({
+    where: { id: params.userId },
+    select: { name: true },
+  });
+
+  const orgName = ensureOrgName(deriveOrgNameFromUser({ name: user?.name, email: params.email }));
+
+  try {
+    const created = await params.prisma.$transaction(async (tx) => {
+      const txClient = tx as OrgPlacementTx;
+
+      const existing = await txClient.orgMember.findFirst({
+        where: {
+          userId: params.userId,
+          org: { domain: params.domain },
+        },
+        select: { id: true },
+      });
+      if (existing) {
+        return null;
+      }
+
+      const slug = await deriveSlugWithValidation(params.domain, txClient, orgName);
+
+      const org = await txClient.organisation.create({
+        data: {
+          domain: params.domain,
+          name: orgName,
+          slug,
+          ownerId: params.userId,
+        },
+        select: { id: true },
+      });
+
+      const team = await txClient.team.create({
+        data: {
+          orgId: org.id,
+          name: DEFAULT_TEAM_NAME,
+          slug: await deriveUniqueTeamSlug({
+            orgId: org.id,
+            prisma: txClient,
+            name: DEFAULT_TEAM_NAME,
+          }),
+          isDefault: true,
+        },
+        select: { id: true },
+      });
+
+      await txClient.orgMember.create({
+        data: {
+          orgId: org.id,
+          userId: params.userId,
+          role: OWNER_ROLE,
+        },
+      });
+
+      await txClient.teamMember.create({
+        data: {
+          teamId: team.id,
+          userId: params.userId,
+          teamRole: DEFAULT_TEAM_ROLE,
+        },
+      });
+
+      return { orgId: org.id, teamId: team.id };
+    });
+
+    if (!created) {
+      return { status: 'skipped', reason: 'already_member_for_domain' };
+    }
+
+    return { status: 'auto_created', orgId: created.orgId, teamId: created.teamId };
+  } catch (err) {
+    params.logError('failed to auto-create personal organisation on first login', {
+      domain: params.domain,
+      userId: params.userId,
+      errorName: err instanceof Error ? err.name : 'unknown',
+    });
+    return { status: 'skipped', reason: 'auto_create_failed' };
   }
+}
 
-  const logError = deps?.logError ?? defaultLogError;
-  const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgPlacementPrisma);
-  const domain = normalizeDomain(params.config.domain);
-
+async function placeFromDomainMapping(params: {
+  userId: string;
+  email: string;
+  emailDomain: string;
+  domain: string;
+  mapping: { email_domain: string; org_id: string; team_id?: string };
+  config: ClientConfig;
+  prisma: OrgPlacementPrisma;
+  logError: OrgPlacementLogger;
+}): Promise<RegistrationOrgPlacementResult> {
   const allowedRoles = params.config.org_features?.org_roles ?? [];
   if (!allowedRoles.includes(DEFAULT_MEMBER_ROLE)) {
-    logError('member role is not allowed by org_features.org_roles; skipping placement', {
-      domain,
+    params.logError('member role is not allowed by org_features.org_roles; skipping placement', {
+      domain: params.domain,
       userId: params.userId,
-      orgId: mapping.org_id,
+      orgId: params.mapping.org_id,
       configuredRoles: allowedRoles,
     });
     return { status: 'skipped', reason: 'member_role_not_allowed' };
   }
 
-  const org = await prisma.organisation.findUnique({
-    where: { id: mapping.org_id },
+  const org = await params.prisma.organisation.findUnique({
+    where: { id: params.mapping.org_id },
     select: { id: true, domain: true },
   });
   if (!org) {
-    logError('registration_domain_mapping references an unknown organisation', {
-      domain,
+    params.logError('registration_domain_mapping references an unknown organisation', {
+      domain: params.domain,
       userId: params.userId,
-      orgId: mapping.org_id,
-      emailDomain,
+      orgId: params.mapping.org_id,
+      emailDomain: params.emailDomain,
     });
     return { status: 'skipped', reason: 'org_not_found' };
   }
 
-  if (normalizeDomain(org.domain) !== domain) {
-    logError('registration_domain_mapping organisation domain mismatch', {
-      domain,
+  if (normalizeDomain(org.domain) !== params.domain) {
+    params.logError('registration_domain_mapping organisation domain mismatch', {
+      domain: params.domain,
       userId: params.userId,
       orgId: org.id,
       orgDomain: org.domain,
-      emailDomain,
+      emailDomain: params.emailDomain,
     });
     return { status: 'skipped', reason: 'org_domain_mismatch' };
   }
 
   let teamId: string;
-  if (mapping.team_id) {
-    const team = await prisma.team.findFirst({
+  if (params.mapping.team_id) {
+    const team = await params.prisma.team.findFirst({
       where: {
-        id: mapping.team_id,
+        id: params.mapping.team_id,
         orgId: org.id,
       },
       select: { id: true },
     });
     if (!team) {
-      logError('registration_domain_mapping references a team outside the mapped organisation', {
-        domain,
-        userId: params.userId,
-        orgId: org.id,
-        teamId: mapping.team_id,
-        emailDomain,
-      });
+      params.logError(
+        'registration_domain_mapping references a team outside the mapped organisation',
+        {
+          domain: params.domain,
+          userId: params.userId,
+          orgId: org.id,
+          teamId: params.mapping.team_id,
+          emailDomain: params.emailDomain,
+        },
+      );
       return { status: 'skipped', reason: 'team_not_found' };
     }
-
     teamId = team.id;
   } else {
-    const defaultTeam = await prisma.team.findFirst({
+    const defaultTeam = await params.prisma.team.findFirst({
       where: {
         orgId: org.id,
         isDefault: true,
@@ -164,24 +275,21 @@ export async function placeUserInConfiguredOrganisation(
       select: { id: true },
     });
     if (!defaultTeam) {
-      logError('registration_domain_mapping target organisation is missing a default team', {
-        domain,
+      params.logError('registration_domain_mapping target organisation is missing a default team', {
+        domain: params.domain,
         userId: params.userId,
         orgId: org.id,
-        emailDomain,
+        emailDomain: params.emailDomain,
       });
       return { status: 'skipped', reason: 'default_team_missing' };
     }
-
     teamId = defaultTeam.id;
   }
 
-  const existingMembership = await prisma.orgMember.findFirst({
+  const existingMembership = await params.prisma.orgMember.findFirst({
     where: {
       userId: params.userId,
-      org: {
-        domain,
-      },
+      org: { domain: params.domain },
     },
     select: { id: true },
   });
@@ -190,15 +298,13 @@ export async function placeUserInConfiguredOrganisation(
   }
 
   try {
-    const created = await prisma.$transaction(async (tx) => {
+    const created = await params.prisma.$transaction(async (tx) => {
       const txClient = tx as OrgPlacementTx;
 
       const membershipInDomain = await txClient.orgMember.findFirst({
         where: {
           userId: params.userId,
-          org: {
-            domain,
-          },
+          org: { domain: params.domain },
         },
         select: { id: true },
       });
@@ -232,12 +338,10 @@ export async function placeUserInConfiguredOrganisation(
     return { status: 'placed', orgId: org.id, teamId };
   } catch (err) {
     if (isConstraintViolation(err)) {
-      const concurrentMembership = await prisma.orgMember.findFirst({
+      const concurrentMembership = await params.prisma.orgMember.findFirst({
         where: {
           userId: params.userId,
-          org: {
-            domain,
-          },
+          org: { domain: params.domain },
         },
         select: { id: true },
       });
@@ -246,14 +350,70 @@ export async function placeUserInConfiguredOrganisation(
       }
     }
 
-    logError('failed to auto-place user from registration_domain_mapping', {
-      domain,
+    params.logError('failed to auto-place user from registration_domain_mapping', {
+      domain: params.domain,
       userId: params.userId,
       orgId: org.id,
       teamId,
-      emailDomain,
+      emailDomain: params.emailDomain,
       errorName: err instanceof Error ? err.name : 'unknown',
     });
     return { status: 'skipped', reason: 'transaction_failed' };
   }
+}
+
+export async function placeUserInConfiguredOrganisation(
+  params: {
+    userId: string;
+    email: string;
+    config: ClientConfig;
+  },
+  deps?: OrgPlacementDeps,
+): Promise<RegistrationOrgPlacementResult> {
+  if (!params.config.org_features?.enabled) {
+    return { status: 'skipped', reason: 'org_features_disabled' };
+  }
+
+  const emailDomain = extractEmailDomain(params.email);
+  if (!emailDomain) {
+    return { status: 'skipped', reason: 'invalid_email' };
+  }
+
+  const logError = deps?.logError ?? defaultLogError;
+  const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgPlacementPrisma);
+  const domain = normalizeDomain(params.config.domain);
+  const mapping = findMappingForEmailDomain({ config: params.config, emailDomain });
+
+  if (mapping) {
+    return placeFromDomainMapping({
+      userId: params.userId,
+      email: params.email,
+      emailDomain,
+      domain,
+      mapping,
+      config: params.config,
+      prisma,
+      logError,
+    });
+  }
+
+  const orgFeatures = params.config.org_features;
+  if (!orgFeatures?.auto_create_personal_org_on_first_login) {
+    return { status: 'skipped', reason: 'no_placement_configured' };
+  }
+
+  if (orgFeatures.pending_invites_block_auto_create) {
+    const blocked = await hasPendingInviteForEmail({ prisma, email: params.email });
+    if (blocked) {
+      return { status: 'skipped', reason: 'pending_invite_blocks_auto_create' };
+    }
+  }
+
+  return autoCreatePersonalOrgForUser({
+    userId: params.userId,
+    email: params.email,
+    domain,
+    prisma,
+    logError,
+  });
 }

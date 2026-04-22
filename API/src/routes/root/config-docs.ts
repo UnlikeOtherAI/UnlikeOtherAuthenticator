@@ -150,6 +150,12 @@ export const configJwtDocumentation = {
       enabled: 'boolean (default false)',
       groups_enabled: 'boolean (default false)',
       user_needs_team: 'boolean (default false)',
+      auto_create_personal_org_on_first_login:
+        'boolean (default false) — create a personal org + default team on first verified login when no mapping matches',
+      allow_user_create_org:
+        'boolean (default false) — permit end-users to call POST /org/organisations with their own access token (superusers bypass)',
+      pending_invites_block_auto_create:
+        'boolean (default true) — a pending invite for the user email suppresses auto_create_personal_org_on_first_login',
       max_teams_per_org: 'number (default 100, max 1000)',
       max_groups_per_org: 'number (default 20, max 200)',
       max_members_per_org: 'number (default 1000, max 10000)',
