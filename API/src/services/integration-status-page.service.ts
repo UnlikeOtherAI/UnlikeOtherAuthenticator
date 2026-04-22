@@ -26,18 +26,17 @@ export type IntegrationStatusPageKind = 'pending' | 'declined';
 export type IntegrationStatusPageParams = {
   kind: IntegrationStatusPageKind;
   domain: string;
-  contactEmail?: string | null;
 };
 
 /**
  * Renders a friendly public-facing page for the two auto-onboarding terminal states:
  *
  * - "pending"  — the request was captured; a superuser has been notified; the partner
- *                will receive a claim email at `contactEmail` once approved.
+ *                will receive a claim email at the contact address once approved.
  * - "declined" — a prior request for this domain was declined; no new request will be
  *                created until a superuser deletes the existing row.
  *
- * No internal diagnostics are leaked.
+ * No internal diagnostics are leaked (including the contact email).
  */
 export function renderIntegrationStatusHtml(params: IntegrationStatusPageParams): string {
   const isDeclined = params.kind === 'declined';
@@ -51,10 +50,7 @@ export function renderIntegrationStatusHtml(params: IntegrationStatusPageParams)
       ]
     : [
         '<p>Thanks — your integration request has been captured.</p>',
-        '<p>An UnlikeOtherAuthenticator superuser has been notified. Once they approve this integration, you will receive an email with a one-time link to copy your client secret.</p>',
-        params.contactEmail
-          ? `<p>Approval email will be sent to <strong>${escapeHtml(params.contactEmail)}</strong>.</p>`
-          : '<p>Approval email will be sent to the contact address in your signed config.</p>',
+        '<p>An UnlikeOtherAuthenticator superuser has been notified. Once they approve this integration, the system admin will receive an email with a one-time link to copy your client secret.</p>',
       ];
 
   return [

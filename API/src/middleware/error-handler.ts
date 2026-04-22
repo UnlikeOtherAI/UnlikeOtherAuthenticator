@@ -42,7 +42,6 @@ function maybeRenderIntegrationStatusPage(
   return renderIntegrationStatusHtml({
     kind: outcome.kind,
     domain: outcome.domain,
-    contactEmail: outcome.kind === 'pending' ? outcome.contactEmail : null,
   });
 }
 
