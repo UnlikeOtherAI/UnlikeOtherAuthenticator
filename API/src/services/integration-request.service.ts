@@ -2,6 +2,7 @@ import { Prisma, type PrismaClient } from '@prisma/client';
 
 import { getPrisma } from '../db/prisma.js';
 import { normalizeDomain } from '../utils/domain.js';
+import { AppError } from '../utils/errors.js';
 import type { PublicRsaJwk } from './client-jwk.service.js';
 
 type IntegrationRequestPrisma = Pick<PrismaClient, 'clientDomainIntegrationRequest'>;
@@ -23,7 +24,11 @@ export type IntegrationRequestRow = {
   jwksUrl: string;
   configUrl: string | null;
   configSummary: Prisma.JsonValue | null;
+  preValidationResult: Prisma.JsonValue | null;
   declineReason: string | null;
+  reviewedAt: Date | null;
+  reviewedByEmail: string | null;
+  clientDomainId: string | null;
   submittedAt: Date;
   lastSeenAt: Date;
 };
@@ -121,4 +126,71 @@ export async function upsertPendingIntegrationRequest(
     },
   })) as IntegrationRequestRow;
   return { kind: 'created', row };
+}
+
+/**
+ * List integration requests ordered newest-first, optionally filtered by status.
+ * Enumeration is internal-admin only so we return the persisted rows verbatim.
+ */
+export async function listIntegrationRequests(
+  params: { status?: IntegrationRequestStatus; limit?: number } = {},
+  deps?: { prisma?: IntegrationRequestPrisma },
+): Promise<IntegrationRequestRow[]> {
+  const take = Math.max(1, Math.min(200, params.limit ?? 100));
+  const rows = await prismaClient(deps).clientDomainIntegrationRequest.findMany({
+    where: params.status ? { status: params.status } : undefined,
+    orderBy: { submittedAt: 'desc' },
+    take,
+  });
+  return rows as IntegrationRequestRow[];
+}
+
+export async function getIntegrationRequestById(
+  id: string,
+  deps?: { prisma?: IntegrationRequestPrisma },
+): Promise<IntegrationRequestRow | null> {
+  const row = await prismaClient(deps).clientDomainIntegrationRequest.findUnique({ where: { id } });
+  return (row as IntegrationRequestRow | null) ?? null;
+}
+
+export async function declineIntegrationRequest(
+  params: { id: string; reason: string; reviewerEmail: string },
+  deps?: { prisma?: IntegrationRequestPrisma },
+): Promise<IntegrationRequestRow> {
+  const prisma = prismaClient(deps);
+  const existing = (await prisma.clientDomainIntegrationRequest.findUnique({
+    where: { id: params.id },
+  })) as IntegrationRequestRow | null;
+  if (!existing) throw new AppError('NOT_FOUND', 404, 'INTEGRATION_REQUEST_NOT_FOUND');
+  if (existing.status !== 'PENDING') {
+    throw new AppError('BAD_REQUEST', 400, 'INTEGRATION_REQUEST_NOT_PENDING');
+  }
+
+  const row = (await prisma.clientDomainIntegrationRequest.update({
+    where: { id: existing.id },
+    data: {
+      status: 'DECLINED',
+      declineReason: params.reason,
+      reviewedAt: new Date(),
+      reviewedByEmail: params.reviewerEmail,
+    },
+  })) as IntegrationRequestRow;
+  return row;
+}
+
+export async function deleteIntegrationRequest(
+  id: string,
+  deps?: { prisma?: IntegrationRequestPrisma },
+): Promise<IntegrationRequestRow> {
+  const prisma = prismaClient(deps);
+  const existing = (await prisma.clientDomainIntegrationRequest.findUnique({
+    where: { id },
+  })) as IntegrationRequestRow | null;
+  if (!existing) throw new AppError('NOT_FOUND', 404, 'INTEGRATION_REQUEST_NOT_FOUND');
+  if (existing.status === 'PENDING') {
+    throw new AppError('BAD_REQUEST', 400, 'INTEGRATION_REQUEST_STILL_PENDING');
+  }
+
+  await prisma.clientDomainIntegrationRequest.delete({ where: { id: existing.id } });
+  return existing;
 }
