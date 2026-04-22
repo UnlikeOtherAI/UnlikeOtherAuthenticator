@@ -4,6 +4,7 @@ import fastify, { type FastifyInstance } from 'fastify';
 import { getEnv } from './config/env.js';
 import { connectPrisma, disconnectPrisma } from './db/prisma.js';
 import { registerErrorHandler } from './middleware/error-handler.js';
+import tenantContextPlugin from './plugins/tenant-context.plugin.js';
 import { registerRoutes } from './routes/index.js';
 import { sweepExpiredClaims } from './services/integration-claim.service.js';
 import { pruneExpiredSecurityData } from './services/retention-pruning.service.js';
@@ -132,6 +133,7 @@ export async function createApp(): Promise<FastifyInstance> {
   }
 
   registerErrorHandler(app);
+  await app.register(tenantContextPlugin);
   await registerRoutes(app);
 
   return app;
