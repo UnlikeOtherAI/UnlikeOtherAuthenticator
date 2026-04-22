@@ -220,7 +220,8 @@ All secrets and configuration live in environment variables. Nothing is hardcode
 * `ADMIN_CONFIG_JWT` — signed RS256 config JWT served from `/internal/admin/config` for `/admin/login`; required before the production Admin login handoff can work
 * `CONFIG_JWKS_URL` — trusted JWKS endpoint for RS256 config JWT verification by `kid`; required by config-backed auth routes, not process boot
 * `CONFIG_JWKS_JSON` — public JWKS JSON served from `/.well-known/jwks.json`; must contain public keys only
-* `DATABASE_URL` — database connection string
+* `DATABASE_URL` — database connection string for post-context tenant paths (will be scoped to the `uoa_app` role once RLS M2 is enforced; see `Docs/Requirements/row-level-security.md`)
+* `DATABASE_ADMIN_URL` — bootstrap/admin connection string used for domain-hash auth, admin routes, auto-onboarding, claim flow, retention pruning, audit log, and `/.well-known/jwks.json`; must connect as a `BYPASSRLS` role (`uoa_admin`). Falls back to `DATABASE_URL` when unset, so local/dev without RLS keeps working unchanged
 * Social provider credentials (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, etc.)
 * Email service credentials:
   * `EMAIL_PROVIDER` — `disabled` (default behavior) or `smtp`

@@ -71,7 +71,8 @@ Set via Cloud Run service config:
 | `CONFIG_JWKS_URL` | Plain value: `https://authentication.unlikeotherai.com/.well-known/jwks.json`; trusted JWKS URL for RS256 config JWT verification; route-level requirement for config-backed auth |
 | `CONFIG_JWKS_JSON` | Secret Manager: `uoa-auth-config-jwks-json`; public JWKS JSON served from `/.well-known/jwks.json`; must contain public keys only |
 | `PUBLIC_BASE_URL` | Plain value: `https://authentication.unlikeotherai.com` |
-| `DATABASE_URL` | Secret Manager: `uoa-auth-database-url` |
+| `DATABASE_URL` | Secret Manager: `uoa-auth-database-url`; runtime connection used for post-context (tenant) DB paths; should point at the `uoa_app` role once RLS M2 is enforced |
+| `DATABASE_ADMIN_URL` | Secret Manager: `uoa-auth-database-admin-url`; bootstrap/admin connection used for domain-hash auth, admin routes, auto-onboarding, claim flow, retention pruning, audit log, and `/.well-known/jwks.json`; must connect as a `BYPASSRLS` role (`uoa_admin`). Falls back to `DATABASE_URL` when unset |
 | `SHARED_SECRET` | Secret Manager: `uoa-auth-shared-secret` |
 | `GOOGLE_CLIENT_ID` | Secret Manager: `uoa-auth-google-client-id` |
 | `GOOGLE_CLIENT_SECRET` | Secret Manager: `uoa-auth-google-client-secret` |
