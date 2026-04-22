@@ -1,6 +1,8 @@
 import { createRemoteJWKSet, decodeProtectedHeader, jwtVerify, type JWTPayload } from 'jose';
 import { AppError } from '../utils/errors.js';
 import { z } from 'zod';
+import { findJwkByKidDb, importClientJwkKey, jwkToPublic } from './client-jwk.service.js';
+import { getEnv } from '../config/env.js';
 import { tryParseHttpUrl } from '../utils/http-url.js';
 import { getAppLogger } from '../utils/app-logger.js';
 
@@ -358,6 +360,10 @@ function assertConfigJwtHeader(configJwt: string): void {
 
 /**
  * Task 2.3: Verify the config JWT signature using the configured JWKS.
+ *
+ * Resolution order for the JWT's `kid`:
+ *   1. Per-domain JWKs stored in `client_domain_jwks` (added via auto-onboarding or admin).
+ *   2. The deployment-level `jwksUrl` (legacy `CONFIG_JWKS_URL`) as fallback.
  */
 export async function verifyConfigJwtSignature(
   configJwt: string,
@@ -365,12 +371,29 @@ export async function verifyConfigJwtSignature(
 ): Promise<JWTPayload> {
   try {
     assertConfigJwtHeader(configJwt);
+
+    const header = decodeProtectedHeader(configJwt);
+    const kid = typeof header.kid === 'string' ? header.kid : '';
+
+    if (kid && getEnv().DATABASE_URL) {
+      const dbKey = await findJwkByKidDb(kid).catch(() => null);
+      if (dbKey) {
+        const imported = await importClientJwkKey(jwkToPublic(dbKey.jwk));
+        const { payload } = await jwtVerify(configJwt, imported, {
+          algorithms: [...CONFIG_JWT_ALLOWED_ALGS],
+          clockTolerance: 30,
+        });
+        return payload;
+      }
+    }
+
     const { payload } = await jwtVerify(configJwt, getConfigJwks(jwksUrl), {
       algorithms: [...CONFIG_JWT_ALLOWED_ALGS],
       clockTolerance: 30,
     });
     return payload;
-  } catch {
+  } catch (err) {
+    if (err instanceof AppError) throw err;
     // Normalize all verification failures into a generic, user-safe error.
     throw new AppError('BAD_REQUEST', 400);
   }
