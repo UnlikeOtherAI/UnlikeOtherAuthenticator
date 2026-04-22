@@ -145,13 +145,17 @@ export const internalAdminEndpoints: EndpointSchema[] = [
     method: 'POST',
     path: '/internal/admin/integration-requests/:id/accept',
     description:
-      'Approve a pending integration request. Creates the ClientDomain, the first ClientDomainJwk, and a ClientDomainSecret in one transaction, then emails a 24h one-time claim link to contact_email.',
+      'Approve a pending integration request. Creates the ClientDomain, the first ClientDomainJwk, and a ClientDomainSecret in one transaction, then either emails a 24h one-time claim link to contact_email (deliveryMode=email) or returns the freshly minted credentials once in the response (deliveryMode=reveal).',
     auth: adminAuth,
     body: {
       label: 'string (optional) — friendly label stored on the created ClientDomain',
-      client_secret: 'string (optional, min 32) — omit to let the API generate one',
+      clientSecret: 'string (optional, min 32) — omit to let the API generate one',
+      deliveryMode: '"email" (default) or "reveal" — email dispatches a claim link; reveal returns credentials once and skips email',
     },
-    response: { 200: 'Updated integration request detail (status=ACCEPTED)', '401/403': authFailures },
+    response: {
+      200: 'Integration request detail (status=ACCEPTED) plus { delivery_mode, email_dispatched, credentials? }. credentials = { domain, client_secret, client_hash, hash_prefix } is only present when delivery_mode=reveal and will never appear again.',
+      '401/403': authFailures,
+    },
   },
   {
     method: 'POST',
@@ -165,9 +169,15 @@ export const internalAdminEndpoints: EndpointSchema[] = [
     method: 'POST',
     path: '/internal/admin/integration-requests/:id/resend-claim',
     description:
-      'Generate a fresh 24h claim token for an ACCEPTED request and email the link again. Old token is revoked.',
+      'Generate a fresh 24h claim token for an ACCEPTED request. Old token is revoked. deliveryMode=email (default) re-emails the claim link; deliveryMode=reveal returns the claim credentials once without sending an email.',
     auth: adminAuth,
-    response: { 200: 'Integration request detail', '401/403': authFailures },
+    body: {
+      deliveryMode: '"email" (default) or "reveal"',
+    },
+    response: {
+      200: 'Integration request detail plus { delivery_mode, email_dispatched, credentials? }. credentials = { domain, client_secret, client_hash, hash_prefix } is only present when delivery_mode=reveal and will never appear again.',
+      '401/403': authFailures,
+    },
   },
   {
     method: 'DELETE',

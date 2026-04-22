@@ -321,6 +321,56 @@ describe('/internal/admin/integration-requests', () => {
     }
   });
 
+  it('accepts with deliveryMode=reveal and returns credentials without sending email', async () => {
+    integrationAcceptMocks.acceptIntegrationRequest.mockResolvedValue({
+      integration: row({
+        status: 'ACCEPTED',
+        reviewedAt: new Date('2026-04-22T12:00:00Z'),
+        reviewedByEmail: 'admin@example.com',
+        clientDomainId: 'cd-1',
+      }),
+      clientDomainId: 'cd-1',
+      clientHash: 'abcd'.repeat(16),
+      hashPrefix: 'abcdabcdabcd',
+      rawClientSecret: 'raw-secret-long-enough-to-pass-min',
+      claim: {
+        rawToken: 'raw-claim-token-abc',
+        tokenHash: 'hash-abc',
+        expiresAt: new Date('2026-04-23T12:00:00Z'),
+      },
+    });
+
+    const { createApp } = await import('../../src/app.js');
+    const app = await createApp();
+    await app.ready();
+
+    try {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/internal/admin/integration-requests/req-1/accept',
+        headers: { authorization: `Bearer ${await accessToken('superuser')}` },
+        payload: { deliveryMode: 'reveal' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({
+        status: 'ACCEPTED',
+        delivery_mode: 'reveal',
+        email_dispatched: false,
+        credentials: {
+          domain: 'client.example.com',
+          client_secret: 'raw-secret-long-enough-to-pass-min',
+          client_hash: 'abcd'.repeat(16),
+          hash_prefix: 'abcdabcdabcd',
+        },
+      });
+      await new Promise((r) => setImmediate(r));
+      expect(emailMocks.sendIntegrationApprovedEmail).not.toHaveBeenCalled();
+    } finally {
+      await app.close();
+    }
+  });
+
   it('rejects accept with a client secret shorter than 32 chars', async () => {
     const { createApp } = await import('../../src/app.js');
     const app = await createApp();
@@ -353,6 +403,9 @@ describe('/internal/admin/integration-requests', () => {
         tokenHash: 'hash-fresh',
         expiresAt: new Date('2026-04-23T12:00:00Z'),
       },
+      clientHash: 'aaaa'.repeat(16),
+      hashPrefix: 'aaaaaaaaaaaa',
+      rawClientSecret: 'resent-secret-long-enough-to-pass-min',
     });
     process.env.PUBLIC_BASE_URL = 'https://auth.example.com/';
 
@@ -381,6 +434,54 @@ describe('/internal/admin/integration-requests', () => {
     } finally {
       await app.close();
       Reflect.deleteProperty(process.env, 'PUBLIC_BASE_URL');
+    }
+  });
+
+  it('resends with deliveryMode=reveal and returns credentials without sending email', async () => {
+    integrationAcceptMocks.resendIntegrationClaim.mockResolvedValue({
+      integration: row({
+        status: 'ACCEPTED',
+        reviewedByEmail: 'admin@example.com',
+        clientDomainId: 'cd-1',
+      }),
+      claim: {
+        rawToken: 'fresh-claim-token',
+        tokenHash: 'hash-fresh',
+        expiresAt: new Date('2026-04-23T12:00:00Z'),
+      },
+      clientHash: 'beef'.repeat(16),
+      hashPrefix: 'beefbeefbeef',
+      rawClientSecret: 'resent-secret-long-enough-to-pass-min',
+    });
+
+    const { createApp } = await import('../../src/app.js');
+    const app = await createApp();
+    await app.ready();
+
+    try {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/internal/admin/integration-requests/req-1/resend-claim',
+        headers: { authorization: `Bearer ${await accessToken('superuser')}` },
+        payload: { deliveryMode: 'reveal' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({
+        status: 'ACCEPTED',
+        delivery_mode: 'reveal',
+        email_dispatched: false,
+        credentials: {
+          domain: 'client.example.com',
+          client_secret: 'resent-secret-long-enough-to-pass-min',
+          client_hash: 'beef'.repeat(16),
+          hash_prefix: 'beefbeefbeef',
+        },
+      });
+      await new Promise((r) => setImmediate(r));
+      expect(emailMocks.sendIntegrationApprovedEmail).not.toHaveBeenCalled();
+    } finally {
+      await app.close();
     }
   });
 

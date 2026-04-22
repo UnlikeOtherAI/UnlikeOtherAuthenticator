@@ -136,9 +136,11 @@ The browser now shows the pending page. Do not retry in a loop — UOA has every
 A UOA superuser sees your request in **/admin > New Integrations**, inspects the fingerprint, \`jwks_url\`, and verified \`config_summary\`, and clicks **Accept**. UOA:
 
 - Creates the \`client_domains\` row, the first \`client_domain_jwks\` row, and a new client secret inside one DB transaction.
-- Emails \`contact_email\` a link of the form \`https://<uoa-host>/integrations/claim/<token>\`. The token is single-use and expires after 24 hours.
+- **Delivers the credentials one of two ways** depending on what the superuser picked on Accept:
+  - **Email claim link (default):** \`contact_email\` receives a link of the form \`https://<uoa-host>/integrations/claim/<token>\`. The token is single-use and expires after 24 hours. You claim the secret yourself.
+  - **Reveal to admin:** the superuser sees \`domain\`, \`client_secret\`, \`client_hash\`, and \`hash_prefix\` once in the admin UI and passes them to you through your own secure channel. No email is sent.
 
-If the superuser declines, no email is sent. Contact your UOA superuser if you expected approval but did not receive an email within a business day.
+If the superuser declines, no email is sent. Contact your UOA superuser if you expected approval but did not receive an email (or a secret from them directly) within a business day.
 
 ### 1.5 Open the claim link and copy the secret ONCE
 
@@ -156,7 +158,7 @@ const clientHash = createHash('sha256').update(domain + clientSecret).digest('he
 // Authorization: Bearer <clientHash>
 \`\`\`
 
-**Resend claim link.** If you lose the email before clicking, ask a UOA superuser to use **Resend claim link** on the accepted request. The old token is revoked and a fresh one is emailed.
+**Resend claim link.** If you lose the email before clicking, ask a UOA superuser to use **Resend claim link** on the accepted request. The old token is revoked and a fresh one is emailed (or revealed in-UI if the superuser picks reveal mode on resend).
 
 **Disabling.** A superuser can set a domain to \`disabled\` on the Secrets page; UOA rejects every domain bearer request for that domain until it is re-enabled.
 
