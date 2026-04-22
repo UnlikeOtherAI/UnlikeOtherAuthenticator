@@ -2,6 +2,20 @@ import type { Prisma, PrismaClient } from '@prisma/client';
 
 import { getPrisma } from './prisma.js';
 
+/**
+ * Cast a transaction client to `PrismaClient` for service `deps.prisma` call sites.
+ *
+ * Services in this codebase type `deps.prisma` as a narrow `Pick<PrismaClient, ...>`
+ * subset. `Prisma.TransactionClient` satisfies that subset at runtime (the model
+ * accessors are identical), but TypeScript needs an explicit bridge because
+ * `TransactionClient` excludes `$transaction`, `$connect`, etc. This helper names
+ * the cast so it reads intentionally instead of scattering `as unknown as PrismaClient`
+ * across every route.
+ */
+export function asPrismaClient(tx: Prisma.TransactionClient): PrismaClient {
+  return tx as unknown as PrismaClient;
+}
+
 // Tenant context threaded from `config-verifier`, access-token verification,
 // and org resolution into the per-request transaction. Values become Postgres
 // session settings that RLS policies key off; see `Docs/Requirements/row-level-security.md`.

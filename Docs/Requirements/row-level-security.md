@@ -205,6 +205,21 @@ No chunk needs to be rewritten. The app-side changes are:
 10. **Connection pool size**: each `uoa_app` request holds an interactive transaction for its whole duration. Current Prisma default is 2 × num_cpus; may need bumping. Benchmark before M2.
 11. **Org bootstrap reads**: three code paths look up orgs before `app.org_id` is set — `/org/organisations` list by domain, `/org/me` resolve by user+domain, token issuance org resolution. Covered by the third branch of the `organisations` policy in section 7 (domain + membership). Same logic must not be generalised to `teams` / `groups` without an explicit reason; those always have `app.org_id` by the time they are queried.
 12. **Global-scope users are not RLS-isolated** by domain. `User.domain IS NULL` rows are visible under any `app.domain`. This follows the `user_scope = global` product model; documented, not a bug. Per-domain installs pin users with a non-null `domain` and get strict isolation.
+13. **Pre-auth flows are *admin-side* even though they pass `config-verifier`.** These routes have `app.domain` but no `app.user_id`:
+    - `/auth/domain-mapping` — email-domain → org/team resolution before registration. Needs `organisations.findUnique(id)` scoped to a domain — policy requires a known user_id.
+    - `/auth/register`, `/auth/verify-email`, `/auth/reset-password`, `/auth/email-registration-link`, `/auth/email-reset-password`, `/auth/email-twofa-reset`, `/auth/email-team-invite-open`, `/auth/email-team-invite` — all read/write `users`, `verification_tokens`, and sometimes `organisations`/`teams` (team-invite redemption) before the user has authenticated.
+    - `/auth/login` — reads `users` by userKey pre-auth.
+    - `/auth/callback` (social) — reads/writes `users` pre-auth.
+    - `/auth/token-exchange` — reads `refresh_tokens` + `users` pre-auth.
+    - `/auth/revoke` — reads `refresh_tokens` pre-auth (domain-hash-authenticated but no user context).
+    - `/twofactor/*` — some flows run pre-login.
+
+    Two strategies, chosen per route:
+    1. **Admin client (`request.adminDb`)** — use when the route does not have a verified `userId` yet. The domain-hash or config-JWT check is the trust boundary; RLS does not add meaningfully beyond the capability guard on the token itself. Easier. Default choice for `/auth/*` pre-login reads/writes.
+    2. **Tenant context with `userId` set late** — use when the route *does* produce a `userId` mid-handler (e.g. `/auth/login` after `loginWithEmailPassword`). Keep the pre-auth user lookup on `request.adminDb`; switch to `request.withTenantTx` only for post-authentication writes (authorization code issuance, login log, refresh token).
+
+    Concretely: only fully *post-auth* routes (access-token bearer required) go cleanly through `request.withTenantTx`. This is the `/org/*`, `/twofactor/verify`, and `/internal/org/*` surface. The `/auth/*` family is predominantly `request.adminDb`.
+14. **`login_logs` are written post-auth with a known userId + domain**, so they belong in `withTenantTx`. Same for `authorization_codes` and `refresh_tokens` writes that happen after login. The pre-auth *reads* of `refresh_tokens` (token exchange, revoke) stay on `request.adminDb` — the token itself is the capability.
 
 ## 11. Rollout checklist
 
@@ -217,11 +232,12 @@ Prereqs:
 
 M1 (plumbing, reversible, no behaviour change if kept internal):
 
-- [ ] M1 migration authored and code-reviewed.
-- [ ] Env vars (`DATABASE_URL`, `DATABASE_ADMIN_URL`, `DATABASE_MIGRATE_URL`) wired in Cloud Run and local `.env.example`.
-- [ ] `uoa_migrator`, `uoa_app`, `uoa_admin` exist in dev/staging/prod with the right privileges.
-- [ ] Fastify plugins for `request.db` / `request.adminDb`, `tenantContext` preHandler, and `runWithTenantContext` helper landed.
-- [ ] Admin/bootstrap code paths switched to `request.adminDb` (listed in section 4).
+- [x] M1 migration authored and code-reviewed (`API/prisma/migrations/20260423000000_rls_roles_and_grants`).
+- [x] Env var `DATABASE_ADMIN_URL` wired in `Docs/deploy.md` and `Docs/techstack.md`. `DATABASE_MIGRATE_URL` reserved for later — M1 grants migrator role but Prisma still runs as the original DB user in CI until that flip.
+- [ ] `uoa_migrator`, `uoa_app`, `uoa_admin` exist in dev/staging/prod with the right privileges (manual DBA step; M1 creates them when run).
+- [x] `request.adminDb` decorator + `runWithTenantContext` helper + `setTenantContextFromRequest` landed (`API/src/plugins/tenant-context.plugin.ts`, `API/src/db/tenant-context.ts`).
+- [x] Admin/bootstrap code paths switched to `getAdminPrisma()` — `handshake-error-log.service.ts`, `domain-secret.service.ts`, `client-jwk.service.ts`, `integration-accept.service.ts`, `integration-claim.service.ts`, `audit-log.service.ts`, `retention-pruning.service.ts`, `internal-admin.service.ts`, `integration-request.service.ts`, `domain-role.service.ts`, `admin-superuser` middleware, `/internal/admin/token`.
+- [ ] Per-route migration to `request.withTenantTx` — see section 16 for status per route family. Post-auth `/org/*` and authenticated `/twofactor/*` are the migration target; most `/auth/*` stays on `request.adminDb` per sharp-edge #13.
 - [ ] Run M1 in staging. Smoke-test every public and admin route.
 
 Integration testing (before M2):
@@ -237,11 +253,78 @@ Integration testing (before M2):
 
 M2 (the flip):
 
-- [ ] M2 migration authored and code-reviewed.
+- [x] M2 migration authored and code-reviewed (`API/prisma/migrations/20260423000001_rls_enable_policies`).
 - [ ] Run M2 in staging. Soak ≥ 24h with production-like traffic patterns.
 - [ ] Monitor for `new row violates row-level security policy` and `permission denied` in logs.
 - [ ] Run M2 in prod.
 - [ ] 72h post-deploy watch.
+
+## 16. Route migration status
+
+Live per-route tracking. Authoritative for whether a handler runs under `request.withTenantTx` (tenant-scoped, `uoa_app`) or `request.adminDb` (bootstrap, `uoa_admin`).
+
+Legend: **T** — `withTenantTx`; **A** — `adminDb`; **–** — no DB access.
+
+### `/auth/*` (predominantly A; reasons in §10.13)
+
+| Route | Strategy | Notes |
+|---|---|---|
+| `/auth/entrypoint` | – | SSR only. |
+| `/auth/domain-mapping` | A | Pre-auth org metadata lookup; capability = verified config JWT. |
+| `/auth/login` | T (post-auth writes) + A (pre-auth user lookup) | Split: `loginWithEmailPassword` stays on `adminDb` for the email → user resolution. Authorization-code issuance, refresh-token write, and login-log write go inside `withTenantTx` with `domain` + resolved `userId`. |
+| `/auth/register` | A | Pre-auth; email enumeration resistance. |
+| `/auth/email-registration-link` | A | Pre-auth. |
+| `/auth/email-reset-password` | A | Pre-auth. |
+| `/auth/email-team-invite` | A | Domain-hash authenticated server-to-server. |
+| `/auth/email-team-invite-open` | A | Public invite-open. |
+| `/auth/email-twofa-reset` | A | Pre-auth. |
+| `/auth/reset-password` | A | Pre-auth (token is the capability). |
+| `/auth/verify-email` | A | Pre-auth (token is the capability). |
+| `/auth/revoke` | T | `refresh_tokens` is domain-scoped; `userId` irrelevant. Migrated. |
+| `/auth/token-exchange` | T (post-auth) + A (pre-auth lookup) | Same split as `/auth/login`. |
+| `/auth/callback` (social) | T (post-auth writes) + A (pre-auth user lookup) | Same split. |
+
+### `/org/*` (all T — authenticated, tenant context is always available)
+
+| Route | Strategy | Notes |
+|---|---|---|
+| `/org/me` | T | Uses organisations bootstrap branch (domain + membership). |
+| `/org/organisations` (list) | T | Uses organisations bootstrap branch. |
+| `/org/organisations/:orgId` | T | org_id from URL; standard policy. |
+| `/org/organisations/:orgId/members/*` | T | |
+| `/org/organisations/:orgId/teams/*` | T | |
+| `/org/organisations/:orgId/teams/:teamId/members/*` | T | |
+| `/org/organisations/:orgId/groups*` | T | |
+| `/org/organisations/:orgId/teams/:teamId/invitations*` | T | |
+| `/org/organisations/:orgId/access-requests*` | T | |
+| `/org/organisations/:orgId/domain-context` | T | |
+
+### `/twofactor/*`
+
+| Route | Strategy | Notes |
+|---|---|---|
+| `/twofactor/verify` | T | Post-login (twofa_token is the bridge); domain + user known. |
+| `/twofactor/reset` | A | Pre-auth reset flow (token is the capability). |
+
+### `/internal/org/*` (all T — authenticated system admin)
+
+Standard org-context post-auth routes.
+
+### `/internal/admin/*` (all A — already migrated)
+
+Bootstrap surface; see §4.
+
+### `/integrations/*` (all A — already migrated)
+
+Capability-token endpoints; see §4.
+
+### Progress
+
+- [x] `/auth/revoke` migrated to T.
+- [ ] Remaining `/auth/*` pre-auth routes switched to `request.adminDb` (currently still use default `getPrisma()`; no-op until M1 rebalances `DATABASE_URL`, but makes RLS-safety explicit).
+- [ ] `/org/*` migrated to T.
+- [ ] `/twofactor/verify` migrated to T.
+- [ ] Post-auth write paths inside `/auth/login`, `/auth/callback`, `/auth/token-exchange` wrapped in T.
 
 ## 12. What we do not build here
 
@@ -285,3 +368,4 @@ Exhaustive map of every DB access path the reviews surfaced, grouped by required
 
 - **v0.1 — 2026-04-22** — initial draft.
 - **v0.2 — 2026-04-22** — revised after parallel Claude and Codex reviews. Major changes: `uoa_admin` broadened to a bootstrap role (not just admin routes); all auto-onboarding tables moved to admin-only (no permissive policies); `organisations` predicate gained a domain+membership bootstrap branch; `handshake_error_logs`, `client_domains`, `client_domain_secrets` reclassified as admin-only; single migration split into M1 (plumbing) + M2 (flip); `RLS_ENFORCED` feature flag dropped; per-query `$allOperations` wrapper replaced by `runWithTenantContext` around the request handler body; appendix A added.
+- **v0.3 — 2026-04-22** — M1 and M2 migration SQL authored (`API/prisma/migrations/20260423000000_rls_roles_and_grants`, `..._rls_enable_policies`). `runWithTenantContext`, `setTenantContextFromRequest`, and `request.adminDb`/`request.withTenantTx` decorators landed (`API/src/db/tenant-context.ts`, `API/src/plugins/tenant-context.plugin.ts`). Admin-side services switched to `getAdminPrisma()`. Added sharp-edges §10.13 and §10.14 clarifying that most `/auth/*` is pre-auth bootstrap and should stay on `request.adminDb`; added §16 route-migration status table. `/auth/revoke` migrated as the first reference route.
