@@ -37,11 +37,14 @@ export function registerAuthResetPasswordRoutes(app: FastifyInstance): void {
 
       if (email && request.config && request.configUrl) {
         try {
-          await requestPasswordReset({
-            email,
-            config: request.config,
-            configUrl: request.configUrl,
-          });
+          await requestPasswordReset(
+            {
+              email,
+              config: request.config,
+              configUrl: request.configUrl,
+            },
+            { prisma: request.adminDb },
+          );
         } catch (err) {
           request.log.error({ err }, 'password reset request failed');
         }
@@ -64,12 +67,15 @@ export function registerAuthResetPasswordRoutes(app: FastifyInstance): void {
         throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
       }
 
-      await resetPasswordWithToken({
-        token,
-        password,
-        config: request.config,
-        configUrl: request.configUrl,
-      });
+      await resetPasswordWithToken(
+        {
+          token,
+          password,
+          config: request.config,
+          configUrl: request.configUrl,
+        },
+        { prisma: request.adminDb },
+      );
 
       reply.status(200).send({ ok: true });
     },

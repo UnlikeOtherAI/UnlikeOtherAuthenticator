@@ -70,11 +70,14 @@ function assertTokenValid(params: {
   return params.token.type;
 }
 
-export async function validateVerifyEmailToken(params: {
-  token: string;
-  configUrl: string;
-  config: ClientConfig;
-}): Promise<VerifyEmailTokenType> {
+export async function validateVerifyEmailToken(
+  params: {
+    token: string;
+    configUrl: string;
+    config: ClientConfig;
+  },
+  deps?: { prisma?: VerifyEmailPrisma },
+): Promise<VerifyEmailTokenType> {
   void params.config; // Included for future-proofing; configVerifier already validates domain integrity.
   const env = getEnv();
 
@@ -85,7 +88,7 @@ export async function validateVerifyEmailToken(params: {
   const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
   const tokenHash = hashEmailToken(params.token, SHARED_SECRET);
 
-  const prisma = getPrisma();
+  const prisma = deps?.prisma ?? (getPrisma() as unknown as VerifyEmailPrisma);
   const row = await prisma.verificationToken.findUnique({
     where: { tokenHash },
     select: {

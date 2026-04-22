@@ -101,11 +101,14 @@ export function registerAuthEmailTeamInviteRoute(app: FastifyInstance): void {
       }
 
       try {
-        const invite = await getTeamInviteLandingData({
-          token,
-          config: request.config,
-          configUrl: request.configUrl,
-        });
+        const invite = await getTeamInviteLandingData(
+          {
+            token,
+            config: request.config,
+            configUrl: request.configUrl,
+          },
+          { prisma: request.adminDb },
+        );
 
         reply
           .status(200)
@@ -161,11 +164,14 @@ export function registerAuthEmailTeamInviteRoute(app: FastifyInstance): void {
       }
 
       try {
-        const invite = await declineTeamInviteByToken({
-          token,
-          config: request.config,
-          configUrl: request.configUrl,
-        });
+        const invite = await declineTeamInviteByToken(
+          {
+            token,
+            config: request.config,
+            configUrl: request.configUrl,
+          },
+          { prisma: request.adminDb },
+        );
 
         reply
           .status(200)

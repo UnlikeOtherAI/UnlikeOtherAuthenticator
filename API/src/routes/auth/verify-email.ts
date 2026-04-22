@@ -54,49 +54,61 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
         throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
       }
 
-      const tokenType = await validateVerifyEmailToken({
-        token,
-        config: request.config,
-        configUrl: request.configUrl,
-      });
+      const tokenType = await validateVerifyEmailToken(
+        {
+          token,
+          config: request.config,
+          configUrl: request.configUrl,
+        },
+        { prisma: request.adminDb },
+      );
 
       if (tokenType === 'VERIFY_EMAIL_SET_PASSWORD' && !password) {
         throw new AppError('BAD_REQUEST', 400, 'MISSING_PASSWORD');
       }
 
-      const { userId, type } = await verifyEmailToken({
-        token,
-        password,
-        config: request.config,
-        configUrl: request.configUrl,
-      });
+      const { userId, type } = await verifyEmailToken(
+        {
+          token,
+          password,
+          config: request.config,
+          configUrl: request.configUrl,
+        },
+        { prisma: request.adminDb },
+      );
 
       const redirectUrl = selectRedirectUrl({
         allowedRedirectUrls: request.config.redirect_urls,
         requestedRedirectUrl: redirect_url,
       });
-      const finalResult = await finalizeAuthenticatedUser({
-        userId,
-        config: request.config,
-        configUrl: request.configUrl,
-        redirectUrl,
-        rememberMe: request.config.session?.remember_me_default ?? true,
-        requestAccess: parseRequestAccessFlag(request_access),
-        codeChallenge: pkce.codeChallenge,
-        codeChallengeMethod: pkce.codeChallengeMethod,
-      });
+      const finalResult = await finalizeAuthenticatedUser(
+        {
+          userId,
+          config: request.config,
+          configUrl: request.configUrl,
+          redirectUrl,
+          rememberMe: request.config.session?.remember_me_default ?? true,
+          requestAccess: parseRequestAccessFlag(request_access),
+          codeChallenge: pkce.codeChallenge,
+          codeChallengeMethod: pkce.codeChallengeMethod,
+        },
+        { prisma: request.adminDb },
+      );
 
       try {
-        await recordLoginLog({
-          userId,
-          domain: request.config.domain,
-          authMethod: type === 'VERIFY_EMAIL' ? 'verify_email' : 'verify_email_set_password',
-          ip: request.ip ?? null,
-          userAgent:
-            typeof request.headers['user-agent'] === 'string'
-              ? request.headers['user-agent']
-              : null,
-        });
+        await recordLoginLog(
+          {
+            userId,
+            domain: request.config.domain,
+            authMethod: type === 'VERIFY_EMAIL' ? 'verify_email' : 'verify_email_set_password',
+            ip: request.ip ?? null,
+            userAgent:
+              typeof request.headers['user-agent'] === 'string'
+                ? request.headers['user-agent']
+                : null,
+          },
+          { prisma: request.adminDb },
+        );
       } catch (err) {
         request.log.error({ err }, 'failed to record login log');
       }

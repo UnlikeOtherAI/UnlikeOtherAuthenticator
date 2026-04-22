@@ -93,11 +93,14 @@ export function registerAuthEmailTwoFaResetRoute(app: FastifyInstance): void {
         throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
       }
 
-      await resetTwoFaWithToken({
-        token,
-        config: request.config,
-        configUrl: request.configUrl,
-      });
+      await resetTwoFaWithToken(
+        {
+          token,
+          config: request.config,
+          configUrl: request.configUrl,
+        },
+        { prisma: request.adminDb },
+      );
 
       const html = renderPage({
         title: 'Two-factor authentication reset',

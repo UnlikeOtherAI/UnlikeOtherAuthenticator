@@ -31,11 +31,14 @@ export function registerAuthEmailResetPasswordRoute(app: FastifyInstance): void 
         throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
       }
 
-      await validatePasswordResetToken({
-        token,
-        config: request.config,
-        configUrl: request.configUrl,
-      });
+      await validatePasswordResetToken(
+        {
+          token,
+          config: request.config,
+          configUrl: request.configUrl,
+        },
+        { prisma: request.adminDb },
+      );
 
       // Token is valid — render the Auth UI with the token context.
       const redirectUrl = redirect_url

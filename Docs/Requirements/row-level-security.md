@@ -325,7 +325,7 @@ Capability-token endpoints; see §4.
 - [x] `/twofactor/verify` migrated to T (post-challenge flow runs inside `withTenantTx` with `{ orgId: null, userId: challenge.userId }`).
 - [x] Post-auth write paths inside `/auth/login`, `/auth/callback`, `/auth/token-exchange` wrapped in T. Domain-only tenant context (`{ orgId: null, userId: null }`) because userId is resolved inside the tx from the credentials/code/refresh-token; users policy allows the lookup with `app.domain` alone.
 - [x] `/internal/org/*` migrated to T (groups, group-members, team-group-assignment) with domain-only tenant context.
-- [ ] Remaining `/auth/*` pre-auth routes switched to `request.adminDb` (currently still use default `getPrisma()`; no-op until M1 rebalances `DATABASE_URL`, but makes RLS-safety explicit). Tracked for follow-up.
+- [x] Remaining `/auth/*` pre-auth routes switched to `request.adminDb` (2026-04-22). Routes threaded: `/auth/domain-mapping`, `/auth/register`, `/auth/email/link`, `/auth/email/reset-password`, `/auth/email/team-invite` (landing + decline), `/auth/email/team-invite-open/:inviteId.gif`, `/auth/email/twofa-reset` + `/confirm`, `/auth/reset-password/request`, `/auth/reset-password`, `/auth/verify-email`. `validateRegistrationEmailLandingToken`, `validateVerifyEmailToken`, and `validatePasswordResetToken` gained `deps.prisma` parameters to support this.
 
 ## 12. What we do not build here
 

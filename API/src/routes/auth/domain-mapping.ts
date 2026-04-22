@@ -41,10 +41,13 @@ export function registerAuthDomainMappingRoute(app: FastifyInstance): void {
         throw new AppError('UNAUTHORIZED', 401, 'MISSING_CONFIG');
       }
 
-      const result = await lookupRegistrationDomainMapping({
-        config,
-        emailDomain: email_domain,
-      });
+      const result = await lookupRegistrationDomainMapping(
+        {
+          config,
+          emailDomain: email_domain,
+        },
+        { prisma: request.adminDb },
+      );
 
       reply.status(200).send(result);
     },

@@ -14,7 +14,7 @@ export function registerAuthEmailTeamInviteOpenRoute(app: FastifyInstance): void
     const { inviteId } = ParamsSchema.parse(request.params);
 
     try {
-      await trackTeamInviteOpen({ inviteId });
+      await trackTeamInviteOpen({ inviteId }, { prisma: request.adminDb });
     } catch (err) {
       request.log.error({ err }, 'team invite open tracking failed');
     }

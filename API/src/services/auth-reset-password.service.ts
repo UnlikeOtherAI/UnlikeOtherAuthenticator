@@ -130,11 +130,14 @@ export async function requestPasswordReset(
   await (deps?.sendPasswordResetEmail ?? sendPasswordResetEmail)({ to: email, link, theme });
 }
 
-export async function validatePasswordResetToken(params: {
-  token: string;
-  configUrl: string;
-  config: ClientConfig;
-}): Promise<void> {
+export async function validatePasswordResetToken(
+  params: {
+    token: string;
+    configUrl: string;
+    config: ClientConfig;
+  },
+  deps?: { prisma?: ResetPasswordPrisma },
+): Promise<void> {
   void params.config; // Included for future-proofing; configVerifier already validates domain integrity.
   const env = getEnv();
   if (!env.DATABASE_URL) {
@@ -144,7 +147,7 @@ export async function validatePasswordResetToken(params: {
   const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
   const tokenHash = hashEmailToken(params.token, SHARED_SECRET);
 
-  const prisma = getPrisma();
+  const prisma = deps?.prisma ?? (getPrisma() as unknown as ResetPasswordPrisma);
   const row = await prisma.verificationToken.findUnique({
     where: { tokenHash },
     select: {

@@ -45,15 +45,18 @@ export function registerAuthRegisterRoute(app: FastifyInstance): void {
 
       if (email && request.config && request.configUrl) {
         try {
-          await requestRegistrationInstructions({
-            email,
-            config: request.config,
-            configUrl: request.configUrl,
-            redirectUrl: redirect_url,
-            requestAccess: parseRequestAccessFlag(request_access),
-            codeChallenge: pkce.codeChallenge,
-            codeChallengeMethod: pkce.codeChallengeMethod,
-          });
+          await requestRegistrationInstructions(
+            {
+              email,
+              config: request.config,
+              configUrl: request.configUrl,
+              redirectUrl: redirect_url,
+              requestAccess: parseRequestAccessFlag(request_access),
+              codeChallenge: pkce.codeChallenge,
+              codeChallengeMethod: pkce.codeChallengeMethod,
+            },
+            { prisma: request.adminDb },
+          );
         } catch (err) {
           // Never leak internal failures; always return the generic success response.
           request.log.error({ err }, 'registration instructions failed');

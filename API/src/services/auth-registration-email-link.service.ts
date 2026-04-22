@@ -36,11 +36,14 @@ function assertRegistrationLandingTokenValid(params: {
   }
 }
 
-export async function validateRegistrationEmailLandingToken(params: {
-  token: string;
-  configUrl: string;
-  config: ClientConfig;
-}): Promise<'LOGIN_LINK' | 'VERIFY_EMAIL_SET_PASSWORD' | 'VERIFY_EMAIL'> {
+export async function validateRegistrationEmailLandingToken(
+  params: {
+    token: string;
+    configUrl: string;
+    config: ClientConfig;
+  },
+  deps?: { prisma?: RegistrationEmailLinkPrisma },
+): Promise<'LOGIN_LINK' | 'VERIFY_EMAIL_SET_PASSWORD' | 'VERIFY_EMAIL'> {
   void params.config; // Included for future-proofing; configVerifier already validates domain integrity.
   const env = getEnv();
 
@@ -51,7 +54,7 @@ export async function validateRegistrationEmailLandingToken(params: {
   const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
   const tokenHash = hashEmailToken(params.token, SHARED_SECRET);
 
-  const prisma = getPrisma() as unknown as RegistrationEmailLinkPrisma;
+  const prisma = deps?.prisma ?? (getPrisma() as unknown as RegistrationEmailLinkPrisma);
   const row = await prisma.verificationToken.findUnique({
     where: { tokenHash },
     select: {
