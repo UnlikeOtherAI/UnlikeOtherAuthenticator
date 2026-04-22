@@ -321,10 +321,11 @@ Capability-token endpoints; see §4.
 ### Progress
 
 - [x] `/auth/revoke` migrated to T.
-- [ ] Remaining `/auth/*` pre-auth routes switched to `request.adminDb` (currently still use default `getPrisma()`; no-op until M1 rebalances `DATABASE_URL`, but makes RLS-safety explicit).
-- [ ] `/org/*` migrated to T.
-- [ ] `/twofactor/verify` migrated to T.
-- [ ] Post-auth write paths inside `/auth/login`, `/auth/callback`, `/auth/token-exchange` wrapped in T.
+- [x] `/org/*` migrated to T (all routes: me, organisations+members+transfer, teams+members, team-invitations, groups, access-requests).
+- [ ] Remaining `/auth/*` pre-auth routes switched to `request.adminDb` (currently still use default `getPrisma()`; no-op until M1 rebalances `DATABASE_URL`, but makes RLS-safety explicit). Tracked for follow-up.
+- [ ] `/twofactor/verify` migrated to T. **Blocked**: `finalizeAuthenticatedUser` → `issueAuthorizationCode` → `handlePostAuthenticationAccessRequest` do not accept `deps.prisma`. Requires threading `OrgServiceDeps`-style injection through `access-request-flow.service.ts`, `token.service.ts`, and `access-request.service.ts` before the route can be wrapped. Until then stays on admin connection; `authorization_codes`/`login_logs` rely on app-layer checks. Tracked for follow-up.
+- [ ] Post-auth write paths inside `/auth/login`, `/auth/callback`, `/auth/token-exchange` wrapped in T. Same blocker as `/twofactor/verify` (shared `finalizeAuthenticatedUser` path). Tracked for follow-up.
+- [ ] `/internal/org/*` migrated to T. Currently stays on admin (b2b auth boundary = domain-hash; no user context). Safe under the threat model, but migrating with a domain-only tenant context (no `app.user_id`) would still add defense-in-depth for forgotten `WHERE domain = ?`. Tracked for follow-up.
 
 ## 12. What we do not build here
 
@@ -369,3 +370,4 @@ Exhaustive map of every DB access path the reviews surfaced, grouped by required
 - **v0.1 — 2026-04-22** — initial draft.
 - **v0.2 — 2026-04-22** — revised after parallel Claude and Codex reviews. Major changes: `uoa_admin` broadened to a bootstrap role (not just admin routes); all auto-onboarding tables moved to admin-only (no permissive policies); `organisations` predicate gained a domain+membership bootstrap branch; `handshake_error_logs`, `client_domains`, `client_domain_secrets` reclassified as admin-only; single migration split into M1 (plumbing) + M2 (flip); `RLS_ENFORCED` feature flag dropped; per-query `$allOperations` wrapper replaced by `runWithTenantContext` around the request handler body; appendix A added.
 - **v0.3 — 2026-04-22** — M1 and M2 migration SQL authored (`API/prisma/migrations/20260423000000_rls_roles_and_grants`, `..._rls_enable_policies`). `runWithTenantContext`, `setTenantContextFromRequest`, and `request.adminDb`/`request.withTenantTx` decorators landed (`API/src/db/tenant-context.ts`, `API/src/plugins/tenant-context.plugin.ts`). Admin-side services switched to `getAdminPrisma()`. Added sharp-edges §10.13 and §10.14 clarifying that most `/auth/*` is pre-auth bootstrap and should stay on `request.adminDb`; added §16 route-migration status table. `/auth/revoke` migrated as the first reference route.
+- **v0.4 — 2026-04-22** — All `/org/*` routes migrated to `request.withTenantTx`: `/org/me`, `/org/organisations` (list/create/get/update/delete), `/org/organisations/:orgId/members/*`, `/org/organisations/:orgId/transfer-ownership`, `/org/organisations/:orgId/teams/*`, `/org/organisations/:orgId/teams/:teamId/members/*`, `/org/organisations/:orgId/teams/:teamId/invitations*`, `/org/organisations/:orgId/groups*`, `/org/organisations/:orgId/teams/:teamId/access-requests*`. Progress tracker in §16 updated; `/twofactor/verify`, post-auth `/auth/*` split, and `/internal/org/*` explicitly deferred with reasons (shared `finalizeAuthenticatedUser` chain lacks `deps.prisma` injection — needs a separate refactor).
