@@ -4,7 +4,7 @@ export type NavItem = {
   label: string;
   path: string;
   icon: IconName;
-  badgeKey?: 'domains' | 'orgs' | 'users' | 'teams';
+  badgeKey?: 'domains' | 'orgs' | 'users' | 'teams' | 'integrationRequests';
 };
 
 export type NavSection = {
@@ -19,7 +19,10 @@ export const navSections: NavSection[] = [
   },
   {
     label: 'Configuration',
-    items: [{ label: 'Secrets', path: '/secrets', icon: 'globe', badgeKey: 'domains' }],
+    items: [
+      { label: 'New Integrations', path: '/integrations', icon: 'bell', badgeKey: 'integrationRequests' },
+      { label: 'Secrets', path: '/secrets', icon: 'globe', badgeKey: 'domains' },
+    ],
   },
   {
     label: 'Directory',
@@ -48,6 +51,10 @@ export const navSections: NavSection[] = [
 ];
 
 export function navLabelForPath(pathname: string) {
+  if (pathname.startsWith('/integrations/')) {
+    return 'Integration Request';
+  }
+
   if (pathname.startsWith('/organisations/') && pathname.includes('/teams/')) {
     return 'Team';
   }

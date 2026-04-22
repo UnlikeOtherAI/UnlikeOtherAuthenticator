@@ -1,7 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { zodResolver } from '@hookform/resolvers/zod';
+import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useForm } from 'react-hook-form';
 
 import { ActionButton, ActionDivider } from '../components/ui/ActionButton';
 import { Badge } from '../components/ui/Badge';
@@ -14,14 +12,12 @@ import { StatusBadge } from '../components/ui/Status';
 import { DataTable, PaginationFooter, Td, usePagination } from '../components/ui/Table';
 import { useDomainsQuery } from '../features/admin/admin-queries';
 import { useAdminUi } from '../features/shell/admin-ui';
-import { DomainFormSchema, type DomainFormValues } from '../schemas/admin';
 import { adminService, type DomainSecretResponse } from '../services/admin-service';
 
 export function SecretsPage() {
   const { data = [], isLoading } = useDomainsQuery();
   const { confirm, openDialog } = useAdminUi();
   const queryClient = useQueryClient();
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [revealedSecret, setRevealedSecret] = useState<DomainSecretResponse | null>(null);
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('all');
@@ -47,14 +43,12 @@ export function SecretsPage() {
     },
   });
 
-  function handleCreated(result: DomainSecretResponse) {
-    setRevealedSecret(result);
-    void queryClient.invalidateQueries({ queryKey: ['admin'] });
-  }
-
   return (
     <>
-      <PageHeader title="Secrets" description="Registered client domains and access secrets" actions={<Button icon="plus" variant="primary" onClick={() => setIsModalOpen(true)}>Add Domain</Button>} />
+      <PageHeader
+        title="Secrets"
+        description="Registered client domains. New domains are onboarded via the New Integrations queue."
+      />
       <Card>
         <div className="flex flex-wrap gap-2 border-b border-gray-100 px-4 py-3">
           <TextField className="w-60" placeholder="Filter by domain..." type="search" value={query} onChange={(event) => setQuery(event.target.value)} />
@@ -132,62 +126,8 @@ export function SecretsPage() {
           </>
         )}
       </Card>
-      <AddDomainModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onCreated={handleCreated} />
       <SecretModal result={revealedSecret} onClose={() => setRevealedSecret(null)} />
     </>
-  );
-}
-
-function AddDomainModal({ isOpen, onClose, onCreated }: { isOpen: boolean; onClose: () => void; onCreated: (result: DomainSecretResponse) => void }) {
-  const secret = useMemo(generateSecret, [isOpen]);
-  const form = useForm<DomainFormValues>({
-    resolver: zodResolver(DomainFormSchema),
-    defaultValues: { domain: '', label: '', secret },
-  });
-  const createDomain = useMutation({ mutationFn: adminService.createDomain });
-
-  useEffect(() => {
-    if (isOpen) form.reset({ domain: '', label: '', secret });
-  }, [form, isOpen, secret]);
-
-  async function submit(values: DomainFormValues) {
-    const result = await createDomain.mutateAsync({
-      clientSecret: values.secret,
-      domain: values.domain,
-      label: values.label,
-    });
-    onCreated(result);
-    onClose();
-  }
-
-  return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title="Add Domain"
-      footer={
-        <>
-          <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" onClick={form.handleSubmit(submit)}>Add Domain</Button>
-        </>
-      }
-    >
-      <form className="space-y-4" onSubmit={form.handleSubmit(submit)}>
-        <FieldShell label="Domain name" hint="Must match the domain claim in config JWTs." error={form.formState.errors.domain?.message}>
-          <TextField {...form.register('domain')} placeholder="app.example.com" />
-        </FieldShell>
-        <FieldShell label="Friendly name" error={form.formState.errors.label?.message}>
-          <TextField {...form.register('label')} placeholder="My App" />
-        </FieldShell>
-        <FieldShell label="Client secret" hint="The client backend uses this to derive its domain bearer token." error={form.formState.errors.secret?.message}>
-          <div className="flex gap-2">
-            <TextField {...form.register('secret')} className="font-mono" />
-            <Button onClick={() => form.setValue('secret', generateSecret())}>Generate</Button>
-          </div>
-        </FieldShell>
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">Store this secret securely. It will not be shown again after saving.</div>
-      </form>
-    </Modal>
   );
 }
 
@@ -212,11 +152,4 @@ function SecretModal({ onClose, result }: { onClose: () => void; result: DomainS
       </div>
     </Modal>
   );
-}
-
-function generateSecret() {
-  const bytes = new Uint8Array(36);
-  crypto.getRandomValues(bytes);
-  const raw = Array.from(bytes, (byte) => String.fromCharCode(byte)).join('');
-  return btoa(raw).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
 }
