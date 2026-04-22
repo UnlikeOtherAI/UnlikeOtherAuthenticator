@@ -104,14 +104,25 @@ function buildClaimUrl(rawToken: string): string {
   return `${resolveClaimBaseUrl()}/integrations/claim/${encodeURIComponent(rawToken)}`;
 }
 
-function dispatchClaimEmail(params: { to: string; link: string; domain: string }): void {
-  // Fire-and-forget: email failures must never roll back the accept/resend transaction.
-  void sendIntegrationApprovedEmail(params).catch((err) => {
+async function dispatchClaimEmail(params: {
+  to: string;
+  link: string;
+  domain: string;
+}): Promise<boolean> {
+  // The accept/resend transaction has already committed by the time we get here,
+  // so a throw would leave the admin thinking nothing happened even though a
+  // claim token exists. Await the send so we can surface the outcome in the
+  // response and the admin can decide to re-trigger /resend-claim.
+  try {
+    await sendIntegrationApprovedEmail(params);
+    return true;
+  } catch (err) {
     getAppLogger().error(
       { err, domain: params.domain },
       'failed to dispatch integration approval email',
     );
-  });
+    return false;
+  }
 }
 
 export function registerInternalAdminIntegrationRequestRoutes(app: FastifyInstance): void {
@@ -153,13 +164,13 @@ export function registerInternalAdminIntegrationRequestRoutes(app: FastifyInstan
         clientSecret: body?.clientSecret,
       });
 
-      dispatchClaimEmail({
+      const emailDispatched = await dispatchClaimEmail({
         to: result.integration.contactEmail,
         link: buildClaimUrl(result.claim.rawToken),
         domain: result.integration.domain,
       });
 
-      return toAdminDetail(result.integration);
+      return { ...toAdminDetail(result.integration), email_dispatched: emailDispatched };
     },
   );
 
@@ -172,13 +183,13 @@ export function registerInternalAdminIntegrationRequestRoutes(app: FastifyInstan
 
       const result = await resendIntegrationClaim({ id, actorEmail });
 
-      dispatchClaimEmail({
+      const emailDispatched = await dispatchClaimEmail({
         to: result.integration.contactEmail,
         link: buildClaimUrl(result.claim.rawToken),
         domain: result.integration.domain,
       });
 
-      return toAdminDetail(result.integration);
+      return { ...toAdminDetail(result.integration), email_dispatched: emailDispatched };
     },
   );
 

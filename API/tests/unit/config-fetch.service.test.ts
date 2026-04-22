@@ -116,7 +116,7 @@ describe('fetchConfigJwtFromUrl', () => {
       .mockResolvedValueOnce(
         new Response('', {
           status: 302,
-          headers: { location: 'https://next.example.com/config' },
+          headers: { location: 'https://client.example.com/config/final' },
         }),
       )
       .mockResolvedValueOnce(new Response('config.jwt.value', { status: 200 }));
@@ -135,6 +135,20 @@ describe('fetchConfigJwtFromUrl', () => {
       dispatcher: expect.any(Object),
       redirect: 'manual',
     });
+  });
+
+  it('rejects a cross-host redirect even when the target resolves to a public address', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response('', {
+        status: 302,
+        headers: { location: 'https://attacker.example.com/config' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      fetchConfigJwtFromUrl('https://client.example.com/config'),
+    ).rejects.toMatchObject({ statusCode: 400 });
   });
 
   it('tries the next public DNS address when an earlier address cannot be reached', async () => {

@@ -1,5 +1,6 @@
 import { fetch as undiciFetch } from 'undici';
 
+import { normalizeDomain } from '../utils/domain.js';
 import { AppError } from '../utils/errors.js';
 import {
   closeSsrfAgent,
@@ -53,13 +54,18 @@ async function readBodyWithLimit(res: Response): Promise<Buffer> {
  */
 export async function fetchPartnerJwks(
   jwksUrl: string,
-  opts?: { timeoutMs?: number },
+  opts?: { timeoutMs?: number; expectedHost?: string },
 ): Promise<PublicRsaJwks> {
   let url: URL;
   try {
     url = parseHttpsUrl(jwksUrl);
   } catch {
     throw new AppError('BAD_REQUEST', 400, 'INTEGRATION_JWKS_URL_INVALID');
+  }
+
+  const expectedHost = opts?.expectedHost ? normalizeDomain(opts.expectedHost) : null;
+  if (expectedHost && normalizeDomain(url.hostname) !== expectedHost) {
+    throw new AppError('BAD_REQUEST', 400, 'INTEGRATION_JWKS_HOST_MISMATCH');
   }
 
   const controller = new AbortController();
@@ -95,11 +101,21 @@ export async function fetchPartnerJwks(
             if (!location || redirectCount === MAX_JWKS_FETCH_REDIRECTS) {
               throw new AppError('BAD_REQUEST', 400, 'INTEGRATION_JWKS_TOO_MANY_REDIRECTS');
             }
+            let nextUrl: URL;
             try {
-              url = parseHttpsUrl(new URL(location, url).toString());
+              nextUrl = parseHttpsUrl(new URL(location, url).toString());
             } catch {
               throw new AppError('BAD_REQUEST', 400, 'INTEGRATION_JWKS_REDIRECT_REJECTED');
             }
+            // Defence against a partner server with an open-redirect endpoint or
+            // attacker-controlled Location header: the fetched JWKS must stay on
+            // the host that was bound to the config JWT's `domain` claim. Otherwise
+            // an attacker with `evil.com`-controlled keys could substitute them
+            // after the caller's host-match check and before signature verification.
+            if (expectedHost && normalizeDomain(nextUrl.hostname) !== expectedHost) {
+              throw new AppError('BAD_REQUEST', 400, 'INTEGRATION_JWKS_HOST_MISMATCH');
+            }
+            url = nextUrl;
             continue redirectLoop;
           }
 

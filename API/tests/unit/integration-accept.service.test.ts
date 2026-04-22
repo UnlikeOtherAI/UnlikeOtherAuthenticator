@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -210,6 +211,24 @@ describe('acceptIntegrationRequest', () => {
       integration: baseRow(),
       conflict: { id: 'cd-existing' },
     });
+
+    await expect(
+      acceptIntegrationRequest(
+        { id: 'req-1', reviewerEmail: 'admin@example.com' },
+        { prisma: prisma as never, sharedSecret },
+      ),
+    ).rejects.toMatchObject({ statusCode: 400, message: 'DOMAIN_ALREADY_EXISTS' });
+  });
+
+  it('translates a concurrent P2002 race on clientDomain.create into DOMAIN_ALREADY_EXISTS', async () => {
+    const { prisma, domainCreate } = makePrisma({ integration: baseRow() });
+    domainCreate.mockRejectedValueOnce(
+      new Prisma.PrismaClientKnownRequestError('unique constraint', {
+        code: 'P2002',
+        clientVersion: 'test',
+        meta: { target: ['domain'] },
+      }),
+    );
 
     await expect(
       acceptIntegrationRequest(

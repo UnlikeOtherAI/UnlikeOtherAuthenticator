@@ -159,7 +159,7 @@ export async function tryAutoOnboard(
     return { kind: 'declined', domain: normalizeHostname(domain), row: existingOpen };
   }
 
-  const jwks = await fetchPartnerJwks(jwksUrl);
+  const jwks = await fetchPartnerJwks(jwksUrl, { expectedHost: domain });
   const jwk = findJwkByKid(jwks, kid);
   if (!jwk) {
     throw new AppError('BAD_REQUEST', 400, 'INTEGRATION_KID_NOT_IN_JWKS');

@@ -1,5 +1,6 @@
 import { fetch as undiciFetch } from 'undici';
 
+import { normalizeDomain } from '../utils/domain.js';
 import { AppError } from '../utils/errors.js';
 import {
   closeSsrfAgent,
@@ -86,6 +87,7 @@ export async function fetchConfigJwtFromUrl(
   } catch {
     throw configFetchFailure(configUrl, 'INVALID_OR_NON_HTTPS_CONFIG_URL');
   }
+  const originalHost = normalizeDomain(url.hostname);
 
   const controller = new AbortController();
   const timeoutMs = opts?.timeoutMs ?? DEFAULT_CONFIG_FETCH_TIMEOUT_MS;
@@ -127,14 +129,26 @@ export async function fetchConfigJwtFromUrl(
               });
             }
 
+            let nextUrl: URL;
             try {
-              url = parseHttpsUrl(new URL(location, url).toString());
+              nextUrl = parseHttpsUrl(new URL(location, url).toString());
             } catch {
               throw configFetchFailure(configUrl, 'REDIRECT_TARGET_REJECTED', {
                 final_url: url.toString(),
                 status: res.status,
               });
             }
+            // Cross-host redirects are rejected so an open-redirect endpoint on
+            // the partner's domain can't hand the config fetch off to a server
+            // the partner does not control.
+            if (normalizeDomain(nextUrl.hostname) !== originalHost) {
+              throw configFetchFailure(configUrl, 'REDIRECT_CROSS_HOST_REJECTED', {
+                final_url: url.toString(),
+                redirect_to: nextUrl.toString(),
+                status: res.status,
+              });
+            }
+            url = nextUrl;
             continue redirectLoop;
           }
 

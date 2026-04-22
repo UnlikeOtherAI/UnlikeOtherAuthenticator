@@ -1,4 +1,4 @@
-import type { Prisma, PrismaClient } from '@prisma/client';
+import { Prisma, type PrismaClient } from '@prisma/client';
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { decryptClaimSecret } from '../utils/claim-secret-crypto.js';
@@ -105,30 +105,42 @@ export async function acceptIntegrationRequest(
     const hashPrefix = clientHash.slice(0, 12);
     const secretDigest = digestDomainClientHash(clientHash, deps?.sharedSecret);
 
-    const clientDomain = await tx.clientDomain.create({
-      data: {
-        domain,
-        label: labelFor(domain, params.label),
-        status: 'active',
-        jwks: {
-          create: {
-            kid: jwk.kid,
-            jwk: jwk as unknown as Prisma.InputJsonValue,
-            fingerprint,
-            active: true,
-            createdByEmail: params.reviewerEmail,
+    // The findUnique above is advisory only; under READ COMMITTED two concurrent
+    // accepts can both pass it and race here. Convert Prisma's P2002 on the
+    // `client_domains.domain` unique index into the same 400 the caller would
+    // have gotten had they lost the check, so the API contract stays stable.
+    let clientDomain: { id: string };
+    try {
+      clientDomain = await tx.clientDomain.create({
+        data: {
+          domain,
+          label: labelFor(domain, params.label),
+          status: 'active',
+          jwks: {
+            create: {
+              kid: jwk.kid,
+              jwk: jwk as unknown as Prisma.InputJsonValue,
+              fingerprint,
+              active: true,
+              createdByEmail: params.reviewerEmail,
+            },
+          },
+          secrets: {
+            create: {
+              active: true,
+              hashPrefix,
+              secretDigest,
+            },
           },
         },
-        secrets: {
-          create: {
-            active: true,
-            hashPrefix,
-            secretDigest,
-          },
-        },
-      },
-      select: { id: true },
-    });
+        select: { id: true },
+      });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new AppError('BAD_REQUEST', 400, 'DOMAIN_ALREADY_EXISTS');
+      }
+      throw err;
+    }
 
     const now = params.now ?? new Date();
     const claim = await createClaimToken(

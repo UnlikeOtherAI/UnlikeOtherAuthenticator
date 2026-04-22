@@ -92,4 +92,32 @@ describe('fetchPartnerJwks', () => {
     ).rejects.toMatchObject({ statusCode: 400 });
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  it('rejects a cross-host redirect when bound to an expectedHost', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response('', {
+        status: 302,
+        headers: { location: 'https://attacker.example.com/.well-known/jwks.json' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      fetchPartnerJwks('https://client.example.com/.well-known/jwks.json', {
+        expectedHost: 'client.example.com',
+      }),
+    ).rejects.toMatchObject({ statusCode: 400, message: 'INTEGRATION_JWKS_HOST_MISMATCH' });
+  });
+
+  it('rejects an initial URL that does not match expectedHost before fetching', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      fetchPartnerJwks('https://attacker.example.com/.well-known/jwks.json', {
+        expectedHost: 'client.example.com',
+      }),
+    ).rejects.toMatchObject({ statusCode: 400, message: 'INTEGRATION_JWKS_HOST_MISMATCH' });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });
