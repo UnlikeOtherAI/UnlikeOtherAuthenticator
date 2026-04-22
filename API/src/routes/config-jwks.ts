@@ -21,11 +21,7 @@ const configJwksResponseSchema = {
 
 function readLegacyEnvJwks(): PublicRsaJwk[] {
   if (!getEnv().CONFIG_JWKS_JSON) return [];
-  try {
-    return readPublicConfigJwks().keys as unknown as PublicRsaJwk[];
-  } catch {
-    return [];
-  }
+  return readPublicConfigJwks().keys as unknown as PublicRsaJwk[];
 }
 
 async function readDbJwks(): Promise<PublicRsaJwk[]> {
@@ -50,7 +46,7 @@ export function registerConfigJwksRoute(app: FastifyInstance): void {
         keys.push(key);
       }
 
-      reply.header('Cache-Control', 'public, max-age=60');
+      reply.header('Cache-Control', 'public, max-age=300');
       reply.type('application/json; charset=utf-8').send({ keys });
     },
   );
