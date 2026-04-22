@@ -1,3 +1,5 @@
+import type { PrismaClient } from '@prisma/client';
+
 import type { ClientConfig } from './config.service.js';
 
 import { EMAIL_TOKEN_TTL_MS } from '../config/constants.js';
@@ -21,17 +23,7 @@ import { generateEmailToken, hashEmailToken } from '../utils/verification-token.
  * Task 4.4 will implement "email determines next step" (existing -> login link,
  * new -> verification + set password) without changing the public response.
  */
-type RegisterPrisma = {
-  user: {
-    findUnique: (args: {
-      where: { userKey: string };
-      select: { id: true };
-    }) => Promise<{ id: string } | null>;
-  };
-  verificationToken: {
-    create: (args: { data: Record<string, unknown> }) => Promise<unknown>;
-  };
-};
+type RegisterPrisma = PrismaClient;
 
 type RegisterDeps = {
   env?: ReturnType<typeof getEnv>;

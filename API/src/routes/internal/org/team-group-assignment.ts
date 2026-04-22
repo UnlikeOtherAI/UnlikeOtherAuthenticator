@@ -1,10 +1,12 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
+import { asPrismaClient } from '../../../db/tenant-context.js';
 import { configVerifier } from '../../../middleware/config-verifier.js';
 import { requireGroupsEnabled } from '../../../middleware/groups-enabled.js';
 import requireDomainHashAuthForDomainQuery from '../../../middleware/domain-hash-auth.js';
 import { requireOrgFeatures } from '../../../middleware/org-features.js';
+import { setTenantContextFromRequest } from '../../../plugins/tenant-context.plugin.js';
 import { assignTeamToGroup } from '../../../services/group.service.js';
 import { AppError } from '../../../utils/errors.js';
 import {
@@ -77,13 +79,19 @@ export function registerInternalTeamGroupAssignmentRoutes(app: FastifyInstance):
       const teamId = getTeamIdFromParams(request.params);
       const body = TeamGroupBodySchema.parse(request.body ?? {});
 
-      const team = await assignTeamToGroup({
-        orgId,
-        teamId,
-        domain,
-        groupId: body.groupId,
-        config,
-      });
+      setTenantContextFromRequest(request, { orgId });
+      const team = await request.withTenantTx((tx) =>
+        assignTeamToGroup(
+          {
+            orgId,
+            teamId,
+            domain,
+            groupId: body.groupId,
+            config,
+          },
+          { prisma: asPrismaClient(tx) },
+        ),
+      );
 
       reply.status(200).send(team);
     },

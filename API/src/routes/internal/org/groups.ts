@@ -1,10 +1,12 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
+import { asPrismaClient } from '../../../db/tenant-context.js';
 import { configVerifier } from '../../../middleware/config-verifier.js';
 import { requireGroupsEnabled } from '../../../middleware/groups-enabled.js';
 import requireDomainHashAuthForDomainQuery from '../../../middleware/domain-hash-auth.js';
 import { requireOrgFeatures } from '../../../middleware/org-features.js';
+import { setTenantContextFromRequest } from '../../../plugins/tenant-context.plugin.js';
 import { createGroup, updateGroup, deleteGroup } from '../../../services/group.service.js';
 import { AppError } from '../../../utils/errors.js';
 import {
@@ -82,13 +84,19 @@ export function registerInternalGroupRoutes(app: FastifyInstance): void {
       const orgId = getOrgIdFromParams(request.params);
       const body = GroupBodySchema.parse(request.body ?? {});
 
-      const group = await createGroup({
-        orgId,
-        domain,
-        name: body.name,
-        description: body.description ?? undefined,
-        config,
-      });
+      setTenantContextFromRequest(request, { orgId });
+      const group = await request.withTenantTx((tx) =>
+        createGroup(
+          {
+            orgId,
+            domain,
+            name: body.name,
+            description: body.description ?? undefined,
+            config,
+          },
+          { prisma: asPrismaClient(tx) },
+        ),
+      );
 
       reply.status(200).send(group);
     },
@@ -117,14 +125,20 @@ export function registerInternalGroupRoutes(app: FastifyInstance): void {
         throw new AppError('BAD_REQUEST', 400);
       }
 
-      const group = await updateGroup({
-        orgId,
-        groupId,
-        domain,
-        config,
-        ...(body.name !== undefined ? { name: body.name } : {}),
-        ...(body.description !== undefined ? { description: body.description } : {}),
-      });
+      setTenantContextFromRequest(request, { orgId });
+      const group = await request.withTenantTx((tx) =>
+        updateGroup(
+          {
+            orgId,
+            groupId,
+            domain,
+            config,
+            ...(body.name !== undefined ? { name: body.name } : {}),
+            ...(body.description !== undefined ? { description: body.description } : {}),
+          },
+          { prisma: asPrismaClient(tx) },
+        ),
+      );
 
       reply.status(200).send(group);
     },
@@ -149,12 +163,18 @@ export function registerInternalGroupRoutes(app: FastifyInstance): void {
       const orgId = getOrgIdFromParams(request.params);
       const groupId = getGroupIdFromParams(request.params);
 
-      await deleteGroup({
-        orgId,
-        groupId,
-        domain,
-        config,
-      });
+      setTenantContextFromRequest(request, { orgId });
+      await request.withTenantTx((tx) =>
+        deleteGroup(
+          {
+            orgId,
+            groupId,
+            domain,
+            config,
+          },
+          { prisma: asPrismaClient(tx) },
+        ),
+      );
 
       reply.status(200).send({ ok: true });
     },

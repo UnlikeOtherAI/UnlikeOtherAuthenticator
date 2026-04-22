@@ -1,7 +1,13 @@
+import type { PrismaClient } from '@prisma/client';
+
 import type { ClientConfig } from './config.service.js';
 
 import { buildRedirectToUrl, issueAuthorizationCode } from './token.service.js';
 import { handlePostAuthenticationAccessRequest } from './access-request.service.js';
+
+type FinalizeDeps = {
+  prisma?: PrismaClient;
+};
 
 export function parseRequestAccessFlag(value: unknown): boolean {
   if (typeof value !== 'string') return false;
@@ -23,24 +29,30 @@ export function buildAccessRequestedUrl(params: {
   return `${url.pathname}${url.search}`;
 }
 
-export async function finalizeAuthenticatedUser(params: {
-  userId: string;
-  config: ClientConfig;
-  configUrl: string;
-  redirectUrl: string;
-  rememberMe: boolean;
-  requestAccess: boolean;
-  codeChallenge?: string;
-  codeChallengeMethod?: 'S256';
-}): Promise<
+export async function finalizeAuthenticatedUser(
+  params: {
+    userId: string;
+    config: ClientConfig;
+    configUrl: string;
+    redirectUrl: string;
+    rememberMe: boolean;
+    requestAccess: boolean;
+    codeChallenge?: string;
+    codeChallengeMethod?: 'S256';
+  },
+  deps?: FinalizeDeps,
+): Promise<
   | { status: 'granted'; redirectTo: string; code: string }
   | { status: 'requested'; redirectTo: string }
 > {
   if (params.requestAccess) {
-    const decision = await handlePostAuthenticationAccessRequest({
-      userId: params.userId,
-      config: params.config,
-    });
+    const decision = await handlePostAuthenticationAccessRequest(
+      {
+        userId: params.userId,
+        config: params.config,
+      },
+      deps?.prisma ? { prisma: deps.prisma } : undefined,
+    );
 
     if (decision.status === 'requested') {
       return {
@@ -53,15 +65,18 @@ export async function finalizeAuthenticatedUser(params: {
     }
   }
 
-  const { code } = await issueAuthorizationCode({
-    userId: params.userId,
-    domain: params.config.domain,
-    configUrl: params.configUrl,
-    redirectUrl: params.redirectUrl,
-    codeChallenge: params.codeChallenge,
-    codeChallengeMethod: params.codeChallengeMethod,
-    rememberMe: params.rememberMe,
-  });
+  const { code } = await issueAuthorizationCode(
+    {
+      userId: params.userId,
+      domain: params.config.domain,
+      configUrl: params.configUrl,
+      redirectUrl: params.redirectUrl,
+      codeChallenge: params.codeChallenge,
+      codeChallengeMethod: params.codeChallengeMethod,
+      rememberMe: params.rememberMe,
+    },
+    deps?.prisma ? { prisma: deps.prisma } : undefined,
+  );
 
   return {
     status: 'granted',

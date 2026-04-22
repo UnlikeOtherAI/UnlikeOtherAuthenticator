@@ -59,6 +59,9 @@ importers:
       fastify:
         specifier: ^5.2.1
         version: 5.8.5
+      fastify-plugin:
+        specifier: ^5.1.0
+        version: 5.1.0
       jose:
         specifier: ^5.9.6
         version: 5.10.0

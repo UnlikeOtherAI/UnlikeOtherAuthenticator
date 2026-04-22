@@ -1,10 +1,12 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
+import { asPrismaClient } from '../../../db/tenant-context.js';
 import { configVerifier } from '../../../middleware/config-verifier.js';
 import { requireGroupsEnabled } from '../../../middleware/groups-enabled.js';
 import requireDomainHashAuthForDomainQuery from '../../../middleware/domain-hash-auth.js';
 import { requireOrgFeatures } from '../../../middleware/org-features.js';
+import { setTenantContextFromRequest } from '../../../plugins/tenant-context.plugin.js';
 import {
   addGroupMember,
   removeGroupMember,
@@ -93,14 +95,20 @@ export function registerInternalGroupMemberRoutes(app: FastifyInstance): void {
       const groupId = getGroupIdFromParams(request.params);
       const body = AddMemberBodySchema.parse(request.body ?? {});
 
-      const member = await addGroupMember({
-        orgId,
-        groupId,
-        domain,
-        userId: body.userId,
-        isAdmin: body.isAdmin,
-        config,
-      });
+      setTenantContextFromRequest(request, { orgId });
+      const member = await request.withTenantTx((tx) =>
+        addGroupMember(
+          {
+            orgId,
+            groupId,
+            domain,
+            userId: body.userId,
+            isAdmin: body.isAdmin,
+            config,
+          },
+          { prisma: asPrismaClient(tx) },
+        ),
+      );
 
       reply.status(200).send(member);
     },
@@ -126,13 +134,19 @@ export function registerInternalGroupMemberRoutes(app: FastifyInstance): void {
       const groupId = getGroupIdFromParams(request.params);
       const userId = getMemberUserIdFromParams(request.params);
 
-      await removeGroupMember({
-        orgId,
-        groupId,
-        domain,
-        userId,
-        config,
-      });
+      setTenantContextFromRequest(request, { orgId });
+      await request.withTenantTx((tx) =>
+        removeGroupMember(
+          {
+            orgId,
+            groupId,
+            domain,
+            userId,
+            config,
+          },
+          { prisma: asPrismaClient(tx) },
+        ),
+      );
 
       reply.status(200).send({ ok: true });
     },
@@ -159,14 +173,20 @@ export function registerInternalGroupMemberRoutes(app: FastifyInstance): void {
       const userId = getMemberUserIdFromParams(request.params);
       const body = AdminFlagBodySchema.parse(request.body ?? {});
 
-      const member = await updateGroupMemberAdmin({
-        orgId,
-        groupId,
-        domain,
-        userId,
-        isAdmin: body.isAdmin,
-        config,
-      });
+      setTenantContextFromRequest(request, { orgId });
+      const member = await request.withTenantTx((tx) =>
+        updateGroupMemberAdmin(
+          {
+            orgId,
+            groupId,
+            domain,
+            userId,
+            isAdmin: body.isAdmin,
+            config,
+          },
+          { prisma: asPrismaClient(tx) },
+        ),
+      );
 
       reply.status(200).send(member);
     },

@@ -1,5 +1,5 @@
 import type { FastifyRequest } from 'fastify';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const getPrismaMock = vi.hoisted(() => vi.fn());
 const getAdminPrismaMock = vi.hoisted(() => vi.fn());
@@ -54,7 +54,20 @@ function makeRequest(overrides: Partial<FastifyRequest> = {}): FastifyRequest {
 }
 
 describe('tenant-context plugin', () => {
+  const originalDatabaseUrl = process.env.DATABASE_URL;
+
+  beforeEach(() => {
+    // onRequest conditionally wires adminDb/withTenantTx on DATABASE_URL; ensure the
+    // real-DB path is taken for these expectations.
+    process.env.DATABASE_URL = 'postgres://test/test';
+  });
+
   afterEach(() => {
+    if (originalDatabaseUrl === undefined) {
+      delete process.env.DATABASE_URL;
+    } else {
+      process.env.DATABASE_URL = originalDatabaseUrl;
+    }
     getPrismaMock.mockReset();
     getAdminPrismaMock.mockReset();
     runWithContextMock.mockReset();

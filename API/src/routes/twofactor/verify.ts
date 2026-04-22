@@ -2,7 +2,9 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 import { getAuthServiceIdentifier, requireEnv } from '../../config/env.js';
+import { asPrismaClient } from '../../db/tenant-context.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
+import { setTenantContextFromRequest } from '../../plugins/tenant-context.plugin.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
 import { finalizeAuthenticatedUser } from '../../services/access-request-flow.service.js';
 import { verifyTwoFaChallenge } from '../../services/twofactor-challenge.service.js';
@@ -28,7 +30,8 @@ export function registerTwoFactorVerifyRoute(app: FastifyInstance): void {
       const { twofa_token, code } = BodySchema.parse(request.body);
 
       const config = request.config;
-      if (!config || !request.configUrl) throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
+      const configUrl = request.configUrl;
+      if (!config || !configUrl) throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
 
       // If the client didn't enable 2FA, treat this as a generic auth failure.
       if (!config['2fa_enabled']) {
@@ -44,7 +47,7 @@ export function registerTwoFactorVerifyRoute(app: FastifyInstance): void {
       });
 
       // Bind the challenge token to this config URL and domain.
-      if (challenge.configUrl !== request.configUrl) {
+      if (challenge.configUrl !== configUrl) {
         throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
       }
       if (challenge.domain !== config.domain) {
@@ -57,33 +60,47 @@ export function registerTwoFactorVerifyRoute(app: FastifyInstance): void {
         requestedRedirectUrl: challenge.redirectUrl,
       });
 
-      await verifyTwoFactorForLogin({ userId: challenge.userId, code });
+      // Post-auth: challenge token is the bridge from primary auth. Tenant context = verified
+      // config domain + userId recovered from the challenge JWT.
+      setTenantContextFromRequest(request, { orgId: null, userId: challenge.userId });
+      const finalResult = await request.withTenantTx(async (tx) => {
+        const prisma = asPrismaClient(tx);
+        await verifyTwoFactorForLogin({ userId: challenge.userId, code }, { prisma });
 
-      const finalResult = await finalizeAuthenticatedUser({
-        userId: challenge.userId,
-        config,
-        configUrl: request.configUrl,
-        redirectUrl,
-        rememberMe: challenge.rememberMe,
-        requestAccess: challenge.requestAccess,
-        codeChallenge: challenge.codeChallenge,
-        codeChallengeMethod: challenge.codeChallengeMethod,
+        const decision = await finalizeAuthenticatedUser(
+          {
+            userId: challenge.userId,
+            config,
+            configUrl,
+            redirectUrl,
+            rememberMe: challenge.rememberMe,
+            requestAccess: challenge.requestAccess,
+            codeChallenge: challenge.codeChallenge,
+            codeChallengeMethod: challenge.codeChallengeMethod,
+          },
+          { prisma },
+        );
+
+        try {
+          await recordLoginLog(
+            {
+              userId: challenge.userId,
+              domain: config.domain,
+              authMethod: challenge.authMethod,
+              ip: request.ip ?? null,
+              userAgent:
+                typeof request.headers['user-agent'] === 'string'
+                  ? request.headers['user-agent']
+                  : null,
+            },
+            { prisma },
+          );
+        } catch (err) {
+          request.log.error({ err }, 'failed to record login log');
+        }
+
+        return decision;
       });
-
-      try {
-        await recordLoginLog({
-          userId: challenge.userId,
-          domain: config.domain,
-          authMethod: challenge.authMethod,
-          ip: request.ip ?? null,
-          userAgent:
-            typeof request.headers['user-agent'] === 'string'
-              ? request.headers['user-agent']
-              : null,
-        });
-      } catch (err) {
-        request.log.error({ err }, 'failed to record login log');
-      }
 
       reply.status(200).send({
         ok: true,

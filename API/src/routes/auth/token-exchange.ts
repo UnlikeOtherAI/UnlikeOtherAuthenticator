@@ -1,8 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
+import { asPrismaClient } from '../../db/tenant-context.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
 import { requireDomainHashAuth } from '../../middleware/domain-hash-auth.js';
+import { setTenantContextFromRequest } from '../../plugins/tenant-context.plugin.js';
 import { AppError } from '../../utils/errors.js';
 import {
   exchangeAuthorizationCodeForTokens,
@@ -59,26 +61,41 @@ export function registerAuthTokenExchangeRoute(app: FastifyInstance): void {
     async (request, reply) => {
       const body = parseTokenExchangeBody(request.body);
 
-      if (!request.config || !request.configUrl) {
+      const config = request.config;
+      const configUrl = request.configUrl;
+      if (!config || !configUrl) {
         throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
       }
 
-      const tokenPair =
-        body.grant_type === 'refresh_token'
-          ? await exchangeRefreshTokenForTokens({
-              refreshToken: body.refresh_token,
-              config: request.config,
-              configUrl: request.configUrl,
-              clientId: request.domainAuthClientId,
-            })
-          : await exchangeAuthorizationCodeForTokens({
-              code: body.code,
-              config: request.config,
-              configUrl: request.configUrl,
-              redirectUrl: body.redirect_url,
-              codeVerifier: body.code_verifier,
-              clientId: request.domainAuthClientId,
-            });
+      // Token exchange runs under domain-only tenant context. The service looks up the
+      // authorization code / refresh token row inside the tx; users policy allows that
+      // lookup with app.domain alone, and downstream token writes stay scoped the same.
+      setTenantContextFromRequest(request, { orgId: null, userId: null });
+
+      const tokenPair = await request.withTenantTx(async (tx) => {
+        const prisma = asPrismaClient(tx);
+        return body.grant_type === 'refresh_token'
+          ? exchangeRefreshTokenForTokens(
+              {
+                refreshToken: body.refresh_token,
+                config,
+                configUrl,
+                clientId: request.domainAuthClientId,
+              },
+              { prisma },
+            )
+          : exchangeAuthorizationCodeForTokens(
+              {
+                code: body.code,
+                config,
+                configUrl,
+                redirectUrl: body.redirect_url,
+                codeVerifier: body.code_verifier,
+                clientId: request.domainAuthClientId,
+              },
+              { prisma },
+            );
+      });
 
       // Keep response OAuth-ish without being overly strict about fields.
       reply.header('Cache-Control', 'no-store');

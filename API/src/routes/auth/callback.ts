@@ -2,6 +2,8 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 
 import { getAuthServiceIdentifier, getEnv, requireEnv } from '../../config/env.js';
+import { asPrismaClient } from '../../db/tenant-context.js';
+import { setTenantContextFromRequest } from '../../plugins/tenant-context.plugin.js';
 import { AppError } from '../../utils/errors.js';
 import {
   assertConfigDomainMatchesConfigUrl,
@@ -112,6 +114,12 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
       assertConfigDomainMatchesConfigUrl(config.domain, configUrl);
       assertSocialProviderAllowed({ config, provider });
 
+      // configVerifier doesn't run on /auth/callback (the provider redirect is unauthenticated
+      // and config_url travels inside `state`). Mirror its contract so setTenantContextFromRequest
+      // can read the verified domain below.
+      request.config = config;
+      request.configUrl = configUrl;
+
       // Re-validate redirect URL against current config (config can change between initiation and callback).
       const redirectUrl = selectRedirectUrl({
         allowedRedirectUrls: config.redirect_urls,
@@ -192,55 +200,106 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         throw new AppError('BAD_REQUEST', 400);
       }
 
-      if (!profile.emailVerified) {
-        await requestRegistrationInstructions({
-          email: profile.email,
-          config,
-          configUrl,
-          redirectUrl,
-          requestAccess: socialState.request_access === true,
-          codeChallenge: socialState.code_challenge,
-          codeChallengeMethod: socialState.code_challenge_method,
-        });
-        redirectNoStore(reply, buildAuthFailedRedirectUrl(redirectUrl));
-        return;
-      }
+      setTenantContextFromRequest(request, { orgId: null, userId: null });
 
-      const socialLoginResult = await loginWithSocialProfile({
-        profile,
-        config,
-        requestAccess: socialState.request_access === true,
+      const outcome = await request.withTenantTx(async (tx) => {
+        const prisma = asPrismaClient(tx);
+
+        if (!profile.emailVerified) {
+          await requestRegistrationInstructions(
+            {
+              email: profile.email,
+              config,
+              configUrl,
+              redirectUrl,
+              requestAccess: socialState.request_access === true,
+              codeChallenge: socialState.code_challenge,
+              codeChallengeMethod: socialState.code_challenge_method,
+            },
+            { prisma },
+          );
+          return { kind: 'auth_failed' as const };
+        }
+
+        const socialLoginResult = await loginWithSocialProfile(
+          {
+            profile,
+            config,
+            requestAccess: socialState.request_access === true,
+          },
+          { prisma },
+        );
+
+        if (socialLoginResult.status === 'blocked') {
+          return { kind: 'auth_failed' as const };
+        }
+
+        const { userId, twoFaEnabled } = socialLoginResult;
+        const rememberMe = config.session?.remember_me_default ?? true;
+
+        if (config['2fa_enabled'] && twoFaEnabled) {
+          const twofa_token = await signTwoFaChallenge({
+            userId,
+            domain: config.domain,
+            configUrl,
+            redirectUrl,
+            authMethod: provider,
+            rememberMe,
+            requestAccess: socialState.request_access === true,
+            codeChallenge: socialState.code_challenge,
+            codeChallengeMethod: socialState.code_challenge_method,
+            sharedSecret: SHARED_SECRET,
+            audience: authServiceIdentifier,
+          });
+          return { kind: 'twofa' as const, twofa_token };
+        }
+
+        const finalResult = await finalizeAuthenticatedUser(
+          {
+            userId,
+            config,
+            configUrl,
+            redirectUrl,
+            rememberMe,
+            requestAccess: socialState.request_access === true,
+            codeChallenge: socialState.code_challenge,
+            codeChallengeMethod: socialState.code_challenge_method,
+          },
+          { prisma },
+        );
+
+        try {
+          await recordLoginLog(
+            {
+              userId,
+              email: profile.email,
+              domain: config.domain,
+              authMethod: provider,
+              ip: request.ip ?? null,
+              userAgent:
+                typeof request.headers['user-agent'] === 'string'
+                  ? request.headers['user-agent']
+                  : null,
+            },
+            { prisma },
+          );
+        } catch (err) {
+          request.log.error({ err }, 'failed to record login log');
+        }
+
+        return { kind: 'granted' as const, finalResult };
       });
 
-      if (socialLoginResult.status === 'blocked') {
+      if (outcome.kind === 'auth_failed') {
         redirectNoStore(reply, buildAuthFailedRedirectUrl(redirectUrl));
         return;
       }
 
-      const { userId, twoFaEnabled } = socialLoginResult;
-
-      // Brief 13 / Phase 8.6 + 8.7: enforce 2FA verification during login when enabled via config.
-      const rememberMe = config.session?.remember_me_default ?? true;
-
-      if (config['2fa_enabled'] && twoFaEnabled) {
-        const twofa_token = await signTwoFaChallenge({
-          userId,
-          domain: config.domain,
-          configUrl,
-          redirectUrl,
-          authMethod: provider,
-          rememberMe,
-          requestAccess: socialState.request_access === true,
-          codeChallenge: socialState.code_challenge,
-          codeChallengeMethod: socialState.code_challenge_method,
-          sharedSecret: SHARED_SECRET,
-          audience: authServiceIdentifier,
-        });
-
+      if (outcome.kind === 'twofa') {
         const u = new URL(`${baseUrl}/auth`);
         u.searchParams.set('config_url', configUrl);
         u.searchParams.set('redirect_url', redirectUrl);
-        u.searchParams.set('twofa_token', twofa_token);
+        u.searchParams.set('twofa_token', outcome.twofa_token);
         if (socialState.request_access === true) {
           u.searchParams.set('request_access', 'true');
         }
@@ -248,34 +307,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         return;
       }
 
-      const finalResult = await finalizeAuthenticatedUser({
-        userId,
-        config,
-        configUrl,
-        redirectUrl,
-        rememberMe,
-        requestAccess: socialState.request_access === true,
-        codeChallenge: socialState.code_challenge,
-        codeChallengeMethod: socialState.code_challenge_method,
-      });
-
-      try {
-        await recordLoginLog({
-          userId,
-          email: profile.email,
-          domain: config.domain,
-          authMethod: provider,
-          ip: request.ip ?? null,
-          userAgent:
-            typeof request.headers['user-agent'] === 'string'
-              ? request.headers['user-agent']
-              : null,
-        });
-      } catch (err) {
-        request.log.error({ err }, 'failed to record login log');
-      }
-
-      redirectNoStore(reply, finalResult.redirectTo);
+      redirectNoStore(reply, outcome.finalResult.redirectTo);
     },
   );
 }
