@@ -1,5 +1,6 @@
 import { authEndpoints } from './schema.auth.js';
 import { configDebugEndpoints } from './schema.config-debug.js';
+import { integrationsEndpoints } from './schema.integrations.js';
 import { internalAdminEndpoints } from './schema.internal-admin.js';
 
 export type EndpointSchema = {
@@ -300,5 +301,6 @@ export const endpoints: EndpointSchema[] = [
   ...authEndpoints,
   ...domainEndpoints,
   ...orgEndpoints,
+  ...integrationsEndpoints,
   ...internalAdminEndpoints,
 ];

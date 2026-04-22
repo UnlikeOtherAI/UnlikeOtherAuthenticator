@@ -154,6 +154,36 @@ describe('GET /api', () => {
         path: '/internal/admin/handshake-errors',
       }),
     );
+    expect(body.endpoints).toContainEqual(
+      expect.objectContaining({
+        method: 'GET',
+        path: '/integrations/claim/:token',
+      }),
+    );
+    expect(body.endpoints).toContainEqual(
+      expect.objectContaining({
+        method: 'POST',
+        path: '/integrations/claim/:token/confirm',
+      }),
+    );
+    expect(body.endpoints).toContainEqual(
+      expect.objectContaining({
+        method: 'GET',
+        path: '/internal/admin/integration-requests',
+      }),
+    );
+    expect(body.endpoints).toContainEqual(
+      expect.objectContaining({
+        method: 'POST',
+        path: '/internal/admin/integration-requests/:id/accept',
+      }),
+    );
+    expect(body.endpoints).toContainEqual(
+      expect.objectContaining({
+        method: 'GET',
+        path: '/internal/admin/domains/:domain/jwks',
+      }),
+    );
   });
 
   it('returns a valid semver-like version string from package.json', async () => {
@@ -239,5 +269,9 @@ describe('GET /llm', () => {
     expect(res.body).toContain('/.well-known/jwks.json');
     expect(res.body).toContain('/internal/admin/token');
     expect(res.body).toContain('allow_registration');
+    expect(res.body).toContain('Auto-onboard with one');
+    expect(res.body).toContain('jwks_url');
+    expect(res.body).toContain('contact_email');
+    expect(res.body).toContain('INTEGRATION_JWKS_HOST_MISMATCH');
   });
 });

@@ -31,9 +31,9 @@ You need BOTH to ship a working integration. Phase 0 + Phase 1 below cover them 
 
 ---
 
-## Phase 0 — Register your RS256 signing key with UOA
+## Phase 0 — Generate your RS256 signing keypair
 
-You cannot skip this. Until your public JWK is in UOA's \`CONFIG_JWKS_JSON\` document, every \`/auth\` request will fail with \`CONFIG_JWT_INVALID\` because UOA cannot resolve your \`kid\`.
+Every config JWT is RS256-signed. You need an RSA-2048 keypair whose PUBLIC JWK is discoverable at a JWKS URL UOA can fetch, and whose PRIVATE key stays in your backend.
 
 ### 0.1 Generate an RSA-2048 keypair
 
@@ -73,39 +73,80 @@ UOA's JWKS validator accepts ONLY these members and REJECTS the document if any 
 \`\`\`
 
 - \`kty\` MUST be \`"RSA"\`. EC, OKP, and oct keys are rejected.
-- \`kid\` MUST be a non-empty string and MUST be unique within UOA's JWKS.
+- \`kid\` MUST be a non-empty string. It MUST be unique across all JWKs registered to your \`domain\`, and collisions with other partners' \`kid\`s are rejected.
 - \`n\` and \`e\` MUST be non-empty base64url strings.
 - \`alg\` SHOULD be \`"RS256"\` (the only algorithm UOA accepts for config JWTs).
-- The following members are FORBIDDEN and will cause UOA to reject the JWKS at boot: \`d\`, \`p\`, \`q\`, \`dp\`, \`dq\`, \`qi\`, \`oth\`. Never paste a private key.
+- The following members are FORBIDDEN and will cause UOA to reject the JWK: \`d\`, \`p\`, \`q\`, \`dp\`, \`dq\`, \`qi\`, \`oth\`. Never paste a private key.
 
-### 0.3 Send the public JWK to a UOA superuser
+### 0.3 Store the private key in your client backend ONLY
 
-Email or share the JWK JSON above with a UOA superuser. Today the JWKS document is loaded from the deployment env var \`CONFIG_JWKS_JSON\` and served at \`/.well-known/jwks.json\`. A superuser appends your JWK to the \`keys\` array, redeploys UOA, and confirms your \`kid\` shows up in the JWKS.
-
-You can verify your registration any time with:
-
-\`\`\`bash
-curl https://<uoa-host>/.well-known/jwks.json | jq '.keys[] | .kid'
-\`\`\`
-
-Your new \`kid\` MUST appear in that list before Phase 2 will work.
-
-### 0.4 Store the private key in your client backend ONLY
-
-The private PEM (or \`privateKey\` from \`jose.generateKeyPair\`) lives in your application backend's secret store. It must NEVER be committed to git, sent to UOA, or accessible from a browser. Rotate by generating a new key with a new \`kid\`, registering it, and signing new config JWTs with the new \`kid\` — keep the old \`kid\` in the JWKS until all caches expire (UOA caches the JWKS for ~10 minutes).
+The private PEM (or \`privateKey\` from \`jose.generateKeyPair\`) lives in your application backend's secret store. It must NEVER be committed to git, sent to UOA, or accessible from a browser. Rotate by generating a new key with a new \`kid\`, publishing it on your JWKS URL, and signing new config JWTs with the new \`kid\` — keep the old \`kid\` published until all caches expire (UOA caches the JWKS for ~10 minutes).
 
 ---
 
-## Phase 1 — Get your per-domain client secret
+## Phase 1 — Auto-onboard with one \`/auth\` call
 
-Backend calls to UOA (token exchange, token revoke, domain admin APIs) authenticate with a per-domain bearer token. You get the underlying client secret from the UOA Admin UI.
+UOA uses **auto-onboarding**. There is no admin-side "Add Domain" button anymore; you register yourself by making one \`/auth\` call with a config JWT that contains two extra payload fields. A UOA superuser then sees your request in the admin console, approves it, and UOA emails you a one-time claim link.
 
-1. Open **/admin** and sign in as a UOA superuser (or ask one).
-2. Go to **Configuration > Secrets**.
-3. Click **Add Domain**, enter the domain hostname (must equal the \`domain\` claim you will put in the config JWT, e.g. \`api.voicepos.unlikeotherai.com\`), a friendly label, and either generate or paste a 36-byte base64url client secret.
-4. Submit. The next screen reveals \`client_secret\` and \`client_hash\` ONCE. Copy both into your backend secret store immediately. After this dialog closes, the secret cannot be retrieved — only rotated.
+### 1.1 Publish your JWKS URL on the SAME hostname as your \`config_url\`
 
-**What UOA stores.** UOA never persists the raw secret. The \`client_domains\` table holds the domain row, and \`client_domain_secrets\` holds an HMAC-SHA256 digest of \`SHA256(domain + clientSecret)\` plus a 16-character display prefix used to identify the active secret in the admin UI. The digest is keyed with the deployment-wide \`SHARED_SECRET\` env var. There is no decryption path.
+Stand up a public HTTPS endpoint that returns a standard JWKS document with your public JWK:
+
+\`\`\`http
+GET https://api.voicepos.unlikeotherai.com/.well-known/jwks.json
+
+{ "keys": [ { "kty": "RSA", "kid": "voicepos-2026-04", "alg": "RS256", "use": "sig", "n": "...", "e": "AQAB" } ] }
+\`\`\`
+
+- Hostname of \`jwks_url\` MUST equal the \`domain\` claim in your config JWT (case-insensitive). Cross-host JWKS are rejected with \`INTEGRATION_JWKS_HOST_MISMATCH\`.
+- Same SSRF rules as \`config_url\`: HTTPS only, public DNS only, 5s timeout, 64 KiB cap, 3 redirects max.
+
+### 1.2 Include \`jwks_url\` and \`contact_email\` in your config JWT payload
+
+Add two optional fields to the payload described in Phase 2.4. These are only required on the auto-onboarding call; after approval they are inert but harmless.
+
+\`\`\`json
+{
+  "domain": "api.voicepos.unlikeotherai.com",
+  "jwks_url": "https://api.voicepos.unlikeotherai.com/.well-known/jwks.json",
+  "contact_email": "ops@voicepos.com",
+  "redirect_urls": ["https://app.voicepos.unlikeotherai.com/oauth/callback"],
+  "enabled_auth_methods": ["email_password", "google"],
+  "ui_theme": { "...": "see /api" },
+  "language_config": "en"
+}
+\`\`\`
+
+### 1.3 Make ONE \`/auth\` call to trigger auto-discovery
+
+Open \`/auth?config_url=<your_config_url>&redirect_url=<callback>&code_challenge=<S256>&code_challenge_method=S256\` in a browser. UOA will:
+
+1. Fetch and decode your config JWT (unverified) to read \`jwks_url\` and \`contact_email\`.
+2. Verify \`URL(jwks_url).hostname === payload.domain\`.
+3. Fetch \`jwks_url\` through the same SSRF-protected pipeline as \`config_url\`.
+4. Verify the config JWT signature against the published public JWK.
+5. Schema-validate the payload so it can store a safe \`config_summary\`.
+6. Insert a PENDING row in \`client_domain_integration_requests\` (or touch the existing one).
+7. Render a friendly **"Integration pending review"** page. No auth flow runs yet.
+
+The browser now shows the pending page. Do not retry in a loop — UOA has everything it needs.
+
+### 1.4 Wait for the approval email
+
+A UOA superuser sees your request in **/admin > New Integrations**, inspects the fingerprint, \`jwks_url\`, and verified \`config_summary\`, and clicks **Accept**. UOA:
+
+- Creates the \`client_domains\` row, the first \`client_domain_jwks\` row, and a new client secret inside one DB transaction.
+- Emails \`contact_email\` a link of the form \`https://<uoa-host>/integrations/claim/<token>\`. The token is single-use and expires after 24 hours.
+
+If the superuser declines, no email is sent. Contact your UOA superuser if you expected approval but did not receive an email within a business day.
+
+### 1.5 Open the claim link and copy the secret ONCE
+
+1. Open the claim link in a browser. You will see a "Confirm" page — link scanners and email previewers cannot burn the token because consumption requires a \`POST\`.
+2. Click **Reveal secret**. UOA POSTs to \`/integrations/claim/:token/confirm\`, marks the token used, and renders the one-time reveal page containing \`domain\`, \`client_secret\`, \`client_hash\`, and \`hash_prefix\`.
+3. Copy \`client_secret\` and \`client_hash\` into your backend secret store immediately. The page warns "This is the only time this secret will be displayed." Refreshing or re-opening the link returns the invalid-link page.
+
+**What UOA stores.** UOA never persists the raw secret. \`client_domains\` holds the domain row, and \`client_domain_secrets\` holds an HMAC-SHA256 digest of \`SHA256(domain + clientSecret)\` keyed with the deployment-wide \`SHARED_SECRET\`, plus a 16-character display prefix used to identify the active secret in the admin UI. There is no decryption path.
 
 **Computing the bearer token from the client secret.** If you only stored \`client_secret\`, recompute the bearer at runtime:
 
@@ -115,9 +156,13 @@ const clientHash = createHash('sha256').update(domain + clientSecret).digest('he
 // Authorization: Bearer <clientHash>
 \`\`\`
 
-**Rotation.** In **Configuration > Secrets**, click **Rotate** on a domain row. UOA generates a new secret, deactivates the previous one, and reveals the new \`client_secret\`/\`client_hash\` once. Update the client backend immediately — the previous bearer stops working as soon as the rotation completes.
+**Resend claim link.** If you lose the email before clicking, ask a UOA superuser to use **Resend claim link** on the accepted request. The old token is revoked and a fresh one is emailed.
 
-**Disabling.** \`Disable\` on a domain row sets its status to \`disabled\`; UOA rejects every domain bearer request for that domain until it is re-enabled.
+**Disabling.** A superuser can set a domain to \`disabled\` on the Secrets page; UOA rejects every domain bearer request for that domain until it is re-enabled.
+
+### 1.6 Adding or deactivating signing keys later
+
+Once your domain is registered, a superuser can add additional RSA JWKs through **Admin > Secrets > domain > Signing Keys**, or deactivate an old \`kid\`. Rotation flow: publish the new \`kid\` on your JWKS URL, ask a superuser to register it, start signing with the new \`kid\`, and once traffic with the old \`kid\` drains the superuser deactivates the old row.
 
 ---
 
@@ -151,7 +196,7 @@ Anything else (HTML, error JSON, empty body) fails with \`CONFIG_FETCH_FAILED\`.
 \`\`\`
 
 - \`alg\` MUST be exactly \`"RS256"\`. \`HS256\`, \`none\`, \`ES256\`, \`PS256\`, etc. are rejected.
-- \`kid\` MUST be present, non-empty, and MUST resolve in UOA's JWKS (Phase 0). If your \`kid\` is missing or not yet in UOA's JWKS the request fails with \`CONFIG_JWT_INVALID\`.
+- \`kid\` MUST be present, non-empty, and MUST resolve to a registered JWK — either a \`client_domain_jwks\` row for your domain, or the legacy deployment-wide \`CONFIG_JWKS_JSON\`. On the FIRST \`/auth\` call from a new domain the \`kid\` will not yet be registered; that is the signal that triggers auto-discovery against your \`jwks_url\` (see Phase 1). All subsequent calls must use a \`kid\` that resolves directly in UOA's tables — otherwise the request fails with \`CONFIG_JWT_INVALID\`.
 - \`typ\` is optional but recommended.
 
 ### 2.4 Required payload fields
@@ -159,6 +204,8 @@ Anything else (HTML, error JSON, empty body) fails with \`CONFIG_FETCH_FAILED\`.
 \`\`\`json
 {
   "domain": "api.voicepos.unlikeotherai.com",
+  "jwks_url": "https://api.voicepos.unlikeotherai.com/.well-known/jwks.json",
+  "contact_email": "ops@voicepos.com",
   "redirect_urls": ["https://app.voicepos.unlikeotherai.com/oauth/callback"],
   "enabled_auth_methods": ["email_password", "google"],
   "ui_theme": { "...": "see /api for the full ui_theme contract" },
@@ -167,6 +214,7 @@ Anything else (HTML, error JSON, empty body) fails with \`CONFIG_FETCH_FAILED\`.
 \`\`\`
 
 - \`domain\` MUST exactly equal the hostname of the \`config_url\` UOA fetched. Mismatch fails with \`CONFIG_DOMAIN_MISMATCH\`.
+- \`jwks_url\` and \`contact_email\` are **required on the first auto-onboarding call** and optional thereafter. \`jwks_url\` MUST be HTTPS and share the hostname of \`domain\`. \`contact_email\` is where UOA sends the one-time claim link on approval. See Phase 1 for the full flow.
 - \`redirect_urls\` MUST be a non-empty array of absolute HTTP/HTTPS URLs. Matching at \`/auth\` is exact (scheme + host + port + path + query).
 - \`enabled_auth_methods\` MUST be a non-empty array. Allowed values: \`email_password\`, \`google\`, \`facebook\`, \`github\`, \`linkedin\`, \`apple\`. There is no separate social-provider allowlist — listing a provider here both enables and allows it.
 - \`ui_theme\` is required. See \`/api\` for the full contract (colors as hex only, radii/font sizes as CSS lengths, button + card styles, logo with required \`url\` and \`alt\`).
@@ -275,7 +323,11 @@ In a non-production deployment with \`DEBUG_ENABLED=true\` you can additionally 
 |---|---|---|
 | \`CONFIG_FETCH_FAILED\` | UOA fetching your \`config_url\` | Endpoint unreachable from UOA, returned non-200, returned > 64 KiB, took > 5s, returned a body that did not contain a recognizable JWT, or resolved to a private/blocked IP. Check the **Connection Errors** page in /admin for the captured request/response context. |
 | \`CONFIG_URL_NETWORK_ERROR\` | UOA fetching your \`config_url\` | TLS, DNS, or socket-level failure before HTTP could complete. |
-| \`CONFIG_JWT_INVALID\` | Header / signature verification | Almost always: your \`kid\` is not yet in UOA's \`CONFIG_JWKS_JSON\` (Phase 0 not completed or not redeployed). Other causes: \`alg\` is not \`RS256\`, \`kid\` missing, signature does not match the registered public key, JWKS endpoint unreachable. |
+| \`CONFIG_JWT_INVALID\` | Header / signature verification | Your \`kid\` is not registered and your payload does not include \`jwks_url\` + \`contact_email\` to trigger auto-discovery. Other causes: \`alg\` is not \`RS256\`, \`kid\` missing, signature does not match the registered public key, JWKS endpoint unreachable. |
+| \`INTEGRATION_JWKS_HOST_MISMATCH\` | Auto-discovery | The hostname of the \`jwks_url\` you published in the payload does not match the \`domain\` claim (case-insensitive). Fix: host the JWKS on the same hostname. |
+| \`INTEGRATION_KID_NOT_IN_JWKS\` | Auto-discovery | UOA fetched your \`jwks_url\` but the JWT's \`kid\` is not present in the document. Fix: publish the correct public JWK with the \`kid\` you signed with. |
+| \`INTEGRATION_PENDING_REVIEW\` | Auto-discovery | A valid request has been captured and is waiting for a UOA superuser to approve. Wait for the email to \`contact_email\`; do not retry in a loop. |
+| \`INTEGRATION_DECLINED\` | Auto-discovery | A UOA superuser declined your integration request for this domain. Contact support. |
 | \`CONFIG_DOMAIN_MISMATCH\` | Post-decode | \`payload.domain\` does not exactly match the hostname of the \`config_url\` UOA fetched. Hostnames are compared case-insensitively but must otherwise be identical (no trailing dot, no port mismatch). |
 | Schema validation failures | Schema stage | A required field is missing or malformed. \`/config/validate\` returns the exact JSON path and reason in \`issues\`. |
 | \`auth_failed\` (final redirect) | Post-callback | Intentionally generic. With \`allow_registration: false\`, social login does not create users — the user must already exist for that domain. Check \`/internal/admin/handshake-errors\`. |
