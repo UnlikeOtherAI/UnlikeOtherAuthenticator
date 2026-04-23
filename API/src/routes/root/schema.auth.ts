@@ -88,13 +88,16 @@ export const authEndpoints: EndpointSchema[] = [
       'refresh_token?': 'refresh token (for refresh_token grant)',
     },
     response: {
-      access_token: 'JWT with aud="uoa:access-token"',
-      expires_in: 'seconds',
-      refresh_token: 'opaque token',
-      refresh_token_expires_in: 'seconds',
+      access_token:
+        'HS256 JWT signed with the deployment SHARED_SECRET. aud="uoa:access-token". RPs cannot and should not verify it cryptographically — trust comes from the authenticated backend channel. See /api > access_token.claims for the claim schema.',
+      expires_in: 'number — seconds until access_token expiry',
+      refresh_token: 'string — opaque, server-side only; never hand to the browser',
+      refresh_token_expires_in: 'number — seconds until refresh_token expiry',
       token_type: '"Bearer"',
       'firstLogin?':
-        'object { memberships: { orgs, teams }, pending_invites, capabilities { can_create_org, can_accept_invite } } — included on authorization_code exchange when org_features.enabled is true so the client can render onboarding UX',
+        'object { memberships: { orgs, teams }, pending_invites, capabilities { can_create_org, can_accept_invite } } — included on authorization_code exchange when org_features.enabled is true. memberships.orgs[] = { orgId, role } camelCase; memberships.teams[] = { teamId, orgId, role } camelCase; pending_invites[] = { inviteId, type, orgId, teamId, teamName } camelCase. Not included on refresh_token grants.',
+      '[note]':
+        'There is NO top-level `user` field. User identity lives inside access_token claims (read claims.sub). The outer envelope is snake_case; firstLogin.* IDs are camelCase.',
     },
   },
   {

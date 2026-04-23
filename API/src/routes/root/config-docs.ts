@@ -210,6 +210,40 @@ export const configValidationEndpointDocumentation = {
   },
 };
 
+export const accessTokenDocumentation = {
+  description:
+    'The access_token returned by POST /auth/token is an HS256 JWT signed with the deployment SHARED_SECRET. Relying parties cannot and should not verify it cryptographically — trust derives from the authenticated backend channel (domain-hash bearer + PKCE). When an RP needs to validate a presented access token later, it should call UOA (e.g. GET /org/me) rather than attempting local verification.',
+  signing: {
+    algorithm: 'HS256',
+    key: 'deployment-wide SHARED_SECRET (not exposed, no UOA-side public JWKS)',
+    audience: 'uoa:access-token',
+  },
+  claims: {
+    sub: 'string — stable external user id. Primary foreign key for the RP into the UOA user.',
+    email: 'string — user primary email. Advisory (user may change it); sub is the stable identity.',
+    role:
+      'string — UOA platform role, "user" or "superuser". Gates UOA admin surfaces only. DO NOT use for RP authorization; honour firstLogin.memberships.orgs[].role (or GET /org/me) instead.',
+    domain: 'string — integration domain from the config JWT. Confirms which integration minted this token.',
+    client_id:
+      'string — SHA256(domain + clientSecret) hex. Identifies the exact client credential used.',
+    org:
+      'object | absent — present only when org_features.enabled and the user has an org on this domain. Shape: { org_id, org_role, teams[], team_roles{}, groups?[], group_admin?[] }.',
+    iss: 'string — UOA host (e.g. authentication.unlikeotherai.com).',
+    aud: 'string — always "uoa:access-token".',
+    iat: 'number — issued at, epoch seconds.',
+    exp: 'number — expiry, epoch seconds.',
+  },
+  rp_guidance: [
+    'Do NOT read response.user — there is no top-level user field. Decode access_token and read claims.sub.',
+    'Do NOT verify access_token against the /.well-known/jwks.json JWKS; that JWKS is for RS256 config JWTs only.',
+    'Do NOT use claims.role for RP authorization; it is the UOA platform role. Use firstLogin.memberships.orgs[].role (or GET /org/me).',
+    'Do NOT fall back to a synthetic tenant when firstLogin.memberships.orgs is empty — branch on firstLogin.capabilities (can_create_org / can_accept_invite). See /llm Phase 4.5.',
+    'Keep access_token server-side when possible. If forwarded to UOA-owned endpoints, use the X-UOA-Access-Token header.',
+  ],
+  response_envelope_casing:
+    'The /auth/token response envelope is snake_case (access_token, refresh_token, expires_in, refresh_token_expires_in, token_type). The key firstLogin is camelCase; memberships.orgs[].orgId, memberships.teams[].teamId, memberships.teams[].orgId, and pending_invites[].inviteId/orgId/teamId/teamName are camelCase. pending_invites and capabilities.can_* remain snake_case.',
+};
+
 export const configVerificationEndpointDocumentation = {
   ...configValidationEndpointDocumentation,
   path: '/config/verify',

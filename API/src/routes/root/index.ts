@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import type { FastifyInstance } from 'fastify';
 
 import {
+  accessTokenDocumentation,
   configJwtDocumentation,
   configValidationEndpointDocumentation,
   configVerificationEndpointDocumentation,
@@ -51,6 +52,7 @@ export function registerRootRoute(app: FastifyInstance): void {
       docs: '/llm',
       api: '/api',
       config_jwt: configJwtDocumentation,
+      access_token: accessTokenDocumentation,
       config_validation: configValidationEndpointDocumentation,
       config_verification: configVerificationEndpointDocumentation,
       endpoints,
