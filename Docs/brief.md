@@ -1461,3 +1461,13 @@ Each task references the line number(s) where the relevant specification lives i
 | 13.8 | Verify refresh tokens are hashed, rotated, and never exposed to browser clients; backup codes and admin overrides remain absent | L379–385, L491, L480–482 |
 | 13.9 | Verify avatar URL overwrite behavior (no history, no local storage) | L461–466 |
 | 13.10 | End-to-end test: full OAuth flow from config URL fetch through token exchange | L405–410, L529–536 |
+
+---
+
+## 2026-04 Super-users and Per-Domain Email
+
+The Admin panel includes a **Super-users** page for operators who already hold `SUPERUSER` on `ADMIN_AUTH_DOMAIN`. Super-user access is represented by a `domain_roles` row where `domain = ADMIN_AUTH_DOMAIN` and `role = SUPERUSER`; this is separate from customer-domain bootstrap superusers.
+
+Registered domains can opt into UOA-managed transactional email. Admin operators configure the mailing domain, from address, optional from name, and optional default reply-to on the domain detail page. SES registration returns DNS TXT and DKIM CNAME records for the operator to publish. Sending is enabled only after both SES verification and DKIM report `Success`.
+
+Customer backends send through `POST /email/send` with `X-UOA-Config-JWT: <signed config JWT>`. UOA verifies the config JWT from the request header, checks the domain's stored email config is enabled and verified, then sends the raw subject/text/html payload through the configured email provider. The public response remains generic for missing, invalid, disabled, unverified, or failed sends.

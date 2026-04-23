@@ -18,6 +18,7 @@ import { LoginPage } from '../pages/LoginPage';
 import { OrganisationDetailPage } from '../pages/OrganisationDetailPage';
 import { OrganisationsPage } from '../pages/OrganisationsPage';
 import { SettingsPage } from '../pages/SettingsPage';
+import { SuperUsersPage } from '../pages/SuperUsersPage';
 import { TeamDetailPage } from '../pages/TeamDetailPage';
 import { UserDetailPage } from '../pages/UserDetailPage';
 import { TeamsPage } from '../pages/TeamsPage';
@@ -49,6 +50,7 @@ export function App() {
         <Route path="teams" element={<TeamsPage />} />
         <Route path="users" element={<UsersPage />} />
         <Route path="users/:userId" element={<UserDetailPage />} />
+        <Route path="superusers" element={<SuperUsersPage />} />
         <Route path="logs" element={<LogsPage />} />
         <Route path="connection-errors" element={<ConnectionErrorsPage />} />
         <Route path="feature-flags" element={<FeatureFlagsPage />} />

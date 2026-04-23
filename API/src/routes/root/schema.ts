@@ -89,6 +89,26 @@ const appEndpoints: EndpointSchema[] = [
   },
 ];
 
+const emailEndpoints: EndpointSchema[] = [
+  {
+    method: 'POST',
+    path: '/email/send',
+    description: 'Send a per-domain transactional email through UOA-managed email infrastructure',
+    auth: 'X-UOA-Config-JWT header containing a signed RS256 client config JWT',
+    body: {
+      to: 'email address (required)',
+      subject: 'string (required)',
+      text: 'string (required)',
+      html: 'string (optional)',
+      reply_to: 'email address (optional; overrides the configured default reply-to)',
+    },
+    response: {
+      202: '{ ok: true }',
+      '401/403': 'generic error for missing/invalid config JWT or unconfigured/unverified domain email',
+    },
+  },
+];
+
 const orgEndpoints: EndpointSchema[] = [
   {
     method: 'GET',
@@ -326,6 +346,7 @@ export const endpoints: EndpointSchema[] = [
   ...configDebugEndpoints,
   ...authEndpoints,
   ...appEndpoints,
+  ...emailEndpoints,
   ...domainEndpoints,
   ...orgEndpoints,
   ...integrationsEndpoints,

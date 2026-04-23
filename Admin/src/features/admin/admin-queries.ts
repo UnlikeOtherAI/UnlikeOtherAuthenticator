@@ -89,3 +89,23 @@ export function useDomainJwksQuery(domain: string | null | undefined) {
     enabled: Boolean(domain),
   });
 }
+
+export function useDomainEmailQuery(domain: string | null | undefined) {
+  return useQuery({
+    queryKey: ['admin', 'domain-email', domain],
+    queryFn: () => adminService.getDomainEmail(domain ?? ''),
+    enabled: Boolean(domain),
+  });
+}
+
+export function useSuperusersQuery() {
+  return useQuery({ queryKey: ['admin', 'superusers'], queryFn: adminService.getSuperusers });
+}
+
+export function useSuperuserSearchQuery(query: string) {
+  return useQuery({
+    queryKey: ['admin', 'superusers', 'search', query],
+    queryFn: () => adminService.searchSuperusers(query),
+    enabled: query.trim().length > 1,
+  });
+}

@@ -6,6 +6,7 @@ import { registerAppRoutes } from './apps/index.js';
 import { registerAuthRoutes } from './auth/index.js';
 import { registerConfigJwksRoute } from './config-jwks.js';
 import { registerDomainRoutes } from './domain/index.js';
+import { registerEmailRoutes } from './email/index.js';
 import { registerInternalAdminRoutes } from './internal/admin/index.js';
 import { registerInternalOrgRoutes } from './internal/org/index.js';
 import { registerHealthRoutes } from './health/index.js';
@@ -23,6 +24,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   registerAppRoutes(app);
   registerAuthRoutes(app);
   registerDomainRoutes(app);
+  registerEmailRoutes(app);
   registerIntegrationRoutes(app);
   registerInternalAdminRoutes(app);
   registerInternalOrgRoutes(app);

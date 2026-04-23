@@ -5,6 +5,7 @@ export type ApiClient = {
   delete<T>(path: string, init?: RequestInit): Promise<T>;
   get<T>(path: string, init?: RequestInit): Promise<T>;
   post<T>(path: string, body?: unknown, init?: RequestInit): Promise<T>;
+  patch<T>(path: string, body?: unknown, init?: RequestInit): Promise<T>;
   put<T>(path: string, body?: unknown, init?: RequestInit): Promise<T>;
 };
 
@@ -28,6 +29,7 @@ export function createApiClient(baseUrl = adminEnv.apiBaseUrl): ApiClient {
       throw new Error('Request failed');
     }
 
+    if (response.status === 204) return undefined as T;
     return response.json() as Promise<T>;
   }
 
@@ -40,6 +42,9 @@ export function createApiClient(baseUrl = adminEnv.apiBaseUrl): ApiClient {
     },
     async post<T>(path: string, body?: unknown, init?: RequestInit) {
       return request<T>('POST', path, body, init);
+    },
+    async patch<T>(path: string, body?: unknown, init?: RequestInit) {
+      return request<T>('PATCH', path, body, init);
     },
     async put<T>(path: string, body?: unknown, init?: RequestInit) {
       return request<T>('PUT', path, body, init);

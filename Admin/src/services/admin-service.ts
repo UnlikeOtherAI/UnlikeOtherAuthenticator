@@ -1,7 +1,10 @@
 import type {
   AdminData,
+  AdminSuperuser,
   Domain,
   DomainDirectoryDetail,
+  DomainEmailRegistration,
+  DomainEmailSettings,
   DomainJwk,
   IntegrationClaimCredentials,
   IntegrationClaimDeliveryMode,
@@ -51,6 +54,28 @@ export const adminService = {
       `/internal/admin/domains/${encodeURIComponent(domain)}/rotate-secret`,
       { deliveryMode },
     ),
+  getDomainEmail: (domain: string) =>
+    api.get<DomainEmailSettings>(`/internal/admin/domains/${encodeURIComponent(domain)}/email`),
+  updateDomainEmail: (
+    domain: string,
+    input: {
+      mailingDomain: string;
+      fromAddress: string;
+      fromName?: string;
+      replyToDefault?: string;
+    },
+  ) => api.put<{ config: DomainEmailSettings['config'] }>(`/internal/admin/domains/${encodeURIComponent(domain)}/email`, input),
+  registerDomainEmail: (domain: string) =>
+    api.post<DomainEmailRegistration>(`/internal/admin/domains/${encodeURIComponent(domain)}/email/register`),
+  refreshDomainEmail: (domain: string) =>
+    api.post<{ verification: string; dkim: string }>(`/internal/admin/domains/${encodeURIComponent(domain)}/email/refresh`),
+  setDomainEmailEnabled: (domain: string, enabled: boolean) =>
+    api.patch<{ config: DomainEmailSettings['config'] }>(
+      `/internal/admin/domains/${encodeURIComponent(domain)}/email/enabled`,
+      { enabled },
+    ),
+  deleteDomainEmail: (domain: string) =>
+    api.delete<unknown>(`/internal/admin/domains/${encodeURIComponent(domain)}/email`),
   getOrganisations: () => api.get<AdminData['organisations']>('/internal/admin/organisations'),
   getOrganisation: (orgId: string) =>
     api.get<AdminData['organisations'][number] | null>(`/internal/admin/organisations/${encodeURIComponent(orgId)}`),
@@ -105,6 +130,12 @@ export const adminService = {
     api.delete<DomainJwk>(
       `/internal/admin/domains/${encodeURIComponent(domain)}/jwks/${encodeURIComponent(kid)}`,
     ),
+  getSuperusers: () => api.get<AdminSuperuser[]>('/internal/admin/superusers'),
+  searchSuperusers: (query: string) =>
+    api.get<Array<Omit<AdminSuperuser, 'createdAt'>>>(`/internal/admin/superusers/search?q=${encodeURIComponent(query)}`),
+  grantSuperuser: (userId: string) => api.post<AdminSuperuser>('/internal/admin/superusers', { userId }),
+  revokeSuperuser: (userId: string) =>
+    api.delete<unknown>(`/internal/admin/superusers/${encodeURIComponent(userId)}`),
 };
 
 export type AdminServiceData = AdminData;

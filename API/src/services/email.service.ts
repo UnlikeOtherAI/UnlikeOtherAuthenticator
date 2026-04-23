@@ -264,3 +264,26 @@ export async function sendTwoFaResetEmail(params: {
     html: template.html,
   });
 }
+
+export async function sendRawEmail(params: {
+  to: string;
+  subject: string;
+  text: string;
+  html?: string;
+  from: string;
+  fromName?: string | null;
+  replyTo?: string | null;
+}): Promise<void> {
+  const from = params.fromName?.trim()
+    ? `"${params.fromName.trim().replace(/"/g, '\\"')}" <${params.from}>`
+    : params.from;
+
+  await dispatchEmail({
+    to: params.to,
+    from,
+    replyTo: params.replyTo ?? undefined,
+    subject: params.subject,
+    text: params.text,
+    html: params.html,
+  });
+}

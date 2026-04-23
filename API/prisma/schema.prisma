@@ -212,9 +212,30 @@ model ClientDomain {
   secrets     ClientDomainSecret[]
   jwks        ClientDomainJwk[]
   claimTokens IntegrationClaimToken[]
+  emailConfig DomainEmailConfig?
 
   @@index([status])
   @@map("client_domains")
+}
+
+model DomainEmailConfig {
+  domain          String   @id
+  enabled         Boolean  @default(false)
+  mailingDomain   String?  @map("mailing_domain")
+  fromAddress     String?  @map("from_address")
+  fromName        String?  @map("from_name")
+  replyToDefault  String?  @map("reply_to_default")
+  sesRegion       String   @default("eu-west-1") @map("ses_region")
+  sesVerification String?  @map("ses_verification")
+  sesDkim         String?  @map("ses_dkim")
+  dkimTokens      String[] @default([]) @map("dkim_tokens")
+  lastCheckedAt   DateTime? @map("last_checked_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  domainRef ClientDomain @relation(fields: [domain], references: [domain], onDelete: Cascade)
+
+  @@map("domain_email_configs")
 }
 
 model ClientDomainSecret {

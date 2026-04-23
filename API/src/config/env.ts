@@ -68,6 +68,11 @@ const EnvSchema = z
     EMAIL_REPLY_TO: z.string().min(1).optional(),
     // AWS SES provider configuration.
     AWS_REGION: z.string().min(1).optional(),
+    AWS_ACCESS_KEY_ID: z.string().min(1).optional(),
+    AWS_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+    AWS_SES_ADMIN_ACCESS_KEY_ID: z.string().min(1).optional(),
+    AWS_SES_ADMIN_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+    AWS_SES_ADMIN_REGION: z.string().min(1).optional(),
     // SendGrid provider configuration.
     SENDGRID_API_KEY: z.string().min(1).optional(),
     SMTP_HOST: z.string().min(1).optional(),

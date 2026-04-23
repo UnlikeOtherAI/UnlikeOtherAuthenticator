@@ -89,3 +89,37 @@ aws ses list-identities --region eu-west-1
 aws ses send-email --from noreply@unlikeotherai.com --to <recipient> \
   --subject "Test" --text "Test email" --region eu-west-1
 ```
+
+## Admin Sender Registration IAM
+
+Per-domain sender registration from the UOA Admin panel uses optional dedicated SES admin credentials:
+
+```
+AWS_SES_ADMIN_ACCESS_KEY_ID
+AWS_SES_ADMIN_SECRET_ACCESS_KEY
+AWS_SES_ADMIN_REGION=eu-west-1
+```
+
+The admin key needs identity-management permissions in the SES region used for sender registration:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ses:VerifyDomainIdentity",
+        "ses:VerifyDomainDkim",
+        "ses:SetIdentityDkimEnabled",
+        "ses:SetIdentityMailFromDomain",
+        "ses:GetIdentityVerificationAttributes",
+        "ses:GetIdentityDkimAttributes"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+The existing `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` remain the send credentials for `ses:SendEmail`.

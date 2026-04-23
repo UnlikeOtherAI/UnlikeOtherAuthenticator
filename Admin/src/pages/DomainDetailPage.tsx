@@ -9,6 +9,7 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { MethodBadge, StatusBadge } from '../components/ui/Status';
 import { DataTable, PaginationFooter, Td, usePagination } from '../components/ui/Table';
 import { SegmentedTabs } from '../components/ui/Tabs';
+import { DomainEmailSection } from '../features/admin/DomainEmailSection';
 import { TeamTable } from '../features/admin/TeamTable';
 import { useDomainQuery } from '../features/admin/admin-queries';
 
@@ -44,6 +45,7 @@ export function DomainDetailPage() {
         <MetricCard label="Teams" value={String(teams.length)} />
         <MetricCard label="Users" value={String(users.length)} />
       </div>
+      <DomainEmailSection domain={domain.name} />
       <SegmentedTabs<DomainTab>
         value={tab}
         onChange={setTab}

@@ -38,6 +38,7 @@ export const navSections: NavSection[] = [
     items: [
       { label: 'Login Logs', path: '/logs', icon: 'logs' },
       { label: 'Connection Errors', path: '/connection-errors', icon: 'alert' },
+      { label: 'Super-users', path: '/superusers', icon: 'key' },
     ],
   },
   {
@@ -77,6 +78,10 @@ export function navLabelForPath(pathname: string) {
 
   if (pathname.startsWith('/users/')) {
     return 'User';
+  }
+
+  if (pathname.startsWith('/superusers')) {
+    return 'Super-users';
   }
 
   const item = navSections.flatMap((section) => section.items).find((entry) => entry.path === pathname);

@@ -94,6 +94,7 @@ The initial React Router tree should mirror the existing templates and current a
 - `/users` — user listing and search
 - `/domains` — domains and secrets view
 - `/logs` — login logs and audit surfaces
+- `/superusers` — admin-domain super-user management
 - `/settings` — system-level settings
 
 If a template demonstrates a section but not a final route name, use this route map rather than inventing a new page tree.
@@ -175,3 +176,9 @@ Current required frontend variables:
 - `VITE_ADMIN_BYPASS_AUTH` for development-only auth bypass
 
 Do not hardcode hosts or protocols in components.
+
+## 11. Domain Email
+
+Domain detail pages include a transactional email section. The section reads and writes `/internal/admin/domains/:domain/email`, registers SES sender identities, displays DNS records, refreshes verification/DKIM status, and only enables sending after both statuses are `Success`.
+
+Super-users are managed from `/superusers`. This page lists current `ADMIN_AUTH_DOMAIN` super-users, searches eligible UOA users, grants access, and protects revocation with a confirmation dialog.

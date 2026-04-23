@@ -26,6 +26,44 @@ export type DomainDirectoryDetail = {
   users: UserSummary[];
 };
 
+export type AdminSuperuser = {
+  userId: string;
+  email: string;
+  name: string | null;
+  createdAt: string;
+};
+
+export type DomainEmailConfig = {
+  domain: string;
+  enabled: boolean;
+  mailingDomain: string | null;
+  fromAddress: string | null;
+  fromName: string | null;
+  replyToDefault: string | null;
+  sesRegion: string;
+  sesVerification: string | null;
+  sesDkim: string | null;
+  dkimTokens: string[];
+  lastCheckedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type DomainEmailSettings = {
+  config: DomainEmailConfig | null;
+  liveStatus: { verification: string | null; dkim: string | null };
+  dnsRecords: {
+    verification: { record: string } | null;
+    dkim: Array<{ cname: string; value: string }>;
+  } | null;
+  adminCredentialsConfigured: boolean;
+};
+
+export type DomainEmailRegistration = {
+  verification: { record: string; status: string };
+  dkim: Array<{ cname: string; value: string }>;
+};
+
 export type Team = {
   id: string;
   orgId: string;
