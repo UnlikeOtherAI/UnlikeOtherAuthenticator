@@ -36,6 +36,7 @@ function serialize(config: DomainEmailConfig | null) {
     sesRegion: config.sesRegion,
     sesVerification: config.sesVerification,
     sesDkim: config.sesDkim,
+    sesVerificationToken: config.sesVerificationToken,
     dkimTokens: config.dkimTokens,
     lastCheckedAt: config.lastCheckedAt?.toISOString() ?? null,
     createdAt: config.createdAt.toISOString(),
@@ -46,8 +47,8 @@ function serialize(config: DomainEmailConfig | null) {
 function dnsRecords(config: DomainEmailConfig | null) {
   if (!config?.mailingDomain) return null;
   return {
-    verification: config.sesVerification
-      ? { record: `_amazonses.${config.mailingDomain} TXT <token from registration>` }
+    verification: config.sesVerificationToken
+      ? { record: `_amazonses.${config.mailingDomain} TXT "${config.sesVerificationToken}"` }
       : null,
     dkim: config.dkimTokens.map((token) => ({
       cname: `${token}._domainkey.${config.mailingDomain}`,
@@ -91,6 +92,8 @@ export async function upsertDomainEmailConfig(domain: string, fields: DomainEmai
     throw new AppError('BAD_REQUEST', 400, 'FROM_ADDRESS_DOMAIN_MISMATCH');
   }
 
+  const existing = await getAdminPrisma().domainEmailConfig.findUnique({ where: { domain: normalized } });
+  const senderChanged = existing?.mailingDomain !== mailingDomain || existing?.fromAddress !== fromAddress;
   const config = await getAdminPrisma().domainEmailConfig.upsert({
     where: { domain: normalized },
     update: {
@@ -99,6 +102,16 @@ export async function upsertDomainEmailConfig(domain: string, fields: DomainEmai
       fromName: cleanOptional(fields.fromName),
       replyToDefault: cleanOptional(fields.replyToDefault),
       sesRegion: getEnv().AWS_SES_ADMIN_REGION ?? getEnv().AWS_REGION ?? 'eu-west-1',
+      ...(senderChanged
+        ? {
+            enabled: false,
+            sesVerification: null,
+            sesDkim: null,
+            sesVerificationToken: null,
+            dkimTokens: [],
+            lastCheckedAt: null,
+          }
+        : {}),
     },
     create: {
       domain: normalized,
@@ -124,6 +137,7 @@ export async function registerDomainEmailSender(domain: string): Promise<SesRegi
     data: {
       sesVerification: 'Pending',
       sesDkim: 'Pending',
+      sesVerificationToken: registration.verification.record.match(/"([^"]+)"/)?.[1] ?? null,
       dkimTokens: registration.dkim.map((record) =>
         record.cname.replace(`._domainkey.${config.mailingDomain}`, ''),
       ),

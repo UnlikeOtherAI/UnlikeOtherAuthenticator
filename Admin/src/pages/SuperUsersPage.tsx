@@ -5,6 +5,7 @@ import { Avatar } from '../components/ui/Avatar';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { TextField } from '../components/ui/FormFields';
+import { Modal } from '../components/ui/Modal';
 import { PageHeader } from '../components/ui/PageHeader';
 import { DataTable, Td } from '../components/ui/Table';
 import { useSuperuserSearchQuery, useSuperusersQuery } from '../features/admin/admin-queries';
@@ -41,28 +42,32 @@ export function SuperUsersPage() {
       <PageHeader title="Super-users" description="Manage first-party UOA admin access." />
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
         <Card>
-          <DataTable headers={['User', 'Granted', 'Action']}>
-            {superusers.map((user) => (
-              <tr key={user.userId}>
-                <Td>
-                  <div className="flex items-center gap-2">
-                    <Avatar label={user.name ?? user.email} />
-                    <div>
-                      <p className="font-medium text-gray-700">{user.name ?? user.email}</p>
-                      <p className="text-xs text-gray-400">{user.email}</p>
+          {isLoading ? (
+            <p className="px-5 py-6 text-sm text-gray-400">Loading super-users...</p>
+          ) : (
+            <DataTable headers={['User', 'Granted', 'Action']}>
+              {superusers.map((user) => (
+                <tr key={user.userId}>
+                  <Td>
+                    <div className="flex items-center gap-2">
+                      <Avatar label={user.name ?? user.email} />
+                      <div>
+                        <p className="font-medium text-gray-700">{user.name ?? user.email}</p>
+                        <p className="text-xs text-gray-400">{user.email}</p>
+                      </div>
                     </div>
-                  </div>
-                </Td>
-                <Td className="text-xs text-gray-400">{new Date(user.createdAt).toLocaleString()}</Td>
-                <Td>
-                  <Button size="sm" variant="danger" onClick={() => setPendingRevoke(user.userId)}>Remove</Button>
-                </Td>
-              </tr>
-            ))}
-            {!isLoading && superusers.length === 0 ? (
-              <tr><Td colSpan={3} className="text-sm text-gray-400">No super-users found.</Td></tr>
-            ) : null}
-          </DataTable>
+                  </Td>
+                  <Td className="text-xs text-gray-400">{new Date(user.createdAt).toLocaleString()}</Td>
+                  <Td>
+                    <Button size="sm" variant="danger" onClick={() => setPendingRevoke(user.userId)}>Revoke</Button>
+                  </Td>
+                </tr>
+              ))}
+              {superusers.length === 0 ? (
+                <tr><Td colSpan={3} className="text-sm text-gray-400">No super-users found.</Td></tr>
+              ) : null}
+            </DataTable>
+          )}
         </Card>
         <Card className="p-4">
           <h2 className="text-sm font-semibold text-gray-900">Grant access</h2>
@@ -83,18 +88,28 @@ export function SuperUsersPage() {
           </div>
         </Card>
       </div>
-      {pendingRevoke ? (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4">
-          <Card className="max-w-sm p-5">
-            <h2 className="text-base font-semibold text-gray-900">Remove super-user?</h2>
-            <p className="mt-2 text-sm text-gray-500">This revokes Admin access for the selected user.</p>
-            <div className="mt-4 flex justify-end gap-2">
-              <Button onClick={() => setPendingRevoke(null)}>Cancel</Button>
-              <Button variant="danger" disabled={revoke.isPending} onClick={() => revoke.mutate(pendingRevoke)}>Remove</Button>
-            </div>
-          </Card>
-        </div>
-      ) : null}
+      <Modal
+        isOpen={Boolean(pendingRevoke)}
+        onClose={() => setPendingRevoke(null)}
+        title="Revoke super-user access?"
+        widthClassName="max-w-sm"
+        footer={(
+          <>
+            <Button onClick={() => setPendingRevoke(null)}>Cancel</Button>
+            <Button
+              variant="danger"
+              disabled={!pendingRevoke || revoke.isPending}
+              onClick={() => {
+                if (pendingRevoke) revoke.mutate(pendingRevoke);
+              }}
+            >
+              Revoke access
+            </Button>
+          </>
+        )}
+      >
+        <p className="text-sm text-gray-500">This revokes Admin access for the selected user.</p>
+      </Modal>
     </>
   );
 }

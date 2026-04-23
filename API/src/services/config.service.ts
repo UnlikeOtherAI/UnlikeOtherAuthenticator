@@ -381,6 +381,13 @@ export async function verifyConfigJwtSignature(
   configJwt: string,
   jwksUrl: string,
 ): Promise<JWTPayload> {
+  return (await verifyConfigJwtSignatureWithKeyDomain(configJwt, jwksUrl)).payload;
+}
+
+export async function verifyConfigJwtSignatureWithKeyDomain(
+  configJwt: string,
+  jwksUrl: string,
+): Promise<{ payload: JWTPayload; keyDomain: string | null }> {
   try {
     assertConfigJwtHeader(configJwt);
 
@@ -395,7 +402,7 @@ export async function verifyConfigJwtSignature(
           algorithms: [...CONFIG_JWT_ALLOWED_ALGS],
           clockTolerance: 30,
         });
-        return payload;
+        return { payload, keyDomain: dbKey.domain.domain };
       }
     }
 
@@ -403,7 +410,7 @@ export async function verifyConfigJwtSignature(
       algorithms: [...CONFIG_JWT_ALLOWED_ALGS],
       clockTolerance: 30,
     });
-    return payload;
+    return { payload, keyDomain: null };
   } catch (err) {
     if (err instanceof AppError) throw err;
     // Normalize all verification failures into a generic, user-safe error.

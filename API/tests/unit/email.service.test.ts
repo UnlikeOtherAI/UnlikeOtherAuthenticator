@@ -1,7 +1,12 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Env } from '../../src/config/env.js';
-import { createEmailProvider } from '../../src/services/email.service.js';
+import {
+  createEmailProvider,
+  resetEmailProviderCache,
+  sendRawEmail,
+} from '../../src/services/email.service.js';
+import { setAppLogger } from '../../src/utils/app-logger.js';
 
 type SesModule = typeof import('@aws-sdk/client-ses');
 
@@ -347,5 +352,33 @@ describe('createEmailProvider', () => {
       providerErrorName: 'ResponseError',
       providerHttpStatusCode: 429,
     });
+  });
+});
+
+describe('sendRawEmail', () => {
+  const originalEnv = { ...process.env };
+
+  afterEach(() => {
+    process.env = { ...originalEnv };
+    resetEmailProviderCache();
+  });
+
+  it('propagates provider send failures so the public send route can return a generic 500', async () => {
+    process.env.NODE_ENV = 'test';
+    process.env.SHARED_SECRET = 'test-shared-secret-with-enough-length';
+    process.env.EMAIL_PROVIDER = 'smtp';
+    process.env.EMAIL_FROM = 'noreply@example.com';
+    Reflect.deleteProperty(process.env, 'SMTP_HOST');
+    resetEmailProviderCache();
+    setAppLogger({ error: vi.fn() } as never);
+
+    await expect(
+      sendRawEmail({
+        to: 'to@example.com',
+        from: 'noreply@example.com',
+        subject: 'Subject',
+        text: 'Text',
+      }),
+    ).rejects.toThrow('EMAIL_DISPATCH_FAILED');
   });
 });

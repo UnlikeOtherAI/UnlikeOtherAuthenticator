@@ -63,7 +63,14 @@ export function DomainEmailSection({ domain }: DomainEmailSectionProps) {
   });
 
   const config = data?.config;
-  const canEnable = config?.sesVerification === 'Success' && config.sesDkim === 'Success';
+  const canEnable = config?.sesVerification === 'Success' && config?.sesDkim === 'Success';
+  const canToggle = Boolean(config) && (config?.enabled || canEnable);
+  const dnsRecords = registration
+    ? [registration.verification.record, ...registration.dkim.map((record) => `${record.cname} CNAME ${record.value}`)]
+    : [
+        data?.dnsRecords?.verification?.record,
+        ...(data?.dnsRecords?.dkim.map((record) => `${record.cname} CNAME ${record.value}`) ?? []),
+      ].filter((record): record is string => Boolean(record));
 
   return (
     <Card className="mt-5">
@@ -99,7 +106,7 @@ export function DomainEmailSection({ domain }: DomainEmailSectionProps) {
             <Button variant="primary" disabled={save.isPending} onClick={() => save.mutate()}>Save</Button>
             <Button disabled={!data?.adminCredentialsConfigured || !config?.mailingDomain || register.isPending} onClick={() => register.mutate()}>Register sender</Button>
             <Button disabled={!data?.adminCredentialsConfigured || !config?.mailingDomain || refresh.isPending} onClick={() => refresh.mutate()}>Refresh status</Button>
-            <Button disabled={!canEnable || toggle.isPending} onClick={() => toggle.mutate(!config?.enabled)}>
+            <Button disabled={!canToggle || toggle.isPending} onClick={() => toggle.mutate(!config?.enabled)}>
               {config?.enabled ? 'Disable sending' : 'Enable sending'}
             </Button>
           </div>
@@ -109,19 +116,19 @@ export function DomainEmailSection({ domain }: DomainEmailSectionProps) {
           {!canEnable ? (
             <p className="text-xs text-gray-400">Sending can be enabled after SES verification and DKIM both report Success.</p>
           ) : null}
-          {registration ? <DnsRecords registration={registration} /> : null}
+          {dnsRecords.length > 0 ? <DnsRecords records={dnsRecords} /> : null}
         </div>
       )}
     </Card>
   );
 }
 
-function DnsRecords({ registration }: { registration: DomainEmailRegistration }) {
+function DnsRecords({ records }: { records: string[] }) {
   return (
     <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
       <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">DNS records</p>
       <pre className="mt-2 overflow-x-auto whitespace-pre-wrap text-xs text-gray-700">
-        {[registration.verification.record, ...registration.dkim.map((record) => `${record.cname} CNAME ${record.value}`)].join('\n')}
+        {records.join('\n')}
       </pre>
     </div>
   );

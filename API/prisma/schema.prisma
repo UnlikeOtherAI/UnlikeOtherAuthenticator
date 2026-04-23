@@ -228,6 +228,7 @@ model DomainEmailConfig {
   sesRegion       String   @default("eu-west-1") @map("ses_region")
   sesVerification String?  @map("ses_verification")
   sesDkim         String?  @map("ses_dkim")
+  sesVerificationToken String? @map("ses_verification_token")
   dkimTokens      String[] @default([]) @map("dkim_tokens")
   lastCheckedAt   DateTime? @map("last_checked_at")
   createdAt       DateTime @default(now()) @map("created_at")

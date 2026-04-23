@@ -43,6 +43,7 @@ export type DomainEmailConfig = {
   sesRegion: string;
   sesVerification: string | null;
   sesDkim: string | null;
+  sesVerificationToken: string | null;
   dkimTokens: string[];
   lastCheckedAt: string | null;
   createdAt: string;

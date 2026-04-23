@@ -39,7 +39,7 @@ function getProvider(): EmailProvider {
   return cachedProvider;
 }
 
-async function dispatchEmail(message: EmailMessage): Promise<void> {
+async function dispatchEmail(message: EmailMessage, options?: { swallowFailures?: boolean }): Promise<void> {
   const env = getEnv();
   const provider = getProvider();
 
@@ -62,6 +62,9 @@ async function dispatchEmail(message: EmailMessage): Promise<void> {
     // The caller should still respond with a generic message.
     if (env.NODE_ENV !== 'production') {
       safeEmailLog(env, message);
+    }
+    if (options?.swallowFailures === false) {
+      throw new Error('EMAIL_DISPATCH_FAILED');
     }
   }
 }
@@ -274,6 +277,7 @@ export async function sendRawEmail(params: {
   fromName?: string | null;
   replyTo?: string | null;
 }): Promise<void> {
+  const env = getEnv();
   const from = params.fromName?.trim()
     ? `"${params.fromName.trim().replace(/"/g, '\\"')}" <${params.from}>`
     : params.from;
@@ -281,9 +285,9 @@ export async function sendRawEmail(params: {
   await dispatchEmail({
     to: params.to,
     from,
-    replyTo: params.replyTo ?? undefined,
+    replyTo: params.replyTo ?? env.EMAIL_REPLY_TO,
     subject: params.subject,
     text: params.text,
     html: params.html,
-  });
+  }, { swallowFailures: false });
 }

@@ -3,7 +3,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { getEnv } from '../config/env.js';
 import {
   validateConfigFields,
-  verifyConfigJwtSignature,
+  verifyConfigJwtSignatureWithKeyDomain,
   type ClientConfig,
 } from '../services/config.service.js';
 import { normalizeDomain } from '../utils/domain.js';
@@ -31,9 +31,16 @@ export async function configJwtHeaderVerifier(
   if (!configJwt) throw new AppError('UNAUTHORIZED', 401);
 
   const jwksUrl = getEnv().CONFIG_JWKS_URL ?? 'https://invalid.local/.well-known/jwks.json';
-  const payload = await verifyConfigJwtSignature(configJwt, jwksUrl);
+  const { payload, keyDomain } = await verifyConfigJwtSignatureWithKeyDomain(configJwt, jwksUrl);
   const config = validateConfigFields(payload);
-  if (!normalizeDomain(config.domain)) throw new AppError('BAD_REQUEST', 400);
+  const configDomain = normalizeDomain(config.domain);
+  if (!configDomain) throw new AppError('BAD_REQUEST', 400);
+  if (keyDomain && normalizeDomain(keyDomain) !== configDomain) {
+    throw new AppError('BAD_REQUEST', 400);
+  }
+  if (getEnv().DATABASE_URL && !keyDomain) {
+    throw new AppError('BAD_REQUEST', 400);
+  }
 
   request.configJwt = configJwt;
   request.config = config;
