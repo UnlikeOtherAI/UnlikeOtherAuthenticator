@@ -1,5 +1,5 @@
 import type { DomainRole, PrismaClient, UserRole } from '@prisma/client';
-import { Prisma } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
@@ -8,23 +8,23 @@ function normalizeDomain(value: string): string {
   return value.trim().toLowerCase().replace(/\.$/, '');
 }
 
-function isUniqueConstraintError(err: unknown): err is Prisma.PrismaClientKnownRequestError {
-  return err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002';
-}
-
 /**
  * Ensures a per-domain role row exists for a given user.
  *
- * Brief 18 + 22.5:
- * - First successfully created SUPERUSER row per domain wins (DB constraint).
- * - No locks/queues; resolve races at constraint level.
+ * Brief 18 + 22.5: first SUPERUSER row per domain wins, enforced by a
+ * partial unique index on (domain) WHERE role='SUPERUSER'.
  *
- * Write-path:
- * - Try insert SUPERUSER
- * - On any unique conflict (P2002), first check if (domain,user) already exists and return it
- *   (handles concurrent same-user insert regardless of role).
- * - Otherwise, insert USER (domain already has a SUPERUSER or we lost some other recoverable race).
- * - If USER insert also P2002, check for existing row again and return it; otherwise rethrow.
+ * The target role is decided up front with a pre-read rather than by
+ * optimistic INSERT + catch(P2002). This function runs inside the login
+ * interactive transaction (callback route wraps it in `withTenantTx`),
+ * and in Postgres any statement error inside an interactive tx aborts
+ * the whole tx (SQLSTATE 25P02). A catch-and-retry pattern therefore
+ * surfaces as "transaction is aborted" on the next query.
+ *
+ * A genuine concurrent-first-signup race (two brand-new users on a
+ * brand-new domain at the same instant) will still cause one INSERT to
+ * P2002 and fail the request; the user can retry, and the retry will
+ * see the newly-created SUPERUSER and be assigned USER.
  */
 export async function ensureDomainRoleForUser(params: {
   domain: string;
@@ -41,35 +41,13 @@ export async function ensureDomainRoleForUser(params: {
   });
   if (existing) return existing;
 
-  const findExisting = async (): Promise<DomainRole | null> => {
-    return await prisma.domainRole.findUnique({
-      where: { domain_userId: { domain, userId: params.userId } },
-    });
-  };
+  const existingSuperuser = await prisma.domainRole.findFirst({
+    where: { domain, role: 'SUPERUSER' },
+    select: { userId: true },
+  });
+  const role: UserRole = existingSuperuser ? 'USER' : 'SUPERUSER';
 
-  const createWithRole = async (role: UserRole): Promise<DomainRole> => {
-    return await prisma.domainRole.create({
-      data: { domain, userId: params.userId, role },
-    });
-  };
-
-  try {
-    return await createWithRole('SUPERUSER');
-  } catch (err) {
-    if (!isUniqueConstraintError(err)) throw err;
-
-    // Any P2002 is recoverable. First, check if someone inserted (domain,user) concurrently.
-    const rowAfterSuperuserConflict = await findExisting();
-    if (rowAfterSuperuserConflict) return rowAfterSuperuserConflict;
-
-    // Otherwise, we lost the "first SUPERUSER per domain" race; fall back to USER.
-    try {
-      return await createWithRole('USER');
-    } catch (err2) {
-      if (!isUniqueConstraintError(err2)) throw err2;
-      const rowAfterUserConflict = await findExisting();
-      if (rowAfterUserConflict) return rowAfterUserConflict;
-      throw err2;
-    }
-  }
+  return await prisma.domainRole.create({
+    data: { domain, userId: params.userId, role },
+  });
 }
