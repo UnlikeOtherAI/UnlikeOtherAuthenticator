@@ -1,0 +1,35 @@
+apis:
+  main:
+    root: ./openapi.yaml
+
+rules:
+  # Structural correctness — enforced
+  struct: error
+  no-unresolved-refs: error
+  no-undefined-server-variable: error
+  parameter-description: warn
+  operation-description: warn
+
+  # Operability — relaxed
+  operation-operationId: warn
+  operation-summary: warn
+  operation-operationId-unique: error
+  path-not-include-query: error
+  no-ambiguous-paths: error
+  no-path-trailing-slash: warn
+
+  # Server config
+  no-server-example.com: off
+  no-server-trailing-slash: warn
+
+  # Responses
+  operation-4xx-response: warn
+  response-contains-header: off
+  no-empty-servers: warn
+
+  # Tags
+  tag-description: off
+  operation-tag-defined: warn
+
+  # Security
+  security-defined: warn

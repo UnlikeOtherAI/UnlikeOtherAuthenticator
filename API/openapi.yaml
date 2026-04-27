@@ -1,0 +1,4425 @@
+openapi: 3.0.3
+info:
+  title: UnlikeOtherAuthenticator API
+  version: 1.0.0
+  description: |
+    Centralized OAuth / authentication service. Provides user auth flows,
+    token issuance, organisation/team management, and admin operations.
+
+    ## Authentication Schemes
+
+    | Scheme | Header | Format | Used By |
+    |--------|--------|--------|---------|
+    | Domain Hash Bearer | `Authorization` | `Bearer hash(domain+SHARED_SECRET)` | Domain-scoped server-to-server calls |
+    | Admin Bearer | `Authorization` | `Bearer <HS256 JWT>` | Internal admin endpoints |
+    | Access Token | `X-UOA-Access-Token` | `Bearer <JWT>` or raw JWT | User-context org endpoints |
+    | Config JWT | `X-UOA-Config-JWT` | RS256 JWT | Email send endpoint |
+
+    ## Config URL
+    Most endpoints require a `config_url` query parameter pointing to a signed
+    RS256 config JWT hosted by the integrator. The server fetches and verifies
+    this JWT on every request.
+
+servers:
+  - url: https://auth.example.com
+    description: Production
+
+security: []
+
+tags:
+  - name: Infrastructure
+    description: Health, JWKS, API schema, admin UI
+  - name: Config
+    description: Config JWT validation and verification
+  - name: Auth
+    description: Authentication flows (login, register, social, tokens)
+  - name: 2FA
+    description: Two-factor authentication
+  - name: i18n
+    description: Auth UI translations
+  - name: Apps
+    description: Mobile/web app startup payload
+  - name: Email
+    description: Transactional email sending
+  - name: Integrations
+    description: Integration claim flows
+  - name: Domain
+    description: Domain-scoped user and log queries
+  - name: Organizations
+    description: User-facing org, team, group, and membership management
+  - name: Internal Admin
+    description: System-admin–only management endpoints
+  - name: Internal Org
+    description: Server-to-server group and team-group management
+
+components:
+  securitySchemes:
+    domainHashBearer:
+      type: http
+      scheme: bearer
+      description: |
+        `hash(domain + SHARED_SECRET)` — HMAC-SHA256 of the normalised domain
+        concatenated with the shared secret, hex-encoded.
+    adminBearer:
+      type: http
+      scheme: bearer
+      description: |
+        HS256 JWT signed with `ADMIN_ACCESS_TOKEN_SECRET`. Claims must include
+        `role: "superuser"` and `domain` matching `ADMIN_AUTH_DOMAIN`.
+    accessToken:
+      type: apiKey
+      in: header
+      name: X-UOA-Access-Token
+      description: |
+        UOA access token (HS256 JWT). May be prefixed with `Bearer ` or sent raw.
+    configJwt:
+      type: apiKey
+      in: header
+      name: X-UOA-Config-JWT
+      description: RS256 config JWT signed with the domain's private key.
+
+  parameters:
+    configUrl:
+      name: config_url
+      in: query
+      required: true
+      description: HTTPS URL to a signed RS256 config JWT hosted by the integrator.
+      schema:
+        type: string
+        format: uri
+
+    domainQuery:
+      name: domain
+      in: query
+      required: true
+      description: Normalised domain (lowercase, trimmed).
+      schema:
+        type: string
+        example: acme.example.com
+
+    limitQuery:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+
+    cursorQuery:
+      name: cursor
+      in: query
+      required: false
+      schema:
+        type: string
+
+    orgIdPath:
+      name: orgId
+      in: path
+      required: true
+      schema:
+        type: string
+
+    teamIdPath:
+      name: teamId
+      in: path
+      required: true
+      schema:
+        type: string
+
+    groupIdPath:
+      name: groupId
+      in: path
+      required: true
+      schema:
+        type: string
+
+    userIdPath:
+      name: userId
+      in: path
+      required: true
+      schema:
+        type: string
+
+    domainPath:
+      name: domain
+      in: path
+      required: true
+      description: Normalised domain.
+      schema:
+        type: string
+        example: acme.example.com
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Generic public error message.
+        code:
+          type: string
+          description: Machine-readable error code (only when DEBUG_ENABLED).
+        summary:
+          type: string
+        details:
+          type: array
+          items:
+            type: string
+        hints:
+          type: array
+          items:
+            type: string
+
+    OkTrue:
+      type: object
+      required: [ok]
+      properties:
+        ok:
+          type: boolean
+          enum: [true]
+
+    MessageResponse:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+
+    LoginSuccess:
+      type: object
+      required: [ok, redirect_to]
+      properties:
+        ok:
+          type: boolean
+          enum: [true]
+        code:
+          type: string
+          description: One-time authorization code (absent when 2FA required).
+        redirect_to:
+          type: string
+          description: Full redirect URL including `code` param (when present).
+        twofa_required:
+          type: boolean
+          description: Present and `true` when 2FA is required before token exchange.
+        twofa_token:
+          type: string
+          description: Short-lived challenge token to submit to `POST /2fa/verify`.
+        access_request_status:
+          type: string
+          enum: [pending]
+          description: Set when the user requires approval to access the domain.
+
+    AuthCodeSuccess:
+      type: object
+      required: [ok, redirect_to]
+      properties:
+        ok:
+          type: boolean
+          enum: [true]
+        code:
+          type: string
+        redirect_to:
+          type: string
+        access_request_status:
+          type: string
+          enum: [pending]
+
+    TokenResponse:
+      type: object
+      required: [access_token, expires_in, refresh_token, refresh_token_expires_in, token_type]
+      properties:
+        access_token:
+          type: string
+          description: 'HS256 JWT, aud claim is "uoa:access-token".'
+        expires_in:
+          type: integer
+          description: Seconds until access token expiry.
+        refresh_token:
+          type: string
+        refresh_token_expires_in:
+          type: integer
+          description: Seconds until refresh token expiry.
+        token_type:
+          type: string
+          enum: [Bearer]
+        firstLogin:
+          type: object
+          description: Present only on first-ever login for this user on this domain.
+          properties:
+            memberships:
+              type: object
+              properties:
+                orgs:
+                  type: array
+                  items:
+                    type: object
+                    additionalProperties: true
+                teams:
+                  type: array
+                  items:
+                    type: object
+                    additionalProperties: true
+            pending_invites:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+            capabilities:
+              type: object
+              properties:
+                can_create_org:
+                  type: boolean
+                can_accept_invite:
+                  type: boolean
+
+    AdminTokenResponse:
+      type: object
+      required: [access_token, expires_in, token_type]
+      additionalProperties: false
+      properties:
+        access_token:
+          type: string
+        expires_in:
+          type: integer
+        token_type:
+          type: string
+          enum: [Bearer]
+
+    JwksResponse:
+      type: object
+      required: [keys]
+      properties:
+        keys:
+          type: array
+          items:
+            type: object
+            description: Public RSA JWK.
+            additionalProperties: true
+
+    PaginatedList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        nextCursor:
+          type: string
+          nullable: true
+
+    DomainObject:
+      type: object
+      additionalProperties: true
+
+    OrganisationObject:
+      type: object
+      additionalProperties: true
+
+    TeamObject:
+      type: object
+      additionalProperties: true
+
+    MemberObject:
+      type: object
+      additionalProperties: true
+
+    GroupObject:
+      type: object
+      additionalProperties: true
+
+    InviteResult:
+      type: string
+      enum: [invited, resent_existing, already_member, conflict]
+
+    AccessRequestObject:
+      type: object
+      additionalProperties: true
+
+    IntegrationRequestObject:
+      type: object
+      additionalProperties: true
+
+    RotateSecretResponse:
+      type: object
+      required: [domain, contact_email, delivery_mode, email_dispatched, hash_prefix]
+      additionalProperties: false
+      properties:
+        domain:
+          type: string
+        contact_email:
+          type: string
+        delivery_mode:
+          type: string
+          enum: [email, reveal]
+        email_dispatched:
+          type: boolean
+        hash_prefix:
+          type: string
+        credentials:
+          type: object
+          description: Present when `delivery_mode` is `reveal`.
+          additionalProperties: false
+          required: [domain, client_secret, client_hash, hash_prefix]
+          properties:
+            domain:
+              type: string
+            client_secret:
+              type: string
+            client_hash:
+              type: string
+            hash_prefix:
+              type: string
+
+    ConfigValidateResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        schema_valid:
+          type: boolean
+        jwt_signature_valid:
+          type: boolean
+          nullable: true
+        domain_match:
+          type: boolean
+          nullable: true
+        checks:
+          type: object
+          additionalProperties: true
+        issues:
+          type: array
+          items:
+            type: object
+            properties:
+              stage:
+                type: string
+              code:
+                type: string
+              summary:
+                type: string
+              details:
+                type: string
+        recommendations:
+          type: array
+          items:
+            type: string
+
+    AppStartupResponse:
+      type: object
+      required: [flags, cacheTtl, serverTime]
+      properties:
+        killSwitch:
+          type: object
+          nullable: true
+          additionalProperties: true
+        flags:
+          type: object
+          additionalProperties:
+            type: boolean
+        cacheTtl:
+          type: integer
+        serverTime:
+          type: string
+          format: date-time
+        activatesIn:
+          type: integer
+          description: Seconds until kill-switch activates (when scheduled).
+
+    DomainMappingResponse:
+      type: object
+      additionalProperties: true
+      description: Email-domain-to-org/team mapping result.
+
+    DomainUsersResponse:
+      type: object
+      required: [ok, users]
+      properties:
+        ok:
+          type: boolean
+          enum: [true]
+        users:
+          type: array
+          items:
+            type: object
+            required: [id, email]
+            properties:
+              id:
+                type: string
+              email:
+                type: string
+              name:
+                type: string
+                nullable: true
+              avatar_url:
+                type: string
+                nullable: true
+              twofa_enabled:
+                type: boolean
+              role:
+                type: string
+              created_at:
+                type: string
+                format: date-time
+
+    DomainLogsResponse:
+      type: object
+      required: [ok, logs]
+      properties:
+        ok:
+          type: boolean
+          enum: [true]
+        logs:
+          type: array
+          items:
+            type: object
+            required: [id, domain]
+            properties:
+              id:
+                type: string
+              user_id:
+                type: string
+                nullable: true
+              email:
+                type: string
+                nullable: true
+              domain:
+                type: string
+              timestamp:
+                type: string
+                format: date-time
+              auth_method:
+                type: string
+              ip:
+                type: string
+              user_agent:
+                type: string
+
+    DomainDebugResponse:
+      type: object
+      required: [ok, domain, client_id, superuser]
+      properties:
+        ok:
+          type: boolean
+          enum: [true]
+        domain:
+          type: string
+        client_id:
+          type: string
+        superuser:
+          type: object
+          required: [user_id, email]
+          properties:
+            user_id:
+              type: string
+            email:
+              type: string
+
+    AdminSessionResponse:
+      type: object
+      required: [ok, adminUser]
+      additionalProperties: false
+      properties:
+        ok:
+          type: boolean
+        adminUser:
+          type: object
+          additionalProperties: true
+
+    AdminDashboardResponse:
+      type: object
+      required: [stats, domains, organisations, users, logs, handshakeErrors, bans, apps]
+      additionalProperties: false
+      properties:
+        stats:
+          type: object
+          additionalProperties: true
+        domains:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        organisations:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        users:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        logs:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        handshakeErrors:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        bans:
+          type: object
+          additionalProperties: true
+        apps:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+
+    AdminSettingsResponse:
+      type: object
+      required: [bans, apps]
+      additionalProperties: false
+      properties:
+        bans:
+          type: object
+          additionalProperties: true
+        apps:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+
+    RegisterDomainResponse:
+      type: object
+      required: [domain]
+      additionalProperties: false
+      properties:
+        domain:
+          type: object
+          additionalProperties: true
+        client_secret:
+          type: string
+          description: Only present when a new secret was generated.
+        client_hash:
+          type: string
+        client_hash_prefix:
+          type: string
+
+paths:
+
+  # ── Infrastructure ────────────────────────────────────────────────────────────
+
+  /:
+    get:
+      tags: [Infrastructure]
+      summary: Holding page
+      operationId: holdingPage
+      description: Returns a public HTML page linking to /admin, /llm, and /api.
+      responses:
+        '200':
+          description: HTML holding page.
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /health:
+    get:
+      tags: [Infrastructure]
+      summary: Health check
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Service is healthy.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkTrue'
+
+  /.well-known/jwks.json:
+    get:
+      tags: [Infrastructure]
+      summary: Public JWKS
+      operationId: getJwks
+      description: Returns the public RSA key set used to verify config JWTs.
+      responses:
+        '200':
+          description: JWKS document.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: public, max-age=300
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JwksResponse'
+
+  /api:
+    get:
+      tags: [Infrastructure]
+      summary: Machine-readable API schema
+      operationId: getApiSchema
+      description: Returns the full endpoint schema as a JSON array.
+      responses:
+        '200':
+          description: Endpoint schema array.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+
+  /llm:
+    get:
+      tags: [Infrastructure]
+      summary: LLM / human integration guide
+      operationId: getLlmGuide
+      description: Returns Markdown documentation for LLMs and integrators. Links /api for the JSON schema.
+      responses:
+        '200':
+          description: Markdown integration guide.
+          content:
+            text/markdown:
+              schema:
+                type: string
+
+  /admin/{path}:
+    get:
+      tags: [Infrastructure]
+      summary: Admin UI (CSR shell and static assets)
+      operationId: getAdminUi
+      description: |
+        Serves the single-page React admin application. All paths under `/admin/`
+        return either the HTML shell or a static asset. `/admin` (no trailing slash)
+        redirects to `/admin/`.
+      parameters:
+        - name: path
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: HTML shell or static asset.
+          content:
+            text/html:
+              schema:
+                type: string
+        '302':
+          description: Redirect from `/admin` to `/admin/`.
+
+  /assets/{path}:
+    get:
+      tags: [Infrastructure]
+      summary: Auth UI static assets
+      operationId: getAsset
+      description: |
+        Serves the built Auth application's JS, CSS, and font assets referenced by
+        the auth entrypoint HTML. No authentication required.
+      parameters:
+        - name: path
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Relative asset path (e.g. `index-abc123.js`).
+      responses:
+        '200':
+          description: Asset file with appropriate `Content-Type`.
+        '404':
+          description: Asset not found.
+
+  # ── Config ────────────────────────────────────────────────────────────────────
+
+  /config/validate:
+    post:
+      tags: [Config]
+      summary: Validate a config JWT
+      operationId: validateConfig
+      description: |
+        Validates a config JWT without making database calls. Runs schema checks,
+        signature verification, domain matching, and secret scanning. Rate limited
+        to 20 requests per minute per IP.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: At least one of `config`, `config_jwt`, or `config_url` is required.
+              properties:
+                config:
+                  type: object
+                  description: Raw decoded config object.
+                  additionalProperties: true
+                config_jwt:
+                  type: string
+                  description: Signed RS256 config JWT string.
+                config_url:
+                  type: string
+                  format: uri
+                  description: URL from which to fetch the signed config JWT.
+      responses:
+        '200':
+          description: Validation result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigValidateResponse'
+        '429':
+          description: Rate limited.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /config/verify:
+    post:
+      tags: [Config]
+      summary: Verify a config JWT (debug only)
+      operationId: verifyConfig
+      description: |
+        Like `/config/validate` but skips secret scanning and runtime policy checks.
+        Only available when `DEBUG_ENABLED=true` and `NODE_ENV` is not `production`.
+        Rate limited to 10 requests per minute per IP.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                config:
+                  type: object
+                  additionalProperties: true
+                config_jwt:
+                  type: string
+                config_url:
+                  type: string
+                  format: uri
+                jwks_url:
+                  type: string
+                  format: uri
+                  description: Defaults to `CONFIG_JWKS_URL` env var.
+      responses:
+        '200':
+          description: Verification result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigValidateResponse'
+        '403':
+          description: Not available in production.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Rate limited.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ── Auth ──────────────────────────────────────────────────────────────────────
+
+  /auth:
+    get:
+      tags: [Auth]
+      summary: OAuth entrypoint (renders Auth UI)
+      operationId: getAuthEntrypoint
+      description: |
+        Returns the HTML shell for the embedded auth UI. Requires a valid
+        `config_url`. Rate limited to 60 requests per minute per IP.
+      parameters:
+        - $ref: '#/components/parameters/configUrl'
+        - name: redirect_url
+          in: query
+          schema:
+            type: string
+        - name: code_challenge
+          in: query
+          schema:
+            type: string
+        - name: code_challenge_method
+          in: query
+          schema:
+            type: string
+        - name: request_access
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Auth UI HTML.
+          content:
+            text/html:
+              schema:
+                type: string
+        '400':
+          description: Invalid or missing config.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Email / password login
+      operationId: login
+      description: |
+        Authenticates a user with email and password. Returns an authorization
+        code on success, or a `twofa_token` when 2FA is required.
+        Rate limited: 10/min per IP, 5/15 min per email.
+      parameters:
+        - $ref: '#/components/parameters/configUrl'
+        - name: redirect_url
+          in: query
+          schema:
+            type: string
+        - name: code_challenge
+          in: query
+          schema:
+            type: string
+        - name: code_challenge_method
+          in: query
+          schema:
+            type: string
+        - name: request_access
+          in: query
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              additionalProperties: false
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 1
+                remember_me:
+                  type: boolean
+      responses:
+        '200':
+          description: Login succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginSuccess'
+        '400':
+          description: Validation error or missing config.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Invalid credentials.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Rate limited.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Register / initiate email login link
+      operationId: register
+      description: |
+        Sends a magic-link email for registration or passwordless login.
+        Always returns 200 to avoid email enumeration.
+        Rate limited: 10/min per IP, 5/hour per email.
+      parameters:
+        - $ref: '#/components/parameters/configUrl'
+        - name: redirect_url
+          in: query
+          schema:
+            type: string
+        - name: code_challenge
+          in: query
+          schema:
+            type: string
+        - name: code_challenge_method
+          in: query
+          schema:
+            type: string
+        - name: request_access
+          in: query
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              additionalProperties: false
+              properties:
+                email:
+                  type: string
+                  format: email
+      responses:
+        '200':
+          description: Always returned (no enumeration).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+              example:
+                message: We sent instructions to your email
+        '429':
+          description: Rate limited.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/verify-email:
+    post:
+      tags: [Auth]
+      summary: Complete email verification
+      operationId: verifyEmail
+      description: |
+        Consumes an email verification token. Optionally sets a password for
+        new accounts that haven't set one. Returns an authorization code.
+        Rate limited: 10/min per IP.
+      parameters:
+        - $ref: '#/components/parameters/configUrl'
+        - name: redirect_url
+          in: query
+          schema:
+            type: string
+        - name: code_challenge
+          in: query
+          schema:
+            type: string
+        - name: code_challenge_method
+          in: query
+          schema:
+            type: string
+        - name: request_access
+          in: query
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              additionalProperties: false
+              properties:
+                token:
+                  type: string
+                  minLength: 1
+                password:
+                  type: string
+                  minLength: 1
+                  description: Required when completing a registration that sets a password.
+      responses:
+        '200':
+          description: Email verified.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthCodeSuccess'
+        '400':
+          description: Missing config, missing password, or invalid token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Rate limited.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/token:
+    post:
+      tags: [Auth]
+      summary: Token exchange (authorization code or refresh token)
+      operationId: exchangeToken
+      description: |
+        Exchanges an authorization code or refresh token for an access token pair.
+        Requires domain hash bearer authentication.
+        Rate limited: 10/min per IP.
+      security:
+        - domainHashBearer: []
+      parameters:
+        - $ref: '#/components/parameters/configUrl'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - title: Authorization Code Grant
+                  type: object
+                  required: [code, redirect_url]
+                  additionalProperties: false
+                  properties:
+                    grant_type:
+                      type: string
+                      enum: [authorization_code]
+                      default: authorization_code
+                    code:
+                      type: string
+                      minLength: 1
+                    redirect_url:
+                      type: string
+                      minLength: 1
+                    code_verifier:
+                      type: string
+                      minLength: 1
+                      description: PKCE code verifier (required when `code_challenge` was supplied).
+                - title: Refresh Token Grant
+                  type: object
+                  required: [grant_type, refresh_token]
+                  additionalProperties: false
+                  properties:
+                    grant_type:
+                      type: string
+                      enum: [refresh_token]
+                    refresh_token:
+                      type: string
+                      minLength: 1
+      responses:
+        '200':
+          description: Token pair issued.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '400':
+          description: Invalid request or token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or invalid domain hash auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Rate limited.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/revoke:
+    post:
+      tags: [Auth]
+      summary: Revoke refresh token (logout)
+      operationId: revokeToken
+      description: |
+        Invalidates a refresh token. Requires domain hash bearer authentication.
+      security:
+        - domainHashBearer: []
+      parameters:
+        - $ref: '#/components/parameters/configUrl'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              additionalProperties: false
+              properties:
+                refresh_token:
+                  type: string
+                  minLength: 1
+      responses:
+        '200':
+          description: Token revoked.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkTrue'
+        '400':
+          description: Missing config or invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or invalid domain hash auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/reset-password/request:
+    post:
+      tags: [Auth]
+      summary: Request password reset email
+      operationId: requestPasswordReset
+      description: |
+        Sends a password reset email. Always returns 200 to avoid enumeration.
+        Rate limited: 10/min per IP, 3/hour per email.
+      parameters:
+        - $ref: '#/components/parameters/configUrl'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              additionalProperties: false
+              properties:
+                email:
+                  type: string
+                  format: email
+      responses:
+        '200':
+          description: Always returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+              example:
+                message: "If you have an account with us, we've sent you instructions"
+        '429':
+          description: Rate limited.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/reset-password:
+    post:
+      tags: [Auth]
+      summary: Complete password reset
+      operationId: resetPassword
+      description: |
+        Consumes a password-reset token and sets a new password.
+        Rate limited: 10/min per IP.
+      parameters:
+        - $ref: '#/components/parameters/configUrl'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, password]
+              additionalProperties: false
+              properties:
+                token:
+                  type: string
+                  minLength: 1
+                password:
+                  type: string
+                  minLength: 1
+      responses:
+        '200':
+          description: Password reset successful.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkTrue'
+        '400':
+          description: Invalid token or missing config.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Rate limited.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/social/{provider}:
+    get:
+      tags: [Auth]
+      summary: Initiate social OAuth flow
+      operationId: initiateSocialAuth
+      description: |
+        Redirects to the social provider's authorization URL. State is stored
+        server-side (session cookie). Rate limited: 60/min per IP.
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [google, apple, facebook, github, linkedin]
+        - $ref: '#/components/parameters/configUrl'
+        - name: redirect_url
+          in: query
+          schema:
+            type: string
+        - name: redirect_uri
+          in: query
+          schema:
+            type: string
+        - name: code_challenge
+          in: query
+          schema:
+            type: string
+        - name: code_challenge_method
+          in: query
+          schema:
+            type: string
+        - name: request_access
+          in: query
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirect to social provider.
+        '400':
+          description: Missing config or unsupported provider.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Social provider environment variable missing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/callback/{provider}:
+    get:
+      tags: [Auth]
+      summary: Social OAuth callback
+      operationId: socialAuthCallback
+      description: |
+        Handles the OAuth provider redirect. Validates state, exchanges code,
+        upserts user, then redirects to the auth UI with a code or `twofa_token`.
+        Rate limited: 20/min per IP.
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [google, apple, facebook, github, linkedin]
+        - name: code
+          in: query
+          schema:
+            type: string
+        - name: state
+          in: query
+          schema:
+            type: string
+        - name: error
+          in: query
+          schema:
+            type: string
+            description: Error code returned by the social provider.
+      responses:
+        '302':
+          description: Redirect to /auth with code or twofa_token, or to error page.
+        '400':
+          description: Missing callback params or provider mismatch.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Social provider returned an error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/domain-mapping:
+    get:
+      tags: [Auth]
+      summary: Email-domain to org/team mapping lookup
+      operationId: getDomainMapping
+      description: |
+        Returns org/team mapping rules for a given email domain. Used by the auth
+        UI to auto-suggest or auto-join an org. Requires a valid `config_url`.
+        Rate limited: 60/min per IP.
+      parameters:
+        - $ref: '#/components/parameters/configUrl'
+        - name: email_domain
+          in: query
+          required: true
+          schema:
+            type: string
+            description: Email domain to look up (e.g. `acme.com`).
+      responses:
+        '200':
+          description: Mapping result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DomainMappingResponse'
+        '401':
+          description: Missing config or domain hash auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/email/link:
+    get:
+      tags: [Auth]
+      summary: Email magic-link landing page
+      operationId: handleEmailLink
+      description: |
+        Handles click-through from a magic-link email. Validates the token, then
+        either redirects (LOGIN_LINK) or renders a set-password form
+        (VERIFY_EMAIL_SET_PASSWORD). Rate limited: 10/min per IP.
+      parameters:
+        - $ref: '#/components/parameters/configUrl'
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: redirect_url
+          in: query
+          schema:
+            type: string
+        - name: code_challenge
+          in: query
+          schema:
+            type: string
+        - name: code_challenge_method
+          in: query
+          schema:
+            type: string
+        - name: request_access
+          in: query
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirect to auth UI with authorization code.
+        '200':
+          description: HTML set-password form.
+          content:
+            text/html:
+              schema:
+                type: string
+        '400':
+          description: Missing config or invalid token.
+
+  /auth/email/reset-password:
+    get:
+      tags: [Auth]
+      summary: Password-reset email landing page
+      operationId: handlePasswordResetEmail
+      description: |
+        Handles click-through from a password-reset email. Renders the
+        set-new-password form. Rate limited: 10/min per IP.
+      parameters:
+        - $ref: '#/components/parameters/configUrl'
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: redirect_url
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: HTML set-password form.
+          content:
+            text/html:
+              schema:
+                type: string
+        '400':
+          description: Missing config or invalid token.
+
+  /auth/email/twofa-reset:
+    get:
+      tags: [Auth]
+      summary: 2FA-reset email landing page
+      operationId: handleTwofaResetEmail
+      description: 'Renders the 2FA reset confirmation page. Rate limited: 10/min per IP.'
+      parameters:
+        - $ref: '#/components/parameters/configUrl'
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: HTML confirmation page.
+          content:
+            text/html:
+              schema:
+                type: string
+        '400':
+          description: Missing config or invalid token.
+
+  /auth/email/twofa-reset/confirm:
+    post:
+      tags: [Auth]
+      summary: Confirm 2FA reset via email link
+      operationId: confirmTwofaReset
+      description: 'Consumes the 2FA reset token. Rate limited: 10/min per IP.'
+      parameters:
+        - $ref: '#/components/parameters/configUrl'
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 2FA reset confirmed (HTML response).
+          content:
+            text/html:
+              schema:
+                type: string
+        '400':
+          description: Missing config or invalid token.
+
+  /auth/email/team-invite:
+    get:
+      tags: [Auth]
+      summary: Team invite email landing page
+      operationId: handleTeamInviteEmail
+      description: |
+        Shows accept/decline UI for a team invitation. Rate limited: 10/min per IP.
+      parameters:
+        - $ref: '#/components/parameters/configUrl'
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: redirect_url
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: HTML invite page.
+          content:
+            text/html:
+              schema:
+                type: string
+        '400':
+          description: Invalid or expired invite.
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /auth/email/team-invite/decline:
+    get:
+      tags: [Auth]
+      summary: Decline team invite via email link
+      operationId: declineTeamInvite
+      description: 'Marks the team invite as declined. Rate limited: 10/min per IP.'
+      parameters:
+        - $ref: '#/components/parameters/configUrl'
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: redirect_url
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: HTML decline confirmation.
+          content:
+            text/html:
+              schema:
+                type: string
+        '400':
+          description: Invalid or expired invite.
+
+  /auth/email/team-invite-open/{inviteId}.gif:
+    get:
+      tags: [Auth]
+      summary: Email open tracking pixel
+      operationId: trackInviteEmailOpen
+      description: |
+        1×1 GIF tracking pixel. Records that the invite email was opened.
+        No authentication required.
+      parameters:
+        - name: inviteId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 1×1 transparent GIF.
+          content:
+            image/gif:
+              schema:
+                type: string
+                format: binary
+
+  # ── 2FA ───────────────────────────────────────────────────────────────────────
+
+  /2fa/verify:
+    post:
+      tags: [2FA]
+      summary: Verify TOTP code
+      operationId: verifyTotp
+      description: |
+        Validates a TOTP code against a pending `twofa_token`. Returns an
+        authorization code on success. Rate limited: 5/15 min per IP.
+      parameters:
+        - $ref: '#/components/parameters/configUrl'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [twofa_token, code]
+              additionalProperties: false
+              properties:
+                twofa_token:
+                  type: string
+                  minLength: 1
+                  description: Token returned by `POST /auth/login` when `twofa_required` is true.
+                code:
+                  type: string
+                  minLength: 1
+                  description: 6-digit TOTP code from the authenticator app.
+      responses:
+        '200':
+          description: TOTP verified. Authorization code returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthCodeSuccess'
+        '400':
+          description: Missing config.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Invalid TOTP code or challenge mismatch.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Rate limited.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /2fa/reset/request:
+    post:
+      tags: [2FA]
+      summary: Request 2FA reset email
+      operationId: requestTwofaReset
+      description: |
+        Sends a 2FA reset email. Always returns 200 to avoid enumeration.
+        Rate limited: 10/min per IP, 3/hour per email.
+      parameters:
+        - $ref: '#/components/parameters/configUrl'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              additionalProperties: false
+              properties:
+                email:
+                  type: string
+                  format: email
+      responses:
+        '200':
+          description: Always returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+              example:
+                message: We sent instructions to your email
+        '429':
+          description: Rate limited.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /2fa/reset:
+    post:
+      tags: [2FA]
+      summary: Complete 2FA reset
+      operationId: resetTwofa
+      description: |
+        Consumes a 2FA reset token, disabling 2FA for the user.
+        Rate limited: 10/min per IP.
+      parameters:
+        - $ref: '#/components/parameters/configUrl'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              additionalProperties: false
+              properties:
+                token:
+                  type: string
+                  minLength: 1
+      responses:
+        '200':
+          description: 2FA disabled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkTrue'
+        '400':
+          description: Invalid token or missing config.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Rate limited.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ── i18n ──────────────────────────────────────────────────────────────────────
+
+  /i18n/{language}:
+    get:
+      tags: [i18n]
+      summary: Get Auth UI translations
+      operationId: getTranslations
+      description: |
+        Returns a flat key/value translation map for the requested language.
+        The language must appear in the config's `language_config` field.
+        Translations are AI-generated and cached permanently.
+        Rate limited: 60/min per IP.
+      parameters:
+        - name: language
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 32
+            example: en
+        - $ref: '#/components/parameters/configUrl'
+      responses:
+        '200':
+          description: Translation map.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '400':
+          description: Language not allowed by config or missing config.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ── Apps ──────────────────────────────────────────────────────────────────────
+
+  /apps/startup:
+    get:
+      tags: [Apps]
+      summary: App startup payload (feature flags + kill switch)
+      operationId: getAppStartup
+      description: |
+        Returns feature flags and kill-switch state for a mobile or web app.
+        Requires a valid `config_url`.
+      parameters:
+        - $ref: '#/components/parameters/configUrl'
+        - name: appIdentifier
+          in: query
+          required: true
+          description: Bundle/package identifier (e.g. `com.acme.ios`).
+          schema:
+            type: string
+        - name: platform
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [ios, android, web, macos, windows, other]
+        - name: versionName
+          in: query
+          schema:
+            type: string
+            description: Semantic or display version string.
+        - name: versionCode
+          in: query
+          schema:
+            type: string
+            description: Android numeric version code.
+        - name: buildNumber
+          in: query
+          schema:
+            type: string
+            description: iOS / macOS build number.
+        - name: userId
+          in: query
+          schema:
+            type: string
+            description: Per-user flag overrides and kill-switch targeting.
+        - name: teamId
+          in: query
+          schema:
+            type: string
+            description: Reserved for multi-team flag resolution.
+      responses:
+        '200':
+          description: Startup payload.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppStartupResponse'
+        '400':
+          description: Missing or invalid config.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ── Email ─────────────────────────────────────────────────────────────────────
+
+  /email/send:
+    post:
+      tags: [Email]
+      summary: Send a transactional email
+      operationId: sendEmail
+      description: |
+        Sends an email via the domain's configured SES mailing identity.
+        Requires a valid RS256 config JWT in the `X-UOA-Config-JWT` header.
+        Returns 202 on success (delivery is async).
+      security:
+        - configJwt: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [to, subject, text]
+              additionalProperties: false
+              properties:
+                to:
+                  type: string
+                  format: email
+                subject:
+                  type: string
+                  minLength: 1
+                  maxLength: 998
+                text:
+                  type: string
+                  minLength: 1
+                  description: Plain-text body.
+                html:
+                  type: string
+                  minLength: 1
+                  description: HTML body (optional).
+                reply_to:
+                  type: string
+                  format: email
+      responses:
+        '202':
+          description: Email queued for delivery.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkTrue'
+        '401':
+          description: Missing or invalid config JWT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '400':
+          description: Validation error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ── Integrations ──────────────────────────────────────────────────────────────
+
+  /integrations/claim/{token}:
+    get:
+      tags: [Integrations]
+      summary: Integration claim confirm page
+      operationId: getClaimPage
+      description: |
+        Shows an HTML confirmation page for a one-time claim token. Does NOT
+        consume the token (safe for link scanners). Returns 404 HTML if the token
+        is unknown, expired, or already used.
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 512
+      responses:
+        '200':
+          description: HTML confirmation page with a POST form.
+          content:
+            text/html:
+              schema:
+                type: string
+        '404':
+          description: Token not found or already consumed (HTML error page).
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /integrations/claim/{token}/confirm:
+    post:
+      tags: [Integrations]
+      summary: Consume integration claim token
+      operationId: confirmClaim
+      description: |
+        Consumes the claim token and reveals the integration credentials once.
+        Returns an HTML page showing `domain`, `client_secret`, `client_hash`,
+        `hash_prefix`, and the LLM URL. Returns 404 HTML on any failure.
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 512
+      responses:
+        '200':
+          description: HTML credential reveal page (shown exactly once).
+          content:
+            text/html:
+              schema:
+                type: string
+        '404':
+          description: Token not found, expired, or already consumed (HTML error page).
+          content:
+            text/html:
+              schema:
+                type: string
+
+  # ── Domain ────────────────────────────────────────────────────────────────────
+
+  /domain/users:
+    get:
+      tags: [Domain]
+      summary: List domain users
+      operationId: getDomainUsers
+      description: |
+        Returns all users registered under the domain.
+        Requires domain hash bearer authentication.
+      security:
+        - domainHashBearer: []
+      parameters:
+        - $ref: '#/components/parameters/domainQuery'
+        - $ref: '#/components/parameters/limitQuery'
+      responses:
+        '200':
+          description: User list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DomainUsersResponse'
+        '401':
+          description: Missing or invalid domain hash auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /domain/logs:
+    get:
+      tags: [Domain]
+      summary: List domain login logs
+      operationId: getDomainLogs
+      description: |
+        Returns recent login activity for the domain.
+        Requires domain hash bearer authentication.
+      security:
+        - domainHashBearer: []
+      parameters:
+        - $ref: '#/components/parameters/domainQuery'
+        - $ref: '#/components/parameters/limitQuery'
+      responses:
+        '200':
+          description: Login log entries.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DomainLogsResponse'
+        '401':
+          description: Missing or invalid domain hash auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /domain/debug:
+    get:
+      tags: [Domain]
+      summary: Domain debug info (superuser only)
+      operationId: getDomainDebug
+      description: |
+        Returns domain identity and superuser info. Requires both domain hash
+        bearer auth AND a superuser access token (`X-UOA-Access-Token`).
+      security:
+        - domainHashBearer: []
+          accessToken: []
+      parameters:
+        - $ref: '#/components/parameters/domainQuery'
+      responses:
+        '200':
+          description: Debug payload.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DomainDebugResponse'
+        '401':
+          description: Missing domain hash auth or access token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Access token does not have superuser role.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ── Organizations (user-facing) ───────────────────────────────────────────────
+
+  /org/me:
+    get:
+      tags: [Organizations]
+      summary: Current user org context
+      operationId: getMyOrgContext
+      description: |
+        Returns the authenticated user's organisation memberships and capabilities
+        within the domain. Requires domain hash auth AND a user access token.
+      security:
+        - domainHashBearer: []
+          accessToken: []
+      parameters:
+        - $ref: '#/components/parameters/domainQuery'
+        - $ref: '#/components/parameters/configUrl'
+      responses:
+        '200':
+          description: User org context.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, org]
+                properties:
+                  ok:
+                    type: boolean
+                    enum: [true]
+                  org:
+                    type: object
+                    additionalProperties: true
+        '401':
+          description: Missing access token or config.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Access token domain mismatch.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /org/organisations:
+    get:
+      tags: [Organizations]
+      summary: List organisations
+      operationId: listOrgs
+      description: |
+        Returns organisations visible to the domain. Paginated.
+        Requires domain hash bearer auth.
+      security:
+        - domainHashBearer: []
+      parameters:
+        - $ref: '#/components/parameters/domainQuery'
+        - $ref: '#/components/parameters/configUrl'
+        - $ref: '#/components/parameters/limitQuery'
+        - $ref: '#/components/parameters/cursorQuery'
+      responses:
+        '200':
+          description: Paginated organisation list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedList'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      tags: [Organizations]
+      summary: Create organisation
+      operationId: createOrg
+      description: |
+        Creates a new organisation. The authenticated user becomes the owner.
+        Rate limited: 5/hour per domain+actor. Requires domain hash auth and
+        either superuser role or `allow_user_create_org` config flag.
+      security:
+        - domainHashBearer: []
+      parameters:
+        - $ref: '#/components/parameters/domainQuery'
+        - $ref: '#/components/parameters/configUrl'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              additionalProperties: false
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+      responses:
+        '200':
+          description: Organisation created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganisationObject'
+        '401':
+          description: Missing config or auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Org creation not allowed for this user.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Rate limited.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /org/organisations/{orgId}:
+    parameters:
+      - $ref: '#/components/parameters/orgIdPath'
+      - $ref: '#/components/parameters/domainQuery'
+      - $ref: '#/components/parameters/configUrl'
+
+    get:
+      tags: [Organizations]
+      summary: Get organisation
+      operationId: getOrg
+      security:
+        - domainHashBearer: []
+      responses:
+        '200':
+          description: Organisation details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganisationObject'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      tags: [Organizations]
+      summary: Update organisation
+      operationId: updateOrg
+      security:
+        - domainHashBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              additionalProperties: false
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+      responses:
+        '200':
+          description: Updated organisation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganisationObject'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags: [Organizations]
+      summary: Delete organisation
+      operationId: deleteOrg
+      security:
+        - domainHashBearer: []
+      responses:
+        '200':
+          description: Organisation deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkTrue'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /org/organisations/{orgId}/transfer-ownership:
+    post:
+      tags: [Organizations]
+      summary: Transfer organisation ownership
+      operationId: transferOrgOwnership
+      description: |
+        Transfers ownership to another org member. Caller must be the current owner.
+        Provide exactly one of `newOwnerId` or `newOwnerUserId`.
+      security:
+        - domainHashBearer: []
+      parameters:
+        - $ref: '#/components/parameters/orgIdPath'
+        - $ref: '#/components/parameters/domainQuery'
+        - $ref: '#/components/parameters/configUrl'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                newOwnerId:
+                  type: string
+                newOwnerUserId:
+                  type: string
+      responses:
+        '200':
+          description: Ownership transferred.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganisationObject'
+        '400':
+          description: Missing new owner identifier.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /org/organisations/{orgId}/members:
+    parameters:
+      - $ref: '#/components/parameters/orgIdPath'
+      - $ref: '#/components/parameters/domainQuery'
+      - $ref: '#/components/parameters/configUrl'
+
+    get:
+      tags: [Organizations]
+      summary: List organisation members
+      operationId: listOrgMembers
+      security:
+        - domainHashBearer: []
+      parameters:
+        - $ref: '#/components/parameters/limitQuery'
+        - $ref: '#/components/parameters/cursorQuery'
+      responses:
+        '200':
+          description: Paginated member list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedList'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      tags: [Organizations]
+      summary: Add organisation member
+      operationId: addOrgMember
+      description: |
+        Adds a user (by userId) to the organisation.
+        Rate limited: 100/hour per domain+actor.
+      security:
+        - domainHashBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId]
+              additionalProperties: false
+              properties:
+                userId:
+                  type: string
+                  minLength: 1
+                role:
+                  type: string
+                  description: Org role to assign (defaults to member).
+      responses:
+        '200':
+          description: Member added.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberObject'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /org/organisations/{orgId}/members/{userId}:
+    parameters:
+      - $ref: '#/components/parameters/orgIdPath'
+      - $ref: '#/components/parameters/userIdPath'
+      - $ref: '#/components/parameters/domainQuery'
+      - $ref: '#/components/parameters/configUrl'
+
+    put:
+      tags: [Organizations]
+      summary: Update org member role
+      operationId: updateOrgMemberRole
+      security:
+        - domainHashBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              additionalProperties: false
+              properties:
+                role:
+                  type: string
+      responses:
+        '200':
+          description: Role updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberObject'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags: [Organizations]
+      summary: Remove org member
+      operationId: removeOrgMember
+      security:
+        - domainHashBearer: []
+      responses:
+        '200':
+          description: Member removed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkTrue'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /org/organisations/{orgId}/teams:
+    parameters:
+      - $ref: '#/components/parameters/orgIdPath'
+      - $ref: '#/components/parameters/domainQuery'
+      - $ref: '#/components/parameters/configUrl'
+
+    get:
+      tags: [Organizations]
+      summary: List teams in organisation
+      operationId: listTeams
+      security:
+        - domainHashBearer: []
+      parameters:
+        - $ref: '#/components/parameters/limitQuery'
+        - $ref: '#/components/parameters/cursorQuery'
+      responses:
+        '200':
+          description: Team list.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    name:
+                      type: string
+                    slug:
+                      type: string
+                    description:
+                      type: string
+                      nullable: true
+                    groupId:
+                      type: string
+                      nullable: true
+                    isDefault:
+                      type: boolean
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      tags: [Organizations]
+      summary: Create team
+      operationId: createTeam
+      description: Rate limited 50/hour per domain+actor.
+      security:
+        - domainHashBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              additionalProperties: false
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                slug:
+                  type: string
+                  minLength: 1
+                  maxLength: 120
+                  description: URL-safe slug. Auto-generated from name if omitted.
+                description:
+                  type: string
+                  maxLength: 500
+                  nullable: true
+      responses:
+        '200':
+          description: Team created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamObject'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /org/organisations/{orgId}/teams/{teamId}:
+    parameters:
+      - $ref: '#/components/parameters/orgIdPath'
+      - $ref: '#/components/parameters/teamIdPath'
+      - $ref: '#/components/parameters/domainQuery'
+      - $ref: '#/components/parameters/configUrl'
+
+    get:
+      tags: [Organizations]
+      summary: Get team with members
+      operationId: getTeam
+      security:
+        - domainHashBearer: []
+      responses:
+        '200':
+          description: Team details with member list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamObject'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      tags: [Organizations]
+      summary: Update team
+      operationId: updateTeam
+      description: At least one field must be provided.
+      security:
+        - domainHashBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                slug:
+                  type: string
+                  minLength: 1
+                  maxLength: 120
+                description:
+                  type: string
+                  maxLength: 500
+                  nullable: true
+      responses:
+        '200':
+          description: Team updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamObject'
+        '400':
+          description: No update fields provided.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags: [Organizations]
+      summary: Delete team
+      operationId: deleteTeam
+      security:
+        - domainHashBearer: []
+      responses:
+        '200':
+          description: Team deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkTrue'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /org/organisations/{orgId}/teams/{teamId}/members:
+    parameters:
+      - $ref: '#/components/parameters/orgIdPath'
+      - $ref: '#/components/parameters/teamIdPath'
+      - $ref: '#/components/parameters/domainQuery'
+      - $ref: '#/components/parameters/configUrl'
+
+    post:
+      tags: [Organizations]
+      summary: Add team member
+      operationId: addTeamMember
+      security:
+        - domainHashBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId]
+              additionalProperties: false
+              properties:
+                userId:
+                  type: string
+                  minLength: 1
+                teamRole:
+                  type: string
+      responses:
+        '200':
+          description: Member added to team.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberObject'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /org/organisations/{orgId}/teams/{teamId}/members/{userId}:
+    parameters:
+      - $ref: '#/components/parameters/orgIdPath'
+      - $ref: '#/components/parameters/teamIdPath'
+      - $ref: '#/components/parameters/userIdPath'
+      - $ref: '#/components/parameters/domainQuery'
+      - $ref: '#/components/parameters/configUrl'
+
+    put:
+      tags: [Organizations]
+      summary: Update team member role
+      operationId: updateTeamMemberRole
+      security:
+        - domainHashBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [teamRole]
+              additionalProperties: false
+              properties:
+                teamRole:
+                  type: string
+      responses:
+        '200':
+          description: Role updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberObject'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags: [Organizations]
+      summary: Remove team member
+      operationId: removeTeamMember
+      security:
+        - domainHashBearer: []
+      responses:
+        '200':
+          description: Member removed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkTrue'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /org/organisations/{orgId}/teams/{teamId}/invitations:
+    parameters:
+      - $ref: '#/components/parameters/orgIdPath'
+      - $ref: '#/components/parameters/teamIdPath'
+      - $ref: '#/components/parameters/domainQuery'
+      - $ref: '#/components/parameters/configUrl'
+
+    get:
+      tags: [Organizations]
+      summary: List team invitations
+      operationId: listTeamInvitations
+      security:
+        - domainHashBearer: []
+      responses:
+        '200':
+          description: Invitation list.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      tags: [Organizations]
+      summary: Bulk invite users to team
+      operationId: bulkInviteToTeam
+      description: |
+        Sends invite emails to one or more addresses. Rate limited: 20/hour.
+        Returns per-email result codes.
+      security:
+        - domainHashBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [invites]
+              additionalProperties: false
+              properties:
+                redirectUrl:
+                  type: string
+                  description: URL the accept/decline link redirects to after action.
+                invitedBy:
+                  type: object
+                  additionalProperties: false
+                  properties:
+                    userId:
+                      type: string
+                    name:
+                      type: string
+                      maxLength: 120
+                    email:
+                      type: string
+                      format: email
+                invites:
+                  type: array
+                  minItems: 1
+                  maxItems: 200
+                  description: Each email must be unique within the batch.
+                  items:
+                    type: object
+                    required: [email]
+                    additionalProperties: false
+                    properties:
+                      email:
+                        type: string
+                        format: email
+                      name:
+                        type: string
+                        maxLength: 120
+                      teamRole:
+                        type: string
+      responses:
+        '200':
+          description: Per-invite results.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [results]
+                properties:
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/InviteResult'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Rate limited.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /org/organisations/{orgId}/teams/{teamId}/invitations/{inviteId}/resend:
+    post:
+      tags: [Organizations]
+      summary: Resend team invitation
+      operationId: resendTeamInvitation
+      security:
+        - domainHashBearer: []
+      parameters:
+        - $ref: '#/components/parameters/orgIdPath'
+        - $ref: '#/components/parameters/teamIdPath'
+        - name: inviteId
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/domainQuery'
+        - $ref: '#/components/parameters/configUrl'
+      responses:
+        '200':
+          description: Invite resent.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /org/organisations/{orgId}/teams/{teamId}/access-requests:
+    get:
+      tags: [Organizations]
+      summary: List team access requests
+      operationId: listAccessRequests
+      security:
+        - domainHashBearer: []
+      parameters:
+        - $ref: '#/components/parameters/orgIdPath'
+        - $ref: '#/components/parameters/teamIdPath'
+        - $ref: '#/components/parameters/domainQuery'
+        - $ref: '#/components/parameters/configUrl'
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, approved, rejected]
+      responses:
+        '200':
+          description: Access request list.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AccessRequestObject'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /org/organisations/{orgId}/teams/{teamId}/access-requests/{requestId}/approve:
+    post:
+      tags: [Organizations]
+      summary: Approve team access request
+      operationId: approveAccessRequest
+      security:
+        - domainHashBearer: []
+      parameters:
+        - $ref: '#/components/parameters/orgIdPath'
+        - $ref: '#/components/parameters/teamIdPath'
+        - name: requestId
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/domainQuery'
+        - $ref: '#/components/parameters/configUrl'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                reviewedByUserId:
+                  type: string
+                reviewReason:
+                  type: string
+                  maxLength: 500
+      responses:
+        '200':
+          description: Request approved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessRequestObject'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /org/organisations/{orgId}/teams/{teamId}/access-requests/{requestId}/reject:
+    post:
+      tags: [Organizations]
+      summary: Reject team access request
+      operationId: rejectAccessRequest
+      security:
+        - domainHashBearer: []
+      parameters:
+        - $ref: '#/components/parameters/orgIdPath'
+        - $ref: '#/components/parameters/teamIdPath'
+        - name: requestId
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/domainQuery'
+        - $ref: '#/components/parameters/configUrl'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                reviewedByUserId:
+                  type: string
+                reviewReason:
+                  type: string
+                  maxLength: 500
+      responses:
+        '200':
+          description: Request rejected.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessRequestObject'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /org/organisations/{orgId}/groups:
+    parameters:
+      - $ref: '#/components/parameters/orgIdPath'
+      - $ref: '#/components/parameters/domainQuery'
+      - $ref: '#/components/parameters/configUrl'
+
+    get:
+      tags: [Organizations]
+      summary: List organisation groups
+      operationId: listOrgGroups
+      description: Requires `org_features.groups_enabled` in config.
+      security:
+        - domainHashBearer: []
+      parameters:
+        - $ref: '#/components/parameters/limitQuery'
+        - $ref: '#/components/parameters/cursorQuery'
+      responses:
+        '200':
+          description: Paginated group list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedList'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Groups feature not enabled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /org/organisations/{orgId}/groups/{groupId}:
+    parameters:
+      - $ref: '#/components/parameters/orgIdPath'
+      - $ref: '#/components/parameters/groupIdPath'
+      - $ref: '#/components/parameters/domainQuery'
+      - $ref: '#/components/parameters/configUrl'
+
+    get:
+      tags: [Organizations]
+      summary: Get group
+      operationId: getOrgGroup
+      description: Requires `org_features.groups_enabled` in config.
+      security:
+        - domainHashBearer: []
+      responses:
+        '200':
+          description: Group details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupObject'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Group not found or feature not enabled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ── Internal Admin ────────────────────────────────────────────────────────────
+
+  /internal/admin/config:
+    get:
+      tags: [Internal Admin]
+      summary: Serve admin config JWT
+      operationId: getAdminConfig
+      description: |
+        Returns the signed RS256 admin config JWT as `text/plain`. Used by the
+        admin login flow. No authentication required; response is not cacheable.
+      responses:
+        '200':
+          description: Signed admin config JWT.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: no-store, no-cache
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /internal/admin/token:
+    post:
+      tags: [Internal Admin]
+      summary: Admin token exchange
+      operationId: exchangeAdminToken
+      description: |
+        Exchanges a one-time authorization code (from the admin login flow) for an
+        admin access token. The `config_url` domain must match `ADMIN_AUTH_DOMAIN`
+        and the user must be a superuser.
+      parameters:
+        - $ref: '#/components/parameters/configUrl'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, redirect_url]
+              additionalProperties: false
+              properties:
+                code:
+                  type: string
+                  minLength: 1
+                redirect_url:
+                  type: string
+                  minLength: 1
+                code_verifier:
+                  type: string
+                  minLength: 1
+      responses:
+        '200':
+          description: Admin access token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminTokenResponse'
+        '403':
+          description: Domain mismatch, not a superuser, or role not granted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server misconfiguration.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /internal/admin/session:
+    get:
+      tags: [Internal Admin]
+      summary: Validate admin session
+      operationId: getAdminSession
+      description: Verifies the admin bearer token and returns the admin user claims.
+      security:
+        - adminBearer: []
+      responses:
+        '200':
+          description: Valid session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminSessionResponse'
+        '401':
+          description: Missing or invalid bearer token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Not a superuser or wrong domain.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /internal/admin/dashboard:
+    get:
+      tags: [Internal Admin]
+      summary: Admin dashboard data
+      operationId: getAdminDashboard
+      description: Returns aggregate stats, recent domains, orgs, users, logs, and handshake errors.
+      security:
+        - adminBearer: []
+      responses:
+        '200':
+          description: Dashboard payload.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminDashboardResponse'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Not admin.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /internal/admin/domains:
+    get:
+      tags: [Internal Admin]
+      summary: List domains
+      operationId: adminListDomains
+      security:
+        - adminBearer: []
+      parameters:
+        - $ref: '#/components/parameters/limitQuery'
+      responses:
+        '200':
+          description: Domain list.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DomainObject'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      tags: [Internal Admin]
+      summary: Register domain
+      operationId: adminRegisterDomain
+      description: Creates a new domain. A client secret is generated if not supplied.
+      security:
+        - adminBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [domain]
+              additionalProperties: false
+              properties:
+                domain:
+                  type: string
+                  minLength: 3
+                  description: Normalised domain (min 3 chars).
+                label:
+                  type: string
+                  minLength: 1
+                  maxLength: 120
+                client_secret:
+                  type: string
+                  minLength: 32
+                  description: If omitted, a secret is auto-generated.
+      responses:
+        '200':
+          description: Domain registered.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterDomainResponse'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /internal/admin/domains/{domain}:
+    parameters:
+      - $ref: '#/components/parameters/domainPath'
+
+    get:
+      tags: [Internal Admin]
+      summary: Get domain details
+      operationId: adminGetDomain
+      security:
+        - adminBearer: []
+      responses:
+        '200':
+          description: Domain object or null.
+          content:
+            application/json:
+              schema:
+                type: object
+                nullable: true
+                allOf:
+                  - $ref: '#/components/schemas/DomainObject'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      tags: [Internal Admin]
+      summary: Update domain
+      operationId: adminUpdateDomain
+      security:
+        - adminBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                label:
+                  type: string
+                  minLength: 1
+                  maxLength: 120
+                status:
+                  type: string
+                  enum: [active, disabled]
+      responses:
+        '200':
+          description: Updated domain.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DomainObject'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /internal/admin/domains/{domain}/rotate-secret:
+    post:
+      tags: [Internal Admin]
+      summary: Rotate domain client secret
+      operationId: adminRotateDomainSecret
+      description: |
+        Generates a new client secret for the domain. Credentials can be delivered
+        via email or revealed in the response.
+      security:
+        - adminBearer: []
+      parameters:
+        - $ref: '#/components/parameters/domainPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                client_secret:
+                  type: string
+                  minLength: 32
+                  description: Custom secret (auto-generated if omitted).
+                deliveryMode:
+                  type: string
+                  enum: [email, reveal]
+                  default: email
+      responses:
+        '200':
+          description: Rotation result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RotateSecretResponse'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /internal/admin/domains/{domain}/jwks:
+    parameters:
+      - $ref: '#/components/parameters/domainPath'
+
+    get:
+      tags: [Internal Admin]
+      summary: List domain JWKs
+      operationId: adminListDomainJwks
+      security:
+        - adminBearer: []
+      responses:
+        '200':
+          description: List of JWK objects.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      tags: [Internal Admin]
+      summary: Add domain JWK
+      operationId: adminAddDomainJwk
+      description: Registers an additional public JWK for config JWT verification.
+      security:
+        - adminBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [jwk]
+              additionalProperties: false
+              properties:
+                jwk:
+                  description: JWK object (any shape; server validates key type).
+      responses:
+        '200':
+          description: JWK registered.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /internal/admin/domains/{domain}/jwks/{kid}:
+    delete:
+      tags: [Internal Admin]
+      summary: Deactivate domain JWK
+      operationId: adminDeactivateDomainJwk
+      security:
+        - adminBearer: []
+      parameters:
+        - $ref: '#/components/parameters/domainPath'
+        - name: kid
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 256
+      responses:
+        '200':
+          description: JWK deactivated.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /internal/admin/domains/{domain}/email:
+    parameters:
+      - $ref: '#/components/parameters/domainPath'
+
+    get:
+      tags: [Internal Admin]
+      summary: Get domain email config
+      operationId: adminGetDomainEmail
+      security:
+        - adminBearer: []
+      responses:
+        '200':
+          description: Email configuration.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      tags: [Internal Admin]
+      summary: Update domain email config
+      operationId: adminUpdateDomainEmail
+      description: Sets the SES mailing domain and sender address.
+      security:
+        - adminBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mailingDomain, fromAddress]
+              additionalProperties: false
+              properties:
+                mailingDomain:
+                  type: string
+                  minLength: 3
+                  description: SES verified mailing domain.
+                fromAddress:
+                  type: string
+                  format: email
+                fromName:
+                  type: string
+                replyToDefault:
+                  type: string
+                  format: email
+      responses:
+        '200':
+          description: Updated email config.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags: [Internal Admin]
+      summary: Delete domain email config
+      operationId: adminDeleteDomainEmail
+      security:
+        - adminBearer: []
+      responses:
+        '204':
+          description: Email config deleted.
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /internal/admin/domains/{domain}/email/register:
+    post:
+      tags: [Internal Admin]
+      summary: Register mailing domain with SES
+      operationId: adminRegisterMailingDomain
+      description: Initiates SES domain verification for the mailing domain.
+      security:
+        - adminBearer: []
+      parameters:
+        - $ref: '#/components/parameters/domainPath'
+      responses:
+        '200':
+          description: Registration initiated.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /internal/admin/domains/{domain}/email/refresh:
+    post:
+      tags: [Internal Admin]
+      summary: Refresh SES verification status
+      operationId: adminRefreshEmailStatus
+      security:
+        - adminBearer: []
+      parameters:
+        - $ref: '#/components/parameters/domainPath'
+      responses:
+        '200':
+          description: Refreshed SES status.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /internal/admin/domains/{domain}/email/enabled:
+    patch:
+      tags: [Internal Admin]
+      summary: Enable or disable domain email
+      operationId: adminToggleDomainEmail
+      security:
+        - adminBearer: []
+      parameters:
+        - $ref: '#/components/parameters/domainPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              additionalProperties: false
+              properties:
+                enabled:
+                  type: boolean
+      responses:
+        '200':
+          description: Email enabled state updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /internal/admin/superusers:
+    get:
+      tags: [Internal Admin]
+      summary: List superusers
+      operationId: adminListSuperusers
+      security:
+        - adminBearer: []
+      responses:
+        '200':
+          description: Superuser list.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      tags: [Internal Admin]
+      summary: Grant superuser
+      operationId: adminGrantSuperuser
+      description: Promotes a user to superuser status.
+      security:
+        - adminBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId]
+              additionalProperties: false
+              properties:
+                userId:
+                  type: string
+                  minLength: 1
+      responses:
+        '201':
+          description: Superuser granted.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /internal/admin/superusers/search:
+    get:
+      tags: [Internal Admin]
+      summary: Search non-superuser users
+      operationId: adminSearchNonSuperusers
+      description: Returns users who are not yet superusers, filtered by query string.
+      security:
+        - adminBearer: []
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+            default: ''
+      responses:
+        '200':
+          description: Matching users.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /internal/admin/superusers/{userId}:
+    delete:
+      tags: [Internal Admin]
+      summary: Revoke superuser
+      operationId: adminRevokeSuperuser
+      security:
+        - adminBearer: []
+      parameters:
+        - $ref: '#/components/parameters/userIdPath'
+      responses:
+        '204':
+          description: Superuser revoked.
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Not permitted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Conflict (safety rail — cannot revoke own superuser status).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /internal/admin/integration-requests:
+    get:
+      tags: [Internal Admin]
+      summary: List integration requests
+      operationId: adminListIntegrationRequests
+      security:
+        - adminBearer: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [PENDING, ACCEPTED, DECLINED]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+      responses:
+        '200':
+          description: Integration request list.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/IntegrationRequestObject'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /internal/admin/integration-requests/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+
+    get:
+      tags: [Internal Admin]
+      summary: Get integration request
+      operationId: adminGetIntegrationRequest
+      security:
+        - adminBearer: []
+      responses:
+        '200':
+          description: Integration request or null.
+          content:
+            application/json:
+              schema:
+                type: object
+                nullable: true
+                allOf:
+                  - $ref: '#/components/schemas/IntegrationRequestObject'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags: [Internal Admin]
+      summary: Delete integration request
+      operationId: adminDeleteIntegrationRequest
+      security:
+        - adminBearer: []
+      responses:
+        '200':
+          description: Deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkTrue'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /internal/admin/integration-requests/{id}/accept:
+    post:
+      tags: [Internal Admin]
+      summary: Accept integration request
+      operationId: adminAcceptIntegrationRequest
+      description: Provisions the domain and optionally delivers credentials by email or reveal.
+      security:
+        - adminBearer: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                label:
+                  type: string
+                  minLength: 1
+                  maxLength: 255
+                clientSecret:
+                  type: string
+                  minLength: 32
+                  maxLength: 512
+                deliveryMode:
+                  type: string
+                  enum: [email, reveal]
+                  default: email
+      responses:
+        '200':
+          description: Request accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntegrationRequestObject'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /internal/admin/integration-requests/{id}/decline:
+    post:
+      tags: [Internal Admin]
+      summary: Decline integration request
+      operationId: adminDeclineIntegrationRequest
+      security:
+        - adminBearer: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              additionalProperties: false
+              properties:
+                reason:
+                  type: string
+                  minLength: 1
+                  maxLength: 1000
+      responses:
+        '200':
+          description: Request declined.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntegrationRequestObject'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /internal/admin/integration-requests/{id}/resend-claim:
+    post:
+      tags: [Internal Admin]
+      summary: Resend integration claim link
+      operationId: adminResendClaimLink
+      security:
+        - adminBearer: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                deliveryMode:
+                  type: string
+                  enum: [email, reveal]
+                  default: email
+      responses:
+        '200':
+          description: Claim link resent.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntegrationRequestObject'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /internal/admin/organisations:
+    get:
+      tags: [Internal Admin]
+      summary: List all organisations (admin view)
+      operationId: adminListOrgs
+      security:
+        - adminBearer: []
+      parameters:
+        - $ref: '#/components/parameters/limitQuery'
+      responses:
+        '200':
+          description: Organisation list.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OrganisationObject'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /internal/admin/organisations/{orgId}:
+    get:
+      tags: [Internal Admin]
+      summary: Get organisation (admin view)
+      operationId: adminGetOrg
+      security:
+        - adminBearer: []
+      parameters:
+        - $ref: '#/components/parameters/orgIdPath'
+      responses:
+        '200':
+          description: Organisation or null.
+          content:
+            application/json:
+              schema:
+                type: object
+                nullable: true
+                allOf:
+                  - $ref: '#/components/schemas/OrganisationObject'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /internal/admin/organisations/{orgId}/teams/{teamId}:
+    get:
+      tags: [Internal Admin]
+      summary: Get team (admin view)
+      operationId: adminGetTeam
+      security:
+        - adminBearer: []
+      parameters:
+        - $ref: '#/components/parameters/orgIdPath'
+        - $ref: '#/components/parameters/teamIdPath'
+      responses:
+        '200':
+          description: Team or null.
+          content:
+            application/json:
+              schema:
+                type: object
+                nullable: true
+                allOf:
+                  - $ref: '#/components/schemas/TeamObject'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /internal/admin/teams:
+    get:
+      tags: [Internal Admin]
+      summary: List all teams (admin view)
+      operationId: adminListTeams
+      security:
+        - adminBearer: []
+      parameters:
+        - $ref: '#/components/parameters/limitQuery'
+      responses:
+        '200':
+          description: Team list.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TeamObject'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /internal/admin/users:
+    get:
+      tags: [Internal Admin]
+      summary: List all users (admin view)
+      operationId: adminListUsers
+      security:
+        - adminBearer: []
+      parameters:
+        - $ref: '#/components/parameters/limitQuery'
+      responses:
+        '200':
+          description: User list.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /internal/admin/users/{userId}:
+    get:
+      tags: [Internal Admin]
+      summary: Get user (admin view)
+      operationId: adminGetUser
+      security:
+        - adminBearer: []
+      parameters:
+        - $ref: '#/components/parameters/userIdPath'
+      responses:
+        '200':
+          description: User or null.
+          content:
+            application/json:
+              schema:
+                type: object
+                nullable: true
+                additionalProperties: true
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /internal/admin/logs:
+    get:
+      tags: [Internal Admin]
+      summary: List all login logs (admin view)
+      operationId: adminListLogs
+      security:
+        - adminBearer: []
+      parameters:
+        - $ref: '#/components/parameters/limitQuery'
+      responses:
+        '200':
+          description: Login log entries.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /internal/admin/handshake-errors:
+    get:
+      tags: [Internal Admin]
+      summary: List handshake errors (admin view)
+      operationId: adminListHandshakeErrors
+      security:
+        - adminBearer: []
+      parameters:
+        - $ref: '#/components/parameters/limitQuery'
+      responses:
+        '200':
+          description: Handshake error entries.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /internal/admin/settings:
+    get:
+      tags: [Internal Admin]
+      summary: Admin settings
+      operationId: adminGetSettings
+      security:
+        - adminBearer: []
+      responses:
+        '200':
+          description: Global settings (ban config, registered apps).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminSettingsResponse'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /internal/admin/search:
+    get:
+      tags: [Internal Admin]
+      summary: Global search
+      operationId: adminSearch
+      description: Searches across organisations, teams, and users.
+      security:
+        - adminBearer: []
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+            default: ''
+      responses:
+        '200':
+          description: Search results.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ── Internal Org (server-to-server) ───────────────────────────────────────────
+
+  /internal/org/organisations/{orgId}/groups:
+    post:
+      tags: [Internal Org]
+      summary: Create group
+      operationId: internalCreateGroup
+      description: |
+        Creates a group within an organisation. Requires domain hash bearer auth
+        and `org_features.groups_enabled` in config.
+      security:
+        - domainHashBearer: []
+      parameters:
+        - $ref: '#/components/parameters/orgIdPath'
+        - $ref: '#/components/parameters/domainQuery'
+        - $ref: '#/components/parameters/configUrl'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              additionalProperties: false
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                description:
+                  type: string
+                  maxLength: 500
+                  nullable: true
+      responses:
+        '200':
+          description: Group created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupObject'
+        '401':
+          description: Missing auth or config.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Groups feature not enabled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /internal/org/organisations/{orgId}/groups/{groupId}:
+    parameters:
+      - $ref: '#/components/parameters/orgIdPath'
+      - $ref: '#/components/parameters/groupIdPath'
+      - $ref: '#/components/parameters/domainQuery'
+      - $ref: '#/components/parameters/configUrl'
+
+    put:
+      tags: [Internal Org]
+      summary: Update group
+      operationId: internalUpdateGroup
+      description: At least one of `name` or `description` must be provided.
+      security:
+        - domainHashBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                description:
+                  type: string
+                  maxLength: 500
+                  nullable: true
+      responses:
+        '200':
+          description: Group updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupObject'
+        '400':
+          description: No update fields provided.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing auth or config.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags: [Internal Org]
+      summary: Delete group
+      operationId: internalDeleteGroup
+      security:
+        - domainHashBearer: []
+      responses:
+        '200':
+          description: Group deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkTrue'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /internal/org/organisations/{orgId}/groups/{groupId}/members:
+    post:
+      tags: [Internal Org]
+      summary: Add group member
+      operationId: internalAddGroupMember
+      security:
+        - domainHashBearer: []
+      parameters:
+        - $ref: '#/components/parameters/orgIdPath'
+        - $ref: '#/components/parameters/groupIdPath'
+        - $ref: '#/components/parameters/domainQuery'
+        - $ref: '#/components/parameters/configUrl'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId]
+              additionalProperties: false
+              properties:
+                userId:
+                  type: string
+                  minLength: 1
+                isAdmin:
+                  type: boolean
+                  description: Grant admin role within the group.
+      responses:
+        '200':
+          description: Member added.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberObject'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /internal/org/organisations/{orgId}/groups/{groupId}/members/{userId}:
+    parameters:
+      - $ref: '#/components/parameters/orgIdPath'
+      - $ref: '#/components/parameters/groupIdPath'
+      - $ref: '#/components/parameters/userIdPath'
+      - $ref: '#/components/parameters/domainQuery'
+      - $ref: '#/components/parameters/configUrl'
+
+    put:
+      tags: [Internal Org]
+      summary: Update group member admin status
+      operationId: internalUpdateGroupMember
+      security:
+        - domainHashBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [isAdmin]
+              additionalProperties: false
+              properties:
+                isAdmin:
+                  type: boolean
+      responses:
+        '200':
+          description: Member updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberObject'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags: [Internal Org]
+      summary: Remove group member
+      operationId: internalRemoveGroupMember
+      security:
+        - domainHashBearer: []
+      responses:
+        '200':
+          description: Member removed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkTrue'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /internal/org/organisations/{orgId}/teams/{teamId}/group:
+    put:
+      tags: [Internal Org]
+      summary: Assign or unassign team group
+      operationId: internalAssignTeamGroup
+      description: |
+        Sets the group a team belongs to. Pass `null` for `groupId` to unassign.
+      security:
+        - domainHashBearer: []
+      parameters:
+        - $ref: '#/components/parameters/orgIdPath'
+        - $ref: '#/components/parameters/teamIdPath'
+        - $ref: '#/components/parameters/domainQuery'
+        - $ref: '#/components/parameters/configUrl'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [groupId]
+              additionalProperties: false
+              properties:
+                groupId:
+                  type: string
+                  minLength: 1
+                  nullable: true
+      responses:
+        '200':
+          description: Team updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamObject'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
