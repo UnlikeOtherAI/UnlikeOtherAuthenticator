@@ -10,7 +10,7 @@ info:
 
     | Scheme | Header | Format | Used By |
     |--------|--------|--------|---------|
-    | Domain Hash Bearer | `Authorization` | `Bearer hash(domain+SHARED_SECRET)` | Domain-scoped server-to-server calls |
+    | Domain Hash Bearer | `Authorization` | `Bearer SHA256(normalizedDomain+clientSecret)` | Domain-scoped server-to-server calls |
     | Admin Bearer | `Authorization` | `Bearer <HS256 JWT>` | Internal admin endpoints |
     | Access Token | `X-UOA-Access-Token` | `Bearer <JWT>` or raw JWT | User-context org endpoints |
     | Config JWT | `X-UOA-Config-JWT` | RS256 JWT | Email send endpoint |
@@ -58,8 +58,7 @@ components:
       type: http
       scheme: bearer
       description: |
-        `hash(domain + SHARED_SECRET)` — HMAC-SHA256 of the normalised domain
-        concatenated with the shared secret, hex-encoded.
+        `Bearer SHA256(normalizedDomain + clientSecret)` — uses the per-domain client secret, not the shared secret.
     adminBearer:
       type: http
       scheme: bearer
@@ -188,7 +187,7 @@ components:
 
     LoginSuccess:
       type: object
-      required: [ok, redirect_to]
+      required: [ok]
       properties:
         ok:
           type: boolean
@@ -198,7 +197,7 @@ components:
           description: One-time authorization code (absent when 2FA required).
         redirect_to:
           type: string
-          description: Full redirect URL including `code` param (when present).
+          description: Present when authentication is complete (absent when twofa_required is true).
         twofa_required:
           type: boolean
           description: Present and `true` when 2FA is required before token exchange.
@@ -300,12 +299,12 @@ components:
     PaginatedList:
       type: object
       properties:
-        items:
+        data:
           type: array
           items:
             type: object
             additionalProperties: true
-        nextCursor:
+        next_cursor:
           type: string
           nullable: true
 
@@ -493,8 +492,10 @@ components:
                 type: string
               ip:
                 type: string
+                nullable: true
               user_agent:
                 type: string
+                nullable: true
 
     DomainDebugResponse:
       type: object
@@ -654,17 +655,16 @@ paths:
       tags: [Infrastructure]
       summary: Machine-readable API schema
       operationId: getApiSchema
-      description: Returns the full endpoint schema as a JSON array.
+      description: Returns the full endpoint schema as a JSON object.
       responses:
         '200':
           description: Endpoint schema array.
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  type: object
-                  additionalProperties: true
+                type: object
+                additionalProperties: true
+                description: API info and full endpoint schema.
 
   /llm:
     get:
@@ -679,6 +679,16 @@ paths:
             text/markdown:
               schema:
                 type: string
+
+  /admin:
+    get:
+      tags: [Infrastructure]
+      summary: Admin redirect
+      operationId: adminRedirect
+      description: Redirects to /admin/.
+      responses:
+        '302':
+          description: Redirect to /admin/.
 
   /admin/{path}:
     get:
@@ -704,6 +714,24 @@ paths:
                 type: string
         '302':
           description: Redirect from `/admin` to `/admin/`.
+
+  /admin/assets/{path}:
+    get:
+      tags: [Infrastructure]
+      summary: Admin UI static assets
+      operationId: getAdminAsset
+      description: Serves built Admin app JS/CSS/font assets. Cached for 1 year (immutable).
+      parameters:
+        - name: path
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Asset file with appropriate Content-Type.
+        '404':
+          description: Asset not found.
 
   /assets/{path}:
     get:
@@ -805,8 +833,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ConfigValidateResponse'
-        '403':
-          description: Not available in production.
+        '404':
+          description: Not available (DEBUG_ENABLED not set or production environment).
           content:
             application/json:
               schema:
@@ -2050,7 +2078,7 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [ok, org]
+                required: [ok]
                 properties:
                   ok:
                     type: boolean
@@ -2058,6 +2086,7 @@ paths:
                   org:
                     type: object
                     additionalProperties: true
+                    description: Present when the user has org context on this domain.
         '401':
           description: Missing access token or config.
           content:
@@ -2081,6 +2110,7 @@ paths:
         Requires domain hash bearer auth.
       security:
         - domainHashBearer: []
+          accessToken: []
       parameters:
         - $ref: '#/components/parameters/domainQuery'
         - $ref: '#/components/parameters/configUrl'
@@ -2110,6 +2140,7 @@ paths:
         either superuser role or `allow_user_create_org` config flag.
       security:
         - domainHashBearer: []
+          accessToken: []
       parameters:
         - $ref: '#/components/parameters/domainQuery'
         - $ref: '#/components/parameters/configUrl'
@@ -2164,6 +2195,7 @@ paths:
       operationId: getOrg
       security:
         - domainHashBearer: []
+          accessToken: []
       responses:
         '200':
           description: Organisation details.
@@ -2184,6 +2216,7 @@ paths:
       operationId: updateOrg
       security:
         - domainHashBearer: []
+          accessToken: []
       requestBody:
         required: true
         content:
@@ -2217,6 +2250,7 @@ paths:
       operationId: deleteOrg
       security:
         - domainHashBearer: []
+          accessToken: []
       responses:
         '200':
           description: Organisation deleted.
@@ -2241,6 +2275,7 @@ paths:
         Provide exactly one of `newOwnerId` or `newOwnerUserId`.
       security:
         - domainHashBearer: []
+          accessToken: []
       parameters:
         - $ref: '#/components/parameters/orgIdPath'
         - $ref: '#/components/parameters/domainQuery'
@@ -2289,6 +2324,7 @@ paths:
       operationId: listOrgMembers
       security:
         - domainHashBearer: []
+          accessToken: []
       parameters:
         - $ref: '#/components/parameters/limitQuery'
         - $ref: '#/components/parameters/cursorQuery'
@@ -2315,6 +2351,7 @@ paths:
         Rate limited: 100/hour per domain+actor.
       security:
         - domainHashBearer: []
+          accessToken: []
       requestBody:
         required: true
         content:
@@ -2357,6 +2394,7 @@ paths:
       operationId: updateOrgMemberRole
       security:
         - domainHashBearer: []
+          accessToken: []
       requestBody:
         required: true
         content:
@@ -2388,6 +2426,7 @@ paths:
       operationId: removeOrgMember
       security:
         - domainHashBearer: []
+          accessToken: []
       responses:
         '200':
           description: Member removed.
@@ -2414,6 +2453,7 @@ paths:
       operationId: listTeams
       security:
         - domainHashBearer: []
+          accessToken: []
       parameters:
         - $ref: '#/components/parameters/limitQuery'
         - $ref: '#/components/parameters/cursorQuery'
@@ -2455,6 +2495,7 @@ paths:
       description: Rate limited 50/hour per domain+actor.
       security:
         - domainHashBearer: []
+          accessToken: []
       requestBody:
         required: true
         content:
@@ -2504,6 +2545,7 @@ paths:
       operationId: getTeam
       security:
         - domainHashBearer: []
+          accessToken: []
       responses:
         '200':
           description: Team details with member list.
@@ -2525,6 +2567,7 @@ paths:
       description: At least one field must be provided.
       security:
         - domainHashBearer: []
+          accessToken: []
       requestBody:
         required: true
         content:
@@ -2571,6 +2614,7 @@ paths:
       operationId: deleteTeam
       security:
         - domainHashBearer: []
+          accessToken: []
       responses:
         '200':
           description: Team deleted.
@@ -2598,6 +2642,7 @@ paths:
       operationId: addTeamMember
       security:
         - domainHashBearer: []
+          accessToken: []
       requestBody:
         required: true
         content:
@@ -2640,6 +2685,7 @@ paths:
       operationId: updateTeamMemberRole
       security:
         - domainHashBearer: []
+          accessToken: []
       requestBody:
         required: true
         content:
@@ -2671,6 +2717,7 @@ paths:
       operationId: removeTeamMember
       security:
         - domainHashBearer: []
+          accessToken: []
       responses:
         '200':
           description: Member removed.
@@ -2698,6 +2745,7 @@ paths:
       operationId: listTeamInvitations
       security:
         - domainHashBearer: []
+          accessToken: []
       responses:
         '200':
           description: Invitation list.
@@ -2724,6 +2772,7 @@ paths:
         Returns per-email result codes.
       security:
         - domainHashBearer: []
+          accessToken: []
       requestBody:
         required: true
         content:
@@ -2799,6 +2848,7 @@ paths:
       operationId: resendTeamInvitation
       security:
         - domainHashBearer: []
+          accessToken: []
       parameters:
         - $ref: '#/components/parameters/orgIdPath'
         - $ref: '#/components/parameters/teamIdPath'
@@ -2831,6 +2881,7 @@ paths:
       operationId: listAccessRequests
       security:
         - domainHashBearer: []
+          accessToken: []
       parameters:
         - $ref: '#/components/parameters/orgIdPath'
         - $ref: '#/components/parameters/teamIdPath'
@@ -2864,6 +2915,7 @@ paths:
       operationId: approveAccessRequest
       security:
         - domainHashBearer: []
+          accessToken: []
       parameters:
         - $ref: '#/components/parameters/orgIdPath'
         - $ref: '#/components/parameters/teamIdPath'
@@ -2907,6 +2959,7 @@ paths:
       operationId: rejectAccessRequest
       security:
         - domainHashBearer: []
+          accessToken: []
       parameters:
         - $ref: '#/components/parameters/orgIdPath'
         - $ref: '#/components/parameters/teamIdPath'
@@ -2956,6 +3009,7 @@ paths:
       description: Requires `org_features.groups_enabled` in config.
       security:
         - domainHashBearer: []
+          accessToken: []
       parameters:
         - $ref: '#/components/parameters/limitQuery'
         - $ref: '#/components/parameters/cursorQuery'
@@ -2993,6 +3047,7 @@ paths:
       description: Requires `org_features.groups_enabled` in config.
       security:
         - domainHashBearer: []
+          accessToken: []
       responses:
         '200':
           description: Group details.
@@ -3166,6 +3221,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+        '403':
+          description: Not a superuser or wrong admin domain.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
     post:
       tags: [Internal Admin]
       summary: Register domain
@@ -3208,6 +3269,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+        '403':
+          description: Not a superuser or wrong admin domain.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /internal/admin/domains/{domain}:
     parameters:
       - $ref: '#/components/parameters/domainPath'
@@ -3235,6 +3302,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+        '403':
+          description: Not a superuser or wrong admin domain.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
     put:
       tags: [Internal Admin]
       summary: Update domain
@@ -3270,6 +3343,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+        '403':
+          description: Not a superuser or wrong admin domain.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /internal/admin/domains/{domain}/rotate-secret:
     post:
       tags: [Internal Admin]
@@ -3283,7 +3362,7 @@ paths:
       parameters:
         - $ref: '#/components/parameters/domainPath'
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema:
@@ -3312,6 +3391,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+        '403':
+          description: Not a superuser or wrong admin domain.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /internal/admin/domains/{domain}/jwks:
     parameters:
       - $ref: '#/components/parameters/domainPath'
@@ -3339,6 +3424,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+        '403':
+          description: Not a superuser or wrong admin domain.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
     post:
       tags: [Internal Admin]
       summary: Add domain JWK
@@ -3372,6 +3463,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+        '403':
+          description: Not a superuser or wrong admin domain.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /internal/admin/domains/{domain}/jwks/{kid}:
     delete:
       tags: [Internal Admin]
@@ -3403,6 +3500,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+        '403':
+          description: Not a superuser or wrong admin domain.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /internal/admin/domains/{domain}/email:
     parameters:
       - $ref: '#/components/parameters/domainPath'
@@ -3428,6 +3531,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+        '403':
+          description: Not a superuser or wrong admin domain.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
     put:
       tags: [Internal Admin]
       summary: Update domain email config
@@ -3471,6 +3580,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+        '403':
+          description: Not a superuser or wrong admin domain.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
     delete:
       tags: [Internal Admin]
       summary: Delete domain email config
@@ -3487,6 +3602,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+        '403':
+          description: Not a superuser or wrong admin domain.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /internal/admin/domains/{domain}/email/register:
     post:
       tags: [Internal Admin]
@@ -3512,6 +3633,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+        '403':
+          description: Not a superuser or wrong admin domain.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /internal/admin/domains/{domain}/email/refresh:
     post:
       tags: [Internal Admin]
@@ -3536,6 +3663,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+        '403':
+          description: Not a superuser or wrong admin domain.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /internal/admin/domains/{domain}/email/enabled:
     patch:
       tags: [Internal Admin]
@@ -3571,6 +3704,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+        '403':
+          description: Not a superuser or wrong admin domain.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /internal/admin/superusers:
     get:
       tags: [Internal Admin]
@@ -3595,6 +3734,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+        '403':
+          description: Not a superuser or wrong admin domain.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
     post:
       tags: [Internal Admin]
       summary: Grant superuser
@@ -3629,6 +3774,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+        '403':
+          description: Not a superuser or wrong admin domain.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /internal/admin/superusers/search:
     get:
       tags: [Internal Admin]
@@ -3660,6 +3811,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+        '403':
+          description: Not a superuser or wrong admin domain.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /internal/admin/superusers/{userId}:
     delete:
       tags: [Internal Admin]
@@ -3726,6 +3883,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+        '403':
+          description: Not a superuser or wrong admin domain.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /internal/admin/integration-requests/{id}:
     parameters:
       - name: id
@@ -3757,6 +3920,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+        '403':
+          description: Not a superuser or wrong admin domain.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
     delete:
       tags: [Internal Admin]
       summary: Delete integration request
@@ -3777,6 +3946,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+        '403':
+          description: Not a superuser or wrong admin domain.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /internal/admin/integration-requests/{id}/accept:
     post:
       tags: [Internal Admin]
@@ -3824,6 +3999,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+        '403':
+          description: Not a superuser or wrong admin domain.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /internal/admin/integration-requests/{id}/decline:
     post:
       tags: [Internal Admin]
@@ -3864,6 +4045,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+        '403':
+          description: Not a superuser or wrong admin domain.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /internal/admin/integration-requests/{id}/resend-claim:
     post:
       tags: [Internal Admin]
@@ -3902,6 +4089,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+        '403':
+          description: Not a superuser or wrong admin domain.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /internal/admin/organisations:
     get:
       tags: [Internal Admin]
@@ -3927,6 +4120,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+        '403':
+          description: Not a superuser or wrong admin domain.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /internal/admin/organisations/{orgId}:
     get:
       tags: [Internal Admin]
@@ -3953,6 +4152,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+        '403':
+          description: Not a superuser or wrong admin domain.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /internal/admin/organisations/{orgId}/teams/{teamId}:
     get:
       tags: [Internal Admin]
@@ -3980,6 +4185,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+        '403':
+          description: Not a superuser or wrong admin domain.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /internal/admin/teams:
     get:
       tags: [Internal Admin]
@@ -4005,6 +4216,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+        '403':
+          description: Not a superuser or wrong admin domain.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /internal/admin/users:
     get:
       tags: [Internal Admin]
@@ -4031,6 +4248,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+        '403':
+          description: Not a superuser or wrong admin domain.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /internal/admin/users/{userId}:
     get:
       tags: [Internal Admin]
@@ -4056,6 +4279,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+        '403':
+          description: Not a superuser or wrong admin domain.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /internal/admin/logs:
     get:
       tags: [Internal Admin]
@@ -4082,6 +4311,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+        '403':
+          description: Not a superuser or wrong admin domain.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /internal/admin/handshake-errors:
     get:
       tags: [Internal Admin]
@@ -4108,6 +4343,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+        '403':
+          description: Not a superuser or wrong admin domain.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /internal/admin/settings:
     get:
       tags: [Internal Admin]
@@ -4129,6 +4370,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+        '403':
+          description: Not a superuser or wrong admin domain.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /internal/admin/search:
     get:
       tags: [Internal Admin]
