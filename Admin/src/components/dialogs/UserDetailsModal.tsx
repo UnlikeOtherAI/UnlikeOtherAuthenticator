@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { Badge } from '../ui/Badge';
@@ -5,26 +6,44 @@ import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { MethodBadge, StatusBadge } from '../ui/Status';
 import { useLogsQuery, useOrganisationsQuery, useUserQuery } from '../../features/admin/admin-queries';
+import type { UserSummary } from '../../features/admin/types';
 import { useAdminUi } from '../../features/shell/admin-ui';
+import { AddUserToTeamDialog } from './AddUserToTeamDialog';
+import { EditUserDialog } from './EditUserDialog';
+
+type FollowUpDialog = { kind: 'edit-user'; user: UserSummary } | { kind: 'add-user-to-team'; user: UserSummary };
 
 export function UserDetailsModal() {
   const navigate = useNavigate();
-  const { closeUser, confirm, openDialog, selectedUserId } = useAdminUi();
+  const { closeUser, confirm, selectedUserId } = useAdminUi();
   const userQuery = useUserQuery(selectedUserId);
   const orgsQuery = useOrganisationsQuery();
   const logsQuery = useLogsQuery();
+  const [followUp, setFollowUp] = useState<FollowUpDialog | null>(null);
+  const closeFollowUp = () => setFollowUp(null);
   const user = userQuery.data;
   const orgMemberships = orgsQuery.data?.filter((org) => org.members.some((member) => member.id === selectedUserId)) ?? [];
   const recentLogs = logsQuery.data?.filter((log) => log.user === user?.email).slice(0, 3) ?? [];
 
+  function openEditUser(target: UserSummary) {
+    closeUser();
+    setFollowUp({ kind: 'edit-user', user: target });
+  }
+
+  function openAddUserToTeam(target: UserSummary) {
+    closeUser();
+    setFollowUp({ kind: 'add-user-to-team', user: target });
+  }
+
   return (
+    <>
     <Modal
       isOpen={Boolean(selectedUserId)}
       onClose={closeUser}
       title="User Details"
       footer={
         <>
-          {user ? <Button onClick={() => { closeUser(); openDialog({ type: 'edit-user', user }); }}>Edit User</Button> : null}
+          {user ? <Button onClick={() => openEditUser(user)}>Edit User</Button> : null}
           {user ? <Button variant="primary" onClick={() => { closeUser(); navigate(`/users/${user.id}`); }}>Open Detail</Button> : null}
           <Button onClick={closeUser}>Close</Button>
         </>
@@ -44,8 +63,8 @@ export function UserDetailsModal() {
               </div>
             </div>
             <div className="flex shrink-0 flex-col gap-2">
-              <Button size="sm" onClick={() => { closeUser(); openDialog({ type: 'edit-user', user }); }}>Edit User</Button>
-              <Button size="sm" onClick={() => { closeUser(); openDialog({ type: 'add-user-to-team', user, organisations: orgsQuery.data ?? [] }); }}>Add to Team</Button>
+              <Button size="sm" onClick={() => openEditUser(user)}>Edit User</Button>
+              <Button size="sm" onClick={() => openAddUserToTeam(user)}>Add to Team</Button>
               {user.twofa ? (
                 <Button size="sm" onClick={() => confirm(`Reset 2FA for ${user.email}?`, 'They will need to re-enroll before completing a protected login.')}>
                   Reset 2FA
@@ -105,6 +124,18 @@ export function UserDetailsModal() {
         <p className="text-sm text-gray-400">Loading user...</p>
       )}
     </Modal>
+    <EditUserDialog
+      open={followUp?.kind === 'edit-user'}
+      user={followUp?.kind === 'edit-user' ? followUp.user : null}
+      onClose={closeFollowUp}
+    />
+    <AddUserToTeamDialog
+      open={followUp?.kind === 'add-user-to-team'}
+      user={followUp?.kind === 'add-user-to-team' ? followUp.user : null}
+      organisations={orgsQuery.data ?? []}
+      onClose={closeFollowUp}
+    />
+    </>
   );
 }
 

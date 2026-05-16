@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import { ActionButton, ActionDivider } from '../components/ui/ActionButton';
@@ -8,13 +9,24 @@ import { Card, CardHeader } from '../components/ui/Card';
 import { PageHeader } from '../components/ui/PageHeader';
 import { StatusBadge } from '../components/ui/Status';
 import { DataTable, PaginationFooter, Td, usePagination } from '../components/ui/Table';
+import { AddMemberDialog } from '../components/dialogs/AddMemberDialog';
+import { ChangeTeamRoleDialog } from '../components/dialogs/ChangeTeamRoleDialog';
+import { TeamDialog } from '../components/dialogs/TeamDialog';
 import { useTeamQuery } from '../features/admin/admin-queries';
+import type { OrganisationMember } from '../features/admin/types';
 import { useAdminUi } from '../features/shell/admin-ui';
+
+type DialogState =
+  | { kind: 'edit-team' }
+  | { kind: 'add-member' }
+  | { kind: 'change-team-role'; member: OrganisationMember };
 
 export function TeamDetailPage() {
   const { orgId, teamId } = useParams();
   const navigate = useNavigate();
-  const { confirm, openDialog, openUser } = useAdminUi();
+  const { confirm, openUser } = useAdminUi();
+  const [dialog, setDialog] = useState<DialogState | null>(null);
+  const closeDialog = () => setDialog(null);
   const { data, isLoading } = useTeamQuery(orgId, teamId);
   const teamName = data?.team?.name;
   const members = data?.org && teamName ? data.org.members.filter((member) => member.teams.includes(teamName)) : [];
@@ -40,7 +52,7 @@ export function TeamDetailPage() {
         onBack={() => navigate(`/organisations/${org.id}`)}
         actions={
           <>
-            <Button onClick={() => openDialog({ type: 'edit-team', organisation: org, team })}>Edit</Button>
+            <Button onClick={() => setDialog({ kind: 'edit-team' })}>Edit</Button>
             {!team.isDefault ? <Button variant="danger" onClick={() => confirm(`Delete ${team.name}?`, 'Members stay in the organisation.')}>Delete</Button> : null}
           </>
         }
@@ -48,7 +60,7 @@ export function TeamDetailPage() {
       <Card>
         <CardHeader>
           <span className="text-sm font-semibold text-gray-900">Members ({members.length})</span>
-          <Button icon="plus" size="sm" variant="primary" onClick={() => openDialog({ type: 'add-member', organisation: org, team })}>Add Member</Button>
+          <Button icon="plus" size="sm" variant="primary" onClick={() => setDialog({ kind: 'add-member' })}>Add Member</Button>
         </CardHeader>
         <DataTable headers={['User', 'Team Role', '2FA', 'Last Login', 'Actions']}>
           {pageItems.map((member) => (
@@ -76,7 +88,7 @@ export function TeamDetailPage() {
               <Td><StatusBadge status={member.twofa ? 'On' : 'Off'} /></Td>
               <Td className="text-xs text-gray-400">{member.lastLogin}</Td>
               <Td className="whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
-                <ActionButton tone="amber" onClick={() => openDialog({ type: 'change-team-role', organisation: org, team, member })}>Change Role</ActionButton>
+                <ActionButton tone="amber" onClick={() => setDialog({ kind: 'change-team-role', member })}>Change Role</ActionButton>
                 <ActionDivider />
                 <ActionButton tone="red" onClick={() => confirm('Remove from team?', `${member.name ?? member.email} will be removed from ${team.name}.`)}>Remove</ActionButton>
               </Td>
@@ -85,6 +97,14 @@ export function TeamDetailPage() {
         </DataTable>
         <PaginationFooter {...pagination} />
       </Card>
+      <TeamDialog open={dialog?.kind === 'edit-team'} team={team} onClose={closeDialog} />
+      <AddMemberDialog open={dialog?.kind === 'add-member'} organisation={org} team={team} onClose={closeDialog} />
+      <ChangeTeamRoleDialog
+        open={dialog?.kind === 'change-team-role'}
+        member={dialog?.kind === 'change-team-role' ? dialog.member : null}
+        team={team}
+        onClose={closeDialog}
+      />
     </>
   );
 }

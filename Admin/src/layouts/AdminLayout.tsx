@@ -1,6 +1,5 @@
 import { Outlet } from 'react-router-dom';
 
-import { AdminActionDialog } from './AdminActionDialog';
 import { ConfirmDialog } from '../components/dialogs/ConfirmDialog';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
@@ -16,7 +15,6 @@ export function AdminLayout() {
           <Outlet />
         </main>
       </div>
-      <AdminActionDialog />
       <UserDetailsModal />
       <ConfirmDialog />
     </div>

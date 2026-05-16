@@ -23,11 +23,21 @@ import {
   killSwitchPlatformLabel,
   platformCoverage,
 } from '../features/admin/feature-audience';
+import { FeatureFlagDialog } from '../components/dialogs/FeatureFlagDialog';
+import { KillSwitchDialog } from '../components/dialogs/KillSwitchDialog';
+import { RegisterPlatformDialog } from '../components/dialogs/RegisterPlatformDialog';
 import { useSettingsQuery, useUsersQuery } from '../features/admin/admin-queries';
 import { ALL_PLATFORMS_ID } from '../features/admin/platforms';
-import type { KillSwitchEntry } from '../features/admin/types';
+import type { FeatureFlagDefinition, KillSwitchEntry } from '../features/admin/types';
 import { useAdminUi } from '../features/shell/admin-ui';
 import { useCookieState } from '../utils/cookie-state';
+
+type DialogState =
+  | { kind: 'register-platform' }
+  | { kind: 'add-feature-flag' }
+  | { kind: 'edit-feature-flag'; flag: FeatureFlagDefinition }
+  | { kind: 'add-kill-switch' }
+  | { kind: 'edit-kill-switch'; killSwitch: KillSwitchEntry };
 
 const appDetailTabs = ['flags', 'killswitches', 'groups'] as const;
 
@@ -38,7 +48,9 @@ export function FeatureFlagDetailPage() {
   const navigate = useNavigate();
   const { data, isLoading } = useSettingsQuery();
   const { data: users = [] } = useUsersQuery();
-  const { confirm, openDialog } = useAdminUi();
+  const { confirm } = useAdminUi();
+  const [dialog, setDialog] = useState<DialogState | null>(null);
+  const closeDialog = () => setDialog(null);
   const app = data?.apps.find((item) => item.id === appId);
   const [selectedPlatformId, setSelectedPlatformId] = useState(defaultSelectedPlatformId);
   const [tab, setTab] = useCookieState<AppDetailTab>(`uoa-admin-feature-flags-tab-${appId ?? 'unknown'}`, 'flags', appDetailTabs);
@@ -88,7 +100,7 @@ export function FeatureFlagDetailPage() {
         title={app.name}
         description={`${app.identifier} · ${app.domain} · ${app.org}`}
         onBack={() => navigate('/feature-flags')}
-        actions={<Button icon="plus" variant="primary" onClick={() => openDialog({ type: 'register-platform', app })}>Add Platform</Button>}
+        actions={<Button icon="plus" variant="primary" onClick={() => setDialog({ kind: 'register-platform' })}>Add Platform</Button>}
       />
       <div className="mb-4 grid gap-3 lg:grid-cols-[1fr_auto]">
         <Card className="p-4">
@@ -127,7 +139,7 @@ export function FeatureFlagDetailPage() {
               <span className="text-sm font-semibold text-gray-900">Feature Flags</span>
               <p className="mt-0.5 text-xs text-gray-400">{selectedPlatformName}</p>
             </div>
-            <Button icon="plus" size="sm" variant="primary" onClick={() => openDialog({ type: 'add-feature-flag', app })}>Add Flag</Button>
+            <Button icon="plus" size="sm" variant="primary" onClick={() => setDialog({ kind: 'add-feature-flag' })}>Add Flag</Button>
           </CardHeader>
           <DataTable headers={['Flag', 'Default', 'Scope', 'Platforms', 'Updated', 'Actions']}>
             {flagPageItems.map((flag) => (
@@ -135,10 +147,10 @@ export function FeatureFlagDetailPage() {
                 key={flag.id}
                 className="cursor-pointer transition-colors hover:bg-gray-50"
                 tabIndex={0}
-                onClick={() => openDialog({ type: 'edit-feature-flag', app, flag })}
+                onClick={() => setDialog({ kind: 'edit-feature-flag', flag })}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') {
-                    openDialog({ type: 'edit-feature-flag', app, flag });
+                    setDialog({ kind: 'edit-feature-flag', flag });
                   }
                 }}
               >
@@ -168,7 +180,7 @@ export function FeatureFlagDetailPage() {
               <span className="text-sm font-semibold text-gray-900">Kill Switches</span>
               <p className="mt-0.5 text-xs text-gray-400">Version entries for mobile SDK startup checks</p>
             </div>
-            <Button icon="plus" size="sm" variant="danger" onClick={() => openDialog({ type: 'add-kill-switch', app })}>Add Kill Switch</Button>
+            <Button icon="plus" size="sm" variant="danger" onClick={() => setDialog({ kind: 'add-kill-switch' })}>Add Kill Switch</Button>
           </CardHeader>
           <DataTable headers={['Name', 'Platform', 'Type', 'Version Match', 'Latest', 'Users', 'Status', 'Priority', 'Actions']}>
             {killSwitchPageItems.map((killSwitch) => (
@@ -176,10 +188,10 @@ export function FeatureFlagDetailPage() {
                 key={killSwitch.id}
                 className="cursor-pointer transition-colors hover:bg-gray-50"
                 tabIndex={0}
-                onClick={() => openDialog({ type: 'edit-kill-switch', app, killSwitch })}
+                onClick={() => setDialog({ kind: 'edit-kill-switch', killSwitch })}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') {
-                    openDialog({ type: 'edit-kill-switch', app, killSwitch });
+                    setDialog({ kind: 'edit-kill-switch', killSwitch });
                   }
                 }}
               >
@@ -246,6 +258,19 @@ export function FeatureFlagDetailPage() {
           <PaginationFooter {...groupPagination} />
         </Card>
       ) : null}
+      <RegisterPlatformDialog open={dialog?.kind === 'register-platform'} app={app} onClose={closeDialog} />
+      <FeatureFlagDialog
+        open={dialog?.kind === 'add-feature-flag' || dialog?.kind === 'edit-feature-flag'}
+        app={app}
+        flag={dialog?.kind === 'edit-feature-flag' ? dialog.flag : null}
+        onClose={closeDialog}
+      />
+      <KillSwitchDialog
+        open={dialog?.kind === 'add-kill-switch' || dialog?.kind === 'edit-kill-switch'}
+        app={app}
+        killSwitch={dialog?.kind === 'edit-kill-switch' ? dialog.killSwitch : null}
+        onClose={closeDialog}
+      />
     </>
   );
 }

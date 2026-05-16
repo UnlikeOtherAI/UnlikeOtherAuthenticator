@@ -11,15 +11,24 @@ import { FieldShell, SelectField, TextAreaField, TextField } from '../components
 import { Modal } from '../components/ui/Modal';
 import { PageHeader } from '../components/ui/PageHeader';
 import { DataTable, PaginationFooter, Td, usePagination } from '../components/ui/Table';
+import { EditOrganisationDialog } from '../components/dialogs/EditOrganisationDialog';
+import { TransferOwnershipDialog } from '../components/dialogs/TransferOwnershipDialog';
 import { useOrganisationsQuery } from '../features/admin/admin-queries';
+import type { Organisation } from '../features/admin/types';
 import { useAdminUi } from '../features/shell/admin-ui';
 import { NewOrganisationFormSchema, type NewOrganisationFormValues } from '../schemas/admin';
+
+type DialogState =
+  | { kind: 'edit-org'; organisation: Organisation }
+  | { kind: 'transfer'; organisation: Organisation };
 
 export function OrganisationsPage() {
   const { data = [], isLoading } = useOrganisationsQuery();
   const navigate = useNavigate();
-  const { confirm, openDialog, openUser } = useAdminUi();
+  const { confirm, openUser } = useAdminUi();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [dialog, setDialog] = useState<DialogState | null>(null);
+  const closeDialog = () => setDialog(null);
   const { pageItems, pagination } = usePagination(data);
 
   return (
@@ -63,9 +72,9 @@ export function OrganisationsPage() {
                   <Td>{org.teams.length}</Td>
                   <Td className="text-xs text-gray-400">{org.created}</Td>
                   <Td className="whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
-                    <ActionButton onClick={() => openDialog({ type: 'edit-org', organisation: org })}>Edit</ActionButton>
+                    <ActionButton onClick={() => setDialog({ kind: 'edit-org', organisation: org })}>Edit</ActionButton>
                     <ActionDivider />
-                    <ActionButton tone="amber" onClick={() => openDialog({ type: 'transfer-ownership', organisation: org })}>Transfer</ActionButton>
+                    <ActionButton tone="amber" onClick={() => setDialog({ kind: 'transfer', organisation: org })}>Transfer</ActionButton>
                     <ActionDivider />
                     <ActionButton tone="red" onClick={() => confirm(`Delete ${org.name}?`, 'A production write endpoint is required before this can delete stored organisations.')}>Delete</ActionButton>
                   </Td>
@@ -77,6 +86,16 @@ export function OrganisationsPage() {
         )}
       </Card>
       <NewOrganisationModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+      <EditOrganisationDialog
+        open={dialog?.kind === 'edit-org'}
+        organisation={dialog?.kind === 'edit-org' ? dialog.organisation : null}
+        onClose={closeDialog}
+      />
+      <TransferOwnershipDialog
+        open={dialog?.kind === 'transfer'}
+        organisation={dialog?.kind === 'transfer' ? dialog.organisation : null}
+        onClose={closeDialog}
+      />
     </>
   );
 }

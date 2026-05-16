@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { ActionButton, ActionDivider } from '../components/ui/ActionButton';
@@ -6,14 +7,23 @@ import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { PageHeader } from '../components/ui/PageHeader';
 import { DataTable, PaginationFooter, Td, usePagination } from '../components/ui/Table';
+import { AppSettingsDialog } from '../components/dialogs/AppSettingsDialog';
+import { RegisterAppDialog } from '../components/dialogs/RegisterAppDialog';
 import { useSettingsQuery } from '../features/admin/admin-queries';
 import { platformKindLabel } from '../features/admin/platforms';
+import type { AppFlagSummary } from '../features/admin/types';
 import { useAdminUi } from '../features/shell/admin-ui';
+
+type DialogState =
+  | { kind: 'register-app' }
+  | { kind: 'app-settings'; app: AppFlagSummary };
 
 export function FeatureFlagsPage() {
   const { data, isLoading } = useSettingsQuery();
-  const { confirm, openDialog } = useAdminUi();
+  const { confirm } = useAdminUi();
   const navigate = useNavigate();
+  const [dialog, setDialog] = useState<DialogState | null>(null);
+  const closeDialog = () => setDialog(null);
   const apps = data?.apps ?? [];
   const { pageItems, pagination } = usePagination(apps);
 
@@ -22,7 +32,7 @@ export function FeatureFlagsPage() {
       <PageHeader
         title="Feature Flags"
         description="Apps, platforms, feature flags, audience groups, and versioned kill switches"
-        actions={<Button icon="plus" variant="primary" onClick={() => openDialog({ type: 'register-app' })}>Register App</Button>}
+        actions={<Button icon="plus" variant="primary" onClick={() => setDialog({ kind: 'register-app' })}>Register App</Button>}
       />
       <Card>
         {isLoading || !data ? (
@@ -53,7 +63,7 @@ export function FeatureFlagsPage() {
                   <Td><span className="font-semibold">{app.flags}</span></Td>
                   <Td><Badge variant={app.killSwitches.length ? 'amber' : 'slate'}>{app.killSwitches.length}</Badge></Td>
                   <Td className="whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
-                    <ActionButton tone="amber" onClick={() => openDialog({ type: 'app-settings', app })}>Settings</ActionButton>
+                    <ActionButton tone="amber" onClick={() => setDialog({ kind: 'app-settings', app })}>Settings</ActionButton>
                     <ActionDivider />
                     <ActionButton tone="red" onClick={() => confirm(`Delete ${app.name}?`, 'A production write endpoint is required before this can change stored app registrations.')}>Delete</ActionButton>
                   </Td>
@@ -64,6 +74,12 @@ export function FeatureFlagsPage() {
           </>
         )}
       </Card>
+      <RegisterAppDialog open={dialog?.kind === 'register-app'} onClose={closeDialog} />
+      <AppSettingsDialog
+        open={dialog?.kind === 'app-settings'}
+        app={dialog?.kind === 'app-settings' ? dialog.app : null}
+        onClose={closeDialog}
+      />
     </>
   );
 }

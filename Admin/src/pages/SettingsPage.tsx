@@ -7,10 +7,16 @@ import { Card, CardHeader } from '../components/ui/Card';
 import { PageHeader } from '../components/ui/PageHeader';
 import { DataTable, PaginationFooter, Td, usePagination } from '../components/ui/Table';
 import { SegmentedTabs } from '../components/ui/Tabs';
+import { BanDialog, type BanKind } from '../components/dialogs/BanDialog';
 import { useSettingsQuery } from '../features/admin/admin-queries';
+import type { BanRecord } from '../features/admin/types';
 import { useAdminUi } from '../features/shell/admin-ui';
 
 type SettingsTab = 'bans' | 'system';
+
+type BanDialogState =
+  | { kind: 'add'; banKind: BanKind }
+  | { kind: 'edit'; banKind: BanKind; ban: BanRecord };
 
 export function SettingsPage() {
   const [tab, setTab] = useState<SettingsTab>('bans');
@@ -27,7 +33,9 @@ export function SettingsPage() {
 
 function BansSettings() {
   const { data, isLoading } = useSettingsQuery();
-  const { confirm, openDialog } = useAdminUi();
+  const { confirm } = useAdminUi();
+  const [dialog, setDialog] = useState<BanDialogState | null>(null);
+  const closeDialog = () => setDialog(null);
   const { pageItems: emailBanPageItems, pagination: emailBanPagination } = usePagination(data?.bans.emails ?? []);
   const { pageItems: ipBanPageItems, pagination: ipBanPagination } = usePagination(data?.bans.ips ?? []);
 
@@ -43,11 +51,11 @@ function BansSettings() {
             <span className="text-sm font-semibold text-gray-900">Banned Emails</span>
             <p className="mt-0.5 text-xs text-gray-400">Exact email address blocks</p>
           </div>
-          <Button icon="plus" size="sm" variant="danger" onClick={() => openDialog({ type: 'add-ban', kind: 'email' })}>Add</Button>
+          <Button icon="plus" size="sm" variant="danger" onClick={() => setDialog({ kind: 'add', banKind: 'email' })}>Add</Button>
         </CardHeader>
         <DataTable headers={['Email', 'Banned', 'Reason', '']}>
           {emailBanPageItems.map((ban) => (
-            <tr key={ban.id} className="cursor-pointer hover:bg-gray-50" tabIndex={0} onClick={() => openDialog({ type: 'edit-ban', kind: 'email', ban })}>
+            <tr key={ban.id} className="cursor-pointer hover:bg-gray-50" tabIndex={0} onClick={() => setDialog({ kind: 'edit', banKind: 'email', ban })}>
               <Td><code>{ban.value}</code></Td>
               <Td className="text-xs text-gray-400">{ban.bannedAt}</Td>
               <Td className="text-xs text-gray-400">{ban.reason}</Td>
@@ -65,11 +73,11 @@ function BansSettings() {
             <span className="text-sm font-semibold text-gray-900">IP Address Bans</span>
             <p className="mt-0.5 text-xs text-gray-400">Single IPs and CIDR ranges</p>
           </div>
-          <Button icon="plus" size="sm" variant="danger" onClick={() => openDialog({ type: 'add-ban', kind: 'ip' })}>Ban IP / Range</Button>
+          <Button icon="plus" size="sm" variant="danger" onClick={() => setDialog({ kind: 'add', banKind: 'ip' })}>Ban IP / Range</Button>
         </CardHeader>
         <DataTable headers={['IP / CIDR', 'Label', 'Banned', 'Hits', 'Expires', '']}>
           {ipBanPageItems.map((ban) => (
-            <tr key={ban.id} className="cursor-pointer hover:bg-gray-50" tabIndex={0} onClick={() => openDialog({ type: 'edit-ban', kind: 'ip', ban })}>
+            <tr key={ban.id} className="cursor-pointer hover:bg-gray-50" tabIndex={0} onClick={() => setDialog({ kind: 'edit', banKind: 'ip', ban })}>
               <Td><code className="font-semibold">{ban.value}</code></Td>
               <Td className="text-xs text-gray-400">{ban.label}</Td>
               <Td className="text-xs text-gray-400">{ban.bannedAt}</Td>
@@ -83,6 +91,12 @@ function BansSettings() {
         </DataTable>
         <PaginationFooter {...ipBanPagination} />
       </Card>
+      <BanDialog
+        open={dialog !== null}
+        kind={dialog?.banKind ?? 'email'}
+        ban={dialog?.kind === 'edit' ? dialog.ban : null}
+        onClose={closeDialog}
+      />
     </div>
   );
 }

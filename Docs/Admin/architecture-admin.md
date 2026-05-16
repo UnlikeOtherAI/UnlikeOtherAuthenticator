@@ -70,9 +70,6 @@ Use this structure (matches the current tree under `Admin/src/`):
       Sidebar.tsx            — Shell sidebar
       Topbar.tsx             — Shell topbar
       navigation.ts          — Sidebar/topbar navigation model
-      AdminActionDialog.tsx  — Shared action dialog primitive used by the shell
-      AdminFeatureDialogBodies.tsx — Feature-flag dialog bodies (slated to move into /features)
-      AdminUserDialogBodies.tsx    — User-management dialog bodies (slated to move into /features)
     /pages                   — Route-level page components (one per route, see §4.1)
     /components
       /dialogs               — Shared dialog primitives (ConfirmDialog, UserDetailsModal, …)
@@ -93,7 +90,7 @@ Use this structure (matches the current tree under `Admin/src/`):
 Rules:
 
 - `pages` own route composition only
-- `layouts` own shell composition only — the two feature-specific files currently in `/layouts` (`AdminFeatureDialogBodies.tsx`, `AdminUserDialogBodies.tsx`) are tracked debt and must migrate into the matching `/features/*` subtree. No new feature components belong in `/layouts`.
+- `layouts` own shell composition only — no feature components belong in `/layouts`
 - `components` hold reusable UI pieces, organised by kind: `components/dialogs` for shared dialog primitives, `components/icons` for product-action icons (inline SVG), `components/search` for shell-level search primitives, `components/sections` for reusable page sections that aren't feature-owned, and `components/ui` for generic presentational primitives
 - `features` hold feature-specific views, hooks, and orchestration; current subtrees are `admin`, `auth`, and `shell`
 - `services` own API clients and transport mapping

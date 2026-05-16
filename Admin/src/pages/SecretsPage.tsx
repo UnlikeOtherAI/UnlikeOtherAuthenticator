@@ -10,14 +10,17 @@ import { Modal } from '../components/ui/Modal';
 import { PageHeader } from '../components/ui/PageHeader';
 import { StatusBadge } from '../components/ui/Status';
 import { DataTable, PaginationFooter, Td, usePagination } from '../components/ui/Table';
+import { EditDomainDialog } from '../components/dialogs/EditDomainDialog';
 import { useDomainsQuery } from '../features/admin/admin-queries';
+import type { Domain } from '../features/admin/types';
 import { useAdminUi } from '../features/shell/admin-ui';
 import { adminService, type DomainRotateResponse } from '../services/admin-service';
 
 export function SecretsPage() {
   const { data = [], isLoading } = useDomainsQuery();
-  const { confirm, openDialog } = useAdminUi();
+  const { confirm } = useAdminUi();
   const queryClient = useQueryClient();
+  const [editing, setEditing] = useState<Domain | null>(null);
   const [rotateResult, setRotateResult] = useState<DomainRotateResponse | null>(null);
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('all');
@@ -69,10 +72,10 @@ export function SecretsPage() {
                   key={domain.id}
                   className="cursor-pointer transition-colors hover:bg-gray-50"
                   tabIndex={0}
-                  onClick={() => openDialog({ type: 'edit-domain', domain })}
+                  onClick={() => setEditing(domain)}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter') {
-                      openDialog({ type: 'edit-domain', domain });
+                      setEditing(domain);
                     }
                   }}
                 >
@@ -140,6 +143,7 @@ export function SecretsPage() {
           </>
         )}
       </Card>
+      <EditDomainDialog open={editing !== null} domain={editing} onClose={() => setEditing(null)} />
       <RotateNoticeModal result={rotateResult} onClose={() => setRotateResult(null)} />
     </>
   );

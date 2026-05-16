@@ -1,61 +1,48 @@
 import type { ReactNode } from 'react';
 
-import { FieldShell, SelectField, TextField } from '../components/ui/FormFields';
-import type { AppFlagSummary, FeatureFlagDefinition, KillSwitchEntry } from '../features/admin/types';
+import { Button } from '../ui/Button';
+import { FieldShell, SelectField, TextField } from '../ui/FormFields';
+import { Modal } from '../ui/Modal';
+import type { AppFlagSummary, KillSwitchEntry } from '../../features/admin/types';
 
-type FeatureFlagDialogBodyProps = {
-  app: AppFlagSummary;
-  flag: FeatureFlagDefinition | null;
-};
-
-type KillSwitchDialogBodyProps = {
-  app: AppFlagSummary;
+export function KillSwitchDialog({
+  app,
+  killSwitch,
+  onClose,
+  open,
+}: {
+  app: AppFlagSummary | null;
   killSwitch: KillSwitchEntry | null;
-};
-
-export function FeatureFlagDialogBody({ app, flag }: FeatureFlagDialogBodyProps) {
-  const selectedPlatformIds = new Set(flag?.platformIds ?? app.platforms.map((platform) => platform.id));
-  const allPlatforms = !flag || flag.platformMode === 'all';
-  const selectedGroupIds = new Set(flag ? app.audienceGroups.filter((group) => group.featureFlagIds.includes(flag.id)).map((group) => group.id) : []);
-
+  onClose: () => void;
+  open: boolean;
+}) {
+  const isEdit = killSwitch !== null;
   return (
-    <div className="space-y-4">
-      <FieldShell label="Flag key">
-        <TextField className="font-mono" defaultValue={flag?.key ?? ''} placeholder="new_checkout" />
-      </FieldShell>
-      <FieldShell label="Description">
-        <TextField defaultValue={flag?.description ?? ''} placeholder="New checkout flow" />
-      </FieldShell>
-      <FieldShell label="Default state">
-        <SelectField defaultValue={flag?.defaultState ? 'enabled' : 'disabled'}>
-          <option value="disabled">Disabled</option>
-          <option value="enabled">Enabled</option>
-        </SelectField>
-      </FieldShell>
-      <FieldShell label="Platform coverage">
-        <SelectField defaultValue={flag?.platformMode ?? 'all'}>
-          <option value="all">All platforms</option>
-          <option value="selected">Selected platforms</option>
-        </SelectField>
-      </FieldShell>
-      <CheckboxGrid title="Platforms">
-        {app.platforms.map((platform) => (
-          <CheckboxRow key={platform.id} label={platform.name} defaultChecked={allPlatforms || selectedPlatformIds.has(platform.id)} />
-        ))}
-      </CheckboxGrid>
-      <CheckboxGrid title="Audience groups">
-        {app.audienceGroups.map((group) => (
-          <CheckboxRow key={group.id} label={group.name} defaultChecked={selectedGroupIds.has(group.id)} />
-        ))}
-      </CheckboxGrid>
-    </div>
+    <Modal
+      isOpen={open && Boolean(app)}
+      onClose={onClose}
+      title={isEdit ? 'Edit Kill Switch' : 'Add Kill Switch'}
+      widthClassName="max-w-xl"
+      footer={
+        <>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button icon="check" variant="primary" onClick={onClose}>{isEdit ? 'Save changes' : 'Add'}</Button>
+        </>
+      }
+    >
+      {app ? <KillSwitchDialogBody app={app} killSwitch={killSwitch} /> : null}
+    </Modal>
   );
 }
 
-export function KillSwitchDialogBody({ app, killSwitch }: KillSwitchDialogBodyProps) {
+function KillSwitchDialogBody({ app, killSwitch }: { app: AppFlagSummary; killSwitch: KillSwitchEntry | null }) {
   const selectedPlatformIds = new Set(killSwitch?.platformIds ?? app.platforms.map((platform) => platform.id));
   const allPlatforms = !killSwitch || killSwitch.platformMode === 'all';
-  const selectedGroupIds = new Set(killSwitch ? app.audienceGroups.filter((group) => group.killSwitchIds.includes(killSwitch.id)).map((group) => group.id) : []);
+  const selectedGroupIds = new Set(
+    killSwitch
+      ? app.audienceGroups.filter((group) => group.killSwitchIds.includes(killSwitch.id)).map((group) => group.id)
+      : [],
+  );
 
   return (
     <div className="space-y-4">

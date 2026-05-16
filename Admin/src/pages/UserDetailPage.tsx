@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { ActionButton, ActionDivider } from '../components/ui/ActionButton';
@@ -8,9 +9,17 @@ import { Card, CardHeader } from '../components/ui/Card';
 import { PageHeader } from '../components/ui/PageHeader';
 import { MethodBadge, StatusBadge } from '../components/ui/Status';
 import { DataTable, PaginationFooter, Td, usePagination } from '../components/ui/Table';
+import { AddUserToTeamDialog } from '../components/dialogs/AddUserToTeamDialog';
+import { ChangeTeamRoleDialog } from '../components/dialogs/ChangeTeamRoleDialog';
+import { EditUserDialog } from '../components/dialogs/EditUserDialog';
 import { useLogsQuery, useOrganisationsQuery, useUserQuery } from '../features/admin/admin-queries';
-import type { Organisation, OrganisationMember, Team } from '../features/admin/types';
+import type { Organisation, OrganisationMember, Team, UserSummary } from '../features/admin/types';
 import { useAdminUi } from '../features/shell/admin-ui';
+
+type DialogState =
+  | { kind: 'edit-user'; user: UserSummary }
+  | { kind: 'add-to-team'; user: UserSummary }
+  | { kind: 'change-team-role'; member: OrganisationMember; team: Team };
 
 type TeamMembership = {
   organisation: Organisation;
@@ -21,7 +30,9 @@ type TeamMembership = {
 export function UserDetailPage() {
   const { userId } = useParams();
   const navigate = useNavigate();
-  const { confirm, openDialog } = useAdminUi();
+  const { confirm } = useAdminUi();
+  const [dialog, setDialog] = useState<DialogState | null>(null);
+  const closeDialog = () => setDialog(null);
   const userQuery = useUserQuery(userId ?? null);
   const orgsQuery = useOrganisationsQuery();
   const logsQuery = useLogsQuery();
@@ -55,8 +66,8 @@ export function UserDetailPage() {
         onBack={() => navigate('/users')}
         actions={
           <>
-            <Button onClick={() => openDialog({ type: 'edit-user', user })}>Edit User</Button>
-            <Button variant="primary" onClick={() => openDialog({ type: 'add-user-to-team', user, organisations })}>Add to Team</Button>
+            <Button onClick={() => setDialog({ kind: 'edit-user', user })}>Edit User</Button>
+            <Button variant="primary" onClick={() => setDialog({ kind: 'add-to-team', user })}>Add to Team</Button>
             <Button onClick={() => confirm(`Reset 2FA for ${user.email}?`, 'They will need to re-enroll before completing a protected login.')}>Reset 2FA</Button>
             <Button variant={user.status === 'banned' ? 'secondary' : 'danger'} onClick={() => confirm(`${user.status === 'banned' ? 'Unban' : 'Ban'} ${user.email}?`, 'A production write endpoint is required before this can change stored user state.')}>
               {user.status === 'banned' ? 'Unban' : 'Ban User'}
@@ -73,7 +84,7 @@ export function UserDetailPage() {
       <Card>
         <CardHeader>
           <span className="text-sm font-semibold text-gray-900">Teams</span>
-          <Button icon="plus" size="sm" variant="primary" onClick={() => openDialog({ type: 'add-user-to-team', user, organisations })}>Add to Team</Button>
+          <Button icon="plus" size="sm" variant="primary" onClick={() => setDialog({ kind: 'add-to-team', user })}>Add to Team</Button>
         </CardHeader>
         <DataTable headers={['Organisation', 'Team', 'Org Role', 'Team Role', 'Members', 'Actions']}>
           {pageItems.map(({ member, organisation, team }) => (
@@ -97,7 +108,7 @@ export function UserDetailPage() {
               <Td><StatusBadge status={member.teamRoles[team.name] ?? 'member'} /></Td>
               <Td>{team.members}</Td>
               <Td className="whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
-                <ActionButton tone="amber" onClick={() => openDialog({ type: 'change-team-role', organisation, team, member })}>Change Role</ActionButton>
+                <ActionButton tone="amber" onClick={() => setDialog({ kind: 'change-team-role', member, team })}>Change Role</ActionButton>
                 <ActionDivider />
                 <ActionButton tone="red" onClick={() => confirm(`Remove from ${team.name}?`, `${user.email} will stay in the user directory.`)}>Remove</ActionButton>
               </Td>
@@ -121,6 +132,19 @@ export function UserDetailPage() {
           {recentLogs.length === 0 ? <p className="px-5 py-4 text-sm text-gray-400">No recent logins.</p> : null}
         </div>
       </Card>
+      <EditUserDialog open={dialog?.kind === 'edit-user'} user={dialog?.kind === 'edit-user' ? dialog.user : null} onClose={closeDialog} />
+      <AddUserToTeamDialog
+        open={dialog?.kind === 'add-to-team'}
+        user={dialog?.kind === 'add-to-team' ? dialog.user : null}
+        organisations={organisations}
+        onClose={closeDialog}
+      />
+      <ChangeTeamRoleDialog
+        open={dialog?.kind === 'change-team-role'}
+        member={dialog?.kind === 'change-team-role' ? dialog.member : null}
+        team={dialog?.kind === 'change-team-role' ? dialog.team : null}
+        onClose={closeDialog}
+      />
     </>
   );
 }
