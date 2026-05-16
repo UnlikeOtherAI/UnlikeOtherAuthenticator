@@ -62,7 +62,10 @@ function writeCookieValue(cookieName: string, value: string) {
     return;
   }
 
-  document.cookie = `${encodeURIComponent(cookieName)}=${encodeURIComponent(value)}; Max-Age=${cookieMaxAgeSeconds}; Path=/; SameSite=Lax`;
+  // Only mark `Secure` on https — local dev runs on http://localhost where
+  // browsers would silently drop a Secure cookie.
+  const secureAttr = typeof window !== 'undefined' && window.location.protocol === 'https:' ? '; Secure' : '';
+  document.cookie = `${encodeURIComponent(cookieName)}=${encodeURIComponent(value)}; Max-Age=${cookieMaxAgeSeconds}; Path=/; SameSite=Lax${secureAttr}`;
 }
 
 function dispatchCookieStateChanged(cookieName: string, value: string) {

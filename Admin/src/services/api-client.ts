@@ -12,13 +12,20 @@ export type ApiClient = {
 export function createApiClient(baseUrl = adminEnv.apiBaseUrl): ApiClient {
   async function request<T>(method: string, path: string, body?: unknown, init?: RequestInit) {
     const resolvedBaseUrl = baseUrl || window.location.origin;
+    const requestUrl = new URL(path, resolvedBaseUrl);
+    // The admin Bearer is scoped to the auth origin. If a mis-configured
+    // VITE_API_BASE_URL resolves cross-origin, refuse to send the request
+    // rather than leak the token to another host.
+    if (requestUrl.origin !== window.location.origin) {
+      throw new Error('Cross-origin admin API requests are not permitted');
+    }
     const accessToken = readAdminAccessToken();
     const headers = new Headers(init?.headers);
     headers.set('Accept', 'application/json');
     if (body !== undefined) headers.set('Content-Type', 'application/json');
     if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
 
-    const response = await fetch(new URL(path, resolvedBaseUrl), {
+    const response = await fetch(requestUrl, {
       ...init,
       body: body === undefined ? undefined : JSON.stringify(body),
       headers,

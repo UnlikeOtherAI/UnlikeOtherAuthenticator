@@ -1,7 +1,6 @@
 import { adminEnv } from '../../config/env';
 
 const pendingLoginKey = 'uoa-admin-pending-login';
-const verifierChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._~-';
 
 export type PendingAdminLogin = {
   codeVerifier: string;
@@ -33,9 +32,12 @@ function sanitizeReturnTo(value: string): string {
 }
 
 function randomCodeVerifier(): string {
-  const bytes = new Uint8Array(64);
+  // 32 random bytes → 43 base64url chars (unreserved per RFC 7636 §4.1).
+  // Direct base64url encoding avoids the modulo bias of the previous
+  // `bytes[i] % verifierChars.length` mapping.
+  const bytes = new Uint8Array(32);
   window.crypto.getRandomValues(bytes);
-  return Array.from(bytes, (byte) => verifierChars[byte % verifierChars.length]).join('');
+  return base64Url(bytes);
 }
 
 function base64Url(bytes: Uint8Array): string {

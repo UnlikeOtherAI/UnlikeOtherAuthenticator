@@ -33,7 +33,11 @@ function appendQuery(url: URL, query?: Record<string, QueryValue>): void {
 
 function buildUrl(path: string, query?: Record<string, QueryValue>): string {
   // Paths are always relative to the auth origin — the SPA lives in the
-  // popup served by the same host as the API.
+  // popup served by the same host as the API. Reject absolute URLs so a
+  // stray `https://attacker.example/...` value can never bypass the base.
+  if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('//')) {
+    throw new Error('Absolute URLs not permitted');
+  }
   const url = new URL(path, window.location.origin);
   appendQuery(url, query);
   return url.toString();
