@@ -121,7 +121,9 @@ describe('verifyAccessToken', () => {
       ttl: '1s',
     });
 
-    vi.setSystemTime(new Date('2026-02-10T00:00:02.000Z'));
+    // The verifier allows a 30s clockTolerance for parity with config.service.ts;
+    // push past that window so the token is unambiguously expired.
+    vi.setSystemTime(new Date('2026-02-10T00:01:00.000Z'));
 
     await expect(verifyAccessToken(token)).rejects.toMatchObject({ statusCode: 401 });
   });

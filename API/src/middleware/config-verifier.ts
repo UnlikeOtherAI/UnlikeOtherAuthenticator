@@ -9,6 +9,7 @@ import {
   formatZodIssues,
   mergeAuthDebugInfo,
 } from '../services/auth-debug-page.service.js';
+import { normalizeDomain } from '../utils/domain.js';
 import { AppError } from '../utils/errors.js';
 import {
   assertConfigDomainMatchesConfigUrl,
@@ -299,10 +300,6 @@ function endpointPath(request: FastifyRequest): string {
   } catch {
     return 'unknown';
   }
-}
-
-function normalizeDomain(value: string): string {
-  return value.trim().toLowerCase().replace(/\.$/, '');
 }
 
 export function sanitizeConfigJwtForHandshakeLog(configJwt: string | undefined): {

@@ -3,6 +3,7 @@ import { Prisma, type PrismaClient } from '@prisma/client';
 import type { ClientConfig } from './config.service.js';
 import { getPrisma } from '../db/prisma.js';
 import { getAppLogger } from '../utils/app-logger.js';
+import { normalizeDomain } from '../utils/domain.js';
 import { extractEmailDomain } from '../utils/email-domain.js';
 import {
   deriveSlugWithValidation,
@@ -58,10 +59,6 @@ const DEFAULT_TEAM_ROLE = 'member';
 const OWNER_ROLE = 'owner';
 const DEFAULT_TEAM_NAME = 'General';
 const MAX_ORG_NAME_LENGTH = 100;
-
-function normalizeDomain(value: string): string {
-  return value.trim().toLowerCase().replace(/\.$/, '');
-}
 
 function findMappingForEmailDomain(params: {
   config: ClientConfig;

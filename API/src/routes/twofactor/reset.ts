@@ -16,7 +16,7 @@ const RequestBodySchema = z
 
 const ResetBodySchema = z
   .object({
-    token: z.string().min(1),
+    token: z.string().min(1).max(4096),
   })
   .strict();
 

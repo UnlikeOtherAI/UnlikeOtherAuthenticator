@@ -32,6 +32,7 @@
 import type { FastifyRequest } from 'fastify';
 
 import { verifyDomainAuthToken } from '../services/domain-secret.service.js';
+import { normalizeDomain } from '../utils/domain.js';
 import { AppError } from '../utils/errors.js';
 
 type RequestWithConfig = FastifyRequest & {
@@ -46,24 +47,24 @@ declare module 'fastify' {
   }
 }
 
-function normaliseDomain(rawDomain: unknown) {
+function normalizeDomainInput(rawDomain: unknown): string | undefined {
   if (typeof rawDomain !== 'string') {
     return undefined;
   }
 
-  const value = rawDomain.trim().toLowerCase();
+  const value = normalizeDomain(rawDomain);
   return value || undefined;
 }
 
 function resolveDomain(request: FastifyRequest): string | undefined {
   const queryDomain = (request.query as { domain?: unknown } | undefined)?.domain;
-  return normaliseDomain(queryDomain) || normaliseDomain(request.config?.domain);
+  return normalizeDomainInput(queryDomain) || normalizeDomainInput(request.config?.domain);
 }
 
 function resolveVerifiedConfigDomain(request: RequestWithConfig): string | undefined {
-  const configDomain = normaliseDomain(request.config?.domain);
+  const configDomain = normalizeDomainInput(request.config?.domain);
   const queryDomain = (request.query as { domain?: unknown } | undefined)?.domain;
-  const normalizedQueryDomain = normaliseDomain(queryDomain);
+  const normalizedQueryDomain = normalizeDomainInput(queryDomain);
 
   if (configDomain && normalizedQueryDomain && normalizedQueryDomain !== configDomain) {
     throw new AppError('UNAUTHORIZED', 401);

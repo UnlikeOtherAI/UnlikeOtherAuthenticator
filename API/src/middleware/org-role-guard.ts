@@ -2,10 +2,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 
 import { AppError } from '../utils/errors.js';
 import { verifyAccessToken, type AccessTokenClaims } from '../services/access-token.service.js';
-
-function normalizeDomain(value: string): string {
-  return value.trim().toLowerCase().replace(/\.$/, '');
-}
+import { normalizeDomain } from '../utils/domain.js';
 
 function resolveDomainFromRequest(request: FastifyRequest): string {
   const queryDomain = typeof request.query === 'object' && request.query !== null

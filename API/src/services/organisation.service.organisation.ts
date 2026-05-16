@@ -158,14 +158,27 @@ export async function createOrganisation(
 }
 
 export async function getOrganisation(
-  params: { orgId: string; domain: string },
+  params: { orgId: string; domain: string; actorUserId: string },
   deps?: OrgServiceDeps,
 ): Promise<OrganisationRecord> {
   const env = deps?.env ?? getEnv();
   assertDatabaseEnabled(env);
 
+  const actorUserId = params.actorUserId.trim();
+  if (!actorUserId) throw new AppError('BAD_REQUEST', 400);
+
   const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
   const row = await resolveOrganisationByDomain(prisma, params);
+
+  // Defence-in-depth: even though the route layer enforces `requireOrgRole`,
+  // re-verify actor membership here so the service contract matches
+  // updateOrganisation/deleteOrganisation and cannot leak org data if a future
+  // route refactor omits the role guard.
+  const actorMembership = await getOrganisationMember(prisma, { orgId: row.id, userId: actorUserId });
+  if (!actorMembership) {
+    throw new AppError('FORBIDDEN', 403);
+  }
+
   return toOrganisationRecord(row);
 }
 

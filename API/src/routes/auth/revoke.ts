@@ -7,10 +7,11 @@ import { requireDomainHashAuth } from '../../middleware/domain-hash-auth.js';
 import { setTenantContextFromRequest } from '../../plugins/tenant-context.plugin.js';
 import { revokeRefreshTokenFamily } from '../../services/refresh-token.service.js';
 import { AppError } from '../../utils/errors.js';
+import { revokeRateLimiter } from './rate-limit-keys.js';
 
 const BodySchema = z
   .object({
-    refresh_token: z.string().min(1),
+    refresh_token: z.string().min(1).max(4096),
   })
   .strict();
 
@@ -18,7 +19,7 @@ export function registerAuthRevokeRoute(app: FastifyInstance): void {
   app.post(
     '/auth/revoke',
     {
-      preHandler: [configVerifier, requireDomainHashAuth],
+      preHandler: [configVerifier, requireDomainHashAuth, revokeRateLimiter],
     },
     async (request, reply) => {
       const { refresh_token } = BodySchema.parse(request.body);

@@ -234,10 +234,11 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
     async (request, reply) => {
       const { domain } = parseDomainContext(request);
       const orgId = getOrgIdFromParams(request.params);
+      const actorUserId = getActorUserId(request as RequestWithClaims);
 
-      setTenantContextFromRequest(request, { orgId });
+      setTenantContextFromRequest(request, { orgId, userId: actorUserId });
       const org = await request.withTenantTx((tx) =>
-        getOrganisation({ orgId, domain }, { prisma: asPrismaClient(tx) }),
+        getOrganisation({ orgId, domain, actorUserId }, { prisma: asPrismaClient(tx) }),
       );
 
       reply.status(200).send(org);

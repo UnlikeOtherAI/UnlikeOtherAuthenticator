@@ -90,6 +90,8 @@ function normalizeTranslationResult(params: {
   return out;
 }
 
+const OPENAI_TRANSLATION_TIMEOUT_MS = 10_000;
+
 async function translateWithOpenAi(params: {
   apiKey: string;
   model: string;
@@ -105,21 +107,32 @@ async function translateWithOpenAi(params: {
     stableStringify(params.source),
   ].join('\n');
 
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      authorization: `Bearer ${params.apiKey}`,
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: params.model,
-      messages: [
-        { role: 'system', content: 'You are a translation engine.' },
-        { role: 'user', content: prompt },
-      ],
-      temperature: 0.2,
-    }),
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), OPENAI_TRANSLATION_TIMEOUT_MS);
+
+  let res: Response;
+  try {
+    res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${params.apiKey}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: params.model,
+        messages: [
+          { role: 'system', content: 'You are a translation engine.' },
+          { role: 'user', content: prompt },
+        ],
+        temperature: 0.2,
+      }),
+      signal: controller.signal,
+    });
+  } catch {
+    throw new AppError('INTERNAL', 500, 'AI_TRANSLATION_FAILED');
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   if (!res.ok) {
     throw new AppError('INTERNAL', 500, 'AI_TRANSLATION_FAILED');

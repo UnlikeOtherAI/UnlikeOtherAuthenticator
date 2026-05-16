@@ -61,6 +61,10 @@ export async function verifyAccessToken(
       algorithms: [...ACCESS_TOKEN_ALLOWED_ALGS],
       issuer,
       audience: ACCESS_TOKEN_AUDIENCE,
+      // Parity with config.service.ts and auto-onboarding.service.ts: allow a tiny
+      // amount of clock skew between client/server. 30 seconds keeps the token still
+      // short-lived while preventing brittle "barely-expired" rejections.
+      clockTolerance: 30,
     });
 
     const parsed = AccessTokenClaimsSchema.parse(payload);

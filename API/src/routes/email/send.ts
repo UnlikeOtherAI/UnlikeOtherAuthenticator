@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 import { configJwtHeaderVerifier } from '../../middleware/config-jwt-header-verifier.js';
+import { emailSendRateLimiter } from '../auth/rate-limit-keys.js';
 import { requireSendableDomainEmailConfig } from '../../services/domain-email-config.service.js';
 import { sendRawEmail } from '../../services/email.service.js';
 import { AppError } from '../../utils/errors.js';
@@ -10,8 +11,8 @@ const SendEmailBodySchema = z
   .object({
     to: z.string().email(),
     subject: z.string().trim().min(1).max(998),
-    text: z.string().min(1),
-    html: z.string().min(1).optional(),
+    text: z.string().min(1).max(50_000),
+    html: z.string().min(1).max(50_000).optional(),
     reply_to: z.string().email().optional(),
   })
   .strict();
@@ -20,7 +21,10 @@ export function registerEmailSendRoute(app: FastifyInstance): void {
   app.post(
     '/email/send',
     {
-      preHandler: [configJwtHeaderVerifier],
+      // Inline HTML emails can legitimately exceed the global 64 KiB body cap;
+      // raise just this route's limit to 256 KiB.
+      bodyLimit: 256 * 1024,
+      preHandler: [configJwtHeaderVerifier, emailSendRateLimiter],
       schema: {
         response: {
           202: {

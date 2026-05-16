@@ -1,13 +1,10 @@
+import { normalizeDomain } from '../utils/domain.js';
 import { AppError } from '../utils/errors.js';
 
 export type UserScope = 'global' | 'per_domain';
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
-}
-
-function normalizeDomain(value: string): string {
-  return value.trim().toLowerCase().replace(/\.$/, '');
 }
 
 /**

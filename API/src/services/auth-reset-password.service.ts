@@ -1,4 +1,7 @@
+import { randomBytes } from 'node:crypto';
+
 import type { Prisma, PrismaClient } from '@prisma/client';
+import argon2 from 'argon2';
 import type { ClientConfig } from './config.service.js';
 
 import { EMAIL_TOKEN_TTL_MS } from '../config/constants.js';
@@ -9,6 +12,7 @@ import { generateEmailToken, hashEmailToken } from '../utils/verification-token.
 import { extractEmailTheme } from './email-theme.service.js';
 import { sendPasswordResetEmail } from './email.service.js';
 import { hashPassword } from './password.service.js';
+import { revokeAllRefreshTokensForUser } from './refresh-token.service.js';
 import { buildUserIdentity } from './user-scope.service.js';
 
 type ResetPasswordPrisma = Pick<PrismaClient, '$transaction'> & {
@@ -25,6 +29,8 @@ type ResetPasswordDeps = {
   hashPassword?: typeof hashPassword;
   buildUserIdentity?: typeof buildUserIdentity;
   sendPasswordResetEmail?: typeof sendPasswordResetEmail;
+  revokeAllRefreshTokensForUser?: typeof revokeAllRefreshTokensForUser;
+  consumeAccountFlowTimingBudget?: () => Promise<void>;
   prisma?: ResetPasswordPrisma;
 };
 
@@ -76,6 +82,26 @@ function assertResetTokenValid(params: {
   }
 }
 
+/**
+ * Brief 11: equalize CPU/IO between the user-exists and user-missing branches so the
+ * response time does not leak account existence. Argon2id is the heaviest single step
+ * in the exists branch (password+email pipeline) — matching it within an order of
+ * magnitude is enough to defeat a network-side timing attacker. Result is discarded.
+ */
+async function consumeAccountFlowTimingBudget(): Promise<void> {
+  try {
+    await argon2.hash(randomBytes(16).toString('hex'), {
+      type: argon2.argon2id,
+      timeCost: 3,
+      memoryCost: 2 ** 15,
+      parallelism: 1,
+      hashLength: 32,
+    });
+  } catch {
+    // Never let a timing-equalisation failure surface as an account-flow error.
+  }
+}
+
 export async function requestPasswordReset(
   params: { email: string; config: ClientConfig; configUrl: string },
   deps?: ResetPasswordDeps,
@@ -96,8 +122,14 @@ export async function requestPasswordReset(
     select: { id: true },
   });
 
-  // Brief 11: no email enumeration. If the user doesn't exist, do nothing.
-  if (!existing) return;
+  // Brief 11: no email enumeration. If the user doesn't exist, do nothing visible —
+  // but burn comparable CPU so the response time doesn't reveal account presence.
+  // The Argon2id cost approximates the hash-password+email work the exists branch
+  // performs; we never persist a token or send mail in this path.
+  if (!existing) {
+    await (deps?.consumeAccountFlowTimingBudget ?? consumeAccountFlowTimingBudget)();
+    return;
+  }
 
   const token = deps?.generateEmailToken ? deps.generateEmailToken() : generateEmailToken();
   const sharedSecret = deps?.sharedSecret ?? requireEnv('SHARED_SECRET').SHARED_SECRET;
@@ -183,7 +215,7 @@ export async function resetPasswordWithToken(
   const tokenHash = (deps?.hashEmailToken ?? hashEmailToken)(params.token, sharedSecret);
   const passwordHash = await (deps?.hashPassword ?? hashPassword)(params.password);
 
-  return await prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const tokenRow = await tx.verificationToken.findUnique({
       where: { tokenHash },
       select: {
@@ -236,5 +268,13 @@ export async function resetPasswordWithToken(
 
     return { userId: user.id };
   });
+
+  // Credential change → any pre-existing refresh token must die. Done after the
+  // transaction commits so a revoke failure cannot roll back the password change.
+  await (deps?.revokeAllRefreshTokensForUser ?? revokeAllRefreshTokensForUser)(result.userId, {
+    now: () => now,
+  });
+
+  return result;
 }
 

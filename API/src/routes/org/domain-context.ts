@@ -1,10 +1,9 @@
 import type { FastifyRequest } from 'fastify';
 
+import { normalizeDomain } from '../../utils/domain.js';
 import { AppError } from '../../utils/errors.js';
 
-export function normalizeDomain(value: string): string {
-  return value.trim().toLowerCase().replace(/\.$/, '');
-}
+export { normalizeDomain };
 
 export function assertVerifiedDomainMatchesQuery(
   request: FastifyRequest,

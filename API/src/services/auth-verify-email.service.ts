@@ -9,6 +9,7 @@ import { hashEmailToken } from '../utils/verification-token.js';
 import { hashPassword } from './password.service.js';
 import { ensureDomainRoleForUser } from './domain-role.service.js';
 import { placeUserInConfiguredOrganisation } from './org-placement.service.js';
+import { revokeAllRefreshTokensForUser } from './refresh-token.service.js';
 import { acceptTeamInviteWithinTransaction } from './team-invite.service.js';
 
 type VerifyEmailPrisma = PrismaClient;
@@ -22,6 +23,7 @@ type VerifyEmailDeps = {
   prisma?: VerifyEmailPrisma;
   placeUserInConfiguredOrganisation?: typeof placeUserInConfiguredOrganisation;
   acceptTeamInviteWithinTransaction?: typeof acceptTeamInviteWithinTransaction;
+  revokeAllRefreshTokensForUser?: typeof revokeAllRefreshTokensForUser;
 };
 
 type VerifyEmailTokenRow = Prisma.VerificationTokenGetPayload<{
@@ -157,6 +159,10 @@ export async function verifyEmailToken(
 
     let userId: string;
     let createdUser = false;
+    // True only when this call wrote a new passwordHash onto a pre-existing user
+    // (i.e. social-login / passwordless account adding a password). New users have
+    // no pre-existing sessions to revoke.
+    let setPasswordOnExistingUser = false;
     if (type === 'VERIFY_EMAIL_SET_PASSWORD') {
       if (!params.password) {
         throw new AppError('BAD_REQUEST', 400, 'MISSING_PASSWORD');
@@ -185,6 +191,7 @@ export async function verifyEmailToken(
           select: { id: true },
         });
         userId = updated.id;
+        setPasswordOnExistingUser = true;
       } else {
         const created = await tx.user.create({
           data: {
@@ -258,10 +265,21 @@ export async function verifyEmailToken(
       userId,
       type,
       createdUser,
+      setPasswordOnExistingUser,
       email: tokenRow.email,
       teamInviteId: tokenRow.teamInviteId,
     };
   });
+
+  if (consumed.setPasswordOnExistingUser) {
+    // N-L-1: a social-login / passwordless account that just got a password is a
+    // credential change. Any refresh token issued before the password binding must
+    // die. Done after the transaction commits so a revoke failure cannot roll back
+    // the password write.
+    await (deps?.revokeAllRefreshTokensForUser ?? revokeAllRefreshTokensForUser)(consumed.userId, {
+      now: () => now,
+    });
+  }
 
   if (consumed.createdUser && !consumed.teamInviteId) {
     try {

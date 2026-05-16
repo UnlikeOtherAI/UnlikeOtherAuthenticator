@@ -370,4 +370,66 @@ describe('Organisation service: membership', () => {
       }),
     );
   });
+
+  it('refuses an admin actor from adding a new owner member (no self-elevation)', async () => {
+    const prisma = makePrismaMock();
+
+    prisma.organisation.findFirst.mockResolvedValue(baseOrg);
+    prisma.orgMember.findFirst.mockResolvedValueOnce({
+      id: 'm-actor',
+      orgId: 'org-1',
+      userId: 'u-admin',
+      role: 'admin',
+    });
+
+    const promise = addOrganisationMember(
+      {
+        orgId: 'org-1',
+        domain: 'acme.example.com',
+        actorUserId: 'u-admin',
+        userId: 'u-new',
+        role: 'owner',
+        config: makeConfig(),
+      },
+      { prisma },
+    );
+
+    await expect(promise).rejects.toMatchObject({ code: 'FORBIDDEN', statusCode: 403 });
+    expect(prisma.orgMember.create).not.toHaveBeenCalled();
+  });
+
+  it('refuses an admin actor from removing an owner member even when other owners remain', async () => {
+    const prisma = makePrismaMock();
+
+    prisma.organisation.findFirst.mockResolvedValue(baseOrg);
+    // actor lookup (admin), then target lookup (another owner).
+    prisma.orgMember.findFirst
+      .mockResolvedValueOnce({
+        id: 'm-admin',
+        orgId: 'org-1',
+        userId: 'u-admin',
+        role: 'admin',
+      })
+      .mockResolvedValueOnce({
+        id: 'm-other-owner',
+        orgId: 'org-1',
+        userId: 'u-other-owner',
+        role: 'owner',
+      });
+    // ownerCount = 2 so the ownerCount<=1 guard would otherwise let the delete proceed.
+    prisma.orgMember.count.mockResolvedValue(2);
+
+    const promise = removeOrganisationMember(
+      {
+        orgId: 'org-1',
+        domain: 'acme.example.com',
+        actorUserId: 'u-admin',
+        userId: 'u-other-owner',
+      },
+      { prisma },
+    );
+
+    await expect(promise).rejects.toMatchObject({ code: 'FORBIDDEN', statusCode: 403 });
+    expect(prisma.orgMember.delete).not.toHaveBeenCalled();
+  });
 });

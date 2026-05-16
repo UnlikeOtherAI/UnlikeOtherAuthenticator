@@ -1,4 +1,7 @@
+import { randomBytes } from 'node:crypto';
+
 import type { Prisma, PrismaClient } from '@prisma/client';
+import argon2 from 'argon2';
 import type { ClientConfig } from './config.service.js';
 
 import { EMAIL_TOKEN_TTL_MS } from '../config/constants.js';
@@ -7,6 +10,7 @@ import { getPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import { generateEmailToken, hashEmailToken } from '../utils/verification-token.js';
 import { sendTwoFaResetEmail } from './email.service.js';
+import { revokeAllRefreshTokensForUser } from './refresh-token.service.js';
 import { buildUserIdentity } from './user-scope.service.js';
 
 type TwoFaResetRequestPrisma = {
@@ -26,8 +30,31 @@ type TwoFaResetDeps = {
   generateEmailToken?: typeof generateEmailToken;
   hashEmailToken?: typeof hashEmailToken;
   sendTwoFaResetEmail?: typeof sendTwoFaResetEmail;
+  revokeAllRefreshTokensForUser?: typeof revokeAllRefreshTokensForUser;
+  consumeAccountFlowTimingBudget?: () => Promise<void>;
   prisma?: TwoFaResetRequestPrisma & TwoFaResetConsumePrisma;
 };
+
+/**
+ * Brief 11: equalize CPU/IO between the user-exists and user-missing branches so the
+ * response time does not leak account existence. Argon2id is the heaviest single step
+ * in the exists branch (HMAC + verificationToken.create + email send); matching its
+ * cost within an order of magnitude is enough to defeat a network-side timing attacker.
+ * Result is discarded.
+ */
+async function consumeAccountFlowTimingBudget(): Promise<void> {
+  try {
+    await argon2.hash(randomBytes(16).toString('hex'), {
+      type: argon2.argon2id,
+      timeCost: 3,
+      memoryCost: 2 ** 15,
+      parallelism: 1,
+      hashLength: 32,
+    });
+  } catch {
+    // Never let a timing-equalisation failure surface as an account-flow error.
+  }
+}
 
 function normalizeBaseUrl(value: string): string {
   return value.trim().replace(/\/+$/, '');
@@ -102,8 +129,12 @@ export async function requestTwoFaReset(
     select: { id: true, twoFaEnabled: true },
   });
 
-  // No enumeration: if missing or 2FA isn't enabled, do nothing.
-  if (!existing || !existing.twoFaEnabled) return;
+  // No enumeration: if missing or 2FA isn't enabled, do nothing visible — but burn
+  // comparable CPU so the response time doesn't reveal account/2FA state.
+  if (!existing || !existing.twoFaEnabled) {
+    await (deps?.consumeAccountFlowTimingBudget ?? consumeAccountFlowTimingBudget)();
+    return;
+  }
 
   const token = deps?.generateEmailToken ? deps.generateEmailToken() : generateEmailToken();
   const sharedSecret = deps?.sharedSecret ?? requireEnv('SHARED_SECRET').SHARED_SECRET;
@@ -155,7 +186,7 @@ export async function resetTwoFaWithToken(
   const sharedSecret = deps?.sharedSecret ?? requireEnv('SHARED_SECRET').SHARED_SECRET;
   const tokenHash = (deps?.hashEmailToken ?? hashEmailToken)(params.token, sharedSecret);
 
-  return await prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const tokenRow = await tx.verificationToken.findUnique({
       where: { tokenHash },
       select: {
@@ -211,4 +242,12 @@ export async function resetTwoFaWithToken(
 
     return { userId: user.id };
   });
+
+  // Credential change (2FA disabled) → revoke active refresh tokens so a stolen
+  // session cannot continue past the recovery action.
+  await (deps?.revokeAllRefreshTokensForUser ?? revokeAllRefreshTokensForUser)(result.userId, {
+    now: () => now,
+  });
+
+  return result;
 }

@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@prisma/client';
 
 import { getEnv } from '../config/env.js';
+import { normalizeDomain } from '../utils/domain.js';
 
 type StartupPrisma = Pick<
   PrismaClient,
@@ -63,10 +64,6 @@ function emptyStartup(now = new Date()): AppStartupResponse {
     cacheTtl: DEFAULT_CACHE_TTL,
     serverTime: now.toISOString(),
   };
-}
-
-function normalizeDomain(value: string): string {
-  return value.trim().toLowerCase().replace(/\.$/, '');
 }
 
 function normalizeIdentifier(value: string): string {

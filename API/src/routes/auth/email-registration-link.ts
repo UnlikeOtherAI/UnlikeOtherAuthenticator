@@ -17,12 +17,12 @@ import { tokenConsumeRateLimiter } from './rate-limit-keys.js';
 
 const QuerySchema = z
   .object({
-    config_url: z.string().min(1),
-    token: z.string().min(1),
-    redirect_url: z.string().min(1).optional(),
-    code_challenge: z.string().min(1).optional(),
-    code_challenge_method: z.string().min(1).optional(),
-    request_access: z.string().optional(),
+    config_url: z.string().min(1).max(2048),
+    token: z.string().min(1).max(4096),
+    redirect_url: z.string().min(1).max(2048).optional(),
+    code_challenge: z.string().min(1).max(256).optional(),
+    code_challenge_method: z.string().min(1).max(32).optional(),
+    request_access: z.string().max(16).optional(),
   })
   .strict();
 

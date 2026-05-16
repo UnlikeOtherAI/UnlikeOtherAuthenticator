@@ -2,6 +2,7 @@ import type { PrismaClient } from '@prisma/client';
 
 import type { ClientConfig } from './config.service.js';
 import { getPrisma } from '../db/prisma.js';
+import { normalizeDomain } from '../utils/domain.js';
 
 type DomainMappingPrisma = {
   organisation: Pick<PrismaClient['organisation'], 'findUnique'>;
@@ -27,10 +28,6 @@ export type DomainMappingLookupResult =
       team_id: string;
       team_name: string;
     };
-
-function normalizeDomain(value: string): string {
-  return value.trim().toLowerCase().replace(/\.$/, '');
-}
 
 function findMapping(
   config: ClientConfig,

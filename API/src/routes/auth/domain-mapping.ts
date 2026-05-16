@@ -11,8 +11,8 @@ const DOMAIN_MAPPING_LOOKUP_WINDOW_MS = 60 * 1000;
 
 const QuerySchema = z
   .object({
-    config_url: z.string().min(1),
-    email_domain: z.string().trim().toLowerCase().min(1),
+    config_url: z.string().min(1).max(2048),
+    email_domain: z.string().trim().toLowerCase().min(1).max(253),
   })
   .strict();
 

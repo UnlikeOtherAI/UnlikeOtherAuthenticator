@@ -3,7 +3,7 @@ import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 
 import { getEnv, requireEnv } from '../config/env.js';
-import { getPrisma } from '../db/prisma.js';
+import { getAdminPrisma, getPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 
 const MIN_INHERITED_REFRESH_TTL_SECONDS = 5 * 60;
@@ -257,4 +257,24 @@ export async function revokeRefreshTokenFamily(
   }
 
   await revokeRefreshTokenFamilyInternal(prisma, row.familyId, now);
+}
+
+/**
+ * Revoke every active refresh token belonging to a user, across all domains/clients.
+ *
+ * Used on credential-changing events (password reset, 2FA reset, set-password-on-verify)
+ * so that an attacker holding a stolen refresh token cannot survive the user's recovery
+ * action. Uses the admin Prisma connection to bypass per-domain RLS — credentials are
+ * a user-wide property, not a per-domain one.
+ */
+export async function revokeAllRefreshTokensForUser(
+  userId: string,
+  deps?: { now?: () => Date; prisma?: RefreshTokenPrisma },
+): Promise<void> {
+  const prisma = deps?.prisma ?? (getAdminPrisma() as unknown as RefreshTokenPrisma);
+  const now = deps?.now ? deps.now() : new Date();
+  await prisma.refreshToken.updateMany({
+    where: { userId, revokedAt: null },
+    data: { revokedAt: now },
+  });
 }

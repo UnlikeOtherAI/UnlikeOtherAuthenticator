@@ -83,6 +83,11 @@ export async function addOrganisationMember(
   if (!actorMembership || (actorMembership.role !== 'owner' && actorMembership.role !== 'admin')) {
     throw new AppError('FORBIDDEN', 403);
   }
+  // Only owners may grant the `owner` role. An `admin` actor must not be able to
+  // self-elevate by adding another `owner` row.
+  if (role === 'owner' && actorMembership.role !== 'owner') {
+    throw new AppError('FORBIDDEN', 403);
+  }
 
   const createdMember = await prisma.$transaction(async (tx) => {
     const existingMemberInOrg = await tx.orgMember.findFirst({
@@ -221,6 +226,12 @@ export async function removeOrganisationMember(
 
   const member = await getOrganisationMember(prisma, { orgId: org.id, userId });
   if (!member) throw new AppError('NOT_FOUND', 404);
+
+  // Only owners may remove another `owner` member. An `admin` actor cannot remove
+  // an owner even when other owners remain.
+  if (member.role === 'owner' && actorMembership.role !== 'owner') {
+    throw new AppError('FORBIDDEN', 403);
+  }
 
   const ownerCount = await prisma.orgMember.count({ where: { orgId: org.id, role: 'owner' } });
   if (member.role === 'owner' && ownerCount <= 1) {

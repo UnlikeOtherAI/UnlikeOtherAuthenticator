@@ -2,6 +2,9 @@ import type { Prisma } from '@prisma/client';
 
 import { getEnv } from '../config/env.js';
 import { getAdminPrisma } from '../db/prisma.js';
+import { normalizeDomain } from '../utils/domain.js';
+
+export { normalizeDomain };
 
 export type AdminMethod = 'email' | 'google' | 'github' | 'apple' | 'facebook' | 'linkedin' | 'microsoft';
 
@@ -52,10 +55,6 @@ export function method(value: string | null | undefined): AdminMethod {
   return ['email', 'google', 'github', 'apple', 'facebook', 'linkedin', 'microsoft'].includes(normalized)
     ? (normalized as AdminMethod)
     : 'email';
-}
-
-export function normalizeDomain(value: string): string {
-  return value.trim().toLowerCase().replace(/\.$/, '');
 }
 
 export function listLimit(limit?: number): number {

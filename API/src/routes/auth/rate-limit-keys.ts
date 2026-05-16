@@ -60,6 +60,12 @@ function bodyRateLimiter(prefix: string, key: string, limit: number, windowMs: n
   });
 }
 
+function authIpDomainKey(prefix: string, request: FastifyRequest, domain: string): string {
+  const normalized = normalizePart(domain);
+  if (!normalized) return `${prefix}:ip:${getRequestIp(request)}`;
+  return `${prefix}:ip+domain:${getRequestIp(request)}:${hashPart(normalized)}`;
+}
+
 export const loginRateLimiter = composeRateLimiters(
   ipRateLimiter('auth:login', 10, MINUTE_MS),
   bodyRateLimiter('auth:login', 'email', 5, 15 * MINUTE_MS),
@@ -79,8 +85,37 @@ export const tokenConsumeRateLimiter = ipRateLimiter('auth:token-consume', 10, M
 
 export const tokenExchangeRateLimiter = ipRateLimiter('auth:token-exchange', 10, MINUTE_MS);
 
-export const twoFactorVerifyRateLimiter = ipRateLimiter('auth:twofa-verify', 5, 15 * MINUTE_MS);
+// Compound IP-only and per-challenge-token buckets so an attacker spraying many IPs
+// can't burn another user's IP budget against the same `twofa_token`.
+export const twoFactorVerifyRateLimiter = composeRateLimiters(
+  ipRateLimiter('auth:twofa-verify', 5, 15 * MINUTE_MS),
+  bodyRateLimiter('auth:twofa-verify', 'twofa_token', 5, 15 * MINUTE_MS),
+);
 
 export const socialCallbackRateLimiter = ipRateLimiter('auth:social-callback', 20, MINUTE_MS);
 
 export const configFetchRateLimiter = ipRateLimiter('auth:config-fetch', 60, MINUTE_MS);
+
+export const revokeRateLimiter = createRateLimiter({
+  limit: 20,
+  windowMs: MINUTE_MS,
+  keyBuilder: (request) => {
+    const domain = normalizePart(request.config?.domain);
+    return authIpDomainKey('auth:revoke', request, domain);
+  },
+});
+
+export const emailSendRateLimiter = createRateLimiter({
+  limit: 60,
+  windowMs: HOUR_MS,
+  keyBuilder: (request) => {
+    const domain = normalizePart(request.config?.domain);
+    return authIpDomainKey('email:send', request, domain);
+  },
+});
+
+export const emailTeamInviteOpenRateLimiter = ipRateLimiter(
+  'auth:email-team-invite-open',
+  30,
+  MINUTE_MS,
+);

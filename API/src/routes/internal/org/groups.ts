@@ -2,9 +2,9 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
 import { asPrismaClient } from '../../../db/tenant-context.js';
+import { requireAdminSuperuser } from '../../../middleware/admin-superuser.js';
 import { configVerifier } from '../../../middleware/config-verifier.js';
 import { requireGroupsEnabled } from '../../../middleware/groups-enabled.js';
-import requireDomainHashAuthForDomainQuery from '../../../middleware/domain-hash-auth.js';
 import { requireOrgFeatures } from '../../../middleware/org-features.js';
 import { setTenantContextFromRequest } from '../../../plugins/tenant-context.plugin.js';
 import { createGroup, updateGroup, deleteGroup } from '../../../services/group.service.js';
@@ -69,7 +69,7 @@ export function registerInternalGroupRoutes(app: FastifyInstance): void {
     '/internal/org/organisations/:orgId/groups',
     {
       preValidation: [
-        requireDomainHashAuthForDomainQuery(),
+        requireAdminSuperuser,
         configVerifier,
         parseDomainContextHook,
         requireOrgFeatures,
@@ -106,7 +106,7 @@ export function registerInternalGroupRoutes(app: FastifyInstance): void {
     '/internal/org/organisations/:orgId/groups/:groupId',
     {
       preValidation: [
-        requireDomainHashAuthForDomainQuery(),
+        requireAdminSuperuser,
         configVerifier,
         parseDomainContextHook,
         requireOrgFeatures,
@@ -148,7 +148,7 @@ export function registerInternalGroupRoutes(app: FastifyInstance): void {
     '/internal/org/organisations/:orgId/groups/:groupId',
     {
       preValidation: [
-        requireDomainHashAuthForDomainQuery(),
+        requireAdminSuperuser,
         configVerifier,
         parseDomainContextHook,
         requireOrgFeatures,

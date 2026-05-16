@@ -341,9 +341,15 @@ describe('Organisation service: organisation CRUD', () => {
       createdAt: now,
       updatedAt: now,
     });
+    prisma.orgMember.findFirst.mockResolvedValue({
+      id: 'm-actor',
+      orgId: 'org-1',
+      userId: 'u-actor',
+      role: 'member',
+    });
 
     const org = await getOrganisation(
-      { orgId: 'org-1', domain: 'Acme.Example.com' },
+      { orgId: 'org-1', domain: 'Acme.Example.com', actorUserId: 'u-actor' },
       { prisma },
     );
 
@@ -358,6 +364,28 @@ describe('Organisation service: organisation CRUD', () => {
       name: 'Acme',
       slug: 'acme',
     });
+  });
+
+  it('refuses to read an organisation when the actor has no membership', async () => {
+    const prisma = makePrismaMock();
+
+    prisma.organisation.findFirst.mockResolvedValue({
+      id: 'org-1',
+      domain: 'acme.example.com',
+      name: 'Acme',
+      slug: 'acme',
+      ownerId: 'u-owner',
+      createdAt: now,
+      updatedAt: now,
+    });
+    prisma.orgMember.findFirst.mockResolvedValue(null);
+
+    const promise = getOrganisation(
+      { orgId: 'org-1', domain: 'acme.example.com', actorUserId: 'u-stranger' },
+      { prisma },
+    );
+
+    await expect(promise).rejects.toMatchObject({ code: 'FORBIDDEN', statusCode: 403 });
   });
 
   it('deletes an organisation when called by the owner', async () => {

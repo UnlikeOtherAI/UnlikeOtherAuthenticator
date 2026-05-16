@@ -2,9 +2,9 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
 import { asPrismaClient } from '../../../db/tenant-context.js';
+import { requireAdminSuperuser } from '../../../middleware/admin-superuser.js';
 import { configVerifier } from '../../../middleware/config-verifier.js';
 import { requireGroupsEnabled } from '../../../middleware/groups-enabled.js';
-import requireDomainHashAuthForDomainQuery from '../../../middleware/domain-hash-auth.js';
 import { requireOrgFeatures } from '../../../middleware/org-features.js';
 import { setTenantContextFromRequest } from '../../../plugins/tenant-context.plugin.js';
 import { assignTeamToGroup } from '../../../services/group.service.js';
@@ -63,7 +63,7 @@ export function registerInternalTeamGroupAssignmentRoutes(app: FastifyInstance):
     '/internal/org/organisations/:orgId/teams/:teamId/group',
     {
       preValidation: [
-        requireDomainHashAuthForDomainQuery(),
+        requireAdminSuperuser,
         configVerifier,
         parseDomainContextHook,
         requireOrgFeatures,

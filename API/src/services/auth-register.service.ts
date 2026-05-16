@@ -1,4 +1,7 @@
+import { randomBytes } from 'node:crypto';
+
 import type { PrismaClient } from '@prisma/client';
+import argon2 from 'argon2';
 
 import type { ClientConfig } from './config.service.js';
 
@@ -35,8 +38,30 @@ type RegisterDeps = {
   sendVerifyEmailSetPasswordEmail?: typeof sendVerifyEmailSetPasswordEmail;
   generateEmailToken?: typeof generateEmailToken;
   hashEmailToken?: typeof hashEmailToken;
+  consumeAccountFlowTimingBudget?: () => Promise<void>;
   prisma?: RegisterPrisma;
 };
+
+/**
+ * Brief 11: equalize CPU/IO between the user-exists and user-missing/blocked branches
+ * so the response time does not leak account existence or registration eligibility.
+ * Argon2id is the heaviest single step in the exists branch (HMAC + token.create +
+ * email send) — matching its cost within an order of magnitude is enough. The hash
+ * result is discarded; no token persisted and no mail sent.
+ */
+async function consumeAccountFlowTimingBudget(): Promise<void> {
+  try {
+    await argon2.hash(randomBytes(16).toString('hex'), {
+      type: argon2.argon2id,
+      timeCost: 3,
+      memoryCost: 2 ** 15,
+      parallelism: 1,
+      hashLength: 32,
+    });
+  } catch {
+    // Never let a timing-equalisation failure surface as an account-flow error.
+  }
+}
 
 function normalizeBaseUrl(value: string): string {
   return value.trim().replace(/\/+$/, '');
@@ -128,6 +153,8 @@ export async function requestRegistrationInstructions(
       config: params.config,
     })
   ) {
+    // Don't leak "registration blocked" vs "registration in progress" via timing.
+    await (deps?.consumeAccountFlowTimingBudget ?? consumeAccountFlowTimingBudget)();
     return;
   }
 

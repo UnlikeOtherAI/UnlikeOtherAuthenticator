@@ -107,6 +107,11 @@ export function registerTeamInvitationRoutes(app: FastifyInstance): void {
         configVerifier,
         parseDomainContextHook,
         requireOrgFeatures,
+        createRateLimiter({
+          limit: 20,
+          windowMs: 60 * 60 * 1000,
+          keyBuilder: keyInviteTeamRateLimit,
+        }),
       ],
     },
     async (request, reply) => {

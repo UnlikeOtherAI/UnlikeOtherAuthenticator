@@ -3,7 +3,10 @@ import { Prisma, PrismaClient } from '@prisma/client';
 
 import type { ClientConfig } from './config.service.js';
 import { getEnv } from '../config/env.js';
+import { normalizeDomain } from '../utils/domain.js';
 import { AppError } from '../utils/errors.js';
+
+export { normalizeDomain };
 
 type OrgServicePrisma = PrismaClient & {
   $transaction<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T>;
@@ -52,10 +55,6 @@ const RESERVED_ORG_SLUGS = new Set([
 const SLUG_ALLOWED_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 const SLUG_RANDOM_SUFFIX_MAX_ATTEMPTS = 10;
 const SLUG_SUFFIX_LENGTH = 4;
-
-export function normalizeDomain(value: string): string {
-  return value.trim().toLowerCase().replace(/\.$/, '');
-}
 
 export function assertDatabaseEnabled(env: ReturnType<typeof getEnv>): void {
   if (!env.DATABASE_URL) {

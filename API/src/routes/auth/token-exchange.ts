@@ -15,16 +15,16 @@ import { tokenExchangeRateLimiter } from './rate-limit-keys.js';
 const AuthorizationCodeGrantSchema = z
   .object({
     grant_type: z.literal('authorization_code').optional(),
-    code: z.string().min(1),
-    redirect_url: z.string().min(1),
-    code_verifier: z.string().min(1).optional(),
+    code: z.string().min(1).max(256),
+    redirect_url: z.string().min(1).max(2048),
+    code_verifier: z.string().min(1).max(256).optional(),
   })
   .strict();
 
 const RefreshTokenGrantSchema = z
   .object({
     grant_type: z.literal('refresh_token'),
-    refresh_token: z.string().min(1),
+    refresh_token: z.string().min(1).max(4096),
   })
   .strict();
 

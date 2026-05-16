@@ -15,8 +15,8 @@ import { twoFactorVerifyRateLimiter } from '../auth/rate-limit-keys.js';
 
 const BodySchema = z
   .object({
-    twofa_token: z.string().min(1),
-    code: z.string().min(1),
+    twofa_token: z.string().min(1).max(4096),
+    code: z.string().min(1).max(64),
   })
   .strict();
 

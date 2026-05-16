@@ -2,6 +2,7 @@ import type { PrismaClient, UserRole } from '@prisma/client';
 
 import { getEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
+import { normalizeDomain } from '../utils/domain.js';
 import { AppError } from '../utils/errors.js';
 
 type DomainUsersPrisma = {
@@ -22,10 +23,6 @@ export type DomainUserRecord = {
   role: 'superuser' | 'user';
   createdAt: Date;
 };
-
-function normalizeDomain(value: string): string {
-  return value.trim().toLowerCase().replace(/\.$/, '');
-}
 
 function roleToPublic(role: UserRole): 'superuser' | 'user' {
   return role === 'SUPERUSER' ? 'superuser' : 'user';

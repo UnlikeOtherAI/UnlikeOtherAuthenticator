@@ -111,7 +111,7 @@ describe('requestPasswordReset', () => {
     }));
   });
 
-  it('does nothing for non-existent users (no enumeration)', async () => {
+  it('does nothing for non-existent users (no enumeration) but burns timing budget', async () => {
     const findUnique = vi.fn<PrismaStub['user']['findUnique']>().mockResolvedValue(null);
     const createToken = vi.fn<PrismaStub['verificationToken']['create']>();
     const prisma: PrismaStub = {
@@ -122,6 +122,8 @@ describe('requestPasswordReset', () => {
     const sendPasswordResetEmail = vi.fn<(params: { to: string; link: string }) => Promise<void>>(
       async () => undefined,
     );
+    // Inject a fake timing budget so the test doesn't pay the real Argon2 cost.
+    const consumeAccountFlowTimingBudget = vi.fn<() => Promise<void>>(async () => undefined);
 
     await requestPasswordReset(
       {
@@ -133,6 +135,7 @@ describe('requestPasswordReset', () => {
         env: testEnv(),
         prisma: prisma as unknown as never,
         sendPasswordResetEmail,
+        consumeAccountFlowTimingBudget,
       },
     );
 
@@ -143,6 +146,8 @@ describe('requestPasswordReset', () => {
 
     expect(createToken).not.toHaveBeenCalled();
     expect(sendPasswordResetEmail).not.toHaveBeenCalled();
+    // Brief 11: the not-exists branch must still burn comparable CPU.
+    expect(consumeAccountFlowTimingBudget).toHaveBeenCalledTimes(1);
   });
 
   it('is a no-op when the database is disabled', async () => {

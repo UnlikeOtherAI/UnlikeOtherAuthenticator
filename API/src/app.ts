@@ -15,6 +15,13 @@ export async function createApp(): Promise<FastifyInstance> {
 
   const app = fastify({
     trustProxy: 1,
+    // Defence-in-depth caps. The only request body we expect anywhere near this size
+    // is the signed config JWT (capped to 64 KiB at the fetch layer). Per-route
+    // `bodyLimit` overrides exist where larger bodies are legitimate (e.g. `/email/send`).
+    bodyLimit: 64 * 1024,
+    requestTimeout: 30_000,
+    keepAliveTimeout: 5_000,
+    connectionTimeout: 10_000,
     // Never log bearer tokens or other secrets. Additionally, avoid automatic request
     // logging to prevent sensitive query params (like config_url) from being persisted.
     disableRequestLogging: true,
@@ -47,6 +54,7 @@ export async function createApp(): Promise<FastifyInstance> {
                 'sharedSecret',
                 'SHARED_SECRET',
                 'req.body.password',
+                'req.body.passwordHash',
                 'req.body.code',
                 'req.body.code_verifier',
                 'req.body.access_token',
@@ -55,6 +63,8 @@ export async function createApp(): Promise<FastifyInstance> {
                 'req.body.email_token',
                 'req.body.client_secret',
                 'req.body.shared_secret',
+                '*.totpSecret',
+                '*.recoveryCode',
               ],
               censor: '[REDACTED]',
             },

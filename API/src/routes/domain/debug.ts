@@ -3,16 +3,13 @@ import { z } from 'zod';
 
 import { requireDomainHashAuthForDomainQuery } from '../../middleware/domain-hash-auth.js';
 import { requireSuperuserAccessTokenForDomainQuery } from '../../middleware/superuser-access-token.js';
+import { normalizeDomain } from '../../utils/domain.js';
 
 const QuerySchema = z
   .object({
     domain: z.string().trim().min(1),
   })
   .strict();
-
-function normalizeDomain(value: string): string {
-  return value.trim().toLowerCase().replace(/\.$/, '');
-}
 
 /**
  * Brief 12.4: domain debug endpoint, superuser only.

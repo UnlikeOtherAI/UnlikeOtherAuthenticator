@@ -2,11 +2,8 @@ import type { DomainRole, PrismaClient, UserRole } from '@prisma/client';
 import type { Prisma } from '@prisma/client';
 
 import { getAdminPrisma } from '../db/prisma.js';
+import { normalizeDomain } from '../utils/domain.js';
 import { AppError } from '../utils/errors.js';
-
-function normalizeDomain(value: string): string {
-  return value.trim().toLowerCase().replace(/\.$/, '');
-}
 
 /**
  * Ensures a per-domain role row exists for a given user.

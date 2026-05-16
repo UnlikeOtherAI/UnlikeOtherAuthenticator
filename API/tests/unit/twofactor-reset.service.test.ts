@@ -246,6 +246,10 @@ describe('resetTwoFaWithToken', () => {
       },
     };
 
+    const revokeAllRefreshTokensForUser = vi.fn<(userId: string) => Promise<void>>(
+      async () => undefined,
+    );
+
     const res = await resetTwoFaWithToken(
       {
         token: 'raw-token',
@@ -258,10 +262,12 @@ describe('resetTwoFaWithToken', () => {
         now: () => new Date('2026-02-10T00:00:00.000Z'),
         sharedSecret: 'pepper',
         hashEmailToken: () => 'hash123',
+        revokeAllRefreshTokensForUser: revokeAllRefreshTokensForUser as never,
       },
     );
 
     expect(res).toEqual({ userId: 'u1' });
+    expect(revokeAllRefreshTokensForUser).toHaveBeenCalledWith('u1', expect.anything());
 
     expect(prisma.verificationToken.findUnique).toHaveBeenCalledWith({
       where: { tokenHash: 'hash123' },

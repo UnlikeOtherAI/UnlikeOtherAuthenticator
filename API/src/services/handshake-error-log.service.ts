@@ -2,6 +2,7 @@ import type { HandshakeErrorLog, Prisma, PrismaClient } from '@prisma/client';
 
 import { getEnv } from '../config/env.js';
 import { getAdminPrisma } from '../db/prisma.js';
+import { normalizeDomain } from '../utils/domain.js';
 
 type HandshakeErrorPrisma = {
   handshakeErrorLog: Pick<PrismaClient['handshakeErrorLog'], 'create' | 'findMany'>;
@@ -64,10 +65,6 @@ type HandshakeErrorDeps = {
   env?: ReturnType<typeof getEnv>;
   prisma?: HandshakeErrorPrisma;
 };
-
-function normalizeDomain(value: string): string {
-  return value.trim().toLowerCase().replace(/\.$/, '');
-}
 
 function jsonArray(value: Prisma.JsonValue): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
