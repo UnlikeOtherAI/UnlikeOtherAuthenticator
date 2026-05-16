@@ -18,141 +18,242 @@ For the full product spec, see [brief.md](./brief.md). For tech stack, see [tech
 
 ## Directory Structure
 
+The tree below reflects the current `API/src` layout. It is a snapshot — when a new file, route, or service is added, this tree must be updated in the same change. The principles in the rest of this document (thin routes, fat services, one responsibility per file, 500-line cap) are the durable contract; the tree is the index.
+
 ```
 /API
   /src
-    /routes
-      /root
-        index.ts              — GET / (Tailwind holding page), GET /api (full endpoint schema)
-        llm.ts                — GET /llm (Markdown config documentation for LLM consumers)
-      config-jwks.ts          — GET /.well-known/jwks.json (public config JWT verification keys)
-      /apps
-        apps.ts               — CRUD for /org/:orgId/apps[/:appId]
-        killswitches.ts       — CRUD for /org/:orgId/apps/:appId/killswitches[/:id]
-        flags.ts              — Flag definitions: GET/POST/PATCH/DELETE /org/:orgId/apps/:appId/flags/definitions[/:flagKey]
-        flag-matrix.ts        — GET/PATCH /org/:orgId/apps/:appId/flags/matrix[/:roleName/:flagKey]
-        flag-overrides.ts     — GET/PUT/DELETE /org/:orgId/apps/:appId/flags/overrides/:userId[/:flagKey]
-        flag-query.ts         — GET /apps/:appId/flags (resolved flag map for a user; domain-hash auth, no orgId in path)
-        startup.ts            — GET /apps/startup (combined kill switch + flags; config JWT auth)
-        killswitch-check.ts   — GET /killswitch/check (standalone kill switch query; public)
-        index.ts              — Route registration for /apps and /killswitch
-      /auth
-        login.ts              — POST /auth/login
-        register.ts           — POST /auth/register
-        verify-email.ts       — POST /auth/verify-email
-        reset-password.ts     — POST /auth/reset-password
-        callback.ts           — GET  /auth/callback/:provider
-        social.ts             — GET /auth/social/:provider
-        token-exchange.ts     — POST /auth/token
-        revoke.ts             — POST /auth/revoke
-        entrypoint.ts         — GET /auth (main auth entry)
-        email-reset-password.ts  — GET /auth/email-reset-password
-        email-registration-link.ts — GET /auth/email-registration-link
-        email-twofa-reset.ts  — GET /auth/email-twofa-reset
-        index.ts              — Route registration for /auth
-      /i18n
-        get.ts                — GET /i18n/:language
-        index.ts              — Route registration for /i18n
-      /twofactor
-        verify.ts             — POST /2fa/verify
-        reset.ts              — POST /2fa/reset
-        index.ts              — Route registration for /2fa
-      /domain
-        users.ts              — GET  /domain/users
-        logs.ts               — GET  /domain/logs
-        debug.ts              — GET  /domain/debug
-        index.ts              — Route registration for /domain
-      /org
-        organisations.ts      — Organisations + memberships + ownership transfer
-        teams.ts              — Teams + team membership operations + custom role CRUD (/org/:orgId/teams/:teamId/roles)
-        domain-rules.ts       — GET/POST/DELETE /org/:orgId/domain-rules (email domain auto-enrolment rules)
-        groups.ts             — GET group operations (org-aware reads)
-        me.ts                 — GET /org/me
-        index.ts              — Route registration for /org
-      /health
-        index.ts              — GET  /health
-      /internal
-        /org
-          groups.ts              — POST/PUT/DELETE internal group operations
-          group-members.ts       — POST/PUT/DELETE internal group members
-          team-group-assignment.ts — PUT team↔group assignment
-          index.ts               — Route registration for /internal/org
-        /admin
-          orgs.ts                — GET /internal/admin/orgs, GET /internal/admin/orgs/:orgId
-          org-members.ts         — PATCH/DELETE /internal/admin/orgs/:orgId/members/:userId
-          org-domain-rules.ts    — GET/POST/DELETE /internal/admin/orgs/:orgId/domain-rules
-          team-members.ts        — PATCH /internal/admin/teams/:teamId/members/:userId
-          scim-tokens.ts         — GET/POST/DELETE /internal/admin/orgs/:orgId/scim-tokens  [DEFERRED]
-          scim-group-mappings.ts — GET/POST/DELETE /internal/admin/orgs/:orgId/scim/group-mappings  [DEFERRED]
-          index.ts               — Route registration for /internal/admin
-      /scim                      [DEFERRED — full spec in roles-and-acl.md; schema ready]
-        users.ts               — POST/GET/PATCH/DELETE /scim/v2/Users[/:id]
-        groups.ts              — GET/POST/PATCH/DELETE /scim/v2/Groups[/:id]
-        index.ts               — Route registration for /scim/v2 (uses ScimToken bearer auth, no config-verifier)
-    /middleware
-      config-verifier.ts      — Fetches config URL, verifies JWT, attaches config to request
-      domain-hash-auth.ts     — Verifies domain hash token for domain-scoped APIs
-      superuser-access-token.ts — Verifies user access token and requires superuser role
-      org-features.ts         — Returns 404 when org features are disabled
-      groups-enabled.ts       — Returns 404 when groups are disabled
-      org-role-guard.ts       — Validates user access token and org role for /org endpoints
-      org-permission.ts       — requireOrgRole(minRole) — org-level UOA role enforcement (owner > admin > member)
-      team-permission.ts      — requireTeamRole(minRole) — team-level UOA role enforcement with org-level fallback
-      scim-auth.ts            — SCIM bearer token validation and org-scope verification for /scim/v2/* routes  [DEFERRED]
-      error-handler.ts        — Global error handler (generic user-facing errors, detailed internal logs)
-      rate-limiter.ts         — Rate limiting
-    /services
-      auth.service.ts         — Login, registration, password verification logic
-      config.service.ts       — Config JWT fetching, parsing, validation
-      token.service.ts        — Access token, refresh token, and authorization code orchestration
-      refresh-token.service.ts — Refresh token issuance, rotation, reuse detection, revocation
-      organisation.service.ts  — Organisation orchestration API
-      organisation.service.base.ts — Organisation service building blocks
-      organisation.service.organisation.ts — Organisation CRUD + slug generation
-      organisation.service.members.ts — Org membership lifecycle
-      team.service.ts         — Team orchestration API
-      team.service.base.ts    — Team service building blocks
-      team.service.teams.ts   — Team CRUD
-      team.service.members.ts — Team member lifecycle
-      group.service.ts        — Group orchestration API
-      group.service.base.ts   — Group service building blocks
-      group.service.groups.ts — Group CRUD
-      group.service.members.ts — Group membership lifecycle
-      org-context.service.ts  — Resolve user org context for JWT enrichment and /org/me
-      password.service.ts     — Hashing, validation rules, comparison
-      email.service.ts        — Email dispatch abstraction (verification, reset, login links)
-      social
-        google.service.ts     — Google OAuth flow
-        apple.service.ts      — Apple OAuth flow
-        facebook.service.ts   — Facebook OAuth flow
-        github.service.ts     — GitHub OAuth flow
-        linkedin.service.ts   — LinkedIn OAuth flow
-        microsoft.service.ts  — Microsoft Entra ID (Azure AD) OIDC flow
-        provider.base.ts      — Shared interface and email verification enforcement
-      totp.service.ts         — TOTP secret generation, QR code, verification
-      user.service.ts         — User CRUD, scope handling (global vs per-domain)
-      domain.service.ts       — Client ID generation, domain verification, superuser logic
-      translation.service.ts  — AI translation fallback and caching
-      app.service.ts          — App CRUD, identifier uniqueness, platform validation
-      killswitch.service.ts   — Kill switch entry CRUD, version matching, priority resolution, activateAt scheduling
-      flag.service.ts         — Flag definition CRUD, role matrix management, per-user override management, flag resolution
-    /utils
-      hash.ts                 — Hashing helpers (domain + secret, tokens)
-      errors.ts               — Generic error factory (never leaks specifics)
-      validation.ts           — Input validation helpers
-      logger.ts               — Structured logging (internal details only)
+    app.ts                  — Fastify app setup, plugin and middleware registration
+    server.ts               — Server entry point
     /config
-      env.ts                  — Environment variable loading and validation
-      constants.ts            — App-wide constants (token TTL defaults, retention defaults)
+      constants.ts          — App-wide constants (token TTL defaults, retention defaults)
+      env.ts                — Environment variable loading and validation
+      jwt.ts                — JWT signing/verification configuration
+    /db
+      prisma.ts             — Prisma client construction (anonymous + tenant-scoped)
+      tenant-context.ts     — RLS tenant-context helpers
+    /plugins
+      tenant-context.plugin.ts — Fastify plugin that wires per-request RLS tenant context
+    /middleware
+      admin-superuser.ts            — Validates admin access token + superuser role for /internal/admin/*
+      config-jwt-header-verifier.ts — Verifies signed config JWT supplied via header
+      config-verifier.ts            — Fetches config URL, verifies JWT, attaches config to request
+      domain-hash-auth.ts           — Verifies domain hash token for domain-scoped APIs
+      error-handler.ts              — Global error handler (generic user-facing errors, detailed internal logs)
+      groups-enabled.ts             — Returns 404 when groups are disabled
+      org-features.ts               — Returns 404 when org features are disabled
+      org-role-guard.ts             — Validates user access token and org role for /org endpoints
+      rate-limiter.ts               — Rate limiting
+      superuser-access-token.ts     — Validates user access tokens for superuser-only domain endpoints
+    /routes
+      index.ts              — Top-level route registration and global 404 handler
+      admin-ui.ts           — Serves the static admin SPA bundle
+      config-jwks.ts        — GET /.well-known/jwks.json (public config JWT verification keys)
+      /root
+        index.ts            — GET / (holding page) and GET /api (full endpoint schema)
+        llm.ts              — GET /llm (Markdown config documentation for LLM consumers)
+        llm-intro.ts        — /llm content: introduction section
+        llm-integration.ts  — /llm content: integration section
+        config-docs.ts      — Shared documentation blocks for /api (config JWT, access token, etc.)
+        config-validate.ts  — POST /config/validate (lint a candidate config JWT)
+        config-verify.ts    — POST /config/verify (verify a signed config JWT)
+        schema.ts           — Aggregates the endpoint schema returned by /api
+        schema.auth.ts      — /api schema slice: auth endpoints
+        schema.config-debug.ts — /api schema slice: config debug endpoints
+        schema.integrations.ts — /api schema slice: integration endpoints
+        schema.internal-admin.ts — /api schema slice: internal admin endpoints
+      /apps
+        startup.ts          — GET /apps/startup (combined startup payload; config JWT auth)
+        index.ts            — Route registration for /apps
+      /auth
+        login.ts            — POST /auth/login
+        register.ts         — POST /auth/register
+        verify-email.ts     — POST /auth/verify-email
+        reset-password.ts   — POST /auth/reset-password
+        callback.ts         — GET  /auth/callback/:provider
+        social.ts           — GET  /auth/social/:provider
+        token-exchange.ts   — POST /auth/token
+        revoke.ts           — POST /auth/revoke
+        entrypoint.ts       — GET  /auth (main auth entry)
+        domain-mapping.ts   — Auth-flow domain mapping helper
+        rate-limit-keys.ts  — Shared rate-limit key helpers for auth routes
+        email-reset-password.ts    — GET /auth/email-reset-password
+        email-registration-link.ts — GET /auth/email-registration-link
+        email-twofa-reset.ts       — GET /auth/email-twofa-reset
+        email-team-invite.ts       — GET /auth/email-team-invite
+        email-team-invite-open.ts  — GET /auth/email-team-invite-open
+        index.ts            — Route registration for /auth
+      /domain
+        users.ts            — GET  /domain/users
+        logs.ts             — GET  /domain/logs
+        debug.ts            — GET  /domain/debug
+        index.ts            — Route registration for /domain
+      /email
+        send.ts             — POST /email/send (transactional email send)
+        index.ts            — Route registration for /email
+      /health
+        index.ts            — GET  /health
+      /i18n
+        get.ts              — GET /i18n/:language
+        index.ts            — Route registration for /i18n
+      /integrations
+        claim.ts            — Integration request claim flow
+        index.ts            — Route registration for /integrations
+      /internal
+        /admin
+          config.ts                 — GET  /internal/admin/config (admin auth config)
+          token.ts                  — POST /internal/admin/token (admin token exchange)
+          read.ts                   — Read endpoints powering the admin panel
+          domains.ts                — Domain CRUD for the admin panel
+          domain-email.ts           — Per-domain transactional email config + SES identity flow
+          domain-jwks.ts            — Per-domain JWKS management
+          superusers.ts             — Super-user grant/revoke for ADMIN_AUTH_DOMAIN
+          integration-requests.ts   — Integration-request management
+          index.ts                  — Route registration for /internal/admin
+        /org
+          groups.ts                 — POST/PUT/DELETE internal group operations
+          group-members.ts          — POST/PUT/DELETE internal group members
+          team-group-assignment.ts  — PUT team↔group assignment
+          index.ts                  — Route registration for /internal/org
+      /org
+        me.ts               — GET /org/me
+        organisations.ts    — Organisations + memberships + ownership transfer
+        teams.ts            — Teams + team membership operations
+        team-invitations.ts — Team invitation lifecycle endpoints
+        team-route.shared.ts — Shared helpers used by team and team-invitation routes
+        groups.ts           — GET group operations (org-aware reads)
+        access-requests.ts  — Team/org access-request endpoints
+        domain-context.ts   — Resolve domain context for org-scoped flows
+        index.ts            — Route registration for /org
+      /twofactor
+        verify.ts           — POST /2fa/verify
+        reset.ts            — POST /2fa/reset
+        index.ts            — Route registration for /2fa
+    /services
+      access-request-flow.service.ts        — Orchestration for access-request flow
+      access-request.service.ts             — Access-request orchestration API
+      access-request.service.admin.ts       — Access-request admin operations
+      access-request.service.auth.ts        — Access-request auth-flow integration
+      access-request.service.base.ts        — Access-request service building blocks
+      access-token.service.ts               — Access-token issuance and verification
+      admin-auth-config.service.ts          — Admin auth config builder
+      admin-superusers.service.ts           — Super-user management for the admin domain
+      admin-ui.service.ts                   — Resolves the admin SPA asset URLs
+      app-startup.service.ts                — /apps/startup orchestration
+      audit-log.service.ts                  — Audit-log writes
+      auth-debug-page.service.ts            — HTML rendering for /domain/debug
+      auth-domain-mapping.service.ts        — Auth-flow domain mapping
+      auth-login.service.ts                 — Login logic
+      auth-register.service.ts              — Registration logic
+      auth-registration-email-link.service.ts — Registration email link generation
+      auth-reset-password.service.ts        — Password reset logic
+      auth-ui.service.ts                    — Auth window HTML/asset rendering
+      auth-verify-email.service.ts          — Email verification logic
+      auto-onboarding.service.ts            — Auto-onboarding flow
+      client-jwk.service.ts                 — Client-side JWK helpers
+      config-debug.service.ts               — Config debug introspection
+      config-fetch.service.ts               — Config URL fetch
+      config-fetch-diagnostics.service.ts   — Config fetch diagnostics
+      config-jwks.service.ts                — Config JWKS fetch/cache
+      config-jwt-source.service.ts          — Config JWT source resolution
+      config-secret-scan.service.ts         — Config secret-leak scanning
+      config-validation-guidance.service.ts — Config validation guidance text
+      config.service.ts                     — Config JWT verification orchestrator
+      domain-email-config.service.ts        — Per-domain email config + SES wiring
+      domain-role.service.ts                — Domain role lookups (superuser etc.)
+      domain-secret.service.ts              — Domain shared-secret management
+      domain-users.service.ts               — Domain users listing
+      email-theme.service.ts                — Email template theming
+      email.providers.ts                    — Email provider implementations
+      email.service.ts                      — Email dispatch entry point
+      email.templates.ts                    — Email template registry
+      first-login.service.ts                — First-login bootstrapping
+      group.service.ts                      — Group orchestration API
+      group.service.base.ts                 — Group service building blocks
+      group.service.groups.ts               — Group CRUD
+      group.service.members.ts              — Group membership lifecycle
+      handshake-error-log.service.ts        — Handshake error logging
+      handshake-log-context.service.ts      — Handshake log context builder
+      integration-accept.service.ts         — Integration accept flow
+      integration-claim-page.service.ts     — Integration claim HTML page
+      integration-claim.service.ts          — Integration claim logic
+      integration-request-notify.service.ts — Integration request notifications
+      integration-request.service.ts        — Integration request orchestration
+      integration-status-page.service.ts    — Integration status HTML page
+      internal-admin.service.ts             — Shared logic for /internal/admin/* (orchestration entry point)
+      internal-admin.service.base.ts        — Internal-admin service building blocks
+      internal-admin.service.domains.ts     — Domain admin operations
+      internal-admin.service.organisations.ts — Organisation admin operations
+      internal-admin.service.users.ts       — User admin operations
+      jwks-fetch.service.ts                 — JWKS fetch helper
+      login-log.service.ts                  — Login log writes
+      org-context.service.ts                — Resolve user org context for JWT enrichment and /org/me
+      org-placement.service.ts              — Org placement decisions during onboarding
+      organisation.service.base.ts          — Organisation service building blocks
+      organisation.service.organisation.ts  — Organisation CRUD + slug generation (slice entry point)
+      organisation.service.members.ts       — Org membership lifecycle
+      password.service.ts                   — Hashing, validation rules, comparison
+      refresh-token.service.ts              — Refresh token issuance, rotation, reuse detection, revocation
+      retention-pruning.service.ts          — Retention pruning jobs
+      root-page.service.ts                  — Root holding page rendering
+      ses-admin.service.ts                  — AWS SES identity admin operations
+      team-invite.service.ts                — Team invite orchestration API
+      team-invite.service.base.ts           — Team invite service building blocks
+      team-invite.service.acceptance.ts     — Team invite acceptance flow
+      team-invite.service.management.ts     — Team invite create/list/revoke
+      team-invite.service.token.ts          — Team invite token issuance/verification
+      team.service.ts                       — Team orchestration API
+      team.service.base.ts                  — Team service building blocks
+      team.service.teams.ts                 — Team CRUD
+      team.service.members.ts               — Team member lifecycle
+      token.service.ts                      — Access token, refresh token, and authorization code orchestration
+      totp.service.ts                       — TOTP secret generation, QR code, verification
+      translation.service.ts                — AI translation fallback and caching
+      twofactor-challenge.service.ts        — 2FA challenge lifecycle
+      twofactor-enroll.service.ts           — 2FA enrollment
+      twofactor-login.service.ts            — 2FA login verification
+      twofactor-reset.service.ts            — 2FA reset flow
+      user-scope.service.ts                 — User scope handling (global vs per-domain)
+      user-team-requirement.service.ts      — Per-domain team-requirement enforcement
+      /social
+        apple.service.ts                    — Apple OAuth flow
+        facebook.service.ts                 — Facebook OAuth flow
+        github.service.ts                   — GitHub OAuth flow
+        google.service.ts                   — Google OAuth flow
+        linkedin.service.ts                 — LinkedIn OAuth flow
+        provider.base.ts                    — Shared interface and email verification enforcement
+        social-login.service.ts             — Shared social-login orchestration
+        social-state.service.ts             — Social-state OAuth parameter signing
+        index.ts                            — Social provider registry
+    /utils
+      app-logger.ts                  — Structured logger (internal details only)
+      claim-secret-crypto.ts         — Claim-secret cryptographic helpers
+      client-hash.ts                 — Client-hash helpers
+      display-prefixes.ts            — Public-display ID prefixes
+      domain.ts                      — Domain helpers
+      email-domain.ts                — Email-domain parsing
+      error-auth-provider-explanations.ts — Auth-provider error explanations
+      error-response.ts              — Public error-body builder
+      errors.ts                      — Generic error factory (never leaks specifics)
+      hash.ts                        — Hashing helpers (domain + secret, tokens)
+      http-url.ts                    — HTTP URL validation
+      pkce.ts                        — PKCE helpers
+      ssrf.ts                        — SSRF safeguards
+      static-file.ts                 — Static-file serving helpers
+      theme-sanitizer.ts             — Theme sanitization
+      twofa-secret.ts                — 2FA secret helpers
+      verification-token.ts          — Verification token helpers
   /prisma
-    schema.prisma             — Database schema
-    /migrations               — Prisma migration files
-  /tests
-    /unit                     — Unit tests per service
-    /integration              — API endpoint integration tests
-  server.ts                   — Server entry point
-  app.ts                      — Fastify app setup and middleware registration
+    schema.prisma                    — Database schema
+    /migrations                      — Prisma migration files
 ```
+
+Notes on layout:
+
+- `/db` and `/plugins` are first-class peers of `/middleware` and `/services` because RLS tenant context is wired via a Fastify plugin and shared helpers in `/db`.
+- `/routes/root` contains the documentation and config-debug endpoints. The `schema.*.ts` files are slice modules that compose into `schema.ts`, which is what `GET /api` ultimately returns.
+- Service families that exceed the 500-line cap are split with the `<domain>.service.<slice>.ts` pattern (see `team.*`, `group.*`, `team-invite.*`, `access-request.*`, `internal-admin.*`, `organisation.*`). Most families keep an unsuffixed `<domain>.service.ts` orchestration entry point that re-exports the public API; the `organisation.*` family currently has no such entry and callers import the slice files directly.
+- SCIM is not present in the tree. The full SCIM spec remains in `Docs/Requirements/roles-and-acl.md` and is deferred. When implementation lands, add a `/routes/scim` subtree and a `scim-auth` middleware and update this document.
 
 ---
 
@@ -175,16 +276,18 @@ Request → Route → Middleware → Service → Database (Prisma)
 
 ### Middleware
 
-* **config-verifier** — runs on all OAuth entry points and the server-facing `GET /apps/startup` endpoint. Fetches config from URL, verifies JWT, attaches parsed config to the request context. **Bypass exceptions** (SDK-facing or unauthenticated documentation endpoints called without a backend config context): `GET /killswitch/check`, `GET /` (holding page), `GET /api` (JSON schema), `GET /llm` (Markdown config docs). All `/scim/v2/*` endpoints also bypass config-verifier (they use SCIM bearer token auth instead) — noted here for when SCIM is implemented [DEFERRED].
-* **domain-hash-auth** — runs on domain-scoped API routes. Verifies the domain hash token
-* **superuser-access-token** — validates user access tokens for superuser-only domain endpoints
-* **org-features** — rejects org endpoints when `org_features.enabled` is false
-* **groups-enabled** — rejects group endpoints when `org_features.groups_enabled` is false
-* **org-role-guard** — validates user context and org role for `/org/*` routes
-* **org-permission** (`requireOrgRole(minRole)`) — enforces org-level UOA role (`owner > admin > member`). Reads `OrgMember.role` for the authenticated user in the target org. Returns 403 if not a member or role is insufficient. Used on org management endpoints and admin panel org routes. See `api-changes-rebac.md §4`.
-* **team-permission** (`requireTeamRole(minRole)`) — enforces team-level UOA role with org-level fallback inheritance. Checks `TeamMember.role` first; if not a direct member, falls back to the user's `OrgMember.role` for the parent org. Returns 403 if neither check passes. See `api-changes-rebac.md §4`.
-* **scim-auth** — [DEFERRED] used only on `/scim/v2/*` routes. Extracts the bearer token from the `Authorization` header, looks up the hashed token in `ScimToken`, validates the org scope. Returns 401 on missing/invalid token, 403 on org scope mismatch.
-* **error-handler** — catches all errors. Returns generic message to user. Logs specifics internally
+* **config-verifier** — runs on OAuth entry points and the server-facing `GET /apps/startup` endpoint. Fetches config from URL, verifies JWT, attaches parsed config to the request context. **Bypass exceptions** (SDK-facing or unauthenticated documentation endpoints called without a backend config context): `GET /` (holding page), `GET /api` (JSON schema), `GET /llm` (Markdown config docs), `GET /.well-known/jwks.json`, the `/health` endpoint, and the static admin SPA served under `/admin`.
+* **config-jwt-header-verifier** — verifies a signed config JWT supplied via header for endpoints that accept the config out-of-band rather than via a `config_url` query parameter.
+* **domain-hash-auth** — runs on domain-scoped API routes. Verifies the domain hash token.
+* **superuser-access-token** — validates user access tokens for superuser-only domain endpoints.
+* **admin-superuser** — runs on `/internal/admin/*`. Validates the admin access token issued by `POST /internal/admin/token` and requires `role: "superuser"` for the configured `ADMIN_AUTH_DOMAIN`. See `Docs/Requirements/roles-and-acl.md`.
+* **org-features** — rejects org endpoints when `org_features.enabled` is false.
+* **groups-enabled** — rejects group endpoints when `org_features.groups_enabled` is false.
+* **org-role-guard** — validates the user access token and the user's org role for `/org/*` routes (`owner > admin > member`). Reads `OrgMember.role` for the authenticated user in the target org and returns 403 if not a member or the role is insufficient.
+* **error-handler** — catches all errors. Returns a generic public body via `utils/error-response.ts` to the caller and logs specifics internally.
+* **rate-limiter** — request rate limiting; keyed helpers for auth routes live in `routes/auth/rate-limit-keys.ts`.
+
+> SCIM is deferred. When implementation lands, add a `scim-auth` middleware (SCIM bearer token validation and org-scope verification for `/scim/v2/*`, returning 401 on invalid token and 403 on org scope mismatch) and update both this list and the directory tree.
 
 ### Services (fat)
 
@@ -205,9 +308,11 @@ Request → Route → Middleware → Service → Database (Prisma)
 ## File Size Rules
 
 * **Maximum 500 lines per code file.** No exceptions.
-* If a service grows past this, split by sub-concern (e.g. `auth.service.ts` → `auth-login.service.ts` + `auth-register.service.ts`)
-* If a route file grows past this, split by endpoint
-* Tests have no line limit but should still be organized logically
+* If a service grows past this, split by sub-concern. Two patterns are used in the tree today:
+  * **Flow-level split** — peer files named for the sub-flow, e.g. `auth-login.service.ts`, `auth-register.service.ts`, `auth-reset-password.service.ts`.
+  * **Domain slice split** — sibling `<domain>.service.<slice>.ts` files, optionally with an orchestration entry point. Two flavours in the tree today: `internal-admin.service.ts` is the entry point that re-exports from `internal-admin.service.base.ts`, `internal-admin.service.domains.ts`, `internal-admin.service.organisations.ts`, and `internal-admin.service.users.ts`; the `organisation.service.*` family uses no orchestration entry — callers import directly from `organisation.service.organisation.ts`, `organisation.service.members.ts`, or `organisation.service.base.ts`. Pick the form that fits the call sites.
+* If a route file grows past this, split by endpoint.
+* Tests have no line limit but should still be organized logically.
 
 ---
 
