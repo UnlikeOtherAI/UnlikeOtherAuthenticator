@@ -7,7 +7,7 @@ import { AdminAuthCallbackPage } from '../pages/AdminAuthCallbackPage';
 import { ConnectionErrorsPage } from '../pages/ConnectionErrorsPage';
 import { FeatureAudienceGroupPage } from '../pages/FeatureAudienceGroupPage';
 import { FeatureFlagDetailPage } from '../pages/FeatureFlagDetailPage';
-import { FeatureFlagsPage } from '../pages/AppsFlagsPage';
+import { FeatureFlagsPage } from '../pages/FeatureFlagsPage';
 import { DashboardPage } from '../pages/DashboardPage';
 import { DirectoryDomainsPage } from '../pages/DirectoryDomainsPage';
 import { DomainDetailPage } from '../pages/DomainDetailPage';

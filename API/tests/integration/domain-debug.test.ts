@@ -3,7 +3,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { SignJWT } from 'jose';
 
 import { createApp } from '../../src/app.js';
-import { ACCESS_TOKEN_AUDIENCE } from '../../src/config/jwt.js';
+import { ACCESS_TOKEN_AUDIENCE } from '../../src/config/constants.js';
 import { digestDomainClientHash } from '../../src/utils/client-hash.js';
 import { createClientId } from '../../src/utils/hash.js';
 import { expectJsonError } from '../helpers/error-response.js';

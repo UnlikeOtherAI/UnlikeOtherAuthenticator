@@ -1,7 +1,7 @@
 import { SignJWT } from 'jose';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ACCESS_TOKEN_AUDIENCE } from '../../src/config/jwt.js';
+import { ACCESS_TOKEN_AUDIENCE } from '../../src/config/constants.js';
 
 const clientJwkMocks = vi.hoisted(() => ({
   listJwksForDomain: vi.fn(),

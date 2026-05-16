@@ -30,15 +30,18 @@ The API is the central OAuth/auth server. It handles:
 
 ```
 /API
-  /routes          — Fastify route handlers
-  /routes/org      — User-facing org/team routes
-  /routes/internal/org — Internal org-team-group admin routes
-  /middleware       — Auth, config verification, error handling
-  /models          — Database models (users, domain roles, login logs, tokens)
-  /services        — Business logic (auth, email, JWT, TOTP, social providers)
-  /utils           — Shared helpers (hashing, validation, generic errors)
-  /migrations      — Database schema migrations
-  /config          — Environment loading, constants
+  /src
+    /routes          — Fastify route handlers
+    /routes/org      — User-facing org/team routes
+    /routes/internal — Internal admin routes (incl. /internal/org/*)
+    /middleware      — Auth, config verification, error handling
+    /models          — Reserved for domain types (currently empty)
+    /services        — Business logic (auth, email, JWT, TOTP, social providers)
+    /plugins         — Fastify plugins (Prisma, logging, etc.)
+    /db              — Prisma client wiring
+    /utils           — Shared helpers (hashing, validation, generic errors)
+    /config          — Environment loading, constants
+  /prisma            — Schema and database migrations
 ```
 
 ### Key Decisions

@@ -1,7 +1,7 @@
 import { SignJWT } from 'jose';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ACCESS_TOKEN_AUDIENCE } from '../../src/config/jwt.js';
+import { ACCESS_TOKEN_AUDIENCE } from '../../src/config/constants.js';
 import type { ClientConfig } from '../../src/services/config.service.js';
 import { testUiTheme } from '../helpers/test-config.js';
 

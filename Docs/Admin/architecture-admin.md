@@ -124,7 +124,7 @@ Authenticated shell (`AdminSessionGuard` → `AdminUiProvider` → `AdminLayout`
 - `/superusers` — admin-domain super-user management (`SuperUsersPage`)
 - `/logs` — login logs and audit surfaces (`LogsPage`)
 - `/connection-errors` — connection-error inspection (`ConnectionErrorsPage`)
-- `/feature-flags` — feature-flag apps listing (`AppsFlagsPage`, exported as `FeatureFlagsPage`)
+- `/feature-flags` — feature-flag apps listing (`FeatureFlagsPage`)
 - `/feature-flags/:appId` — feature-flag detail for an app (`FeatureFlagDetailPage`)
 - `/feature-flags/:appId/groups/:groupId` — audience-group detail under a feature flag (`FeatureAudienceGroupPage`)
 - `/settings` — system-level settings (`SettingsPage`)

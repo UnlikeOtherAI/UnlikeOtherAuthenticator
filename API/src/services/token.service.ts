@@ -3,9 +3,8 @@ import { createHmac, randomBytes } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 import { SignJWT } from 'jose';
 
-import { AUTHORIZATION_CODE_TTL_MS } from '../config/constants.js';
+import { ACCESS_TOKEN_AUDIENCE, AUTHORIZATION_CODE_TTL_MS } from '../config/constants.js';
 import { getAdminAuthDomain, getAuthServiceIdentifier, getEnv, requireEnv } from '../config/env.js';
-import { ACCESS_TOKEN_AUDIENCE } from '../config/jwt.js';
 import { getPrisma } from '../db/prisma.js';
 import { ensureDomainRoleForUser } from './domain-role.service.js';
 import { exchangeRefreshToken, issueRefreshToken } from './refresh-token.service.js';

@@ -2,7 +2,7 @@ import { SignJWT } from 'jose';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { createApp } from '../../src/app.js';
-import { ACCESS_TOKEN_AUDIENCE } from '../../src/config/jwt.js';
+import { ACCESS_TOKEN_AUDIENCE } from '../../src/config/constants.js';
 import { baseClientConfigPayload, signTestConfigJwt } from '../helpers/test-config.js';
 
 const sharedSecret = 'test-shared-secret-with-enough-length';

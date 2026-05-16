@@ -2,7 +2,7 @@ import { SignJWT } from 'jose';
 import type { FastifyRequest } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { ACCESS_TOKEN_AUDIENCE } from '../../config/jwt.js';
+import { ACCESS_TOKEN_AUDIENCE } from '../../config/constants.js';
 import { requireAdminSuperuser } from '../admin-superuser.js';
 
 const domainRoleFindUnique = vi.hoisted(() => vi.fn());

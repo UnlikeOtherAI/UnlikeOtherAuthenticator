@@ -12,3 +12,6 @@ export const TWOFA_CHALLENGE_TTL_MS = 5 * 60 * 1000;
 
 // Social OAuth state is signed and short-lived to limit replay window.
 export const SOCIAL_STATE_TTL_MS = 10 * 60 * 1000;
+
+// JWT `aud` claim for access tokens issued by this service.
+export const ACCESS_TOKEN_AUDIENCE = 'uoa:access-token';

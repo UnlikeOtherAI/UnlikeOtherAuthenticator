@@ -1,8 +1,8 @@
 import { jwtVerify } from 'jose';
 import { z } from 'zod';
 
+import { ACCESS_TOKEN_AUDIENCE } from '../config/constants.js';
 import { getAuthServiceIdentifier, requireEnv } from '../config/env.js';
-import { ACCESS_TOKEN_AUDIENCE } from '../config/jwt.js';
 import { AppError } from '../utils/errors.js';
 
 const ACCESS_TOKEN_ALLOWED_ALGS = ['HS256'] as const;

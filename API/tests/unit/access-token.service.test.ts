@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SignJWT } from 'jose';
 
-import { ACCESS_TOKEN_AUDIENCE } from '../../src/config/jwt.js';
+import { ACCESS_TOKEN_AUDIENCE } from '../../src/config/constants.js';
 import { verifyAccessToken } from '../../src/services/access-token.service.js';
 
 function secretKey(secret: string): Uint8Array {

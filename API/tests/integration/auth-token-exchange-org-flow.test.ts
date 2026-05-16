@@ -12,7 +12,7 @@ import { createHash } from 'node:crypto';
 
 import { jwtVerify } from 'jose';
 
-import { ACCESS_TOKEN_AUDIENCE } from '../../src/config/jwt.js';
+import { ACCESS_TOKEN_AUDIENCE } from '../../src/config/constants.js';
 import { createApp } from '../../src/app.js';
 import { hashPassword } from '../../src/services/password.service.js';
 import { createClientId } from '../../src/utils/hash.js';

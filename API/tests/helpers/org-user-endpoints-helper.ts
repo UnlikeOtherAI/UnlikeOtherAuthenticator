@@ -1,6 +1,6 @@
 import { SignJWT } from 'jose';
 
-import { ACCESS_TOKEN_AUDIENCE } from '../../src/config/jwt.js';
+import { ACCESS_TOKEN_AUDIENCE } from '../../src/config/constants.js';
 import { createClientId } from '../../src/utils/hash.js';
 import { baseClientConfigPayload, signTestConfigJwt } from './test-config.js';
 

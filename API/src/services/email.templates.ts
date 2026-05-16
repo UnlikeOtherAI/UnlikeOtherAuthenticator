@@ -95,6 +95,11 @@ function buildEmailHtml(params: {
   buttonUrl: string;
   minutes: number;
   expiryLabel?: string;
+  /**
+   * Notification mode for emails sent to admins (no expiry copy, no
+   * copy-paste URL block, no "ignore if you did not request" footer).
+   */
+  notification?: boolean;
 }): string {
   const t = params.theme;
   const escapedLink = escapeHtml(params.buttonUrl);
@@ -104,6 +109,25 @@ function buildEmailHtml(params: {
   const fontLink = t.fontImportUrl
     ? `<link rel="stylesheet" href="${escapeHtml(t.fontImportUrl)}" />`
     : '';
+
+  const footerRows = params.notification
+    ? ''
+    : `<tr>
+              <td style="padding:0 24px 16px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:${t.muted};font-size:12px;line-height:18px;">
+                ${escapeHtml(expiryLabel)}
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:0 24px 16px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:${t.muted};font-size:12px;line-height:18px;">
+                If the button does not work, copy and paste this URL into your browser:
+                <div style="margin-top:8px;word-break:break-all;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;color:${t.text};">${escapedLink}</div>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:0 24px 24px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:${t.muted};font-size:12px;line-height:18px;">
+                If you did not request this, you can ignore this email.
+              </td>
+            </tr>`;
 
   return `<!doctype html>
 <html lang="en">
@@ -136,22 +160,7 @@ function buildEmailHtml(params: {
                 </a>
               </td>
             </tr>
-            <tr>
-              <td style="padding:0 24px 16px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:${t.muted};font-size:12px;line-height:18px;">
-                ${escapeHtml(expiryLabel)}
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:0 24px 16px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:${t.muted};font-size:12px;line-height:18px;">
-                If the button does not work, copy and paste this URL into your browser:
-                <div style="margin-top:8px;word-break:break-all;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;color:${t.text};">${escapedLink}</div>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:0 24px 24px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:${t.muted};font-size:12px;line-height:18px;">
-                If you did not request this, you can ignore this email.
-              </td>
-            </tr>
+            ${footerRows}
           </table>
         </td>
       </tr>
@@ -264,42 +273,18 @@ export function buildAccessRequestNotificationTemplate(params: {
     'Review the request here:',
     params.reviewUrl,
   ].join('\n');
-  const html = `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>${escapeHtml(subject)}</title>
-  </head>
-  <body style="margin:0;padding:0;background-color:${theme.bg};" bgcolor="${theme.bg}">
-    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color:${theme.bg};padding:24px 12px;" bgcolor="${theme.bg}">
-      <tr>
-        <td align="center" bgcolor="${theme.bg}">
-          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:560px;background-color:${theme.surface};border-radius:${theme.cardRadius};overflow:hidden;border:1px solid ${theme.border};" bgcolor="${theme.surface}">
-            ${logoHtml(theme)}
-            <tr>
-              <td style="padding:24px 24px 8px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:${theme.text};">
-                <h1 style="margin:0;font-size:20px;line-height:28px;color:${theme.text};">Access request received</h1>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:0 24px 16px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:${theme.text};font-size:14px;line-height:22px;">
-                ${escapeHtml(requester)} requested access to ${escapeHtml(params.teamName)} on ${escapeHtml(params.organisationName)}.
-              </td>
-            </tr>
-            <tr>
-              <td align="center" style="padding:0 24px 20px 24px;">
-                <a href="${escapeHtml(params.reviewUrl)}" style="display:inline-block;background-color:${theme.primary};color:${theme.primaryText};text-decoration:none;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:20px;padding:12px 16px;border-radius:${theme.buttonRadius};">
-                  Review request
-                </a>
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-  </body>
-</html>`;
+  const bodyText = `${requester} requested access to ${params.teamName} on ${params.organisationName}.`;
+  const html = buildEmailHtml({
+    theme,
+    subject,
+    heading: 'Access request received',
+    body: bodyText,
+    bodyHtml: `${escapeHtml(requester)} requested access to ${escapeHtml(params.teamName)} on ${escapeHtml(params.organisationName)}.`,
+    buttonLabel: 'Review request',
+    buttonUrl: params.reviewUrl,
+    minutes: 0,
+    notification: true,
+  });
 
   return { subject, text, html };
 }
@@ -397,43 +382,18 @@ export function buildIntegrationRequestNotificationTemplate(params: {
     params.adminUrl,
   ].join('\n');
 
-  const html = `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>${escapeHtml(subject)}</title>
-  </head>
-  <body style="margin:0;padding:0;background-color:${theme.bg};" bgcolor="${theme.bg}">
-    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color:${theme.bg};padding:24px 12px;" bgcolor="${theme.bg}">
-      <tr>
-        <td align="center" bgcolor="${theme.bg}">
-          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:560px;background-color:${theme.surface};border-radius:${theme.cardRadius};overflow:hidden;border:1px solid ${theme.border};" bgcolor="${theme.surface}">
-            ${logoHtml(theme)}
-            <tr>
-              <td style="padding:24px 24px 8px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:${theme.text};">
-                <h1 style="margin:0;font-size:20px;line-height:28px;color:${theme.text};">New integration request</h1>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:0 24px 16px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:${theme.text};font-size:14px;line-height:22px;">
-                A partner at <strong>${escapeHtml(params.domain)}</strong> has submitted a signed config JWT and is waiting for approval.<br/>
-                Contact: <strong>${escapeHtml(params.contactEmail)}</strong>
-              </td>
-            </tr>
-            <tr>
-              <td align="center" style="padding:0 24px 20px 24px;">
-                <a href="${escapeHtml(params.adminUrl)}" style="display:inline-block;background-color:${theme.primary};color:${theme.primaryText};text-decoration:none;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:20px;padding:12px 16px;border-radius:${theme.buttonRadius};">
-                  Review request
-                </a>
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-  </body>
-</html>`;
+  const html = buildEmailHtml({
+    theme,
+    subject,
+    heading: 'New integration request',
+    body: `A partner at ${params.domain} has submitted a signed config JWT and is waiting for approval. Contact: ${params.contactEmail}`,
+    bodyHtml: `A partner at <strong>${escapeHtml(params.domain)}</strong> has submitted a signed config JWT and is waiting for approval.<br/>
+                Contact: <strong>${escapeHtml(params.contactEmail)}</strong>`,
+    buttonLabel: 'Review request',
+    buttonUrl: params.adminUrl,
+    minutes: 0,
+    notification: true,
+  });
 
   return { subject, text, html };
 }
