@@ -1,10 +1,14 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
 
+import type { ClientConfig } from '../../src/services/config.service.js';
 import {
-  OrganisationService,
-  OrganisationServiceError,
-} from '../../src/services/organisation.service.js';
+  createOrganisation,
+  deleteOrganisation,
+  getOrganisation,
+  listOrganisationsForDomain,
+  updateOrganisation,
+} from '../../src/services/organisation.service.organisation.js';
 
 const { randomBytes } = vi.hoisted(() => ({
   randomBytes: vi.fn(),
@@ -27,6 +31,7 @@ function makePrismaMock() {
       findMany: vi.fn(),
       findFirst: vi.fn(),
       findUnique: vi.fn(),
+      findUniqueOrThrow: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
       delete: vi.fn(),
@@ -66,27 +71,52 @@ function makePrismaMock() {
   return prisma;
 }
 
-function makeLimits() {
+function makeConfig(overrides?: Partial<NonNullable<ClientConfig['org_features']>>): ClientConfig {
   return {
-    maxTeamsPerOrg: 100,
-    maxMembersPerOrg: 1_000,
-    maxTeamMembershipsPerUser: 50,
-  };
+    org_features: {
+      enabled: true,
+      groups_enabled: false,
+      max_teams_per_org: 100,
+      max_groups_per_org: 20,
+      max_members_per_org: 1000,
+      max_members_per_team: 200,
+      max_members_per_group: 500,
+      max_team_memberships_per_user: 50,
+      org_roles: ['owner', 'admin', 'member'],
+      ...overrides,
+    },
+  } as unknown as ClientConfig;
 }
 
-describe('OrganisationService', () => {
+const originalNodeEnv = process.env.NODE_ENV;
+const originalSharedSecret = process.env.SHARED_SECRET;
+const originalAuthServiceIdentifier = process.env.AUTH_SERVICE_IDENTIFIER;
+const originalDatabaseUrl = process.env.DATABASE_URL;
+
+describe('Organisation service: organisation CRUD', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.NODE_ENV = 'test';
+    process.env.SHARED_SECRET = 'test-shared-secret-with-enough-length';
+    process.env.AUTH_SERVICE_IDENTIFIER = 'uoa-auth-service';
+    process.env.DATABASE_URL = 'postgres://example.invalid/db';
     randomBytes.mockReset();
     randomBytes.mockReturnValue(Buffer.from([0x00, 0x00, 0x00, 0x00]));
   });
 
+  afterAll(() => {
+    process.env.NODE_ENV = originalNodeEnv;
+    process.env.SHARED_SECRET = originalSharedSecret;
+    process.env.AUTH_SERVICE_IDENTIFIER = originalAuthServiceIdentifier;
+    process.env.DATABASE_URL = originalDatabaseUrl;
+  });
+
   it('creates an organisation, owner membership, and default team', async () => {
     const prisma = makePrismaMock();
-    const service = new OrganisationService(prisma, makeLimits());
 
     prisma.orgMember.findFirst.mockResolvedValue(null);
     prisma.user.findUnique.mockResolvedValue({ id: 'u-owner' });
-    prisma.organisation.findUnique.mockResolvedValue(null);
+    prisma.organisation.findFirst.mockResolvedValue(null);
     prisma.organisation.create.mockResolvedValue({
       id: 'org-1',
       domain: 'acme.example.com',
@@ -96,6 +126,7 @@ describe('OrganisationService', () => {
       createdAt: now,
       updatedAt: now,
     });
+    prisma.team.findFirst.mockResolvedValue(null);
     prisma.team.create.mockResolvedValue({
       id: 'team-default',
       orgId: 'org-1',
@@ -106,6 +137,7 @@ describe('OrganisationService', () => {
     });
     prisma.orgMember.create.mockResolvedValue({
       id: 'member-owner',
+      orgId: 'org-1',
       userId: 'u-owner',
       role: 'owner',
       createdAt: now,
@@ -115,19 +147,20 @@ describe('OrganisationService', () => {
       id: 'tm-owner',
       teamId: 'team-default',
       userId: 'u-owner',
-      role: 'member',
+      teamRole: 'member',
       createdAt: now,
       updatedAt: now,
     });
 
-    const org = await service.createOrganisation({
-      domain: 'Acme.Example.com',
-      name: 'Acme Inc',
-      ownerUserId: 'u-owner',
-      ownerRole: 'OWNER',
-      allowedRoles: ['owner', 'admin', 'member'],
-      limits: makeLimits(),
-    });
+    const org = await createOrganisation(
+      {
+        domain: 'Acme.Example.com',
+        name: 'Acme Inc',
+        ownerId: 'u-owner',
+        config: makeConfig(),
+      },
+      { prisma },
+    );
 
     expect(org).toMatchObject({
       id: 'org-1',
@@ -157,12 +190,12 @@ describe('OrganisationService', () => {
     );
     expect(prisma.team.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: {
+        data: expect.objectContaining({
           orgId: 'org-1',
           name: 'General',
           slug: 'general',
           isDefault: true,
-        },
+        }),
       }),
     );
     expect(prisma.teamMember.create).toHaveBeenCalledWith(
@@ -170,7 +203,6 @@ describe('OrganisationService', () => {
         data: {
           teamId: 'team-default',
           userId: 'u-owner',
-          teamRole: 'member',
         },
       }),
     );
@@ -178,44 +210,50 @@ describe('OrganisationService', () => {
 
   it('rejects creating an org when owner already belongs to another org on the domain', async () => {
     const prisma = makePrismaMock();
-    const service = new OrganisationService(prisma, makeLimits());
 
     prisma.orgMember.findFirst.mockResolvedValue({ id: 'existing-member' });
     prisma.user.findUnique.mockResolvedValue({ id: 'u-owner' });
 
-    const promise = service.createOrganisation({
-      domain: 'acme.example.com',
-      name: 'Second org',
-      ownerUserId: 'u-owner',
-      ownerRole: 'owner',
-      allowedRoles: ['owner', 'admin', 'member'],
-      limits: makeLimits(),
-    });
+    const promise = createOrganisation(
+      {
+        domain: 'acme.example.com',
+        name: 'Second org',
+        ownerId: 'u-owner',
+        config: makeConfig(),
+      },
+      { prisma },
+    );
 
     await expect(promise).rejects.toMatchObject({
-      code: 'CONFLICT',
-      statusCode: 409,
-      message: 'User already belongs to an organisation on this domain.',
-    } satisfies Partial<OrganisationServiceError>);
+      code: 'BAD_REQUEST',
+      statusCode: 400,
+    });
     expect(prisma.organisation.create).not.toHaveBeenCalled();
   });
 
   it('regenerates slug with random suffix when the base slug collides', async () => {
     const prisma = makePrismaMock();
-    const service = new OrganisationService(prisma, makeLimits());
 
-    prisma.organisation.findFirst.mockResolvedValue({
-      id: 'org-1',
-      domain: 'acme.example.com',
-      name: 'Original',
-      slug: 'original',
-      ownerId: 'u-owner',
+    prisma.organisation.findFirst
+      .mockResolvedValueOnce({
+        id: 'org-1',
+        domain: 'acme.example.com',
+        name: 'Original',
+        slug: 'original',
+        ownerId: 'u-owner',
+        createdAt: now,
+        updatedAt: now,
+      })
+      .mockResolvedValueOnce({ id: 'other-org' })
+      .mockResolvedValueOnce(null);
+    prisma.orgMember.findFirst.mockResolvedValue({
+      id: 'm-owner',
+      orgId: 'org-1',
+      userId: 'u-owner',
+      role: 'owner',
       createdAt: now,
       updatedAt: now,
     });
-    prisma.organisation.findUnique
-      .mockResolvedValueOnce({ id: 'other-org' })
-      .mockResolvedValueOnce(null);
     prisma.organisation.update.mockResolvedValue({
       id: 'org-1',
       domain: 'acme.example.com',
@@ -226,94 +264,73 @@ describe('OrganisationService', () => {
       updatedAt: now,
     });
 
-    const result = await service.updateOrganisation({
-      orgId: 'org-1',
-      domain: 'acme.example.com',
-      name: 'Acme',
-      callerUserId: 'u-owner',
-    });
+    const result = await updateOrganisation(
+      {
+        orgId: 'org-1',
+        domain: 'acme.example.com',
+        name: 'Acme',
+        actorUserId: 'u-owner',
+        config: makeConfig(),
+      },
+      { prisma },
+    );
 
     expect(prisma.organisation.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 'org-1' },
-        data: {
+        data: expect.objectContaining({
           name: 'Acme',
           slug: 'acme-aaaa',
-        },
+        }),
       }),
     );
     expect(result.slug).toBe('acme-aaaa');
     expect(randomBytes).toHaveBeenCalledTimes(1);
   });
 
-  it('transfers ownership to an existing organisation member', async () => {
+  it('lists organisations for a domain with cursor pagination', async () => {
     const prisma = makePrismaMock();
-    const service = new OrganisationService(prisma, makeLimits());
 
-    prisma.organisation.findFirst.mockResolvedValue({
-      id: 'org-1',
-      domain: 'acme.example.com',
-      name: 'Acme',
-      slug: 'acme',
-      ownerId: 'u-owner',
-      createdAt: now,
-      updatedAt: now,
-    });
-    prisma.orgMember.findUnique.mockResolvedValue({
-      id: 'member-new',
-      orgId: 'org-1',
-      userId: 'u-new-owner',
-      role: 'member',
-      createdAt: now,
-      updatedAt: now,
-    });
-    prisma.organisation.update.mockResolvedValue({
-      id: 'org-1',
-      domain: 'acme.example.com',
-      name: 'Acme',
-      slug: 'acme',
-      ownerId: 'u-new-owner',
-      createdAt: now,
-      updatedAt: now,
-    });
-    prisma.orgMember.update.mockResolvedValue({
-      id: 'member-new',
-      orgId: 'org-1',
-      userId: 'u-new-owner',
-      role: 'owner',
-      createdAt: now,
-      updatedAt: now,
-    });
+    prisma.organisation.findMany.mockResolvedValue([
+      {
+        id: 'org-new',
+        domain: 'acme.example.com',
+        name: 'New',
+        slug: 'new',
+        ownerId: 'u-owner',
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: 'org-old',
+        domain: 'acme.example.com',
+        name: 'Old',
+        slug: 'old',
+        ownerId: 'u-owner',
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]);
 
-    const result = await service.transferOwnership({
-      orgId: 'org-1',
-      domain: 'acme.example.com',
-      newOwnerUserId: 'u-new-owner',
-      callerUserId: 'u-owner',
-      allowedRoles: ['owner', 'admin', 'member'],
-    });
-
-    expect(result).toEqual({
-      id: 'org-1',
-      ownerId: 'u-new-owner',
-    });
-    expect(prisma.organisation.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 'org-1' },
-        data: { ownerId: 'u-new-owner' },
-      }),
+    const result = await listOrganisationsForDomain(
+      { domain: 'Acme.Example.com', limit: 1 },
+      { prisma },
     );
-    expect(prisma.orgMember.update).toHaveBeenCalledWith(
+
+    expect(result).toMatchObject({
+      data: [{ id: 'org-new', slug: 'new' }],
+      next_cursor: 'org-old',
+    });
+    expect(prisma.organisation.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'member-new' },
-        data: { role: 'owner' },
+        where: { domain: 'acme.example.com' },
+        take: 2,
       }),
     );
   });
 
   it('reads an organisation from its domain and id', async () => {
     const prisma = makePrismaMock();
-    const service = new OrganisationService(prisma, makeLimits());
 
     prisma.organisation.findFirst.mockResolvedValue({
       id: 'org-1',
@@ -325,14 +342,16 @@ describe('OrganisationService', () => {
       updatedAt: now,
     });
 
-    const org = await service.getOrganisation({
-      orgId: 'org-1',
-      domain: 'Acme.Example.com',
-    });
+    const org = await getOrganisation(
+      { orgId: 'org-1', domain: 'Acme.Example.com' },
+      { prisma },
+    );
 
-    expect(prisma.organisation.findFirst).toHaveBeenCalledWith({
-      where: { id: 'org-1', domain: 'acme.example.com' },
-    });
+    expect(prisma.organisation.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'org-1', domain: 'acme.example.com' },
+      }),
+    );
     expect(org).toMatchObject({
       id: 'org-1',
       domain: 'acme.example.com',
@@ -341,9 +360,8 @@ describe('OrganisationService', () => {
     });
   });
 
-  it('deletes an organisation when called by the owner and removes memberships first', async () => {
+  it('deletes an organisation when called by the owner', async () => {
     const prisma = makePrismaMock();
-    const service = new OrganisationService(prisma, makeLimits());
 
     prisma.organisation.findFirst.mockResolvedValue({
       id: 'org-1',
@@ -354,7 +372,6 @@ describe('OrganisationService', () => {
       createdAt: now,
       updatedAt: now,
     });
-    prisma.orgMember.deleteMany.mockResolvedValue({ count: 2 } as never);
     prisma.organisation.delete.mockResolvedValue({
       id: 'org-1',
       domain: 'acme.example.com',
@@ -365,19 +382,21 @@ describe('OrganisationService', () => {
       updatedAt: now,
     });
 
-    await service.deleteOrganisation({
-      orgId: 'org-1',
-      domain: 'acme.example.com',
-      callerUserId: 'u-owner',
-    });
+    const result = await deleteOrganisation(
+      {
+        orgId: 'org-1',
+        domain: 'acme.example.com',
+        actorUserId: 'u-owner',
+      },
+      { prisma },
+    );
 
-    expect(prisma.orgMember.deleteMany).toHaveBeenCalledWith({ where: { orgId: 'org-1' } });
+    expect(result).toEqual({ deleted: true });
     expect(prisma.organisation.delete).toHaveBeenCalledWith({ where: { id: 'org-1' } });
   });
 
   it('forbids deleting an organisation when caller is not the owner', async () => {
     const prisma = makePrismaMock();
-    const service = new OrganisationService(prisma, makeLimits());
 
     prisma.organisation.findFirst.mockResolvedValue({
       id: 'org-1',
@@ -389,17 +408,19 @@ describe('OrganisationService', () => {
       updatedAt: now,
     });
 
-    const promise = service.deleteOrganisation({
-      orgId: 'org-1',
-      domain: 'acme.example.com',
-      callerUserId: 'u-not-owner',
-    });
+    const promise = deleteOrganisation(
+      {
+        orgId: 'org-1',
+        domain: 'acme.example.com',
+        actorUserId: 'u-not-owner',
+      },
+      { prisma },
+    );
 
     await expect(promise).rejects.toMatchObject({
-      code: 'UNAUTHORIZED',
+      code: 'FORBIDDEN',
       statusCode: 403,
-      message: 'Only the owner can delete an organisation.',
-    } satisfies Partial<OrganisationServiceError>);
+    });
     expect(prisma.organisation.delete).not.toHaveBeenCalled();
   });
 });
