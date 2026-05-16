@@ -54,29 +54,48 @@ State model:
 
 ## 4. Module Boundaries
 
-Use this structure:
+Use this structure (matches the current tree under `Admin/src/`):
 
 ```text
 /Admin
   /src
+    main.tsx                 — Vite entry, mounts <App /> with providers
+    index.css                — Tailwind entry
+    vite-env.d.ts            — Vite ambient types
     /app
+      App.tsx                — Router and route tree (see §4.1)
+      AppProviders.tsx       — Query client, router, and shared providers
     /layouts
-    /pages
+      AdminLayout.tsx        — Authenticated shell composing Sidebar + Topbar + outlet
+      Sidebar.tsx            — Shell sidebar
+      Topbar.tsx             — Shell topbar
+      navigation.ts          — Sidebar/topbar navigation model
+      AdminActionDialog.tsx  — Shared action dialog primitive used by the shell
+      AdminFeatureDialogBodies.tsx — Feature-flag dialog bodies (slated to move into /features)
+      AdminUserDialogBodies.tsx    — User-management dialog bodies (slated to move into /features)
+    /pages                   — Route-level page components (one per route, see §4.1)
     /components
+      /dialogs               — Shared dialog primitives (ConfirmDialog, UserDetailsModal, …)
+      /icons                 — Inline SVG icon components (see §8.1)
+      /search                — Shell-level search primitives (GlobalSearch)
+      /sections              — Reusable page sections (e.g. DomainSigningKeysSection)
+      /ui                    — Reusable presentational primitives (Button, Modal, Table, …)
     /features
-    /hooks
-    /services
-    /schemas
-    /config
-    /utils
+      /admin                 — Admin-domain feature views, hooks, and orchestration
+      /auth                  — Admin auth/session feature (admin-session, guards, callback flow)
+      /shell                 — Shell-scoped feature state (e.g. AdminUiProvider)
+    /services                — API clients and transport mapping
+    /schemas                 — Frontend validation schemas and UI-facing contracts
+    /config                  — Runtime config, env parsing, request-client setup
+    /utils                   — Small generic helpers
 ```
 
 Rules:
 
 - `pages` own route composition only
-- `layouts` own shell composition only
-- `components` hold reusable UI pieces
-- `features` hold feature-specific views, hooks, and orchestration
+- `layouts` own shell composition only — the two feature-specific files currently in `/layouts` (`AdminFeatureDialogBodies.tsx`, `AdminUserDialogBodies.tsx`) are tracked debt and must migrate into the matching `/features/*` subtree. No new feature components belong in `/layouts`.
+- `components` hold reusable UI pieces, organised by kind: `components/dialogs` for shared dialog primitives, `components/icons` for product-action icons (inline SVG), `components/search` for shell-level search primitives, `components/sections` for reusable page sections that aren't feature-owned, and `components/ui` for generic presentational primitives
+- `features` hold feature-specific views, hooks, and orchestration; current subtrees are `admin`, `auth`, and `shell`
 - `services` own API clients and transport mapping
 - `config` owns runtime config, env parsing, and request-client setup
 - `schemas` own frontend validation schemas and UI-facing contracts
@@ -84,20 +103,40 @@ Rules:
 
 ## 4.1 Route Map
 
-The initial React Router tree should mirror the existing templates and current admin scope:
+The React Router tree defined in `Admin/src/app/App.tsx` is:
 
-- `/login` — admin sign-in screen from `template-login.html`
-- `/` — admin shell landing page from `template-folder.html`
+Public (no session):
+
+- `/login` — admin sign-in screen (`LoginPage`), styled from `template-login.html`
+- `/auth/callback` — admin OAuth callback (`AdminAuthCallbackPage`); exchanges the authorization code with `POST /internal/admin/token`
+
+Authenticated shell (`AdminSessionGuard` → `AdminUiProvider` → `AdminLayout`):
+
+- `/` — index route, renders `DashboardPage`
 - `/dashboard` — dashboard/home inside the admin shell
-- `/organisations` — organisation listing and search
-- `/teams` — team listing and search
-- `/users` — user listing and search
-- `/domains` — domains and secrets view
-- `/logs` — login logs and audit surfaces
-- `/superusers` — admin-domain super-user management
-- `/settings` — system-level settings
+- `/integrations` — integration requests (`IntegrationRequestsPage`)
+- `/secrets` — shared secrets view (`SecretsPage`)
+- `/domains` — domains listing (`DirectoryDomainsPage`)
+- `/domains/:domainId` — domain detail, including the §11 Domain Email and signing-keys sections (`DomainDetailPage`)
+- `/organisations` — organisation listing and search (`OrganisationsPage`)
+- `/organisations/:orgId` — organisation detail (`OrganisationDetailPage`)
+- `/organisations/:orgId/teams/:teamId` — team detail under an organisation (`TeamDetailPage`)
+- `/teams` — team listing across organisations (`TeamsPage`)
+- `/users` — user listing and search (`UsersPage`)
+- `/users/:userId` — user detail (`UserDetailPage`)
+- `/superusers` — admin-domain super-user management (`SuperUsersPage`)
+- `/logs` — login logs and audit surfaces (`LogsPage`)
+- `/connection-errors` — connection-error inspection (`ConnectionErrorsPage`)
+- `/feature-flags` — feature-flag apps listing (`AppsFlagsPage`, exported as `FeatureFlagsPage`)
+- `/feature-flags/:appId` — feature-flag detail for an app (`FeatureFlagDetailPage`)
+- `/feature-flags/:appId/groups/:groupId` — audience-group detail under a feature flag (`FeatureAudienceGroupPage`)
+- `/settings` — system-level settings (`SettingsPage`)
 
-If a template demonstrates a section but not a final route name, use this route map rather than inventing a new page tree.
+Catch-all:
+
+- `*` — redirects to `/dashboard`
+
+When a template demonstrates a section that does not yet have a route here, use this route map rather than inventing a new page tree. When a new route is added in `App.tsx`, this list must be updated in the same change.
 
 ## 5. Data and API Rules
 
