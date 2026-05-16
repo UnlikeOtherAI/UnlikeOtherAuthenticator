@@ -1,5 +1,5 @@
-import type { AdminData, AppFlagSummary, FeatureAudienceGroup, FeatureFlagDefinition, FeaturePlatform, KillSwitchEntry, OrganisationMember, PreapprovedMember, Team, UserSummary } from './types';
-import { createFeaturePlatform } from './platforms';
+import type { AdminData, AppFlagSummary, FeatureAudienceGroup, FeatureFlagDefinition, FeaturePlatform, KillSwitchEntry, OrganisationMember, PreapprovedMember, Team, UserSummary } from '../types';
+import { createFeaturePlatform } from '../platforms';
 
 const acmeMembers: OrganisationMember[] = [
   member('u101', 'Alice Chen', 'alice@acme.com', 'owner', ['General', 'Backend'], { General: 'member', Backend: 'admin' }, true, '2 min ago', 'google'),

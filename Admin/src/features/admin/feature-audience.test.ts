@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { ALL_PLATFORMS_ID, PLATFORM_KIND_OPTIONS } from './platforms';
 import { filterFlagsByPlatform, filterGroupsByPlatform, filterKillSwitchesByPlatform } from './feature-audience';
-import { mockAdminData } from './mock-data';
+import { mockAdminData } from './__mocks__/mock-data';
 
 const widgetsApp = requireWidgetsApp();
 
