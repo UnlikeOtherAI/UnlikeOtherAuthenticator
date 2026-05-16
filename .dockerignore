@@ -11,3 +11,4 @@ API/dist
 Auth/dist
 Auth/dist-ssr
 npm-debug.log*
+**/*.map
