@@ -24,7 +24,7 @@ export function ChangeTeamRoleDialog({
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
-          <Button icon="check" variant="primary" onClick={onClose}>Save changes</Button>
+          <Button icon="check" variant="primary" disabled title="Not yet implemented" onClick={onClose}>Save changes</Button>
         </>
       }
     >
@@ -40,6 +40,7 @@ export function ChangeTeamRoleDialog({
               <option value="admin">Admin</option>
             </SelectField>
           </FieldShell>
+          <p className="text-sm text-gray-500">Coming soon — backend wiring pending.</p>
         </div>
       ) : null}
     </Modal>

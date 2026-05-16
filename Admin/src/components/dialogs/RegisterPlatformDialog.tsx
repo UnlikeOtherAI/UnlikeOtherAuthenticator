@@ -14,7 +14,7 @@ export function RegisterPlatformDialog({ app, onClose, open }: { app: AppFlagSum
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
-          <Button icon="check" variant="primary" onClick={onClose}>Add</Button>
+          <Button icon="check" variant="primary" disabled title="Not yet implemented" onClick={onClose}>Add</Button>
         </>
       }
     >
@@ -36,6 +36,7 @@ export function RegisterPlatformDialog({ app, onClose, open }: { app: AppFlagSum
           <FieldShell label="Identifier">
             <TextField className="font-mono" placeholder={app.identifier} />
           </FieldShell>
+          <p className="text-sm text-gray-500">Coming soon — backend wiring pending.</p>
         </div>
       ) : null}
     </Modal>

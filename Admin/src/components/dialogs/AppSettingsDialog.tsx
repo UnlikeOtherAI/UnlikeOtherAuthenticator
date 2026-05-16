@@ -13,7 +13,7 @@ export function AppSettingsDialog({ app, onClose, open }: { app: AppFlagSummary 
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
-          <Button icon="check" variant="primary" onClick={onClose}>Save changes</Button>
+          <Button icon="check" variant="primary" disabled title="Not yet implemented" onClick={onClose}>Save changes</Button>
         </>
       }
     >
@@ -25,6 +25,7 @@ export function AppSettingsDialog({ app, onClose, open }: { app: AppFlagSummary 
           <FieldShell label="Identifier">
             <TextField className="font-mono" defaultValue={app.identifier} />
           </FieldShell>
+          <p className="text-sm text-gray-500">Coming soon — backend wiring pending.</p>
         </div>
       ) : null}
     </Modal>

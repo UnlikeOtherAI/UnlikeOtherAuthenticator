@@ -13,7 +13,7 @@ export function EditOrganisationDialog({ onClose, open, organisation }: { onClos
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
-          <Button icon="check" variant="primary" onClick={onClose}>Save changes</Button>
+          <Button icon="check" variant="primary" disabled title="Not yet implemented" onClick={onClose}>Save changes</Button>
         </>
       }
     >
@@ -25,6 +25,7 @@ export function EditOrganisationDialog({ onClose, open, organisation }: { onClos
           <FieldShell label="Slug">
             <TextField className="font-mono" defaultValue={organisation.slug} />
           </FieldShell>
+          <p className="text-sm text-gray-500">Coming soon — backend wiring pending.</p>
         </div>
       ) : null}
     </Modal>

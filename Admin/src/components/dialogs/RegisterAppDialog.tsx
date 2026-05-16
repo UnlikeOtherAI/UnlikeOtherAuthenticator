@@ -13,7 +13,7 @@ export function RegisterAppDialog({ onClose, open }: { onClose: () => void; open
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
-          <Button icon="check" variant="primary" onClick={onClose}>Add</Button>
+          <Button icon="check" variant="primary" disabled title="Not yet implemented" onClick={onClose}>Add</Button>
         </>
       }
     >
@@ -37,6 +37,7 @@ export function RegisterAppDialog({ onClose, open }: { onClose: () => void; open
         <FieldShell label="Organisation">
           <TextField placeholder="Acme Engineering" />
         </FieldShell>
+        <p className="text-sm text-gray-500">Coming soon — backend wiring pending.</p>
       </div>
     </Modal>
   );
