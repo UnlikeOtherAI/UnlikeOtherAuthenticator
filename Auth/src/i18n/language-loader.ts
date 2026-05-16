@@ -1,3 +1,5 @@
+import { getJson } from '../utils/api.js';
+
 type TranslationFile = Record<string, string>;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -29,18 +31,12 @@ export function loadTranslations(params: {
 
   const p = (async () => {
     try {
-      const url = new URL(`/i18n/${encodeURIComponent(language)}`, window.location.origin);
-      url.searchParams.set('config_url', configUrl);
-
-      const res = await fetch(url.toString(), {
-        method: 'GET',
-        headers: { accept: 'application/json' },
-      });
-      if (!res.ok) return null;
-      const json: unknown = await res.json().catch(() => null);
-      return normalizeTranslationFile(json);
-    } catch {
-      return null;
+      const result = await getJson<unknown>(
+        `/i18n/${encodeURIComponent(language)}`,
+        { config_url: configUrl },
+      );
+      if (!result.ok) return null;
+      return normalizeTranslationFile(result.data);
     } finally {
       inFlight.delete(key);
     }
@@ -49,4 +45,3 @@ export function loadTranslations(params: {
   inFlight.set(key, p);
   return p;
 }
-

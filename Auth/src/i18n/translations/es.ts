@@ -15,6 +15,9 @@ export const es = {
   'form.confirmPassword.label': 'Confirmar contrasena',
 
   'form.rememberMe.label': 'Recordarme',
+  'form.password.show': 'Mostrar',
+  'form.password.hide': 'Ocultar',
+  'form.error.generic': 'La solicitud fallo. Intentalo de nuevo.',
   'form.login.submit': 'Iniciar sesion',
   'form.login.error': 'Correo electronico o contrasena invalidos.',
   'form.register.submit': 'Continuar',

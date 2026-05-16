@@ -13,6 +13,9 @@ export const en = {
   'form.confirmPassword.label': 'Confirm password',
 
   'form.rememberMe.label': 'Remember me',
+  'form.password.show': 'Show',
+  'form.password.hide': 'Hide',
+  'form.error.generic': 'Request failed. Please try again.',
   'form.login.submit': 'Sign in',
   'form.login.error': 'Invalid email or password.',
   'form.register.submit': 'Continue',

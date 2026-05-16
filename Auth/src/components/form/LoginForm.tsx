@@ -1,20 +1,25 @@
 import React, { useId, useState } from 'react';
 
 import { Button } from '../ui/Button.js';
+import { Input } from '../ui/Input.js';
+import { PasswordInput } from '../ui/PasswordInput.js';
 import { Switch } from '../ui/Switch.js';
 import { usePopup } from '../../hooks/use-popup.js';
 import { useTranslation } from '../../i18n/use-translation.js';
+import { postJson } from '../../utils/api.js';
 import { isRegistrationAllowed } from '../../utils/auth-config.js';
 
-function fieldInputClasses(): string {
-  return [
-    'mt-1 w-full rounded-[var(--uoa-radius-input)] border border-[var(--uoa-color-border)]',
-    'bg-[var(--uoa-color-surface)] px-3 py-2 text-[var(--uoa-color-text)]',
-    'placeholder:text-[var(--uoa-color-muted)]',
-    'focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--uoa-color-primary)]',
-    'focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--uoa-color-bg)]',
-  ].join(' ');
-}
+type LoginRequest = {
+  email: string;
+  password: string;
+  remember_me: boolean;
+};
+
+type LoginResponse = {
+  twofa_required?: boolean;
+  twofa_token?: string;
+  redirect_to?: string;
+};
 
 function readSessionConfig(config: unknown): {
   rememberMeEnabled: boolean;
@@ -34,8 +39,6 @@ function readSessionConfig(config: unknown): {
 }
 
 export function LoginForm(): React.JSX.Element {
-  const emailId = useId();
-  const passwordId = useId();
   const rememberMeId = useId();
   const { t } = useTranslation();
   const {
@@ -62,91 +65,65 @@ export function LoginForm(): React.JSX.Element {
     setError(null);
     setLoading(true);
 
-    try {
-      const url = new URL('/auth/login', window.location.origin);
-      url.searchParams.set('config_url', configUrl);
-      if (redirectUrl) {
-        url.searchParams.set('redirect_url', redirectUrl);
-      }
-      if (codeChallenge && codeChallengeMethod) {
-        url.searchParams.set('code_challenge', codeChallenge);
-        url.searchParams.set('code_challenge_method', codeChallengeMethod);
-      }
-      if (requestAccess) {
-        url.searchParams.set('request_access', 'true');
-      }
-
-      const response = await fetch(url.toString(), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, remember_me: rememberMe }),
-      });
-
-      const data = await response.json() as Record<string, unknown>;
-
-      if (!response.ok) {
-        setError(t('form.login.error'));
-        return;
-      }
-
-      if (data.twofa_required && typeof data.twofa_token === 'string') {
-        // 2FA required: update URL to trigger the 2FA view
-        const twofaUrl = new URL(window.location.href);
-        twofaUrl.searchParams.set('twofa_token', data.twofa_token);
-        window.location.assign(twofaUrl.toString());
-        return;
-      }
-
-      if (typeof data.redirect_to === 'string') {
-        redirectTo(data.redirect_to);
-        return;
-      }
-
-      setError(t('form.login.error'));
-    } catch {
-      setError(t('form.login.error'));
-    } finally {
-      setLoading(false);
+    const query: Record<string, string | boolean | null> = { config_url: configUrl };
+    if (redirectUrl) query.redirect_url = redirectUrl;
+    if (codeChallenge && codeChallengeMethod) {
+      query.code_challenge = codeChallenge;
+      query.code_challenge_method = codeChallengeMethod;
     }
+    if (requestAccess) query.request_access = true;
+
+    const result = await postJson<LoginRequest, LoginResponse>(
+      '/auth/login',
+      { email, password, remember_me: rememberMe },
+      query,
+    );
+
+    setLoading(false);
+
+    if (!result.ok) {
+      setError(t('form.login.error'));
+      return;
+    }
+
+    if (result.data.twofa_required && typeof result.data.twofa_token === 'string') {
+      const twofaUrl = new URL(window.location.href);
+      twofaUrl.searchParams.set('twofa_token', result.data.twofa_token);
+      window.location.assign(twofaUrl.toString());
+      return;
+    }
+
+    if (typeof result.data.redirect_to === 'string') {
+      redirectTo(result.data.redirect_to);
+      return;
+    }
+
+    setError(t('form.login.error'));
   }
 
   return (
-    <form
-      className="mt-6 flex flex-col gap-4"
-      onSubmit={handleSubmit}
-    >
-      <div>
-        <label htmlFor={emailId} className="text-sm font-medium">
-          {t('form.email.label')}
-        </label>
-        <input
-          id={emailId}
-          name="email"
-          type="email"
-          inputMode="email"
-          autoComplete="email"
-          required
-          className={fieldInputClasses()}
-          value={email}
-          onChange={(e) => setEmail(e.currentTarget.value)}
-        />
-      </div>
+    <form className="mt-6 flex flex-col gap-4" onSubmit={handleSubmit}>
+      <Input
+        name="email"
+        type="email"
+        inputMode="email"
+        autoComplete="email"
+        required
+        label={t('form.email.label')}
+        value={email}
+        onChange={(e) => setEmail(e.currentTarget.value)}
+      />
 
-      <div>
-        <label htmlFor={passwordId} className="text-sm font-medium">
-          {t('form.password.label')}
-        </label>
-        <input
-          id={passwordId}
-          name="password"
-          type="password"
-          autoComplete="current-password"
-          required
-          className={fieldInputClasses()}
-          value={password}
-          onChange={(e) => setPassword(e.currentTarget.value)}
-        />
-      </div>
+      <PasswordInput
+        name="password"
+        autoComplete="current-password"
+        required
+        label={t('form.password.label')}
+        showToggleLabel={t('form.password.show')}
+        hideToggleLabel={t('form.password.hide')}
+        value={password}
+        onChange={(e) => setPassword(e.currentTarget.value)}
+      />
 
       {rememberMeEnabled && (
         <Switch
@@ -157,9 +134,7 @@ export function LoginForm(): React.JSX.Element {
         />
       )}
 
-      {error && (
-        <p className="text-sm text-[var(--uoa-color-danger)]">{error}</p>
-      )}
+      {error && <p className="text-sm text-[var(--uoa-color-danger)]">{error}</p>}
 
       <div className="mt-2">
         <Button variant="primary" type="submit" disabled={loading}>

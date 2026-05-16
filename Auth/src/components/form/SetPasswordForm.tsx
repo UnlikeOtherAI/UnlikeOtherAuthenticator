@@ -1,22 +1,15 @@
-import React, { useId, useState } from 'react';
+import React, { useState } from 'react';
 
 import { Button } from '../ui/Button.js';
+import { PasswordInput } from '../ui/PasswordInput.js';
 import { usePopup } from '../../hooks/use-popup.js';
 import { useTranslation } from '../../i18n/use-translation.js';
+import { postJson } from '../../utils/api.js';
 
-function fieldInputClasses(): string {
-  return [
-    'mt-1 w-full rounded-[var(--uoa-radius-input)] border border-[var(--uoa-color-border)]',
-    'bg-[var(--uoa-color-surface)] px-3 py-2 text-[var(--uoa-color-text)]',
-    'placeholder:text-[var(--uoa-color-muted)]',
-    'focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--uoa-color-primary)]',
-    'focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--uoa-color-bg)]',
-  ].join(' ');
-}
+type SetPasswordRequest = { token: string; password: string };
+type SetPasswordResponse = { redirect_to?: string };
 
 export function SetPasswordForm(): React.JSX.Element {
-  const passwordId = useId();
-  const confirmId = useId();
   const { t } = useTranslation();
   const {
     configUrl,
@@ -54,65 +47,48 @@ export function SetPasswordForm(): React.JSX.Element {
 
     setLoading(true);
 
-    try {
-      if (isPasswordReset) {
-        // Password reset flow: POST /auth/reset-password
-        const url = new URL('/auth/reset-password', window.location.origin);
-        url.searchParams.set('config_url', configUrl);
-
-        const response = await fetch(url.toString(), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token: emailToken, password }),
-        });
-
-        if (!response.ok) {
-          setError(t('form.setPassword.error'));
-          return;
-        }
-
-        // Password reset doesn't issue an auth code — user must re-login.
-        setSuccess(true);
-      } else {
-        // Registration verify+set-password flow: POST /auth/verify-email
-        const url = new URL('/auth/verify-email', window.location.origin);
-        url.searchParams.set('config_url', configUrl);
-        if (redirectUrl) {
-          url.searchParams.set('redirect_url', redirectUrl);
-        }
-        if (codeChallenge && codeChallengeMethod) {
-          url.searchParams.set('code_challenge', codeChallenge);
-          url.searchParams.set('code_challenge_method', codeChallengeMethod);
-        }
-        if (requestAccess) {
-          url.searchParams.set('request_access', 'true');
-        }
-
-        const response = await fetch(url.toString(), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token: emailToken, password }),
-        });
-
-        const data = await response.json() as Record<string, unknown>;
-
-        if (!response.ok) {
-          setError(t('form.setPassword.error'));
-          return;
-        }
-
-        if (typeof data.redirect_to === 'string') {
-          redirectTo(data.redirect_to);
-          return;
-        }
-
-        setError(t('form.setPassword.error'));
-      }
-    } catch {
-      setError(t('form.setPassword.error'));
-    } finally {
+    if (isPasswordReset) {
+      const result = await postJson<SetPasswordRequest, unknown>(
+        '/auth/reset-password',
+        { token: emailToken, password },
+        { config_url: configUrl },
+      );
       setLoading(false);
+      if (!result.ok) {
+        setError(t('form.setPassword.error'));
+        return;
+      }
+      // Password reset doesn't issue an auth code — user must re-login.
+      setSuccess(true);
+      return;
     }
+
+    const query: Record<string, string | boolean | null> = { config_url: configUrl };
+    if (redirectUrl) query.redirect_url = redirectUrl;
+    if (codeChallenge && codeChallengeMethod) {
+      query.code_challenge = codeChallenge;
+      query.code_challenge_method = codeChallengeMethod;
+    }
+    if (requestAccess) query.request_access = true;
+
+    const result = await postJson<SetPasswordRequest, SetPasswordResponse>(
+      '/auth/verify-email',
+      { token: emailToken, password },
+      query,
+    );
+    setLoading(false);
+
+    if (!result.ok) {
+      setError(t('form.setPassword.error'));
+      return;
+    }
+
+    if (typeof result.data.redirect_to === 'string') {
+      redirectTo(result.data.redirect_to);
+      return;
+    }
+
+    setError(t('form.setPassword.error'));
   }
 
   if (success) {
@@ -139,47 +115,32 @@ export function SetPasswordForm(): React.JSX.Element {
   }
 
   return (
-    <form
-      className="mt-6 flex flex-col gap-4"
-      onSubmit={handleSubmit}
-    >
-      <div>
-        <label htmlFor={passwordId} className="text-sm font-medium">
-          {t('form.newPassword.label')}
-        </label>
-        <input
-          id={passwordId}
-          name="password"
-          type="password"
-          autoComplete="new-password"
-          required
-          minLength={8}
-          className={fieldInputClasses()}
-          value={password}
-          onChange={(e) => setPassword(e.currentTarget.value)}
-        />
-      </div>
+    <form className="mt-6 flex flex-col gap-4" onSubmit={handleSubmit}>
+      <PasswordInput
+        name="password"
+        autoComplete="new-password"
+        required
+        minLength={8}
+        label={t('form.newPassword.label')}
+        showToggleLabel={t('form.password.show')}
+        hideToggleLabel={t('form.password.hide')}
+        value={password}
+        onChange={(e) => setPassword(e.currentTarget.value)}
+      />
 
-      <div>
-        <label htmlFor={confirmId} className="text-sm font-medium">
-          {t('form.confirmPassword.label')}
-        </label>
-        <input
-          id={confirmId}
-          name="confirm-password"
-          type="password"
-          autoComplete="new-password"
-          required
-          minLength={8}
-          className={fieldInputClasses()}
-          value={confirm}
-          onChange={(e) => setConfirm(e.currentTarget.value)}
-        />
-      </div>
+      <PasswordInput
+        name="confirm-password"
+        autoComplete="new-password"
+        required
+        minLength={8}
+        label={t('form.confirmPassword.label')}
+        showToggleLabel={t('form.password.show')}
+        hideToggleLabel={t('form.password.hide')}
+        value={confirm}
+        onChange={(e) => setConfirm(e.currentTarget.value)}
+      />
 
-      {error && (
-        <p className="text-sm text-[var(--uoa-color-danger)]">{error}</p>
-      )}
+      {error && <p className="text-sm text-[var(--uoa-color-danger)]">{error}</p>}
 
       <div className="mt-2">
         <Button variant="primary" type="submit" disabled={loading}>
