@@ -1,13 +1,13 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
-import { Badge } from '../components/ui/Badge';
-import { Button } from '../components/ui/Button';
-import { FieldShell, TextAreaField } from '../components/ui/FormFields';
-import { useDomainJwksQuery } from '../features/admin/admin-queries';
-import { useAdminUi } from '../features/shell/admin-ui';
-import { adminService } from '../services/admin-service';
-import type { DomainJwk } from '../features/admin/types';
+import { Badge } from '../ui/Badge';
+import { Button } from '../ui/Button';
+import { FieldShell, TextAreaField } from '../ui/FormFields';
+import { useDomainJwksQuery } from '../../features/admin/admin-queries';
+import { useAdminUi } from '../../features/shell/admin-ui';
+import { adminService } from '../../services/admin-service';
+import type { DomainJwk } from '../../features/admin/types';
 
 export function DomainSigningKeysSection({ domain }: { domain: string }) {
   const { data = [], isLoading } = useDomainJwksQuery(domain);

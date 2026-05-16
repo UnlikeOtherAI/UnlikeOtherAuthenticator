@@ -2,11 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 
-import { Icon } from '../components/icons/Icon';
-import { Badge } from '../components/ui/Badge';
-import { adminService } from '../services/admin-service';
-import type { SearchResult } from '../features/admin/types';
-import { useAdminUi } from '../features/shell/admin-ui';
+import { Icon } from '../icons/Icon';
+import { Badge } from '../ui/Badge';
+import { adminService } from '../../services/admin-service';
+import type { SearchResult } from '../../features/admin/types';
+import { useAdminUi } from '../../features/shell/admin-ui';
 
 export function GlobalSearch() {
   const [inputValue, setInputValue] = useState('');

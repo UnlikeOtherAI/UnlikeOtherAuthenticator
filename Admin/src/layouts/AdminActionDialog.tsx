@@ -7,7 +7,7 @@ import { Modal } from '../components/ui/Modal';
 import { PLATFORM_KIND_OPTIONS } from '../features/admin/platforms';
 import { useAdminUi, type AdminDialog } from '../features/shell/admin-ui';
 import { adminService } from '../services/admin-service';
-import { DomainSigningKeysSection } from './DomainSigningKeysSection';
+import { DomainSigningKeysSection } from '../components/sections/DomainSigningKeysSection';
 import { FeatureFlagDialogBody, KillSwitchDialogBody } from './AdminFeatureDialogBodies';
 import { AddUserToTeamDialogBody, EditUserDialogBody, ReadOnlyUser } from './AdminUserDialogBodies';
 

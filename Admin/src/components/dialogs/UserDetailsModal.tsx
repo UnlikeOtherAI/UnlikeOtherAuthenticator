@@ -1,11 +1,11 @@
 import { useNavigate } from 'react-router-dom';
 
-import { Badge } from '../components/ui/Badge';
-import { Button } from '../components/ui/Button';
-import { Modal } from '../components/ui/Modal';
-import { MethodBadge, StatusBadge } from '../components/ui/Status';
-import { useLogsQuery, useOrganisationsQuery, useUserQuery } from '../features/admin/admin-queries';
-import { useAdminUi } from '../features/shell/admin-ui';
+import { Badge } from '../ui/Badge';
+import { Button } from '../ui/Button';
+import { Modal } from '../ui/Modal';
+import { MethodBadge, StatusBadge } from '../ui/Status';
+import { useLogsQuery, useOrganisationsQuery, useUserQuery } from '../../features/admin/admin-queries';
+import { useAdminUi } from '../../features/shell/admin-ui';
 
 export function UserDetailsModal() {
   const navigate = useNavigate();

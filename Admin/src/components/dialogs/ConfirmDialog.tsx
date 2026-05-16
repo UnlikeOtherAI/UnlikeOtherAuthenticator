@@ -1,6 +1,6 @@
-import { Button } from '../components/ui/Button';
-import { Modal } from '../components/ui/Modal';
-import { useAdminUi } from '../features/shell/admin-ui';
+import { Button } from '../ui/Button';
+import { Modal } from '../ui/Modal';
+import { useAdminUi } from '../../features/shell/admin-ui';
 
 export function ConfirmDialog() {
   const { closeConfirmation, confirmation } = useAdminUi();

@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { Icon } from '../components/icons/Icon';
 import { Button } from '../components/ui/Button';
 import { useAdminUi } from '../features/shell/admin-ui';
-import { GlobalSearch } from './GlobalSearch';
+import { GlobalSearch } from '../components/search/GlobalSearch';
 import { navLabelForPath } from './navigation';
 
 export function Topbar() {

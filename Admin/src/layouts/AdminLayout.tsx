@@ -1,10 +1,10 @@
 import { Outlet } from 'react-router-dom';
 
 import { AdminActionDialog } from './AdminActionDialog';
-import { ConfirmDialog } from './ConfirmDialog';
+import { ConfirmDialog } from '../components/dialogs/ConfirmDialog';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
-import { UserDetailsModal } from './UserDetailsModal';
+import { UserDetailsModal } from '../components/dialogs/UserDetailsModal';
 
 export function AdminLayout() {
   return (
