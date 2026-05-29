@@ -569,6 +569,52 @@ The following tighten ambiguities in the brief to prevent misinterpretation duri
 
 ---
 
+### 22.14 Public-client / MCP OAuth profile (2026-05 addition)
+
+A second, **opt-in** OAuth profile is added alongside the config-JWT flow above, so
+that standards-based public clients — in particular Model Context Protocol (MCP)
+clients such as IDE/desktop/mobile AI assistants — can authenticate users without a
+client-supplied config URL or a shared secret. It is served under a distinct
+`/oauth/*` path family and **does not change the existing config-JWT flow** (§4, §5,
+§22.1–§22.13), which remains the default. The config-JWT flow stays the only way to
+reach the existing `/auth/*` endpoints.
+
+This profile **qualifies** specific rules above, scoped to `/oauth/*` only:
+
+* **Config source (qualifies §22.1).** There is no client-supplied `config_url`.
+  `/oauth/*` uses a single **first-party config** supplied to the auth service via
+  environment (`MCP_OAUTH_*`): its `domain`, `enabled_auth_methods`, `ui_theme` and
+  `language_config`. No config is fetched, POSTed, or trusted from the client. The
+  config-JWT trust boundary (§22.1, §22.4) is untouched for `/auth/*`.
+* **Registered public clients (qualifies §29 "minimal state" / §22.1 "never stored
+  centrally").** Clients self-register via RFC 7591 Dynamic Client Registration
+  (`POST /oauth/register`) and are stored as **`OAuthClient`** rows holding only a
+  random public `client_id`, `redirect_uris`, and a label. There are **still no
+  per-client secrets** (§22.3 preserved) — these are PKCE public clients
+  (`token_endpoint_auth_method: none`). The only new central state is the
+  redirect-URI allow-list per public client, which is the minimum required to make
+  the redirect step safe.
+* **Public token endpoint (qualifies §22.13).** `POST /oauth/token` performs the
+  authorization-code (and refresh-token) grant with **PKCE only and no shared-secret
+  / domain-hash authorization**, because public clients cannot hold a secret. PKCE
+  S256 is mandatory (as it already is for code issuance). The shared-secret-gated
+  `/auth/token` endpoint is unchanged.
+* **Resource-bound RS256 access tokens (qualifies §14, §22.3).** Tokens issued by
+  this profile are signed **RS256** with a dedicated auth-service access-token key
+  (`MCP_OAUTH_ACCESS_TOKEN_*`) and carry an **`aud`** equal to the RFC 8707
+  `resource` the client requested, so any resource server can validate them
+  statelessly via the published access-token JWKS (`GET /oauth/jwks.json`) without
+  the shared secret. This is **separate** from the HS256 client-domain tokens (§14)
+  and from config-JWT verification (§22.2); the existing tokens and `/.well-known/jwks.json`
+  (config keys) are unchanged. Discovery metadata is served per RFC 8414 at
+  `GET /.well-known/oauth-authorization-server`.
+
+Everything else (short-lived access tokens §22.10, opaque rotated refresh tokens,
+generic error philosophy §22.11, 2FA, social login, user scope §22.12) applies to
+this profile unchanged.
+
+---
+
 **This brief is the single source of truth for implementation.**
 
 ---
