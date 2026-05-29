@@ -1,10 +1,11 @@
 import type { PrismaClient } from '@prisma/client';
 
 import type { ClientConfig } from '../config.service.js';
-import { getEnv } from '../../config/env.js';
+import { getAdminAuthDomain, getEnv } from '../../config/env.js';
 import { getPrisma } from '../../db/prisma.js';
 import { getAppLogger } from '../../utils/app-logger.js';
 import { extractEmailDomain } from '../../utils/email-domain.js';
+import { normalizeDomain } from '../../utils/domain.js';
 import { AppError } from '../../utils/errors.js';
 import { buildUserIdentity } from '../user-scope.service.js';
 import { ensureDomainRoleForUser } from '../domain-role.service.js';
@@ -13,6 +14,7 @@ import { assertProviderVerifiedEmail, type SocialProfile } from './provider.base
 
 type SocialLoginPrisma = {
   user: Pick<PrismaClient['user'], 'findUnique' | 'create' | 'update'>;
+  domainRole: Pick<PrismaClient['domainRole'], 'findFirst'>;
 };
 
 type SocialLoginDeps = {
@@ -45,6 +47,33 @@ function isAllowedByRegistrationDomainPolicy(params: {
   if (!emailDomain) return false;
 
   return domains.includes(emailDomain);
+}
+
+/**
+ * Brief §18 / §22.5: the first user on the admin domain (ADMIN_AUTH_DOMAIN)
+ * becomes its SUPERUSER. The first-party Admin panel is intentionally
+ * registration-disabled, so without this exception that bootstrap login is
+ * rejected by the registration policy and the panel can never gain its initial
+ * superuser (chicken-and-egg). Scoped narrowly: only the admin domain, and only
+ * while no SUPERUSER row exists yet. Once one does, the registration policy
+ * applies to every subsequent new user as normal. Customer domains are
+ * unaffected.
+ */
+async function isAdminSuperuserBootstrap(params: {
+  env: ReturnType<typeof getEnv>;
+  prisma: SocialLoginPrisma;
+  domain: string;
+}): Promise<boolean> {
+  const domain = normalizeDomain(params.domain);
+  if (domain !== getAdminAuthDomain(params.env)) {
+    return false;
+  }
+
+  const existingSuperuser = await params.prisma.domainRole.findFirst({
+    where: { domain, role: 'SUPERUSER' },
+    select: { userId: true },
+  });
+  return !existingSuperuser;
 }
 
 export async function loginWithSocialProfile(
@@ -95,11 +124,15 @@ export async function loginWithSocialProfile(
     userId = updated.id;
     twoFaEnabled = updated.twoFaEnabled;
   } else {
-    if (!isAllowedByRegistrationDomainPolicy({
+    const allowedByPolicy = isAllowedByRegistrationDomainPolicy({
       email,
       config: params.config,
       requestAccess: params.requestAccess,
-    })) {
+    });
+    if (
+      !allowedByPolicy &&
+      !(await isAdminSuperuserBootstrap({ env, prisma, domain: params.config.domain }))
+    ) {
       return { status: 'blocked' };
     }
 

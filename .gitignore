@@ -13,3 +13,6 @@ dist-ssr/
 # tooling
 .eslintcache
 
+
+# git worktrees (per workflow rules)
+.worktrees/
