@@ -109,6 +109,18 @@ const EnvSchema = z
     AI_TRANSLATION_PROVIDER: z.enum(['disabled', 'openai']).default('disabled'),
     OPENAI_API_KEY: z.string().min(1).optional(),
     OPENAI_MODEL: z.string().min(1).optional(),
+    // Public-client / MCP OAuth profile (brief §22.14). The whole /oauth/* profile is
+    // gated on a signing key being present; if unset the profile is disabled and its
+    // routes return 404. RS256 private JWK (JSON) used to sign access tokens; clients
+    // verify via GET /oauth/jwks.json. Separate from the config-signing JWKS (§22.2).
+    MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK: z.string().min(1).optional(),
+    // First-party config for the profile (no client config_url): the auth "domain"
+    // used for tenant scope, and the auth methods offered on the login screen.
+    MCP_OAUTH_DOMAIN: z.string().min(1).optional(),
+    MCP_OAUTH_ENABLED_AUTH_METHODS: z.string().min(1).optional(),
+    // Comma-separated OAuth scopes advertised in metadata (informational; this profile
+    // grants full user context like the rest of the service). Defaults to "openid".
+    MCP_OAUTH_SCOPES_SUPPORTED: z.string().min(1).optional(),
   });
 
 export type Env = z.infer<typeof EnvSchema>;
@@ -166,6 +178,20 @@ export function getAuthServiceIdentifier(env: Env = getEnv()): string {
 
 export function getAdminAuthDomain(env: Env = getEnv()): string {
   return stripTrailingDot(env.ADMIN_AUTH_DOMAIN ?? getAuthServiceIdentifier(env)).toLowerCase();
+}
+
+/** Absolute public base URL (scheme + host), used as the OAuth issuer (RFC 8414).
+ *  Falls back to http://HOST:PORT for local dev when PUBLIC_BASE_URL is unset. */
+export function getPublicBaseUrl(env: Env = getEnv()): string {
+  const explicit = env.PUBLIC_BASE_URL?.trim();
+  const base = explicit && explicit.length > 0 ? explicit : `http://${env.HOST}:${env.PORT}`;
+  return base.replace(/\/+$/, '');
+}
+
+/** Whether the public-client / MCP OAuth profile (brief §22.14) is enabled. It is
+ *  gated on an access-token signing key being configured. */
+export function isMcpOAuthEnabled(env: Env = getEnv()): boolean {
+  return Boolean(env.MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK);
 }
 
 export function requireEnv<K extends keyof Env>(...keys: K[]): { [P in K]-?: NonNullable<Env[P]> } {

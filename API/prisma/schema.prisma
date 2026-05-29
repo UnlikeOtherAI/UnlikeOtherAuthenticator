@@ -108,8 +108,13 @@ model AuthorizationCode {
   codeHash            String    @unique @map("code_hash")
   userId              String    @map("user_id")
   domain              String
-  configUrl           String    @map("config_url")
+  // configUrl is null for the public-client / MCP profile (brief §22.14), which has
+  // no client-supplied config URL; those rows carry oauthClientId + resource instead.
+  configUrl           String?   @map("config_url")
   redirectUrl         String    @map("redirect_url")
+  oauthClientId       String?   @map("oauth_client_id")
+  resource            String?
+  state               String?
   codeChallenge       String?   @map("code_challenge")
   codeChallengeMethod String?   @map("code_challenge_method")
   rememberMe          Boolean   @default(false) @map("remember_me")
@@ -124,6 +129,21 @@ model AuthorizationCode {
   @@index([expiresAt])
   @@index([createdAt])
   @@map("authorization_codes")
+}
+
+// Public OAuth clients (brief §22.14). Registered via RFC 7591 dynamic client
+// registration for the /oauth/* public-client profile. PUBLIC clients only:
+// there is NO secret column (§22.3 preserved) — they authenticate with PKCE.
+// The only state stored is the redirect-URI allow-list per client.
+model OAuthClient {
+  id           String   @id @default(cuid())
+  clientId     String   @unique @map("client_id")
+  clientName   String?  @map("client_name")
+  redirectUris String[] @map("redirect_uris")
+  scopes       String[]
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("oauth_clients")
 }
 
 model RefreshToken {
