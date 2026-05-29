@@ -173,6 +173,8 @@ Content-Type: application/json
 { "refresh_token": "<refresh token to revoke>" }
 \`\`\`
 
+This revokes the refresh-token family AND invalidates the user's already-issued access tokens (their \`tv\` claim no longer matches the bumped per-user token version), so logout takes effect immediately rather than waiting for access-token expiry. The same access-token revocation applies on password reset and 2FA reset.
+
 Domain admin APIs (\`/domain/users\`, \`/domain/logs\`, etc.) and team-invite / access-request review APIs use the same \`Authorization: Bearer <client_hash>\` mechanism. The old global shared-secret bearer is NOT accepted for any customer-facing endpoint.
 
 ---

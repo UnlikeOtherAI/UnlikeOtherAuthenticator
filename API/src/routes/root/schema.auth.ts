@@ -103,7 +103,7 @@ export const authEndpoints: EndpointSchema[] = [
   {
     method: 'POST',
     path: '/auth/revoke',
-    description: 'Revoke refresh token family (logout)',
+    description: 'Revoke refresh token family and the user access tokens (logout)',
     auth: 'config_url query param + domain hash bearer token',
     body: { refresh_token: 'string (required)' },
     response: { ok: 'true' },

@@ -8,9 +8,19 @@ import { requireAdminSuperuser } from '../admin-superuser.js';
 const domainRoleFindUnique = vi.hoisted(() => vi.fn());
 
 vi.mock('../../db/prisma.js', () => ({
+  // The middleware passes this admin client to verifyAccessToken for the
+  // tokenVersion revocation lookup, and uses it for the domainRole check.
   getAdminPrisma: () => ({
     domainRole: {
       findUnique: domainRoleFindUnique,
+    },
+    user: {
+      findUnique: async () => ({ tokenVersion: 0 }),
+    },
+  }),
+  getPrisma: () => ({
+    user: {
+      findUnique: async () => ({ tokenVersion: 0 }),
     },
   }),
 }));
@@ -30,6 +40,7 @@ async function accessToken(
     domain,
     client_id: 'client-id',
     role,
+    tv: 0,
   })
     .setProtectedHeader({ alg: 'HS256' })
     .setSubject('user_123')

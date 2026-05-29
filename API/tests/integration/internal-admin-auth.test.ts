@@ -34,6 +34,7 @@ async function accessToken(role: 'superuser' | 'user', domain = adminDomain): Pr
     domain,
     client_id: 'client-id',
     role,
+    tv: 0,
   })
     .setProtectedHeader({ alg: 'HS256' })
     .setSubject('user_123')

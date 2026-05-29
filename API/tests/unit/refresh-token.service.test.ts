@@ -300,16 +300,21 @@ describe('refresh-token.service (unit)', () => {
     });
   });
 
-  it('revokes the refresh-token family on logout for the matching client context', async () => {
+  it('revokes the refresh-token family and bumps the user token version on logout', async () => {
+    const userUpdate = vi.fn().mockResolvedValue({ id: 'user-1' });
     const prisma = {
       refreshToken: {
         findUnique: vi.fn().mockResolvedValue({
           familyId: 'family-1',
+          userId: 'user-1',
           domain: context.domain,
           clientId: context.clientId,
           configUrl: context.configUrl,
         }),
         updateMany: vi.fn().mockResolvedValue({ count: 2 }),
+      },
+      user: {
+        update: userUpdate,
       },
     } as unknown as PrismaClient;
 
@@ -331,6 +336,7 @@ describe('refresh-token.service (unit)', () => {
       },
       select: {
         familyId: true,
+        userId: true,
         domain: true,
         clientId: true,
         configUrl: true,
@@ -344,6 +350,11 @@ describe('refresh-token.service (unit)', () => {
       data: {
         revokedAt: now,
       },
+    });
+    // Logout must also revoke already-issued access tokens via a tokenVersion bump.
+    expect(userUpdate).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      data: { tokenVersion: { increment: 1 } },
     });
   });
 });

@@ -8,6 +8,18 @@ function secretKey(secret: string): Uint8Array {
   return new TextEncoder().encode(secret);
 }
 
+// Stub the user lookup verifyAccessToken performs for token-version revocation.
+// `tokenVersion: null` simulates a missing user.
+function depsWithTokenVersion(tokenVersion: number | null) {
+  return {
+    prisma: {
+      user: {
+        findUnique: async () => (tokenVersion === null ? null : { tokenVersion }),
+      },
+    },
+  } as unknown as Parameters<typeof verifyAccessToken>[1];
+}
+
 async function signAccessToken(params: {
   sharedSecret: string;
   issuer: string;
@@ -15,6 +27,7 @@ async function signAccessToken(params: {
   audience?: string | null;
   alg?: 'HS256' | 'HS512';
   ttl?: string;
+  tv?: number;
   org?: {
     org_id: string;
     org_role: string;
@@ -33,6 +46,7 @@ async function signAccessToken(params: {
     domain: 'client.example.com',
     client_id: 'client-id',
     role: 'superuser',
+    tv: params.tv ?? 0,
     ...(org ? { org } : {}),
   })
     .setProtectedHeader({ alg, typ: 'JWT' })
@@ -71,7 +85,7 @@ describe('verifyAccessToken', () => {
       subject: 'u1',
     });
 
-    const claims = await verifyAccessToken(token);
+    const claims = await verifyAccessToken(token, depsWithTokenVersion(0));
     expect(claims).toEqual({
       userId: 'u1',
       email: 'user@example.com',
@@ -94,7 +108,7 @@ describe('verifyAccessToken', () => {
       },
     });
 
-    const claims = await verifyAccessToken(token);
+    const claims = await verifyAccessToken(token, depsWithTokenVersion(0));
     expect(claims).toEqual({
       userId: 'u2',
       email: 'user@example.com',
@@ -125,7 +139,9 @@ describe('verifyAccessToken', () => {
     // push past that window so the token is unambiguously expired.
     vi.setSystemTime(new Date('2026-02-10T00:01:00.000Z'));
 
-    await expect(verifyAccessToken(token)).rejects.toMatchObject({ statusCode: 401 });
+    await expect(verifyAccessToken(token, depsWithTokenVersion(0))).rejects.toMatchObject({
+      statusCode: 401,
+    });
   });
 
   it('rejects tokens with wrong issuer or algorithm', async () => {
@@ -134,7 +150,9 @@ describe('verifyAccessToken', () => {
       issuer: 'someone-else',
       subject: 'u1',
     });
-    await expect(verifyAccessToken(wrongIssuerToken)).rejects.toMatchObject({ statusCode: 401 });
+    await expect(
+      verifyAccessToken(wrongIssuerToken, depsWithTokenVersion(0)),
+    ).rejects.toMatchObject({ statusCode: 401 });
 
     const wrongAlgToken = await signAccessToken({
       sharedSecret: process.env.SHARED_SECRET!,
@@ -142,7 +160,9 @@ describe('verifyAccessToken', () => {
       subject: 'u1',
       alg: 'HS512',
     });
-    await expect(verifyAccessToken(wrongAlgToken)).rejects.toMatchObject({ statusCode: 401 });
+    await expect(verifyAccessToken(wrongAlgToken, depsWithTokenVersion(0))).rejects.toMatchObject({
+      statusCode: 401,
+    });
   });
 
   it('rejects tokens with missing or wrong audience', async () => {
@@ -152,7 +172,9 @@ describe('verifyAccessToken', () => {
       subject: 'u1',
       audience: null,
     });
-    await expect(verifyAccessToken(missingAudienceToken)).rejects.toMatchObject({ statusCode: 401 });
+    await expect(
+      verifyAccessToken(missingAudienceToken, depsWithTokenVersion(0)),
+    ).rejects.toMatchObject({ statusCode: 401 });
 
     const wrongAudienceToken = await signAccessToken({
       sharedSecret: process.env.SHARED_SECRET!,
@@ -160,6 +182,61 @@ describe('verifyAccessToken', () => {
       subject: 'u1',
       audience: 'someone-else',
     });
-    await expect(verifyAccessToken(wrongAudienceToken)).rejects.toMatchObject({ statusCode: 401 });
+    await expect(
+      verifyAccessToken(wrongAudienceToken, depsWithTokenVersion(0)),
+    ).rejects.toMatchObject({ statusCode: 401 });
+  });
+
+  it('rejects a token whose tv no longer matches the user (logout/reset revokes access)', async () => {
+    const token = await signAccessToken({
+      sharedSecret: process.env.SHARED_SECRET!,
+      issuer: process.env.AUTH_SERVICE_IDENTIFIER!,
+      subject: 'u1',
+      tv: 0,
+    });
+
+    // Token verifies fine while versions match.
+    await expect(verifyAccessToken(token, depsWithTokenVersion(0))).resolves.toMatchObject({
+      userId: 'u1',
+    });
+
+    // After a logout/reset bumps the user's tokenVersion to 1, the same token
+    // (still tv:0, still unexpired, still validly signed) must be rejected.
+    await expect(verifyAccessToken(token, depsWithTokenVersion(1))).rejects.toMatchObject({
+      statusCode: 401,
+    });
+  });
+
+  it('rejects a token when the user no longer exists', async () => {
+    const token = await signAccessToken({
+      sharedSecret: process.env.SHARED_SECRET!,
+      issuer: process.env.AUTH_SERVICE_IDENTIFIER!,
+      subject: 'u1',
+      tv: 0,
+    });
+
+    await expect(verifyAccessToken(token, depsWithTokenVersion(null))).rejects.toMatchObject({
+      statusCode: 401,
+    });
+  });
+
+  it('rejects a token with no tv claim', async () => {
+    const jwt = new SignJWT({
+      email: 'user@example.com',
+      domain: 'client.example.com',
+      client_id: 'client-id',
+      role: 'superuser',
+    })
+      .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
+      .setIssuer(process.env.AUTH_SERVICE_IDENTIFIER!)
+      .setAudience(ACCESS_TOKEN_AUDIENCE)
+      .setSubject('u1')
+      .setIssuedAt()
+      .setExpirationTime('30m');
+    const token = await jwt.sign(secretKey(process.env.SHARED_SECRET!));
+
+    await expect(verifyAccessToken(token, depsWithTokenVersion(0))).rejects.toMatchObject({
+      statusCode: 401,
+    });
   });
 });

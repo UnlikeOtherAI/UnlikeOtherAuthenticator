@@ -38,7 +38,15 @@ export async function requireAdminSuperuser(
     throw new AppError('INTERNAL', 500, 'ADMIN_ACCESS_TOKEN_SECRET_REQUIRED');
   }
 
-  const claims = await verifyAccessToken(token, { sharedSecret: env.ADMIN_ACCESS_TOKEN_SECRET });
+  // Token-version revocation lookup runs against the RLS-bypassing admin client:
+  // admin tokens are user-wide and this middleware already has no tenant context.
+  // When DATABASE_URL is unset the service runs DB-less (dev/boot), so — exactly
+  // like the SUPERUSER role check below — revocation cannot be enforced and the
+  // lookup is skipped.
+  const claims = await verifyAccessToken(token, {
+    sharedSecret: env.ADMIN_ACCESS_TOKEN_SECRET,
+    prisma: env.DATABASE_URL ? getAdminPrisma() : undefined,
+  });
   if (claims.role !== 'superuser') {
     throw new AppError('FORBIDDEN', 403, 'NOT_SUPERUSER');
   }

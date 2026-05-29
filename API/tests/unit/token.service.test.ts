@@ -16,6 +16,11 @@ function pkceChallenge(codeVerifier: string): string {
   return createHash('sha256').update(codeVerifier, 'utf8').digest('base64url');
 }
 
+// PKCE is mandatory on both issuance and redemption; these tests exercise the
+// secure path with a real challenge/verifier pair.
+const TEST_CODE_VERIFIER = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ';
+const TEST_CODE_CHALLENGE = pkceChallenge(TEST_CODE_VERIFIER);
+
 function makeConfig(overrides?: Partial<ClientConfig['org_features']>): ClientConfig {
   return {
     domain: 'client.example.com',
@@ -107,8 +112,8 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
       domain: config.domain,
       configUrl,
       redirectUrl,
-      codeChallenge: null,
-      codeChallengeMethod: null,
+      codeChallenge: TEST_CODE_CHALLENGE,
+      codeChallengeMethod: 'S256',
       expiresAt: new Date(now.getTime() + 60_000),
       usedAt: null,
       codeHash: hashAuthorizationCode(code, sharedSecret),
@@ -120,7 +125,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
       domain: config.domain,
       userId: 'user-1',
     });
-    prisma.user.findUnique.mockResolvedValue({ email: 'user@example.com' });
+    prisma.user.findUnique.mockResolvedValue({ email: 'user@example.com', tokenVersion: 0 });
     prisma.orgMember.findFirst.mockResolvedValue({
       orgId: 'org-1',
       role: 'admin',
@@ -137,7 +142,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
     ]);
 
     const { accessToken, refreshToken } = await exchangeAuthorizationCodeForTokens(
-      { code, config, configUrl, redirectUrl, clientId },
+      { code, config, configUrl, redirectUrl, clientId, codeVerifier: TEST_CODE_VERIFIER },
       {
         now: () => now,
         sharedSecret,
@@ -150,6 +155,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
     const claims = await verifyAccessToken(accessToken, {
       sharedSecret,
       issuer: process.env.AUTH_SERVICE_IDENTIFIER,
+      prisma,
     });
 
     expect(claims).toMatchObject({
@@ -213,8 +219,8 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
       domain: config.domain,
       configUrl,
       redirectUrl,
-      codeChallenge: null,
-      codeChallengeMethod: null,
+      codeChallenge: TEST_CODE_CHALLENGE,
+      codeChallengeMethod: 'S256',
       expiresAt: new Date(now.getTime() + 60_000),
       usedAt: null,
       codeHash: hashAuthorizationCode(code, sharedSecret),
@@ -226,10 +232,10 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
       domain: config.domain,
       userId: 'user-2',
     });
-    prisma.user.findUnique.mockResolvedValue({ email: 'user2@example.com' });
+    prisma.user.findUnique.mockResolvedValue({ email: 'user2@example.com', tokenVersion: 0 });
 
     const { accessToken, refreshToken } = await exchangeAuthorizationCodeForTokens(
-      { code, config, configUrl, redirectUrl, clientId },
+      { code, config, configUrl, redirectUrl, clientId, codeVerifier: TEST_CODE_VERIFIER },
       {
         now: () => now,
         sharedSecret,
@@ -242,6 +248,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
     const claims = await verifyAccessToken(accessToken, {
       sharedSecret,
       issuer: process.env.AUTH_SERVICE_IDENTIFIER,
+      prisma,
     });
 
     expect(claims).toMatchObject({
@@ -305,8 +312,8 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
       domain: config.domain,
       configUrl,
       redirectUrl,
-      codeChallenge: null,
-      codeChallengeMethod: null,
+      codeChallenge: TEST_CODE_CHALLENGE,
+      codeChallengeMethod: 'S256',
       expiresAt: new Date(now.getTime() + 60_000),
       usedAt: null,
       codeHash: hashAuthorizationCode(code, sharedSecret),
@@ -318,14 +325,14 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
       domain: config.domain,
       userId: 'user-3',
     });
-    prisma.user.findUnique.mockResolvedValue({ email: 'user3@example.com' });
+    prisma.user.findUnique.mockResolvedValue({ email: 'user3@example.com', tokenVersion: 0 });
     prisma.orgMember.findFirst.mockResolvedValue(null);
     prisma.orgMember.findMany.mockResolvedValue([]);
     prisma.teamMember.findMany.mockResolvedValue([]);
     prisma.teamInvite.findMany.mockResolvedValue([]);
 
     const { accessToken, refreshToken } = await exchangeAuthorizationCodeForTokens(
-      { code, config, configUrl, redirectUrl, clientId },
+      { code, config, configUrl, redirectUrl, clientId, codeVerifier: TEST_CODE_VERIFIER },
       {
         now: () => now,
         sharedSecret,
@@ -338,6 +345,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
     const claims = await verifyAccessToken(accessToken, {
       sharedSecret,
       issuer: process.env.AUTH_SERVICE_IDENTIFIER,
+      prisma,
     });
 
     expect(claims).toMatchObject({
@@ -406,7 +414,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
       domain: config.domain,
       userId: 'user-pkce',
     });
-    prisma.user.findUnique.mockResolvedValue({ email: 'pkce@example.com' });
+    prisma.user.findUnique.mockResolvedValue({ email: 'pkce@example.com', tokenVersion: 0 });
 
     await expect(
       exchangeAuthorizationCodeForTokens(
@@ -439,5 +447,56 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
         where: { codeHash: hashAuthorizationCode(code, sharedSecret) },
       }),
     );
+  });
+
+  it('rejects an authorization code that has no PKCE challenge (no downgrade)', async () => {
+    const now = new Date('2026-02-15T00:00:04.000Z');
+    const sharedSecret = process.env.SHARED_SECRET!;
+    const code = 'code-without-pkce';
+    const config = makeConfig({ enabled: false });
+    const clientId = createClientId(config.domain, sharedSecret);
+    const configUrl = 'https://client.example.com/auth-config';
+    const redirectUrl = 'https://client.example.com/oauth/callback';
+
+    const prisma = {
+      authorizationCode: { findUnique: vi.fn(), updateMany: vi.fn() },
+      refreshToken: { create: vi.fn() },
+      user: { findUnique: vi.fn() },
+      domainRole: { findUnique: vi.fn() },
+      orgMember: { findFirst: vi.fn() },
+      teamMember: { findMany: vi.fn() },
+      groupMember: { findMany: vi.fn() },
+    } as unknown as PrismaClient;
+
+    prisma.authorizationCode.findUnique.mockResolvedValue({
+      id: 'auth-code-no-pkce',
+      userId: 'user-no-pkce',
+      domain: config.domain,
+      configUrl,
+      redirectUrl,
+      // A code that somehow reached the store without a challenge must never be
+      // redeemable — PKCE is mandatory on redemption.
+      codeChallenge: null,
+      codeChallengeMethod: null,
+      expiresAt: new Date(now.getTime() + 60_000),
+      usedAt: null,
+      codeHash: hashAuthorizationCode(code, sharedSecret),
+    });
+    prisma.authorizationCode.updateMany.mockResolvedValue({ count: 1 });
+
+    await expect(
+      exchangeAuthorizationCodeForTokens(
+        { code, config, configUrl, redirectUrl, clientId, codeVerifier: TEST_CODE_VERIFIER },
+        {
+          now: () => now,
+          sharedSecret,
+          authServiceIdentifier: process.env.AUTH_SERVICE_IDENTIFIER,
+          accessTokenTtl: '15m',
+          prisma,
+        },
+      ),
+    ).rejects.toMatchObject({ statusCode: 401 });
+    // The code must not be consumed when redemption is refused.
+    expect(prisma.authorizationCode.updateMany).not.toHaveBeenCalled();
   });
 });

@@ -9,6 +9,7 @@ import { AppError } from '../utils/errors.js';
 const MIN_INHERITED_REFRESH_TTL_SECONDS = 5 * 60;
 
 type RefreshTokenPrisma = Pick<PrismaClient, 'refreshToken'>;
+type UserVersionPrisma = Pick<PrismaClient, 'user'>;
 
 type RefreshTokenDeps = {
   now?: () => Date;
@@ -246,6 +247,7 @@ export async function revokeRefreshTokenFamily(
     where: { tokenHash },
     select: {
       familyId: true,
+      userId: true,
       domain: true,
       clientId: true,
       configUrl: true,
@@ -257,6 +259,29 @@ export async function revokeRefreshTokenFamily(
   }
 
   await revokeRefreshTokenFamilyInternal(prisma, row.familyId, now);
+  // Logout must also kill already-issued (stateless) access tokens for this
+  // user, not just the refresh family. Bumping the per-user token version
+  // invalidates them on their next verify.
+  await bumpUserTokenVersion(row.userId, {
+    prisma: deps?.prisma as unknown as UserVersionPrisma | undefined,
+  });
+}
+
+/**
+ * Increment a user's token version. Stateless access tokens carry a `tv` claim
+ * matched against this on verify, so bumping it revokes every already-issued
+ * access token for the user. Uses the admin Prisma connection to bypass
+ * per-domain RLS — token version is a user-wide property, not per-domain.
+ */
+export async function bumpUserTokenVersion(
+  userId: string,
+  deps?: { prisma?: UserVersionPrisma },
+): Promise<void> {
+  const prisma = deps?.prisma ?? (getAdminPrisma() as unknown as UserVersionPrisma);
+  await prisma.user.update({
+    where: { id: userId },
+    data: { tokenVersion: { increment: 1 } },
+  });
 }
 
 /**
@@ -276,5 +301,9 @@ export async function revokeAllRefreshTokensForUser(
   await prisma.refreshToken.updateMany({
     where: { userId, revokedAt: null },
     data: { revokedAt: now },
+  });
+  // Also invalidate already-issued access tokens for this user.
+  await bumpUserTokenVersion(userId, {
+    prisma: deps?.prisma as unknown as UserVersionPrisma | undefined,
   });
 }

@@ -55,6 +55,7 @@ async function accessToken(role: 'superuser' | 'user'): Promise<string> {
     domain: adminDomain,
     client_id: `admin:${adminDomain}`,
     role,
+    tv: 0,
   })
     .setProtectedHeader({ alg: 'HS256' })
     .setSubject('user_123')

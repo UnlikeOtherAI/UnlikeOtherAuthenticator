@@ -39,6 +39,7 @@ model User {
   twoFaSecret              String?  @map("2fa_secret")
   twoFaLastAcceptedCounter Int?     @map("2fa_last_accepted_counter")
   avatarUrl                String?  @map("avatar_url")
+  tokenVersion             Int      @default(0) @map("token_version")
   createdAt                DateTime @default(now()) @map("created_at")
 
   domainRoles            DomainRole[]

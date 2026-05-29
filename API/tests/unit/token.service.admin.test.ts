@@ -1,4 +1,4 @@
-import { createHmac } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
 
 import type { PrismaClient } from '@prisma/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -11,6 +11,12 @@ import { createClientId } from '../../src/utils/hash.js';
 function hashAuthorizationCode(code: string, sharedSecret: string): string {
   return createHmac('sha256', sharedSecret).update(code, 'utf8').digest('hex');
 }
+
+// PKCE is mandatory on redemption; exercise the secure path.
+const TEST_CODE_VERIFIER = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ';
+const TEST_CODE_CHALLENGE = createHash('sha256')
+  .update(TEST_CODE_VERIFIER, 'utf8')
+  .digest('base64url');
 
 function restoreEnv(key: string, value: string | undefined): void {
   if (value === undefined) {
@@ -82,8 +88,8 @@ describe('admin-domain token issuance', () => {
       domain: config.domain,
       configUrl,
       redirectUrl,
-      codeChallenge: null,
-      codeChallengeMethod: null,
+      codeChallenge: TEST_CODE_CHALLENGE,
+      codeChallengeMethod: 'S256',
       expiresAt: new Date(now.getTime() + 60_000),
       usedAt: null,
       codeHash: hashAuthorizationCode(code, sharedSecret),
@@ -95,10 +101,10 @@ describe('admin-domain token issuance', () => {
       domain: config.domain,
       userId: 'admin-user',
     });
-    prisma.user.findUnique.mockResolvedValue({ email: 'admin@example.com' });
+    prisma.user.findUnique.mockResolvedValue({ email: 'admin@example.com', tokenVersion: 0 });
 
     const { accessToken } = await exchangeAuthorizationCodeForTokens(
-      { code, config, configUrl, redirectUrl },
+      { code, config, configUrl, redirectUrl, codeVerifier: TEST_CODE_VERIFIER },
       {
         now: () => now,
         sharedSecret,
@@ -112,12 +118,14 @@ describe('admin-domain token issuance', () => {
       verifyAccessToken(accessToken, {
         sharedSecret,
         issuer: process.env.AUTH_SERVICE_IDENTIFIER,
+        prisma,
       }),
     ).rejects.toMatchObject({ statusCode: 401 });
 
     const claims = await verifyAccessToken(accessToken, {
       sharedSecret: adminSecret,
       issuer: process.env.AUTH_SERVICE_IDENTIFIER,
+      prisma,
     });
 
     expect(claims).toMatchObject({

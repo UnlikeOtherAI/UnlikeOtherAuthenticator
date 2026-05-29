@@ -186,9 +186,12 @@ async function consumeAuthorizationCode(params: {
       rowRedirectUrl: row.redirectUrl,
       paramRedirectUrl: params.redirectUrl,
     });
-  if (row.codeChallenge) {
-    if (row.codeChallengeMethod !== 'S256')
-      rejectAuthCode('pkce_method_unsupported', { method: row.codeChallengeMethod });
+  // PKCE is mandatory at issuance (issueAuthorizationCode throws PKCE_REQUIRED),
+  // so it is mandatory at redemption too. Requiring the challenge here — rather
+  // than only verifying `if (row.codeChallenge)` — closes a downgrade footgun: a
+  // code that ever reached the store without a challenge must never be redeemable
+  // without proof of the code_verifier that binds it to the initiating browser.
+  if (row.codeChallenge && row.codeChallengeMethod === 'S256') {
     try {
       verifyPkceCodeVerifier({
         codeVerifier: params.codeVerifier,
@@ -200,6 +203,8 @@ async function consumeAuthorizationCode(params: {
         codeVerifierLength: params.codeVerifier?.length ?? 0,
       });
     }
+  } else {
+    rejectAuthCode('pkce_required', { method: row.codeChallengeMethod });
   }
   if (row.usedAt) rejectAuthCode('already_used', { usedAt: row.usedAt.toISOString() });
   if (row.expiresAt.getTime() <= params.now.getTime()) rejectAuthCode('expired');
@@ -230,6 +235,7 @@ async function signAccessToken(params: {
   sharedSecret: string;
   ttl: string;
   issuer: string;
+  tokenVersion: number;
   org?: OrgContext | null;
 }): Promise<string> {
   const payload = {
@@ -237,11 +243,13 @@ async function signAccessToken(params: {
     domain: params.domain,
     client_id: params.clientId,
     role: params.role,
+    tv: params.tokenVersion,
   } as {
     email: string;
     domain: string;
     client_id: string;
     role: 'superuser' | 'user';
+    tv: number;
     org?: OrgContext;
   };
 
@@ -351,7 +359,7 @@ async function issueTokenPairForUser(
 
   const user = await prisma.user.findUnique({
     where: { id: params.userId },
-    select: { email: true },
+    select: { email: true, tokenVersion: true },
   });
   if (!user) throw new AppError('INTERNAL', 500, 'MISSING_USER');
 
@@ -389,6 +397,7 @@ async function issueTokenPairForUser(
     sharedSecret: accessTokenContext.sharedSecret,
     ttl,
     issuer,
+    tokenVersion: user.tokenVersion,
     org,
   });
 
