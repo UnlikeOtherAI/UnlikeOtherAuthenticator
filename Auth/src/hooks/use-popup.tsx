@@ -13,6 +13,10 @@ export type PopupQueryParams = {
   emailToken: string | null;
   /** The type of email link flow, set by the server on landing routes. */
   emailTokenType: 'VERIFY_EMAIL_SET_PASSWORD' | 'VERIFY_EMAIL' | 'LOGIN_LINK' | 'PASSWORD_RESET' | null;
+  /** Public-client / MCP profile (brief §22.14): present only on /oauth/authorize. */
+  clientId: string | null;
+  state: string | null;
+  resource: string | null;
 };
 
 export type PopupContextValue = PopupQueryParams & {
@@ -49,6 +53,9 @@ export function parsePopupQueryParams(search: string): PopupQueryParams {
       requestAccessStatus: null,
       emailToken: null,
       emailTokenType: null,
+      clientId: null,
+      state: null,
+      resource: null,
     };
   }
 
@@ -62,6 +69,9 @@ export function parsePopupQueryParams(search: string): PopupQueryParams {
   const requestAccessStatus = params.get('request_access_status') === 'pending' ? 'pending' : null;
   const emailToken = params.get('email_token');
   const rawType = params.get('email_token_type');
+  const clientId = params.get('client_id');
+  const state = params.get('state');
+  const resource = params.get('resource');
 
   const validTypes = ['VERIFY_EMAIL_SET_PASSWORD', 'VERIFY_EMAIL', 'LOGIN_LINK', 'PASSWORD_RESET'] as const;
   const emailTokenType = rawType && (validTypes as readonly string[]).includes(rawType)
@@ -77,6 +87,9 @@ export function parsePopupQueryParams(search: string): PopupQueryParams {
     requestAccessStatus,
     emailToken: emailToken && emailToken.trim() ? emailToken : null,
     emailTokenType,
+    clientId: clientId && clientId.trim() ? clientId : null,
+    state: state && state.trim() ? state : null,
+    resource: resource && resource.trim() ? resource : null,
   };
 }
 
@@ -128,6 +141,9 @@ export function PopupProvider(props: {
       requestAccessStatus: parsed.requestAccessStatus,
       emailToken: parsed.emailToken,
       emailTokenType: parsed.emailTokenType,
+      clientId: parsed.clientId,
+      state: parsed.state,
+      resource: parsed.resource,
       view,
       setView,
       redirectTo: (url: string) => {
@@ -144,6 +160,9 @@ export function PopupProvider(props: {
     parsed.requestAccessStatus,
     parsed.emailToken,
     parsed.emailTokenType,
+    parsed.clientId,
+    parsed.state,
+    parsed.resource,
     view,
     setView,
     props.configUrl,
