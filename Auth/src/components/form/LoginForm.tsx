@@ -50,6 +50,9 @@ export function LoginForm(): React.JSX.Element {
     redirectTo,
     setView,
     requestAccess,
+    clientId,
+    state,
+    resource,
   } = usePopup();
   const registrationAllowed = isRegistrationAllowed(config);
   const { rememberMeEnabled, rememberMeDefault } = readSessionConfig(config);
@@ -65,16 +68,28 @@ export function LoginForm(): React.JSX.Element {
     setError(null);
     setLoading(true);
 
-    const query: Record<string, string | boolean | null> = { config_url: configUrl };
-    if (redirectUrl) query.redirect_url = redirectUrl;
+    // Public-client / MCP profile (brief §22.14): no config_url — post to the
+    // secret-less /oauth/login keyed on the registered client_id + redirect_uri.
+    const mcpMode = Boolean(clientId);
+    const endpoint = mcpMode ? '/oauth/login' : '/auth/login';
+
+    const query: Record<string, string | boolean | null> = mcpMode
+      ? { client_id: clientId }
+      : { config_url: configUrl };
+    if (redirectUrl) query[mcpMode ? 'redirect_uri' : 'redirect_url'] = redirectUrl;
     if (codeChallenge && codeChallengeMethod) {
       query.code_challenge = codeChallenge;
       query.code_challenge_method = codeChallengeMethod;
     }
-    if (requestAccess) query.request_access = true;
+    if (mcpMode) {
+      if (state) query.state = state;
+      if (resource) query.resource = resource;
+    } else if (requestAccess) {
+      query.request_access = true;
+    }
 
     const result = await postJson<LoginRequest, LoginResponse>(
-      '/auth/login',
+      endpoint,
       { email, password, remember_me: rememberMe },
       query,
     );

@@ -297,4 +297,26 @@ The first-party Admin UI is served from [/admin](/admin). It dogfoods the same a
 - \`POST /email/send\` — send a transactional email for a configured domain. Supply \`X-UOA-Config-JWT: <signed config JWT>\`; UOA verifies the RS256 config JWT directly from the header, requires the domain email config to be enabled and SES verification/DKIM to both be \`Success\`, then sends \`{ to, subject, text, html?, reply_to? }\`.
 - \`GET /internal/admin/handshake-errors\` — sanitized handshake and config JWT errors for superusers, including redacted request/response context when \`config_url\` fetches fail before a JWT can be decoded.
 
+---
+
+## Public-client / MCP OAuth profile (\`/oauth/*\`, brief §22.14)
+
+A second, opt-in profile for **standards public clients** (e.g. MCP clients) that have
+no \`config_url\` and no shared secret. Disabled unless \`MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK\`
+is set (routes 404 otherwise). It does not change the config-JWT flow above.
+
+- \`GET /.well-known/oauth-authorization-server\` — RFC 8414 metadata (discover the endpoints below).
+- \`POST /oauth/register\` — RFC 7591 dynamic registration. PUBLIC clients only: send
+  \`redirect_uris\` (https / loopback http / native scheme), get a \`client_id\`, **no secret**.
+- \`GET /oauth/authorize?response_type=code&client_id=&redirect_uri=&code_challenge=&code_challenge_method=S256&state=&resource=\`
+  — renders the first-party login UI; on success redirects to \`redirect_uri?code=&state=\`.
+- \`POST /oauth/token\` — PKCE exchange (\`code\`, \`redirect_uri\`, \`code_verifier\`, \`client_id\`),
+  **no client secret**. Returns a resource-bound **RS256** access token (\`aud\` = the requested \`resource\`).
+- \`GET /oauth/jwks.json\` — verify those access tokens here (separate from the config JWKS).
+
+Standard OAuth 2.1 + PKCE authorization-code flow; resource servers validate the token
+statelessly via \`/oauth/jwks.json\` with issuer + audience checks.
+
+---
+
 Use [/api](/api) for the complete JSON endpoint schema and the canonical \`config_jwt\` field contract.`;

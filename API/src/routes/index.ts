@@ -12,6 +12,7 @@ import { registerInternalOrgRoutes } from './internal/org/index.js';
 import { registerHealthRoutes } from './health/index.js';
 import { registerI18nRoutes } from './i18n/index.js';
 import { registerIntegrationRoutes } from './integrations/index.js';
+import { registerOAuthRoutes } from './oauth/index.js';
 import { registerOrgRoutes } from './org/index.js';
 import { registerRootRoute } from './root/index.js';
 import { registerTwoFactorRoutes } from './twofactor/index.js';
@@ -26,6 +27,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   registerDomainRoutes(app);
   registerEmailRoutes(app);
   registerIntegrationRoutes(app);
+  registerOAuthRoutes(app);
   registerInternalAdminRoutes(app);
   registerInternalOrgRoutes(app);
   registerOrgRoutes(app);

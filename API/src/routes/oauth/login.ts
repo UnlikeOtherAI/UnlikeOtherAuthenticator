@@ -1,0 +1,109 @@
+import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
+
+import { asPrismaClient } from '../../db/tenant-context.js';
+import { isMcpOAuthEnabled } from '../../config/env.js';
+import { createRateLimiter } from '../../middleware/rate-limiter.js';
+import { loginWithEmailPassword } from '../../services/auth-login.service.js';
+import { buildMcpClientConfig } from '../../services/oauth/config.service.js';
+import { getOAuthClient } from '../../services/oauth/client.service.js';
+import { issueOAuthCode } from '../../services/oauth/oauth-code.service.js';
+import { selectRedirectUrl } from '../../services/token.service.js';
+import { buildPublicErrorBody } from '../../utils/error-response.js';
+import { parseRequiredPkceChallenge } from '../../utils/pkce.js';
+
+// Public, secret-less email/password login for the MCP profile (brief §22.14).
+// Mirrors /auth/login but is keyed on a registered public client_id instead of a
+// config_url + domain-hash. On success it issues an authorization code and returns
+// the redirect target (redirect_uri?code=&state=).
+const BodySchema = z
+  .object({
+    email: z.string().trim().toLowerCase().email(),
+    password: z.string().min(1).max(1024),
+    remember_me: z.boolean().optional(),
+  })
+  .strict();
+
+const QuerySchema = z
+  .object({
+    client_id: z.string().min(1).max(256),
+    redirect_uri: z.string().min(1).max(2048),
+    code_challenge: z.string().min(1).max(256),
+    code_challenge_method: z.string().min(1).max(32),
+    state: z.string().max(2048).optional(),
+    resource: z.string().max(2048).optional(),
+  })
+  .strip();
+
+export function registerOAuthLoginRoute(app: FastifyInstance): void {
+  const limiter = createRateLimiter({
+    limit: 10,
+    windowMs: 5 * 60 * 1000,
+    keyBuilder: (request) => `oauth-login:ip:${request.ip || 'unknown'}`,
+  });
+
+  app.post('/oauth/login', { preHandler: [limiter] }, async (request, reply) => {
+    if (!isMcpOAuthEnabled()) {
+      reply.status(404).send(buildPublicErrorBody({ statusCode: 404 }));
+      return;
+    }
+    const { email, password, remember_me } = BodySchema.parse(request.body);
+    const q = QuerySchema.parse(request.query);
+    const pkce = parseRequiredPkceChallenge({
+      codeChallenge: q.code_challenge,
+      codeChallengeMethod: q.code_challenge_method,
+    });
+
+    const client = await getOAuthClient(q.client_id);
+    if (!client || !client.redirectUris.includes(q.redirect_uri)) {
+      reply.status(400).send(buildPublicErrorBody({ statusCode: 400 }));
+      return;
+    }
+
+    const config = buildMcpClientConfig(client.redirectUris);
+    request.tenantContext = { domain: config.domain, orgId: null, userId: null };
+
+    const outcome = await request.withTenantTx(async (tx) => {
+      const prisma = asPrismaClient(tx);
+      const { userId, twoFaEnabled } = await loginWithEmailPassword(
+        { email, password, config },
+        { prisma },
+      );
+
+      // Fail-closed: 2FA users are blocked until the /oauth 2FA completion step
+      // lands (follow-up) — never bypassed.
+      if (config['2fa_enabled'] && twoFaEnabled) {
+        return { kind: 'twofa' as const };
+      }
+
+      const redirectUrl = selectRedirectUrl({
+        allowedRedirectUrls: client.redirectUris,
+        requestedRedirectUrl: q.redirect_uri,
+      });
+      const rememberMe = remember_me ?? config.session?.remember_me_default ?? true;
+      const { code } = await issueOAuthCode(
+        {
+          userId,
+          domain: config.domain,
+          oauthClientId: client.clientId,
+          redirectUrl,
+          resource: q.resource,
+          state: q.state,
+          codeChallenge: pkce.codeChallenge,
+          rememberMe,
+        },
+        tx,
+      );
+      const url = new URL(redirectUrl);
+      url.searchParams.set('code', code);
+      if (q.state) url.searchParams.set('state', q.state);
+      return { kind: 'granted' as const, redirectTo: url.toString() };
+    });
+
+    if (outcome.kind === 'twofa') {
+      reply.status(200).send({ ok: true, twofa_required: true });
+      return;
+    }
+    reply.status(200).send({ ok: true, redirect_to: outcome.redirectTo });
+  });
+}
