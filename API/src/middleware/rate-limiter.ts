@@ -18,12 +18,44 @@ type WindowState = {
 
 const windows = new Map<string, WindowState>();
 
-function cleanUp() {
+// Hard upper bound on tracked keys to prevent unbounded memory growth from
+// body-keyed limiters (one entry per distinct email/token hash).
+const MAX_ENTRIES = 100_000;
+// How often the background sweep removes expired windows.
+const SWEEP_INTERVAL_MS = 60_000;
+
+function sweepExpired() {
   const now = Date.now();
   for (const [key, window] of windows.entries()) {
     if (window.resetAt <= now) {
       windows.delete(key);
     }
+  }
+}
+
+// Periodic background sweep instead of an O(n) scan on every request.
+// unref() so the timer never keeps the process alive (tests/process exit).
+const sweepTimer = setInterval(sweepExpired, SWEEP_INTERVAL_MS);
+sweepTimer.unref();
+
+// Make room for a new key while respecting MAX_ENTRIES. Evicts expired
+// entries first; if still at the cap, evicts the oldest inserted entry
+// (Map preserves insertion order, so the front is the oldest).
+function ensureCapacity(now: number) {
+  if (windows.size < MAX_ENTRIES) {
+    return;
+  }
+  for (const [key, window] of windows.entries()) {
+    if (window.resetAt <= now) {
+      windows.delete(key);
+    }
+  }
+  while (windows.size >= MAX_ENTRIES) {
+    const oldest = windows.keys().next().value;
+    if (oldest === undefined) {
+      break;
+    }
+    windows.delete(oldest);
   }
 }
 
@@ -34,11 +66,11 @@ export function createRateLimiter({ keyBuilder, limit, windowMs }: RateLimitOpti
       return;
     }
 
-    cleanUp();
     const now = Date.now();
     const existing = windows.get(key);
 
     if (!existing || existing.resetAt <= now) {
+      ensureCapacity(now);
       windows.set(key, { count: 1, resetAt: now + windowMs });
       return;
     }

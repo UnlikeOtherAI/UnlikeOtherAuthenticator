@@ -2,6 +2,7 @@ import { decodeJwt, decodeProtectedHeader, type JWTPayload } from 'jose';
 import { z } from 'zod';
 
 import { getEnv } from '../config/env.js';
+import { parseHttpsUrl, resolvePublicDestinations } from '../utils/ssrf.js';
 import { formatZodIssues } from './auth-debug-page.service.js';
 import {
   assertConfigDomainMatchesConfigUrl,
@@ -175,7 +176,24 @@ export async function verifyClientConfig(
   let payload: JWTPayload | undefined;
   let configJwt: string | undefined;
   const env = getEnv();
-  const jwksUrl = params.jwks_url?.trim() || env.CONFIG_JWKS_URL;
+
+  const callerJwksUrl = params.jwks_url?.trim();
+  let jwksUrl = env.CONFIG_JWKS_URL;
+  if (callerJwksUrl) {
+    try {
+      await resolvePublicDestinations(parseHttpsUrl(callerJwksUrl));
+      jwksUrl = callerJwksUrl;
+    } catch {
+      failedCheck(
+        response,
+        'jwks_url',
+        'CONFIG_JWKS_URL_REJECTED',
+        'The supplied jwks_url is not a usable public HTTPS endpoint.',
+        ['jwks_url must be an https URL resolving to a public address (no localhost, private, or metadata hosts).'],
+      );
+      jwksUrl = undefined;
+    }
+  }
 
   passedCheck(response, 'source', `Using ${source} as the configuration source.`);
 
