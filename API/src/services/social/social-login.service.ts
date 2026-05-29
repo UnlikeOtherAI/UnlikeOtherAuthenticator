@@ -1,7 +1,7 @@
 import type { PrismaClient } from '@prisma/client';
 
 import type { ClientConfig } from '../config.service.js';
-import { getAdminAuthDomain, getEnv } from '../../config/env.js';
+import { getAdminAuthDomain, getAdminBootstrapEmails, getEnv } from '../../config/env.js';
 import { getPrisma } from '../../db/prisma.js';
 import { getAppLogger } from '../../utils/app-logger.js';
 import { extractEmailDomain } from '../../utils/email-domain.js';
@@ -58,14 +58,24 @@ function isAllowedByRegistrationDomainPolicy(params: {
  * while no SUPERUSER row exists yet. Once one does, the registration policy
  * applies to every subsequent new user as normal. Customer domains are
  * unaffected.
+ *
+ * ADMIN_BOOTSTRAP_EMAILS is an optional allowlist: when set, only a listed
+ * email may claim the initial SUPERUSER; when unset, the first admin-domain
+ * login wins (brief 22.5).
  */
 async function isAdminSuperuserBootstrap(params: {
   env: ReturnType<typeof getEnv>;
   prisma: SocialLoginPrisma;
   domain: string;
+  email: string;
 }): Promise<boolean> {
   const domain = normalizeDomain(params.domain);
   if (domain !== getAdminAuthDomain(params.env)) {
+    return false;
+  }
+
+  const allowlist = getAdminBootstrapEmails(params.env);
+  if (allowlist.length > 0 && !allowlist.includes(params.email.trim().toLowerCase())) {
     return false;
   }
 
@@ -131,7 +141,7 @@ export async function loginWithSocialProfile(
     });
     if (
       !allowedByPolicy &&
-      !(await isAdminSuperuserBootstrap({ env, prisma, domain: params.config.domain }))
+      !(await isAdminSuperuserBootstrap({ env, prisma, domain: params.config.domain, email }))
     ) {
       return { status: 'blocked' };
     }

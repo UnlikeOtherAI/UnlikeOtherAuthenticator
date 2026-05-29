@@ -49,6 +49,11 @@ const EnvSchema = z
     ADMIN_AUTH_DOMAIN: z.string().min(1).optional(),
     // Auth-service-only signing secret for first-party admin access tokens.
     ADMIN_ACCESS_TOKEN_SECRET: z.string().min(32).optional(),
+    // Optional allowlist (comma-separated emails) of who may bootstrap the initial
+    // SUPERUSER on ADMIN_AUTH_DOMAIN. When unset/empty, the first successful
+    // admin-domain login wins SUPERUSER (brief 22.5). When set, only a listed email
+    // can bootstrap; all other first logins are blocked.
+    ADMIN_BOOTSTRAP_EMAILS: z.string().min(1).optional(),
     // Signed RS256 config JWT served to the first-party Admin UI. The payload must be
     // Google-only, registration-disabled, and scoped to ADMIN_AUTH_DOMAIN.
     ADMIN_CONFIG_JWT: z.string().min(1).optional(),
@@ -192,6 +197,20 @@ export function getPublicBaseUrl(env: Env = getEnv()): string {
  *  gated on an access-token signing key being configured. */
 export function isMcpOAuthEnabled(env: Env = getEnv()): boolean {
   return Boolean(env.MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK);
+}
+
+/**
+ * Optional allowlist of emails permitted to bootstrap the initial SUPERUSER on
+ * ADMIN_AUTH_DOMAIN. Empty when ADMIN_BOOTSTRAP_EMAILS is unset — in which case
+ * any first admin-domain login wins SUPERUSER (brief 22.5).
+ */
+export function getAdminBootstrapEmails(env: Env = getEnv()): string[] {
+  const raw = env.ADMIN_BOOTSTRAP_EMAILS?.trim();
+  if (!raw) return [];
+  return raw
+    .split(',')
+    .map((email) => email.trim().toLowerCase())
+    .filter((email) => email.length > 0);
 }
 
 export function requireEnv<K extends keyof Env>(...keys: K[]): { [P in K]-?: NonNullable<Env[P]> } {

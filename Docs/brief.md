@@ -479,6 +479,14 @@ The following tighten ambiguities in the brief to prevent misinterpretation duri
 * No locking, queues, or moderation flows
 * Superuser assignment applies regardless of whether the first login is via social or email/password
 
+#### Admin-domain bootstrap allowlist (optional)
+
+* No allowlist is required. By default the **first** successful login on `ADMIN_AUTH_DOMAIN` bootstraps the initial `SUPERUSER` (the chicken-and-egg exception that lets a registration-disabled Admin panel gain its first operator).
+* An **optional** allowlist is supported via the `ADMIN_BOOTSTRAP_EMAILS` env var (comma-separated emails):
+  * **Unset / empty** — any first admin-domain login is accepted as superuser (default behaviour above).
+  * **Set** — only a listed email may bootstrap the initial superuser; every other first login on the admin domain is blocked.
+* The allowlist only gates the **initial** bootstrap on `ADMIN_AUTH_DOMAIN`. Once a `SUPERUSER` exists, the normal registration policy applies and the allowlist is irrelevant. Customer domains are never affected.
+
 ---
 
 ### 22.6 Social Login Email Trust

@@ -221,6 +221,7 @@ All secrets and configuration live in environment variables. Nothing is hardcode
 * `ADMIN_AUTH_DOMAIN` — domain whose superuser access tokens may access the Admin panel; defaults to the resolved auth service identifier
 * `ADMIN_ACCESS_TOKEN_SECRET` — auth-service-only signing secret used for access tokens issued to `ADMIN_AUTH_DOMAIN`; required by admin routes, not process boot
 * `ADMIN_CONFIG_JWT` — signed RS256 config JWT served from `/internal/admin/config` for `/admin/login`; required before the production Admin login handoff can work
+* `ADMIN_BOOTSTRAP_EMAILS` — optional comma-separated allowlist of emails permitted to bootstrap the initial `SUPERUSER` on `ADMIN_AUTH_DOMAIN`; when unset, the first admin-domain login wins (see brief 22.5)
 * `CONFIG_JWKS_URL` — trusted JWKS endpoint for RS256 config JWT verification by `kid`; required by config-backed auth routes, not process boot
 * `CONFIG_JWKS_JSON` — public JWKS JSON served from `/.well-known/jwks.json`; must contain public keys only
 * `DATABASE_URL` — database connection string for post-context tenant paths (will be scoped to the `uoa_app` role once RLS M2 is enforced; see `Docs/Requirements/row-level-security.md`)
