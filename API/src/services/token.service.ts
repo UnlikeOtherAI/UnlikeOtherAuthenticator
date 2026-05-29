@@ -9,6 +9,7 @@ import { getPrisma } from '../db/prisma.js';
 import { ensureDomainRoleForUser } from './domain-role.service.js';
 import { exchangeRefreshToken, issueRefreshToken } from './refresh-token.service.js';
 import { AppError } from '../utils/errors.js';
+import { getAppLogger } from '../utils/app-logger.js';
 import { normalizeDomain } from '../utils/domain.js';
 import type { ClientConfig } from './config.service.js';
 import { tryParseHttpUrl } from '../utils/http-url.js';
@@ -158,23 +159,50 @@ async function consumeAuthorizationCode(params: {
     },
   });
 
-  if (!row) throw new AppError('UNAUTHORIZED', 401, 'INVALID_AUTH_CODE');
-  if (row.domain !== params.domain) throw new AppError('UNAUTHORIZED', 401, 'INVALID_AUTH_CODE');
+  // Authorization-code rejection always surfaces the same opaque
+  // INVALID_AUTH_CODE to the client (no oracle), but we log the precise
+  // reason server-side so an operator can diagnose a failing first login on a
+  // fresh install without guessing. No secrets (code/verifier) are logged.
+  const rejectAuthCode = (reason: string, detail?: Record<string, unknown>): never => {
+    try {
+      getAppLogger().warn(
+        { reason, domain: params.domain, configUrl: params.configUrl, ...detail },
+        'authorization code rejected',
+      );
+    } catch {
+      // Logger not initialised (e.g. in unit tests) — diagnostics are best-effort
+      // and must never change the opaque rejection behaviour below.
+    }
+    throw new AppError('UNAUTHORIZED', 401, 'INVALID_AUTH_CODE');
+  };
+
+  if (!row) return rejectAuthCode('code_not_found');
+  if (row.domain !== params.domain)
+    rejectAuthCode('domain_mismatch', { rowDomain: row.domain });
   if (row.configUrl !== params.configUrl)
-    throw new AppError('UNAUTHORIZED', 401, 'INVALID_AUTH_CODE');
+    rejectAuthCode('config_url_mismatch', { rowConfigUrl: row.configUrl });
   if (row.redirectUrl !== params.redirectUrl)
-    throw new AppError('UNAUTHORIZED', 401, 'INVALID_AUTH_CODE');
+    rejectAuthCode('redirect_url_mismatch', {
+      rowRedirectUrl: row.redirectUrl,
+      paramRedirectUrl: params.redirectUrl,
+    });
   if (row.codeChallenge) {
     if (row.codeChallengeMethod !== 'S256')
-      throw new AppError('UNAUTHORIZED', 401, 'INVALID_AUTH_CODE');
-    verifyPkceCodeVerifier({
-      codeVerifier: params.codeVerifier,
-      codeChallenge: row.codeChallenge,
-    });
+      rejectAuthCode('pkce_method_unsupported', { method: row.codeChallengeMethod });
+    try {
+      verifyPkceCodeVerifier({
+        codeVerifier: params.codeVerifier,
+        codeChallenge: row.codeChallenge,
+      });
+    } catch {
+      rejectAuthCode('pkce_verifier_invalid', {
+        codeVerifierPresent: Boolean(params.codeVerifier),
+        codeVerifierLength: params.codeVerifier?.length ?? 0,
+      });
+    }
   }
-  if (row.usedAt) throw new AppError('UNAUTHORIZED', 401, 'INVALID_AUTH_CODE');
-  if (row.expiresAt.getTime() <= params.now.getTime())
-    throw new AppError('UNAUTHORIZED', 401, 'INVALID_AUTH_CODE');
+  if (row.usedAt) rejectAuthCode('already_used', { usedAt: row.usedAt.toISOString() });
+  if (row.expiresAt.getTime() <= params.now.getTime()) rejectAuthCode('expired');
 
   const updated = await params.prisma.authorizationCode.updateMany({
     where: {
@@ -187,7 +215,7 @@ async function consumeAuthorizationCode(params: {
     },
   });
   if (updated.count !== 1) {
-    throw new AppError('UNAUTHORIZED', 401, 'INVALID_AUTH_CODE');
+    rejectAuthCode('concurrent_consume');
   }
 
   return { userId: row.userId, rememberMe: row.rememberMe };
