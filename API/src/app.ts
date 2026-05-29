@@ -1,7 +1,8 @@
+import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
 import fastify, { type FastifyInstance } from 'fastify';
 
-import { getEnv } from './config/env.js';
+import { getEnv, requireEnv } from './config/env.js';
 import { connectPrisma, disconnectPrisma } from './db/prisma.js';
 import { registerErrorHandler } from './middleware/error-handler.js';
 import tenantContextPlugin from './plugins/tenant-context.plugin.js';
@@ -153,6 +154,12 @@ export async function createApp(): Promise<FastifyInstance> {
   } else {
     app.log.warn('DATABASE_URL not set; database is disabled');
   }
+
+  // Signed cookies are used to bind the social-login OAuth `state` to the browser
+  // that initiated the flow (login-CSRF protection). The signing key is derived from
+  // SHARED_SECRET so the cookie is tamper-evident without introducing a new secret.
+  const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
+  await app.register(cookie, { secret: SHARED_SECRET });
 
   registerErrorHandler(app);
   await app.register(tenantContextPlugin);

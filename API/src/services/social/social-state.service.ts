@@ -15,6 +15,9 @@ const SocialStateSchema = z
     request_access: z.boolean().optional(),
     code_challenge: z.string().min(1).optional(),
     code_challenge_method: z.literal('S256').optional(),
+    // CSRF binding: random nonce mirrored in an HttpOnly cookie set on the
+    // initiating browser. The callback rejects unless the two match.
+    nonce: z.string().min(1),
   });
 
 export type SocialState = z.infer<typeof SocialStateSchema>;
@@ -34,6 +37,7 @@ export async function signSocialState(params: {
   requestAccess?: boolean;
   codeChallenge?: string;
   codeChallengeMethod?: 'S256';
+  nonce: string;
   sharedSecret: string;
   audience: string;
   baseUrlForIssuer: string;
@@ -52,6 +56,7 @@ export async function signSocialState(params: {
       request_access: params.requestAccess ?? false,
       code_challenge: params.codeChallenge,
       code_challenge_method: params.codeChallengeMethod,
+      nonce: params.nonce,
     })
       .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
       .setAudience(params.audience)

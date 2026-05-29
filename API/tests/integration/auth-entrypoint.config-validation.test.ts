@@ -248,6 +248,13 @@ describe('GET /auth (config validation)', () => {
       expect(res.statusCode).toBe(302);
       expect(res.headers.location).toContain('https://accounts.google.com/o/oauth2/v2/auth');
       expect(res.headers.location).toContain('client_id=google-client-id');
+      // Login-CSRF binding: authorize must set the signed, HttpOnly state cookie.
+      const setCookie = res.headers['set-cookie'];
+      const setCookieStr = Array.isArray(setCookie) ? setCookie.join('\n') : (setCookie ?? '');
+      expect(setCookieStr).toContain('uoa_social_state=');
+      expect(setCookieStr).toContain('HttpOnly');
+      expect(setCookieStr).toContain('SameSite=Lax');
+      expect(setCookieStr).toContain('Path=/auth');
     } finally {
       if (originalGoogleClientId === undefined) {
         delete process.env.GOOGLE_CLIENT_ID;

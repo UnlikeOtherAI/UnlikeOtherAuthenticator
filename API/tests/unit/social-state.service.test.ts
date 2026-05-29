@@ -5,11 +5,12 @@ import { signSocialState, verifySocialState } from '../../src/services/social/so
 const SOCIAL_STATE_ISSUER = 'https://auth.example.com/social-state';
 
 describe('social-state.service', () => {
-  it('signs and verifies a social state JWT', async () => {
+  it('signs and verifies a social state JWT, round-tripping the CSRF nonce', async () => {
     const jwt = await signSocialState({
       provider: 'google',
       configUrl: 'https://client.example.com/auth-config',
       redirectUrl: 'https://client.example.com/oauth/callback',
+      nonce: 'csrf-nonce-value',
       sharedSecret: 'test-shared-secret-with-enough-length',
       audience: 'uoa-auth-service',
       baseUrlForIssuer: 'https://auth.example.com',
@@ -30,6 +31,7 @@ describe('social-state.service', () => {
       config_url: 'https://client.example.com/auth-config',
       redirect_url: 'https://client.example.com/oauth/callback',
       request_access: false,
+      nonce: 'csrf-nonce-value',
     });
   });
 
@@ -41,6 +43,7 @@ describe('social-state.service', () => {
       requestAccess: true,
       codeChallenge: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
       codeChallengeMethod: 'S256',
+      nonce: 'csrf-nonce-value',
       sharedSecret: 'test-shared-secret-with-enough-length',
       audience: 'uoa-auth-service',
       baseUrlForIssuer: 'https://auth.example.com',
@@ -68,6 +71,7 @@ describe('social-state.service', () => {
       provider: 'google',
       configUrl: 'https://client.example.com/auth-config',
       redirectUrl: 'https://client.example.com/oauth/callback',
+      nonce: 'csrf-nonce-value',
       sharedSecret: 'test-shared-secret-with-enough-length',
       audience: 'uoa-auth-service',
       baseUrlForIssuer: 'https://auth.example.com',
@@ -91,6 +95,7 @@ describe('social-state.service', () => {
       provider: 'google',
       configUrl: 'https://client.example.com/auth-config',
       redirectUrl: 'https://client.example.com/oauth/callback',
+      nonce: 'csrf-nonce-value',
       sharedSecret: 'test-shared-secret-with-enough-length',
       audience: 'uoa-auth-service',
       baseUrlForIssuer: 'https://other-auth.example.com',
@@ -114,6 +119,7 @@ describe('social-state.service', () => {
       provider: 'google',
       configUrl: 'https://client.example.com/auth-config',
       redirectUrl: 'https://client.example.com/oauth/callback',
+      nonce: 'csrf-nonce-value',
       sharedSecret: 'test-shared-secret-with-enough-length',
       audience: 'uoa-auth-service',
       baseUrlForIssuer: 'https://auth.example.com',

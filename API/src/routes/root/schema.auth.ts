@@ -181,7 +181,8 @@ export const authEndpoints: EndpointSchema[] = [
   {
     method: 'GET',
     path: '/auth/social/:provider',
-    description: 'Initiate social OAuth flow (google, facebook, github, linkedin, apple)',
+    description:
+      'Initiate social OAuth flow (google, facebook, github, linkedin, apple). Sets a signed, HttpOnly `uoa_social_state` cookie (SameSite=Lax, Path=/auth) that binds the OAuth `state` to the browser; the cookie must be returned to /auth/callback.',
     query: {
       config_url: 'string (required)',
       redirect_url: 'string (optional)',
@@ -194,7 +195,8 @@ export const authEndpoints: EndpointSchema[] = [
   {
     method: 'GET',
     path: '/auth/callback/:provider',
-    description: 'OAuth provider callback (server-to-server)',
+    description:
+      'OAuth provider callback. Requires the signed `uoa_social_state` cookie set at /auth/social to match the nonce embedded in `state` (login-CSRF protection); the cookie is single-use and cleared on consume.',
   },
   {
     method: 'GET',

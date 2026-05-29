@@ -10,6 +10,11 @@ import { buildGoogleAuthorizationUrl } from '../../services/social/google.servic
 import { buildLinkedInAuthorizationUrl } from '../../services/social/linkedin.service.js';
 import { assertSocialProviderAllowed } from '../../services/social/index.js';
 import { signSocialState } from '../../services/social/social-state.service.js';
+import {
+  generateSocialStateNonce,
+  setSocialStateCookie,
+} from '../../services/social/social-state-cookie.js';
+import type { SocialProviderKey } from '../../services/social/provider.base.js';
 import { parseRequestAccessFlag } from '../../services/access-request-flow.service.js';
 import { selectRedirectUrl } from '../../services/token.service.js';
 import { AppError } from '../../utils/errors.js';
@@ -72,28 +77,45 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
       });
 
       const env = getEnv();
+
+      // Bind the OAuth `state` to this browser: a CSPRNG nonce is embedded in the
+      // signed state JWT and mirrored in an HttpOnly cookie. The callback rejects
+      // unless both match, preventing login-CSRF / forced-login attacks. Generated
+      // once and reused across provider branches; the cookie is set on `reply` here
+      // and verified in the callback route.
+      const nonce = generateSocialStateNonce();
+      const baseUrl = resolvePublicBaseUrl();
+      const authServiceIdentifier = getAuthServiceIdentifier(env);
+      const requestConfigUrl = request.configUrl;
+
+      const signStateForProvider = async (
+        providerKey: SocialProviderKey,
+      ): Promise<string> => {
+        const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
+        const state = await signSocialState({
+          provider: providerKey,
+          configUrl: requestConfigUrl,
+          redirectUrl,
+          requestAccess: parseRequestAccessFlag(request_access),
+          codeChallenge: pkce.codeChallenge,
+          codeChallengeMethod: pkce.codeChallengeMethod,
+          nonce,
+          sharedSecret: SHARED_SECRET,
+          audience: authServiceIdentifier,
+          baseUrlForIssuer: baseUrl,
+        });
+        setSocialStateCookie(reply, nonce);
+        return state;
+      };
+
       if (provider === 'google') {
         if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
           // Misconfiguration; keep response generic.
           throw new AppError('INTERNAL', 500, 'GOOGLE_ENV_MISSING');
         }
 
-        const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
-        const authServiceIdentifier = getAuthServiceIdentifier(env);
-        const baseUrl = resolvePublicBaseUrl();
         const redirectUri = `${baseUrl}/auth/callback/google`;
-
-        const state = await signSocialState({
-          provider: 'google',
-          configUrl: request.configUrl,
-          redirectUrl,
-          requestAccess: parseRequestAccessFlag(request_access),
-          codeChallenge: pkce.codeChallenge,
-          codeChallengeMethod: pkce.codeChallengeMethod,
-          sharedSecret: SHARED_SECRET,
-          audience: authServiceIdentifier,
-          baseUrlForIssuer: baseUrl,
-        });
+        const state = await signStateForProvider('google');
 
         const url = buildGoogleAuthorizationUrl({
           clientId: env.GOOGLE_CLIENT_ID,
@@ -110,22 +132,8 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
           throw new AppError('INTERNAL', 500, 'FACEBOOK_ENV_MISSING');
         }
 
-        const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
-        const authServiceIdentifier = getAuthServiceIdentifier(env);
-        const baseUrl = resolvePublicBaseUrl();
         const redirectUri = `${baseUrl}/auth/callback/facebook`;
-
-        const state = await signSocialState({
-          provider: 'facebook',
-          configUrl: request.configUrl,
-          redirectUrl,
-          requestAccess: parseRequestAccessFlag(request_access),
-          codeChallenge: pkce.codeChallenge,
-          codeChallengeMethod: pkce.codeChallengeMethod,
-          sharedSecret: SHARED_SECRET,
-          audience: authServiceIdentifier,
-          baseUrlForIssuer: baseUrl,
-        });
+        const state = await signStateForProvider('facebook');
 
         const url = buildFacebookAuthorizationUrl({
           clientId: env.FACEBOOK_CLIENT_ID,
@@ -142,22 +150,8 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
           throw new AppError('INTERNAL', 500, 'GITHUB_ENV_MISSING');
         }
 
-        const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
-        const authServiceIdentifier = getAuthServiceIdentifier(env);
-        const baseUrl = resolvePublicBaseUrl();
         const redirectUri = `${baseUrl}/auth/callback/github`;
-
-        const state = await signSocialState({
-          provider: 'github',
-          configUrl: request.configUrl,
-          redirectUrl,
-          requestAccess: parseRequestAccessFlag(request_access),
-          codeChallenge: pkce.codeChallenge,
-          codeChallengeMethod: pkce.codeChallengeMethod,
-          sharedSecret: SHARED_SECRET,
-          audience: authServiceIdentifier,
-          baseUrlForIssuer: baseUrl,
-        });
+        const state = await signStateForProvider('github');
 
         const url = buildGitHubAuthorizationUrl({
           clientId: env.GITHUB_CLIENT_ID,
@@ -179,22 +173,8 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
           throw new AppError('INTERNAL', 500, 'APPLE_ENV_MISSING');
         }
 
-        const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
-        const authServiceIdentifier = getAuthServiceIdentifier(env);
-        const baseUrl = resolvePublicBaseUrl();
         const redirectUri = `${baseUrl}/auth/callback/apple`;
-
-        const state = await signSocialState({
-          provider: 'apple',
-          configUrl: request.configUrl,
-          redirectUrl,
-          requestAccess: parseRequestAccessFlag(request_access),
-          codeChallenge: pkce.codeChallenge,
-          codeChallengeMethod: pkce.codeChallengeMethod,
-          sharedSecret: SHARED_SECRET,
-          audience: authServiceIdentifier,
-          baseUrlForIssuer: baseUrl,
-        });
+        const state = await signStateForProvider('apple');
 
         const url = buildAppleAuthorizationUrl({
           clientId: env.APPLE_CLIENT_ID,
@@ -211,22 +191,8 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
           throw new AppError('INTERNAL', 500, 'LINKEDIN_ENV_MISSING');
         }
 
-        const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
-        const authServiceIdentifier = getAuthServiceIdentifier(env);
-        const baseUrl = resolvePublicBaseUrl();
         const redirectUri = `${baseUrl}/auth/callback/linkedin`;
-
-        const state = await signSocialState({
-          provider: 'linkedin',
-          configUrl: request.configUrl,
-          redirectUrl,
-          requestAccess: parseRequestAccessFlag(request_access),
-          codeChallenge: pkce.codeChallenge,
-          codeChallengeMethod: pkce.codeChallengeMethod,
-          sharedSecret: SHARED_SECRET,
-          audience: authServiceIdentifier,
-          baseUrlForIssuer: baseUrl,
-        });
+        const state = await signStateForProvider('linkedin');
 
         const url = buildLinkedInAuthorizationUrl({
           clientId: env.LINKEDIN_CLIENT_ID,

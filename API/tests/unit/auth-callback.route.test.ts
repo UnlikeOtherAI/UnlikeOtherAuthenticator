@@ -79,6 +79,9 @@ vi.mock('../../src/services/token.service.js', async () => {
   };
 });
 
+const TEST_NONCE = 'test-social-state-nonce';
+const SOCIAL_STATE_COOKIE_NAME = 'uoa_social_state';
+
 function baseConfig(overrides?: Partial<ClientConfig>): ClientConfig {
   return {
     domain: 'client.example.com',
@@ -131,6 +134,7 @@ describe('GET /auth/callback/:provider', () => {
       provider: 'google',
       config_url: 'https://client.example.com/auth-config',
       redirect_url: 'https://client.example.com/oauth/callback',
+      nonce: TEST_NONCE,
     });
     selectRedirectUrlMock.mockReturnValue('https://client.example.com/oauth/callback');
     getGoogleProfileFromCodeMock.mockResolvedValue({
@@ -155,6 +159,7 @@ describe('GET /auth/callback/:provider', () => {
     const res = await app.inject({
       method: 'GET',
       url: '/auth/callback/google?code=provider-code&state=state-token',
+      cookies: { [SOCIAL_STATE_COOKIE_NAME]: app.signCookie(TEST_NONCE) },
     });
 
     expect(res.statusCode).toBe(302);
@@ -167,6 +172,8 @@ describe('GET /auth/callback/:provider', () => {
     );
     expect(loginWithSocialProfileMock).toHaveBeenCalledTimes(1);
     expect(issueAuthorizationCodeMock).not.toHaveBeenCalled();
+    // Single-use: the state cookie is cleared after consumption.
+    expect(res.headers['set-cookie']).toBeDefined();
 
     await app.close();
   });
@@ -176,6 +183,7 @@ describe('GET /auth/callback/:provider', () => {
       provider: 'google',
       config_url: 'https://admin.example.com/internal/admin/config',
       redirect_url: 'https://admin.example.com/admin/auth/callback',
+      nonce: TEST_NONCE,
     });
     validateConfigFieldsMock.mockReturnValue(
       baseConfig({
@@ -193,6 +201,7 @@ describe('GET /auth/callback/:provider', () => {
     const res = await app.inject({
       method: 'GET',
       url: '/auth/callback/google?code=provider-code&state=state-token',
+      cookies: { [SOCIAL_STATE_COOKIE_NAME]: app.signCookie(TEST_NONCE) },
     });
 
     expect(res.statusCode).toBe(302);
@@ -203,6 +212,45 @@ describe('GET /auth/callback/:provider', () => {
       'admin-config-jwt',
       'https://auth.example.com/.well-known/jwks.json',
     );
+
+    await app.close();
+  });
+
+  it('rejects the callback when the state nonce does not match the cookie (login-CSRF)', async () => {
+    const { createApp } = await import('../../src/app.js');
+    const app = await createApp();
+    await app.ready();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/auth/callback/google?code=provider-code&state=state-token',
+      // Attacker-supplied state (verifies fine) but the victim's browser carries a
+      // different signed nonce: the flow must be rejected before any login work.
+      cookies: { [SOCIAL_STATE_COOKIE_NAME]: app.signCookie('a-different-nonce-value') },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.headers.location).toBeUndefined();
+    expect(loginWithSocialProfileMock).not.toHaveBeenCalled();
+    expect(issueAuthorizationCodeMock).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('rejects the callback when the state-binding cookie is absent', async () => {
+    const { createApp } = await import('../../src/app.js');
+    const app = await createApp();
+    await app.ready();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/auth/callback/google?code=provider-code&state=state-token',
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.headers.location).toBeUndefined();
+    expect(loginWithSocialProfileMock).not.toHaveBeenCalled();
+    expect(issueAuthorizationCodeMock).not.toHaveBeenCalled();
 
     await app.close();
   });

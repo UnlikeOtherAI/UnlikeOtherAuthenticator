@@ -20,6 +20,10 @@ import { getLinkedInProfileFromCode } from '../../services/social/linkedin.servi
 import type { SocialProfile } from '../../services/social/provider.base.js';
 import { loginWithSocialProfile } from '../../services/social/social-login.service.js';
 import { verifySocialState } from '../../services/social/social-state.service.js';
+import {
+  clearSocialStateCookie,
+  socialStateCookieMatches,
+} from '../../services/social/social-state-cookie.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
 import { finalizeAuthenticatedUser } from '../../services/access-request-flow.service.js';
 import { requestRegistrationInstructions } from '../../services/auth-register.service.js';
@@ -96,6 +100,16 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         audience: authServiceIdentifier,
         issuer: socialStateIssuer(baseUrl),
       });
+
+      // Login-CSRF protection: the state nonce must match the signed, HttpOnly
+      // cookie set on the browser that initiated the flow. Clear the cookie first
+      // so it is single-use regardless of outcome, then reject (generically) on
+      // any mismatch or missing/forged cookie.
+      const nonceMatches = socialStateCookieMatches(request, socialState.nonce);
+      clearSocialStateCookie(reply);
+      if (!nonceMatches) {
+        throw new AppError('BAD_REQUEST', 400, 'INVALID_SOCIAL_STATE');
+      }
 
       if (socialState.provider !== provider) {
         throw new AppError('BAD_REQUEST', 400, 'SOCIAL_PROVIDER_MISMATCH');
