@@ -23,12 +23,12 @@ describe('mcp access-token (RS256)', () => {
   it('publishes a public JWKS with no private material', async () => {
     const { keys } = await getAccessTokenPublicJwks();
     expect(keys).toHaveLength(1);
-    const key = keys[0]!;
-    expect(key.kid).toBe('mcp-test-kid');
-    expect(key.use).toBe('sig');
-    expect(key.alg).toBe('RS256');
-    expect(key.d).toBeUndefined();
-    expect(key.p).toBeUndefined();
+    const key = keys[0];
+    expect(key?.kid).toBe('mcp-test-kid');
+    expect(key?.use).toBe('sig');
+    expect(key?.alg).toBe('RS256');
+    expect(key?.d).toBeUndefined();
+    expect(key?.p).toBeUndefined();
   });
 
   it('signs a resource-bound token verifiable against the public JWKS', async () => {
