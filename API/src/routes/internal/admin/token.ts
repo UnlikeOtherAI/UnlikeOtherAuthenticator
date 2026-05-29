@@ -3,7 +3,9 @@ import { z } from 'zod';
 
 import { getAdminAuthDomain, getAuthServiceIdentifier, getEnv } from '../../../config/env.js';
 import { getAdminPrisma } from '../../../db/prisma.js';
+import { asPrismaClient } from '../../../db/tenant-context.js';
 import { configVerifier } from '../../../middleware/config-verifier.js';
+import { setTenantContextFromRequest } from '../../../plugins/tenant-context.plugin.js';
 import { verifyAccessToken } from '../../../services/access-token.service.js';
 import { exchangeAuthorizationCodeForTokens } from '../../../services/token.service.js';
 import { AppError } from '../../../utils/errors.js';
@@ -86,12 +88,26 @@ export function registerInternalAdminTokenRoute(app: FastifyInstance): void {
       }
 
       assertAdminConfigDomain(request.config.domain);
-      const tokenPair = await exchangeAuthorizationCodeForTokens({
-        code: body.code,
-        config: request.config,
-        configUrl: request.configUrl,
-        redirectUrl: body.redirect_url,
-        codeVerifier: body.code_verifier,
+
+      // The authorization_codes / refresh_tokens rows are RLS-scoped by domain
+      // (app.domain GUC). Like the public /auth/token route, the exchange must run
+      // inside a domain-scoped tenant transaction, otherwise the uoa_app role cannot
+      // see the freshly-issued code row and the lookup fails with code_not_found.
+      setTenantContextFromRequest(request, { orgId: null, userId: null });
+      const config = request.config;
+      const configUrl = request.configUrl;
+      const tokenPair = await request.withTenantTx(async (tx) => {
+        const prisma = asPrismaClient(tx);
+        return exchangeAuthorizationCodeForTokens(
+          {
+            code: body.code,
+            config,
+            configUrl,
+            redirectUrl: body.redirect_url,
+            codeVerifier: body.code_verifier,
+          },
+          { prisma },
+        );
       });
       await assertAdminAccessTokenIsSuperuser(tokenPair.accessToken);
 

@@ -58,7 +58,7 @@ export function AdminAuthCallbackPage() {
   return (
     <main className="flex min-h-full items-center justify-center bg-slate-950 px-6 py-12 text-center">
       <p className="text-sm text-slate-400">
-        {error ? 'Admin access was rejected. Superuser access is required.' : 'Completing admin sign-in.'}
+        {error ? 'Admin sign-in failed. Please try again.' : 'Completing admin sign-in.'}
       </p>
     </main>
   );

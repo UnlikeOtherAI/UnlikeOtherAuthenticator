@@ -129,13 +129,18 @@ describe('POST /internal/admin/token', () => {
         token_type: 'Bearer',
       });
       expect(typeof response.json().access_token).toBe('string');
-      expect(exchangeAuthorizationCodeForTokensMock).toHaveBeenCalledWith({
-        code: 'auth-code',
-        config: currentConfig,
-        configUrl: currentConfigUrl,
-        redirectUrl: 'https://admin.example.com/admin/callback',
-        codeVerifier: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
-      });
+      expect(exchangeAuthorizationCodeForTokensMock).toHaveBeenCalledWith(
+        {
+          code: 'auth-code',
+          config: currentConfig,
+          configUrl: currentConfigUrl,
+          redirectUrl: 'https://admin.example.com/admin/callback',
+          codeVerifier: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+        },
+        // The exchange now runs inside a domain-scoped tenant transaction so the
+        // RLS-bound uoa_app role can see the freshly-issued authorization code.
+        expect.objectContaining({ prisma: expect.anything() }),
+      );
     } finally {
       await app.close();
     }
