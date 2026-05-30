@@ -1,0 +1,13 @@
+-- Drop the "one SUPERUSER per domain" partial unique index.
+--
+-- This index (added in 20260210193000_domain_roles) capped every domain at a
+-- single SUPERUSER. It contradicts the Admin "Super-users" page (brief, section
+-- "2026-04 Super-users"), which exists to grant SUPERUSER to *additional*
+-- operators on ADMIN_AUTH_DOMAIN. With the index in place, every grant after
+-- the first raised a unique violation -> 500, so the "Grant" button silently
+-- did nothing.
+--
+-- The first-login bootstrap race (brief 22.5) is still handled in application
+-- code: ensureDomainRoleForUser() pre-reads for an existing SUPERUSER before
+-- assigning a role, and a genuine simultaneous first-signup self-heals on retry.
+DROP INDEX IF EXISTS "domain_roles_domain_superuser_key";
