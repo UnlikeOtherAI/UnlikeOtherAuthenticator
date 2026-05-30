@@ -77,6 +77,9 @@ Set via Cloud Run service config:
 | `SHARED_SECRET` | Secret Manager: `uoa-auth-shared-secret` |
 | `GOOGLE_CLIENT_ID` | Secret Manager: `uoa-auth-google-client-id` |
 | `GOOGLE_CLIENT_SECRET` | Secret Manager: `uoa-auth-google-client-secret` |
+| `MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK` | Secret Manager: RS256 private JWK (JSON) for the public-client / MCP OAuth profile (brief §22.14); presence enables the whole `/oauth/*` profile |
+| `MCP_OAUTH_DOMAIN` | Plain value; **required when the MCP OAuth profile is enabled**: the dedicated first-party tenant domain for `/oauth/*`. Must be distinct from `ADMIN_AUTH_DOMAIN` — the service fails closed if unset or equal to `ADMIN_AUTH_DOMAIN` |
+| `MCP_OAUTH_RESOURCES_SUPPORTED` | Optional plain value; comma-separated, case-sensitive allowlist of RFC 8707 resource-server URIs the MCP profile may issue tokens for. A client-supplied `resource` must exactly match one of these or the request is rejected with `invalid_target` |
 
 `/llm` is a Markdown integration guide for LLMs and human readers. `/api` is the machine-readable JSON schema and config contract.
 

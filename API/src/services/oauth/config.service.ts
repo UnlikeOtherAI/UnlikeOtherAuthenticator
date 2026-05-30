@@ -3,6 +3,7 @@
 // service builds its own ClientConfig from env + the registered client's redirect
 // URIs, then drives the SAME login / token machinery as the config-JWT flow.
 import { getAdminAuthDomain, getEnv } from '../../config/env.js';
+import { AppError } from '../../utils/errors.js';
 import { type ClientConfig, validateConfigFields } from '../config.service.js';
 
 // A neutral, valid default theme. The MCP login screen is first-party, so there is
@@ -31,7 +32,16 @@ const DEFAULT_UI_THEME = {
  *  are the registered client's, so selectRedirectUrl validates against them. */
 export function buildMcpClientConfig(redirectUris: string[]): ClientConfig {
   const env = getEnv();
-  const domain = (env.MCP_OAUTH_DOMAIN ?? getAdminAuthDomain(env)).toLowerCase();
+  // The MCP profile must run on its own dedicated first-party domain — never the admin
+  // domain (a SUPERUSER bootstrap there would bypass ADMIN_BOOTSTRAP_EMAILS) and never a
+  // customer domain. Fail closed when misconfigured; the whole profile is already gated
+  // on the private JWK / isMcpOAuthEnabled, so this only affects misconfigured deployments.
+  const configured = env.MCP_OAUTH_DOMAIN?.trim().toLowerCase();
+  if (!configured) throw new AppError('INTERNAL', 500, 'MCP_OAUTH_DOMAIN_REQUIRED');
+  if (configured === getAdminAuthDomain(env)) {
+    throw new AppError('INTERNAL', 500, 'MCP_OAUTH_DOMAIN_FORBIDDEN_ADMIN');
+  }
+  const domain = configured;
   const methods = (env.MCP_OAUTH_ENABLED_AUTH_METHODS ?? 'email_password')
     .split(',')
     .map((s) => s.trim())

@@ -8,6 +8,7 @@ import { loginWithEmailPassword } from '../../services/auth-login.service.js';
 import { buildMcpClientConfig } from '../../services/oauth/config.service.js';
 import { getOAuthClient } from '../../services/oauth/client.service.js';
 import { issueOAuthCode } from '../../services/oauth/oauth-code.service.js';
+import { validateRequestedResource } from '../../services/oauth/resource-validation.service.js';
 import { selectRedirectUrl } from '../../services/token.service.js';
 import { buildPublicErrorBody } from '../../utils/error-response.js';
 import { parseRequiredPkceChallenge } from '../../utils/pkce.js';
@@ -49,6 +50,8 @@ export function registerOAuthLoginRoute(app: FastifyInstance): void {
     }
     const { email, password, remember_me } = BodySchema.parse(request.body);
     const q = QuerySchema.parse(request.query);
+    // RFC 8707: bind the requested resource to the allowlist before issuing the code.
+    const resource = validateRequestedResource(q.resource);
     const pkce = parseRequiredPkceChallenge({
       codeChallenge: q.code_challenge,
       codeChallengeMethod: q.code_challenge_method,
@@ -87,7 +90,7 @@ export function registerOAuthLoginRoute(app: FastifyInstance): void {
           domain: config.domain,
           oauthClientId: client.clientId,
           redirectUrl,
-          resource: q.resource,
+          resource,
           state: q.state,
           codeChallenge: pkce.codeChallenge,
           rememberMe,

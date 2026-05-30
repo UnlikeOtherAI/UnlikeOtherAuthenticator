@@ -242,3 +242,8 @@ All secrets and configuration live in environment variables. Nothing is hardcode
 * `DEBUG_ENABLED` — include internal error/debug details in responses when set to `true` (default: `false`)
 * `VITE_API_BASE_URL` — admin frontend API base URL
 * `VITE_ADMIN_BYPASS_AUTH` — development-only admin auth bypass flag; must not be relied on in production
+* `MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK` — RS256 private JWK (JSON) for the public-client / MCP OAuth profile (brief §22.14); presence enables the whole `/oauth/*` profile
+* `MCP_OAUTH_DOMAIN` — **required when the MCP OAuth profile is enabled**; the dedicated first-party tenant domain for `/oauth/*`. Must be distinct from `ADMIN_AUTH_DOMAIN` (and any customer domain) — the service fails closed if it is unset or equals `ADMIN_AUTH_DOMAIN`
+* `MCP_OAUTH_ENABLED_AUTH_METHODS` — optional comma-separated auth methods offered on the MCP login screen (default: `email_password`)
+* `MCP_OAUTH_SCOPES_SUPPORTED` — optional comma-separated OAuth scopes advertised in MCP discovery metadata (default: `openid`)
+* `MCP_OAUTH_RESOURCES_SUPPORTED` — optional comma-separated, case-sensitive allowlist of RFC 8707 resource-server URIs the MCP profile may issue tokens for. A client-supplied `resource` must exactly match one of these or the request is rejected with `invalid_target`; when unset, no resource is allowed and clients omit `resource` (the token `aud` falls back to the issuer)

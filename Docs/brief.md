@@ -621,6 +621,23 @@ Everything else (short-lived access tokens §22.10, opaque rotated refresh token
 generic error philosophy §22.11, 2FA, social login, user scope §22.12) applies to
 this profile unchanged.
 
+**Dedicated profile domain (security hardening).** `MCP_OAUTH_DOMAIN` is **required**
+whenever this profile is enabled. It MUST be a dedicated first-party domain that is
+**distinct from `ADMIN_AUTH_DOMAIN`** and from any customer domain. The auth service
+**fails closed** (the whole `/oauth/*` flow errors) if `MCP_OAUTH_DOMAIN` is unset or
+equals the admin domain — there is no fall back to the admin domain. This prevents an
+MCP login from bootstrapping a `SUPERUSER` domain-role on the admin domain (which would
+bypass the `ADMIN_BOOTSTRAP_EMAILS` control that only guards the Google social path).
+
+**Resource allowlist (RFC 8707, confused-deputy mitigation).** The client-supplied
+`resource` becomes the token `aud`, so it is validated against an optional allowlist
+`MCP_OAUTH_RESOURCES_SUPPORTED` (comma-separated, case-sensitive resource-server URIs).
+When a client supplies `resource`, it MUST exactly match one of the allowlisted values;
+otherwise the request is rejected with `invalid_target` (HTTP 400). When the client
+supplies no `resource`, the token `aud` falls back to the issuer as before. The
+allowlist (when configured) is advertised in the RFC 8414 discovery metadata; when
+unset, no unconstrained resource support is advertised.
+
 ---
 
 **This brief is the single source of truth for implementation.**

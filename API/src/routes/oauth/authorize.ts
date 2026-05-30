@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { isMcpOAuthEnabled } from '../../config/env.js';
 import { getOAuthClient } from '../../services/oauth/client.service.js';
 import { buildMcpClientConfig } from '../../services/oauth/config.service.js';
+import { validateRequestedResource } from '../../services/oauth/resource-validation.service.js';
 import { renderAuthEntrypointHtml, sendAuthHtml } from '../../services/auth-ui.service.js';
 import { buildPublicErrorBody } from '../../utils/error-response.js';
 
@@ -48,6 +49,15 @@ export function registerOAuthAuthorizeRoute(app: FastifyInstance): void {
     const client = await getOAuthClient(q.client_id);
     if (!client || !client.redirectUris.includes(q.redirect_uri)) {
       // Per OAuth, never redirect to an unvalidated redirect_uri — surface a 400.
+      reply.status(400).send(buildPublicErrorBody({ statusCode: 400 }));
+      return;
+    }
+
+    // RFC 8707: reject an out-of-allowlist `resource` early (invalid_target), before
+    // rendering the login UI, so the client fails fast instead of at /oauth/login.
+    try {
+      validateRequestedResource(q.resource);
+    } catch {
       reply.status(400).send(buildPublicErrorBody({ statusCode: 400 }));
       return;
     }

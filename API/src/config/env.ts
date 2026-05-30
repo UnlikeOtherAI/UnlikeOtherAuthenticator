@@ -126,6 +126,11 @@ const EnvSchema = z
     // Comma-separated OAuth scopes advertised in metadata (informational; this profile
     // grants full user context like the rest of the service). Defaults to "openid".
     MCP_OAUTH_SCOPES_SUPPORTED: z.string().min(1).optional(),
+    // Optional comma-separated allowlist of resource-server URIs (RFC 8707) this profile
+    // may issue tokens for. When a client supplies `resource`, it must exactly match one
+    // of these; otherwise the request is rejected (invalid_target). Closes the
+    // confused-deputy: a public client cannot mint a token for an arbitrary `aud`.
+    MCP_OAUTH_RESOURCES_SUPPORTED: z.string().min(1).optional(),
   });
 
 export type Env = z.infer<typeof EnvSchema>;
@@ -197,6 +202,20 @@ export function getPublicBaseUrl(env: Env = getEnv()): string {
  *  gated on an access-token signing key being configured. */
 export function isMcpOAuthEnabled(env: Env = getEnv()): boolean {
   return Boolean(env.MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK);
+}
+
+/**
+ * Allowlist of resource-server URIs (RFC 8707) the MCP OAuth profile may issue tokens
+ * for. Empty when MCP_OAUTH_RESOURCES_SUPPORTED is unset. Values are NOT lowercased —
+ * resource URIs are case-sensitive.
+ */
+export function getMcpOAuthResources(env: Env = getEnv()): string[] {
+  const raw = env.MCP_OAUTH_RESOURCES_SUPPORTED?.trim();
+  if (!raw) return [];
+  return raw
+    .split(',')
+    .map((resource) => resource.trim())
+    .filter((resource) => resource.length > 0);
 }
 
 /**
