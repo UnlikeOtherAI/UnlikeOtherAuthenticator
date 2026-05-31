@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { ActionButton, ActionDivider } from '../components/ui/ActionButton';
@@ -17,6 +18,8 @@ import { EditOrganisationDialog } from '../components/dialogs/EditOrganisationDi
 import { PreapprovalDialog } from '../components/dialogs/PreapprovalDialog';
 import { TeamDialog } from '../components/dialogs/TeamDialog';
 import { TransferOwnershipDialog } from '../components/dialogs/TransferOwnershipDialog';
+import { LoginRestrictionSection } from '../components/sections/LoginRestrictionSection';
+import { adminService } from '../services/admin-service';
 import { useOrganisationQuery } from '../features/admin/admin-queries';
 import type { OrganisationMember, PreapprovedMember } from '../features/admin/types';
 import { TeamTable } from '../features/admin/TeamTable';
@@ -36,10 +39,16 @@ type DialogState =
 export function OrganisationDetailPage() {
   const { orgId } = useParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { confirm, openUser } = useAdminUi();
   const [dialog, setDialog] = useState<DialogState | null>(null);
   const closeDialog = () => setDialog(null);
   const { data: org, isLoading } = useOrganisationQuery(orgId);
+  const updateRestriction = useMutation({
+    mutationFn: (allowedEmailDomains: string[]) =>
+      adminService.updateOrganisation(orgId ?? '', { allowedEmailDomains }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin'] }),
+  });
   const [tab, setTab] = useState<OrgTab>('teams');
   const { pageItems: teamPageItems, pagination: teamPagination } = usePagination(org?.teams ?? []);
   const { pageItems: memberPageItems, pagination: memberPagination } = usePagination(org?.members ?? []);
@@ -73,6 +82,14 @@ export function OrganisationDetailPage() {
         <MetricCard label="Owner" value={org.owner.name ?? org.owner.email} action={<button className="text-xs font-medium text-indigo-600 hover:text-indigo-900" type="button" onClick={() => openUser(org.owner.id)}>{org.owner.email}</button>} />
         <MetricCard label="Members" value={String(org.members.length)} />
         <MetricCard label="Teams" value={String(org.teams.length)} />
+      </div>
+      <div className="mb-5">
+        <LoginRestrictionSection
+          title="Login email-domain restriction"
+          description="Only users whose email domain matches one of these can sign in to this organisation. Empty = no restriction. Superusers always bypass."
+          value={org.allowedEmailDomains}
+          onSave={(next) => updateRestriction.mutateAsync(next)}
+        />
       </div>
       <SegmentedTabs<OrgTab> value={tab} onChange={setTab} options={[{ label: 'Teams', value: 'teams' }, { label: 'Members', value: 'members' }, { label: 'Pre-approved', value: 'preapproved' }]} />
       {tab === 'teams' ? (

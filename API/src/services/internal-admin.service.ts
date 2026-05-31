@@ -10,6 +10,8 @@ export {
   getAdminOrganisations,
   getAdminTeam,
   getAdminTeams,
+  updateAdminOrganisation,
+  updateAdminTeam,
 } from './internal-admin.service.organisations.js';
 export { getAdminLogs, getAdminUser, getAdminUsers } from './internal-admin.service.users.js';
 

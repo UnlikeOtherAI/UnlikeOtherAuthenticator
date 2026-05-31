@@ -4,6 +4,7 @@ import type { ClientConfig } from './config.service.js';
 
 import { buildRedirectToUrl, issueAuthorizationCode } from './token.service.js';
 import { handlePostAuthenticationAccessRequest } from './access-request.service.js';
+import { assertEmailDomainAllowedForLogin } from './login-domain-policy.service.js';
 
 type FinalizeDeps = {
   prisma?: PrismaClient;
@@ -45,6 +46,13 @@ export async function finalizeAuthenticatedUser(
   | { status: 'granted'; redirectTo: string; code: string }
   | { status: 'requested'; redirectTo: string }
 > {
+  // Allowed-login-email-domain restrictions (client domain / org / team). SUPERUSER bypasses.
+  // Runs on the BYPASSRLS admin client, so it does not receive the request's tenant prisma.
+  await assertEmailDomainAllowedForLogin({
+    userId: params.userId,
+    domain: params.config.domain,
+  });
+
   if (params.requestAccess) {
     const decision = await handlePostAuthenticationAccessRequest(
       {

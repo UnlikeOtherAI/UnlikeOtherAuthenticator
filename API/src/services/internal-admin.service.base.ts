@@ -81,6 +81,7 @@ export function formatAdminOrganisation(
     isDefault: team.isDefault,
     members: team._count.members,
     orgName: org.name,
+    allowedEmailDomains: team.allowedEmailDomains,
   }));
 
   const members = org.members.map((member) => {
@@ -110,6 +111,7 @@ export function formatAdminOrganisation(
     id: org.id,
     name: org.name,
     slug: org.slug,
+    allowedEmailDomains: org.allowedEmailDomains,
     created: displayDate(org.createdAt),
     owner: { id: org.owner.id, name: org.owner.name, email: org.owner.email },
     teams,

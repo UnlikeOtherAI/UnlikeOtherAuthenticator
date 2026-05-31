@@ -1,4 +1,6 @@
 import { getAdminPrisma } from '../db/prisma.js';
+import { normalizeAllowedEmailDomains } from '../utils/email-domain-list.js';
+import { AppError } from '../utils/errors.js';
 import {
   DEFAULT_LIST_LIMIT,
   adminOrganisationArgs,
@@ -57,4 +59,37 @@ export async function getAdminTeams(limit?: number) {
 export async function getAdminTeam(orgId: string, teamId: string) {
   const org = await getAdminOrganisation(orgId);
   return org ? { org, team: org.teams.find((team) => team.id === teamId) ?? null } : null;
+}
+
+export async function updateAdminOrganisation(
+  orgId: string,
+  input: { allowedEmailDomains: string[] },
+) {
+  const prisma = getAdminPrisma();
+  const existing = await prisma.organisation.findUnique({ where: { id: orgId }, select: { id: true } });
+  if (!existing) throw new AppError('NOT_FOUND', 404, 'ORGANISATION_NOT_FOUND');
+
+  await prisma.organisation.update({
+    where: { id: orgId },
+    data: { allowedEmailDomains: normalizeAllowedEmailDomains(input.allowedEmailDomains) },
+  });
+
+  return getAdminOrganisation(orgId);
+}
+
+export async function updateAdminTeam(
+  orgId: string,
+  teamId: string,
+  input: { allowedEmailDomains: string[] },
+) {
+  const prisma = getAdminPrisma();
+  const team = await prisma.team.findFirst({ where: { id: teamId, orgId }, select: { id: true } });
+  if (!team) throw new AppError('NOT_FOUND', 404, 'TEAM_NOT_FOUND');
+
+  await prisma.team.update({
+    where: { id: teamId },
+    data: { allowedEmailDomains: normalizeAllowedEmailDomains(input.allowedEmailDomains) },
+  });
+
+  return getAdminTeam(orgId, teamId);
 }

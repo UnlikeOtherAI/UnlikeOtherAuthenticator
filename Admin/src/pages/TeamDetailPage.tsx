@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import { ActionButton, ActionDivider } from '../components/ui/ActionButton';
@@ -12,6 +13,8 @@ import { DataTable, PaginationFooter, Td, usePagination } from '../components/ui
 import { AddMemberDialog } from '../components/dialogs/AddMemberDialog';
 import { ChangeTeamRoleDialog } from '../components/dialogs/ChangeTeamRoleDialog';
 import { TeamDialog } from '../components/dialogs/TeamDialog';
+import { LoginRestrictionSection } from '../components/sections/LoginRestrictionSection';
+import { adminService } from '../services/admin-service';
 import { useTeamQuery } from '../features/admin/admin-queries';
 import type { OrganisationMember } from '../features/admin/types';
 import { useAdminUi } from '../features/shell/admin-ui';
@@ -24,10 +27,16 @@ type DialogState =
 export function TeamDetailPage() {
   const { orgId, teamId } = useParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { confirm, openUser } = useAdminUi();
   const [dialog, setDialog] = useState<DialogState | null>(null);
   const closeDialog = () => setDialog(null);
   const { data, isLoading } = useTeamQuery(orgId, teamId);
+  const updateRestriction = useMutation({
+    mutationFn: (allowedEmailDomains: string[]) =>
+      adminService.updateTeam(orgId ?? '', teamId ?? '', { allowedEmailDomains }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin'] }),
+  });
   const teamName = data?.team?.name;
   const members = data?.org && teamName ? data.org.members.filter((member) => member.teams.includes(teamName)) : [];
   const { pageItems, pagination } = usePagination(members);
@@ -57,6 +66,14 @@ export function TeamDetailPage() {
           </>
         }
       />
+      <div className="mb-5">
+        <LoginRestrictionSection
+          title="Login email-domain restriction"
+          description="Only users whose email domain matches one of these can sign in while a member of this team. Empty = no restriction. Superusers always bypass."
+          value={team.allowedEmailDomains}
+          onSave={(next) => updateRestriction.mutateAsync(next)}
+        />
+      </div>
       <Card>
         <CardHeader>
           <span className="text-sm font-semibold text-gray-900">Members ({members.length})</span>

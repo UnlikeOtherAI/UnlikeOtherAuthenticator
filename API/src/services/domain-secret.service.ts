@@ -10,6 +10,7 @@ import {
   generateClientSecret,
 } from '../utils/client-hash.js';
 import { normalizeDomain } from '../utils/domain.js';
+import { normalizeAllowedEmailDomains } from '../utils/email-domain-list.js';
 import { AppError } from '../utils/errors.js';
 import { writeAuditLog, type AuditLogPrisma } from './audit-log.service.js';
 import {
@@ -160,13 +161,23 @@ export async function createAdminDomain(
 }
 
 export async function updateAdminDomain(
-  params: { domain: string; label?: string; status?: DomainStatus; actorEmail: string },
+  params: {
+    domain: string;
+    label?: string;
+    status?: DomainStatus;
+    allowedEmailDomains?: string[];
+    actorEmail: string;
+  },
   deps?: { prisma?: DomainSecretPrisma },
 ): Promise<DomainWithActiveSecret> {
   const prisma = prismaClient(deps);
   const domain = normalizeDomain(params.domain);
   const label = params.label === undefined ? undefined : labelForDomain(domain, params.label);
   const status = params.status === undefined ? undefined : normalizeStatus(params.status);
+  const allowedEmailDomains =
+    params.allowedEmailDomains === undefined
+      ? undefined
+      : normalizeAllowedEmailDomains(params.allowedEmailDomains);
 
   return prisma.$transaction(async (tx) => {
     const prior = await tx.clientDomain.findUnique({
@@ -176,8 +187,17 @@ export async function updateAdminDomain(
 
     const row = await tx.clientDomain.upsert({
       where: { domain },
-      create: { domain, label: label ?? domain, status: status ?? 'active' },
-      update: { ...(label ? { label } : {}), ...(status ? { status } : {}) },
+      create: {
+        domain,
+        label: label ?? domain,
+        status: status ?? 'active',
+        ...(allowedEmailDomains ? { allowedEmailDomains } : {}),
+      },
+      update: {
+        ...(label ? { label } : {}),
+        ...(status ? { status } : {}),
+        ...(allowedEmailDomains ? { allowedEmailDomains } : {}),
+      },
       ...domainWithActiveSecret,
     });
 

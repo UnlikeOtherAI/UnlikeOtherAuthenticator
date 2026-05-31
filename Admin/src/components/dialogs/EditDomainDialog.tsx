@@ -6,16 +6,18 @@ import { FieldShell, SelectField, TextField } from '../ui/FormFields';
 import { Modal } from '../ui/Modal';
 import { adminService } from '../../services/admin-service';
 import type { Domain } from '../../features/admin/types';
+import { AllowedEmailDomainsField } from '../sections/AllowedEmailDomainsField';
 import { DomainSigningKeysSection } from '../sections/DomainSigningKeysSection';
 
 type DomainFormState = {
   label: string;
   status: 'active' | 'disabled';
+  allowedEmailDomains: string[];
 };
 
 export function EditDomainDialog({ domain, onClose, open }: { domain: Domain | null; onClose: () => void; open: boolean }) {
   const queryClient = useQueryClient();
-  const [form, setForm] = useState<DomainFormState>({ label: '', status: 'active' });
+  const [form, setForm] = useState<DomainFormState>({ label: '', status: 'active', allowedEmailDomains: [] });
   const updateDomain = useMutation({
     mutationFn: (input: { domain: string; values: DomainFormState }) =>
       adminService.updateDomain(input.domain, input.values),
@@ -27,6 +29,7 @@ export function EditDomainDialog({ domain, onClose, open }: { domain: Domain | n
     setForm({
       label: domain.label,
       status: domain.status === 'disabled' ? 'disabled' : 'active',
+      allowedEmailDomains: domain.allowedEmailDomains,
     });
   }, [domain]);
 
@@ -65,6 +68,15 @@ export function EditDomainDialog({ domain, onClose, open }: { domain: Domain | n
               <option value="active">Active</option>
               <option value="disabled">Disabled</option>
             </SelectField>
+          </FieldShell>
+          <FieldShell
+            label="Login email-domain restriction"
+            hint="Only users whose email domain matches one of these can sign in to this domain. Empty = no restriction. Superusers always bypass."
+          >
+            <AllowedEmailDomainsField
+              value={form.allowedEmailDomains}
+              onChange={(next) => setForm({ ...form, allowedEmailDomains: next })}
+            />
           </FieldShell>
           <DomainSigningKeysSection domain={domain.name} />
         </div>

@@ -47,8 +47,17 @@ export const adminService = {
       domain: input.domain,
       label: input.label,
     }),
-  updateDomain: (domain: string, input: { label?: string; status?: 'active' | 'disabled' }) =>
-    api.put<Domain>(`/internal/admin/domains/${encodeURIComponent(domain)}`, input),
+  updateDomain: (
+    domain: string,
+    input: { label?: string; status?: 'active' | 'disabled'; allowedEmailDomains?: string[] },
+  ) =>
+    api.put<Domain>(`/internal/admin/domains/${encodeURIComponent(domain)}`, {
+      ...(input.label !== undefined ? { label: input.label } : {}),
+      ...(input.status !== undefined ? { status: input.status } : {}),
+      ...(input.allowedEmailDomains !== undefined
+        ? { allowed_email_domains: input.allowedEmailDomains }
+        : {}),
+    }),
   rotateDomainSecret: (domain: string, deliveryMode: IntegrationClaimDeliveryMode = 'email') =>
     api.post<DomainRotateResponse>(
       `/internal/admin/domains/${encodeURIComponent(domain)}/rotate-secret`,
@@ -79,10 +88,20 @@ export const adminService = {
   getOrganisations: () => api.get<AdminData['organisations']>('/internal/admin/organisations'),
   getOrganisation: (orgId: string) =>
     api.get<AdminData['organisations'][number] | null>(`/internal/admin/organisations/${encodeURIComponent(orgId)}`),
+  updateOrganisation: (orgId: string, input: { allowedEmailDomains: string[] }) =>
+    api.patch<AdminData['organisations'][number] | null>(
+      `/internal/admin/organisations/${encodeURIComponent(orgId)}`,
+      { allowed_email_domains: input.allowedEmailDomains },
+    ),
   getTeams: () => api.get<Array<Team & { orgName: string }>>('/internal/admin/teams'),
   getTeam: (orgId: string, teamId: string) =>
     api.get<{ org: AdminData['organisations'][number]; team: Team | null } | null>(
       `/internal/admin/organisations/${encodeURIComponent(orgId)}/teams/${encodeURIComponent(teamId)}`,
+    ),
+  updateTeam: (orgId: string, teamId: string, input: { allowedEmailDomains: string[] }) =>
+    api.patch<{ org: AdminData['organisations'][number]; team: Team | null } | null>(
+      `/internal/admin/organisations/${encodeURIComponent(orgId)}/teams/${encodeURIComponent(teamId)}`,
+      { allowed_email_domains: input.allowedEmailDomains },
     ),
   getUsers: () => api.get<UserSummary[]>('/internal/admin/users'),
   getUser: (userId: string) => api.get<UserSummary | null>(`/internal/admin/users/${encodeURIComponent(userId)}`),
