@@ -131,6 +131,32 @@ export const adminService = {
       domain: input.domain,
       org_id: input.orgId,
     }),
+  createFeatureFlag: (appId: string, input: { key: string; description?: string; defaultState: boolean }) =>
+    api.post<AppFlagSummary>(`/internal/admin/apps/${encodeURIComponent(appId)}/flags`, {
+      key: input.key,
+      description: input.description,
+      default_state: input.defaultState,
+    }),
+  updateFeatureFlag: (appId: string, flagId: string, input: { key: string; description?: string; defaultState: boolean }) =>
+    api.patch<AppFlagSummary>(
+      `/internal/admin/apps/${encodeURIComponent(appId)}/flags/${encodeURIComponent(flagId)}`,
+      {
+        key: input.key,
+        description: input.description,
+        default_state: input.defaultState,
+      },
+    ),
+  deleteFeatureFlag: (appId: string, flagId: string) =>
+    api.delete<AppFlagSummary>(`/internal/admin/apps/${encodeURIComponent(appId)}/flags/${encodeURIComponent(flagId)}`),
+  createKillSwitch: (appId: string, input: KillSwitchInput) =>
+    api.post<AppFlagSummary>(`/internal/admin/apps/${encodeURIComponent(appId)}/kill-switches`, toKillSwitchBody(input)),
+  updateKillSwitch: (appId: string, killSwitchId: string, input: KillSwitchInput) =>
+    api.patch<AppFlagSummary>(
+      `/internal/admin/apps/${encodeURIComponent(appId)}/kill-switches/${encodeURIComponent(killSwitchId)}`,
+      toKillSwitchBody(input),
+    ),
+  deleteKillSwitch: (appId: string, killSwitchId: string) =>
+    api.delete<AppFlagSummary>(`/internal/admin/apps/${encodeURIComponent(appId)}/kill-switches/${encodeURIComponent(killSwitchId)}`),
   search: (query: string) => api.get<SearchResult[]>(`/internal/admin/search?q=${encodeURIComponent(query)}`),
   getIntegrationRequests: (status?: IntegrationRequestStatus) => {
     const suffix = status ? `?status=${status}` : '';
@@ -179,6 +205,38 @@ export const adminService = {
   revokeSuperuser: (userId: string) =>
     api.delete<unknown>(`/internal/admin/superusers/${encodeURIComponent(userId)}`),
 };
+
+export type KillSwitchInput = {
+  name?: string;
+  platform: string;
+  type: 'hard' | 'soft' | 'info' | 'maintenance';
+  versionField: 'versionName' | 'versionCode' | 'buildNumber';
+  operator: 'lt' | 'lte' | 'eq' | 'gte' | 'gt' | 'range';
+  versionValue: string;
+  versionMax?: string | null;
+  versionScheme: 'semver' | 'integer' | 'date' | 'custom';
+  latestVersion?: string | null;
+  active: boolean;
+  priority: number;
+  cacheTtl?: number;
+};
+
+function toKillSwitchBody(input: KillSwitchInput) {
+  return {
+    name: input.name,
+    platform: input.platform,
+    type: input.type,
+    version_field: input.versionField,
+    operator: input.operator,
+    version_value: input.versionValue,
+    version_max: input.versionMax,
+    version_scheme: input.versionScheme,
+    latest_version: input.latestVersion,
+    active: input.active,
+    priority: input.priority,
+    cache_ttl: input.cacheTtl,
+  };
+}
 
 export type AdminServiceData = AdminData;
 export type TeamWithOrg = Team & { orgName: string };

@@ -35,3 +35,28 @@ export const RegisterAppFormSchema = z.object({
 });
 
 export type RegisterAppFormValues = z.infer<typeof RegisterAppFormSchema>;
+
+export const FeatureFlagFormSchema = z.object({
+  key: z.string().trim().min(1, 'Flag key is required.').max(80, 'Flag key is too long.'),
+  description: z.string().trim().max(500, 'Description is too long.').optional(),
+  defaultState: z.enum(['enabled', 'disabled']),
+});
+
+export type FeatureFlagFormValues = z.infer<typeof FeatureFlagFormSchema>;
+
+export const KillSwitchFormSchema = z.object({
+  name: z.string().trim().max(120, 'Rule name is too long.').optional(),
+  platform: z.string().trim().min(1, 'Platform is required.'),
+  type: z.enum(['hard', 'soft', 'info', 'maintenance']),
+  versionField: z.enum(['versionName', 'versionCode', 'buildNumber']),
+  operator: z.enum(['lt', 'lte', 'eq', 'gte', 'gt', 'range']),
+  versionValue: z.string().trim().min(1, 'Version value is required.').max(80, 'Version value is too long.'),
+  versionMax: z.string().trim().max(80, 'Maximum is too long.').optional(),
+  versionScheme: z.enum(['semver', 'integer', 'date', 'custom']),
+  latestVersion: z.string().trim().max(80, 'Latest version is too long.').optional(),
+  active: z.enum(['active', 'paused']),
+  priority: z.coerce.number().int().min(0).max(1000),
+  cacheTtl: z.coerce.number().int().min(60).max(86400),
+});
+
+export type KillSwitchFormValues = z.infer<typeof KillSwitchFormSchema>;

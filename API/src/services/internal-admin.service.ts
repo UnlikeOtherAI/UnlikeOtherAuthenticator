@@ -5,7 +5,16 @@ import { getAdminDomains } from './internal-admin.service.domains.js';
 import { getAdminOrganisations } from './internal-admin.service.organisations.js';
 import { getAdminLogs, getAdminUsers } from './internal-admin.service.users.js';
 
-export { createAdminApp, getAdminApps } from './internal-admin.service.apps.js';
+export {
+  createAdminApp,
+  createAdminFeatureFlag,
+  createAdminKillSwitch,
+  deleteAdminFeatureFlag,
+  deleteAdminKillSwitch,
+  getAdminApps,
+  updateAdminFeatureFlag,
+  updateAdminKillSwitch,
+} from './internal-admin.service.apps.js';
 export { getAdminDomain, getAdminDomains } from './internal-admin.service.domains.js';
 export {
   createAdminOrganisation,

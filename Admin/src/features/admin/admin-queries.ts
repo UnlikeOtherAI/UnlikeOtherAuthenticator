@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { adminService } from '../../services/admin-service';
 import type { AppPlatformKind, IntegrationRequestStatus } from './types';
+import type { KillSwitchInput } from '../../services/admin-service';
 
 export function useDashboardQuery() {
   return useQuery({ queryKey: ['admin', 'dashboard'], queryFn: adminService.getDashboard });
@@ -90,6 +91,67 @@ export function useCreateAppMutation() {
       void queryClient.invalidateQueries({ queryKey: ['admin', 'dashboard'] });
       void queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] });
     },
+  });
+}
+
+function invalidateFeatureFlagQueries(queryClient: ReturnType<typeof useQueryClient>) {
+  void queryClient.invalidateQueries({ queryKey: ['admin', 'dashboard'] });
+  void queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] });
+}
+
+export function useCreateFeatureFlagMutation(appId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: { key: string; description?: string; defaultState: boolean }) =>
+      adminService.createFeatureFlag(appId, input),
+    onSuccess: () => invalidateFeatureFlagQueries(queryClient),
+  });
+}
+
+export function useUpdateFeatureFlagMutation(appId: string, flagId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: { key: string; description?: string; defaultState: boolean }) =>
+      adminService.updateFeatureFlag(appId, flagId, input),
+    onSuccess: () => invalidateFeatureFlagQueries(queryClient),
+  });
+}
+
+export function useDeleteFeatureFlagMutation(appId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (flagId: string) => adminService.deleteFeatureFlag(appId, flagId),
+    onSuccess: () => invalidateFeatureFlagQueries(queryClient),
+  });
+}
+
+export function useCreateKillSwitchMutation(appId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: KillSwitchInput) => adminService.createKillSwitch(appId, input),
+    onSuccess: () => invalidateFeatureFlagQueries(queryClient),
+  });
+}
+
+export function useUpdateKillSwitchMutation(appId: string, killSwitchId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: KillSwitchInput) => adminService.updateKillSwitch(appId, killSwitchId, input),
+    onSuccess: () => invalidateFeatureFlagQueries(queryClient),
+  });
+}
+
+export function useDeleteKillSwitchMutation(appId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (killSwitchId: string) => adminService.deleteKillSwitch(appId, killSwitchId),
+    onSuccess: () => invalidateFeatureFlagQueries(queryClient),
   });
 }
 

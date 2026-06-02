@@ -178,8 +178,8 @@ export function formatAdminApp(app: AdminAppRow) {
     killSwitches: app.killSwitches.map((entry) => ({
       id: entry.id,
       name: entry.name ?? `${entry.type} ${entry.versionValue}`,
-      platformMode: 'all',
-      platformIds: [],
+      platformMode: entry.platform === 'both' ? 'all' : 'selected',
+      platformIds: entry.platform === 'both' ? [] : [entry.platform],
       type: entry.type,
       versionField: entry.versionField,
       operator: entry.operator,

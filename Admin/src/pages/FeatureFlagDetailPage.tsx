@@ -26,7 +26,14 @@ import {
 import { FeatureFlagDialog } from '../components/dialogs/FeatureFlagDialog';
 import { KillSwitchDialog } from '../components/dialogs/KillSwitchDialog';
 import { RegisterPlatformDialog } from '../components/dialogs/RegisterPlatformDialog';
-import { useSettingsQuery, useUsersQuery } from '../features/admin/admin-queries';
+import {
+  useDeleteFeatureFlagMutation,
+  useDeleteKillSwitchMutation,
+  useSettingsQuery,
+  useUpdateFeatureFlagMutation,
+  useUpdateKillSwitchMutation,
+  useUsersQuery,
+} from '../features/admin/admin-queries';
 import { ALL_PLATFORMS_ID } from '../features/admin/platforms';
 import type { FeatureFlagDefinition, KillSwitchEntry } from '../features/admin/types';
 import { useAdminUi } from '../features/shell/admin-ui';
@@ -52,6 +59,9 @@ export function FeatureFlagDetailPage() {
   const [dialog, setDialog] = useState<DialogState | null>(null);
   const closeDialog = () => setDialog(null);
   const app = data?.apps.find((item) => item.id === appId);
+  const resolvedAppId = app?.id ?? '';
+  const flagDeleteMutation = useDeleteFeatureFlagMutation(resolvedAppId);
+  const killSwitchDeleteMutation = useDeleteKillSwitchMutation(resolvedAppId);
   const [selectedPlatformId, setSelectedPlatformId] = useState(defaultSelectedPlatformId);
   const [tab, setTab] = useCookieState<AppDetailTab>(`uoa-admin-feature-flags-tab-${appId ?? 'unknown'}`, 'flags', appDetailTabs);
 
@@ -159,13 +169,23 @@ export function FeatureFlagDetailPage() {
                   <p className="mt-0.5 text-xs text-gray-400">{flag.description}</p>
                 </Td>
                 <Td onClick={(event) => event.stopPropagation()}>
-                  <Switch checked={flag.defaultState} label={flag.defaultState ? 'Enabled' : 'Disabled'} onClick={() => confirm(`${flag.defaultState ? 'Disable' : 'Enable'} ${flag.key}?`, 'A production write endpoint is required before this can change stored flag defaults.')} />
+                  <FlagDefaultSwitch appId={app.id} flag={flag} />
                 </Td>
                 <Td><Badge variant={flag.platformMode === 'all' ? 'green' : 'blue'}>{flag.platformMode === 'all' ? 'All platforms' : 'Selected'}</Badge></Td>
                 <Td className="text-xs text-gray-500">{featureFlagPlatformLabel(app, flag)}</Td>
                 <Td className="text-xs text-gray-400">{flag.updated}</Td>
                 <Td className="whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
-                  <ActionButton aria-label={`Delete ${flag.key}`} tone="red" onClick={() => confirm(`Delete ${flag.key}?`, 'A production write endpoint is required before this can delete stored flag definitions.')}>Delete</ActionButton>
+                  <ActionButton
+                    aria-label={`Delete ${flag.key}`}
+                    tone="red"
+                    onClick={() =>
+                      confirm(`Delete ${flag.key}?`, 'This removes the stored flag definition and related overrides.', async () => {
+                        await flagDeleteMutation.mutateAsync(flag.id);
+                      })
+                    }
+                  >
+                    Delete
+                  </ActionButton>
                 </Td>
               </tr>
             ))}
@@ -205,11 +225,21 @@ export function FeatureFlagDetailPage() {
                 <Td className="text-xs text-gray-500">{killSwitch.latestVersion ?? '-'}</Td>
                 <Td className="text-xs text-gray-500">{killSwitchAudienceSummary(app, killSwitch, users)}</Td>
                 <Td onClick={(event) => event.stopPropagation()}>
-                  <Switch checked={killSwitch.active} label={killSwitch.active ? 'Active' : 'Paused'} tone="danger" onClick={() => confirm(`${killSwitch.active ? 'Pause' : 'Activate'} ${killSwitch.name}?`, 'A production write endpoint is required before this can change stored kill switch status.')} />
+                  <KillSwitchActiveSwitch appId={app.id} killSwitch={killSwitch} />
                 </Td>
                 <Td>{killSwitch.priority}</Td>
                 <Td className="whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
-                  <ActionButton aria-label={`Delete ${killSwitch.name}`} tone="red" onClick={() => confirm(`Delete ${killSwitch.name}?`, 'A production write endpoint is required before this can delete stored version rules.')}>Delete</ActionButton>
+                  <ActionButton
+                    aria-label={`Delete ${killSwitch.name}`}
+                    tone="red"
+                    onClick={() =>
+                      confirm(`Delete ${killSwitch.name}?`, 'This removes the stored version rule.', async () => {
+                        await killSwitchDeleteMutation.mutateAsync(killSwitch.id);
+                      })
+                    }
+                  >
+                    Delete
+                  </ActionButton>
                 </Td>
               </tr>
             ))}
@@ -281,6 +311,58 @@ function Metric({ label, value }: { label: string; value: string }) {
       <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">{label}</p>
       <p className="mt-1 text-lg font-semibold text-gray-900">{value}</p>
     </div>
+  );
+}
+
+function FlagDefaultSwitch({ appId, flag }: { appId: string; flag: FeatureFlagDefinition }) {
+  const { confirm } = useAdminUi();
+  const mutation = useUpdateFeatureFlagMutation(appId, flag.id);
+
+  return (
+    <Switch
+      checked={flag.defaultState}
+      label={flag.defaultState ? 'Enabled' : 'Disabled'}
+      onClick={() =>
+        confirm(`${flag.defaultState ? 'Disable' : 'Enable'} ${flag.key}?`, 'This changes the stored default flag state.', async () => {
+          await mutation.mutateAsync({
+            key: flag.key,
+            description: flag.description,
+            defaultState: !flag.defaultState,
+          });
+        })
+      }
+    />
+  );
+}
+
+function KillSwitchActiveSwitch({ appId, killSwitch }: { appId: string; killSwitch: KillSwitchEntry }) {
+  const { confirm } = useAdminUi();
+  const mutation = useUpdateKillSwitchMutation(appId, killSwitch.id);
+
+  return (
+    <Switch
+      checked={killSwitch.active}
+      label={killSwitch.active ? 'Active' : 'Paused'}
+      tone="danger"
+      onClick={() =>
+        confirm(`${killSwitch.active ? 'Pause' : 'Activate'} ${killSwitch.name}?`, 'This changes the stored kill switch status.', async () => {
+          await mutation.mutateAsync({
+            name: killSwitch.name,
+            platform: killSwitch.platformMode === 'selected' ? killSwitch.platformIds[0] ?? 'both' : 'both',
+            type: killSwitch.type,
+            versionField: killSwitch.versionField,
+            operator: killSwitch.operator,
+            versionValue: killSwitch.versionValue,
+            versionMax: killSwitch.versionMax,
+            versionScheme: killSwitch.versionScheme,
+            latestVersion: killSwitch.latestVersion,
+            active: !killSwitch.active,
+            priority: killSwitch.priority,
+            cacheTtl: killSwitch.cacheTtl,
+          });
+        })
+      }
+    />
   );
 }
 

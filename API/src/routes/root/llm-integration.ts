@@ -298,6 +298,7 @@ The first-party Admin UI is served from [/admin](/admin). It dogfoods the same a
 - \`GET /internal/admin/handshake-errors\` — sanitized handshake and config JWT errors for superusers, including redacted request/response context when \`config_url\` fetches fail before a JWT can be decoded.
 - \`POST /internal/admin/organisations\` — admin-only organisation creation for an existing owner user; creates the default \`General\` team.
 - \`POST /internal/admin/apps\` — admin-only app registration used by feature flags and \`/apps/startup\`.
+- \`POST/PATCH/DELETE /internal/admin/apps/:appId/flags\` and \`/kill-switches\` — admin-only feature flag definitions and version kill-switch rules.
 
 ---
 
