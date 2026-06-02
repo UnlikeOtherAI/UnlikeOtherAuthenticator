@@ -3,9 +3,11 @@ import { z } from 'zod';
 
 import { requireAdminSuperuser } from '../../../middleware/admin-superuser.js';
 import {
+  createAdminOrganisation,
   updateAdminOrganisation,
   updateAdminTeam,
 } from '../../../services/internal-admin.service.js';
+import { normalizeDomain } from '../../../utils/domain.js';
 
 const OrgParamsSchema = z.object({ orgId: z.string().trim().min(1) });
 const TeamParamsSchema = z.object({
@@ -15,6 +17,14 @@ const TeamParamsSchema = z.object({
 const AllowedEmailDomainsSchema = z
   .object({
     allowed_email_domains: z.array(z.string()).max(50),
+  })
+  .strict();
+const CreateOrganisationSchema = z
+  .object({
+    name: z.string().trim().min(1).max(100),
+    domain: z.string().trim().min(3).transform(normalizeDomain),
+    owner_email: z.string().trim().email(),
+    allowed_email_domains: z.array(z.string()).max(50).optional(),
   })
   .strict();
 
@@ -29,6 +39,16 @@ function adminRoute(responseSchema: Record<string, unknown>): RouteShorthandOpti
 }
 
 export function registerInternalAdminOrganisationRoutes(app: FastifyInstance): void {
+  app.post('/internal/admin/organisations', adminRoute(objectSchema), async (request) => {
+    const body = CreateOrganisationSchema.parse(request.body);
+    return createAdminOrganisation({
+      name: body.name,
+      domain: body.domain,
+      ownerEmail: body.owner_email,
+      allowedEmailDomains: body.allowed_email_domains,
+    });
+  });
+
   app.patch(
     '/internal/admin/organisations/:orgId',
     adminRoute(nullableObjectSchema),

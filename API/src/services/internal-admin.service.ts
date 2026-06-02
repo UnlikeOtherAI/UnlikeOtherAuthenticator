@@ -1,11 +1,14 @@
 import { listHandshakeErrorLogs } from './handshake-error-log.service.js';
 import { emptyBans, emptyData, getAdminStats } from './internal-admin.service.base.js';
+import { getAdminApps } from './internal-admin.service.apps.js';
 import { getAdminDomains } from './internal-admin.service.domains.js';
 import { getAdminOrganisations } from './internal-admin.service.organisations.js';
 import { getAdminLogs, getAdminUsers } from './internal-admin.service.users.js';
 
+export { createAdminApp, getAdminApps } from './internal-admin.service.apps.js';
 export { getAdminDomain, getAdminDomains } from './internal-admin.service.domains.js';
 export {
+  createAdminOrganisation,
   getAdminOrganisation,
   getAdminOrganisations,
   getAdminTeam,
@@ -49,7 +52,7 @@ export async function getAdminDashboard() {
 }
 
 export async function getAdminSettings() {
-  return { bans: emptyBans, apps: [] };
+  return { bans: emptyBans, apps: await getAdminApps() };
 }
 
 export async function searchAdmin(query: string) {

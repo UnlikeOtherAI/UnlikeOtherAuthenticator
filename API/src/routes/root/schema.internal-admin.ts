@@ -277,6 +277,19 @@ export const internalAdminEndpoints: EndpointSchema[] = [
     response: { 200: 'Admin organisation summary array', '401/403': authFailures },
   },
   {
+    method: 'POST',
+    path: '/internal/admin/organisations',
+    description: 'Create an organisation for an existing owner user; also creates the default General team',
+    auth: adminAuth,
+    body: {
+      name: 'string (required, max 100)',
+      domain: 'string (required)',
+      owner_email: 'email (required; must match an existing user)',
+      allowed_email_domains: 'string[] (optional, max 50)',
+    },
+    response: { 200: 'Created admin organisation object', '401/403': authFailures },
+  },
+  {
     method: 'GET',
     path: '/internal/admin/organisations/:orgId',
     description: 'Get one organisation with teams, members, and pre-approval rows',
@@ -335,6 +348,22 @@ export const internalAdminEndpoints: EndpointSchema[] = [
     description: 'Admin settings backing data for bans and apps',
     auth: adminAuth,
     response: { 200: '{ bans, apps }', '401/403': authFailures },
+  },
+  {
+    method: 'POST',
+    path: '/internal/admin/apps',
+    description: 'Register an app for feature flags and startup payload lookups',
+    auth: adminAuth,
+    body: {
+      name: 'string (required, max 120)',
+      identifier: 'string (required, max 160; unique per organisation)',
+      platform: 'ios | android | web | macos | windows | linux | iot | tv | console | other',
+      domain: 'string (required)',
+      org_id: 'string (required)',
+      offline_policy: 'allow | block | cached (optional)',
+      poll_interval_seconds: 'number (optional, 30-86400)',
+    },
+    response: { 200: 'Created app summary object', '401/403': authFailures },
   },
   {
     method: 'GET',

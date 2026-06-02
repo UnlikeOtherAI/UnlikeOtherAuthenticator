@@ -1,7 +1,7 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { adminService } from '../../services/admin-service';
-import type { IntegrationRequestStatus } from './types';
+import type { AppPlatformKind, IntegrationRequestStatus } from './types';
 
 export function useDashboardQuery() {
   return useQuery({ queryKey: ['admin', 'dashboard'], queryFn: adminService.getDashboard });
@@ -21,6 +21,19 @@ export function useDomainQuery(domain: string | undefined) {
 
 export function useOrganisationsQuery() {
   return useQuery({ queryKey: ['admin', 'organisations'], queryFn: adminService.getOrganisations });
+}
+
+export function useCreateOrganisationMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: adminService.createOrganisation,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'dashboard'] });
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'organisations'] });
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'domains'] });
+    },
+  });
 }
 
 export function useOrganisationQuery(orgId: string | undefined) {
@@ -65,6 +78,19 @@ export function useHandshakeErrorsQuery() {
 
 export function useSettingsQuery() {
   return useQuery({ queryKey: ['admin', 'settings'], queryFn: adminService.getSettings });
+}
+
+export function useCreateAppMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: { name: string; identifier: string; platform: AppPlatformKind; domain: string; orgId: string }) =>
+      adminService.createApp(input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'dashboard'] });
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] });
+    },
+  });
 }
 
 export function useIntegrationRequestsQuery(status?: IntegrationRequestStatus) {

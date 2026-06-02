@@ -296,6 +296,8 @@ The first-party Admin UI is served from [/admin](/admin). It dogfoods the same a
 - \`GET /org/me\` — current user's org context.
 - \`POST /email/send\` — send a transactional email for a configured domain. Supply \`X-UOA-Config-JWT: <signed config JWT>\`; UOA verifies the RS256 config JWT directly from the header, requires the domain email config to be enabled and SES verification/DKIM to both be \`Success\`, then sends \`{ to, subject, text, html?, reply_to? }\`.
 - \`GET /internal/admin/handshake-errors\` — sanitized handshake and config JWT errors for superusers, including redacted request/response context when \`config_url\` fetches fail before a JWT can be decoded.
+- \`POST /internal/admin/organisations\` — admin-only organisation creation for an existing owner user; creates the default \`General\` team.
+- \`POST /internal/admin/apps\` — admin-only app registration used by feature flags and \`/apps/startup\`.
 
 ---
 

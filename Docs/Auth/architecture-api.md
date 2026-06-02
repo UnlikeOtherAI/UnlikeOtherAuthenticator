@@ -107,6 +107,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
           domains.ts                — Domain CRUD for the admin panel
           domain-email.ts           — Per-domain transactional email config + SES identity flow
           domain-jwks.ts            — Per-domain JWKS management
+          apps.ts                   — App registration for feature flags
           superusers.ts             — Super-user grant/revoke for ADMIN_AUTH_DOMAIN
           integration-requests.ts   — Integration-request management
           index.ts                  — Route registration for /internal/admin
@@ -181,6 +182,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       integration-request.service.ts        — Integration request orchestration
       integration-status-page.service.ts    — Integration status HTML page
       internal-admin.service.ts             — Shared logic for /internal/admin/* (orchestration entry point)
+      internal-admin.service.apps.ts        — Admin app registration and app summary formatting
       internal-admin.service.base.ts        — Internal-admin service building blocks
       internal-admin.service.domains.ts     — Domain admin operations
       internal-admin.service.organisations.ts — Organisation admin operations

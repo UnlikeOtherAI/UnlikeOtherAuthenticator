@@ -24,6 +24,14 @@ export const adminOrganisationArgs = {
 export type AdminOrganisationRow = Prisma.OrganisationGetPayload<typeof adminOrganisationArgs>;
 export type AdminLoginLogRow = { userId: string | null; authMethod: string; createdAt: Date };
 
+export type AdminAppRow = Prisma.AppGetPayload<{
+  include: {
+    org: { select: { id: true; name: true } };
+    flags: true;
+    killSwitches: true;
+  };
+}>;
+
 export const emptyBans = {
   emails: [],
   patterns: [],
@@ -125,6 +133,67 @@ export function formatAdminOrganisation(
       status: invite.acceptedAt ? 'claimed' : 'pending',
       created: displayDate(invite.createdAt),
     })),
+  };
+}
+
+function jsonStringArray(value: Prisma.JsonValue): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
+
+export function formatAdminApp(app: AdminAppRow) {
+  const domains = jsonStringArray(app.domains);
+  const platform = app.platform;
+
+  return {
+    id: app.id,
+    name: app.name,
+    identifier: app.identifier,
+    domain: domains[0] ?? '',
+    org: app.org.name,
+    orgId: app.org.id,
+    platform,
+    domains,
+    storeUrl: app.storeUrl ?? undefined,
+    offlinePolicy: app.offlinePolicy,
+    pollIntervalSeconds: app.pollIntervalSeconds,
+    flags: app.flags.length,
+    platforms: [
+      {
+        id: `${app.id}:${platform}`,
+        name: platform,
+        key: platform,
+        kind: platform,
+        identifier: app.identifier,
+      },
+    ],
+    flagDefinitions: app.flags.map((flag) => ({
+      id: flag.id,
+      key: flag.key,
+      description: flag.description ?? '',
+      defaultState: flag.defaultState,
+      platformMode: 'all',
+      platformIds: [],
+      updated: displayDate(flag.updatedAt),
+    })),
+    killSwitches: app.killSwitches.map((entry) => ({
+      id: entry.id,
+      name: entry.name ?? `${entry.type} ${entry.versionValue}`,
+      platformMode: 'all',
+      platformIds: [],
+      type: entry.type,
+      versionField: entry.versionField,
+      operator: entry.operator,
+      versionValue: entry.versionValue,
+      versionMax: entry.versionMax,
+      versionScheme: entry.versionScheme,
+      latestVersion: entry.latestVersion ?? undefined,
+      active: entry.active,
+      priority: entry.priority,
+      cacheTtl: entry.cacheTtl,
+      updated: displayDate(entry.updatedAt),
+    })),
+    audienceGroups: [],
+    status: app.active ? 'active' : 'disabled',
   };
 }
 

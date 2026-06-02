@@ -4,11 +4,15 @@ import { AppError } from '../utils/errors.js';
 import {
   DEFAULT_LIST_LIMIT,
   adminOrganisationArgs,
+  displayDate,
   formatAdminOrganisation,
   isDatabaseEnabled,
   latestLogsByUser,
   listLimit,
+  normalizeDomain,
 } from './internal-admin.service.base.js';
+import { deriveSlugWithValidation, isP2002Error, isP2003Error } from './organisation.service.base.js';
+import { deriveUniqueTeamSlug } from './team.service.base.js';
 
 export async function getAdminOrganisations(limit?: number) {
   if (!isDatabaseEnabled()) return [];
@@ -59,6 +63,66 @@ export async function getAdminTeams(limit?: number) {
 export async function getAdminTeam(orgId: string, teamId: string) {
   const org = await getAdminOrganisation(orgId);
   return org ? { org, team: org.teams.find((team) => team.id === teamId) ?? null } : null;
+}
+
+export async function createAdminOrganisation(input: {
+  name: string;
+  domain: string;
+  ownerEmail: string;
+  allowedEmailDomains?: string[];
+}) {
+  const prisma = getAdminPrisma();
+  const name = input.name.trim();
+  const domain = normalizeDomain(input.domain);
+  const ownerEmail = input.ownerEmail.trim().toLowerCase();
+  if (!name || name.length > 100 || !domain || !ownerEmail) {
+    throw new AppError('BAD_REQUEST', 400, 'INVALID_ORGANISATION_INPUT');
+  }
+
+  const owner = await prisma.user.findFirst({
+    where: { email: ownerEmail },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true },
+  });
+  if (!owner) throw new AppError('BAD_REQUEST', 400, 'OWNER_NOT_FOUND');
+
+  const created = await prisma.$transaction(async (tx) => {
+    const slug = await deriveSlugWithValidation(domain, tx, name);
+    const org = await tx.organisation.create({
+      data: {
+        domain,
+        name,
+        slug,
+        ownerId: owner.id,
+        allowedEmailDomains: normalizeAllowedEmailDomains(input.allowedEmailDomains ?? []),
+      },
+      select: { id: true, createdAt: true },
+    });
+    const team = await tx.team.create({
+      data: {
+        orgId: org.id,
+        name: 'General',
+        slug: await deriveUniqueTeamSlug({ orgId: org.id, prisma: tx, name: 'General' }),
+        isDefault: true,
+      },
+      select: { id: true },
+    });
+
+    try {
+      await tx.orgMember.create({ data: { orgId: org.id, userId: owner.id, role: 'owner' } });
+      await tx.teamMember.create({ data: { teamId: team.id, userId: owner.id, teamRole: 'owner' } });
+    } catch (err) {
+      if (isP2002Error(err) || isP2003Error(err)) throw new AppError('BAD_REQUEST', 400);
+      throw err;
+    }
+
+    return { id: org.id, createdAt: org.createdAt };
+  });
+
+  return {
+    ...(await getAdminOrganisation(created.id)),
+    created: displayDate(created.createdAt),
+  };
 }
 
 export async function updateAdminOrganisation(

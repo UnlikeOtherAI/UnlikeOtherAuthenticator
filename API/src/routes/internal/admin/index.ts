@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 
+import { registerInternalAdminAppRoutes } from './apps.js';
 import { registerInternalAdminConfigRoute } from './config.js';
 import { registerInternalAdminDomainEmailRoutes } from './domain-email.js';
 import { registerInternalAdminDomainJwkRoutes } from './domain-jwks.js';
@@ -15,6 +16,7 @@ export function registerInternalAdminRoutes(app: FastifyInstance): void {
   registerInternalAdminTokenRoute(app);
   registerInternalAdminReadRoutes(app);
   registerInternalAdminOrganisationRoutes(app);
+  registerInternalAdminAppRoutes(app);
   registerInternalAdminDomainRoutes(app);
   registerInternalAdminDomainEmailRoutes(app);
   registerInternalAdminDomainJwkRoutes(app);

@@ -13,7 +13,7 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { DataTable, PaginationFooter, Td, usePagination } from '../components/ui/Table';
 import { EditOrganisationDialog } from '../components/dialogs/EditOrganisationDialog';
 import { TransferOwnershipDialog } from '../components/dialogs/TransferOwnershipDialog';
-import { useOrganisationsQuery } from '../features/admin/admin-queries';
+import { useCreateOrganisationMutation, useOrganisationsQuery } from '../features/admin/admin-queries';
 import type { Organisation } from '../features/admin/types';
 import { useAdminUi } from '../features/shell/admin-ui';
 import { NewOrganisationFormSchema, type NewOrganisationFormValues } from '../schemas/admin';
@@ -101,15 +101,23 @@ export function OrganisationsPage() {
 }
 
 function NewOrganisationModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+  const mutation = useCreateOrganisationMutation();
   const [preapproved, setPreapproved] = useState<Array<{ email: string; role: string }>>([]);
   const [preapproveEmail, setPreapproveEmail] = useState('');
   const [preapproveRole, setPreapproveRole] = useState('member');
   const form = useForm<NewOrganisationFormValues>({
     resolver: zodResolver(NewOrganisationFormSchema),
-    defaultValues: { name: '', slug: '', description: '', ownerEmail: '' },
+    defaultValues: { name: '', domain: '', slug: '', description: '', ownerEmail: '' },
   });
 
-  function submit() {
+  async function submit(values: NewOrganisationFormValues) {
+    await mutation.mutateAsync({
+      name: values.name,
+      domain: values.domain,
+      ownerEmail: values.ownerEmail,
+    });
+    form.reset();
+    setPreapproved([]);
     onClose();
   }
 
@@ -133,7 +141,9 @@ function NewOrganisationModal({ isOpen, onClose }: { isOpen: boolean; onClose: (
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
-          <Button icon="check" variant="primary" onClick={form.handleSubmit(submit)}>Create Organisation</Button>
+          <Button icon="check" variant="primary" disabled={mutation.isPending} onClick={form.handleSubmit(submit)}>
+            {mutation.isPending ? 'Creating...' : 'Create Organisation'}
+          </Button>
         </>
       }
     >
@@ -148,8 +158,11 @@ function NewOrganisationModal({ isOpen, onClose }: { isOpen: boolean; onClose: (
             }}
           />
         </FieldShell>
+        <FieldShell label="Domain" hint="Primary domain for this organisation." error={form.formState.errors.domain?.message}>
+          <TextField {...form.register('domain')} className="font-mono" placeholder="app.example.com" />
+        </FieldShell>
         <FieldShell label="Slug" hint="URL-safe identifier, auto-generated." error={form.formState.errors.slug?.message}>
-          <TextField {...form.register('slug')} className="font-mono" placeholder="acme-engineering" />
+          <TextField {...form.register('slug')} className="font-mono" placeholder="acme-engineering" readOnly />
         </FieldShell>
         <FieldShell label="Description">
           <TextAreaField {...form.register('description')} rows={2} placeholder="What does this organisation do?" />
@@ -178,6 +191,7 @@ function NewOrganisationModal({ isOpen, onClose }: { isOpen: boolean; onClose: (
             )) : <p className="text-sm text-gray-400">No pre-approved members yet.</p>}
           </div>
         </div>
+        {mutation.isError ? <p className="text-sm text-red-600">Could not create the organisation.</p> : null}
       </form>
     </Modal>
   );

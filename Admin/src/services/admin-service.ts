@@ -1,6 +1,8 @@
 import type {
   AdminData,
   AdminSuperuser,
+  AppFlagSummary,
+  AppPlatformKind,
   Domain,
   DomainDirectoryDetail,
   DomainEmailRegistration,
@@ -86,6 +88,13 @@ export const adminService = {
   deleteDomainEmail: (domain: string) =>
     api.delete<unknown>(`/internal/admin/domains/${encodeURIComponent(domain)}/email`),
   getOrganisations: () => api.get<AdminData['organisations']>('/internal/admin/organisations'),
+  createOrganisation: (input: { name: string; domain: string; ownerEmail: string; allowedEmailDomains?: string[] }) =>
+    api.post<AdminData['organisations'][number]>('/internal/admin/organisations', {
+      name: input.name,
+      domain: input.domain,
+      owner_email: input.ownerEmail,
+      allowed_email_domains: input.allowedEmailDomains,
+    }),
   getOrganisation: (orgId: string) =>
     api.get<AdminData['organisations'][number] | null>(`/internal/admin/organisations/${encodeURIComponent(orgId)}`),
   updateOrganisation: (orgId: string, input: { allowedEmailDomains: string[] }) =>
@@ -108,6 +117,20 @@ export const adminService = {
   getLogs: () => api.get<AdminData['logs']>('/internal/admin/logs'),
   getHandshakeErrors: () => api.get<AdminData['handshakeErrors']>('/internal/admin/handshake-errors'),
   getSettings: () => api.get<Pick<AdminData, 'bans' | 'apps'>>('/internal/admin/settings'),
+  createApp: (input: {
+    name: string;
+    identifier: string;
+    platform: AppPlatformKind;
+    domain: string;
+    orgId: string;
+  }) =>
+    api.post<AppFlagSummary>('/internal/admin/apps', {
+      name: input.name,
+      identifier: input.identifier,
+      platform: input.platform,
+      domain: input.domain,
+      org_id: input.orgId,
+    }),
   search: (query: string) => api.get<SearchResult[]>(`/internal/admin/search?q=${encodeURIComponent(query)}`),
   getIntegrationRequests: (status?: IntegrationRequestStatus) => {
     const suffix = status ? `?status=${status}` : '';
