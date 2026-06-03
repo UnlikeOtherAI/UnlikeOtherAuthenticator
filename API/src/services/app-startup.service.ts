@@ -74,6 +74,10 @@ function jsonStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
 }
 
+function appDomains(value: unknown): string[] {
+  return jsonStringArray(value).map(normalizeDomain).filter(Boolean);
+}
+
 function versionForField(entry: KillSwitchRow, params: StartupParams): string | undefined {
   if (entry.versionField === 'versionName') return params.versionName;
   if (entry.versionField === 'versionCode') return params.versionCode;
@@ -237,12 +241,15 @@ export async function getAppStartup(
   const env = deps.env ?? getEnv();
   if (!env.DATABASE_URL) return emptyStartup(now);
 
-  const app = await deps.prisma.app.findFirst({
+  const domain = normalizeDomain(params.domain);
+  const apps = await deps.prisma.app.findMany({
     where: {
       identifier: normalizeIdentifier(params.appIdentifier),
-      org: { domain: normalizeDomain(params.domain) },
+      active: true,
     },
+    orderBy: { createdAt: 'asc' },
   });
+  const app = apps.find((candidate) => appDomains(candidate.domains).includes(domain));
   if (!app?.active) return emptyStartup(now);
 
   const [flags, killSwitchEntries] = await Promise.all([

@@ -204,7 +204,7 @@ Response:
 }
 \`\`\`
 
-- Unknown, inactive, or cross-domain apps return a clear startup payload: \`killSwitch: null\`, \`flags: {}\`.
+- Unknown, inactive, or cross-domain apps return a clear startup payload: \`killSwitch: null\`, \`flags: {}\`. App matching uses the registered \`appIdentifier\` plus the config JWT domain being present in the app's registered domains.
 - Feature flags return a flat key-to-boolean map. If feature flags are disabled for the App, \`flags\` is \`{}\`.
 - A matched hard or maintenance kill switch appears in \`killSwitch\`; callers should block startup before loading app content.
 

@@ -13,21 +13,24 @@ function makeApp(overrides: Record<string, unknown> = {}) {
   return {
     id: 'app_1',
     orgId: 'org_1',
+    domains: ['app.example.com'],
     storeUrl: 'https://example.com/store',
     active: true,
     featureFlagsEnabled: true,
+    createdAt: new Date('2026-04-22T10:00:00.000Z'),
     ...overrides,
   };
 }
 
 function makePrisma(overrides: {
   app?: unknown;
+  apps?: unknown[];
   definitions?: unknown[];
   overrides?: unknown[];
   killSwitches?: unknown[];
   membership?: unknown;
 } = {}) {
-  const appFindFirst = vi.fn(async () => overrides.app ?? makeApp());
+  const appFindMany = vi.fn(async () => overrides.apps ?? [overrides.app ?? makeApp()]);
   const definitionFindMany = vi.fn(async () => overrides.definitions ?? []);
   const overrideFindMany = vi.fn(async () => overrides.overrides ?? []);
   const killSwitchFindMany = vi.fn(async () => overrides.killSwitches ?? []);
@@ -35,14 +38,14 @@ function makePrisma(overrides: {
 
   return {
     mocks: {
-      appFindFirst,
+      appFindMany,
       definitionFindMany,
       overrideFindMany,
       killSwitchFindMany,
       orgMemberFindFirst,
     },
     prisma: {
-      app: { findFirst: appFindFirst },
+      app: { findMany: appFindMany },
       featureFlagDefinition: { findMany: definitionFindMany },
       featureFlagUserOverride: { findMany: overrideFindMany },
       killSwitchEntry: { findMany: killSwitchFindMany },
@@ -63,7 +66,7 @@ describe('getAppStartup', () => {
     expect(response.killSwitch).toBeNull();
     expect(response.flags).toEqual({});
     expect(response.cacheTtl).toBe(3600);
-    expect(mocks.appFindFirst).not.toHaveBeenCalled();
+    expect(mocks.appFindMany).not.toHaveBeenCalled();
   });
 
   it('returns default flags plus per-user overrides for org members', async () => {
@@ -86,6 +89,54 @@ describe('getAppStartup', () => {
     );
 
     expect(response.flags).toEqual({ dark_mode: true, new_checkout: true });
+  });
+
+  it('resolves apps by their registered domains instead of the organisation domain', async () => {
+    const { prisma, mocks } = makePrisma({
+      app: makeApp({
+        orgId: 'piano_org',
+        domains: ['api.voicepos.unlikeotherai.com'],
+      }),
+      definitions: [{ key: 'card_payment', defaultState: true }],
+    });
+
+    const response = await getAppStartup(
+      {
+        domain: 'api.voicepos.unlikeotherai.com',
+        appIdentifier: 'com.piano.hugo',
+        platform: 'ios',
+      },
+      { env: testEnv(), prisma },
+    );
+
+    expect(mocks.appFindMany).toHaveBeenCalledWith({
+      where: {
+        identifier: 'com.piano.hugo',
+        active: true,
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+    expect(response.flags).toEqual({ card_payment: true });
+  });
+
+  it('returns an empty startup response for apps not registered to the config domain', async () => {
+    const { prisma, mocks } = makePrisma({
+      app: makeApp({
+        domains: ['other.example.com'],
+      }),
+    });
+
+    const response = await getAppStartup(
+      {
+        domain: 'app.example.com',
+        appIdentifier: 'com.example.app',
+        platform: 'ios',
+      },
+      { env: testEnv(), prisma },
+    );
+
+    expect(response.flags).toEqual({});
+    expect(mocks.definitionFindMany).not.toHaveBeenCalled();
   });
 
   it('selects the highest-priority active kill switch', async () => {
