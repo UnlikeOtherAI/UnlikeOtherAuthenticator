@@ -6,6 +6,7 @@ import { requireAdminSuperuser } from '../../../middleware/admin-superuser.js';
 import { sendIntegrationApprovedEmail } from '../../../services/email.service.js';
 import {
   createAdminDomain,
+  directRotateDomainSecret,
   type DomainMutationResult,
   rotateAdminDomainSecret,
   updateAdminDomain,
@@ -181,6 +182,28 @@ export function registerInternalAdminDomainRoutes(app: FastifyInstance): void {
       const { domain } = DomainParamsSchema.parse(request.params);
       const body = DomainRotateSchema.parse(request.body ?? {});
       const actorEmail = requireActorEmail(request);
+      const deliveryMode = body.deliveryMode ?? 'email';
+
+      if (deliveryMode === 'reveal') {
+        const result = await directRotateDomainSecret({
+          domain,
+          clientSecret: body.client_secret,
+          actorEmail,
+        });
+        return {
+          domain: result.domain,
+          contact_email: actorEmail,
+          delivery_mode: deliveryMode,
+          email_dispatched: false,
+          hash_prefix: result.hashPrefix,
+          credentials: {
+            domain: result.domain,
+            client_secret: result.rawClientSecret,
+            client_hash: result.clientHash,
+            hash_prefix: result.hashPrefix,
+          },
+        };
+      }
 
       const result = await rotateAdminDomainSecret({
         domain,
@@ -188,14 +211,11 @@ export function registerInternalAdminDomainRoutes(app: FastifyInstance): void {
         actorEmail,
       });
 
-      const deliveryMode = body.deliveryMode ?? 'email';
-      const emailDispatched = deliveryMode === 'email'
-        ? await dispatchRotationClaimEmail({
-            to: result.contactEmail,
-            link: buildClaimUrl(result.claim.rawToken),
-            domain: result.domain,
-          })
-        : false;
+      const emailDispatched = await dispatchRotationClaimEmail({
+        to: result.contactEmail,
+        link: buildClaimUrl(result.claim.rawToken),
+        domain: result.domain,
+      });
 
       return {
         domain: result.domain,
@@ -203,16 +223,6 @@ export function registerInternalAdminDomainRoutes(app: FastifyInstance): void {
         delivery_mode: deliveryMode,
         email_dispatched: emailDispatched,
         hash_prefix: result.hashPrefix,
-        ...(deliveryMode === 'reveal'
-          ? {
-              credentials: {
-                domain: result.domain,
-                client_secret: result.rawClientSecret,
-                client_hash: result.clientHash,
-                hash_prefix: result.hashPrefix,
-              },
-            }
-          : {}),
       };
     },
   );

@@ -315,3 +315,60 @@ export async function rotateAdminDomainSecret(
     };
   });
 }
+
+export type DirectRotateDomainSecretResult = {
+  domain: string;
+  hashPrefix: string;
+  rawClientSecret: string;
+  clientHash: string;
+};
+
+/**
+ * Directly activate a new secret for a domain, without a claim token.
+ * Used for the admin "Rotate & reveal" flow on domains that have no integration
+ * request contact (i.e., domains created directly by an admin). Both the new
+ * secret and any existing active secrets remain valid so the partner can
+ * transition at their own pace.
+ */
+export async function directRotateDomainSecret(
+  params: { domain: string; clientSecret?: string; actorEmail: string },
+  deps?: { prisma?: DomainSecretPrisma },
+): Promise<DirectRotateDomainSecretResult> {
+  const prisma = prismaClient(deps);
+  const domain = normalizeDomain(params.domain);
+  const rawClientSecret = params.clientSecret?.trim() || generateClientSecret();
+  if (rawClientSecret.length < 32) {
+    throw new AppError('BAD_REQUEST', 400, 'CLIENT_SECRET_TOO_SHORT');
+  }
+  const clientHash = createDomainClientHash(domain, rawClientSecret);
+  const hashPrefix = clientHash.slice(0, 12);
+
+  return prisma.$transaction(async (tx) => {
+    const clientDomain = await tx.clientDomain.findUnique({
+      where: { domain },
+      select: { id: true },
+    });
+    if (!clientDomain) throw new AppError('NOT_FOUND', 404, 'DOMAIN_NOT_FOUND');
+
+    await tx.clientDomainSecret.create({
+      data: {
+        domainId: clientDomain.id,
+        secretDigest: digestDomainClientHash(clientHash),
+        hashPrefix,
+        active: true,
+      },
+    });
+
+    await writeAuditLog(
+      {
+        actorEmail: params.actorEmail,
+        action: 'domain.secret_rotated',
+        targetDomain: domain,
+        metadata: { hashPrefix, directReveal: true },
+      },
+      { prisma: tx as unknown as AuditLogPrisma },
+    );
+
+    return { domain, hashPrefix, rawClientSecret, clientHash };
+  });
+}

@@ -6,8 +6,11 @@ export function ConfirmDialog() {
   const { closeConfirmation, confirmation } = useAdminUi();
 
   async function confirmAction() {
-    await confirmation?.onConfirm?.();
-    closeConfirmation();
+    try {
+      await confirmation?.onConfirm?.();
+    } finally {
+      closeConfirmation();
+    }
   }
 
   return (

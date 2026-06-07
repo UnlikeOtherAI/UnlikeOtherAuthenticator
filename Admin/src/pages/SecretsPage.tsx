@@ -22,6 +22,7 @@ export function SecretsPage() {
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState<Domain | null>(null);
   const [rotateResult, setRotateResult] = useState<DomainRotateResponse | null>(null);
+  const [rotateError, setRotateError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('all');
   const filteredDomains = useMemo(() => {
@@ -44,6 +45,9 @@ export function SecretsPage() {
     onSuccess: (result) => {
       setRotateResult(result);
       void queryClient.invalidateQueries({ queryKey: ['admin'] });
+    },
+    onError: (err) => {
+      setRotateError(err instanceof Error ? err.message : 'Rotation failed. Please try again.');
     },
   });
 
@@ -145,6 +149,9 @@ export function SecretsPage() {
       </Card>
       <EditDomainDialog open={editing !== null} domain={editing} onClose={() => setEditing(null)} />
       <RotateNoticeModal result={rotateResult} onClose={() => setRotateResult(null)} />
+      <Modal isOpen={Boolean(rotateError)} onClose={() => setRotateError(null)} title="Rotation failed" footer={<Button variant="primary" onClick={() => setRotateError(null)}>Close</Button>}>
+        <p className="text-sm text-gray-600">{rotateError}</p>
+      </Modal>
     </>
   );
 }
@@ -164,7 +171,7 @@ function RotateNoticeModal({
     ? 'Rotation claim sent'
     : 'Rotation claim not delivered';
   const description = reveal
-    ? `Copy the secret below now — it will not be displayed again. The previous secret keeps working until the partner switches to the new one. Deliver these to ${result?.contact_email ?? 'the partner contact'} through your own secure channel.`
+    ? 'Copy the secret below now — it will not be displayed again. The previous secret keeps working until the partner switches to the new one. Deliver these through your own secure channel.'
     : dispatched
     ? `A one-time claim link has been emailed to ${result?.contact_email ?? 'the partner contact'}. The previous secret stays active until they open the link and confirm.`
     : `A claim token was created but the email to ${result?.contact_email ?? 'the partner contact'} could not be dispatched. Retry the rotation or deliver the link out-of-band.`;
