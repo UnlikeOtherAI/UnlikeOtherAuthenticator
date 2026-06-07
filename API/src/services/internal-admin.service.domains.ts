@@ -60,6 +60,7 @@ export async function getAdminDomains(limit?: number) {
   });
 
   return Array.from(domains.entries())
+    .filter(([domain]) => registryByDomain.has(domain))
     .sort(([a], [b]) => a.localeCompare(b))
     .slice(0, listLimit(limit))
     .map(([domain, entry]) => {
