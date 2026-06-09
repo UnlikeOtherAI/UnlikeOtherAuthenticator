@@ -14,9 +14,10 @@ const TeamParamsSchema = z.object({
   orgId: z.string().trim().min(1),
   teamId: z.string().trim().min(1),
 });
-const AllowedEmailDomainsSchema = z
+const LoginRestrictionsSchema = z
   .object({
-    allowed_email_domains: z.array(z.string()).max(50),
+    allowed_email_domains: z.array(z.string()).max(50).optional(),
+    allowed_emails: z.array(z.string()).max(200).optional(),
   })
   .strict();
 const CreateOrganisationSchema = z
@@ -25,6 +26,7 @@ const CreateOrganisationSchema = z
     domain: z.string().trim().min(3).transform(normalizeDomain),
     owner_email: z.string().trim().email(),
     allowed_email_domains: z.array(z.string()).max(50).optional(),
+    allowed_emails: z.array(z.string()).max(200).optional(),
   })
   .strict();
 
@@ -46,6 +48,7 @@ export function registerInternalAdminOrganisationRoutes(app: FastifyInstance): v
       domain: body.domain,
       ownerEmail: body.owner_email,
       allowedEmailDomains: body.allowed_email_domains,
+      allowedEmails: body.allowed_emails,
     });
   });
 
@@ -54,8 +57,11 @@ export function registerInternalAdminOrganisationRoutes(app: FastifyInstance): v
     adminRoute(nullableObjectSchema),
     async (request) => {
       const { orgId } = OrgParamsSchema.parse(request.params);
-      const body = AllowedEmailDomainsSchema.parse(request.body);
-      return updateAdminOrganisation(orgId, { allowedEmailDomains: body.allowed_email_domains });
+      const body = LoginRestrictionsSchema.parse(request.body);
+      return updateAdminOrganisation(orgId, {
+        allowedEmailDomains: body.allowed_email_domains,
+        allowedEmails: body.allowed_emails,
+      });
     },
   );
 
@@ -64,8 +70,11 @@ export function registerInternalAdminOrganisationRoutes(app: FastifyInstance): v
     adminRoute(nullableObjectSchema),
     async (request) => {
       const { orgId, teamId } = TeamParamsSchema.parse(request.params);
-      const body = AllowedEmailDomainsSchema.parse(request.body);
-      return updateAdminTeam(orgId, teamId, { allowedEmailDomains: body.allowed_email_domains });
+      const body = LoginRestrictionsSchema.parse(request.body);
+      return updateAdminTeam(orgId, teamId, {
+        allowedEmailDomains: body.allowed_email_domains,
+        allowedEmails: body.allowed_emails,
+      });
     },
   );
 }

@@ -45,8 +45,8 @@ export function OrganisationDetailPage() {
   const closeDialog = () => setDialog(null);
   const { data: org, isLoading } = useOrganisationQuery(orgId);
   const updateRestriction = useMutation({
-    mutationFn: (allowedEmailDomains: string[]) =>
-      adminService.updateOrganisation(orgId ?? '', { allowedEmailDomains }),
+    mutationFn: (input: { allowedEmailDomains: string[]; allowedEmails: string[] }) =>
+      adminService.updateOrganisation(orgId ?? '', input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin'] }),
   });
   const [tab, setTab] = useState<OrgTab>('teams');
@@ -85,9 +85,10 @@ export function OrganisationDetailPage() {
       </div>
       <div className="mb-5">
         <LoginRestrictionSection
-          title="Login email-domain restriction"
-          description="Only users whose email domain matches one of these can sign in to this organisation. Empty = no restriction. Superusers always bypass."
-          value={org.allowedEmailDomains}
+          title="Login access whitelist"
+          description="Empty = no restriction. A user may sign in if their email domain OR their exact email is listed. Superusers always bypass."
+          allowedEmailDomains={org.allowedEmailDomains}
+          allowedEmails={org.allowedEmails}
           onSave={(next) => updateRestriction.mutateAsync(next)}
         />
       </div>

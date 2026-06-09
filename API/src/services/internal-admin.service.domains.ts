@@ -76,6 +76,7 @@ export async function getAdminDomains(limit?: number) {
         orgs: entry.orgs,
         status: registry?.status === 'disabled' ? 'disabled' : 'active',
         allowedEmailDomains: registry?.allowedEmailDomains ?? [],
+        allowedEmails: registry?.allowedEmails ?? [],
         created: entry.createdAt ? displayDate(entry.createdAt) : '',
         hash: activeSecret ? `sha256:${activeSecret.hashPrefix}...` : 'not configured',
       };
@@ -150,6 +151,7 @@ export async function getAdminDomain(domain: string) {
     orgs: organisations.length,
     status: registry?.status === 'disabled' ? 'disabled' : 'active',
     allowedEmailDomains: registry?.allowedEmailDomains ?? [],
+    allowedEmails: registry?.allowedEmails ?? [],
     created: registry ? displayDate(registry.createdAt) : '',
     hash: activeSecret ? `sha256:${activeSecret.hashPrefix}...` : 'not configured',
   };

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { useMemo, useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { Avatar } from '../components/ui/Avatar';
@@ -9,17 +10,25 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { MethodBadge, StatusBadge } from '../components/ui/Status';
 import { DataTable, PaginationFooter, Td, usePagination } from '../components/ui/Table';
 import { SegmentedTabs } from '../components/ui/Tabs';
+import { LoginRestrictionSection } from '../components/sections/LoginRestrictionSection';
 import { DomainEmailSection } from '../features/admin/DomainEmailSection';
 import { TeamTable } from '../features/admin/TeamTable';
 import { useDomainQuery } from '../features/admin/admin-queries';
+import { adminService } from '../services/admin-service';
 
 type DomainTab = 'organisations' | 'teams' | 'users';
 
 export function DomainDetailPage() {
   const { domainId } = useParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { data, isLoading } = useDomainQuery(domainId);
   const [tab, setTab] = useState<DomainTab>('organisations');
+  const updateRestriction = useMutation({
+    mutationFn: (input: { allowedEmailDomains: string[]; allowedEmails: string[] }) =>
+      adminService.updateDomain(domainId ?? '', input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin'] }),
+  });
 
   if (isLoading) {
     return <p className="text-sm text-gray-400">Loading domain...</p>;
@@ -44,6 +53,15 @@ export function DomainDetailPage() {
         <MetricCard label="Organisations" value={String(organisations.length)} />
         <MetricCard label="Teams" value={String(teams.length)} />
         <MetricCard label="Users" value={String(users.length)} />
+      </div>
+      <div className="mb-5">
+        <LoginRestrictionSection
+          title="Login access whitelist"
+          description="Empty = no restriction. A user may sign in if their email domain OR their exact email is listed. Superusers always bypass."
+          allowedEmailDomains={domain.allowedEmailDomains}
+          allowedEmails={domain.allowedEmails}
+          onSave={(next) => updateRestriction.mutateAsync(next)}
+        />
       </div>
       <DomainEmailSection domain={domain.name} />
       <SegmentedTabs<DomainTab>

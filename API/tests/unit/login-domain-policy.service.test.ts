@@ -3,20 +3,33 @@ import { describe, expect, it } from 'vitest';
 import { assertEmailDomainAllowedForLogin } from '../../src/services/login-domain-policy.service.js';
 import { isAppError } from '../../src/utils/errors.js';
 
+type ScopeShape = {
+  allowedEmailDomains: string[];
+  allowedEmails: string[];
+};
+
 type UserShape = {
   email: string;
   domainRoles: { role: string }[];
-  orgMembers: { org: { allowedEmailDomains: string[] } }[];
-  teamMembers: { team: { allowedEmailDomains: string[] } }[];
+  orgMembers: { org: ScopeShape }[];
+  teamMembers: { team: ScopeShape }[];
 };
 
-function makePrisma(user: UserShape | null, clientDomainAllowed: string[]) {
+function scope(allowedEmailDomains: string[] = [], allowedEmails: string[] = []): ScopeShape {
+  return { allowedEmailDomains, allowedEmails };
+}
+
+function makePrisma(
+  user: UserShape | null,
+  clientDomainAllowed: string[],
+  clientDomainAllowedEmails: string[],
+) {
   return {
     user: {
       findUnique: async () => user,
     },
     clientDomain: {
-      findUnique: async () => ({ allowedEmailDomains: clientDomainAllowed }),
+      findUnique: async () => scope(clientDomainAllowed, clientDomainAllowedEmails),
     },
   } as never;
 }
@@ -31,15 +44,23 @@ function baseUser(overrides: Partial<UserShape> = {}): UserShape {
   };
 }
 
-async function run(user: UserShape | null, clientDomainAllowed: string[]): Promise<void> {
+async function run(
+  user: UserShape | null,
+  clientDomainAllowed: string[],
+  clientDomainAllowedEmails: string[] = [],
+): Promise<void> {
   await assertEmailDomainAllowedForLogin(
     { userId: 'u1', domain: 'auth.acme.com' },
-    { prisma: makePrisma(user, clientDomainAllowed) },
+    { prisma: makePrisma(user, clientDomainAllowed, clientDomainAllowedEmails) },
   );
 }
 
-async function expectBlocked(user: UserShape | null, clientDomainAllowed: string[]): Promise<void> {
-  await expect(run(user, clientDomainAllowed)).rejects.toSatisfy(
+async function expectBlocked(
+  user: UserShape | null,
+  clientDomainAllowed: string[],
+  clientDomainAllowedEmails: string[] = [],
+): Promise<void> {
+  await expect(run(user, clientDomainAllowed, clientDomainAllowedEmails)).rejects.toSatisfy(
     (err: unknown) => isAppError(err) && err.statusCode === 403,
   );
 }
@@ -53,20 +74,34 @@ describe('assertEmailDomainAllowedForLogin', () => {
     await expect(run(baseUser(), ['acme.com'])).resolves.toBeUndefined();
   });
 
+  it('allows when the client-domain restriction matches the exact email', async () => {
+    await expect(run(baseUser({ email: 'Bob@Evil.com' }), [], ['bob@evil.com'])).resolves.toBeUndefined();
+  });
+
   it('blocks when the client-domain restriction excludes the email domain', async () => {
     await expectBlocked(baseUser({ email: 'bob@evil.com' }), ['acme.com']);
   });
 
+  it('blocks when neither the domain nor exact email matches', async () => {
+    await expectBlocked(baseUser({ email: 'bob@evil.com' }), ['acme.com'], ['alice@evil.com']);
+  });
+
   it('blocks on an org-level restriction even when the client domain is open', async () => {
     await expectBlocked(
-      baseUser({ email: 'bob@evil.com', orgMembers: [{ org: { allowedEmailDomains: ['acme.com'] } }] }),
+      baseUser({ email: 'bob@evil.com', orgMembers: [{ org: scope(['acme.com']) }] }),
       [],
     );
   });
 
+  it('allows an email-only org-level restriction when the exact email matches', async () => {
+    await expect(
+      run(baseUser({ email: 'bob@evil.com', orgMembers: [{ org: scope([], ['bob@evil.com']) }] }), []),
+    ).resolves.toBeUndefined();
+  });
+
   it('blocks on a team-level restriction even when the client domain is open', async () => {
     await expectBlocked(
-      baseUser({ email: 'bob@evil.com', teamMembers: [{ team: { allowedEmailDomains: ['acme.com'] } }] }),
+      baseUser({ email: 'bob@evil.com', teamMembers: [{ team: scope(['acme.com']) }] }),
       [],
     );
   });
@@ -74,7 +109,7 @@ describe('assertEmailDomainAllowedForLogin', () => {
   it('requires every non-empty level to match (AND semantics)', async () => {
     // email matches the client domain but not the team — must still be blocked.
     await expectBlocked(
-      baseUser({ email: 'bob@acme.com', teamMembers: [{ team: { allowedEmailDomains: ['other.com'] } }] }),
+      baseUser({ email: 'bob@acme.com', teamMembers: [{ team: scope(['other.com']) }] }),
       ['acme.com'],
     );
   });
@@ -85,7 +120,7 @@ describe('assertEmailDomainAllowedForLogin', () => {
         baseUser({
           email: 'root@evil.com',
           domainRoles: [{ role: 'SUPERUSER' }],
-          orgMembers: [{ org: { allowedEmailDomains: ['acme.com'] } }],
+          orgMembers: [{ org: scope(['acme.com'], ['someone@acme.com']) }],
         }),
         ['acme.com'],
       ),

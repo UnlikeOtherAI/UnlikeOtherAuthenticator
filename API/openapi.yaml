@@ -3329,6 +3329,16 @@ paths:
                 status:
                   type: string
                   enum: [active, disabled]
+                allowed_email_domains:
+                  type: array
+                  maxItems: 50
+                  items:
+                    type: string
+                allowed_emails:
+                  type: array
+                  items:
+                    type: string
+                    format: email
       responses:
         '200':
           description: Updated domain.
@@ -4126,6 +4136,60 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags: [Internal Admin]
+      summary: Create organisation
+      operationId: adminCreateOrg
+      security:
+        - adminBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name, domain, owner_email]
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                domain:
+                  type: string
+                owner_email:
+                  type: string
+                  format: email
+                allowed_email_domains:
+                  type: array
+                  maxItems: 50
+                  items:
+                    type: string
+                allowed_emails:
+                  type: array
+                  items:
+                    type: string
+                    format: email
+      responses:
+        '200':
+          description: Created organisation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganisationObject'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+        '403':
+          description: Not a superuser or wrong admin domain.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /internal/admin/organisations/{orgId}:
     get:
       tags: [Internal Admin]
@@ -4138,6 +4202,55 @@ paths:
       responses:
         '200':
           description: Organisation or null.
+          content:
+            application/json:
+              schema:
+                type: object
+                nullable: true
+                allOf:
+                  - $ref: '#/components/schemas/OrganisationObject'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+        '403':
+          description: Not a superuser or wrong admin domain.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    patch:
+      tags: [Internal Admin]
+      summary: Update organisation login access whitelist
+      operationId: adminUpdateOrgLoginAccessWhitelist
+      security:
+        - adminBearer: []
+      parameters:
+        - $ref: '#/components/parameters/orgIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                allowed_email_domains:
+                  type: array
+                  maxItems: 50
+                  items:
+                    type: string
+                allowed_emails:
+                  type: array
+                  items:
+                    type: string
+                    format: email
+      responses:
+        '200':
+          description: Updated organisation or null.
           content:
             application/json:
               schema:
@@ -4178,6 +4291,55 @@ paths:
                 nullable: true
                 allOf:
                   - $ref: '#/components/schemas/TeamObject'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+        '403':
+          description: Not a superuser or wrong admin domain.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    patch:
+      tags: [Internal Admin]
+      summary: Update team login access whitelist
+      operationId: adminUpdateTeamLoginAccessWhitelist
+      security:
+        - adminBearer: []
+      parameters:
+        - $ref: '#/components/parameters/orgIdPath'
+        - $ref: '#/components/parameters/teamIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                allowed_email_domains:
+                  type: array
+                  maxItems: 50
+                  items:
+                    type: string
+                allowed_emails:
+                  type: array
+                  items:
+                    type: string
+                    format: email
+      responses:
+        '200':
+          description: Updated team with organisation context or null.
+          content:
+            application/json:
+              schema:
+                type: object
+                nullable: true
+                additionalProperties: true
         '401':
           description: Missing auth.
           content:

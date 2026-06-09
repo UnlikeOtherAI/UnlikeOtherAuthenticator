@@ -63,9 +63,14 @@ export const internalAdminEndpoints: EndpointSchema[] = [
   {
     method: 'PUT',
     path: '/internal/admin/domains/:domain',
-    description: 'Update domain label or active/disabled status',
+    description: 'Update domain label, active/disabled status, or login access whitelist',
     auth: adminAuth,
-    body: { label: 'string (optional)', status: 'active | disabled (optional)' },
+    body: {
+      label: 'string (optional)',
+      status: 'active | disabled (optional)',
+      allowed_email_domains: 'string[] (optional, max 50)',
+      allowed_emails: 'string[] (optional, max 200)',
+    },
     response: { 200: 'Updated domain registry row', '401/403': authFailures },
   },
   {
@@ -286,6 +291,7 @@ export const internalAdminEndpoints: EndpointSchema[] = [
       domain: 'string (required)',
       owner_email: 'email (required; must match an existing user)',
       allowed_email_domains: 'string[] (optional, max 50)',
+      allowed_emails: 'string[] (optional, max 200)',
     },
     response: { 200: 'Created admin organisation object', '401/403': authFailures },
   },
@@ -297,11 +303,33 @@ export const internalAdminEndpoints: EndpointSchema[] = [
     response: { 200: 'Admin organisation object or null', '401/403': authFailures },
   },
   {
+    method: 'PATCH',
+    path: '/internal/admin/organisations/:orgId',
+    description: 'Replace organisation login access whitelist lists',
+    auth: adminAuth,
+    body: {
+      allowed_email_domains: 'string[] (optional, max 50)',
+      allowed_emails: 'string[] (optional, max 200)',
+    },
+    response: { 200: 'Updated admin organisation object or null', '401/403': authFailures },
+  },
+  {
     method: 'GET',
     path: '/internal/admin/organisations/:orgId/teams/:teamId',
     description: 'Get one team with its parent organisation',
     auth: adminAuth,
     response: { 200: '{ org, team } or null', '401/403': authFailures },
+  },
+  {
+    method: 'PATCH',
+    path: '/internal/admin/organisations/:orgId/teams/:teamId',
+    description: 'Replace team login access whitelist lists',
+    auth: adminAuth,
+    body: {
+      allowed_email_domains: 'string[] (optional, max 50)',
+      allowed_emails: 'string[] (optional, max 200)',
+    },
+    response: { 200: '{ org, team } or null with updated team whitelist', '401/403': authFailures },
   },
   {
     method: 'GET',

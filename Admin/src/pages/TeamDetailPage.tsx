@@ -33,8 +33,8 @@ export function TeamDetailPage() {
   const closeDialog = () => setDialog(null);
   const { data, isLoading } = useTeamQuery(orgId, teamId);
   const updateRestriction = useMutation({
-    mutationFn: (allowedEmailDomains: string[]) =>
-      adminService.updateTeam(orgId ?? '', teamId ?? '', { allowedEmailDomains }),
+    mutationFn: (input: { allowedEmailDomains: string[]; allowedEmails: string[] }) =>
+      adminService.updateTeam(orgId ?? '', teamId ?? '', input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin'] }),
   });
   const teamName = data?.team?.name;
@@ -68,9 +68,10 @@ export function TeamDetailPage() {
       />
       <div className="mb-5">
         <LoginRestrictionSection
-          title="Login email-domain restriction"
-          description="Only users whose email domain matches one of these can sign in while a member of this team. Empty = no restriction. Superusers always bypass."
-          value={team.allowedEmailDomains}
+          title="Login access whitelist"
+          description="Empty = no restriction. A user may sign in if their email domain OR their exact email is listed. Superusers always bypass."
+          allowedEmailDomains={team.allowedEmailDomains}
+          allowedEmails={team.allowedEmails}
           onSave={(next) => updateRestriction.mutateAsync(next)}
         />
       </div>

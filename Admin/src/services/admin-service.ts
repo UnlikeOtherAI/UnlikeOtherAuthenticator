@@ -38,6 +38,11 @@ export type DomainRotateResponse = {
   credentials?: IntegrationClaimCredentials;
 };
 
+type LoginRestrictionInput = {
+  allowedEmailDomains?: string[];
+  allowedEmails?: string[];
+};
+
 export const adminService = {
   getDashboard: () => api.get<AdminData>('/internal/admin/dashboard'),
   getDomains: () => api.get<AdminData['domains']>('/internal/admin/domains'),
@@ -51,7 +56,7 @@ export const adminService = {
     }),
   updateDomain: (
     domain: string,
-    input: { label?: string; status?: 'active' | 'disabled'; allowedEmailDomains?: string[] },
+    input: { label?: string; status?: 'active' | 'disabled' } & LoginRestrictionInput,
   ) =>
     api.put<Domain>(`/internal/admin/domains/${encodeURIComponent(domain)}`, {
       ...(input.label !== undefined ? { label: input.label } : {}),
@@ -59,6 +64,7 @@ export const adminService = {
       ...(input.allowedEmailDomains !== undefined
         ? { allowed_email_domains: input.allowedEmailDomains }
         : {}),
+      ...(input.allowedEmails !== undefined ? { allowed_emails: input.allowedEmails } : {}),
     }),
   rotateDomainSecret: (domain: string, deliveryMode: IntegrationClaimDeliveryMode = 'email') =>
     api.post<DomainRotateResponse>(
@@ -88,29 +94,42 @@ export const adminService = {
   deleteDomainEmail: (domain: string) =>
     api.delete<unknown>(`/internal/admin/domains/${encodeURIComponent(domain)}/email`),
   getOrganisations: () => api.get<AdminData['organisations']>('/internal/admin/organisations'),
-  createOrganisation: (input: { name: string; domain: string; ownerEmail: string; allowedEmailDomains?: string[] }) =>
+  createOrganisation: (
+    input: { name: string; domain: string; ownerEmail: string } & LoginRestrictionInput,
+  ) =>
     api.post<AdminData['organisations'][number]>('/internal/admin/organisations', {
       name: input.name,
       domain: input.domain,
       owner_email: input.ownerEmail,
       allowed_email_domains: input.allowedEmailDomains,
+      allowed_emails: input.allowedEmails,
     }),
   getOrganisation: (orgId: string) =>
     api.get<AdminData['organisations'][number] | null>(`/internal/admin/organisations/${encodeURIComponent(orgId)}`),
-  updateOrganisation: (orgId: string, input: { allowedEmailDomains: string[] }) =>
+  updateOrganisation: (orgId: string, input: LoginRestrictionInput) =>
     api.patch<AdminData['organisations'][number] | null>(
       `/internal/admin/organisations/${encodeURIComponent(orgId)}`,
-      { allowed_email_domains: input.allowedEmailDomains },
+      {
+        ...(input.allowedEmailDomains !== undefined
+          ? { allowed_email_domains: input.allowedEmailDomains }
+          : {}),
+        ...(input.allowedEmails !== undefined ? { allowed_emails: input.allowedEmails } : {}),
+      },
     ),
   getTeams: () => api.get<Array<Team & { orgName: string }>>('/internal/admin/teams'),
   getTeam: (orgId: string, teamId: string) =>
     api.get<{ org: AdminData['organisations'][number]; team: Team | null } | null>(
       `/internal/admin/organisations/${encodeURIComponent(orgId)}/teams/${encodeURIComponent(teamId)}`,
     ),
-  updateTeam: (orgId: string, teamId: string, input: { allowedEmailDomains: string[] }) =>
+  updateTeam: (orgId: string, teamId: string, input: LoginRestrictionInput) =>
     api.patch<{ org: AdminData['organisations'][number]; team: Team | null } | null>(
       `/internal/admin/organisations/${encodeURIComponent(orgId)}/teams/${encodeURIComponent(teamId)}`,
-      { allowed_email_domains: input.allowedEmailDomains },
+      {
+        ...(input.allowedEmailDomains !== undefined
+          ? { allowed_email_domains: input.allowedEmailDomains }
+          : {}),
+        ...(input.allowedEmails !== undefined ? { allowed_emails: input.allowedEmails } : {}),
+      },
     ),
   getUsers: () => api.get<UserSummary[]>('/internal/admin/users'),
   getUser: (userId: string) => api.get<UserSummary | null>(`/internal/admin/users/${encodeURIComponent(userId)}`),

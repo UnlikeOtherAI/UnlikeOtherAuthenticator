@@ -4,15 +4,18 @@ import { Icon } from '../icons/Icon';
 import { TextField } from '../ui/FormFields';
 
 function normalizeEntry(raw: string): string {
-  return raw.trim().toLowerCase().replace(/^@/, '').replace(/\.$/, '');
+  return raw.trim().toLowerCase();
+}
+
+function looksLikeEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+$/.test(value);
 }
 
 /**
- * Controlled editor for an allowed-login-email-domains list. Renders the current domains as
- * removable chips plus an input that adds a domain on Enter / comma / blur. Empty list means
- * "no restriction".
+ * Controlled editor for exact allowed-login-email entries. Renders the current emails as removable
+ * chips plus an input that adds an email on Enter / comma / blur.
  */
-export function AllowedEmailDomainsField({
+export function AllowedEmailsField({
   value,
   onChange,
   disabled,
@@ -26,12 +29,12 @@ export function AllowedEmailDomainsField({
   function addDraft() {
     const entry = normalizeEntry(draft);
     setDraft('');
-    if (!entry || value.includes(entry)) return;
+    if (!entry || !looksLikeEmail(entry) || value.includes(entry)) return;
     onChange([...value, entry]);
   }
 
-  function remove(domain: string) {
-    onChange(value.filter((item) => item !== domain));
+  function remove(email: string) {
+    onChange(value.filter((item) => item !== email));
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
@@ -47,18 +50,18 @@ export function AllowedEmailDomainsField({
     <div className="space-y-2">
       {value.length > 0 ? (
         <div className="flex flex-wrap gap-1.5">
-          {value.map((domain) => (
+          {value.map((email) => (
             <span
-              key={domain}
-              className="inline-flex items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700"
+              key={email}
+              className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700"
             >
-              {domain}
+              {email}
               {!disabled ? (
                 <button
                   type="button"
-                  aria-label={`Remove ${domain}`}
-                  onClick={() => remove(domain)}
-                  className="text-indigo-400 hover:text-indigo-700"
+                  aria-label={`Remove ${email}`}
+                  onClick={() => remove(email)}
+                  className="text-emerald-400 hover:text-emerald-700"
                 >
                   <Icon name="close" className="h-3 w-3" />
                 </button>
@@ -67,12 +70,12 @@ export function AllowedEmailDomainsField({
           ))}
         </div>
       ) : (
-        <p className="text-xs text-gray-400">No domain entries.</p>
+        <p className="text-xs text-gray-400">No individual email entries.</p>
       )}
       {!disabled ? (
         <TextField
           value={draft}
-          placeholder="acme.com — press Enter to add"
+          placeholder="person@acme.com — press Enter to add"
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={handleKeyDown}
           onBlur={addDraft}

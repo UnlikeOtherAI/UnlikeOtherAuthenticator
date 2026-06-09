@@ -12,13 +12,23 @@ type PolicyDeps = {
   prisma?: PolicyPrisma;
 };
 
+type ScopeRestriction = {
+  domains: string[];
+  emails: string[];
+};
+
+function lowerList(values: readonly string[]): string[] {
+  return values.map((value) => value.trim().toLowerCase()).filter(Boolean);
+}
+
 /**
- * Enforces allowed-login-email-domain restrictions for a successfully authenticated user.
+ * Enforces allowed-login email-domain/email restrictions for a successfully authenticated user.
  *
  * Restrictions can be configured at three levels — the client domain, any organisation the user
  * belongs to, and any team the user belongs to (all scoped to the login's client domain). If a
- * level has a non-empty `allowedEmailDomains` list, the user's email domain must appear in it.
- * A SUPERUSER on the login domain bypasses every restriction.
+ * level has a non-empty `allowedEmailDomains` or `allowedEmails` list, the user's email domain or
+ * exact lower-cased email must appear in that level. A SUPERUSER on the login domain bypasses every
+ * restriction.
  *
  * Reads run on the BYPASSRLS admin client because the relevant org/team rows are tenant-scoped and
  * login has no tenant context yet (mirrors domain-hash auth and config-verifier).
@@ -44,11 +54,11 @@ export async function assertEmailDomainAllowedForLogin(
       },
       orgMembers: {
         where: { org: { domain: loginDomain } },
-        select: { org: { select: { allowedEmailDomains: true } } },
+        select: { org: { select: { allowedEmailDomains: true, allowedEmails: true } } },
       },
       teamMembers: {
         where: { team: { org: { domain: loginDomain } } },
-        select: { team: { select: { allowedEmailDomains: true } } },
+        select: { team: { select: { allowedEmailDomains: true, allowedEmails: true } } },
       },
     },
   });
@@ -61,20 +71,34 @@ export async function assertEmailDomainAllowedForLogin(
 
   const clientDomain = await prisma.clientDomain.findUnique({
     where: { domain: loginDomain },
-    select: { allowedEmailDomains: true },
+    select: { allowedEmailDomains: true, allowedEmails: true },
   });
 
-  const restrictionLists: string[][] = [
-    clientDomain?.allowedEmailDomains ?? [],
-    ...user.orgMembers.map((member) => member.org.allowedEmailDomains),
-    ...user.teamMembers.map((member) => member.team.allowedEmailDomains),
-  ].filter((list) => list.length > 0);
+  const restrictionLists: ScopeRestriction[] = [
+    {
+      domains: clientDomain?.allowedEmailDomains ?? [],
+      emails: clientDomain?.allowedEmails ?? [],
+    },
+    ...user.orgMembers.map((member) => ({
+      domains: member.org.allowedEmailDomains,
+      emails: member.org.allowedEmails,
+    })),
+    ...user.teamMembers.map((member) => ({
+      domains: member.team.allowedEmailDomains,
+      emails: member.team.allowedEmails,
+    })),
+  ]
+    .map((scope) => ({ domains: lowerList(scope.domains), emails: lowerList(scope.emails) }))
+    .filter((scope) => scope.domains.length > 0 || scope.emails.length > 0);
 
   if (restrictionLists.length === 0) return;
 
+  const email = user.email.trim().toLowerCase();
   const emailDomain = extractEmailDomain(user.email);
-  const allowed =
-    emailDomain !== null && restrictionLists.every((list) => list.includes(emailDomain));
+  const allowed = restrictionLists.every(
+    (scope) =>
+      (emailDomain !== null && scope.domains.includes(emailDomain)) || scope.emails.includes(email),
+  );
 
   if (!allowed) {
     throw new AppError('FORBIDDEN', 403, 'EMAIL_DOMAIN_NOT_ALLOWED');

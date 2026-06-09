@@ -7,17 +7,24 @@ import { Modal } from '../ui/Modal';
 import { adminService } from '../../services/admin-service';
 import type { Domain } from '../../features/admin/types';
 import { AllowedEmailDomainsField } from '../sections/AllowedEmailDomainsField';
+import { AllowedEmailsField } from '../sections/AllowedEmailsField';
 import { DomainSigningKeysSection } from '../sections/DomainSigningKeysSection';
 
 type DomainFormState = {
   label: string;
   status: 'active' | 'disabled';
   allowedEmailDomains: string[];
+  allowedEmails: string[];
 };
 
 export function EditDomainDialog({ domain, onClose, open }: { domain: Domain | null; onClose: () => void; open: boolean }) {
   const queryClient = useQueryClient();
-  const [form, setForm] = useState<DomainFormState>({ label: '', status: 'active', allowedEmailDomains: [] });
+  const [form, setForm] = useState<DomainFormState>({
+    label: '',
+    status: 'active',
+    allowedEmailDomains: [],
+    allowedEmails: [],
+  });
   const updateDomain = useMutation({
     mutationFn: (input: { domain: string; values: DomainFormState }) =>
       adminService.updateDomain(input.domain, input.values),
@@ -30,6 +37,7 @@ export function EditDomainDialog({ domain, onClose, open }: { domain: Domain | n
       label: domain.label,
       status: domain.status === 'disabled' ? 'disabled' : 'active',
       allowedEmailDomains: domain.allowedEmailDomains,
+      allowedEmails: domain.allowedEmails,
     });
   }, [domain]);
 
@@ -69,13 +77,22 @@ export function EditDomainDialog({ domain, onClose, open }: { domain: Domain | n
               <option value="disabled">Disabled</option>
             </SelectField>
           </FieldShell>
-          <FieldShell
-            label="Login email-domain restriction"
-            hint="Only users whose email domain matches one of these can sign in to this domain. Empty = no restriction. Superusers always bypass."
-          >
+          <div>
+            <p className="text-sm font-medium text-gray-700">Login access whitelist</p>
+            <p className="mt-1 text-xs text-gray-400">
+              Empty = no restriction. A user may sign in if their email domain OR their exact email is listed. Superusers always bypass.
+            </p>
+          </div>
+          <FieldShell label="Allowed email domains">
             <AllowedEmailDomainsField
               value={form.allowedEmailDomains}
               onChange={(next) => setForm({ ...form, allowedEmailDomains: next })}
+            />
+          </FieldShell>
+          <FieldShell label="Allowed individual emails">
+            <AllowedEmailsField
+              value={form.allowedEmails}
+              onChange={(next) => setForm({ ...form, allowedEmails: next })}
             />
           </FieldShell>
           <DomainSigningKeysSection domain={domain.name} />

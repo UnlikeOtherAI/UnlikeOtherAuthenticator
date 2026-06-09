@@ -1,5 +1,8 @@
 import { getAdminPrisma } from '../db/prisma.js';
-import { normalizeAllowedEmailDomains } from '../utils/email-domain-list.js';
+import {
+  normalizeAllowedEmailDomains,
+  normalizeAllowedEmails,
+} from '../utils/email-domain-list.js';
 import { AppError } from '../utils/errors.js';
 import {
   DEFAULT_LIST_LIMIT,
@@ -70,6 +73,7 @@ export async function createAdminOrganisation(input: {
   domain: string;
   ownerEmail: string;
   allowedEmailDomains?: string[];
+  allowedEmails?: string[];
 }) {
   const prisma = getAdminPrisma();
   const name = input.name.trim();
@@ -95,6 +99,7 @@ export async function createAdminOrganisation(input: {
         slug,
         ownerId: owner.id,
         allowedEmailDomains: normalizeAllowedEmailDomains(input.allowedEmailDomains ?? []),
+        allowedEmails: normalizeAllowedEmails(input.allowedEmails ?? []),
       },
       select: { id: true, createdAt: true },
     });
@@ -127,16 +132,23 @@ export async function createAdminOrganisation(input: {
 
 export async function updateAdminOrganisation(
   orgId: string,
-  input: { allowedEmailDomains: string[] },
+  input: { allowedEmailDomains?: string[]; allowedEmails?: string[] },
 ) {
   const prisma = getAdminPrisma();
   const existing = await prisma.organisation.findUnique({ where: { id: orgId }, select: { id: true } });
   if (!existing) throw new AppError('NOT_FOUND', 404, 'ORGANISATION_NOT_FOUND');
 
-  await prisma.organisation.update({
-    where: { id: orgId },
-    data: { allowedEmailDomains: normalizeAllowedEmailDomains(input.allowedEmailDomains) },
-  });
+  const data: { allowedEmailDomains?: string[]; allowedEmails?: string[] } = {};
+  if (input.allowedEmailDomains !== undefined) {
+    data.allowedEmailDomains = normalizeAllowedEmailDomains(input.allowedEmailDomains);
+  }
+  if (input.allowedEmails !== undefined) {
+    data.allowedEmails = normalizeAllowedEmails(input.allowedEmails);
+  }
+
+  if (Object.keys(data).length > 0) {
+    await prisma.organisation.update({ where: { id: orgId }, data });
+  }
 
   return getAdminOrganisation(orgId);
 }
@@ -144,16 +156,23 @@ export async function updateAdminOrganisation(
 export async function updateAdminTeam(
   orgId: string,
   teamId: string,
-  input: { allowedEmailDomains: string[] },
+  input: { allowedEmailDomains?: string[]; allowedEmails?: string[] },
 ) {
   const prisma = getAdminPrisma();
   const team = await prisma.team.findFirst({ where: { id: teamId, orgId }, select: { id: true } });
   if (!team) throw new AppError('NOT_FOUND', 404, 'TEAM_NOT_FOUND');
 
-  await prisma.team.update({
-    where: { id: teamId },
-    data: { allowedEmailDomains: normalizeAllowedEmailDomains(input.allowedEmailDomains) },
-  });
+  const data: { allowedEmailDomains?: string[]; allowedEmails?: string[] } = {};
+  if (input.allowedEmailDomains !== undefined) {
+    data.allowedEmailDomains = normalizeAllowedEmailDomains(input.allowedEmailDomains);
+  }
+  if (input.allowedEmails !== undefined) {
+    data.allowedEmails = normalizeAllowedEmails(input.allowedEmails);
+  }
+
+  if (Object.keys(data).length > 0) {
+    await prisma.team.update({ where: { id: teamId }, data });
+  }
 
   return getAdminTeam(orgId, teamId);
 }

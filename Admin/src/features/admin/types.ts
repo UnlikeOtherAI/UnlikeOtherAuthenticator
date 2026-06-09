@@ -16,6 +16,7 @@ export type Domain = {
   orgs: number;
   status: EntityStatus;
   allowedEmailDomains: string[];
+  allowedEmails: string[];
   created: string;
   hash: string;
 };
@@ -74,6 +75,7 @@ export type Team = {
   isDefault: boolean;
   members: number;
   allowedEmailDomains: string[];
+  allowedEmails: string[];
 };
 
 export type UserSummary = {
@@ -99,6 +101,7 @@ export type Organisation = {
   name: string;
   slug: string;
   allowedEmailDomains: string[];
+  allowedEmails: string[];
   created: string;
   owner: Pick<UserSummary, 'id' | 'name' | 'email'>;
   teams: Team[];

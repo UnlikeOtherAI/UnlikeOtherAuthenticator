@@ -228,6 +228,7 @@ model ClientDomain {
   label               String   @db.VarChar(120)
   status              String   @default("active") @db.VarChar(20)
   allowedEmailDomains String[] @default([]) @map("allowed_email_domains")
+  allowedEmails       String[] @default([]) @map("allowed_emails")
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @updatedAt @map("updated_at")
 
@@ -359,6 +360,7 @@ model Organisation {
   slug                String   @db.VarChar(120)
   ownerId             String   @map("owner_id")
   allowedEmailDomains String[] @default([]) @map("allowed_email_domains")
+  allowedEmails       String[] @default([]) @map("allowed_emails")
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @updatedAt @map("updated_at")
 
@@ -521,6 +523,7 @@ model Team {
   description         String?  @db.VarChar(500)
   isDefault           Boolean  @default(false) @map("is_default")
   allowedEmailDomains String[] @default([]) @map("allowed_email_domains")
+  allowedEmails       String[] @default([]) @map("allowed_emails")
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @updatedAt @map("updated_at")
 

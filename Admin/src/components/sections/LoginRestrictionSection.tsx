@@ -1,7 +1,14 @@
 import { useEffect, useState } from 'react';
 
 import { AllowedEmailDomainsField } from './AllowedEmailDomainsField';
+import { AllowedEmailsField } from './AllowedEmailsField';
 import { Button } from '../ui/Button';
+import { FieldShell } from '../ui/FormFields';
+
+export type LoginRestrictionValue = {
+  allowedEmailDomains: string[];
+  allowedEmails: string[];
+};
 
 function sameList(a: string[], b: string[]): boolean {
   return a.length === b.length && a.every((item, index) => item === b[index]);
@@ -14,29 +21,37 @@ function sameList(a: string[], b: string[]): boolean {
 export function LoginRestrictionSection({
   title,
   description,
-  value,
+  allowedEmailDomains,
+  allowedEmails,
   onSave,
 }: {
   title: string;
   description: string;
-  value: string[];
-  onSave: (next: string[]) => Promise<unknown>;
+  allowedEmailDomains: string[];
+  allowedEmails: string[];
+  onSave: (next: LoginRestrictionValue) => Promise<unknown>;
 }) {
-  const [draft, setDraft] = useState<string[]>(value);
+  const [domainDraft, setDomainDraft] = useState<string[]>(allowedEmailDomains);
+  const [emailDraft, setEmailDraft] = useState<string[]>(allowedEmails);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    setDraft(value);
-  }, [value]);
+    setDomainDraft(allowedEmailDomains);
+  }, [allowedEmailDomains]);
 
-  const dirty = !sameList(draft, value);
+  useEffect(() => {
+    setEmailDraft(allowedEmails);
+  }, [allowedEmails]);
+
+  const dirty =
+    !sameList(domainDraft, allowedEmailDomains) || !sameList(emailDraft, allowedEmails);
 
   async function save() {
     setSaving(true);
     setError(false);
     try {
-      await onSave(draft);
+      await onSave({ allowedEmailDomains: domainDraft, allowedEmails: emailDraft });
     } catch {
       setError(true);
     } finally {
@@ -61,8 +76,17 @@ export function LoginRestrictionSection({
           {saving ? 'Saving…' : 'Save'}
         </Button>
       </div>
-      <AllowedEmailDomainsField value={draft} onChange={setDraft} />
-      {error ? <p className="mt-2 text-xs text-red-600">Could not save. Check the domains and try again.</p> : null}
+      <div className="grid gap-4 md:grid-cols-2">
+        <FieldShell label="Allowed email domains">
+          <AllowedEmailDomainsField value={domainDraft} onChange={setDomainDraft} />
+        </FieldShell>
+        <FieldShell label="Allowed individual emails">
+          <AllowedEmailsField value={emailDraft} onChange={setEmailDraft} />
+        </FieldShell>
+      </div>
+      {error ? (
+        <p className="mt-2 text-xs text-red-600">Could not save. Check the domains and emails and try again.</p>
+      ) : null}
     </section>
   );
 }

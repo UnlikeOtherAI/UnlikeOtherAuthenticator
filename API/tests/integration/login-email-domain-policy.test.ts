@@ -80,8 +80,13 @@ describe.skipIf(!hasDatabase)('login email-domain policy (DB-backed)', () => {
     await prisma.clientDomain.create({
       data: { domain: 'restrict.example.com', label: 'Restrict', allowedEmailDomains: ['acme.com'] },
     });
+    await prisma.clientDomain.create({
+      data: { domain: 'email-only.example.com', label: 'Email Only', allowedEmails: ['friend@evil.com'] },
+    });
     await prisma.user.create({ data: { email: 'alice@acme.com', userKey: 'alice@acme.com' } });
     await prisma.user.create({ data: { email: 'mallory@evil.com', userKey: 'mallory@evil.com' } });
+    await prisma.user.create({ data: { email: 'friend@evil.com', userKey: 'friend@evil.com' } });
+    await prisma.user.create({ data: { email: 'stranger@evil.com', userKey: 'stranger@evil.com' } });
     const restrictSuper = await prisma.user.create({
       data: { email: 'root@evil.com', userKey: 'root@evil.com' },
       select: { id: true },
@@ -163,6 +168,18 @@ describe.skipIf(!hasDatabase)('login email-domain policy (DB-backed)', () => {
     await expectBlocked(id, 'restrict.example.com');
   });
 
+  it('allows a matching exact email at the client-domain level', async () => {
+    const id = await userIdByEmail('friend@evil.com');
+    await expect(
+      assertEmailDomainAllowedForLogin({ userId: id, domain: 'email-only.example.com' }),
+    ).resolves.toBeUndefined();
+  });
+
+  it('blocks when neither domain nor exact email matches at the client-domain level', async () => {
+    const id = await userIdByEmail('stranger@evil.com');
+    await expectBlocked(id, 'email-only.example.com');
+  });
+
   it('lets a SUPERUSER bypass the client-domain restriction', async () => {
     const id = await userIdByEmail('root@evil.com');
     await expect(
@@ -186,16 +203,21 @@ describe.skipIf(!hasDatabase)('login email-domain policy (DB-backed)', () => {
       method: 'PUT',
       url: '/internal/admin/domains/restrict.example.com',
       headers: { authorization: `Bearer ${token}` },
-      payload: { allowed_email_domains: ['acme.com', 'ACME.io'] },
+      payload: {
+        allowed_email_domains: ['acme.com', 'ACME.io'],
+        allowed_emails: ['VIP@Acme.com', 'not an email'],
+      },
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().allowedEmailDomains).toEqual(['acme.com', 'acme.io']);
+    expect(res.json().allowedEmails).toEqual(['vip@acme.com']);
 
     const row = await handle!.prisma.clientDomain.findUniqueOrThrow({
       where: { domain: 'restrict.example.com' },
-      select: { allowedEmailDomains: true },
+      select: { allowedEmailDomains: true, allowedEmails: true },
     });
     expect(row.allowedEmailDomains).toEqual(['acme.com', 'acme.io']);
+    expect(row.allowedEmails).toEqual(['vip@acme.com']);
   });
 
   it('rejects an invalid domain entry with 400', async () => {
@@ -215,10 +237,11 @@ describe.skipIf(!hasDatabase)('login email-domain policy (DB-backed)', () => {
       method: 'PATCH',
       url: `/internal/admin/organisations/${restrictedOrgId}`,
       headers: { authorization: `Bearer ${token}` },
-      payload: { allowed_email_domains: ['acme.com', 'partner.com'] },
+      payload: { allowed_email_domains: ['acme.com', 'partner.com'], allowed_emails: ['owner@ACME.com'] },
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().allowedEmailDomains).toEqual(['acme.com', 'partner.com']);
+    expect(res.json().allowedEmails).toEqual(['owner@acme.com']);
   });
 
   it('persists allowed_email_domains via the admin team endpoint', async () => {
@@ -227,10 +250,11 @@ describe.skipIf(!hasDatabase)('login email-domain policy (DB-backed)', () => {
       method: 'PATCH',
       url: `/internal/admin/organisations/${openOrgId}/teams/${restrictedTeamId}`,
       headers: { authorization: `Bearer ${token}` },
-      payload: { allowed_email_domains: ['acme.com'] },
+      payload: { allowed_email_domains: ['acme.com'], allowed_emails: ['team.member@ACME.com'] },
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().team.allowedEmailDomains).toEqual(['acme.com']);
+    expect(res.json().team.allowedEmails).toEqual(['team.member@acme.com']);
   });
 
   it('rejects admin writes without a superuser token', async () => {
