@@ -173,10 +173,10 @@ describe('GET /auth (config validation)', () => {
     expect(res.headers['content-type']).toContain('text/html');
     expect(res.body).toContain('REDIRECT_URL_NOT_ALLOWED');
     expect(res.body).toContain('config_url was fetched successfully and the config JWT passed signature, schema, and domain checks.');
-    expect(res.body).toContain('The requested redirect_url does not exactly match any value in config.redirect_urls.');
-    expect(res.body).toContain('https://client.example.com/auth/callback?mode=');
+    expect(res.body).toContain('Requested redirect_url: https://client.example.com/auth/callback?mode=');
+    expect(res.body).toContain('The requested redirect_url does not exactly match any allowlisted value above');
     expect(res.body).toContain('Requested redirect_url includes query keys: mode, next.');
-    expect(res.body).toContain('Allowlisted redirect_urls: https://client.example.com/auth/callback.');
+    expect(res.body).toContain('Allowlisted redirect_urls (1): https://client.example.com/auth/callback.');
     expect(res.body).toContain('redirect_url matching is exact.');
     expect(res.body).not.toContain('next=%2F');
 

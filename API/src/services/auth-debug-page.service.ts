@@ -316,19 +316,26 @@ export function enrichAuthDebugForAppError(
   const code = error.message || error.code;
   const allowedRedirectUrls = sanitizeAllowedRedirectUrls(request.config?.redirect_urls);
   const redirectQueryKeys = parseRedirectQueryKeys(request.raw.url);
+  const requestedRedirectUrl =
+    request.authDebug?.redirectUrl ?? parseRequestDebugUrls(request.raw.url).redirectUrl;
+  const requestedDetail = requestedRedirectUrl
+    ? `Requested redirect_url: ${requestedRedirectUrl}`
+    : 'Requested redirect_url: (none sent in the request).';
+  const allowlistDetail = allowedRedirectUrls.length
+    ? `Allowlisted redirect_urls (${allowedRedirectUrls.length}): ${allowedRedirectUrls.join(', ')}.`
+    : 'No redirect_urls are currently allowlisted for this client config.';
   const configValidatedDetail =
     'config_url was fetched successfully and the config JWT passed signature, schema, and domain checks.';
 
   if (code === 'REDIRECT_URL_NOT_ALLOWED') {
     const details = [
       configValidatedDetail,
-      'The requested redirect_url does not exactly match any value in config.redirect_urls.',
+      requestedDetail,
+      allowlistDetail,
+      'The requested redirect_url does not exactly match any allowlisted value above — send one of the allowlisted URLs verbatim, or add the requested URL to config.redirect_urls.',
     ];
     if (redirectQueryKeys.length) {
       details.push(`Requested redirect_url includes query keys: ${redirectQueryKeys.join(', ')}.`);
-    }
-    if (allowedRedirectUrls.length) {
-      details.push(`Allowlisted redirect_urls: ${allowedRedirectUrls.join(', ')}.`);
     }
 
     mergeAuthDebugInfo(request, {
@@ -349,9 +356,7 @@ export function enrichAuthDebugForAppError(
       stage: 'request',
       code,
       summary: 'No usable redirect_url was provided and the client config did not supply a fallback.',
-      details: allowedRedirectUrls.length
-        ? [configValidatedDetail, `Allowlisted redirect_urls: ${allowedRedirectUrls.join(', ')}.`]
-        : [configValidatedDetail, 'config.redirect_urls is empty or missing.'],
+      details: [configValidatedDetail, requestedDetail, allowlistDetail],
       hints: [
         'Provide redirect_url in the request, or include at least one valid absolute URL in config.redirect_urls.',
       ],
@@ -364,9 +369,7 @@ export function enrichAuthDebugForAppError(
       stage: 'request',
       code,
       summary: 'The supplied redirect_url is not a valid absolute HTTP(S) URL.',
-      details: allowedRedirectUrls.length
-        ? [configValidatedDetail, `Allowlisted redirect_urls: ${allowedRedirectUrls.join(', ')}.`]
-        : [configValidatedDetail],
+      details: [configValidatedDetail, requestedDetail, allowlistDetail],
       hints: [
         'Use a full http:// or https:// callback URL and make sure it exactly matches a value in config.redirect_urls.',
       ],
