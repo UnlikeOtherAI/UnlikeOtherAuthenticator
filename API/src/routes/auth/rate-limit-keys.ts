@@ -92,6 +92,15 @@ export const twoFactorVerifyRateLimiter = composeRateLimiters(
   bodyRateLimiter('auth:twofa-verify', 'twofa_token', 5, 15 * MINUTE_MS),
 );
 
+export const twoFactorSetupRateLimiter = ipRateLimiter('auth:twofa-setup', 5, 15 * MINUTE_MS);
+
+export const twoFactorEnrollRateLimiter = composeRateLimiters(
+  ipRateLimiter('auth:twofa-enroll', 5, 15 * MINUTE_MS),
+  bodyRateLimiter('auth:twofa-enroll', 'setup_token', 5, 15 * MINUTE_MS),
+);
+
+export const twoFactorDisableRateLimiter = ipRateLimiter('auth:twofa-disable', 5, 15 * MINUTE_MS);
+
 export const socialCallbackRateLimiter = ipRateLimiter('auth:social-callback', 20, MINUTE_MS);
 
 export const configFetchRateLimiter = ipRateLimiter('auth:config-fetch', 60, MINUTE_MS);

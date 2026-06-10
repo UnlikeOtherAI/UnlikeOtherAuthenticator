@@ -14,8 +14,10 @@ import type {
   IntegrationRequestDetailWithCredentials,
   IntegrationRequestStatus,
   IntegrationRequestSummary,
+  OrganisationTwoFaPolicy,
   SearchResult,
   Team,
+  TwoFaPolicy,
   UserSummary,
 } from '../features/admin/types';
 import { createApiClient } from './api-client';
@@ -59,12 +61,14 @@ export const adminService = {
     input: {
       label?: string;
       status?: 'active' | 'disabled';
+      twoFaPolicy?: TwoFaPolicy;
       allowedRedirectUrls?: string[];
     } & LoginRestrictionInput,
   ) =>
-    api.put<Domain>(`/internal/admin/domains/${encodeURIComponent(domain)}`, {
+    api.patch<Domain>(`/internal/admin/domains/${encodeURIComponent(domain)}`, {
       ...(input.label !== undefined ? { label: input.label } : {}),
       ...(input.status !== undefined ? { status: input.status } : {}),
+      ...(input.twoFaPolicy !== undefined ? { twoFaPolicy: input.twoFaPolicy } : {}),
       ...(input.allowedEmailDomains !== undefined
         ? { allowed_email_domains: input.allowedEmailDomains }
         : {}),
@@ -113,7 +117,7 @@ export const adminService = {
     }),
   getOrganisation: (orgId: string) =>
     api.get<AdminData['organisations'][number] | null>(`/internal/admin/organisations/${encodeURIComponent(orgId)}`),
-  updateOrganisation: (orgId: string, input: LoginRestrictionInput) =>
+  updateOrganisation: (orgId: string, input: LoginRestrictionInput & { twoFaPolicy?: OrganisationTwoFaPolicy }) =>
     api.patch<AdminData['organisations'][number] | null>(
       `/internal/admin/organisations/${encodeURIComponent(orgId)}`,
       {
@@ -121,6 +125,7 @@ export const adminService = {
           ? { allowed_email_domains: input.allowedEmailDomains }
           : {}),
         ...(input.allowedEmails !== undefined ? { allowed_emails: input.allowedEmails } : {}),
+        ...(input.twoFaPolicy !== undefined ? { twoFaPolicy: input.twoFaPolicy } : {}),
       },
     ),
   getTeams: () => api.get<Array<Team & { orgName: string }>>('/internal/admin/teams'),
@@ -140,6 +145,8 @@ export const adminService = {
     ),
   getUsers: () => api.get<UserSummary[]>('/internal/admin/users'),
   getUser: (userId: string) => api.get<UserSummary | null>(`/internal/admin/users/${encodeURIComponent(userId)}`),
+  resetUserTwoFactor: (userId: string) =>
+    api.post<UserSummary | null>(`/internal/admin/users/${encodeURIComponent(userId)}/2fa/disable`),
   getLogs: () => api.get<AdminData['logs']>('/internal/admin/logs'),
   getHandshakeErrors: () => api.get<AdminData['handshakeErrors']>('/internal/admin/handshake-errors'),
   getSettings: () => api.get<Pick<AdminData, 'bans' | 'apps'>>('/internal/admin/settings'),

@@ -9,7 +9,12 @@ import { Modal } from '../../components/ui/Modal';
 import { StatusBadge } from '../../components/ui/Status';
 import { adminService, type DomainRotateResponse } from '../../services/admin-service';
 import { useAdminUi } from '../shell/admin-ui';
-import type { Domain } from './types';
+import type { Domain, TwoFaPolicy } from './types';
+import {
+  DOMAIN_TWOFA_POLICY_OPTIONS,
+  isDomainTwoFaPolicy,
+  TwoFactorPolicySelect,
+} from './TwoFactorPolicySelect';
 
 type DomainOverviewTabProps = {
   domain: Domain;
@@ -28,7 +33,7 @@ export function DomainOverviewTab({ counts, domain }: DomainOverviewTabProps) {
   }, [domain.label]);
 
   const updateDomain = useMutation({
-    mutationFn: (input: { label?: string; status?: 'active' | 'disabled' }) =>
+    mutationFn: (input: { label?: string; status?: 'active' | 'disabled'; twoFaPolicy?: TwoFaPolicy }) =>
       adminService.updateDomain(domain.name, input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin'] }),
   });
@@ -80,6 +85,19 @@ export function DomainOverviewTab({ counts, domain }: DomainOverviewTabProps) {
         </div>
         <p className="mt-3 text-xs text-gray-400">Added {domain.created}</p>
       </Card>
+
+      <TwoFactorPolicySelect
+        title="Two-factor authentication"
+        description="Domain policy is combined with organisation policy at login; the strongest policy wins while config 2fa_enabled is the master gate."
+        value={domain.twoFaPolicy}
+        options={DOMAIN_TWOFA_POLICY_OPTIONS}
+        saving={updateDomain.isPending}
+        onSave={(next) =>
+          isDomainTwoFaPolicy(next)
+            ? updateDomain.mutateAsync({ twoFaPolicy: next })
+            : Promise.resolve()
+        }
+      />
 
       <Card className="p-5">
         <div className="mb-4">

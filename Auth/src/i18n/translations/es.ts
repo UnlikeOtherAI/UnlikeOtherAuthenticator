@@ -40,11 +40,18 @@ export const es = {
 
   'twoFactor.setup.instructions':
     'Escanea este codigo QR con una app autenticadora y luego ingresa el codigo de 6 digitos para verificar la configuracion.',
+  'twoFactor.setup.loading': 'Cargando codigo QR...',
+  'twoFactor.setup.manual': 'Clave de configuracion manual:',
+  'twoFactor.setup.error': 'No se pudo configurar la autenticacion de dos factores. Intentalo de nuevo.',
   'twoFactor.setup.submit': 'Activar 2FA',
   'twoFactor.setup.success': 'La autenticacion de dos factores esta habilitada',
+  'twoFactor.qr.alt': 'Codigo QR de configuracion de dos factores',
+  'twoFactor.qr.placeholder': 'El codigo QR aparecera aqui',
+  'twoFactor.code.label': 'Codigo de verificacion',
 
   'twoFactor.verify.instructions':
     'Ingresa el codigo de 6 digitos de tu app autenticadora para terminar de iniciar sesion.',
+  'twoFactor.verify.error': 'No se pudo verificar el codigo. Intentalo de nuevo.',
   'twoFactor.verify.submit': 'Verificar',
   'twoFactor.verify.success': 'Verificacion exitosa',
 

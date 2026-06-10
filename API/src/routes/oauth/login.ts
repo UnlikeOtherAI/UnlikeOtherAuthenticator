@@ -10,6 +10,7 @@ import { getOAuthClient } from '../../services/oauth/client.service.js';
 import { issueOAuthCode } from '../../services/oauth/oauth-code.service.js';
 import { validateRequestedResource } from '../../services/oauth/resource-validation.service.js';
 import { selectRedirectUrl } from '../../services/token.service.js';
+import { resolveTwoFaPolicy } from '../../services/twofactor-policy.service.js';
 import { buildPublicErrorBody } from '../../utils/error-response.js';
 import { parseRequiredPkceChallenge } from '../../utils/pkce.js';
 
@@ -73,10 +74,14 @@ export function registerOAuthLoginRoute(app: FastifyInstance): void {
         { prisma },
       );
 
-      // Fail-closed: 2FA users are blocked until the /oauth 2FA completion step
-      // lands (follow-up) — never bypassed.
-      if (config['2fa_enabled'] && twoFaEnabled) {
+      // Fail-closed: public /oauth 2FA completion is still a follow-up, so policy
+      // branches block completion instead of issuing a code.
+      const twoFaPolicy = await resolveTwoFaPolicy({ config, userId });
+      if (twoFaPolicy !== 'OFF' && twoFaEnabled) {
         return { kind: 'twofa' as const };
+      }
+      if (twoFaPolicy === 'REQUIRED') {
+        return { kind: 'twofa_enroll_required' as const };
       }
 
       const redirectUrl = selectRedirectUrl({
@@ -105,6 +110,10 @@ export function registerOAuthLoginRoute(app: FastifyInstance): void {
 
     if (outcome.kind === 'twofa') {
       reply.status(200).send({ ok: true, twofa_required: true });
+      return;
+    }
+    if (outcome.kind === 'twofa_enroll_required') {
+      reply.status(200).send({ ok: true, kind: 'twofa_enroll_required', twofa_enroll_required: true });
       return;
     }
     reply.status(200).send({ ok: true, redirect_to: outcome.redirectTo });

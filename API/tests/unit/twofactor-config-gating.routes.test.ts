@@ -14,6 +14,7 @@ const buildRedirectToUrlMock = vi.fn();
 const signTwoFaChallengeMock = vi.fn();
 const verifyTwoFaChallengeMock = vi.fn();
 const verifyTwoFactorForLoginMock = vi.fn();
+const resolveTwoFaPolicyMock = vi.fn();
 
 vi.mock('../../src/middleware/config-verifier.js', () => {
   return {
@@ -58,6 +59,12 @@ vi.mock('../../src/services/twofactor-login.service.js', () => {
   };
 });
 
+vi.mock('../../src/services/twofactor-policy.service.js', () => {
+  return {
+    resolveTwoFaPolicy: (...args: unknown[]) => resolveTwoFaPolicyMock(...args),
+  };
+});
+
 describe('2FA gated by config `2fa_enabled`', () => {
   beforeEach(() => {
     currentConfig = {
@@ -77,6 +84,11 @@ describe('2FA gated by config `2fa_enabled`', () => {
     signTwoFaChallengeMock.mockReset();
     verifyTwoFaChallengeMock.mockReset();
     verifyTwoFactorForLoginMock.mockReset();
+    resolveTwoFaPolicyMock.mockReset();
+    resolveTwoFaPolicyMock.mockImplementation(
+      ({ config }: { config: Pick<ClientConfig, '2fa_enabled'> }) =>
+        config['2fa_enabled'] === true ? 'OPTIONAL' : 'OFF',
+    );
 
     process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER =

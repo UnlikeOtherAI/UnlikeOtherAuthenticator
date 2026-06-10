@@ -10,6 +10,7 @@ import { registerInternalAdminOrganisationRoutes } from './organisations.js';
 import { registerInternalAdminReadRoutes } from './read.js';
 import { registerInternalAdminSuperuserRoutes } from './superusers.js';
 import { registerInternalAdminTokenRoute } from './token.js';
+import { registerInternalAdminUserRoutes } from './users.js';
 
 export function registerInternalAdminRoutes(app: FastifyInstance): void {
   registerInternalAdminConfigRoute(app);
@@ -20,6 +21,7 @@ export function registerInternalAdminRoutes(app: FastifyInstance): void {
   registerInternalAdminDomainRoutes(app);
   registerInternalAdminDomainEmailRoutes(app);
   registerInternalAdminDomainJwkRoutes(app);
+  registerInternalAdminUserRoutes(app);
   registerInternalAdminSuperuserRoutes(app);
   registerInternalAdminIntegrationRequestRoutes(app);
 }

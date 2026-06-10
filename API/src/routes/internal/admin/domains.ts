@@ -14,6 +14,7 @@ import {
 import { getAppLogger } from '../../../utils/app-logger.js';
 import { normalizeDomain } from '../../../utils/domain.js';
 import { AppError } from '../../../utils/errors.js';
+import { parseTwoFaPolicyInput, toPublicTwoFaPolicy } from '../../../services/twofactor-policy.service.js';
 
 const DomainParamsSchema = z.object({
   domain: z.string().trim().min(3).transform(normalizeDomain),
@@ -34,6 +35,7 @@ const DomainUpdateSchema = z
     allowed_email_domains: z.array(z.string()).max(50).optional(),
     allowed_emails: z.array(z.string()).max(200).optional(),
     allowed_redirect_urls: z.array(z.string().trim().min(1).max(2048)).max(50).optional(),
+    twoFaPolicy: z.enum(['off', 'optional', 'required']).optional(),
   })
   .strict();
 
@@ -106,6 +108,7 @@ function toAdminDomain(row: DomainMutationResult['domain']) {
     allowedEmailDomains: row.allowedEmailDomains,
     allowedEmails: row.allowedEmails,
     allowedRedirectUrls: row.allowedRedirectUrls,
+    twoFaPolicy: toPublicTwoFaPolicy(row.twoFaPolicy),
     created: displayDate(row.createdAt),
     hash: activeSecret ? `sha256:${activeSecret.hashPrefix}...` : 'not configured',
   };
@@ -176,6 +179,27 @@ export function registerInternalAdminDomainRoutes(app: FastifyInstance): void {
         allowedEmailDomains: body.allowed_email_domains,
         allowedEmails: body.allowed_emails,
         allowedRedirectUrls: body.allowed_redirect_urls,
+        twoFaPolicy:
+          body.twoFaPolicy === undefined ? undefined : parseTwoFaPolicyInput(body.twoFaPolicy),
+        actorEmail,
+      }),
+    );
+  });
+
+  app.patch('/internal/admin/domains/:domain', adminRoute(objectSchema), async (request) => {
+    const { domain } = DomainParamsSchema.parse(request.params);
+    const body = DomainUpdateSchema.parse(request.body);
+    const actorEmail = requireActorEmail(request);
+    return toAdminDomain(
+      await updateAdminDomain({
+        domain,
+        label: body.label,
+        status: body.status,
+        allowedEmailDomains: body.allowed_email_domains,
+        allowedEmails: body.allowed_emails,
+        allowedRedirectUrls: body.allowed_redirect_urls,
+        twoFaPolicy:
+          body.twoFaPolicy === undefined ? undefined : parseTwoFaPolicyInput(body.twoFaPolicy),
         actorEmail,
       }),
     );

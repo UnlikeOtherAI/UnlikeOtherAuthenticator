@@ -21,8 +21,12 @@ import { TransferOwnershipDialog } from '../components/dialogs/TransferOwnership
 import { LoginRestrictionSection } from '../components/sections/LoginRestrictionSection';
 import { adminService } from '../services/admin-service';
 import { useOrganisationQuery } from '../features/admin/admin-queries';
-import type { OrganisationMember, PreapprovedMember } from '../features/admin/types';
+import type { OrganisationMember, OrganisationTwoFaPolicy, PreapprovedMember } from '../features/admin/types';
 import { TeamTable } from '../features/admin/TeamTable';
+import {
+  ORGANISATION_TWOFA_POLICY_OPTIONS,
+  TwoFactorPolicySelect,
+} from '../features/admin/TwoFactorPolicySelect';
 import { useAdminUi } from '../features/shell/admin-ui';
 
 type OrgTab = 'teams' | 'members' | 'preapproved';
@@ -47,6 +51,11 @@ export function OrganisationDetailPage() {
   const updateRestriction = useMutation({
     mutationFn: (input: { allowedEmailDomains: string[]; allowedEmails: string[] }) =>
       adminService.updateOrganisation(orgId ?? '', input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin'] }),
+  });
+  const updateTwoFaPolicy = useMutation({
+    mutationFn: (twoFaPolicy: OrganisationTwoFaPolicy) =>
+      adminService.updateOrganisation(orgId ?? '', { twoFaPolicy }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin'] }),
   });
   const [tab, setTab] = useState<OrgTab>('teams');
@@ -90,6 +99,16 @@ export function OrganisationDetailPage() {
           allowedEmailDomains={org.allowedEmailDomains}
           allowedEmails={org.allowedEmails}
           onSave={(next) => updateRestriction.mutateAsync(next)}
+        />
+      </div>
+      <div className="mb-5">
+        <TwoFactorPolicySelect
+          title="Two-factor authentication"
+          description="Organisation policy is combined with the service domain policy at login; required always wins."
+          value={org.twoFaPolicy}
+          options={ORGANISATION_TWOFA_POLICY_OPTIONS}
+          saving={updateTwoFaPolicy.isPending}
+          onSave={(next) => updateTwoFaPolicy.mutateAsync(next)}
         />
       </div>
       <SegmentedTabs<OrgTab> value={tab} onChange={setTab} options={[{ label: 'Teams', value: 'teams' }, { label: 'Members', value: 'members' }, { label: 'Pre-approved', value: 'preapproved' }]} />

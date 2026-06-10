@@ -7,6 +7,8 @@ import {
   listLimit,
   method,
 } from './internal-admin.service.base.js';
+import { writeAuditLog, type AuditLogPrisma } from './audit-log.service.js';
+import { resetTwoFactorForUser } from './twofactor-disable.service.js';
 
 export async function getAdminLogs(limit = 100) {
   if (!isDatabaseEnabled()) return [];
@@ -103,4 +105,29 @@ export async function getAdminUser(userId: string) {
     method: method(latestLog?.authMethod),
     created: displayDate(user.createdAt),
   };
+}
+
+export async function resetAdminUserTwoFactor(params: {
+  actorEmail: string;
+  userId: string;
+}) {
+  const prisma = getAdminPrisma();
+  const user = await prisma.user.findUnique({
+    where: { id: params.userId },
+    select: { id: true, email: true, domain: true },
+  });
+  if (!user) return null;
+
+  await resetTwoFactorForUser({ userId: user.id }, { prisma });
+  await writeAuditLog(
+    {
+      actorEmail: params.actorEmail,
+      action: 'user.twofa_reset',
+      targetDomain: user.domain,
+      metadata: { userId: user.id, email: user.email },
+    },
+    { prisma: prisma as unknown as AuditLogPrisma },
+  );
+
+  return getAdminUser(user.id);
 }

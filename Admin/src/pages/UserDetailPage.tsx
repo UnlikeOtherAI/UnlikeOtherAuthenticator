@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { ActionButton, ActionDivider } from '../components/ui/ActionButton';
@@ -14,6 +15,7 @@ import { ChangeTeamRoleDialog } from '../components/dialogs/ChangeTeamRoleDialog
 import { EditUserDialog } from '../components/dialogs/EditUserDialog';
 import { useLogsQuery, useOrganisationsQuery, useUserQuery } from '../features/admin/admin-queries';
 import type { Organisation, OrganisationMember, Team, UserSummary } from '../features/admin/types';
+import { adminService } from '../services/admin-service';
 import { useAdminUi } from '../features/shell/admin-ui';
 
 type DialogState =
@@ -30,6 +32,7 @@ type TeamMembership = {
 export function UserDetailPage() {
   const { userId } = useParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { confirm } = useAdminUi();
   const [dialog, setDialog] = useState<DialogState | null>(null);
   const closeDialog = () => setDialog(null);
@@ -41,6 +44,10 @@ export function UserDetailPage() {
   const memberships = buildMemberships(organisations, userId);
   const recentLogs = logsQuery.data?.filter((log) => log.user === user?.email) ?? [];
   const { pageItems, pagination } = usePagination(memberships);
+  const resetTwoFa = useMutation({
+    mutationFn: () => adminService.resetUserTwoFactor(userId ?? ''),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin'] }),
+  });
 
   if (userQuery.isLoading || orgsQuery.isLoading) {
     return <p className="text-sm text-gray-400">Loading user...</p>;
@@ -68,7 +75,20 @@ export function UserDetailPage() {
           <>
             <Button onClick={() => setDialog({ kind: 'edit-user', user })}>Edit User</Button>
             <Button variant="primary" onClick={() => setDialog({ kind: 'add-to-team', user })}>Add to Team</Button>
-            <Button onClick={() => confirm(`Reset 2FA for ${user.email}?`, 'They will need to re-enroll before completing a protected login.')}>Reset 2FA</Button>
+            <Button
+              disabled={resetTwoFa.isPending}
+              onClick={() =>
+                confirm(
+                  `Reset 2FA for ${user.email}?`,
+                  'They will need to re-enroll before completing a protected login.',
+                  async () => {
+                    await resetTwoFa.mutateAsync();
+                  },
+                )
+              }
+            >
+              {resetTwoFa.isPending ? 'Resetting...' : 'Reset 2FA'}
+            </Button>
             <Button variant={user.status === 'banned' ? 'secondary' : 'danger'} onClick={() => confirm(`${user.status === 'banned' ? 'Unban' : 'Ban'} ${user.email}?`, 'A production write endpoint is required before this can change stored user state.')}>
               {user.status === 'banned' ? 'Unban' : 'Ban User'}
             </Button>

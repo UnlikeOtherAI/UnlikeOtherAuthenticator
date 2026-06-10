@@ -7,7 +7,9 @@ import {
   updateAdminOrganisation,
   updateAdminTeam,
 } from '../../../services/internal-admin.service.js';
+import { parseOrganisationTwoFaPolicyInput } from '../../../services/twofactor-policy.service.js';
 import { normalizeDomain } from '../../../utils/domain.js';
+import { AppError } from '../../../utils/errors.js';
 
 const OrgParamsSchema = z.object({ orgId: z.string().trim().min(1) });
 const TeamParamsSchema = z.object({
@@ -20,6 +22,9 @@ const LoginRestrictionsSchema = z
     allowed_emails: z.array(z.string()).max(200).optional(),
   })
   .strict();
+const OrganisationUpdateSchema = LoginRestrictionsSchema.extend({
+  twoFaPolicy: z.enum(['inherit', 'off', 'optional', 'required']).optional(),
+}).strict();
 const CreateOrganisationSchema = z
   .object({
     name: z.string().trim().min(1).max(100),
@@ -40,6 +45,12 @@ function adminRoute(responseSchema: Record<string, unknown>): RouteShorthandOpti
   };
 }
 
+function requireActorEmail(request: { adminAccessTokenClaims?: { email: string } }): string {
+  const email = request.adminAccessTokenClaims?.email;
+  if (!email) throw new AppError('INTERNAL', 500, 'MISSING_ADMIN_CLAIMS');
+  return email;
+}
+
 export function registerInternalAdminOrganisationRoutes(app: FastifyInstance): void {
   app.post('/internal/admin/organisations', adminRoute(objectSchema), async (request) => {
     const body = CreateOrganisationSchema.parse(request.body);
@@ -57,10 +68,15 @@ export function registerInternalAdminOrganisationRoutes(app: FastifyInstance): v
     adminRoute(nullableObjectSchema),
     async (request) => {
       const { orgId } = OrgParamsSchema.parse(request.params);
-      const body = LoginRestrictionsSchema.parse(request.body);
+      const body = OrganisationUpdateSchema.parse(request.body);
       return updateAdminOrganisation(orgId, {
         allowedEmailDomains: body.allowed_email_domains,
         allowedEmails: body.allowed_emails,
+        twoFaPolicy:
+          body.twoFaPolicy === undefined
+            ? undefined
+            : parseOrganisationTwoFaPolicyInput(body.twoFaPolicy),
+        actorEmail: requireActorEmail(request),
       });
     },
   );

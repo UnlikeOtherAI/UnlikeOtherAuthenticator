@@ -6,6 +6,10 @@ export type UoaRole = 'owner' | 'admin' | 'member';
 
 export type TeamRole = 'admin' | 'member';
 
+export type TwoFaPolicy = 'off' | 'optional' | 'required';
+
+export type OrganisationTwoFaPolicy = 'inherit' | TwoFaPolicy;
+
 export type Domain = {
   id: string;
   name: string;
@@ -15,6 +19,7 @@ export type Domain = {
   users: number;
   orgs: number;
   status: EntityStatus;
+  twoFaPolicy: TwoFaPolicy;
   allowedEmailDomains: string[];
   allowedEmails: string[];
   allowedRedirectUrls: string[];
@@ -105,6 +110,7 @@ export type Organisation = {
   allowedEmails: string[];
   created: string;
   owner: Pick<UserSummary, 'id' | 'name' | 'email'>;
+  twoFaPolicy: OrganisationTwoFaPolicy;
   teams: Team[];
   members: OrganisationMember[];
   preapprovedMembers: PreapprovedMember[];

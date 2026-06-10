@@ -1,6 +1,6 @@
 import React from 'react';
 
-export function QrCodeDisplay(props: { src?: string; alt?: string }): React.JSX.Element {
+export function QrCodeDisplay(props: { src?: string; alt?: string; placeholder?: string }): React.JSX.Element {
   const alt = props.alt ?? '2FA setup QR code';
   const dataUri = props.src?.trim();
 
@@ -14,7 +14,7 @@ export function QrCodeDisplay(props: { src?: string; alt?: string }): React.JSX.
           'bg-[var(--uoa-color-surface)] text-sm text-[var(--uoa-color-muted)]',
         ].join(' ')}
       >
-        QR code will appear here
+        {props.placeholder ?? 'QR code will appear here'}
       </div>
     );
   }

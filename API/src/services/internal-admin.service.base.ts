@@ -3,6 +3,7 @@ import type { Prisma } from '@prisma/client';
 import { getEnv } from '../config/env.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { normalizeDomain } from '../utils/domain.js';
+import { toPublicTwoFaPolicy } from './twofactor-policy.service.js';
 
 export { normalizeDomain };
 
@@ -120,6 +121,7 @@ export function formatAdminOrganisation(
     id: org.id,
     name: org.name,
     slug: org.slug,
+    twoFaPolicy: org.twoFaPolicy ? toPublicTwoFaPolicy(org.twoFaPolicy) : 'inherit',
     allowedEmailDomains: org.allowedEmailDomains,
     allowedEmails: org.allowedEmails,
     created: displayDate(org.createdAt),

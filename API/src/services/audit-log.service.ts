@@ -11,7 +11,10 @@ export type AdminAuditAction =
   | 'jwk.deactivated'
   | 'domain.disabled'
   | 'domain.enabled'
-  | 'domain.secret_rotated';
+  | 'domain.secret_rotated'
+  | 'domain.twofa_policy_updated'
+  | 'organisation.twofa_policy_updated'
+  | 'user.twofa_reset';
 
 export type AuditLogPrisma = Pick<PrismaClient, 'adminAuditLog'>;
 

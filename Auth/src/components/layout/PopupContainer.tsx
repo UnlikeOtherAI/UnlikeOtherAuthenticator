@@ -7,11 +7,17 @@ import { RegisterPage } from '../../pages/RegisterPage.js';
 import { ResetPasswordPage } from '../../pages/ResetPasswordPage.js';
 import { SetPasswordPage } from '../../pages/SetPasswordPage.js';
 import { SignedInPage } from '../../pages/SignedInPage.js';
+import { TwoFactorSetupPage } from '../../pages/TwoFactorSetupPage.js';
 import { TwoFactorVerifyPage } from '../../pages/TwoFactorVerifyPage.js';
 import { AuthLayout } from './AuthLayout.js';
 
 function PopupContent(): React.JSX.Element {
   const popup = usePopup();
+
+  // Required 2FA enrollment can be reached from password login or social callback.
+  if (popup.twoFactorSetup) {
+    return <TwoFactorSetupPage />;
+  }
 
   // When the social callback flow requires 2FA, the server redirects back to /auth
   // with a `twofa_token` so the popup can render the verification screen.

@@ -177,6 +177,16 @@ This revokes the refresh-token family AND invalidates the user's already-issued 
 
 Domain admin APIs (\`/domain/users\`, \`/domain/logs\`, etc.) and team-invite / access-request review APIs use the same \`Authorization: Bearer <client_hash>\` mechanism. The old global shared-secret bearer is NOT accepted for any customer-facing endpoint.
 
+### 4.7 Two-factor login branches
+
+When config \`2fa_enabled\` is false or absent, no 2FA branch runs. When it is true, UOA resolves DB policy from the Service/domain plus the user's Organisations using strongest-wins (\`off < optional < required\`).
+
+- Enrolled users get \`{ ok: true, twofa_required: true, twofa_token }\`; submit \`{ twofa_token, code }\` to \`POST /2fa/verify?config_url=...\` and follow \`redirect_to\`.
+- Required but unenrolled users get \`{ ok: true, kind: "twofa_enroll_required", twofa_enroll_required: true, setup_token, otpauth_uri?, qr_svg?, manual_secret? }\`; the Auth UI completes \`POST /2fa/enroll\` with the setup token and initial code before any authorization code is granted.
+- Optional and unenrolled users continue normally.
+
+For account settings, an authenticated user can call \`POST /2fa/setup\` with \`X-UOA-Access-Token\`, enroll with \`POST /2fa/enroll\`, and disable with \`POST /2fa/disable\` plus a current TOTP code. Disable is rejected generically when the effective policy is required.
+
 ---
 
 ## Phase 5 — Server startup payload: kill switch + feature flags

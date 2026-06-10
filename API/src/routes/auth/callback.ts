@@ -30,7 +30,9 @@ import { sendDeepLinkHandoff } from '../../services/auth-ui.service.js';
 import { isCustomSchemeUrl } from '../../utils/http-url.js';
 import { finalizeAuthenticatedUser } from '../../services/access-request-flow.service.js';
 import { requestRegistrationInstructions } from '../../services/auth-register.service.js';
+import { resolveTwoFaPolicy } from '../../services/twofactor-policy.service.js';
 import { signTwoFaChallenge } from '../../services/twofactor-challenge.service.js';
+import { startTwoFactorSetup } from '../../services/twofactor-setup.service.js';
 import { selectRedirectUrl } from '../../services/token.service.js';
 import { socialCallbackRateLimiter } from './rate-limit-keys.js';
 
@@ -257,7 +259,8 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         const { userId, twoFaEnabled } = socialLoginResult;
         const rememberMe = config.session?.remember_me_default ?? true;
 
-        if (config['2fa_enabled'] && twoFaEnabled) {
+        const twoFaPolicy = await resolveTwoFaPolicy({ config, userId });
+        if (twoFaPolicy !== 'OFF' && twoFaEnabled) {
           const twofa_token = await signTwoFaChallenge({
             userId,
             domain: config.domain,
@@ -272,6 +275,26 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
             audience: authServiceIdentifier,
           });
           return { kind: 'twofa' as const, twofa_token };
+        }
+
+        if (twoFaPolicy === 'REQUIRED') {
+          const setup = await startTwoFactorSetup(
+            {
+              userId,
+              config,
+              configUrl,
+              finalize: {
+                authMethod: provider,
+                redirectUrl,
+                rememberMe,
+                requestAccess: socialState.request_access === true,
+                codeChallenge: socialState.code_challenge,
+                codeChallengeMethod: socialState.code_challenge_method,
+              },
+            },
+            { prisma },
+          );
+          return { kind: 'twofa_enroll_required' as const, setupToken: setup.setup_token };
         }
 
         const finalResult = await finalizeAuthenticatedUser(
@@ -320,6 +343,19 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         u.searchParams.set('config_url', configUrl);
         u.searchParams.set('redirect_url', redirectUrl);
         u.searchParams.set('twofa_token', outcome.twofa_token);
+        if (socialState.request_access === true) {
+          u.searchParams.set('request_access', 'true');
+        }
+        redirectNoStore(reply, u.toString());
+        return;
+      }
+
+      if (outcome.kind === 'twofa_enroll_required') {
+        const u = new URL(`${baseUrl}/auth`);
+        u.searchParams.set('config_url', configUrl);
+        u.searchParams.set('redirect_url', redirectUrl);
+        u.searchParams.set('twofa_enroll_required', 'true');
+        u.searchParams.set('twofa_setup_token', outcome.setupToken);
         if (socialState.request_access === true) {
           u.searchParams.set('request_access', 'true');
         }

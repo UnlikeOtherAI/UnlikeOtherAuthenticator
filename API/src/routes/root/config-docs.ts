@@ -130,7 +130,8 @@ export const configJwtDocumentation = {
     },
   },
   optional_fields: {
-    '2fa_enabled': 'boolean (default false)',
+    '2fa_enabled':
+      'boolean (default false) — master gate for 2FA. When false or absent, effective 2FA policy is off regardless of Admin policy. When true, DB-backed ClientDomain and Organisation policies resolve strongest-wins: off < optional < required.',
     debug_enabled: 'boolean (default false)',
     user_scope: '"global" | "per_domain" (default "global")',
     allow_registration: 'boolean (default true)',

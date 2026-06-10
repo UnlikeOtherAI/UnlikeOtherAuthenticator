@@ -26,6 +26,12 @@ enum ClientDomainIntegrationStatus {
   DECLINED
 }
 
+enum TwoFaPolicy {
+  OFF
+  OPTIONAL
+  REQUIRED
+}
+
 model User {
   id                       String   @id @default(cuid())
   // Note: email is not globally unique because `user_scope` can be "per_domain".
@@ -47,13 +53,13 @@ model User {
   authorizationCodes     AuthorizationCode[]
   refreshTokens          RefreshToken[]
   loginLogs              LoginLog[]
-  ownedOrgs              Organisation[]      @relation("OrgOwner")
+  ownedOrgs              Organisation[]            @relation("OrgOwner")
   orgMembers             OrgMember[]
   teamMembers            TeamMember[]
   groupMembers           GroupMember[]
-  acceptedTeamInvites    TeamInvite[]        @relation("AcceptedTeamInvites")
+  acceptedTeamInvites    TeamInvite[]              @relation("AcceptedTeamInvites")
   accessRequests         AccessRequest[]
-  reviewedAccessRequests AccessRequest[]     @relation("ReviewedAccessRequests")
+  reviewedAccessRequests AccessRequest[]           @relation("ReviewedAccessRequests")
   featureFlagOverrides   FeatureFlagUserOverride[]
 
   @@index([email])
@@ -223,15 +229,16 @@ model HandshakeErrorLog {
 }
 
 model ClientDomain {
-  id                  String   @id @default(cuid())
-  domain              String   @unique
-  label               String   @db.VarChar(120)
-  status              String   @default("active") @db.VarChar(20)
-  allowedEmailDomains String[] @default([]) @map("allowed_email_domains")
-  allowedEmails       String[] @default([]) @map("allowed_emails")
-  allowedRedirectUrls String[] @default([]) @map("allowed_redirect_urls")
-  createdAt           DateTime @default(now()) @map("created_at")
-  updatedAt           DateTime @updatedAt @map("updated_at")
+  id                  String      @id @default(cuid())
+  domain              String      @unique
+  label               String      @db.VarChar(120)
+  status              String      @default("active") @db.VarChar(20)
+  twoFaPolicy         TwoFaPolicy @default(OPTIONAL) @map("two_fa_policy")
+  allowedEmailDomains String[]    @default([]) @map("allowed_email_domains")
+  allowedEmails       String[]    @default([]) @map("allowed_emails")
+  allowedRedirectUrls String[]    @default([]) @map("allowed_redirect_urls")
+  createdAt           DateTime    @default(now()) @map("created_at")
+  updatedAt           DateTime    @updatedAt @map("updated_at")
 
   secrets     ClientDomainSecret[]
   jwks        ClientDomainJwk[]
@@ -243,20 +250,20 @@ model ClientDomain {
 }
 
 model DomainEmailConfig {
-  domain          String   @id
-  enabled         Boolean  @default(false)
-  mailingDomain   String?  @map("mailing_domain")
-  fromAddress     String?  @map("from_address")
-  fromName        String?  @map("from_name")
-  replyToDefault  String?  @map("reply_to_default")
-  sesRegion       String   @default("eu-west-1") @map("ses_region")
-  sesVerification String?  @map("ses_verification")
-  sesDkim         String?  @map("ses_dkim")
-  sesVerificationToken String? @map("ses_verification_token")
-  dkimTokens      String[] @default([]) @map("dkim_tokens")
-  lastCheckedAt   DateTime? @map("last_checked_at")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  domain               String    @id
+  enabled              Boolean   @default(false)
+  mailingDomain        String?   @map("mailing_domain")
+  fromAddress          String?   @map("from_address")
+  fromName             String?   @map("from_name")
+  replyToDefault       String?   @map("reply_to_default")
+  sesRegion            String    @default("eu-west-1") @map("ses_region")
+  sesVerification      String?   @map("ses_verification")
+  sesDkim              String?   @map("ses_dkim")
+  sesVerificationToken String?   @map("ses_verification_token")
+  dkimTokens           String[]  @default([]) @map("dkim_tokens")
+  lastCheckedAt        DateTime? @map("last_checked_at")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
 
   domainRef ClientDomain @relation(fields: [domain], references: [domain], onDelete: Cascade)
 
@@ -355,15 +362,16 @@ model AdminAuditLog {
 }
 
 model Organisation {
-  id                  String   @id @default(cuid())
+  id                  String       @id @default(cuid())
   domain              String
-  name                String   @db.VarChar(100)
-  slug                String   @db.VarChar(120)
-  ownerId             String   @map("owner_id")
-  allowedEmailDomains String[] @default([]) @map("allowed_email_domains")
-  allowedEmails       String[] @default([]) @map("allowed_emails")
-  createdAt           DateTime @default(now()) @map("created_at")
-  updatedAt           DateTime @updatedAt @map("updated_at")
+  name                String       @db.VarChar(100)
+  slug                String       @db.VarChar(120)
+  ownerId             String       @map("owner_id")
+  twoFaPolicy         TwoFaPolicy? @map("two_fa_policy")
+  allowedEmailDomains String[]     @default([]) @map("allowed_email_domains")
+  allowedEmails       String[]     @default([]) @map("allowed_emails")
+  createdAt           DateTime     @default(now()) @map("created_at")
+  updatedAt           DateTime     @updatedAt @map("updated_at")
 
   owner          User            @relation("OrgOwner", fields: [ownerId], references: [id], onDelete: Restrict)
   members        OrgMember[]
@@ -411,11 +419,11 @@ model App {
   createdAt             DateTime @default(now()) @map("created_at")
   updatedAt             DateTime @updatedAt @map("updated_at")
 
-  org            Organisation            @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  killSwitches   KillSwitchEntry[]
-  flags          FeatureFlagDefinition[]
-  roleValues     FeatureFlagRoleValue[]
-  userOverrides  FeatureFlagUserOverride[]
+  org           Organisation              @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  killSwitches  KillSwitchEntry[]
+  flags         FeatureFlagDefinition[]
+  roleValues    FeatureFlagRoleValue[]
+  userOverrides FeatureFlagUserOverride[]
 
   @@unique([orgId, identifier])
   @@index([identifier])

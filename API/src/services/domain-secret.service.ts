@@ -22,6 +22,7 @@ import {
   type ClaimTokenCreated,
   type ClaimTokenPrisma,
 } from './integration-claim.service.js';
+import type { TwoFaPolicyValue } from './twofactor-policy.service.js';
 
 type DomainSecretPrisma = Pick<
   PrismaClient,
@@ -172,6 +173,7 @@ export async function updateAdminDomain(
     allowedEmailDomains?: string[];
     allowedEmails?: string[];
     allowedRedirectUrls?: string[];
+    twoFaPolicy?: TwoFaPolicyValue;
     actorEmail: string;
   },
   deps?: { prisma?: DomainSecretPrisma },
@@ -190,11 +192,12 @@ export async function updateAdminDomain(
     params.allowedRedirectUrls === undefined
       ? undefined
       : normalizeAllowedRedirectUrls(params.allowedRedirectUrls);
+  const twoFaPolicy = params.twoFaPolicy;
 
   return prisma.$transaction(async (tx) => {
     const prior = await tx.clientDomain.findUnique({
       where: { domain },
-      select: { status: true },
+      select: { status: true, twoFaPolicy: true },
     });
 
     const row = await tx.clientDomain.upsert({
@@ -206,6 +209,7 @@ export async function updateAdminDomain(
         ...(allowedEmailDomains ? { allowedEmailDomains } : {}),
         ...(allowedEmails ? { allowedEmails } : {}),
         ...(allowedRedirectUrls ? { allowedRedirectUrls } : {}),
+        ...(twoFaPolicy ? { twoFaPolicy } : {}),
       },
       update: {
         ...(label ? { label } : {}),
@@ -213,6 +217,7 @@ export async function updateAdminDomain(
         ...(allowedEmailDomains ? { allowedEmailDomains } : {}),
         ...(allowedEmails ? { allowedEmails } : {}),
         ...(allowedRedirectUrls ? { allowedRedirectUrls } : {}),
+        ...(twoFaPolicy ? { twoFaPolicy } : {}),
       },
       ...domainWithActiveSecret,
     });
@@ -226,6 +231,18 @@ export async function updateAdminDomain(
           action: nextStatus === 'disabled' ? 'domain.disabled' : 'domain.enabled',
           targetDomain: domain,
           metadata: { priorStatus: priorStatus ?? null, nextStatus },
+        },
+        { prisma: tx as unknown as AuditLogPrisma },
+      );
+    }
+
+    if (twoFaPolicy !== undefined && prior?.twoFaPolicy !== row.twoFaPolicy) {
+      await writeAuditLog(
+        {
+          actorEmail: params.actorEmail,
+          action: 'domain.twofa_policy_updated',
+          targetDomain: domain,
+          metadata: { priorPolicy: prior?.twoFaPolicy ?? null, nextPolicy: row.twoFaPolicy },
         },
         { prisma: tx as unknown as AuditLogPrisma },
       );

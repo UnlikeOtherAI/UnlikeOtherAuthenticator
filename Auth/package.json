@@ -8,7 +8,8 @@
     "build": "tsc -p tsconfig.json && vite build && vite build --ssr src/entry-server.tsx --outDir dist-ssr",
     "preview": "vite preview",
     "lint": "node ../node_modules/eslint/bin/eslint.js \"**/*.{ts,tsx,js,jsx,mjs,cjs}\" --no-error-on-unmatched-pattern",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
   },
   "dependencies": {
     "react": "^19.0.0",
@@ -22,6 +23,7 @@
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.7.3",
-    "vite": "^6.1.0"
+    "vite": "^6.1.0",
+    "vitest": "^2.1.9"
   }
 }

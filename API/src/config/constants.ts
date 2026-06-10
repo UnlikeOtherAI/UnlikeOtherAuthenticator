@@ -10,6 +10,9 @@ export const AUTHORIZATION_CODE_TTL_MS = 5 * 60 * 1000;
 // Brief 13 / Phase 8.6: 2FA challenges during login must be short-lived bearer tokens.
 export const TWOFA_CHALLENGE_TTL_MS = 5 * 60 * 1000;
 
+// Two-factor enrollment setup tokens bridge setup -> initial TOTP verification.
+export const TWOFA_SETUP_TTL_MS = 10 * 60 * 1000;
+
 // Social OAuth state is signed and short-lived to limit replay window.
 export const SOCIAL_STATE_TTL_MS = 10 * 60 * 1000;
 

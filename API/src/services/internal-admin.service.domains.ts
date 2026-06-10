@@ -13,6 +13,7 @@ import {
   normalizeDomain,
   secretAge,
 } from './internal-admin.service.base.js';
+import { toPublicTwoFaPolicy } from './twofactor-policy.service.js';
 
 export async function getAdminDomains(limit?: number) {
   if (!isDatabaseEnabled()) return [];
@@ -78,6 +79,7 @@ export async function getAdminDomains(limit?: number) {
         allowedEmailDomains: registry?.allowedEmailDomains ?? [],
         allowedEmails: registry?.allowedEmails ?? [],
         allowedRedirectUrls: registry?.allowedRedirectUrls ?? [],
+        twoFaPolicy: toPublicTwoFaPolicy(registry?.twoFaPolicy ?? 'OPTIONAL'),
         created: entry.createdAt ? displayDate(entry.createdAt) : '',
         hash: activeSecret ? `sha256:${activeSecret.hashPrefix}...` : 'not configured',
       };
@@ -154,6 +156,7 @@ export async function getAdminDomain(domain: string) {
     allowedEmailDomains: registry?.allowedEmailDomains ?? [],
     allowedEmails: registry?.allowedEmails ?? [],
     allowedRedirectUrls: registry?.allowedRedirectUrls ?? [],
+    twoFaPolicy: toPublicTwoFaPolicy(registry?.twoFaPolicy ?? 'OPTIONAL'),
     created: registry ? displayDate(registry.createdAt) : '',
     hash: activeSecret ? `sha256:${activeSecret.hashPrefix}...` : 'not configured',
   };

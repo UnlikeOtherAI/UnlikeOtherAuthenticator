@@ -31,10 +31,16 @@ export const authEndpoints: EndpointSchema[] = [
     },
     response: {
       ok: 'true',
+      kind: '"twofa_enroll_required" when mandatory 2FA setup must complete before code grant',
       code: 'authorization code',
       redirect_to: 'full redirect URL with code',
       twofa_required: 'true (only if 2FA needed)',
       twofa_token: 'challenge token (only if 2FA needed)',
+      twofa_enroll_required: 'true (only if effective policy is required and user is not enrolled)',
+      setup_token: 'short-lived 2FA setup token (only with twofa_enroll_required)',
+      otpauth_uri: 'otpauth:// URI (only with twofa_enroll_required)',
+      qr_svg: 'self-contained data:image/svg+xml;base64 QR with logo (only with twofa_enroll_required)',
+      manual_secret: 'manual-entry TOTP secret text (only with twofa_enroll_required)',
       access_request_status: '"pending" when request_access created a pending access request',
     },
   },
@@ -207,6 +213,47 @@ export const authEndpoints: EndpointSchema[] = [
       config_url: 'string (required)',
       email_domain: 'string (required)',
     },
+  },
+  {
+    method: 'POST',
+    path: '/2fa/setup',
+    description: 'Start or render TOTP 2FA enrollment for a user',
+    auth: 'config_url query param. Normal self-service requires X-UOA-Access-Token; forced enrollment rendering may send setup_token in the body before an auth code exists.',
+    body: {
+      setup_token:
+        'string (optional) — when present, re-renders the setup QR from the encrypted secret in the token',
+    },
+    response: {
+      otpauth_uri: 'otpauth:// URI for the authenticator app',
+      qr_svg: 'self-contained data:image/svg+xml;base64 QR with config logo embedded',
+      setup_token:
+        'short-lived signed JWT containing userId, encryptedSecret, domain, and configUrl',
+      manual_secret: 'base32 secret for manual authenticator entry',
+    },
+  },
+  {
+    method: 'POST',
+    path: '/2fa/enroll',
+    description: 'Verify the initial TOTP code and enable 2FA',
+    auth: 'config_url query param + setup_token body. X-UOA-Access-Token is accepted for normal self-service binding but is not required for forced enrollment before code grant.',
+    body: {
+      setup_token: 'string (required) — short-lived setup token from /2fa/setup or login enforcement',
+      code: 'string (required) — current 6-digit TOTP',
+    },
+    response: {
+      ok: 'true',
+      code: 'authorization code when enroll completes a forced login',
+      redirect_to: 'redirect URL when enroll completes a forced login',
+      access_request_status: '"pending" when forced login created a pending access request',
+    },
+  },
+  {
+    method: 'POST',
+    path: '/2fa/disable',
+    description: 'Disable enrolled 2FA for the access-token user',
+    auth: 'config_url query param + X-UOA-Access-Token. Blocked when effective policy is required.',
+    body: { code: 'string (required) — current 6-digit TOTP' },
+    response: { ok: 'true' },
   },
   {
     method: 'POST',

@@ -18,6 +18,11 @@ type LoginRequest = {
 type LoginResponse = {
   twofa_required?: boolean;
   twofa_token?: string;
+  twofa_enroll_required?: boolean;
+  setup_token?: string;
+  otpauth_uri?: string;
+  qr_svg?: string;
+  manual_secret?: string;
   redirect_to?: string;
 };
 
@@ -49,6 +54,8 @@ export function LoginForm(): React.JSX.Element {
     codeChallengeMethod,
     redirectTo,
     setView,
+    startTwoFactorVerify,
+    startTwoFactorSetup,
     requestAccess,
     clientId,
     state,
@@ -102,9 +109,17 @@ export function LoginForm(): React.JSX.Element {
     }
 
     if (result.data.twofa_required && typeof result.data.twofa_token === 'string') {
-      const twofaUrl = new URL(window.location.href);
-      twofaUrl.searchParams.set('twofa_token', result.data.twofa_token);
-      window.location.assign(twofaUrl.toString());
+      startTwoFactorVerify(result.data.twofa_token);
+      return;
+    }
+
+    if (result.data.twofa_enroll_required && typeof result.data.setup_token === 'string') {
+      startTwoFactorSetup({
+        setup_token: result.data.setup_token,
+        otpauth_uri: result.data.otpauth_uri,
+        qr_svg: result.data.qr_svg,
+        manual_secret: result.data.manual_secret,
+      });
       return;
     }
 

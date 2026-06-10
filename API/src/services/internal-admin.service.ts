@@ -25,7 +25,12 @@ export {
   updateAdminOrganisation,
   updateAdminTeam,
 } from './internal-admin.service.organisations.js';
-export { getAdminLogs, getAdminUser, getAdminUsers } from './internal-admin.service.users.js';
+export {
+  getAdminLogs,
+  getAdminUser,
+  getAdminUsers,
+  resetAdminUserTwoFactor,
+} from './internal-admin.service.users.js';
 
 export async function getAdminSession(claims: { userId: string; email: string; domain: string }) {
   return {

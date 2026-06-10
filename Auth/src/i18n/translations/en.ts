@@ -40,11 +40,18 @@ export const en = {
 
   'twoFactor.setup.instructions':
     'Scan this QR code with an authenticator app, then enter the 6-digit code to verify setup.',
+  'twoFactor.setup.loading': 'Loading QR code...',
+  'twoFactor.setup.manual': 'Manual setup key:',
+  'twoFactor.setup.error': 'Could not set up two-factor authentication. Please try again.',
   'twoFactor.setup.submit': 'Enable 2FA',
   'twoFactor.setup.success': 'Two-factor authentication is enabled',
+  'twoFactor.qr.alt': 'Two-factor setup QR code',
+  'twoFactor.qr.placeholder': 'QR code will appear here',
+  'twoFactor.code.label': 'Verification code',
 
   'twoFactor.verify.instructions':
     'Enter the 6-digit code from your authenticator app to finish signing in.',
+  'twoFactor.verify.error': 'Could not verify the code. Please try again.',
   'twoFactor.verify.submit': 'Verify',
   'twoFactor.verify.success': 'Verification successful',
 

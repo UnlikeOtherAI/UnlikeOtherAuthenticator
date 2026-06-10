@@ -11,7 +11,9 @@ import {
   parseRequestAccessFlag,
 } from '../../services/access-request-flow.service.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
+import { resolveTwoFaPolicy } from '../../services/twofactor-policy.service.js';
 import { signTwoFaChallenge } from '../../services/twofactor-challenge.service.js';
+import { startTwoFactorSetup, type TwoFactorSetupResult } from '../../services/twofactor-setup.service.js';
 import { selectRedirectUrl } from '../../services/token.service.js';
 import { parseRequiredPkceChallenge } from '../../utils/pkce.js';
 import { loginRateLimiter } from './rate-limit-keys.js';
@@ -80,8 +82,8 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
 
         const rememberMe = remember_me ?? config.session?.remember_me_default ?? true;
 
-        // Brief 13 / Phase 8.6 + 8.7: enforce 2FA verification during login when enabled via config.
-        if (config['2fa_enabled'] && twoFaEnabled) {
+        const twoFaPolicy = await resolveTwoFaPolicy({ config, userId });
+        if (twoFaPolicy !== 'OFF' && twoFaEnabled) {
           const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
 
           const twofa_token = await signTwoFaChallenge({
@@ -99,6 +101,27 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
           });
 
           return { kind: 'twofa' as const, twofa_token };
+        }
+
+        if (twoFaPolicy === 'REQUIRED') {
+          const setup = await startTwoFactorSetup(
+            {
+              userId,
+              config,
+              configUrl,
+              finalize: {
+                authMethod: 'email_password',
+                redirectUrl,
+                rememberMe,
+                requestAccess: parseRequestAccessFlag(request_access),
+                codeChallenge: pkce.codeChallenge,
+                codeChallengeMethod: pkce.codeChallengeMethod,
+              },
+            },
+            { prisma },
+          );
+
+          return { kind: 'twofa_enroll_required' as const, setup };
         }
 
         const finalResult = await finalizeAuthenticatedUser(
@@ -139,6 +162,17 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
 
       if (outcome.kind === 'twofa') {
         reply.status(200).send({ ok: true, twofa_required: true, twofa_token: outcome.twofa_token });
+        return;
+      }
+
+      if (outcome.kind === 'twofa_enroll_required') {
+        const setup: TwoFactorSetupResult = outcome.setup;
+        reply.status(200).send({
+          ok: true,
+          kind: 'twofa_enroll_required',
+          twofa_enroll_required: true,
+          ...setup,
+        });
         return;
       }
 

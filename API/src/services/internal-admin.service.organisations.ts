@@ -4,6 +4,7 @@ import {
   normalizeAllowedEmails,
 } from '../utils/email-domain-list.js';
 import { AppError } from '../utils/errors.js';
+import { writeAuditLog, type AuditLogPrisma } from './audit-log.service.js';
 import {
   DEFAULT_LIST_LIMIT,
   adminOrganisationArgs,
@@ -16,6 +17,7 @@ import {
 } from './internal-admin.service.base.js';
 import { deriveSlugWithValidation, isP2002Error, isP2003Error } from './organisation.service.base.js';
 import { deriveUniqueTeamSlug } from './team.service.base.js';
+import type { TwoFaPolicyValue } from './twofactor-policy.service.js';
 
 export async function getAdminOrganisations(limit?: number) {
   if (!isDatabaseEnabled()) return [];
@@ -132,22 +134,54 @@ export async function createAdminOrganisation(input: {
 
 export async function updateAdminOrganisation(
   orgId: string,
-  input: { allowedEmailDomains?: string[]; allowedEmails?: string[] },
+  input: {
+    actorEmail?: string;
+    allowedEmailDomains?: string[];
+    allowedEmails?: string[];
+    twoFaPolicy?: TwoFaPolicyValue | null;
+  },
 ) {
   const prisma = getAdminPrisma();
-  const existing = await prisma.organisation.findUnique({ where: { id: orgId }, select: { id: true } });
+  const existing = await prisma.organisation.findUnique({
+    where: { id: orgId },
+    select: { id: true, domain: true, twoFaPolicy: true },
+  });
   if (!existing) throw new AppError('NOT_FOUND', 404, 'ORGANISATION_NOT_FOUND');
 
-  const data: { allowedEmailDomains?: string[]; allowedEmails?: string[] } = {};
+  const data: {
+    allowedEmailDomains?: string[];
+    allowedEmails?: string[];
+    twoFaPolicy?: TwoFaPolicyValue | null;
+  } = {};
   if (input.allowedEmailDomains !== undefined) {
     data.allowedEmailDomains = normalizeAllowedEmailDomains(input.allowedEmailDomains);
   }
   if (input.allowedEmails !== undefined) {
     data.allowedEmails = normalizeAllowedEmails(input.allowedEmails);
   }
+  if (input.twoFaPolicy !== undefined) {
+    data.twoFaPolicy = input.twoFaPolicy;
+  }
 
   if (Object.keys(data).length > 0) {
     await prisma.organisation.update({ where: { id: orgId }, data });
+  }
+
+  if (input.twoFaPolicy !== undefined && input.twoFaPolicy !== existing.twoFaPolicy) {
+    if (!input.actorEmail) throw new AppError('INTERNAL', 500, 'MISSING_ADMIN_CLAIMS');
+    await writeAuditLog(
+      {
+        actorEmail: input.actorEmail,
+        action: 'organisation.twofa_policy_updated',
+        targetDomain: existing.domain,
+        metadata: {
+          orgId,
+          priorPolicy: existing.twoFaPolicy ?? null,
+          nextPolicy: input.twoFaPolicy,
+        },
+      },
+      { prisma: prisma as unknown as AuditLogPrisma },
+    );
   }
 
   return getAdminOrganisation(orgId);

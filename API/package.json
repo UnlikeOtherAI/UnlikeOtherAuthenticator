@@ -23,6 +23,7 @@
     "@fastify/helmet": "^13.0.2",
     "@prisma/client": "^6.3.1",
     "@sendgrid/mail": "^8.1.6",
+    "@unlikeotherai/qr-art": "^0.1.0",
     "argon2": "^0.44.0",
     "dotenv": "^16.6.1",
     "fastify": "^5.2.1",

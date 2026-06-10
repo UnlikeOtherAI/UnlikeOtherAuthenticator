@@ -8,6 +8,13 @@ export type AuthView =
   | 'access-requested'
   | 'signed-in';
 
+export type TwoFactorSetupState = {
+  setup_token: string;
+  otpauth_uri?: string;
+  qr_svg?: string;
+  manual_secret?: string;
+};
+
 /** True for a native deep-link target (custom scheme, not http/https). */
 function isCustomSchemeUrl(value: string): boolean {
   try {
@@ -23,6 +30,7 @@ export type PopupQueryParams = {
   codeChallenge: string | null;
   codeChallengeMethod: 'S256' | null;
   twoFaToken: string | null;
+  twoFaSetupToken: string | null;
   requestAccess: boolean;
   requestAccessStatus: 'pending' | null;
   /** Token from an email link landing (registration verify or password reset). */
@@ -49,6 +57,9 @@ export type PopupContextValue = PopupQueryParams & {
   view: AuthView;
   /** Navigate between auth views. */
   setView: (view: AuthView) => void;
+  startTwoFactorVerify: (token: string) => void;
+  startTwoFactorSetup: (setup: TwoFactorSetupState) => void;
+  twoFactorSetup: TwoFactorSetupState | null;
   /**
    * Perform the final OAuth redirect (authorization code flow).
    * This intentionally uses a normal top-level navigation, not postMessage.
@@ -71,6 +82,7 @@ export function parsePopupQueryParams(search: string): PopupQueryParams {
       codeChallenge: null,
       codeChallengeMethod: null,
       twoFaToken: null,
+      twoFaSetupToken: null,
       requestAccess: false,
       requestAccessStatus: null,
       emailToken: null,
@@ -88,6 +100,7 @@ export function parsePopupQueryParams(search: string): PopupQueryParams {
   const codeChallenge = params.get('code_challenge');
   const codeChallengeMethod = params.get('code_challenge_method');
   const twoFaToken = params.get('twofa_token');
+  const twoFaSetupToken = params.get('twofa_setup_token');
   const requestAccess = ['1', 'true', 'yes'].includes((params.get('request_access') ?? '').toLowerCase());
   const requestAccessStatus = params.get('request_access_status') === 'pending' ? 'pending' : null;
   const emailToken = params.get('email_token');
@@ -107,6 +120,7 @@ export function parsePopupQueryParams(search: string): PopupQueryParams {
     codeChallenge: codeChallenge && codeChallenge.trim() ? codeChallenge : null,
     codeChallengeMethod: codeChallengeMethod === 'S256' ? 'S256' : null,
     twoFaToken: twoFaToken && twoFaToken.trim() ? twoFaToken : null,
+    twoFaSetupToken: twoFaSetupToken && twoFaSetupToken.trim() ? twoFaSetupToken : null,
     requestAccess,
     requestAccessStatus,
     emailToken: emailToken && emailToken.trim() ? emailToken : null,
@@ -155,11 +169,23 @@ export function PopupProvider(props: {
 
   const parsed = useMemo(() => parsePopupQueryParams(search), [search]);
   const [view, setViewState] = useState<AuthView>(() => deriveInitialView(parsed));
+  const [twoFaToken, setTwoFaToken] = useState<string | null>(() => parsed.twoFaToken);
+  const [twoFactorSetup, setTwoFactorSetup] = useState<TwoFactorSetupState | null>(() =>
+    parsed.twoFaSetupToken ? { setup_token: parsed.twoFaSetupToken } : null,
+  );
   // Seeded from the query for the server-rendered handoff; updated by redirectTo for the
   // client-side flows (email/password, 2FA, verify-email) when the target is a custom scheme.
   const [handoffTarget, setHandoffTarget] = useState<string | null>(() => parsed.handoffTarget);
 
   const setView = useCallback((v: AuthView) => setViewState(v), []);
+  const startTwoFactorVerify = useCallback((token: string) => {
+    setTwoFaToken(token);
+    setViewState('login');
+  }, []);
+  const startTwoFactorSetup = useCallback((setup: TwoFactorSetupState) => {
+    setTwoFactorSetup(setup);
+    setViewState('login');
+  }, []);
 
   const value = useMemo<PopupContextValue>(() => {
     return {
@@ -168,7 +194,8 @@ export function PopupProvider(props: {
       redirectUrl: parsed.redirectUrl,
       codeChallenge: parsed.codeChallenge,
       codeChallengeMethod: parsed.codeChallengeMethod,
-      twoFaToken: parsed.twoFaToken,
+      twoFaToken,
+      twoFaSetupToken: parsed.twoFaSetupToken,
       requestAccess: parsed.requestAccess,
       requestAccessStatus: parsed.requestAccessStatus,
       emailToken: parsed.emailToken,
@@ -179,6 +206,9 @@ export function PopupProvider(props: {
       handoffTarget,
       view,
       setView,
+      startTwoFactorVerify,
+      startTwoFactorSetup,
+      twoFactorSetup,
       redirectTo: (url: string) => {
         if (typeof window === 'undefined') return;
         // Native deep links (custom schemes) launch the OS handler without unloading this
@@ -196,7 +226,8 @@ export function PopupProvider(props: {
     parsed.redirectUrl,
     parsed.codeChallenge,
     parsed.codeChallengeMethod,
-    parsed.twoFaToken,
+    twoFaToken,
+    parsed.twoFaSetupToken,
     parsed.requestAccess,
     parsed.requestAccessStatus,
     parsed.emailToken,
@@ -207,6 +238,9 @@ export function PopupProvider(props: {
     handoffTarget,
     view,
     setView,
+    startTwoFactorVerify,
+    startTwoFactorSetup,
+    twoFactorSetup,
     props.configUrl,
     props.config,
   ]);

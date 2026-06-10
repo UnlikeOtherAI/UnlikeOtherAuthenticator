@@ -235,7 +235,17 @@ The payload MUST NOT contain \`SHARED_SECRET\`, the \`client_secret\` from Phase
 
 Optional fields are documented at \`/api\` under \`config_jwt_documentation.optional_fields\`, including \`2fa_enabled\`, \`debug_enabled\`, \`user_scope\`, \`allow_registration\`, \`registration_mode\`, \`allowed_registration_domains\`, \`registration_domain_mapping\`, \`session.*\`, \`org_features.*\`, and \`access_requests.*\`.
 
-### 2.5 Sign the JWT
+### 2.5 Two-factor policy model
+
+\`2fa_enabled\` in the config JWT is the master gate. If it is false or absent, UOA treats 2FA as off for that integration even if an Admin policy exists. If it is true, UOA resolves the effective policy from the DB-backed Service/domain policy plus the user's Organisation policies. The strongest policy wins: \`off < optional < required\`.
+
+- \`off\`: login proceeds without a TOTP prompt.
+- \`optional\`: users may enroll themselves; enrolled users must verify a code at login.
+- \`required\`: an unenrolled user must complete setup before UOA grants an auth code.
+
+Normal self-service setup uses \`POST /2fa/setup\` with \`X-UOA-Access-Token\`, then \`POST /2fa/enroll\` with the returned \`setup_token\` and TOTP code. In required-login flows, UOA returns \`twofa_enroll_required\` plus a short-lived setup token before any auth code exists; the Auth UI uses that token to render the QR and complete \`/2fa/enroll\`, which then resumes the normal auth-code finalization path. \`POST /2fa/disable\` requires a current TOTP code and is blocked while the effective policy is \`required\`.
+
+### 2.6 Sign the JWT
 
 \`\`\`js
 import { SignJWT, importPKCS8 } from 'jose';
