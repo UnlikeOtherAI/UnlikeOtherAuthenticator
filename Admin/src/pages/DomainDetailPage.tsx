@@ -1,34 +1,51 @@
-import type { ReactNode } from 'react';
-import { useMemo, useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { Avatar } from '../components/ui/Avatar';
-import { Card } from '../components/ui/Card';
-import { TextField } from '../components/ui/FormFields';
 import { PageHeader } from '../components/ui/PageHeader';
-import { MethodBadge, StatusBadge } from '../components/ui/Status';
-import { DataTable, PaginationFooter, Td, usePagination } from '../components/ui/Table';
-import { SegmentedTabs } from '../components/ui/Tabs';
-import { LoginRestrictionSection } from '../components/sections/LoginRestrictionSection';
+import { StatusBadge } from '../components/ui/Status';
+import { UnderlineTabs } from '../components/ui/Tabs';
+import { DomainSigningKeysSection } from '../components/sections/DomainSigningKeysSection';
+import { Card } from '../components/ui/Card';
+import { DomainAccessTab } from '../features/admin/DomainAccessTab';
 import { DomainEmailSection } from '../features/admin/DomainEmailSection';
-import { TeamTable } from '../features/admin/TeamTable';
+import { DomainOverviewTab } from '../features/admin/DomainOverviewTab';
+import {
+  DomainOrganisationsTab,
+  DomainTeamsTab,
+  DomainUsersTab,
+} from '../features/admin/DomainDirectoryTabs';
 import { useDomainQuery } from '../features/admin/admin-queries';
-import { adminService } from '../services/admin-service';
 
-type DomainTab = 'organisations' | 'teams' | 'users';
+const DOMAIN_TABS = ['overview', 'organisations', 'teams', 'users', 'access', 'keys', 'email'] as const;
+type DomainTab = (typeof DOMAIN_TABS)[number];
+
+function isDomainTab(value: string | null): value is DomainTab {
+  return value !== null && (DOMAIN_TABS as readonly string[]).includes(value);
+}
 
 export function DomainDetailPage() {
   const { domainId } = useParams();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { data, isLoading } = useDomainQuery(domainId);
-  const [tab, setTab] = useState<DomainTab>('organisations');
-  const updateRestriction = useMutation({
-    mutationFn: (input: { allowedEmailDomains: string[]; allowedEmails: string[] }) =>
-      adminService.updateDomain(domainId ?? '', input),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin'] }),
-  });
+
+  const tabParam = searchParams.get('tab');
+  const tab: DomainTab = isDomainTab(tabParam) ? tabParam : 'overview';
+
+  function selectTab(next: DomainTab) {
+    setSearchParams(
+      (current) => {
+        const params = new URLSearchParams(current);
+        if (next === 'overview') {
+          params.delete('tab');
+        } else {
+          params.set('tab', next);
+        }
+        return params;
+      },
+      { replace: true },
+    );
+  }
 
   if (isLoading) {
     return <p className="text-sm text-gray-400">Loading domain...</p>;
@@ -49,178 +66,35 @@ export function DomainDetailPage() {
         badges={<StatusBadge status={domain.status} />}
         onBack={() => navigate('/domains')}
       />
-      <div className="mb-5 grid gap-3 md:grid-cols-3">
-        <MetricCard label="Organisations" value={String(organisations.length)} />
-        <MetricCard label="Teams" value={String(teams.length)} />
-        <MetricCard label="Users" value={String(users.length)} />
-      </div>
-      <div className="mb-5">
-        <LoginRestrictionSection
-          title="Login access whitelist"
-          description="Empty = no restriction. A user may sign in if their email domain OR their exact email is listed. Superusers always bypass."
-          allowedEmailDomains={domain.allowedEmailDomains}
-          allowedEmails={domain.allowedEmails}
-          onSave={(next) => updateRestriction.mutateAsync(next)}
-        />
-      </div>
-      <DomainEmailSection domain={domain.name} />
-      <SegmentedTabs<DomainTab>
+      <UnderlineTabs<DomainTab>
         value={tab}
-        onChange={setTab}
+        onChange={selectTab}
         options={[
-          { label: `Organisations (${organisations.length})`, value: 'organisations' },
-          { label: `Teams (${teams.length})`, value: 'teams' },
-          { label: `Users (${users.length})`, value: 'users' },
+          { label: 'Overview', value: 'overview' },
+          { label: 'Organisations', value: 'organisations', count: organisations.length },
+          { label: 'Teams', value: 'teams', count: teams.length },
+          { label: 'Users', value: 'users', count: users.length },
+          { label: 'Access', value: 'access' },
+          { label: 'Signing keys', value: 'keys' },
+          { label: 'Email', value: 'email' },
         ]}
       />
-      {tab === 'organisations' ? <OrganisationsTab organisations={organisations} /> : null}
-      {tab === 'teams' ? <TeamsTab teams={teams} /> : null}
-      {tab === 'users' ? <UsersTab users={users} /> : null}
+      {tab === 'overview' ? (
+        <DomainOverviewTab
+          domain={domain}
+          counts={{ organisations: organisations.length, teams: teams.length, users: users.length }}
+        />
+      ) : null}
+      {tab === 'organisations' ? <DomainOrganisationsTab organisations={organisations} /> : null}
+      {tab === 'teams' ? <DomainTeamsTab teams={teams} /> : null}
+      {tab === 'users' ? <DomainUsersTab users={users} /> : null}
+      {tab === 'access' ? <DomainAccessTab domain={domain} /> : null}
+      {tab === 'keys' ? (
+        <Card className="p-5">
+          <DomainSigningKeysSection domain={domain.name} />
+        </Card>
+      ) : null}
+      {tab === 'email' ? <DomainEmailSection domain={domain.name} /> : null}
     </>
-  );
-}
-
-function OrganisationsTab({ organisations }: { organisations: NonNullable<ReturnType<typeof useDomainQuery>['data']>['organisations'] }) {
-  const navigate = useNavigate();
-  const [query, setQuery] = useState('');
-  const filtered = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    if (!normalized) return organisations;
-    return organisations.filter((org) =>
-      [org.name, org.slug, org.owner.email, org.owner.name ?? ''].some((value) => value.toLowerCase().includes(normalized)),
-    );
-  }, [organisations, query]);
-  const { pageItems, pagination } = usePagination(filtered);
-
-  return (
-    <Card>
-      <div className="border-b border-gray-100 px-4 py-3">
-        <TextField className="w-64" placeholder="Search organisations..." type="search" value={query} onChange={(event) => setQuery(event.target.value)} />
-      </div>
-      <DataTable headers={['Organisation', 'Owner', 'Members', 'Teams', 'Created']}>
-        {pageItems.map((org) => (
-          <tr
-            key={org.id}
-            className="cursor-pointer transition-colors hover:bg-gray-50"
-            tabIndex={0}
-            onClick={() => navigate(`/organisations/${org.id}`)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                navigate(`/organisations/${org.id}`);
-              }
-            }}
-          >
-            <Td>
-              <div className="flex items-center gap-2">
-                <Avatar label={org.name} shape="square" />
-                <div>
-                  <Link to={`/organisations/${org.id}`} className="text-sm font-semibold text-indigo-600 hover:text-indigo-900" onClick={(event) => event.stopPropagation()}>{org.name}</Link>
-                  <p className="mt-0.5 text-xs text-gray-400">{org.slug}</p>
-                </div>
-              </div>
-            </Td>
-            <Td>
-              <p className="text-sm text-gray-700">{org.owner.name ?? org.owner.email}</p>
-              <p className="text-xs text-gray-400">{org.owner.email}</p>
-            </Td>
-            <Td>{org.members.length}</Td>
-            <Td>{org.teams.length}</Td>
-            <Td className="text-xs text-gray-400">{org.created}</Td>
-          </tr>
-        ))}
-        {pageItems.length === 0 ? (
-          <tr>
-            <Td colSpan={5} className="text-sm text-gray-400">No organisations match the search.</Td>
-          </tr>
-        ) : null}
-      </DataTable>
-      <PaginationFooter {...pagination} />
-    </Card>
-  );
-}
-
-function TeamsTab({ teams }: { teams: NonNullable<ReturnType<typeof useDomainQuery>['data']>['teams'] }) {
-  const [query, setQuery] = useState('');
-  const filtered = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    if (!normalized) return teams;
-    return teams.filter((team) =>
-      [team.name, team.orgName, team.description].some((value) => value.toLowerCase().includes(normalized)),
-    );
-  }, [teams, query]);
-  const { pageItems, pagination } = usePagination(filtered);
-
-  return (
-    <Card>
-      <div className="border-b border-gray-100 px-4 py-3">
-        <TextField className="w-64" placeholder="Search teams..." type="search" value={query} onChange={(event) => setQuery(event.target.value)} />
-      </div>
-      <TeamTable teams={pageItems} showOrganisation emptyMessage="No teams match the search." />
-      <PaginationFooter {...pagination} />
-    </Card>
-  );
-}
-
-function UsersTab({ users }: { users: NonNullable<ReturnType<typeof useDomainQuery>['data']>['users'] }) {
-  const navigate = useNavigate();
-  const [query, setQuery] = useState('');
-  const filtered = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    if (!normalized) return users;
-    return users.filter((user) => [user.name ?? '', user.email].some((value) => value.toLowerCase().includes(normalized)));
-  }, [users, query]);
-  const { pageItems, pagination } = usePagination(filtered);
-
-  return (
-    <Card>
-      <div className="border-b border-gray-100 px-4 py-3">
-        <TextField className="w-64" placeholder="Search by name or email..." type="search" value={query} onChange={(event) => setQuery(event.target.value)} />
-      </div>
-      <DataTable headers={['User', 'Method', '2FA', 'Last Login', 'Status']}>
-        {pageItems.map((user) => (
-          <tr
-            key={user.id}
-            className="cursor-pointer transition-colors hover:bg-gray-50"
-            tabIndex={0}
-            onClick={() => navigate(`/users/${user.id}`)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                navigate(`/users/${user.id}`);
-              }
-            }}
-          >
-            <Td>
-              <div className="flex items-center gap-2">
-                <Avatar label={user.name ?? user.email} />
-                <div>
-                  <span className="font-medium text-gray-700">{user.name ?? user.email}</span>
-                  <p className="text-xs text-gray-400">{user.email}</p>
-                </div>
-              </div>
-            </Td>
-            <Td><MethodBadge method={user.method} /></Td>
-            <Td><StatusBadge status={user.twofa ? 'On' : 'Off'} /></Td>
-            <Td className="text-xs text-gray-400">{user.lastLogin}</Td>
-            <Td><StatusBadge status={user.status} /></Td>
-          </tr>
-        ))}
-        {pageItems.length === 0 ? (
-          <tr>
-            <Td colSpan={5} className="text-sm text-gray-400">No users match the search.</Td>
-          </tr>
-        ) : null}
-      </DataTable>
-      <PaginationFooter {...pagination} />
-    </Card>
-  );
-}
-
-function MetricCard({ action, label, value }: { action?: ReactNode; label: string; value: string }) {
-  return (
-    <Card className="p-4">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">{label}</p>
-      <p className="mt-1 truncate text-lg font-semibold text-gray-900">{value}</p>
-      {action ? <div className="mt-1">{action}</div> : null}
-    </Card>
   );
 }

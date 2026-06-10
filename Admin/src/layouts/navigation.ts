@@ -21,7 +21,6 @@ export const navSections: NavSection[] = [
     label: 'Configuration',
     items: [
       { label: 'New Integrations', path: '/integrations', icon: 'bell', badgeKey: 'integrationRequests' },
-      { label: 'Secrets', path: '/secrets', icon: 'globe', badgeKey: 'domains' },
     ],
   },
   {

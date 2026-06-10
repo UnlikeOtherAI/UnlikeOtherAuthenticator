@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { Badge } from '../components/ui/Badge';
 import { Card } from '../components/ui/Card';
 import { SelectField, TextField } from '../components/ui/FormFields';
 import { PageHeader } from '../components/ui/PageHeader';
@@ -16,21 +17,29 @@ export function DirectoryDomainsPage() {
   const filteredDomains = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     return data.filter((domain) => {
-      const matchesQuery = !normalized || [domain.name, domain.label].some((value) => value.toLowerCase().includes(normalized));
+      const matchesQuery =
+        !normalized || [domain.name, domain.label, domain.hash].some((value) => value.toLowerCase().includes(normalized));
       const matchesStatus = status === 'all' || domain.status === status;
       return matchesQuery && matchesStatus;
     });
   }, [data, query, status]);
   const { pageItems, pagination } = usePagination(filteredDomains);
 
+  function open(domainId: string) {
+    navigate(`/domains/${encodeURIComponent(domainId)}`);
+  }
+
   return (
     <>
-      <PageHeader title="Domains" description="Browse organisations, teams, and users for each domain" />
+      <PageHeader
+        title="Domains"
+        description="Registered client domains — secrets, access, signing keys, and their organisations, teams, and users."
+      />
       <Card>
         <div className="flex flex-wrap items-end gap-3 border-b border-gray-100 px-4 py-3">
           <label className="block w-64 max-w-full">
             <span className="mb-1.5 block text-sm font-medium text-gray-700">Domain</span>
-            <TextField placeholder="Search by domain..." type="search" value={query} onChange={(event) => setQuery(event.target.value)} />
+            <TextField placeholder="Search by domain or hash..." type="search" value={query} onChange={(event) => setQuery(event.target.value)} />
           </label>
           <label className="block w-48 max-w-full">
             <span className="mb-1.5 block text-sm font-medium text-gray-700">Status</span>
@@ -45,22 +54,32 @@ export function DirectoryDomainsPage() {
           <p className="px-5 py-6 text-sm text-gray-400">Loading domains...</p>
         ) : (
           <>
-            <DataTable headers={['Domain', 'Organisations', 'Users', 'Status']}>
+            <DataTable headers={['Domain', 'Client Hash', 'Secret Age', 'Orgs', 'Users', 'Status']}>
               {pageItems.map((domain) => (
                 <tr
                   key={domain.id}
                   className="cursor-pointer transition-colors hover:bg-gray-50"
                   tabIndex={0}
-                  onClick={() => navigate(`/domains/${encodeURIComponent(domain.id)}`)}
+                  onClick={() => open(domain.id)}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter') {
-                      navigate(`/domains/${encodeURIComponent(domain.id)}`);
+                      open(domain.id);
                     }
                   }}
                 >
                   <Td>
                     <p className="font-semibold text-indigo-600">{domain.name}</p>
                     <p className="mt-0.5 text-xs text-gray-400">{domain.label}</p>
+                  </Td>
+                  <Td>
+                    <code className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">{domain.hash}</code>
+                  </Td>
+                  <Td>
+                    {domain.secretAge ? (
+                      <Badge variant={domain.secretOld ? 'amber' : 'green'}>{domain.secretAge}</Badge>
+                    ) : (
+                      <Badge>—</Badge>
+                    )}
                   </Td>
                   <Td>{domain.orgs}</Td>
                   <Td>{domain.users}</Td>
@@ -69,7 +88,7 @@ export function DirectoryDomainsPage() {
               ))}
               {pageItems.length === 0 ? (
                 <tr>
-                  <Td colSpan={4} className="text-sm text-gray-400">No domains match the filters.</Td>
+                  <Td colSpan={6} className="text-sm text-gray-400">No domains match the filters.</Td>
                 </tr>
               ) : null}
             </DataTable>
