@@ -287,6 +287,15 @@ This service is **stateless where possible**, standards-based, and API-first.
 5. Verify initial code
 6. Mark 2FA enabled
 
+### Clarification: Policy and Self-Service Enrollment
+
+* `2fa_enabled` in the signed config JWT is the master gate. If it is false or absent, effective 2FA is off regardless of Admin policy.
+* When `2fa_enabled` is true, the effective login policy is resolved from the Service/domain policy and the user's Organisation policies. The strongest policy wins: `off < optional < required`.
+* Service/domain policy supports Off, Optional, and Required. Organisation policy supports Inherit, Optional, and Required in Admin; inherited policy does not weaken the domain policy.
+* Optional policy lets users self-enroll and requires TOTP verification only for enrolled users. Required policy forces an unenrolled user to complete setup before an OAuth code is granted.
+* Self-service setup returns an `otpauth://` URI, a self-contained logo QR, and a short-lived setup token. Enrollment trusts the encrypted secret in the setup token, not any client-submitted plaintext secret.
+* Users may disable 2FA only when the effective policy is not Required. Admins may reset a user's 2FA enrollment but cannot view secrets or enroll on the user's behalf.
+
 ---
 
 ## 14. Tokens & OAuth Output

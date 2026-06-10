@@ -61,6 +61,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
         schema.auth.ts      — /api schema slice: auth endpoints
         schema.config-debug.ts — /api schema slice: config debug endpoints
         schema.integrations.ts — /api schema slice: integration endpoints
+        schema.internal-admin-apps.ts — /api schema slice: internal admin app/settings/search endpoints
         schema.internal-admin.ts — /api schema slice: internal admin endpoints
       /apps
         startup.ts          — GET /apps/startup (combined startup payload; config JWT auth)
@@ -109,6 +110,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
           domain-jwks.ts            — Per-domain JWKS management
           apps.ts                   — App registration for feature flags
           superusers.ts             — Super-user grant/revoke for ADMIN_AUTH_DOMAIN
+          users.ts                  — User admin write operations (2FA reset)
           integration-requests.ts   — Integration-request management
           index.ts                  — Route registration for /internal/admin
         /org
@@ -127,6 +129,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
         domain-context.ts   — Resolve domain context for org-scoped flows
         index.ts            — Route registration for /org
       /twofactor
+        self-service.ts     — POST /2fa/setup, /2fa/enroll, /2fa/disable
         verify.ts           — POST /2fa/verify
         reset.ts            — POST /2fa/reset
         index.ts            — Route registration for /2fa
@@ -209,12 +212,17 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       team.service.teams.ts                 — Team CRUD
       team.service.members.ts               — Team member lifecycle
       token.service.ts                      — Access token, refresh token, and authorization code orchestration
-      totp.service.ts                       — TOTP secret generation, QR code, verification
+      totp.service.ts                       — TOTP secret generation and verification
+      totp-qr.service.ts                    — Logo'd TOTP QR SVG rendering
       translation.service.ts                — AI translation fallback and caching
       twofactor-challenge.service.ts        — 2FA challenge lifecycle
+      twofactor-disable.service.ts          — 2FA disable/reset helpers
       twofactor-enroll.service.ts           — 2FA enrollment
       twofactor-login.service.ts            — 2FA login verification
+      twofactor-policy.service.ts           — DB-backed 2FA policy resolution
       twofactor-reset.service.ts            — 2FA reset flow
+      twofactor-setup.service.ts            — 2FA setup orchestration
+      twofactor-setup-token.service.ts      — Short-lived setup token signing/verification
       user-scope.service.ts                 — User scope handling (global vs per-domain)
       user-team-requirement.service.ts      — Per-domain team-requirement enforcement
       /social
