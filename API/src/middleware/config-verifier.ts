@@ -17,6 +17,7 @@ import {
   verifyConfigJwtSignature,
   type ClientConfig,
 } from '../services/config.service.js';
+import { applyDomainRedirectAllowlist } from '../services/domain-redirect-allowlist.service.js';
 import { containsSecretValue } from '../services/config-secret-scan.service.js';
 import { getConfigFetchDiagnostics } from '../services/config-fetch-diagnostics.service.js';
 import { readConfigJwtFromTrustedSource } from '../services/config-jwt-source.service.js';
@@ -278,6 +279,10 @@ export async function configVerifier(
     });
     throw err;
   }
+
+  // Union any admin-managed redirect allowlist for this domain into the verified config so every
+  // downstream redirect check (selectRedirectUrl) enforces the merged set. No-op when empty.
+  request.config = await applyDomainRedirectAllowlist(request.config);
 }
 
 function sleep(ms: number): Promise<void> {

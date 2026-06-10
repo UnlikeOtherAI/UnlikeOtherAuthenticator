@@ -11,6 +11,7 @@ import {
   verifyConfigJwtSignature,
 } from '../../services/config.service.js';
 import { readConfigJwtFromTrustedSource } from '../../services/config-jwt-source.service.js';
+import { applyDomainRedirectAllowlist } from '../../services/domain-redirect-allowlist.service.js';
 import { assertSocialProviderAllowed } from '../../services/social/index.js';
 import { getAppleProfileFromCode } from '../../services/social/apple.service.js';
 import { getFacebookProfileFromCode } from '../../services/social/facebook.service.js';
@@ -124,13 +125,16 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         configJwt,
         CONFIG_JWKS_URL,
       );
-      const config = validateConfigFields(payload);
-      assertConfigDomainMatchesConfigUrl(config.domain, configUrl);
-      assertSocialProviderAllowed({ config, provider });
+      const baseConfig = validateConfigFields(payload);
+      assertConfigDomainMatchesConfigUrl(baseConfig.domain, configUrl);
+      assertSocialProviderAllowed({ config: baseConfig, provider });
 
-      // configVerifier doesn't run on /auth/callback (the provider redirect is unauthenticated
-      // and config_url travels inside `state`). Mirror its contract so setTenantContextFromRequest
-      // can read the verified domain below.
+      // Mirror configVerifier (which doesn't run here — the provider redirect is unauthenticated
+      // and config_url travels inside `state`): union any admin-managed redirect allowlist so the
+      // redirect check below enforces the same merged set as the other auth routes.
+      const config = await applyDomainRedirectAllowlist(baseConfig);
+
+      // setTenantContextFromRequest reads the verified domain from request.config below.
       request.config = config;
       request.configUrl = configUrl;
 

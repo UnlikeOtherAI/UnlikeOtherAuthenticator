@@ -63,13 +63,16 @@ export const internalAdminEndpoints: EndpointSchema[] = [
   {
     method: 'PUT',
     path: '/internal/admin/domains/:domain',
-    description: 'Update domain label, active/disabled status, or login access whitelist',
+    description:
+      'Update domain label, active/disabled status, login access whitelist, or allowed redirect URLs',
     auth: adminAuth,
     body: {
       label: 'string (optional)',
       status: 'active | disabled (optional)',
       allowed_email_domains: 'string[] (optional, max 50)',
       allowed_emails: 'string[] (optional, max 200)',
+      allowed_redirect_urls:
+        'string[] (optional, max 50) — absolute http/https URLs unioned into the domain config redirect_urls allowlist; empty clears the additions',
     },
     response: { 200: 'Updated domain registry row', '401/403': authFailures },
   },

@@ -34,11 +34,11 @@ const fordMembers: OrganisationMember[] = [
 export const mockAdminData: AdminData = {
   stats: { users: 1247, domains: 12, orgs: 34, loginsToday: 389 },
   domains: [
-    { id: 'd1', name: 'app.acme.com', label: 'Acme App', secretAge: '12 days', secretOld: false, users: 487, orgs: 8, status: 'active', allowedEmailDomains: [], allowedEmails: [], created: '2024-01-15', hash: 'a3f8d2c1...' },
-    { id: 'd2', name: 'widgets.io', label: 'Widgets', secretAge: '89 days', secretOld: true, users: 312, orgs: 5, status: 'active', allowedEmailDomains: [], allowedEmails: [], created: '2023-11-02', hash: 'b7e2f9a4...' },
-    { id: 'd3', name: 'portal.example.com', label: 'Example Portal', secretAge: '5 days', secretOld: false, users: 198, orgs: 3, status: 'active', allowedEmailDomains: [], allowedEmails: [], created: '2024-03-01', hash: 'c1d4e8b3...' },
-    { id: 'd4', name: 'startup.dev', label: 'Startup Dev', secretAge: '22 days', secretOld: false, users: 104, orgs: 2, status: 'active', allowedEmailDomains: [], allowedEmails: [], created: '2024-02-10', hash: 'e4b7c9f1...' },
-    { id: 'd5', name: 'old-product.com', label: 'Old Product', secretAge: null, secretOld: false, users: 89, orgs: 2, status: 'disabled', allowedEmailDomains: [], allowedEmails: [], created: '2023-06-10', hash: 'd9c3a7e2...' },
+    { id: 'd1', name: 'app.acme.com', label: 'Acme App', secretAge: '12 days', secretOld: false, users: 487, orgs: 8, status: 'active', allowedEmailDomains: [], allowedEmails: [], allowedRedirectUrls: [], created: '2024-01-15', hash: 'a3f8d2c1...' },
+    { id: 'd2', name: 'widgets.io', label: 'Widgets', secretAge: '89 days', secretOld: true, users: 312, orgs: 5, status: 'active', allowedEmailDomains: [], allowedEmails: [], allowedRedirectUrls: [], created: '2023-11-02', hash: 'b7e2f9a4...' },
+    { id: 'd3', name: 'portal.example.com', label: 'Example Portal', secretAge: '5 days', secretOld: false, users: 198, orgs: 3, status: 'active', allowedEmailDomains: [], allowedEmails: [], allowedRedirectUrls: [], created: '2024-03-01', hash: 'c1d4e8b3...' },
+    { id: 'd4', name: 'startup.dev', label: 'Startup Dev', secretAge: '22 days', secretOld: false, users: 104, orgs: 2, status: 'active', allowedEmailDomains: [], allowedEmails: [], allowedRedirectUrls: [], created: '2024-02-10', hash: 'e4b7c9f1...' },
+    { id: 'd5', name: 'old-product.com', label: 'Old Product', secretAge: null, secretOld: false, users: 89, orgs: 2, status: 'disabled', allowedEmailDomains: [], allowedEmails: [], allowedRedirectUrls: [], created: '2023-06-10', hash: 'd9c3a7e2...' },
   ],
   organisations: [
     org('o1', 'Acme Engineering', 'acme-engineering', 'Jan 15, 2024', acmeMembers[0], [

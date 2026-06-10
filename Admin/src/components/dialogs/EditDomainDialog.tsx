@@ -8,6 +8,7 @@ import { adminService } from '../../services/admin-service';
 import type { Domain } from '../../features/admin/types';
 import { AllowedEmailDomainsField } from '../sections/AllowedEmailDomainsField';
 import { AllowedEmailsField } from '../sections/AllowedEmailsField';
+import { AllowedRedirectUrlsField } from '../sections/AllowedRedirectUrlsField';
 import { DomainSigningKeysSection } from '../sections/DomainSigningKeysSection';
 
 type DomainFormState = {
@@ -15,6 +16,7 @@ type DomainFormState = {
   status: 'active' | 'disabled';
   allowedEmailDomains: string[];
   allowedEmails: string[];
+  allowedRedirectUrls: string[];
 };
 
 export function EditDomainDialog({ domain, onClose, open }: { domain: Domain | null; onClose: () => void; open: boolean }) {
@@ -24,6 +26,7 @@ export function EditDomainDialog({ domain, onClose, open }: { domain: Domain | n
     status: 'active',
     allowedEmailDomains: [],
     allowedEmails: [],
+    allowedRedirectUrls: [],
   });
   const updateDomain = useMutation({
     mutationFn: (input: { domain: string; values: DomainFormState }) =>
@@ -38,6 +41,7 @@ export function EditDomainDialog({ domain, onClose, open }: { domain: Domain | n
       status: domain.status === 'disabled' ? 'disabled' : 'active',
       allowedEmailDomains: domain.allowedEmailDomains,
       allowedEmails: domain.allowedEmails,
+      allowedRedirectUrls: domain.allowedRedirectUrls,
     });
   }, [domain]);
 
@@ -76,6 +80,19 @@ export function EditDomainDialog({ domain, onClose, open }: { domain: Domain | n
               <option value="active">Active</option>
               <option value="disabled">Disabled</option>
             </SelectField>
+          </FieldShell>
+          <div>
+            <p className="text-sm font-medium text-gray-700">Allowed redirect URLs</p>
+            <p className="mt-1 text-xs text-gray-400">
+              Extra redirect targets permitted for this domain, in addition to those declared in the
+              client&apos;s signed config. Matched byte-for-byte; empty = no additions.
+            </p>
+          </div>
+          <FieldShell label="Redirect URLs">
+            <AllowedRedirectUrlsField
+              value={form.allowedRedirectUrls}
+              onChange={(next) => setForm({ ...form, allowedRedirectUrls: next })}
+            />
           </FieldShell>
           <div>
             <p className="text-sm font-medium text-gray-700">Login access whitelist</p>

@@ -229,6 +229,7 @@ model ClientDomain {
   status              String   @default("active") @db.VarChar(20)
   allowedEmailDomains String[] @default([]) @map("allowed_email_domains")
   allowedEmails       String[] @default([]) @map("allowed_emails")
+  allowedRedirectUrls String[] @default([]) @map("allowed_redirect_urls")
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @updatedAt @map("updated_at")
 

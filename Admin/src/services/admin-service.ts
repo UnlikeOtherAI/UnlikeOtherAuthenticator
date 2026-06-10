@@ -56,7 +56,11 @@ export const adminService = {
     }),
   updateDomain: (
     domain: string,
-    input: { label?: string; status?: 'active' | 'disabled' } & LoginRestrictionInput,
+    input: {
+      label?: string;
+      status?: 'active' | 'disabled';
+      allowedRedirectUrls?: string[];
+    } & LoginRestrictionInput,
   ) =>
     api.put<Domain>(`/internal/admin/domains/${encodeURIComponent(domain)}`, {
       ...(input.label !== undefined ? { label: input.label } : {}),
@@ -65,6 +69,9 @@ export const adminService = {
         ? { allowed_email_domains: input.allowedEmailDomains }
         : {}),
       ...(input.allowedEmails !== undefined ? { allowed_emails: input.allowedEmails } : {}),
+      ...(input.allowedRedirectUrls !== undefined
+        ? { allowed_redirect_urls: input.allowedRedirectUrls }
+        : {}),
     }),
   rotateDomainSecret: (domain: string, deliveryMode: IntegrationClaimDeliveryMode = 'email') =>
     api.post<DomainRotateResponse>(

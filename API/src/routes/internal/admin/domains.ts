@@ -33,6 +33,7 @@ const DomainUpdateSchema = z
     status: z.enum(['active', 'disabled']).optional(),
     allowed_email_domains: z.array(z.string()).max(50).optional(),
     allowed_emails: z.array(z.string()).max(200).optional(),
+    allowed_redirect_urls: z.array(z.string().trim().min(1).max(2048)).max(50).optional(),
   })
   .strict();
 
@@ -104,6 +105,7 @@ function toAdminDomain(row: DomainMutationResult['domain']) {
     status: row.status === 'disabled' ? 'disabled' : 'active',
     allowedEmailDomains: row.allowedEmailDomains,
     allowedEmails: row.allowedEmails,
+    allowedRedirectUrls: row.allowedRedirectUrls,
     created: displayDate(row.createdAt),
     hash: activeSecret ? `sha256:${activeSecret.hashPrefix}...` : 'not configured',
   };
@@ -173,6 +175,7 @@ export function registerInternalAdminDomainRoutes(app: FastifyInstance): void {
         status: body.status,
         allowedEmailDomains: body.allowed_email_domains,
         allowedEmails: body.allowed_emails,
+        allowedRedirectUrls: body.allowed_redirect_urls,
         actorEmail,
       }),
     );

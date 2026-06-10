@@ -17,6 +17,7 @@ export type Domain = {
   status: EntityStatus;
   allowedEmailDomains: string[];
   allowedEmails: string[];
+  allowedRedirectUrls: string[];
   created: string;
   hash: string;
 };

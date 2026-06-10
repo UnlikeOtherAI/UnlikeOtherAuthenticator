@@ -14,6 +14,7 @@ import {
   normalizeAllowedEmailDomains,
   normalizeAllowedEmails,
 } from '../utils/email-domain-list.js';
+import { normalizeAllowedRedirectUrls } from '../utils/redirect-url-list.js';
 import { AppError } from '../utils/errors.js';
 import { writeAuditLog, type AuditLogPrisma } from './audit-log.service.js';
 import {
@@ -170,6 +171,7 @@ export async function updateAdminDomain(
     status?: DomainStatus;
     allowedEmailDomains?: string[];
     allowedEmails?: string[];
+    allowedRedirectUrls?: string[];
     actorEmail: string;
   },
   deps?: { prisma?: DomainSecretPrisma },
@@ -184,6 +186,10 @@ export async function updateAdminDomain(
       : normalizeAllowedEmailDomains(params.allowedEmailDomains);
   const allowedEmails =
     params.allowedEmails === undefined ? undefined : normalizeAllowedEmails(params.allowedEmails);
+  const allowedRedirectUrls =
+    params.allowedRedirectUrls === undefined
+      ? undefined
+      : normalizeAllowedRedirectUrls(params.allowedRedirectUrls);
 
   return prisma.$transaction(async (tx) => {
     const prior = await tx.clientDomain.findUnique({
@@ -199,12 +205,14 @@ export async function updateAdminDomain(
         status: status ?? 'active',
         ...(allowedEmailDomains ? { allowedEmailDomains } : {}),
         ...(allowedEmails ? { allowedEmails } : {}),
+        ...(allowedRedirectUrls ? { allowedRedirectUrls } : {}),
       },
       update: {
         ...(label ? { label } : {}),
         ...(status ? { status } : {}),
         ...(allowedEmailDomains ? { allowedEmailDomains } : {}),
         ...(allowedEmails ? { allowedEmails } : {}),
+        ...(allowedRedirectUrls ? { allowedRedirectUrls } : {}),
       },
       ...domainWithActiveSecret,
     });
