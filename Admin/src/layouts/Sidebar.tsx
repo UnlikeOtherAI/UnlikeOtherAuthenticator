@@ -42,19 +42,24 @@ export function Sidebar() {
           <img src={adminAssets.adminIcon} width="56" height="56" className="h-14 w-14 rounded-xl object-cover" alt="UOA" />
         </div>
         <nav className="flex-1 px-2 py-2">
-          {navSections.map((section) => (
-            <div key={section.label}>
-              <p className="mb-1 mt-4 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-600 first:mt-2">{section.label}</p>
-              {section.items.map((item) => (
-                <SidebarLink
-                  key={item.path}
-                  item={item}
-                  badge={getSidebarBadge(item, data, pendingIntegrationCount)}
-                  onClick={closeSidebar}
-                />
-              ))}
-            </div>
-          ))}
+          {navSections.map((section) => {
+            const visibleItems = section.items
+              .map((item) => ({ item, badge: getSidebarBadge(item, data, pendingIntegrationCount) }))
+              .filter(({ item, badge }) => !(item.hideWhenEmpty && !badge));
+
+            if (visibleItems.length === 0) {
+              return null;
+            }
+
+            return (
+              <div key={section.label}>
+                <p className="mb-1 mt-4 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-600 first:mt-2">{section.label}</p>
+                {visibleItems.map(({ item, badge }) => (
+                  <SidebarLink key={item.path} item={item} badge={badge} onClick={closeSidebar} />
+                ))}
+              </div>
+            );
+          })}
         </nav>
         <div className="border-t border-slate-800 p-2">
           <button className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left transition-colors hover:bg-slate-800" type="button" onClick={signOut}>
@@ -89,7 +94,7 @@ function SidebarLink({ badge, item, onClick }: { badge?: SidebarBadge; item: Nav
         <Badge
           className={cn(
             'shrink-0',
-            badge.tone === 'alert' ? 'bg-red-900 text-red-300' : 'bg-slate-700 text-slate-300',
+            badge.tone === 'alert' ? 'bg-red-600 text-white' : 'bg-slate-700 text-slate-300',
           )}
         >
           {badge.label}

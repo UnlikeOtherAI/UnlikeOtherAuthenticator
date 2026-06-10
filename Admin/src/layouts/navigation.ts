@@ -5,6 +5,8 @@ export type NavItem = {
   path: string;
   icon: IconName;
   badgeKey?: 'domains' | 'orgs' | 'users' | 'teams' | 'integrationRequests';
+  // Only render this item when its badge has a value (e.g. hide until there is an actual new integration).
+  hideWhenEmpty?: boolean;
 };
 
 export type NavSection = {
@@ -20,7 +22,7 @@ export const navSections: NavSection[] = [
   {
     label: 'Configuration',
     items: [
-      { label: 'New Integrations', path: '/integrations', icon: 'bell', badgeKey: 'integrationRequests' },
+      { label: 'New Integrations', path: '/integrations', icon: 'bell', badgeKey: 'integrationRequests', hideWhenEmpty: true },
     ],
   },
   {

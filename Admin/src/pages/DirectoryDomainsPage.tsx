@@ -13,7 +13,8 @@ export function DirectoryDomainsPage() {
   const { data = [], isLoading } = useDomainsQuery();
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
-  const [status, setStatus] = useState('all');
+  // Default to active services only; disabled ones are opt-in via the Status filter.
+  const [status, setStatus] = useState('active');
   const filteredDomains = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     return data.filter((domain) => {
