@@ -4,6 +4,7 @@ import {
   isAdminStaticAssetPath,
   readAdminIndexHtml,
   readAdminUiAsset,
+  readAdminUiAssetIfExists,
 } from '../services/admin-ui.service.js';
 
 export function registerAdminUiRoutes(app: FastifyInstance): void {
@@ -26,10 +27,15 @@ export function registerAdminUiRoutes(app: FastifyInstance): void {
     const rel = params['*'] ?? '';
 
     if (isAdminStaticAssetPath(rel)) {
-      const { body, contentType } = await readAdminUiAsset({ relativePath: rel });
-      reply.header('Cache-Control', 'public, max-age=3600');
-      reply.type(contentType).status(200).send(body);
-      return;
+      const asset = await readAdminUiAssetIfExists({ relativePath: rel });
+      if (asset) {
+        reply.header('Cache-Control', 'public, max-age=3600');
+        reply.type(asset.contentType).status(200).send(asset.body);
+        return;
+      }
+      // Path looked like a file (e.g. an SPA deep link ending in a domain such as
+      // `domains/api.example.com`) but no such asset exists — serve the SPA shell so the
+      // client router can render it on hard refresh.
     }
 
     const html = await readAdminIndexHtml();

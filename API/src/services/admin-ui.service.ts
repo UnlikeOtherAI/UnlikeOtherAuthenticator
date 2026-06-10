@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { AppError } from '../utils/errors.js';
 import { readStaticFileUnderRoot } from '../utils/static-file.js';
 
 function repoRootFrom(metaUrl: string): string {
@@ -55,4 +56,22 @@ export async function readAdminUiAsset(params: {
 }): Promise<{ body: Buffer; contentType: string }> {
   const distDir = adminDistDirFrom(import.meta.url);
   return readStaticFileUnderRoot({ rootDir: distDir, relativePath: params.relativePath });
+}
+
+/**
+ * Like {@link readAdminUiAsset} but returns null when the path looks like an asset yet no such
+ * file exists. This lets the `/admin/*` SPA route fall back to index.html for deep links whose
+ * last path segment merely contains dots (e.g. a domain name like `api.example.com`), which
+ * `path.extname` otherwise mistakes for a file extension. Path-traversal and other errors still
+ * propagate.
+ */
+export async function readAdminUiAssetIfExists(params: {
+  relativePath: string;
+}): Promise<{ body: Buffer; contentType: string } | null> {
+  try {
+    return await readAdminUiAsset(params);
+  } catch (err) {
+    if (err instanceof AppError && err.statusCode === 404) return null;
+    throw err;
+  }
 }
