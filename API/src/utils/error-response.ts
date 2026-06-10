@@ -186,8 +186,10 @@ function explainKnownCode(
       };
     case 'INVALID_REDIRECT_URL':
       return {
-        summary: 'The supplied redirect_url is not a valid absolute HTTP(S) URL.',
-        hints: ['Use a full http:// or https:// redirect URL.'],
+        summary: 'The supplied redirect_url is not an acceptable redirect target.',
+        hints: [
+          'Use an https:// URL (any host), an http:// loopback URL (localhost/127.0.0.1/[::1]), or a native custom-scheme deep link (e.g. com.acme.app://callback).',
+        ],
       };
     case 'REDIRECT_URL_NOT_ALLOWED':
       return {

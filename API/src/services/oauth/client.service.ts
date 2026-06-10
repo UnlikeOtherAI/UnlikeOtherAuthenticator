@@ -7,23 +7,13 @@ import type { OAuthClient } from '@prisma/client';
 
 import { getAdminPrisma } from '../../db/prisma.js';
 import { AppError } from '../../utils/errors.js';
+import { tryParseRedirectUrl } from '../../utils/http-url.js';
 
 /** Validate a redirect URI per RFC 8252 native-app guidance: https anywhere, http
- *  only for loopback, and custom (non-http) schemes for native deep links. */
+ *  only for loopback, and custom (non-http) schemes for native deep links. Shares the
+ *  single redirect-URL policy used by the config-JWT and admin-allowlist paths. */
 export function isAllowedRedirectUri(value: string): boolean {
-  let url: URL;
-  try {
-    url = new URL(value);
-  } catch {
-    return false;
-  }
-  if (url.protocol === 'https:') return true;
-  if (url.protocol === 'http:') {
-    return url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '[::1]';
-  }
-  // Custom scheme (e.g. cursor://, vscode://) for native clients: require a scheme
-  // and some authority/path so it isn't an empty or malformed value.
-  return url.protocol.length > 1 && value.includes('://') && value.length > url.protocol.length + 3;
+  return Boolean(tryParseRedirectUrl(value));
 }
 
 function generateClientId(): string {

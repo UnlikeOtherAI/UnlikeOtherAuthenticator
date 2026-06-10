@@ -72,7 +72,7 @@ export const internalAdminEndpoints: EndpointSchema[] = [
       allowed_email_domains: 'string[] (optional, max 50)',
       allowed_emails: 'string[] (optional, max 200)',
       allowed_redirect_urls:
-        'string[] (optional, max 50) — absolute http/https URLs unioned into the domain config redirect_urls allowlist; empty clears the additions',
+        'string[] (optional, max 50) — redirect targets (https any host, http loopback-only, or native custom-scheme deep links) unioned into the domain config redirect_urls allowlist; empty clears the additions',
     },
     response: { 200: 'Updated domain registry row', '401/403': authFailures },
   },

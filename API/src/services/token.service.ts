@@ -12,7 +12,7 @@ import { AppError } from '../utils/errors.js';
 import { getAppLogger } from '../utils/app-logger.js';
 import { normalizeDomain } from '../utils/domain.js';
 import type { ClientConfig } from './config.service.js';
-import { tryParseHttpUrl } from '../utils/http-url.js';
+import { tryParseRedirectUrl } from '../utils/http-url.js';
 import { verifyPkceCodeVerifier } from '../utils/pkce.js';
 import { getUserOrgContext, type OrgContext } from './org-context.service.js';
 import { ensureUserHasRequiredTeam } from './user-team-requirement.service.js';
@@ -39,8 +39,8 @@ function sharedSecretKey(sharedSecret: string): Uint8Array {
   return new TextEncoder().encode(sharedSecret);
 }
 
-function parseHttpUrl(value: string): URL {
-  const u = tryParseHttpUrl(value);
+function parseRedirectUrl(value: string): URL {
+  const u = tryParseRedirectUrl(value);
   if (!u) throw new AppError('BAD_REQUEST', 400, 'INVALID_REDIRECT_URL');
   return u;
 }
@@ -54,7 +54,7 @@ export function selectRedirectUrl(params: {
     if (!params.allowedRedirectUrls.includes(requested)) {
       throw new AppError('BAD_REQUEST', 400, 'REDIRECT_URL_NOT_ALLOWED');
     }
-    parseHttpUrl(requested);
+    parseRedirectUrl(requested);
     return requested;
   }
 
@@ -63,12 +63,12 @@ export function selectRedirectUrl(params: {
     throw new AppError('BAD_REQUEST', 400, 'MISSING_REDIRECT_URL');
   }
 
-  parseHttpUrl(candidate);
+  parseRedirectUrl(candidate);
   return candidate;
 }
 
 export function buildRedirectToUrl(params: { redirectUrl: string; code: string }): string {
-  const u = parseHttpUrl(params.redirectUrl);
+  const u = parseRedirectUrl(params.redirectUrl);
   u.searchParams.set('code', params.code);
   return u.toString();
 }
@@ -94,7 +94,7 @@ export async function issueAuthorizationCode(
   const now = deps?.now ? deps.now() : new Date();
   const sharedSecret = deps?.sharedSecret ?? requireEnv('SHARED_SECRET').SHARED_SECRET;
 
-  parseHttpUrl(params.redirectUrl);
+  parseRedirectUrl(params.redirectUrl);
 
   if (!params.codeChallenge || params.codeChallengeMethod !== 'S256') {
     throw new AppError('BAD_REQUEST', 400, 'PKCE_REQUIRED');

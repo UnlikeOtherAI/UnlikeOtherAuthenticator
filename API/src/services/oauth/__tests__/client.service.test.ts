@@ -20,9 +20,12 @@ describe('isAllowedRedirectUri', () => {
     expect(isAllowedRedirectUri('com.example.app://callback')).toBe(true);
   });
 
-  it('rejects malformed values', () => {
+  it('rejects malformed and dangerous values', () => {
     expect(isAllowedRedirectUri('not a url')).toBe(false);
     expect(isAllowedRedirectUri('')).toBe(false);
     expect(isAllowedRedirectUri('javascript:alert(1)')).toBe(false);
+    // Authority-form dangerous schemes (the `://` slips past a naive include-check).
+    expect(isAllowedRedirectUri('javascript://%0aalert(1)')).toBe(false);
+    expect(isAllowedRedirectUri('data://text/html,x')).toBe(false);
   });
 });

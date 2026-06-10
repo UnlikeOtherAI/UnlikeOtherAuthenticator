@@ -3,7 +3,7 @@ import { AppError } from '../utils/errors.js';
 import { z } from 'zod';
 import { findJwkByKidDb, importClientJwkKey, jwkToPublic } from './client-jwk.service.js';
 import { getEnv } from '../config/env.js';
-import { tryParseHttpUrl } from '../utils/http-url.js';
+import { tryParseHttpUrl, tryParseRedirectUrl } from '../utils/http-url.js';
 import { getAppLogger } from '../utils/app-logger.js';
 
 const CONFIG_JWT_ALLOWED_ALGS = ['RS256'] as const;
@@ -22,7 +22,7 @@ const RedirectUrlSchema = z
   .string()
   .trim()
   .min(1)
-  .refine((value) => Boolean(tryParseHttpUrl(value)));
+  .refine((value) => Boolean(tryParseRedirectUrl(value)));
 
 const HexColorSchema = z
   .string()

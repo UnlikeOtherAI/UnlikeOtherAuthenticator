@@ -126,7 +126,9 @@ function deriveSchemaHints(details: string[]): string[] {
     hints.push('Set ui_theme.card.style to one of plain, bordered, or shadow.');
   }
   if (details.some((detail) => detail.startsWith('redirect_urls'))) {
-    hints.push('Ensure redirect_urls contains at least one valid absolute URL allowed for this client.');
+    hints.push(
+      'Ensure redirect_urls contains at least one acceptable redirect target (https, http loopback, or a native custom scheme) allowed for this client.',
+    );
   }
   if (details.some((detail) => detail.startsWith('enabled_auth_methods'))) {
     hints.push('Ensure enabled_auth_methods contains at least one supported login method.');
@@ -358,7 +360,7 @@ export function enrichAuthDebugForAppError(
       summary: 'No usable redirect_url was provided and the client config did not supply a fallback.',
       details: [configValidatedDetail, requestedDetail, allowlistDetail],
       hints: [
-        'Provide redirect_url in the request, or include at least one valid absolute URL in config.redirect_urls.',
+        'Provide redirect_url in the request, or include at least one acceptable redirect target in config.redirect_urls.',
       ],
     });
     return;
