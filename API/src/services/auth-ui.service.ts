@@ -141,6 +141,29 @@ export function sendAuthHtml(reply: FastifyReply, html: string): void {
   reply.type('text/html; charset=utf-8').status(200).send(html);
 }
 
+/**
+ * Render the "signed in — return to the app" handoff page for a native deep-link redirect.
+ *
+ * Used instead of a 302 when the final redirect target is a custom scheme: a bare redirect to
+ * `nessie://…` launches the OS app but leaves the browser tab blank with no closure. The deep
+ * link (which carries the single-use authorization code) is rendered into the page body via the
+ * auth window's SSR bootstrap, never placed in a logged URL or `Location` header.
+ */
+export async function sendDeepLinkHandoff(
+  reply: FastifyReply,
+  params: { config: ClientConfig; configUrl: string; target: string },
+): Promise<void> {
+  const search = new URLSearchParams();
+  search.set('config_url', params.configUrl);
+  search.set('handoff_target', params.target);
+  const html = await renderAuthEntrypointHtml({
+    config: params.config,
+    configUrl: params.configUrl,
+    requestUrl: `/auth?${search.toString()}`,
+  });
+  sendAuthHtml(reply, html);
+}
+
 export async function readAuthUiAsset(params: {
   // e.g. "assets/index-abc.js" (no leading slash)
   relativePath: string;

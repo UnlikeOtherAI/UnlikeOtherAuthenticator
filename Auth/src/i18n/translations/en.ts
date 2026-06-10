@@ -4,6 +4,7 @@ export const en = {
   'auth.resetPassword.title': 'Reset your password',
   'auth.setPassword.title': 'Set your password',
   'auth.accessRequested.title': 'Access request submitted',
+  'auth.signedIn.title': 'You’re signed in',
   'auth.twoFactorVerify.title': 'Verify two-factor code',
   'auth.twoFactorSetup.title': 'Set up two-factor authentication',
 
@@ -29,6 +30,8 @@ export const en = {
   'message.instructionsSent': 'We sent instructions to your email',
   'message.accessRequested':
     'Your request has been sent to the team administrators. You can close this window and wait for approval.',
+  'message.signedIn': 'Return to the app to finish signing in. You can close this window.',
+  'action.openApp': 'Open the app',
 
   // Navigation links between auth views.
   'nav.forgotPassword': 'Forgot your password?',

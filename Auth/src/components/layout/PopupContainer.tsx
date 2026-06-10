@@ -6,6 +6,7 @@ import { LoginPage } from '../../pages/LoginPage.js';
 import { RegisterPage } from '../../pages/RegisterPage.js';
 import { ResetPasswordPage } from '../../pages/ResetPasswordPage.js';
 import { SetPasswordPage } from '../../pages/SetPasswordPage.js';
+import { SignedInPage } from '../../pages/SignedInPage.js';
 import { TwoFactorVerifyPage } from '../../pages/TwoFactorVerifyPage.js';
 import { AuthLayout } from './AuthLayout.js';
 
@@ -27,6 +28,8 @@ function PopupContent(): React.JSX.Element {
       return <SetPasswordPage />;
     case 'access-requested':
       return <AccessRequestedPage />;
+    case 'signed-in':
+      return <SignedInPage />;
     default:
       return <LoginPage />;
   }

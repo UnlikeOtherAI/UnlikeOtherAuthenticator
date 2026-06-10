@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { tryParseHttpUrl, tryParseRedirectUrl } from '../http-url.js';
+import { isCustomSchemeUrl, tryParseHttpUrl, tryParseRedirectUrl } from '../http-url.js';
 
 describe('tryParseHttpUrl', () => {
   it('accepts http(s) URLs with a host', () => {
@@ -46,5 +46,15 @@ describe('tryParseRedirectUrl (RFC 8252 redirect policy)', () => {
     expect(tryParseRedirectUrl('file:///etc/passwd')).toBeNull();
     expect(tryParseRedirectUrl('not a url')).toBeNull();
     expect(tryParseRedirectUrl('')).toBeNull();
+  });
+});
+
+describe('isCustomSchemeUrl', () => {
+  it('is true only for non-http(s) schemes', () => {
+    expect(isCustomSchemeUrl('nessie://auth/callback')).toBe(true);
+    expect(isCustomSchemeUrl('com.acme.app://callback')).toBe(true);
+    expect(isCustomSchemeUrl('https://app.acme.com/cb')).toBe(false);
+    expect(isCustomSchemeUrl('http://127.0.0.1:8888/cb')).toBe(false);
+    expect(isCustomSchemeUrl('not a url')).toBe(false);
   });
 });

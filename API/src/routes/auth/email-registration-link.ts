@@ -7,8 +7,13 @@ import {
   finalizeAuthenticatedUser,
   parseRequestAccessFlag,
 } from '../../services/access-request-flow.service.js';
-import { renderAuthEntrypointHtml, sendAuthHtml } from '../../services/auth-ui.service.js';
+import {
+  renderAuthEntrypointHtml,
+  sendAuthHtml,
+  sendDeepLinkHandoff,
+} from '../../services/auth-ui.service.js';
 import { selectRedirectUrl } from '../../services/token.service.js';
+import { isCustomSchemeUrl } from '../../utils/http-url.js';
 import { verifyEmailToken } from '../../services/auth-verify-email.service.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
 import { AppError } from '../../utils/errors.js';
@@ -110,6 +115,14 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
 
           const finalUrl = finalResult.redirectTo;
           if (finalUrl) {
+            if (isCustomSchemeUrl(finalUrl)) {
+              await sendDeepLinkHandoff(reply, {
+                config: request.config,
+                configUrl: request.configUrl,
+                target: finalUrl,
+              });
+              return;
+            }
             redirectNoStore(reply, finalUrl);
             return;
           }

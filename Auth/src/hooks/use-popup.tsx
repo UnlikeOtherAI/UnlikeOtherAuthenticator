@@ -1,6 +1,22 @@
 import React, { createContext, useContext, useMemo, useState, useCallback } from 'react';
 
-export type AuthView = 'login' | 'register' | 'reset-password' | 'set-password' | 'access-requested';
+export type AuthView =
+  | 'login'
+  | 'register'
+  | 'reset-password'
+  | 'set-password'
+  | 'access-requested'
+  | 'signed-in';
+
+/** True for a native deep-link target (custom scheme, not http/https). */
+function isCustomSchemeUrl(value: string): boolean {
+  try {
+    const protocol = new URL(value).protocol;
+    return protocol !== 'http:' && protocol !== 'https:';
+  } catch {
+    return false;
+  }
+}
 
 export type PopupQueryParams = {
   redirectUrl: string | null;
@@ -17,6 +33,12 @@ export type PopupQueryParams = {
   clientId: string | null;
   state: string | null;
   resource: string | null;
+  /**
+   * Native deep-link target the flow should hand off to (custom scheme). When present, the
+   * auth window renders the "signed in — return to the app" handoff view instead of bouncing
+   * straight to the scheme, so the browser tab isn't left blank.
+   */
+  handoffTarget: string | null;
 };
 
 export type PopupContextValue = PopupQueryParams & {
@@ -56,6 +78,7 @@ export function parsePopupQueryParams(search: string): PopupQueryParams {
       clientId: null,
       state: null,
       resource: null,
+      handoffTarget: null,
     };
   }
 
@@ -72,6 +95,7 @@ export function parsePopupQueryParams(search: string): PopupQueryParams {
   const clientId = params.get('client_id');
   const state = params.get('state');
   const resource = params.get('resource');
+  const handoffTarget = params.get('handoff_target');
 
   const validTypes = ['VERIFY_EMAIL_SET_PASSWORD', 'VERIFY_EMAIL', 'LOGIN_LINK', 'PASSWORD_RESET'] as const;
   const emailTokenType = rawType && (validTypes as readonly string[]).includes(rawType)
@@ -90,6 +114,7 @@ export function parsePopupQueryParams(search: string): PopupQueryParams {
     clientId: clientId && clientId.trim() ? clientId : null,
     state: state && state.trim() ? state : null,
     resource: resource && resource.trim() ? resource : null,
+    handoffTarget: handoffTarget && handoffTarget.trim() ? handoffTarget : null,
   };
 }
 
@@ -99,6 +124,10 @@ function readClientSearch(): string {
 }
 
 function deriveInitialView(parsed: PopupQueryParams): AuthView {
+  if (parsed.handoffTarget) {
+    // Server-rendered handoff (e.g. social callback to a native deep link).
+    return 'signed-in';
+  }
   if (parsed.requestAccessStatus === 'pending') {
     return 'access-requested';
   }
@@ -126,6 +155,9 @@ export function PopupProvider(props: {
 
   const parsed = useMemo(() => parsePopupQueryParams(search), [search]);
   const [view, setViewState] = useState<AuthView>(() => deriveInitialView(parsed));
+  // Seeded from the query for the server-rendered handoff; updated by redirectTo for the
+  // client-side flows (email/password, 2FA, verify-email) when the target is a custom scheme.
+  const [handoffTarget, setHandoffTarget] = useState<string | null>(() => parsed.handoffTarget);
 
   const setView = useCallback((v: AuthView) => setViewState(v), []);
 
@@ -144,10 +176,19 @@ export function PopupProvider(props: {
       clientId: parsed.clientId,
       state: parsed.state,
       resource: parsed.resource,
+      handoffTarget,
       view,
       setView,
       redirectTo: (url: string) => {
         if (typeof window === 'undefined') return;
+        // Native deep links (custom schemes) launch the OS handler without unloading this
+        // tab, so a bare assign would leave the user staring at a blank page. Render the
+        // handoff view instead — it fires the launch and tells them they can close the tab.
+        if (isCustomSchemeUrl(url)) {
+          setHandoffTarget(url);
+          setView('signed-in');
+          return;
+        }
         window.location.assign(url);
       },
     };
@@ -163,6 +204,7 @@ export function PopupProvider(props: {
     parsed.clientId,
     parsed.state,
     parsed.resource,
+    handoffTarget,
     view,
     setView,
     props.configUrl,

@@ -62,3 +62,18 @@ export function tryParseRedirectUrl(value: string): URL | null {
   return null;
 }
 
+/**
+ * True when `value` is a native deep-link target — a custom scheme rather than http(s). These
+ * launch an OS app and leave the browser tab blank, so the auth flow hands off to a "signed in"
+ * page for them instead of a bare 302/navigation. Assumes `value` already passed redirect
+ * validation; returns false for anything unparseable.
+ */
+export function isCustomSchemeUrl(value: string): boolean {
+  try {
+    const protocol = new URL(value).protocol;
+    return protocol !== 'http:' && protocol !== 'https:';
+  } catch {
+    return false;
+  }
+}
+

@@ -26,6 +26,8 @@ import {
   socialStateCookieMatches,
 } from '../../services/social/social-state-cookie.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
+import { sendDeepLinkHandoff } from '../../services/auth-ui.service.js';
+import { isCustomSchemeUrl } from '../../utils/http-url.js';
 import { finalizeAuthenticatedUser } from '../../services/access-request-flow.service.js';
 import { requestRegistrationInstructions } from '../../services/auth-register.service.js';
 import { signTwoFaChallenge } from '../../services/twofactor-challenge.service.js';
@@ -322,6 +324,17 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
           u.searchParams.set('request_access', 'true');
         }
         redirectNoStore(reply, u.toString());
+        return;
+      }
+
+      if (isCustomSchemeUrl(outcome.finalResult.redirectTo)) {
+        // Native deep link: hand off via a "signed in" page instead of a 302 to a custom
+        // scheme, which would launch the app but strand the browser on a blank tab.
+        await sendDeepLinkHandoff(reply, {
+          config,
+          configUrl,
+          target: outcome.finalResult.redirectTo,
+        });
         return;
       }
 
