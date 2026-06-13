@@ -5,6 +5,10 @@ import type { AppError } from '../utils/errors.js';
 
 export type AuthDebugStage =
   | 'request'
+  // Provider OAuth callback (e.g. /auth/callback/google). config_url and
+  // redirect_url are not query params here — they travel inside the signed
+  // OAuth `state`, so they must be sourced from the verified state, not the URL.
+  | 'callback'
   | 'config_url'
   | 'config_fetch'
   | 'config_verify'
@@ -46,7 +50,13 @@ function sanitizeUrlForDebug(
 
   try {
     const url = new URL(raw);
-    const base = `${url.origin}${url.pathname}`;
+    // Custom-scheme deep links (e.g. nessie://auth/callback) have a "null"
+    // origin; fall back to scheme + host + path so they render verbatim instead
+    // of as "null/auth/callback".
+    const base =
+      url.origin && url.origin !== 'null'
+        ? `${url.origin}${url.pathname}`
+        : `${url.protocol}//${url.host}${url.pathname}`;
     if (!options?.includeQueryKeys || url.searchParams.size === 0) return base;
 
     const queryKeys = [...new Set(url.searchParams.keys())];
@@ -160,6 +170,12 @@ function deriveStageHints(stage: AuthDebugStage, code: string): string[] {
     case 'CONFIG_SCHEMA_INVALID':
       return [];
     default:
+      if (stage === 'callback') {
+        return [
+          'This is the provider OAuth callback, not the initial /auth request: config_url and redirect_url travel inside the signed OAuth state, not as query parameters here.',
+          'If the sign-in was interrupted, took over 10 minutes, or the browser did not return the uoa_social_state cookie, restart it from the beginning in a single browser.',
+        ];
+      }
       if (stage === 'request') {
         return ['Check that config_url is present and points to the client backend endpoint that returns the signed config JWT.'];
       }
@@ -256,6 +272,11 @@ export function createAuthDebugInfo(params: {
   summary?: string;
   details?: string[];
   hints?: string[];
+  // Explicit overrides. At the provider callback these come from the verified
+  // OAuth `state` (config_url/redirect_url are never query params there). When
+  // omitted, both fall back to whatever is parseable from the request URL.
+  configUrl?: string | null;
+  redirectUrl?: string | null;
 }): AuthDebugInfo {
   const parsed = parseRequestDebugUrls(params.requestUrl);
   const stage = params.stage ?? 'request';
@@ -268,8 +289,12 @@ export function createAuthDebugInfo(params: {
     stage,
     code,
     summary: params.summary ?? 'The auth service could not complete this request.',
-    configUrl: parsed.configUrl,
-    redirectUrl: parsed.redirectUrl,
+    configUrl:
+      params.configUrl !== undefined ? sanitizeUrlForDebug(params.configUrl) : parsed.configUrl,
+    redirectUrl:
+      params.redirectUrl !== undefined
+        ? sanitizeUrlForDebug(params.redirectUrl, { includeQueryKeys: true })
+        : parsed.redirectUrl,
     requestPath: parsed.requestPath,
     details,
     hints: [...new Set([...stageHints, ...schemaHints])],
@@ -288,6 +313,26 @@ export function mergeAuthDebugInfo(
     summary: next.summary ?? current.summary,
     details: next.details ?? current.details,
     hints: next.hints,
+    // Carry forward verified URLs (e.g. set from the callback's OAuth state) so a
+    // later enrichment pass does not reset them to the request URL's query params.
+    configUrl: current.configUrl,
+    redirectUrl: current.redirectUrl,
+  });
+}
+
+// Seed the debug context for a provider OAuth callback from the verified state.
+// Called once the social state JWT is verified so any subsequent failure (incl.
+// the login-CSRF cookie check) renders the real config_url/redirect_url and a
+// callback-stage hint instead of the misleading "config_url is missing".
+export function setSocialCallbackDebugContext(
+  request: FastifyRequest,
+  params: { configUrl: string; redirectUrl: string },
+): void {
+  request.authDebug = createAuthDebugInfo({
+    requestUrl: request.raw.url,
+    stage: 'callback',
+    configUrl: params.configUrl,
+    redirectUrl: params.redirectUrl,
   });
 }
 
@@ -316,6 +361,73 @@ export function enrichAuthDebugForAppError(
   error: AppError,
 ): void {
   const code = error.message || error.code;
+
+  // Provider OAuth callback failures (/auth/callback/:provider). These are NOT
+  // initial-request misconfigurations: config_url/redirect_url live in the signed
+  // state, so the generic "config_url is missing" framing misleads the client. The
+  // callback route stashes the verified URLs on request.authDebug; mergeAuthDebugInfo
+  // preserves them so they still render here.
+  if (
+    code === 'INVALID_SOCIAL_STATE' ||
+    code === 'MISSING_SOCIAL_CALLBACK_PARAMS' ||
+    code === 'SOCIAL_PROVIDER_ERROR' ||
+    code === 'SOCIAL_PROVIDER_MISMATCH'
+  ) {
+    const callbackNote =
+      'This is the provider OAuth callback. config_url and redirect_url are carried inside the signed OAuth state, not as query parameters on this request.';
+
+    if (code === 'INVALID_SOCIAL_STATE') {
+      mergeAuthDebugInfo(request, {
+        stage: 'callback',
+        code,
+        summary: 'The social sign-in could not be matched to the browser that started it.',
+        details: [
+          callbackNote,
+          'The single-use uoa_social_state cookie was missing or did not match the signed OAuth state, or the state was invalid or older than its 10-minute lifetime.',
+        ],
+        hints: [
+          'Restart the sign-in and complete it in the same browser within 10 minutes.',
+          'The uoa_social_state cookie is first-party, HttpOnly, Secure, SameSite=Lax and scoped to /auth — make sure the browser is not blocking cookies, the flow is not switched to a different browser/profile midway, and the provider returns via a top-level redirect.',
+        ],
+      });
+      return;
+    }
+
+    if (code === 'MISSING_SOCIAL_CALLBACK_PARAMS') {
+      mergeAuthDebugInfo(request, {
+        stage: 'callback',
+        code,
+        summary: 'The provider redirected back without the required code and state.',
+        details: [
+          callbackNote,
+          'The OAuth provider did not return both a `code` and a `state`, so the callback cannot be completed.',
+        ],
+        hints: ['Restart the sign-in from the beginning so a fresh code and state are issued.'],
+      });
+      return;
+    }
+
+    if (code === 'SOCIAL_PROVIDER_ERROR') {
+      mergeAuthDebugInfo(request, {
+        stage: 'callback',
+        code,
+        summary: 'The upstream identity provider reported an error.',
+        details: [callbackNote, 'The provider returned an `error` (for example, consent was denied).'],
+        hints: ['Restart the sign-in and approve the requested permissions at the provider.'],
+      });
+      return;
+    }
+
+    mergeAuthDebugInfo(request, {
+      stage: 'callback',
+      code,
+      summary: 'The social provider in the callback did not match the one in the signed state.',
+      details: [callbackNote],
+      hints: ['Restart the sign-in from the beginning.'],
+    });
+    return;
+  }
+
   const allowedRedirectUrls = sanitizeAllowedRedirectUrls(request.config?.redirect_urls);
   const redirectQueryKeys = parseRedirectQueryKeys(request.raw.url);
   const requestedRedirectUrl =
