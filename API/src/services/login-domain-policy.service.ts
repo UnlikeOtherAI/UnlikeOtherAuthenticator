@@ -104,3 +104,38 @@ export async function assertEmailDomainAllowedForLogin(
     throw new AppError('FORBIDDEN', 403, 'EMAIL_DOMAIN_NOT_ALLOWED');
   }
 }
+
+/**
+ * Admin-managed registration allowlist for a client domain.
+ *
+ * A client domain's `allowedEmails` (exact) and `allowedEmailDomains` (email-domain) lists are
+ * managed by a superuser in the admin panel. When a config has `allow_registration: false`, a new
+ * user whose email — or whose email domain — is explicitly listed here is still permitted to
+ * register: the admin allowlist is an explicit grant that overrides the config's registration gate.
+ * An empty allowlist grants nothing (returns false), so it never widens access on its own.
+ *
+ * Client-domain level only: a brand-new user has no organisation/team membership yet, so only the
+ * domain-wide lists can apply at registration time. Reads run on the BYPASSRLS admin client.
+ */
+export async function isEmailAdminAllowedForRegistration(
+  params: { domain: string; email: string },
+  deps?: { prisma?: Pick<PrismaClient, 'clientDomain'> },
+): Promise<boolean> {
+  const prisma =
+    deps?.prisma ?? (getEnv().DATABASE_URL ? (getAdminPrisma() as Pick<PrismaClient, 'clientDomain'>) : null);
+  if (!prisma) return false;
+
+  const clientDomain = await prisma.clientDomain.findUnique({
+    where: { domain: normalizeDomain(params.domain) },
+    select: { allowedEmailDomains: true, allowedEmails: true },
+  });
+  if (!clientDomain) return false;
+
+  const emails = lowerList(clientDomain.allowedEmails);
+  const domains = lowerList(clientDomain.allowedEmailDomains);
+  if (emails.length === 0 && domains.length === 0) return false;
+
+  const email = params.email.trim().toLowerCase();
+  const emailDomain = extractEmailDomain(params.email);
+  return emails.includes(email) || (emailDomain !== null && domains.includes(emailDomain));
+}

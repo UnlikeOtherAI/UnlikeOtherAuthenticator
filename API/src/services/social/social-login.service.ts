@@ -9,6 +9,7 @@ import { normalizeDomain } from '../../utils/domain.js';
 import { AppError } from '../../utils/errors.js';
 import { buildUserIdentity } from '../user-scope.service.js';
 import { ensureDomainRoleForUser } from '../domain-role.service.js';
+import { isEmailAdminAllowedForRegistration } from '../login-domain-policy.service.js';
 import { placeUserInConfiguredOrganisation } from '../org-placement.service.js';
 import { assertProviderVerifiedEmail, type SocialProfile } from './provider.base.js';
 
@@ -23,6 +24,7 @@ type SocialLoginDeps = {
   buildUserIdentity?: typeof buildUserIdentity;
   ensureDomainRoleForUser?: typeof ensureDomainRoleForUser;
   placeUserInConfiguredOrganisation?: typeof placeUserInConfiguredOrganisation;
+  isEmailAdminAllowedForRegistration?: typeof isEmailAdminAllowedForRegistration;
 };
 
 type SocialLoginResult =
@@ -139,8 +141,18 @@ export async function loginWithSocialProfile(
       config: params.config,
       requestAccess: params.requestAccess,
     });
+    // A superuser-managed allowlist on the client domain (exact email or email domain) is an
+    // explicit grant that overrides the config registration gate: a listed new user may register
+    // even when allow_registration is false. An empty allowlist grants nothing.
+    const allowedByAdminAllowlist =
+      !allowedByPolicy &&
+      (await (deps?.isEmailAdminAllowedForRegistration ?? isEmailAdminAllowedForRegistration)({
+        domain: params.config.domain,
+        email,
+      }));
     if (
       !allowedByPolicy &&
+      !allowedByAdminAllowlist &&
       !(await isAdminSuperuserBootstrap({ env, prisma, domain: params.config.domain, email }))
     ) {
       return { status: 'blocked' };
