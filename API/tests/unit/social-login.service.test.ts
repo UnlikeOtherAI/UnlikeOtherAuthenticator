@@ -295,6 +295,88 @@ describe('social-login.service', () => {
     expect(placeUserInConfiguredOrganisation).not.toHaveBeenCalled();
   });
 
+  it('admits a new social user when the admin allowlist overrides disabled registration', async () => {
+    const prisma = {
+      user: {
+        findUnique: vi.fn(async () => null),
+        create: vi.fn(async () => {
+          return { id: 'user_1', twoFaEnabled: false };
+        }),
+        update: vi.fn(),
+      },
+      domainRole: {
+        findFirst: vi.fn(async () => null),
+      },
+    };
+
+    const ensureDomainRoleForUser = vi.fn(async () => {
+      return {
+        domain: 'client.example.com',
+        userId: 'user_1',
+        role: 'USER',
+        createdAt: new Date(),
+      } as DomainRole;
+    });
+    const placeUserInConfiguredOrganisation = vi.fn(async () => {
+      return { status: 'skipped', reason: 'mapping_not_found' } as const;
+    });
+    const isEmailAdminAllowedForRegistration = vi.fn(async () => true);
+
+    const env: Env = {
+      NODE_ENV: 'test',
+      HOST: '127.0.0.1',
+      PORT: 3000,
+      PUBLIC_BASE_URL: 'https://auth.example.com',
+      LOG_LEVEL: 'info',
+      SHARED_SECRET: 'test-shared-secret-with-enough-length',
+      AUTH_SERVICE_IDENTIFIER: 'uoa-auth-service',
+      DATABASE_URL: 'postgres://example.invalid/db',
+      ACCESS_TOKEN_TTL: '30m',
+      LOG_RETENTION_DAYS: 90,
+    };
+
+    const config: ClientConfig = {
+      domain: 'client.example.com',
+      redirect_urls: ['https://client.example.com/oauth/callback'],
+      enabled_auth_methods: ['google'],
+      ui_theme: testUiTheme(),
+      language_config: 'en',
+      user_scope: 'global',
+      allow_registration: false,
+      '2fa_enabled': false,
+      debug_enabled: false,
+    };
+
+    const result = await loginWithSocialProfile(
+      {
+        profile: {
+          provider: 'google',
+          email: 'invitee@partner.com',
+          emailVerified: true,
+          name: 'Invitee',
+          avatarUrl: null,
+        },
+        config,
+      },
+      {
+        env,
+        prisma,
+        ensureDomainRoleForUser,
+        placeUserInConfiguredOrganisation,
+        isEmailAdminAllowedForRegistration,
+      },
+    );
+
+    expect(result).toEqual({ status: 'authenticated', userId: 'user_1', twoFaEnabled: false });
+    expect(isEmailAdminAllowedForRegistration).toHaveBeenCalledWith({
+      domain: 'client.example.com',
+      email: 'invitee@partner.com',
+    });
+    expect(prisma.user.create).toHaveBeenCalledTimes(1);
+    // The allowlist already permitted registration, so the superuser-bootstrap path is skipped.
+    expect(prisma.domainRole.findFirst).not.toHaveBeenCalled();
+  });
+
   it('allows existing social users even when their email domain is not allowed for new registration', async () => {
     const prisma = {
       user: {

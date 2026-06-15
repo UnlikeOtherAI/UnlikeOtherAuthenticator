@@ -58,7 +58,8 @@ export function DomainAccessTab({ domain }: { domain: Domain }) {
         <h3 className="text-sm font-semibold text-gray-900">Login access whitelist</h3>
         <p className="mt-0.5 text-xs text-gray-500">
           Empty = no restriction. A user may sign in if their email domain OR their exact email is listed. Superusers
-          always bypass.
+          always bypass. A listed email or domain also lets that person sign in even when the service has registration
+          disabled — so this list doubles as an explicit allow-list for invited users.
         </p>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           <FieldShell label="Allowed email domains">
