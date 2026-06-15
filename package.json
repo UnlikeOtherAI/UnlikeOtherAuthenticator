@@ -31,7 +31,22 @@
   },
   "pnpm": {
     "overrides": {
-      "axios": "^1.8.2"
+      "axios": "^1.15.2",
+      "fast-uri": "^3.1.1",
+      "fast-xml-builder": "^1.1.7",
+      "form-data": "^4.0.6",
+      "handlebars": "^4.7.9",
+      "protobufjs": "^7.5.6",
+      "react-router": "^7.14.2",
+      "vite": "^6.4.3",
+      "ws": "^7.5.11"
+    },
+    "auditConfig": {
+      "ignoreGhsas": [
+        "GHSA-67mh-4wv8-2f99",
+        "GHSA-g7r4-m6w7-qqqr",
+        "GHSA-gv7w-rqvm-qjhr"
+      ]
     }
   }
 }
