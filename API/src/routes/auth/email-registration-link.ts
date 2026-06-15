@@ -91,6 +91,7 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
               requestAccess: parseRequestAccessFlag(request_access),
               codeChallenge: pkce.codeChallenge,
               codeChallengeMethod: pkce.codeChallengeMethod,
+              ip: request.ip ?? null,
             },
             { prisma: request.adminDb },
           );

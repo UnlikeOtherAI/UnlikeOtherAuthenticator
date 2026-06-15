@@ -258,6 +258,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
             profile,
             config,
             requestAccess: socialState.request_access === true,
+            ip: request.ip ?? null,
           },
           { prisma },
         );
@@ -317,6 +318,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
             requestAccess: socialState.request_access === true,
             codeChallenge: socialState.code_challenge,
             codeChallengeMethod: socialState.code_challenge_method,
+            ip: request.ip ?? null,
           },
           { prisma },
         );

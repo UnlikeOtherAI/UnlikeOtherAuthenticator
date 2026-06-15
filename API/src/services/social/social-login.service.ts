@@ -10,6 +10,7 @@ import { AppError } from '../../utils/errors.js';
 import { buildUserIdentity } from '../user-scope.service.js';
 import { ensureDomainRoleForUser } from '../domain-role.service.js';
 import { isEmailAdminAllowedForRegistration } from '../login-domain-policy.service.js';
+import { isPrincipalBannedForRegistration } from '../ban-policy.service.js';
 import { placeUserInConfiguredOrganisation } from '../org-placement.service.js';
 import { assertProviderVerifiedEmail, type SocialProfile } from './provider.base.js';
 
@@ -25,6 +26,7 @@ type SocialLoginDeps = {
   ensureDomainRoleForUser?: typeof ensureDomainRoleForUser;
   placeUserInConfiguredOrganisation?: typeof placeUserInConfiguredOrganisation;
   isEmailAdminAllowedForRegistration?: typeof isEmailAdminAllowedForRegistration;
+  isPrincipalBannedForRegistration?: typeof isPrincipalBannedForRegistration;
 };
 
 type SocialLoginResult =
@@ -93,6 +95,7 @@ export async function loginWithSocialProfile(
     profile: SocialProfile;
     config: ClientConfig;
     requestAccess?: boolean;
+    ip?: string | null;
   },
   deps?: SocialLoginDeps,
 ): Promise<SocialLoginResult> {
@@ -136,6 +139,18 @@ export async function loginWithSocialProfile(
     userId = updated.id;
     twoFaEnabled = updated.twoFaEnabled;
   } else {
+    // Admin ban list (domain scope) blocks a banned email/pattern/IP before any user row is
+    // created. A ban overrides every allow path, including the admin-superuser bootstrap. An
+    // existing banned user is instead caught at finalizeAuthenticatedUser (login enforcement).
+    const banned = await (deps?.isPrincipalBannedForRegistration ?? isPrincipalBannedForRegistration)({
+      domain: params.config.domain,
+      email,
+      ip: params.ip ?? null,
+    });
+    if (banned) {
+      return { status: 'blocked' };
+    }
+
     const allowedByPolicy = isAllowedByRegistrationDomainPolicy({
       email,
       config: params.config,

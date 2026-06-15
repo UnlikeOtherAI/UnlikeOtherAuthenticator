@@ -32,6 +32,13 @@ enum TwoFaPolicy {
   REQUIRED
 }
 
+enum BanType {
+  EMAIL
+  PATTERN
+  IP
+  USER
+}
+
 model User {
   id                       String   @id @default(cuid())
   // Note: email is not globally unique because `user_scope` can be "per_domain".
@@ -380,6 +387,7 @@ model Organisation {
   invites        TeamInvite[]
   accessRequests AccessRequest[]
   apps           App[]
+  bans           Ban[]
 
   @@unique([domain, slug])
   @@index([domain])
@@ -541,12 +549,38 @@ model Team {
   members        TeamMember[]
   invites        TeamInvite[]
   accessRequests AccessRequest[]
+  bans           Ban[]
 
   @@unique([orgId, name])
   @@unique([orgId, slug])
   @@index([orgId])
   @@index([groupId])
   @@map("teams")
+}
+
+/// Admin-managed deny list. Scope is derived from which id is set: neither orgId nor
+/// teamId set is a client-domain ban; orgId set is an organisation ban; teamId set is a
+/// team ban. A ban always overrides any allow-list. Accessed only via the BYPASSRLS admin
+/// client (login enforcement has no tenant context yet), like client_domains.
+model Ban {
+  id             String   @id @default(cuid())
+  domain         String
+  orgId          String?  @map("org_id")
+  teamId         String?  @map("team_id")
+  type           BanType
+  value          String   @db.VarChar(320)
+  reason         String?  @db.VarChar(500)
+  createdByEmail String?  @map("created_by_email")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  org  Organisation? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  team Team?         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([domain])
+  @@index([orgId])
+  @@index([teamId])
+  @@map("bans")
 }
 
 model TeamMember {

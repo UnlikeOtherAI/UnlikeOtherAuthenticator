@@ -1551,3 +1551,32 @@ The Admin panel includes a **Super-users** page for operators who already hold `
 Registered domains can opt into UOA-managed transactional email. Admin operators configure the mailing domain, from address, optional from name, and optional default reply-to on the domain detail page. SES registration returns DNS TXT and DKIM CNAME records for the operator to publish. Sending is enabled only after both SES verification and DKIM report `Success`.
 
 Customer backends send through `POST /email/send` with `X-UOA-Config-JWT: <signed config JWT>`. UOA verifies the config JWT from the request header, checks the domain's stored email config is enabled and verified, then sends the raw subject/text/html payload through the configured email provider. The public response remains generic for missing, invalid, disabled, unverified, or failed sends.
+
+## 2026-06 Admin Bans (deny list)
+
+The Admin panel's ban capability is backed by a real `bans` table rather than the
+earlier non-functional stub. A ban is a superuser-managed **deny** rule that always
+overrides any allow-list.
+
+**Scope (per-tenant).** A ban is scoped to a client domain by default, or to a specific
+organisation (`org_id`) or team (`team_id`) within that domain. The org/team must belong
+to the named domain — cross-tenant bans are rejected.
+
+**Types.** `email` (exact, case-insensitive), `pattern` (shell-style glob over the email,
+e.g. `*@evil.com` — never a raw regex, to avoid ReDoS), `ip` (exact or IPv4 CIDR against
+the request IP), and `user` (UOA userId).
+
+**Enforcement.** Bans are checked at the single login chokepoint
+(`finalizeAuthenticatedUser`, after the allow-list, across the user's domain/org/team
+scopes) and in the registration and social-login paths (domain scope, before any user row
+is created). A SUPERUSER on the login domain bypasses bans, matching the allow-list
+semantics. A matched ban produces the generic auth error to the user (no enumeration):
+login fails closed with `ACCESS_DENIED`, registration returns the standard
+timing-equalised silent response.
+
+**Admin API.** `GET/POST /internal/admin/bans` and `DELETE /internal/admin/bans/:id`
+(superuser only). The settings read returns the live ban list grouped by type. Reads and
+writes run on the BYPASS-RLS admin role (login enforcement runs before any tenant context
+is set), and the `bans` table denies the runtime app role, mirroring `client_domains`.
+
+There are no ban expiries or hit counters; a ban persists until an operator removes it.
