@@ -254,4 +254,51 @@ describe('GET /auth/callback/:provider', () => {
 
     await app.close();
   });
+
+  it('renders an honest, callback-stage debug page (not a config_url error) on a cookie mismatch', async () => {
+    const { createApp } = await import('../../src/app.js');
+    const app = await createApp();
+    await app.ready();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/auth/callback/google?code=provider-code&state=state-token',
+      headers: { accept: 'text/html' },
+      cookies: { [SOCIAL_STATE_COOKIE_NAME]: app.signCookie('a-different-nonce-value') },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.headers['content-type']).toContain('text/html');
+    const body = res.body;
+    // The real failure code + phase, not the generic AUTH_REQUEST_FAILED/internal fallback.
+    expect(body).toContain('INVALID_SOCIAL_STATE');
+    expect(body).toContain('class="chip">callback</span>');
+    // config_url is recovered from the verified state, not the (absent) query string.
+    expect(body).toContain('client.example.com/auth-config');
+    expect(body).not.toContain('<dd>missing</dd>');
+    // The misleading "you forgot config_url" guidance must be gone.
+    expect(body).not.toContain('Check that config_url is present');
+
+    await app.close();
+  });
+
+  it('renders a callback-stage debug page when code/state are missing entirely', async () => {
+    const { createApp } = await import('../../src/app.js');
+    const app = await createApp();
+    await app.ready();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/auth/callback/google',
+      headers: { accept: 'text/html' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    const body = res.body;
+    expect(body).toContain('MISSING_SOCIAL_CALLBACK_PARAMS');
+    expect(body).toContain('class="chip">callback</span>');
+    expect(body).not.toContain('Check that config_url is present');
+
+    await app.close();
+  });
 });

@@ -25,6 +25,7 @@ import {
   clearSocialStateCookie,
   socialStateCookieMatches,
 } from '../../services/social/social-state-cookie.js';
+import { setSocialCallbackDebugContext } from '../../services/auth-debug-page.service.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
 import { sendDeepLinkHandoff } from '../../services/auth-ui.service.js';
 import { isCustomSchemeUrl } from '../../utils/http-url.js';
@@ -104,6 +105,15 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         sharedSecret: SHARED_SECRET,
         audience: authServiceIdentifier,
         issuer: socialStateIssuer(baseUrl),
+      });
+
+      // The verified state — not the query string — carries config_url/redirect_url
+      // at the callback. Seed the debug context so any failure from here on (incl.
+      // the cookie check below) reports the real URLs and a callback-stage hint
+      // instead of the misleading "config_url is missing".
+      setSocialCallbackDebugContext(request, {
+        configUrl: socialState.config_url,
+        redirectUrl: socialState.redirect_url,
       });
 
       // Login-CSRF protection: the state nonce must match the signed, HttpOnly
