@@ -308,6 +308,24 @@ function explainKnownCode(
           'The current user does not have the organisation role required for this operation.',
         hints: ['Check the caller role and the minimum role required by this route.'],
       };
+    case 'ORG_FEATURES_DISABLED':
+      return {
+        summary: 'Organisation features are not enabled for this client config.',
+        hints: ['Set org_features.enabled=true in the signed config to use /org/* endpoints.'],
+      };
+    case 'ORG_CREATION_NOT_ALLOWED':
+      return {
+        summary:
+          'This user is not allowed to create an organisation under the current client config.',
+        hints: [
+          'Set org_features.allow_user_create_org=true to let non-superusers create organisations.',
+        ],
+      };
+    case 'DOMAIN_MISMATCH':
+      return {
+        summary: 'The domain query parameter does not match the verified config domain.',
+        hints: ['Send domain equal to the domain claim of the config returned by config_url.'],
+      };
     case 'NOT_SUPERUSER':
       return {
         summary: 'This operation requires a superuser token.',
