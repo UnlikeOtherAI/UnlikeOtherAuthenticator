@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom';
 
 import { ConfirmDialog } from '../components/dialogs/ConfirmDialog';
+import { DebugFab } from '../components/DebugFab';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 import { UserDetailsModal } from '../components/dialogs/UserDetailsModal';
@@ -17,6 +18,7 @@ export function AdminLayout() {
       </div>
       <UserDetailsModal />
       <ConfirmDialog />
+      <DebugFab />
     </div>
   );
 }
