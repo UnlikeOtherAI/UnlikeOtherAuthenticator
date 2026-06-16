@@ -16,7 +16,7 @@ import { selectRedirectUrl } from '../../services/token.service.js';
 import { isCustomSchemeUrl } from '../../utils/http-url.js';
 import { verifyEmailToken } from '../../services/auth-verify-email.service.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
-import { AppError } from '../../utils/errors.js';
+import { AppError, isAppError } from '../../utils/errors.js';
 import { parseRequiredPkceChallenge, type PkceChallenge } from '../../utils/pkce.js';
 import { tokenConsumeRateLimiter } from './rate-limit-keys.js';
 
@@ -37,6 +37,17 @@ function redirectNoStore(reply: FastifyReply, url: string): void {
   reply.redirect(url, 302);
 }
 
+function isEmailLinkTokenError(err: unknown): boolean {
+  if (!isAppError(err)) return false;
+  return [
+    'INVALID_TOKEN',
+    'INVALID_TOKEN_CONFIG_URL',
+    'INVALID_TOKEN_TYPE',
+    'TOKEN_ALREADY_USED',
+    'TOKEN_EXPIRED',
+  ].includes(err.message);
+}
+
 export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): void {
   app.get(
     '/auth/email/link',
@@ -55,14 +66,35 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
         throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
       }
 
-      const type = await validateRegistrationEmailLandingToken(
-        {
-          token,
+      let type: 'LOGIN_LINK' | 'VERIFY_EMAIL_SET_PASSWORD' | 'VERIFY_EMAIL';
+      try {
+        type = await validateRegistrationEmailLandingToken(
+          {
+            token,
+            config: request.config,
+            configUrl: request.configUrl,
+          },
+          { prisma: request.adminDb },
+        );
+      } catch (err) {
+        if (!isEmailLinkTokenError(err)) {
+          throw err;
+        }
+
+        request.log.info({ err }, 'email link token could not be used; rendering login');
+        const html = await renderAuthEntrypointHtml({
           config: request.config,
           configUrl: request.configUrl,
-        },
-        { prisma: request.adminDb },
-      );
+          requestUrl: buildLoginAuthUrl(
+            request.configUrl,
+            redirect_url,
+            parseRequestAccessFlag(request_access),
+            pkce,
+          ),
+        });
+        sendAuthHtml(reply, html);
+        return;
+      }
 
       // LOGIN_LINK and VERIFY_EMAIL: auto-consume the token and redirect immediately.
       // No password needed — the user is signed in by clicking the link.
@@ -167,6 +199,21 @@ function buildAuthUrl(
   params.set('code_challenge_method', pkce.codeChallengeMethod);
   params.set('email_token', token);
   params.set('email_token_type', type);
+  if (requestAccess) params.set('request_access', 'true');
+  return `/auth?${params.toString()}`;
+}
+
+function buildLoginAuthUrl(
+  configUrl: string,
+  redirectUrl: string | undefined,
+  requestAccess: boolean,
+  pkce: PkceChallenge,
+): string {
+  const params = new URLSearchParams();
+  params.set('config_url', configUrl);
+  if (redirectUrl) params.set('redirect_url', redirectUrl);
+  params.set('code_challenge', pkce.codeChallenge);
+  params.set('code_challenge_method', pkce.codeChallengeMethod);
   if (requestAccess) params.set('request_access', 'true');
   return `/auth?${params.toString()}`;
 }
