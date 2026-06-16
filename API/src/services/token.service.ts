@@ -6,7 +6,7 @@ import { SignJWT } from 'jose';
 import { ACCESS_TOKEN_AUDIENCE, AUTHORIZATION_CODE_TTL_MS } from '../config/constants.js';
 import { getAdminAuthDomain, getAuthServiceIdentifier, getEnv, requireEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
-import { ensureDomainRoleForUser } from './domain-role.service.js';
+import { ensureDomainRoleForUser, isPlatformSuperuser } from './domain-role.service.js';
 import { exchangeRefreshToken, issueRefreshToken } from './refresh-token.service.js';
 import { AppError } from '../utils/errors.js';
 import { getAppLogger } from '../utils/app-logger.js';
@@ -22,6 +22,9 @@ type TokenPrisma = PrismaClient;
 
 type TokenDeps = {
   prisma?: TokenPrisma;
+  // BYPASSRLS admin client used for cross-tenant reads (platform-superuser lookup
+  // on ADMIN_AUTH_DOMAIN). Defaults to the tenant prisma when omitted.
+  adminPrisma?: TokenPrisma;
   now?: () => Date;
   refreshTokenTtlDays?: number;
   sharedSecret?: string;
@@ -363,7 +366,11 @@ async function issueTokenPairForUser(
   });
   if (!user) throw new AppError('INTERNAL', 500, 'MISSING_USER');
 
-  const role = domainRole.role === 'SUPERUSER' ? 'superuser' : 'user';
+  const role =
+    domainRole.role === 'SUPERUSER' ||
+    (await isPlatformSuperuser({ userId: params.userId, prisma: deps?.adminPrisma ?? prisma, env }))
+      ? 'superuser'
+      : 'user';
   const accessTokenContext = resolveAccessTokenContext({
     domain: params.config.domain,
     env,

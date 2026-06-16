@@ -1546,7 +1546,9 @@ Each task references the line number(s) where the relevant specification lives i
 
 ## 2026-04 Super-users and Per-Domain Email
 
-The Admin panel includes a **Super-users** page for operators who already hold `SUPERUSER` on `ADMIN_AUTH_DOMAIN`. Super-user access is represented by a `domain_roles` row where `domain = ADMIN_AUTH_DOMAIN` and `role = SUPERUSER`; this is separate from customer-domain bootstrap superusers.
+The Admin panel includes a **Super-users** page for operators who already hold `SUPERUSER` on `ADMIN_AUTH_DOMAIN`. Super-user access is represented by a `domain_roles` row where `domain = ADMIN_AUTH_DOMAIN` and `role = SUPERUSER`; this is distinct from per-domain bootstrap superusers (the first login on each customer domain).
+
+A user granted `SUPERUSER` on `ADMIN_AUTH_DOMAIN` (a **platform superuser**) is reflected as `role: "superuser"` in the `access_token` `claims.role` for tokens issued on **any** domain — not just the admin panel. This is what makes the admin **Super-users** grant visible to client websites. The per-domain bootstrap superuser still resolves to `superuser` on its own domain on top of this; `claims.role` is `superuser` when either holds.
 
 Registered domains can opt into UOA-managed transactional email. Admin operators configure the mailing domain, from address, optional from name, and optional default reply-to on the domain detail page. SES registration returns DNS TXT and DKIM CNAME records for the operator to publish. Sending is enabled only after both SES verification and DKIM report `Success`.
 

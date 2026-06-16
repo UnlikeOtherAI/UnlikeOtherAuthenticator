@@ -136,4 +136,72 @@ describe('admin-domain token issuance', () => {
     expect(claims.clientId).toBe('admin:admin.example.com');
     expect(claims.clientId).not.toBe(createClientId(config.domain, sharedSecret));
   });
+
+  it('marks a platform superuser (SUPERUSER on ADMIN_AUTH_DOMAIN) as superuser on a client-domain token', async () => {
+    const now = new Date('2026-04-21T10:00:00.000Z');
+    const sharedSecret = process.env.SHARED_SECRET!;
+    const code = 'client-code';
+    const config = {
+      domain: 'client.example.com',
+      org_features: { enabled: false },
+    } as unknown as ClientConfig;
+    const configUrl = 'https://client.example.com/auth-config';
+    const redirectUrl = 'https://client.example.com/oauth/callback';
+    const clientId = createClientId(config.domain, sharedSecret);
+
+    const prisma = {
+      authorizationCode: { findUnique: vi.fn(), updateMany: vi.fn() },
+      refreshToken: { create: vi.fn() },
+      user: { findUnique: vi.fn() },
+      domainRole: { findUnique: vi.fn() },
+    } as unknown as PrismaClient;
+
+    prisma.authorizationCode.findUnique.mockResolvedValue({
+      id: 'auth-code-client',
+      userId: 'client-user',
+      domain: config.domain,
+      configUrl,
+      redirectUrl,
+      codeChallenge: TEST_CODE_CHALLENGE,
+      codeChallengeMethod: 'S256',
+      expiresAt: new Date(now.getTime() + 60_000),
+      usedAt: null,
+      codeHash: hashAuthorizationCode(code, sharedSecret),
+    });
+    prisma.authorizationCode.updateMany.mockResolvedValue({ count: 1 });
+    prisma.refreshToken.create.mockResolvedValue({ id: 'refresh-token-client' });
+    // USER on the client domain, but SUPERUSER on ADMIN_AUTH_DOMAIN (admin-panel grant).
+    prisma.domainRole.findUnique.mockImplementation(async (args: { where: { domain_userId: { domain: string } } }) => {
+      const domain = args.where.domain_userId.domain;
+      return domain === 'admin.example.com'
+        ? { role: 'SUPERUSER', domain, userId: 'client-user' }
+        : { role: 'USER', domain, userId: 'client-user' };
+    });
+    prisma.user.findUnique.mockResolvedValue({ email: 'operator@example.com', tokenVersion: 0 });
+
+    const { accessToken } = await exchangeAuthorizationCodeForTokens(
+      { code, config, configUrl, redirectUrl, clientId, codeVerifier: TEST_CODE_VERIFIER },
+      {
+        now: () => now,
+        sharedSecret,
+        authServiceIdentifier: process.env.AUTH_SERVICE_IDENTIFIER,
+        accessTokenTtl: '15m',
+        prisma,
+        adminPrisma: prisma,
+      },
+    );
+
+    const claims = await verifyAccessToken(accessToken, {
+      sharedSecret,
+      issuer: process.env.AUTH_SERVICE_IDENTIFIER,
+      prisma,
+    });
+
+    expect(claims).toMatchObject({
+      userId: 'client-user',
+      domain: 'client.example.com',
+      clientId,
+      role: 'superuser',
+    });
+  });
 });

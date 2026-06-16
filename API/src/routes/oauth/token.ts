@@ -57,6 +57,7 @@ export function registerOAuthTokenRoute(app: FastifyInstance): void {
           scope: body.scope,
         },
         asPrismaClient(tx),
+        request.adminDb,
       ),
     );
 

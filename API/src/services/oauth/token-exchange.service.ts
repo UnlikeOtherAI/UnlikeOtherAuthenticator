@@ -1,11 +1,11 @@
 // Public-client token exchange for the MCP profile (brief §22.14): redeem an
 // authorization code (PKCE, no client secret) for a resource-bound RS256 access
 // token. Refresh-token issuance for this profile is a follow-up.
-import type { Prisma } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
 
 import { getEnv, getPublicBaseUrl } from '../../config/env.js';
 import { AppError } from '../../utils/errors.js';
-import { ensureDomainRoleForUser } from '../domain-role.service.js';
+import { ensureDomainRoleForUser, isPlatformSuperuser } from '../domain-role.service.js';
 import { signMcpAccessToken } from './access-token.service.js';
 import { consumeOAuthCode } from './oauth-code.service.js';
 
@@ -32,6 +32,9 @@ export async function exchangeOAuthCodeForAccessToken(
     scope?: string;
   },
   prisma: Db,
+  // BYPASSRLS admin client for the cross-tenant platform-superuser lookup on
+  // ADMIN_AUTH_DOMAIN. Defaults to the tenant tx when omitted.
+  adminPrisma?: PrismaClient,
 ): Promise<OAuthTokenResult> {
   const consumed = await consumeOAuthCode(
     {
@@ -55,6 +58,11 @@ export async function exchangeOAuthCodeForAccessToken(
   });
   if (!user) throw new AppError('INTERNAL', 500, 'MISSING_USER');
 
+  const platformSuperuser = await isPlatformSuperuser({
+    userId: consumed.userId,
+    prisma: (adminPrisma ?? prisma) as Parameters<typeof isPlatformSuperuser>[0]['prisma'],
+  });
+
   const issuer = getPublicBaseUrl();
   const ttlSeconds = accessTokenTtlSeconds();
   const accessToken = await signMcpAccessToken({
@@ -62,7 +70,7 @@ export async function exchangeOAuthCodeForAccessToken(
     email: user.email,
     domain: params.domain,
     clientId: params.clientId,
-    role: domainRole.role === 'SUPERUSER' ? 'superuser' : 'user',
+    role: domainRole.role === 'SUPERUSER' || platformSuperuser ? 'superuser' : 'user',
     // RFC 8707: bind the token to the requested resource; fall back to the issuer.
     resource: consumed.resource ?? issuer,
     issuer,
