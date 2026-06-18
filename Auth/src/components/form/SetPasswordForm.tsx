@@ -2,9 +2,11 @@ import React, { useEffect, useState } from 'react';
 
 import { Button } from '../ui/Button.js';
 import { PasswordInput } from '../ui/PasswordInput.js';
+import { PasswordRequirements } from './PasswordRequirements.js';
 import { usePopup } from '../../hooks/use-popup.js';
 import { useTranslation } from '../../i18n/use-translation.js';
-import { postJson } from '../../utils/api.js';
+import { postJson, type ApiResult } from '../../utils/api.js';
+import { checkPasswordPolicy } from '../../utils/password-policy.js';
 
 type SetPasswordRequest = { token: string; password: string };
 type SetPasswordResponse = { redirect_to?: string };
@@ -44,6 +46,27 @@ export function SetPasswordForm(): React.JSX.Element {
 
   const isPasswordReset = emailTokenType === 'PASSWORD_RESET';
 
+  function failure(result: ApiResult<unknown>): void {
+    if (result.ok) return;
+
+    switch (result.code) {
+      case 'PASSWORD_POLICY_VIOLATION':
+      case 'MISSING_PASSWORD':
+        setError(t('form.setPassword.tooShort'));
+        return;
+      case 'INVALID_TOKEN':
+      case 'INVALID_TOKEN_TYPE':
+      case 'INVALID_TOKEN_CONFIG_URL':
+      case 'INVALID_TOKEN_USER':
+      case 'TOKEN_EXPIRED':
+      case 'TOKEN_ALREADY_USED':
+        setError(t('form.setPassword.linkInvalid'));
+        return;
+      default:
+        setError(t('form.setPassword.error'));
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
@@ -53,8 +76,13 @@ export function SetPasswordForm(): React.JSX.Element {
       return;
     }
 
+    if (!checkPasswordPolicy(password).valid) {
+      setError(t('form.setPassword.tooShort'));
+      return;
+    }
+
     if (!emailToken) {
-      setError(t('form.setPassword.error'));
+      setError(t('form.setPassword.linkInvalid'));
       return;
     }
 
@@ -68,7 +96,7 @@ export function SetPasswordForm(): React.JSX.Element {
       );
       setLoading(false);
       if (!result.ok) {
-        setError(t('form.setPassword.error'));
+        failure(result);
         return;
       }
       // Password reset doesn't issue an auth code — user must re-login.
@@ -92,7 +120,7 @@ export function SetPasswordForm(): React.JSX.Element {
     setLoading(false);
 
     if (!result.ok) {
-      setError(t('form.setPassword.error'));
+      failure(result);
       return;
     }
 
@@ -145,6 +173,8 @@ export function SetPasswordForm(): React.JSX.Element {
           value={password}
           onChange={(e) => setPassword(e.currentTarget.value)}
         />
+
+        <PasswordRequirements password={password} />
 
         <PasswordInput
           name="confirm-password"

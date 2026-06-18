@@ -213,13 +213,27 @@ This service is **stateless where possible**, standards-based, and API-first.
 
 ### Password Rules
 
-* Minimum 8 characters
-* At least:
+> **Decision 2026-06-18 (HUGO-147):** Length is the primary strength criterion. A special
+> character is **NOT required** (previously it was). This supersedes the earlier rule that
+> mandated 1 special character.
 
-  * 1 uppercase
-  * 1 lowercase
-  * 1 number
-  * 1 special character (`-` allowed)
+* Minimum 8 characters (length is what matters most — longer is stronger)
+* Recommended (encouraged, **not** enforced as hard blockers): uppercase, lowercase, number
+* Special characters are **allowed but never required**
+* A strong alphanumeric-only password (e.g. a 15-char random string) MUST be accepted
+
+### Password UX & Error Transparency (HUGO-147)
+
+The user must always know **why** they can't proceed and **how** to fix it:
+
+* **On set-password / reset-password:** show the requirements live, so the user sees in real
+  time whether their password meets them before submitting.
+* **On login:** a valid password must never be rejected ("don't harass the user"). If sign-in
+  fails, tell the user the real reason in a clear, localized message — never a generic or
+  misleading one (e.g. "Something went wrong. The link may have expired." must not be shown
+  for a password-policy or credentials failure).
+* This requires the API to surface a machine-readable, distinguishable error code (not a single
+  generic body) so the UI can map it to a specific message.
 
 ### Password Storage
 
@@ -1403,7 +1417,7 @@ Each task references the line number(s) where the relevant specification lives i
 
 | #  | Task | Ref (line) |
 |----|------|------------|
-| 4.1 | Implement password validation rules: min 8 chars, 1 upper, 1 lower, 1 number, 1 special char | L202–210 |
+| 4.1 | Implement password validation rules: min 8 chars; length-first; special char NOT required (see Password Rules decision 2026-06-18 / HUGO-147) | L202–210 |
 | 4.2 | Implement secure password hashing (bcrypt/argon2) | L212–215 |
 | 4.3 | Build registration endpoint with enumeration protection — always respond "We sent instructions to your email" | L219–237 |
 | 4.4 | Implement email-determines-next-step logic: existing user gets login link, new user gets verification + set password | L234–237 |

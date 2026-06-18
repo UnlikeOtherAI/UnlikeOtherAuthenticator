@@ -8,9 +8,14 @@ import {
 } from '../../src/services/password.service.js';
 
 describe('password.service', () => {
-  it('accepts valid passwords meeting the policy', () => {
-    expect(isPasswordValid('Abcdef1-')).toBe(true); // '-' allowed
+  // Decision 2026-06-18 (HUGO-147): length is the only enforced rule; character classes
+  // (uppercase / lowercase / number / special) are encouraged but NOT required.
+  it('accepts any password of at least 8 characters', () => {
+    expect(isPasswordValid('Abcdef1-')).toBe(true);
     expect(isPasswordValid('Zz9!aaaa')).toBe(true);
+    // Regression (HUGO-147): a strong alphanumeric-only password must be accepted.
+    expect(isPasswordValid('zMN8iBS9Lkzib5J')).toBe(true);
+    expect(isPasswordValid('aaaaaaaa')).toBe(true);
   });
 
   it('rejects passwords shorter than 8 characters', () => {
@@ -18,24 +23,13 @@ describe('password.service', () => {
     expect(() => assertPasswordValid('Aa1-aaa')).toThrow();
   });
 
-  it('rejects passwords missing an uppercase letter', () => {
-    expect(isPasswordValid('abcdef1-')).toBe(false);
+  it('does not require a special character', () => {
+    expect(isPasswordValid('Abcdef12')).toBe(true);
   });
 
-  it('rejects passwords missing a lowercase letter', () => {
-    expect(isPasswordValid('ABCDEF1-')).toBe(false);
-  });
-
-  it('rejects passwords missing a number', () => {
-    expect(isPasswordValid('Abcdefg-')).toBe(false);
-  });
-
-  it('rejects passwords missing a special character', () => {
-    expect(isPasswordValid('Abcdef12')).toBe(false);
-  });
-
-  it('does not treat whitespace as a special character', () => {
-    expect(isPasswordValid('Abcdef1 ')).toBe(false);
+  it('does not require mixed case or numbers', () => {
+    expect(isPasswordValid('abcdefgh')).toBe(true);
+    expect(isPasswordValid('ABCDEFGH')).toBe(true);
   });
 
   it('hashes and verifies passwords with argon2id', async () => {
