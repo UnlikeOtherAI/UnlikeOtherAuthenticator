@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
 import { Button } from '../ui/Button.js';
 import { PasswordInput } from '../ui/PasswordInput.js';
@@ -28,6 +28,19 @@ export function SetPasswordForm(): React.JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+
+  // This view is server-rendered, so the password inputs exist as focusable HTML
+  // before the JS bundle hydrates. On mobile a user can tap and type into a
+  // not-yet-hydrated input; when React then hydrates the controlled input (initial
+  // value ''), it wipes that first character and the focus reconciliation dismisses
+  // the soft keyboard (observed on iOS Chrome/WebKit). Gating the controls behind a
+  // post-hydration flag keeps them non-focusable until React owns them, which removes
+  // the race. Server render and first client render both emit disabled controls, so
+  // hydration markup matches.
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => {
+    setHydrated(true);
+  }, []);
 
   const isPasswordReset = emailTokenType === 'PASSWORD_RESET';
 
@@ -115,38 +128,44 @@ export function SetPasswordForm(): React.JSX.Element {
   }
 
   return (
-    <form className="mt-6 flex flex-col gap-4" onSubmit={handleSubmit}>
-      <PasswordInput
-        name="password"
-        autoComplete="new-password"
-        required
-        minLength={8}
-        label={t('form.newPassword.label')}
-        showToggleLabel={t('form.password.show')}
-        hideToggleLabel={t('form.password.hide')}
-        value={password}
-        onChange={(e) => setPassword(e.currentTarget.value)}
-      />
+    <form className="mt-6" onSubmit={handleSubmit}>
+      <fieldset
+        disabled={!hydrated}
+        aria-busy={!hydrated || undefined}
+        className="m-0 flex min-w-0 flex-col gap-4 border-0 p-0"
+      >
+        <PasswordInput
+          name="password"
+          autoComplete="new-password"
+          required
+          minLength={8}
+          label={t('form.newPassword.label')}
+          showToggleLabel={t('form.password.show')}
+          hideToggleLabel={t('form.password.hide')}
+          value={password}
+          onChange={(e) => setPassword(e.currentTarget.value)}
+        />
 
-      <PasswordInput
-        name="confirm-password"
-        autoComplete="new-password"
-        required
-        minLength={8}
-        label={t('form.confirmPassword.label')}
-        showToggleLabel={t('form.password.show')}
-        hideToggleLabel={t('form.password.hide')}
-        value={confirm}
-        onChange={(e) => setConfirm(e.currentTarget.value)}
-      />
+        <PasswordInput
+          name="confirm-password"
+          autoComplete="new-password"
+          required
+          minLength={8}
+          label={t('form.confirmPassword.label')}
+          showToggleLabel={t('form.password.show')}
+          hideToggleLabel={t('form.password.hide')}
+          value={confirm}
+          onChange={(e) => setConfirm(e.currentTarget.value)}
+        />
 
-      {error && <p className="text-sm text-[var(--uoa-color-danger)]">{error}</p>}
+        {error && <p className="text-sm text-[var(--uoa-color-danger)]">{error}</p>}
 
-      <div className="mt-2">
-        <Button variant="primary" type="submit" disabled={loading}>
-          {loading ? '...' : t('form.setPassword.submit')}
-        </Button>
-      </div>
+        <div className="mt-2">
+          <Button variant="primary" type="submit" disabled={!hydrated || loading}>
+            {loading ? '...' : t('form.setPassword.submit')}
+          </Button>
+        </div>
+      </fieldset>
     </form>
   );
 }
