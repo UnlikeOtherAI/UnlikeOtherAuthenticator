@@ -1,9 +1,9 @@
 /**
  * Thin typed wrapper over fetch for the Auth SPA.
  *
- * The auth API always returns either the expected JSON payload (2xx) or a
- * generic `{ error: 'Request failed' }` envelope. The UI never surfaces server
- * error specifics — callers map the boolean `ok` to an i18n key themselves.
+ * The auth API returns either the expected JSON payload (2xx) or a generic
+ * `{ error: 'Request failed' }` envelope. Some flows may also include a small
+ * allowlisted machine-readable `code` so callers can pick the right i18n key.
  */
 
 export type ApiSuccess<T> = {
@@ -17,6 +17,8 @@ export type ApiFailure = {
   status: number;
   /** The generic error string from `{ error }` if present, otherwise null. */
   error: string | null;
+  /** Machine-readable public error code when the API intentionally exposes one. */
+  code: string | null;
 };
 
 export type ApiResult<T> = ApiSuccess<T> | ApiFailure;
@@ -51,6 +53,14 @@ function extractError(body: unknown): string | null {
   return null;
 }
 
+function extractCode(body: unknown): string | null {
+  if (body && typeof body === 'object' && 'code' in body) {
+    const code = (body as Record<string, unknown>).code;
+    if (typeof code === 'string') return code;
+  }
+  return null;
+}
+
 async function parseJsonSafe(response: Response): Promise<unknown> {
   try {
     return await response.json();
@@ -80,13 +90,18 @@ async function request<T>(
       body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
     });
   } catch {
-    return { ok: false, status: 0, error: null };
+    return { ok: false, status: 0, error: null, code: null };
   }
 
   const json = await parseJsonSafe(response);
 
   if (!response.ok) {
-    return { ok: false, status: response.status, error: extractError(json) };
+    return {
+      ok: false,
+      status: response.status,
+      error: extractError(json),
+      code: extractCode(json),
+    };
   }
 
   return { ok: true, status: response.status, data: json as T };

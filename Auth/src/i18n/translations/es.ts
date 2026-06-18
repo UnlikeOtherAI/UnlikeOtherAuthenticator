@@ -18,13 +18,17 @@ export const es = {
   'form.rememberMe.label': 'Recordarme',
   'form.password.show': 'Mostrar',
   'form.password.hide': 'Ocultar',
+  'form.password.requirement.minLength': 'Tener al menos 8 caracteres',
   'form.error.generic': 'La solicitud fallo. Intentalo de nuevo.',
   'form.login.submit': 'Iniciar sesion',
   'form.login.error': 'Correo electronico o contrasena invalidos.',
   'form.register.submit': 'Continuar',
   'form.resetPassword.submit': 'Enviar instrucciones de restablecimiento',
   'form.setPassword.submit': 'Establecer contrasena y continuar',
-  'form.setPassword.error': 'Algo salio mal. El enlace puede haber expirado.',
+  'form.setPassword.error': 'Algo salio mal. Intentalo de nuevo.',
+  'form.setPassword.tooShort': 'La contrasena debe tener al menos 8 caracteres.',
+  'form.setPassword.linkInvalid':
+    'Este enlace es invalido o ha expirado. Solicita uno nuevo e intentalo de nuevo.',
   'form.setPassword.mismatch': 'Las contrasenas no coinciden.',
   'form.setPassword.success': 'Contrasena restablecida correctamente. Ya puedes iniciar sesion.',
 

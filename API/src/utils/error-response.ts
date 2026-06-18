@@ -27,6 +27,16 @@ type PublicExplanation = {
 
 const DEFAULT_HINTS = ['Check the request shape and server logs for more context.'];
 const GENERIC_PUBLIC_ERROR_BODY: PublicErrorBody = { error: PUBLIC_ERROR_MESSAGE };
+const PRODUCTION_PUBLIC_ERROR_CODES = new Set([
+  'PASSWORD_POLICY_VIOLATION',
+  'MISSING_PASSWORD',
+  'INVALID_TOKEN',
+  'INVALID_TOKEN_TYPE',
+  'INVALID_TOKEN_CONFIG_URL',
+  'INVALID_TOKEN_USER',
+  'TOKEN_EXPIRED',
+  'TOKEN_ALREADY_USED',
+]);
 
 function defaultExplanation(code: string, statusCode: number): PublicExplanation {
   if (statusCode === 400) {
@@ -270,9 +280,7 @@ function explainKnownCode(
     case 'PASSWORD_POLICY_VIOLATION':
       return {
         summary: 'The supplied password does not satisfy the password policy.',
-        hints: [
-          'Use at least 8 characters including uppercase, lowercase, number, and special character.',
-        ],
+        hints: ['Use at least 8 characters. Longer passwords are stronger.'],
       };
     case 'USER_ALREADY_HAS_PASSWORD':
       return {
@@ -406,6 +414,11 @@ export function buildPublicErrorBody(params: {
   hints?: string[];
 }): PublicErrorBody {
   if (!getEnv().DEBUG_ENABLED) {
+    const code = deriveErrorCode(params.error, params.statusCode, params.code);
+    if (PRODUCTION_PUBLIC_ERROR_CODES.has(code)) {
+      return { error: PUBLIC_ERROR_MESSAGE, code };
+    }
+
     return GENERIC_PUBLIC_ERROR_BODY;
   }
 

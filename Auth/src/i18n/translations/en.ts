@@ -16,13 +16,17 @@ export const en = {
   'form.rememberMe.label': 'Remember me',
   'form.password.show': 'Show',
   'form.password.hide': 'Hide',
+  'form.password.requirement.minLength': 'Be at least 8 characters',
   'form.error.generic': 'Request failed. Please try again.',
   'form.login.submit': 'Sign in',
   'form.login.error': 'Invalid email or password.',
   'form.register.submit': 'Continue',
   'form.resetPassword.submit': 'Send reset instructions',
   'form.setPassword.submit': 'Set password and continue',
-  'form.setPassword.error': 'Something went wrong. The link may have expired.',
+  'form.setPassword.error': 'Something went wrong. Please try again.',
+  'form.setPassword.tooShort': 'Password must be at least 8 characters.',
+  'form.setPassword.linkInvalid':
+    'This link is invalid or has expired. Request a new one and try again.',
   'form.setPassword.mismatch': 'Passwords do not match.',
   'form.setPassword.success': 'Password reset successful. You can now sign in.',
 
