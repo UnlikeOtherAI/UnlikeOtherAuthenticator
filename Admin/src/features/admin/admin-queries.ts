@@ -81,6 +81,28 @@ export function useSettingsQuery() {
   return useQuery({ queryKey: ['admin', 'settings'], queryFn: adminService.getSettings });
 }
 
+export function useCreateBanMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: adminService.createBan,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] });
+    },
+  });
+}
+
+export function useDeleteBanMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => adminService.deleteBan(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] });
+    },
+  });
+}
+
 export function useCreateAppMutation() {
   const queryClient = useQueryClient();
 

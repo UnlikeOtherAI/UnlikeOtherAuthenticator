@@ -134,6 +134,7 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
             requestAccess: parseRequestAccessFlag(request_access),
             codeChallenge: pkce.codeChallenge,
             codeChallengeMethod: pkce.codeChallengeMethod,
+            ip: request.ip ?? null,
           },
           { prisma },
         );
