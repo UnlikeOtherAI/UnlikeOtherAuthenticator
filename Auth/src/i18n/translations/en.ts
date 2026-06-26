@@ -32,6 +32,8 @@ export const en = {
 
   // Used by registration and reset-password flows; must remain generic.
   'message.instructionsSent': 'We sent instructions to your email',
+  'message.emailAlreadyRegistered':
+    'This email is already registered. Sign in or reset your password to continue.',
   'message.accessRequested':
     'Your request has been sent to the team administrators. You can close this window and wait for approval.',
   'message.signedIn': 'Return to the app to finish signing in. You can close this window.',
@@ -41,6 +43,7 @@ export const en = {
   'nav.forgotPassword': 'Forgot your password?',
   'nav.createAccount': 'Create an account',
   'nav.backToLogin': 'Back to sign in',
+  'nav.resetPassword': 'Reset password',
 
   'twoFactor.setup.instructions':
     'Scan this QR code with an authenticator app, then enter the 6-digit code to verify setup.',

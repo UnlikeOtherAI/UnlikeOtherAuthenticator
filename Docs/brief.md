@@ -263,6 +263,10 @@ The user must always know **why** they can't proceed and **how** to fix it:
   * New user → verification + set password
 * **Email copy must remain generic**: subjects and body text must not explicitly indicate whether an account already exists (even though the backend sends different links depending on state)
 
+### Product-Specific Existing-Account UX Opt-In
+
+The default remains strict no-enumeration: existing users receive the same generic registration response and a neutral login-link email. A consuming product may explicitly opt into the tradeoff with signed config claim `existing_user_registration_behavior: "inline_sign_in"`. In that mode, `POST /auth/register` returns a generic public error envelope with machine code `EMAIL_ALREADY_REGISTERED` for an existing user, sends no login-link email, and the Auth UI shows localized copy routing the user to sign in or reset their password. Use this only where the product has accepted the account-enumeration tradeoff.
+
 ---
 
 ## 12. Email Verification & Password Reset

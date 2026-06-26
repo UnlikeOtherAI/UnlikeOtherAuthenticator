@@ -33,6 +33,8 @@ export const es = {
   'form.setPassword.success': 'Contrasena restablecida correctamente. Ya puedes iniciar sesion.',
 
   'message.instructionsSent': 'Hemos enviado instrucciones a tu correo electronico',
+  'message.emailAlreadyRegistered':
+    'Este correo electronico ya esta registrado. Inicia sesion o restablece tu contrasena para continuar.',
   'message.accessRequested':
     'Tu solicitud se ha enviado a los administradores del equipo. Puedes cerrar esta ventana y esperar su aprobacion.',
   'message.signedIn': 'Vuelve a la aplicacion para terminar de iniciar sesion. Puedes cerrar esta ventana.',
@@ -41,6 +43,7 @@ export const es = {
   'nav.forgotPassword': 'Olvidaste tu contrasena?',
   'nav.createAccount': 'Crear una cuenta',
   'nav.backToLogin': 'Volver a iniciar sesion',
+  'nav.resetPassword': 'Restablecer contrasena',
 
   'twoFactor.setup.instructions':
     'Escanea este codigo QR con una app autenticadora y luego ingresa el codigo de 6 digitos para verificar la configuracion.',

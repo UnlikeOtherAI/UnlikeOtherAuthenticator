@@ -193,6 +193,9 @@ const ClientConfigSchema = RequiredConfigSchema.extend({
   debug_enabled: z.boolean().optional().default(false),
   user_scope: z.enum(['global', 'per_domain']).optional().default('global'),
   allow_registration: z.boolean().optional().default(true),
+  existing_user_registration_behavior: z
+    .enum(['email_login_link', 'inline_sign_in'])
+    .optional(),
   registration_mode: z
     .enum(['password_required', 'passwordless'])
     .optional()

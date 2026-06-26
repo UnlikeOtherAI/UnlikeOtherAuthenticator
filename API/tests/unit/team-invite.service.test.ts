@@ -384,4 +384,69 @@ describe('team invite services', () => {
       },
     });
   });
+
+  it('does not create an invite token or send email for an existing user when inline sign-in is enabled', async () => {
+    const prisma = makeInvitePrisma();
+    prisma.organisation.findFirst.mockResolvedValue({
+      id: 'org-1',
+      domain: 'client.example.com',
+      name: 'Acme',
+      slug: 'acme',
+      ownerId: 'owner-1',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    prisma.team.findFirst.mockResolvedValue({
+      id: 'team-1',
+      name: 'Core Team',
+    });
+    prisma.teamInvite.findFirst.mockResolvedValue(null);
+    prisma.user.findUnique.mockResolvedValue({ id: 'user-existing' });
+    prisma.teamMember.findFirst.mockResolvedValue(null);
+    prisma.orgMember.findFirst.mockResolvedValue(null);
+
+    const sendTeamInviteEmail = vi.fn(async () => undefined);
+
+    const result = await createTeamInvites(
+      {
+        orgId: 'org-1',
+        teamId: 'team-1',
+        domain: 'client.example.com',
+        config: makeConfig({ existing_user_registration_behavior: 'inline_sign_in' }),
+        configUrl: 'https://client.example.com/auth-config',
+        invites: [{ email: 'existing@example.com', name: 'Existing User' }],
+      },
+      {
+        env: {
+          NODE_ENV: 'test',
+          HOST: '127.0.0.1',
+          PORT: 3000,
+          PUBLIC_BASE_URL: 'https://auth.example.com',
+          LOG_LEVEL: 'info',
+          SHARED_SECRET: 'test-shared-secret-with-enough-length',
+          AUTH_SERVICE_IDENTIFIER: 'uoa-auth-service',
+          DATABASE_URL: 'postgres://example.invalid/db',
+          ACCESS_TOKEN_TTL: '30m',
+          LOG_RETENTION_DAYS: 90,
+          AI_TRANSLATION_PROVIDER: 'disabled',
+          OPENAI_API_KEY: undefined,
+          OPENAI_MODEL: undefined,
+        },
+        prisma,
+        now: () => new Date('2026-03-04T00:00:00.000Z'),
+        sharedSecret: 'test-shared-secret-with-enough-length',
+        generateEmailToken: () => 'token-existing',
+        hashEmailToken: () => 'hash-existing',
+        sendTeamInviteEmail,
+      },
+    );
+
+    expect(result.results).toEqual([
+      { email: 'existing@example.com', status: 'existing_user' },
+    ]);
+    expect(prisma.teamInvite.create).not.toHaveBeenCalled();
+    expect(prisma.verificationToken.create).not.toHaveBeenCalled();
+    expect(sendTeamInviteEmail).not.toHaveBeenCalled();
+  });
+
 });

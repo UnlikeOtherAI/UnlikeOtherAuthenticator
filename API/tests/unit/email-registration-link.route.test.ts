@@ -6,6 +6,8 @@ import { testUiTheme } from '../helpers/test-config.js';
 
 const validateRegistrationEmailLandingTokenMock = vi.fn();
 const renderAuthEntrypointHtmlMock = vi.fn();
+const finalizeAuthenticatedUserMock = vi.fn();
+const verifyEmailTokenMock = vi.fn();
 
 let currentConfig: ClientConfig | null = null;
 
@@ -27,6 +29,21 @@ vi.mock('../../src/middleware/config-verifier.js', () => ({
 vi.mock('../../src/services/auth-registration-email-link.service.js', () => ({
   validateRegistrationEmailLandingToken: (...args: unknown[]) =>
     validateRegistrationEmailLandingTokenMock(...args),
+}));
+
+vi.mock('../../src/services/access-request-flow.service.js', async () => {
+  const actual = await vi.importActual<typeof import('../../src/services/access-request-flow.service.js')>(
+    '../../src/services/access-request-flow.service.js',
+  );
+
+  return {
+    ...actual,
+    finalizeAuthenticatedUser: (...args: unknown[]) => finalizeAuthenticatedUserMock(...args),
+  };
+});
+
+vi.mock('../../src/services/auth-verify-email.service.js', () => ({
+  verifyEmailToken: (...args: unknown[]) => verifyEmailTokenMock(...args),
 }));
 
 vi.mock('../../src/services/auth-ui.service.js', async () => {
@@ -85,6 +102,8 @@ describe('GET /auth/email/link', () => {
     currentConfig = baseConfig();
     validateRegistrationEmailLandingTokenMock.mockReset();
     renderAuthEntrypointHtmlMock.mockReset();
+    finalizeAuthenticatedUserMock.mockReset();
+    verifyEmailTokenMock.mockReset();
     renderAuthEntrypointHtmlMock.mockResolvedValue('<html>login</html>');
     process.env.SHARED_SECRET = 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER = 'uoa-auth-service';
@@ -127,6 +146,73 @@ describe('GET /auth/email/link', () => {
           '&code_challenge_method=S256',
       }),
     );
+
+    await app.close();
+  });
+
+  it('renders the login screen instead of an auth error when the email link has no PKCE challenge', async () => {
+    validateRegistrationEmailLandingTokenMock.mockResolvedValue('LOGIN_LINK');
+
+    const { createApp } = await import('../../src/app.js');
+    const app = await createApp();
+    await app.ready();
+
+    const res = await app.inject({
+      method: 'GET',
+      url:
+        '/auth/email/link?' +
+        'config_url=https%3A%2F%2Fclient.example.com%2Fauth-config' +
+        '&redirect_url=https%3A%2F%2Fclient.example.com%2Foauth%2Fcallback' +
+        '&token=missing-pkce-token',
+      headers: { accept: 'text/html' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toContain('text/html');
+    expect(res.body).toBe('<html>login</html>');
+    expect(renderAuthEntrypointHtmlMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestUrl:
+          '/auth?config_url=https%3A%2F%2Fclient.example.com%2Fauth-config' +
+          '&redirect_url=https%3A%2F%2Fclient.example.com%2Foauth%2Fcallback',
+      }),
+    );
+    expect(verifyEmailTokenMock).not.toHaveBeenCalled();
+    expect(finalizeAuthenticatedUserMock).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('renders the login screen instead of an auth error when the email link has an invalid PKCE challenge', async () => {
+    const { createApp } = await import('../../src/app.js');
+    const app = await createApp();
+    await app.ready();
+
+    const res = await app.inject({
+      method: 'GET',
+      url:
+        '/auth/email/link?' +
+        'config_url=https%3A%2F%2Fclient.example.com%2Fauth-config' +
+        '&redirect_url=https%3A%2F%2Fclient.example.com%2Foauth%2Fcallback' +
+        '&code_challenge=short' +
+        '&code_challenge_method=S256' +
+        '&token=invalid-pkce-token',
+      headers: { accept: 'text/html' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toContain('text/html');
+    expect(res.body).toBe('<html>login</html>');
+    expect(renderAuthEntrypointHtmlMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestUrl:
+          '/auth?config_url=https%3A%2F%2Fclient.example.com%2Fauth-config' +
+          '&redirect_url=https%3A%2F%2Fclient.example.com%2Foauth%2Fcallback',
+      }),
+    );
+    expect(validateRegistrationEmailLandingTokenMock).not.toHaveBeenCalled();
+    expect(verifyEmailTokenMock).not.toHaveBeenCalled();
+    expect(finalizeAuthenticatedUserMock).not.toHaveBeenCalled();
 
     await app.close();
   });

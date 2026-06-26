@@ -135,6 +135,8 @@ export const configJwtDocumentation = {
     debug_enabled: 'boolean (default false)',
     user_scope: '"global" | "per_domain" (default "global")',
     allow_registration: 'boolean (default true)',
+    existing_user_registration_behavior:
+      '"email_login_link" | "inline_sign_in" (default "email_login_link") — opt-in override for clients that prefer an inline already-registered sign-in prompt over sending a login-link email during registration',
     registration_mode: '"password_required" | "passwordless" (default "password_required")',
     allowed_registration_domains: 'string[] — lowercase email domains allowed to register',
     registration_domain_mapping:

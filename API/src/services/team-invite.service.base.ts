@@ -53,6 +53,7 @@ export type TeamInviteCreateResult =
   | { email: string; status: 'invited'; invite: TeamInviteRecord }
   | { email: string; status: 'resent_existing'; invite: TeamInviteRecord }
   | { email: string; status: 'already_member' }
+  | { email: string; status: 'existing_user' }
   | { email: string; status: 'conflict' };
 
 export function normalizeInviteName(value?: string): string | null {

@@ -47,7 +47,7 @@ export const authEndpoints: EndpointSchema[] = [
   {
     method: 'POST',
     path: '/auth/register',
-    description: 'User registration — sends verification email',
+    description: 'User registration — sends verification email, or an inline already-registered response when the signed config opts in',
     auth: 'config_url query param',
     query: {
       redirect_url: 'string (optional)',
@@ -57,7 +57,11 @@ export const authEndpoints: EndpointSchema[] = [
       code_challenge_method: '"S256" (required)',
     },
     body: { email: 'string (required)' },
-    response: { message: '"We sent instructions to your email" (always, no enumeration)' },
+    response: {
+      message: '"We sent instructions to your email" (default, no enumeration)',
+      code:
+        '"EMAIL_ALREADY_REGISTERED" with HTTP 409 only when existing_user_registration_behavior="inline_sign_in"',
+    },
   },
   {
     method: 'POST',
@@ -158,8 +162,8 @@ export const authEndpoints: EndpointSchema[] = [
       config_url: 'string (required)',
       redirect_url: 'string (optional)',
       code_challenge:
-        'string (required) — exactly 43-char PKCE S256 challenge preserved through email verification',
-      code_challenge_method: '"S256" (required)',
+        'string (optional for recovery; required to complete the one-click OAuth grant) — exactly 43-char PKCE S256 challenge preserved through email verification',
+      code_challenge_method: '"S256" when code_challenge is sent',
       request_access: 'string (optional) — preserves access-request intent through email auth',
     },
   },

@@ -45,7 +45,7 @@ export function registerAuthRegisterRoute(app: FastifyInstance): void {
 
       if (email && request.config && request.configUrl) {
         try {
-          await requestRegistrationInstructions(
+          const result = await requestRegistrationInstructions(
             {
               email,
               config: request.config,
@@ -57,6 +57,13 @@ export function registerAuthRegisterRoute(app: FastifyInstance): void {
             },
             { prisma: request.adminDb },
           );
+          if (result.status === 'existing_user') {
+            reply.status(409).send({
+              error: 'Request failed',
+              code: 'EMAIL_ALREADY_REGISTERED',
+            });
+            return;
+          }
         } catch (err) {
           // Never leak internal failures; always return the generic success response.
           request.log.error({ err }, 'registration instructions failed');

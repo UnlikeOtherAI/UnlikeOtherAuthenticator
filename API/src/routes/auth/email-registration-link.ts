@@ -17,7 +17,7 @@ import { isCustomSchemeUrl } from '../../utils/http-url.js';
 import { verifyEmailToken } from '../../services/auth-verify-email.service.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
 import { AppError, isAppError } from '../../utils/errors.js';
-import { parseRequiredPkceChallenge, type PkceChallenge } from '../../utils/pkce.js';
+import { parsePkceChallenge, type PkceChallenge } from '../../utils/pkce.js';
 import { tokenConsumeRateLimiter } from './rate-limit-keys.js';
 
 const QuerySchema = z
@@ -57,13 +57,34 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
     async (request, reply) => {
       const { token, redirect_url, code_challenge, code_challenge_method, request_access } =
         QuerySchema.parse(request.query);
-      const pkce = parseRequiredPkceChallenge({
-        codeChallenge: code_challenge,
-        codeChallengeMethod: code_challenge_method,
-      });
 
       if (!request.config || !request.configUrl) {
         throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
+      }
+
+      let pkce: PkceChallenge | undefined;
+      try {
+        pkce = parsePkceChallenge({
+          codeChallenge: code_challenge,
+          codeChallengeMethod: code_challenge_method,
+        });
+      } catch (err) {
+        if (!isAppError(err) || err.message !== 'INVALID_PKCE_CHALLENGE') {
+          throw err;
+        }
+        request.log.info({ err }, 'email link had an invalid PKCE challenge; rendering login');
+        const html = await renderAuthEntrypointHtml({
+          config: request.config,
+          configUrl: request.configUrl,
+          requestUrl: buildLoginAuthUrl(
+            request.configUrl,
+            redirect_url,
+            parseRequestAccessFlag(request_access),
+            undefined,
+          ),
+        });
+        sendAuthHtml(reply, html);
+        return;
       }
 
       let type: 'LOGIN_LINK' | 'VERIFY_EMAIL_SET_PASSWORD' | 'VERIFY_EMAIL';
@@ -90,6 +111,22 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
             redirect_url,
             parseRequestAccessFlag(request_access),
             pkce,
+          ),
+        });
+        sendAuthHtml(reply, html);
+        return;
+      }
+
+      if (!pkce) {
+        request.log.info('email link omitted PKCE challenge; rendering login restart');
+        const html = await renderAuthEntrypointHtml({
+          config: request.config,
+          configUrl: request.configUrl,
+          requestUrl: buildLoginAuthUrl(
+            request.configUrl,
+            redirect_url,
+            parseRequestAccessFlag(request_access),
+            undefined,
           ),
         });
         sendAuthHtml(reply, html);
@@ -207,13 +244,15 @@ function buildLoginAuthUrl(
   configUrl: string,
   redirectUrl: string | undefined,
   requestAccess: boolean,
-  pkce: PkceChallenge,
+  pkce: PkceChallenge | undefined,
 ): string {
   const params = new URLSearchParams();
   params.set('config_url', configUrl);
   if (redirectUrl) params.set('redirect_url', redirectUrl);
-  params.set('code_challenge', pkce.codeChallenge);
-  params.set('code_challenge_method', pkce.codeChallengeMethod);
+  if (pkce) {
+    params.set('code_challenge', pkce.codeChallenge);
+    params.set('code_challenge_method', pkce.codeChallengeMethod);
+  }
   if (requestAccess) params.set('request_access', 'true');
   return `/auth?${params.toString()}`;
 }

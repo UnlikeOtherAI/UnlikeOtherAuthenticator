@@ -10,9 +10,10 @@ type RegisterRequest = { email: string };
 
 export function RegisterForm(): React.JSX.Element {
   const { t } = useTranslation();
-  const { configUrl, redirectUrl, codeChallenge, codeChallengeMethod, requestAccess } = usePopup();
+  const { configUrl, redirectUrl, codeChallenge, codeChallengeMethod, requestAccess, setView } = usePopup();
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [alreadyRegistered, setAlreadyRegistered] = useState(false);
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -27,11 +28,46 @@ export function RegisterForm(): React.JSX.Element {
     }
     if (requestAccess) query.request_access = true;
 
-    // Always render the same confirmation regardless of result — avoids
-    // account-existence enumeration via timing or message differences.
-    await postJson<RegisterRequest, unknown>('/auth/register', { email }, query);
+    // Most clients keep the default no-enumeration response. A signed config
+    // may opt into EMAIL_ALREADY_REGISTERED for products that prefer inline
+    // sign-in guidance over a login-link email.
+    const result = await postJson<RegisterRequest, unknown>('/auth/register', { email }, query);
     setLoading(false);
+    if (!result.ok && result.code === 'EMAIL_ALREADY_REGISTERED') {
+      setAlreadyRegistered(true);
+      return;
+    }
     setSubmitted(true);
+  }
+
+  if (alreadyRegistered) {
+    return (
+      <div
+        role="status"
+        className={[
+          'mt-6 rounded-[var(--uoa-radius-card)] border border-[var(--uoa-color-border)]',
+          'bg-[var(--uoa-color-surface)] px-3 py-3 text-sm text-[var(--uoa-color-text)]',
+        ].join(' ')}
+      >
+        <p>{t('message.emailAlreadyRegistered')}</p>
+        <div className="mt-3 flex flex-wrap gap-3">
+          <button
+            type="button"
+            className="text-sm font-medium text-[var(--uoa-color-primary)] hover:underline"
+            onClick={() => setView('login')}
+          >
+            {t('nav.backToLogin')}
+          </button>
+          <button
+            type="button"
+            className="text-sm font-medium text-[var(--uoa-color-primary)] hover:underline"
+            onClick={() => setView('reset-password')}
+          >
+            {t('nav.resetPassword')}
+          </button>
+        </div>
+      </div>
+    );
   }
 
   if (submitted) {

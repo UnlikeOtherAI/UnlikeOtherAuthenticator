@@ -146,6 +146,11 @@ export async function createTeamInvites(
         results.push({ email, status: 'conflict' });
         continue;
       }
+
+      if (params.config.existing_user_registration_behavior === 'inline_sign_in') {
+        results.push({ email, status: 'existing_user' });
+        continue;
+      }
     }
 
     const hadExistingUnresolvedInvite = Boolean(
@@ -366,6 +371,9 @@ export async function resendTeamInvite(params: {
     where: { userKey: identity.userKey },
     select: { id: true },
   });
+  if (existingUser && params.config.existing_user_registration_behavior === 'inline_sign_in') {
+    throw new AppError('BAD_REQUEST', 409, 'EMAIL_ALREADY_REGISTERED');
+  }
 
   await prisma.teamInvite.updateMany({
     where: {

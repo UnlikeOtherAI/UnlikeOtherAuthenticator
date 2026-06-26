@@ -248,7 +248,7 @@ const orgEndpoints: EndpointSchema[] = [
       invites: 'array (required, 1-200) — [{ email: string, name?: string, teamRole?: string }]',
     },
     response: {
-      results: 'array — per-email status: invited | resent_existing | already_member | conflict',
+      results: 'array — per-email status: invited | resent_existing | already_member | existing_user | conflict',
     },
   },
   {

@@ -125,6 +125,44 @@ describe('requestRegistrationInstructions', () => {
     expect(sendVerifyEmailEmail).not.toHaveBeenCalled();
   });
 
+  it('returns existing_user without creating a token when the client opts into inline sign-in', async () => {
+    const findUnique = vi
+      .fn<PrismaStub['user']['findUnique']>()
+      .mockResolvedValue({ id: 'u1' });
+    const createToken = vi
+      .fn<PrismaStub['verificationToken']['create']>()
+      .mockResolvedValue({ id: 't1' });
+    const prisma: PrismaStub = {
+      user: { findUnique },
+      verificationToken: { create: createToken },
+    };
+
+    const sendAccountExistsEmail = vi.fn<(params: { to: string; link: string }) => Promise<void>>(
+      async () => undefined,
+    );
+
+    const result = await requestRegistrationInstructions(
+      {
+        email: 'existing@example.com',
+        config: baseConfig({ existing_user_registration_behavior: 'inline_sign_in' }),
+        configUrl: 'https://client.example.com/auth-config',
+      },
+      {
+        env: testEnv(),
+        prisma,
+        sharedSecret: 'pepper',
+        now: () => new Date('2026-02-10T00:00:00.000Z'),
+        generateEmailToken: () => 'token123',
+        hashEmailToken: () => 'hash123',
+        sendAccountExistsEmail,
+      },
+    );
+
+    expect(result).toEqual({ status: 'existing_user' });
+    expect(createToken).not.toHaveBeenCalled();
+    expect(sendAccountExistsEmail).not.toHaveBeenCalled();
+  });
+
   it('creates a VERIFY_EMAIL_SET_PASSWORD token and sends verification instructions for a new user', async () => {
     const findUnique = vi
       .fn<PrismaStub['user']['findUnique']>()
