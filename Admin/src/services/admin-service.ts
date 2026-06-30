@@ -31,6 +31,22 @@ export type DomainSecretResponse = {
   domain: Domain;
 };
 
+export type ApiKeyResponse = {
+  id: string;
+  name: string;
+  key_prefix: string;
+  last_used_at: string | null;
+  expires_at: string | null;
+  revoked_at: string | null;
+  created_by_email: string | null;
+  created_at: string;
+};
+
+export type ApiKeyCreatedResponse = ApiKeyResponse & {
+  // Plaintext secret — returned exactly once, on creation.
+  key: string;
+};
+
 export type DomainRotateResponse = {
   domain: string;
   contact_email: string;
@@ -237,6 +253,13 @@ export const adminService = {
   grantSuperuser: (userId: string) => api.post<AdminSuperuser>('/internal/admin/superusers', { userId }),
   revokeSuperuser: (userId: string) =>
     api.delete<unknown>(`/internal/admin/superusers/${encodeURIComponent(userId)}`),
+  listApiKeys: () => api.get<ApiKeyResponse[]>('/internal/admin/api-keys'),
+  createApiKey: (input: { name: string; expiresAt?: string | null }) =>
+    api.post<ApiKeyCreatedResponse>('/internal/admin/api-keys', {
+      name: input.name,
+      expires_at: input.expiresAt ?? null,
+    }),
+  revokeApiKey: (id: string) => api.delete<unknown>(`/internal/admin/api-keys/${encodeURIComponent(id)}`),
 };
 
 export type KillSwitchInput = {

@@ -48,7 +48,10 @@ export const navSections: NavSection[] = [
   },
   {
     label: 'System',
-    items: [{ label: 'Settings', path: '/settings', icon: 'settings' }],
+    items: [
+      { label: 'API Keys', path: '/api-keys', icon: 'key' },
+      { label: 'Settings', path: '/settings', icon: 'settings' },
+    ],
   },
 ];
 

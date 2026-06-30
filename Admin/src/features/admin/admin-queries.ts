@@ -199,6 +199,32 @@ export function useDomainEmailQuery(domain: string | null | undefined) {
   });
 }
 
+export function useApiKeysQuery() {
+  return useQuery({ queryKey: ['admin', 'api-keys'], queryFn: adminService.listApiKeys });
+}
+
+export function useCreateApiKeyMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: { name: string; expiresAt?: string | null }) => adminService.createApiKey(input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'api-keys'] });
+    },
+  });
+}
+
+export function useRevokeApiKeyMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => adminService.revokeApiKey(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'api-keys'] });
+    },
+  });
+}
+
 export function useSuperusersQuery() {
   return useQuery({ queryKey: ['admin', 'superusers'], queryFn: adminService.getSuperusers });
 }
