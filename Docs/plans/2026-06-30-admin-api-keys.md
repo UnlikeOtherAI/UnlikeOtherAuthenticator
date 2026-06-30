@@ -2,7 +2,7 @@
 
 - **Jira:** HUGO-539
 - **Branch:** `hugo-539-admin-api-keys`
-- **Status:** spec (pre-implementation)
+- **Status:** spec v2 (post spec-review; reviewed by 1 Claude + 1 Codex worker)
 
 ## Context
 
@@ -10,34 +10,31 @@ Feature flags and kill switches are stored per `App` and written through
 `POST/PATCH/DELETE /internal/admin/apps/:appId/{flags,kill-switches}`
 (`API/src/routes/internal/admin/apps.ts`). Every `/internal/admin/*` route is guarded by
 `requireAdminSuperuser` (`API/src/middleware/admin-superuser.ts`), which requires a **superuser
-browser access-token JWT** issued by the admin OAuth flow. That JWT is short-lived and obtained
-interactively, so there is **no way to operate a flag or kill switch from a terminal or CI job**.
+browser access-token JWT** issued by the admin OAuth flow — short-lived and obtained interactively,
+so there is **no way to operate a flag or kill switch from a terminal or CI job**.
 
-UOA has **no API-key concept** today. The only long-lived credential is the per-domain client
-secret (`uoa_sec_`, `API/src/utils/client-hash.ts` + `API/src/services/domain-secret.service.ts`),
-which authenticates `/domain/*` backend calls — not admin operations.
+UOA has **no API-key concept** today. The per-domain client secret (`uoa_sec_`,
+`API/src/utils/client-hash.ts` + `API/src/services/domain-secret.service.ts`) authenticates
+`/domain/*` calls only. (`Docs/Requirements/roles-and-acl.md` §253 specs an org-scoped **SCIM bearer
+token** — opaque, hashed-at-rest, shown once, revocable — but it is not implemented. Our Admin API
+Key shares that lifecycle shape; it is **global/superuser-scoped**, not org-scoped, which is the
+deliberate difference.)
 
-**Outcome we want:** a superuser mints an **Admin API Key** in the Admin panel and uses it from the
-terminal (curl/CI) to create and toggle feature flags and kill switches. Turnkey for the operator:
-the UI shows ready-to-paste commands the moment the key is created, and `/llm` documents the same.
+**Outcome:** a superuser mints an **Admin API Key** in the Admin panel and uses it from the terminal
+(curl/CI) to list apps and create/toggle feature flags and kill switches. Turnkey: the UI shows
+ready-to-paste commands the moment the key is created, and `/llm` documents the same.
 
-## Non-goals / guardrails (keep it simple, not over-engineered)
+## Guardrails (keep it simple — both spec reviewers flagged over-engineering risk)
 
-- No per-key rate limiting, IP allowlists, or usage analytics (YAGNI for an internal superuser tool).
-- No scope-picker UI: every key carries the same fixed capability set (below). Scopes are stored so a
-  read-only key is a trivial future addition, but the create form does not expose them.
-- A key **cannot** mint/list/revoke keys and **cannot** touch users, orgs, domains, or superusers.
-  Key management stays superuser-UI-only — this is the privilege-escalation boundary.
-- Reuse the existing digest pattern; introduce **no new env var** (uses `SHARED_SECRET`).
+- **One fixed capability per key**, no scope-picker UI and **no `scopes` column**. A valid key can do
+  exactly what the guarded routes allow (list apps + write flags + write kill switches). The security
+  boundary is *which routes* carry the combined guard — every other `/internal/admin/*` route stays
+  `requireAdminSuperuser`. If a read-only key is ever needed, that's a future migration (YAGNI).
+- A key **cannot** mint/list/revoke keys and **cannot** reach users, orgs, domains, superusers,
+  dashboard, settings, logs, or search. Key management is superuser-UI-only — the escalation boundary.
+- **No new env var** (reuses `SHARED_SECRET`). No per-key rate limits / IP allowlists / usage analytics.
 
 ## Design
-
-### Capability model
-
-A key grants exactly: `apps:read`, `flags:write`, `killswitches:write`. These map to:
-- `apps:read` → `GET /internal/admin/apps`, `GET /internal/admin/apps/:appId` (discover app + ids).
-- `flags:write` → `POST/PATCH/DELETE …/apps/:appId/flags[/:flagId]`.
-- `killswitches:write` → `POST/PATCH/DELETE …/apps/:appId/kill-switches[/:killSwitchId]`.
 
 ### 1. Storage — `AdminApiKey` (`API/prisma/schema.prisma`)
 
@@ -45,108 +42,132 @@ A key grants exactly: `apps:read`, `flags:write`, `killswitches:write`. These ma
 model AdminApiKey {
   id              String    @id @default(cuid())
   name            String    @db.VarChar(120)
-  keyPrefix       String    @db.VarChar(24)            // display hint, e.g. "uoa_ak_AbC123"
-  secretDigest    String    @unique                    // HMAC-SHA256(rawKey, SHARED_SECRET) hex
-  scopes          Json      @default("[\"apps:read\",\"flags:write\",\"killswitches:write\"]")
-  lastUsedAt      DateTime?
-  expiresAt       DateTime?
-  revokedAt       DateTime?
-  createdByUserId String?
-  createdByEmail  String?   @db.VarChar(200)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  keyPrefix       String    @map("key_prefix") @db.VarChar(24)   // display hint, e.g. "uoa_ak_AbC123"
+  secretDigest    String    @unique @map("secret_digest")        // HMAC-SHA256(rawKey, SHARED_SECRET) hex
+  lastUsedAt      DateTime? @map("last_used_at")
+  expiresAt       DateTime? @map("expires_at")
+  revokedAt       DateTime? @map("revoked_at")
+  createdByUserId String?   @map("created_by_user_id")
+  createdByEmail  String?   @map("created_by_email") @db.VarChar(200)
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
 
   @@map("admin_api_keys")
 }
 ```
 
-Secret is **never** persisted — only the HMAC digest, exactly like `ClientDomainSecret.secretDigest`.
+Secret is **never** persisted — only the HMAC digest (storage like `ClientDomainSecret.secretDigest`;
+verification is a global unique-index lookup, a deliberate global-key pattern — *not* the per-domain
+scan + `timingSafeEqual` of `domain-secret.service.ts`).
 
 ### 2. Key util — `API/src/utils/api-key.ts` (new, mirrors `client-hash.ts`)
 
 - `export const API_KEY_PREFIX = 'uoa_ak_'`
 - `generateAdminApiKey()` → `uoa_ak_` + `randomBytes(32).toString('base64url')`
 - `digestApiKey(rawKey, pepper = requireEnv('SHARED_SECRET').SHARED_SECRET)` → HMAC-SHA256 hex
-- `apiKeyDisplayPrefix(rawKey)` → first 14 chars (for the list view)
+- `apiKeyDisplayPrefix(rawKey)` → first 14 chars (list view)
 
 ### 3. Service — `API/src/services/admin-api-key.service.ts` (new)
 
 - `createAdminApiKey({ name, expiresAt?, createdBy })` → `{ record, plaintext }` (plaintext shown once).
-- `listAdminApiKeys()` → records without any secret material.
+- `listAdminApiKeys()` → records (no secret material).
 - `revokeAdminApiKey(id)` → set `revokedAt = now()`.
-- `verifyAdminApiKey(rawKey)` → compute digest → `findUnique({ where: { secretDigest } })`; reject when
-  missing / `revokedAt` set / `expiresAt < now`; best-effort `lastUsedAt` touch (don't fail the request
-  if the touch write fails); return `{ id, scopes }`. Indexed digest lookup is forgery-proof — an
-  attacker cannot compute the HMAC without `SHARED_SECRET`, so no timing concern beyond the existing
-  client-secret path. Uses `getAdminPrisma()` (no tenant context).
+- `verifyAdminApiKey(rawKey)` → **guard `if (!getEnv().DATABASE_URL) throw new AppError('UNAUTHORIZED', 401)`**
+  (matches `admin-superuser.ts` / `domain-secret.service.ts`), then digest →
+  `findUnique({ where: { secretDigest } })`; reject when missing / `revokedAt` set / `expiresAt < now`;
+  best-effort `lastUsedAt` touch (never fail the request on the touch); return `{ id }`. Uses
+  `getAdminPrisma()` (no tenant context). Forgery-proof: the HMAC needs `SHARED_SECRET`.
 
 ### 4. Auth middleware — `API/src/middleware/admin-access.ts` (new)
 
 ```ts
-export function requireAdminAccess(scope: AdminScope) {
+declare module 'fastify' {
+  interface FastifyRequest { adminApiKey?: { id: string } }   // mirrors admin-superuser.ts augmentation
+}
+
+export function requireAdminApiKeyOrSuperuser() {
   return async (request, reply) => {
-    const apiKey = readApiKeyCredential(request); // X-API-Key header, or Bearer "uoa_ak_…"
+    const apiKey = readApiKeyCredential(request);   // X-API-Key, else Bearer "uoa_ak_…"; reject array/dup headers
     if (apiKey) {
-      const verified = await verifyAdminApiKey(apiKey);   // throws 401 on bad/expired/revoked
-      if (!verified.scopes.includes(scope)) throw new AppError('FORBIDDEN', 403, 'API_KEY_SCOPE');
-      request.adminApiKey = verified;
+      request.adminApiKey = await verifyAdminApiKey(apiKey);   // invalid key → 401, NEVER falls back to JWT
       return;
     }
-    return requireAdminSuperuser(request, reply);          // unchanged JWT path
+    return requireAdminSuperuser(request, reply);   // unchanged JWT path (Bearer not starting with uoa_ak_)
   };
 }
 ```
 
-`readApiKeyCredential` only treats a Bearer value as an API key when it starts with `uoa_ak_`;
-otherwise the existing superuser-JWT path runs untouched (no regression for the Admin UI).
+- **Precedence:** an API-key credential, when present, is authoritative — a bad/expired/revoked key
+  returns a generic 401, it does **not** retry as a JWT. Only requests with *no* API-key credential
+  fall through to the superuser JWT path, so the Admin UI is unaffected.
+- In `API/src/routes/internal/admin/apps.ts`, swap the local `adminRoute(...)` helper's preHandler
+  from `requireAdminSuperuser` → `requireAdminApiKeyOrSuperuser()` for the flag/kill-switch write
+  routes **and** the new GET apps route below. **Do not touch `read.ts`** (dashboard/settings/users/
+  domains/logs/search stay superuser-only — avoids over-granting).
 
-In `API/src/routes/internal/admin/apps.ts`, generalize the local `adminRoute(responseSchema)` helper to
-`adminRoute(scope, responseSchema)` and swap `requireAdminSuperuser` → `requireAdminAccess(scope)`.
-Apply `apps:read` to the apps GET route(s) (locate the existing GET list/detail handler — sibling of
-`apps.ts` under `routes/internal/admin/`), `flags:write` / `killswitches:write` to the write routes.
+### 5. New read route for discovery — `GET /internal/admin/apps` (in `apps.ts`)
 
-### 5. Key-management routes — `API/src/routes/internal/admin/api-keys.ts` (new)
+Required because **no GET apps route exists today** (app data is only embedded in
+`GET /internal/admin/dashboard` / `/settings`). Add `GET /internal/admin/apps` guarded by
+`requireAdminApiKeyOrSuperuser()`, returning the apps list (each with its flags + kill switches, via
+the existing `getAdminApps()` in `API/src/services/internal-admin.service.apps.ts`). This gives a
+terminal user every id they need. Skip `GET /:appId` (the list already includes everything — keep it
+to one new route).
+
+### 6. Key-management routes — `API/src/routes/internal/admin/api-keys.ts` (new)
 
 `GET /internal/admin/api-keys` · `POST /internal/admin/api-keys` (returns plaintext once) ·
 `DELETE /internal/admin/api-keys/:id` (revoke). **All keep `requireAdminSuperuser`.** Register via the
 existing `registerInternalAdminRoutes` aggregation in `API/src/routes/index.ts`.
 
-### 6. Admin UI (`Admin/`)
+### 7. Migration — `API/prisma/migrations/<ts>_admin_api_keys/migration.sql`
 
-- New page `Admin/src/pages/ApiKeysPage.tsx`; route `/api-keys` in `Admin/src/app/App.tsx`; nav entry.
-- `Admin/src/services/admin-service.ts`: `listApiKeys`, `createApiKey`, `revokeApiKey`
-  (calls go through `createApiClient()` → Bearer admin token, same as every other admin call).
+Author via Prisma, then **hand-add the admin-only grants** (the RLS migration
+`20260423000000_rls_roles_and_grants` grants future tables to `uoa_app` by default, so a secret table
+must be locked down explicitly, like the other admin-only tables):
+
+```sql
+REVOKE ALL ON TABLE "admin_api_keys" FROM "uoa_app";
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "admin_api_keys" TO "uoa_admin";
+```
+
+The UOA database needs this applied before the prod merge. **Confirm with the user before applying to
+prod and before merging.**
+
+### 8. Admin UI (`Admin/`)
+
+- New page `Admin/src/pages/ApiKeysPage.tsx`; route `/api-keys` in `Admin/src/app/App.tsx`;
+  **nav entry + label in `Admin/src/layouts/navigation.ts`** (the real nav/topbar source — add an
+  "API Keys" item under the System or Flags section, and a `navLabelForPath` case).
+- Add `listApiKeys` / `createApiKey` / `revokeApiKey` **as methods on the `adminService` object** in
+  `Admin/src/services/admin-service.ts` (snake_case response types like `DomainSecretResponse`); calls
+  go through `createApiClient()` (Bearer admin token).
 - Create dialog: **name** (required) + optional **expiry**. On success, a one-time panel shows the
-  secret with a Copy button **and copy-ready curl snippets** prefilled with the real key and the
-  `sso.hugopos.eu` base URL: (a) list apps, (b) create a flag, (c) flip a kill switch.
-- List table: name, key prefix, scopes, last used, expires, status (active / expired / revoked), Revoke.
-- TanStack Query for fetch/mutations; Tailwind only; follow `Docs/Admin/architecture-admin.md`.
+  secret with a Copy button **and copy-ready curl snippets built from `window.location.origin`**
+  (list apps, create a flag, flip a kill switch). List table: name, prefix, last used, expires,
+  status (active / expired / revoked), Revoke. TanStack Query; Tailwind only.
 
-### 7. Docs — keep `/api` and `/llm` in sync (hard repo rule)
+### 9. Docs — keep `/api` and `/llm` in sync (hard repo rule)
 
-Update `API/src/routes/root/index.ts` (machine-readable schema) and `API/src/routes/root/llm.ts`
-(markdown guide): document `X-API-Key` auth, the three key-management endpoints, and a terminal recipe
-for toggling a flag / kill switch with a key.
+Update the **split schema source** `API/src/routes/root/schema.internal-admin-apps.ts` (and its
+aggregation `schema.internal-admin.ts`) for the machine-readable `/api`, and the **markdown source**
+`API/src/routes/root/llm-integration.ts` (+ `llm-intro.ts` if a new top-level section is warranted)
+for `/llm` — *not* `root/index.ts` / `root/llm.ts` directly. Document `X-API-Key` auth, the new
+`GET /internal/admin/apps`, the three key-management endpoints, and a terminal recipe for toggling a
+flag / kill switch.
 
-### 8. Tests — Vitest via `app.inject()` (`API/tests/unit/`)
+### 10. Tests — Vitest via `app.inject()` (`API/tests/unit/`)
 
-- API key can `POST` a flag and `PATCH` a kill switch (200).
-- Revoked key → 401; expired key → 401; unknown key → 401.
-- Valid key missing the required scope → 403.
-- API key cannot hit `POST /internal/admin/api-keys` (key-mgmt stays superuser-only) → 401/403.
+- API key can `GET /internal/admin/apps`, `POST` a flag, and `PATCH` a kill switch (200).
+- Revoked / expired / unknown key → 401; invalid API key does **not** fall back to JWT.
+- API key cannot hit `POST /internal/admin/api-keys` or `read.ts` routes (superuser-only) → 401.
 - Superuser JWT still works on the flag/kill-switch routes (regression).
 - Service unit: create returns plaintext once; stored digest matches `digestApiKey`.
 
-### 9. Migration
-
-`pnpm --filter @uoa/api exec prisma migrate dev --name admin_api_keys` to author the migration.
-The UOA database needs it applied before the prod merge. **Confirm with the user before applying to
-prod and before merging** (per the standing rule to confirm prod-affecting steps).
-
 ## Verification
 
-- `pnpm --filter @uoa/api test` green (new auth/scope/revoke/expiry + service tests).
+- `pnpm --filter @uoa/api test` green (new auth/revoke/expiry + service tests).
 - `pnpm --filter @uoa/admin build` green; API-Keys page lists/creates (one-time secret + curl panel)/revokes.
-- End-to-end against a running instance: mint a key in the UI → `curl` with `X-API-Key` to create a
-  flag and flip a kill switch → confirm via `GET /apps/startup`.
-- `GET /api` and `GET /llm` reflect the new auth + endpoints and stay byte-consistent with each other.
+- End-to-end against a running instance: mint a key in the UI → `curl -H "X-API-Key: …"` to
+  `GET /internal/admin/apps`, create a flag, flip a kill switch → confirm via `GET /apps/startup`.
+- `GET /api` and `GET /llm` reflect the new auth + endpoints and stay consistent with each other.
