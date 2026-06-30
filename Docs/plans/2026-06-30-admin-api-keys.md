@@ -2,7 +2,7 @@
 
 - **Jira:** HUGO-539
 - **Branch:** `hugo-539-admin-api-keys`
-- **Status:** spec v2 (post spec-review; reviewed by 1 Claude + 1 Codex worker)
+- **Status:** spec v3 (post spec-review rounds 1–2; reviewed by 1 Claude + 1 Codex worker)
 
 ## Context
 
@@ -75,7 +75,8 @@ scan + `timingSafeEqual` of `domain-secret.service.ts`).
 - `verifyAdminApiKey(rawKey)` → **guard `if (!getEnv().DATABASE_URL) throw new AppError('UNAUTHORIZED', 401)`**
   (matches `admin-superuser.ts` / `domain-secret.service.ts`), then digest →
   `findUnique({ where: { secretDigest } })`; reject when missing / `revokedAt` set / `expiresAt < now`;
-  best-effort `lastUsedAt` touch (never fail the request on the touch); return `{ id }`. Uses
+  best-effort `lastUsedAt` touch wrapped in **awaited try/catch** (never fire-and-forget — an
+  unhandled rejection must not crash the process; swallow touch errors); return `{ id }`. Uses
   `getAdminPrisma()` (no tenant context). Forgery-proof: the HMAC needs `SHARED_SECRET`.
 
 ### 4. Auth middleware — `API/src/middleware/admin-access.ts` (new)
@@ -100,16 +101,20 @@ export function requireAdminApiKeyOrSuperuser() {
 - **Precedence:** an API-key credential, when present, is authoritative — a bad/expired/revoked key
   returns a generic 401, it does **not** retry as a JWT. Only requests with *no* API-key credential
   fall through to the superuser JWT path, so the Admin UI is unaffected.
-- In `API/src/routes/internal/admin/apps.ts`, swap the local `adminRoute(...)` helper's preHandler
-  from `requireAdminSuperuser` → `requireAdminApiKeyOrSuperuser()` for the flag/kill-switch write
-  routes **and** the new GET apps route below. **Do not touch `read.ts`** (dashboard/settings/users/
-  domains/logs/search stay superuser-only — avoids over-granting).
+- In `API/src/routes/internal/admin/apps.ts` the local `adminRoute(...)` helper is **shared** and also
+  guards `POST /internal/admin/apps` (app creation). **Do not swap the shared helper wholesale** — that
+  would let an API key create apps. Instead add a second helper `keyedRoute(responseSchema)` whose
+  preHandler is `requireAdminApiKeyOrSuperuser()`, and apply it **only** to: the flag write routes
+  (POST/PATCH/DELETE flags), the kill-switch write routes (POST/PATCH/DELETE kill-switches), and the
+  new `GET /internal/admin/apps` (§5). Leave `POST /internal/admin/apps` on the superuser-only
+  `adminRoute(...)`. **Do not touch `read.ts`** (dashboard/settings/users/domains/logs/search stay
+  superuser-only). Net: a key reaches exactly flags + kill switches + apps-list; nothing else.
 
 ### 5. New read route for discovery — `GET /internal/admin/apps` (in `apps.ts`)
 
 Required because **no GET apps route exists today** (app data is only embedded in
-`GET /internal/admin/dashboard` / `/settings`). Add `GET /internal/admin/apps` guarded by
-`requireAdminApiKeyOrSuperuser()`, returning the apps list (each with its flags + kill switches, via
+`GET /internal/admin/dashboard` / `/settings`). Add `GET /internal/admin/apps` registered with the new `keyedRoute(...)` helper
+(`requireAdminApiKeyOrSuperuser()`), returning the apps list (each with its flags + kill switches, via
 the existing `getAdminApps()` in `API/src/services/internal-admin.service.apps.ts`). This gives a
 terminal user every id they need. Skip `GET /:appId` (the list already includes everything — keep it
 to one new route).
@@ -129,6 +134,11 @@ must be locked down explicitly, like the other admin-only tables):
 ```sql
 REVOKE ALL ON TABLE "admin_api_keys" FROM "uoa_app";
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "admin_api_keys" TO "uoa_admin";
+-- belt-and-braces, matching the other admin-only secret tables (migration 20260423000001 §3):
+-- if a future migration ever grants uoa_app a privilege here, the deny-all policy still blocks it.
+ALTER TABLE "admin_api_keys" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "admin_api_keys" FORCE ROW LEVEL SECURITY;
+CREATE POLICY admin_api_keys_deny_app ON "admin_api_keys" FOR ALL TO uoa_app USING (false) WITH CHECK (false);
 ```
 
 The UOA database needs this applied before the prod merge. **Confirm with the user before applying to
@@ -160,7 +170,8 @@ flag / kill switch.
 
 - API key can `GET /internal/admin/apps`, `POST` a flag, and `PATCH` a kill switch (200).
 - Revoked / expired / unknown key → 401; invalid API key does **not** fall back to JWT.
-- API key cannot hit `POST /internal/admin/api-keys` or `read.ts` routes (superuser-only) → 401.
+- API key cannot hit `POST /internal/admin/apps` (app creation), `POST /internal/admin/api-keys`, or
+  any `read.ts` route (all superuser-only) → 401.
 - Superuser JWT still works on the flag/kill-switch routes (regression).
 - Service unit: create returns plaintext once; stored digest matches `digestApiKey`.
 
