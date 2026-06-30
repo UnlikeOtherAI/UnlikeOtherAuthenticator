@@ -2,9 +2,10 @@ import type { EndpointSchema } from './schema.js';
 
 export function buildInternalAdminAppEndpoints(params: {
   adminAuth: string;
+  keyedAuth: string;
   authFailures: string;
 }): EndpointSchema[] {
-  const { adminAuth, authFailures } = params;
+  const { adminAuth, keyedAuth, authFailures } = params;
 
   return [
     {
@@ -13,6 +14,14 @@ export function buildInternalAdminAppEndpoints(params: {
       description: 'Admin settings backing data for bans and apps',
       auth: adminAuth,
       response: { 200: '{ bans, apps }', '401/403': authFailures },
+    },
+    {
+      method: 'GET',
+      path: '/internal/admin/apps',
+      description:
+        'List registered apps, each with its feature flag definitions and kill-switch rules. The discovery endpoint a terminal/CI caller uses to find the appId, flagId, and killSwitchId before writing flags or kill switches.',
+      auth: keyedAuth,
+      response: { 200: 'Array of app summary objects (each with flags and kill switches)', '401/403': authFailures },
     },
     {
       method: 'POST',
@@ -34,7 +43,7 @@ export function buildInternalAdminAppEndpoints(params: {
       method: 'POST',
       path: '/internal/admin/apps/:appId/flags',
       description: 'Create a feature flag definition for an app',
-      auth: adminAuth,
+      auth: keyedAuth,
       body: {
         key: 'string (required, max 80)',
         description: 'string (optional, max 500)',
@@ -46,7 +55,7 @@ export function buildInternalAdminAppEndpoints(params: {
       method: 'PATCH',
       path: '/internal/admin/apps/:appId/flags/:flagId',
       description: 'Update a feature flag definition',
-      auth: adminAuth,
+      auth: keyedAuth,
       body: {
         key: 'string (required, max 80)',
         description: 'string (optional, max 500)',
@@ -58,14 +67,14 @@ export function buildInternalAdminAppEndpoints(params: {
       method: 'DELETE',
       path: '/internal/admin/apps/:appId/flags/:flagId',
       description: 'Delete a feature flag definition and cascading flag values/overrides',
-      auth: adminAuth,
+      auth: keyedAuth,
       response: { 200: 'Updated app summary object', '401/403': authFailures },
     },
     {
       method: 'POST',
       path: '/internal/admin/apps/:appId/kill-switches',
       description: 'Create a kill switch version rule for an app',
-      auth: adminAuth,
+      auth: keyedAuth,
       body: {
         name: 'string (optional, max 120)',
         platform: 'both | platform key',
@@ -86,7 +95,7 @@ export function buildInternalAdminAppEndpoints(params: {
       method: 'PATCH',
       path: '/internal/admin/apps/:appId/kill-switches/:killSwitchId',
       description: 'Update a kill switch version rule',
-      auth: adminAuth,
+      auth: keyedAuth,
       body: {
         name: 'string (optional, max 120)',
         platform: 'both | platform key',
@@ -107,7 +116,7 @@ export function buildInternalAdminAppEndpoints(params: {
       method: 'DELETE',
       path: '/internal/admin/apps/:appId/kill-switches/:killSwitchId',
       description: 'Delete a kill switch version rule',
-      auth: adminAuth,
+      auth: keyedAuth,
       response: { 200: 'Updated app summary object', '401/403': authFailures },
     },
     {

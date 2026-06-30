@@ -678,3 +678,22 @@ model AiTranslation {
   @@index([sourceHash])
   @@map("ai_translations")
 }
+
+// HUGO-539: Admin API keys — terminal/CI control of feature flags & kill switches.
+// Global/superuser-scoped opaque bearer key. The secret is never persisted, only the
+// HMAC-SHA256 digest (peppered with SHARED_SECRET). Admin-only table (deny-all RLS for uoa_app).
+model AdminApiKey {
+  id              String    @id @default(cuid())
+  name            String    @db.VarChar(120)
+  keyPrefix       String    @map("key_prefix") @db.VarChar(24)
+  secretDigest    String    @unique @map("secret_digest")
+  lastUsedAt      DateTime? @map("last_used_at")
+  expiresAt       DateTime? @map("expires_at")
+  revokedAt       DateTime? @map("revoked_at")
+  createdByUserId String?   @map("created_by_user_id")
+  createdByEmail  String?   @map("created_by_email") @db.VarChar(200)
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@map("admin_api_keys")
+}
