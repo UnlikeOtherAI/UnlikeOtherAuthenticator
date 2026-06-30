@@ -3,6 +3,8 @@ import { buildInternalAdminAppEndpoints } from './schema.internal-admin-apps.js'
 
 const adminAuth =
   'Authorization: Bearer <access_token>; admin tokens must be signed with ADMIN_ACCESS_TOKEN_SECRET, token role must be superuser, domain must match ADMIN_AUTH_DOMAIN, and DB-backed deployments require a SUPERUSER domain_roles row';
+const keyedAuth =
+  'Superuser JWT (see adminAuth) OR an Admin API key sent as `X-API-Key: <key>` or `Authorization: Bearer uoa_ak_…`. The key is minted once by a superuser in the Admin panel and is scoped to exactly these routes (list apps + write feature flags + write kill switches); it cannot reach any other /internal/admin route or mint/list/revoke keys. When an API-key credential is present it is authoritative — an invalid/expired/revoked key returns 401 and never falls back to the JWT.';
 const listLimit = { limit: 'number (optional, max 200)' };
 const authFailures = '401 when bearer token is missing/invalid; 403 when token is not an admin-domain superuser';
 
@@ -399,5 +401,37 @@ export const internalAdminEndpoints: EndpointSchema[] = [
     query: { limit: 'number (optional, max 500)' },
     response: { 200: 'Sanitized handshake error log array with requestJson, responseJson, jwtHeader, jwtPayload, and redactions', '401/403': authFailures },
   },
-  ...buildInternalAdminAppEndpoints({ adminAuth, authFailures }),
+  {
+    method: 'GET',
+    path: '/internal/admin/api-keys',
+    description: 'List Admin API keys (no secret material). Each key controls feature flags and kill switches from a terminal/CI; minting and revoking is superuser-only.',
+    auth: adminAuth,
+    response: {
+      200: 'Array of { id, name, key_prefix, last_used_at, expires_at, revoked_at, created_by_email, created_at }',
+      '401/403': authFailures,
+    },
+  },
+  {
+    method: 'POST',
+    path: '/internal/admin/api-keys',
+    description:
+      'Mint an Admin API key. The plaintext key (uoa_ak_…) is returned exactly once in the response and never shown again; only an HMAC digest is stored. The key can list apps and write feature flags + kill switches via X-API-Key auth — nothing else.',
+    auth: adminAuth,
+    body: {
+      name: 'string (required, max 120)',
+      expires_at: 'string (optional, ISO-8601 datetime; null or omitted means the key never expires)',
+    },
+    response: {
+      201: '{ id, name, key_prefix, last_used_at, expires_at, revoked_at, created_by_email, created_at, key } — key is the one-time plaintext secret',
+      '401/403': authFailures,
+    },
+  },
+  {
+    method: 'DELETE',
+    path: '/internal/admin/api-keys/:id',
+    description: 'Revoke an Admin API key by id. The key stops authenticating immediately (sets revoked_at).',
+    auth: adminAuth,
+    response: { 204: 'No content', '401/403': authFailures },
+  },
+  ...buildInternalAdminAppEndpoints({ adminAuth, keyedAuth, authFailures }),
 ];

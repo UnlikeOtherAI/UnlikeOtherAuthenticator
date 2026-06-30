@@ -293,7 +293,7 @@ The first-party Admin UI is served from [/admin](/admin). It dogfoods the same a
 - The admin config uses the admin domain, disables registration, and allows only Google.
 - \`/admin/auth/callback\` exchanges the authorization code at \`POST /internal/admin/token\`.
 - Admin access tokens are signed with \`ADMIN_ACCESS_TOKEN_SECRET\`.
-- Only \`role: "superuser"\` tokens for \`ADMIN_AUTH_DOMAIN\` can access \`/internal/admin/*\`.
+- Only \`role: "superuser"\` tokens for \`ADMIN_AUTH_DOMAIN\` can access \`/internal/admin/*\`. The sole exception is the feature-flag/kill-switch/apps-list subset, which **also** accepts a scoped **Admin API key** (\`X-API-Key\`) for terminal/CI use — see "Admin API keys" below.
 - \`ADMIN_AUTH_DOMAIN\` defaults to the resolved auth service identifier (inferred from \`PUBLIC_BASE_URL\` unless \`AUTH_SERVICE_IDENTIFIER\` overrides it).
 - DB-backed deployments also require a \`SUPERUSER\` row in \`domain_roles\` for that admin domain.
 
@@ -308,8 +308,56 @@ The first-party Admin UI is served from [/admin](/admin). It dogfoods the same a
 - \`GET /internal/admin/handshake-errors\` — sanitized handshake and config JWT errors for superusers, including redacted request/response context when \`config_url\` fetches fail before a JWT can be decoded.
 - \`PUT /internal/admin/domains/:domain\`, \`PATCH /internal/admin/organisations/:orgId\`, and \`PATCH /internal/admin/organisations/:orgId/teams/:teamId\` — admin-only login access whitelist writes. Send \`allowed_email_domains\` and/or \`allowed_emails\`; omitted lists remain unchanged.
 - \`POST /internal/admin/organisations\` — admin-only organisation creation for an existing owner user; creates the default \`General\` team and may set \`allowed_email_domains\` / \`allowed_emails\`.
-- \`POST /internal/admin/apps\` — admin-only app registration used by feature flags and \`/apps/startup\`.
-- \`POST/PATCH/DELETE /internal/admin/apps/:appId/flags\` and \`/kill-switches\` — admin-only feature flag definitions and version kill-switch rules.
+- \`POST /internal/admin/apps\` — admin-only app registration used by feature flags and \`/apps/startup\`. Superuser JWT only — an Admin API key cannot create apps.
+- \`GET /internal/admin/apps\` — list registered apps with their feature flag definitions and kill-switch rules. Superuser JWT **or** an Admin API key (\`X-API-Key\`). This is the discovery call a terminal/CI user makes to find the \`appId\`/\`flagId\`/\`killSwitchId\`.
+- \`POST/PATCH/DELETE /internal/admin/apps/:appId/flags\` and \`/kill-switches\` — feature flag definitions and version kill-switch rules. Superuser JWT **or** an Admin API key (\`X-API-Key\`).
+- \`GET/POST/DELETE /internal/admin/api-keys\` — mint, list, and revoke Admin API keys. **Superuser JWT only** (key management is the escalation boundary; an Admin API key can never reach these).
+
+---
+
+## Admin API keys — control feature flags & kill switches from a terminal
+
+Feature flags and kill switches are normally written through the Admin UI with a short-lived superuser browser token, so there is no way to flip one from a script or CI job. An **Admin API key** closes that gap.
+
+A superuser mints a key in the Admin panel (**API Keys** page). It is shown **once** — copy it immediately. The key:
+
+- looks like \`uoa_ak_<random>\` and is sent as \`X-API-Key: <key>\` (or \`Authorization: Bearer uoa_ak_…\`),
+- can do **exactly** three things: list apps, write feature flags, and write kill switches,
+- **cannot** mint/list/revoke keys or reach any other \`/internal/admin/*\` route (users, orgs, domains, dashboard, settings, logs, search). Those stay superuser-JWT-only.
+
+When an \`X-API-Key\`/\`Bearer uoa_ak_…\` credential is present it is authoritative: a bad, expired, or revoked key returns a generic \`401\` and is **not** retried as a JWT. Only requests with no API-key credential fall through to the superuser browser-token path, so the Admin UI is unaffected.
+
+### Terminal recipe
+
+\`\`\`bash
+UOA=https://authentication.unlikeotherai.com
+KEY=uoa_ak_your_key_minted_in_the_admin_panel
+
+# 1. Discover the app — find its appId, flag ids, and kill-switch ids.
+curl -fsS -H "X-API-Key: $KEY" "$UOA/internal/admin/apps"
+# => [ { "id": "app_…", "identifier": "com.acme.ios", "flags": [ { "id": "flag_…", "key": "new_checkout" } ], "killSwitches": [ … ] }, … ]
+
+APP=app_…
+
+# 2. Create a feature flag definition (default OFF).
+curl -fsS -X POST -H "X-API-Key: $KEY" -H 'Content-Type: application/json' \\
+  -d '{ "key": "new_checkout", "description": "New checkout flow", "default_state": false }' \\
+  "$UOA/internal/admin/apps/$APP/flags"
+
+# 2b. Toggle it ON later (PATCH the returned flagId).
+curl -fsS -X PATCH -H "X-API-Key: $KEY" -H 'Content-Type: application/json' \\
+  -d '{ "key": "new_checkout", "default_state": true }' \\
+  "$UOA/internal/admin/apps/$APP/flags/flag_…"
+
+# 3. Flip a kill switch — block versions < 1.5.0 with a hard stop.
+curl -fsS -X POST -H "X-API-Key: $KEY" -H 'Content-Type: application/json' \\
+  -d '{ "platform": "both", "type": "hard", "version_field": "versionName",
+        "operator": "lt", "version_value": "1.5.0", "version_scheme": "semver",
+        "active": true, "priority": 100 }' \\
+  "$UOA/internal/admin/apps/$APP/kill-switches"
+\`\`\`
+
+The result is visible immediately to clients calling \`GET /apps/startup\`. See [/api](/api) for the full request/response schema of each route (flag and kill-switch bodies, the apps-list shape, and the superuser-only \`/internal/admin/api-keys\` management routes).
 
 ---
 
