@@ -2,7 +2,8 @@
 
 - **Jira:** HUGO-539
 - **Branch:** `hugo-539-admin-api-keys`
-- **Status:** spec v3 (post spec-review rounds 1–2; reviewed by 1 Claude + 1 Codex worker)
+- **Status:** IMPLEMENTED on branch `hugo-539-admin-api-keys` (spec v3; spec-reviewed + code-reviewed
+  by Claude + Codex pairs; verified COMPLETE). Pending: apply the migration to the UOA DB, then merge.
 
 ## Context
 
