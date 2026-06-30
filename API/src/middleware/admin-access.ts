@@ -29,14 +29,16 @@ function assertSingleHeader(value: string | string[]): string {
 
 /**
  * Extract a single Admin API-key credential from the request, or null when none is present.
- * Accepts `X-API-Key: <key>` or `Authorization: Bearer uoa_ak_…`. Array/duplicate header
+ * Accepts `X-API-Key: <key>` or `Authorization: Bearer uoa_ak_…`. A present X-API-Key
+ * is authoritative: empty means 401 and never falls back to JWT. Array/duplicate header
  * values are rejected (401) — an attacker must not smuggle a second value past the guard.
  */
 function readApiKeyCredential(request: FastifyRequest): string | null {
   const apiKeyHeader = request.headers['x-api-key'];
   if (apiKeyHeader !== undefined) {
     const value = assertSingleHeader(apiKeyHeader).trim();
-    return value || null;
+    if (!value) throw new AppError('UNAUTHORIZED', 401);
+    return value;
   }
 
   const authHeader = request.headers.authorization;

@@ -193,6 +193,19 @@ describe('/internal/admin api-key auth', () => {
     });
   });
 
+  it('rejects an empty X-API-Key with 401 and does NOT fall back to JWT', async () => {
+    await withApp(async (app) => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/internal/admin/apps',
+        headers: { 'x-api-key': '', authorization: `Bearer ${await accessToken('superuser')}` },
+      });
+      expect(res.statusCode).toBe(401);
+      expect(apiKeyService.verifyAdminApiKey).not.toHaveBeenCalled();
+      expect(appsService.getAdminApps).not.toHaveBeenCalled();
+    });
+  });
+
   it('lets an API key NOT create apps (POST /internal/admin/apps stays superuser-only)', async () => {
     await withApp(async (app) => {
       const res = await app.inject({

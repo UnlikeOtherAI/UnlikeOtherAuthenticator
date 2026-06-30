@@ -335,7 +335,7 @@ KEY=uoa_ak_your_key_minted_in_the_admin_panel
 
 # 1. Discover the app — find its appId, flag ids, and kill-switch ids.
 curl -fsS -H "X-API-Key: $KEY" "$UOA/internal/admin/apps"
-# => [ { "id": "app_…", "identifier": "com.acme.ios", "flags": [ { "id": "flag_…", "key": "new_checkout" } ], "killSwitches": [ … ] }, … ]
+# => [ { "id": "app_…", "identifier": "com.acme.ios", "flags": 1, "flagDefinitions": [ { "id": "flag_…", "key": "new_checkout" } ], "killSwitches": [ … ] }, … ]
 
 APP=app_…
 
