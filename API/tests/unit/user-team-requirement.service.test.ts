@@ -120,7 +120,7 @@ describe('ensureUserHasRequiredTeam', () => {
       expect.objectContaining({
         data: expect.objectContaining({
           userId: 'user-1',
-          teamRole: 'lead',
+          teamRole: 'admin',
         }),
       }),
     );
@@ -200,7 +200,7 @@ describe('ensureUserHasRequiredTeam', () => {
       data: {
         teamId: 'team-1',
         userId: 'user-1',
-        teamRole: 'lead',
+        teamRole: 'admin',
       },
     });
   });

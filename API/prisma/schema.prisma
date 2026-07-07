@@ -32,6 +32,27 @@ enum TwoFaPolicy {
   REQUIRED
 }
 
+// Slack-style membership lifecycle (Docs/plans/2026-07-07-slack-style-login-and-membership.md §4.1).
+// ACTIVE is the only status existing rows carry; DEACTIVATED/REMOVED are set by admin actions and
+// retained as tombstones. Read paths filter to ACTIVE; "invited" is NOT a status (it stays a
+// pending TeamInvite row) to avoid placeholder accounts and email-enumeration surface.
+enum MembershipStatus {
+  ACTIVE
+  DEACTIVATED
+  REMOVED
+}
+
+// Per-team join policy (design §4.6). Gates the existing self-join mechanisms rather than replacing
+// them. INVITE_ONLY is the current implicit behaviour, so the column is dormant until later phases
+// wire the other policies. Kept in the foundation migration to avoid a follow-up schema change.
+enum TeamJoinPolicy {
+  INVITE_ONLY
+  APPROVED_DOMAIN
+  REQUEST_TO_JOIN
+  OPEN_TO_ORG
+  HIDDEN
+}
+
 model User {
   id                       String   @id @default(cuid())
   // Note: email is not globally unique because `user_scope` can be "per_domain".
@@ -49,6 +70,7 @@ model User {
   createdAt                DateTime @default(now()) @map("created_at")
 
   domainRoles            DomainRole[]
+  authIdentities         AuthIdentity[]
   tokens                 VerificationToken[]
   authorizationCodes     AuthorizationCode[]
   refreshTokens          RefreshToken[]
@@ -82,6 +104,35 @@ model DomainRole {
   @@id([domain, userId])
   @@index([userId])
   @@map("domain_roles")
+}
+
+// Slack-style auth identities (design §4.2). Records which providers a person has linked, giving
+// the token `method` claim a persistence home and turning merge-by-verified-email into an auditable
+// record instead of a lost merge. Admin-managed (written via the BYPASSRLS admin client during
+// authentication); locked down for uoa_app until an app-role read path needs it.
+model AuthIdentity {
+  id              String    @id @default(cuid())
+  userId          String    @map("user_id")
+  provider        String // "email" | "google" | "github" | "microsoft" | "apple" | "facebook" | "linkedin"
+  providerSubject String    @map("provider_subject") // provider user id; for "email" the email itself
+  email           String    @db.Citext
+  providerTenant  String?   @map("provider_tenant") // e.g. Microsoft Entra `tid` (stored, not enforced)
+  verifiedAt      DateTime? @map("verified_at")
+  lastLoginAt     DateTime? @map("last_login_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // One identity per provider per user — the upsert target. NOT globally unique on
+  // (provider, providerSubject): under user_scope "per_domain" the same email or social account
+  // legitimately maps to separate user rows on different domains, so a global unique would reject
+  // those and break the backfill. Social-subject lookups use the non-unique index below and filter
+  // by the resolved domain/user.
+  @@unique([userId, provider])
+  @@index([userId])
+  @@index([provider, providerSubject])
+  @@index([email])
+  @@map("auth_identities")
 }
 
 model VerificationToken {
@@ -361,12 +412,31 @@ model AdminAuditLog {
   @@map("admin_audit_log")
 }
 
+// Org-scoped audit log (design §4.10) — distinct from the platform-admin AdminAuditLog above.
+// Written from every membership/invite/policy mutation. Admin-managed (BYPASSRLS admin client,
+// deny-all for uoa_app) in this phase; a user-facing read endpoint is deferred to a later phase.
+model OrgAuditLog {
+  id          String   @id @default(cuid())
+  orgId       String   @map("org_id")
+  actorUserId String?  @map("actor_user_id") // null = system action (auto-enrolment, later SCIM)
+  action      String // e.g. "member.deactivated", "invite.approved", "team.join_policy_changed"
+  targetType  String   @map("target_type") // "org_member" | "team_member" | "invite" | "invite_link" | "team"
+  targetId    String   @map("target_id")
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([orgId, createdAt])
+  @@index([targetType, targetId])
+  @@map("org_audit_log")
+}
+
 model Organisation {
   id                  String       @id @default(cuid())
   domain              String
   name                String       @db.VarChar(100)
   slug                String       @db.VarChar(120)
   ownerId             String       @map("owner_id")
+  iconUrl             String?      @map("icon_url") // external URL only, no local storage (brief §15); §11.3
   twoFaPolicy         TwoFaPolicy? @map("two_fa_policy")
   allowedEmailDomains String[]     @default([]) @map("allowed_email_domains")
   allowedEmails       String[]     @default([]) @map("allowed_emails")
@@ -388,18 +458,21 @@ model Organisation {
 }
 
 model OrgMember {
-  id        String   @id @default(cuid())
-  orgId     String   @map("org_id")
-  userId    String   @map("user_id")
-  role      String   @default("member") // validated against org_roles config: "owner" | "admin" | "member"
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id              String           @id @default(cuid())
+  orgId           String           @map("org_id")
+  userId          String           @map("user_id")
+  role            String           @default("member") // validated against org_roles config: "owner" | "admin" | "member"
+  status          MembershipStatus @default(ACTIVE) // lifecycle (design §4.1); read paths filter to ACTIVE
+  statusChangedAt DateTime?        @map("status_changed_at")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
 
   org  Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
   user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([orgId, userId])
   @@index([userId])
+  @@index([orgId, status])
   @@map("org_members")
 }
 
@@ -536,6 +609,9 @@ model Team {
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @updatedAt @map("updated_at")
 
+  iconUrl             String?  @map("icon_url") // external URL only, no local storage (brief §15); §11.3
+  joinPolicy          TeamJoinPolicy @default(INVITE_ONLY) @map("join_policy") // design §4.6
+
   org            Organisation    @relation(fields: [orgId], references: [id], onDelete: Cascade)
   group          Group?          @relation(fields: [groupId], references: [id], onDelete: SetNull)
   members        TeamMember[]
@@ -550,18 +626,22 @@ model Team {
 }
 
 model TeamMember {
-  id        String   @id @default(cuid())
-  teamId    String   @map("team_id")
-  userId    String   @map("user_id")
-  teamRole  String   @default("member") @map("team_role") // "owner" | "admin" | "member"
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id              String           @id @default(cuid())
+  teamId          String           @map("team_id")
+  userId          String           @map("user_id")
+  teamRole        String           @default("member") @map("team_role") // "owner" | "admin" | "member"
+  status          MembershipStatus @default(ACTIVE) // lifecycle (design §4.1)
+  statusChangedAt DateTime?        @map("status_changed_at")
+  isGuest         Boolean          @default(false) @map("is_guest") // design §4.8 — dormant until guests ship
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
 
   team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([teamId, userId])
   @@index([userId])
+  @@index([teamId, status])
   @@map("team_members")
 }
 

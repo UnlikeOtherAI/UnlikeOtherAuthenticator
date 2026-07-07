@@ -47,9 +47,13 @@ export async function getUserOrgContext(
 
   const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgContextPrisma);
 
+  // Lifecycle enforcement (design §4.1): only ACTIVE memberships appear in the token/context.
+  // A DEACTIVATED or REMOVED membership disappears from claims within one access-token TTL because
+  // org claims are re-resolved on every refresh — no separate revocation machinery needed.
   const orgMembership = await prisma.orgMember.findFirst({
     where: {
       userId,
+      status: 'ACTIVE',
       org: {
         domain,
       },
@@ -65,6 +69,7 @@ export async function getUserOrgContext(
   const teamMemberships = await prisma.teamMember.findMany({
     where: {
       userId,
+      status: 'ACTIVE',
       team: {
         orgId: orgMembership.orgId,
       },

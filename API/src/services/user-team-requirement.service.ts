@@ -96,7 +96,7 @@ async function createPersonalOrgAndTeam(params: {
     data: {
       teamId: team.id,
       userId: params.user.id,
-      teamRole: 'lead',
+      teamRole: 'admin',
     },
   });
 }
@@ -133,7 +133,7 @@ async function createPersonalTeamForExistingOrg(params: {
     data: {
       teamId: team.id,
       userId: params.user.id,
-      teamRole: 'lead',
+      teamRole: 'admin',
     },
   });
 

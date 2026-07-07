@@ -209,7 +209,7 @@ describe('team invite services', () => {
       teamId: 'team-1',
       email: 'invited@example.com',
       inviteName: 'Invited User',
-      teamRole: 'lead',
+      teamRole: 'admin',
       acceptedUserId: null,
       acceptedAt: null,
       revokedAt: null,
@@ -257,7 +257,7 @@ describe('team invite services', () => {
       data: {
         teamId: 'team-1',
         userId: 'user-1',
-        teamRole: 'lead',
+        teamRole: 'admin',
       },
       select: { id: true },
     });

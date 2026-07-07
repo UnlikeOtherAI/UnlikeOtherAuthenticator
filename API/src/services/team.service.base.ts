@@ -39,7 +39,9 @@ export type TeamWithMembersRecord = TeamRecord & {
   members: TeamMemberRecord[];
 };
 
-const ALLOWED_TEAM_ROLES = new Set(['member', 'lead']);
+// Canonical team roles (api-changes-rebac.md §1, design §4.9). The pre-ReBAC `lead` value is
+// removed and migrated to `admin` in 20260707104937_slack_membership_foundation.
+const ALLOWED_TEAM_ROLES = new Set(['owner', 'admin', 'member']);
 const TEAM_SLUG_ALLOWED_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 const TEAM_SLUG_FALLBACK = 'team';
 const MAX_TEAM_SLUG_LENGTH = 120;

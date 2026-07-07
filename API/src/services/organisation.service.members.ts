@@ -2,6 +2,11 @@ import type { ClientConfig } from './config.service.js';
 import { getEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
+import {
+  writeOrgAuditLog,
+  type OrgAuditAction,
+  type OrgAuditTargetType,
+} from './org-audit-log.service.js';
 
 import {
   assertDatabaseEnabled,
@@ -51,6 +56,31 @@ export async function listOrganisationMembers(
   const data = rows.slice(0, limit).map(toMemberRecord);
   const nextCursorRow = rows[limit];
   return { data, next_cursor: nextCursorRow ? nextCursorRow.id : null };
+}
+
+// Best-effort org audit write (design §4.10). Runs via the BYPASSRLS admin client AFTER the primary
+// mutation has committed, and swallows errors, so auditing can never roll back or fail the mutation
+// it records.
+async function auditOrg(params: {
+  orgId: string;
+  actorUserId: string;
+  action: OrgAuditAction;
+  targetType: OrgAuditTargetType;
+  targetId: string;
+  metadata?: Record<string, string | number | boolean | null>;
+}): Promise<void> {
+  try {
+    await writeOrgAuditLog({
+      orgId: params.orgId,
+      actorUserId: params.actorUserId,
+      action: params.action,
+      targetType: params.targetType,
+      targetId: params.targetId,
+      metadata: params.metadata ?? {},
+    });
+  } catch {
+    // Auditing is non-critical; the mutation has already succeeded.
+  }
 }
 
 export async function addOrganisationMember(
@@ -149,6 +179,15 @@ export async function addOrganisationMember(
     return created;
   });
 
+  await auditOrg({
+    orgId: org.id,
+    actorUserId,
+    action: 'member.added',
+    targetType: 'org_member',
+    targetId: createdMember.id,
+    metadata: { userId, role },
+  });
+
   return toMemberRecord(createdMember);
 }
 
@@ -184,6 +223,7 @@ export async function changeOrganisationMemberRole(
     throw new AppError('BAD_REQUEST', 400);
   }
 
+  const previousRole = member.role;
   const updated = await prisma.orgMember.update({
     where: { id: member.id },
     data: { role },
@@ -195,6 +235,15 @@ export async function changeOrganisationMemberRole(
       createdAt: true,
       updatedAt: true,
     },
+  });
+
+  await auditOrg({
+    orgId: org.id,
+    actorUserId,
+    action: 'member.role_changed',
+    targetType: 'org_member',
+    targetId: updated.id,
+    metadata: { userId, role, previousRole },
   });
 
   return toMemberRecord(updated);
@@ -275,6 +324,15 @@ export async function removeOrganisationMember(
       },
     });
     await tx.orgMember.delete({ where: { id: member.id } });
+  });
+
+  await auditOrg({
+    orgId: org.id,
+    actorUserId,
+    action: 'member.removed',
+    targetType: 'org_member',
+    targetId: member.id,
+    metadata: { userId, role: member.role },
   });
 
   return { removed: true };

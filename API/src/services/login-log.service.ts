@@ -2,6 +2,7 @@ import type { PrismaClient } from '@prisma/client';
 
 import { getEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
+import { mapAuthMethodToProvider, recordAuthIdentity } from './auth-identity.service.js';
 
 type LoginLogPrisma = {
   loginLog: Pick<PrismaClient['loginLog'], 'create' | 'deleteMany' | 'findMany'>;
@@ -84,6 +85,24 @@ export async function recordLoginLog(
     },
     select: { id: true },
   });
+
+  // Record the auth identity for this login (design §4.2). Best-effort and via the BYPASSRLS admin
+  // client (the table is locked down for uoa_app), so an identity write never blocks the login.
+  // providerSubject is the email here; social phases refine it to the real OAuth subject via the
+  // same (userId, provider) upsert.
+  try {
+    await recordAuthIdentity(
+      {
+        userId: params.userId,
+        provider: mapAuthMethodToProvider(params.authMethod),
+        providerSubject: email,
+        email,
+      },
+      { env, now: () => now },
+    );
+  } catch {
+    // Identity recording is non-critical; the login has already succeeded and been logged.
+  }
 
   // Brief 22.8: log retention must be finite. Enforce it opportunistically on writes.
   await pruneLoginLogs({ env, prisma, now: () => now });
