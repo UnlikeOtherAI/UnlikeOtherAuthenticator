@@ -14,6 +14,7 @@ import {
   acceptTeamInviteWithinTransaction,
   declineTeamInviteForUser,
 } from '../../services/team-invite.service.js';
+import { redeemTeamInviteLink } from '../../services/team-invite-link.service.js';
 import { finalizeWithTwoFaPolicy } from '../../services/workspace-finalize.service.js';
 import { AppError } from '../../utils/errors.js';
 import { parseRequiredPkceChallenge } from '../../utils/pkce.js';
@@ -24,10 +25,25 @@ const BodySchema = z
     login_token: z.string().min(1).max(4096),
     teamId: z.string().min(1).max(256).optional(),
     inviteId: z.string().min(1).max(256).optional(),
+    // Phase 5 (design §4.7 Task 3): redeem a shareable invite link. Mutually exclusive with
+    // teamId/inviteId — the link only completes AFTER this bridge token proves the email was
+    // already verified (an invite link never authorizes authentication on its own).
+    inviteLinkToken: z.string().min(1).max(4096).optional(),
     action: z.enum(['accept', 'decline']).optional(),
     remember_me: z.boolean().optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((body, ctx) => {
+    const provided = [body.teamId, body.inviteId, body.inviteLinkToken].filter(
+      (value) => value !== undefined,
+    ).length;
+    if (provided > 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'teamId, inviteId, and inviteLinkToken are mutually exclusive',
+      });
+    }
+  });
 
 const QuerySchema = z
   .object({
@@ -58,7 +74,7 @@ export function registerAuthSelectTeamRoute(app: FastifyInstance): void {
       preHandler: [selectTeamRateLimiter, configVerifier],
     },
     async (request, reply) => {
-      const { login_token, teamId, inviteId, action, remember_me } = BodySchema.parse(
+      const { login_token, teamId, inviteId, inviteLinkToken, action, remember_me } = BodySchema.parse(
         request.body,
       );
       const { redirect_url, code_challenge, code_challenge_method, request_access } =
@@ -98,7 +114,18 @@ export function registerAuthSelectTeamRoute(app: FastifyInstance): void {
       let orgId: string | undefined;
       let resolvedTeamId: string | undefined;
 
-      if (inviteId) {
+      if (inviteLinkToken) {
+        // Phase 5 (design §4.7 Task 3): the security-correct join — the link only completes AFTER
+        // the bridge token above proves the email was verified. Every validation failure inside
+        // redeemTeamInviteLink (revoked/expired/over-cap/HIDDEN/cross-domain/unknown) throws the
+        // same generic error, so no oracle leaks which condition failed.
+        const redeemed = await redeemTeamInviteLink(
+          { token: inviteLinkToken, userId, domain: config.domain, config },
+          { prisma },
+        );
+        orgId = redeemed.orgId;
+        resolvedTeamId = redeemed.teamId;
+      } else if (inviteId) {
         // IDOR guard: acceptTeamInviteWithinTransaction re-validates the invite's org domain and
         // the invitee email against the verified user before creating any membership.
         const invite = await prisma.teamInvite.findUnique({

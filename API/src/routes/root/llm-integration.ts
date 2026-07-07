@@ -266,6 +266,38 @@ code/magic-link flow cover the core case); this is called out as a known gap, no
 
 ---
 
+## Phase 4.9 — Shareable team invite links (opt-in)
+
+Additive on top of the invite system in 4.7a — a link that can be shared outside of email (Slack's
+"Copy invite link"). A link authorizes **joining** a team; it never authorizes **authentication** on
+its own — redemption only completes on the verified-session path below, after the visitor has
+already proven their email via a magic link or (if enabled) a sign-in code.
+
+1. \`POST /org/organisations/:orgId/teams/:teamId/invite-links\` (domain hash + access token; org or
+   team \`owner\`/\`admin\` only) creates a link. Body:
+   \`{ roleToAssign?: "member"|"admin", maxUses?: number (<=400, default 400), expiresInDays?: number (<=30, default 30) }\`.
+   Response: \`{ token, link: { id, roleToAssign, expiresAt, maxUses, useCount, revokedAt, createdAt } }\`
+   — **the plaintext \`token\` is returned exactly once**; only its hash is ever stored. Refused with a
+   generic error when the team's \`joinPolicy\` is \`HIDDEN\` (invite links are not a self-serve
+   backdoor around a hidden team).
+2. \`GET .../invite-links\` lists a team's links (never the token itself).
+   \`DELETE .../invite-links/:linkId\` revokes one — idempotent, revoking twice still returns success.
+3. Share the link as \`GET /auth/team-invite-link/:token?config_url=...\`. This is a public,
+   IP-rate-limited landing page — it validates the token WITHOUT redeeming it (no \`useCount\`
+   increment, no membership change) and renders the normal Auth UI bootstrapped to start email
+   verification. An unknown, revoked, expired, over-cap, or HIDDEN-team token all render the
+   identical generic invalid-link page — there is no oracle on which condition failed.
+4. Once the visitor verifies their identity and holds a \`login_token\` bridge (§4.8), the client
+   calls \`POST /auth/select-team?config_url=...\` with \`{ login_token, inviteLinkToken }\` instead of
+   \`teamId\`/\`inviteId\` (the three are mutually exclusive in one call). UOA re-validates the link with
+   the same generic-error rule, atomically increments \`useCount\` (a conditional update guarantees
+   concurrent redemptions can never push \`useCount\` past \`maxUses\`), adds the caller as an ACTIVE
+   team member with the link's \`roleToAssign\` (reactivating a previously removed/deactivated row;
+   idempotent if already an ACTIVE member), then finalizes exactly like a normal team selection —
+   including the 2FA policy check for that org.
+
+---
+
 ## Phase 5 — Server startup payload: kill switch + feature flags
 
 Your backend can request the startup payload using the same signed config JWT trust path as \`/auth/login\` and \`/auth/register\`: pass \`config_url\`, UOA fetches the RS256 config JWT, verifies the signature, validates the payload, and checks that \`domain\` matches the \`config_url\` hostname.

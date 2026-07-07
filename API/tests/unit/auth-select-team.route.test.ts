@@ -39,8 +39,9 @@ vi.mock('../../src/services/login-domain-policy.service.js', () => ({
 
 const prismaMock = vi.hoisted(() => ({
   team: { findFirst: vi.fn() },
-  teamMember: { findFirst: vi.fn(), findMany: vi.fn(), count: vi.fn(), create: vi.fn() },
+  teamMember: { findFirst: vi.fn(), findMany: vi.fn(), count: vi.fn(), create: vi.fn(), update: vi.fn() },
   teamInvite: { findUnique: vi.fn(), update: vi.fn(), findMany: vi.fn() },
+  teamInviteLink: { findUnique: vi.fn(), updateMany: vi.fn() },
   user: { findUnique: vi.fn(), update: vi.fn() },
   orgMember: { findFirst: vi.fn(), count: vi.fn(), create: vi.fn() },
   authorizationCode: { create: vi.fn() },
@@ -323,6 +324,98 @@ describe('POST /auth/select-team', () => {
     expect(prismaMock.teamInvite.update).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 'invite-1' }, data: { declinedAt: expect.any(Date) } }),
     );
+    expect(prismaMock.authorizationCode.create).not.toHaveBeenCalled();
+  });
+
+  it('redeems a valid inviteLinkToken and finalizes scoped to its team (Phase 5)', async () => {
+    const loginToken = await mintLoginToken('user-1');
+    prismaMock.teamInviteLink.findUnique.mockResolvedValue({
+      id: 'link-1',
+      orgId: 'org-7',
+      teamId: 'team-7',
+      roleToAssign: 'member',
+      maxUses: 400,
+      useCount: 1,
+      revokedAt: null,
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    prismaMock.team.findFirst.mockResolvedValue({ id: 'team-7', orgId: 'org-7', joinPolicy: 'INVITE_ONLY' });
+    prismaMock.teamInviteLink.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.orgMember.findFirst.mockResolvedValue(null);
+    prismaMock.orgMember.create.mockResolvedValue({ id: 'om-1' });
+    prismaMock.teamMember.findFirst.mockResolvedValue(null);
+    prismaMock.teamMember.create.mockResolvedValue({ id: 'tm-1' });
+    prismaMock.user.findUnique.mockResolvedValue({ twoFaEnabled: false });
+
+    const res = await postSelectTeam({ login_token: loginToken, inviteLinkToken: 'plaintext-link-token' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().ok).toBe(true);
+    expect(prismaMock.teamInviteLink.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ id: 'link-1' }) }),
+    );
+    expect(prismaMock.teamMember.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ teamId: 'team-7', userId: 'user-1', teamRole: 'member' }),
+      }),
+    );
+    expect(prismaMock.authorizationCode.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ orgId: 'org-7', teamId: 'team-7' }),
+      }),
+    );
+  });
+
+  it('enforces the selected org 2FA policy after redeeming an invite link (Phase 5)', async () => {
+    currentConfig = baseConfig({ '2fa_enabled': true });
+    const loginToken = await mintLoginToken('user-1');
+    prismaMock.teamInviteLink.findUnique.mockResolvedValue({
+      id: 'link-2',
+      orgId: 'org-8',
+      teamId: 'team-8',
+      roleToAssign: 'member',
+      maxUses: 400,
+      useCount: 0,
+      revokedAt: null,
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    prismaMock.team.findFirst.mockResolvedValue({ id: 'team-8', orgId: 'org-8', joinPolicy: 'INVITE_ONLY' });
+    prismaMock.teamInviteLink.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.orgMember.findFirst.mockResolvedValue({ id: 'om-2', orgId: 'org-8' });
+    prismaMock.teamMember.findFirst.mockResolvedValue({ id: 'tm-2', status: 'ACTIVE' });
+    prismaMock.user.findUnique.mockResolvedValue({ twoFaEnabled: true });
+    prismaMock.clientDomain.findUnique.mockResolvedValue({ twoFaPolicy: 'REQUIRED' });
+    prismaMock.organisation.findMany.mockResolvedValue([]);
+
+    const res = await postSelectTeam({ login_token: loginToken, inviteLinkToken: 'plaintext-link-token' });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body).toMatchObject({ ok: true, twofa_required: true });
+    expect(typeof body.twofa_token).toBe('string');
+    expect(prismaMock.authorizationCode.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects an invalid/unknown inviteLinkToken with a generic error (Phase 5)', async () => {
+    const loginToken = await mintLoginToken('user-1');
+    prismaMock.teamInviteLink.findUnique.mockResolvedValue(null);
+
+    const res = await postSelectTeam({ login_token: loginToken, inviteLinkToken: 'bad-token' });
+
+    expect(res.statusCode).toBe(400);
+    expect(prismaMock.authorizationCode.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a request combining inviteLinkToken with teamId (mutually exclusive)', async () => {
+    const loginToken = await mintLoginToken('user-1');
+
+    const res = await postSelectTeam({
+      login_token: loginToken,
+      inviteLinkToken: 'some-token',
+      teamId: 'team-1',
+    });
+
+    expect(res.statusCode).toBe(400);
     expect(prismaMock.authorizationCode.create).not.toHaveBeenCalled();
   });
 });

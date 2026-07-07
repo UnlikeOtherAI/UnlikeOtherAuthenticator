@@ -99,7 +99,7 @@ export const authEndpoints: EndpointSchema[] = [
     method: 'POST',
     path: '/auth/select-team',
     description:
-      'Choose a workspace (or accept/decline a pending invite) using the login_token bridge from /auth/verify-code or /auth/login. Rejects (generically) an invalid/expired login_token, a teamId the user is not an ACTIVE member of, or a team on another domain (IDOR). Enforces the selected org\'s 2FA policy before finalizing. Also reachable after /auth/login when config.login_flow.workspace_selection="auto" (that endpoint returns the same login_token + chooser payload instead of finalizing directly).',
+      'Choose a workspace (or accept/decline a pending invite, or redeem a shareable invite link) using the login_token bridge from /auth/verify-code or /auth/login. Rejects (generically) an invalid/expired login_token, a teamId the user is not an ACTIVE member of, a team on another domain (IDOR), or an invalid inviteLinkToken (revoked/expired/over-cap/HIDDEN/cross-domain/unknown — all the same generic error). Enforces the selected org\'s 2FA policy before finalizing. Also reachable after /auth/login when config.login_flow.workspace_selection="auto" (that endpoint returns the same login_token + chooser payload instead of finalizing directly).',
     auth: 'config_url query param + login_token body field',
     query: {
       redirect_url: 'string (optional, redirect_uri also accepted)',
@@ -112,6 +112,8 @@ export const authEndpoints: EndpointSchema[] = [
       login_token: 'string (required) — bridge token from /auth/verify-code or /auth/login',
       'teamId?': 'string (optional) — an ACTIVE team membership to select',
       'inviteId?': 'string (optional) — a pending invite id (accept or decline via `action`)',
+      'inviteLinkToken?':
+        'string (optional) — a shareable team invite-link token (from GET /auth/team-invite-link/:token). Mutually exclusive with teamId/inviteId; redeems the link and finalizes scoped to its team, only now that identity is verified — an invite link never grants membership on its own.',
       'action?': '"accept" | "decline" (optional) — default "accept" when inviteId is present',
       remember_me: 'boolean (optional) — defaults to session.remember_me_default from config',
     },
@@ -269,6 +271,16 @@ export const authEndpoints: EndpointSchema[] = [
     method: 'GET',
     path: '/auth/email/team-invite-open/:inviteId.gif',
     description: 'Tracking pixel for team invite open events',
+  },
+  {
+    method: 'GET',
+    path: '/auth/team-invite-link/:token',
+    description:
+      'Shareable team invite-link landing page. Public, IP-rate-limited, no auth. Validates the token WITHOUT redeeming it or granting any membership (unknown/revoked/expired/over-cap/HIDDEN all render the same generic invalid-link page). A valid token renders the normal Auth UI bootstrapped to start email verification, carrying invite_link_token for the client to pass into POST /auth/select-team once identity is verified.',
+    query: {
+      config_url: 'string (required)',
+      redirect_url: 'string (optional)',
+    },
   },
   {
     method: 'GET',

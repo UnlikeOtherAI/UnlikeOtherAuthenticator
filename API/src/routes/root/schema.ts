@@ -322,6 +322,37 @@ const orgEndpoints: EndpointSchema[] = [
     auth: 'domain hash bearer token + access token (X-UOA-Access-Token header), owner/admin only',
   },
   {
+    method: 'POST',
+    path: '/org/organisations/:orgId/teams/:teamId/invite-links',
+    description: 'Create a shareable team invite link (Slack-style). Owner/admin (org or team) only; refused (generic error) when the team\'s joinPolicy is HIDDEN. roleToAssign may be "member" (default) or "admin" — never "owner". Returns the plaintext token ONCE; only its hash is stored.',
+    auth: 'domain hash bearer token + access token (X-UOA-Access-Token header)',
+    body: {
+      'roleToAssign?': 'string — "member" (default) | "admin"',
+      'maxUses?': 'number — capped at 400 (default 400)',
+      'expiresInDays?': 'number — capped at 30 (default 30)',
+    },
+    response: {
+      token: 'string — the plaintext invite-link token; shown only in this response',
+      link: 'object — { id, roleToAssign, expiresAt, maxUses, useCount, revokedAt, createdAt } (never the token)',
+    },
+  },
+  {
+    method: 'GET',
+    path: '/org/organisations/:orgId/teams/:teamId/invite-links',
+    description: 'List invite links for a team (never includes the token itself)',
+    auth: 'domain hash bearer token + access token (X-UOA-Access-Token header)',
+    response: {
+      data: 'array — { id, roleToAssign, expiresAt, maxUses, useCount, revokedAt, createdAt }',
+    },
+  },
+  {
+    method: 'DELETE',
+    path: '/org/organisations/:orgId/teams/:teamId/invite-links/:linkId',
+    description: 'Revoke a team invite link; idempotent (revoking an already-revoked link succeeds)',
+    auth: 'domain hash bearer token + access token (X-UOA-Access-Token header)',
+    response: { revoked: 'true' },
+  },
+  {
     method: 'GET',
     path: '/org/organisations/:orgId/teams/:teamId/access-requests',
     description: 'List access requests for the configured team',

@@ -70,6 +70,15 @@ export const MemberInviteBodySchema = z.object({
   teamRole: z.string().trim().min(1).optional(),
 });
 
+// Team invite links (Phase 5, design §4.7) — create body. `roleToAssign`/`maxUses`/`expiresInDays`
+// are all optional; the service layer clamps/validates them (member|admin only, max 400 uses, max
+// 30-day expiry).
+export const InviteLinkCreateBodySchema = z.object({
+  roleToAssign: z.string().trim().min(1).optional(),
+  maxUses: z.number().int().positive().optional(),
+  expiresInDays: z.number().int().positive().optional(),
+});
+
 export const BulkInviteBodySchema = z.object({
   redirectUrl: z.string().trim().min(1).optional(),
   invitedBy: z
@@ -157,6 +166,11 @@ export function getInviteIdFromParams(params: unknown): string {
   return parsed.inviteId;
 }
 
+export function getLinkIdFromParams(params: unknown): string {
+  const parsed = z.object({ linkId: z.string().trim().min(1) }).parse(params ?? {});
+  return parsed.linkId;
+}
+
 export function keyCreateTeamRateLimit(request: FastifyRequest) {
   const domain = parseDomainFromRequest(request);
   const orgId = getOrgIdFromParams(request.params);
@@ -168,4 +182,11 @@ export function keyInviteTeamRateLimit(request: FastifyRequest) {
   const orgId = getOrgIdFromParams(request.params);
   const teamId = getTeamIdFromParams(request.params);
   return `org:invite-team:${domain}:${orgId}:${teamId}`;
+}
+
+export function keyInviteLinkRateLimit(request: FastifyRequest) {
+  const domain = parseDomainFromRequest(request);
+  const orgId = getOrgIdFromParams(request.params);
+  const teamId = getTeamIdFromParams(request.params);
+  return `org:invite-link:${domain}:${orgId}:${teamId}`;
 }

@@ -469,11 +469,12 @@ model Organisation {
   createdAt           DateTime     @default(now()) @map("created_at")
   updatedAt           DateTime     @updatedAt @map("updated_at")
 
-  owner          User            @relation("OrgOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  owner          User             @relation("OrgOwner", fields: [ownerId], references: [id], onDelete: Restrict)
   members        OrgMember[]
   teams          Team[]
   groups         Group[]
   invites        TeamInvite[]
+  inviteLinks    TeamInviteLink[]
   accessRequests AccessRequest[]
   apps           App[]
 
@@ -638,10 +639,11 @@ model Team {
   iconUrl    String?        @map("icon_url") // external URL only, no local storage (brief §15); §11.3
   joinPolicy TeamJoinPolicy @default(INVITE_ONLY) @map("join_policy") // design §4.6
 
-  org            Organisation    @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  group          Group?          @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  org            Organisation     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  group          Group?           @relation(fields: [groupId], references: [id], onDelete: SetNull)
   members        TeamMember[]
   invites        TeamInvite[]
+  inviteLinks    TeamInviteLink[]
   accessRequests AccessRequest[]
 
   @@unique([orgId, name])
@@ -710,6 +712,32 @@ model TeamInvite {
   @@index([acceptedAt])
   @@index([revokedAt])
   @@map("team_invites")
+}
+
+// Shareable team invite links (design §4.7, Phase 5). Slack-style: a non-personal link that
+// authorizes JOINING a team (never authentication) once the redeemer has already verified their
+// identity — redemption only happens via `POST /auth/select-team`'s `inviteLinkToken` path, gated
+// behind the Phase 3b `login_token` bridge. Only the token HASH is stored (mirrors
+// `domain-secret.service.ts`'s claim-token pattern); the plaintext token is returned exactly once,
+// at creation.
+model TeamInviteLink {
+  id              String    @id @default(cuid())
+  orgId           String    @map("org_id")
+  teamId          String    @map("team_id")
+  tokenHash       String    @unique @map("token_hash")
+  createdByUserId String?   @map("created_by_user_id")
+  roleToAssign    String    @default("member") @map("role_to_assign") // "member" | "admin" — never "owner"
+  expiresAt       DateTime  @map("expires_at") // capped at now + 30 days
+  maxUses         Int       @default(400) @map("max_uses") // capped at 400
+  useCount        Int       @default(0) @map("use_count")
+  revokedAt       DateTime? @map("revoked_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  org  Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  team Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([teamId])
+  @@map("team_invite_links")
 }
 
 model Group {
