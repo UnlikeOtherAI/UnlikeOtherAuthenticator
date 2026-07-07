@@ -40,6 +40,10 @@ export async function finalizeAuthenticatedUser(
     requestAccess: boolean;
     codeChallenge?: string;
     codeChallengeMethod?: 'S256';
+    // Workspace scope resolved by /auth/select-team (design §7 step 3-4, Phase 3b Task 6). Every
+    // other caller omits these, so the issued code carries no scope (unchanged behaviour).
+    orgId?: string;
+    teamId?: string;
   },
   deps?: FinalizeDeps,
 ): Promise<
@@ -82,6 +86,8 @@ export async function finalizeAuthenticatedUser(
       codeChallenge: params.codeChallenge,
       codeChallengeMethod: params.codeChallengeMethod,
       rememberMe: params.rememberMe,
+      orgId: params.orgId,
+      teamId: params.teamId,
     },
     deps?.prisma ? { prisma: deps.prisma } : undefined,
   );

@@ -25,6 +25,8 @@ type FinalizeContext = {
   requestAccess: boolean;
   codeChallenge?: string;
   codeChallengeMethod?: 'S256';
+  orgId?: string;
+  teamId?: string;
 };
 
 function prismaClient(deps?: { prisma?: SetupPrisma }): SetupPrisma {
@@ -108,6 +110,8 @@ export async function startTwoFactorSetup(
     requestAccess: params.finalize?.requestAccess,
     codeChallenge: params.finalize?.codeChallenge,
     codeChallengeMethod: params.finalize?.codeChallengeMethod,
+    orgId: params.finalize?.orgId,
+    teamId: params.finalize?.teamId,
     sharedSecret,
     audience: getAuthServiceIdentifier(),
   });

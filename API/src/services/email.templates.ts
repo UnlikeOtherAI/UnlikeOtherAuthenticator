@@ -39,7 +39,7 @@ const DEFAULT_THEME: EmailTheme = {
   cardRadius: '12px',
 };
 
-function escapeHtml(value: string): string {
+export function escapeHtml(value: string): string {
   return value
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
@@ -52,12 +52,12 @@ function tokenTtlMinutes(): number {
   return Math.max(1, Math.round(EMAIL_TOKEN_TTL_MS / (60 * 1000)));
 }
 
-function resolveTheme(theme?: Partial<EmailTheme>): EmailTheme {
+export function resolveTheme(theme?: Partial<EmailTheme>): EmailTheme {
   if (!theme) return DEFAULT_THEME;
   return { ...DEFAULT_THEME, ...theme };
 }
 
-function logoHtml(t: EmailTheme): string {
+export function logoHtml(t: EmailTheme): string {
   if (t.logoUrl) {
     const alt = escapeHtml(t.logoAlt ?? '');
     const src = escapeHtml(t.logoUrl);

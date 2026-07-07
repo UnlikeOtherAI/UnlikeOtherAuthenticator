@@ -69,6 +69,10 @@ export async function issueAuthorizationCode(
     codeChallenge?: string;
     codeChallengeMethod?: 'S256';
     rememberMe?: boolean;
+    // Workspace scope resolved by /auth/select-team (design §7 step 3-4, Phase 3b Task 6). Omitted
+    // by every other caller today, so it defaults to null and existing behaviour is unchanged.
+    orgId?: string;
+    teamId?: string;
   },
   deps?: AuthorizationCodeDeps,
 ): Promise<{ code: string }> {
@@ -103,6 +107,8 @@ export async function issueAuthorizationCode(
           codeChallenge: params.codeChallenge,
           codeChallengeMethod: params.codeChallengeMethod,
           rememberMe: params.rememberMe ?? false,
+          orgId: params.orgId ?? null,
+          teamId: params.teamId ?? null,
           expiresAt,
         },
         select: { id: true },

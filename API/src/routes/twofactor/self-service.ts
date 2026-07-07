@@ -176,6 +176,8 @@ export function registerTwoFactorSelfServiceRoutes(app: FastifyInstance): void {
             requestAccess: setup.requestAccess,
             codeChallenge: setup.codeChallenge,
             codeChallengeMethod: setup.codeChallengeMethod,
+            orgId: setup.orgId,
+            teamId: setup.teamId,
           },
           { prisma },
         );

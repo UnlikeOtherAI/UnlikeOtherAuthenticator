@@ -10,6 +10,8 @@ import {
   finalizeAuthenticatedUser,
   parseRequestAccessFlag,
 } from '../../services/access-request-flow.service.js';
+import { buildWorkspaceChoices } from '../../services/first-login.service.js';
+import { signLoginSession } from '../../services/login-session.service.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
 import { resolveTwoFaPolicy } from '../../services/twofactor-policy.service.js';
 import { signTwoFaChallenge } from '../../services/twofactor-challenge.service.js';
@@ -124,6 +126,21 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
           return { kind: 'twofa_enroll_required' as const, setup };
         }
 
+        // Phase 3b Task 7 (design §4.3 item 4): with the chooser opted in, 2FA-satisfied logins
+        // land on the workspace chooser instead of finalizing directly. 2FA ordering is preserved —
+        // both branches above already returned before this point when 2FA still needs handling.
+        if (config.login_flow?.workspace_selection === 'auto') {
+          const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
+          const loginToken = await signLoginSession({
+            userId,
+            domain: config.domain,
+            sharedSecret: SHARED_SECRET,
+            audience: getAuthServiceIdentifier(),
+          });
+          const choices = await buildWorkspaceChoices({ userId, config }, { prisma });
+          return { kind: 'workspace_chooser' as const, loginToken, choices };
+        }
+
         const finalResult = await finalizeAuthenticatedUser(
           {
             userId,
@@ -173,6 +190,11 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
           twofa_enroll_required: true,
           ...setup,
         });
+        return;
+      }
+
+      if (outcome.kind === 'workspace_chooser') {
+        reply.status(200).send({ login_token: outcome.loginToken, ...outcome.choices });
         return;
       }
 

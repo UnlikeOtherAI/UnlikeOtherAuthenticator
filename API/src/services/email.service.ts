@@ -12,6 +12,7 @@ import {
   buildVerifyEmailTemplate,
   buildVerifyEmailSetPasswordTemplate,
 } from './email.templates.js';
+import { buildLoginCodeTemplate } from './email.templates.login-code.js';
 import {
   createEmailProvider,
   safeEmailLog,
@@ -159,6 +160,23 @@ export async function sendVerifyEmailEmail(params: {
 }): Promise<void> {
   const env = getEnv();
   const template = buildVerifyEmailTemplate({ link: params.link, theme: params.theme });
+  await dispatchEmail({
+    to: params.to,
+    from: env.EMAIL_FROM,
+    replyTo: env.EMAIL_REPLY_TO,
+    subject: template.subject,
+    text: template.text,
+    html: template.html,
+  });
+}
+
+export async function sendLoginCodeEmail(params: {
+  to: string;
+  code: string;
+  theme?: Partial<EmailTheme>;
+}): Promise<void> {
+  const env = getEnv();
+  const template = buildLoginCodeTemplate({ code: params.code, theme: params.theme });
   await dispatchEmail({
     to: params.to,
     from: env.EMAIL_FROM,

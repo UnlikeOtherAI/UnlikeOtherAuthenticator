@@ -17,6 +17,10 @@ const TwoFaChallengeSchema = z.object({
   request_access: z.boolean().optional(),
   code_challenge: z.string().min(1).optional(),
   code_challenge_method: z.literal('S256').optional(),
+  // Workspace scope carried through from /auth/select-team (Phase 3b, design §4.4). Absent for
+  // every pre-existing caller (login.ts, social callback) — unchanged behaviour.
+  org_id: z.string().min(1).optional(),
+  team_id: z.string().min(1).optional(),
 });
 
 export type TwoFaChallenge = {
@@ -29,6 +33,8 @@ export type TwoFaChallenge = {
   requestAccess: boolean;
   codeChallenge?: string;
   codeChallengeMethod?: 'S256';
+  orgId?: string;
+  teamId?: string;
 };
 
 function sharedSecretKey(sharedSecret: string): Uint8Array {
@@ -51,6 +57,8 @@ export async function signTwoFaChallenge(params: {
   requestAccess?: boolean;
   codeChallenge?: string;
   codeChallengeMethod?: 'S256';
+  orgId?: string;
+  teamId?: string;
   sharedSecret: string;
   audience: string;
   now?: Date;
@@ -70,6 +78,8 @@ export async function signTwoFaChallenge(params: {
       request_access: params.requestAccess ?? false,
       code_challenge: params.codeChallenge,
       code_challenge_method: params.codeChallengeMethod,
+      org_id: params.orgId,
+      team_id: params.teamId,
     })
       .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
       .setIssuer(TWOFA_CHALLENGE_ISSUER)
@@ -123,5 +133,7 @@ export async function verifyTwoFaChallenge(params: {
     challenge.codeChallenge = parsed.code_challenge;
     challenge.codeChallengeMethod = parsed.code_challenge_method;
   }
+  if (parsed.org_id) challenge.orgId = parsed.org_id;
+  if (parsed.team_id) challenge.teamId = parsed.team_id;
   return challenge;
 }

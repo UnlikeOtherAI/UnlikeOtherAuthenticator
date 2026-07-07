@@ -137,3 +137,104 @@ export async function buildFirstLoginBlock(
     capabilities,
   };
 }
+
+export type WorkspaceChoiceTeam = {
+  teamId: string;
+  orgId: string;
+  name: string;
+  role: string;
+};
+
+export type WorkspaceChoicePendingInvite = {
+  inviteId: string;
+  teamName: string;
+  invitedBy: string | null;
+};
+
+export type WorkspaceChoices = {
+  teams: WorkspaceChoiceTeam[];
+  pending_invites: WorkspaceChoicePendingInvite[];
+  can_create_org: boolean;
+};
+
+type WorkspaceChooserPrisma = {
+  user: Pick<PrismaClient['user'], 'findUnique'>;
+  teamMember: Pick<PrismaClient['teamMember'], 'findMany'>;
+  teamInvite: Pick<PrismaClient['teamInvite'], 'findMany'>;
+};
+
+/**
+ * Phase 3b (design §4.3): the post-verification workspace chooser payload. Only ever built AFTER
+ * identity verification (a successful /auth/verify-code or a valid login_token) — never before, so
+ * it never leaks workspace names or membership existence to an unverified caller. Only ACTIVE team
+ * memberships are listed; DEACTIVATED/REMOVED rows are silently omitted (design §8: a suspended user
+ * never sees "you were suspended", the team just isn't there).
+ */
+export async function buildWorkspaceChoices(
+  params: {
+    userId: string;
+    config: ClientConfig;
+  },
+  deps?: { prisma?: WorkspaceChooserPrisma },
+): Promise<WorkspaceChoices> {
+  const prisma = deps?.prisma ?? (getPrisma() as unknown as WorkspaceChooserPrisma);
+
+  const user = await prisma.user.findUnique({
+    where: { id: params.userId },
+    select: { email: true },
+  });
+  if (!user) {
+    return { teams: [], pending_invites: [], can_create_org: false };
+  }
+
+  const domain = params.config.domain.trim().toLowerCase().replace(/\.$/, '');
+
+  const [teamRows, inviteRows] = await Promise.all([
+    prisma.teamMember.findMany({
+      where: {
+        userId: params.userId,
+        status: 'ACTIVE',
+        team: { org: { domain } },
+      },
+      select: {
+        teamId: true,
+        teamRole: true,
+        team: { select: { name: true, orgId: true } },
+      },
+    }),
+    prisma.teamInvite.findMany({
+      where: {
+        email: user.email,
+        acceptedAt: null,
+        declinedAt: null,
+        revokedAt: null,
+        org: { domain },
+      },
+      select: {
+        id: true,
+        team: { select: { name: true } },
+        invitedByName: true,
+        invitedByEmail: true,
+      },
+    }),
+  ]);
+
+  const teams: WorkspaceChoiceTeam[] = teamRows.map((row) => ({
+    teamId: row.teamId,
+    orgId: row.team.orgId,
+    name: row.team.name,
+    role: row.teamRole,
+  }));
+
+  const pendingInvites: WorkspaceChoicePendingInvite[] = inviteRows.map((row) => ({
+    inviteId: row.id,
+    teamName: row.team.name,
+    invitedBy: row.invitedByName ?? row.invitedByEmail ?? null,
+  }));
+
+  return {
+    teams,
+    pending_invites: pendingInvites,
+    can_create_org: Boolean(params.config.org_features?.allow_user_create_org),
+  };
+}

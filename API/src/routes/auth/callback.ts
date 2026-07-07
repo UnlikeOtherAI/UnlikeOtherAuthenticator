@@ -307,6 +307,10 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
           return { kind: 'twofa_enroll_required' as const, setupToken: setup.setup_token };
         }
 
+        // TODO(Phase 3b Task 7 follow-up): social callbacks don't yet route through the workspace
+        // chooser when config.login_flow.workspace_selection === 'auto' (deferred — flagged in the
+        // Phase 3b report; password login + magic-link/code already cover the chooser flow, and
+        // workspace_selection defaults to "off" so this is unchanged behaviour either way).
         const finalResult = await finalizeAuthenticatedUser(
           {
             userId,

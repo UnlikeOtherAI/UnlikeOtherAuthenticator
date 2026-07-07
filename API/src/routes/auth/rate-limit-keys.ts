@@ -76,6 +76,27 @@ export const registerRateLimiter = composeRateLimiters(
   bodyRateLimiter('auth:register', 'email', 5, HOUR_MS),
 );
 
+// Phase 3b: /auth/start is the email-first entry (register + optional login code). Same shape as
+// registerRateLimiter but keyed separately so it doesn't share budget with /auth/register.
+export const authStartRateLimiter = composeRateLimiters(
+  ipRateLimiter('auth:start', 10, MINUTE_MS),
+  bodyRateLimiter('auth:start', 'email', 5, HOUR_MS),
+);
+
+// Phase 3b (design §8): /auth/verify-code is IP- and email-keyed, tighter than login since a
+// 6-digit code has a much smaller search space than a password.
+export const verifyCodeRateLimiter = composeRateLimiters(
+  ipRateLimiter('auth:verify-code', 10, 15 * MINUTE_MS),
+  bodyRateLimiter('auth:verify-code', 'email', 10, 15 * MINUTE_MS),
+);
+
+// Phase 3b: /auth/select-team is gated by a short-lived login_token; still rate-limit by IP and by
+// the presented token so a leaked/guessed token can't be hammered for team/invite enumeration.
+export const selectTeamRateLimiter = composeRateLimiters(
+  ipRateLimiter('auth:select-team', 20, MINUTE_MS),
+  bodyRateLimiter('auth:select-team', 'login_token', 20, 15 * MINUTE_MS),
+);
+
 export const resetRequestRateLimiter = composeRateLimiters(
   ipRateLimiter('auth:reset-request', 10, MINUTE_MS),
   bodyRateLimiter('auth:reset-request', 'email', 3, HOUR_MS),

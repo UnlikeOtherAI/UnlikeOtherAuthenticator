@@ -46,6 +46,88 @@ export const authEndpoints: EndpointSchema[] = [
   },
   {
     method: 'POST',
+    path: '/auth/start',
+    description:
+      'Slack-style email-first entry point — superset of /auth/register. Always sends the existing magic-link instructions; additionally issues a 6-digit sign-in code when config.login_flow.email_code_enabled is true. Response is always the same generic message (no enumeration).',
+    auth: 'config_url query param',
+    query: {
+      redirect_url: 'string (optional, redirect_uri also accepted)',
+      code_challenge: 'string (required) — exactly 43-char PKCE S256 challenge',
+      code_challenge_method: '"S256" (required)',
+      request_access:
+        'string (optional) — when truthy, auto-grant or create a pending access request',
+    },
+    body: { email: 'string (required)' },
+    response: {
+      message: '"We sent instructions to your email" (always, regardless of email code issuance)',
+      code:
+        '"EMAIL_ALREADY_REGISTERED" with HTTP 409 only when existing_user_registration_behavior="inline_sign_in"',
+    },
+  },
+  {
+    method: 'POST',
+    path: '/auth/verify-code',
+    description:
+      'Verify a 6-digit sign-in code issued by /auth/start (requires config.login_flow.email_code_enabled). 5 wrong attempts kill the code; every failure mode (no code, wrong code, expired, dead) returns the same generic auth error. IP + email rate-limited.',
+    auth: 'config_url query param',
+    query: {
+      redirect_url: 'string (optional, redirect_uri also accepted)',
+      code_challenge: 'string (required) — exactly 43-char PKCE S256 challenge',
+      code_challenge_method: '"S256" (required)',
+      request_access:
+        'string (optional) — when truthy, auto-grant or create a pending access request',
+    },
+    body: {
+      email: 'string (required)',
+      code: 'string (required) — 6-digit sign-in code',
+      remember_me: 'boolean (optional) — defaults to session.remember_me_default from config',
+    },
+    response: {
+      'login_token?':
+        'short-lived bridge JWT (only when config.login_flow.workspace_selection="auto") — authorizes ONLY POST /auth/select-team for this verified user, nothing else',
+      'teams?': 'array of { teamId, orgId, name, role } — this user\'s ACTIVE team memberships on this domain (only with login_token)',
+      'pending_invites?': 'array of { inviteId, teamName, invitedBy } — pending invites for this email on this domain (only with login_token)',
+      'can_create_org?': 'boolean (only with login_token)',
+      ok: 'true (when workspace_selection is "off" — finalizes immediately like /auth/login)',
+      code: 'authorization code (workspace_selection "off" branch only)',
+      redirect_to: 'full redirect URL with code (workspace_selection "off" branch only)',
+      twofa_required: 'true (only if 2FA needed, workspace_selection "off" branch only)',
+      twofa_token: 'challenge token (only if 2FA needed, workspace_selection "off" branch only)',
+    },
+  },
+  {
+    method: 'POST',
+    path: '/auth/select-team',
+    description:
+      'Choose a workspace (or accept/decline a pending invite) using the login_token bridge from /auth/verify-code or /auth/login. Rejects (generically) an invalid/expired login_token, a teamId the user is not an ACTIVE member of, or a team on another domain (IDOR). Enforces the selected org\'s 2FA policy before finalizing. Also reachable after /auth/login when config.login_flow.workspace_selection="auto" (that endpoint returns the same login_token + chooser payload instead of finalizing directly).',
+    auth: 'config_url query param + login_token body field',
+    query: {
+      redirect_url: 'string (optional, redirect_uri also accepted)',
+      code_challenge: 'string (required) — exactly 43-char PKCE S256 challenge',
+      code_challenge_method: '"S256" (required)',
+      request_access:
+        'string (optional) — when truthy, auto-grant or create a pending access request',
+    },
+    body: {
+      login_token: 'string (required) — bridge token from /auth/verify-code or /auth/login',
+      'teamId?': 'string (optional) — an ACTIVE team membership to select',
+      'inviteId?': 'string (optional) — a pending invite id (accept or decline via `action`)',
+      'action?': '"accept" | "decline" (optional) — default "accept" when inviteId is present',
+      remember_me: 'boolean (optional) — defaults to session.remember_me_default from config',
+    },
+    response: {
+      ok: 'true',
+      code: 'authorization code, now carrying the selected workspace scope (active claim on exchange) when a team/invite was resolved',
+      redirect_to: 'full redirect URL with code',
+      twofa_required: 'true (only if the selected org requires 2FA)',
+      twofa_token: 'challenge token (only if 2FA needed)',
+      twofa_enroll_required: 'true (only if the selected org requires 2FA and the user is not enrolled)',
+      'login_token?': 'refreshed bridge token + chooser payload (decline-invite response only)',
+      access_request_status: '"pending" when request_access created a pending access request',
+    },
+  },
+  {
+    method: 'POST',
     path: '/auth/register',
     description: 'User registration — sends verification email, or an inline already-registered response when the signed config opts in',
     auth: 'config_url query param',

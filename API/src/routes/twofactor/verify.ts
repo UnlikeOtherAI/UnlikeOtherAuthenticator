@@ -77,6 +77,8 @@ export function registerTwoFactorVerifyRoute(app: FastifyInstance): void {
             requestAccess: challenge.requestAccess,
             codeChallenge: challenge.codeChallenge,
             codeChallengeMethod: challenge.codeChallengeMethod,
+            orgId: challenge.orgId,
+            teamId: challenge.teamId,
           },
           { prisma },
         );

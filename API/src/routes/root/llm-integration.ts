@@ -198,6 +198,53 @@ For account settings, an authenticated user can call \`POST /2fa/setup\` with \`
 
 ---
 
+## Phase 4.8 — Slack-style email sign-in codes + workspace selection (opt-in)
+
+Additive on top of \`/auth/register\` and \`/auth/login\` — everything below is gated by config
+\`login_flow\` and changes NOTHING when left at its defaults:
+
+\`\`\`jsonc
+"login_flow": {
+  "email_code_enabled": false,      // offer a 6-digit sign-in code alongside the magic link
+  "workspace_selection": "off"      // "off" | "auto" — "auto" shows a workspace chooser after
+                                     // identity verification when the user has any teams or invites
+}
+\`\`\`
+
+**Security note (read before enabling):** workspace names, team membership, and pending invites are
+revealed ONLY after the user's identity has been verified (a valid sign-in code or magic link) —
+never from \`/auth/start\`, which always returns the same generic message regardless of whether the
+email exists. The \`login_token\` bridge issued by \`/auth/verify-code\` (and, when the chooser is on,
+by \`/auth/login\`) authorizes ONLY \`POST /auth/select-team\` for that verified user — it is a distinct
+token class from \`access_token\` and \`twofa_token\` and cannot be used for anything else.
+
+1. \`POST /auth/start?config_url=...\` — body \`{ email }\`. Same generic response as
+   \`/auth/register\`; when \`email_code_enabled\` is true it additionally emails a 6-digit code.
+2. \`POST /auth/verify-code?config_url=...\` — body \`{ email, code }\`. IP + email rate-limited; wrong
+   code, expired code, no code, and a dead (5-attempt) code all return the identical generic auth
+   error. On success:
+   - \`workspace_selection: "auto"\` → \`{ login_token, teams: [{ teamId, orgId, name, role }], pending_invites: [{ inviteId, teamName, invitedBy }], can_create_org }\`.
+   - \`workspace_selection: "off"\` (default) → finalizes immediately, same response shape as
+     \`/auth/login\` (\`{ ok, code, redirect_to }\`, or a \`twofa_token\`/\`twofa_enroll_required\` branch —
+     2FA still applies, only the chooser step is skipped).
+3. \`POST /auth/select-team?config_url=...\` — body \`{ login_token, teamId }\` (or
+   \`{ login_token, inviteId, action: "accept" | "decline" }\`). Validates the bridge token, that the
+   team belongs to an org on this domain, and that the user holds an ACTIVE membership on it (a team
+   on another domain, or one the user isn't an ACTIVE member of, is rejected exactly like an invalid
+   token — no IDOR oracle). Enforces the selected org's 2FA policy, then finalizes with the resolved
+   workspace scope: the returned \`code\` carries \`orgId\`/\`teamId\`, so the eventual \`POST /auth/token\`
+   exchange's access token includes the \`active: { orgId, teamId }\` claim (§4.2) next to the existing
+   \`org\` claim.
+4. \`POST /auth/login\` (password) also routes into the chooser when \`workspace_selection: "auto"\` and
+   2FA is already satisfied: it returns \`{ login_token, teams, pending_invites, can_create_org }\`
+   instead of finalizing directly, and the client then calls \`/auth/select-team\`. With the default
+   \`"off"\`, \`/auth/login\` is completely unchanged.
+
+Social login callbacks do not yet route through the chooser (password login and the email
+code/magic-link flow cover the core case); this is called out as a known gap, not a silent omission.
+
+---
+
 ## Phase 5 — Server startup payload: kill switch + feature flags
 
 Your backend can request the startup payload using the same signed config JWT trust path as \`/auth/login\` and \`/auth/register\`: pass \`config_url\`, UOA fetches the RS256 config JWT, verifies the signature, validates the payload, and checks that \`domain\` matches the \`config_url\` hostname.
