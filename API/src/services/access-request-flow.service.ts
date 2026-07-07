@@ -2,7 +2,7 @@ import type { PrismaClient } from '@prisma/client';
 
 import type { ClientConfig } from './config.service.js';
 
-import { buildRedirectToUrl, issueAuthorizationCode } from './token.service.js';
+import { buildRedirectToUrl, issueAuthorizationCode } from './authorization-code.service.js';
 import { handlePostAuthenticationAccessRequest } from './access-request.service.js';
 import { assertEmailDomainAllowedForLogin } from './login-domain-policy.service.js';
 

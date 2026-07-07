@@ -95,6 +95,10 @@ export async function issueRefreshToken(
     familyId?: string;
     parentTokenId?: string;
     userId: string;
+    // Workspace scope carried from the authorization code / prior refresh token (design §7 step
+    // 3-4). Dormant until Phase 3b populates it; defaults to null (no scope).
+    orgId?: string | null;
+    teamId?: string | null;
   },
   deps?: RefreshTokenDeps,
 ): Promise<{
@@ -118,6 +122,8 @@ export async function issueRefreshToken(
       domain: params.domain,
       clientId: params.clientId,
       configUrl: params.configUrl,
+      orgId: params.orgId ?? null,
+      teamId: params.teamId ?? null,
       expiresAt,
     },
     select: {
@@ -141,6 +147,8 @@ export async function exchangeRefreshToken(
   expiresInSeconds: number;
   refreshToken: string;
   userId: string;
+  orgId: string | null;
+  teamId: string | null;
 }> {
   const prisma = getRefreshTokenPrisma(deps);
   const now = nowDate(deps);
@@ -160,6 +168,8 @@ export async function exchangeRefreshToken(
       expiresAt: true,
       revokedAt: true,
       replacedByTokenId: true,
+      orgId: true,
+      teamId: true,
     },
   });
 
@@ -197,6 +207,9 @@ export async function exchangeRefreshToken(
       domain: row.domain,
       clientId: row.clientId,
       configUrl: row.configUrl,
+      // Rotation preserves the session's workspace scope (design §7 step 4).
+      orgId: row.orgId,
+      teamId: row.teamId,
     },
     {
       ...deps,
@@ -229,6 +242,8 @@ export async function exchangeRefreshToken(
     userId: row.userId,
     refreshToken: nextRefreshToken.refreshToken,
     expiresInSeconds: nextRefreshToken.expiresInSeconds,
+    orgId: row.orgId,
+    teamId: row.teamId,
   };
 }
 

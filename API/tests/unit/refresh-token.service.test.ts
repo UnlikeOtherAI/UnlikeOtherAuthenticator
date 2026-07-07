@@ -88,6 +88,60 @@ describe('refresh-token.service (unit)', () => {
     });
   });
 
+  it('persists orgId/teamId on the created row when provided (dormant workspace scope, design §7)', async () => {
+    const prisma = {
+      refreshToken: {
+        create: vi.fn().mockResolvedValue({ id: 'refresh-token-1' }),
+      },
+    } as unknown as PrismaClient;
+
+    await issueRefreshToken(
+      {
+        ...context,
+        userId: 'user-1',
+        orgId: 'org-1',
+        teamId: 'team-1',
+      },
+      {
+        now: () => now,
+        prisma,
+        refreshTokenTtlDays: 30,
+        sharedSecret,
+      },
+    );
+
+    expect(prisma.refreshToken.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ orgId: 'org-1', teamId: 'team-1' }),
+      select: { id: true },
+    });
+  });
+
+  it('defaults orgId/teamId to null when not provided', async () => {
+    const prisma = {
+      refreshToken: {
+        create: vi.fn().mockResolvedValue({ id: 'refresh-token-1' }),
+      },
+    } as unknown as PrismaClient;
+
+    await issueRefreshToken(
+      {
+        ...context,
+        userId: 'user-1',
+      },
+      {
+        now: () => now,
+        prisma,
+        refreshTokenTtlDays: 30,
+        sharedSecret,
+      },
+    );
+
+    expect(prisma.refreshToken.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ orgId: null, teamId: null }),
+      select: { id: true },
+    });
+  });
+
   it('rotates an active refresh token and links it to the same family', async () => {
     const currentRefreshToken = 'current-refresh-token';
     const prisma = {
@@ -162,6 +216,50 @@ describe('refresh-token.service (unit)', () => {
     });
     expect(rotated.refreshToken).toBeTypeOf('string');
     expect(rotated.refreshToken).not.toBe(currentRefreshToken);
+  });
+
+  it('carries orgId/teamId onto the rotated row and returns them (rotation preserves workspace scope)', async () => {
+    const currentRefreshToken = 'scoped-refresh-token';
+    const prisma = {
+      refreshToken: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: 'refresh-token-1',
+          familyId: 'family-1',
+          userId: 'user-1',
+          domain: context.domain,
+          clientId: context.clientId,
+          configUrl: context.configUrl,
+          createdAt: new Date(now.getTime() + 60_000 - 30 * 24 * 60 * 60 * 1000),
+          expiresAt: new Date(now.getTime() + 60_000),
+          revokedAt: null,
+          replacedByTokenId: null,
+          orgId: 'org-1',
+          teamId: 'team-1',
+        }),
+        create: vi.fn().mockResolvedValue({ id: 'refresh-token-2' }),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
+    } as unknown as PrismaClient;
+
+    const rotated = await exchangeRefreshToken(
+      {
+        ...context,
+        refreshToken: currentRefreshToken,
+      },
+      {
+        now: () => now,
+        prisma,
+        refreshTokenTtlDays: 30,
+        sharedSecret,
+      },
+    );
+
+    expect(prisma.refreshToken.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ orgId: 'org-1', teamId: 'team-1' }),
+      select: { id: true },
+    });
+    expect(rotated.orgId).toBe('org-1');
+    expect(rotated.teamId).toBe('team-1');
   });
 
   it('clamps the inherited TTL when it is below the floor', async () => {

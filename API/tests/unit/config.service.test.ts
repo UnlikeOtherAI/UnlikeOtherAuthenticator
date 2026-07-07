@@ -20,6 +20,19 @@ describe('validateConfigFields', () => {
     expect(cfg.registration_mode).toBe('password_required');
     expect(cfg.allowed_registration_domains).toBeUndefined();
     expect(cfg.registration_domain_mapping).toBeUndefined();
+    expect(cfg.login_flow).toEqual({ email_code_enabled: false, workspace_selection: 'off' });
+  });
+
+  it('parses login_flow when provided', () => {
+    const cfg = validateConfigFields({
+      ...basePayload(),
+      login_flow: {
+        email_code_enabled: true,
+        workspace_selection: 'auto',
+      },
+    });
+
+    expect(cfg.login_flow).toEqual({ email_code_enabled: true, workspace_selection: 'auto' });
   });
 
   it('parses optional fields when provided', () => {

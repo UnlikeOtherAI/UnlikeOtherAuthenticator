@@ -18,6 +18,7 @@ enum VerificationTokenType {
   VERIFY_EMAIL
   PASSWORD_RESET
   TWOFA_RESET
+  LOGIN_CODE
 }
 
 enum ClientDomainIntegrationStatus {
@@ -136,16 +137,17 @@ model AuthIdentity {
 }
 
 model VerificationToken {
-  id        String                @id @default(cuid())
-  type      VerificationTokenType
-  email     String
-  userKey   String                @map("user_key")
-  domain    String?
-  configUrl String                @map("config_url")
-  tokenHash String                @unique @map("token_hash")
-  expiresAt DateTime              @map("expires_at")
-  usedAt    DateTime?             @map("used_at")
-  createdAt DateTime              @default(now()) @map("created_at")
+  id           String                @id @default(cuid())
+  type         VerificationTokenType
+  email        String
+  userKey      String                @map("user_key")
+  domain       String?
+  configUrl    String                @map("config_url")
+  tokenHash    String                @unique @map("token_hash")
+  expiresAt    DateTime              @map("expires_at")
+  usedAt       DateTime?             @map("used_at")
+  attemptCount Int                   @default(0) @map("attempt_count")
+  createdAt    DateTime              @default(now()) @map("created_at")
 
   userId       String?     @map("user_id")
   user         User?       @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -176,6 +178,10 @@ model AuthorizationCode {
   codeChallenge       String?   @map("code_challenge")
   codeChallengeMethod String?   @map("code_challenge_method")
   rememberMe          Boolean   @default(false) @map("remember_me")
+  // Workspace scope captured at select-team time (design §7 step 3-4). Dormant until Phase 3b
+  // populates it; consumeAuthorizationCode threads it into the issued session's `active` claim.
+  orgId               String?   @map("org_id")
+  teamId              String?   @map("team_id")
   expiresAt           DateTime  @map("expires_at")
   usedAt              DateTime? @map("used_at")
   createdAt           DateTime  @default(now()) @map("created_at")
@@ -214,6 +220,10 @@ model RefreshToken {
   domain            String
   clientId          String    @map("client_id")
   configUrl         String    @map("config_url")
+  // Workspace scope carried from the authorization code that created this session (design §7 step
+  // 3-4). Dormant until Phase 3b populates it; rotation preserves it onto the new row.
+  orgId             String?   @map("org_id")
+  teamId            String?   @map("team_id")
   expiresAt         DateTime  @map("expires_at")
   revokedAt         DateTime? @map("revoked_at")
   lastUsedAt        DateTime? @map("last_used_at")
@@ -609,8 +619,8 @@ model Team {
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @updatedAt @map("updated_at")
 
-  iconUrl             String?  @map("icon_url") // external URL only, no local storage (brief §15); §11.3
-  joinPolicy          TeamJoinPolicy @default(INVITE_ONLY) @map("join_policy") // design §4.6
+  iconUrl    String?        @map("icon_url") // external URL only, no local storage (brief §15); §11.3
+  joinPolicy TeamJoinPolicy @default(INVITE_ONLY) @map("join_policy") // design §4.6
 
   org            Organisation    @relation(fields: [orgId], references: [id], onDelete: Cascade)
   group          Group?          @relation(fields: [groupId], references: [id], onDelete: SetNull)

@@ -209,6 +209,15 @@ const ClientConfigSchema = RequiredConfigSchema.extend({
   // Brief 8 / Phase 10.4: default language should come from the client website's selection.
   // This is the currently selected language (not the list of available languages).
   language: z.string().trim().min(1).optional(),
+  // Slack-style login foundation (design §4.3, §4.4). Nothing reads this yet — Phase 3b wires the
+  // email-code flow and workspace selection; this just makes it a valid, parsed config field.
+  login_flow: z
+    .object({
+      email_code_enabled: z.boolean().default(false),
+      workspace_selection: z.enum(['off', 'auto']).default('off'),
+    })
+    .optional()
+    .default({ email_code_enabled: false, workspace_selection: 'off' }),
   session: z
     .object({
       remember_me_enabled: z.boolean().default(true),

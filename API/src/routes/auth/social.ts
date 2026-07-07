@@ -16,7 +16,7 @@ import {
 } from '../../services/social/social-state-cookie.js';
 import type { SocialProviderKey } from '../../services/social/provider.base.js';
 import { parseRequestAccessFlag } from '../../services/access-request-flow.service.js';
-import { selectRedirectUrl } from '../../services/token.service.js';
+import { selectRedirectUrl } from '../../services/authorization-code.service.js';
 import { AppError } from '../../utils/errors.js';
 import { parseRequiredPkceChallenge } from '../../utils/pkce.js';
 import { configFetchRateLimiter } from './rate-limit-keys.js';

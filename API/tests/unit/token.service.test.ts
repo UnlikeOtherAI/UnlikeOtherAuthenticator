@@ -5,7 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createClientId } from '../../src/utils/hash.js';
 import type { ClientConfig } from '../../src/services/config.service.js';
-import { exchangeAuthorizationCodeForTokens } from '../../src/services/token.service.js';
+import {
+  exchangeAuthorizationCodeForTokens,
+  exchangeRefreshTokenForTokens,
+} from '../../src/services/token.service.js';
 import { verifyAccessToken } from '../../src/services/access-token.service.js';
 
 function hashAuthorizationCode(code: string, sharedSecret: string): string {
@@ -498,5 +501,396 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
     ).rejects.toMatchObject({ statusCode: 401 });
     // The code must not be consumed when redemption is refused.
     expect(prisma.authorizationCode.updateMany).not.toHaveBeenCalled();
+  });
+});
+
+// Phase 3a (dormant): `active` workspace-scope claim. Nothing populates
+// authorization_codes.org_id/team_id yet, but the plumbing must already behave
+// correctly once Phase 3b starts writing them.
+describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
+  const originalDatabaseUrl = process.env.DATABASE_URL;
+  const originalSharedSecret = process.env.SHARED_SECRET;
+  const originalIssuer = process.env.AUTH_SERVICE_IDENTIFIER;
+  const originalAccessTokenTtl = process.env.ACCESS_TOKEN_TTL;
+  const originalRefreshTokenTtlDays = process.env.REFRESH_TOKEN_TTL_DAYS;
+
+  beforeEach(() => {
+    process.env.DATABASE_URL = 'postgres://localhost:5432/authenticator_test';
+    process.env.SHARED_SECRET = 'test-shared-secret-with-enough-length';
+    process.env.AUTH_SERVICE_IDENTIFIER = 'uoa-auth-service';
+    process.env.ACCESS_TOKEN_TTL = '30m';
+    process.env.REFRESH_TOKEN_TTL_DAYS = '30';
+  });
+
+  afterEach(() => {
+    process.env.DATABASE_URL = originalDatabaseUrl;
+    process.env.SHARED_SECRET = originalSharedSecret;
+    process.env.AUTH_SERVICE_IDENTIFIER = originalIssuer;
+    process.env.ACCESS_TOKEN_TTL = originalAccessTokenTtl;
+    process.env.REFRESH_TOKEN_TTL_DAYS = originalRefreshTokenTtlDays;
+    vi.restoreAllMocks();
+    vi.clearAllMocks();
+  });
+
+  function makePrisma() {
+    return {
+      authorizationCode: {
+        findUnique: vi.fn(),
+        updateMany: vi.fn(),
+      },
+      refreshToken: {
+        create: vi.fn(),
+      },
+      user: {
+        findUnique: vi.fn(),
+      },
+      domainRole: {
+        findUnique: vi.fn(),
+      },
+    } as unknown as PrismaClient;
+  }
+
+  it('emits the active claim and persists it on the refresh token when the code carries both orgId and teamId', async () => {
+    const now = new Date('2026-07-07T00:00:00.000Z');
+    const sharedSecret = process.env.SHARED_SECRET!;
+    const code = 'code-with-active-scope';
+    const config = makeConfig({ enabled: false });
+    const clientId = createClientId(config.domain, sharedSecret);
+    const configUrl = 'https://client.example.com/auth-config';
+    const redirectUrl = 'https://client.example.com/oauth/callback';
+
+    const prisma = makePrisma();
+    prisma.authorizationCode.findUnique.mockResolvedValue({
+      id: 'auth-code-active',
+      userId: 'user-active',
+      domain: config.domain,
+      configUrl,
+      redirectUrl,
+      codeChallenge: TEST_CODE_CHALLENGE,
+      codeChallengeMethod: 'S256',
+      expiresAt: new Date(now.getTime() + 60_000),
+      usedAt: null,
+      codeHash: hashAuthorizationCode(code, sharedSecret),
+      orgId: 'org-active',
+      teamId: 'team-active',
+    });
+    prisma.authorizationCode.updateMany.mockResolvedValue({ count: 1 });
+    prisma.refreshToken.create.mockResolvedValue({ id: 'refresh-token-active' });
+    prisma.domainRole.findUnique.mockResolvedValue({
+      role: 'USER',
+      domain: config.domain,
+      userId: 'user-active',
+    });
+    prisma.user.findUnique.mockResolvedValue({ email: 'active@example.com', tokenVersion: 0 });
+
+    const { accessToken } = await exchangeAuthorizationCodeForTokens(
+      { code, config, configUrl, redirectUrl, clientId, codeVerifier: TEST_CODE_VERIFIER },
+      {
+        now: () => now,
+        sharedSecret,
+        authServiceIdentifier: process.env.AUTH_SERVICE_IDENTIFIER,
+        accessTokenTtl: '15m',
+        prisma,
+      },
+    );
+
+    expect(prisma.refreshToken.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ orgId: 'org-active', teamId: 'team-active' }),
+      }),
+    );
+
+    const claims = await verifyAccessToken(accessToken, {
+      sharedSecret,
+      issuer: process.env.AUTH_SERVICE_IDENTIFIER,
+      prisma,
+    });
+
+    expect(claims.active).toEqual({ orgId: 'org-active', teamId: 'team-active' });
+  });
+
+  it('omits the active claim when the code carries only one of orgId/teamId', async () => {
+    const now = new Date('2026-07-07T00:00:01.000Z');
+    const sharedSecret = process.env.SHARED_SECRET!;
+    const code = 'code-with-partial-scope';
+    const config = makeConfig({ enabled: false });
+    const clientId = createClientId(config.domain, sharedSecret);
+    const configUrl = 'https://client.example.com/auth-config';
+    const redirectUrl = 'https://client.example.com/oauth/callback';
+
+    const prisma = makePrisma();
+    prisma.authorizationCode.findUnique.mockResolvedValue({
+      id: 'auth-code-partial',
+      userId: 'user-partial',
+      domain: config.domain,
+      configUrl,
+      redirectUrl,
+      codeChallenge: TEST_CODE_CHALLENGE,
+      codeChallengeMethod: 'S256',
+      expiresAt: new Date(now.getTime() + 60_000),
+      usedAt: null,
+      codeHash: hashAuthorizationCode(code, sharedSecret),
+      orgId: 'org-only',
+      teamId: null,
+    });
+    prisma.authorizationCode.updateMany.mockResolvedValue({ count: 1 });
+    prisma.refreshToken.create.mockResolvedValue({ id: 'refresh-token-partial' });
+    prisma.domainRole.findUnique.mockResolvedValue({
+      role: 'USER',
+      domain: config.domain,
+      userId: 'user-partial',
+    });
+    prisma.user.findUnique.mockResolvedValue({ email: 'partial@example.com', tokenVersion: 0 });
+
+    const { accessToken } = await exchangeAuthorizationCodeForTokens(
+      { code, config, configUrl, redirectUrl, clientId, codeVerifier: TEST_CODE_VERIFIER },
+      {
+        now: () => now,
+        sharedSecret,
+        authServiceIdentifier: process.env.AUTH_SERVICE_IDENTIFIER,
+        accessTokenTtl: '15m',
+        prisma,
+      },
+    );
+
+    const claims = await verifyAccessToken(accessToken, {
+      sharedSecret,
+      issuer: process.env.AUTH_SERVICE_IDENTIFIER,
+      prisma,
+    });
+
+    expect(claims.active).toBeUndefined();
+  });
+
+  it('omits the active claim when the code carries neither orgId nor teamId (today\'s dormant default)', async () => {
+    const now = new Date('2026-07-07T00:00:02.000Z');
+    const sharedSecret = process.env.SHARED_SECRET!;
+    const code = 'code-with-no-scope';
+    const config = makeConfig({ enabled: false });
+    const clientId = createClientId(config.domain, sharedSecret);
+    const configUrl = 'https://client.example.com/auth-config';
+    const redirectUrl = 'https://client.example.com/oauth/callback';
+
+    const prisma = makePrisma();
+    prisma.authorizationCode.findUnique.mockResolvedValue({
+      id: 'auth-code-none',
+      userId: 'user-none',
+      domain: config.domain,
+      configUrl,
+      redirectUrl,
+      codeChallenge: TEST_CODE_CHALLENGE,
+      codeChallengeMethod: 'S256',
+      expiresAt: new Date(now.getTime() + 60_000),
+      usedAt: null,
+      codeHash: hashAuthorizationCode(code, sharedSecret),
+    });
+    prisma.authorizationCode.updateMany.mockResolvedValue({ count: 1 });
+    prisma.refreshToken.create.mockResolvedValue({ id: 'refresh-token-none' });
+    prisma.domainRole.findUnique.mockResolvedValue({
+      role: 'USER',
+      domain: config.domain,
+      userId: 'user-none',
+    });
+    prisma.user.findUnique.mockResolvedValue({ email: 'none@example.com', tokenVersion: 0 });
+
+    const { accessToken } = await exchangeAuthorizationCodeForTokens(
+      { code, config, configUrl, redirectUrl, clientId, codeVerifier: TEST_CODE_VERIFIER },
+      {
+        now: () => now,
+        sharedSecret,
+        authServiceIdentifier: process.env.AUTH_SERVICE_IDENTIFIER,
+        accessTokenTtl: '15m',
+        prisma,
+      },
+    );
+
+    expect(prisma.refreshToken.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ orgId: null, teamId: null }),
+      }),
+    );
+
+    const claims = await verifyAccessToken(accessToken, {
+      sharedSecret,
+      issuer: process.env.AUTH_SERVICE_IDENTIFIER,
+      prisma,
+    });
+
+    expect(claims.active).toBeUndefined();
+  });
+});
+
+describe('exchangeRefreshTokenForTokens active-claim re-validation (unit)', () => {
+  const originalDatabaseUrl = process.env.DATABASE_URL;
+  const originalSharedSecret = process.env.SHARED_SECRET;
+  const originalIssuer = process.env.AUTH_SERVICE_IDENTIFIER;
+  const originalAccessTokenTtl = process.env.ACCESS_TOKEN_TTL;
+  const originalRefreshTokenTtlDays = process.env.REFRESH_TOKEN_TTL_DAYS;
+
+  beforeEach(() => {
+    process.env.DATABASE_URL = 'postgres://localhost:5432/authenticator_test';
+    process.env.SHARED_SECRET = 'test-shared-secret-with-enough-length';
+    process.env.AUTH_SERVICE_IDENTIFIER = 'uoa-auth-service';
+    process.env.ACCESS_TOKEN_TTL = '30m';
+    process.env.REFRESH_TOKEN_TTL_DAYS = '30';
+  });
+
+  afterEach(() => {
+    process.env.DATABASE_URL = originalDatabaseUrl;
+    process.env.SHARED_SECRET = originalSharedSecret;
+    process.env.AUTH_SERVICE_IDENTIFIER = originalIssuer;
+    process.env.ACCESS_TOKEN_TTL = originalAccessTokenTtl;
+    process.env.REFRESH_TOKEN_TTL_DAYS = originalRefreshTokenTtlDays;
+    vi.restoreAllMocks();
+    vi.clearAllMocks();
+  });
+
+  function makeRotationPrisma(params: {
+    storedOrgId: string | null;
+    storedTeamId: string | null;
+    contextTeamIds: string[];
+  }) {
+    const now = new Date('2026-07-07T01:00:00.000Z');
+    return {
+      now,
+      prisma: {
+        refreshToken: {
+          findUnique: vi.fn().mockResolvedValue({
+            id: 'refresh-token-1',
+            familyId: 'family-1',
+            userId: 'user-1',
+            domain: 'client.example.com',
+            clientId: 'client-id',
+            configUrl: 'https://client.example.com/auth-config',
+            createdAt: new Date(now.getTime() - 60_000),
+            expiresAt: new Date(now.getTime() + 60_000),
+            revokedAt: null,
+            replacedByTokenId: null,
+            orgId: params.storedOrgId,
+            teamId: params.storedTeamId,
+          }),
+          create: vi.fn().mockResolvedValue({ id: 'refresh-token-2' }),
+          updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        },
+        user: {
+          findUnique: vi.fn().mockResolvedValue({ email: 'user@example.com', tokenVersion: 0 }),
+        },
+        domainRole: {
+          findUnique: vi.fn().mockResolvedValue({
+            role: 'USER',
+            domain: 'client.example.com',
+            userId: 'user-1',
+          }),
+        },
+        orgMember: {
+          findFirst: vi.fn().mockResolvedValue({ orgId: params.storedOrgId, role: 'member' }),
+        },
+        teamMember: {
+          findMany: vi.fn().mockResolvedValue(
+            params.contextTeamIds.map((teamId) => ({ teamId, teamRole: 'member' })),
+          ),
+        },
+      } as unknown as PrismaClient,
+    };
+  }
+
+  it('keeps the active claim when the rotated token\'s workspace is still an ACTIVE membership', async () => {
+    const { now, prisma } = makeRotationPrisma({
+      storedOrgId: 'org-1',
+      storedTeamId: 'team-1',
+      contextTeamIds: ['team-1', 'team-2'],
+    });
+    const sharedSecret = process.env.SHARED_SECRET!;
+    const config = makeConfig({ enabled: true, groups_enabled: false });
+    // Must match the mocked refresh-token row's clientId for matchesRefreshTokenContext to accept it.
+    const clientId = 'client-id';
+    const configUrl = 'https://client.example.com/auth-config';
+
+    const { accessToken } = await exchangeRefreshTokenForTokens(
+      { config, configUrl, refreshToken: 'current-refresh-token', clientId },
+      {
+        now: () => now,
+        sharedSecret,
+        authServiceIdentifier: process.env.AUTH_SERVICE_IDENTIFIER,
+        accessTokenTtl: '15m',
+        prisma,
+      },
+    );
+
+    const claims = await verifyAccessToken(accessToken, {
+      sharedSecret,
+      issuer: process.env.AUTH_SERVICE_IDENTIFIER,
+      prisma,
+    });
+
+    expect(claims.active).toEqual({ orgId: 'org-1', teamId: 'team-1' });
+    expect(prisma.refreshToken.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ orgId: 'org-1', teamId: 'team-1' }),
+      }),
+    );
+  });
+
+  it('drops the active claim on refresh when the team membership is no longer in the resolved org context', async () => {
+    const { now, prisma } = makeRotationPrisma({
+      storedOrgId: 'org-1',
+      storedTeamId: 'team-removed',
+      contextTeamIds: ['team-1'],
+    });
+    const sharedSecret = process.env.SHARED_SECRET!;
+    const config = makeConfig({ enabled: true, groups_enabled: false });
+    const clientId = 'client-id';
+    const configUrl = 'https://client.example.com/auth-config';
+
+    const { accessToken } = await exchangeRefreshTokenForTokens(
+      { config, configUrl, refreshToken: 'current-refresh-token', clientId },
+      {
+        now: () => now,
+        sharedSecret,
+        authServiceIdentifier: process.env.AUTH_SERVICE_IDENTIFIER,
+        accessTokenTtl: '15m',
+        prisma,
+      },
+    );
+
+    const claims = await verifyAccessToken(accessToken, {
+      sharedSecret,
+      issuer: process.env.AUTH_SERVICE_IDENTIFIER,
+      prisma,
+    });
+
+    expect(claims.active).toBeUndefined();
+  });
+
+  it('never emits active when org_features is disabled, even if the stored refresh token carries scope', async () => {
+    const { now, prisma } = makeRotationPrisma({
+      storedOrgId: 'org-1',
+      storedTeamId: 'team-1',
+      contextTeamIds: ['team-1'],
+    });
+    const sharedSecret = process.env.SHARED_SECRET!;
+    const config = makeConfig({ enabled: false });
+    const clientId = 'client-id';
+    const configUrl = 'https://client.example.com/auth-config';
+
+    const { accessToken } = await exchangeRefreshTokenForTokens(
+      { config, configUrl, refreshToken: 'current-refresh-token', clientId },
+      {
+        now: () => now,
+        sharedSecret,
+        authServiceIdentifier: process.env.AUTH_SERVICE_IDENTIFIER,
+        accessTokenTtl: '15m',
+        prisma,
+      },
+    );
+
+    const claims = await verifyAccessToken(accessToken, {
+      sharedSecret,
+      issuer: process.env.AUTH_SERVICE_IDENTIFIER,
+      prisma,
+    });
+
+    expect(claims.active).toBeUndefined();
+    expect(prisma.orgMember.findFirst).not.toHaveBeenCalled();
   });
 });

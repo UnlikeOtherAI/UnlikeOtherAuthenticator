@@ -14,7 +14,7 @@ import { recordLoginLog } from '../../services/login-log.service.js';
 import { resolveTwoFaPolicy } from '../../services/twofactor-policy.service.js';
 import { signTwoFaChallenge } from '../../services/twofactor-challenge.service.js';
 import { startTwoFactorSetup, type TwoFactorSetupResult } from '../../services/twofactor-setup.service.js';
-import { selectRedirectUrl } from '../../services/token.service.js';
+import { selectRedirectUrl } from '../../services/authorization-code.service.js';
 import { parseRequiredPkceChallenge } from '../../utils/pkce.js';
 import { loginRateLimiter } from './rate-limit-keys.js';
 

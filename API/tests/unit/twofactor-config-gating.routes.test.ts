@@ -31,10 +31,13 @@ vi.mock('../../src/services/auth-login.service.js', () => {
   };
 });
 
-vi.mock('../../src/services/token.service.js', async () => {
-  const actual = await vi.importActual<typeof import('../../src/services/token.service.js')>(
-    '../../src/services/token.service.js',
-  );
+// issueAuthorizationCode / buildRedirectToUrl moved to authorization-code.service.js in Phase 3a
+// (token.service split). The route reaches them through access-request-flow, which imports from the
+// new module, so the mock must target authorization-code.service.js.
+vi.mock('../../src/services/authorization-code.service.js', async () => {
+  const actual = await vi.importActual<
+    typeof import('../../src/services/authorization-code.service.js')
+  >('../../src/services/authorization-code.service.js');
   return {
     ...actual,
     issueAuthorizationCode: (...args: unknown[]) => issueAuthorizationCodeMock(...args),

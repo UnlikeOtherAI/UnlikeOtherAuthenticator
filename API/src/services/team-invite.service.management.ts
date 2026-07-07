@@ -6,7 +6,7 @@ import { assertDatabaseEnabled } from './organisation.service.base.js';
 import { buildUserIdentity } from './user-scope.service.js';
 import { extractEmailTheme } from './email-theme.service.js';
 import { sendTeamInviteEmail } from './email.service.js';
-import { selectRedirectUrl } from './token.service.js';
+import { selectRedirectUrl } from './authorization-code.service.js';
 import { normalizeTeamRole } from './team.service.base.js';
 import {
   type InviteDeps,

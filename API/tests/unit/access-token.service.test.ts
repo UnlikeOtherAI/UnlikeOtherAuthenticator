@@ -36,10 +36,15 @@ async function signAccessToken(params: {
     groups?: string[];
     group_admin?: string[];
   };
+  active?: {
+    orgId: string;
+    teamId: string;
+  };
 }): Promise<string> {
   const alg = params.alg ?? 'HS256';
   const ttl = params.ttl ?? '30m';
   const org = params.org;
+  const active = params.active;
 
   const jwt = new SignJWT({
     email: 'user@example.com',
@@ -48,6 +53,7 @@ async function signAccessToken(params: {
     role: 'superuser',
     tv: params.tv ?? 0,
     ...(org ? { org } : {}),
+    ...(active ? { active } : {}),
   })
     .setProtectedHeader({ alg, typ: 'JWT' })
     .setIssuer(params.issuer)
@@ -121,6 +127,25 @@ describe('verifyAccessToken', () => {
         teams: ['team_a', 'team_b'],
         team_roles: { team_a: 'lead', team_b: 'member' },
       },
+    });
+  });
+
+  it('accepts a valid JWT with an active claim and returns claims including it (dormant workspace scope)', async () => {
+    const token = await signAccessToken({
+      sharedSecret: process.env.SHARED_SECRET!,
+      issuer: process.env.AUTH_SERVICE_IDENTIFIER!,
+      subject: 'u3',
+      active: { orgId: 'org_1', teamId: 'team_a' },
+    });
+
+    const claims = await verifyAccessToken(token, depsWithTokenVersion(0));
+    expect(claims).toEqual({
+      userId: 'u3',
+      email: 'user@example.com',
+      domain: 'client.example.com',
+      clientId: 'client-id',
+      role: 'superuser',
+      active: { orgId: 'org_1', teamId: 'team_a' },
     });
   });
 
