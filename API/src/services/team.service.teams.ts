@@ -9,6 +9,7 @@ import {
   deriveUniqueTeamSlug,
   ensureAvailableTeamSlug,
   normalizeTeamDescription,
+  normalizeTeamJoinPolicy,
   normalizeTeamName,
   parseMaxTeamsPerOrg,
   requireTeamManager,
@@ -23,6 +24,19 @@ import {
   type TeamWithMembersRecord,
   isP2002Error,
 } from './team.service.base.js';
+
+const TEAM_SELECT = {
+  id: true,
+  orgId: true,
+  groupId: true,
+  name: true,
+  slug: true,
+  description: true,
+  isDefault: true,
+  joinPolicy: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
 
 export async function listTeams(
   params: {
@@ -53,22 +67,20 @@ export async function listTeams(
   const cursor = params.cursor?.trim();
 
   const rows = await prisma.team.findMany({
-    where: { orgId: org.id },
+    where: {
+      orgId: org.id,
+      // HIDDEN teams are excluded from any org-member-visible listing unless the caller is already
+      // an ACTIVE member of that specific team (design §4.6) — invite-only discovery is preserved.
+      OR: [
+        { NOT: { joinPolicy: 'HIDDEN' } },
+        { members: { some: { userId: actorUserId, status: 'ACTIVE' } } },
+      ],
+    },
     orderBy: { createdAt: 'desc' },
     take: limit + 1,
     cursor: cursor ? { id: cursor } : undefined,
     skip: cursor ? 1 : 0,
-    select: {
-      id: true,
-      orgId: true,
-      groupId: true,
-      name: true,
-      slug: true,
-      description: true,
-      isDefault: true,
-      createdAt: true,
-      updatedAt: true,
-    },
+    select: TEAM_SELECT,
   });
 
   const data = rows.slice(0, limit).map(toTeamRecord);
@@ -136,17 +148,7 @@ export async function createTeam(
           slug,
           ...(description === undefined ? {} : { description }),
         },
-        select: {
-          id: true,
-          orgId: true,
-          groupId: true,
-          name: true,
-          slug: true,
-          description: true,
-          isDefault: true,
-          createdAt: true,
-          updatedAt: true,
-        },
+        select: TEAM_SELECT,
       });
 
       return toTeamRecord(created);
@@ -189,15 +191,7 @@ export async function getTeam(
       orgId: org.id,
     },
     select: {
-      id: true,
-      orgId: true,
-      groupId: true,
-      name: true,
-      slug: true,
-      description: true,
-      isDefault: true,
-      createdAt: true,
-      updatedAt: true,
+      ...TEAM_SELECT,
       members: {
         where: { status: 'ACTIVE' },
         orderBy: { createdAt: 'desc' },
@@ -232,6 +226,7 @@ export async function updateTeam(
     name?: string;
     slug?: string;
     description?: string | null;
+    joinPolicy?: string;
   },
   deps?: OrgServiceDeps,
 ): Promise<TeamRecord> {
@@ -244,17 +239,28 @@ export async function updateTeam(
   }
 
   const hasUpdates =
-    params.name !== undefined || params.slug !== undefined || params.description !== undefined;
+    params.name !== undefined ||
+    params.slug !== undefined ||
+    params.description !== undefined ||
+    params.joinPolicy !== undefined;
   if (!hasUpdates) {
     throw new AppError('BAD_REQUEST', 400);
   }
 
-  const data: Partial<{ name: string; slug: string; description: string | null }> = {};
+  const data: Partial<{
+    name: string;
+    slug: string;
+    description: string | null;
+    joinPolicy: ReturnType<typeof normalizeTeamJoinPolicy>;
+  }> = {};
   if (params.name !== undefined) {
     data.name = normalizeTeamName(params.name);
   }
   if (params.description !== undefined) {
     data.description = normalizeTeamDescription(params.description);
+  }
+  if (params.joinPolicy !== undefined) {
+    data.joinPolicy = normalizeTeamJoinPolicy(params.joinPolicy);
   }
 
   const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
@@ -286,17 +292,7 @@ export async function updateTeam(
     const updated = await prisma.team.update({
       where: { id: existing.id },
       data,
-      select: {
-        id: true,
-        orgId: true,
-        groupId: true,
-        name: true,
-        slug: true,
-        description: true,
-        isDefault: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+      select: TEAM_SELECT,
     });
 
     return toTeamRecord(updated);

@@ -39,6 +39,11 @@ export const TeamUpdateBodySchema = z.object({
   name: z.string().trim().min(1).max(100).optional(),
   slug: z.string().trim().min(1).max(120).optional(),
   description: z.string().trim().max(500).nullable().optional(),
+  // Join policy (design §4.6, Phase 4) — owner/admin only; omitted leaves the current policy
+  // unchanged. Validated against the enum at the service layer.
+  joinPolicy: z
+    .enum(['INVITE_ONLY', 'APPROVED_DOMAIN', 'REQUEST_TO_JOIN', 'OPEN_TO_ORG', 'HIDDEN'])
+    .optional(),
 });
 
 export const AddTeamMemberBodySchema = z.object({
@@ -51,6 +56,15 @@ export const ChangeTeamMemberRoleBodySchema = z.object({
 });
 
 const TeamInviteeSchema = z.object({
+  email: z.string().trim().toLowerCase().email(),
+  name: z.string().trim().max(120).optional(),
+  teamRole: z.string().trim().min(1).optional(),
+});
+
+// Member-initiated invite (Phase 4 Task 4, design §4.7) — the user-token variant of the bulk-invite
+// endpoint above, single invite only (one teammate at a time, matching Slack's "invite people" UX).
+export const MemberInviteBodySchema = z.object({
+  redirectUrl: z.string().trim().min(1).optional(),
   email: z.string().trim().toLowerCase().email(),
   name: z.string().trim().max(120).optional(),
   teamRole: z.string().trim().min(1).optional(),

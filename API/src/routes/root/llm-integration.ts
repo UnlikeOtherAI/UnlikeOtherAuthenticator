@@ -186,6 +186,27 @@ This revokes the refresh-token family AND invalidates the user's already-issued 
 
 Domain admin APIs (\`/domain/users\`, \`/domain/logs\`, etc.) and team-invite / access-request review APIs use the same \`Authorization: Bearer <client_hash>\` mechanism. The old global shared-secret bearer is NOT accepted for any customer-facing endpoint.
 
+### 4.7a Team join policies + member-initiated invites (Phase 4)
+
+Every \`Team\` has a \`joinPolicy\`: \`INVITE_ONLY\` (default) | \`APPROVED_DOMAIN\` | \`REQUEST_TO_JOIN\` | \`OPEN_TO_ORG\` | \`HIDDEN\`. The policy **gates** the existing join mechanisms rather than replacing them:
+
+- **Auto-enrolment** via \`access_requests.auto_grant_domains\` only auto-adds a user when the configured target team's \`joinPolicy\` is \`APPROVED_DOMAIN\`.
+- **Request-to-join** (\`access_requests.enabled\`) only accepts a request when the target team's \`joinPolicy\` is \`REQUEST_TO_JOIN\`; any other policy fails the login with a generic error when \`request_access=true\` is set.
+- **Self-join** — \`POST /org/organisations/:orgId/teams/:teamId/join\` (access token required) — succeeds only when the team's \`joinPolicy\` is \`OPEN_TO_ORG\` and the caller is an ACTIVE member of the team's org. Reactivates a previously removed/deactivated row instead of duplicating it.
+- **HIDDEN** teams are excluded from \`GET /org/organisations/:orgId/teams\` for callers who are not already an ACTIVE member of that team.
+- Set the policy with \`PUT /org/organisations/:orgId/teams/:teamId\` (\`{ "joinPolicy": "OPEN_TO_ORG" }\`, owner/admin only).
+
+Team invites now carry an \`expiresAt\` (30 days from send/resend — resending refreshes it) and an \`approvalStatus\`: \`not_required\` | \`pending\` | \`approved\` | \`denied\`. The derived invite \`status\` gains \`expired\` alongside \`pending | accepted | declined | replaced\`; an expired or not-yet-approved invite cannot be accepted and is excluded from the workspace chooser / \`firstLogin.pending_invites\`.
+
+Member-initiated invites: \`POST /org/organisations/:orgId/teams/:teamId/invitations\` accepts the same path used by the trusted backend bulk-invite call, but when called WITH an \`X-UOA-Access-Token\` header it becomes a single-invite, permission-gated call instead:
+
+- Org or team \`owner\`/\`admin\`: always allowed, sent immediately (\`approvalStatus: not_required\`).
+- A plain ACTIVE team member: gated by the organisation's \`memberInvites\` setting (\`allowed\` default | \`admin_approval\` | \`disabled\`, set via \`PUT /org/organisations/:orgId\` \`{ "member_invites": "admin_approval" }\`). \`admin_approval\` creates the invite as \`pending\` and sends **no email** until an owner/admin approves it.
+- A deactivated member, or a plain member when \`disabled\`, is rejected generically.
+- The response is always \`{ "status": "ok" }\` regardless of outcome — whether the email already has an account is never revealed (no enumeration).
+
+Owner/admin review the pending queue with \`GET /org/organisations/:orgId/invitations?approval=pending\`, then \`POST /org/organisations/:orgId/invitations/:inviteId/approve\` (sends the invite email) or \`.../deny\` (silent to the invitee, sends nothing).
+
 ### 4.7 Two-factor login branches
 
 When config \`2fa_enabled\` is false or absent, no 2FA branch runs. When it is true, UOA resolves DB policy from the Service/domain plus the user's Organisations using strongest-wins (\`off < optional < required\`).

@@ -54,6 +54,17 @@ enum TeamJoinPolicy {
   HIDDEN
 }
 
+// Invite approval workflow (design §4.7, Phase 4). NOT_REQUIRED is every invite created by an
+// org/team owner/admin (or the pre-Phase-4 backend endpoint) — unchanged behaviour. PENDING/APPROVED/
+// DENIED are only produced by a plain member's invite when the org's memberInvites setting is
+// "admin_approval".
+enum InviteApprovalStatus {
+  NOT_REQUIRED
+  PENDING
+  APPROVED
+  DENIED
+}
+
 model User {
   id                       String   @id @default(cuid())
   // Note: email is not globally unique because `user_scope` can be "per_domain".
@@ -450,6 +461,11 @@ model Organisation {
   twoFaPolicy         TwoFaPolicy? @map("two_fa_policy")
   allowedEmailDomains String[]     @default([]) @map("allowed_email_domains")
   allowedEmails       String[]     @default([]) @map("allowed_emails")
+  // Member-initiated invite policy (design §4.7, Phase 4): "allowed" (default, current behaviour —
+  // any active member may invite) | "admin_approval" (member invites are created PENDING and mailed
+  // only after an owner/admin approves) | "disabled" (only owner/admin may invite). Validated at the
+  // app layer, not the DB, matching the org_features JSON pattern.
+  memberInvites       String       @default("allowed") @map("member_invites")
   createdAt           DateTime     @default(now()) @map("created_at")
   updatedAt           DateTime     @updatedAt @map("updated_at")
 
@@ -673,6 +689,14 @@ model TeamInvite {
   openedAt        DateTime? @map("opened_at")
   openCount       Int       @default(0) @map("open_count")
   lastSentAt      DateTime  @map("last_sent_at")
+  // Invite-level expiry (design §4.7, Phase 4), independent of the emailed token's own (much
+  // shorter) TTL. Nullable so the column is additive; the migration backfills existing unresolved
+  // invites to `lastSentAt + 30 days` and every new/resent invite sets `now + 30 days`.
+  expiresAt       DateTime? @map("expires_at")
+  // Member-initiated invite approval workflow (design §4.7, Phase 4). NOT_REQUIRED for every invite
+  // created by an owner/admin (or the backend bulk-invite endpoint) — unchanged behaviour.
+  approvalStatus     InviteApprovalStatus @default(NOT_REQUIRED) @map("approval_status")
+  requestedByUserId  String?              @map("requested_by_user_id")
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 

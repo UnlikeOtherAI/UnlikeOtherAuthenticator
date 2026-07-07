@@ -27,12 +27,29 @@ export type CursorList<T> = {
   next_cursor: string | null;
 };
 
+export type OrgMemberInvitesValue = 'allowed' | 'admin_approval' | 'disabled';
+
+const ALLOWED_MEMBER_INVITES_VALUES = new Set<OrgMemberInvitesValue>([
+  'allowed',
+  'admin_approval',
+  'disabled',
+]);
+
+export function normalizeMemberInvitesSetting(value: string): OrgMemberInvitesValue {
+  const normalized = value.trim().toLowerCase();
+  if (!ALLOWED_MEMBER_INVITES_VALUES.has(normalized as OrgMemberInvitesValue)) {
+    throw new AppError('BAD_REQUEST', 400);
+  }
+  return normalized as OrgMemberInvitesValue;
+}
+
 export type OrganisationRecord = {
   id: string;
   domain: string;
   name: string;
   slug: string;
   ownerId: string;
+  memberInvites: OrgMemberInvitesValue;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -126,7 +143,16 @@ export function toListLimit(limit?: number): number {
 export async function resolveOrganisationByDomain(
   prisma: OrgServicePrisma,
   params: { orgId: string; domain: string },
-): Promise<{ id: string; domain: string; name: string; slug: string; ownerId: string; createdAt: Date; updatedAt: Date }> {
+): Promise<{
+  id: string;
+  domain: string;
+  name: string;
+  slug: string;
+  ownerId: string;
+  memberInvites?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}> {
   const orgId = params.orgId.trim();
   const domain = normalizeDomain(params.domain);
   if (!orgId || !domain) {
@@ -141,6 +167,7 @@ export async function resolveOrganisationByDomain(
       name: true,
       slug: true,
       ownerId: true,
+      memberInvites: true,
       createdAt: true,
       updatedAt: true,
     },
@@ -164,6 +191,7 @@ export function toOrganisationRecord(row: {
   name: string;
   slug: string;
   ownerId: string;
+  memberInvites?: string;
   createdAt: Date;
   updatedAt: Date;
 }): OrganisationRecord {
@@ -173,6 +201,7 @@ export function toOrganisationRecord(row: {
     name: row.name,
     slug: row.slug,
     ownerId: row.ownerId,
+    memberInvites: (row.memberInvites ?? 'allowed') as OrgMemberInvitesValue,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

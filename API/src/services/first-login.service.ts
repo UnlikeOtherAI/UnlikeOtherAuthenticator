@@ -48,13 +48,14 @@ export async function buildFirstLoginBlock(
     userId: string;
     config: ClientConfig;
   },
-  deps?: { prisma?: FirstLoginPrisma },
+  deps?: { prisma?: FirstLoginPrisma; now?: () => Date },
 ): Promise<FirstLoginBlock | null> {
   if (!params.config.org_features?.enabled) {
     return null;
   }
 
   const prisma = deps?.prisma ?? (getPrisma() as unknown as FirstLoginPrisma);
+  const now = deps?.now ? deps.now() : new Date();
 
   const user = await prisma.user.findUnique({
     where: { id: params.userId },
@@ -96,6 +97,10 @@ export async function buildFirstLoginBlock(
         acceptedAt: null,
         declinedAt: null,
         revokedAt: null,
+        // Task 3/4 (design §4.7): expired invites and invites awaiting member-invite approval are
+        // not yet real pending invites for the invitee — excluded from every pending-invite surface.
+        approvalStatus: { in: ['NOT_REQUIRED', 'APPROVED'] },
+        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
         org: { domain },
       },
       select: {
@@ -175,9 +180,10 @@ export async function buildWorkspaceChoices(
     userId: string;
     config: ClientConfig;
   },
-  deps?: { prisma?: WorkspaceChooserPrisma },
+  deps?: { prisma?: WorkspaceChooserPrisma; now?: () => Date },
 ): Promise<WorkspaceChoices> {
   const prisma = deps?.prisma ?? (getPrisma() as unknown as WorkspaceChooserPrisma);
+  const now = deps?.now ? deps.now() : new Date();
 
   const user = await prisma.user.findUnique({
     where: { id: params.userId },
@@ -208,6 +214,10 @@ export async function buildWorkspaceChoices(
         acceptedAt: null,
         declinedAt: null,
         revokedAt: null,
+        // Task 3/4 (design §4.7): expired invites and invites awaiting member-invite approval are
+        // not yet real pending invites for the invitee — excluded from the chooser.
+        approvalStatus: { in: ['NOT_REQUIRED', 'APPROVED'] },
+        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
         org: { domain },
       },
       select: {

@@ -33,6 +33,8 @@ export async function acceptTeamInviteWithinTransaction(params: {
       acceptedUserId: true,
       acceptedAt: true,
       revokedAt: true,
+      expiresAt: true,
+      approvalStatus: true,
       org: {
         select: {
           id: true,
@@ -54,6 +56,15 @@ export async function acceptTeamInviteWithinTransaction(params: {
     if (invite.acceptedUserId === params.userId) {
       return;
     }
+    throw new AppError('BAD_REQUEST', 400);
+  }
+
+  // Task 3/4 (design §4.7): a PENDING/DENIED (member-invite approval not yet granted) or expired
+  // invite is not acceptable — generic error, same as any other invalid-invite case (no oracle).
+  if (invite.approvalStatus === 'PENDING' || invite.approvalStatus === 'DENIED') {
+    throw new AppError('BAD_REQUEST', 400);
+  }
+  if (invite.expiresAt && invite.expiresAt.getTime() <= params.now.getTime()) {
     throw new AppError('BAD_REQUEST', 400);
   }
 

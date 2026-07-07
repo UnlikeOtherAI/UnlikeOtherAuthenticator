@@ -162,6 +162,8 @@ describe('first-login.service', () => {
         acceptedAt: null,
         declinedAt: null,
         revokedAt: null,
+        approvalStatus: { in: ['NOT_REQUIRED', 'APPROVED'] },
+        OR: [{ expiresAt: null }, { expiresAt: { gt: expect.any(Date) } }],
         org: { domain: 'client.example.com' },
       },
       select: {
@@ -263,6 +265,8 @@ describe('buildWorkspaceChoices', () => {
         acceptedAt: null,
         declinedAt: null,
         revokedAt: null,
+        approvalStatus: { in: ['NOT_REQUIRED', 'APPROVED'] },
+        OR: [{ expiresAt: null }, { expiresAt: { gt: expect.any(Date) } }],
         org: { domain: 'client.example.com' },
       },
       select: {

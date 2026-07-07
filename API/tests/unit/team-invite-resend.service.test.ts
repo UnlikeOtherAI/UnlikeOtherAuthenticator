@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
 
 import type { ClientConfig } from '../../src/services/config.service.js';
-import { resendTeamInvite } from '../../src/services/team-invite.service.management.js';
+import { resendTeamInvite } from '../../src/services/team-invite.service.resend.js';
 import { testUiTheme } from '../helpers/test-config.js';
 
 function makeConfig(overrides?: Partial<ClientConfig>): ClientConfig {
@@ -129,5 +129,114 @@ describe('resendTeamInvite', () => {
     expect(prisma.teamInvite.create).not.toHaveBeenCalled();
     expect(prisma.verificationToken.create).not.toHaveBeenCalled();
     expect(sendTeamInviteEmail).not.toHaveBeenCalled();
+  });
+
+  it('Phase 4: refreshes expiresAt to now + 30 days on resend', async () => {
+    const prisma = makeInvitePrisma();
+    prisma.organisation.findFirst.mockResolvedValue({
+      id: 'org-1',
+      domain: 'client.example.com',
+      name: 'Acme',
+      slug: 'acme',
+      ownerId: 'owner-1',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    prisma.team.findFirst.mockResolvedValue({ id: 'team-1', name: 'Core Team' });
+    prisma.teamInvite.findFirst.mockResolvedValue({
+      id: 'invite-old',
+      orgId: 'org-1',
+      teamId: 'team-1',
+      email: 'invitee@example.com',
+      inviteName: null,
+      teamRole: 'member',
+      redirectUrl: null,
+      invitedByUserId: 'owner-1',
+      invitedByName: 'Owner',
+      invitedByEmail: 'owner@example.com',
+      acceptedUserId: null,
+      acceptedAt: null,
+      declinedAt: null,
+      revokedAt: null,
+      openedAt: null,
+      openCount: 0,
+      lastSentAt: new Date('2026-01-01T00:00:00.000Z'),
+      expiresAt: new Date('2026-01-31T00:00:00.000Z'),
+      approvalStatus: 'NOT_REQUIRED',
+      requestedByUserId: null,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    });
+    prisma.user.findUnique.mockResolvedValue(null);
+    prisma.teamInvite.updateMany.mockResolvedValue({ count: 1 });
+    prisma.teamInvite.create.mockResolvedValue({
+      id: 'invite-new',
+      orgId: 'org-1',
+      teamId: 'team-1',
+      email: 'invitee@example.com',
+      inviteName: null,
+      teamRole: 'member',
+      redirectUrl: null,
+      invitedByUserId: 'owner-1',
+      invitedByName: 'Owner',
+      invitedByEmail: 'owner@example.com',
+      acceptedUserId: null,
+      acceptedAt: null,
+      declinedAt: null,
+      revokedAt: null,
+      openedAt: null,
+      openCount: 0,
+      lastSentAt: new Date('2026-02-01T00:00:00.000Z'),
+      expiresAt: new Date('2026-03-03T00:00:00.000Z'),
+      approvalStatus: 'NOT_REQUIRED',
+      requestedByUserId: null,
+      createdAt: new Date('2026-02-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-02-01T00:00:00.000Z'),
+    });
+    prisma.verificationToken.updateMany.mockResolvedValue({ count: 0 });
+    prisma.verificationToken.create.mockResolvedValue({ id: 'token-row-3' });
+
+    const result = await resendTeamInvite(
+      {
+        orgId: 'org-1',
+        teamId: 'team-1',
+        inviteId: 'invite-old',
+        domain: 'client.example.com',
+        config: makeConfig(),
+        configUrl: 'https://client.example.com/auth-config',
+      },
+      {
+        env: {
+          NODE_ENV: 'test',
+          HOST: '127.0.0.1',
+          PORT: 3000,
+          PUBLIC_BASE_URL: 'https://auth.example.com',
+          LOG_LEVEL: 'info',
+          SHARED_SECRET: 'test-shared-secret-with-enough-length',
+          AUTH_SERVICE_IDENTIFIER: 'uoa-auth-service',
+          DATABASE_URL: 'postgres://example.invalid/db',
+          ACCESS_TOKEN_TTL: '30m',
+          LOG_RETENTION_DAYS: 90,
+          AI_TRANSLATION_PROVIDER: 'disabled',
+          OPENAI_API_KEY: undefined,
+          OPENAI_MODEL: undefined,
+        },
+        prisma,
+        now: () => new Date('2026-02-01T00:00:00.000Z'),
+        sharedSecret: 'test-shared-secret-with-enough-length',
+        generateEmailToken: () => 'token-new',
+        hashEmailToken: () => 'hash-new',
+        sendTeamInviteEmail: vi.fn(async () => undefined),
+      },
+    );
+
+    expect(prisma.teamInvite.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          expiresAt: new Date('2026-03-03T00:00:00.000Z'),
+        }),
+      }),
+    );
+    expect(result.expiresAt).toEqual(new Date('2026-03-03T00:00:00.000Z'));
   });
 });

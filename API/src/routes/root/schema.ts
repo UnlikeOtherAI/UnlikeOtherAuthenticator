@@ -143,7 +143,10 @@ const orgEndpoints: EndpointSchema[] = [
     path: '/org/organisations/:orgId',
     description: 'Update organisation',
     auth: 'domain hash bearer token',
-    body: { name: 'string (optional)' },
+    body: {
+      name: 'string (optional)',
+      'member_invites?': 'string — "allowed" (default) | "admin_approval" | "disabled"; owner/admin only, omitted leaves it unchanged; gates the member-initiated invite endpoint',
+    },
   },
   {
     method: 'DELETE',
@@ -243,6 +246,7 @@ const orgEndpoints: EndpointSchema[] = [
       name: 'string (optional)',
       'slug?': 'string — optional custom team slug; omitted leaves the current slug unchanged',
       description: 'string (optional)',
+      'joinPolicy?': 'string — INVITE_ONLY (default) | APPROVED_DOMAIN | REQUEST_TO_JOIN | OPEN_TO_ORG | HIDDEN; owner/admin only, omitted leaves the current policy unchanged',
     },
     response: {
       slug: 'string — unique team slug within the organisation',
@@ -256,16 +260,30 @@ const orgEndpoints: EndpointSchema[] = [
   },
   {
     method: 'POST',
+    path: '/org/organisations/:orgId/teams/:teamId/join',
+    description: 'Self-join a team whose joinPolicy is OPEN_TO_ORG (caller must be an ACTIVE member of the team\'s org); reactivates a previously removed/deactivated membership instead of duplicating it',
+    auth: 'domain hash bearer token + access token (X-UOA-Access-Token header)',
+    response: {
+      200: 'team member record',
+      400: 'generic error — team not found, policy is not OPEN_TO_ORG, or already an active member',
+    },
+  },
+  {
+    method: 'POST',
     path: '/org/organisations/:orgId/teams/:teamId/invitations',
-    description: 'Bulk invite users to a team and send invitation emails',
-    auth: 'domain hash bearer token',
+    description: 'Dual-mode: with an X-UOA-Access-Token header, a single member-initiated invite gated by the org\'s member_invites setting (owner/admin always allowed; plain member per setting; no email enumeration in the response). Without that header, the original trusted-backend bulk invite (unchanged).',
+    auth: 'domain hash bearer token; add access token (X-UOA-Access-Token header) for the member-initiated variant',
     body: {
       'redirectUrl?': 'string — optional final OAuth redirect URL',
-      'invitedBy?': 'object — optional inviter metadata { userId?, name?, email? }',
-      invites: 'array (required, 1-200) — [{ email: string, name?: string, teamRole?: string }]',
+      'invitedBy?': 'object — backend-only variant: optional inviter metadata { userId?, name?, email? }',
+      'invites?': 'array (backend-only variant, required, 1-200) — [{ email: string, name?: string, teamRole?: string }]',
+      'email?': 'string — member-initiated variant (required instead of invites)',
+      'name?': 'string — member-initiated variant',
+      'teamRole?': 'string — member-initiated variant',
     },
     response: {
-      results: 'array — per-email status: invited | resent_existing | already_member | existing_user | conflict',
+      results: 'array (backend-only variant) — per-email status: invited | resent_existing | already_member | existing_user | conflict',
+      status: '"ok" (member-initiated variant) — always the same shape regardless of outcome (no enumeration)',
     },
   },
   {
@@ -274,14 +292,34 @@ const orgEndpoints: EndpointSchema[] = [
     description: 'List invitation history for a team',
     auth: 'domain hash bearer token',
     response: {
-      data: 'array — invite records with status, inviter, send/open, accepted/declined state',
+      data: 'array — invite records with status (pending|accepted|declined|replaced|expired), approval_status (not_required|pending|approved|denied), expiresAt, inviter, send/open, accepted/declined state',
     },
   },
   {
     method: 'POST',
     path: '/org/organisations/:orgId/teams/:teamId/invitations/:inviteId/resend',
-    description: 'Resend a pending team invitation email',
+    description: 'Resend a pending team invitation email; refreshes the invite\'s expiry to now + 30 days',
     auth: 'domain hash bearer token',
+  },
+  {
+    method: 'GET',
+    path: '/org/organisations/:orgId/invitations',
+    description: 'List invites awaiting member-invite approval for the organisation (requires ?approval=pending)',
+    auth: 'domain hash bearer token + access token (X-UOA-Access-Token header), owner/admin only',
+    query: { approval: 'string (required) — must be "pending"' },
+    response: { data: 'array — invite records with approval_status: pending' },
+  },
+  {
+    method: 'POST',
+    path: '/org/organisations/:orgId/invitations/:inviteId/approve',
+    description: 'Approve a PENDING member-initiated invite: sets approval_status APPROVED and sends the invite email',
+    auth: 'domain hash bearer token + access token (X-UOA-Access-Token header), owner/admin only',
+  },
+  {
+    method: 'POST',
+    path: '/org/organisations/:orgId/invitations/:inviteId/deny',
+    description: 'Deny a PENDING member-initiated invite: sets approval_status DENIED; sends nothing (silent to the invitee)',
+    auth: 'domain hash bearer token + access token (X-UOA-Access-Token header), owner/admin only',
   },
   {
     method: 'GET',

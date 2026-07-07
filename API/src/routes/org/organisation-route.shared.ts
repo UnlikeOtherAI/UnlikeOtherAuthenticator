@@ -35,6 +35,9 @@ export const OrgPathSchema = z.object({
 
 export const OrgBodySchema = z.object({
   name: z.string().trim().min(1).max(100),
+  // Member-initiated invite policy (design §4.7, Phase 4) — owner/admin only; omitted leaves the
+  // current setting unchanged. Validated against the allowed vocabulary at the service layer.
+  member_invites: z.enum(['allowed', 'admin_approval', 'disabled']).optional(),
 });
 
 export const AddMemberBodySchema = z.object({

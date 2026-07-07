@@ -12,6 +12,7 @@ import {
   isP2002Error,
   isP2003Error,
   normalizeDomain,
+  normalizeMemberInvitesSetting,
   parseOrgFeatureRoles,
   resolveOrganisationByDomain,
   toListLimit,
@@ -22,6 +23,17 @@ import {
   type OrganisationRecord,
 } from './organisation.service.base.js';
 import { deriveUniqueTeamSlug } from './team.service.base.js';
+
+const ORGANISATION_SELECT = {
+  id: true,
+  domain: true,
+  name: true,
+  slug: true,
+  ownerId: true,
+  memberInvites: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
 
 export async function listOrganisationsForDomain(
   params: { domain: string; limit?: number; cursor?: string },
@@ -44,15 +56,7 @@ export async function listOrganisationsForDomain(
     take: limit + 1,
     cursor: cursor ? { id: cursor } : undefined,
     skip: cursor ? 1 : 0,
-    select: {
-      id: true,
-      domain: true,
-      name: true,
-      slug: true,
-      ownerId: true,
-      createdAt: true,
-      updatedAt: true,
-    },
+    select: ORGANISATION_SELECT,
   });
 
   const data = rows.slice(0, limit).map(toOrganisationRecord);
@@ -107,15 +111,7 @@ export async function createOrganisation(
         slug,
         ownerId,
       },
-      select: {
-        id: true,
-        domain: true,
-        name: true,
-        slug: true,
-        ownerId: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+      select: ORGANISATION_SELECT,
     });
 
     const defaultTeam = await tx.team.create({
@@ -190,6 +186,7 @@ export async function updateOrganisation(
     name: string;
     actorUserId: string;
     config: ClientConfig;
+    memberInvites?: string;
   },
   deps?: OrgServiceDeps,
 ): Promise<OrganisationRecord> {
@@ -210,16 +207,16 @@ export async function updateOrganisation(
   const slug = await deriveSlugWithValidation(org.domain, prisma, name, org.slug);
   const updated = await prisma.organisation.update({
     where: { id: org.id },
-    data: { name, slug },
-    select: {
-      id: true,
-      domain: true,
-      name: true,
-      slug: true,
-      ownerId: true,
-      createdAt: true,
-      updatedAt: true,
+    data: {
+      name,
+      slug,
+      // Member-initiated invite policy (design §4.7, Phase 4) — owner/admin only, validated against
+      // the allowed/admin_approval/disabled vocabulary; omitted leaves the current setting unchanged.
+      ...(params.memberInvites !== undefined
+        ? { memberInvites: normalizeMemberInvitesSetting(params.memberInvites) }
+        : {}),
     },
+    select: ORGANISATION_SELECT,
   });
 
   return toOrganisationRecord(updated);
