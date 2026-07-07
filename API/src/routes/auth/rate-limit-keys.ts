@@ -97,6 +97,13 @@ export const selectTeamRateLimiter = composeRateLimiters(
   bodyRateLimiter('auth:select-team', 'login_token', 20, 15 * MINUTE_MS),
 );
 
+// Phase 3b follow-up: /auth/session-choices is gated by the same login_token bridge as
+// /auth/select-team — same IP + token-keyed shape so a leaked/guessed token can't be hammered.
+export const sessionChoicesRateLimiter = composeRateLimiters(
+  ipRateLimiter('auth:session-choices', 20, MINUTE_MS),
+  bodyRateLimiter('auth:session-choices', 'login_token', 20, 15 * MINUTE_MS),
+);
+
 export const resetRequestRateLimiter = composeRateLimiters(
   ipRateLimiter('auth:reset-request', 10, MINUTE_MS),
   bodyRateLimiter('auth:reset-request', 'email', 3, HOUR_MS),

@@ -1,7 +1,5 @@
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { PrismaClient } from '@prisma/client';
+import { describe, expect, it, vi } from 'vitest';
 
-import type { ClientConfig } from '../../src/services/config.service.js';
 import {
   addOrganisationMember,
   changeOrganisationMemberRole,
@@ -10,106 +8,21 @@ import {
   transferOrganisationOwnership,
 } from '../../src/services/organisation.service.members.js';
 import {
-  deactivateOrganisationMember,
-  reactivateOrganisationMember,
-} from '../../src/services/organisation.service.lifecycle.js';
-import { getOrganisationMember } from '../../src/services/organisation.service.base.js';
+  baseOrg,
+  makeConfig,
+  makePrismaMock,
+  now,
+  useOrganisationMembershipTestEnv,
+} from './helpers/organisation-service-membership-test-helpers.js';
 
-const now = new Date('2026-02-15T00:00:00.000Z');
-
-function makePrismaMock() {
-  const prisma = {
-    organisation: {
-      findFirst: vi.fn(),
-      findUnique: vi.fn(),
-      findUniqueOrThrow: vi.fn(),
-      update: vi.fn(),
-    },
-    orgMember: {
-      findMany: vi.fn(),
-      findFirst: vi.fn(),
-      findUnique: vi.fn(),
-      create: vi.fn(),
-      update: vi.fn(),
-      delete: vi.fn(),
-      deleteMany: vi.fn(),
-      count: vi.fn(),
-    },
-    team: {
-      findFirst: vi.fn(),
-      create: vi.fn(),
-    },
-    teamMember: {
-      findFirst: vi.fn(),
-      create: vi.fn(),
-      update: vi.fn(),
-      updateMany: vi.fn(),
-      deleteMany: vi.fn(),
-    },
-    group: {
-      findMany: vi.fn(),
-    },
-    groupMember: {
-      deleteMany: vi.fn(),
-    },
-    user: {
-      findUnique: vi.fn(),
-    },
-    $transaction: vi.fn(),
-  } as unknown as PrismaClient;
-
-  prisma.$transaction = vi.fn(async (callback: (tx: PrismaClient) => Promise<unknown>) => callback(prisma));
-
-  return prisma;
-}
-
-function makeConfig(overrides?: Partial<NonNullable<ClientConfig['org_features']>>): ClientConfig {
-  return {
-    org_features: {
-      enabled: true,
-      groups_enabled: false,
-      max_teams_per_org: 100,
-      max_groups_per_org: 20,
-      max_members_per_org: 1000,
-      max_members_per_team: 200,
-      max_members_per_group: 500,
-      max_team_memberships_per_user: 50,
-      org_roles: ['owner', 'admin', 'member'],
-      ...overrides,
-    },
-  } as unknown as ClientConfig;
-}
-
-const originalNodeEnv = process.env.NODE_ENV;
-const originalSharedSecret = process.env.SHARED_SECRET;
-const originalAuthServiceIdentifier = process.env.AUTH_SERVICE_IDENTIFIER;
-const originalDatabaseUrl = process.env.DATABASE_URL;
-
-const baseOrg = {
-  id: 'org-1',
-  domain: 'acme.example.com',
-  name: 'Acme',
-  slug: 'acme',
-  ownerId: 'u-owner',
-  createdAt: now,
-  updatedAt: now,
-};
-
+// CLAUDE.md 500-line split of the original organisation.service.membership.test.ts: member
+// add/list/role-change/remove/ownership-transfer. Deactivate/reactivate lifecycle lives in
+// organisation.service.membership.lifecycle.test.ts; the activeOnly actor-authorization filter
+// lives in organisation.service.membership.active-only.test.ts. Shared mocks/config/env setup
+// live in tests/unit/helpers/organisation-service-membership-test-helpers.ts. Only the location
+// changed — no assertion here was altered from the pre-split file.
 describe('Organisation service: membership', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    process.env.NODE_ENV = 'test';
-    process.env.SHARED_SECRET = 'test-shared-secret-with-enough-length';
-    process.env.AUTH_SERVICE_IDENTIFIER = 'uoa-auth-service';
-    process.env.DATABASE_URL = 'postgres://example.invalid/db';
-  });
-
-  afterAll(() => {
-    process.env.NODE_ENV = originalNodeEnv;
-    process.env.SHARED_SECRET = originalSharedSecret;
-    process.env.AUTH_SERVICE_IDENTIFIER = originalAuthServiceIdentifier;
-    process.env.DATABASE_URL = originalDatabaseUrl;
-  });
+  useOrganisationMembershipTestEnv();
 
   it('lists organisation members with cursor pagination', async () => {
     const prisma = makePrismaMock();
@@ -524,154 +437,6 @@ describe('Organisation service: membership', () => {
     // No existing default-team row was found, so it creates one rather than updating.
     expect(prisma.teamMember.create).toHaveBeenCalledWith({
       data: { teamId: 'team-default', userId: 'u-old' },
-    });
-  });
-});
-
-describe('Organisation service: member lifecycle (deactivate/reactivate)', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    process.env.NODE_ENV = 'test';
-    process.env.SHARED_SECRET = 'test-shared-secret-with-enough-length';
-    process.env.AUTH_SERVICE_IDENTIFIER = 'uoa-auth-service';
-    process.env.DATABASE_URL = 'postgres://example.invalid/db';
-  });
-
-  it('deactivates an ACTIVE member, cascades team rows, and revokes domain sessions', async () => {
-    const prisma = makePrismaMock();
-
-    prisma.organisation.findFirst.mockResolvedValue(baseOrg);
-    // Actor lookup (owner), then target member lookup (ACTIVE member).
-    prisma.orgMember.findFirst
-      .mockResolvedValueOnce({ id: 'm-owner', orgId: 'org-1', userId: 'u-owner', role: 'owner' })
-      .mockResolvedValueOnce({ id: 'member-target', role: 'member' });
-    prisma.orgMember.update.mockResolvedValue({ id: 'member-target', status: 'DEACTIVATED' });
-    prisma.teamMember.updateMany.mockResolvedValue({ count: 1 });
-
-    const revokeRefreshTokensForUserDomain = vi.fn().mockResolvedValue({ revokedCount: 1 });
-
-    const result = await deactivateOrganisationMember(
-      {
-        orgId: 'org-1',
-        domain: 'acme.example.com',
-        actorUserId: 'u-owner',
-        userId: 'u-member',
-      },
-      { prisma, revokeRefreshTokensForUserDomain },
-    );
-
-    expect(result).toEqual({ deactivated: true });
-    expect(prisma.orgMember.update).toHaveBeenCalledWith({
-      where: { id: 'member-target' },
-      data: { status: 'DEACTIVATED', statusChangedAt: expect.any(Date) },
-    });
-    expect(prisma.teamMember.updateMany).toHaveBeenCalledWith({
-      where: { userId: 'u-member', team: { orgId: 'org-1' }, status: 'ACTIVE' },
-      data: { status: 'DEACTIVATED', statusChangedAt: expect.any(Date) },
-    });
-    expect(revokeRefreshTokensForUserDomain).toHaveBeenCalledWith('u-member', 'acme.example.com');
-  });
-
-  it('rejects deactivating an owner', async () => {
-    const prisma = makePrismaMock();
-
-    prisma.organisation.findFirst.mockResolvedValue(baseOrg);
-    prisma.orgMember.findFirst
-      .mockResolvedValueOnce({ id: 'm-owner', orgId: 'org-1', userId: 'u-owner', role: 'owner' })
-      .mockResolvedValueOnce({ id: 'member-owner', role: 'owner' });
-
-    const revokeRefreshTokensForUserDomain = vi.fn();
-
-    const promise = deactivateOrganisationMember(
-      {
-        orgId: 'org-1',
-        domain: 'acme.example.com',
-        actorUserId: 'u-owner',
-        userId: 'u-owner-2',
-      },
-      { prisma, revokeRefreshTokensForUserDomain },
-    );
-
-    await expect(promise).rejects.toMatchObject({ code: 'BAD_REQUEST', statusCode: 400 });
-    expect(prisma.orgMember.update).not.toHaveBeenCalled();
-    expect(revokeRefreshTokensForUserDomain).not.toHaveBeenCalled();
-  });
-
-  it('returns NOT_FOUND when the target member is not ACTIVE', async () => {
-    const prisma = makePrismaMock();
-
-    prisma.organisation.findFirst.mockResolvedValue(baseOrg);
-    prisma.orgMember.findFirst
-      .mockResolvedValueOnce({ id: 'm-owner', orgId: 'org-1', userId: 'u-owner', role: 'owner' })
-      .mockResolvedValueOnce(null);
-
-    const promise = deactivateOrganisationMember(
-      {
-        orgId: 'org-1',
-        domain: 'acme.example.com',
-        actorUserId: 'u-owner',
-        userId: 'u-member',
-      },
-      { prisma },
-    );
-
-    await expect(promise).rejects.toMatchObject({ code: 'NOT_FOUND', statusCode: 404 });
-  });
-
-  it('reactivates a DEACTIVATED member without touching sessions', async () => {
-    const prisma = makePrismaMock();
-
-    prisma.organisation.findFirst.mockResolvedValue(baseOrg);
-    prisma.orgMember.findFirst
-      .mockResolvedValueOnce({ id: 'm-owner', orgId: 'org-1', userId: 'u-owner', role: 'owner' })
-      .mockResolvedValueOnce({ id: 'member-target' });
-    prisma.orgMember.update.mockResolvedValue({ id: 'member-target', status: 'ACTIVE' });
-    prisma.teamMember.updateMany.mockResolvedValue({ count: 1 });
-
-    const result = await reactivateOrganisationMember(
-      {
-        orgId: 'org-1',
-        domain: 'acme.example.com',
-        actorUserId: 'u-owner',
-        userId: 'u-member',
-      },
-      { prisma },
-    );
-
-    expect(result).toEqual({ reactivated: true });
-    expect(prisma.orgMember.update).toHaveBeenCalledWith({
-      where: { id: 'member-target' },
-      data: { status: 'ACTIVE', statusChangedAt: expect.any(Date) },
-    });
-    expect(prisma.teamMember.updateMany).toHaveBeenCalledWith({
-      where: { userId: 'u-member', team: { orgId: 'org-1' }, status: 'DEACTIVATED' },
-      data: { status: 'ACTIVE', statusChangedAt: expect.any(Date) },
-    });
-  });
-});
-
-describe('getOrganisationMember: activeOnly actor-authorization filter (§4.9)', () => {
-  it('adds status:ACTIVE to the where clause when activeOnly is set (deactivated actor has no powers)', async () => {
-    const findFirst = vi.fn().mockResolvedValue(null);
-    const prisma = { orgMember: { findFirst } } as unknown as PrismaClient;
-
-    await getOrganisationMember(prisma, { orgId: 'org-1', userId: 'actor-1' }, { activeOnly: true });
-
-    expect(findFirst).toHaveBeenCalledWith({
-      where: { orgId: 'org-1', userId: 'actor-1', status: 'ACTIVE' },
-      select: { id: true, orgId: true, userId: true, role: true },
-    });
-  });
-
-  it('omits the status filter by default so target lookups still find DEACTIVATED/REMOVED rows', async () => {
-    const findFirst = vi.fn().mockResolvedValue(null);
-    const prisma = { orgMember: { findFirst } } as unknown as PrismaClient;
-
-    await getOrganisationMember(prisma, { orgId: 'org-1', userId: 'target-1' });
-
-    expect(findFirst).toHaveBeenCalledWith({
-      where: { orgId: 'org-1', userId: 'target-1' },
-      select: { id: true, orgId: true, userId: true, role: true },
     });
   });
 });

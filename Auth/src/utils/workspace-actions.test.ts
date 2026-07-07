@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import * as api from './api.js';
-import { requestSignInCode, submitTeamSelection, submitVerifyCode } from './workspace-actions.js';
+import {
+  requestSignInCode,
+  submitSessionChoices,
+  submitTeamSelection,
+  submitVerifyCode,
+} from './workspace-actions.js';
 
 const QUERY = {
   configUrl: 'https://client.example.com/auth-config',
@@ -137,5 +142,40 @@ describe('requestSignInCode', () => {
     await requestSignInCode({ email: 'jo@example.com', ...QUERY });
 
     expect(spy).toHaveBeenCalledWith({ email: 'jo@example.com' }, QUERY);
+  });
+});
+
+describe('submitSessionChoices', () => {
+  it('calls fetchSessionChoices with the login_token and decodes the bare chooser payload', async () => {
+    const spy = vi.spyOn(api, 'fetchSessionChoices').mockResolvedValue({
+      ok: true,
+      status: 200,
+      data: {
+        teams: [{ teamId: 't1', orgId: 'o1', name: 'Team One', role: 'member' }],
+        pending_invites: [],
+        can_create_org: true,
+      },
+    });
+
+    const choices = await submitSessionChoices({ loginToken: 'bridge.jwt', ...QUERY });
+
+    expect(spy).toHaveBeenCalledWith({ login_token: 'bridge.jwt' }, QUERY);
+    expect(choices).toEqual({
+      teams: [{ teamId: 't1', orgId: 'o1', name: 'Team One', role: 'member' }],
+      pending_invites: [],
+      can_create_org: true,
+    });
+  });
+
+  it('returns null on an API failure', async () => {
+    vi.spyOn(api, 'fetchSessionChoices').mockResolvedValue({
+      ok: false,
+      status: 401,
+      error: null,
+      code: null,
+    });
+
+    const choices = await submitSessionChoices({ loginToken: 'bridge.jwt', ...QUERY });
+    expect(choices).toBeNull();
   });
 });

@@ -5,6 +5,7 @@ import {
   applyWorkspaceOutcome,
   interpretWorkspaceResponse,
   pickAutoSkipTeam,
+  toWorkspaceChoices,
 } from './workspace-response.js';
 
 const TEAM_A = { teamId: 'team-a', orgId: 'org-a', name: 'Backend Team', role: 'member' };
@@ -77,6 +78,39 @@ describe('interpretWorkspaceResponse', () => {
     expect(interpretWorkspaceResponse(null)).toEqual({ kind: 'error' });
     expect(interpretWorkspaceResponse({ ok: true })).toEqual({ kind: 'error' });
     expect(interpretWorkspaceResponse('not-an-object')).toEqual({ kind: 'error' });
+  });
+});
+
+describe('toWorkspaceChoices', () => {
+  it('decodes a bare /auth/session-choices payload (no login_token field)', () => {
+    const choices = toWorkspaceChoices({
+      teams: [TEAM_A],
+      pending_invites: [INVITE_A],
+      can_create_org: true,
+    });
+
+    expect(choices).toEqual({
+      teams: [TEAM_A],
+      pending_invites: [INVITE_A],
+      can_create_org: true,
+    });
+  });
+
+  it('drops malformed entries rather than throwing', () => {
+    const choices = toWorkspaceChoices({
+      teams: [TEAM_A, { teamId: 'missing-fields' }],
+      pending_invites: ['not-an-object'],
+      can_create_org: false,
+    });
+
+    expect(choices?.teams).toEqual([TEAM_A]);
+    expect(choices?.pending_invites).toEqual([]);
+  });
+
+  it('returns null for anything that is not a valid chooser payload', () => {
+    expect(toWorkspaceChoices(null)).toBeNull();
+    expect(toWorkspaceChoices({ can_create_org: true })).toBeNull();
+    expect(toWorkspaceChoices('not-an-object')).toBeNull();
   });
 });
 

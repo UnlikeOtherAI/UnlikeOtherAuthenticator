@@ -238,3 +238,31 @@ export function selectTeam(
     buildAuthFlowQuery(query),
   );
 }
+
+export type SessionChoicesRequest = { login_token: string };
+
+/**
+ * The bare chooser shape `/auth/session-choices` returns — unlike `WorkspaceChooserResponse` it
+ * never carries a `login_token` (the caller already holds one; that's what it sent).
+ */
+export type SessionChoicesResponse = {
+  teams: unknown[];
+  pending_invites: unknown[];
+  can_create_org: boolean;
+};
+
+/**
+ * POST /auth/session-choices — hydrate the chooser payload for a `login_token` seeded via a
+ * redirect (Phase 3c follow-up, design §4.3 Task 7 remainder: the social callback can't inline
+ * the chooser payload the way `/auth/verify-code`/`/auth/login` do).
+ */
+export function fetchSessionChoices(
+  body: SessionChoicesRequest,
+  query: AuthFlowQuery,
+): Promise<ApiResult<SessionChoicesResponse>> {
+  return postJson<SessionChoicesRequest, SessionChoicesResponse>(
+    '/auth/session-choices',
+    body,
+    buildAuthFlowQuery(query),
+  );
+}

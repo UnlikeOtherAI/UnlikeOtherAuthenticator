@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { LOGIN_SESSION_AUDIENCE } from '../../src/config/constants.js';
 import type { ClientConfig } from '../../src/services/config.service.js';
 import { testUiTheme } from '../helpers/test-config.js';
 
@@ -144,6 +145,13 @@ describe('POST /auth/login — workspace chooser wiring (Phase 3b Task 7)', () =
       can_create_org: false,
     });
     expect(finalizeAuthenticatedUserMock).not.toHaveBeenCalled();
+    // Regression guard: the login_token MUST be signed with LOGIN_SESSION_AUDIENCE, the same audience
+    // verify-code/select-team/session-choices verify against. Signing it with the auth-service
+    // identifier (as this route once did) makes the password → chooser → select-team flow fail
+    // token verification.
+    expect(signLoginSessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ audience: LOGIN_SESSION_AUDIENCE }),
+    );
   });
 
   it('workspace_selection "auto" but 2FA still required: 2FA challenge wins, chooser is not reached', async () => {

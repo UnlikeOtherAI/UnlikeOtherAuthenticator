@@ -84,6 +84,21 @@ export function interpretWorkspaceResponse(data: unknown): WorkspaceResponseOutc
 }
 
 /**
+ * Phase 3c follow-up (design §4.3 Task 7 remainder): decode a raw `POST /auth/session-choices`
+ * response — the bare `{ teams, pending_invites, can_create_org }` shape (no `login_token`, unlike
+ * the chooser-producing endpoints, since the caller already holds one) — into `WorkspaceChoices`.
+ * Returns null for anything that doesn't look like a valid payload (generic failure upstream).
+ */
+export function toWorkspaceChoices(data: unknown): WorkspaceChoices | null {
+  if (!isRecord(data) || !Array.isArray(data.teams)) return null;
+  return {
+    teams: toTeamChoices(data.teams),
+    pending_invites: toInviteChoices(data.pending_invites),
+    can_create_org: Boolean(data.can_create_org),
+  };
+}
+
+/**
  * Design §11.2: "the chooser is skipped automatically ... when the user has exactly one active
  * team and no pending invites." Returns the team to auto-select, or null when the chooser should
  * render normally.

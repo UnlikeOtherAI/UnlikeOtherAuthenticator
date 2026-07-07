@@ -12,6 +12,9 @@ import {
 } from '../../services/config.service.js';
 import { readConfigJwtFromTrustedSource } from '../../services/config-jwt-source.service.js';
 import { applyDomainRedirectAllowlist } from '../../services/domain-redirect-allowlist.service.js';
+import { LOGIN_SESSION_AUDIENCE } from '../../config/constants.js';
+import { buildWorkspaceChoices } from '../../services/first-login.service.js';
+import { signLoginSession } from '../../services/login-session.service.js';
 import { assertSocialProviderAllowed } from '../../services/social/index.js';
 import { getAppleProfileFromCode } from '../../services/social/apple.service.js';
 import { getFacebookProfileFromCode } from '../../services/social/facebook.service.js';
@@ -307,10 +310,27 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
           return { kind: 'twofa_enroll_required' as const, setupToken: setup.setup_token };
         }
 
-        // TODO(Phase 3b Task 7 follow-up): social callbacks don't yet route through the workspace
-        // chooser when config.login_flow.workspace_selection === 'auto' (deferred — flagged in the
-        // Phase 3b report; password login + magic-link/code already cover the chooser flow, and
-        // workspace_selection defaults to "off" so this is unchanged behaviour either way).
+        // Phase 3b Task 7 follow-up (design §4.3, §11.2): route social logins into the workspace
+        // chooser too, the same way login.ts already does for password logins. 2FA is already
+        // satisfied by this point — both branches above already returned otherwise. Unlike
+        // login.ts (a JSON POST that can inline the chooser payload), this is a GET redirect, so a
+        // login_token bridge is minted instead and the SPA hydrates the payload afterwards via
+        // POST /auth/session-choices. Pre-check team/invite counts here (mirroring the client-side
+        // auto-skip rule in §11.2) so a single-workspace/no-invite social user isn't bounced
+        // through an extra redirect round-trip for a chooser that would just auto-skip anyway.
+        if (config.login_flow?.workspace_selection === 'auto') {
+          const choices = await buildWorkspaceChoices({ userId, config }, { prisma });
+          if (choices.teams.length >= 2 || choices.pending_invites.length > 0) {
+            const loginToken = await signLoginSession({
+              userId,
+              domain: config.domain,
+              sharedSecret: SHARED_SECRET,
+              audience: LOGIN_SESSION_AUDIENCE,
+            });
+            return { kind: 'workspace_chooser' as const, loginToken };
+          }
+        }
+
         const finalResult = await finalizeAuthenticatedUser(
           {
             userId,
@@ -357,6 +377,19 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         u.searchParams.set('config_url', configUrl);
         u.searchParams.set('redirect_url', redirectUrl);
         u.searchParams.set('twofa_token', outcome.twofa_token);
+        if (socialState.request_access === true) {
+          u.searchParams.set('request_access', 'true');
+        }
+        redirectNoStore(reply, u.toString());
+        return;
+      }
+
+      if (outcome.kind === 'workspace_chooser') {
+        const u = new URL(`${baseUrl}/auth`);
+        u.searchParams.set('config_url', configUrl);
+        u.searchParams.set('redirect_url', redirectUrl);
+        u.searchParams.set('login_token', outcome.loginToken);
+        u.searchParams.set('flow', 'workspace_chooser');
         if (socialState.request_access === true) {
           u.searchParams.set('request_access', 'true');
         }

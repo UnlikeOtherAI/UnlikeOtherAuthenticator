@@ -7,7 +7,7 @@ import { usePopup } from '../hooks/use-popup.js';
 import { useTheme } from '../hooks/use-theme.js';
 import { useTranslation } from '../i18n/use-translation.js';
 import type { AuthFlowQuery } from '../utils/api.js';
-import { submitTeamSelection } from '../utils/workspace-actions.js';
+import { submitSessionChoices, submitTeamSelection } from '../utils/workspace-actions.js';
 import {
   applyWorkspaceOutcome,
   pickAutoSkipTeam,
@@ -19,6 +19,10 @@ import {
  * `workspaceChoices` from `usePopup()` — set by `CodeEntryPage` or a chooser-producing
  * `LoginForm` submit — and never round-trips to the server itself except through the
  * cards/auto-skip below (all funnelled through `submitTeamSelection`).
+ *
+ * Phase 3c follow-up (design §4.3 Task 7 remainder): the social callback can only seed
+ * `loginToken` via redirect (no inline payload), so when this page mounts with a `loginToken`
+ * but no `workspaceChoices` yet, it hydrates them itself via `POST /auth/session-choices`.
  */
 export function WorkspaceChooserPage(): React.JSX.Element {
   const { classNames } = useTheme();
@@ -42,7 +46,9 @@ export function WorkspaceChooserPage(): React.JSX.Element {
 
   const [error, setError] = useState<string | null>(null);
   const [autoSkipFailed, setAutoSkipFailed] = useState(false);
+  const [hydrateFailed, setHydrateFailed] = useState(false);
   const autoSkipStarted = useRef(false);
+  const hydrateStarted = useRef(false);
 
   const query = useMemo<AuthFlowQuery>(
     () => ({ configUrl, redirectUrl, codeChallenge, codeChallengeMethod, requestAccess }),
@@ -65,10 +71,28 @@ export function WorkspaceChooserPage(): React.JSX.Element {
     [setLoginToken, setWorkspaceChoices, setView, redirectTo, startTwoFactorVerify, startTwoFactorSetup, t],
   );
 
-  // Not reachable directly (no login_token / chooser payload yet) — bounce back to login.
+  // Not reachable directly (no login_token at all) — bounce back to login. A login_token with no
+  // workspaceChoices yet is the social-callback hydration path below, not an invalid state.
   useEffect(() => {
-    if (!loginToken || !workspaceChoices) setView('login');
-  }, [loginToken, workspaceChoices, setView]);
+    if (!loginToken) setView('login');
+  }, [loginToken, setView]);
+
+  // Phase 3c follow-up (design §4.3 Task 7 remainder): hydrate the chooser payload when we landed
+  // here via the social-callback redirect (loginToken seeded, workspaceChoices not — CodeEntryPage
+  // and the chooser-producing LoginForm always set both together, so this is a no-op for them).
+  useEffect(() => {
+    if (!loginToken || workspaceChoices || hydrateStarted.current) return;
+    hydrateStarted.current = true;
+    void (async () => {
+      const choices = await submitSessionChoices({ loginToken, ...query });
+      if (choices) {
+        setWorkspaceChoices(choices);
+      } else {
+        setHydrateFailed(true);
+        setError(t('form.error.generic'));
+      }
+    })();
+  }, [loginToken, workspaceChoices, query, setWorkspaceChoices, t]);
 
   // Design §11.2: a user with exactly one ACTIVE team and no pending invites never sees a
   // one-item chooser — select it for them as soon as the payload lands.
@@ -90,6 +114,13 @@ export function WorkspaceChooserPage(): React.JSX.Element {
   }, [loginToken, workspaceChoices, query, handleOutcome]);
 
   if (!loginToken || !workspaceChoices) {
+    if (hydrateFailed) {
+      return (
+        <div>
+          <p className="text-sm text-[var(--uoa-color-danger)]">{error ?? t('form.error.generic')}</p>
+        </div>
+      );
+    }
     return <div />;
   }
 

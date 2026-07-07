@@ -1,5 +1,10 @@
-import { authStart, selectTeam, verifyLoginCode, type AuthFlowQuery } from './api.js';
-import { interpretWorkspaceResponse, type WorkspaceResponseOutcome } from './workspace-response.js';
+import type { WorkspaceChoices } from '../hooks/use-popup.js';
+import { authStart, fetchSessionChoices, selectTeam, verifyLoginCode, type AuthFlowQuery } from './api.js';
+import {
+  interpretWorkspaceResponse,
+  toWorkspaceChoices,
+  type WorkspaceResponseOutcome,
+} from './workspace-response.js';
 
 /** POST /auth/verify-code, decoded into the next client step (Phase 3c, `CodeEntryPage`). */
 export async function submitVerifyCode(
@@ -35,4 +40,19 @@ export async function submitTeamSelection(
 export async function requestSignInCode(params: { email: string } & AuthFlowQuery): Promise<void> {
   const { email, ...query } = params;
   await authStart({ email }, query);
+}
+
+/**
+ * POST /auth/session-choices — hydrate the chooser payload for a `login_token` seeded via a
+ * redirect (Phase 3c follow-up, `WorkspaceChooserPage`'s social-callback hydration path). Unlike
+ * `submitTeamSelection`/`submitVerifyCode` this never resolves to a twofa/redirect outcome — 2FA
+ * already ran before the redirecting flow minted `login_token` — so the only results are the
+ * chooser payload or `null` (a generic failure, left for the caller to render).
+ */
+export async function submitSessionChoices(
+  params: { loginToken: string } & AuthFlowQuery,
+): Promise<WorkspaceChoices | null> {
+  const { loginToken, ...query } = params;
+  const result = await fetchSessionChoices({ login_token: loginToken }, query);
+  return result.ok ? toWorkspaceChoices(result.data) : null;
 }

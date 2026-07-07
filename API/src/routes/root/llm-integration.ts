@@ -260,9 +260,14 @@ token class from \`access_token\` and \`twofa_token\` and cannot be used for any
    2FA is already satisfied: it returns \`{ login_token, teams, pending_invites, can_create_org }\`
    instead of finalizing directly, and the client then calls \`/auth/select-team\`. With the default
    \`"off"\`, \`/auth/login\` is completely unchanged.
-
-Social login callbacks do not yet route through the chooser (password login and the email
-code/magic-link flow cover the core case); this is called out as a known gap, not a silent omission.
+5. Social login (\`GET /auth/callback/:provider\`) also routes into the chooser when
+   \`workspace_selection: "auto"\`, 2FA is already satisfied, and the user has 2+ ACTIVE teams or a
+   pending invite (single-team/no-invite users redirect straight to the code, matching the
+   client-side auto-skip rule). As a GET redirect it can't inline the chooser JSON, so it mints the
+   same \`login_token\` bridge and redirects to \`/auth?config_url=...&redirect_url=...&login_token=...&flow=workspace_chooser\`.
+   The Auth UI then calls \`POST /auth/session-choices?config_url=...\` \`{ login_token }\` to hydrate
+   \`{ teams, pending_invites, can_create_org }\` — generic rejection for an invalid/expired token, no
+   enumeration.
 
 ---
 

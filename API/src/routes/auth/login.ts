@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
+import { LOGIN_SESSION_AUDIENCE } from '../../config/constants.js';
 import { getAuthServiceIdentifier, requireEnv } from '../../config/env.js';
 import { asPrismaClient } from '../../db/tenant-context.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
@@ -135,7 +136,10 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
             userId,
             domain: config.domain,
             sharedSecret: SHARED_SECRET,
-            audience: getAuthServiceIdentifier(),
+            // Must match the audience verify-code/select-team/session-choices verify against
+            // (LOGIN_SESSION_AUDIENCE), NOT the auth-service identifier — otherwise a password-login
+            // login_token fails verifyLoginSession at select-team and the chooser flow breaks.
+            audience: LOGIN_SESSION_AUDIENCE,
           });
           const choices = await buildWorkspaceChoices({ userId, config }, { prisma });
           return { kind: 'workspace_chooser' as const, loginToken, choices };

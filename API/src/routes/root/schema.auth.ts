@@ -130,6 +130,22 @@ export const authEndpoints: EndpointSchema[] = [
   },
   {
     method: 'POST',
+    path: '/auth/session-choices',
+    description:
+      'Hydrate the workspace-chooser payload for a login_token bridge seeded via a redirect (currently: the social callback\'s workspace_chooser branch), since a GET redirect cannot inline the chooser JSON the way /auth/verify-code and /auth/login do. Rejects (generically) an invalid/expired login_token. Introduces no enumeration — it only ever answers for an already-verified login_token.',
+    auth: 'config_url query param + login_token body field',
+    query: { config_url: 'string (required)' },
+    body: {
+      login_token: 'string (required) — bridge token from the redirecting flow (e.g. the social callback)',
+    },
+    response: {
+      teams: 'array of { teamId, orgId, name, role } — this user\'s ACTIVE team memberships on this domain',
+      pending_invites: 'array of { inviteId, teamName, invitedBy } — pending invites for this email on this domain',
+      can_create_org: 'boolean',
+    },
+  },
+  {
+    method: 'POST',
     path: '/auth/register',
     description: 'User registration — sends verification email, or an inline already-registered response when the signed config opts in',
     auth: 'config_url query param',
@@ -300,7 +316,7 @@ export const authEndpoints: EndpointSchema[] = [
     method: 'GET',
     path: '/auth/callback/:provider',
     description:
-      'OAuth provider callback. Requires the signed `uoa_social_state` cookie set at /auth/social to match the nonce embedded in `state` (login-CSRF protection); the cookie is single-use and cleared on consume.',
+      'OAuth provider callback. Requires the signed `uoa_social_state` cookie set at /auth/social to match the nonce embedded in `state` (login-CSRF protection); the cookie is single-use and cleared on consume. On success, redirects with an authorization code by default; with a `twofa_token` challenge when 2FA is required; or, when `config.login_flow.workspace_selection` is "auto" and 2FA is already satisfied and the user has 2+ ACTIVE teams or a pending invite, with a `login_token` + `flow=workspace_chooser` bridge for `POST /auth/session-choices` (single-team/no-invite users redirect with a code exactly as before).',
   },
   {
     method: 'GET',

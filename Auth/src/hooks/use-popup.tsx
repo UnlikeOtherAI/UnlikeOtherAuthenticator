@@ -72,6 +72,13 @@ export type PopupQueryParams = {
    * straight to the scheme, so the browser tab isn't left blank.
    */
   handoffTarget: string | null;
+  /**
+   * Phase 3c follow-up (design §4.3 Task 7 remainder): the `login_token` bridge seeded via a
+   * redirect (currently: the social callback's workspace_chooser branch), only ever set alongside
+   * `flow=workspace_chooser`. Unlike `twofa_token`, the chooser payload itself doesn't fit in the
+   * URL — the SPA hydrates it afterwards via `POST /auth/session-choices`.
+   */
+  loginToken: string | null;
 };
 
 export type PopupContextValue = PopupQueryParams & {
@@ -88,8 +95,11 @@ export type PopupContextValue = PopupQueryParams & {
   /** The email a sign-in code was sent to (email-code and code-entry flow). */
   pendingEmail: string | null;
   setPendingEmail: (email: string | null) => void;
-  /** Bridge token from /auth/verify-code or a chooser-producing /auth/login (design §4.3). */
-  loginToken: string | null;
+  /**
+   * Bridge token from /auth/verify-code, a chooser-producing /auth/login (design §4.3), or the
+   * `login_token`/`flow=workspace_chooser` query pair seeded by the social callback (declared on
+   * `PopupQueryParams` above so it can be parsed from the URL like `twoFaToken`).
+   */
   setLoginToken: (token: string | null) => void;
   /** The workspace chooser payload for the current `loginToken`. */
   workspaceChoices: WorkspaceChoices | null;
@@ -125,6 +135,7 @@ export function parsePopupQueryParams(search: string): PopupQueryParams {
       state: null,
       resource: null,
       handoffTarget: null,
+      loginToken: null,
     };
   }
 
@@ -143,6 +154,11 @@ export function parsePopupQueryParams(search: string): PopupQueryParams {
   const state = params.get('state');
   const resource = params.get('resource');
   const handoffTarget = params.get('handoff_target');
+  // Phase 3c follow-up (design §4.3 Task 7 remainder): only trust `login_token` when the redirect
+  // also carries the `flow=workspace_chooser` marker — mirrors how `twofa_token` is scoped by its
+  // own dedicated query param, so a stray `login_token` on an unrelated redirect is never picked up.
+  const loginToken =
+    params.get('flow') === 'workspace_chooser' ? params.get('login_token') : null;
 
   const validTypes = ['VERIFY_EMAIL_SET_PASSWORD', 'VERIFY_EMAIL', 'LOGIN_LINK', 'PASSWORD_RESET'] as const;
   const emailTokenType = rawType && (validTypes as readonly string[]).includes(rawType)
@@ -163,6 +179,7 @@ export function parsePopupQueryParams(search: string): PopupQueryParams {
     state: state && state.trim() ? state : null,
     resource: resource && resource.trim() ? resource : null,
     handoffTarget: handoffTarget && handoffTarget.trim() ? handoffTarget : null,
+    loginToken: loginToken && loginToken.trim() ? loginToken : null,
   };
 }
 
@@ -178,6 +195,11 @@ function deriveInitialView(parsed: PopupQueryParams): AuthView {
   }
   if (parsed.requestAccessStatus === 'pending') {
     return 'access-requested';
+  }
+  if (parsed.loginToken) {
+    // Phase 3c follow-up (design §4.3 Task 7 remainder): the social callback seeded a login_token
+    // bridge via redirect. WorkspaceChooserPage hydrates workspaceChoices itself on mount.
+    return 'workspace-chooser';
   }
   if (parsed.emailToken && parsed.emailTokenType) {
     // Email link landing: show set-password for both registration+password and password reset.
@@ -225,7 +247,7 @@ export function PopupProvider(props: {
     () => props.initialPendingEmail ?? null,
   );
   const [loginToken, setLoginTokenState] = useState<string | null>(
-    () => props.initialLoginToken ?? null,
+    () => props.initialLoginToken ?? parsed.loginToken,
   );
   const [workspaceChoices, setWorkspaceChoicesState] = useState<WorkspaceChoices | null>(
     () => props.initialWorkspaceChoices ?? null,
