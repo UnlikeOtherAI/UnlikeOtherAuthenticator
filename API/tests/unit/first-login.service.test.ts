@@ -153,7 +153,7 @@ describe('first-login.service', () => {
     });
 
     expect(prisma.orgMember.findMany).toHaveBeenCalledWith({
-      where: { userId: 'user-1', org: { domain: 'client.example.com' } },
+      where: { userId: 'user-1', status: 'ACTIVE', org: { domain: 'client.example.com' } },
       select: { orgId: true, role: true },
     });
     expect(prisma.teamInvite.findMany).toHaveBeenCalledWith({

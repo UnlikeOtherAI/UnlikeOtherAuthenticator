@@ -1,6 +1,7 @@
 import type { ClientConfig } from './config.service.js';
 import { getEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
+import { runInTransaction } from '../db/tenant-context.js';
 import { AppError } from '../utils/errors.js';
 
 import {
@@ -70,8 +71,10 @@ export async function addTeamMember(
     throw new AppError('NOT_FOUND', 404);
   }
 
-  return await prisma.$transaction(async (tx) => {
-    const memberCount = await tx.teamMember.count({ where: { teamId: team.id } });
+  return await runInTransaction(prisma, async (tx) => {
+    const memberCount = await tx.teamMember.count({
+      where: { teamId: team.id, status: 'ACTIVE' },
+    });
     if (memberCount >= maxMembersPerTeam) {
       throw new AppError('BAD_REQUEST', 400);
     }
@@ -82,30 +85,54 @@ export async function addTeamMember(
         team: {
           orgId: org.id,
         },
+        status: 'ACTIVE',
       },
     });
     if (userMemberships >= maxTeamMembershipsPerUser) {
       throw new AppError('BAD_REQUEST', 400);
     }
 
-    try {
-      const created = await tx.teamMember.create({
-        data: {
-          teamId: team.id,
-          userId,
-          teamRole,
-        },
-        select: {
-          id: true,
-          teamId: true,
-          userId: true,
-          teamRole: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-      });
+    // A prior DEACTIVATED/REMOVED (teamId, userId) row is reactivated instead of rejected
+    // (design §4.1: statuses are tombstones under the same unique constraint).
+    const existing = await tx.teamMember.findFirst({
+      where: { teamId: team.id, userId },
+      select: { id: true, status: true },
+    });
+    if (existing && existing.status === 'ACTIVE') {
+      throw new AppError('BAD_REQUEST', 400);
+    }
 
-      return toTeamMemberRecord(created);
+    try {
+      const record = existing
+        ? await tx.teamMember.update({
+            where: { id: existing.id },
+            data: { teamRole, status: 'ACTIVE', statusChangedAt: new Date() },
+            select: {
+              id: true,
+              teamId: true,
+              userId: true,
+              teamRole: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+          })
+        : await tx.teamMember.create({
+            data: {
+              teamId: team.id,
+              userId,
+              teamRole,
+            },
+            select: {
+              id: true,
+              teamId: true,
+              userId: true,
+              teamRole: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+          });
+
+      return toTeamMemberRecord(record);
     } catch (err) {
       if (isP2002Error(err)) {
         throw new AppError('BAD_REQUEST', 400);
@@ -156,10 +183,12 @@ export async function changeTeamMemberRole(
     throw new AppError('NOT_FOUND', 404);
   }
 
+  // A non-ACTIVE (DEACTIVATED/REMOVED) team member has no role to change.
   const member = await prisma.teamMember.findFirst({
     where: {
       teamId: team.id,
       userId,
+      status: 'ACTIVE',
     },
     select: { id: true },
   });
@@ -233,13 +262,15 @@ export async function removeTeamMember(
     throw new AppError('NOT_FOUND', 404);
   }
 
-  return await prisma.$transaction(async (tx) => {
+  return await runInTransaction(prisma, async (tx) => {
+    // "Cannot leave your last team" counts ACTIVE team memberships only (design §4.5).
     const userTeamCount = await tx.teamMember.count({
       where: {
         userId,
         team: {
           orgId: org.id,
         },
+        status: 'ACTIVE',
       },
     });
 
@@ -247,7 +278,12 @@ export async function removeTeamMember(
       throw new AppError('BAD_REQUEST', 400);
     }
 
-    await tx.teamMember.delete({ where: { id: membership.id } });
+    // Team removal is a tombstone, not a delete (design §4.5) — org identity is untouched;
+    // no session revocation here, org membership is the session scope.
+    await tx.teamMember.update({
+      where: { id: membership.id },
+      data: { status: 'REMOVED', statusChangedAt: new Date() },
+    });
 
     return { removed: true };
   });

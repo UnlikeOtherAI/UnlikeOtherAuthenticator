@@ -1,6 +1,7 @@
 import type { ClientConfig } from './config.service.js';
 import { getEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
+import { runInTransaction } from '../db/tenant-context.js';
 import { AppError } from '../utils/errors.js';
 
 import {
@@ -80,7 +81,7 @@ export async function createOrganisation(
 
   const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
 
-  return await prisma.$transaction(async (tx) => {
+  return await runInTransaction(prisma, async (tx) => {
     const ownerInDomainOrg = await tx.orgMember.findFirst({
       where: {
         userId: ownerId,
@@ -174,7 +175,7 @@ export async function getOrganisation(
   // re-verify actor membership here so the service contract matches
   // updateOrganisation/deleteOrganisation and cannot leak org data if a future
   // route refactor omits the role guard.
-  const actorMembership = await getOrganisationMember(prisma, { orgId: row.id, userId: actorUserId });
+  const actorMembership = await getOrganisationMember(prisma, { orgId: row.id, userId: actorUserId }, { activeOnly: true });
   if (!actorMembership) {
     throw new AppError('FORBIDDEN', 403);
   }
@@ -201,7 +202,7 @@ export async function updateOrganisation(
   const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
   const org = await resolveOrganisationByDomain(prisma, params);
 
-  const actorMembership = await getOrganisationMember(prisma, { orgId: org.id, userId: actorUserId });
+  const actorMembership = await getOrganisationMember(prisma, { orgId: org.id, userId: actorUserId }, { activeOnly: true });
   if (!actorMembership || (actorMembership.role !== 'owner' && actorMembership.role !== 'admin')) {
     throw new AppError('FORBIDDEN', 403);
   }

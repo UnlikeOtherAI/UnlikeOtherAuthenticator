@@ -163,6 +163,15 @@ Server-side behaviour on first verified login is controlled by \`org_features\`:
 - \`auto_create_personal_org_on_first_login\` (default \`false\`) creates a personal org with the user as \`owner\` plus a default team when no mapping matches. Skipped when \`pending_invites_block_auto_create\` is \`true\` and a pending invite exists for the email.
 - \`allow_user_create_org\` (default \`false\`) gates \`POST /org/organisations\` for end-users. Superusers bypass. Keep \`false\` for admin-provisioned tenants.
 
+### 4.7 Organisation member lifecycle — deactivate, reactivate, soft-remove
+
+Membership rows carry a \`status\`: \`ACTIVE\` | \`DEACTIVATED\` | \`REMOVED\`. Deactivation suspends access without deleting history (Slack's "deactivate", not "kick"); removal is a tombstone, not a hard delete, so audit history survives.
+
+- \`POST /org/organisations/:orgId/members/:userId/deactivate\` — suspends the member: their org and team rows move to \`DEACTIVATED\`, and their refresh-token sessions **on this domain only** are revoked (their sessions on other domains, if any, are untouched — a user belongs to at most one org per domain, so domain-scoped revocation is exactly org-scoped revocation). Cannot deactivate an \`owner\` — transfer ownership first. The user disappears from \`GET /org/organisations/:orgId/members\` (default view) and from \`firstLogin\`/\`GET /org/me\` on their next token refresh.
+- \`POST /org/organisations/:orgId/members/:userId/reactivate\` — flips a \`DEACTIVATED\` member back to \`ACTIVE\`. No sessions are restored; the user simply signs in again.
+- \`DELETE /org/organisations/:orgId/members/:userId\` — now a soft-remove: status becomes \`REMOVED\` (not a row delete) and the domain-scoped session revocation above applies. Re-adding a previously removed user via \`POST /org/organisations/:orgId/members\` **reactivates** their existing row (and re-activates their default-team membership) instead of rejecting with "already a member".
+- \`GET /org/organisations/:orgId/members\` defaults to \`ACTIVE\` members only. Pass \`?status=DEACTIVATED\`, \`?status=REMOVED\`, or \`?status=all\` to see other lifecycle states (e.g. for an admin roster view that lists suspended/removed accounts).
+
 To revoke on logout:
 
 \`\`\`text

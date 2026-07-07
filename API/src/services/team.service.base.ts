@@ -228,7 +228,7 @@ export async function requireTeamManager(
   orgId: string,
   userId: string,
 ): Promise<void> {
-  const actorMembership = await getOrganisationMember(prisma, { orgId, userId });
+  const actorMembership = await getOrganisationMember(prisma, { orgId, userId }, { activeOnly: true });
   if (!actorMembership || !isTeamManager(actorMembership.role)) {
     throw new AppError('FORBIDDEN', 403);
   }
@@ -256,7 +256,7 @@ export async function resolveAndAuthorizeTeamOrg(
   const actorMembership = await getOrganisationMember(prisma, {
     orgId: org.id,
     userId: params.actorUserId,
-  });
+  }, { activeOnly: true });
   if (!actorMembership) {
     throw new AppError('FORBIDDEN', 403);
   }

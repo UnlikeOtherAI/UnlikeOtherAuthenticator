@@ -5,6 +5,7 @@ import { importJWK, type JWK, type KeyLike } from 'jose';
 import { z } from 'zod';
 
 import { getAdminPrisma } from '../db/prisma.js';
+import { runInTransaction } from '../db/tenant-context.js';
 import { normalizeDomain } from '../utils/domain.js';
 import { AppError } from '../utils/errors.js';
 import { writeAuditLog, type AuditLogPrisma } from './audit-log.service.js';
@@ -150,7 +151,7 @@ export async function addJwkForDomain(
   const fingerprint = computeJwkFingerprint(jwk);
 
   const prisma = prismaClient(deps);
-  return prisma.$transaction(async (tx) => {
+  return runInTransaction(prisma as unknown as PrismaClient, async (tx) => {
     const domainRow = await tx.clientDomain.findUnique({
       where: { domain: normalized },
       select: { id: true },
@@ -207,7 +208,7 @@ export async function deactivateJwk(
 ): Promise<ClientDomainJwkRow> {
   const normalized = normalizeDomain(params.domain);
   const prisma = prismaClient(deps);
-  return prisma.$transaction(async (tx) => {
+  return runInTransaction(prisma as unknown as PrismaClient, async (tx) => {
     const domainRow = await tx.clientDomain.findUnique({
       where: { domain: normalized },
       select: { id: true },

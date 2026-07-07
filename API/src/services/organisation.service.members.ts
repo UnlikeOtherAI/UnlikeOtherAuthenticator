@@ -1,15 +1,15 @@
+import type { MembershipStatus } from '@prisma/client';
+
 import type { ClientConfig } from './config.service.js';
 import { getEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
+import { runInTransaction } from '../db/tenant-context.js';
 import { AppError } from '../utils/errors.js';
-import {
-  writeOrgAuditLog,
-  type OrgAuditAction,
-  type OrgAuditTargetType,
-} from './org-audit-log.service.js';
+import { revokeRefreshTokensForUserDomain } from './refresh-token.service.js';
 
 import {
   assertDatabaseEnabled,
+  auditOrg,
   ensureOrgRole,
   getOrganisationMember,
   parseOrgFeatureRoles,
@@ -25,8 +25,24 @@ import {
   type OrganisationRecord,
 } from './organisation.service.base.js';
 
+const MEMBER_SELECT = {
+  id: true,
+  orgId: true,
+  userId: true,
+  role: true,
+  status: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
+
 export async function listOrganisationMembers(
-  params: { orgId: string; domain: string; limit?: number; cursor?: string },
+  params: {
+    orgId: string;
+    domain: string;
+    limit?: number;
+    cursor?: string;
+    status?: MembershipStatus | 'all';
+  },
   deps?: OrgServiceDeps,
 ): Promise<CursorList<OrganisationMemberRecord>> {
   const env = deps?.env ?? getEnv();
@@ -37,50 +53,19 @@ export async function listOrganisationMembers(
 
   const limit = toListLimit(params.limit);
   const cursor = params.cursor?.trim();
+  const status = params.status ?? 'ACTIVE';
   const rows = await prisma.orgMember.findMany({
-    where: { orgId: org.id },
+    where: { orgId: org.id, ...(status === 'all' ? {} : { status }) },
     orderBy: { createdAt: 'desc' },
     take: limit + 1,
     cursor: cursor ? { id: cursor } : undefined,
     skip: cursor ? 1 : 0,
-    select: {
-      id: true,
-      orgId: true,
-      userId: true,
-      role: true,
-      createdAt: true,
-      updatedAt: true,
-    },
+    select: MEMBER_SELECT,
   });
 
   const data = rows.slice(0, limit).map(toMemberRecord);
   const nextCursorRow = rows[limit];
   return { data, next_cursor: nextCursorRow ? nextCursorRow.id : null };
-}
-
-// Best-effort org audit write (design §4.10). Runs via the BYPASSRLS admin client AFTER the primary
-// mutation has committed, and swallows errors, so auditing can never roll back or fail the mutation
-// it records.
-async function auditOrg(params: {
-  orgId: string;
-  actorUserId: string;
-  action: OrgAuditAction;
-  targetType: OrgAuditTargetType;
-  targetId: string;
-  metadata?: Record<string, string | number | boolean | null>;
-}): Promise<void> {
-  try {
-    await writeOrgAuditLog({
-      orgId: params.orgId,
-      actorUserId: params.actorUserId,
-      action: params.action,
-      targetType: params.targetType,
-      targetId: params.targetId,
-      metadata: params.metadata ?? {},
-    });
-  } catch {
-    // Auditing is non-critical; the mutation has already succeeded.
-  }
 }
 
 export async function addOrganisationMember(
@@ -109,7 +94,7 @@ export async function addOrganisationMember(
   const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
   const org = await resolveOrganisationByDomain(prisma, params);
 
-  const actorMembership = await getOrganisationMember(prisma, { orgId: org.id, userId: actorUserId });
+  const actorMembership = await getOrganisationMember(prisma, { orgId: org.id, userId: actorUserId }, { activeOnly: true });
   if (!actorMembership || (actorMembership.role !== 'owner' && actorMembership.role !== 'admin')) {
     throw new AppError('FORBIDDEN', 403);
   }
@@ -119,18 +104,24 @@ export async function addOrganisationMember(
     throw new AppError('FORBIDDEN', 403);
   }
 
-  const createdMember = await prisma.$transaction(async (tx) => {
+  const { member: createdMember, reactivated } = await runInTransaction(prisma, async (tx) => {
+    // Include the status so a prior DEACTIVATED/REMOVED row can be reactivated instead of
+    // rejected (design §4.1: statuses are tombstones, re-adding flips them back to ACTIVE).
     const existingMemberInOrg = await tx.orgMember.findFirst({
       where: { orgId: org.id, userId },
-      select: { id: true },
+      select: { id: true, status: true },
     });
-    if (existingMemberInOrg) {
+    if (existingMemberInOrg && existingMemberInOrg.status === 'ACTIVE') {
       throw new AppError('BAD_REQUEST', 400);
     }
 
+    // A REMOVED/DEACTIVATED membership elsewhere on the domain must not block re-adding this
+    // org's own (possibly reactivated) row — only an ACTIVE membership elsewhere violates the
+    // one-org-per-domain invariant.
     const existingMemberInDomain = await tx.orgMember.findFirst({
       where: {
         userId,
+        status: 'ACTIVE',
         org: { domain: org.domain },
       },
       select: { id: true },
@@ -139,7 +130,7 @@ export async function addOrganisationMember(
       throw new AppError('BAD_REQUEST', 400);
     }
 
-    const memberCount = await tx.orgMember.count({ where: { orgId: org.id } });
+    const memberCount = await tx.orgMember.count({ where: { orgId: org.id, status: 'ACTIVE' } });
     if (memberCount >= maxMembers) throw new AppError('BAD_REQUEST', 400);
 
     const targetUser = await tx.user.findUnique({ where: { id: userId }, select: { id: true, domain: true } });
@@ -147,22 +138,6 @@ export async function addOrganisationMember(
     if (targetUser.domain && targetUser.domain !== org.domain) {
       throw new AppError('BAD_REQUEST', 400);
     }
-
-    const created = await tx.orgMember.create({
-      data: {
-        orgId: org.id,
-        userId,
-        role,
-      },
-      select: {
-        id: true,
-        orgId: true,
-        userId: true,
-        role: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
 
     const defaultTeam = await tx.team.findFirst({
       where: { orgId: org.id, isDefault: true },
@@ -172,11 +147,46 @@ export async function addOrganisationMember(
       throw new AppError('INTERNAL', 500, 'DEFAULT_TEAM_MISSING');
     }
 
+    if (existingMemberInOrg) {
+      const now = new Date();
+      const reactivatedMember = await tx.orgMember.update({
+        where: { id: existingMemberInOrg.id },
+        data: { role, status: 'ACTIVE', statusChangedAt: now },
+        select: MEMBER_SELECT,
+      });
+
+      const existingTeamMembership = await tx.teamMember.findFirst({
+        where: { teamId: defaultTeam.id, userId },
+        select: { id: true },
+      });
+      if (existingTeamMembership) {
+        await tx.teamMember.update({
+          where: { id: existingTeamMembership.id },
+          data: { status: 'ACTIVE', statusChangedAt: now },
+        });
+      } else {
+        await tx.teamMember.create({
+          data: { teamId: defaultTeam.id, userId },
+        });
+      }
+
+      return { member: reactivatedMember, reactivated: true };
+    }
+
+    const created = await tx.orgMember.create({
+      data: {
+        orgId: org.id,
+        userId,
+        role,
+      },
+      select: MEMBER_SELECT,
+    });
+
     await tx.teamMember.create({
       data: { teamId: defaultTeam.id, userId },
     });
 
-    return created;
+    return { member: created, reactivated: false };
   });
 
   await auditOrg({
@@ -185,7 +195,7 @@ export async function addOrganisationMember(
     action: 'member.added',
     targetType: 'org_member',
     targetId: createdMember.id,
-    metadata: { userId, role },
+    metadata: reactivated ? { userId, role, reactivated: true } : { userId, role },
   });
 
   return toMemberRecord(createdMember);
@@ -217,7 +227,12 @@ export async function changeOrganisationMemberRole(
   const org = await resolveOrganisationByDomain(prisma, params);
   if (org.ownerId !== actorUserId) throw new AppError('FORBIDDEN', 403);
 
-  const member = await getOrganisationMember(prisma, { orgId: org.id, userId });
+  // A non-ACTIVE (DEACTIVATED/REMOVED) member has no role to change (design §4.9: membership
+  // checks require ACTIVE).
+  const member = await prisma.orgMember.findFirst({
+    where: { orgId: org.id, userId, status: 'ACTIVE' },
+    select: { id: true, orgId: true, userId: true, role: true },
+  });
   if (!member) throw new AppError('NOT_FOUND', 404);
   if (member.userId === org.ownerId && role !== 'owner') {
     throw new AppError('BAD_REQUEST', 400);
@@ -227,14 +242,7 @@ export async function changeOrganisationMemberRole(
   const updated = await prisma.orgMember.update({
     where: { id: member.id },
     data: { role },
-    select: {
-      id: true,
-      orgId: true,
-      userId: true,
-      role: true,
-      createdAt: true,
-      updatedAt: true,
-    },
+    select: MEMBER_SELECT,
   });
 
   await auditOrg({
@@ -256,7 +264,9 @@ export async function removeOrganisationMember(
     actorUserId: string;
     userId: string;
   },
-  deps?: OrgServiceDeps,
+  deps?: OrgServiceDeps & {
+    revokeRefreshTokensForUserDomain?: typeof revokeRefreshTokensForUserDomain;
+  },
 ): Promise<{ removed: boolean }> {
   const env = deps?.env ?? getEnv();
   assertDatabaseEnabled(env);
@@ -268,7 +278,7 @@ export async function removeOrganisationMember(
   const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
   const org = await resolveOrganisationByDomain(prisma, params);
 
-  const actorMembership = await getOrganisationMember(prisma, { orgId: org.id, userId: actorUserId });
+  const actorMembership = await getOrganisationMember(prisma, { orgId: org.id, userId: actorUserId }, { activeOnly: true });
   if (!actorMembership || (actorMembership.role !== 'owner' && actorMembership.role !== 'admin')) {
     throw new AppError('FORBIDDEN', 403);
   }
@@ -282,20 +292,27 @@ export async function removeOrganisationMember(
     throw new AppError('FORBIDDEN', 403);
   }
 
-  const ownerCount = await prisma.orgMember.count({ where: { orgId: org.id, role: 'owner' } });
+  // Owner-count guards must count ACTIVE owners only (design §4.1/§4.5) — a REMOVED/DEACTIVATED
+  // owner row must not be able to block the last remaining active owner from being removed, nor
+  // count toward "there is still another owner".
+  const ownerCount = await prisma.orgMember.count({
+    where: { orgId: org.id, role: 'owner', status: 'ACTIVE' },
+  });
   if (member.role === 'owner' && ownerCount <= 1) {
     throw new AppError('BAD_REQUEST', 400);
   }
 
-  await prisma.$transaction(async (tx) => {
-    const ownerCountTx = await tx.orgMember.count({ where: { orgId: org.id, role: 'owner' } });
+  await runInTransaction(prisma, async (tx) => {
+    const ownerCountTx = await tx.orgMember.count({
+      where: { orgId: org.id, role: 'owner', status: 'ACTIVE' },
+    });
     if (member.role === 'owner' && ownerCountTx <= 1) {
       throw new AppError('BAD_REQUEST', 400);
     }
 
     const owners = member.userId === org.ownerId
       ? await tx.orgMember.findMany({
-          where: { orgId: org.id, role: 'owner', userId: { not: member.userId } },
+          where: { orgId: org.id, role: 'owner', status: 'ACTIVE', userId: { not: member.userId } },
           select: { userId: true },
         })
       : [];
@@ -307,14 +324,20 @@ export async function removeOrganisationMember(
       });
     }
 
-    await tx.teamMember.deleteMany({
+    const now = new Date();
+
+    await tx.teamMember.updateMany({
       where: {
         userId,
         team: {
           orgId: org.id,
         },
+        status: { not: 'REMOVED' },
       },
+      data: { status: 'REMOVED', statusChangedAt: now },
     });
+    // Groups have no status column (no lifecycle tombstone for group membership) — hard delete
+    // remains correct here.
     await tx.groupMember.deleteMany({
       where: {
         userId,
@@ -323,8 +346,23 @@ export async function removeOrganisationMember(
         },
       },
     });
-    await tx.orgMember.delete({ where: { id: member.id } });
+    await tx.orgMember.update({
+      where: { id: member.id },
+      data: { status: 'REMOVED', statusChangedAt: now },
+    });
   });
+
+  // Domain-scoped session revocation runs AFTER the tenant transaction commits, via the admin
+  // client, best-effort — a revoke failure must not undo (or appear to undo) the removal that
+  // already succeeded.
+  try {
+    await (deps?.revokeRefreshTokensForUserDomain ?? revokeRefreshTokensForUserDomain)(
+      userId,
+      org.domain,
+    );
+  } catch {
+    // Best-effort; the removal already succeeded.
+  }
 
   await auditOrg({
     orgId: org.id,
@@ -364,7 +402,7 @@ export async function transferOrganisationOwnership(
   const newOwnerMembership = await getOrganisationMember(prisma, { orgId: org.id, userId: newOwnerId });
   if (!newOwnerMembership) throw new AppError('NOT_FOUND', 404);
 
-  const updated = await prisma.$transaction(async (tx) => {
+  const updated = await runInTransaction(prisma, async (tx) => {
     await tx.organisation.update({
       where: { id: org.id },
       data: { ownerId: newOwnerId },

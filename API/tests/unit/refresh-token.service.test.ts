@@ -7,6 +7,7 @@ import {
   exchangeRefreshToken,
   issueRefreshToken,
   revokeRefreshTokenFamily,
+  revokeRefreshTokensForUserDomain,
 } from '../../src/services/refresh-token.service.js';
 
 function hashRefreshToken(token: string, sharedSecret: string): string {
@@ -356,5 +357,31 @@ describe('refresh-token.service (unit)', () => {
       where: { id: 'user-1' },
       data: { tokenVersion: { increment: 1 } },
     });
+  });
+
+  it('revokes only this domain\'s refresh tokens and does NOT bump the user token version', async () => {
+    const userUpdate = vi.fn();
+    const prisma = {
+      refreshToken: {
+        updateMany: vi.fn().mockResolvedValue({ count: 3 }),
+      },
+      user: {
+        update: userUpdate,
+      },
+    } as unknown as PrismaClient;
+
+    const result = await revokeRefreshTokensForUserDomain('user-1', context.domain, {
+      now: () => now,
+      prisma,
+    });
+
+    expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
+      where: { userId: 'user-1', domain: context.domain, revokedAt: null },
+      data: { revokedAt: now },
+    });
+    expect(result).toEqual({ revokedCount: 3 });
+    // Domain-scoped revocation must never touch the global per-user token version — that would
+    // also invalidate the user's sessions on other domains.
+    expect(userUpdate).not.toHaveBeenCalled();
   });
 });

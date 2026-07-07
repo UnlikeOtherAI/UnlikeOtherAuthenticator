@@ -285,6 +285,27 @@ export async function bumpUserTokenVersion(
 }
 
 /**
+ * Domain-scoped session revocation (design §4.5). Revokes every live refresh token for this user on
+ * this domain. Because a user belongs to exactly one org per domain, this is the correct scope for
+ * deactivating/removing an org membership. Deliberately does NOT bump the global user token version
+ * (that would also invalidate the user's sessions on other domains). Existing short-lived access
+ * tokens on this domain expire naturally; they simply cannot be renewed.
+ */
+export async function revokeRefreshTokensForUserDomain(
+  userId: string,
+  domain: string,
+  deps?: { now?: () => Date; prisma?: RefreshTokenPrisma },
+): Promise<{ revokedCount: number }> {
+  const prisma = deps?.prisma ?? (getAdminPrisma() as unknown as RefreshTokenPrisma);
+  const now = deps?.now ? deps.now() : new Date();
+  const result = await prisma.refreshToken.updateMany({
+    where: { userId, domain, revokedAt: null },
+    data: { revokedAt: now },
+  });
+  return { revokedCount: result.count };
+}
+
+/**
  * Revoke every active refresh token belonging to a user, across all domains/clients.
  *
  * Used on credential-changing events (password reset, 2FA reset, set-password-on-verify)

@@ -1,6 +1,7 @@
 import type { ClientConfig } from './config.service.js';
 import { getEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
+import { runInTransaction } from '../db/tenant-context.js';
 import { AppError } from '../utils/errors.js';
 
 import {
@@ -109,7 +110,7 @@ export async function createTeam(
 
   await requireTeamManager(prisma, org.id, actorUserId);
 
-  return await prisma.$transaction(async (tx) => {
+  return await runInTransaction(prisma, async (tx) => {
     const teamCount = await tx.team.count({ where: { orgId: org.id } });
     if (teamCount >= maxTeams) {
       throw new AppError('BAD_REQUEST', 400);
@@ -198,6 +199,7 @@ export async function getTeam(
       createdAt: true,
       updatedAt: true,
       members: {
+        where: { status: 'ACTIVE' },
         orderBy: { createdAt: 'desc' },
         select: {
           id: true,
@@ -350,7 +352,7 @@ export async function deleteTeam(
     throw new AppError('BAD_REQUEST', 400);
   }
 
-  await prisma.$transaction(async (tx) => {
+  await runInTransaction(prisma, async (tx) => {
     const defaultTeam = await tx.team.findFirst({
       where: { orgId: org.id, isDefault: true },
       select: { id: true },
@@ -360,7 +362,7 @@ export async function deleteTeam(
     }
 
     const members = await tx.teamMember.findMany({
-      where: { teamId: team.id },
+      where: { teamId: team.id, status: 'ACTIVE' },
       select: { userId: true },
     });
 
@@ -371,6 +373,7 @@ export async function deleteTeam(
           team: {
             orgId: org.id,
           },
+          status: 'ACTIVE',
         },
       });
 

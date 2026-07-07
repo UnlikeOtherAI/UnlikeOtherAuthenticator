@@ -1,5 +1,6 @@
 import { getAdminAuthDomain, getEnv } from '../config/env.js';
 import { getAdminPrisma } from '../db/prisma.js';
+import { runInTransaction } from '../db/tenant-context.js';
 import { normalizeDomain } from '../utils/domain.js';
 import { AppError } from '../utils/errors.js';
 
@@ -91,7 +92,7 @@ export async function revokeAdminSuperuser(params: {
   const domain = adminDomain();
   const prisma = getAdminPrisma();
 
-  await prisma.$transaction(async (tx) => {
+  await runInTransaction(prisma, async (tx) => {
     const count = await tx.domainRole.count({ where: { domain, role: 'SUPERUSER' } });
     if (count <= 1) {
       throw new AppError('BAD_REQUEST', 409, 'CANNOT_REMOVE_LAST_SUPERUSER');

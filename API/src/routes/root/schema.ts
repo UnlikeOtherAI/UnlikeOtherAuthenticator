@@ -156,6 +156,9 @@ const orgEndpoints: EndpointSchema[] = [
     path: '/org/organisations/:orgId/members',
     description: 'List organisation members',
     auth: 'domain hash bearer token',
+    query: {
+      'status?': 'string — ACTIVE (default) | DEACTIVATED | REMOVED | all',
+    },
   },
   {
     method: 'POST',
@@ -174,8 +177,22 @@ const orgEndpoints: EndpointSchema[] = [
   {
     method: 'DELETE',
     path: '/org/organisations/:orgId/members/:userId',
-    description: 'Remove organisation member',
+    description: 'Remove organisation member (soft-remove: status becomes REMOVED, tombstoned for audit; also revokes the member\'s sessions on this domain)',
     auth: 'domain hash bearer token',
+  },
+  {
+    method: 'POST',
+    path: '/org/organisations/:orgId/members/:userId/deactivate',
+    description: 'Deactivate an organisation member: suspends access (org + team rows become DEACTIVATED, sessions on this domain revoked) without deleting history; cannot deactivate an owner (transfer ownership first)',
+    auth: 'domain hash bearer token',
+    response: { ok: 'true' },
+  },
+  {
+    method: 'POST',
+    path: '/org/organisations/:orgId/members/:userId/reactivate',
+    description: 'Reactivate a DEACTIVATED organisation member (org + team rows return to ACTIVE); does not restore sessions — the user signs in again',
+    auth: 'domain hash bearer token',
+    response: { ok: 'true' },
   },
   {
     method: 'POST',

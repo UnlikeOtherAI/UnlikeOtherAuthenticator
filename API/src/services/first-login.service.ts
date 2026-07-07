@@ -70,6 +70,7 @@ export async function buildFirstLoginBlock(
     prisma.orgMember.findMany({
       where: {
         userId: params.userId,
+        status: 'ACTIVE',
         org: { domain },
       },
       select: {
@@ -80,6 +81,7 @@ export async function buildFirstLoginBlock(
     prisma.teamMember.findMany({
       where: {
         userId: params.userId,
+        status: 'ACTIVE',
         team: { org: { domain } },
       },
       select: {

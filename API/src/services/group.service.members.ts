@@ -1,6 +1,7 @@
 import type { ClientConfig } from './config.service.js';
 import { getEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
+import { runInTransaction } from '../db/tenant-context.js';
 
 import {
   assertDatabaseEnabled,
@@ -63,7 +64,7 @@ export async function addGroupMember(
   });
   if (!orgMember) throw new AppError('BAD_REQUEST', 400);
 
-  return await prisma.$transaction(async (tx) => {
+  return await runInTransaction(prisma, async (tx) => {
     const groupMemberCount = await tx.groupMember.count({ where: { groupId: group.id } });
     if (groupMemberCount >= maxMembersPerGroup) {
       throw new AppError('BAD_REQUEST', 400);

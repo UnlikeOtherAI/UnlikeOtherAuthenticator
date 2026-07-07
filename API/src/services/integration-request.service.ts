@@ -1,6 +1,7 @@
 import { Prisma, type PrismaClient } from '@prisma/client';
 
 import { getAdminPrisma } from '../db/prisma.js';
+import { runInTransaction } from '../db/tenant-context.js';
 import { normalizeDomain } from '../utils/domain.js';
 import { AppError } from '../utils/errors.js';
 import { writeAuditLog, type AuditLogPrisma } from './audit-log.service.js';
@@ -162,7 +163,7 @@ export async function declineIntegrationRequest(
   deps?: { prisma?: IntegrationRequestPrisma },
 ): Promise<IntegrationRequestRow> {
   const prisma = prismaClient(deps);
-  return prisma.$transaction(async (tx) => {
+  return runInTransaction(prisma as unknown as PrismaClient, async (tx) => {
     const existing = (await tx.clientDomainIntegrationRequest.findUnique({
       where: { id: params.id },
     })) as IntegrationRequestRow | null;
@@ -200,7 +201,7 @@ export async function deleteIntegrationRequest(
   deps?: { prisma?: IntegrationRequestPrisma },
 ): Promise<IntegrationRequestRow> {
   const prisma = prismaClient(deps);
-  return prisma.$transaction(async (tx) => {
+  return runInTransaction(prisma as unknown as PrismaClient, async (tx) => {
     const existing = (await tx.clientDomainIntegrationRequest.findUnique({
       where: { id: params.id },
     })) as IntegrationRequestRow | null;
