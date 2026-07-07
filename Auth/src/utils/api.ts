@@ -121,3 +121,120 @@ export function postJson<TReq, TRes>(
 ): Promise<ApiResult<TRes>> {
   return request<TRes>('POST', path, { query, body });
 }
+
+/**
+ * Phase 3c (design §11.2): the query parameters every `/auth/*` flow endpoint needs — the
+ * same shape `LoginForm`/`RegisterForm` build inline, pulled out so the code-entry and
+ * workspace-chooser calls can share it.
+ */
+export type AuthFlowQuery = {
+  configUrl: string;
+  redirectUrl?: string | null;
+  codeChallenge?: string | null;
+  codeChallengeMethod?: 'S256' | null;
+  requestAccess?: boolean;
+};
+
+function buildAuthFlowQuery(params: AuthFlowQuery): Record<string, QueryValue> {
+  const query: Record<string, QueryValue> = { config_url: params.configUrl };
+  if (params.redirectUrl) query.redirect_url = params.redirectUrl;
+  if (params.codeChallenge && params.codeChallengeMethod) {
+    query.code_challenge = params.codeChallenge;
+    query.code_challenge_method = params.codeChallengeMethod;
+  }
+  if (params.requestAccess) query.request_access = true;
+  return query;
+}
+
+export type AuthStartRequest = { email: string };
+export type AuthStartResponse = { message: string };
+
+/** POST /auth/start — Slack-style email-first entry point (Phase 3b). */
+export function authStart(
+  body: AuthStartRequest,
+  query: AuthFlowQuery,
+): Promise<ApiResult<AuthStartResponse>> {
+  return postJson<AuthStartRequest, AuthStartResponse>(
+    '/auth/start',
+    body,
+    buildAuthFlowQuery(query),
+  );
+}
+
+export type VerifyLoginCodeRequest = {
+  email: string;
+  code: string;
+  remember_me?: boolean;
+};
+
+/**
+ * The three shapes `/auth/verify-code`, `/auth/select-team`, and a chooser-producing
+ * `/auth/login` can all resolve to (mirrors the Phase 3b API route bodies field-for-field —
+ * see `auth-verify-code.ts` / `auth-select-team.ts`). The chooser payload has no `ok` field.
+ */
+export type WorkspaceChooserResponse = {
+  login_token: string;
+  teams: unknown[];
+  pending_invites: unknown[];
+  can_create_org: boolean;
+};
+
+export type TwoFaRequiredResponse = {
+  ok: true;
+  twofa_required: true;
+  twofa_token: string;
+};
+
+export type TwoFaEnrollRequiredResponse = {
+  ok: true;
+  twofa_enroll_required: true;
+  setup_token: string;
+  otpauth_uri?: string;
+  qr_svg?: string;
+  manual_secret?: string;
+};
+
+export type AuthFlowFinalResponse = {
+  ok: true;
+  code?: string;
+  redirect_to?: string;
+  access_request_status?: 'pending';
+};
+
+export type AuthFlowResponse =
+  | WorkspaceChooserResponse
+  | TwoFaRequiredResponse
+  | TwoFaEnrollRequiredResponse
+  | AuthFlowFinalResponse;
+
+/** POST /auth/verify-code — verify an emailed 6-digit sign-in code (Phase 3b). */
+export function verifyLoginCode(
+  body: VerifyLoginCodeRequest,
+  query: AuthFlowQuery,
+): Promise<ApiResult<AuthFlowResponse>> {
+  return postJson<VerifyLoginCodeRequest, AuthFlowResponse>(
+    '/auth/verify-code',
+    body,
+    buildAuthFlowQuery(query),
+  );
+}
+
+export type SelectTeamRequest = {
+  login_token: string;
+  teamId?: string;
+  inviteId?: string;
+  action?: 'accept' | 'decline';
+  remember_me?: boolean;
+};
+
+/** POST /auth/select-team — choose a workspace or accept/decline an invite (Phase 3b). */
+export function selectTeam(
+  body: SelectTeamRequest,
+  query: AuthFlowQuery,
+): Promise<ApiResult<AuthFlowResponse>> {
+  return postJson<SelectTeamRequest, AuthFlowResponse>(
+    '/auth/select-team',
+    body,
+    buildAuthFlowQuery(query),
+  );
+}

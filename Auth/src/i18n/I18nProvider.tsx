@@ -8,8 +8,17 @@ type I18nContextValue = {
   language: string;
   languages: string[];
   setLanguage: (language: string) => void;
-  t: (key: TranslationKey) => string;
+  /** `params` fills `{token}` placeholders in the translated string (e.g. `{email}`). */
+  t: (key: TranslationKey, params?: Record<string, string>) => string;
 };
+
+/** Replaces `{token}` placeholders with values from `params`; tokens without a match are left as-is. */
+function interpolate(template: string, params?: Record<string, string>): string {
+  if (!params) return template;
+  return template.replace(/\{(\w+)\}/g, (match, token: string) =>
+    Object.prototype.hasOwnProperty.call(params, token) ? params[token] : match,
+  );
+}
 
 const I18nContext = createContext<I18nContextValue | null>(null);
 
@@ -110,7 +119,7 @@ export function I18nProvider(props: {
         if (!languages.includes(trimmed)) return;
         setLanguageState(trimmed);
       },
-      t: (key) => {
+      t: (key, params) => {
         const langKey =
           safeLanguage in translationsByLanguage
             ? (safeLanguage as keyof typeof translationsByLanguage)
@@ -119,7 +128,8 @@ export function I18nProvider(props: {
         const builtIn = translationsByLanguage[langKey] ?? translationsByLanguage.en;
         const active = remote ?? builtIn;
         const fallback = translationsByLanguage.en;
-        return active[key] ?? builtIn[key] ?? fallback[key] ?? key;
+        const template = active[key] ?? builtIn[key] ?? fallback[key] ?? key;
+        return interpolate(template, params);
       },
     };
   }, [initial.languages, language, remoteByLanguage]);

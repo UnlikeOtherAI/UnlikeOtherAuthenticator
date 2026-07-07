@@ -7,6 +7,8 @@ export const en = {
   'auth.signedIn.title': 'You’re signed in',
   'auth.twoFactorVerify.title': 'Verify two-factor code',
   'auth.twoFactorSetup.title': 'Set up two-factor authentication',
+  'auth.codeEntry.title': 'Enter your code',
+  'auth.workspaceChooser.title': 'Choose a workspace',
 
   'form.email.label': 'Email',
   'form.password.label': 'Password',
@@ -44,6 +46,26 @@ export const en = {
   'nav.createAccount': 'Create an account',
   'nav.backToLogin': 'Back to sign in',
   'nav.resetPassword': 'Reset password',
+  'nav.emailMeCode': 'Email me a sign-in code',
+
+  // Phase 3c: email-code entry (design §11.2).
+  'codeEntry.instructions': 'We sent a code to {email}',
+  'codeEntry.submit': 'Verify',
+  'codeEntry.resend': 'Resend code',
+  'codeEntry.resend.sent': 'We sent a new code to your email',
+  'codeEntry.error': 'Could not verify the code. Please try again.',
+
+  // Phase 3c: workspace chooser (design §11.2 — copy names the workspace, not the product).
+  'workspaceChooser.subtitle': 'Your workspaces for {email}',
+  'workspaceChooser.autoSkip': 'Signing you in…',
+  'workspace.role.owner': 'Owner',
+  'workspace.role.admin': 'Admin',
+  'workspace.invite.title': 'You’ve been invited to {teamName}',
+  'workspace.invite.invitedBy': 'Invited by {invitedBy}',
+  'workspace.invite.accept': 'Accept',
+  'workspace.invite.decline': 'Decline',
+  'workspace.createOrg.title': 'Create a new workspace',
+  'workspace.createOrg.subtitle': 'Start a brand new workspace',
 
   'twoFactor.setup.instructions':
     'Scan this QR code with an authenticator app, then enter the 6-digit code to verify setup.',

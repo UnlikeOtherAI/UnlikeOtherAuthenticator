@@ -7,7 +7,9 @@ import { Switch } from '../ui/Switch.js';
 import { usePopup } from '../../hooks/use-popup.js';
 import { useTranslation } from '../../i18n/use-translation.js';
 import { postJson } from '../../utils/api.js';
-import { isRegistrationAllowed } from '../../utils/auth-config.js';
+import { isEmailCodeEnabled, isRegistrationAllowed } from '../../utils/auth-config.js';
+import { requestSignInCode } from '../../utils/workspace-actions.js';
+import { applyWorkspaceOutcome, interpretWorkspaceResponse } from '../../utils/workspace-response.js';
 
 type LoginRequest = {
   email: string;
@@ -24,6 +26,11 @@ type LoginResponse = {
   qr_svg?: string;
   manual_secret?: string;
   redirect_to?: string;
+  // Workspace chooser payload (design §11.2, `workspace_selection: "auto"`); no `ok` field.
+  login_token?: string;
+  teams?: unknown[];
+  pending_invites?: unknown[];
+  can_create_org?: boolean;
 };
 
 function readSessionConfig(config: unknown): {
@@ -60,8 +67,12 @@ export function LoginForm(): React.JSX.Element {
     clientId,
     state,
     resource,
+    setPendingEmail,
+    setLoginToken,
+    setWorkspaceChoices,
   } = usePopup();
   const registrationAllowed = isRegistrationAllowed(config);
+  const emailCodeEnabled = isEmailCodeEnabled(config);
   const { rememberMeEnabled, rememberMeDefault } = readSessionConfig(config);
 
   const [email, setEmail] = useState('');
@@ -69,6 +80,7 @@ export function LoginForm(): React.JSX.Element {
   const [rememberMe, setRememberMe] = useState(rememberMeDefault);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [sendingCode, setSendingCode] = useState(false);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -108,27 +120,38 @@ export function LoginForm(): React.JSX.Element {
       return;
     }
 
-    if (result.data.twofa_required && typeof result.data.twofa_token === 'string') {
-      startTwoFactorVerify(result.data.twofa_token);
-      return;
+    // Phase 3c (design §11.2): a password login can resolve to the same four shapes
+    // /auth/verify-code and /auth/select-team do — including the workspace chooser when
+    // `workspace_selection: "auto"`. Decode once, then apply generically.
+    const outcome = interpretWorkspaceResponse(result.data);
+    if (outcome.kind === 'chooser') {
+      setPendingEmail(email);
     }
+    const applied = applyWorkspaceOutcome(outcome, {
+      setLoginToken,
+      setWorkspaceChoices,
+      setView,
+      redirectTo,
+      startTwoFactorVerify,
+      startTwoFactorSetup,
+    });
+    if (!applied) setError(t('form.login.error'));
+  }
 
-    if (result.data.twofa_enroll_required && typeof result.data.setup_token === 'string') {
-      startTwoFactorSetup({
-        setup_token: result.data.setup_token,
-        otpauth_uri: result.data.otpauth_uri,
-        qr_svg: result.data.qr_svg,
-        manual_secret: result.data.manual_secret,
-      });
-      return;
-    }
-
-    if (typeof result.data.redirect_to === 'string') {
-      redirectTo(result.data.redirect_to);
-      return;
-    }
-
-    setError(t('form.login.error'));
+  async function handleEmailCode() {
+    if (!email) return;
+    setSendingCode(true);
+    await requestSignInCode({
+      email,
+      configUrl,
+      redirectUrl,
+      codeChallenge,
+      codeChallengeMethod,
+      requestAccess,
+    });
+    setSendingCode(false);
+    setPendingEmail(email);
+    setView('code-entry');
   }
 
   return (
@@ -190,6 +213,19 @@ export function LoginForm(): React.JSX.Element {
           </button>
         ) : null}
       </div>
+
+      {emailCodeEnabled ? (
+        <div className="text-center text-sm">
+          <button
+            type="button"
+            className="text-[var(--uoa-color-primary)] hover:underline disabled:cursor-not-allowed disabled:opacity-60"
+            onClick={() => void handleEmailCode()}
+            disabled={!email || sendingCode}
+          >
+            {t('nav.emailMeCode')}
+          </button>
+        </div>
+      ) : null}
     </form>
   );
 }

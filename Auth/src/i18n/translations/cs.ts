@@ -9,6 +9,8 @@ export const cs = {
   'auth.signedIn.title': 'Jste přihlášeni',
   'auth.twoFactorVerify.title': 'Ověření dvoufaktorovým kódem',
   'auth.twoFactorSetup.title': 'Nastavení dvoufaktorového ověření',
+  'auth.codeEntry.title': 'Zadejte svůj kód',
+  'auth.workspaceChooser.title': 'Vyberte pracovní prostor',
 
   'form.email.label': 'E-mail',
   'form.password.label': 'Heslo',
@@ -44,6 +46,24 @@ export const cs = {
   'nav.createAccount': 'Vytvořit účet',
   'nav.backToLogin': 'Zpět na přihlášení',
   'nav.resetPassword': 'Obnovit heslo',
+  'nav.emailMeCode': 'Poslat mi přihlašovací kód e-mailem',
+
+  'codeEntry.instructions': 'Poslali jsme kód na {email}',
+  'codeEntry.submit': 'Ověřit',
+  'codeEntry.resend': 'Poslat kód znovu',
+  'codeEntry.resend.sent': 'Poslali jsme nový kód na váš e-mail',
+  'codeEntry.error': 'Kód se nepodařilo ověřit. Zkuste to prosím znovu.',
+
+  'workspaceChooser.subtitle': 'Vaše pracovní prostory pro {email}',
+  'workspaceChooser.autoSkip': 'Přihlašování…',
+  'workspace.role.owner': 'Vlastník',
+  'workspace.role.admin': 'Správce',
+  'workspace.invite.title': 'Byli jste pozváni do {teamName}',
+  'workspace.invite.invitedBy': 'Pozval(a) {invitedBy}',
+  'workspace.invite.accept': 'Přijmout',
+  'workspace.invite.decline': 'Odmítnout',
+  'workspace.createOrg.title': 'Vytvořit nový pracovní prostor',
+  'workspace.createOrg.subtitle': 'Začněte zcela nový pracovní prostor',
 
   'twoFactor.setup.instructions':
     'Naskenujte tento QR kód v ověřovací aplikaci a potom zadejte 6místný kód pro dokončení nastavení.',
