@@ -12,6 +12,7 @@ export type EndpointSchema = {
   query?: Record<string, string>;
   body?: Record<string, string>;
   response?: Record<string, string>;
+  notes?: string;
 };
 
 const baseEndpoints: EndpointSchema[] = [
@@ -128,9 +129,10 @@ const orgEndpoints: EndpointSchema[] = [
   {
     method: 'POST',
     path: '/org/organisations',
-    description: 'Create organisation',
-    auth: 'domain hash bearer token',
-    body: { name: 'string (required)', owner_id: 'string (required)' },
+    description:
+      'Create organisation owned by the calling user (X-UOA-Access-Token). Non-superusers also require org_features.allow_user_create_org=true, else 403 ORG_CREATION_NOT_ALLOWED.',
+    auth: 'domain hash bearer token + X-UOA-Access-Token header (the new org owner)',
+    body: { name: 'string (required, 1-100)' },
   },
   {
     method: 'GET',
@@ -428,6 +430,30 @@ const orgEndpoints: EndpointSchema[] = [
   },
 ];
 
+// Every /org/* endpoint resolves its tenant from a strict domain query and is gated
+// by the org feature flag, so the machine schema must advertise that uniformly rather
+// than per-endpoint (issue #7 — integrators were blocked because `domain` and the
+// X-UOA-Access-Token requirement were undocumented).
+const ORG_DOMAIN_QUERY: Record<string, string> = {
+  domain: 'string (required) — must match the config domain for domain-hash auth',
+  config_url: 'string (required)',
+};
+
+const ORG_CONTRACT_NOTE =
+  'Requires org_features.enabled=true (otherwise 404). Org/team reads and all mutations ' +
+  'also require the X-UOA-Access-Token header — the acting user is its `userId` claim, and a ' +
+  'new organisation is owned by that user (the body never carries owner_id). Non-superusers can ' +
+  'only create an organisation when org_features.allow_user_create_org=true, else 403 ' +
+  'ORG_CREATION_NOT_ALLOWED.';
+
+function withOrgContract(list: EndpointSchema[]): EndpointSchema[] {
+  return list.map((endpoint) => ({
+    ...endpoint,
+    query: { ...ORG_DOMAIN_QUERY, ...endpoint.query },
+    notes: endpoint.notes ?? ORG_CONTRACT_NOTE,
+  }));
+}
+
 export const endpoints: EndpointSchema[] = [
   ...baseEndpoints,
   ...configDebugEndpoints,
@@ -435,7 +461,7 @@ export const endpoints: EndpointSchema[] = [
   ...appEndpoints,
   ...emailEndpoints,
   ...domainEndpoints,
-  ...orgEndpoints,
+  ...withOrgContract(orgEndpoints),
   ...integrationsEndpoints,
   ...internalAdminEndpoints,
   ...oauthEndpoints,

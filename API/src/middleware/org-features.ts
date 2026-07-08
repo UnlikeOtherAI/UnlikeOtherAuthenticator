@@ -13,7 +13,9 @@ type RequestWithConfig = FastifyRequest & {
 export async function requireOrgFeatures(request: RequestWithConfig): Promise<void> {
   const enabled = request.config?.org_features?.enabled === true;
   if (!enabled) {
-    throw new AppError('NOT_FOUND', 404);
+    // 404 keeps the feature invisible to the public, but the code lets debug-mode
+    // integrators see why every /org/* call 404s (issue #7).
+    throw new AppError('NOT_FOUND', 404, 'ORG_FEATURES_DISABLED');
   }
 }
 
