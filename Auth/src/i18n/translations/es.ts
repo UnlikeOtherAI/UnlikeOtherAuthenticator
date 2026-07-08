@@ -9,6 +9,8 @@ export const es = {
   'auth.signedIn.title': 'Sesion iniciada',
   'auth.twoFactorVerify.title': 'Verificar codigo de dos factores',
   'auth.twoFactorSetup.title': 'Configurar autenticacion de dos factores',
+  'auth.codeEntry.title': 'Ingresa tu codigo',
+  'auth.workspaceChooser.title': 'Elige un espacio de trabajo',
 
   'form.email.label': 'Correo electronico',
   'form.password.label': 'Contrasena',
@@ -18,17 +20,23 @@ export const es = {
   'form.rememberMe.label': 'Recordarme',
   'form.password.show': 'Mostrar',
   'form.password.hide': 'Ocultar',
+  'form.password.requirement.minLength': 'Tener al menos 8 caracteres',
   'form.error.generic': 'La solicitud fallo. Intentalo de nuevo.',
   'form.login.submit': 'Iniciar sesion',
   'form.login.error': 'Correo electronico o contrasena invalidos.',
   'form.register.submit': 'Continuar',
   'form.resetPassword.submit': 'Enviar instrucciones de restablecimiento',
   'form.setPassword.submit': 'Establecer contrasena y continuar',
-  'form.setPassword.error': 'Algo salio mal. El enlace puede haber expirado.',
+  'form.setPassword.error': 'Algo salio mal. Intentalo de nuevo.',
+  'form.setPassword.tooShort': 'La contrasena debe tener al menos 8 caracteres.',
+  'form.setPassword.linkInvalid':
+    'Este enlace es invalido o ha expirado. Solicita uno nuevo e intentalo de nuevo.',
   'form.setPassword.mismatch': 'Las contrasenas no coinciden.',
   'form.setPassword.success': 'Contrasena restablecida correctamente. Ya puedes iniciar sesion.',
 
   'message.instructionsSent': 'Hemos enviado instrucciones a tu correo electronico',
+  'message.emailAlreadyRegistered':
+    'Este correo electronico ya esta registrado. Inicia sesion o restablece tu contrasena para continuar.',
   'message.accessRequested':
     'Tu solicitud se ha enviado a los administradores del equipo. Puedes cerrar esta ventana y esperar su aprobacion.',
   'message.signedIn': 'Vuelve a la aplicacion para terminar de iniciar sesion. Puedes cerrar esta ventana.',
@@ -37,6 +45,25 @@ export const es = {
   'nav.forgotPassword': 'Olvidaste tu contrasena?',
   'nav.createAccount': 'Crear una cuenta',
   'nav.backToLogin': 'Volver a iniciar sesion',
+  'nav.resetPassword': 'Restablecer contrasena',
+  'nav.emailMeCode': 'Enviarme un codigo de acceso',
+
+  'codeEntry.instructions': 'Enviamos un codigo a {email}',
+  'codeEntry.submit': 'Verificar',
+  'codeEntry.resend': 'Reenviar codigo',
+  'codeEntry.resend.sent': 'Enviamos un nuevo codigo a tu correo electronico',
+  'codeEntry.error': 'No se pudo verificar el codigo. Intentalo de nuevo.',
+
+  'workspaceChooser.subtitle': 'Tus espacios de trabajo para {email}',
+  'workspaceChooser.autoSkip': 'Iniciando sesion...',
+  'workspace.role.owner': 'Propietario',
+  'workspace.role.admin': 'Administrador',
+  'workspace.invite.title': 'Te invitaron a {teamName}',
+  'workspace.invite.invitedBy': 'Invitado por {invitedBy}',
+  'workspace.invite.accept': 'Aceptar',
+  'workspace.invite.decline': 'Rechazar',
+  'workspace.createOrg.title': 'Crear un nuevo espacio de trabajo',
+  'workspace.createOrg.subtitle': 'Comienza un espacio de trabajo nuevo',
 
   'twoFactor.setup.instructions':
     'Escanea este codigo QR con una app autenticadora y luego ingresa el codigo de 6 digitos para verificar la configuracion.',

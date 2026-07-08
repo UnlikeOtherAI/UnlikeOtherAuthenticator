@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { ClientConfig } from '../../src/services/config.service.js';
-import { buildFirstLoginBlock } from '../../src/services/first-login.service.js';
+import { buildFirstLoginBlock, buildWorkspaceChoices } from '../../src/services/first-login.service.js';
 import { testUiTheme } from '../helpers/test-config.js';
 
 function makeConfig(overrides?: Partial<ClientConfig>): ClientConfig {
@@ -153,7 +153,7 @@ describe('first-login.service', () => {
     });
 
     expect(prisma.orgMember.findMany).toHaveBeenCalledWith({
-      where: { userId: 'user-1', org: { domain: 'client.example.com' } },
+      where: { userId: 'user-1', status: 'ACTIVE', org: { domain: 'client.example.com' } },
       select: { orgId: true, role: true },
     });
     expect(prisma.teamInvite.findMany).toHaveBeenCalledWith({
@@ -162,6 +162,8 @@ describe('first-login.service', () => {
         acceptedAt: null,
         declinedAt: null,
         revokedAt: null,
+        approvalStatus: { in: ['NOT_REQUIRED', 'APPROVED'] },
+        OR: [{ expiresAt: null }, { expiresAt: { gt: expect.any(Date) } }],
         org: { domain: 'client.example.com' },
       },
       select: {
@@ -169,6 +171,109 @@ describe('first-login.service', () => {
         orgId: true,
         teamId: true,
         team: { select: { name: true } },
+      },
+    });
+  });
+});
+
+describe('buildWorkspaceChoices', () => {
+  it('returns empty choices when the user cannot be found', async () => {
+    const prisma = {
+      user: { findUnique: vi.fn(async () => null) },
+      teamMember: { findMany: vi.fn() },
+      teamInvite: { findMany: vi.fn() },
+    };
+
+    const result = await buildWorkspaceChoices(
+      { userId: 'user-1', config: makeConfig() },
+      { prisma },
+    );
+
+    expect(result).toEqual({ teams: [], pending_invites: [], can_create_org: false });
+    expect(prisma.teamMember.findMany).not.toHaveBeenCalled();
+  });
+
+  it('only queries ACTIVE team memberships — DEACTIVATED/REMOVED never surface', async () => {
+    const prisma = {
+      user: { findUnique: vi.fn(async () => ({ email: 'jane@acme.com' })) },
+      teamMember: {
+        findMany: vi.fn(async () => [
+          { teamId: 'team-1', teamRole: 'owner', team: { name: 'Backend Team', orgId: 'org-1' } },
+        ]),
+      },
+      teamInvite: { findMany: vi.fn(async () => []) },
+    };
+
+    const result = await buildWorkspaceChoices(
+      { userId: 'user-1', config: makeConfig({ org_features: { allow_user_create_org: true } }) },
+      { prisma },
+    );
+
+    expect(result).toEqual({
+      teams: [{ teamId: 'team-1', orgId: 'org-1', name: 'Backend Team', role: 'owner' }],
+      pending_invites: [],
+      can_create_org: true,
+    });
+    expect(prisma.teamMember.findMany).toHaveBeenCalledWith({
+      where: {
+        userId: 'user-1',
+        status: 'ACTIVE',
+        team: { org: { domain: 'client.example.com' } },
+      },
+      select: {
+        teamId: true,
+        teamRole: true,
+        team: { select: { name: true, orgId: true } },
+      },
+    });
+  });
+
+  it('maps pending invites and falls back from invitedByName to invitedByEmail', async () => {
+    const prisma = {
+      user: { findUnique: vi.fn(async () => ({ email: 'jane@acme.com' })) },
+      teamMember: { findMany: vi.fn(async () => []) },
+      teamInvite: {
+        findMany: vi.fn(async () => [
+          {
+            id: 'invite-1',
+            team: { name: 'Design' },
+            invitedByName: 'Alice Admin',
+            invitedByEmail: 'alice@acme.com',
+          },
+          {
+            id: 'invite-2',
+            team: { name: 'Ops' },
+            invitedByName: null,
+            invitedByEmail: 'bob@acme.com',
+          },
+        ]),
+      },
+    };
+
+    const result = await buildWorkspaceChoices(
+      { userId: 'user-1', config: makeConfig() },
+      { prisma },
+    );
+
+    expect(result.pending_invites).toEqual([
+      { inviteId: 'invite-1', teamName: 'Design', invitedBy: 'Alice Admin' },
+      { inviteId: 'invite-2', teamName: 'Ops', invitedBy: 'bob@acme.com' },
+    ]);
+    expect(prisma.teamInvite.findMany).toHaveBeenCalledWith({
+      where: {
+        email: 'jane@acme.com',
+        acceptedAt: null,
+        declinedAt: null,
+        revokedAt: null,
+        approvalStatus: { in: ['NOT_REQUIRED', 'APPROVED'] },
+        OR: [{ expiresAt: null }, { expiresAt: { gt: expect.any(Date) } }],
+        org: { domain: 'client.example.com' },
+      },
+      select: {
+        id: true,
+        team: { select: { name: true } },
+        invitedByName: true,
+        invitedByEmail: true,
       },
     });
   });

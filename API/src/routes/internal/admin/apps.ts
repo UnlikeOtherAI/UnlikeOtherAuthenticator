@@ -1,6 +1,7 @@
 import type { FastifyInstance, RouteShorthandOptions } from 'fastify';
 import { z } from 'zod';
 
+import { requireAdminApiKeyOrSuperuser } from '../../../middleware/admin-access.js';
 import { requireAdminSuperuser } from '../../../middleware/admin-superuser.js';
 import {
   createAdminApp,
@@ -8,6 +9,7 @@ import {
   createAdminKillSwitch,
   deleteAdminFeatureFlag,
   deleteAdminKillSwitch,
+  getAdminApps,
   updateAdminFeatureFlag,
   updateAdminKillSwitch,
 } from '../../../services/internal-admin.service.js';
@@ -58,7 +60,9 @@ const KillSwitchSchema = z
   .strict();
 
 const objectSchema = { type: 'object', additionalProperties: true } as const;
+const arraySchema = { type: 'array', items: { type: 'object', additionalProperties: true } } as const;
 
+// Superuser-JWT-only (app creation stays here — an Admin API key must NOT be able to create apps).
 function adminRoute(responseSchema: Record<string, unknown>): RouteShorthandOptions {
   return {
     preHandler: [requireAdminSuperuser],
@@ -66,7 +70,18 @@ function adminRoute(responseSchema: Record<string, unknown>): RouteShorthandOpti
   };
 }
 
+// HUGO-539: Admin-API-key OR superuser JWT. Applied only to flag/kill-switch writes and the
+// apps-list read — every other /internal/admin/* route stays superuser-only.
+function keyedRoute(responseSchema: Record<string, unknown>): RouteShorthandOptions {
+  return {
+    preHandler: [requireAdminApiKeyOrSuperuser()],
+    schema: { response: { 200: responseSchema } },
+  };
+}
+
 export function registerInternalAdminAppRoutes(app: FastifyInstance): void {
+  app.get('/internal/admin/apps', keyedRoute(arraySchema), async () => getAdminApps());
+
   app.post('/internal/admin/apps', adminRoute(objectSchema), async (request) => {
     const body = CreateAppSchema.parse(request.body);
     return createAdminApp({
@@ -80,7 +95,7 @@ export function registerInternalAdminAppRoutes(app: FastifyInstance): void {
     });
   });
 
-  app.post('/internal/admin/apps/:appId/flags', adminRoute(objectSchema), async (request) => {
+  app.post('/internal/admin/apps/:appId/flags', keyedRoute(objectSchema), async (request) => {
     const { appId } = AppParamsSchema.parse(request.params);
     const body = FeatureFlagSchema.parse(request.body);
     return createAdminFeatureFlag(appId, {
@@ -90,7 +105,7 @@ export function registerInternalAdminAppRoutes(app: FastifyInstance): void {
     });
   });
 
-  app.patch('/internal/admin/apps/:appId/flags/:flagId', adminRoute(objectSchema), async (request) => {
+  app.patch('/internal/admin/apps/:appId/flags/:flagId', keyedRoute(objectSchema), async (request) => {
     const { appId, flagId } = FlagParamsSchema.parse(request.params);
     const body = FeatureFlagSchema.parse(request.body);
     return updateAdminFeatureFlag(appId, flagId, {
@@ -100,24 +115,24 @@ export function registerInternalAdminAppRoutes(app: FastifyInstance): void {
     });
   });
 
-  app.delete('/internal/admin/apps/:appId/flags/:flagId', adminRoute(objectSchema), async (request) => {
+  app.delete('/internal/admin/apps/:appId/flags/:flagId', keyedRoute(objectSchema), async (request) => {
     const { appId, flagId } = FlagParamsSchema.parse(request.params);
     return deleteAdminFeatureFlag(appId, flagId);
   });
 
-  app.post('/internal/admin/apps/:appId/kill-switches', adminRoute(objectSchema), async (request) => {
+  app.post('/internal/admin/apps/:appId/kill-switches', keyedRoute(objectSchema), async (request) => {
     const { appId } = AppParamsSchema.parse(request.params);
     const body = KillSwitchSchema.parse(request.body);
     return createAdminKillSwitch(appId, toKillSwitchInput(body));
   });
 
-  app.patch('/internal/admin/apps/:appId/kill-switches/:killSwitchId', adminRoute(objectSchema), async (request) => {
+  app.patch('/internal/admin/apps/:appId/kill-switches/:killSwitchId', keyedRoute(objectSchema), async (request) => {
     const { appId, killSwitchId } = KillSwitchParamsSchema.parse(request.params);
     const body = KillSwitchSchema.parse(request.body);
     return updateAdminKillSwitch(appId, killSwitchId, toKillSwitchInput(body));
   });
 
-  app.delete('/internal/admin/apps/:appId/kill-switches/:killSwitchId', adminRoute(objectSchema), async (request) => {
+  app.delete('/internal/admin/apps/:appId/kill-switches/:killSwitchId', keyedRoute(objectSchema), async (request) => {
     const { appId, killSwitchId } = KillSwitchParamsSchema.parse(request.params);
     return deleteAdminKillSwitch(appId, killSwitchId);
   });

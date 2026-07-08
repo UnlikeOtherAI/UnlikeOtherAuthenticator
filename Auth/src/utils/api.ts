@@ -1,9 +1,9 @@
 /**
  * Thin typed wrapper over fetch for the Auth SPA.
  *
- * The auth API always returns either the expected JSON payload (2xx) or a
- * generic `{ error: 'Request failed' }` envelope. The UI never surfaces server
- * error specifics — callers map the boolean `ok` to an i18n key themselves.
+ * The auth API returns either the expected JSON payload (2xx) or a generic
+ * `{ error: 'Request failed' }` envelope. Some flows may also include a small
+ * allowlisted machine-readable `code` so callers can pick the right i18n key.
  */
 
 export type ApiSuccess<T> = {
@@ -17,6 +17,8 @@ export type ApiFailure = {
   status: number;
   /** The generic error string from `{ error }` if present, otherwise null. */
   error: string | null;
+  /** Machine-readable public error code when the API intentionally exposes one. */
+  code: string | null;
 };
 
 export type ApiResult<T> = ApiSuccess<T> | ApiFailure;
@@ -51,6 +53,14 @@ function extractError(body: unknown): string | null {
   return null;
 }
 
+function extractCode(body: unknown): string | null {
+  if (body && typeof body === 'object' && 'code' in body) {
+    const code = (body as Record<string, unknown>).code;
+    if (typeof code === 'string') return code;
+  }
+  return null;
+}
+
 async function parseJsonSafe(response: Response): Promise<unknown> {
   try {
     return await response.json();
@@ -80,13 +90,18 @@ async function request<T>(
       body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
     });
   } catch {
-    return { ok: false, status: 0, error: null };
+    return { ok: false, status: 0, error: null, code: null };
   }
 
   const json = await parseJsonSafe(response);
 
   if (!response.ok) {
-    return { ok: false, status: response.status, error: extractError(json) };
+    return {
+      ok: false,
+      status: response.status,
+      error: extractError(json),
+      code: extractCode(json),
+    };
   }
 
   return { ok: true, status: response.status, data: json as T };
@@ -105,4 +120,149 @@ export function postJson<TReq, TRes>(
   query?: Record<string, QueryValue>,
 ): Promise<ApiResult<TRes>> {
   return request<TRes>('POST', path, { query, body });
+}
+
+/**
+ * Phase 3c (design §11.2): the query parameters every `/auth/*` flow endpoint needs — the
+ * same shape `LoginForm`/`RegisterForm` build inline, pulled out so the code-entry and
+ * workspace-chooser calls can share it.
+ */
+export type AuthFlowQuery = {
+  configUrl: string;
+  redirectUrl?: string | null;
+  codeChallenge?: string | null;
+  codeChallengeMethod?: 'S256' | null;
+  requestAccess?: boolean;
+};
+
+function buildAuthFlowQuery(params: AuthFlowQuery): Record<string, QueryValue> {
+  const query: Record<string, QueryValue> = { config_url: params.configUrl };
+  if (params.redirectUrl) query.redirect_url = params.redirectUrl;
+  if (params.codeChallenge && params.codeChallengeMethod) {
+    query.code_challenge = params.codeChallenge;
+    query.code_challenge_method = params.codeChallengeMethod;
+  }
+  if (params.requestAccess) query.request_access = true;
+  return query;
+}
+
+export type AuthStartRequest = { email: string };
+export type AuthStartResponse = { message: string };
+
+/** POST /auth/start — Slack-style email-first entry point (Phase 3b). */
+export function authStart(
+  body: AuthStartRequest,
+  query: AuthFlowQuery,
+): Promise<ApiResult<AuthStartResponse>> {
+  return postJson<AuthStartRequest, AuthStartResponse>(
+    '/auth/start',
+    body,
+    buildAuthFlowQuery(query),
+  );
+}
+
+export type VerifyLoginCodeRequest = {
+  email: string;
+  code: string;
+  remember_me?: boolean;
+};
+
+/**
+ * The three shapes `/auth/verify-code`, `/auth/select-team`, and a chooser-producing
+ * `/auth/login` can all resolve to (mirrors the Phase 3b API route bodies field-for-field —
+ * see `auth-verify-code.ts` / `auth-select-team.ts`). The chooser payload has no `ok` field.
+ */
+export type WorkspaceChooserResponse = {
+  login_token: string;
+  teams: unknown[];
+  pending_invites: unknown[];
+  can_create_org: boolean;
+};
+
+export type TwoFaRequiredResponse = {
+  ok: true;
+  twofa_required: true;
+  twofa_token: string;
+};
+
+export type TwoFaEnrollRequiredResponse = {
+  ok: true;
+  twofa_enroll_required: true;
+  setup_token: string;
+  otpauth_uri?: string;
+  qr_svg?: string;
+  manual_secret?: string;
+};
+
+export type AuthFlowFinalResponse = {
+  ok: true;
+  code?: string;
+  redirect_to?: string;
+  access_request_status?: 'pending';
+};
+
+export type AuthFlowResponse =
+  | WorkspaceChooserResponse
+  | TwoFaRequiredResponse
+  | TwoFaEnrollRequiredResponse
+  | AuthFlowFinalResponse;
+
+/** POST /auth/verify-code — verify an emailed 6-digit sign-in code (Phase 3b). */
+export function verifyLoginCode(
+  body: VerifyLoginCodeRequest,
+  query: AuthFlowQuery,
+): Promise<ApiResult<AuthFlowResponse>> {
+  return postJson<VerifyLoginCodeRequest, AuthFlowResponse>(
+    '/auth/verify-code',
+    body,
+    buildAuthFlowQuery(query),
+  );
+}
+
+export type SelectTeamRequest = {
+  login_token: string;
+  teamId?: string;
+  inviteId?: string;
+  action?: 'accept' | 'decline';
+  remember_me?: boolean;
+};
+
+/** POST /auth/select-team — choose a workspace or accept/decline an invite (Phase 3b). */
+export function selectTeam(
+  body: SelectTeamRequest,
+  query: AuthFlowQuery,
+): Promise<ApiResult<AuthFlowResponse>> {
+  return postJson<SelectTeamRequest, AuthFlowResponse>(
+    '/auth/select-team',
+    body,
+    buildAuthFlowQuery(query),
+  );
+}
+
+export type SessionChoicesRequest = { login_token: string };
+
+/**
+ * The bare chooser shape `/auth/session-choices` returns — unlike `WorkspaceChooserResponse` it
+ * never carries a `login_token` (the caller already holds one; that's what it sent).
+ */
+export type SessionChoicesResponse = {
+  teams: unknown[];
+  pending_invites: unknown[];
+  can_create_org: boolean;
+};
+
+/**
+ * POST /auth/session-choices — hydrate the chooser payload for a `login_token` seeded via a
+ * redirect (Phase 3c follow-up, design §4.3 Task 7 remainder: the social callback can't inline
+ * the chooser payload the way `/auth/verify-code`/`/auth/login` do).
+ */
+export function fetchSessionChoices(
+  body: SessionChoicesRequest,
+  query: AuthFlowQuery,
+): Promise<ApiResult<SessionChoicesResponse>> {
+  return postJson<SessionChoicesRequest, SessionChoicesResponse>(
+    '/auth/session-choices',
+    body,
+    buildAuthFlowQuery(query),
+  );
 }

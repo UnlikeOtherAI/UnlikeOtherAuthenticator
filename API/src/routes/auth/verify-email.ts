@@ -12,7 +12,7 @@ import {
   finalizeAuthenticatedUser,
   parseRequestAccessFlag,
 } from '../../services/access-request-flow.service.js';
-import { selectRedirectUrl } from '../../services/token.service.js';
+import { selectRedirectUrl } from '../../services/authorization-code.service.js';
 import { parseRequiredPkceChallenge } from '../../utils/pkce.js';
 import { tokenConsumeRateLimiter } from './rate-limit-keys.js';
 

@@ -103,6 +103,14 @@ export async function handlePostAuthenticationAccessRequest(params: {
     return { status: 'continue' };
   }
 
+  // NOTE (Phase 4): join-policy gating of the access-request mechanism is intentionally NOT enforced
+  // here. Access requests are already gated by the signed `access_requests` config, and that config's
+  // target team lives in the config JWT — the foundation migration cannot reliably backfill
+  // REQUEST_TO_JOIN/APPROVED_DOMAIN onto those teams, so enforcing a policy gate would silently break
+  // existing auto-grant and request-to-join setups. Join-policy values are still stored and ARE
+  // enforced for the new self-join (OPEN_TO_ORG) and HIDDEN-listing paths; enforcing them on this
+  // legacy mechanism is deferred to a migration that can map config targets to teams. (Deviation from
+  // design §4.6, raised per the non-breaking requirement.)
   if (isAutoGrantDomain({ email: user.email, config: params.config })) {
     await ensureUserAssignedToConfiguredAccessTarget({
       prisma,

@@ -1,69 +1,26 @@
-import { createHash, createHmac } from 'node:crypto';
-
 import type { PrismaClient } from '@prisma/client';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { createClientId } from '../../src/utils/hash.js';
-import type { ClientConfig } from '../../src/services/config.service.js';
 import { exchangeAuthorizationCodeForTokens } from '../../src/services/token.service.js';
 import { verifyAccessToken } from '../../src/services/access-token.service.js';
+import {
+  hashAuthorizationCode,
+  makeConfig,
+  TEST_CODE_CHALLENGE,
+  TEST_CODE_VERIFIER,
+  pkceChallenge,
+  useTokenServiceTestEnv,
+} from './helpers/token-service-test-helpers.js';
 
-function hashAuthorizationCode(code: string, sharedSecret: string): string {
-  return createHmac('sha256', sharedSecret).update(code, 'utf8').digest('hex');
-}
-
-function pkceChallenge(codeVerifier: string): string {
-  return createHash('sha256').update(codeVerifier, 'utf8').digest('base64url');
-}
-
-// PKCE is mandatory on both issuance and redemption; these tests exercise the
-// secure path with a real challenge/verifier pair.
-const TEST_CODE_VERIFIER = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ';
-const TEST_CODE_CHALLENGE = pkceChallenge(TEST_CODE_VERIFIER);
-
-function makeConfig(overrides?: Partial<ClientConfig['org_features']>): ClientConfig {
-  return {
-    domain: 'client.example.com',
-    org_features: {
-      enabled: false,
-      groups_enabled: false,
-      user_needs_team: false,
-      max_teams_per_org: 100,
-      max_groups_per_org: 20,
-      max_members_per_org: 1000,
-      max_members_per_team: 200,
-      max_members_per_group: 500,
-      max_team_memberships_per_user: 50,
-      org_roles: ['owner', 'admin', 'member'],
-      ...overrides,
-    },
-  } as unknown as ClientConfig;
-}
-
+// CLAUDE.md 500-line split of the original token.service.test.ts: authorization-code issuance
+// (org claim inclusion + PKCE enforcement). The `active` claim on issuance lives in
+// token.service.active-claim.test.ts; refresh-token active-claim re-validation lives in
+// token.service.refresh-active-claim.test.ts. Shared helpers live in
+// tests/unit/helpers/token-service-test-helpers.ts. Only the location changed — no assertion here
+// was altered from the pre-split file.
 describe('exchangeAuthorizationCodeForTokens (unit)', () => {
-  const originalDatabaseUrl = process.env.DATABASE_URL;
-  const originalSharedSecret = process.env.SHARED_SECRET;
-  const originalIssuer = process.env.AUTH_SERVICE_IDENTIFIER;
-  const originalAccessTokenTtl = process.env.ACCESS_TOKEN_TTL;
-  const originalRefreshTokenTtlDays = process.env.REFRESH_TOKEN_TTL_DAYS;
-
-  beforeEach(() => {
-    process.env.DATABASE_URL = 'postgres://localhost:5432/authenticator_test';
-    process.env.SHARED_SECRET = 'test-shared-secret-with-enough-length';
-    process.env.AUTH_SERVICE_IDENTIFIER = 'uoa-auth-service';
-    process.env.ACCESS_TOKEN_TTL = '30m';
-    process.env.REFRESH_TOKEN_TTL_DAYS = '30';
-  });
-
-  afterEach(() => {
-    process.env.DATABASE_URL = originalDatabaseUrl;
-    process.env.SHARED_SECRET = originalSharedSecret;
-    process.env.AUTH_SERVICE_IDENTIFIER = originalIssuer;
-    process.env.ACCESS_TOKEN_TTL = originalAccessTokenTtl;
-    process.env.REFRESH_TOKEN_TTL_DAYS = originalRefreshTokenTtlDays;
-    vi.restoreAllMocks();
-    vi.clearAllMocks();
-  });
+  useTokenServiceTestEnv();
 
   it('includes org claim in an issued JWT and round-trips the org context', async () => {
     const now = new Date('2026-02-15T00:00:00.000Z');

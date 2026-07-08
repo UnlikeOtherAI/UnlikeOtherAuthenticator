@@ -18,6 +18,7 @@ enum VerificationTokenType {
   VERIFY_EMAIL
   PASSWORD_RESET
   TWOFA_RESET
+  LOGIN_CODE
 }
 
 enum ClientDomainIntegrationStatus {
@@ -39,6 +40,38 @@ enum BanType {
   USER
 }
 
+// Slack-style membership lifecycle (Docs/plans/2026-07-07-slack-style-login-and-membership.md §4.1).
+// ACTIVE is the only status existing rows carry; DEACTIVATED/REMOVED are set by admin actions and
+// retained as tombstones. Read paths filter to ACTIVE; "invited" is NOT a status (it stays a
+// pending TeamInvite row) to avoid placeholder accounts and email-enumeration surface.
+enum MembershipStatus {
+  ACTIVE
+  DEACTIVATED
+  REMOVED
+}
+
+// Per-team join policy (design §4.6). Gates the existing self-join mechanisms rather than replacing
+// them. INVITE_ONLY is the current implicit behaviour, so the column is dormant until later phases
+// wire the other policies. Kept in the foundation migration to avoid a follow-up schema change.
+enum TeamJoinPolicy {
+  INVITE_ONLY
+  APPROVED_DOMAIN
+  REQUEST_TO_JOIN
+  OPEN_TO_ORG
+  HIDDEN
+}
+
+// Invite approval workflow (design §4.7, Phase 4). NOT_REQUIRED is every invite created by an
+// org/team owner/admin (or the pre-Phase-4 backend endpoint) — unchanged behaviour. PENDING/APPROVED/
+// DENIED are only produced by a plain member's invite when the org's memberInvites setting is
+// "admin_approval".
+enum InviteApprovalStatus {
+  NOT_REQUIRED
+  PENDING
+  APPROVED
+  DENIED
+}
+
 model User {
   id                       String   @id @default(cuid())
   // Note: email is not globally unique because `user_scope` can be "per_domain".
@@ -56,6 +89,7 @@ model User {
   createdAt                DateTime @default(now()) @map("created_at")
 
   domainRoles            DomainRole[]
+  authIdentities         AuthIdentity[]
   tokens                 VerificationToken[]
   authorizationCodes     AuthorizationCode[]
   refreshTokens          RefreshToken[]
@@ -91,17 +125,47 @@ model DomainRole {
   @@map("domain_roles")
 }
 
+// Slack-style auth identities (design §4.2). Records which providers a person has linked, giving
+// the token `method` claim a persistence home and turning merge-by-verified-email into an auditable
+// record instead of a lost merge. Admin-managed (written via the BYPASSRLS admin client during
+// authentication); locked down for uoa_app until an app-role read path needs it.
+model AuthIdentity {
+  id              String    @id @default(cuid())
+  userId          String    @map("user_id")
+  provider        String // "email" | "google" | "github" | "microsoft" | "apple" | "facebook" | "linkedin"
+  providerSubject String    @map("provider_subject") // provider user id; for "email" the email itself
+  email           String    @db.Citext
+  providerTenant  String?   @map("provider_tenant") // e.g. Microsoft Entra `tid` (stored, not enforced)
+  verifiedAt      DateTime? @map("verified_at")
+  lastLoginAt     DateTime? @map("last_login_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // One identity per provider per user — the upsert target. NOT globally unique on
+  // (provider, providerSubject): under user_scope "per_domain" the same email or social account
+  // legitimately maps to separate user rows on different domains, so a global unique would reject
+  // those and break the backfill. Social-subject lookups use the non-unique index below and filter
+  // by the resolved domain/user.
+  @@unique([userId, provider])
+  @@index([userId])
+  @@index([provider, providerSubject])
+  @@index([email])
+  @@map("auth_identities")
+}
+
 model VerificationToken {
-  id        String                @id @default(cuid())
-  type      VerificationTokenType
-  email     String
-  userKey   String                @map("user_key")
-  domain    String?
-  configUrl String                @map("config_url")
-  tokenHash String                @unique @map("token_hash")
-  expiresAt DateTime              @map("expires_at")
-  usedAt    DateTime?             @map("used_at")
-  createdAt DateTime              @default(now()) @map("created_at")
+  id           String                @id @default(cuid())
+  type         VerificationTokenType
+  email        String
+  userKey      String                @map("user_key")
+  domain       String?
+  configUrl    String                @map("config_url")
+  tokenHash    String                @unique @map("token_hash")
+  expiresAt    DateTime              @map("expires_at")
+  usedAt       DateTime?             @map("used_at")
+  attemptCount Int                   @default(0) @map("attempt_count")
+  createdAt    DateTime              @default(now()) @map("created_at")
 
   userId       String?     @map("user_id")
   user         User?       @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -132,6 +196,10 @@ model AuthorizationCode {
   codeChallenge       String?   @map("code_challenge")
   codeChallengeMethod String?   @map("code_challenge_method")
   rememberMe          Boolean   @default(false) @map("remember_me")
+  // Workspace scope captured at select-team time (design §7 step 3-4). Dormant until Phase 3b
+  // populates it; consumeAuthorizationCode threads it into the issued session's `active` claim.
+  orgId               String?   @map("org_id")
+  teamId              String?   @map("team_id")
   expiresAt           DateTime  @map("expires_at")
   usedAt              DateTime? @map("used_at")
   createdAt           DateTime  @default(now()) @map("created_at")
@@ -170,6 +238,10 @@ model RefreshToken {
   domain            String
   clientId          String    @map("client_id")
   configUrl         String    @map("config_url")
+  // Workspace scope carried from the authorization code that created this session (design §7 step
+  // 3-4). Dormant until Phase 3b populates it; rotation preserves it onto the new row.
+  orgId             String?   @map("org_id")
+  teamId            String?   @map("team_id")
   expiresAt         DateTime  @map("expires_at")
   revokedAt         DateTime? @map("revoked_at")
   lastUsedAt        DateTime? @map("last_used_at")
@@ -368,23 +440,48 @@ model AdminAuditLog {
   @@map("admin_audit_log")
 }
 
+// Org-scoped audit log (design §4.10) — distinct from the platform-admin AdminAuditLog above.
+// Written from every membership/invite/policy mutation. Admin-managed (BYPASSRLS admin client,
+// deny-all for uoa_app) in this phase; a user-facing read endpoint is deferred to a later phase.
+model OrgAuditLog {
+  id          String   @id @default(cuid())
+  orgId       String   @map("org_id")
+  actorUserId String?  @map("actor_user_id") // null = system action (auto-enrolment, later SCIM)
+  action      String // e.g. "member.deactivated", "invite.approved", "team.join_policy_changed"
+  targetType  String   @map("target_type") // "org_member" | "team_member" | "invite" | "invite_link" | "team"
+  targetId    String   @map("target_id")
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([orgId, createdAt])
+  @@index([targetType, targetId])
+  @@map("org_audit_log")
+}
+
 model Organisation {
   id                  String       @id @default(cuid())
   domain              String
   name                String       @db.VarChar(100)
   slug                String       @db.VarChar(120)
   ownerId             String       @map("owner_id")
+  iconUrl             String?      @map("icon_url") // external URL only, no local storage (brief §15); §11.3
   twoFaPolicy         TwoFaPolicy? @map("two_fa_policy")
   allowedEmailDomains String[]     @default([]) @map("allowed_email_domains")
   allowedEmails       String[]     @default([]) @map("allowed_emails")
+  // Member-initiated invite policy (design §4.7, Phase 4): "allowed" (default, current behaviour —
+  // any active member may invite) | "admin_approval" (member invites are created PENDING and mailed
+  // only after an owner/admin approves) | "disabled" (only owner/admin may invite). Validated at the
+  // app layer, not the DB, matching the org_features JSON pattern.
+  memberInvites       String       @default("allowed") @map("member_invites")
   createdAt           DateTime     @default(now()) @map("created_at")
   updatedAt           DateTime     @updatedAt @map("updated_at")
 
-  owner          User            @relation("OrgOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  owner          User             @relation("OrgOwner", fields: [ownerId], references: [id], onDelete: Restrict)
   members        OrgMember[]
   teams          Team[]
   groups         Group[]
   invites        TeamInvite[]
+  inviteLinks    TeamInviteLink[]
   accessRequests AccessRequest[]
   apps           App[]
   bans           Ban[]
@@ -396,18 +493,21 @@ model Organisation {
 }
 
 model OrgMember {
-  id        String   @id @default(cuid())
-  orgId     String   @map("org_id")
-  userId    String   @map("user_id")
-  role      String   @default("member") // validated against org_roles config: "owner" | "admin" | "member"
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id              String           @id @default(cuid())
+  orgId           String           @map("org_id")
+  userId          String           @map("user_id")
+  role            String           @default("member") // validated against org_roles config: "owner" | "admin" | "member"
+  status          MembershipStatus @default(ACTIVE) // lifecycle (design §4.1); read paths filter to ACTIVE
+  statusChangedAt DateTime?        @map("status_changed_at")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
 
   org  Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
   user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([orgId, userId])
   @@index([userId])
+  @@index([orgId, status])
   @@map("org_members")
 }
 
@@ -544,10 +644,14 @@ model Team {
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @updatedAt @map("updated_at")
 
-  org            Organisation    @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  group          Group?          @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  iconUrl    String?        @map("icon_url") // external URL only, no local storage (brief §15); §11.3
+  joinPolicy TeamJoinPolicy @default(INVITE_ONLY) @map("join_policy") // design §4.6
+
+  org            Organisation     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  group          Group?           @relation(fields: [groupId], references: [id], onDelete: SetNull)
   members        TeamMember[]
   invites        TeamInvite[]
+  inviteLinks    TeamInviteLink[]
   accessRequests AccessRequest[]
   bans           Ban[]
 
@@ -584,18 +688,22 @@ model Ban {
 }
 
 model TeamMember {
-  id        String   @id @default(cuid())
-  teamId    String   @map("team_id")
-  userId    String   @map("user_id")
-  teamRole  String   @default("member") @map("team_role") // "owner" | "admin" | "member"
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id              String           @id @default(cuid())
+  teamId          String           @map("team_id")
+  userId          String           @map("user_id")
+  teamRole        String           @default("member") @map("team_role") // "owner" | "admin" | "member"
+  status          MembershipStatus @default(ACTIVE) // lifecycle (design §4.1)
+  statusChangedAt DateTime?        @map("status_changed_at")
+  isGuest         Boolean          @default(false) @map("is_guest") // design §4.8 — dormant until guests ship
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
 
   team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([teamId, userId])
   @@index([userId])
+  @@index([teamId, status])
   @@map("team_members")
 }
 
@@ -617,6 +725,14 @@ model TeamInvite {
   openedAt        DateTime? @map("opened_at")
   openCount       Int       @default(0) @map("open_count")
   lastSentAt      DateTime  @map("last_sent_at")
+  // Invite-level expiry (design §4.7, Phase 4), independent of the emailed token's own (much
+  // shorter) TTL. Nullable so the column is additive; the migration backfills existing unresolved
+  // invites to `lastSentAt + 30 days` and every new/resent invite sets `now + 30 days`.
+  expiresAt       DateTime? @map("expires_at")
+  // Member-initiated invite approval workflow (design §4.7, Phase 4). NOT_REQUIRED for every invite
+  // created by an owner/admin (or the backend bulk-invite endpoint) — unchanged behaviour.
+  approvalStatus     InviteApprovalStatus @default(NOT_REQUIRED) @map("approval_status")
+  requestedByUserId  String?              @map("requested_by_user_id")
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
@@ -630,6 +746,32 @@ model TeamInvite {
   @@index([acceptedAt])
   @@index([revokedAt])
   @@map("team_invites")
+}
+
+// Shareable team invite links (design §4.7, Phase 5). Slack-style: a non-personal link that
+// authorizes JOINING a team (never authentication) once the redeemer has already verified their
+// identity — redemption only happens via `POST /auth/select-team`'s `inviteLinkToken` path, gated
+// behind the Phase 3b `login_token` bridge. Only the token HASH is stored (mirrors
+// `domain-secret.service.ts`'s claim-token pattern); the plaintext token is returned exactly once,
+// at creation.
+model TeamInviteLink {
+  id              String    @id @default(cuid())
+  orgId           String    @map("org_id")
+  teamId          String    @map("team_id")
+  tokenHash       String    @unique @map("token_hash")
+  createdByUserId String?   @map("created_by_user_id")
+  roleToAssign    String    @default("member") @map("role_to_assign") // "member" | "admin" — never "owner"
+  expiresAt       DateTime  @map("expires_at") // capped at now + 30 days
+  maxUses         Int       @default(400) @map("max_uses") // capped at 400
+  useCount        Int       @default(0) @map("use_count")
+  revokedAt       DateTime? @map("revoked_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  org  Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  team Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([teamId])
+  @@map("team_invite_links")
 }
 
 model Group {
@@ -711,4 +853,23 @@ model AiTranslation {
 
   @@index([sourceHash])
   @@map("ai_translations")
+}
+
+// HUGO-539: Admin API keys — terminal/CI control of feature flags & kill switches.
+// Global/superuser-scoped opaque bearer key. The secret is never persisted, only the
+// HMAC-SHA256 digest (peppered with SHARED_SECRET). Admin-only table (deny-all RLS for uoa_app).
+model AdminApiKey {
+  id              String    @id @default(cuid())
+  name            String    @db.VarChar(120)
+  keyPrefix       String    @map("key_prefix") @db.VarChar(24)
+  secretDigest    String    @unique @map("secret_digest")
+  lastUsedAt      DateTime? @map("last_used_at")
+  expiresAt       DateTime? @map("expires_at")
+  revokedAt       DateTime? @map("revoked_at")
+  createdByUserId String?   @map("created_by_user_id")
+  createdByEmail  String?   @map("created_by_email") @db.VarChar(200)
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@map("admin_api_keys")
 }

@@ -12,6 +12,7 @@ import {
 } from './config.service.js';
 import { containsSecretValue } from './config-secret-scan.service.js';
 import { readConfigJwtFromTrustedSource } from './config-jwt-source.service.js';
+import { verifyConfigJwtViaPublishedJwks } from './auto-onboarding.service.js';
 import {
   buildConfigGuidance,
   buildConfigSummary,
@@ -247,26 +248,45 @@ export async function verifyClientConfig(
       return response;
     }
 
+    let signaturePassNote = '';
+
     if (jwksUrl) {
       try {
         await verifyConfigJwtSignature(configJwt, jwksUrl);
-        response.jwt_signature_valid = true;
-        passedCheck(response, 'signature', 'The configured JWKS verified the RS256 config JWT signature.');
+        signaturePassNote = 'The configured JWKS verified the RS256 config JWT signature.';
       } catch {
-        response.jwt_signature_valid = false;
-        failedCheck(
-          response,
-          'signature',
-          'CONFIG_JWKS_SIGNATURE_INVALID',
-          'The configured JWKS did not verify the config JWT signature.',
-          ['Check that the JWT header includes a valid kid, uses RS256, and matches the configured JWKS.'],
-        );
+        // Fall through to the published-JWKS path below.
       }
+    }
+
+    if (!signaturePassNote) {
+      // Mirror the /auth runtime, which — when the deployment JWKS and per-domain DB
+      // keys don't match the JWT's kid — verifies against the JWKS the config publishes
+      // at its own `jwks_url`. That published key set is the source of truth the live
+      // runtime ultimately trusts, so the validator must not report a signature the
+      // runtime accepts as invalid (issue #13).
+      try {
+        await verifyConfigJwtViaPublishedJwks(configJwt);
+        signaturePassNote =
+          "Verified against the JWKS published at the config's own jwks_url — the same key resolution the /auth runtime uses.";
+      } catch {
+        // Both the configured/DB path and the published-JWKS path failed.
+      }
+    }
+
+    if (signaturePassNote) {
+      response.jwt_signature_valid = true;
+      passedCheck(response, 'signature', signaturePassNote);
     } else {
-      skippedCheck(
+      response.jwt_signature_valid = false;
+      failedCheck(
         response,
         'signature',
-        'Signature verification was skipped because no JWKS URL was configured.',
+        'CONFIG_JWKS_SIGNATURE_INVALID',
+        'No configured, registered, or published JWKS verified the config JWT signature.',
+        [
+          "Check that the JWT header includes a valid kid, uses RS256, and that the matching public key is served at the config payload's jwks_url (its host must equal the domain claim).",
+        ],
       );
     }
   } else {

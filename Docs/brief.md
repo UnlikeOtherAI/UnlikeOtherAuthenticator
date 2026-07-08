@@ -213,13 +213,27 @@ This service is **stateless where possible**, standards-based, and API-first.
 
 ### Password Rules
 
-* Minimum 8 characters
-* At least:
+> **Decision 2026-06-18 (HUGO-147):** Length is the primary strength criterion. A special
+> character is **NOT required** (previously it was). This supersedes the earlier rule that
+> mandated 1 special character.
 
-  * 1 uppercase
-  * 1 lowercase
-  * 1 number
-  * 1 special character (`-` allowed)
+* Minimum 8 characters (length is what matters most — longer is stronger)
+* Recommended (encouraged, **not** enforced as hard blockers): uppercase, lowercase, number
+* Special characters are **allowed but never required**
+* A strong alphanumeric-only password (e.g. a 15-char random string) MUST be accepted
+
+### Password UX & Error Transparency (HUGO-147)
+
+The user must always know **why** they can't proceed and **how** to fix it:
+
+* **On set-password / reset-password:** show the requirements live, so the user sees in real
+  time whether their password meets them before submitting.
+* **On login:** a valid password must never be rejected ("don't harass the user"). If sign-in
+  fails, tell the user the real reason in a clear, localized message — never a generic or
+  misleading one (e.g. "Something went wrong. The link may have expired." must not be shown
+  for a password-policy or credentials failure).
+* This requires the API to surface a machine-readable, distinguishable error code (not a single
+  generic body) so the UI can map it to a specific message.
 
 ### Password Storage
 
@@ -248,6 +262,10 @@ This service is **stateless where possible**, standards-based, and API-first.
   * Existing user → login link
   * New user → verification + set password
 * **Email copy must remain generic**: subjects and body text must not explicitly indicate whether an account already exists (even though the backend sends different links depending on state)
+
+### Product-Specific Existing-Account UX Opt-In
+
+The default remains strict no-enumeration: existing users receive the same generic registration response and a neutral login-link email. A consuming product may explicitly opt into the tradeoff with signed config claim `existing_user_registration_behavior: "inline_sign_in"`. In that mode, `POST /auth/register` returns a generic public error envelope with machine code `EMAIL_ALREADY_REGISTERED` for an existing user, sends no login-link email, and the Auth UI shows localized copy routing the user to sign in or reset their password. Use this only where the product has accepted the account-enumeration tradeoff.
 
 ---
 
@@ -1403,7 +1421,7 @@ Each task references the line number(s) where the relevant specification lives i
 
 | #  | Task | Ref (line) |
 |----|------|------------|
-| 4.1 | Implement password validation rules: min 8 chars, 1 upper, 1 lower, 1 number, 1 special char | L202–210 |
+| 4.1 | Implement password validation rules: min 8 chars; length-first; special char NOT required (see Password Rules decision 2026-06-18 / HUGO-147) | L202–210 |
 | 4.2 | Implement secure password hashing (bcrypt/argon2) | L212–215 |
 | 4.3 | Build registration endpoint with enumeration protection — always respond "We sent instructions to your email" | L219–237 |
 | 4.4 | Implement email-determines-next-step logic: existing user gets login link, new user gets verification + set password | L234–237 |
@@ -1546,7 +1564,9 @@ Each task references the line number(s) where the relevant specification lives i
 
 ## 2026-04 Super-users and Per-Domain Email
 
-The Admin panel includes a **Super-users** page for operators who already hold `SUPERUSER` on `ADMIN_AUTH_DOMAIN`. Super-user access is represented by a `domain_roles` row where `domain = ADMIN_AUTH_DOMAIN` and `role = SUPERUSER`; this is separate from customer-domain bootstrap superusers.
+The Admin panel includes a **Super-users** page for operators who already hold `SUPERUSER` on `ADMIN_AUTH_DOMAIN`. Super-user access is represented by a `domain_roles` row where `domain = ADMIN_AUTH_DOMAIN` and `role = SUPERUSER`; this is distinct from per-domain bootstrap superusers (the first login on each customer domain).
+
+A user granted `SUPERUSER` on `ADMIN_AUTH_DOMAIN` (a **platform superuser**) is reflected as `role: "superuser"` in the `access_token` `claims.role` for tokens issued on **any** domain — not just the admin panel. This is what makes the admin **Super-users** grant visible to client websites. The per-domain bootstrap superuser still resolves to `superuser` on its own domain on top of this; `claims.role` is `superuser` when either holds.
 
 Registered domains can opt into UOA-managed transactional email. Admin operators configure the mailing domain, from address, optional from name, and optional default reply-to on the domain detail page. SES registration returns DNS TXT and DKIM CNAME records for the operator to publish. Sending is enabled only after both SES verification and DKIM report `Success`.
 

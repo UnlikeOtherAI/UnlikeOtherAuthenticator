@@ -12,6 +12,7 @@ export type EndpointSchema = {
   query?: Record<string, string>;
   body?: Record<string, string>;
   response?: Record<string, string>;
+  notes?: string;
 };
 
 const baseEndpoints: EndpointSchema[] = [
@@ -128,9 +129,10 @@ const orgEndpoints: EndpointSchema[] = [
   {
     method: 'POST',
     path: '/org/organisations',
-    description: 'Create organisation',
-    auth: 'domain hash bearer token',
-    body: { name: 'string (required)', owner_id: 'string (required)' },
+    description:
+      'Create organisation owned by the calling user (X-UOA-Access-Token). Non-superusers also require org_features.allow_user_create_org=true, else 403 ORG_CREATION_NOT_ALLOWED.',
+    auth: 'domain hash bearer token + X-UOA-Access-Token header (the new org owner)',
+    body: { name: 'string (required, 1-100)' },
   },
   {
     method: 'GET',
@@ -143,7 +145,10 @@ const orgEndpoints: EndpointSchema[] = [
     path: '/org/organisations/:orgId',
     description: 'Update organisation',
     auth: 'domain hash bearer token',
-    body: { name: 'string (optional)' },
+    body: {
+      name: 'string (optional)',
+      'member_invites?': 'string — "allowed" (default) | "admin_approval" | "disabled"; owner/admin only, omitted leaves it unchanged; gates the member-initiated invite endpoint',
+    },
   },
   {
     method: 'DELETE',
@@ -156,6 +161,9 @@ const orgEndpoints: EndpointSchema[] = [
     path: '/org/organisations/:orgId/members',
     description: 'List organisation members',
     auth: 'domain hash bearer token',
+    query: {
+      'status?': 'string — ACTIVE (default) | DEACTIVATED | REMOVED | all',
+    },
   },
   {
     method: 'POST',
@@ -174,8 +182,22 @@ const orgEndpoints: EndpointSchema[] = [
   {
     method: 'DELETE',
     path: '/org/organisations/:orgId/members/:userId',
-    description: 'Remove organisation member',
+    description: 'Remove organisation member (soft-remove: status becomes REMOVED, tombstoned for audit; also revokes the member\'s sessions on this domain)',
     auth: 'domain hash bearer token',
+  },
+  {
+    method: 'POST',
+    path: '/org/organisations/:orgId/members/:userId/deactivate',
+    description: 'Deactivate an organisation member: suspends access (org + team rows become DEACTIVATED, sessions on this domain revoked) without deleting history; cannot deactivate an owner (transfer ownership first)',
+    auth: 'domain hash bearer token',
+    response: { ok: 'true' },
+  },
+  {
+    method: 'POST',
+    path: '/org/organisations/:orgId/members/:userId/reactivate',
+    description: 'Reactivate a DEACTIVATED organisation member (org + team rows return to ACTIVE); does not restore sessions — the user signs in again',
+    auth: 'domain hash bearer token',
+    response: { ok: 'true' },
   },
   {
     method: 'POST',
@@ -226,6 +248,7 @@ const orgEndpoints: EndpointSchema[] = [
       name: 'string (optional)',
       'slug?': 'string — optional custom team slug; omitted leaves the current slug unchanged',
       description: 'string (optional)',
+      'joinPolicy?': 'string — INVITE_ONLY (default) | APPROVED_DOMAIN | REQUEST_TO_JOIN | OPEN_TO_ORG | HIDDEN; owner/admin only, omitted leaves the current policy unchanged',
     },
     response: {
       slug: 'string — unique team slug within the organisation',
@@ -239,16 +262,30 @@ const orgEndpoints: EndpointSchema[] = [
   },
   {
     method: 'POST',
+    path: '/org/organisations/:orgId/teams/:teamId/join',
+    description: 'Self-join a team whose joinPolicy is OPEN_TO_ORG (caller must be an ACTIVE member of the team\'s org); reactivates a previously removed/deactivated membership instead of duplicating it',
+    auth: 'domain hash bearer token + access token (X-UOA-Access-Token header)',
+    response: {
+      200: 'team member record',
+      400: 'generic error — team not found, policy is not OPEN_TO_ORG, or already an active member',
+    },
+  },
+  {
+    method: 'POST',
     path: '/org/organisations/:orgId/teams/:teamId/invitations',
-    description: 'Bulk invite users to a team and send invitation emails',
-    auth: 'domain hash bearer token',
+    description: 'Dual-mode: with an X-UOA-Access-Token header, a single member-initiated invite gated by the org\'s member_invites setting (owner/admin always allowed; plain member per setting; no email enumeration in the response). Without that header, the original trusted-backend bulk invite (unchanged).',
+    auth: 'domain hash bearer token; add access token (X-UOA-Access-Token header) for the member-initiated variant',
     body: {
       'redirectUrl?': 'string — optional final OAuth redirect URL',
-      'invitedBy?': 'object — optional inviter metadata { userId?, name?, email? }',
-      invites: 'array (required, 1-200) — [{ email: string, name?: string, teamRole?: string }]',
+      'invitedBy?': 'object — backend-only variant: optional inviter metadata { userId?, name?, email? }',
+      'invites?': 'array (backend-only variant, required, 1-200) — [{ email: string, name?: string, teamRole?: string }]',
+      'email?': 'string — member-initiated variant (required instead of invites)',
+      'name?': 'string — member-initiated variant',
+      'teamRole?': 'string — member-initiated variant',
     },
     response: {
-      results: 'array — per-email status: invited | resent_existing | already_member | conflict',
+      results: 'array (backend-only variant) — per-email status: invited | resent_existing | already_member | existing_user | conflict',
+      status: '"ok" (member-initiated variant) — always the same shape regardless of outcome (no enumeration)',
     },
   },
   {
@@ -257,14 +294,65 @@ const orgEndpoints: EndpointSchema[] = [
     description: 'List invitation history for a team',
     auth: 'domain hash bearer token',
     response: {
-      data: 'array — invite records with status, inviter, send/open, accepted/declined state',
+      data: 'array — invite records with status (pending|accepted|declined|replaced|expired), approval_status (not_required|pending|approved|denied), expiresAt, inviter, send/open, accepted/declined state',
     },
   },
   {
     method: 'POST',
     path: '/org/organisations/:orgId/teams/:teamId/invitations/:inviteId/resend',
-    description: 'Resend a pending team invitation email',
+    description: 'Resend a pending team invitation email; refreshes the invite\'s expiry to now + 30 days',
     auth: 'domain hash bearer token',
+  },
+  {
+    method: 'GET',
+    path: '/org/organisations/:orgId/invitations',
+    description: 'List invites awaiting member-invite approval for the organisation (requires ?approval=pending)',
+    auth: 'domain hash bearer token + access token (X-UOA-Access-Token header), owner/admin only',
+    query: { approval: 'string (required) — must be "pending"' },
+    response: { data: 'array — invite records with approval_status: pending' },
+  },
+  {
+    method: 'POST',
+    path: '/org/organisations/:orgId/invitations/:inviteId/approve',
+    description: 'Approve a PENDING member-initiated invite: sets approval_status APPROVED and sends the invite email',
+    auth: 'domain hash bearer token + access token (X-UOA-Access-Token header), owner/admin only',
+  },
+  {
+    method: 'POST',
+    path: '/org/organisations/:orgId/invitations/:inviteId/deny',
+    description: 'Deny a PENDING member-initiated invite: sets approval_status DENIED; sends nothing (silent to the invitee)',
+    auth: 'domain hash bearer token + access token (X-UOA-Access-Token header), owner/admin only',
+  },
+  {
+    method: 'POST',
+    path: '/org/organisations/:orgId/teams/:teamId/invite-links',
+    description: 'Create a shareable team invite link (Slack-style). Owner/admin (org or team) only; refused (generic error) when the team\'s joinPolicy is HIDDEN. roleToAssign may be "member" (default) or "admin" — never "owner". Returns the plaintext token ONCE; only its hash is stored.',
+    auth: 'domain hash bearer token + access token (X-UOA-Access-Token header)',
+    body: {
+      'roleToAssign?': 'string — "member" (default) | "admin"',
+      'maxUses?': 'number — capped at 400 (default 400)',
+      'expiresInDays?': 'number — capped at 30 (default 30)',
+    },
+    response: {
+      token: 'string — the plaintext invite-link token; shown only in this response',
+      link: 'object — { id, roleToAssign, expiresAt, maxUses, useCount, revokedAt, createdAt } (never the token)',
+    },
+  },
+  {
+    method: 'GET',
+    path: '/org/organisations/:orgId/teams/:teamId/invite-links',
+    description: 'List invite links for a team (never includes the token itself)',
+    auth: 'domain hash bearer token + access token (X-UOA-Access-Token header)',
+    response: {
+      data: 'array — { id, roleToAssign, expiresAt, maxUses, useCount, revokedAt, createdAt }',
+    },
+  },
+  {
+    method: 'DELETE',
+    path: '/org/organisations/:orgId/teams/:teamId/invite-links/:linkId',
+    description: 'Revoke a team invite link; idempotent (revoking an already-revoked link succeeds)',
+    auth: 'domain hash bearer token + access token (X-UOA-Access-Token header)',
+    response: { revoked: 'true' },
   },
   {
     method: 'GET',
@@ -342,6 +430,30 @@ const orgEndpoints: EndpointSchema[] = [
   },
 ];
 
+// Every /org/* endpoint resolves its tenant from a strict domain query and is gated
+// by the org feature flag, so the machine schema must advertise that uniformly rather
+// than per-endpoint (issue #7 — integrators were blocked because `domain` and the
+// X-UOA-Access-Token requirement were undocumented).
+const ORG_DOMAIN_QUERY: Record<string, string> = {
+  domain: 'string (required) — must match the config domain for domain-hash auth',
+  config_url: 'string (required)',
+};
+
+const ORG_CONTRACT_NOTE =
+  'Requires org_features.enabled=true (otherwise 404). Org/team reads and all mutations ' +
+  'also require the X-UOA-Access-Token header — the acting user is its `userId` claim, and a ' +
+  'new organisation is owned by that user (the body never carries owner_id). Non-superusers can ' +
+  'only create an organisation when org_features.allow_user_create_org=true, else 403 ' +
+  'ORG_CREATION_NOT_ALLOWED.';
+
+function withOrgContract(list: EndpointSchema[]): EndpointSchema[] {
+  return list.map((endpoint) => ({
+    ...endpoint,
+    query: { ...ORG_DOMAIN_QUERY, ...endpoint.query },
+    notes: endpoint.notes ?? ORG_CONTRACT_NOTE,
+  }));
+}
+
 export const endpoints: EndpointSchema[] = [
   ...baseEndpoints,
   ...configDebugEndpoints,
@@ -349,7 +461,7 @@ export const endpoints: EndpointSchema[] = [
   ...appEndpoints,
   ...emailEndpoints,
   ...domainEndpoints,
-  ...orgEndpoints,
+  ...withOrgContract(orgEndpoints),
   ...integrationsEndpoints,
   ...internalAdminEndpoints,
   ...oauthEndpoints,

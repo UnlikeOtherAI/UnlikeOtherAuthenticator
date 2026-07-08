@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { adminService } from '../../services/admin-service';
-import type { AppPlatformKind, IntegrationRequestStatus } from './types';
+import type { AppFlagSummary, AppPlatformKind, IntegrationRequestStatus } from './types';
 import type { KillSwitchInput } from '../../services/admin-service';
 
 export function useDashboardQuery() {
@@ -116,7 +116,20 @@ export function useCreateAppMutation() {
   });
 }
 
-function invalidateFeatureFlagQueries(queryClient: ReturnType<typeof useQueryClient>) {
+function invalidateFeatureFlagQueries(queryClient: ReturnType<typeof useQueryClient>, updatedApp?: AppFlagSummary) {
+  if (updatedApp) {
+    queryClient.setQueryData<Awaited<ReturnType<typeof adminService.getSettings>>>(
+      ['admin', 'settings'],
+      (current) =>
+        current
+          ? {
+              ...current,
+              apps: current.apps.map((app) => (app.id === updatedApp.id ? updatedApp : app)),
+            }
+          : current,
+    );
+  }
+
   void queryClient.invalidateQueries({ queryKey: ['admin', 'dashboard'] });
   void queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] });
 }
@@ -127,7 +140,7 @@ export function useCreateFeatureFlagMutation(appId: string) {
   return useMutation({
     mutationFn: (input: { key: string; description?: string; defaultState: boolean }) =>
       adminService.createFeatureFlag(appId, input),
-    onSuccess: () => invalidateFeatureFlagQueries(queryClient),
+    onSuccess: (updatedApp) => invalidateFeatureFlagQueries(queryClient, updatedApp),
   });
 }
 
@@ -137,7 +150,7 @@ export function useUpdateFeatureFlagMutation(appId: string, flagId: string) {
   return useMutation({
     mutationFn: (input: { key: string; description?: string; defaultState: boolean }) =>
       adminService.updateFeatureFlag(appId, flagId, input),
-    onSuccess: () => invalidateFeatureFlagQueries(queryClient),
+    onSuccess: (updatedApp) => invalidateFeatureFlagQueries(queryClient, updatedApp),
   });
 }
 
@@ -146,7 +159,7 @@ export function useDeleteFeatureFlagMutation(appId: string) {
 
   return useMutation({
     mutationFn: (flagId: string) => adminService.deleteFeatureFlag(appId, flagId),
-    onSuccess: () => invalidateFeatureFlagQueries(queryClient),
+    onSuccess: (updatedApp) => invalidateFeatureFlagQueries(queryClient, updatedApp),
   });
 }
 
@@ -155,7 +168,7 @@ export function useCreateKillSwitchMutation(appId: string) {
 
   return useMutation({
     mutationFn: (input: KillSwitchInput) => adminService.createKillSwitch(appId, input),
-    onSuccess: () => invalidateFeatureFlagQueries(queryClient),
+    onSuccess: (updatedApp) => invalidateFeatureFlagQueries(queryClient, updatedApp),
   });
 }
 
@@ -164,7 +177,7 @@ export function useUpdateKillSwitchMutation(appId: string, killSwitchId: string)
 
   return useMutation({
     mutationFn: (input: KillSwitchInput) => adminService.updateKillSwitch(appId, killSwitchId, input),
-    onSuccess: () => invalidateFeatureFlagQueries(queryClient),
+    onSuccess: (updatedApp) => invalidateFeatureFlagQueries(queryClient, updatedApp),
   });
 }
 
@@ -173,7 +186,7 @@ export function useDeleteKillSwitchMutation(appId: string) {
 
   return useMutation({
     mutationFn: (killSwitchId: string) => adminService.deleteKillSwitch(appId, killSwitchId),
-    onSuccess: () => invalidateFeatureFlagQueries(queryClient),
+    onSuccess: (updatedApp) => invalidateFeatureFlagQueries(queryClient, updatedApp),
   });
 }
 
@@ -205,6 +218,32 @@ export function useDomainEmailQuery(domain: string | null | undefined) {
     queryKey: ['admin', 'domain-email', domain],
     queryFn: () => adminService.getDomainEmail(domain ?? ''),
     enabled: Boolean(domain),
+  });
+}
+
+export function useApiKeysQuery() {
+  return useQuery({ queryKey: ['admin', 'api-keys'], queryFn: adminService.listApiKeys });
+}
+
+export function useCreateApiKeyMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: { name: string; expiresAt?: string | null }) => adminService.createApiKey(input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'api-keys'] });
+    },
+  });
+}
+
+export function useRevokeApiKeyMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => adminService.revokeApiKey(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'api-keys'] });
+    },
   });
 }
 

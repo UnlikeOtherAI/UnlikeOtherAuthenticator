@@ -14,6 +14,29 @@ import {
   isP2002Error,
 } from './organisation.service.base.js';
 
+export type TeamJoinPolicyValue =
+  | 'INVITE_ONLY'
+  | 'APPROVED_DOMAIN'
+  | 'REQUEST_TO_JOIN'
+  | 'OPEN_TO_ORG'
+  | 'HIDDEN';
+
+const ALLOWED_TEAM_JOIN_POLICIES = new Set<TeamJoinPolicyValue>([
+  'INVITE_ONLY',
+  'APPROVED_DOMAIN',
+  'REQUEST_TO_JOIN',
+  'OPEN_TO_ORG',
+  'HIDDEN',
+]);
+
+export function normalizeTeamJoinPolicy(value: string): TeamJoinPolicyValue {
+  const normalized = value.trim().toUpperCase();
+  if (!ALLOWED_TEAM_JOIN_POLICIES.has(normalized as TeamJoinPolicyValue)) {
+    throw new AppError('BAD_REQUEST', 400);
+  }
+  return normalized as TeamJoinPolicyValue;
+}
+
 export type TeamRecord = {
   id: string;
   orgId: string;
@@ -22,6 +45,7 @@ export type TeamRecord = {
   slug: string;
   description: string | null;
   isDefault: boolean;
+  joinPolicy: TeamJoinPolicyValue;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -39,7 +63,9 @@ export type TeamWithMembersRecord = TeamRecord & {
   members: TeamMemberRecord[];
 };
 
-const ALLOWED_TEAM_ROLES = new Set(['member', 'lead']);
+// Canonical team roles (api-changes-rebac.md §1, design §4.9). The pre-ReBAC `lead` value is
+// removed and migrated to `admin` in 20260707104937_slack_membership_foundation.
+const ALLOWED_TEAM_ROLES = new Set(['owner', 'admin', 'member']);
 const TEAM_SLUG_ALLOWED_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 const TEAM_SLUG_FALLBACK = 'team';
 const MAX_TEAM_SLUG_LENGTH = 120;
@@ -187,6 +213,7 @@ export function toTeamRecord(row: {
   slug: string;
   description: string | null;
   isDefault: boolean;
+  joinPolicy?: string;
   createdAt: Date;
   updatedAt: Date;
 }): TeamRecord {
@@ -198,6 +225,7 @@ export function toTeamRecord(row: {
     slug: row.slug,
     description: row.description,
     isDefault: row.isDefault,
+    joinPolicy: (row.joinPolicy ?? 'INVITE_ONLY') as TeamJoinPolicyValue,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -226,7 +254,7 @@ export async function requireTeamManager(
   orgId: string,
   userId: string,
 ): Promise<void> {
-  const actorMembership = await getOrganisationMember(prisma, { orgId, userId });
+  const actorMembership = await getOrganisationMember(prisma, { orgId, userId }, { activeOnly: true });
   if (!actorMembership || !isTeamManager(actorMembership.role)) {
     throw new AppError('FORBIDDEN', 403);
   }
@@ -254,7 +282,7 @@ export async function resolveAndAuthorizeTeamOrg(
   const actorMembership = await getOrganisationMember(prisma, {
     orgId: org.id,
     userId: params.actorUserId,
-  });
+  }, { activeOnly: true });
   if (!actorMembership) {
     throw new AppError('FORBIDDEN', 403);
   }

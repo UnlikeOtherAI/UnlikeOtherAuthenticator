@@ -18,6 +18,10 @@ const TwoFaSetupSchema = z.object({
   request_access: z.boolean().optional(),
   code_challenge: z.string().min(1).optional(),
   code_challenge_method: z.literal('S256').optional(),
+  // Workspace scope carried through from /auth/select-team (Phase 3b, design §4.4). Absent for
+  // every pre-existing caller — unchanged behaviour.
+  org_id: z.string().min(1).optional(),
+  team_id: z.string().min(1).optional(),
 });
 
 export type TwoFaSetupToken = {
@@ -31,6 +35,8 @@ export type TwoFaSetupToken = {
   requestAccess: boolean;
   codeChallenge?: string;
   codeChallengeMethod?: 'S256';
+  orgId?: string;
+  teamId?: string;
 };
 
 function sharedSecretKey(sharedSecret: string): Uint8Array {
@@ -48,6 +54,8 @@ export async function signTwoFaSetupToken(params: {
   requestAccess?: boolean;
   codeChallenge?: string;
   codeChallengeMethod?: 'S256';
+  orgId?: string;
+  teamId?: string;
   sharedSecret: string;
   audience: string;
   now?: Date;
@@ -68,6 +76,8 @@ export async function signTwoFaSetupToken(params: {
       request_access: params.requestAccess ?? false,
       code_challenge: params.codeChallenge,
       code_challenge_method: params.codeChallengeMethod,
+      org_id: params.orgId,
+      team_id: params.teamId,
     })
       .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
       .setIssuer(TWOFA_SETUP_ISSUER)
@@ -121,5 +131,7 @@ export async function verifyTwoFaSetupToken(params: {
     token.codeChallenge = parsed.code_challenge;
     token.codeChallengeMethod = parsed.code_challenge_method;
   }
+  if (parsed.org_id) token.orgId = parsed.org_id;
+  if (parsed.team_id) token.teamId = parsed.team_id;
   return token;
 }

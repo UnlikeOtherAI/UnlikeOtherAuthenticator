@@ -55,6 +55,7 @@ const safeConfigJwtPayloadKeys = new Set([
   'debug_enabled',
   'user_scope',
   'allow_registration',
+  'existing_user_registration_behavior',
   'registration_mode',
   'allowed_registration_domains',
   'registration_domain_mapping',

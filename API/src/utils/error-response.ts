@@ -27,6 +27,16 @@ type PublicExplanation = {
 
 const DEFAULT_HINTS = ['Check the request shape and server logs for more context.'];
 const GENERIC_PUBLIC_ERROR_BODY: PublicErrorBody = { error: PUBLIC_ERROR_MESSAGE };
+const PRODUCTION_PUBLIC_ERROR_CODES = new Set([
+  'PASSWORD_POLICY_VIOLATION',
+  'MISSING_PASSWORD',
+  'INVALID_TOKEN',
+  'INVALID_TOKEN_TYPE',
+  'INVALID_TOKEN_CONFIG_URL',
+  'INVALID_TOKEN_USER',
+  'TOKEN_EXPIRED',
+  'TOKEN_ALREADY_USED',
+]);
 
 function defaultExplanation(code: string, statusCode: number): PublicExplanation {
   if (statusCode === 400) {
@@ -270,9 +280,7 @@ function explainKnownCode(
     case 'PASSWORD_POLICY_VIOLATION':
       return {
         summary: 'The supplied password does not satisfy the password policy.',
-        hints: [
-          'Use at least 8 characters including uppercase, lowercase, number, and special character.',
-        ],
+        hints: ['Use at least 8 characters. Longer passwords are stronger.'],
       };
     case 'USER_ALREADY_HAS_PASSWORD':
       return {
@@ -307,6 +315,24 @@ function explainKnownCode(
         summary:
           'The current user does not have the organisation role required for this operation.',
         hints: ['Check the caller role and the minimum role required by this route.'],
+      };
+    case 'ORG_FEATURES_DISABLED':
+      return {
+        summary: 'Organisation features are not enabled for this client config.',
+        hints: ['Set org_features.enabled=true in the signed config to use /org/* endpoints.'],
+      };
+    case 'ORG_CREATION_NOT_ALLOWED':
+      return {
+        summary:
+          'This user is not allowed to create an organisation under the current client config.',
+        hints: [
+          'Set org_features.allow_user_create_org=true to let non-superusers create organisations.',
+        ],
+      };
+    case 'DOMAIN_MISMATCH':
+      return {
+        summary: 'The domain query parameter does not match the verified config domain.',
+        hints: ['Send domain equal to the domain claim of the config returned by config_url.'],
       };
     case 'NOT_SUPERUSER':
       return {
@@ -406,6 +432,11 @@ export function buildPublicErrorBody(params: {
   hints?: string[];
 }): PublicErrorBody {
   if (!getEnv().DEBUG_ENABLED) {
+    const code = deriveErrorCode(params.error, params.statusCode, params.code);
+    if (PRODUCTION_PUBLIC_ERROR_CODES.has(code)) {
+      return { error: PUBLIC_ERROR_MESSAGE, code };
+    }
+
     return GENERIC_PUBLIC_ERROR_BODY;
   }
 

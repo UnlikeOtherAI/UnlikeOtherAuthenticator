@@ -132,6 +132,7 @@ describe('access request services', () => {
     prisma.team.findFirst.mockResolvedValue({
       id: 'team-1',
       name: 'Core Team',
+      joinPolicy: 'INVITE_ONLY',
     });
     prisma.user.findUnique.mockResolvedValue({
       id: 'user-1',
@@ -187,6 +188,7 @@ describe('access request services', () => {
     prisma.team.findFirst.mockResolvedValue({
       id: 'team-1',
       name: 'Core Team',
+      joinPolicy: 'INVITE_ONLY',
     });
     prisma.user.findUnique.mockResolvedValue({
       id: 'user-1',

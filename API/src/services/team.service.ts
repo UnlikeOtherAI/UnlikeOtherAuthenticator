@@ -1,5 +1,6 @@
 export type {
   CursorList,
+  TeamJoinPolicyValue,
   TeamMemberRecord,
   TeamRecord,
   TeamWithMembersRecord,
@@ -13,4 +14,9 @@ export {
   deleteTeam,
 } from './team.service.teams.js';
 
-export { addTeamMember, changeTeamMemberRole, removeTeamMember } from './team.service.members.js';
+export {
+  addTeamMember,
+  changeTeamMemberRole,
+  removeTeamMember,
+  selfJoinTeam,
+} from './team.service.members.js';

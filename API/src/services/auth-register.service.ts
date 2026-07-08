@@ -44,6 +44,10 @@ type RegisterDeps = {
   prisma?: RegisterPrisma;
 };
 
+type RegistrationInstructionResult =
+  | { status: 'sent' }
+  | { status: 'existing_user' };
+
 /**
  * Brief 11: equalize CPU/IO between the user-exists and user-missing/blocked branches
  * so the response time does not leak account existence or registration eligibility.
@@ -130,11 +134,11 @@ export async function requestRegistrationInstructions(
     ip?: string | null;
   },
   deps?: RegisterDeps,
-): Promise<void> {
+): Promise<RegistrationInstructionResult> {
   const env = deps?.env ?? getEnv();
 
   // Keep API behavior stable in environments where the DB isn't configured yet.
-  if (!env.DATABASE_URL) return;
+  if (!env.DATABASE_URL) return { status: 'sent' };
 
   const { userKey, domain, email } = buildUserIdentity({
     userScope: params.config.user_scope,
@@ -151,7 +155,7 @@ export async function requestRegistrationInstructions(
   });
   if (banned) {
     await (deps?.consumeAccountFlowTimingBudget ?? consumeAccountFlowTimingBudget)();
-    return;
+    return { status: 'sent' };
   }
 
   const prisma = deps?.prisma ?? getPrisma();
@@ -159,6 +163,10 @@ export async function requestRegistrationInstructions(
     where: { userKey },
     select: { id: true },
   });
+
+  if (existing && params.config.existing_user_registration_behavior === 'inline_sign_in') {
+    return { status: 'existing_user' };
+  }
 
   if (
     !existing &&
@@ -170,7 +178,7 @@ export async function requestRegistrationInstructions(
   ) {
     // Don't leak "registration blocked" vs "registration in progress" via timing.
     await (deps?.consumeAccountFlowTimingBudget ?? consumeAccountFlowTimingBudget)();
-    return;
+    return { status: 'sent' };
   }
 
   const token = deps?.generateEmailToken ? deps.generateEmailToken() : generateEmailToken();
@@ -217,7 +225,7 @@ export async function requestRegistrationInstructions(
       codeChallengeMethod: params.codeChallengeMethod,
     });
     await (deps?.sendAccountExistsEmail ?? sendAccountExistsEmail)({ to: email, link, theme });
-    return;
+    return { status: 'sent' };
   }
 
   const link = buildRegistrationEmailLandingLink({
@@ -235,7 +243,7 @@ export async function requestRegistrationInstructions(
       link,
       theme,
     });
-    return;
+    return { status: 'sent' };
   }
 
   await (deps?.sendVerifyEmailSetPasswordEmail ?? sendVerifyEmailSetPasswordEmail)({
@@ -243,4 +251,5 @@ export async function requestRegistrationInstructions(
     link,
     theme,
   });
+  return { status: 'sent' };
 }

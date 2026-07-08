@@ -2,6 +2,7 @@ import type { Prisma, PrismaClient } from '@prisma/client';
 
 import { getEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
+import { runInTransaction } from '../db/tenant-context.js';
 import { AppError } from '../utils/errors.js';
 import type { ClientConfig } from './config.service.js';
 import {
@@ -96,7 +97,7 @@ async function createPersonalOrgAndTeam(params: {
     data: {
       teamId: team.id,
       userId: params.user.id,
-      teamRole: 'lead',
+      teamRole: 'admin',
     },
   });
 }
@@ -133,7 +134,7 @@ async function createPersonalTeamForExistingOrg(params: {
     data: {
       teamId: team.id,
       userId: params.user.id,
-      teamRole: 'lead',
+      teamRole: 'admin',
     },
   });
 
@@ -181,7 +182,7 @@ export async function ensureUserHasRequiredTeam(
     return;
   }
 
-  await prisma.$transaction(async (tx) => {
+  await runInTransaction(prisma, async (tx) => {
     const orgMembership = await tx.orgMember.findFirst({
       where: {
         userId,

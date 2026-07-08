@@ -10,7 +10,7 @@ import { finalizeAuthenticatedUser } from '../../services/access-request-flow.se
 import { verifyAccessToken, type AccessTokenClaims } from '../../services/access-token.service.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
 import { revokeAllRefreshTokensForUser } from '../../services/refresh-token.service.js';
-import { selectRedirectUrl } from '../../services/token.service.js';
+import { selectRedirectUrl } from '../../services/authorization-code.service.js';
 import { disableTwoFactorForUser } from '../../services/twofactor-disable.service.js';
 import { enrollTwoFactorForUser } from '../../services/twofactor-enroll.service.js';
 import { resolveTwoFaPolicy } from '../../services/twofactor-policy.service.js';
@@ -177,6 +177,8 @@ export function registerTwoFactorSelfServiceRoutes(app: FastifyInstance): void {
             codeChallenge: setup.codeChallenge,
             codeChallengeMethod: setup.codeChallengeMethod,
             ip: request.ip ?? null,
+            orgId: setup.orgId,
+            teamId: setup.teamId,
           },
           { prisma },
         );

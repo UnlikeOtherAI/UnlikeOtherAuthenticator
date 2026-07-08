@@ -11,7 +11,12 @@ import { registerAuthDomainMappingRoute } from './domain-mapping.js';
 import { registerAuthRevokeRoute } from './revoke.js';
 import { registerAuthRegisterRoute } from './register.js';
 import { registerAuthResetPasswordRoutes } from './reset-password.js';
+import { registerAuthSelectTeamRoute } from './auth-select-team.js';
+import { registerAuthSessionChoicesRoute } from './auth-session-choices.js';
+import { registerAuthStartRoute } from './auth-start.js';
+import { registerAuthTeamInviteLinkRoute } from './team-invite-link.js';
 import { registerAuthTokenExchangeRoute } from './token-exchange.js';
+import { registerAuthVerifyCodeRoute } from './auth-verify-code.js';
 import { registerAuthVerifyEmailRoute } from './verify-email.js';
 import { registerAuthSocialRoute } from './social.js';
 import { registerAuthCallbackRoute } from './callback.js';
@@ -28,8 +33,13 @@ export function registerAuthRoutes(app: FastifyInstance): void {
   registerAuthDomainMappingRoute(app);
   registerAuthRegisterRoute(app);
   registerAuthResetPasswordRoutes(app);
+  registerAuthSelectTeamRoute(app);
+  registerAuthSessionChoicesRoute(app);
   registerAuthSocialRoute(app);
+  registerAuthStartRoute(app);
+  registerAuthTeamInviteLinkRoute(app);
   registerAuthRevokeRoute(app);
   registerAuthTokenExchangeRoute(app);
+  registerAuthVerifyCodeRoute(app);
   registerAuthVerifyEmailRoute(app);
 }

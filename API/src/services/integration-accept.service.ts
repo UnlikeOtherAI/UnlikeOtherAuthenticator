@@ -1,6 +1,7 @@
 import { Prisma, type PrismaClient } from '@prisma/client';
 
 import { getAdminPrisma } from '../db/prisma.js';
+import { runInTransaction } from '../db/tenant-context.js';
 import { decryptClaimSecret } from '../utils/claim-secret-crypto.js';
 import {
   createDomainClientHash,
@@ -82,7 +83,7 @@ export async function acceptIntegrationRequest(
     throw new AppError('BAD_REQUEST', 400, 'CLIENT_SECRET_TOO_SHORT');
   }
 
-  return prisma.$transaction(async (tx) => {
+  return runInTransaction(prisma as unknown as PrismaClient, async (tx) => {
     const existing = (await tx.clientDomainIntegrationRequest.findUnique({
       where: { id: params.id },
     })) as IntegrationRequestRow | null;
@@ -215,7 +216,7 @@ export async function resendIntegrationClaim(
 ): Promise<ResendClaimResult> {
   const prisma = prismaClient(deps);
 
-  return prisma.$transaction(async (tx) => {
+  return runInTransaction(prisma as unknown as PrismaClient, async (tx) => {
     const existing = (await tx.clientDomainIntegrationRequest.findUnique({
       where: { id: params.id },
     })) as IntegrationRequestRow | null;

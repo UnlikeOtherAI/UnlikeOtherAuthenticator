@@ -106,7 +106,7 @@ export async function resolveAccessTarget(params: {
   config: ClientConfig;
 }): Promise<{
   org: { id: string; name: string; domain: string };
-  team: { id: string; name: string };
+  team: { id: string; name: string; joinPolicy: string };
 }> {
   const orgId = params.config.access_requests?.target_org_id;
   const teamId = params.config.access_requests?.target_team_id;
@@ -126,6 +126,7 @@ export async function resolveAccessTarget(params: {
     select: {
       id: true,
       name: true,
+      joinPolicy: true,
     },
   });
   if (!team) {

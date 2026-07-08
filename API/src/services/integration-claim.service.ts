@@ -3,6 +3,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 
 import { getAdminPrisma } from '../db/prisma.js';
+import { runInTransaction } from '../db/tenant-context.js';
 import {
   createDomainClientHash,
   digestDomainClientHash,
@@ -182,7 +183,7 @@ export async function consumeClaim(
   const prisma = prismaClient(deps);
   const now = deps?.now ?? new Date();
 
-  return prisma.$transaction(async (tx) => {
+  return runInTransaction(prisma as unknown as PrismaClient, async (tx) => {
     const row = toRow(
       await tx.integrationClaimToken.findUnique({ where: { tokenHash } }),
     );
@@ -258,7 +259,7 @@ export async function replaceClaimToken(
   const now = params.now ?? new Date();
   const prisma = prismaClient(deps);
 
-  return prisma.$transaction(async (tx) => {
+  return runInTransaction(prisma as unknown as PrismaClient, async (tx) => {
     await tx.integrationClaimToken.deleteMany({
       where: { integrationId: params.integrationId, usedAt: null },
     });

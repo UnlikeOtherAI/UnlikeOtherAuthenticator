@@ -27,6 +27,15 @@ const AccessTokenClaimsSchema = z
       })
       .passthrough()
       .optional(),
+    // Slack-style workspace-scoped sessions (design §7 step 3-4). Dormant until Phase 3b's
+    // select-team flow populates it — absent on every token issued today.
+    active: z
+      .object({
+        orgId: z.string().trim().min(1),
+        teamId: z.string().trim().min(1),
+      })
+      .passthrough()
+      .optional(),
   })
   .passthrough();
 
@@ -43,6 +52,10 @@ export type AccessTokenClaims = {
     team_roles: Record<string, string>;
     groups?: string[];
     group_admin?: string[];
+  };
+  active?: {
+    orgId: string;
+    teamId: string;
   };
 };
 
@@ -105,6 +118,7 @@ export async function verifyAccessToken(
       clientId: parsed.client_id,
       role: parsed.role,
       ...(parsed.org ? { org: parsed.org } : {}),
+      ...(parsed.active ? { active: parsed.active } : {}),
     };
   } catch {
     // Normalize all verification/parsing failures into a generic, user-safe error.

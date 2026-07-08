@@ -2,6 +2,7 @@ import React from 'react';
 
 import { PopupProvider, usePopup } from '../../hooks/use-popup.js';
 import { AccessRequestedPage } from '../../pages/AccessRequestedPage.js';
+import { CodeEntryPage } from '../../pages/CodeEntryPage.js';
 import { LoginPage } from '../../pages/LoginPage.js';
 import { RegisterPage } from '../../pages/RegisterPage.js';
 import { ResetPasswordPage } from '../../pages/ResetPasswordPage.js';
@@ -9,6 +10,7 @@ import { SetPasswordPage } from '../../pages/SetPasswordPage.js';
 import { SignedInPage } from '../../pages/SignedInPage.js';
 import { TwoFactorSetupPage } from '../../pages/TwoFactorSetupPage.js';
 import { TwoFactorVerifyPage } from '../../pages/TwoFactorVerifyPage.js';
+import { WorkspaceChooserPage } from '../../pages/WorkspaceChooserPage.js';
 import { AuthLayout } from './AuthLayout.js';
 
 function PopupContent(): React.JSX.Element {
@@ -36,6 +38,10 @@ function PopupContent(): React.JSX.Element {
       return <AccessRequestedPage />;
     case 'signed-in':
       return <SignedInPage />;
+    case 'code-entry':
+      return <CodeEntryPage />;
+    case 'workspace-chooser':
+      return <WorkspaceChooserPage />;
     default:
       return <LoginPage />;
   }

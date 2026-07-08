@@ -2,6 +2,7 @@ import { Prisma, type PrismaClient } from '@prisma/client';
 
 import type { ClientConfig } from './config.service.js';
 import { getPrisma } from '../db/prisma.js';
+import { runInTransaction } from '../db/tenant-context.js';
 import { getAppLogger } from '../utils/app-logger.js';
 import { normalizeDomain } from '../utils/domain.js';
 import { extractEmailDomain } from '../utils/email-domain.js';
@@ -120,7 +121,7 @@ async function autoCreatePersonalOrgForUser(params: {
   const orgName = ensureOrgName(deriveOrgNameFromUser({ name: user?.name, email: params.email }));
 
   try {
-    const created = await params.prisma.$transaction(async (tx) => {
+    const created = await runInTransaction(params.prisma as unknown as PrismaClient, async (tx) => {
       const txClient = tx as OrgPlacementTx;
 
       const existing = await txClient.orgMember.findFirst({
@@ -295,7 +296,7 @@ async function placeFromDomainMapping(params: {
   }
 
   try {
-    const created = await params.prisma.$transaction(async (tx) => {
+    const created = await runInTransaction(params.prisma as unknown as PrismaClient, async (tx) => {
       const txClient = tx as OrgPlacementTx;
 
       const membershipInDomain = await txClient.orgMember.findFirst({

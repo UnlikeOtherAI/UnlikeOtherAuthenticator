@@ -4,8 +4,8 @@ import { z } from 'zod';
 import { configVerifier } from '../../middleware/config-verifier.js';
 import { validatePasswordResetToken } from '../../services/auth-reset-password.service.js';
 import { renderAuthEntrypointHtml, sendAuthHtml } from '../../services/auth-ui.service.js';
-import { selectRedirectUrl } from '../../services/token.service.js';
-import { AppError } from '../../utils/errors.js';
+import { selectRedirectUrl } from '../../services/authorization-code.service.js';
+import { AppError, isAppError } from '../../utils/errors.js';
 import { tokenConsumeRateLimiter } from './rate-limit-keys.js';
 
 const QuerySchema = z
@@ -15,6 +15,24 @@ const QuerySchema = z
     redirect_url: z.string().min(1).max(2048).optional(),
   })
   .strict();
+
+function isEmailLinkTokenError(err: unknown): boolean {
+  if (!isAppError(err)) return false;
+  return [
+    'INVALID_TOKEN',
+    'INVALID_TOKEN_CONFIG_URL',
+    'INVALID_TOKEN_TYPE',
+    'TOKEN_ALREADY_USED',
+    'TOKEN_EXPIRED',
+  ].includes(err.message);
+}
+
+function buildLoginAuthUrl(configUrl: string, redirectUrl: string | undefined): string {
+  const params = new URLSearchParams();
+  params.set('config_url', configUrl);
+  if (redirectUrl) params.set('redirect_url', redirectUrl);
+  return `/auth?${params.toString()}`;
+}
 
 export function registerAuthEmailResetPasswordRoute(app: FastifyInstance): void {
   // Email link landing for password reset. Validates the token, then renders
@@ -31,14 +49,33 @@ export function registerAuthEmailResetPasswordRoute(app: FastifyInstance): void 
         throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
       }
 
-      await validatePasswordResetToken(
-        {
-          token,
+      try {
+        await validatePasswordResetToken(
+          {
+            token,
+            config: request.config,
+            configUrl: request.configUrl,
+          },
+          { prisma: request.adminDb },
+        );
+      } catch (err) {
+        if (!isEmailLinkTokenError(err)) {
+          throw err;
+        }
+
+        // Stale reset link (used/expired/invalid). A reset token is single-use and
+        // expires after 30 min, so a page refresh on the landing URL re-validates a
+        // now-unusable token. Render login instead of a hard error — the user can
+        // request a fresh reset link from there. Mirrors the registration link route.
+        request.log.info({ err }, 'password reset token could not be used; rendering login');
+        const html = await renderAuthEntrypointHtml({
           config: request.config,
           configUrl: request.configUrl,
-        },
-        { prisma: request.adminDb },
-      );
+          requestUrl: buildLoginAuthUrl(request.configUrl, redirect_url),
+        });
+        sendAuthHtml(reply, html);
+        return;
+      }
 
       // Token is valid — render the Auth UI with the token context.
       const redirectUrl = redirect_url

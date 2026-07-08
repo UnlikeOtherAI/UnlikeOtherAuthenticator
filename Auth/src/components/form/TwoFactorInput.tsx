@@ -1,6 +1,6 @@
 import React from 'react';
 
-import { Input } from '../ui/Input.js';
+import { CodeInput } from '../ui/CodeInput.js';
 
 export function TwoFactorInput(props: {
   label?: string;
@@ -12,22 +12,12 @@ export function TwoFactorInput(props: {
   const { label = 'Verification code', digits = 6 } = props;
 
   return (
-    <Input
-      name="code"
-      type="text"
-      inputMode="numeric"
-      autoComplete="one-time-code"
-      placeholder={digits === 8 ? '12345678' : '123456'}
-      required
-      disabled={props.disabled}
-      maxLength={digits}
-      label={label}
+    <CodeInput
       value={props.value}
-      onChange={(e) => {
-        const raw = e.currentTarget.value;
-        const next = raw.replace(/[^0-9]/g, '').slice(0, digits);
-        props.onChange(next);
-      }}
+      onChange={props.onChange}
+      length={digits}
+      disabled={props.disabled}
+      label={label}
     />
   );
 }

@@ -82,7 +82,7 @@ export function registerAuthTokenExchangeRoute(app: FastifyInstance): void {
                 configUrl,
                 clientId: request.domainAuthClientId,
               },
-              { prisma },
+              { prisma, adminPrisma: request.adminDb },
             )
           : exchangeAuthorizationCodeForTokens(
               {
@@ -93,7 +93,7 @@ export function registerAuthTokenExchangeRoute(app: FastifyInstance): void {
                 codeVerifier: body.code_verifier,
                 clientId: request.domainAuthClientId,
               },
-              { prisma },
+              { prisma, adminPrisma: request.adminDb },
             );
       });
 

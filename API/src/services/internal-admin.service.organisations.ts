@@ -1,4 +1,5 @@
 import { getAdminPrisma } from '../db/prisma.js';
+import { runInTransaction } from '../db/tenant-context.js';
 import {
   normalizeAllowedEmailDomains,
   normalizeAllowedEmails,
@@ -92,7 +93,7 @@ export async function createAdminOrganisation(input: {
   });
   if (!owner) throw new AppError('BAD_REQUEST', 400, 'OWNER_NOT_FOUND');
 
-  const created = await prisma.$transaction(async (tx) => {
+  const created = await runInTransaction(prisma, async (tx) => {
     const slug = await deriveSlugWithValidation(domain, tx, name);
     const org = await tx.organisation.create({
       data: {

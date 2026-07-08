@@ -4,6 +4,7 @@ import type { Prisma, PrismaClient } from '@prisma/client';
 
 import { getEnv } from '../config/env.js';
 import { getAdminPrisma } from '../db/prisma.js';
+import { runInTransaction } from '../db/tenant-context.js';
 import {
   createDomainClientHash,
   digestDomainClientHash,
@@ -129,7 +130,7 @@ export async function createAdminDomain(
   const domain = normalizeDomain(params.domain);
   const secret = await createSecretData(domain, params.clientSecret);
 
-  const row = await prisma.$transaction(async (tx) => {
+  const row = await runInTransaction(prisma as unknown as PrismaClient, async (tx) => {
     const existing = await tx.clientDomain.findUnique({ where: { domain }, select: { id: true } });
     if (existing) throw new AppError('BAD_REQUEST', 400, 'DOMAIN_ALREADY_EXISTS');
 
@@ -194,7 +195,7 @@ export async function updateAdminDomain(
       : normalizeAllowedRedirectUrls(params.allowedRedirectUrls);
   const twoFaPolicy = params.twoFaPolicy;
 
-  return prisma.$transaction(async (tx) => {
+  return runInTransaction(prisma as unknown as PrismaClient, async (tx) => {
     const prior = await tx.clientDomain.findUnique({
       where: { domain },
       select: { status: true, twoFaPolicy: true },
@@ -287,7 +288,7 @@ export async function rotateAdminDomainSecret(
   const clientHash = createDomainClientHash(domain, rawClientSecret);
   const hashPrefix = clientHash.slice(0, 12);
 
-  return prisma.$transaction(async (tx) => {
+  return runInTransaction(prisma as unknown as PrismaClient, async (tx) => {
     const clientDomain = await tx.clientDomain.findUnique({
       where: { domain },
       select: { id: true },
@@ -376,7 +377,7 @@ export async function directRotateDomainSecret(
   const clientHash = createDomainClientHash(domain, rawClientSecret);
   const hashPrefix = clientHash.slice(0, 12);
 
-  return prisma.$transaction(async (tx) => {
+  return runInTransaction(prisma as unknown as PrismaClient, async (tx) => {
     const clientDomain = await tx.clientDomain.findUnique({
       where: { domain },
       select: { id: true },

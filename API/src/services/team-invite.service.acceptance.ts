@@ -33,6 +33,8 @@ export async function acceptTeamInviteWithinTransaction(params: {
       acceptedUserId: true,
       acceptedAt: true,
       revokedAt: true,
+      expiresAt: true,
+      approvalStatus: true,
       org: {
         select: {
           id: true,
@@ -54,6 +56,15 @@ export async function acceptTeamInviteWithinTransaction(params: {
     if (invite.acceptedUserId === params.userId) {
       return;
     }
+    throw new AppError('BAD_REQUEST', 400);
+  }
+
+  // Task 3/4 (design §4.7): a PENDING/DENIED (member-invite approval not yet granted) or expired
+  // invite is not acceptable — generic error, same as any other invalid-invite case (no oracle).
+  if (invite.approvalStatus === 'PENDING' || invite.approvalStatus === 'DENIED') {
+    throw new AppError('BAD_REQUEST', 400);
+  }
+  if (invite.expiresAt && invite.expiresAt.getTime() <= params.now.getTime()) {
     throw new AppError('BAD_REQUEST', 400);
   }
 
@@ -157,6 +168,58 @@ export async function acceptTeamInviteWithinTransaction(params: {
       acceptedAt: params.now,
       acceptedUserId: params.userId,
     },
+    select: { id: true },
+  });
+}
+
+/**
+ * Phase 3b (design §4.3/§11.5): decline a pending invite from the workspace chooser, authenticated
+ * by an already-verified userId (the login_token bridge) rather than the emailed invite token used
+ * by `declineTeamInviteByToken`. Generic `BAD_REQUEST` on every validation failure (unknown invite,
+ * wrong domain, invite already resolved, email mismatch) — no oracle on invite existence.
+ */
+export async function declineTeamInviteForUser(params: {
+  prisma: Prisma.TransactionClient;
+  teamInviteId: string;
+  userId: string;
+  config: ClientConfig;
+  now: Date;
+}): Promise<void> {
+  const invite = await params.prisma.teamInvite.findUnique({
+    where: { id: params.teamInviteId },
+    select: {
+      id: true,
+      email: true,
+      acceptedAt: true,
+      declinedAt: true,
+      revokedAt: true,
+      org: { select: { domain: true } },
+    },
+  });
+
+  if (!invite || invite.revokedAt || invite.acceptedAt) {
+    throw new AppError('BAD_REQUEST', 400);
+  }
+
+  if (normalizeDomain(invite.org.domain) !== normalizeDomain(params.config.domain)) {
+    throw new AppError('BAD_REQUEST', 400);
+  }
+
+  const user = await params.prisma.user.findUnique({
+    where: { id: params.userId },
+    select: { email: true },
+  });
+  if (!user || user.email.toLowerCase() !== invite.email.toLowerCase()) {
+    throw new AppError('BAD_REQUEST', 400);
+  }
+
+  if (invite.declinedAt) {
+    return;
+  }
+
+  await params.prisma.teamInvite.update({
+    where: { id: invite.id },
+    data: { declinedAt: params.now },
     select: { id: true },
   });
 }

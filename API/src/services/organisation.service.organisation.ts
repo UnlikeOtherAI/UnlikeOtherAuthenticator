@@ -1,6 +1,7 @@
 import type { ClientConfig } from './config.service.js';
 import { getEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
+import { runInTransaction } from '../db/tenant-context.js';
 import { AppError } from '../utils/errors.js';
 
 import {
@@ -11,6 +12,7 @@ import {
   isP2002Error,
   isP2003Error,
   normalizeDomain,
+  normalizeMemberInvitesSetting,
   parseOrgFeatureRoles,
   resolveOrganisationByDomain,
   toListLimit,
@@ -21,6 +23,17 @@ import {
   type OrganisationRecord,
 } from './organisation.service.base.js';
 import { deriveUniqueTeamSlug } from './team.service.base.js';
+
+const ORGANISATION_SELECT = {
+  id: true,
+  domain: true,
+  name: true,
+  slug: true,
+  ownerId: true,
+  memberInvites: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
 
 export async function listOrganisationsForDomain(
   params: { domain: string; limit?: number; cursor?: string },
@@ -43,15 +56,7 @@ export async function listOrganisationsForDomain(
     take: limit + 1,
     cursor: cursor ? { id: cursor } : undefined,
     skip: cursor ? 1 : 0,
-    select: {
-      id: true,
-      domain: true,
-      name: true,
-      slug: true,
-      ownerId: true,
-      createdAt: true,
-      updatedAt: true,
-    },
+    select: ORGANISATION_SELECT,
   });
 
   const data = rows.slice(0, limit).map(toOrganisationRecord);
@@ -80,7 +85,7 @@ export async function createOrganisation(
 
   const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
 
-  return await prisma.$transaction(async (tx) => {
+  return await runInTransaction(prisma, async (tx) => {
     const ownerInDomainOrg = await tx.orgMember.findFirst({
       where: {
         userId: ownerId,
@@ -106,15 +111,7 @@ export async function createOrganisation(
         slug,
         ownerId,
       },
-      select: {
-        id: true,
-        domain: true,
-        name: true,
-        slug: true,
-        ownerId: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+      select: ORGANISATION_SELECT,
     });
 
     const defaultTeam = await tx.team.create({
@@ -174,7 +171,7 @@ export async function getOrganisation(
   // re-verify actor membership here so the service contract matches
   // updateOrganisation/deleteOrganisation and cannot leak org data if a future
   // route refactor omits the role guard.
-  const actorMembership = await getOrganisationMember(prisma, { orgId: row.id, userId: actorUserId });
+  const actorMembership = await getOrganisationMember(prisma, { orgId: row.id, userId: actorUserId }, { activeOnly: true });
   if (!actorMembership) {
     throw new AppError('FORBIDDEN', 403);
   }
@@ -189,6 +186,7 @@ export async function updateOrganisation(
     name: string;
     actorUserId: string;
     config: ClientConfig;
+    memberInvites?: string;
   },
   deps?: OrgServiceDeps,
 ): Promise<OrganisationRecord> {
@@ -201,7 +199,7 @@ export async function updateOrganisation(
   const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
   const org = await resolveOrganisationByDomain(prisma, params);
 
-  const actorMembership = await getOrganisationMember(prisma, { orgId: org.id, userId: actorUserId });
+  const actorMembership = await getOrganisationMember(prisma, { orgId: org.id, userId: actorUserId }, { activeOnly: true });
   if (!actorMembership || (actorMembership.role !== 'owner' && actorMembership.role !== 'admin')) {
     throw new AppError('FORBIDDEN', 403);
   }
@@ -209,16 +207,16 @@ export async function updateOrganisation(
   const slug = await deriveSlugWithValidation(org.domain, prisma, name, org.slug);
   const updated = await prisma.organisation.update({
     where: { id: org.id },
-    data: { name, slug },
-    select: {
-      id: true,
-      domain: true,
-      name: true,
-      slug: true,
-      ownerId: true,
-      createdAt: true,
-      updatedAt: true,
+    data: {
+      name,
+      slug,
+      // Member-initiated invite policy (design §4.7, Phase 4) — owner/admin only, validated against
+      // the allowed/admin_approval/disabled vocabulary; omitted leaves the current setting unchanged.
+      ...(params.memberInvites !== undefined
+        ? { memberInvites: normalizeMemberInvitesSetting(params.memberInvites) }
+        : {}),
     },
+    select: ORGANISATION_SELECT,
   });
 
   return toOrganisationRecord(updated);

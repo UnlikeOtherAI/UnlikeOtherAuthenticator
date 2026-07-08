@@ -32,12 +32,14 @@ For the full product spec, see [brief.md](./brief.md). For tech stack, see [tech
         Spinner.tsx           — Loading indicator
         Alert.tsx             — Generic error/success message display
         Divider.tsx           — Visual separator (e.g. "or continue with")
+        CodeInput.tsx         — Reusable 6-digit numeric code input (Phase 3c; extracted from
+                                 TwoFactorInput so email-code entry and 2FA share one implementation)
       /form
         LoginForm.tsx         — Email + password login form
         RegisterForm.tsx      — Email submission for registration
         PasswordSetForm.tsx   — Set new password (after verification)
         ResetPasswordForm.tsx — Password reset form
-        TwoFactorInput.tsx    — 6-digit TOTP code input
+        TwoFactorInput.tsx    — 6-digit TOTP code input (wraps ui/CodeInput.tsx)
       /social
         SocialLoginButtons.tsx — Renders enabled social provider buttons from config
         SocialButton.tsx       — Individual social provider button
@@ -48,6 +50,11 @@ For the full product spec, see [brief.md](./brief.md). For tech stack, see [tech
       /twofactor
         QrCodeDisplay.tsx     — QR code rendering for 2FA setup
         TwoFactorSetup.tsx    — Full 2FA enrollment flow (QR + verify)
+      /workspace
+        WorkspaceList.tsx        — Vertical stack of WorkspaceCards, server order preserved (Phase 3c)
+        WorkspaceCard.tsx        — One ACTIVE workspace: icon + name + role (owner/admin only) (Phase 3c)
+        InviteCard.tsx           — Pending team invite: accept / decline (Phase 3c)
+        CreateWorkspaceCard.tsx  — "Create a new workspace" entry, shown when can_create_org (Phase 3c)
     /pages
       LoginPage.tsx           — Login page (email/password + social buttons)
       RegisterPage.tsx        — Registration page
@@ -56,6 +63,8 @@ For the full product spec, see [brief.md](./brief.md). For tech stack, see [tech
       SetPasswordPage.tsx     — Set password after verification
       TwoFactorSetupPage.tsx  — 2FA enrollment page
       TwoFactorVerifyPage.tsx — 2FA challenge during login
+      CodeEntryPage.tsx       — Email sign-in code entry, login_flow.email_code_enabled (Phase 3c)
+      WorkspaceChooserPage.tsx — Slack-style "choose a workspace" screen, workspace_selection: "auto" (Phase 3c)
       ErrorPage.tsx           — Generic error display
     /theme
       ThemeProvider.tsx       — React context provider, reads config and exposes theme values
@@ -72,9 +81,15 @@ For the full product spec, see [brief.md](./brief.md). For tech stack, see [tech
       use-theme.ts            — Shorthand hook for theme context
       use-popup.ts            — Popup lifecycle (redirect handling, window messaging)
     /utils
-      api.ts                  — API client for calling auth server endpoints
+      api.ts                  — API client for calling auth server endpoints (includes the
+                                 Phase 3c authStart/verifyLoginCode/selectTeam flow helpers)
       validation.ts           — Client-side input validation (email format, password rules)
       errors.ts               — Error display helpers (always generic)
+      code-input.ts           — Pure numeric-code sanitization behind ui/CodeInput.tsx (Phase 3c)
+      workspace-response.ts   — Decodes /auth/verify-code, /auth/select-team, and a
+                                 chooser-producing /auth/login into one client outcome (Phase 3c)
+      workspace-actions.ts    — Typed wrappers over the flow API calls used by the chooser (Phase 3c)
+      workspace-icon.ts       — Deterministic initials-on-color fallback avatar (design §11.3, Phase 3c)
   /public
     index.html                — Entry point HTML
   vite.config.ts              — Build configuration
@@ -156,6 +171,18 @@ The auth flow is state-driven, not route-driven. A single popup URL loads the ap
 6. **Password reset** → ResetPasswordPage → "Check your email" → SetPasswordPage
 7. **2FA setup** → TwoFactorSetupPage → QR scan → Verify code → Done
 8. **Error** → ErrorPage (generic message only)
+9. **Email sign-in code** (Phase 3c, `login_flow.email_code_enabled`) → LoginPage "Email me a
+   sign-in code" → CodeEntryPage → verify-code → WorkspaceChooserPage (if `workspace_selection:
+   "auto"`) or straight to step 2/3
+10. **Workspace chooser** (Phase 3c, `workspace_selection: "auto"`) — reached from step 9 or a
+    successful password login (step 2/3's LoginForm) → WorkspaceChooserPage (workspace list +
+    pending invites + create-workspace, auto-skipped when there's exactly one ACTIVE team and no
+    pending invites) → TwoFactorVerifyPage (policy of the selected org) → Redirect with a
+    team-scoped code
+
+These two steps are held entirely in client state (`use-popup.tsx`'s `pendingEmail`/`loginToken`/
+`workspaceChoices`) between the identity-verification call and the final redirect — see
+`Docs/plans/2026-07-07-slack-style-login-and-membership.md` §11.2.
 
 ---
 

@@ -1,10 +1,15 @@
 import { randomBytes } from 'node:crypto';
-import { Prisma, PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient, type MembershipStatus } from '@prisma/client';
 
 import type { ClientConfig } from './config.service.js';
 import { getEnv } from '../config/env.js';
 import { normalizeDomain } from '../utils/domain.js';
 import { AppError } from '../utils/errors.js';
+import {
+  writeOrgAuditLog,
+  type OrgAuditAction,
+  type OrgAuditTargetType,
+} from './org-audit-log.service.js';
 
 export { normalizeDomain };
 
@@ -22,12 +27,29 @@ export type CursorList<T> = {
   next_cursor: string | null;
 };
 
+export type OrgMemberInvitesValue = 'allowed' | 'admin_approval' | 'disabled';
+
+const ALLOWED_MEMBER_INVITES_VALUES = new Set<OrgMemberInvitesValue>([
+  'allowed',
+  'admin_approval',
+  'disabled',
+]);
+
+export function normalizeMemberInvitesSetting(value: string): OrgMemberInvitesValue {
+  const normalized = value.trim().toLowerCase();
+  if (!ALLOWED_MEMBER_INVITES_VALUES.has(normalized as OrgMemberInvitesValue)) {
+    throw new AppError('BAD_REQUEST', 400);
+  }
+  return normalized as OrgMemberInvitesValue;
+}
+
 export type OrganisationRecord = {
   id: string;
   domain: string;
   name: string;
   slug: string;
   ownerId: string;
+  memberInvites: OrgMemberInvitesValue;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -37,6 +59,7 @@ export type OrganisationMemberRecord = {
   orgId: string;
   userId: string;
   role: string;
+  status: MembershipStatus;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -120,7 +143,16 @@ export function toListLimit(limit?: number): number {
 export async function resolveOrganisationByDomain(
   prisma: OrgServicePrisma,
   params: { orgId: string; domain: string },
-): Promise<{ id: string; domain: string; name: string; slug: string; ownerId: string; createdAt: Date; updatedAt: Date }> {
+): Promise<{
+  id: string;
+  domain: string;
+  name: string;
+  slug: string;
+  ownerId: string;
+  memberInvites?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}> {
   const orgId = params.orgId.trim();
   const domain = normalizeDomain(params.domain);
   if (!orgId || !domain) {
@@ -135,6 +167,7 @@ export async function resolveOrganisationByDomain(
       name: true,
       slug: true,
       ownerId: true,
+      memberInvites: true,
       createdAt: true,
       updatedAt: true,
     },
@@ -158,6 +191,7 @@ export function toOrganisationRecord(row: {
   name: string;
   slug: string;
   ownerId: string;
+  memberInvites?: string;
   createdAt: Date;
   updatedAt: Date;
 }): OrganisationRecord {
@@ -167,6 +201,7 @@ export function toOrganisationRecord(row: {
     name: row.name,
     slug: row.slug,
     ownerId: row.ownerId,
+    memberInvites: (row.memberInvites ?? 'allowed') as OrgMemberInvitesValue,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -177,6 +212,7 @@ export function toMemberRecord(row: {
   orgId: string;
   userId: string;
   role: string;
+  status: MembershipStatus;
   createdAt: Date;
   updatedAt: Date;
 }): OrganisationMemberRecord {
@@ -185,6 +221,7 @@ export function toMemberRecord(row: {
     orgId: row.orgId,
     userId: row.userId,
     role: row.role,
+    status: row.status,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -244,11 +281,45 @@ export async function resolveUniqueSlugWithCollisionRetries(
 export async function getOrganisationMember(
   prisma: OrgServicePrisma,
   params: { orgId: string; userId: string },
+  opts?: { activeOnly?: boolean },
 ): Promise<{ id: string; orgId: string; userId: string; role: string } | null> {
+  // `activeOnly` is used for ACTOR authorization (design §4.9: "a DEACTIVATED admin has no
+  // powers") — a deactivated/removed member must not pass owner/admin checks even while their
+  // pre-deactivation access token is still within its TTL. Target-member lookups omit it so a
+  // DEACTIVATED/REMOVED member can still be found and, e.g., removed.
   return await prisma.orgMember.findFirst({
-    where: { orgId: params.orgId, userId: params.userId },
+    where: {
+      orgId: params.orgId,
+      userId: params.userId,
+      ...(opts?.activeOnly ? { status: 'ACTIVE' as MembershipStatus } : {}),
+    },
     select: { id: true, orgId: true, userId: true, role: true },
   });
+}
+
+// Best-effort org audit write (design §4.10). Runs via the BYPASSRLS admin client AFTER the primary
+// mutation has committed, and swallows errors, so auditing can never roll back or fail the mutation
+// it records. Shared by organisation.service.members.ts and organisation.service.lifecycle.ts.
+export async function auditOrg(params: {
+  orgId: string;
+  actorUserId: string;
+  action: OrgAuditAction;
+  targetType: OrgAuditTargetType;
+  targetId: string;
+  metadata?: Record<string, string | number | boolean | null>;
+}): Promise<void> {
+  try {
+    await writeOrgAuditLog({
+      orgId: params.orgId,
+      actorUserId: params.actorUserId,
+      action: params.action,
+      targetType: params.targetType,
+      targetId: params.targetId,
+      metadata: params.metadata ?? {},
+    });
+  } catch {
+    // Auditing is non-critical; the mutation has already succeeded.
+  }
 }
 
 export function parseOrgLimit(config: ClientConfig): number {

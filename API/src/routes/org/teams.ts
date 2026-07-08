@@ -158,7 +158,8 @@ export function registerTeamRoutes(app: FastifyInstance): void {
       if (
         !Object.hasOwn(body, 'name') &&
         !Object.hasOwn(body, 'slug') &&
-        !Object.hasOwn(body, 'description')
+        !Object.hasOwn(body, 'description') &&
+        !Object.hasOwn(body, 'joinPolicy')
       ) {
         throw new AppError('BAD_REQUEST', 400);
       }
@@ -174,6 +175,7 @@ export function registerTeamRoutes(app: FastifyInstance): void {
             name: body.name,
             slug: body.slug,
             description: body.description,
+            joinPolicy: body.joinPolicy,
           },
           { prisma: asPrismaClient(tx) },
         ),

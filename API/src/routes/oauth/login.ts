@@ -9,7 +9,7 @@ import { buildMcpClientConfig } from '../../services/oauth/config.service.js';
 import { getOAuthClient } from '../../services/oauth/client.service.js';
 import { issueOAuthCode } from '../../services/oauth/oauth-code.service.js';
 import { validateRequestedResource } from '../../services/oauth/resource-validation.service.js';
-import { selectRedirectUrl } from '../../services/token.service.js';
+import { selectRedirectUrl } from '../../services/authorization-code.service.js';
 import { resolveTwoFaPolicy } from '../../services/twofactor-policy.service.js';
 import { buildPublicErrorBody } from '../../utils/error-response.js';
 import { parseRequiredPkceChallenge } from '../../utils/pkce.js';

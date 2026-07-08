@@ -3,6 +3,7 @@ import type { ClientConfig } from './config.service.js';
 
 import { getEnv, requireEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
+import { runInTransaction } from '../db/tenant-context.js';
 import { AppError } from '../utils/errors.js';
 import { hashEmailToken } from '../utils/verification-token.js';
 
@@ -174,7 +175,7 @@ export async function declineTeamInviteByToken(params: {
   const now = deps?.now ? deps.now() : new Date();
   const sharedSecret = deps?.sharedSecret ?? requireEnv('SHARED_SECRET').SHARED_SECRET;
 
-  return await prisma.$transaction(async (tx) => {
+  return await runInTransaction(prisma, async (tx) => {
     const row = await findInviteToken({
       prisma: tx as unknown as InviteTokenPrisma,
       token: params.token,

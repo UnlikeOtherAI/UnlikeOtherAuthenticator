@@ -2,7 +2,7 @@ import type { PrismaClient } from '@prisma/client';
 
 import type { ClientConfig } from './config.service.js';
 
-import { buildRedirectToUrl, issueAuthorizationCode } from './token.service.js';
+import { buildRedirectToUrl, issueAuthorizationCode } from './authorization-code.service.js';
 import { handlePostAuthenticationAccessRequest } from './access-request.service.js';
 import { assertEmailDomainAllowedForLogin } from './login-domain-policy.service.js';
 import { assertNotBannedAtLogin } from './ban-policy.service.js';
@@ -42,6 +42,10 @@ export async function finalizeAuthenticatedUser(
     codeChallenge?: string;
     codeChallengeMethod?: 'S256';
     ip?: string | null;
+    // Workspace scope resolved by /auth/select-team (design §7 step 3-4, Phase 3b Task 6). Every
+    // other caller omits these, so the issued code carries no scope (unchanged behaviour).
+    orgId?: string;
+    teamId?: string;
   },
   deps?: FinalizeDeps,
 ): Promise<
@@ -92,6 +96,8 @@ export async function finalizeAuthenticatedUser(
       codeChallenge: params.codeChallenge,
       codeChallengeMethod: params.codeChallengeMethod,
       rememberMe: params.rememberMe,
+      orgId: params.orgId,
+      teamId: params.teamId,
     },
     deps?.prisma ? { prisma: deps.prisma } : undefined,
   );

@@ -9,7 +9,7 @@ import { recordLoginLog } from '../../services/login-log.service.js';
 import { finalizeAuthenticatedUser } from '../../services/access-request-flow.service.js';
 import { verifyTwoFaChallenge } from '../../services/twofactor-challenge.service.js';
 import { verifyTwoFactorForLogin } from '../../services/twofactor-login.service.js';
-import { selectRedirectUrl } from '../../services/token.service.js';
+import { selectRedirectUrl } from '../../services/authorization-code.service.js';
 import { AppError } from '../../utils/errors.js';
 import { twoFactorVerifyRateLimiter } from '../auth/rate-limit-keys.js';
 
@@ -78,6 +78,8 @@ export function registerTwoFactorVerifyRoute(app: FastifyInstance): void {
             codeChallenge: challenge.codeChallenge,
             codeChallengeMethod: challenge.codeChallengeMethod,
             ip: request.ip ?? null,
+            orgId: challenge.orgId,
+            teamId: challenge.teamId,
           },
           { prisma },
         );

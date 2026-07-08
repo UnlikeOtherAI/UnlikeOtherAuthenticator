@@ -36,11 +36,13 @@ export async function createApp(): Promise<FastifyInstance> {
                 // Common sensitive headers (domain hash + access token).
                 'req.headers.authorization',
                 'req.headers.cookie',
+                'req.headers["x-api-key"]',
                 'req.headers["x-uoa-access-token"]',
                 // Redact common token-like keys if we ever log structured objects containing them.
                 'authorization',
                 'headers.authorization',
                 'headers.cookie',
+                'headers["x-api-key"]',
                 'headers["x-uoa-access-token"]',
                 'token',
                 'code',
