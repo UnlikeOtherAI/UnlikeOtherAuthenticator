@@ -114,6 +114,7 @@ export function registerAuthVerifyCodeRoute(app: FastifyInstance): void {
             authMethod: 'email_code',
             codeChallenge: pkce.codeChallenge,
             codeChallengeMethod: pkce.codeChallengeMethod,
+            ip: request.ip ?? null,
           },
           { prisma },
         );

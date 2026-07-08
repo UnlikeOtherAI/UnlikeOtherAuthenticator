@@ -54,6 +54,7 @@ export function registerAuthRegisterRoute(app: FastifyInstance): void {
               requestAccess: parseRequestAccessFlag(request_access),
               codeChallenge: pkce.codeChallenge,
               codeChallengeMethod: pkce.codeChallengeMethod,
+              ip: request.ip ?? null,
             },
             { prisma: request.adminDb },
           );

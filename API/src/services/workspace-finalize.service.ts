@@ -38,6 +38,7 @@ export async function finalizeWithTwoFaPolicy(
     authMethod: string;
     codeChallenge?: string;
     codeChallengeMethod?: 'S256';
+    ip?: string | null;
     orgId?: string;
     teamId?: string;
   },
@@ -102,6 +103,7 @@ export async function finalizeWithTwoFaPolicy(
       requestAccess: params.requestAccess,
       codeChallenge: params.codeChallenge,
       codeChallengeMethod: params.codeChallengeMethod,
+      ip: params.ip,
       orgId: params.orgId,
       teamId: params.teamId,
     },

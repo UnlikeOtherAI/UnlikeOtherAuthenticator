@@ -5,6 +5,7 @@ import type { ClientConfig } from './config.service.js';
 import { buildRedirectToUrl, issueAuthorizationCode } from './authorization-code.service.js';
 import { handlePostAuthenticationAccessRequest } from './access-request.service.js';
 import { assertEmailDomainAllowedForLogin } from './login-domain-policy.service.js';
+import { assertNotBannedAtLogin } from './ban-policy.service.js';
 
 type FinalizeDeps = {
   prisma?: PrismaClient;
@@ -40,6 +41,7 @@ export async function finalizeAuthenticatedUser(
     requestAccess: boolean;
     codeChallenge?: string;
     codeChallengeMethod?: 'S256';
+    ip?: string | null;
     // Workspace scope resolved by /auth/select-team (design §7 step 3-4, Phase 3b Task 6). Every
     // other caller omits these, so the issued code carries no scope (unchanged behaviour).
     orgId?: string;
@@ -55,6 +57,14 @@ export async function finalizeAuthenticatedUser(
   await assertEmailDomainAllowedForLogin({
     userId: params.userId,
     domain: params.config.domain,
+  });
+
+  // Admin ban list (client domain / org / team). A ban overrides any allow-list; SUPERUSER
+  // bypasses. Also on the BYPASSRLS admin client. IP is enforced when the route supplies it.
+  await assertNotBannedAtLogin({
+    userId: params.userId,
+    domain: params.config.domain,
+    ip: params.ip,
   });
 
   if (params.requestAccess) {

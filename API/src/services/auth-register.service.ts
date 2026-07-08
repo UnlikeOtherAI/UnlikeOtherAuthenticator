@@ -18,6 +18,7 @@ import {
 } from './email.service.js';
 import { extractEmailDomain } from '../utils/email-domain.js';
 import { generateEmailToken, hashEmailToken } from '../utils/verification-token.js';
+import { isPrincipalBannedForRegistration } from './ban-policy.service.js';
 
 /**
  * Brief 11: Registration must not reveal whether the email exists.
@@ -39,6 +40,7 @@ type RegisterDeps = {
   generateEmailToken?: typeof generateEmailToken;
   hashEmailToken?: typeof hashEmailToken;
   consumeAccountFlowTimingBudget?: () => Promise<void>;
+  isPrincipalBannedForRegistration?: typeof isPrincipalBannedForRegistration;
   prisma?: RegisterPrisma;
 };
 
@@ -129,6 +131,7 @@ export async function requestRegistrationInstructions(
     requestAccess?: boolean;
     codeChallenge?: string;
     codeChallengeMethod?: 'S256';
+    ip?: string | null;
   },
   deps?: RegisterDeps,
 ): Promise<RegistrationInstructionResult> {
@@ -142,6 +145,18 @@ export async function requestRegistrationInstructions(
     email: params.email,
     domain: params.config.domain,
   });
+
+  // Admin ban list (domain scope). A banned email/pattern/IP gets the same silent,
+  // timing-equalised response as a blocked registration — never reveal the ban.
+  const banned = await (deps?.isPrincipalBannedForRegistration ?? isPrincipalBannedForRegistration)({
+    domain: params.config.domain,
+    email: params.email,
+    ip: params.ip ?? null,
+  });
+  if (banned) {
+    await (deps?.consumeAccountFlowTimingBudget ?? consumeAccountFlowTimingBudget)();
+    return { status: 'sent' };
+  }
 
   const prisma = deps?.prisma ?? getPrisma();
   const existing = await prisma.user.findUnique({

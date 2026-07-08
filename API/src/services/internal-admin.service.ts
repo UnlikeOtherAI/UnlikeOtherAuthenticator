@@ -1,5 +1,6 @@
 import { listHandshakeErrorLogs } from './handshake-error-log.service.js';
-import { emptyBans, emptyData, getAdminStats } from './internal-admin.service.base.js';
+import { emptyData, getAdminStats } from './internal-admin.service.base.js';
+import { listAdminBans } from './internal-admin-bans.service.js';
 import { getAdminApps } from './internal-admin.service.apps.js';
 import { getAdminDomains } from './internal-admin.service.domains.js';
 import { getAdminOrganisations } from './internal-admin.service.organisations.js';
@@ -66,7 +67,8 @@ export async function getAdminDashboard() {
 }
 
 export async function getAdminSettings() {
-  return { bans: emptyBans, apps: await getAdminApps() };
+  const [bans, apps] = await Promise.all([listAdminBans(), getAdminApps()]);
+  return { bans, apps };
 }
 
 export async function searchAdmin(query: string) {

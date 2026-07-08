@@ -11,6 +11,7 @@ let currentConfig: ClientConfig | null = null;
 
 const recordLoginLogMock = vi.fn(async () => undefined);
 const assertEmailDomainAllowedForLoginMock = vi.fn(async () => undefined);
+const assertNotBannedAtLoginMock = vi.fn(async () => undefined);
 
 vi.mock('@unlikeotherai/qr-art', () => ({
   renderSVG: () => '<svg />',
@@ -35,6 +36,11 @@ vi.mock('../../src/services/login-domain-policy.service.js', () => ({
   assertEmailDomainAllowedForLogin: (...args: unknown[]) =>
     assertEmailDomainAllowedForLoginMock(...args),
   isEmailAdminAllowedForRegistration: vi.fn(async () => false),
+}));
+
+vi.mock('../../src/services/ban-policy.service.js', () => ({
+  assertNotBannedAtLogin: (...args: unknown[]) => assertNotBannedAtLoginMock(...args),
+  isPrincipalBannedForRegistration: vi.fn(async () => false),
 }));
 
 const prismaMock = vi.hoisted(() => ({
@@ -142,6 +148,7 @@ describe('POST /auth/select-team', () => {
     }
     recordLoginLogMock.mockReset().mockResolvedValue(undefined);
     assertEmailDomainAllowedForLoginMock.mockReset().mockResolvedValue(undefined);
+    assertNotBannedAtLoginMock.mockReset().mockResolvedValue(undefined);
     prismaMock.authorizationCode.create.mockResolvedValue({ id: 'code-row-1' });
   });
 
