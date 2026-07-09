@@ -10,6 +10,8 @@ export const authEndpoints: EndpointSchema[] = [
       redirect_url: 'string (optional) — OAuth redirect URL override (redirect_uri also accepted)',
       code_challenge: 'string (required for sign-in actions) — exactly 43-char PKCE S256 challenge',
       code_challenge_method: '"S256" when code_challenge is sent',
+      team_hint:
+        'string (optional, ≤256 chars, id/slug-safe charset) — chooser preselect / one-click workspace switch (design §11.4): when the workspace chooser renders, a team already in the verified user\'s own chooser payload matching this teamId or slug is auto-selected, same as the single-team auto-skip. Client-side ONLY — an invalid or non-matching value is silently ignored (chooser renders normally) and select-team\'s server-side ACTIVE-membership + domain check remains the sole authority; it can never select a team the user doesn\'t already have.',
     },
   },
   {
@@ -85,7 +87,7 @@ export const authEndpoints: EndpointSchema[] = [
     response: {
       'login_token?':
         'short-lived bridge JWT (only when config.login_flow.workspace_selection="auto") — authorizes ONLY POST /auth/select-team for this verified user, nothing else',
-      'teams?': 'array of { teamId, orgId, name, role } — this user\'s ACTIVE team memberships on this domain (only with login_token)',
+      'teams?': 'array of { teamId, orgId, name, slug, role, iconUrl } — this user\'s ACTIVE team memberships on this domain (only with login_token)',
       'pending_invites?': 'array of { inviteId, teamName, invitedBy } — pending invites for this email on this domain (only with login_token)',
       'can_create_org?': 'boolean (only with login_token)',
       ok: 'true (when workspace_selection is "off" — finalizes immediately like /auth/login)',
@@ -139,7 +141,7 @@ export const authEndpoints: EndpointSchema[] = [
       login_token: 'string (required) — bridge token from the redirecting flow (e.g. the social callback)',
     },
     response: {
-      teams: 'array of { teamId, orgId, name, role } — this user\'s ACTIVE team memberships on this domain',
+      teams: 'array of { teamId, orgId, name, slug, role, iconUrl } — this user\'s ACTIVE team memberships on this domain',
       pending_invites: 'array of { inviteId, teamName, invitedBy } — pending invites for this email on this domain',
       can_create_org: 'boolean',
     },
@@ -166,7 +168,8 @@ export const authEndpoints: EndpointSchema[] = [
   {
     method: 'POST',
     path: '/auth/verify-email',
-    description: 'Complete email verification (registration)',
+    description:
+      'Complete email verification (registration). When config.login_flow.workspace_selection="auto", 2FA is satisfied, the token was not invite-bound (an accepted invite already selects the team), and the user has 2+ ACTIVE teams or a pending invite, returns the workspace-chooser payload instead of finalizing — same shape and gate as /auth/login.',
     auth: 'config_url query param',
     query: {
       redirect_url: 'string (optional)',
@@ -179,10 +182,16 @@ export const authEndpoints: EndpointSchema[] = [
       password: 'string (optional) — required for password_required registration mode',
     },
     response: {
-      ok: 'true',
-      code: 'authorization code',
-      redirect_to: 'redirect URL',
+      ok: 'true (workspace_selection "off"/skipped branch only — finalizes immediately)',
+      code: 'authorization code (workspace_selection "off"/skipped branch only)',
+      redirect_to: 'redirect URL (workspace_selection "off"/skipped branch only)',
       access_request_status: '"pending" when request_access created a pending access request',
+      'login_token?':
+        'short-lived bridge JWT (only when the chooser gate passes) — authorizes ONLY POST /auth/select-team for this verified user',
+      'teams?':
+        'array of { teamId, orgId, name, slug, role, iconUrl } (only with login_token)',
+      'pending_invites?': 'array of { inviteId, teamName, invitedBy } (only with login_token)',
+      'can_create_org?': 'boolean (only with login_token)',
     },
   },
   {
@@ -256,7 +265,8 @@ export const authEndpoints: EndpointSchema[] = [
   {
     method: 'GET',
     path: '/auth/email/link',
-    description: 'Email registration/login link landing',
+    description:
+      'Email registration/login link landing. A consumed LOGIN_LINK/VERIFY_EMAIL link normally finalizes and redirects with an authorization code; when config.login_flow.workspace_selection="auto", 2FA is satisfied, the link was not invite-bound, and the user has 2+ ACTIVE teams or a pending invite, it instead redirects to /auth?...&login_token=...&flow=workspace_chooser (same gate/shape as the social callback and /auth/login).',
     query: {
       token: 'string (required)',
       config_url: 'string (required)',

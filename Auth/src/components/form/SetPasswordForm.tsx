@@ -7,9 +7,9 @@ import { usePopup } from '../../hooks/use-popup.js';
 import { useTranslation } from '../../i18n/use-translation.js';
 import { postJson, type ApiResult } from '../../utils/api.js';
 import { checkPasswordPolicy } from '../../utils/password-policy.js';
+import { applyWorkspaceOutcome, interpretWorkspaceResponse } from '../../utils/workspace-response.js';
 
 type SetPasswordRequest = { token: string; password: string };
-type SetPasswordResponse = { redirect_to?: string };
 
 export function SetPasswordForm(): React.JSX.Element {
   const { t } = useTranslation();
@@ -22,6 +22,10 @@ export function SetPasswordForm(): React.JSX.Element {
     emailToken,
     emailTokenType,
     setView,
+    setLoginToken,
+    setWorkspaceChoices,
+    startTwoFactorVerify,
+    startTwoFactorSetup,
     requestAccess,
   } = usePopup();
 
@@ -112,7 +116,7 @@ export function SetPasswordForm(): React.JSX.Element {
     }
     if (requestAccess) query.request_access = true;
 
-    const result = await postJson<SetPasswordRequest, SetPasswordResponse>(
+    const result = await postJson<SetPasswordRequest, unknown>(
       '/auth/verify-email',
       { token: emailToken, password },
       query,
@@ -124,12 +128,20 @@ export function SetPasswordForm(): React.JSX.Element {
       return;
     }
 
-    if (typeof result.data.redirect_to === 'string') {
-      redirectTo(result.data.redirect_to);
-      return;
-    }
-
-    setError(t('form.setPassword.error'));
+    // Gap-fix B Task 1 (design §4.3): /auth/verify-email can now also resolve to the workspace
+    // chooser payload (same shape /auth/verify-code and /auth/login use) instead of a final
+    // redirect — decode it the same generic way `LoginForm`/`CodeEntryPage` do so this view lands
+    // on `WorkspaceChooserPage` instead of erroring on an unrecognized response shape.
+    const outcome = interpretWorkspaceResponse(result.data);
+    const applied = applyWorkspaceOutcome(outcome, {
+      setLoginToken,
+      setWorkspaceChoices,
+      setView,
+      redirectTo,
+      startTwoFactorVerify,
+      startTwoFactorSetup,
+    });
+    if (!applied) setError(t('form.setPassword.error'));
   }
 
   if (success) {

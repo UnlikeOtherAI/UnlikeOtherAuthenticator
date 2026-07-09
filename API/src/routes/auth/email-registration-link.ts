@@ -1,6 +1,8 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 
+import { LOGIN_SESSION_AUDIENCE } from '../../config/constants.js';
+import { requireEnv } from '../../config/env.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
 import { validateRegistrationEmailLandingToken } from '../../services/auth-registration-email-link.service.js';
 import {
@@ -15,6 +17,8 @@ import {
 import { selectRedirectUrl } from '../../services/authorization-code.service.js';
 import { isCustomSchemeUrl } from '../../utils/http-url.js';
 import { verifyEmailToken } from '../../services/auth-verify-email.service.js';
+import { buildWorkspaceChoices } from '../../services/first-login.service.js';
+import { signLoginSession } from '../../services/login-session.service.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
 import { AppError, isAppError } from '../../utils/errors.js';
 import { parsePkceChallenge, type PkceChallenge } from '../../utils/pkce.js';
@@ -137,7 +141,7 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
       // No password needed — the user is signed in by clicking the link.
       if (type === 'LOGIN_LINK' || type === 'VERIFY_EMAIL') {
         try {
-          const { userId } = await verifyEmailToken(
+          const { userId, teamInviteId } = await verifyEmailToken(
             {
               token,
               config: request.config,
@@ -150,6 +154,39 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
             allowedRedirectUrls: request.config.redirect_urls,
             requestedRedirectUrl: redirect_url,
           });
+
+          // Gap-fix B Task 1 (design §4.3 "Magic links join the same flow"): a consumed magic link
+          // now joins the same post-verification workspace chooser gate as password/social/code
+          // logins — UNLESS this link was invite-bound (teamInviteId set), in which case
+          // verifyEmailToken already ran acceptTeamInviteWithinTransaction above: the accepted invite
+          // IS the workspace selection, so the chooser must NOT be interposed on top of it.
+          if (!teamInviteId && request.config.login_flow?.workspace_selection === 'auto') {
+            const choices = await buildWorkspaceChoices(
+              { userId, config: request.config },
+              { prisma: request.adminDb },
+            );
+            if (choices.teams.length >= 2 || choices.pending_invites.length > 0) {
+              const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
+              const loginToken = await signLoginSession({
+                userId,
+                domain: request.config.domain,
+                sharedSecret: SHARED_SECRET,
+                audience: LOGIN_SESSION_AUDIENCE,
+              });
+              redirectNoStore(
+                reply,
+                buildWorkspaceChooserAuthUrl(
+                  request.configUrl,
+                  redirectUrl,
+                  loginToken,
+                  parseRequestAccessFlag(request_access),
+                  pkce,
+                ),
+              );
+              return;
+            }
+          }
+
           const finalResult = await finalizeAuthenticatedUser(
             {
               userId,
@@ -236,6 +273,28 @@ function buildAuthUrl(
   params.set('code_challenge_method', pkce.codeChallengeMethod);
   params.set('email_token', token);
   params.set('email_token_type', type);
+  if (requestAccess) params.set('request_access', 'true');
+  return `/auth?${params.toString()}`;
+}
+
+// Gap-fix B Task 1 (design §4.3/§11.2): the same `/auth?...&login_token=...&flow=workspace_chooser`
+// shape `callback.ts`'s social workspace-chooser branch redirects to, adapted to this route's own
+// convention of always preserving the (already-verified) PKCE challenge across an `/auth` redirect —
+// see `buildAuthUrl`/`buildLoginAuthUrl` above, which do the same for their own redirect targets.
+function buildWorkspaceChooserAuthUrl(
+  configUrl: string,
+  redirectUrl: string,
+  loginToken: string,
+  requestAccess: boolean,
+  pkce: PkceChallenge,
+): string {
+  const params = new URLSearchParams();
+  params.set('config_url', configUrl);
+  params.set('redirect_url', redirectUrl);
+  params.set('code_challenge', pkce.codeChallenge);
+  params.set('code_challenge_method', pkce.codeChallengeMethod);
+  params.set('login_token', loginToken);
+  params.set('flow', 'workspace_chooser');
   if (requestAccess) params.set('request_access', 'true');
   return `/auth?${params.toString()}`;
 }

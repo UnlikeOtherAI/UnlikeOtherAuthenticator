@@ -122,7 +122,7 @@ export async function verifyEmailToken(
     config: ClientConfig;
   },
   deps?: VerifyEmailDeps,
-): Promise<{ userId: string; type: VerifyEmailTokenType }> {
+): Promise<{ userId: string; type: VerifyEmailTokenType; teamInviteId: string | null }> {
   const env = deps?.env ?? getEnv();
 
   if (!env.DATABASE_URL) {
@@ -301,7 +301,10 @@ export async function verifyEmailToken(
     }
   }
 
-  return { userId: consumed.userId, type: consumed.type };
+  // Gap-fix B Task 1 (design §4.3): `teamInviteId` tells the caller whether this consumption already
+  // bound the user to a specific team via `acceptTeamInviteWithinTransaction` above — an accepted
+  // invite IS the workspace selection, so callers must not interpose the chooser on top of it.
+  return { userId: consumed.userId, type: consumed.type, teamInviteId: consumed.teamInviteId };
 }
 
 export async function verifyEmailAndSetPassword(

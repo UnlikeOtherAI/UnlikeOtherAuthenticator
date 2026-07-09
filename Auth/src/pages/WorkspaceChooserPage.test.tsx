@@ -30,14 +30,21 @@ const TEST_CONFIG = {
   language_config: 'en',
 };
 
-function renderChooser(choices: WorkspaceChoices | null, pendingEmail: string | null = 'jo@example.com'): string {
+function renderChooser(
+  choices: WorkspaceChoices | null,
+  pendingEmail: string | null = 'jo@example.com',
+  teamHint?: string,
+): string {
+  const search = teamHint
+    ? `?config_url=https%3A%2F%2Fclient.example.com%2Fauth-config&team_hint=${encodeURIComponent(teamHint)}`
+    : '?config_url=https%3A%2F%2Fclient.example.com%2Fauth-config';
   return renderToString(
     <ThemeProvider config={TEST_CONFIG} configUrl="">
       <I18nProvider config={TEST_CONFIG} configUrl="">
         <PopupProvider
           configUrl=""
           config={TEST_CONFIG}
-          initialSearch="?config_url=https%3A%2F%2Fclient.example.com%2Fauth-config"
+          initialSearch={search}
           initialView="workspace-chooser"
           initialPendingEmail={pendingEmail}
           initialLoginToken={choices ? 'bridge.jwt' : null}
@@ -152,5 +159,40 @@ describe('WorkspaceChooserPage SSR rendering', () => {
 
     expect(html).toContain('Solo Team');
     expect(html).toContain('Choose a workspace');
+  });
+
+  // Gap-fix B Task 2 (design §11.4): team_hint deep-link/switch preselect — rides the same
+  // auto-select code path/UI as the single-team auto-skip above.
+  describe('team_hint preselect', () => {
+    const twoTeams: WorkspaceChoices = {
+      teams: [
+        { teamId: 't1', orgId: 'o1', name: 'Backend Team', role: 'member', slug: 'backend-team' },
+        { teamId: 't2', orgId: 'o1', name: 'Design', role: 'owner', slug: 'design' },
+      ],
+      pending_invites: [],
+      can_create_org: false,
+    };
+
+    it('auto-selects the hinted team when it matches by teamId', () => {
+      const html = renderChooser(twoTeams, 'jo@example.com', 't2');
+
+      expect(html).not.toContain('Choose a workspace');
+      expect(html).toContain('Signing you in');
+    });
+
+    it('auto-selects the hinted team when it matches by slug', () => {
+      const html = renderChooser(twoTeams, 'jo@example.com', 'design');
+
+      expect(html).not.toContain('Choose a workspace');
+      expect(html).toContain('Signing you in');
+    });
+
+    it('renders the chooser normally when the hint matches no team in this user\'s own choices', () => {
+      const html = renderChooser(twoTeams, 'jo@example.com', 'not-a-real-team');
+
+      expect(html).toContain('Choose a workspace');
+      expect(html).toContain('Backend Team');
+      expect(html).toContain('Design');
+    });
   });
 });

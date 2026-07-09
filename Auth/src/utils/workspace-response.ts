@@ -110,6 +110,18 @@ export function pickAutoSkipTeam(choices: WorkspaceChoices): TeamChoice | null {
   return null;
 }
 
+/**
+ * Gap-fix B Task 2 (design §11.4): `team_hint` deep-link/switch preselect. Matches by `teamId` OR
+ * `slug` — but ONLY against a team already present in this verified user's own chooser payload;
+ * there is no server-side widening here, `select-team` still enforces ACTIVE membership + domain.
+ * An absent/blank hint or one that matches nothing returns null so the chooser renders normally.
+ */
+export function pickHintTeam(choices: WorkspaceChoices, teamHint: string | null): TeamChoice | null {
+  const hint = teamHint?.trim();
+  if (!hint) return null;
+  return choices.teams.find((team) => team.teamId === hint || team.slug === hint) ?? null;
+}
+
 /** The subset of `usePopup()` needed to act on a `WorkspaceResponseOutcome`. */
 export type WorkspaceOutcomeActions = {
   setLoginToken: (token: string | null) => void;

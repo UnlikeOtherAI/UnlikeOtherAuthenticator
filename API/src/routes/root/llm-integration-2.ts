@@ -23,7 +23,7 @@ token class from \`access_token\` and \`twofa_token\` and cannot be used for any
 2. \`POST /auth/verify-code?config_url=...\` — body \`{ email, code }\`. IP + email rate-limited; wrong
    code, expired code, no code, and a dead (5-attempt) code all return the identical generic auth
    error. On success:
-   - \`workspace_selection: "auto"\` → \`{ login_token, teams: [{ teamId, orgId, name, role }], pending_invites: [{ inviteId, teamName, invitedBy }], can_create_org }\`.
+   - \`workspace_selection: "auto"\` → \`{ login_token, teams: [{ teamId, orgId, name, slug, role, iconUrl }], pending_invites: [{ inviteId, teamName, invitedBy }], can_create_org }\`.
    - \`workspace_selection: "off"\` (default) → finalizes immediately, same response shape as
      \`/auth/login\` (\`{ ok, code, redirect_to }\`, or a \`twofa_token\`/\`twofa_enroll_required\` branch —
      2FA still applies, only the chooser step is skipped).
@@ -47,6 +47,20 @@ token class from \`access_token\` and \`twofa_token\` and cannot be used for any
    The Auth UI then calls \`POST /auth/session-choices?config_url=...\` \`{ login_token }\` to hydrate
    \`{ teams, pending_invites, can_create_org }\` — generic rejection for an invalid/expired token, no
    enumeration.
+6. Magic links (\`GET /auth/email/link\`, both the passwordless LOGIN_LINK/VERIFY_EMAIL auto-consume
+   and the VERIFY_EMAIL_SET_PASSWORD → \`POST /auth/verify-email\` path) join the same chooser gate —
+   the design's "magic links join the same flow". LOGIN_LINK/VERIFY_EMAIL redirect to \`/auth?...&
+   login_token=...&flow=workspace_chooser\` exactly like the social callback; \`POST /auth/verify-email\`
+   instead returns the inline JSON chooser payload exactly like \`/auth/login\`. Either way, an
+   invite-bound link (the invite already selected the team when the token was consumed) never sees
+   the chooser — an accepted invite IS the workspace selection.
+7. \`GET /auth\` accepts an optional \`team_hint=<teamId|slug>\` — a chooser preselect / one-click
+   workspace switch (design §11.4): a product's sidebar links back into \`/auth\` with the workspace
+   the user clicked, and if a team in that user's own (already-verified) chooser payload matches by
+   \`teamId\` or \`slug\`, the Auth UI auto-selects it via the same code path as the single-team
+   auto-skip. Client-side preselect ONLY — an invalid or non-matching hint is silently ignored (the
+   chooser just renders normally); \`select-team\`'s ACTIVE-membership + domain check is still the sole
+   authority and a hint can never select a team the user isn't already a member of.
 
 ---
 

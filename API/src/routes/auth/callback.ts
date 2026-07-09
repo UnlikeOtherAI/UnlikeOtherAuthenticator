@@ -388,6 +388,16 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         const u = new URL(`${baseUrl}/auth`);
         u.searchParams.set('config_url', configUrl);
         u.searchParams.set('redirect_url', redirectUrl);
+        // Gap-fix B follow-up: unlike the twofa/twofa_enroll redirects below (whose bridge JWTs
+        // embed the PKCE challenge — signTwoFaChallenge/startTwoFactorSetup carry it inside the
+        // token), the login_token bridge holds only userId+domain. The SPA must re-present the
+        // challenge on POST /auth/select-team, where issueAuthorizationCode requires it — so it
+        // has to survive this redirect via the URL, same as email-registration-link.ts's
+        // buildWorkspaceChooserAuthUrl.
+        if (socialState.code_challenge && socialState.code_challenge_method) {
+          u.searchParams.set('code_challenge', socialState.code_challenge);
+          u.searchParams.set('code_challenge_method', socialState.code_challenge_method);
+        }
         u.searchParams.set('login_token', outcome.loginToken);
         u.searchParams.set('flow', 'workspace_chooser');
         if (socialState.request_access === true) {

@@ -201,7 +201,12 @@ describe('buildWorkspaceChoices', () => {
           {
             teamId: 'team-1',
             teamRole: 'owner',
-            team: { name: 'Backend Team', orgId: 'org-1', iconUrl: 'https://cdn.example.com/a.png' },
+            team: {
+              name: 'Backend Team',
+              slug: 'backend-team',
+              orgId: 'org-1',
+              iconUrl: 'https://cdn.example.com/a.png',
+            },
           },
         ]),
       },
@@ -221,6 +226,7 @@ describe('buildWorkspaceChoices', () => {
           name: 'Backend Team',
           role: 'owner',
           iconUrl: 'https://cdn.example.com/a.png',
+          slug: 'backend-team',
         },
       ],
       pending_invites: [],
@@ -235,7 +241,7 @@ describe('buildWorkspaceChoices', () => {
       select: {
         teamId: true,
         teamRole: true,
-        team: { select: { name: true, orgId: true, iconUrl: true } },
+        team: { select: { name: true, slug: true, orgId: true, iconUrl: true } },
       },
     });
   });

@@ -358,6 +358,17 @@ describe('GET /auth/callback/:provider', () => {
           login_flow: { email_code_enabled: false, workspace_selection: 'auto' },
         }),
       );
+      // The initiating /auth/social request carried a PKCE challenge; it travels inside the signed
+      // social state and MUST survive the chooser redirect (the login_token bridge doesn't embed
+      // it, and /auth/select-team → issueAuthorizationCode requires it).
+      verifySocialStateMock.mockResolvedValue({
+        provider: 'google',
+        config_url: 'https://client.example.com/auth-config',
+        redirect_url: 'https://client.example.com/oauth/callback',
+        nonce: TEST_NONCE,
+        code_challenge: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+        code_challenge_method: 'S256',
+      });
       buildWorkspaceChoicesMock.mockResolvedValue({
         teams: [
           { teamId: 'team-1', orgId: 'org-1', name: 'Design', role: 'member' },
@@ -387,8 +398,49 @@ describe('GET /auth/callback/:provider', () => {
       expect(location.searchParams.get('redirect_url')).toBe(
         'https://client.example.com/oauth/callback',
       );
+      expect(location.searchParams.get('code_challenge')).toBe(
+        'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+      );
+      expect(location.searchParams.get('code_challenge_method')).toBe('S256');
       expect(location.searchParams.has('code')).toBe(false);
       expect(issueAuthorizationCodeMock).not.toHaveBeenCalled();
+
+      await app.close();
+    });
+
+    it('chooser redirect omits the PKCE params when the social state carries none', async () => {
+      validateConfigFieldsMock.mockReturnValue(
+        baseConfig({
+          login_flow: { email_code_enabled: false, workspace_selection: 'auto' },
+        }),
+      );
+      // Default verifySocialStateMock (beforeEach) has no code_challenge/code_challenge_method.
+      buildWorkspaceChoicesMock.mockResolvedValue({
+        teams: [
+          { teamId: 'team-1', orgId: 'org-1', name: 'Design', role: 'member' },
+          { teamId: 'team-2', orgId: 'org-1', name: 'Engineering', role: 'owner' },
+        ],
+        pending_invites: [],
+        can_create_org: false,
+      });
+      signLoginSessionMock.mockResolvedValue('login_token_abc');
+
+      const { createApp } = await import('../../src/app.js');
+      const app = await createApp();
+      await app.ready();
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/auth/callback/google?code=provider-code&state=state-token',
+        cookies: { [SOCIAL_STATE_COOKIE_NAME]: app.signCookie(TEST_NONCE) },
+      });
+
+      expect(res.statusCode).toBe(302);
+      const location = new URL(res.headers.location as string);
+      expect(location.searchParams.get('login_token')).toBe('login_token_abc');
+      expect(location.searchParams.get('flow')).toBe('workspace_chooser');
+      expect(location.searchParams.has('code_challenge')).toBe(false);
+      expect(location.searchParams.has('code_challenge_method')).toBe(false);
 
       await app.close();
     });

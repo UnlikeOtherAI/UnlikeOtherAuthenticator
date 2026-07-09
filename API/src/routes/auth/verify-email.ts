@@ -1,12 +1,16 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
+import { LOGIN_SESSION_AUDIENCE } from '../../config/constants.js';
+import { requireEnv } from '../../config/env.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
 import { AppError } from '../../utils/errors.js';
 import {
   validateVerifyEmailToken,
   verifyEmailToken,
 } from '../../services/auth-verify-email.service.js';
+import { buildWorkspaceChoices } from '../../services/first-login.service.js';
+import { signLoginSession } from '../../services/login-session.service.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
 import {
   finalizeAuthenticatedUser,
@@ -67,7 +71,7 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
         throw new AppError('BAD_REQUEST', 400, 'MISSING_PASSWORD');
       }
 
-      const { userId, type } = await verifyEmailToken(
+      const { userId, type, teamInviteId } = await verifyEmailToken(
         {
           token,
           password,
@@ -81,6 +85,31 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
         allowedRedirectUrls: request.config.redirect_urls,
         requestedRedirectUrl: redirect_url,
       });
+
+      // Gap-fix B Task 1 (design §4.3, mirrors /auth/login's chooser gate): reuse the exact
+      // login.ts pattern — return the JSON chooser payload instead of finalizing — UNLESS this
+      // token was invite-bound (teamInviteId set), in which case verifyEmailToken already ran
+      // acceptTeamInviteWithinTransaction above: the accepted invite IS the workspace selection,
+      // so the chooser must NOT be interposed on top of it. Brand-new users normally have 0 teams
+      // and 0 invites, so the gate auto-skips for them (nothing changes vs. today).
+      if (!teamInviteId && request.config.login_flow?.workspace_selection === 'auto') {
+        const choices = await buildWorkspaceChoices(
+          { userId, config: request.config },
+          { prisma: request.adminDb },
+        );
+        if (choices.teams.length >= 2 || choices.pending_invites.length > 0) {
+          const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
+          const loginToken = await signLoginSession({
+            userId,
+            domain: request.config.domain,
+            sharedSecret: SHARED_SECRET,
+            audience: LOGIN_SESSION_AUDIENCE,
+          });
+          reply.status(200).send({ login_token: loginToken, ...choices });
+          return;
+        }
+      }
+
       const finalResult = await finalizeAuthenticatedUser(
         {
           userId,

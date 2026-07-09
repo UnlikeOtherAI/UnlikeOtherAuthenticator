@@ -176,6 +176,9 @@ export type WorkspaceChoiceTeam = {
   role: string;
   // Design §11.3 (gap-fix A Task 3) — matches `Auth/src/hooks/use-popup.tsx`'s `TeamChoice.iconUrl`.
   iconUrl: string | null;
+  // Gap-fix B Task 2 (design §11.4): lets the client match a `team_hint` deep-link param by slug as
+  // well as by id — matches `Auth/src/hooks/use-popup.tsx`'s `TeamChoice.slug`.
+  slug: string;
 };
 
 export type WorkspaceChoicePendingInvite = {
@@ -233,7 +236,7 @@ export async function buildWorkspaceChoices(
       select: {
         teamId: true,
         teamRole: true,
-        team: { select: { name: true, orgId: true, iconUrl: true } },
+        team: { select: { name: true, slug: true, orgId: true, iconUrl: true } },
       },
     }),
     prisma.teamInvite.findMany({
@@ -259,6 +262,7 @@ export async function buildWorkspaceChoices(
     name: row.team.name,
     role: row.teamRole,
     iconUrl: row.team.iconUrl,
+    slug: row.team.slug,
   }));
 
   const pendingInvites: WorkspaceChoicePendingInvite[] = inviteRows.map((row) => ({

@@ -5,10 +5,24 @@ import {
   applyWorkspaceOutcome,
   interpretWorkspaceResponse,
   pickAutoSkipTeam,
+  pickHintTeam,
   toWorkspaceChoices,
 } from './workspace-response.js';
 
-const TEAM_A = { teamId: 'team-a', orgId: 'org-a', name: 'Backend Team', role: 'member' };
+const TEAM_A = {
+  teamId: 'team-a',
+  orgId: 'org-a',
+  name: 'Backend Team',
+  role: 'member',
+  slug: 'backend-team',
+};
+const TEAM_B = {
+  teamId: 'team-b',
+  orgId: 'org-a',
+  name: 'Design',
+  role: 'owner',
+  slug: 'design',
+};
 const INVITE_A = { inviteId: 'invite-a', teamName: 'Growth', invitedBy: 'Jo' };
 
 describe('interpretWorkspaceResponse', () => {
@@ -138,6 +152,39 @@ describe('pickAutoSkipTeam', () => {
         can_create_org: false,
       }),
     ).toBeNull();
+  });
+});
+
+// Gap-fix B Task 2 (design §11.4): team_hint deep-link/switch preselect matching.
+describe('pickHintTeam', () => {
+  const choices: WorkspaceChoices = {
+    teams: [TEAM_A, TEAM_B],
+    pending_invites: [],
+    can_create_org: false,
+  };
+
+  it('matches a team by teamId', () => {
+    expect(pickHintTeam(choices, 'team-a')).toEqual(TEAM_A);
+  });
+
+  it('matches a team by slug', () => {
+    expect(pickHintTeam(choices, 'design')).toEqual(TEAM_B);
+  });
+
+  it('returns null when the hint matches no team in the caller\'s own choices', () => {
+    expect(pickHintTeam(choices, 'team-does-not-exist')).toBeNull();
+    expect(pickHintTeam(choices, 'some-other-slug')).toBeNull();
+  });
+
+  it('returns null for a null or blank hint', () => {
+    expect(pickHintTeam(choices, null)).toBeNull();
+    expect(pickHintTeam(choices, '  ')).toBeNull();
+  });
+
+  it('never matches a team outside the caller\'s own choices, even by name', () => {
+    // Guards against widening: a hint can only ever select something already IN `choices.teams` —
+    // there is no separate lookup path that could reach a team this user doesn't already have.
+    expect(pickHintTeam({ teams: [], pending_invites: [], can_create_org: false }, 'team-a')).toBeNull();
   });
 });
 

@@ -24,6 +24,8 @@ export type TeamChoice = {
   name: string;
   role: string;
   iconUrl?: string | null;
+  /** Gap-fix B (design §11.4): lets a `team_hint` deep-link match by slug as well as by id. */
+  slug?: string;
 };
 
 /** Phase 3c (design §11.2): a pending team invite offered alongside the chooser. */
@@ -79,6 +81,14 @@ export type PopupQueryParams = {
    * URL — the SPA hydrates it afterwards via `POST /auth/session-choices`.
    */
   loginToken: string | null;
+  /**
+   * Gap-fix B Task 2 (design §11.4): a deep-link/switch preselect — "jump straight into this
+   * workspace" from a product's sidebar (`GET /auth?...&team_hint=<teamId|slug>`). Client-side
+   * ONLY: it may only cause auto-selection of a team already present in the verified user's own
+   * chooser payload (`WorkspaceChooserPage`'s hint-match), never anything wider — `select-team`'s
+   * server-side ACTIVE-membership + domain check remains the sole authority.
+   */
+  teamHint: string | null;
 };
 
 export type PopupContextValue = PopupQueryParams & {
@@ -136,6 +146,7 @@ export function parsePopupQueryParams(search: string): PopupQueryParams {
       resource: null,
       handoffTarget: null,
       loginToken: null,
+      teamHint: null,
     };
   }
 
@@ -159,6 +170,10 @@ export function parsePopupQueryParams(search: string): PopupQueryParams {
   // own dedicated query param, so a stray `login_token` on an unrelated redirect is never picked up.
   const loginToken =
     params.get('flow') === 'workspace_chooser' ? params.get('login_token') : null;
+  // Gap-fix B Task 2 (design §11.4): a deep-link/switch chooser preselect. Parsed unconditionally
+  // (unlike `login_token`, it isn't scoped to another marker param) — validity/membership is
+  // re-checked against the verified user's own chooser payload before it can select anything.
+  const teamHint = params.get('team_hint');
 
   const validTypes = ['VERIFY_EMAIL_SET_PASSWORD', 'VERIFY_EMAIL', 'LOGIN_LINK', 'PASSWORD_RESET'] as const;
   const emailTokenType = rawType && (validTypes as readonly string[]).includes(rawType)
@@ -180,6 +195,7 @@ export function parsePopupQueryParams(search: string): PopupQueryParams {
     resource: resource && resource.trim() ? resource : null,
     handoffTarget: handoffTarget && handoffTarget.trim() ? handoffTarget : null,
     loginToken: loginToken && loginToken.trim() ? loginToken : null,
+    teamHint: teamHint && teamHint.trim() ? teamHint : null,
   };
 }
 
@@ -286,6 +302,7 @@ export function PopupProvider(props: {
       state: parsed.state,
       resource: parsed.resource,
       handoffTarget,
+      teamHint: parsed.teamHint,
       view,
       setView,
       startTwoFactorVerify,
@@ -324,6 +341,7 @@ export function PopupProvider(props: {
     parsed.state,
     parsed.resource,
     handoffTarget,
+    parsed.teamHint,
     view,
     setView,
     startTwoFactorVerify,

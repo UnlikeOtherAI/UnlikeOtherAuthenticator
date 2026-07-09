@@ -11,6 +11,7 @@ import { submitSessionChoices, submitTeamSelection } from '../utils/workspace-ac
 import {
   applyWorkspaceOutcome,
   pickAutoSkipTeam,
+  pickHintTeam,
   type WorkspaceResponseOutcome,
 } from '../utils/workspace-response.js';
 
@@ -36,6 +37,7 @@ export function WorkspaceChooserPage(): React.JSX.Element {
     codeChallenge,
     codeChallengeMethod,
     requestAccess,
+    teamHint,
     setView,
     setLoginToken,
     setWorkspaceChoices,
@@ -95,10 +97,12 @@ export function WorkspaceChooserPage(): React.JSX.Element {
   }, [loginToken, workspaceChoices, query, setWorkspaceChoices, t]);
 
   // Design §11.2: a user with exactly one ACTIVE team and no pending invites never sees a
-  // one-item chooser — select it for them as soon as the payload lands.
+  // one-item chooser — select it for them as soon as the payload lands. Gap-fix B Task 2 (design
+  // §11.4): a `team_hint` deep-link/switch preselect rides the SAME auto-select code path — it
+  // only ever matches a team already present in this user's own chooser payload.
   useEffect(() => {
     if (!loginToken || !workspaceChoices || autoSkipStarted.current) return;
-    const skipTeam = pickAutoSkipTeam(workspaceChoices);
+    const skipTeam = pickAutoSkipTeam(workspaceChoices) ?? pickHintTeam(workspaceChoices, teamHint);
     if (!skipTeam) return;
 
     autoSkipStarted.current = true;
@@ -111,7 +115,7 @@ export function WorkspaceChooserPage(): React.JSX.Element {
       const applied = handleOutcome(outcome);
       if (!applied) setAutoSkipFailed(true);
     })();
-  }, [loginToken, workspaceChoices, query, handleOutcome]);
+  }, [loginToken, workspaceChoices, teamHint, query, handleOutcome]);
 
   if (!loginToken || !workspaceChoices) {
     if (hydrateFailed) {
@@ -124,7 +128,7 @@ export function WorkspaceChooserPage(): React.JSX.Element {
     return <div />;
   }
 
-  const skipTeam = pickAutoSkipTeam(workspaceChoices);
+  const skipTeam = pickAutoSkipTeam(workspaceChoices) ?? pickHintTeam(workspaceChoices, teamHint);
   if (skipTeam && !autoSkipFailed) {
     return (
       <div>
