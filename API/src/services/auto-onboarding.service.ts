@@ -8,6 +8,7 @@ import {
   computeJwkFingerprint,
   findJwkByKid,
   importClientJwkKey,
+  type PublicRsaJwk,
 } from './client-jwk.service.js';
 import { fetchPartnerJwks } from './jwks-fetch.service.js';
 import { validateConfigFields } from './config.service.js';
@@ -137,10 +138,25 @@ function configSummary(payload: JWTPayload): Prisma.InputJsonValue | undefined {
  *      writing anything (decline-and-block).
  *   9. Otherwise upsert a `PENDING` request keyed by domain + fingerprint.
  */
-export async function tryAutoOnboard(
-  configJwt: string,
-  configUrl: string,
-): Promise<AutoOnboardingOutcome> {
+/**
+ * Verify a config JWT against the JWKS the partner publishes at the `jwks_url`
+ * embedded in its (unverified) payload — steps 1-6 of the onboarding flow above.
+ *
+ * This is the key resolution the live `/auth` runtime falls back to when the
+ * deployment JWKS and per-domain DB keys don't match the JWT's `kid`. It is
+ * extracted so the `/config/validate` pre-flight validator can run the identical
+ * check and never false-negative a signature the runtime accepts (issue #13).
+ *
+ * Throws `CONFIG_JWT_INVALID` / `INTEGRATION_*` on any failure. On success returns
+ * the verified payload, the matched JWK, and the opt-in metadata.
+ */
+export async function verifyConfigJwtViaPublishedJwks(configJwt: string): Promise<{
+  payload: JWTPayload;
+  jwk: PublicRsaJwk;
+  domain: string;
+  jwksUrl: string;
+  contactEmail: string;
+}> {
   const { header, domain, jwksUrl, contactEmail } = readAutoOnboardingFields(configJwt);
 
   if (header.alg !== 'RS256') {
@@ -153,11 +169,6 @@ export async function tryAutoOnboard(
   }
 
   assertJwksHostMatchesDomain(jwksUrl, domain);
-
-  const existingOpen = await findOpenIntegrationRequest(domain);
-  if (existingOpen?.status === 'DECLINED') {
-    return { kind: 'declined', domain: normalizeHostname(domain), row: existingOpen };
-  }
 
   const jwks = await fetchPartnerJwks(jwksUrl, { expectedHost: domain });
   const jwk = findJwkByKid(jwks, kid);
@@ -185,6 +196,34 @@ export async function tryAutoOnboard(
   ) {
     throw new AppError('BAD_REQUEST', 400, 'INTEGRATION_JWT_DOMAIN_MISMATCH');
   }
+
+  return { payload: verified, jwk, domain, jwksUrl, contactEmail };
+}
+
+export async function tryAutoOnboard(
+  configJwt: string,
+  configUrl: string,
+): Promise<AutoOnboardingOutcome> {
+  const { header, domain, jwksUrl } = readAutoOnboardingFields(configJwt);
+
+  if (header.alg !== 'RS256') {
+    throw new AppError('BAD_REQUEST', 400, 'CONFIG_JWT_INVALID');
+  }
+
+  const kid = typeof header.kid === 'string' ? header.kid.trim() : '';
+  if (!kid) {
+    throw new AppError('BAD_REQUEST', 400, 'CONFIG_JWT_INVALID');
+  }
+
+  assertJwksHostMatchesDomain(jwksUrl, domain);
+
+  const existingOpen = await findOpenIntegrationRequest(domain);
+  if (existingOpen?.status === 'DECLINED') {
+    return { kind: 'declined', domain: normalizeHostname(domain), row: existingOpen };
+  }
+
+  const { payload: verified, jwk, contactEmail } =
+    await verifyConfigJwtViaPublishedJwks(configJwt);
 
   const fingerprint = computeJwkFingerprint(jwk);
   const summary = configSummary(verified);

@@ -188,6 +188,7 @@ export function registerAuthSelectTeamRoute(app: FastifyInstance): void {
           authMethod: 'workspace_select',
           codeChallenge: pkce.codeChallenge,
           codeChallengeMethod: pkce.codeChallengeMethod,
+          ip: request.ip ?? null,
           orgId,
           teamId: resolvedTeamId,
         },

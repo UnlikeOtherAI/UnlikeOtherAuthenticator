@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   readOptInFields,
   tryAutoOnboard,
+  verifyConfigJwtViaPublishedJwks,
 } from '../../src/services/auto-onboarding.service.js';
 import {
   baseClientConfigPayload,
@@ -53,6 +54,78 @@ describe('readOptInFields', () => {
       }),
     );
     expect(readOptInFields(jwt)).toBeNull();
+  });
+});
+
+describe('verifyConfigJwtViaPublishedJwks', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  async function stubFetchWithJwks(): Promise<void> {
+    const jwks = await testConfigJwks();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(jwks), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      ),
+    );
+  }
+
+  it('verifies a config JWT against the JWKS published at its own jwks_url', async () => {
+    // This is the runtime fallback that /config/validate now reuses (issue #13):
+    // a signature the DB / deployment JWKS do not cover still verifies when the
+    // partner publishes the matching key at the jwks_url in the payload.
+    await stubFetchWithJwks();
+
+    const jwt = await signTestConfigJwt(
+      baseClientConfigPayload({
+        jwks_url: 'https://client.example.com/.well-known/jwks.json',
+        contact_email: 'ops@client.example.com',
+      }),
+    );
+
+    const result = await verifyConfigJwtViaPublishedJwks(jwt);
+
+    expect(result.domain).toBe('client.example.com');
+    expect(result.jwk.kid).toBe(TEST_CONFIG_KID);
+    expect(result.payload.domain).toBe('client.example.com');
+  });
+
+  it('rejects when the published JWKS does not contain the JWT kid', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({ keys: [{ kty: 'RSA', kid: 'other-kid', n: 'nnn', e: 'AQAB' }] }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      ),
+    );
+
+    const jwt = await signTestConfigJwt(
+      baseClientConfigPayload({
+        jwks_url: 'https://client.example.com/.well-known/jwks.json',
+        contact_email: 'ops@client.example.com',
+      }),
+    );
+
+    await expect(verifyConfigJwtViaPublishedJwks(jwt)).rejects.toMatchObject({
+      statusCode: 400,
+      message: 'INTEGRATION_KID_NOT_IN_JWKS',
+    });
+  });
+
+  it('rejects a config JWT that does not opt in (no jwks_url / contact_email)', async () => {
+    const jwt = await signTestConfigJwt(baseClientConfigPayload());
+
+    await expect(verifyConfigJwtViaPublishedJwks(jwt)).rejects.toMatchObject({
+      statusCode: 400,
+      message: 'CONFIG_JWT_INVALID',
+    });
   });
 });
 

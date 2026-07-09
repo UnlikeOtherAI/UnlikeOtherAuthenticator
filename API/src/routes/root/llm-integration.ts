@@ -100,7 +100,7 @@ When \`firstLogin.memberships.orgs\` is empty, the user is authenticated but has
 
 | \`capabilities.can_create_org\` | \`capabilities.can_accept_invite\` | RP action |
 |---|---|---|
-| \`true\` | any | Show "Create your organisation" UI. Your backend calls \`POST /org/organisations\` (domain-hash auth, \`name\` + \`owner_id = claims.sub\`). After success, re-issue the session and re-fetch \`GET /org/me\`. |
+| \`true\` | any | Show "Create your organisation" UI. Your backend calls \`POST /org/organisations?domain=<d>&config_url=<u>\` with domain-hash auth **and the user's \`X-UOA-Access-Token\` header**; the body is \`{ name }\` only — the new org is owned by that token's user (there is no \`owner_id\` in the body). After success, re-issue the session and re-fetch \`GET /org/me\`. |
 | \`false\` | \`true\` | User has a pending invite. Show "Accept invitation" UI; the invite link is delivered by email from UOA — or you can resolve it yourself via \`firstLogin.pending_invites[0]\`. |
 | \`false\` | \`false\` | No tenant and no path to one. Reject the login with a "Contact your administrator" screen — do NOT silently grant access. Your UOA superuser must provision the org/team. |
 

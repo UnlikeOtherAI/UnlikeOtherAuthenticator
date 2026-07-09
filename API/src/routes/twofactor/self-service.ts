@@ -176,6 +176,7 @@ export function registerTwoFactorSelfServiceRoutes(app: FastifyInstance): void {
             requestAccess: setup.requestAccess,
             codeChallenge: setup.codeChallenge,
             codeChallengeMethod: setup.codeChallengeMethod,
+            ip: request.ip ?? null,
             orgId: setup.orgId,
             teamId: setup.teamId,
           },

@@ -3,6 +3,7 @@ import type {
   AdminSuperuser,
   AppFlagSummary,
   AppPlatformKind,
+  BanRecord,
   Domain,
   DomainDirectoryDetail,
   DomainEmailRegistration,
@@ -166,6 +167,24 @@ export const adminService = {
   getLogs: () => api.get<AdminData['logs']>('/internal/admin/logs'),
   getHandshakeErrors: () => api.get<AdminData['handshakeErrors']>('/internal/admin/handshake-errors'),
   getSettings: () => api.get<Pick<AdminData, 'bans' | 'apps'>>('/internal/admin/settings'),
+  createBan: (input: {
+    type: 'email' | 'pattern' | 'ip' | 'user';
+    value: string;
+    domain: string;
+    orgId?: string;
+    teamId?: string;
+    reason?: string;
+  }) =>
+    api.post<BanRecord>('/internal/admin/bans', {
+      type: input.type,
+      value: input.value,
+      domain: input.domain,
+      ...(input.orgId ? { org_id: input.orgId } : {}),
+      ...(input.teamId ? { team_id: input.teamId } : {}),
+      ...(input.reason ? { reason: input.reason } : {}),
+    }),
+  deleteBan: (id: string) =>
+    api.delete<{ id: string }>(`/internal/admin/bans/${encodeURIComponent(id)}`),
   createApp: (input: {
     name: string;
     identifier: string;
