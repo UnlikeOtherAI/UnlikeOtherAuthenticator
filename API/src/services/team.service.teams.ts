@@ -8,6 +8,7 @@ import {
   assertDatabaseEnabled,
   deriveUniqueTeamSlug,
   ensureAvailableTeamSlug,
+  normalizeIconUrl,
   normalizeTeamDescription,
   normalizeTeamJoinPolicy,
   normalizeTeamName,
@@ -24,6 +25,7 @@ import {
   type TeamWithMembersRecord,
   isP2002Error,
 } from './team.service.base.js';
+import { getTeamInvitedEntries, type TeamInvitedEntry } from './team-invite.service.invited.js';
 
 const TEAM_SELECT = {
   id: true,
@@ -34,6 +36,7 @@ const TEAM_SELECT = {
   description: true,
   isDefault: true,
   joinPolicy: true,
+  iconUrl: true,
   createdAt: true,
   updatedAt: true,
 } as const;
@@ -167,9 +170,12 @@ export async function getTeam(
     teamId: string;
     domain: string;
     actorUserId: string;
+    // Task 2 (gapfix-a, design §11.4 "Invited" tab): `?include=invited` on the route. Undefined/false
+    // leaves the response byte-identical to before this change (no `invited` key at all).
+    includeInvited?: boolean;
   },
   deps?: OrgServiceDeps,
-): Promise<TeamWithMembersRecord> {
+): Promise<TeamWithMembersRecord & { invited?: TeamInvitedEntry[] }> {
   const env = deps?.env ?? getEnv();
   assertDatabaseEnabled(env);
 
@@ -211,10 +217,22 @@ export async function getTeam(
     throw new AppError('NOT_FOUND', 404);
   }
 
-  return {
+  const result: TeamWithMembersRecord & { invited?: TeamInvitedEntry[] } = {
     ...toTeamRecord(row),
     members: row.members.map(toTeamMemberRecord),
   };
+
+  if (params.includeInvited) {
+    // Gated inside getTeamInvitedEntries to org/team owner/admin only — invite emails are PII, so a
+    // plain member gets `invited: []` rather than the whole read failing with 403 (design gapfix-a
+    // Task 2).
+    result.invited = await getTeamInvitedEntries(
+      { orgId: org.id, teamId: row.id, actorUserId },
+      { prisma },
+    );
+  }
+
+  return result;
 }
 
 export async function updateTeam(
@@ -227,6 +245,7 @@ export async function updateTeam(
     slug?: string;
     description?: string | null;
     joinPolicy?: string;
+    iconUrl?: string | null;
   },
   deps?: OrgServiceDeps,
 ): Promise<TeamRecord> {
@@ -242,7 +261,8 @@ export async function updateTeam(
     params.name !== undefined ||
     params.slug !== undefined ||
     params.description !== undefined ||
-    params.joinPolicy !== undefined;
+    params.joinPolicy !== undefined ||
+    params.iconUrl !== undefined;
   if (!hasUpdates) {
     throw new AppError('BAD_REQUEST', 400);
   }
@@ -252,6 +272,7 @@ export async function updateTeam(
     slug: string;
     description: string | null;
     joinPolicy: ReturnType<typeof normalizeTeamJoinPolicy>;
+    iconUrl: string | null;
   }> = {};
   if (params.name !== undefined) {
     data.name = normalizeTeamName(params.name);
@@ -261,6 +282,12 @@ export async function updateTeam(
   }
   if (params.joinPolicy !== undefined) {
     data.joinPolicy = normalizeTeamJoinPolicy(params.joinPolicy);
+  }
+  if (params.iconUrl !== undefined) {
+    // normalizeIconUrl(non-undefined) never returns undefined; the cast documents that narrowing
+    // for TS (the function's general signature also accepts/returns undefined for the "omitted"
+    // case, which can't happen on this branch).
+    data.iconUrl = normalizeIconUrl(params.iconUrl) as string | null;
   }
 
   const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);

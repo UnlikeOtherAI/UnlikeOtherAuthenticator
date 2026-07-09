@@ -34,6 +34,10 @@ export function makePrismaMock(): PrismaClient {
       update: vi.fn(),
       delete: vi.fn(),
     },
+    // Gap-fix A Task 2 (`?include=invited`): getTeam's invited-entries lookup.
+    teamInvite: {
+      findMany: vi.fn(),
+    },
     $transaction: vi.fn(),
   } as unknown as PrismaClient;
 

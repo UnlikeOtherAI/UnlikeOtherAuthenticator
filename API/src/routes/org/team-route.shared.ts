@@ -20,6 +20,13 @@ export const ListQuerySchema = DomainQuerySchema.extend({
   cursor: z.string().trim().min(1).optional(),
 }).strict();
 
+// Gap-fix A Task 2 (design §11.4 "Invited" tab): `?include=invited` on the team detail read only.
+// Any value other than the exact literal `"invited"` is ignored (ie. treated the same as absent),
+// not rejected — kept a plain string here (rather than z.literal) so unrecognised values don't 400.
+export const TeamDetailQuerySchema = DomainQuerySchema.extend({
+  include: z.string().trim().optional(),
+}).strict();
+
 export const OrgPathSchema = z.object({
   orgId: z.string().trim().min(1),
 });
@@ -44,6 +51,10 @@ export const TeamUpdateBodySchema = z.object({
   joinPolicy: z
     .enum(['INVITE_ONLY', 'APPROVED_DOMAIN', 'REQUEST_TO_JOIN', 'OPEN_TO_ORG', 'HIDDEN'])
     .optional(),
+  // Workspace icon (design §11.3, gap-fix A Task 3) — owner/admin only (same PUT authorization);
+  // omitted leaves the current icon unchanged, `null` clears it. https-only, ≤2048 chars enforced
+  // at the service layer (`normalizeIconUrl`) with a generic error otherwise.
+  icon_url: z.string().trim().max(2048).nullable().optional(),
 });
 
 export const AddTeamMemberBodySchema = z.object({
@@ -133,6 +144,12 @@ export function parseDomainFromRequest(request: FastifyRequest): string {
 
 export function parseLimitCursor(request: FastifyRequest) {
   const parsed = ListQuerySchema.parse(request.query);
+  assertVerifiedDomainMatchesQuery(request, parsed.domain);
+  return parsed;
+}
+
+export function parseTeamDetailQuery(request: FastifyRequest) {
+  const parsed = TeamDetailQuerySchema.parse(request.query);
   assertVerifiedDomainMatchesQuery(request, parsed.domain);
   return parsed;
 }

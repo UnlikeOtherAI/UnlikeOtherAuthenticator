@@ -1,10 +1,11 @@
 import type { FastifyInstance } from 'fastify';
 
 import { llmIntegrationMarkdown } from './llm-integration.js';
+import { llmIntegrationMarkdown2 } from './llm-integration-2.js';
 import { llmIntroMarkdown } from './llm-intro.js';
 
 function renderLlmMarkdown(): string {
-  return `${llmIntroMarkdown}\n${llmIntegrationMarkdown}`;
+  return `${llmIntroMarkdown}\n${llmIntegrationMarkdown}\n${llmIntegrationMarkdown2}`;
 }
 
 export function registerLlmRoute(app: FastifyInstance): void {

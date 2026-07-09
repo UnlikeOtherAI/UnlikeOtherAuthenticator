@@ -5,6 +5,7 @@ import type { ClientConfig } from './config.service.js';
 import { getEnv } from '../config/env.js';
 import { normalizeDomain } from '../utils/domain.js';
 import { AppError } from '../utils/errors.js';
+import { parseIconUrl } from '../utils/http-url.js';
 import {
   writeOrgAuditLog,
   type OrgAuditAction,
@@ -43,6 +44,25 @@ export function normalizeMemberInvitesSetting(value: string): OrgMemberInvitesVa
   return normalized as OrgMemberInvitesValue;
 }
 
+/**
+ * Validate the `icon_url` field shared by Team/Organisation writes (design §11.3, brief §15):
+ * external URL only, no local storage. `undefined` = field omitted (leave the stored value
+ * unchanged); `null` clears the icon; any other value must be an `https:` URL of at most 2048
+ * characters, else a generic `BAD_REQUEST` (no user-visible error specificity per CLAUDE.md).
+ * Single source of truth for both `updateOrganisation` and `updateTeam` — re-exported from
+ * `team.service.base.ts`.
+ */
+export function normalizeIconUrl(value: string | null | undefined): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+
+  const parsed = parseIconUrl(value);
+  if (!parsed) {
+    throw new AppError('BAD_REQUEST', 400);
+  }
+  return parsed;
+}
+
 export type OrganisationRecord = {
   id: string;
   domain: string;
@@ -50,6 +70,7 @@ export type OrganisationRecord = {
   slug: string;
   ownerId: string;
   memberInvites: OrgMemberInvitesValue;
+  iconUrl: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -150,6 +171,7 @@ export async function resolveOrganisationByDomain(
   slug: string;
   ownerId: string;
   memberInvites?: string;
+  iconUrl?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }> {
@@ -168,6 +190,7 @@ export async function resolveOrganisationByDomain(
       slug: true,
       ownerId: true,
       memberInvites: true,
+      iconUrl: true,
       createdAt: true,
       updatedAt: true,
     },
@@ -192,6 +215,7 @@ export function toOrganisationRecord(row: {
   slug: string;
   ownerId: string;
   memberInvites?: string;
+  iconUrl?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }): OrganisationRecord {
@@ -202,6 +226,7 @@ export function toOrganisationRecord(row: {
     slug: row.slug,
     ownerId: row.ownerId,
     memberInvites: (row.memberInvites ?? 'allowed') as OrgMemberInvitesValue,
+    iconUrl: row.iconUrl ?? null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

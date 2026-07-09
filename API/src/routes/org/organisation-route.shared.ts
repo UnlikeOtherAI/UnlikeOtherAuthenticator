@@ -38,6 +38,10 @@ export const OrgBodySchema = z.object({
   // Member-initiated invite policy (design §4.7, Phase 4) — owner/admin only; omitted leaves the
   // current setting unchanged. Validated against the allowed vocabulary at the service layer.
   member_invites: z.enum(['allowed', 'admin_approval', 'disabled']).optional(),
+  // Workspace icon (design §11.3, gap-fix A Task 3) — owner/admin only (same PUT authorization);
+  // omitted leaves the current icon unchanged, `null` clears it. https-only, ≤2048 chars enforced
+  // at the service layer (`normalizeIconUrl`) with a generic error otherwise.
+  icon_url: z.string().trim().max(2048).nullable().optional(),
 });
 
 export const AddMemberBodySchema = z.object({

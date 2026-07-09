@@ -11,11 +11,10 @@ import { hashEmailToken } from '../utils/verification-token.js';
 import {
   assertDatabaseEnabled,
   auditOrg,
-  getOrganisationMember,
   normalizeDomain,
   resolveOrganisationByDomain,
 } from './organisation.service.base.js';
-import { isTeamManager } from './team.service.base.js';
+import { isOrgOrTeamManager } from './team.service.base.js';
 
 // Phase 5 (design §4.7, §7 step 6, §8): shareable team invite links. A link authorizes JOINING a
 // team, never AUTHENTICATION — redemption only happens on the verified-session path
@@ -97,29 +96,19 @@ function clampMaxUses(value?: number): number {
   return Math.min(Math.trunc(value), MAX_USES_CAP);
 }
 
-/** Actor must be an ACTIVE org owner/admin OR an ACTIVE team owner/admin (design §4.9/Phase 2). */
+/**
+ * Actor must be an ACTIVE org owner/admin OR an ACTIVE team owner/admin (design §4.9/Phase 2).
+ * Delegates to the shared `isOrgOrTeamManager` boolean check (`team.service.base.ts`) — single
+ * source of truth, also used by the gap-fix A "Invited" tab gate.
+ */
 async function requireLinkManager(
   prisma: InviteLinkPrisma,
   params: { orgId: string; teamId: string; actorUserId: string },
 ): Promise<void> {
-  const actorOrgMembership = await getOrganisationMember(
-    prisma,
-    { orgId: params.orgId, userId: params.actorUserId },
-    { activeOnly: true },
-  );
-  if (actorOrgMembership && isTeamManager(actorOrgMembership.role)) {
-    return;
+  const isManager = await isOrgOrTeamManager(prisma, params);
+  if (!isManager) {
+    throw new AppError('FORBIDDEN', 403);
   }
-
-  const actorTeamMembership = await prisma.teamMember.findFirst({
-    where: { teamId: params.teamId, userId: params.actorUserId, status: 'ACTIVE' },
-    select: { teamRole: true },
-  });
-  if (actorTeamMembership && isTeamManager(actorTeamMembership.teamRole)) {
-    return;
-  }
-
-  throw new AppError('FORBIDDEN', 403);
 }
 
 /**

@@ -12,6 +12,7 @@ import {
   isP2002Error,
   isP2003Error,
   normalizeDomain,
+  normalizeIconUrl,
   normalizeMemberInvitesSetting,
   parseOrgFeatureRoles,
   resolveOrganisationByDomain,
@@ -31,6 +32,7 @@ const ORGANISATION_SELECT = {
   slug: true,
   ownerId: true,
   memberInvites: true,
+  iconUrl: true,
   createdAt: true,
   updatedAt: true,
 } as const;
@@ -187,6 +189,7 @@ export async function updateOrganisation(
     actorUserId: string;
     config: ClientConfig;
     memberInvites?: string;
+    iconUrl?: string | null;
   },
   deps?: OrgServiceDeps,
 ): Promise<OrganisationRecord> {
@@ -215,6 +218,9 @@ export async function updateOrganisation(
       ...(params.memberInvites !== undefined
         ? { memberInvites: normalizeMemberInvitesSetting(params.memberInvites) }
         : {}),
+      // Workspace icon (design §11.3, gap-fix A Task 3) — omitted leaves the current icon
+      // unchanged; `null` clears it; validated https-only/≤2048 chars by normalizeIconUrl.
+      ...(params.iconUrl !== undefined ? { iconUrl: normalizeIconUrl(params.iconUrl) } : {}),
     },
     select: ORGANISATION_SELECT,
   });

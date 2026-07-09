@@ -62,6 +62,26 @@ export function tryParseRedirectUrl(value: string): URL | null {
   return null;
 }
 
+const MAX_ICON_URL_LENGTH = 2048;
+
+/**
+ * Parse (without throwing) the `icon_url` field shared by Team/Organisation writes (design §11.3,
+ * brief §15 avatar policy): external URL only, no local storage, `https:` only (stricter than
+ * `tryParseHttpUrl`, which also allows loopback `http:` for redirect targets — icons have no such
+ * exception). Returns the trimmed value to persist, or `null` when the input isn't an acceptable
+ * icon URL; the caller (a `normalizeIconUrl` in the service layer) turns `null` into a generic
+ * `AppError` so this dependency-free module doesn't need to import errors.ts.
+ */
+export function parseIconUrl(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > MAX_ICON_URL_LENGTH) return null;
+
+  const parsed = tryParseHttpUrl(trimmed);
+  if (!parsed || parsed.protocol !== 'https:') return null;
+
+  return trimmed;
+}
+
 /**
  * True when `value` is a native deep-link target — a custom scheme rather than http(s). These
  * launch an OS app and leave the browser tab blank, so the auth flow hands off to a "signed in"

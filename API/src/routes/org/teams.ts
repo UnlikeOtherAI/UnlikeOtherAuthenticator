@@ -32,6 +32,7 @@ import {
   parseDomainContext,
   parseDomainContextHook,
   parseLimitCursor,
+  parseTeamDetailQuery,
 } from './team-route.shared.js';
 
 export function registerTeamRoutes(app: FastifyInstance): void {
@@ -120,15 +121,17 @@ export function registerTeamRoutes(app: FastifyInstance): void {
       ],
     },
     async (request, reply) => {
-      const { domain } = parseDomainContext(request);
+      const { domain, include } = parseTeamDetailQuery(request);
       const orgId = getOrgIdFromParams(request.params);
       const teamId = getTeamIdFromParams(request.params);
       const actorUserId = getActorUserId(request as RequestWithClaims);
+      // Gap-fix A Task 2: exact literal only — any other value behaves like the param is absent.
+      const includeInvited = include === 'invited';
 
       setTenantContextFromRequest(request, { orgId, userId: actorUserId });
       const team = await request.withTenantTx((tx) =>
         getTeam(
-          { orgId, teamId, domain, actorUserId },
+          { orgId, teamId, domain, actorUserId, includeInvited },
           { prisma: asPrismaClient(tx) },
         ),
       );
@@ -159,7 +162,8 @@ export function registerTeamRoutes(app: FastifyInstance): void {
         !Object.hasOwn(body, 'name') &&
         !Object.hasOwn(body, 'slug') &&
         !Object.hasOwn(body, 'description') &&
-        !Object.hasOwn(body, 'joinPolicy')
+        !Object.hasOwn(body, 'joinPolicy') &&
+        !Object.hasOwn(body, 'icon_url')
       ) {
         throw new AppError('BAD_REQUEST', 400);
       }
@@ -176,6 +180,7 @@ export function registerTeamRoutes(app: FastifyInstance): void {
             slug: body.slug,
             description: body.description,
             joinPolicy: body.joinPolicy,
+            iconUrl: body.icon_url,
           },
           { prisma: asPrismaClient(tx) },
         ),

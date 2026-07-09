@@ -288,6 +288,9 @@ describe('Organisation service: organisation CRUD', () => {
     expect(randomBytes).toHaveBeenCalledTimes(1);
   });
 
+  // icon_url validation coverage (accept https, clear on null, reject http/oversized) lives in
+  // organisation.service.icon-url.test.ts (CLAUDE.md 500-line split).
+
   it('lists organisations for a domain with cursor pagination', async () => {
     const prisma = makePrismaMock();
 

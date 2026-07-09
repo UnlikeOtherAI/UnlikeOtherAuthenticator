@@ -117,6 +117,10 @@ const orgEndpoints: EndpointSchema[] = [
     description: 'Current user org context',
     auth: 'access token (X-UOA-Access-Token header)',
     query: { config_url: 'string (required)' },
+    response: {
+      'org.workspaces': 'array — one entry per ACTIVE team membership on this domain: { teamId, orgId, name, slug, orgName, iconUrl, role, lastLoginAt }; ordered lastLoginAt DESC with nulls last, then name ASC (the sidebar order)',
+      'org.pending_invites': 'array — the caller\'s pending invites on this domain: { inviteId, teamId, teamName, invitedBy, expiresAt }',
+    },
   },
   {
     method: 'GET',
@@ -146,6 +150,10 @@ const orgEndpoints: EndpointSchema[] = [
     body: {
       name: 'string (optional)',
       'member_invites?': 'string — "allowed" (default) | "admin_approval" | "disabled"; owner/admin only, omitted leaves it unchanged; gates the member-initiated invite endpoint',
+      'icon_url?': 'string | null — external HTTPS URL only, max 2048 chars; owner/admin only; omitted leaves the current icon unchanged, null clears it; non-https/oversized/invalid rejected with a generic error',
+    },
+    response: {
+      iconUrl: 'string | null — echoed on every organisation read/write',
     },
   },
   {
@@ -232,9 +240,14 @@ const orgEndpoints: EndpointSchema[] = [
     path: '/org/organisations/:orgId/teams/:teamId',
     description: 'Get team details (includes members)',
     auth: 'domain hash bearer token',
+    query: {
+      'include?': 'string — exact literal "invited" adds the invited[] array below; any other value is ignored (treated as absent)',
+    },
     response: {
       slug: 'string — unique team slug within the organisation',
+      iconUrl: 'string | null — echoed on every team read/write',
       members: 'array — current team members',
+      'invited?': 'array — present only when include=invited: pending invites for this team, { inviteId, email, inviteName, teamRole, invitedByName, invitedByEmail, lastSentAt, expiresAt, approvalStatus, openCount }; gated to org/team owner/admin (invite emails are PII) — a plain member gets [] here, never a 403; absent entirely when ?include=invited is not passed',
     },
   },
   {
@@ -247,9 +260,11 @@ const orgEndpoints: EndpointSchema[] = [
       'slug?': 'string — optional custom team slug; omitted leaves the current slug unchanged',
       description: 'string (optional)',
       'joinPolicy?': 'string — INVITE_ONLY (default) | APPROVED_DOMAIN | REQUEST_TO_JOIN | OPEN_TO_ORG | HIDDEN; owner/admin only, omitted leaves the current policy unchanged',
+      'icon_url?': 'string | null — external HTTPS URL only, max 2048 chars; owner/admin only; omitted leaves the current icon unchanged, null clears it; non-https/oversized/invalid rejected with a generic error',
     },
     response: {
       slug: 'string — unique team slug within the organisation',
+      iconUrl: 'string | null — echoed on every team read/write',
     },
   },
   {

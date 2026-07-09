@@ -7,6 +7,10 @@ import { requireOrgFeaturesEnabled } from '../../middleware/org-features.js';
 import { setTenantContextFromRequest } from '../../plugins/tenant-context.plugin.js';
 import { verifyAccessToken } from '../../services/access-token.service.js';
 import { getUserOrgContext } from '../../services/org-context.service.js';
+import {
+  buildSidebarPendingInvites,
+  buildSidebarWorkspaces,
+} from '../../services/workspace-directory.service.js';
 import { AppError } from '../../utils/errors.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
 import { assertVerifiedDomainMatchesQuery, normalizeDomain } from './domain-context.js';
@@ -61,12 +65,24 @@ export function registerOrgMeRoute(app: FastifyInstance): void {
       request.accessTokenClaims = claims;
       setTenantContextFromRequest(request, { orgId: null, userId: claims.userId });
 
-      const org = await request.withTenantTx((tx) =>
-        getUserOrgContext(
+      const org = await request.withTenantTx(async (tx) => {
+        const prisma = asPrismaClient(tx);
+        const context = await getUserOrgContext(
           { userId: claims.userId, domain: normalizedDomain, config },
-          { prisma: asPrismaClient(tx) },
-        ),
-      );
+          { prisma },
+        );
+        if (!context) return context;
+
+        // Gap-fix A Task 1 (design §11.4 sidebar contract): appended, additive top-level fields —
+        // org_id/org_role/teams/team_roles/groups above are unchanged. Both reads share this
+        // transaction so they observe the same snapshot as the org context above.
+        const [workspaces, pendingInvites] = await Promise.all([
+          buildSidebarWorkspaces({ userId: claims.userId, domain: normalizedDomain }, { prisma }),
+          buildSidebarPendingInvites({ userId: claims.userId, domain: normalizedDomain }, { prisma }),
+        ]);
+
+        return { ...context, workspaces, pending_invites: pendingInvites };
+      });
 
       const response: { ok: true; org?: typeof org } = { ok: true };
       if (org) response.org = org;

@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
 
 import type { ClientConfig } from './config.service.js';
 import { getPrisma } from '../db/prisma.js';
@@ -10,6 +10,33 @@ type FirstLoginPrisma = {
   teamInvite: Pick<PrismaClient['teamInvite'], 'findMany'>;
 };
 
+/**
+ * The "is this TeamInvite row still a real pending invite" predicate (design §4.7): unaccepted,
+ * undeclined, unrevoked, and not expired. This is the single source of truth for that eligibility
+ * check — `buildFirstLoginBlock`, `buildWorkspaceChoices` (the chooser), the gap-fix A `/org/me`
+ * sidebar (`workspace-directory.service.ts`), and the "Invited" tab (`team-invite.service.invited.ts`)
+ * all compose it with their own scoping (email+domain vs team+org) rather than duplicating it.
+ *
+ * `includePendingApproval` defaults to false, matching the historical chooser/firstLogin behaviour:
+ * an invite still awaiting member-invite approval (design §4.7 Phase 4) is not yet a real pending
+ * invite FOR THE INVITEE. The "Invited" tab (an admin's view) passes `true` — an admin managing
+ * invites must see ones still awaiting their own approval.
+ */
+export function pendingInviteStatusWhere(params: {
+  now: Date;
+  includePendingApproval?: boolean;
+}): Prisma.TeamInviteWhereInput {
+  return {
+    acceptedAt: null,
+    declinedAt: null,
+    revokedAt: null,
+    approvalStatus: params.includePendingApproval
+      ? { in: ['NOT_REQUIRED', 'APPROVED', 'PENDING'] }
+      : { in: ['NOT_REQUIRED', 'APPROVED'] },
+    OR: [{ expiresAt: null }, { expiresAt: { gt: params.now } }],
+  };
+}
+
 export type FirstLoginMembershipOrg = {
   orgId: string;
   role: string;
@@ -19,6 +46,8 @@ export type FirstLoginMembershipTeam = {
   teamId: string;
   orgId: string;
   role: string;
+  // Design §11.3 (gap-fix A Task 3): echoed everywhere teams are listed.
+  iconUrl: string | null;
 };
 
 export type FirstLoginPendingInvite = {
@@ -88,20 +117,16 @@ export async function buildFirstLoginBlock(
       select: {
         teamId: true,
         teamRole: true,
-        team: { select: { orgId: true } },
+        team: { select: { orgId: true, iconUrl: true } },
       },
     }),
     prisma.teamInvite.findMany({
       where: {
         email: user.email,
-        acceptedAt: null,
-        declinedAt: null,
-        revokedAt: null,
+        org: { domain },
         // Task 3/4 (design §4.7): expired invites and invites awaiting member-invite approval are
         // not yet real pending invites for the invitee — excluded from every pending-invite surface.
-        approvalStatus: { in: ['NOT_REQUIRED', 'APPROVED'] },
-        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
-        org: { domain },
+        ...pendingInviteStatusWhere({ now }),
       },
       select: {
         id: true,
@@ -121,6 +146,7 @@ export async function buildFirstLoginBlock(
     teamId: row.teamId,
     orgId: row.team.orgId,
     role: row.teamRole,
+    iconUrl: row.team.iconUrl,
   }));
 
   const pendingInvites: FirstLoginPendingInvite[] = inviteRows.map((row) => ({
@@ -148,6 +174,8 @@ export type WorkspaceChoiceTeam = {
   orgId: string;
   name: string;
   role: string;
+  // Design §11.3 (gap-fix A Task 3) — matches `Auth/src/hooks/use-popup.tsx`'s `TeamChoice.iconUrl`.
+  iconUrl: string | null;
 };
 
 export type WorkspaceChoicePendingInvite = {
@@ -205,20 +233,16 @@ export async function buildWorkspaceChoices(
       select: {
         teamId: true,
         teamRole: true,
-        team: { select: { name: true, orgId: true } },
+        team: { select: { name: true, orgId: true, iconUrl: true } },
       },
     }),
     prisma.teamInvite.findMany({
       where: {
         email: user.email,
-        acceptedAt: null,
-        declinedAt: null,
-        revokedAt: null,
+        org: { domain },
         // Task 3/4 (design §4.7): expired invites and invites awaiting member-invite approval are
         // not yet real pending invites for the invitee — excluded from the chooser.
-        approvalStatus: { in: ['NOT_REQUIRED', 'APPROVED'] },
-        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
-        org: { domain },
+        ...pendingInviteStatusWhere({ now }),
       },
       select: {
         id: true,
@@ -234,6 +258,7 @@ export async function buildWorkspaceChoices(
     orgId: row.team.orgId,
     name: row.team.name,
     role: row.teamRole,
+    iconUrl: row.team.iconUrl,
   }));
 
   const pendingInvites: WorkspaceChoicePendingInvite[] = inviteRows.map((row) => ({

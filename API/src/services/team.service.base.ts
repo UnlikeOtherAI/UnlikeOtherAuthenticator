@@ -6,6 +6,7 @@ import { AppError } from '../utils/errors.js';
 import {
   assertDatabaseEnabled,
   getOrganisationMember,
+  normalizeIconUrl,
   resolveOrganisationByDomain,
   toListLimit,
   type CursorList,
@@ -46,6 +47,7 @@ export type TeamRecord = {
   description: string | null;
   isDefault: boolean;
   joinPolicy: TeamJoinPolicyValue;
+  iconUrl: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -214,6 +216,7 @@ export function toTeamRecord(row: {
   description: string | null;
   isDefault: boolean;
   joinPolicy?: string;
+  iconUrl?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }): TeamRecord {
@@ -226,6 +229,7 @@ export function toTeamRecord(row: {
     description: row.description,
     isDefault: row.isDefault,
     joinPolicy: (row.joinPolicy ?? 'INVITE_ONLY') as TeamJoinPolicyValue,
+    iconUrl: row.iconUrl ?? null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -258,6 +262,33 @@ export async function requireTeamManager(
   if (!actorMembership || !isTeamManager(actorMembership.role)) {
     throw new AppError('FORBIDDEN', 403);
   }
+}
+
+/**
+ * True when the actor is an ACTIVE org owner/admin OR an ACTIVE team owner/admin for this specific
+ * team (design §4.9/Phase 2's "team manager" definition — mirrors `team-invite-link.service.ts`'s
+ * `requireLinkManager`, extracted here as the single non-throwing source of truth for call sites
+ * that need a boolean gate — e.g. hiding a PII-bearing field — rather than a 403 that would fail
+ * the whole read).
+ */
+export async function isOrgOrTeamManager(
+  prisma: OrgServicePrisma,
+  params: { orgId: string; teamId: string; actorUserId: string },
+): Promise<boolean> {
+  const actorOrgMembership = await getOrganisationMember(
+    prisma,
+    { orgId: params.orgId, userId: params.actorUserId },
+    { activeOnly: true },
+  );
+  if (actorOrgMembership && isTeamManager(actorOrgMembership.role)) {
+    return true;
+  }
+
+  const actorTeamMembership = await prisma.teamMember.findFirst({
+    where: { teamId: params.teamId, userId: params.actorUserId, status: 'ACTIVE' },
+    select: { teamRole: true },
+  });
+  return Boolean(actorTeamMembership && isTeamManager(actorTeamMembership.teamRole));
 }
 
 export async function resolveAndAuthorizeTeamOrg(
@@ -296,6 +327,7 @@ export {
   getOrganisationMember,
   getPrisma,
   isP2002Error,
+  normalizeIconUrl,
   toListLimit,
   type CursorList,
   type OrgServiceDeps,

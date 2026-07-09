@@ -198,7 +198,11 @@ describe('buildWorkspaceChoices', () => {
       user: { findUnique: vi.fn(async () => ({ email: 'jane@acme.com' })) },
       teamMember: {
         findMany: vi.fn(async () => [
-          { teamId: 'team-1', teamRole: 'owner', team: { name: 'Backend Team', orgId: 'org-1' } },
+          {
+            teamId: 'team-1',
+            teamRole: 'owner',
+            team: { name: 'Backend Team', orgId: 'org-1', iconUrl: 'https://cdn.example.com/a.png' },
+          },
         ]),
       },
       teamInvite: { findMany: vi.fn(async () => []) },
@@ -210,7 +214,15 @@ describe('buildWorkspaceChoices', () => {
     );
 
     expect(result).toEqual({
-      teams: [{ teamId: 'team-1', orgId: 'org-1', name: 'Backend Team', role: 'owner' }],
+      teams: [
+        {
+          teamId: 'team-1',
+          orgId: 'org-1',
+          name: 'Backend Team',
+          role: 'owner',
+          iconUrl: 'https://cdn.example.com/a.png',
+        },
+      ],
       pending_invites: [],
       can_create_org: true,
     });
@@ -223,7 +235,7 @@ describe('buildWorkspaceChoices', () => {
       select: {
         teamId: true,
         teamRole: true,
-        team: { select: { name: true, orgId: true } },
+        team: { select: { name: true, orgId: true, iconUrl: true } },
       },
     });
   });

@@ -312,7 +312,14 @@ describe('Team service', () => {
       slug: 'engineering',
       members: [{ userId: 'u-owner', teamRole: 'lead' }],
     });
+    // Gap-fix A Task 2: absent `?include=invited` must be byte-identical to before — no `invited`
+    // key at all (not even an empty array).
+    expect(result).not.toHaveProperty('invited');
+    expect(prisma.teamInvite.findMany).not.toHaveBeenCalled();
   });
+
+  // include=invited coverage (owner/admin sees pending entries incl. PENDING approvalStatus; a
+  // plain member gets []) lives in team.service.invited.test.ts (CLAUDE.md 500-line split).
 
   it('updates a team name and description', async () => {
     const prisma = makePrismaMock();
@@ -362,6 +369,9 @@ describe('Team service', () => {
     expect(result.name).toBe('Platform');
     expect(result.slug).toBe('platform');
   });
+
+  // icon_url validation coverage (accept https, clear on null, reject junk) lives in
+  // team.service.icon-url.test.ts (CLAUDE.md 500-line split).
 
   it('reassigns remaining users before deleting a team', async () => {
     const prisma = makePrismaMock();
