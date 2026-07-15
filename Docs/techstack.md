@@ -198,6 +198,7 @@ The React implementation should translate those templates into reusable componen
 - **Prisma** — ORM and migration tool
 - Tables: `users`, `domain_roles`, `login_logs`, `verification_tokens`
 - Organisational tables: `organisations`, `org_members`, `teams`, `team_members`, `groups`, `group_members`
+- Optional signature-module tables: `domain_signature_settings`, `agreements`, `agreement_versions`, `signing_continuations`, `agreement_signatures`, `signature_revocations`, `signature_audit_events`
 - All schema changes go through Prisma migrations — no manual SQL
 - Prisma schema lives in `/API/prisma/schema.prisma`
 - Superuser race condition resolved at DB constraint level (unique constraint, first insert wins)

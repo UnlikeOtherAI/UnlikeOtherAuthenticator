@@ -202,6 +202,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       retention-pruning.service.ts          — Retention pruning jobs
       root-page.service.ts                  — Root holding page rendering
       ses-admin.service.ts                  — AWS SES identity admin operations
+      signature-policy.service.ts           — Per-domain required-agreement evaluation and fail-closed completion checks
       team-invite.service.ts                — Team invite orchestration API
       team-invite.service.base.ts           — Team invite service building blocks
       team-invite.service.acceptance.ts     — Team invite acceptance flow
