@@ -113,7 +113,7 @@ Authenticated shell (`AdminSessionGuard` → `AdminUiProvider` → `AdminLayout`
 - `/dashboard` — dashboard/home inside the admin shell
 - `/integrations` — integration requests (`IntegrationRequestsPage`)
 - `/domains` — domains listing (`DirectoryDomainsPage`); the single entry point for registered client domains, showing client hash, secret age, and status
-- `/domains/:domainId` — domain detail (`DomainDetailPage`); a flat tab bar (Overview · Organisations · Teams · Users · Access · Signing keys · Email) that consolidates secret rotation and status, the editable friendly name, 2FA policy, the §11 Domain Email and signing-keys sections, login-access whitelist, and allowed redirect URLs. The active tab is persisted in the `?tab=` query param. There is no separate Secrets page or domain-edit modal — both were merged here.
+- `/domains/:domainId` — domain detail (`DomainDetailPage`); a flat tab bar (Overview · Organisations · Teams · Users · Access · Agreements · Signing keys · Email) that consolidates secret rotation and status, the editable friendly name, 2FA policy, the optional per-domain agreement-signature service, the §11 Domain Email and signing-keys sections, login-access whitelist, and allowed redirect URLs. The Agreements tab owns settings, versioned PDF lifecycle, evidence search/download/revocation, and signature audit history. The active tab is persisted in the `?tab=` query param. There is no separate Secrets page or domain-edit modal — both were merged here.
 - `/organisations` — organisation listing and search (`OrganisationsPage`)
 - `/organisations/:orgId` — organisation detail (`OrganisationDetailPage`), including organisation 2FA policy
 - `/organisations/:orgId/teams/:teamId` — team detail under an organisation (`TeamDetailPage`)

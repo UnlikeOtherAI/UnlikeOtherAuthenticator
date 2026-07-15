@@ -15,6 +15,8 @@ Current operator workflow, all under \`/internal/admin/domains/:domain/signature
 
 \`GET /internal/admin/domains/:domain/signatures\` returns settings, agreements and versions in display order, signature counts, and the latest audit events. Exact source bytes are available only through the authenticated no-store \`.../versions/:versionId/source\` download.
 
+Operators search retained evidence through \`GET .../signatures/records\`, filtered by signer, agreement/version, or date range with bounded cursor pagination. \`GET .../records/:signatureId/receipt\` verifies the private object's SHA-256 before download and records the access in both audit logs. \`POST .../records/:signatureId/revoke\` requires a reason and appends one immutable revocation; retries return the original revocation rather than overwriting history.
+
 Published versions, signatures, revocations, and signature audit events are protected by database append-only/immutability triggers. A required published version cannot be withdrawn while the domain gate is enabled. Publishing a replacement is the supported atomic transition.
 
 The evidence signing key is a dedicated RS256 RSA JWK with a unique \`kid\`; it must never reuse config, access-token, admin-token, shared-secret, or email-token key material. \`SIGNATURE_EVIDENCE_PUBLIC_JWKS_JSON\` contains public-only current and retired keys so historical evidence remains verifiable after rotation.

@@ -7,6 +7,7 @@ import { UnderlineTabs } from '../components/ui/Tabs';
 import { DomainSigningKeysSection } from '../components/sections/DomainSigningKeysSection';
 import { Card } from '../components/ui/Card';
 import { DomainAccessTab } from '../features/admin/DomainAccessTab';
+import { DomainAgreementsTab } from '../features/admin/DomainAgreementsTab';
 import { DomainEmailSection } from '../features/admin/DomainEmailSection';
 import { DomainOverviewTab } from '../features/admin/DomainOverviewTab';
 import {
@@ -16,7 +17,7 @@ import {
 } from '../features/admin/DomainDirectoryTabs';
 import { useDomainQuery } from '../features/admin/admin-queries';
 
-const DOMAIN_TABS = ['overview', 'organisations', 'teams', 'users', 'access', 'keys', 'email'] as const;
+const DOMAIN_TABS = ['overview', 'organisations', 'teams', 'users', 'access', 'agreements', 'keys', 'email'] as const;
 type DomainTab = (typeof DOMAIN_TABS)[number];
 
 function isDomainTab(value: string | null): value is DomainTab {
@@ -75,6 +76,7 @@ export function DomainDetailPage() {
           { label: 'Teams', value: 'teams', count: teams.length },
           { label: 'Users', value: 'users', count: users.length },
           { label: 'Access', value: 'access' },
+          { label: 'Agreements', value: 'agreements' },
           { label: 'Signing keys', value: 'keys' },
           { label: 'Email', value: 'email' },
         ]}
@@ -89,6 +91,7 @@ export function DomainDetailPage() {
       {tab === 'teams' ? <DomainTeamsTab teams={teams} /> : null}
       {tab === 'users' ? <DomainUsersTab users={users} /> : null}
       {tab === 'access' ? <DomainAccessTab domain={domain} /> : null}
+      {tab === 'agreements' ? <DomainAgreementsTab domain={domain.name} /> : null}
       {tab === 'keys' ? (
         <Card className="p-5">
           <DomainSigningKeysSection domain={domain.name} />

@@ -110,6 +110,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
           domains.ts                — Domain CRUD for the admin panel
           domain-email.ts           — Per-domain transactional email config + SES identity flow
           domain-jwks.ts            — Per-domain JWKS management
+          domain-signature-operations.ts — Signature evidence search, audited receipt access, and revocation
           domain-signatures.ts      — Per-domain signature settings, agreement/version lifecycle, and source downloads
           apps.ts                   — App registration for feature flags
           superusers.ts             — Super-user grant/revoke for ADMIN_AUTH_DOMAIN
@@ -207,6 +208,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       ses-admin.service.ts                  — AWS SES identity admin operations
       signature-evidence.service.ts         — Canonical evidence manifests, dedicated RS256 signatures, and receipt orchestration
       signature-admin-audit.service.ts      — Dual signature-specific and global Admin audit writes
+      signature-admin-operations.service.ts — Domain-scoped evidence search, receipt integrity/access, and revocation
       signature-admin.service.ts            — Domain signature settings and agreement metadata lifecycle
       signature-agreement-lifecycle.service.ts — Draft PDF upload/replacement/deletion and private source reads
       signature-agreement-publication.service.ts — Serialized publish/supersede/withdraw transitions

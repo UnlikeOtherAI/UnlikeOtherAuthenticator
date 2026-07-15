@@ -5,10 +5,14 @@ import type {
   AppPlatformKind,
   BanRecord,
   Domain,
+  DomainAgreement,
+  DomainAgreementVersion,
   DomainDirectoryDetail,
   DomainEmailRegistration,
   DomainEmailSettings,
   DomainJwk,
+  DomainSignatureOverview,
+  DomainSignatureSettings,
   IntegrationClaimCredentials,
   IntegrationClaimDeliveryMode,
   IntegrationRequestDetail,
@@ -17,6 +21,7 @@ import type {
   IntegrationRequestSummary,
   OrganisationTwoFaPolicy,
   SearchResult,
+  AgreementSignatureSearchResult,
   Team,
   TwoFaPolicy,
   UserSummary,
@@ -62,11 +67,150 @@ type LoginRestrictionInput = {
   allowedEmails?: string[];
 };
 
+export type AgreementInput = {
+  title: string;
+  description: string | null;
+  displayOrder: number;
+  requiredForAccess: boolean;
+};
+
+export type AgreementVersionInput = {
+  title: string;
+  signingMethod: 'clickwrap' | 'typed_name';
+  acceptanceStatement: string;
+};
+
+export type AgreementSignatureSearchInput = {
+  query?: string;
+  agreementId?: string;
+  agreementVersionId?: string;
+  from?: string;
+  to?: string;
+  cursor?: string;
+  limit?: number;
+};
+
+function agreementBody(input: AgreementInput) {
+  return {
+    title: input.title,
+    description: input.description,
+    display_order: input.displayOrder,
+    required_for_access: input.requiredForAccess,
+  };
+}
+
+function versionBody(input: AgreementVersionInput) {
+  return {
+    title: input.title,
+    signing_method: input.signingMethod,
+    acceptance_statement: input.acceptanceStatement,
+  };
+}
+
+function versionForm(file: File, input: AgreementVersionInput): FormData {
+  const form = new FormData();
+  form.set('file', file);
+  form.set('title', input.title);
+  form.set('signing_method', input.signingMethod);
+  form.set('acceptance_statement', input.acceptanceStatement);
+  return form;
+}
+
 export const adminService = {
   getDashboard: () => api.get<AdminData>('/internal/admin/dashboard'),
   getDomains: () => api.get<AdminData['domains']>('/internal/admin/domains'),
   getDomain: (domain: string) =>
     api.get<DomainDirectoryDetail | null>(`/internal/admin/domains/${encodeURIComponent(domain)}`),
+  getDomainSignatures: (domain: string) =>
+    api.get<DomainSignatureOverview>(`/internal/admin/domains/${encodeURIComponent(domain)}/signatures`),
+  updateDomainSignatureSettings: (domain: string, enabled: boolean, retentionDays: number | null) =>
+    api.put<DomainSignatureSettings>(
+      `/internal/admin/domains/${encodeURIComponent(domain)}/signatures/settings`,
+      { enabled, retention_days: retentionDays },
+    ),
+  createDomainAgreement: (domain: string, input: AgreementInput) =>
+    api.post<DomainAgreement>(
+      `/internal/admin/domains/${encodeURIComponent(domain)}/signatures/agreements`,
+      agreementBody(input),
+    ),
+  updateDomainAgreement: (domain: string, agreementId: string, input: AgreementInput) =>
+    api.put<DomainAgreement>(
+      `/internal/admin/domains/${encodeURIComponent(domain)}/signatures/agreements/${encodeURIComponent(agreementId)}`,
+      agreementBody(input),
+    ),
+  uploadDomainAgreementVersion: (
+    domain: string,
+    agreementId: string,
+    file: File,
+    input: AgreementVersionInput,
+  ) =>
+    api.postForm<DomainAgreementVersion>(
+      `/internal/admin/domains/${encodeURIComponent(domain)}/signatures/agreements/${encodeURIComponent(agreementId)}/versions`,
+      versionForm(file, input),
+    ),
+  updateDomainAgreementVersion: (
+    domain: string,
+    agreementId: string,
+    versionId: string,
+    input: AgreementVersionInput,
+  ) =>
+    api.put<DomainAgreementVersion>(
+      `/internal/admin/domains/${encodeURIComponent(domain)}/signatures/agreements/${encodeURIComponent(agreementId)}/versions/${encodeURIComponent(versionId)}`,
+      versionBody(input),
+    ),
+  replaceDomainAgreementVersionSource: (
+    domain: string,
+    agreementId: string,
+    versionId: string,
+    file: File,
+  ) => {
+    const form = new FormData();
+    form.set('file', file);
+    return api.putForm<DomainAgreementVersion>(
+      `/internal/admin/domains/${encodeURIComponent(domain)}/signatures/agreements/${encodeURIComponent(agreementId)}/versions/${encodeURIComponent(versionId)}/source`,
+      form,
+    );
+  },
+  publishDomainAgreementVersion: (domain: string, agreementId: string, versionId: string) =>
+    api.post<DomainAgreementVersion>(
+      `/internal/admin/domains/${encodeURIComponent(domain)}/signatures/agreements/${encodeURIComponent(agreementId)}/versions/${encodeURIComponent(versionId)}/publish`,
+      {},
+    ),
+  withdrawDomainAgreementVersion: (domain: string, agreementId: string, versionId: string) =>
+    api.post<DomainAgreementVersion>(
+      `/internal/admin/domains/${encodeURIComponent(domain)}/signatures/agreements/${encodeURIComponent(agreementId)}/versions/${encodeURIComponent(versionId)}/withdraw`,
+      {},
+    ),
+  deleteDomainAgreementVersion: (domain: string, agreementId: string, versionId: string) =>
+    api.delete<unknown>(
+      `/internal/admin/domains/${encodeURIComponent(domain)}/signatures/agreements/${encodeURIComponent(agreementId)}/versions/${encodeURIComponent(versionId)}`,
+    ),
+  downloadDomainAgreementVersionSource: (domain: string, agreementId: string, versionId: string) =>
+    api.getBlob(
+      `/internal/admin/domains/${encodeURIComponent(domain)}/signatures/agreements/${encodeURIComponent(agreementId)}/versions/${encodeURIComponent(versionId)}/source`,
+    ),
+  searchDomainAgreementSignatures: (domain: string, input: AgreementSignatureSearchInput) => {
+    const query = new URLSearchParams();
+    if (input.query) query.set('q', input.query);
+    if (input.agreementId) query.set('agreement_id', input.agreementId);
+    if (input.agreementVersionId) query.set('agreement_version_id', input.agreementVersionId);
+    if (input.from) query.set('from', input.from);
+    if (input.to) query.set('to', input.to);
+    if (input.cursor) query.set('cursor', input.cursor);
+    query.set('limit', String(input.limit ?? 50));
+    return api.get<AgreementSignatureSearchResult>(
+      `/internal/admin/domains/${encodeURIComponent(domain)}/signatures/records?${query.toString()}`,
+    );
+  },
+  downloadDomainAgreementSignatureReceipt: (domain: string, signatureId: string) =>
+    api.getBlob(
+      `/internal/admin/domains/${encodeURIComponent(domain)}/signatures/records/${encodeURIComponent(signatureId)}/receipt`,
+    ),
+  revokeDomainAgreementSignature: (domain: string, signatureId: string, reason: string) =>
+    api.post<{ id: string; signature_id: string; actor_email: string; reason: string; revoked_at: string }>(
+      `/internal/admin/domains/${encodeURIComponent(domain)}/signatures/records/${encodeURIComponent(signatureId)}/revoke`,
+      { reason },
+    ),
   createDomain: (input: { clientSecret: string; domain: string; label: string }) =>
     api.post<DomainSecretResponse>('/internal/admin/domains', {
       client_secret: input.clientSecret,

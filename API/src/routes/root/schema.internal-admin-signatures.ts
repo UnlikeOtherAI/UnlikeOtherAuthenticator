@@ -111,5 +111,36 @@ export function buildInternalAdminSignatureEndpoints(params: {
       auth: adminAuth,
       response: { 200: 'application/pdf attachment; ETag contains immutable SHA-256', '401/403': authFailures },
     },
+    {
+      method: 'GET',
+      path: '/internal/admin/domains/:domain/signatures/records',
+      description: 'Search immutable signature evidence by signer email/name/reference, agreement, exact version, and signed date range. Results are always domain-scoped and omit the raw evidence JWS.',
+      auth: adminAuth,
+      query: {
+        q: 'string (optional, max 320)',
+        agreement_id: 'string (optional)',
+        agreement_version_id: 'string (optional; takes precedence over agreement_id)',
+        from: 'ISO-8601 datetime (optional)',
+        to: 'ISO-8601 datetime (optional)',
+        cursor: 'signature id returned as next_cursor (optional; must belong to domain)',
+        limit: 'integer (optional, 1-100, default 50)',
+      },
+      response: { 200: '{ data, next_cursor }', 429: 'separate Admin signature-search limit', '401/403': authFailures },
+    },
+    {
+      method: 'GET',
+      path: '/internal/admin/domains/:domain/signatures/records/:signatureId/receipt',
+      description: 'Download a private receipt after domain/ID scoping and SHA-256 verification. Every successful access writes both signature and global Admin audit events.',
+      auth: adminAuth,
+      response: { 200: 'application/pdf attachment with no-store/nosniff and hash ETag', 429: 'separate receipt-access limit', '401/403': authFailures },
+    },
+    {
+      method: 'POST',
+      path: '/internal/admin/domains/:domain/signatures/records/:signatureId/revoke',
+      description: 'Append one immutable signature revocation. Retrying an already-revoked signature is idempotent and preserves the original revocation.',
+      auth: adminAuth,
+      body: { reason: 'string (required, 1-1000)' },
+      response: { 200: '{ id, signature_id, actor_email, reason, revoked_at }', '401/403': authFailures },
+    },
   ];
 }

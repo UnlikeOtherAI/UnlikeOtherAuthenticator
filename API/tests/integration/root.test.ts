@@ -198,6 +198,19 @@ describe('GET /api', () => {
         description: expect.stringContaining('ClamAV'),
       }),
     );
+    expect(body.endpoints).toContainEqual(
+      expect.objectContaining({
+        method: 'GET',
+        path: '/internal/admin/domains/:domain/signatures/records/:signatureId/receipt',
+        description: expect.stringContaining('SHA-256'),
+      }),
+    );
+    expect(body.endpoints).toContainEqual(
+      expect.objectContaining({
+        method: 'POST',
+        path: '/internal/admin/domains/:domain/signatures/records/:signatureId/revoke',
+      }),
+    );
   });
 
   it('returns a valid semver-like version string from package.json', async () => {

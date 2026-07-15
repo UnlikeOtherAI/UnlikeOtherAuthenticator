@@ -314,6 +314,97 @@ export type DomainJwk = {
   created_by_email: string | null;
 };
 
+export type DomainSignatureSettings = {
+  enabled: boolean;
+  policy_revision: number;
+  retention_days: number | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type AgreementVersionStatus = 'draft' | 'published' | 'superseded' | 'withdrawn';
+export type AgreementSigningMethod = 'clickwrap' | 'typed_name';
+
+export type DomainAgreementVersion = {
+  id: string;
+  version: number;
+  title: string;
+  original_filename: string;
+  source_pdf_sha256: string;
+  signing_method: AgreementSigningMethod;
+  acceptance_statement: string;
+  status: AgreementVersionStatus;
+  published_at: string | null;
+  effective_at: string | null;
+  published_by_email: string | null;
+  created_at: string;
+  signature_count?: number;
+};
+
+export type DomainAgreement = {
+  id: string;
+  title: string;
+  description: string | null;
+  display_order: number;
+  required_for_access: boolean;
+  created_at: string;
+  updated_at: string;
+  versions: DomainAgreementVersion[];
+};
+
+export type DomainSignatureAuditEvent = {
+  id: string;
+  actor_email: string;
+  action: string;
+  target_type: string;
+  target_id: string;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+};
+
+export type DomainSignatureOverview = {
+  settings: DomainSignatureSettings;
+  agreements: DomainAgreement[];
+  audit_events: DomainSignatureAuditEvent[];
+};
+
+export type AgreementSignatureRevocation = {
+  actor_email: string;
+  reason: string;
+  revoked_at: string;
+};
+
+export type AgreementSignatureRecord = {
+  id: string;
+  verification_reference: string;
+  user_id: string;
+  user_email: string;
+  signer_name: string | null;
+  domain: string;
+  agreement_id: string;
+  agreement_title: string;
+  agreement_version_id: string;
+  agreement_version: number;
+  signing_method: AgreementSigningMethod;
+  typed_name: string | null;
+  acceptance_statement: string;
+  source_pdf_sha256: string;
+  auth_method: string;
+  two_fa_completed: boolean;
+  ip_address: string;
+  user_agent: string;
+  evidence_manifest_sha256: string;
+  receipt_pdf_sha256: string;
+  evidence_key_id: string;
+  signed_at: string;
+  revocation: AgreementSignatureRevocation | null;
+};
+
+export type AgreementSignatureSearchResult = {
+  data: AgreementSignatureRecord[];
+  next_cursor: string | null;
+};
+
 export type SearchResult =
   | { type: 'organisation'; organisation: Organisation }
   | { type: 'team'; organisation: Organisation; team: Team }
