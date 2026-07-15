@@ -97,7 +97,12 @@ export async function updateSignatureSettings(
   deps?: SignatureAdminDeps,
 ) {
   const domain = normalizeDomain(params.domain);
-  if (params.retentionDays !== null && (!Number.isInteger(params.retentionDays) || params.retentionDays < 1)) {
+  if (
+    params.retentionDays !== null &&
+    (!Number.isInteger(params.retentionDays) ||
+      params.retentionDays < 1 ||
+      params.retentionDays > 36_500)
+  ) {
     throw new AppError('BAD_REQUEST', 400, 'INVALID_SIGNATURE_RETENTION');
   }
   if (params.enabled && params.retentionDays === null) {

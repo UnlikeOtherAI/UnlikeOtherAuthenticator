@@ -262,3 +262,5 @@ All secrets and configuration live in environment variables. Nothing is hardcode
 * `SIGNATURE_EVIDENCE_PUBLIC_JWKS_JSON` — public-only current and retired evidence keys used to verify historical manifests after rotation
 * `SIGNATURE_MAX_PDF_BYTES` — bounded source upload limit (default 25 MiB, allowed 1 KiB–100 MiB)
 * `SIGNATURE_MAX_PDF_PAGES` — bounded source page limit (default 200, allowed 1–2,000)
+* `SIGNATURE_CONTINUATION_TTL_MINUTES` — short-lived signing capability lifetime (default 10, allowed 2–30 minutes)
+* `SIGNATURE_MAX_SIGN_ATTEMPTS` — maximum failed signing submissions before a continuation is rejected (default 10, allowed 1–50)

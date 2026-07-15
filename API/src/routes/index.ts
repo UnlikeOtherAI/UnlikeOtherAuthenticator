@@ -15,10 +15,12 @@ import { registerIntegrationRoutes } from './integrations/index.js';
 import { registerOAuthRoutes } from './oauth/index.js';
 import { registerOrgRoutes } from './org/index.js';
 import { registerRootRoute } from './root/index.js';
+import { registerSignatureRoutes } from './signatures/index.js';
 import { registerTwoFactorRoutes } from './twofactor/index.js';
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
   registerRootRoute(app);
+  registerSignatureRoutes(app);
   registerConfigJwksRoute(app);
   registerHealthRoutes(app);
   registerAdminUiRoutes(app);

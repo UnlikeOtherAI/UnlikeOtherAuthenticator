@@ -118,6 +118,8 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
           redirectUrl,
           rememberMe: request.config.session?.remember_me_default ?? true,
           requestAccess: parseRequestAccessFlag(request_access),
+          authMethod: type === 'VERIFY_EMAIL' ? 'verify_email' : 'verify_email_set_password',
+          twoFaCompleted: false,
           codeChallenge: pkce.codeChallenge,
           codeChallengeMethod: pkce.codeChallengeMethod,
           ip: request.ip ?? null,

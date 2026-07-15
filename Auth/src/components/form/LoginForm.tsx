@@ -67,6 +67,7 @@ export function LoginForm(): React.JSX.Element {
     clientId,
     state,
     resource,
+    scope,
     setPendingEmail,
     setLoginToken,
     setWorkspaceChoices,
@@ -103,6 +104,7 @@ export function LoginForm(): React.JSX.Element {
     if (mcpMode) {
       if (state) query.state = state;
       if (resource) query.resource = resource;
+      if (scope) query.scope = scope;
     } else if (requestAccess) {
       query.request_access = true;
     }

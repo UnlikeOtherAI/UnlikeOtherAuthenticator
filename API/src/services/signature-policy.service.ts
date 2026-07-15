@@ -13,6 +13,9 @@ export type RequiredAgreementVersion = {
   agreementVersionId: string;
   version: number;
   title: string;
+  agreementTitle: string;
+  description: string | null;
+  originalFilename: string;
   displayOrder: number;
   signingMethod: 'CLICKWRAP' | 'TYPED_NAME';
   acceptanceStatement: string;
@@ -67,6 +70,8 @@ export async function evaluateSignaturePolicy(
     orderBy: [{ displayOrder: 'asc' }, { createdAt: 'asc' }],
     select: {
       id: true,
+      title: true,
+      description: true,
       displayOrder: true,
       versions: {
         where: { status: 'PUBLISHED', effectiveAt: { lte: now } },
@@ -76,6 +81,7 @@ export async function evaluateSignaturePolicy(
           id: true,
           version: true,
           title: true,
+          originalFilename: true,
           signingMethod: true,
           acceptanceStatement: true,
           sourcePdfSha256: true,
@@ -96,6 +102,9 @@ export async function evaluateSignaturePolicy(
       agreementVersionId: version.id,
       version: version.version,
       title: version.title,
+      agreementTitle: agreement.title,
+      description: agreement.description,
+      originalFilename: version.originalFilename,
       displayOrder: agreement.displayOrder,
       signingMethod: version.signingMethod,
       acceptanceStatement: version.acceptanceStatement,

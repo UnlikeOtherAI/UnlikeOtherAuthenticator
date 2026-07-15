@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { exportJWK, generateKeyPair, type JWK } from 'jose';
-import { PDFDocument, StandardFonts } from 'pdf-lib';
+import { PDFDocument, PDFName, StandardFonts } from 'pdf-lib';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { parseEnv } from '../../src/config/env.js';
@@ -119,6 +119,22 @@ describe('signature PDF safety and receipt generation', () => {
       SIGNATURE_MAX_PDF_PAGES: '1',
     });
     await expect(validateSourcePdf(source, onePageEnv)).rejects.toThrowError('PDF_TOO_MANY_PAGES');
+  });
+
+  it('rejects active actions hidden inside a compressed PDF object stream', async () => {
+    const document = await PDFDocument.create();
+    document.addPage();
+    const action = document.context.obj({
+      S: PDFName.of('JavaScript'),
+      JS: document.context.obj('app.alert("unexpected")'),
+    });
+    const actionRef = document.context.register(action);
+    document.catalog.set(PDFName.of('OpenAction'), actionRef);
+    const compressed = Buffer.from(await document.save({ useObjectStreams: true }));
+
+    await expect(validateSourcePdf(compressed)).rejects.toThrowError(
+      'PDF_ACTIVE_CONTENT_NOT_ALLOWED',
+    );
   });
 
   it('appends exactly one evidence certificate page after every source page', async () => {

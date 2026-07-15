@@ -1,6 +1,17 @@
 import { createHash } from 'node:crypto';
 
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
+import {
+  PDFArray,
+  PDFDict,
+  PDFDocument,
+  PDFName,
+  PDFRef,
+  PDFStream,
+  StandardFonts,
+  rgb,
+  type PDFFont,
+  type PDFPage,
+} from 'pdf-lib';
 
 import { getEnv, type Env } from '../config/env.js';
 import { AppError } from '../utils/errors.js';
@@ -26,6 +37,9 @@ const FORBIDDEN_PDF_NAMES = [
   '/URI',
   '/XFA',
 ] as const;
+const FORBIDDEN_PARSED_PDF_NAMES = new Set(
+  FORBIDDEN_PDF_NAMES.map((name) => name.slice(1)),
+);
 
 export interface ValidatedSourcePdf {
   byteLength: number;
@@ -71,6 +85,41 @@ function rejectActivePdfContent(value: Uint8Array): void {
   }
 }
 
+function rejectParsedActivePdfContent(document: PDFDocument): void {
+  const visited = new Set<object>();
+  const visit = (object: unknown): void => {
+    if (!object || typeof object !== 'object' || visited.has(object)) return;
+    visited.add(object);
+    if (object instanceof PDFName) {
+      if (FORBIDDEN_PARSED_PDF_NAMES.has(object.decodeText())) {
+        throw new AppError('BAD_REQUEST', 400, 'PDF_ACTIVE_CONTENT_NOT_ALLOWED');
+      }
+      return;
+    }
+    if (object instanceof PDFRef) {
+      visit(document.context.lookup(object));
+      return;
+    }
+    if (object instanceof PDFStream) {
+      visit(object.dict);
+      return;
+    }
+    if (object instanceof PDFDict) {
+      for (const [key, value] of object.entries()) {
+        visit(key);
+        visit(value);
+      }
+      return;
+    }
+    if (object instanceof PDFArray) {
+      for (const value of object.asArray()) visit(value);
+    }
+  };
+
+  for (const [, object] of document.context.enumerateIndirectObjects()) visit(object);
+  visit(document.catalog);
+}
+
 export async function validateSourcePdf(
   value: Uint8Array,
   env: Env = getEnv(),
@@ -97,6 +146,7 @@ export async function validateSourcePdf(
     if (document.isEncrypted) {
       throw new AppError('BAD_REQUEST', 400, 'ENCRYPTED_PDF_NOT_ALLOWED');
     }
+    rejectParsedActivePdfContent(document);
     const pageCount = document.getPageCount();
     if (pageCount < 1) {
       throw new AppError('BAD_REQUEST', 400, 'PDF_HAS_NO_PAGES');

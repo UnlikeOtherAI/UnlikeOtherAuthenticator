@@ -44,6 +44,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       org-features.ts               — Returns 404 when org features are disabled
       org-role-guard.ts             — Validates user access token and org role for /org endpoints
       rate-limiter.ts               — Rate limiting
+      same-origin-browser.ts        — Rejects cross-site browser mutations on capability signing actions
       superuser-access-token.ts     — Validates user access tokens for superuser-only domain endpoints
     /routes
       index.ts              — Top-level route registration and global 404 handler
@@ -63,6 +64,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
         schema.integrations.ts — /api schema slice: integration endpoints
         schema.internal-admin-apps.ts — /api schema slice: internal admin app/settings/search endpoints
         schema.internal-admin-signatures.ts — /api schema slice: signature settings and agreement lifecycle endpoints
+        schema.signatures.ts       — /api schema slice: signing session, signer, domain-status, and public verification endpoints
         schema.internal-admin.ts — /api schema slice: internal admin endpoints
         llm-signatures.ts     — /llm content: optional signature operator workflow and security constraints
       /apps
@@ -90,7 +92,13 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
         users.ts            — GET  /domain/users
         logs.ts             — GET  /domain/logs
         debug.ts            — GET  /domain/debug
+        signatures.ts       — POST /domain/signatures/status (verified config + domain hash)
         index.ts            — Route registration for /domain
+      /signatures
+        session.ts          — Capability-scoped signing state, source, submit, receipt, and completion
+        me.ts               — Access-token subject status and receipt downloads
+        verify.ts           — Public PII-minimised evidence/source/receipt integrity verification
+        index.ts            — Route registration for /signatures
       /email
         send.ts             — POST /email/send (transactional email send)
         index.ts            — Route registration for /email
@@ -215,6 +223,9 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       signature-malware.service.ts          — Fail-closed ClamAV scanning through private temporary files
       signature-pdf.service.ts              — Source-PDF safety validation, hashing, and certificate-page receipt generation
       signature-policy.service.ts           — Per-domain required-agreement evaluation and fail-closed completion checks
+      signature-continuation.service.ts     — Hashed one-use signing continuations and atomic authorization-code gates
+      signature-signing.service.ts          — Capability-scoped signing, exact evidence capture, idempotency, and receipts
+      signature-access.service.ts           — Signer/domain status, subject receipts, and public integrity verification
       signature-storage.service.ts          — Private immutable signature-object storage adapters (filesystem/GCS)
       team-invite.service.ts                — Team invite orchestration API
       team-invite.service.base.ts           — Team invite service building blocks

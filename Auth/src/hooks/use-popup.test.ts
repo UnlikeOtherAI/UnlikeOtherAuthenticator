@@ -3,6 +3,19 @@ import { describe, expect, it } from 'vitest';
 import { parsePopupQueryParams } from './use-popup';
 
 describe('parsePopupQueryParams', () => {
+  it('accepts a signing capability only with the dedicated signatures flow marker', () => {
+    const parsed = parsePopupQueryParams(
+      '?flow=signatures&signing_token=opaque-capability&scope=openid%20profile',
+    );
+
+    expect(parsed.signingToken).toBe('opaque-capability');
+    expect(parsed.scope).toBe('openid profile');
+  });
+
+  it('ignores an unscoped signing_token query parameter', () => {
+    expect(parsePopupQueryParams('?signing_token=opaque-capability').signingToken).toBeNull();
+  });
+
   it('parses forced 2FA enrollment setup token', () => {
     const parsed = parsePopupQueryParams(
       '?config_url=https%3A%2F%2Fclient.example.com%2Fauth%2Fconfig&twofa_enroll_required=true&twofa_setup_token=setup.jwt',

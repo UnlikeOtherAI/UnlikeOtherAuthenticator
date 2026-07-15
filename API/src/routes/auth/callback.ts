@@ -340,6 +340,8 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
             redirectUrl,
             rememberMe,
             requestAccess: socialState.request_access === true,
+            authMethod: provider,
+            twoFaCompleted: false,
             codeChallenge: socialState.code_challenge,
             codeChallengeMethod: socialState.code_challenge_method,
             ip: request.ip ?? null,

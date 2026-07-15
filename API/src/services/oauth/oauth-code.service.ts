@@ -29,6 +29,7 @@ export interface IssueOAuthCodeInput {
   oauthClientId: string;
   redirectUrl: string;
   resource?: string;
+  scope?: string;
   state?: string;
   codeChallenge: string;
   rememberMe?: boolean;
@@ -51,6 +52,7 @@ export async function issueOAuthCode(
           configUrl: null,
           redirectUrl: input.redirectUrl,
           oauthClientId: input.oauthClientId,
+          oauthScope: input.scope ?? null,
           resource: input.resource ?? null,
           state: input.state ?? null,
           codeChallenge: input.codeChallenge,
@@ -72,6 +74,7 @@ export async function issueOAuthCode(
 export interface ConsumeOAuthCodeResult {
   userId: string;
   resource: string | null;
+  scope: string | null;
   rememberMe: boolean;
 }
 
@@ -89,6 +92,7 @@ export async function consumeOAuthCode(
       oauthClientId: true,
       redirectUrl: true,
       resource: true,
+      oauthScope: true,
       codeChallenge: true,
       codeChallengeMethod: true,
       rememberMe: true,
@@ -123,5 +127,10 @@ export async function consumeOAuthCode(
   });
   if (updated.count !== 1) reject();
 
-  return { userId: code.userId, resource: code.resource, rememberMe: code.rememberMe };
+  return {
+    userId: code.userId,
+    resource: code.resource,
+    scope: code.oauthScope,
+    rememberMe: code.rememberMe,
+  };
 }

@@ -65,6 +65,7 @@ For the full product spec, see [brief.md](./brief.md). For tech stack, see [tech
       TwoFactorVerifyPage.tsx — 2FA challenge during login
       CodeEntryPage.tsx       — Email sign-in code entry, login_flow.email_code_enabled (Phase 3c)
       WorkspaceChooserPage.tsx — Slack-style "choose a workspace" screen, workspace_selection: "auto" (Phase 3c)
+      SigningPage.tsx         — Ordered PDF review, explicit click-wrap/typed-name signing, receipts, final recheck
       ErrorPage.tsx           — Generic error display
     /theme
       ThemeProvider.tsx       — React context provider, reads config and exposes theme values
@@ -83,6 +84,7 @@ For the full product spec, see [brief.md](./brief.md). For tech stack, see [tech
     /utils
       api.ts                  — API client for calling auth server endpoints (includes the
                                  Phase 3c authStart/verifyLoginCode/selectTeam flow helpers)
+      signature-api.ts        — Typed capability-session JSON/PDF calls for the hosted signing flow
       validation.ts           — Client-side input validation (email format, password rules)
       errors.ts               — Error display helpers (always generic)
       code-input.ts           — Pure numeric-code sanitization behind ui/CodeInput.tsx (Phase 3c)
@@ -179,6 +181,12 @@ The auth flow is state-driven, not route-driven. A single popup URL loads the ap
     pending invites + create-workspace, auto-skipped when there's exactly one ACTIVE team and no
     pending invites) → TwoFactorVerifyPage (policy of the selected org) → Redirect with a
     team-scoped code
+11. **Required agreements** (optional per-domain service) — after identity, workspace selection,
+    and required 2FA, the shared API gate redirects to `SigningPage` instead of issuing a code.
+    The page renders the hash-verified source PDF, exact acceptance statement, click-wrap or
+    typed-name assertion, and downloadable receipt in Admin display order. Final completion
+    rechecks current policy before following the preserved OAuth redirect. The opaque capability
+    is held in memory and removed from the address bar after hydration.
 
 These two steps are held entirely in client state (`use-popup.tsx`'s `pendingEmail`/`loginToken`/
 `workspaceChoices`) between the identity-verification call and the final redirect — see

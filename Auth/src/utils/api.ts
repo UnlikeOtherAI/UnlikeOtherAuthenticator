@@ -122,6 +122,50 @@ export function postJson<TReq, TRes>(
   return request<TRes>('POST', path, { query, body });
 }
 
+export type ApiBinarySuccess = {
+  ok: true;
+  status: number;
+  data: Blob;
+  contentType: string | null;
+  etag: string | null;
+};
+
+export type ApiBinaryResult = ApiBinarySuccess | ApiFailure;
+
+/** POST a JSON capability request and return the exact binary response bytes. */
+export async function postBinary<TReq>(
+  path: string,
+  body: TReq,
+): Promise<ApiBinaryResult> {
+  const url = buildUrl(path);
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: { accept: 'application/pdf', 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    return { ok: false, status: 0, error: null, code: null };
+  }
+  if (!response.ok) {
+    const json = await parseJsonSafe(response);
+    return {
+      ok: false,
+      status: response.status,
+      error: extractError(json),
+      code: extractCode(json),
+    };
+  }
+  return {
+    ok: true,
+    status: response.status,
+    data: await response.blob(),
+    contentType: response.headers.get('content-type'),
+    etag: response.headers.get('etag'),
+  };
+}
+
 /**
  * Phase 3c (design §11.2): the query parameters every `/auth/*` flow endpoint needs — the
  * same shape `LoginForm`/`RegisterForm` build inline, pulled out so the code-entry and

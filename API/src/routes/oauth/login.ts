@@ -7,8 +7,8 @@ import { createRateLimiter } from '../../middleware/rate-limiter.js';
 import { loginWithEmailPassword } from '../../services/auth-login.service.js';
 import { buildMcpClientConfig } from '../../services/oauth/config.service.js';
 import { getOAuthClient } from '../../services/oauth/client.service.js';
-import { issueOAuthCode } from '../../services/oauth/oauth-code.service.js';
 import { validateRequestedResource } from '../../services/oauth/resource-validation.service.js';
+import { finalizePublicOAuthAuthorizationWithSignatures } from '../../services/signature-continuation.service.js';
 import { selectRedirectUrl } from '../../services/authorization-code.service.js';
 import { resolveTwoFaPolicy } from '../../services/twofactor-policy.service.js';
 import { buildPublicErrorBody } from '../../utils/error-response.js';
@@ -33,6 +33,7 @@ const QuerySchema = z
     code_challenge: z.string().min(1).max(256),
     code_challenge_method: z.string().min(1).max(32),
     state: z.string().max(2048).optional(),
+    scope: z.string().max(512).optional(),
     resource: z.string().max(2048).optional(),
   })
   .strip();
@@ -89,7 +90,7 @@ export function registerOAuthLoginRoute(app: FastifyInstance): void {
         requestedRedirectUrl: q.redirect_uri,
       });
       const rememberMe = remember_me ?? config.session?.remember_me_default ?? true;
-      const { code } = await issueOAuthCode(
+      const gate = await finalizePublicOAuthAuthorizationWithSignatures(
         {
           userId,
           domain: config.domain,
@@ -97,15 +98,14 @@ export function registerOAuthLoginRoute(app: FastifyInstance): void {
           redirectUrl,
           resource,
           state: q.state,
+          scope: q.scope,
           codeChallenge: pkce.codeChallenge,
           rememberMe,
+          authMethod: 'email_password',
+          twoFaCompleted: false,
         },
-        tx,
       );
-      const url = new URL(redirectUrl);
-      url.searchParams.set('code', code);
-      if (q.state) url.searchParams.set('state', q.state);
-      return { kind: 'granted' as const, redirectTo: url.toString() };
+      return { kind: 'granted' as const, redirectTo: gate.redirectTo };
     });
 
     if (outcome.kind === 'twofa') {

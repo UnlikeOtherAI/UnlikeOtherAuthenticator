@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useMemo, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react';
 
 export type AuthView =
   | 'login'
@@ -7,6 +7,7 @@ export type AuthView =
   | 'set-password'
   | 'access-requested'
   | 'signed-in'
+  | 'signatures'
   | 'code-entry'
   | 'workspace-chooser';
 
@@ -68,6 +69,9 @@ export type PopupQueryParams = {
   clientId: string | null;
   state: string | null;
   resource: string | null;
+  scope: string | null;
+  /** Short-lived opaque capability for an authenticated agreement-signing continuation. */
+  signingToken: string | null;
   /**
    * Native deep-link target the flow should hand off to (custom scheme). When present, the
    * auth window renders the "signed in — return to the app" handoff view instead of bouncing
@@ -144,6 +148,8 @@ export function parsePopupQueryParams(search: string): PopupQueryParams {
       clientId: null,
       state: null,
       resource: null,
+      scope: null,
+      signingToken: null,
       handoffTarget: null,
       loginToken: null,
       teamHint: null,
@@ -164,6 +170,9 @@ export function parsePopupQueryParams(search: string): PopupQueryParams {
   const clientId = params.get('client_id');
   const state = params.get('state');
   const resource = params.get('resource');
+  const scope = params.get('scope');
+  const signingToken =
+    params.get('flow') === 'signatures' ? params.get('signing_token') : null;
   const handoffTarget = params.get('handoff_target');
   // Phase 3c follow-up (design §4.3 Task 7 remainder): only trust `login_token` when the redirect
   // also carries the `flow=workspace_chooser` marker — mirrors how `twofa_token` is scoped by its
@@ -193,6 +202,8 @@ export function parsePopupQueryParams(search: string): PopupQueryParams {
     clientId: clientId && clientId.trim() ? clientId : null,
     state: state && state.trim() ? state : null,
     resource: resource && resource.trim() ? resource : null,
+    scope: scope && scope.trim() ? scope : null,
+    signingToken: signingToken && signingToken.trim() ? signingToken : null,
     handoffTarget: handoffTarget && handoffTarget.trim() ? handoffTarget : null,
     loginToken: loginToken && loginToken.trim() ? loginToken : null,
     teamHint: teamHint && teamHint.trim() ? teamHint : null,
@@ -205,6 +216,9 @@ function readClientSearch(): string {
 }
 
 function deriveInitialView(parsed: PopupQueryParams): AuthView {
+  if (parsed.signingToken) {
+    return 'signatures';
+  }
   if (parsed.handoffTarget) {
     // Server-rendered handoff (e.g. social callback to a native deep link).
     return 'signed-in';
@@ -269,6 +283,15 @@ export function PopupProvider(props: {
     () => props.initialWorkspaceChoices ?? null,
   );
 
+  useEffect(() => {
+    if (!parsed.signingToken || typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('signing_token') !== parsed.signingToken) return;
+    url.searchParams.delete('signing_token');
+    if (url.searchParams.get('flow') === 'signatures') url.searchParams.delete('flow');
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+  }, [parsed.signingToken]);
+
   const setView = useCallback((v: AuthView) => setViewState(v), []);
   const setPendingEmail = useCallback((email: string | null) => setPendingEmailState(email), []);
   const setLoginToken = useCallback((token: string | null) => setLoginTokenState(token), []);
@@ -301,6 +324,8 @@ export function PopupProvider(props: {
       clientId: parsed.clientId,
       state: parsed.state,
       resource: parsed.resource,
+      scope: parsed.scope,
+      signingToken: parsed.signingToken,
       handoffTarget,
       teamHint: parsed.teamHint,
       view,
@@ -340,6 +365,8 @@ export function PopupProvider(props: {
     parsed.clientId,
     parsed.state,
     parsed.resource,
+    parsed.scope,
+    parsed.signingToken,
     handoffTarget,
     parsed.teamHint,
     view,

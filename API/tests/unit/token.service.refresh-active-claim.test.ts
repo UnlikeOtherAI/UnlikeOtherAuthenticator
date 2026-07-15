@@ -20,6 +20,10 @@ describe('exchangeRefreshTokenForTokens active-claim re-validation (unit)', () =
     return {
       now,
       prisma: {
+        $executeRaw: vi.fn().mockResolvedValue(1),
+        domainSignatureSettings: {
+          findUnique: vi.fn().mockResolvedValue(null),
+        },
         refreshToken: {
           findUnique: vi.fn().mockResolvedValue({
             id: 'refresh-token-1',

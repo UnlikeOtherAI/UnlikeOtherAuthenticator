@@ -42,6 +42,8 @@ The authorization-code grant returns exactly the shape below. **There is no top-
 
 Store the refresh token server-side ONLY; browser clients never receive or persist refresh tokens. \`firstLogin\` is only present on the authorization-code grant; refresh-token grants never include it.
 
+If optional agreement signatures are enabled for the domain, a newly published version or revoked signature can make the next refresh return the normal authentication failure. UOA deliberately leaves that still-valid refresh token unconsumed and unrotated; restart the interactive authorization flow so the authenticated user can review/sign the current version. Do not retry refresh in a loop.
+
 **Field-casing warning.** The outer envelope is snake_case (\`access_token\`, \`refresh_token\`, \`expires_in\`, \`refresh_token_expires_in\`). The key \`firstLogin\` itself and the IDs inside \`memberships.*\` and \`pending_invites[]\` (\`orgId\`, \`teamId\`, \`inviteId\`, \`teamName\`) are camelCase. \`pending_invites\` and \`capabilities.can_*\` are snake_case. Do not assume one style throughout.
 
 ### 4.2 Access-token JWT claims

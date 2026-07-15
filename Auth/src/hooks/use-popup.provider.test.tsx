@@ -24,6 +24,12 @@ function renderWithSearch(search: string): string {
  * client-side half of "hint ignored under workspace_selection: off".
  */
 describe('PopupProvider — team_hint does not affect initial view on its own', () => {
+  it('opens the signing view only for a scoped signing continuation', () => {
+    const html = renderWithSearch('?flow=signatures&signing_token=opaque-capability');
+
+    expect(html).toContain('signatures:null');
+  });
+
   it('stays on the login view when team_hint is present without a login_token', () => {
     const html = renderWithSearch(
       '?config_url=https%3A%2F%2Fclient.example.com%2Fauth-config&team_hint=team-abc123',

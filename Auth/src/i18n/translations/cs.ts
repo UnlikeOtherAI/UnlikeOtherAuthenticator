@@ -11,6 +11,7 @@ export const cs = {
   'auth.twoFactorSetup.title': 'Nastavení dvoufaktorového ověření',
   'auth.codeEntry.title': 'Zadejte svůj kód',
   'auth.workspaceChooser.title': 'Vyberte pracovní prostor',
+  'auth.signatures.title': 'Zkontrolujte a podepište dohody',
 
   'form.email.label': 'E-mail',
   'form.password.label': 'Heslo',
@@ -84,4 +85,38 @@ export const cs = {
 
   'social.divider': 'nebo',
   'social.continueWith': 'Pokračovat přes',
+
+  'signatures.loading': 'Načítají se vaše dohody…',
+  'signatures.restart':
+    'Tato podpisová relace již není dostupná. Vraťte se do aplikace a zahajte přihlášení znovu.',
+  'signatures.intro':
+    'Doména {domain} vyžaduje před dokončením přihlášení následující aktuální dohody.',
+  'signatures.expires': 'Platnost této zabezpečené podpisové relace skončí v {time}.',
+  'signatures.sourceError': 'Ověřený zdrojový dokument se nepodařilo načíst. Zkuste to znovu.',
+  'signatures.receiptError': 'Ověřené potvrzení se nepodařilo stáhnout. Zkuste to znovu.',
+  'signatures.signError': 'Dohodu se nepodařilo podepsat. Zkontrolujte potvrzení a zkuste to znovu.',
+  'signatures.signed': 'Dohoda byla podepsána. Potvrzení o ověřeném důkazu je připraveno níže.',
+  'signatures.version': 'Verze {version}',
+  'signatures.downloadSource': 'Stáhnout zdrojové PDF',
+  'signatures.loadingDocument': 'Načítá se ověřené PDF…',
+  'signatures.viewerTitle': 'Prohlížeč PDF pro {title}',
+  'signatures.confirmTitle': 'Prohlášení o přijetí',
+  'signatures.confirmCheckbox': 'Výslovně potvrzuji výše uvedené prohlášení o přijetí.',
+  'signatures.fullName': 'Vaše celé jméno',
+  'signatures.nameAssertion':
+    'Zadané jméno se zaznamená jako vaše tvrzení. Nejde o nezávislé ověření totožnosti.',
+  'signatures.evidenceNotice':
+    'UOA zaznamenává ověřený důkaz o dohodě a ověřuje jeho integritu. Nejde o notářské ověření, kvalifikovaný elektronický podpis ani právní poradenství.',
+  'signatures.signing': 'Podepisování…',
+  'signatures.signContinue': 'Podepsat a pokračovat',
+  'signatures.completeTitle': 'Všechny aktuální dohody jsou podepsány',
+  'signatures.completeBody':
+    'Stáhněte si potřebná potvrzení a dokončete přihlášení. Před vydáním přístupu se požadavky ještě jednou zkontrolují.',
+  'signatures.receiptsTitle': 'Potvrzení o důkazu',
+  'signatures.verificationReference': 'Ověřovací reference',
+  'signatures.revoked': 'Tento podpis byl odvolán.',
+  'signatures.downloading': 'Stahování…',
+  'signatures.downloadReceipt': 'Stáhnout potvrzení',
+  'signatures.finishing': 'Dokončování…',
+  'signatures.finish': 'Dokončit přihlášení',
 } satisfies Translations;

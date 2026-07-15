@@ -217,6 +217,8 @@ export const authEndpoints: EndpointSchema[] = [
         'object { memberships: { orgs, teams }, pending_invites, capabilities { can_create_org, can_accept_invite } } — included on authorization_code exchange when org_features.enabled is true. memberships.orgs[] = { orgId, role } camelCase; memberships.teams[] = { teamId, orgId, role } camelCase; pending_invites[] = { inviteId, type, orgId, teamId, teamName } camelCase. Not included on refresh_token grants.',
       '[note]':
         'There is NO top-level `user` field. User identity lives inside access_token claims (read claims.sub). The outer envelope is snake_case; firstLogin.* IDs are camelCase.',
+      '401 refresh policy':
+        'If the domain signature policy changed and the refresh-token user is incomplete, the valid refresh token is not rotated or consumed. Restart interactive authorization so the user can sign.',
     },
   },
   {

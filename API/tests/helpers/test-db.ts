@@ -48,18 +48,20 @@ export async function createTestDb(): Promise<TestDbHandle | null> {
   const adminUrl = withSchemaParam(baseUrl, 'public');
   const testUrl = withSchemaParam(baseUrl, schema);
 
-  // Create an isolated schema for this test file. Prisma migrate deploy will fail if the
-  // schema doesn't exist.
+  // Prisma narrows search_path to the isolated schema. `citext` is a database-wide extension
+  // installed in public, so expose a schema-local domain backed by public.citext before applying
+  // migrations. The advisory lock makes first-time extension setup safe when Vitest starts many
+  // DB-backed files concurrently.
   execFileSync(
     process.platform === 'win32' ? 'cmd' : 'bash',
     process.platform === 'win32'
       ? [
           '/c',
-          `echo CREATE SCHEMA IF NOT EXISTS "${schema}"; | "${prismaBinPath()}" db execute --stdin --schema prisma/schema.prisma`,
+          `echo SELECT pg_advisory_lock(847291); CREATE EXTENSION IF NOT EXISTS citext WITH SCHEMA public; CREATE SCHEMA IF NOT EXISTS "${schema}"; CREATE DOMAIN "${schema}".citext AS public.citext; SELECT pg_advisory_unlock(847291); | "${prismaBinPath()}" db execute --stdin --schema prisma/schema.prisma`,
         ]
       : [
           '-lc',
-          `echo 'CREATE SCHEMA IF NOT EXISTS "${schema}";' | "${prismaBinPath()}" db execute --stdin --schema prisma/schema.prisma`,
+          `echo 'SELECT pg_advisory_lock(847291); CREATE EXTENSION IF NOT EXISTS citext WITH SCHEMA public; CREATE SCHEMA IF NOT EXISTS "${schema}"; CREATE DOMAIN "${schema}".citext AS public.citext; SELECT pg_advisory_unlock(847291);' | "${prismaBinPath()}" db execute --stdin --schema prisma/schema.prisma`,
         ],
     {
       cwd: apiRootDir(),

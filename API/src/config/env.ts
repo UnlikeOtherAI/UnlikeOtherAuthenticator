@@ -215,6 +215,8 @@ const EnvSchema = z
       .optional(),
     SIGNATURE_MAX_PDF_BYTES: z.coerce.number().int().min(1024).max(100 * 1024 * 1024).default(25 * 1024 * 1024),
     SIGNATURE_MAX_PDF_PAGES: z.coerce.number().int().min(1).max(2000).default(200),
+    SIGNATURE_CONTINUATION_TTL_MINUTES: z.coerce.number().int().min(2).max(30).default(10),
+    SIGNATURE_MAX_SIGN_ATTEMPTS: z.coerce.number().int().min(1).max(50).default(10),
   })
   .superRefine((env, ctx) => {
     if (env.SIGNATURE_STORAGE_PROVIDER === 'filesystem' && !env.SIGNATURE_FILESYSTEM_ROOT) {

@@ -50,6 +50,7 @@ function fakePrisma() {
     signatureRevocation: { create: vi.fn() },
     signatureAuditEvent: { create: vi.fn().mockResolvedValue({}) },
     adminAuditLog: { create: vi.fn().mockResolvedValue({}) },
+    $executeRaw: vi.fn().mockResolvedValue(1),
     $transaction: vi.fn(),
   };
   prisma.$transaction.mockImplementation(async (callback: (tx: typeof prisma) => unknown) =>
@@ -181,6 +182,7 @@ describe('admin receipt access and revocation', () => {
         { prisma: prisma as never },
       ),
     ).resolves.toEqual(revocation);
+    expect(prisma.$executeRaw).toHaveBeenCalled();
     expect(prisma.signatureAuditEvent.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ action: 'signature.revoked' }),
     });

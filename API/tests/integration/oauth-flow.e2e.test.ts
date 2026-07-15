@@ -5,6 +5,7 @@ import { jwtVerify } from 'jose';
 import { ACCESS_TOKEN_AUDIENCE } from '../../src/config/constants.js';
 import { createApp } from '../../src/app.js';
 import { hashPassword } from '../../src/services/password.service.js';
+import { digestDomainClientHash } from '../../src/utils/client-hash.js';
 import { createClientId } from '../../src/utils/hash.js';
 import { createTestDb } from '../helpers/test-db.js';
 import { createTestConfigFetchHandler, signTestConfigJwt } from '../helpers/test-config.js';
@@ -69,6 +70,20 @@ describe.skipIf(!hasDatabase)('E2E OAuth flow (config_url -> /auth -> login -> t
       },
       select: { id: true },
     });
+    const clientHash = createClientId('client.example.com', process.env.SHARED_SECRET!);
+    await handle!.prisma.clientDomain.create({
+      data: {
+        domain: 'client.example.com',
+        label: 'E2E client',
+        secrets: {
+          create: {
+            active: true,
+            hashPrefix: clientHash.slice(0, 12),
+            secretDigest: digestDomainClientHash(clientHash),
+          },
+        },
+      },
+    });
 
     const configUrl = 'https://client.example.com/auth-config';
     const jwt = await createSignedConfigJwt(process.env.SHARED_SECRET!);
@@ -112,7 +127,7 @@ describe.skipIf(!hasDatabase)('E2E OAuth flow (config_url -> /auth -> login -> t
       method: 'POST',
       url: `/auth/token?config_url=${encodeURIComponent(configUrl)}`,
       headers: {
-        authorization: `Bearer ${createClientId('client.example.com', process.env.SHARED_SECRET!)}`,
+        authorization: `Bearer ${clientHash}`,
       },
       payload: {
         code: loginBody.code,
@@ -120,7 +135,7 @@ describe.skipIf(!hasDatabase)('E2E OAuth flow (config_url -> /auth -> login -> t
         code_verifier: pkceVerifier,
       },
     });
-    expect(tokenRes.statusCode).toBe(200);
+    expect(tokenRes.statusCode, tokenRes.body).toBe(200);
     const tokenBody = tokenRes.json() as { access_token: string; token_type: string };
     expect(tokenBody.token_type).toBe('Bearer');
     expect(typeof tokenBody.access_token).toBe('string');

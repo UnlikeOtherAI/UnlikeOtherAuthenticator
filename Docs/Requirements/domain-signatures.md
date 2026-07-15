@@ -492,13 +492,33 @@ before Phase 1 implementation begins:
 
 1. **Evidence retention:** required domain-level retention range and default, deletion
    timing, legal-hold needs, and what happens when a user or domain is deleted.
+   **Local Phase 1 resolution:** an explicit value from 1 to 36,500 days is required and
+   there is no silent default. Phase 1 treats evidence as retained, append-only data and
+   blocks user/domain deletion while it exists. It does not automatically erase evidence;
+   time-based deletion and legal holds require the separately approved deletion workflow
+   described above before production use can promise automatic expiry.
 2. **Object storage:** the production private object-storage provider, bucket residency,
    backup policy, and encryption-key ownership.
+   **Local Phase 1 resolution:** private filesystem storage is supported only for local
+   development and tests; production rejects it and requires the private GCS adapter.
+   Bucket residency, backup, and encryption-key ownership remain deployment controls.
 3. **Evidence key custody:** where the dedicated private signing key is held, rotation
    interval, and how retired public keys remain available for verification.
+   **Local Phase 1 resolution:** evidence uses its own RS256 private JWK supplied through
+   the deployment secret boundary. Verification uses a public-only JWKS containing the
+   current and retired keys by `kid`. Custody and rotation cadence remain deployment
+   controls and the service cannot be enabled without both key inputs.
 4. **Upload limits:** maximum source-PDF size and page count.
+   **Local Phase 1 resolution:** defaults are 25 MiB and 200 pages, with bounded deployment
+   overrides of 1 KiB–100 MiB and 1–2,000 pages.
 5. **Signer name:** whether typed-name signatures require the existing profile `name`,
    permit an entered legal name, or require the two values to match.
+   **Local Phase 1 resolution:** the signer enters a name of up to 200 characters. It is
+   captured as the user's assertion and is not matched to or described as verified by the
+   profile name.
 6. **Legal review:** the jurisdictions and assurance claims the product may advertise.
    Until reviewed, product copy must describe this as authenticated agreement evidence,
    not a qualified or independently verified signature.
+   **Local Phase 1 resolution:** no jurisdiction-specific assurance is claimed. Auth UI
+   and receipt copy use “authenticated agreement evidence” and explicitly disclaim
+   qualified-signature, notarisation, trusted-timestamp, and independent-ID claims.

@@ -153,6 +153,8 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
             redirectUrl,
             rememberMe,
             requestAccess: parseRequestAccessFlag(request_access),
+            authMethod: 'email_password',
+            twoFaCompleted: false,
             codeChallenge: pkce.codeChallenge,
             codeChallengeMethod: pkce.codeChallengeMethod,
             ip: request.ip ?? null,

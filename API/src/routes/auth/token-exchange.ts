@@ -72,19 +72,19 @@ export function registerAuthTokenExchangeRoute(app: FastifyInstance): void {
       // lookup with app.domain alone, and downstream token writes stay scoped the same.
       setTenantContextFromRequest(request, { orgId: null, userId: null });
 
-      const tokenPair = await request.withTenantTx(async (tx) => {
-        const prisma = asPrismaClient(tx);
-        return body.grant_type === 'refresh_token'
-          ? exchangeRefreshTokenForTokens(
+      const tokenPair =
+        body.grant_type === 'refresh_token'
+          ? await exchangeRefreshTokenForTokens(
               {
                 refreshToken: body.refresh_token,
                 config,
                 configUrl,
                 clientId: request.domainAuthClientId,
               },
-              { prisma, adminPrisma: request.adminDb },
+              { prisma: request.adminDb, adminPrisma: request.adminDb },
             )
-          : exchangeAuthorizationCodeForTokens(
+          : await request.withTenantTx(async (tx) =>
+              exchangeAuthorizationCodeForTokens(
               {
                 code: body.code,
                 config,
@@ -93,9 +93,9 @@ export function registerAuthTokenExchangeRoute(app: FastifyInstance): void {
                 codeVerifier: body.code_verifier,
                 clientId: request.domainAuthClientId,
               },
-              { prisma, adminPrisma: request.adminDb },
+                { prisma: asPrismaClient(tx), adminPrisma: request.adminDb },
+              ),
             );
-      });
 
       // Keep response OAuth-ish without being overly strict about fields.
       reply.header('Cache-Control', 'no-store');

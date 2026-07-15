@@ -204,6 +204,24 @@ describe('signature admin settings and agreements', () => {
     ).rejects.toThrowError('SIGNATURE_PUBLISHED_REQUIREMENT_REQUIRED');
   });
 
+  it('rejects retention outside the documented 1 to 36,500 day range', async () => {
+    const prisma = fakePrisma();
+    for (const retentionDays of [0, 36_501]) {
+      await expect(
+        updateSignatureSettings(
+          {
+            domain: 'example.com',
+            enabled: false,
+            retentionDays,
+            actorEmail: 'admin@example.com',
+          },
+          { prisma: prisma as never, env: readyEnv(), now: () => NOW },
+        ),
+      ).rejects.toThrowError('INVALID_SIGNATURE_RETENTION');
+    }
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
   it('creates a domain-scoped agreement and writes both audit records atomically', async () => {
     const prisma = fakePrisma();
     prisma.clientDomain.findUnique.mockResolvedValue({ domain: 'example.com' });

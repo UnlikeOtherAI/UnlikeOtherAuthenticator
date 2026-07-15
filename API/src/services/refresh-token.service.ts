@@ -12,6 +12,10 @@ type RefreshTokenPrisma = Pick<PrismaClient, 'refreshToken'>;
 type UserVersionPrisma = Pick<PrismaClient, 'user'>;
 
 type RefreshTokenDeps = {
+  beforeRotate?: (row: {
+    userId: string;
+    domain: string;
+  }) => Promise<void>;
   now?: () => Date;
   prisma?: RefreshTokenPrisma;
   refreshTokenTtlDays?: number;
@@ -189,6 +193,12 @@ export async function exchangeRefreshToken(
   if (row.revokedAt || row.expiresAt.getTime() <= now.getTime()) {
     throw new AppError('UNAUTHORIZED', 401, 'INVALID_REFRESH_TOKEN');
   }
+
+  // Policy gates run here, after the opaque token and its exact client context
+  // have been validated but before any replacement row or mutation is written.
+  // Callers that need a policy/rotation atomicity guarantee must pass a Prisma
+  // transaction as `prisma` and perform the gate through this hook.
+  await deps?.beforeRotate?.({ userId: row.userId, domain: row.domain });
 
   // Inherit the original session's TTL so rotated tokens keep the same lifetime.
   const inheritedTtlSeconds = Math.round(

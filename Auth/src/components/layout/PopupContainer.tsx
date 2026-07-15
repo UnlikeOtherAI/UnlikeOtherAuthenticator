@@ -8,6 +8,7 @@ import { RegisterPage } from '../../pages/RegisterPage.js';
 import { ResetPasswordPage } from '../../pages/ResetPasswordPage.js';
 import { SetPasswordPage } from '../../pages/SetPasswordPage.js';
 import { SignedInPage } from '../../pages/SignedInPage.js';
+import { SigningPage } from '../../pages/SigningPage.js';
 import { TwoFactorSetupPage } from '../../pages/TwoFactorSetupPage.js';
 import { TwoFactorVerifyPage } from '../../pages/TwoFactorVerifyPage.js';
 import { WorkspaceChooserPage } from '../../pages/WorkspaceChooserPage.js';
@@ -38,6 +39,8 @@ function PopupContent(): React.JSX.Element {
       return <AccessRequestedPage />;
     case 'signed-in':
       return <SignedInPage />;
+    case 'signatures':
+      return <SigningPage />;
     case 'code-entry':
       return <CodeEntryPage />;
     case 'workspace-chooser':

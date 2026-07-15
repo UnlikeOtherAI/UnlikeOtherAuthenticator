@@ -2,13 +2,17 @@ import type { PrismaClient } from '@prisma/client';
 
 import type { ClientConfig } from './config.service.js';
 
-import { buildRedirectToUrl, issueAuthorizationCode } from './authorization-code.service.js';
 import { handlePostAuthenticationAccessRequest } from './access-request.service.js';
 import { assertEmailDomainAllowedForLogin } from './login-domain-policy.service.js';
 import { assertNotBannedAtLogin } from './ban-policy.service.js';
+import {
+  finalizeConfigAuthorizationWithSignatures,
+  type SignatureContinuationDeps,
+} from './signature-continuation.service.js';
 
 type FinalizeDeps = {
   prisma?: PrismaClient;
+  signatureDeps?: SignatureContinuationDeps;
 };
 
 export function parseRequestAccessFlag(value: unknown): boolean {
@@ -39,6 +43,8 @@ export async function finalizeAuthenticatedUser(
     redirectUrl: string;
     rememberMe: boolean;
     requestAccess: boolean;
+    authMethod: string;
+    twoFaCompleted: boolean;
     codeChallenge?: string;
     codeChallengeMethod?: 'S256';
     ip?: string | null;
@@ -50,6 +56,7 @@ export async function finalizeAuthenticatedUser(
   deps?: FinalizeDeps,
 ): Promise<
   | { status: 'granted'; redirectTo: string; code: string }
+  | { status: 'signing_required'; redirectTo: string; signingToken: string }
   | { status: 'requested'; redirectTo: string }
 > {
   // Allowed-login-email-domain restrictions (client domain / org / team). SUPERUSER bypasses.
@@ -87,7 +94,7 @@ export async function finalizeAuthenticatedUser(
     }
   }
 
-  const { code } = await issueAuthorizationCode(
+  const gate = await finalizeConfigAuthorizationWithSignatures(
     {
       userId: params.userId,
       domain: params.config.domain,
@@ -96,18 +103,25 @@ export async function finalizeAuthenticatedUser(
       codeChallenge: params.codeChallenge,
       codeChallengeMethod: params.codeChallengeMethod,
       rememberMe: params.rememberMe,
+      requestAccess: params.requestAccess,
       orgId: params.orgId,
       teamId: params.teamId,
+      authMethod: params.authMethod,
+      twoFaCompleted: params.twoFaCompleted,
     },
-    deps?.prisma ? { prisma: deps.prisma } : undefined,
+    deps?.signatureDeps,
   );
 
+  if (gate.status === 'signing_required') {
+    return {
+      status: 'signing_required',
+      signingToken: gate.signingToken,
+      redirectTo: gate.redirectTo,
+    };
+  }
   return {
     status: 'granted',
-    code,
-    redirectTo: buildRedirectToUrl({
-      redirectUrl: params.redirectUrl,
-      code,
-    }),
+    code: gate.code,
+    redirectTo: gate.redirectTo,
   };
 }

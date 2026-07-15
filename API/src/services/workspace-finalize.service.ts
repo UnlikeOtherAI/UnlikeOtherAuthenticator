@@ -101,6 +101,8 @@ export async function finalizeWithTwoFaPolicy(
       redirectUrl: params.redirectUrl,
       rememberMe: params.rememberMe,
       requestAccess: params.requestAccess,
+      authMethod: params.authMethod,
+      twoFaCompleted: false,
       codeChallenge: params.codeChallenge,
       codeChallengeMethod: params.codeChallengeMethod,
       ip: params.ip,

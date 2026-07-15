@@ -50,6 +50,7 @@ const prismaMock = vi.hoisted(() => {
     teamMember: { findMany: vi.fn() },
     teamInvite: { findMany: vi.fn() },
     authorizationCode: { create: vi.fn() },
+    domainSignatureSettings: { findUnique: vi.fn() },
     clientDomain: { findUnique: vi.fn() },
     organisation: { findMany: vi.fn() },
   };
@@ -153,6 +154,8 @@ describe('POST /auth/verify-code', () => {
     assertEmailDomainAllowedForLoginMock.mockReset().mockResolvedValue(undefined);
     assertNotBannedAtLoginMock.mockReset().mockResolvedValue(undefined);
     prismaMock.authorizationCode.create.mockResolvedValue({ id: 'code-row-1' });
+    prismaMock.$executeRaw.mockResolvedValue(1);
+    prismaMock.domainSignatureSettings.findUnique.mockResolvedValue(null);
   });
 
   afterEach(() => {

@@ -44,6 +44,8 @@ vi.mock('../../src/services/ban-policy.service.js', () => ({
 }));
 
 const prismaMock = vi.hoisted(() => ({
+  $executeRaw: vi.fn(),
+  domainSignatureSettings: { findUnique: vi.fn() },
   team: { findFirst: vi.fn() },
   teamMember: { findFirst: vi.fn(), findMany: vi.fn(), count: vi.fn(), create: vi.fn(), update: vi.fn() },
   teamInvite: { findUnique: vi.fn(), update: vi.fn(), findMany: vi.fn() },
@@ -142,14 +144,20 @@ describe('POST /auth/select-team', () => {
     process.env.DATABASE_URL = 'postgres://uoa-select-team-tests.invalid/db';
 
     for (const model of Object.values(prismaMock)) {
+      if (typeof model !== 'object' || model === null) continue;
       for (const fn of Object.values(model)) {
-        (fn as ReturnType<typeof vi.fn>).mockReset();
+        const maybeMock = fn as { mockReset?: unknown };
+        if (typeof maybeMock.mockReset === 'function') {
+          (fn as ReturnType<typeof vi.fn>).mockReset();
+        }
       }
     }
     recordLoginLogMock.mockReset().mockResolvedValue(undefined);
     assertEmailDomainAllowedForLoginMock.mockReset().mockResolvedValue(undefined);
     assertNotBannedAtLoginMock.mockReset().mockResolvedValue(undefined);
     prismaMock.authorizationCode.create.mockResolvedValue({ id: 'code-row-1' });
+    prismaMock.$executeRaw.mockResolvedValue(1);
+    prismaMock.domainSignatureSettings.findUnique.mockResolvedValue(null);
   });
 
   afterEach(() => {

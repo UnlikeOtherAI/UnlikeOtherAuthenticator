@@ -210,6 +210,7 @@ model AuthorizationCode {
   configUrl           String?   @map("config_url")
   redirectUrl         String    @map("redirect_url")
   oauthClientId       String?   @map("oauth_client_id")
+  oauthScope          String?   @map("oauth_scope") @db.VarChar(512)
   resource            String?
   state               String?
   codeChallenge       String?   @map("code_challenge")
@@ -435,12 +436,14 @@ model SigningContinuation {
   authProfile         SignatureAuthProfile @map("auth_profile")
   configUrl           String?              @map("config_url") @db.VarChar(2048)
   redirectUrl         String               @map("redirect_url") @db.VarChar(2048)
-  oauthState          String?              @map("oauth_state") @db.VarChar(1024)
+  oauthState          String?              @map("oauth_state") @db.VarChar(2048)
   oauthClientId       String?              @map("oauth_client_id") @db.VarChar(200)
+  oauthScope          String?              @map("oauth_scope") @db.VarChar(512)
   resource            String?              @db.VarChar(2048)
   codeChallenge       String               @map("code_challenge") @db.VarChar(128)
   codeChallengeMethod String               @map("code_challenge_method") @db.VarChar(16)
   rememberMe          Boolean              @default(false) @map("remember_me")
+  requestAccess       Boolean              @default(false) @map("request_access")
   orgId               String?              @map("org_id")
   teamId              String?              @map("team_id")
   authMethod          String               @map("auth_method") @db.VarChar(32)

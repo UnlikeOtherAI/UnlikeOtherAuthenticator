@@ -195,6 +195,8 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
               redirectUrl,
               rememberMe: request.config.session?.remember_me_default ?? true,
               requestAccess: parseRequestAccessFlag(request_access),
+              authMethod: type === 'VERIFY_EMAIL' ? 'verify_email' : 'login_link',
+              twoFaCompleted: false,
               codeChallenge: pkce.codeChallenge,
               codeChallengeMethod: pkce.codeChallengeMethod,
               ip: request.ip ?? null,

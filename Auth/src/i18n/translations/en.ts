@@ -9,6 +9,7 @@ export const en = {
   'auth.twoFactorSetup.title': 'Set up two-factor authentication',
   'auth.codeEntry.title': 'Enter your code',
   'auth.workspaceChooser.title': 'Choose a workspace',
+  'auth.signatures.title': 'Review and sign agreements',
 
   'form.email.label': 'Email',
   'form.password.label': 'Password',
@@ -86,6 +87,40 @@ export const en = {
 
   'social.divider': 'or',
   'social.continueWith': 'Continue with',
+
+  'signatures.loading': 'Loading your agreements…',
+  'signatures.restart':
+    'This signing session is no longer available. Return to the app and restart sign-in.',
+  'signatures.intro':
+    '{domain} requires the following current agreements before sign-in can finish.',
+  'signatures.expires': 'This secure signing session expires at {time}.',
+  'signatures.sourceError': 'The verified source document could not be loaded. Please try again.',
+  'signatures.receiptError': 'The verified receipt could not be downloaded. Please try again.',
+  'signatures.signError': 'The agreement could not be signed. Check your confirmation and try again.',
+  'signatures.signed': 'Agreement signed. Your authenticated evidence receipt is ready below.',
+  'signatures.version': 'Version {version}',
+  'signatures.downloadSource': 'Download source PDF',
+  'signatures.loadingDocument': 'Loading verified PDF…',
+  'signatures.viewerTitle': 'PDF viewer for {title}',
+  'signatures.confirmTitle': 'Acceptance statement',
+  'signatures.confirmCheckbox': 'I explicitly confirm the acceptance statement shown above.',
+  'signatures.fullName': 'Your full name',
+  'signatures.nameAssertion':
+    'Your typed name is recorded as your assertion. It is not independent identity verification.',
+  'signatures.evidenceNotice':
+    'UOA records authenticated agreement evidence and verifies its integrity. This is not notarisation, a qualified electronic signature, or legal advice.',
+  'signatures.signing': 'Signing…',
+  'signatures.signContinue': 'Sign and continue',
+  'signatures.completeTitle': 'All current agreements are signed',
+  'signatures.completeBody':
+    'Download any receipts you need, then finish sign-in. Requirements are checked once more before access is issued.',
+  'signatures.receiptsTitle': 'Evidence receipts',
+  'signatures.verificationReference': 'Verification reference',
+  'signatures.revoked': 'This signature has been revoked.',
+  'signatures.downloading': 'Downloading…',
+  'signatures.downloadReceipt': 'Download receipt',
+  'signatures.finishing': 'Finishing…',
+  'signatures.finish': 'Finish sign-in',
 } as const;
 
 export type TranslationKey = keyof typeof en;

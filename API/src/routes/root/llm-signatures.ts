@@ -1,7 +1,7 @@
 export const llmSignaturesMarkdown = `
 ---
 
-## Optional per-domain agreement signatures (operator API)
+## Optional per-domain agreement signatures
 
 Agreement signatures are an authenticator service that a UOA platform superuser enables per domain. The process default and every new domain default are disabled, so existing authorization and refresh behavior remain unchanged until the domain is explicitly configured and enabled.
 
@@ -20,6 +20,24 @@ Operators search retained evidence through \`GET .../signatures/records\`, filte
 Published versions, signatures, revocations, and signature audit events are protected by database append-only/immutability triggers. A required published version cannot be withdrawn while the domain gate is enabled. Publishing a replacement is the supported atomic transition.
 
 The evidence signing key is a dedicated RS256 RSA JWK with a unique \`kid\`; it must never reuse config, access-token, admin-token, shared-secret, or email-token key material. \`SIGNATURE_EVIDENCE_PUBLIC_JWKS_JSON\` contains public-only current and retired keys so historical evidence remains verifiable after rotation.
+
+### Authorization and refresh behavior
+
+Every successful identity path—password, social, email link, email code, workspace selection, 2FA completion, and public-client OAuth—calls the same current-policy evaluator after authentication and required 2FA but before authorization-code creation. A missing signature returns the hosted Auth signing URL instead of a code. The opaque \`signing_token\` is short-lived, stored only as a keyed hash, removed from the browser address bar after hydration, and accepted only in JSON bodies under \`POST /signatures/session/*\`.
+
+The hosted UI shows and downloads the exact hash-verified source PDF, presents the exact acceptance statement separately, requires explicit confirmation, captures a typed name only for \`typed_name\`, and offers the resulting receipt. A typed name is a user assertion—not independent identity verification. UOA describes this output as authenticated agreement evidence, never notarisation, PAdES, a qualified signature, or legal advice.
+
+\`POST /signatures/session/complete\` locks the domain policy, re-evaluates current versions/revocations, consumes the continuation once, and creates the authorization code in the same transaction. If policy changed during signing, the same session returns the newly missing version instead. Public OAuth \`state\`, \`scope\`, \`resource\`, client, redirect, and PKCE challenge are preserved exactly; authorize-time scope is bound to the one-time code and cannot be widened at token exchange.
+
+Before rotating a config-JWT refresh token, UOA locks and re-evaluates the current domain signature policy in the same transaction as rotation and access-token construction. Missing or revoked evidence returns the normal invalid-grant-style failure and leaves the valid refresh token untouched; the client must restart interactive authorization. Disabled domains preserve the pre-module authorization and refresh behavior.
+
+### Signer, backend, and public reads
+
+* \`GET /signatures/me/status\` and \`GET /signatures/me/receipts/:signatureId\` require \`X-UOA-Access-Token\` and are restricted to that token's subject and domain.
+* \`POST /domain/signatures/status?config_url=...\` requires the verified config plus the domain-hash bearer and accepts \`{ "user_id": "..." }\` only for a user on that domain.
+* \`GET /signatures/verify/:reference\` is IP-rate-limited and verifies the evidence JWS, canonical-manifest hash, exact private source bytes, receipt bytes, evidence \`kid\`, and revocation state. Its response is deliberately limited to reference state, agreement/version identifiers, hashes, timestamp, and \`kid\`; it never exposes user ID, signer name, email, IP address, or user agent.
+
+Published versions and retained evidence use restrictive foreign keys and append-only database triggers, so user/domain deletion cannot silently cascade away evidence. Drafts remain the only deletable agreement versions.
 
 See [the JSON endpoint contract](/api) and \`Docs/Requirements/domain-signatures.md\` for the complete fixed security and lifecycle requirements.
 `;

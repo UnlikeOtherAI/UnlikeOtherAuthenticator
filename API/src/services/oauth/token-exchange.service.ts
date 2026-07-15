@@ -45,6 +45,9 @@ export async function exchangeOAuthCodeForAccessToken(
     },
     prisma,
   );
+  if (params.scope !== undefined && params.scope !== consumed.scope) {
+    throw new AppError('UNAUTHORIZED', 401, 'INVALID_AUTH_CODE');
+  }
 
   const domainRole = await ensureDomainRoleForUser({
     prisma: prisma as unknown as Parameters<typeof ensureDomainRoleForUser>[0]['prisma'],
@@ -75,7 +78,7 @@ export async function exchangeOAuthCodeForAccessToken(
     resource: consumed.resource ?? issuer,
     issuer,
     ttlSeconds,
-    scope: params.scope,
+    scope: consumed.scope ?? undefined,
   });
 
   return { accessToken, expiresInSeconds: ttlSeconds };

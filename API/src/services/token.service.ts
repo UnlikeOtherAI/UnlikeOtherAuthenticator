@@ -13,6 +13,8 @@ import type { ClientConfig } from './config.service.js';
 import { getUserOrgContext, type OrgContext } from './org-context.service.js';
 import { ensureUserHasRequiredTeam } from './user-team-requirement.service.js';
 import { buildFirstLoginBlock, type FirstLoginBlock } from './first-login.service.js';
+import { evaluateSignaturePolicy } from './signature-policy.service.js';
+import { lockSignaturePolicyForDecision } from './signature-continuation.service.js';
 
 type TokenPrisma = PrismaClient;
 
@@ -325,57 +327,86 @@ export async function exchangeRefreshTokenForTokens(
 
   const sharedSecret = deps?.sharedSecret ?? requireEnv('SHARED_SECRET').SHARED_SECRET;
   const prisma = deps?.prisma ?? getPrisma();
+  const adminPrisma = deps?.adminPrisma ?? prisma;
   const clientId = params.clientId ?? resolveAccessTokenContext({
     domain: params.config.domain,
     env,
     sharedSecret,
   }).clientId;
 
-  const rotatedRefreshToken = await exchangeRefreshToken(
-    {
-      refreshToken: params.refreshToken,
-      domain: params.config.domain,
-      clientId,
-      configUrl: params.configUrl,
-    },
-    {
-      now: deps?.now,
-      prisma,
-      sharedSecret,
-    },
-  );
+  const exchangeInsideTransaction = async (tx: PrismaClient): Promise<IssuedTokenPair> => {
+    const rotatedRefreshToken = await exchangeRefreshToken(
+      {
+        refreshToken: params.refreshToken,
+        domain: params.config.domain,
+        clientId,
+        configUrl: params.configUrl,
+      },
+      {
+        now: deps?.now,
+        prisma: tx,
+        sharedSecret,
+        beforeRotate: async ({ userId, domain }) => {
+          await lockSignaturePolicyForDecision(tx, domain);
+          const policy = await evaluateSignaturePolicy(
+            { domain, userId, now: deps?.now?.() },
+            { prisma: tx },
+          );
+          if (!policy.complete) {
+            // Keep this indistinguishable from the normal invalid-grant response.
+            // The client must restart interactive authorization, where signing is available.
+            throw new AppError('UNAUTHORIZED', 401, 'INVALID_REFRESH_TOKEN');
+          }
+        },
+      },
+    );
 
-  // Re-validate the session's workspace scope on every refresh (design §7 step 4): a deactivated
-  // or removed membership must not linger in `active` past the current access-token TTL. Dormant
-  // today since nothing populates refresh_tokens.org_id/team_id yet.
-  let active: ActiveWorkspace | null = null;
-  if (rotatedRefreshToken.orgId && rotatedRefreshToken.teamId) {
-    const orgContext = params.config.org_features?.enabled
-      ? await getUserOrgContext(
-          {
-            userId: rotatedRefreshToken.userId,
-            domain: params.config.domain,
-            config: params.config,
-          },
-          { env, prisma },
-        )
-      : null;
-    if (orgContext?.teams.includes(rotatedRefreshToken.teamId)) {
-      active = { orgId: rotatedRefreshToken.orgId, teamId: rotatedRefreshToken.teamId };
+    // Re-validate the session's workspace scope on every refresh (design §7 step 4): a deactivated
+    // or removed membership must not linger in `active` past the current access-token TTL. Dormant
+    // today since nothing populates refresh_tokens.org_id/team_id yet.
+    let active: ActiveWorkspace | null = null;
+    if (rotatedRefreshToken.orgId && rotatedRefreshToken.teamId) {
+      const orgContext = params.config.org_features?.enabled
+        ? await getUserOrgContext(
+            {
+              userId: rotatedRefreshToken.userId,
+              domain: params.config.domain,
+              config: params.config,
+            },
+            { env, prisma: tx },
+          )
+        : null;
+      if (orgContext?.teams.includes(rotatedRefreshToken.teamId)) {
+        active = { orgId: rotatedRefreshToken.orgId, teamId: rotatedRefreshToken.teamId };
+      }
     }
-  }
 
-  const accessTtl = resolveAccessTokenTtl(params.config, getEnv().ACCESS_TOKEN_TTL);
-  return issueTokenPairForUser(
-    {
-      userId: rotatedRefreshToken.userId,
-      config: params.config,
-      configUrl: params.configUrl,
-      clientId,
-      refreshToken: rotatedRefreshToken.refreshToken,
-      refreshTokenExpiresInSeconds: rotatedRefreshToken.expiresInSeconds,
-      active,
-    },
-    { ...deps, accessTokenTtl: accessTtl },
-  );
+    const accessTtl = resolveAccessTokenTtl(params.config, getEnv().ACCESS_TOKEN_TTL);
+    return issueTokenPairForUser(
+      {
+        userId: rotatedRefreshToken.userId,
+        config: params.config,
+        configUrl: params.configUrl,
+        clientId,
+        refreshToken: rotatedRefreshToken.refreshToken,
+        refreshTokenExpiresInSeconds: rotatedRefreshToken.expiresInSeconds,
+        active,
+      },
+      {
+        ...deps,
+        prisma: tx,
+        adminPrisma: tx,
+        accessTokenTtl: accessTtl,
+      },
+    );
+  };
+
+  // Production passes the BYPASSRLS client here. Keeping the complete refresh decision in
+  // one transaction makes policy publication/revocation checks atomic with token rotation.
+  if (typeof adminPrisma.$transaction === 'function') {
+    return adminPrisma.$transaction(async (tx) =>
+      exchangeInsideTransaction(tx as unknown as PrismaClient),
+    );
+  }
+  return exchangeInsideTransaction(adminPrisma);
 }

@@ -7,11 +7,14 @@ import {
 
 type TestAgreement = {
   id: string;
+  title: string;
+  description: string | null;
   displayOrder: number;
   versions: Array<{
     id: string;
     version: number;
     title: string;
+    originalFilename: string;
     signingMethod: 'CLICKWRAP' | 'TYPED_NAME';
     acceptanceStatement: string;
     sourcePdfSha256: string;
@@ -21,12 +24,15 @@ type TestAgreement = {
 function agreement(id: string, version: number, displayOrder: number): TestAgreement {
   return {
     id,
+    title: `${id} agreement`,
+    description: `${id} explanation`,
     displayOrder,
     versions: [
       {
         id: `${id}-v${version}`,
         version,
         title: `${id} terms`,
+        originalFilename: `${id}.pdf`,
         signingMethod: version % 2 === 0 ? 'TYPED_NAME' : 'CLICKWRAP',
         acceptanceStatement: `I accept ${id} v${version}`,
         sourcePdfSha256: String(version).repeat(64),

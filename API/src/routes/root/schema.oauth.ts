@@ -54,6 +54,7 @@ export const oauthEndpoints: EndpointSchema[] = [
       code_challenge: 'string (required; PKCE S256)',
       code_challenge_method: 'S256 (required)',
       state: 'string (optional)',
+      scope: 'string (optional; preserved through signing and bound to the authorization code)',
       resource: 'string (optional; RFC 8707 — becomes the token aud)',
     },
     response: { 200: 'Login UI HTML' },
@@ -69,6 +70,7 @@ export const oauthEndpoints: EndpointSchema[] = [
       code_challenge: 'string (required; PKCE S256)',
       code_challenge_method: 'S256 (required)',
       state: 'string (optional)',
+      scope: 'string (optional; preserved exactly and cannot be widened at token exchange)',
       resource: 'string (optional)',
     },
     body: { email: 'string (required)', password: 'string (required)', remember_me: 'boolean (optional)' },
@@ -88,6 +90,7 @@ export const oauthEndpoints: EndpointSchema[] = [
       redirect_uri: 'string (required)',
       code_verifier: 'string (required; PKCE)',
       client_id: 'string (required)',
+      scope: 'string (optional; when supplied, must exactly match the authorize-time scope)',
     },
     response: {
       access_token: 'string — RS256 JWT, aud = resource',

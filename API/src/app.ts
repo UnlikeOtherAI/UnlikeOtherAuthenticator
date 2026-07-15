@@ -110,6 +110,7 @@ export async function createApp(): Promise<FastifyInstance> {
         connectSrc: ["'self'", 'https:'],
         fontSrc: ["'self'", 'https:', 'data:'],
         formAction: ["'self'"],
+        frameSrc: ["'self'", 'blob:'],
         frameAncestors: ["'none'"],
         imgSrc: ["'self'", 'https:', 'data:'],
         objectSrc: ["'none'"],

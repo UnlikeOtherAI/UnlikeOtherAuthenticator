@@ -5,6 +5,7 @@ import { runInTransaction } from '../db/tenant-context.js';
 import { normalizeDomain } from '../utils/domain.js';
 import { AppError } from '../utils/errors.js';
 import { writeSignatureAdminAudit } from './signature-admin-audit.service.js';
+import { lockSignaturePolicyForDecision } from './signature-continuation.service.js';
 import { hashPdf } from './signature-pdf.service.js';
 import {
   createSignatureObjectStorage,
@@ -17,6 +18,7 @@ type SignatureOperationsPrisma = Pick<
   | 'signatureRevocation'
   | 'signatureAuditEvent'
   | 'adminAuditLog'
+  | '$executeRaw'
   | '$transaction'
 >;
 
@@ -165,6 +167,10 @@ export async function revokeAgreementSignature(
   }
   try {
     return await runInTransaction(prisma as unknown as PrismaClient, async (tx) => {
+      // Serialize revocation with authorization completion and refresh rotation. Whichever
+      // transaction owns the domain-policy lock first defines the decision order; a revocation
+      // that commits first is therefore always visible to the next access decision.
+      await lockSignaturePolicyForDecision(tx, domain);
       const signature = await findSignatureOrThrow(
         tx as unknown as SignatureOperationsPrisma,
         domain,
