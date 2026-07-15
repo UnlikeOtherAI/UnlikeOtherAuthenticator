@@ -29,6 +29,65 @@ function normalizeBoolean(input: unknown): unknown {
   return input;
 }
 
+type JsonObject = Record<string, unknown>;
+
+function parseJsonObject(input: string): JsonObject | undefined {
+  try {
+    const value = JSON.parse(input) as unknown;
+    return value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as JsonObject)
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function evidencePrivateKeyId(input: string): string | undefined {
+  const key = parseJsonObject(input);
+  if (
+    key?.kty !== 'RSA' ||
+    typeof key.kid !== 'string' ||
+    key.kid.length < 1 ||
+    typeof key.n !== 'string' ||
+    typeof key.e !== 'string' ||
+    typeof key.d !== 'string' ||
+    (key.alg !== undefined && key.alg !== 'RS256') ||
+    (key.use !== undefined && key.use !== 'sig')
+  ) {
+    return undefined;
+  }
+  return key.kid;
+}
+
+function evidencePublicKeyIds(input: string): string[] | undefined {
+  const jwks = parseJsonObject(input);
+  if (!Array.isArray(jwks?.keys) || jwks.keys.length < 1) return undefined;
+  const ids: string[] = [];
+  for (const value of jwks.keys) {
+    const key = value as JsonObject | null;
+    if (
+      !key ||
+      key.kty !== 'RSA' ||
+      typeof key.kid !== 'string' ||
+      key.kid.length < 1 ||
+      typeof key.n !== 'string' ||
+      typeof key.e !== 'string' ||
+      key.d !== undefined ||
+      key.p !== undefined ||
+      key.q !== undefined ||
+      key.dp !== undefined ||
+      key.dq !== undefined ||
+      key.qi !== undefined ||
+      (key.alg !== undefined && key.alg !== 'RS256') ||
+      (key.use !== undefined && key.use !== 'sig')
+    ) {
+      return undefined;
+    }
+    ids.push(key.kid);
+  }
+  return new Set(ids).size === ids.length ? ids : undefined;
+}
+
 const EnvSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -131,6 +190,62 @@ const EnvSchema = z
     // of these; otherwise the request is rejected (invalid_target). Closes the
     // confused-deputy: a public client cannot mint a token for an arbitrary `aud`.
     MCP_OAUTH_RESOURCES_SUPPORTED: z.string().min(1).optional(),
+    // Optional agreement-signature module. Disabled is the process default; a domain cannot be
+    // enabled until storage, retention, and the dedicated evidence key are configured.
+    SIGNATURE_STORAGE_PROVIDER: z.enum(['disabled', 'filesystem', 'gcs']).default('disabled'),
+    SIGNATURE_FILESYSTEM_ROOT: z.string().min(1).optional(),
+    SIGNATURE_GCS_BUCKET: z.string().min(1).optional(),
+    SIGNATURE_GCS_PROJECT_ID: z.string().min(1).optional(),
+    SIGNATURE_EVIDENCE_PRIVATE_JWK: z
+      .string()
+      .min(1)
+      .refine((value) => evidencePrivateKeyId(value) !== undefined, {
+        message: 'SIGNATURE_EVIDENCE_PRIVATE_JWK must be a private RS256 RSA JWK with a kid',
+      })
+      .optional(),
+    SIGNATURE_EVIDENCE_PUBLIC_JWKS_JSON: z
+      .string()
+      .min(1)
+      .refine((value) => evidencePublicKeyIds(value) !== undefined, {
+        message: 'SIGNATURE_EVIDENCE_PUBLIC_JWKS_JSON must contain public-only RS256 RSA keys',
+      })
+      .optional(),
+    SIGNATURE_MAX_PDF_BYTES: z.coerce.number().int().min(1024).max(100 * 1024 * 1024).default(25 * 1024 * 1024),
+    SIGNATURE_MAX_PDF_PAGES: z.coerce.number().int().min(1).max(2000).default(200),
+  })
+  .superRefine((env, ctx) => {
+    if (env.SIGNATURE_STORAGE_PROVIDER === 'filesystem' && !env.SIGNATURE_FILESYSTEM_ROOT) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['SIGNATURE_FILESYSTEM_ROOT'],
+        message: 'SIGNATURE_FILESYSTEM_ROOT is required for filesystem signature storage',
+      });
+    }
+    if (env.SIGNATURE_STORAGE_PROVIDER === 'filesystem' && env.NODE_ENV === 'production') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['SIGNATURE_STORAGE_PROVIDER'],
+        message: 'filesystem signature storage is not allowed in production',
+      });
+    }
+    if (env.SIGNATURE_STORAGE_PROVIDER === 'gcs' && !env.SIGNATURE_GCS_BUCKET) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['SIGNATURE_GCS_BUCKET'],
+        message: 'SIGNATURE_GCS_BUCKET is required for GCS signature storage',
+      });
+    }
+    if (env.SIGNATURE_EVIDENCE_PRIVATE_JWK && env.SIGNATURE_EVIDENCE_PUBLIC_JWKS_JSON) {
+      const privateKid = evidencePrivateKeyId(env.SIGNATURE_EVIDENCE_PRIVATE_JWK);
+      const publicKids = evidencePublicKeyIds(env.SIGNATURE_EVIDENCE_PUBLIC_JWKS_JSON);
+      if (privateKid && publicKids && !publicKids.includes(privateKid)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['SIGNATURE_EVIDENCE_PUBLIC_JWKS_JSON'],
+          message: 'evidence public JWKS must include the current private key kid',
+        });
+      }
+    }
   });
 
 export type Env = z.infer<typeof EnvSchema>;

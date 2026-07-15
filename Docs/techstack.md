@@ -25,6 +25,7 @@ The API is the central OAuth/auth server. It handles:
 - Domain-scoped APIs (user list, login logs, debug)
 - Organisation, team, and group management APIs (`/org/*` and `/internal/org/*`)
 - Email dispatch (verification, password reset, login links)
+- Optional per-domain agreement signatures, private PDF evidence, and signed receipts
 
 ### Structure
 
@@ -51,6 +52,7 @@ The API is the central OAuth/auth server. It handles:
 - Shared secret loaded from environment variables only
 - All error responses are generic to the user — specifics in internal logs only
 - Organisational models: `organisations`, `org_members`, `teams`, `team_members`, `groups`, `group_members`
+- Signature evidence uses `pdf-lib` for bounded PDF parsing/receipt generation and a dedicated RS256 JWK via `jose`; evidence keys are never shared with config or token signing
 
 ### Organisational Endpoints
 
@@ -210,6 +212,7 @@ The React implementation should translate those templates into reusable componen
 - **Social OAuth Providers** — Google, Apple, Facebook, GitHub, LinkedIn, Microsoft (Entra ID / Azure AD OIDC) (one set of credentials for the auth service, not per-client)
 - **Email Service** — provider-abstracted (e.g. SendGrid, SES), swappable without code changes
 - **AI Translation Service** — for missing translation fallback, results cached permanently
+- **Private Signature Object Storage** — disabled by default; private local filesystem in development/test and Google Cloud Storage via Application Default Credentials when explicitly configured
 
 ---
 
@@ -248,3 +251,11 @@ All secrets and configuration live in environment variables. Nothing is hardcode
 * `MCP_OAUTH_ENABLED_AUTH_METHODS` — optional comma-separated auth methods offered on the MCP login screen (default: `email_password`)
 * `MCP_OAUTH_SCOPES_SUPPORTED` — optional comma-separated OAuth scopes advertised in MCP discovery metadata (default: `openid`)
 * `MCP_OAUTH_RESOURCES_SUPPORTED` — optional comma-separated, case-sensitive allowlist of RFC 8707 resource-server URIs the MCP profile may issue tokens for. A client-supplied `resource` must exactly match one of these or the request is rejected with `invalid_target`; when unset, no resource is allowed and clients omit `resource` (the token `aud` falls back to the issuer)
+* `SIGNATURE_STORAGE_PROVIDER` — optional signature-object provider: `disabled` (default), `filesystem`, or `gcs`; filesystem storage is rejected in production
+* `SIGNATURE_FILESYSTEM_ROOT` — required private root when `SIGNATURE_STORAGE_PROVIDER=filesystem`; intended only for local development and tests
+* `SIGNATURE_GCS_BUCKET` — required private bucket when `SIGNATURE_STORAGE_PROVIDER=gcs`
+* `SIGNATURE_GCS_PROJECT_ID` — optional Google Cloud project override; authentication otherwise uses Application Default Credentials
+* `SIGNATURE_EVIDENCE_PRIVATE_JWK` — dedicated private RSA JWK with `kid` used only for RS256 agreement-evidence manifests
+* `SIGNATURE_EVIDENCE_PUBLIC_JWKS_JSON` — public-only current and retired evidence keys used to verify historical manifests after rotation
+* `SIGNATURE_MAX_PDF_BYTES` — bounded source upload limit (default 25 MiB, allowed 1 KiB–100 MiB)
+* `SIGNATURE_MAX_PDF_PAGES` — bounded source page limit (default 200, allowed 1–2,000)

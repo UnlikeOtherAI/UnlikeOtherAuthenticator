@@ -115,4 +115,128 @@ describe('env', () => {
     expect(() => parseEnv(baseInput({ REFRESH_TOKEN_TTL_DAYS: '0' }))).toThrow();
     expect(() => parseEnv(baseInput({ REFRESH_TOKEN_TTL_DAYS: '91' }))).toThrow();
   });
+
+  it('keeps signature storage disabled by default with bounded PDF limits', () => {
+    const env = parseEnv(baseInput());
+
+    expect(env.SIGNATURE_STORAGE_PROVIDER).toBe('disabled');
+    expect(env.SIGNATURE_MAX_PDF_BYTES).toBe(25 * 1024 * 1024);
+    expect(env.SIGNATURE_MAX_PDF_PAGES).toBe(200);
+  });
+
+  it('requires a root for local signature storage and rejects it in production', () => {
+    expect(() =>
+      parseEnv(baseInput({ SIGNATURE_STORAGE_PROVIDER: 'filesystem' })),
+    ).toThrow();
+    expect(() =>
+      parseEnv(
+        baseInput({
+          NODE_ENV: 'production',
+          SIGNATURE_STORAGE_PROVIDER: 'filesystem',
+          SIGNATURE_FILESYSTEM_ROOT: '/private/signatures',
+        }),
+      ),
+    ).toThrow();
+    expect(
+      parseEnv(
+        baseInput({
+          SIGNATURE_STORAGE_PROVIDER: 'filesystem',
+          SIGNATURE_FILESYSTEM_ROOT: '/tmp/uoa-signatures',
+        }),
+      ).SIGNATURE_FILESYSTEM_ROOT,
+    ).toBe('/tmp/uoa-signatures');
+  });
+
+  it('requires a bucket for GCS signature storage', () => {
+    expect(() => parseEnv(baseInput({ SIGNATURE_STORAGE_PROVIDER: 'gcs' }))).toThrow();
+    expect(
+      parseEnv(
+        baseInput({ SIGNATURE_STORAGE_PROVIDER: 'gcs', SIGNATURE_GCS_BUCKET: 'uoa-signatures' }),
+      ).SIGNATURE_GCS_BUCKET,
+    ).toBe('uoa-signatures');
+  });
+
+  it('accepts a dedicated evidence key pair and requires matching current kids', () => {
+    const privateKey = JSON.stringify({
+      kty: 'RSA',
+      kid: 'evidence-2026-07',
+      alg: 'RS256',
+      use: 'sig',
+      n: 'modulus',
+      e: 'AQAB',
+      d: 'private',
+    });
+    const publicKeys = JSON.stringify({
+      keys: [
+        {
+          kty: 'RSA',
+          kid: 'evidence-2026-07',
+          alg: 'RS256',
+          use: 'sig',
+          n: 'modulus',
+          e: 'AQAB',
+        },
+      ],
+    });
+    const env = parseEnv(
+      baseInput({
+        SIGNATURE_EVIDENCE_PRIVATE_JWK: privateKey,
+        SIGNATURE_EVIDENCE_PUBLIC_JWKS_JSON: publicKeys,
+      }),
+    );
+    expect(env.SIGNATURE_EVIDENCE_PRIVATE_JWK).toBe(privateKey);
+    expect(env.SIGNATURE_EVIDENCE_PUBLIC_JWKS_JSON).toBe(publicKeys);
+
+    expect(() =>
+      parseEnv(
+        baseInput({
+          SIGNATURE_EVIDENCE_PRIVATE_JWK: privateKey,
+          SIGNATURE_EVIDENCE_PUBLIC_JWKS_JSON: JSON.stringify({
+            keys: [{ kty: 'RSA', kid: 'old', n: 'old', e: 'AQAB' }],
+          }),
+        }),
+      ),
+    ).toThrow();
+  });
+
+  it('rejects malformed, non-RS256, duplicate, and private evidence verification keys', () => {
+    expect(() => parseEnv(baseInput({ SIGNATURE_EVIDENCE_PRIVATE_JWK: '{}' }))).toThrow();
+    expect(() =>
+      parseEnv(
+        baseInput({
+          SIGNATURE_EVIDENCE_PRIVATE_JWK: JSON.stringify({
+            kty: 'RSA',
+            kid: 'wrong-alg',
+            alg: 'ES256',
+            n: 'modulus',
+            e: 'AQAB',
+            d: 'private',
+          }),
+        }),
+      ),
+    ).toThrow();
+    const publicKey = { kty: 'RSA', kid: 'duplicate', n: 'modulus', e: 'AQAB' };
+    expect(() =>
+      parseEnv(
+        baseInput({
+          SIGNATURE_EVIDENCE_PUBLIC_JWKS_JSON: JSON.stringify({ keys: [publicKey, publicKey] }),
+        }),
+      ),
+    ).toThrow();
+    expect(() =>
+      parseEnv(
+        baseInput({
+          SIGNATURE_EVIDENCE_PUBLIC_JWKS_JSON: JSON.stringify({
+            keys: [{ ...publicKey, d: 'private' }],
+          }),
+        }),
+      ),
+    ).toThrow();
+  });
+
+  it('rejects unbounded signature PDF limits', () => {
+    expect(() => parseEnv(baseInput({ SIGNATURE_MAX_PDF_BYTES: '512' }))).toThrow();
+    expect(() => parseEnv(baseInput({ SIGNATURE_MAX_PDF_PAGES: '0' }))).toThrow();
+    expect(() => parseEnv(baseInput({ SIGNATURE_MAX_PDF_PAGES: '2001' }))).toThrow();
+  });
 });
