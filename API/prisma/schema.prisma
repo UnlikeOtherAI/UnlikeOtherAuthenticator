@@ -408,7 +408,7 @@ model AgreementVersion {
   version             Int
   title               String                 @db.VarChar(200)
   originalFilename    String                 @map("original_filename") @db.VarChar(255)
-  sourceStorageKey    String                 @map("source_storage_key")
+  sourceStorageKey    String                 @unique @map("source_storage_key")
   sourcePdfSha256     String                 @map("source_pdf_sha256") @db.VarChar(64)
   signingMethod       SignatureMethod        @map("signing_method")
   acceptanceStatement String                 @map("acceptance_statement")
@@ -479,7 +479,7 @@ model AgreementSignature {
   userAgent              String?         @map("user_agent") @db.VarChar(1000)
   evidenceManifestSha256 String          @map("evidence_manifest_sha256") @db.VarChar(64)
   receiptPdfSha256       String          @map("receipt_pdf_sha256") @db.VarChar(64)
-  receiptStorageKey      String          @map("receipt_storage_key")
+  receiptStorageKey      String          @unique @map("receipt_storage_key")
   evidenceKeyId          String          @map("evidence_key_id") @db.VarChar(200)
   evidenceSignature      String          @map("evidence_signature")
   signedAt               DateTime        @default(now()) @map("signed_at")
@@ -492,6 +492,7 @@ model AgreementSignature {
 
   @@index([userId, domain, agreementVersionId])
   @@index([domain, signedAt])
+  @@unique([signingContinuationId, agreementVersionId], map: "agreement_signatures_continuation_version_key")
   @@map("agreement_signatures")
 }
 

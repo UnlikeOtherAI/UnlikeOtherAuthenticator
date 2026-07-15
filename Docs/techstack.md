@@ -52,7 +52,7 @@ The API is the central OAuth/auth server. It handles:
 - Shared secret loaded from environment variables only
 - All error responses are generic to the user — specifics in internal logs only
 - Organisational models: `organisations`, `org_members`, `teams`, `team_members`, `groups`, `group_members`
-- Signature evidence uses `pdf-lib` for bounded PDF parsing/receipt generation and a dedicated RS256 JWK via `jose`; evidence keys are never shared with config or token signing
+- Signature uploads use `@fastify/multipart`, `pdf-lib` for bounded parsing/receipt generation, ClamAV for malware scanning, private object storage, and a dedicated RS256 JWK via `jose`; evidence keys are never shared with config or token signing
 
 ### Organisational Endpoints
 
@@ -255,6 +255,9 @@ All secrets and configuration live in environment variables. Nothing is hardcode
 * `SIGNATURE_FILESYSTEM_ROOT` — required private root when `SIGNATURE_STORAGE_PROVIDER=filesystem`; intended only for local development and tests
 * `SIGNATURE_GCS_BUCKET` — required private bucket when `SIGNATURE_STORAGE_PROVIDER=gcs`
 * `SIGNATURE_GCS_PROJECT_ID` — optional Google Cloud project override; authentication otherwise uses Application Default Credentials
+* `SIGNATURE_MALWARE_SCANNER` — `disabled` (default/fail closed for uploads) or `clamav`; enabled domains require `clamav`
+* `SIGNATURE_CLAMDSCAN_PATH` — ClamAV daemon scanner executable path (default `clamdscan`); invoked without a shell
+* `SIGNATURE_MALWARE_SCAN_TIMEOUT_MS` — per-upload ClamAV timeout (default 30,000; allowed 1,000–120,000)
 * `SIGNATURE_EVIDENCE_PRIVATE_JWK` — dedicated private RSA JWK with `kid` used only for RS256 agreement-evidence manifests
 * `SIGNATURE_EVIDENCE_PUBLIC_JWKS_JSON` — public-only current and retired evidence keys used to verify historical manifests after rotation
 * `SIGNATURE_MAX_PDF_BYTES` — bounded source upload limit (default 25 MiB, allowed 1 KiB–100 MiB)

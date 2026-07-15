@@ -1,5 +1,6 @@
 import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
+import multipart from '@fastify/multipart';
 import fastify, { type FastifyInstance } from 'fastify';
 
 import { getEnv, requireEnv } from './config/env.js';
@@ -50,6 +51,14 @@ export async function createApp(): Promise<FastifyInstance> {
                 'refresh_token',
                 'twofa_token',
                 'email_token',
+                'signing_token',
+                'continuation_token',
+                'evidence_signature',
+                'evidence_manifest',
+                'typedName',
+                'signerName',
+                'evidenceSignature',
+                'evidenceManifest',
                 'client_secret',
                 'shared_secret',
                 'configJwt',
@@ -64,6 +73,12 @@ export async function createApp(): Promise<FastifyInstance> {
                 'req.body.refresh_token',
                 'req.body.twofa_token',
                 'req.body.email_token',
+                'req.body.signing_token',
+                'req.body.continuation_token',
+                'req.body.typed_name',
+                'req.body.signer_name',
+                'req.body.evidence_signature',
+                'req.body.evidence_manifest',
                 'req.body.client_secret',
                 'req.body.shared_secret',
                 '*.totpSecret',
@@ -162,6 +177,16 @@ export async function createApp(): Promise<FastifyInstance> {
   // SHARED_SECRET so the cookie is tamper-evident without introducing a new secret.
   const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
   await app.register(cookie, { secret: SHARED_SECRET });
+  await app.register(multipart, {
+    limits: {
+      fieldNameSize: 100,
+      fieldSize: 20 * 1024,
+      fields: 8,
+      files: 1,
+      fileSize: env.SIGNATURE_MAX_PDF_BYTES,
+    },
+    throwFileSizeLimit: true,
+  });
 
   registerErrorHandler(app);
   await app.register(tenantContextPlugin);

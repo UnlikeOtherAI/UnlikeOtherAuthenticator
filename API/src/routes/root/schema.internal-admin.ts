@@ -1,5 +1,6 @@
 import type { EndpointSchema } from './schema.js';
 import { buildInternalAdminAppEndpoints } from './schema.internal-admin-apps.js';
+import { buildInternalAdminSignatureEndpoints } from './schema.internal-admin-signatures.js';
 
 const adminAuth =
   'Authorization: Bearer <access_token>; admin tokens must be signed with ADMIN_ACCESS_TOKEN_SECRET, token role must be superuser, domain must match ADMIN_AUTH_DOMAIN, and DB-backed deployments require a SUPERUSER domain_roles row';
@@ -201,6 +202,7 @@ export const internalAdminEndpoints: EndpointSchema[] = [
     auth: adminAuth,
     response: { 204: 'No content', '401/403': authFailures },
   },
+  ...buildInternalAdminSignatureEndpoints({ adminAuth, authFailures }),
   {
     method: 'GET',
     path: '/internal/admin/superusers',

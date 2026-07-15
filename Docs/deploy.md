@@ -85,6 +85,24 @@ Set via Cloud Run service config:
 
 The private key used to sign `ADMIN_CONFIG_JWT` is not attached to Cloud Run. Store it separately in Secret Manager as `uoa-auth-config-jwt-private-jwk` for rotation/signing operations only.
 
+### Signature module production prerequisites (not enabled)
+
+The per-domain agreement-signature service remains process-disabled by default and this implementation work does not change the Cloud Run service configuration or enable any production domain. Before production enablement, operators must provision and review all of the following together:
+
+| Variable / dependency | Required production configuration |
+|---|---|
+| `SIGNATURE_STORAGE_PROVIDER` | `gcs`; local filesystem storage is rejected in production |
+| `SIGNATURE_GCS_BUCKET` | Dedicated private bucket with public access prevention, residency/backup/lifecycle policy, and create/read/delete permissions restricted to the Cloud Run service account |
+| `SIGNATURE_GCS_PROJECT_ID` | Optional project override when the bucket is outside the runtime project |
+| `SIGNATURE_MALWARE_SCANNER` | `clamav`; uploads fail closed while disabled or unavailable |
+| `SIGNATURE_CLAMDSCAN_PATH` | Path to the reviewed `clamdscan` client in the runtime image; a reachable, updated ClamAV daemon is also required |
+| `SIGNATURE_MALWARE_SCAN_TIMEOUT_MS` | Bounded scan timeout, default 30 seconds |
+| `SIGNATURE_EVIDENCE_PRIVATE_JWK` | Secret Manager: dedicated RS256 private RSA JWK with a unique `kid`; never reuse another UOA signing key |
+| `SIGNATURE_EVIDENCE_PUBLIC_JWKS_JSON` | Public-only current and retired evidence keys; must include the private key's current `kid` |
+| `SIGNATURE_MAX_PDF_BYTES` / `SIGNATURE_MAX_PDF_PAGES` | Reviewed operational upload bounds (implementation defaults: 25 MiB / 200 pages) |
+
+Enabling an individual domain additionally requires an explicit retention period and at least one active published required agreement version. Legal retention, bucket residency, encryption-key ownership, evidence-key custody/rotation, ClamAV packaging, and backup policy require an approved production change; they are not inferred from local defaults.
+
 ## Service config
 
 - Max instances: 3

@@ -14,6 +14,16 @@ export type AdminAuditAction =
   | 'domain.secret_rotated'
   | 'domain.twofa_policy_updated'
   | 'organisation.twofa_policy_updated'
+  | 'signature.agreement_created'
+  | 'signature.agreement_updated'
+  | 'signature.receipt_accessed'
+  | 'signature.revoked'
+  | 'signature.settings_updated'
+  | 'signature.version_deleted'
+  | 'signature.version_published'
+  | 'signature.version_updated'
+  | 'signature.version_uploaded'
+  | 'signature.version_withdrawn'
   | 'user.twofa_reset';
 
 export type AuditLogPrisma = Pick<PrismaClient, 'adminAuditLog'>;

@@ -184,6 +184,20 @@ describe('GET /api', () => {
         path: '/internal/admin/domains/:domain/jwks',
       }),
     );
+    expect(body.endpoints).toContainEqual(
+      expect.objectContaining({
+        method: 'PUT',
+        path: '/internal/admin/domains/:domain/signatures/settings',
+        auth: expect.stringContaining('superuser'),
+      }),
+    );
+    expect(body.endpoints).toContainEqual(
+      expect.objectContaining({
+        method: 'POST',
+        path: '/internal/admin/domains/:domain/signatures/agreements/:agreementId/versions',
+        description: expect.stringContaining('ClamAV'),
+      }),
+    );
   });
 
   it('returns a valid semver-like version string from package.json', async () => {
@@ -273,5 +287,7 @@ describe('GET /llm', () => {
     expect(res.body).toContain('jwks_url');
     expect(res.body).toContain('contact_email');
     expect(res.body).toContain('INTEGRATION_JWKS_HOST_MISMATCH');
+    expect(res.body).toContain('Optional per-domain agreement signatures');
+    expect(res.body).toContain('SIGNATURE_EVIDENCE_PUBLIC_JWKS_JSON');
   });
 });

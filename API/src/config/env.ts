@@ -196,6 +196,9 @@ const EnvSchema = z
     SIGNATURE_FILESYSTEM_ROOT: z.string().min(1).optional(),
     SIGNATURE_GCS_BUCKET: z.string().min(1).optional(),
     SIGNATURE_GCS_PROJECT_ID: z.string().min(1).optional(),
+    SIGNATURE_MALWARE_SCANNER: z.enum(['disabled', 'clamav']).default('disabled'),
+    SIGNATURE_CLAMDSCAN_PATH: z.string().min(1).default('clamdscan'),
+    SIGNATURE_MALWARE_SCAN_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120_000).default(30_000),
     SIGNATURE_EVIDENCE_PRIVATE_JWK: z
       .string()
       .min(1)

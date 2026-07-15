@@ -62,7 +62,9 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
         schema.config-debug.ts — /api schema slice: config debug endpoints
         schema.integrations.ts — /api schema slice: integration endpoints
         schema.internal-admin-apps.ts — /api schema slice: internal admin app/settings/search endpoints
+        schema.internal-admin-signatures.ts — /api schema slice: signature settings and agreement lifecycle endpoints
         schema.internal-admin.ts — /api schema slice: internal admin endpoints
+        llm-signatures.ts     — /llm content: optional signature operator workflow and security constraints
       /apps
         startup.ts          — GET /apps/startup (combined startup payload; config JWT auth)
         index.ts            — Route registration for /apps
@@ -108,6 +110,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
           domains.ts                — Domain CRUD for the admin panel
           domain-email.ts           — Per-domain transactional email config + SES identity flow
           domain-jwks.ts            — Per-domain JWKS management
+          domain-signatures.ts      — Per-domain signature settings, agreement/version lifecycle, and source downloads
           apps.ts                   — App registration for feature flags
           superusers.ts             — Super-user grant/revoke for ADMIN_AUTH_DOMAIN
           users.ts                  — User admin write operations (2FA reset)
@@ -203,6 +206,11 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       root-page.service.ts                  — Root holding page rendering
       ses-admin.service.ts                  — AWS SES identity admin operations
       signature-evidence.service.ts         — Canonical evidence manifests, dedicated RS256 signatures, and receipt orchestration
+      signature-admin-audit.service.ts      — Dual signature-specific and global Admin audit writes
+      signature-admin.service.ts            — Domain signature settings and agreement metadata lifecycle
+      signature-agreement-lifecycle.service.ts — Draft PDF upload/replacement/deletion and private source reads
+      signature-agreement-publication.service.ts — Serialized publish/supersede/withdraw transitions
+      signature-malware.service.ts          — Fail-closed ClamAV scanning through private temporary files
       signature-pdf.service.ts              — Source-PDF safety validation, hashing, and certificate-page receipt generation
       signature-policy.service.ts           — Per-domain required-agreement evaluation and fail-closed completion checks
       signature-storage.service.ts          — Private immutable signature-object storage adapters (filesystem/GCS)

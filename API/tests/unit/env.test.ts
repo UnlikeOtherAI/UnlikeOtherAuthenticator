@@ -120,6 +120,9 @@ describe('env', () => {
     const env = parseEnv(baseInput());
 
     expect(env.SIGNATURE_STORAGE_PROVIDER).toBe('disabled');
+    expect(env.SIGNATURE_MALWARE_SCANNER).toBe('disabled');
+    expect(env.SIGNATURE_CLAMDSCAN_PATH).toBe('clamdscan');
+    expect(env.SIGNATURE_MALWARE_SCAN_TIMEOUT_MS).toBe(30_000);
     expect(env.SIGNATURE_MAX_PDF_BYTES).toBe(25 * 1024 * 1024);
     expect(env.SIGNATURE_MAX_PDF_PAGES).toBe(200);
   });
@@ -238,5 +241,7 @@ describe('env', () => {
     expect(() => parseEnv(baseInput({ SIGNATURE_MAX_PDF_BYTES: '512' }))).toThrow();
     expect(() => parseEnv(baseInput({ SIGNATURE_MAX_PDF_PAGES: '0' }))).toThrow();
     expect(() => parseEnv(baseInput({ SIGNATURE_MAX_PDF_PAGES: '2001' }))).toThrow();
+    expect(() => parseEnv(baseInput({ SIGNATURE_MALWARE_SCAN_TIMEOUT_MS: '999' }))).toThrow();
+    expect(() => parseEnv(baseInput({ SIGNATURE_MALWARE_SCAN_TIMEOUT_MS: '120001' }))).toThrow();
   });
 });
