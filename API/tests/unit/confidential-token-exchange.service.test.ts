@@ -49,15 +49,21 @@ async function signSubjectToken(
     expiresInSeconds?: number;
     sourceDomain?: string;
     subject?: string;
-    active?: { orgId: string; teamId: string };
+    active?: unknown;
+    omitActive?: boolean;
     jti?: string;
   } = {},
 ): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
-  const jwt = new SignJWT({
+  const payload: Record<string, unknown> = {
     source_domain: overrides.sourceDomain ?? sourceDomain,
-    active: overrides.active ?? { orgId: 'org_1', teamId: 'team_1' },
-  })
+  };
+  if (!overrides.omitActive) {
+    payload.active = Object.prototype.hasOwnProperty.call(overrides, 'active')
+      ? overrides.active
+      : { orgId: 'org_1', teamId: 'team_1' };
+  }
+  const jwt = new SignJWT(payload)
     .setProtectedHeader({ alg: 'RS256', kid: sourcePublicJwk.kid!, typ: 'JWT' })
     .setIssuer(sourceDomain)
     .setAudience(overrides.audience ?? audience)
@@ -72,13 +78,23 @@ function fetchJwks() {
   return vi.fn().mockResolvedValue({ keys: [sourcePublicJwk] });
 }
 
-function prismaMock(options?: { activeTeam?: boolean }): PrismaClient {
+function prismaMock(options?: {
+  activeTeam?: boolean;
+  domainRoleExists?: boolean;
+  userExists?: boolean;
+}): PrismaClient {
   return {
     user: {
-      findUnique: vi.fn().mockResolvedValue({ email: 'nessie-user@example.com' }),
+      findUnique: vi
+        .fn()
+        .mockResolvedValue(
+          options?.userExists === false ? null : { email: 'nessie-user@example.com' },
+        ),
     },
     domainRole: {
-      findUnique: vi.fn().mockResolvedValue({ role: 'USER' }),
+      findUnique: vi
+        .fn()
+        .mockResolvedValue(options?.domainRoleExists === false ? null : { role: 'USER' }),
     },
     orgMember: {
       findFirst: vi.fn().mockResolvedValue({ orgId: 'org_1', role: 'member' }),
@@ -148,6 +164,47 @@ describe('confidential subject-token verification', () => {
     });
   });
 
+  it('accepts a signed identity assertion without workspace context', async () => {
+    const assertion = await verifyConfidentialSubjectToken(
+      {
+        subjectToken: await signSubjectToken({ omitActive: true }),
+        configJwt,
+        sourceDomain,
+        audience,
+      },
+      { fetchJwks: fetchJwks() },
+    );
+
+    expect(assertion.sub).toBe('usr_1');
+    expect(assertion).not.toHaveProperty('active');
+  });
+
+  it('rejects partial or malformed workspace context', async () => {
+    const malformedActiveClaims: unknown[] = [
+      {},
+      { orgId: 'org_1' },
+      { teamId: 'team_1' },
+      { orgId: '', teamId: 'team_1' },
+      { orgId: 'org_1', teamId: '' },
+      { orgId: 'org_1', teamId: 'team_1', extra: true },
+      null,
+    ];
+
+    for (const active of malformedActiveClaims) {
+      await expect(
+        verifyConfidentialSubjectToken(
+          {
+            subjectToken: await signSubjectToken({ active }),
+            configJwt,
+            sourceDomain,
+            audience,
+          },
+          { fetchJwks: fetchJwks() },
+        ),
+      ).rejects.toThrow('INVALID_SUBJECT_TOKEN');
+    }
+  });
+
   it('rejects a subject assertion whose lifetime exceeds 60 seconds', async () => {
     const token = await signSubjectToken({ expiresInSeconds: 61 });
     await expect(
@@ -177,6 +234,43 @@ describe('confidential subject-token verification', () => {
 });
 
 describe('confidential token exchange', () => {
+  it('issues an identity-only token when the user has no selected workspace', async () => {
+    const prisma = prismaMock();
+    const signAccessToken = vi.fn().mockResolvedValue('ledger-access-token');
+
+    await expect(
+      exchangeConfidentialSubjectToken(
+        {
+          subjectToken: await signSubjectToken({ omitActive: true }),
+          resource,
+          config: config(),
+          configJwt,
+        },
+        {
+          prisma,
+          fetchJwks: fetchJwks(),
+          signAccessToken,
+          consumeSubjectRateLimit: vi.fn(),
+        },
+      ),
+    ).resolves.toMatchObject({ accessToken: 'ledger-access-token' });
+
+    expect(signAccessToken).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subject: 'usr_1',
+        email: 'nessie-user@example.com',
+        sourceDomain,
+        resource,
+        scope: 'ai.invoke',
+      }),
+    );
+    const claims = signAccessToken.mock.calls[0]?.[0] as ConfidentialAccessTokenClaims;
+    expect(claims).not.toHaveProperty('org');
+    expect(claims).not.toHaveProperty('active');
+    expect(prisma.orgMember.findFirst).not.toHaveBeenCalled();
+    expect(prisma.teamMember.findMany).not.toHaveBeenCalled();
+  });
+
   it('re-resolves the user and selected workspace before signing', async () => {
     const subjectToken = await signSubjectToken();
     const signAccessToken = vi.fn().mockResolvedValue('ledger-access-token');
@@ -240,6 +334,30 @@ describe('confidential token exchange', () => {
         },
       ),
     ).rejects.toThrow('TOKEN_EXCHANGE_SUBJECT_FORBIDDEN');
+  });
+
+  it('rejects identity-only assertions for an unknown user or missing source-domain role', async () => {
+    for (const prisma of [
+      prismaMock({ userExists: false }),
+      prismaMock({ domainRoleExists: false }),
+    ]) {
+      await expect(
+        exchangeConfidentialSubjectToken(
+          {
+            subjectToken: await signSubjectToken({ omitActive: true }),
+            resource,
+            config: config(),
+            configJwt,
+          },
+          {
+            prisma,
+            fetchJwks: fetchJwks(),
+            signAccessToken: vi.fn(),
+            consumeSubjectRateLimit: vi.fn(),
+          },
+        ),
+      ).rejects.toThrow('TOKEN_EXCHANGE_SUBJECT_FORBIDDEN');
+    }
   });
 
   it('rate-limits a verified user without consuming another user’s allowance', async () => {

@@ -208,7 +208,7 @@ export const authEndpoints: EndpointSchema[] = [
       'code_verifier?': 'required for authorization_code grant; must match the S256 challenge',
       'refresh_token?': 'refresh token (for refresh_token grant)',
       'subject_token?':
-        'RS256 JWT with exp-iat <= 60 seconds (for token-exchange grant), signed by the source config JWKS; must contain iss, source_domain, aud, sub, active { orgId, teamId }, jti, iat, and exp',
+        'RS256 JWT with exp-iat <= 60 seconds (for token-exchange grant), signed by the source config JWKS; must contain iss, source_domain, aud, sub, jti, iat, and exp; optional active must be exactly { orgId, teamId } with both values non-empty',
       'subject_token_type?':
         '"urn:ietf:params:oauth:token-type:jwt" (required for token-exchange grant)',
       'resource?':
@@ -216,7 +216,7 @@ export const authEndpoints: EndpointSchema[] = [
     },
     response: {
       access_token:
-        'Authorization-code/refresh grants: legacy HS256 JWT with aud="uoa:access-token". Confidential token-exchange grant: 5-minute RS256 JWT bound to resource, verifiable at GET /oauth/jwks.json, with stable sub + current org/active context and no domain bearer credential.',
+        'Authorization-code/refresh grants: legacy HS256 JWT with aud="uoa:access-token". Confidential token-exchange grant: 5-minute RS256 JWT bound to resource, verifiable at GET /oauth/jwks.json, with stable sub, optional validated org/active context, and no domain bearer credential.',
       expires_in: 'number — seconds until access_token expiry',
       'refresh_token?':
         'string — opaque, server-side only; authorization-code/refresh grants only, never hand to the browser',
@@ -229,7 +229,7 @@ export const authEndpoints: EndpointSchema[] = [
       'firstLogin?':
         'object { memberships: { orgs, teams }, pending_invites, capabilities { can_create_org, can_accept_invite } } — included on authorization_code exchange when org_features.enabled is true. memberships.orgs[] = { orgId, role } camelCase; memberships.teams[] = { teamId, orgId, role } camelCase; pending_invites[] = { inviteId, type, orgId, teamId, teamName } camelCase. Not included on refresh_token grants.',
       '[note]':
-        'There is NO top-level `user` field. User identity lives inside access_token claims (read claims.sub). Confidential exchange re-resolves the current UOA user, active source-domain role, and requested ACTIVE org/team membership before issue; it never copies the 64-character domain bearer into client_id.',
+        'There is NO top-level `user` field. User identity lives inside access_token claims (read claims.sub). Confidential exchange always re-resolves the current UOA user and source-domain role; when active is supplied it also verifies the requested ACTIVE org/team membership. Identity-only tokens omit org and active. It never copies the 64-character domain bearer into client_id.',
       '[rate limit]':
         'Legacy grants: 10/min per IP. Confidential exchange: 600/min per authenticated source domain plus 60/min per verified source-domain user.',
       '401 refresh policy':

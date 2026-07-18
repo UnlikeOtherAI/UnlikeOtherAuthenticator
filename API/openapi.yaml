@@ -1109,7 +1109,8 @@ paths:
         pair. A confidential backend may instead use the RFC 8693 token-exchange grant
         with a short-lived source-signed JWT to obtain a five-minute, resource-bound
         RS256 access token. That grant re-resolves the current user, source-domain role,
-        and requested ACTIVE org/team membership before issue.
+        and, when the assertion selects a workspace, the requested ACTIVE org/team
+        membership before issue. Identity-only assertions omit workspace claims.
         Requires domain hash bearer authentication.
         Legacy grants are rate limited at 10/min per IP. Confidential exchange is
         isolated from that shared-egress bucket and limited at 600/min per
@@ -1170,8 +1171,10 @@ paths:
                         RS256 JWT signed by a kid in the source config's same-host
                         jwks_url. Required claims: iss and source_domain equal the
                         source config domain; aud equals this /auth/token endpoint;
-                        stable UOA sub; active { orgId, teamId }; jti; iat; exp.
-                        exp-iat must not exceed 60 seconds.
+                        stable UOA sub; jti; iat; exp. Optional active must be exactly
+                        { orgId, teamId } with both values non-empty. Partial or
+                        malformed workspace context is rejected. exp-iat must not
+                        exceed 60 seconds.
                     subject_token_type:
                       type: string
                       enum: ['urn:ietf:params:oauth:token-type:jwt']

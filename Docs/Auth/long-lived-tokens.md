@@ -143,6 +143,12 @@ assertion when another resource token is needed.
 The source assertion's `exp - iat` MUST be no more than 60 seconds. The issued
 resource access token remains five minutes (`expires_in: 300`).
 
+The signed assertion may omit `active` for a first-time or workspace-less user.
+UOA still re-resolves the stable user and source-domain role. When `active` is
+present it must contain both non-empty `orgId` and `teamId`; UOA verifies the
+current ACTIVE memberships and includes `org` plus `active` in the resource
+token. When absent, both workspace claims are omitted from the issued token.
+
 Confidential exchanges use a 600/minute authenticated source-domain ceiling and
 a 60/minute verified source-domain-user ceiling. They do not share the legacy
 10/minute/IP token-exchange bucket, so one product egress IP cannot starve all

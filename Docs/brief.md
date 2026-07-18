@@ -677,9 +677,9 @@ unset, no unconstrained resource support is advertised.
 
 `POST /auth/token` also accepts a narrowly configured RFC 8693-style confidential
 exchange. It exists for a trusted product backend to turn a short-lived,
-source-signed UOA user/workspace assertion into a resource-bound RS256 access
-token. It does not replace or alter the authorization-code and refresh-token
-grants.
+source-signed UOA user assertion, optionally scoped to a workspace, into a
+resource-bound RS256 access token. It does not replace or alter the
+authorization-code and refresh-token grants.
 
 The caller must pass the normal verified `config_url` and per-domain hash bearer,
 plus:
@@ -698,21 +698,26 @@ already-verified source config JWT. That JWKS URL must use HTTPS, remain on the
 source config domain, pass the public-destination SSRF checks, and contain the
 assertion's RS256 `kid`. The assertion has an exact source-domain `iss` and
 `source_domain`, exact `aud = PUBLIC_BASE_URL + "/auth/token"`, stable UOA `sub`,
-requested `active: { orgId, teamId }`, non-empty `jti`, and `iat`/`exp` no more
-than 60 seconds apart.
+non-empty `jti`, and `iat`/`exp` no more than 60 seconds apart. `active` is
+optional so first-time or workspace-less product users can still be delegated.
+When present it must be exactly `{ orgId, teamId }`, with both identifiers
+non-empty; partial, null, or extra-field workspace objects are invalid.
 
 The deployment config contains one exact
 `CONFIDENTIAL_TOKEN_EXCHANGE_SOURCE_DOMAIN` →
 `CONFIDENTIAL_TOKEN_EXCHANGE_RESOURCE` mapping. Both must be set; there is no
 open-ended target fallback and source/resource values cannot be mixed
-independently. Before issue, UOA re-resolves the current user, source-domain
-role, requested ACTIVE org membership, and requested ACTIVE team membership.
-Assertions for removed/deactivated or cross-tenant subjects fail closed.
+independently. Before every issue, UOA re-resolves the current user and
+source-domain role. When `active` is present, UOA additionally re-resolves the
+requested ACTIVE org and team memberships. Unknown users, missing domain roles,
+and removed/deactivated or cross-tenant selected workspaces fail closed.
 
 The result is a five-minute RS256 access token using the §22.14 access-token
 signing key and `GET /oauth/jwks.json`. It contains `iss`, resource `aud`, stable
 `sub`, advisory `email`, `source_domain`, non-secret `azp` (source domain),
-current `org`, selected `active`, `scope = "ai.invoke"`, `jti`, `iat`, and `exp`.
+`scope = "ai.invoke"`, `jti`, `iat`, and `exp`. When a workspace was selected it
+also contains the current `org` and selected `active`; both claims are omitted
+together for an identity-only exchange.
 It deliberately contains no `client_id` and never copies the 64-character
 domain-hash bearer credential. This grant issues no refresh token.
 

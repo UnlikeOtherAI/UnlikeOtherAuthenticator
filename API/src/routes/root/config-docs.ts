@@ -250,11 +250,11 @@ export const accessTokenDocumentation = {
 
 export const confidentialTokenExchangeDocumentation = {
   description:
-    'Confidential RFC 8693-style exchange on POST /auth/token. The source backend authenticates with its normal config_url + domain-hash bearer and supplies a short-lived RS256 subject JWT. UOA verifies that assertion with the JWKS URL published in the already-verified source config, re-resolves current identity and ACTIVE workspace membership, then issues a Ledger-bound RS256 access token.',
+    'Confidential RFC 8693-style exchange on POST /auth/token. The source backend authenticates with its normal config_url + domain-hash bearer and supplies a short-lived RS256 subject JWT. UOA verifies that assertion with the JWKS URL published in the already-verified source config, always re-resolves the current user and source-domain role, conditionally verifies selected ACTIVE workspace membership, then issues a Ledger-bound RS256 access token.',
   request: {
     grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
     subject_token:
-      'RS256 JWT with kid; maximum 60-second exp-iat and required iss, aud, sub, source_domain, active { orgId, teamId }, jti, iat, exp',
+      'RS256 JWT with kid; maximum 60-second exp-iat and required iss, aud, sub, source_domain, jti, iat, exp; optional active must be exactly { orgId, teamId } with both values non-empty',
     subject_token_type: 'urn:ietf:params:oauth:token-type:jwt',
     resource: 'exact configured resource URI',
   },
@@ -268,7 +268,7 @@ export const confidentialTokenExchangeDocumentation = {
     lifetime: '300 seconds',
     jwks: 'GET /oauth/jwks.json',
     claims:
-      'iss, aud, sub, email (advisory), source_domain, azp (source domain only), org, active, scope="ai.invoke", jti, iat, exp',
+      'iss, aud, sub, email (advisory), source_domain, azp (source domain only), scope="ai.invoke", jti, iat, exp; org and active are present together only for a validated selected workspace',
     forbidden_claims:
       'client_id and the 64-character domain-hash bearer credential are never copied into this token',
   },

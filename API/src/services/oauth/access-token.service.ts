@@ -102,7 +102,20 @@ export async function signMcpAccessToken(claims: McpAccessTokenClaims): Promise<
   }
 }
 
-export interface ConfidentialAccessTokenClaims {
+type ConfidentialWorkspaceClaims =
+  | {
+      org: OrgContext;
+      active: {
+        orgId: string;
+        teamId: string;
+      };
+    }
+  | {
+      org?: undefined;
+      active?: undefined;
+    };
+
+export type ConfidentialAccessTokenClaims = {
   subject: string;
   email: string;
   sourceDomain: string;
@@ -110,12 +123,7 @@ export interface ConfidentialAccessTokenClaims {
   issuer: string;
   ttlSeconds: number;
   scope: string;
-  org: OrgContext;
-  active: {
-    orgId: string;
-    teamId: string;
-  };
-}
+} & ConfidentialWorkspaceClaims;
 
 /**
  * Sign a resource-bound access token for a confidential RFC 8693 exchange.
@@ -127,16 +135,19 @@ export async function signConfidentialAccessToken(
   claims: ConfidentialAccessTokenClaims,
 ): Promise<string> {
   const { privateKey, kid } = await load();
+  const payload: Record<string, unknown> = {
+    email: claims.email,
+    source_domain: claims.sourceDomain,
+    azp: claims.sourceDomain,
+    scope: claims.scope,
+  };
+  if (claims.org && claims.active) {
+    payload.org = claims.org;
+    payload.active = claims.active;
+  }
 
   try {
-    return await new SignJWT({
-      email: claims.email,
-      source_domain: claims.sourceDomain,
-      azp: claims.sourceDomain,
-      scope: claims.scope,
-      org: claims.org,
-      active: claims.active,
-    })
+    return await new SignJWT(payload)
       .setProtectedHeader({ alg: ALG, kid, typ: 'at+jwt' })
       .setIssuer(claims.issuer)
       .setAudience(claims.resource)

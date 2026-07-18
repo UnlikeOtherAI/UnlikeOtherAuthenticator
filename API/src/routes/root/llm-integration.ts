@@ -171,7 +171,8 @@ Server-side behaviour on first verified login is controlled by \`org_features\`:
 
 ### 4.6a Confidential assertion exchange for Ledger
 
-A registered backend can exchange a short-lived user/workspace assertion for a
+A registered backend can exchange a short-lived user assertion, optionally
+scoped to a selected workspace, for a
 resource-bound token without forwarding its normal UOA access token or its domain
 credential to the resource server. This is a separate RFC 8693-style grant on the
 same backend-only endpoint; the authorization-code and refresh grants above remain
@@ -181,9 +182,10 @@ unchanged.
 import { SignJWT } from 'jose';
 
 const now = Math.floor(Date.now() / 1000);
+const workspace = orgId && teamId ? { active: { orgId, teamId } } : {};
 const subjectToken = await new SignJWT({
   source_domain: 'api.nessie.works',
-  active: { orgId, teamId },
+  ...workspace,
 })
   .setProtectedHeader({ alg: 'RS256', kid: NESSIE_CONFIG_KEY_ID, typ: 'JWT' })
   .setIssuer('api.nessie.works')
@@ -217,12 +219,15 @@ The source config JWT MUST publish \`jwks_url\` on the source domain. UOA fetche
 that JWKS through its SSRF-protected, same-host pipeline and requires RS256 +
 \`kid\`. The assertion requires exact \`iss\` and \`source_domain\`, exact
 \`aud = PUBLIC_BASE_URL + "/auth/token"\`, stable UOA \`sub\`, non-empty \`jti\`,
-\`iat\`/\`exp\` no more than 60 seconds apart, and
-\`active: { orgId, teamId }\`.
+\`iat\`/\`exp\` no more than 60 seconds apart. \`active\` is optional for
+first-time or workspace-less users. When present it must be exactly
+\`{ orgId, teamId }\` with both values non-empty; partial or malformed workspace
+objects are rejected.
 
-UOA does not trust the membership snapshot. Before issue it re-reads the user,
-source-domain role, requested ACTIVE org membership, and requested ACTIVE team
-membership. A removed/deactivated user or cross-org/team assertion is rejected.
+UOA never trusts the assertion as current identity state. Before every issue it
+re-reads the user and source-domain role. When \`active\` is supplied it also
+re-reads the requested ACTIVE org and team memberships. Unknown users, missing
+domain roles, and removed/deactivated or cross-org/team selections are rejected.
 
 \`\`\`json
 {
@@ -236,8 +241,9 @@ membership. A removed/deactivated user or cross-org/team assertion is rejected.
 
 The issued token is verified with \`GET /oauth/jwks.json\` and contains
 \`iss\`, resource \`aud\`, stable \`sub\`, advisory \`email\`,
-\`source_domain\`, non-secret \`azp\` (the source domain), current \`org\`,
-selected \`active\`, \`scope\`, \`jti\`, \`iat\`, and \`exp\`. It contains no
+\`source_domain\`, non-secret \`azp\` (the source domain), \`scope\`, \`jti\`,
+\`iat\`, and \`exp\`. A validated workspace adds current \`org\` and selected
+\`active\`; an identity-only exchange omits both. It contains no
 \`client_id\` and never contains the 64-character domain-hash bearer credential.
 This grant returns no refresh token.
 

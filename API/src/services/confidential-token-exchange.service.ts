@@ -50,7 +50,8 @@ const SubjectAssertionSchema = z
         orgId: z.string().trim().min(1).max(256),
         teamId: z.string().trim().min(1).max(256),
       })
-      .strict(),
+      .strict()
+      .optional(),
   })
   .passthrough();
 
@@ -185,10 +186,6 @@ export async function exchangeConfidentialSubjectToken(
   if (sourceDomain !== allowed.sourceDomain || params.resource !== allowed.resource) {
     throw new AppError('FORBIDDEN', 403, 'TOKEN_EXCHANGE_TARGET_NOT_ALLOWED');
   }
-  if (!params.config.org_features?.enabled) {
-    throw new AppError('FORBIDDEN', 403, 'TOKEN_EXCHANGE_SUBJECT_FORBIDDEN');
-  }
-
   const issuer = getPublicBaseUrl();
   const assertion = await verifyConfidentialSubjectToken(
     {
@@ -199,11 +196,13 @@ export async function exchangeConfidentialSubjectToken(
     },
     deps,
   );
-  (deps.consumeSubjectRateLimit ?? consumeSubjectExchange)(
-    `${sourceDomain}:${assertion.sub}`,
-  );
+  (deps.consumeSubjectRateLimit ?? consumeSubjectExchange)(`${sourceDomain}:${assertion.sub}`);
 
   const prisma = deps.prisma ?? getAdminPrisma();
+  if (assertion.active && !params.config.org_features?.enabled) {
+    throw new AppError('FORBIDDEN', 403, 'TOKEN_EXCHANGE_SUBJECT_FORBIDDEN');
+  }
+
   const [user, domainRole, org] = await Promise.all([
     prisma.user.findUnique({
       where: { id: assertion.sub },
@@ -218,20 +217,27 @@ export async function exchangeConfidentialSubjectToken(
       },
       select: { role: true },
     }),
-    getUserOrgContext(
-      {
-        userId: assertion.sub,
-        domain: sourceDomain,
-        config: params.config,
-        orgId: assertion.active.orgId,
-      },
-      { prisma },
-    ),
+    assertion.active
+      ? getUserOrgContext(
+          {
+            userId: assertion.sub,
+            domain: sourceDomain,
+            config: params.config,
+            orgId: assertion.active.orgId,
+          },
+          { prisma },
+        )
+      : Promise.resolve(null),
   ]);
 
-  if (!user || !domainRole || !org || !org.teams.includes(assertion.active.teamId)) {
+  if (!user || !domainRole) {
     throw new AppError('FORBIDDEN', 403, 'TOKEN_EXCHANGE_SUBJECT_FORBIDDEN');
   }
+  if (assertion.active && (!org || !org.teams.includes(assertion.active.teamId))) {
+    throw new AppError('FORBIDDEN', 403, 'TOKEN_EXCHANGE_SUBJECT_FORBIDDEN');
+  }
+
+  const workspaceClaims = assertion.active && org ? { org, active: assertion.active } : {};
 
   const accessToken = await (deps.signAccessToken ?? signConfidentialAccessToken)({
     subject: assertion.sub,
@@ -241,8 +247,7 @@ export async function exchangeConfidentialSubjectToken(
     issuer,
     ttlSeconds: CONFIDENTIAL_ACCESS_TOKEN_TTL_SECONDS,
     scope: CONFIDENTIAL_ACCESS_TOKEN_SCOPE,
-    org,
-    active: assertion.active,
+    ...workspaceClaims,
   });
 
   return {

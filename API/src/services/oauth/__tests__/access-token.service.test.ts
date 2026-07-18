@@ -114,4 +114,32 @@ describe('mcp access-token (RS256)', () => {
     expect(payload.client_id).toBeUndefined();
     expect(payload.domain).toBeUndefined();
   });
+
+  it('signs an identity-only confidential token without org or active claims', async () => {
+    const resource = 'https://ledger.unlikeotherai.com';
+    const token = await signConfidentialAccessToken({
+      subject: 'usr_without_workspace',
+      email: 'first-login@example.com',
+      sourceDomain: 'api.nessie.works',
+      resource,
+      issuer: 'https://authentication.unlikeotherai.com',
+      ttlSeconds: 300,
+      scope: 'ai.invoke',
+    });
+
+    const jwks = createLocalJWKSet(await getAccessTokenPublicJwks());
+    const { payload } = await jwtVerify(token, jwks, {
+      issuer: 'https://authentication.unlikeotherai.com',
+      audience: resource,
+    });
+    expect(payload).toMatchObject({
+      sub: 'usr_without_workspace',
+      email: 'first-login@example.com',
+      source_domain: 'api.nessie.works',
+      azp: 'api.nessie.works',
+      scope: 'ai.invoke',
+    });
+    expect(payload.org).toBeUndefined();
+    expect(payload.active).toBeUndefined();
+  });
 });

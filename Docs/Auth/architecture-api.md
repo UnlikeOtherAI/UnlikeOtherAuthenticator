@@ -326,10 +326,11 @@ Request → Route → Middleware → Service → Database (Prisma)
 `POST /auth/token` remains a thin multi-grant route. Its confidential assertion
 branch uses the same config verifier and domain-hash guard as the legacy grants,
 then delegates all source-JWKS verification, exact source→resource allowlisting,
-current identity/workspace resolution, and RS256 issuance to
+current identity resolution, conditional selected-workspace resolution, and
+RS256 issuance to
 `confidential-token-exchange.service.ts`. Pre-context reads use the admin Prisma
-client because the user tenant is not trusted until the assertion and memberships
-have been verified.
+client because the user tenant is not trusted until the assertion, user, domain
+role, and any selected memberships have been verified.
 
 > SCIM is deferred. When implementation lands, add a `scim-auth` middleware (SCIM bearer token validation and org-scope verification for `/scim/v2/*`, returning 401 on invalid token and 403 on org scope mismatch) and update both this list and the directory tree.
 
