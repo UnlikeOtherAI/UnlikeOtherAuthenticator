@@ -11,6 +11,8 @@ type RateLimitOptions = {
   windowMs: number;
 };
 
+type KeyedRateLimitOptions = Omit<RateLimitOptions, 'keyBuilder'>;
+
 type WindowState = {
   count: number;
   resetAt: number;
@@ -59,9 +61,8 @@ function ensureCapacity(now: number) {
   }
 }
 
-export function createRateLimiter({ keyBuilder, limit, windowMs }: RateLimitOptions) {
-  return async function rateLimiter(request: FastifyRequest) {
-    const key = keyBuilder(request);
+export function createKeyedRateLimiter({ limit, windowMs }: KeyedRateLimitOptions) {
+  return function keyedRateLimiter(key: string) {
     if (!key) {
       return;
     }
@@ -81,6 +82,13 @@ export function createRateLimiter({ keyBuilder, limit, windowMs }: RateLimitOpti
     if (existing.count > limit) {
       throw new AppError('RATE_LIMITED', 429);
     }
+  };
+}
+
+export function createRateLimiter({ keyBuilder, limit, windowMs }: RateLimitOptions) {
+  const consume = createKeyedRateLimiter({ limit, windowMs });
+  return async function rateLimiter(request: FastifyRequest) {
+    consume(keyBuilder(request));
   };
 }
 

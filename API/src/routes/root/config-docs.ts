@@ -254,7 +254,7 @@ export const confidentialTokenExchangeDocumentation = {
   request: {
     grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
     subject_token:
-      'RS256 JWT with kid; maximum 5-minute exp-iat and required iss, aud, sub, source_domain, active { orgId, teamId }, jti, iat, exp',
+      'RS256 JWT with kid; maximum 60-second exp-iat and required iss, aud, sub, source_domain, active { orgId, teamId }, jti, iat, exp',
     subject_token_type: 'urn:ietf:params:oauth:token-type:jwt',
     resource: 'exact configured resource URI',
   },
@@ -272,6 +272,10 @@ export const confidentialTokenExchangeDocumentation = {
     forbidden_claims:
       'client_id and the 64-character domain-hash bearer credential are never copied into this token',
   },
+  rate_limit:
+    'Confidential exchange is isolated from the legacy 10/min/IP token bucket: 600/min per authenticated source domain, plus 60/min per verified source-domain user.',
+  public_oauth_boundary:
+    'The signing key publishes GET /oauth/jwks.json but does not enable public registration, authorize, login, or PKCE token routes. Those require MCP_OAUTH_PUBLIC_PROFILE_ENABLED=true.',
 };
 
 export const configVerificationEndpointDocumentation = {

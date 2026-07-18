@@ -34,8 +34,8 @@ export function buildMcpClientConfig(redirectUris: string[]): ClientConfig {
   const env = getEnv();
   // The MCP profile must run on its own dedicated first-party domain — never the admin
   // domain (a SUPERUSER bootstrap there would bypass ADMIN_BOOTSTRAP_EMAILS) and never a
-  // customer domain. Fail closed when misconfigured; the whole profile is already gated
-  // on the private JWK / isMcpOAuthEnabled, so this only affects misconfigured deployments.
+  // customer domain. Fail closed when misconfigured; public routes additionally require
+  // the explicit MCP_OAUTH_PUBLIC_PROFILE_ENABLED gate.
   const configured = env.MCP_OAUTH_DOMAIN?.trim().toLowerCase();
   if (!configured) throw new AppError('INTERNAL', 500, 'MCP_OAUTH_DOMAIN_REQUIRED');
   if (configured === getAdminAuthDomain(env)) {

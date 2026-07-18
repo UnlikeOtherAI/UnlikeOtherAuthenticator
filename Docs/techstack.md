@@ -247,7 +247,8 @@ All secrets and configuration live in environment variables. Nothing is hardcode
 * `DEBUG_ENABLED` — include internal error/debug details in responses when set to `true` (default: `false`)
 * `VITE_API_BASE_URL` — admin frontend API base URL
 * `VITE_ADMIN_BYPASS_AUTH` — development-only admin auth bypass flag; must not be relied on in production
-* `MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK` — RS256 private JWK (JSON) shared by the public-client / MCP OAuth profile and confidential token exchange (brief §22.14–§22.15); presence enables the whole `/oauth/*` profile and publishes its public half at `/oauth/jwks.json`
+* `MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK` — RS256 private JWK (JSON) shared by confidential token exchange and the optional public-client profile; presence enables signing and publishes its public half at `/oauth/jwks.json`, but does not open public OAuth routes
+* `MCP_OAUTH_PUBLIC_PROFILE_ENABLED` — explicit boolean gate for discovery, dynamic registration, authorize, login, and the public PKCE token endpoint; defaults to `false` and additionally requires the signing key plus a valid dedicated `MCP_OAUTH_DOMAIN`
 * `MCP_OAUTH_DOMAIN` — **required when the MCP OAuth profile is enabled**; the dedicated first-party tenant domain for `/oauth/*`. Must be distinct from `ADMIN_AUTH_DOMAIN` (and any customer domain) — the service fails closed if it is unset or equals `ADMIN_AUTH_DOMAIN`
 * `MCP_OAUTH_ENABLED_AUTH_METHODS` — optional comma-separated auth methods offered on the MCP login screen (default: `email_password`)
 * `MCP_OAUTH_SCOPES_SUPPORTED` — optional comma-separated OAuth scopes advertised in MCP discovery metadata (default: `openid`)

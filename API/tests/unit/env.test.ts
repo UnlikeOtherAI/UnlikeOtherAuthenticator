@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { getAdminAuthDomain, getAuthServiceIdentifier, parseEnv } from '../../src/config/env.js';
+import {
+  getAdminAuthDomain,
+  getAuthServiceIdentifier,
+  isMcpOAuthPublicProfileEnabled,
+  isOAuthAccessTokenJwksEnabled,
+  parseEnv,
+} from '../../src/config/env.js';
 
 function baseInput(overrides?: Partial<NodeJS.ProcessEnv>): NodeJS.ProcessEnv {
   return {
@@ -132,6 +138,55 @@ describe('env', () => {
         }),
       ).CONFIDENTIAL_TOKEN_EXCHANGE_RESOURCE,
     ).toBe('https://ledger.unlikeotherai.com');
+  });
+
+  it('keeps the public OAuth profile off when only confidential signing is configured', () => {
+    const env = parseEnv(
+      baseInput({
+        MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK: '{}',
+        CONFIDENTIAL_TOKEN_EXCHANGE_SOURCE_DOMAIN: 'api.nessie.works',
+        CONFIDENTIAL_TOKEN_EXCHANGE_RESOURCE: 'https://ledger.unlikeotherai.com',
+      }),
+    );
+
+    expect(isOAuthAccessTokenJwksEnabled(env)).toBe(true);
+    expect(isMcpOAuthPublicProfileEnabled(env)).toBe(false);
+    expect(env.MCP_OAUTH_PUBLIC_PROFILE_ENABLED).toBe(false);
+  });
+
+  it('requires an explicit flag, signing key, and dedicated domain for public OAuth', () => {
+    expect(() =>
+      parseEnv(baseInput({ MCP_OAUTH_PUBLIC_PROFILE_ENABLED: 'true' })),
+    ).toThrow();
+    expect(() =>
+      parseEnv(
+        baseInput({
+          MCP_OAUTH_PUBLIC_PROFILE_ENABLED: 'true',
+          MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK: '{}',
+        }),
+      ),
+    ).toThrow();
+
+    const env = parseEnv(
+      baseInput({
+        MCP_OAUTH_PUBLIC_PROFILE_ENABLED: 'true',
+        MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK: '{}',
+        MCP_OAUTH_DOMAIN: 'oauth.example.com',
+      }),
+    );
+    expect(isMcpOAuthPublicProfileEnabled(env)).toBe(true);
+  });
+
+  it('fails the public OAuth gate closed when its domain is the admin domain', () => {
+    const env = parseEnv(
+      baseInput({
+        ADMIN_AUTH_DOMAIN: 'oauth.example.com',
+        MCP_OAUTH_PUBLIC_PROFILE_ENABLED: 'true',
+        MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK: '{}',
+        MCP_OAUTH_DOMAIN: 'oauth.example.com',
+      }),
+    );
+    expect(isMcpOAuthPublicProfileEnabled(env)).toBe(false);
   });
 
   it('accepts REFRESH_TOKEN_TTL_DAYS between 1 and 90', () => {

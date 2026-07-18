@@ -140,6 +140,14 @@ The confidential grant instead returns only:
 It does not issue or rotate a refresh token. The source backend creates a fresh
 assertion when another resource token is needed.
 
+The source assertion's `exp - iat` MUST be no more than 60 seconds. The issued
+resource access token remains five minutes (`expires_in: 300`).
+
+Confidential exchanges use a 600/minute authenticated source-domain ceiling and
+a 60/minute verified source-domain-user ceiling. They do not share the legacy
+10/minute/IP token-exchange bucket, so one product egress IP cannot starve all
+users.
+
 ### `POST /auth/revoke`
 
 Request:
@@ -168,7 +176,8 @@ Success response:
 | `REFRESH_TOKEN_TTL_DAYS` | `30` | Refresh-token lifetime in days, bounded to 1-90 |
 | `CONFIDENTIAL_TOKEN_EXCHANGE_SOURCE_DOMAIN` | unset (disabled) | Exact source config domain for confidential exchange |
 | `CONFIDENTIAL_TOKEN_EXCHANGE_RESOURCE` | unset (disabled) | Exact HTTPS resource paired with the source domain |
-| `MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK` | unset | RS256 signing key whose public half is served at `/oauth/jwks.json` |
+| `MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK` | unset | RS256 signing key whose public half is served at `/oauth/jwks.json`; key presence does not enable public OAuth routes |
+| `MCP_OAUTH_PUBLIC_PROFILE_ENABLED` | `false` | Explicit gate for discovery, registration, authorize, login, and public PKCE token routes |
 
 ---
 

@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import { getEnv, getPublicBaseUrl } from '../config/env.js';
 import { getAdminPrisma } from '../db/prisma.js';
+import { createKeyedRateLimiter } from '../middleware/rate-limiter.js';
 import { normalizeDomain } from '../utils/domain.js';
 import { AppError } from '../utils/errors.js';
 import { findJwkByKid, importClientJwkKey, type PublicRsaJwks } from './client-jwk.service.js';
@@ -21,8 +22,14 @@ export const ACCESS_TOKEN_ISSUED_TOKEN_TYPE = 'urn:ietf:params:oauth:token-type:
 export const CONFIDENTIAL_ACCESS_TOKEN_TTL_SECONDS = 5 * 60;
 export const CONFIDENTIAL_ACCESS_TOKEN_SCOPE = 'ai.invoke';
 
-const SUBJECT_ASSERTION_MAX_TTL_SECONDS = 5 * 60;
+export const SUBJECT_ASSERTION_MAX_TTL_SECONDS = 60;
 const SUBJECT_ASSERTION_CLOCK_TOLERANCE_SECONDS = 5;
+export const CONFIDENTIAL_SUBJECT_RATE_LIMIT_PER_MINUTE = 60;
+
+const consumeSubjectExchange = createKeyedRateLimiter({
+  limit: CONFIDENTIAL_SUBJECT_RATE_LIMIT_PER_MINUTE,
+  windowMs: 60 * 1000,
+});
 
 const ConfigJwksLocationSchema = z.object({
   domain: z.string().trim().min(1),
@@ -61,6 +68,7 @@ type ExchangeDeps = {
   fetchJwks?: (jwksUrl: string, opts: { expectedHost: string }) => Promise<PublicRsaJwks>;
   now?: () => number;
   signAccessToken?: (claims: ConfidentialAccessTokenClaims) => Promise<string>;
+  consumeSubjectRateLimit?: (key: string) => void;
 };
 
 function invalidSubjectToken(): AppError {
@@ -190,6 +198,9 @@ export async function exchangeConfidentialSubjectToken(
       audience: `${issuer}/auth/token`,
     },
     deps,
+  );
+  (deps.consumeSubjectRateLimit ?? consumeSubjectExchange)(
+    `${sourceDomain}:${assertion.sub}`,
   );
 
   const prisma = deps.prisma ?? getAdminPrisma();

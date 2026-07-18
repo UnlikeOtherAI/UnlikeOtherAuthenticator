@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
 
 import { createRateLimiter } from '../../middleware/rate-limiter.js';
+import { TOKEN_EXCHANGE_GRANT_TYPE } from '../../services/confidential-token-exchange.service.js';
 
 const MINUTE_MS = 60 * 1000;
 const HOUR_MS = 60 * MINUTE_MS;
@@ -112,6 +113,38 @@ export const resetRequestRateLimiter = composeRateLimiters(
 export const tokenConsumeRateLimiter = ipRateLimiter('auth:token-consume', 10, MINUTE_MS);
 
 export const tokenExchangeRateLimiter = ipRateLimiter('auth:token-exchange', 10, MINUTE_MS);
+
+const confidentialTokenExchangeDomainLimiter = createRateLimiter({
+  limit: 600,
+  windowMs: MINUTE_MS,
+  keyBuilder: (request) => {
+    const domain = normalizePart(request.config?.domain);
+    return domain ? `auth:token-exchange:confidential:domain:${hashPart(domain)}` : '';
+  },
+});
+
+function isConfidentialTokenExchange(request: FastifyRequest): boolean {
+  return bodyString(request, 'grant_type') === TOKEN_EXCHANGE_GRANT_TYPE;
+}
+
+/** Preserve the legacy 10/min/IP guard without placing confidential callers
+ * behind one shared-egress bucket before they authenticate. */
+export async function tokenExchangePreAuthRateLimiter(request: FastifyRequest): Promise<void> {
+  if (!isConfidentialTokenExchange(request)) {
+    await tokenExchangeRateLimiter(request);
+  }
+}
+
+/** Confidential callers reach this guard only after config and domain-hash auth.
+ * The broad domain ceiling bounds a compromised backend while per-user limits
+ * are enforced after the subject assertion signature is verified. */
+export async function confidentialTokenExchangeDomainRateLimiter(
+  request: FastifyRequest,
+): Promise<void> {
+  if (isConfidentialTokenExchange(request)) {
+    await confidentialTokenExchangeDomainLimiter(request);
+  }
+}
 
 // Compound IP-only and per-challenge-token buckets so an attacker spraying many IPs
 // can't burn another user's IP budget against the same `twofa_token`.

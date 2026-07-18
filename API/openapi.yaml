@@ -1111,7 +1111,9 @@ paths:
         RS256 access token. That grant re-resolves the current user, source-domain role,
         and requested ACTIVE org/team membership before issue.
         Requires domain hash bearer authentication.
-        Rate limited: 10/min per IP.
+        Legacy grants are rate limited at 10/min per IP. Confidential exchange is
+        isolated from that shared-egress bucket and limited at 600/min per
+        authenticated source domain plus 60/min per verified source-domain user.
       security:
         - domainHashBearer: []
       parameters:
@@ -1169,7 +1171,7 @@ paths:
                         jwks_url. Required claims: iss and source_domain equal the
                         source config domain; aud equals this /auth/token endpoint;
                         stable UOA sub; active { orgId, teamId }; jti; iat; exp.
-                        exp-iat must not exceed five minutes.
+                        exp-iat must not exceed 60 seconds.
                     subject_token_type:
                       type: string
                       enum: ['urn:ietf:params:oauth:token-type:jwt']

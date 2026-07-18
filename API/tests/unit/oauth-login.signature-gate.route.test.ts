@@ -12,7 +12,7 @@ vi.mock('../../src/config/env.js', async () => {
   const actual = await vi.importActual<typeof import('../../src/config/env.js')>(
     '../../src/config/env.js',
   );
-  return { ...actual, isMcpOAuthEnabled: () => true };
+  return { ...actual, isMcpOAuthPublicProfileEnabled: () => true };
 });
 
 vi.mock('../../src/services/auth-login.service.js', () => ({

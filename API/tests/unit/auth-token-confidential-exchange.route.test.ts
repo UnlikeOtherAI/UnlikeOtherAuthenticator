@@ -1,4 +1,5 @@
 import type { ClientConfig } from '../../src/services/config.service.js';
+import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { testUiTheme } from '../helpers/test-config.js';
@@ -151,6 +152,66 @@ describe('POST /auth/token confidential grant', () => {
 
       expect(response.statusCode).toBe(400);
       expect(exchangeConfidentialSubjectTokenMock).not.toHaveBeenCalled();
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('does not place authenticated confidential users behind the legacy 10/minute IP bucket', async () => {
+    currentConfig = {
+      ...config(),
+      domain: `shared-egress-${randomUUID()}.example`,
+    };
+    const { createApp } = await import('../../src/app.js');
+    const app = await createApp();
+    await app.ready();
+
+    try {
+      for (let requestNumber = 0; requestNumber < 11; requestNumber += 1) {
+        const response = await app.inject({
+          method: 'POST',
+          url: '/auth/token?config_url=' + encodeURIComponent('https://source.example/config'),
+          headers: { authorization: `Bearer ${'a'.repeat(64)}` },
+          payload: {
+            grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
+            subject_token: `source.jwt.assertion.${requestNumber}`,
+            subject_token_type: 'urn:ietf:params:oauth:token-type:jwt',
+            resource: 'https://ledger.unlikeotherai.com',
+          },
+        });
+        expect(response.statusCode).toBe(200);
+      }
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('retains an authenticated per-domain abuse ceiling for confidential exchange', async () => {
+    currentConfig = {
+      ...config(),
+      domain: `rate-limit-${randomUUID()}.example`,
+    };
+    const { createApp } = await import('../../src/app.js');
+    const app = await createApp();
+    await app.ready();
+
+    try {
+      const request = (requestNumber: number) =>
+        app.inject({
+          method: 'POST',
+          url: '/auth/token?config_url=' + encodeURIComponent('https://source.example/config'),
+          headers: { authorization: `Bearer ${'a'.repeat(64)}` },
+          payload: {
+            grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
+            subject_token: `source.jwt.assertion.${requestNumber}`,
+            subject_token_type: 'urn:ietf:params:oauth:token-type:jwt',
+            resource: 'https://ledger.unlikeotherai.com',
+          },
+        });
+      for (let requestNumber = 0; requestNumber < 600; requestNumber += 1) {
+        expect((await request(requestNumber)).statusCode).toBe(200);
+      }
+      expect((await request(601)).statusCode).toBe(429);
     } finally {
       await app.close();
     }

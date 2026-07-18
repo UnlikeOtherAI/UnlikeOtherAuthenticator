@@ -15,7 +15,10 @@ import {
   JWT_SUBJECT_TOKEN_TYPE,
   TOKEN_EXCHANGE_GRANT_TYPE,
 } from '../../services/confidential-token-exchange.service.js';
-import { tokenExchangeRateLimiter } from './rate-limit-keys.js';
+import {
+  confidentialTokenExchangeDomainRateLimiter,
+  tokenExchangePreAuthRateLimiter,
+} from './rate-limit-keys.js';
 
 const AuthorizationCodeGrantSchema = z
   .object({
@@ -79,7 +82,12 @@ export function registerAuthTokenExchangeRoute(app: FastifyInstance): void {
   app.post(
     '/auth/token',
     {
-      preHandler: [tokenExchangeRateLimiter, configVerifier, requireDomainHashAuth],
+      preHandler: [
+        tokenExchangePreAuthRateLimiter,
+        configVerifier,
+        requireDomainHashAuth,
+        confidentialTokenExchangeDomainRateLimiter,
+      ],
     },
     async (request, reply) => {
       const body = parseTokenExchangeBody(request.body);

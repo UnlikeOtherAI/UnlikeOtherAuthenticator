@@ -1,12 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
-import { isMcpOAuthEnabled } from '../../config/env.js';
 import { getOAuthClient } from '../../services/oauth/client.service.js';
 import { buildMcpClientConfig } from '../../services/oauth/config.service.js';
 import { validateRequestedResource } from '../../services/oauth/resource-validation.service.js';
 import { renderAuthEntrypointHtml, sendAuthHtml } from '../../services/auth-ui.service.js';
 import { buildPublicErrorBody } from '../../utils/error-response.js';
+import { requireMcpOAuthPublicProfile } from './public-profile-guard.js';
 
 // Public-client authorization endpoint for the MCP profile (brief §22.14). Validates
 // the registered client + redirect_uri + PKCE, then renders the first-party login UI
@@ -26,50 +26,50 @@ const QuerySchema = z
   .strip();
 
 export function registerOAuthAuthorizeRoute(app: FastifyInstance): void {
-  app.get('/oauth/authorize', async (request, reply) => {
-    if (!isMcpOAuthEnabled()) {
-      reply.status(404).send(buildPublicErrorBody({ statusCode: 404 }));
-      return;
-    }
-    const parsed = QuerySchema.safeParse(request.query);
-    if (!parsed.success) {
-      reply.status(400).send(buildPublicErrorBody({ statusCode: 400 }));
-      return;
-    }
-    const q = parsed.data;
-    if (q.response_type && q.response_type !== 'code') {
-      reply.status(400).send(buildPublicErrorBody({ statusCode: 400 }));
-      return;
-    }
-    if (q.code_challenge_method !== 'S256') {
-      reply.status(400).send(buildPublicErrorBody({ statusCode: 400 }));
-      return;
-    }
+  app.get(
+    '/oauth/authorize',
+    { preHandler: [requireMcpOAuthPublicProfile] },
+    async (request, reply) => {
+      const parsed = QuerySchema.safeParse(request.query);
+      if (!parsed.success) {
+        reply.status(400).send(buildPublicErrorBody({ statusCode: 400 }));
+        return;
+      }
+      const q = parsed.data;
+      if (q.response_type && q.response_type !== 'code') {
+        reply.status(400).send(buildPublicErrorBody({ statusCode: 400 }));
+        return;
+      }
+      if (q.code_challenge_method !== 'S256') {
+        reply.status(400).send(buildPublicErrorBody({ statusCode: 400 }));
+        return;
+      }
 
-    const client = await getOAuthClient(q.client_id);
-    if (!client || !client.redirectUris.includes(q.redirect_uri)) {
-      // Per OAuth, never redirect to an unvalidated redirect_uri — surface a 400.
-      reply.status(400).send(buildPublicErrorBody({ statusCode: 400 }));
-      return;
-    }
+      const client = await getOAuthClient(q.client_id);
+      if (!client || !client.redirectUris.includes(q.redirect_uri)) {
+        // Per OAuth, never redirect to an unvalidated redirect_uri — surface a 400.
+        reply.status(400).send(buildPublicErrorBody({ statusCode: 400 }));
+        return;
+      }
 
-    // RFC 8707: reject an out-of-allowlist `resource` early (invalid_target), before
-    // rendering the login UI, so the client fails fast instead of at /oauth/login.
-    try {
-      validateRequestedResource(q.resource);
-    } catch {
-      reply.status(400).send(buildPublicErrorBody({ statusCode: 400 }));
-      return;
-    }
+      // RFC 8707: reject an out-of-allowlist `resource` early (invalid_target), before
+      // rendering the login UI, so the client fails fast instead of at /oauth/login.
+      try {
+        validateRequestedResource(q.resource);
+      } catch {
+        reply.status(400).send(buildPublicErrorBody({ statusCode: 400 }));
+        return;
+      }
 
-    const config = buildMcpClientConfig(client.redirectUris);
-    const html = await renderAuthEntrypointHtml({
-      config,
-      // Sentinel in place of a client config_url; the UI's MCP mode keys off the
-      // client_id present in the initial search and posts to /oauth/login.
-      configUrl: 'urn:uoa:mcp',
-      requestUrl: request.raw.url ?? '',
-    });
-    sendAuthHtml(reply, html);
-  });
+      const config = buildMcpClientConfig(client.redirectUris);
+      const html = await renderAuthEntrypointHtml({
+        config,
+        // Sentinel in place of a client config_url; the UI's MCP mode keys off the
+        // client_id present in the initial search and posts to /oauth/login.
+        configUrl: 'urn:uoa:mcp',
+        requestUrl: request.raw.url ?? '',
+      });
+      sendAuthHtml(reply, html);
+    },
+  );
 }

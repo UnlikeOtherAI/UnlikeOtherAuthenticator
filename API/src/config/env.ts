@@ -173,11 +173,15 @@ const EnvSchema = z
     AI_TRANSLATION_PROVIDER: z.enum(['disabled', 'openai']).default('disabled'),
     OPENAI_API_KEY: z.string().min(1).optional(),
     OPENAI_MODEL: z.string().min(1).optional(),
-    // Public-client / MCP OAuth profile (brief §22.14). The whole /oauth/* profile is
-    // gated on a signing key being present; if unset the profile is disabled and its
-    // routes return 404. RS256 private JWK (JSON) used to sign access tokens; clients
-    // verify via GET /oauth/jwks.json. Separate from the config-signing JWKS (§22.2).
+    // RS256 private JWK (JSON) shared by confidential resource-token issuance and,
+    // only when explicitly enabled below, the public-client / MCP OAuth profile.
+    // Its public half is served at GET /oauth/jwks.json for resource verification.
+    // Key presence alone MUST NOT enable public registration/login/token routes.
     MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK: z.string().min(1).optional(),
+    MCP_OAUTH_PUBLIC_PROFILE_ENABLED: z.preprocess(
+      normalizeBoolean,
+      z.boolean().default(false),
+    ),
     // First-party config for the profile (no client config_url): the auth "domain"
     // used for tenant scope, and the auth methods offered on the login screen.
     MCP_OAUTH_DOMAIN: z.string().min(1).optional(),
@@ -253,6 +257,20 @@ const EnvSchema = z
         code: z.ZodIssueCode.custom,
         path: ['MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK'],
         message: 'MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK is required for confidential token exchange',
+      });
+    }
+    if (env.MCP_OAUTH_PUBLIC_PROFILE_ENABLED && !env.MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK'],
+        message: 'MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK is required for the public OAuth profile',
+      });
+    }
+    if (env.MCP_OAUTH_PUBLIC_PROFILE_ENABLED && !env.MCP_OAUTH_DOMAIN) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['MCP_OAUTH_DOMAIN'],
+        message: 'MCP_OAUTH_DOMAIN is required for the public OAuth profile',
       });
     }
 
@@ -355,10 +373,19 @@ export function getPublicBaseUrl(env: Env = getEnv()): string {
   return base.replace(/\/+$/, '');
 }
 
-/** Whether the public-client / MCP OAuth profile (brief §22.14) is enabled. It is
- *  gated on an access-token signing key being configured. */
-export function isMcpOAuthEnabled(env: Env = getEnv()): boolean {
+/** Whether RS256 resource-token verification keys may be published. */
+export function isOAuthAccessTokenJwksEnabled(env: Env = getEnv()): boolean {
   return Boolean(env.MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK);
+}
+
+/** Whether the public-client / MCP OAuth profile (brief §22.14) is enabled.
+ * Signing/JWKS configuration alone never opens public OAuth routes. */
+export function isMcpOAuthPublicProfileEnabled(env: Env = getEnv()): boolean {
+  if (!env.MCP_OAUTH_PUBLIC_PROFILE_ENABLED || !env.MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK) {
+    return false;
+  }
+  const profileDomain = env.MCP_OAUTH_DOMAIN?.trim().replace(/\.$/, '').toLowerCase();
+  return Boolean(profileDomain && profileDomain !== getAdminAuthDomain(env));
 }
 
 /**

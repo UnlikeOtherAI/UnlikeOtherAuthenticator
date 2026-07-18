@@ -614,6 +614,13 @@ client-supplied config URL or a shared secret. It is served under a distinct
 §22.1–§22.13), which remains the default. The config-JWT flow stays the only way to
 reach the existing `/auth/*` endpoints.
 
+**Explicit public-profile gate.** The public profile is disabled by default and
+requires `MCP_OAUTH_PUBLIC_PROFILE_ENABLED=true`. A configured RS256 access-token
+signing key by itself only enables token signing and `GET /oauth/jwks.json`; it
+MUST NOT enable discovery, dynamic registration, authorize, login, or the public
+PKCE token endpoint. Enabling the public flag also requires the signing key and
+dedicated `MCP_OAUTH_DOMAIN`; invalid or incomplete configuration fails closed.
+
 This profile **qualifies** specific rules above, scoped to `/oauth/*` only:
 
 * **Config source (qualifies §22.1).** There is no client-supplied `config_url`.
@@ -692,7 +699,7 @@ source config domain, pass the public-destination SSRF checks, and contain the
 assertion's RS256 `kid`. The assertion has an exact source-domain `iss` and
 `source_domain`, exact `aud = PUBLIC_BASE_URL + "/auth/token"`, stable UOA `sub`,
 requested `active: { orgId, teamId }`, non-empty `jti`, and `iat`/`exp` no more
-than five minutes apart.
+than 60 seconds apart.
 
 The deployment config contains one exact
 `CONFIDENTIAL_TOKEN_EXCHANGE_SOURCE_DOMAIN` →
@@ -708,6 +715,12 @@ signing key and `GET /oauth/jwks.json`. It contains `iss`, resource `aud`, stabl
 current `org`, selected `active`, `scope = "ai.invoke"`, `jti`, `iat`, and `exp`.
 It deliberately contains no `client_id` and never copies the 64-character
 domain-hash bearer credential. This grant issues no refresh token.
+
+Confidential exchange does not use the legacy shared 10/minute/IP `/auth/token`
+bucket. After domain-hash authentication it is limited to 600 exchanges per
+source domain per minute; after the assertion signature is verified it is also
+limited to 60 exchanges per source-domain user per minute. Invalid assertions
+still consume the authenticated domain bucket.
 
 ---
 

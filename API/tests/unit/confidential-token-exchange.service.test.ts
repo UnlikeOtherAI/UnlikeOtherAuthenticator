@@ -48,6 +48,7 @@ async function signSubjectToken(
     audience?: string;
     expiresInSeconds?: number;
     sourceDomain?: string;
+    subject?: string;
     active?: { orgId: string; teamId: string };
     jti?: string;
   } = {},
@@ -60,7 +61,7 @@ async function signSubjectToken(
     .setProtectedHeader({ alg: 'RS256', kid: sourcePublicJwk.kid!, typ: 'JWT' })
     .setIssuer(sourceDomain)
     .setAudience(overrides.audience ?? audience)
-    .setSubject('usr_1')
+    .setSubject(overrides.subject ?? 'usr_1')
     .setIssuedAt(now)
     .setExpirationTime(now + (overrides.expiresInSeconds ?? 60));
   if (overrides.jti !== '') jwt.setJti(overrides.jti ?? 'assertion_1');
@@ -147,8 +148,8 @@ describe('confidential subject-token verification', () => {
     });
   });
 
-  it('rejects a subject assertion whose lifetime exceeds five minutes', async () => {
-    const token = await signSubjectToken({ expiresInSeconds: 301 });
+  it('rejects a subject assertion whose lifetime exceeds 60 seconds', async () => {
+    const token = await signSubjectToken({ expiresInSeconds: 61 });
     await expect(
       verifyConfidentialSubjectToken(
         { subjectToken: token, configJwt, sourceDomain, audience },
@@ -179,6 +180,7 @@ describe('confidential token exchange', () => {
   it('re-resolves the user and selected workspace before signing', async () => {
     const subjectToken = await signSubjectToken();
     const signAccessToken = vi.fn().mockResolvedValue('ledger-access-token');
+    const consumeSubjectRateLimit = vi.fn();
 
     const result = await exchangeConfidentialSubjectToken(
       {
@@ -191,6 +193,7 @@ describe('confidential token exchange', () => {
         prisma: prismaMock(),
         fetchJwks: fetchJwks(),
         signAccessToken,
+        consumeSubjectRateLimit,
       },
     );
 
@@ -218,6 +221,7 @@ describe('confidential token exchange', () => {
       },
     });
     expect(claims).not.toHaveProperty('clientId');
+    expect(consumeSubjectRateLimit).toHaveBeenCalledWith(`${sourceDomain}:usr_1`);
   });
 
   it('rejects an assertion when its selected team membership is no longer active', async () => {
@@ -236,6 +240,37 @@ describe('confidential token exchange', () => {
         },
       ),
     ).rejects.toThrow('TOKEN_EXCHANGE_SUBJECT_FORBIDDEN');
+  });
+
+  it('rate-limits a verified user without consuming another user’s allowance', async () => {
+    const firstUserToken = await signSubjectToken({ subject: 'usr_rate_limited' });
+    const secondUserToken = await signSubjectToken({ subject: 'usr_independent' });
+    const deps = {
+      prisma: prismaMock(),
+      fetchJwks: fetchJwks(),
+      signAccessToken: vi.fn().mockResolvedValue('ledger-access-token'),
+    };
+
+    for (let requestNumber = 0; requestNumber < 60; requestNumber += 1) {
+      await expect(
+        exchangeConfidentialSubjectToken(
+          { subjectToken: firstUserToken, resource, config: config(), configJwt },
+          deps,
+        ),
+      ).resolves.toMatchObject({ accessToken: 'ledger-access-token' });
+    }
+    await expect(
+      exchangeConfidentialSubjectToken(
+        { subjectToken: firstUserToken, resource, config: config(), configJwt },
+        deps,
+      ),
+    ).rejects.toMatchObject({ code: 'RATE_LIMITED', statusCode: 429 });
+    await expect(
+      exchangeConfidentialSubjectToken(
+        { subjectToken: secondUserToken, resource, config: config(), configJwt },
+        deps,
+      ),
+    ).resolves.toMatchObject({ accessToken: 'ledger-access-token' });
   });
 
   it('enforces the exact configured source-to-resource mapping', async () => {

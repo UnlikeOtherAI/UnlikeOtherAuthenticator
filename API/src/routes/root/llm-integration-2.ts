@@ -271,8 +271,12 @@ The result is visible immediately to clients calling \`GET /apps/startup\`. See 
 ## Public-client / MCP OAuth profile (\`/oauth/*\`, brief §22.14)
 
 A second, opt-in profile for **standards public clients** (e.g. MCP clients) that have
-no \`config_url\` and no shared secret. Disabled unless \`MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK\`
-is set (routes 404 otherwise). It does not change the config-JWT flow above.
+no \`config_url\` and no shared secret. Disabled unless
+\`MCP_OAUTH_PUBLIC_PROFILE_ENABLED=true\` **and** the signing key and dedicated
+\`MCP_OAUTH_DOMAIN\` are configured (routes 404 otherwise). Signing-key presence
+alone publishes \`/oauth/jwks.json\` for confidential resource-token verification
+and never opens public registration/login/token routes. It does not change the
+config-JWT flow above.
 
 - \`GET /.well-known/oauth-authorization-server\` — RFC 8414 metadata (discover the endpoints below).
 - \`POST /oauth/register\` — RFC 7591 dynamic registration. PUBLIC clients only: send

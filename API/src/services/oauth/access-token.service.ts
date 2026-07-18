@@ -1,8 +1,8 @@
-// RS256 access-token signing for the public-client / MCP OAuth profile (brief
-// §22.14). These tokens are resource-bound (aud = the RFC 8707 `resource`) and are
-// verified by resource servers via the published JWKS (GET /oauth/jwks.json) with no
-// shared secret. This is deliberately separate from the HS256 client-domain access
-// tokens (token.service.ts) and from config-JWT verification (§22.2).
+// RS256 resource access-token signing shared by confidential exchange and the
+// optional public-client / MCP OAuth profile (brief §22.14-§22.15). These tokens
+// are resource-bound (aud = the RFC 8707 `resource`) and resource servers verify
+// them via GET /oauth/jwks.json with no shared secret. This is deliberately
+// separate from HS256 client-domain access tokens and config-JWT verification.
 import { randomUUID } from 'node:crypto';
 
 import { type JWK, type KeyLike, SignJWT, importJWK } from 'jose';

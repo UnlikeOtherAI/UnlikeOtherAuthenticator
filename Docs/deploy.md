@@ -77,9 +77,10 @@ Set via Cloud Run service config:
 | `SHARED_SECRET` | Secret Manager: `uoa-auth-shared-secret` |
 | `GOOGLE_CLIENT_ID` | Secret Manager: `uoa-auth-google-client-id` |
 | `GOOGLE_CLIENT_SECRET` | Secret Manager: `uoa-auth-google-client-secret` |
-| `MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK` | Secret Manager: `uoa-auth-mcp-oauth-access-token-private-jwk`; RS256 private JWK (JSON) shared by the public-client profile and confidential exchange. Presence enables `/oauth/*`; its public half is served at `/oauth/jwks.json` |
-| `MCP_OAUTH_DOMAIN` | Plain production value: `oauth.authentication.unlikeotherai.com`; required because the signing key enables the whole `/oauth/*` profile. Must be registered as a dedicated first-party tenant and remain distinct from `ADMIN_AUTH_DOMAIN` and customer domains |
-| `MCP_OAUTH_RESOURCES_SUPPORTED` | Plain production value: `https://ledger.unlikeotherai.com`; case-sensitive RFC 8707 resource allowlist for the public profile |
+| `MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK` | Secret Manager: `uoa-auth-mcp-oauth-access-token-private-jwk`; RS256 private JWK (JSON) for confidential resource tokens and optional public-profile tokens. Its public half is served at `/oauth/jwks.json`; key presence alone does not open public OAuth routes |
+| `MCP_OAUTH_PUBLIC_PROFILE_ENABLED` | Plain production value: `false` for the confidential-only Ledger rollout. Set `true` only in a separate reviewed change that also configures the dedicated public profile |
+| `MCP_OAUTH_DOMAIN` | Required only when `MCP_OAUTH_PUBLIC_PROFILE_ENABLED=true`; must be a dedicated first-party tenant distinct from `ADMIN_AUTH_DOMAIN` and customer domains |
+| `MCP_OAUTH_RESOURCES_SUPPORTED` | Used only by the explicitly enabled public profile; case-sensitive RFC 8707 resource allowlist |
 | `CONFIDENTIAL_TOKEN_EXCHANGE_SOURCE_DOMAIN` | Plain production value: `api.nessie.works`; the only source config domain allowed to use the confidential assertion grant |
 | `CONFIDENTIAL_TOKEN_EXCHANGE_RESOURCE` | Plain production value: `https://ledger.unlikeotherai.com`; paired exactly with the source domain and used as the issued token audience |
 
@@ -90,14 +91,16 @@ The private key used to sign `ADMIN_CONFIG_JWT` is not attached to Cloud Run. St
 Before enabling the confidential exchange in production:
 
 1. Create `uoa-auth-mcp-oauth-access-token-private-jwk` as an RSA private JWK
-   with `alg=RS256`, a unique `kid`, and public `n`/`e` members; grant the Cloud
-   Run service account Secret Manager access.
-2. Register the dedicated `oauth.authentication.unlikeotherai.com` first-party
-   tenant required by the now-enabled `/oauth/*` profile.
+   with `alg=RS256`, a unique `kid`, and public `n`/`e` members; grant both the
+   Cloud Run runtime identity and GitHub deployment identity Secret Manager
+   accessor permission.
+2. Keep `MCP_OAUTH_PUBLIC_PROFILE_ENABLED=false`; confidential signing and JWKS
+   publication do not require a public OAuth tenant.
 3. Confirm `https://api.nessie.works` publishes its assertion signing public key
    at the `jwks_url` in its config JWT.
 4. Verify `GET https://authentication.unlikeotherai.com/oauth/jwks.json` returns
-   the configured public key before enabling callers.
+   the configured public key, while discovery, registration, authorize, login,
+   and `/oauth/token` return 404, before enabling confidential callers.
 
 The secret value is one private RSA JWK JSON object with at least
 `kty="RSA"`, `alg="RS256"`, `use="sig"`, non-empty `kid`, public `n`/`e`, and

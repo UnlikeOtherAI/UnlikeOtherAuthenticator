@@ -217,7 +217,7 @@ The source config JWT MUST publish \`jwks_url\` on the source domain. UOA fetche
 that JWKS through its SSRF-protected, same-host pipeline and requires RS256 +
 \`kid\`. The assertion requires exact \`iss\` and \`source_domain\`, exact
 \`aud = PUBLIC_BASE_URL + "/auth/token"\`, stable UOA \`sub\`, non-empty \`jti\`,
-\`iat\`/\`exp\` no more than five minutes apart, and
+\`iat\`/\`exp\` no more than 60 seconds apart, and
 \`active: { orgId, teamId }\`.
 
 UOA does not trust the membership snapshot. Before issue it re-reads the user,
@@ -240,6 +240,10 @@ The issued token is verified with \`GET /oauth/jwks.json\` and contains
 selected \`active\`, \`scope\`, \`jti\`, \`iat\`, and \`exp\`. It contains no
 \`client_id\` and never contains the 64-character domain-hash bearer credential.
 This grant returns no refresh token.
+
+The confidential grant is rate-limited per authenticated source domain
+(600/minute) and per verified source-domain user (60/minute), so users behind
+one Nessie egress IP do not consume a shared 10/minute bucket.
 
 ### 4.7 Organisation member lifecycle — deactivate, reactivate, soft-remove
 
