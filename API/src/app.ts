@@ -71,6 +71,7 @@ export async function createApp(): Promise<FastifyInstance> {
                 'req.body.code_verifier',
                 'req.body.access_token',
                 'req.body.refresh_token',
+                'req.body.subject_token',
                 'req.body.twofa_token',
                 'req.body.email_token',
                 'req.body.signing_token',

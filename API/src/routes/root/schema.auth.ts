@@ -197,26 +197,39 @@ export const authEndpoints: EndpointSchema[] = [
   {
     method: 'POST',
     path: '/auth/token',
-    description: 'Exchange authorization code or refresh token for access + refresh tokens',
+    description:
+      'Exchange an authorization code or refresh token for the legacy access + refresh pair, or exchange a source-signed JWT assertion for a resource-bound confidential access token',
     auth: 'config_url query param + domain hash bearer token',
     body: {
-      'grant_type?': '"authorization_code" (default) or "refresh_token"',
+      'grant_type?':
+        '"authorization_code" (default), "refresh_token", or "urn:ietf:params:oauth:grant-type:token-exchange"',
       'code?': 'authorization code (for authorization_code grant)',
       'redirect_url?': 'required for authorization_code grant; must match issued URL',
       'code_verifier?': 'required for authorization_code grant; must match the S256 challenge',
       'refresh_token?': 'refresh token (for refresh_token grant)',
+      'subject_token?':
+        'short-lived RS256 JWT (for token-exchange grant), signed by the source config JWKS; must contain iss, source_domain, aud, sub, active { orgId, teamId }, jti, iat, and exp',
+      'subject_token_type?':
+        '"urn:ietf:params:oauth:token-type:jwt" (required for token-exchange grant)',
+      'resource?':
+        'exact allowlisted resource URI (required for token-exchange grant; becomes access-token aud)',
     },
     response: {
       access_token:
-        'HS256 JWT signed with the deployment SHARED_SECRET. aud="uoa:access-token". RPs cannot and should not verify it cryptographically — trust comes from the authenticated backend channel. See /api > access_token.claims for the claim schema.',
+        'Authorization-code/refresh grants: legacy HS256 JWT with aud="uoa:access-token". Confidential token-exchange grant: 5-minute RS256 JWT bound to resource, verifiable at GET /oauth/jwks.json, with stable sub + current org/active context and no domain bearer credential.',
       expires_in: 'number — seconds until access_token expiry',
-      refresh_token: 'string — opaque, server-side only; never hand to the browser',
-      refresh_token_expires_in: 'number — seconds until refresh_token expiry',
+      'refresh_token?':
+        'string — opaque, server-side only; authorization-code/refresh grants only, never hand to the browser',
+      'refresh_token_expires_in?':
+        'number — seconds until refresh_token expiry; authorization-code/refresh grants only',
+      'issued_token_type?':
+        '"urn:ietf:params:oauth:token-type:access_token"; confidential token-exchange grant only',
+      'scope?': '"ai.invoke"; confidential token-exchange grant only',
       token_type: '"Bearer"',
       'firstLogin?':
         'object { memberships: { orgs, teams }, pending_invites, capabilities { can_create_org, can_accept_invite } } — included on authorization_code exchange when org_features.enabled is true. memberships.orgs[] = { orgId, role } camelCase; memberships.teams[] = { teamId, orgId, role } camelCase; pending_invites[] = { inviteId, type, orgId, teamId, teamName } camelCase. Not included on refresh_token grants.',
       '[note]':
-        'There is NO top-level `user` field. User identity lives inside access_token claims (read claims.sub). The outer envelope is snake_case; firstLogin.* IDs are camelCase.',
+        'There is NO top-level `user` field. User identity lives inside access_token claims (read claims.sub). Confidential exchange re-resolves the current UOA user, active source-domain role, and requested ACTIVE org/team membership before issue; it never copies the 64-character domain bearer into client_id.',
       '401 refresh policy':
         'If the domain signature policy changed and the refresh-token user is incomplete, the valid refresh token is not rotated or consumed. Restart interactive authorization so the user can sign.',
     },

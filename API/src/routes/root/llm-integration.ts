@@ -2,6 +2,10 @@ export const llmIntegrationMarkdown = `---
 
 ## Phase 4 — Backend token exchange
 
+Sections 4.1–4.7 describe the legacy authorization-code / refresh-token profile.
+Section 4.6a documents the separate confidential JWT assertion grant and its
+resource-verifiable RS256 token.
+
 This call is server-to-server. The browser MUST never see the bearer token.
 
 \`\`\`text
@@ -46,7 +50,7 @@ If optional agreement signatures are enabled for the domain, a newly published v
 
 **Field-casing warning.** The outer envelope is snake_case (\`access_token\`, \`refresh_token\`, \`expires_in\`, \`refresh_token_expires_in\`). The key \`firstLogin\` itself and the IDs inside \`memberships.*\` and \`pending_invites[]\` (\`orgId\`, \`teamId\`, \`inviteId\`, \`teamName\`) are camelCase. \`pending_invites\` and \`capabilities.can_*\` are snake_case. Do not assume one style throughout.
 
-### 4.2 Access-token JWT claims
+### 4.2 Legacy access-token JWT claims
 
 The \`access_token\` is a JWT (compact JWS, three base64url segments). Decode the payload — no signature verification on the RP side (see the trust-model note below).
 
@@ -72,7 +76,7 @@ const email = claims.email as string;      // advisory
 const platformRole = claims.role as 'user' | 'superuser';
 \`\`\`
 
-### 4.3 Trust model — access tokens are HS256-signed
+### 4.3 Legacy trust model — authorization-code / refresh tokens are HS256-signed
 
 Access tokens are signed with \`HS256\` using the deployment-wide \`SHARED_SECRET\`. **RPs cannot and should not cryptographically verify them.** The config JWKS at \`/.well-known/jwks.json\` is for verifying RS256 *config* JWTs, not access tokens, and there is no UOA-side public JWKS for access tokens.
 
@@ -164,6 +168,78 @@ Server-side behaviour on first verified login is controlled by \`org_features\`:
 - \`registration_domain_mapping\` (top-level config) places the user into a configured org + team when the email domain matches.
 - \`auto_create_personal_org_on_first_login\` (default \`false\`) creates a personal org with the user as \`owner\` plus a default team when no mapping matches. Skipped when \`pending_invites_block_auto_create\` is \`true\` and a pending invite exists for the email.
 - \`allow_user_create_org\` (default \`false\`) gates \`POST /org/organisations\` for end-users. Superusers bypass. Keep \`false\` for admin-provisioned tenants.
+
+### 4.6a Confidential assertion exchange for Ledger
+
+A registered backend can exchange a short-lived user/workspace assertion for a
+resource-bound token without forwarding its normal UOA access token or its domain
+credential to the resource server. This is a separate RFC 8693-style grant on the
+same backend-only endpoint; the authorization-code and refresh grants above remain
+unchanged.
+
+\`\`\`ts
+import { SignJWT } from 'jose';
+
+const now = Math.floor(Date.now() / 1000);
+const subjectToken = await new SignJWT({
+  source_domain: 'api.nessie.works',
+  active: { orgId, teamId },
+})
+  .setProtectedHeader({ alg: 'RS256', kid: NESSIE_CONFIG_KEY_ID, typ: 'JWT' })
+  .setIssuer('api.nessie.works')
+  .setAudience('https://authentication.unlikeotherai.com/auth/token')
+  .setSubject(uoaUserId) // stable UOA sub, never email
+  .setJti(crypto.randomUUID())
+  .setIssuedAt(now)
+  .setExpirationTime(now + 60)
+  .sign(nessieConfigPrivateKey);
+
+const response = await fetch(
+  'https://authentication.unlikeotherai.com/auth/token?config_url=' +
+    encodeURIComponent(NESSIE_CONFIG_URL),
+  {
+    method: 'POST',
+    headers: {
+      Authorization: \`Bearer \${NESSIE_DOMAIN_HASH}\`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
+      subject_token: subjectToken,
+      subject_token_type: 'urn:ietf:params:oauth:token-type:jwt',
+      resource: 'https://ledger.unlikeotherai.com',
+    }),
+  },
+);
+\`\`\`
+
+The source config JWT MUST publish \`jwks_url\` on the source domain. UOA fetches
+that JWKS through its SSRF-protected, same-host pipeline and requires RS256 +
+\`kid\`. The assertion requires exact \`iss\` and \`source_domain\`, exact
+\`aud = PUBLIC_BASE_URL + "/auth/token"\`, stable UOA \`sub\`, non-empty \`jti\`,
+\`iat\`/\`exp\` no more than five minutes apart, and
+\`active: { orgId, teamId }\`.
+
+UOA does not trust the membership snapshot. Before issue it re-reads the user,
+source-domain role, requested ACTIVE org membership, and requested ACTIVE team
+membership. A removed/deactivated user or cross-org/team assertion is rejected.
+
+\`\`\`json
+{
+  "access_token": "<5-minute RS256 JWT>",
+  "issued_token_type": "urn:ietf:params:oauth:token-type:access_token",
+  "token_type": "Bearer",
+  "expires_in": 300,
+  "scope": "ai.invoke"
+}
+\`\`\`
+
+The issued token is verified with \`GET /oauth/jwks.json\` and contains
+\`iss\`, resource \`aud\`, stable \`sub\`, advisory \`email\`,
+\`source_domain\`, non-secret \`azp\` (the source domain), current \`org\`,
+selected \`active\`, \`scope\`, \`jti\`, \`iat\`, and \`exp\`. It contains no
+\`client_id\` and never contains the 64-character domain-hash bearer credential.
+This grant returns no refresh token.
 
 ### 4.7 Organisation member lifecycle — deactivate, reactivate, soft-remove
 

@@ -77,13 +77,46 @@ Set via Cloud Run service config:
 | `SHARED_SECRET` | Secret Manager: `uoa-auth-shared-secret` |
 | `GOOGLE_CLIENT_ID` | Secret Manager: `uoa-auth-google-client-id` |
 | `GOOGLE_CLIENT_SECRET` | Secret Manager: `uoa-auth-google-client-secret` |
-| `MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK` | Secret Manager: RS256 private JWK (JSON) for the public-client / MCP OAuth profile (brief §22.14); presence enables the whole `/oauth/*` profile |
-| `MCP_OAUTH_DOMAIN` | Plain value; **required when the MCP OAuth profile is enabled**: the dedicated first-party tenant domain for `/oauth/*`. Must be distinct from `ADMIN_AUTH_DOMAIN` — the service fails closed if unset or equal to `ADMIN_AUTH_DOMAIN` |
-| `MCP_OAUTH_RESOURCES_SUPPORTED` | Optional plain value; comma-separated, case-sensitive allowlist of RFC 8707 resource-server URIs the MCP profile may issue tokens for. A client-supplied `resource` must exactly match one of these or the request is rejected with `invalid_target` |
+| `MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK` | Secret Manager: `uoa-auth-mcp-oauth-access-token-private-jwk`; RS256 private JWK (JSON) shared by the public-client profile and confidential exchange. Presence enables `/oauth/*`; its public half is served at `/oauth/jwks.json` |
+| `MCP_OAUTH_DOMAIN` | Plain production value: `oauth.authentication.unlikeotherai.com`; required because the signing key enables the whole `/oauth/*` profile. Must be registered as a dedicated first-party tenant and remain distinct from `ADMIN_AUTH_DOMAIN` and customer domains |
+| `MCP_OAUTH_RESOURCES_SUPPORTED` | Plain production value: `https://ledger.unlikeotherai.com`; case-sensitive RFC 8707 resource allowlist for the public profile |
+| `CONFIDENTIAL_TOKEN_EXCHANGE_SOURCE_DOMAIN` | Plain production value: `api.nessie.works`; the only source config domain allowed to use the confidential assertion grant |
+| `CONFIDENTIAL_TOKEN_EXCHANGE_RESOURCE` | Plain production value: `https://ledger.unlikeotherai.com`; paired exactly with the source domain and used as the issued token audience |
 
 `/llm` is a Markdown integration guide for LLMs and human readers. `/api` is the machine-readable JSON schema and config contract.
 
 The private key used to sign `ADMIN_CONFIG_JWT` is not attached to Cloud Run. Store it separately in Secret Manager as `uoa-auth-config-jwt-private-jwk` for rotation/signing operations only.
+
+Before enabling the confidential exchange in production:
+
+1. Create `uoa-auth-mcp-oauth-access-token-private-jwk` as an RSA private JWK
+   with `alg=RS256`, a unique `kid`, and public `n`/`e` members; grant the Cloud
+   Run service account Secret Manager access.
+2. Register the dedicated `oauth.authentication.unlikeotherai.com` first-party
+   tenant required by the now-enabled `/oauth/*` profile.
+3. Confirm `https://api.nessie.works` publishes its assertion signing public key
+   at the `jwks_url` in its config JWT.
+4. Verify `GET https://authentication.unlikeotherai.com/oauth/jwks.json` returns
+   the configured public key before enabling callers.
+
+The secret value is one private RSA JWK JSON object with at least
+`kty="RSA"`, `alg="RS256"`, `use="sig"`, non-empty `kid`, public `n`/`e`, and
+private `d` (generated keys also include the CRT members). Generate it and send
+it directly to Secret Manager without printing it to the terminal:
+
+```bash
+gcloud secrets describe uoa-auth-mcp-oauth-access-token-private-jwk \
+  --project gen-lang-client-0561071620 >/dev/null 2>&1 ||
+gcloud secrets create uoa-auth-mcp-oauth-access-token-private-jwk \
+  --project gen-lang-client-0561071620 \
+  --replication-policy=automatic
+
+pnpm --filter @uoa/api exec node --input-type=module -e \
+  'import { randomUUID } from "node:crypto"; import { exportJWK, generateKeyPair } from "jose"; const { privateKey } = await generateKeyPair("RS256", { extractable: true }); const jwk = await exportJWK(privateKey); Object.assign(jwk, { kid: `uoa-access-${randomUUID()}`, alg: "RS256", use: "sig" }); process.stdout.write(JSON.stringify(jwk));' |
+gcloud secrets versions add uoa-auth-mcp-oauth-access-token-private-jwk \
+  --project gen-lang-client-0561071620 \
+  --data-file=-
+```
 
 ### Signature module production prerequisites (not enabled)
 

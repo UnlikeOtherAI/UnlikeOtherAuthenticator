@@ -4,6 +4,7 @@ import { createLocalJWKSet, exportJWK, generateKeyPair, jwtVerify } from 'jose';
 import {
   getAccessTokenPublicJwks,
   resetAccessTokenKeyCache,
+  signConfidentialAccessToken,
   signMcpAccessToken,
 } from '../access-token.service.js';
 
@@ -74,5 +75,43 @@ describe('mcp access-token (RS256)', () => {
     await expect(
       jwtVerify(token, jwks, { audience: 'https://other.example/mcp' }),
     ).rejects.toThrow();
+  });
+
+  it('signs confidential exchange tokens without copying a domain credential', async () => {
+    const resource = 'https://ledger.unlikeotherai.com';
+    const token = await signConfidentialAccessToken({
+      subject: 'usr_1',
+      email: 'a@b.com',
+      sourceDomain: 'api.nessie.works',
+      resource,
+      issuer: 'https://authentication.unlikeotherai.com',
+      ttlSeconds: 300,
+      scope: 'ai.invoke',
+      org: {
+        org_id: 'org_1',
+        org_role: 'member',
+        teams: ['team_1'],
+        team_roles: { team_1: 'member' },
+      },
+      active: { orgId: 'org_1', teamId: 'team_1' },
+    });
+
+    const jwks = createLocalJWKSet(await getAccessTokenPublicJwks());
+    const { payload, protectedHeader } = await jwtVerify(token, jwks, {
+      issuer: 'https://authentication.unlikeotherai.com',
+      audience: resource,
+    });
+    expect(protectedHeader.typ).toBe('at+jwt');
+    expect(payload).toMatchObject({
+      sub: 'usr_1',
+      email: 'a@b.com',
+      source_domain: 'api.nessie.works',
+      azp: 'api.nessie.works',
+      scope: 'ai.invoke',
+      active: { orgId: 'org_1', teamId: 'team_1' },
+    });
+    expect(payload.jti).toEqual(expect.any(String));
+    expect(payload.client_id).toBeUndefined();
+    expect(payload.domain).toBeUndefined();
   });
 });

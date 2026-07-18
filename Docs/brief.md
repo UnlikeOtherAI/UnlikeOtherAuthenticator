@@ -633,7 +633,8 @@ This profile **qualifies** specific rules above, scoped to `/oauth/*` only:
   authorization-code (and refresh-token) grant with **PKCE only and no shared-secret
   / domain-hash authorization**, because public clients cannot hold a secret. PKCE
   S256 is mandatory (as it already is for code issuance). The shared-secret-gated
-  `/auth/token` endpoint is unchanged.
+  `/auth/token` authorization-code and refresh-token grants are unchanged; §22.15
+  adds one confidential, domain-authenticated grant alongside them.
 * **Resource-bound RS256 access tokens (qualifies §14, §22.3).** Tokens issued by
   this profile are signed **RS256** with a dedicated auth-service access-token key
   (`MCP_OAUTH_ACCESS_TOKEN_*`) and carry an **`aud`** equal to the RFC 8707
@@ -664,6 +665,49 @@ otherwise the request is rejected with `invalid_target` (HTTP 400). When the cli
 supplies no `resource`, the token `aud` falls back to the issuer as before. The
 allowlist (when configured) is advertised in the RFC 8414 discovery metadata; when
 unset, no unconstrained resource support is advertised.
+
+### 22.15 Confidential subject-token exchange (2026-07 addition)
+
+`POST /auth/token` also accepts a narrowly configured RFC 8693-style confidential
+exchange. It exists for a trusted product backend to turn a short-lived,
+source-signed UOA user/workspace assertion into a resource-bound RS256 access
+token. It does not replace or alter the authorization-code and refresh-token
+grants.
+
+The caller must pass the normal verified `config_url` and per-domain hash bearer,
+plus:
+
+```json
+{
+  "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
+  "subject_token": "<RS256 JWT>",
+  "subject_token_type": "urn:ietf:params:oauth:token-type:jwt",
+  "resource": "https://ledger.unlikeotherai.com"
+}
+```
+
+The subject assertion is verified against the `jwks_url` published by the
+already-verified source config JWT. That JWKS URL must use HTTPS, remain on the
+source config domain, pass the public-destination SSRF checks, and contain the
+assertion's RS256 `kid`. The assertion has an exact source-domain `iss` and
+`source_domain`, exact `aud = PUBLIC_BASE_URL + "/auth/token"`, stable UOA `sub`,
+requested `active: { orgId, teamId }`, non-empty `jti`, and `iat`/`exp` no more
+than five minutes apart.
+
+The deployment config contains one exact
+`CONFIDENTIAL_TOKEN_EXCHANGE_SOURCE_DOMAIN` →
+`CONFIDENTIAL_TOKEN_EXCHANGE_RESOURCE` mapping. Both must be set; there is no
+open-ended target fallback and source/resource values cannot be mixed
+independently. Before issue, UOA re-resolves the current user, source-domain
+role, requested ACTIVE org membership, and requested ACTIVE team membership.
+Assertions for removed/deactivated or cross-tenant subjects fail closed.
+
+The result is a five-minute RS256 access token using the §22.14 access-token
+signing key and `GET /oauth/jwks.json`. It contains `iss`, resource `aud`, stable
+`sub`, advisory `email`, `source_domain`, non-secret `azp` (source domain),
+current `org`, selected `active`, `scope = "ai.invoke"`, `jti`, `iat`, and `exp`.
+It deliberately contains no `client_id` and never copies the 64-character
+domain-hash bearer credential. This grant issues no refresh token.
 
 ---
 

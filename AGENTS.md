@@ -32,4 +32,5 @@ Do not skip these. Do not skim. Read them in full before writing any code or mak
 - **Don't over-engineer.** Build exactly what's specified, nothing more.
 - **Raise conflicts.** If you find a contradiction between files, flag it immediately rather than silently resolving it.
 - **Keep API schema in sync.** When adding/removing/changing any endpoint, update both `API/src/routes/root/index.ts` (endpoint schema) and `API/src/routes/root/llm.ts` (config docs). These are the machine-readable API contract.
+- **Preserve the confidential exchange boundary.** The `/auth/token` assertion grant stays domain-hash authenticated, verifies short-lived RS256 assertions through the source config JWKS, re-resolves current org/team membership, and issues only resource-bound RS256 tokens through `/oauth/jwks.json`. Never copy the domain bearer into token claims.
 - **Commit and push every turn.** After each turn, commit the files you touched in that turn and push them to the current branch. Keep the scope tight because there may be multiple agents or processes working in parallel.

@@ -215,22 +215,23 @@ export const configValidationEndpointDocumentation = {
 
 export const accessTokenDocumentation = {
   description:
-    'The access_token returned by POST /auth/token is an HS256 JWT signed with the deployment SHARED_SECRET. Relying parties cannot and should not verify it cryptographically — trust derives from the authenticated backend channel (domain-hash bearer + PKCE). When an RP needs to validate a presented access token later, it should call UOA (e.g. GET /org/me) rather than attempting local verification.',
+    'Authorization-code and refresh grants at POST /auth/token return the legacy HS256 JWT signed with SHARED_SECRET. The confidential RFC 8693 token-exchange grant is separate: it returns a 5-minute, resource-bound RS256 token verified with GET /oauth/jwks.json. Never apply one profile’s verification rules to the other.',
   signing: {
+    profile: 'legacy authorization-code and refresh-token grants only',
     algorithm: 'HS256',
     key: 'deployment-wide SHARED_SECRET (not exposed, no UOA-side public JWKS)',
     audience: 'uoa:access-token',
   },
   claims: {
     sub: 'string — stable external user id. Primary foreign key for the RP into the UOA user.',
-    email: 'string — user primary email. Advisory (user may change it); sub is the stable identity.',
-    role:
-      'string — UOA platform role, "user" or "superuser". Gates UOA admin surfaces only. DO NOT use for RP authorization; honour firstLogin.memberships.orgs[].role (or GET /org/me) instead.',
-    domain: 'string — integration domain from the config JWT. Confirms which integration minted this token.',
+    email:
+      'string — user primary email. Advisory (user may change it); sub is the stable identity.',
+    role: 'string — UOA platform role, "user" or "superuser". Gates UOA admin surfaces only. DO NOT use for RP authorization; honour firstLogin.memberships.orgs[].role (or GET /org/me) instead.',
+    domain:
+      'string — integration domain from the config JWT. Confirms which integration minted this token.',
     client_id:
       'string — SHA256(domain + clientSecret) hex. Identifies the exact client credential used.',
-    org:
-      'object | absent — present only when org_features.enabled and the user has an org on this domain. Shape: { org_id, org_role, teams[], team_roles{}, groups?[], group_admin?[] }.',
+    org: 'object | absent — present only when org_features.enabled and the user has an org on this domain. Shape: { org_id, org_role, teams[], team_roles{}, groups?[], group_admin?[] }.',
     iss: 'string — UOA host (e.g. authentication.unlikeotherai.com).',
     aud: 'string — always "uoa:access-token".',
     iat: 'number — issued at, epoch seconds.',
@@ -245,6 +246,32 @@ export const accessTokenDocumentation = {
   ],
   response_envelope_casing:
     'The /auth/token response envelope is snake_case (access_token, refresh_token, expires_in, refresh_token_expires_in, token_type). The key firstLogin is camelCase; memberships.orgs[].orgId, memberships.teams[].teamId, memberships.teams[].orgId, and pending_invites[].inviteId/orgId/teamId/teamName are camelCase. pending_invites and capabilities.can_* remain snake_case.',
+};
+
+export const confidentialTokenExchangeDocumentation = {
+  description:
+    'Confidential RFC 8693-style exchange on POST /auth/token. The source backend authenticates with its normal config_url + domain-hash bearer and supplies a short-lived RS256 subject JWT. UOA verifies that assertion with the JWKS URL published in the already-verified source config, re-resolves current identity and ACTIVE workspace membership, then issues a Ledger-bound RS256 access token.',
+  request: {
+    grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
+    subject_token:
+      'RS256 JWT with kid; maximum 5-minute exp-iat and required iss, aud, sub, source_domain, active { orgId, teamId }, jti, iat, exp',
+    subject_token_type: 'urn:ietf:params:oauth:token-type:jwt',
+    resource: 'exact configured resource URI',
+  },
+  subject_assertion_binding: {
+    issuer: 'exact source config domain',
+    audience: 'PUBLIC_BASE_URL + /auth/token',
+    key_source: 'same-host jwks_url claim from the verified source config JWT',
+  },
+  issued_access_token: {
+    algorithm: 'RS256',
+    lifetime: '300 seconds',
+    jwks: 'GET /oauth/jwks.json',
+    claims:
+      'iss, aud, sub, email (advisory), source_domain, azp (source domain only), org, active, scope="ai.invoke", jti, iat, exp',
+    forbidden_claims:
+      'client_id and the 64-character domain-hash bearer credential are never copied into this token',
+  },
 };
 
 export const configVerificationEndpointDocumentation = {

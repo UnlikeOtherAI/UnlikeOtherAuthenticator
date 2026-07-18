@@ -60,6 +60,8 @@ If you are working on branch `api-2.0`, read [`Docs/api-2.0-implementation-plan.
 - All auth errors are generic to the user
 - Only provider-verified emails accepted from social logins
 - All config JWTs must be verified before trust
+- Confidential `/auth/token` assertions must be RS256, short-lived, audience-bound, and verified through the source config's same-host JWKS. Re-resolve current domain/org/team membership before issue.
+- Confidential resource tokens use the public OAuth RS256 signing profile and `/oauth/jwks.json`, carry only the non-secret source domain as `azp`, and must never contain the per-domain hash bearer credential.
 
 ### API Schema & /llm Endpoint
 

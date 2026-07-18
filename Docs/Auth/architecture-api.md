@@ -175,6 +175,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       config-secret-scan.service.ts         — Config secret-leak scanning
       config-validation-guidance.service.ts — Config validation guidance text
       config.service.ts                     — Config JWT verification orchestrator
+      confidential-token-exchange.service.ts — Verify source assertions, re-resolve workspace identity, and issue resource tokens
       domain-email-config.service.ts        — Per-domain email config + SES wiring
       domain-role.service.ts                — Domain role lookups (superuser etc.)
       domain-secret.service.ts              — Domain shared-secret management
@@ -321,6 +322,14 @@ Request → Route → Middleware → Service → Database (Prisma)
 * **org-role-guard** — validates the user access token and the user's org role for `/org/*` routes (`owner > admin > member`). Reads `OrgMember.role` for the authenticated user in the target org and returns 403 if not a member or the role is insufficient.
 * **error-handler** — catches all errors. Returns a generic public body via `utils/error-response.ts` to the caller and logs specifics internally.
 * **rate-limiter** — request rate limiting; keyed helpers for auth routes live in `routes/auth/rate-limit-keys.ts`.
+
+`POST /auth/token` remains a thin multi-grant route. Its confidential assertion
+branch uses the same config verifier and domain-hash guard as the legacy grants,
+then delegates all source-JWKS verification, exact source→resource allowlisting,
+current identity/workspace resolution, and RS256 issuance to
+`confidential-token-exchange.service.ts`. Pre-context reads use the admin Prisma
+client because the user tenant is not trusted until the assertion and memberships
+have been verified.
 
 > SCIM is deferred. When implementation lands, add a `scim-auth` middleware (SCIM bearer token validation and org-scope verification for `/scim/v2/*`, returning 401 on invalid token and 403 on org scope mismatch) and update both this list and the directory tree.
 

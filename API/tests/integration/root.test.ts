@@ -60,6 +60,12 @@ describe('GET /api', () => {
     );
     expect(body.config_validation.path).toBe('/config/validate');
     expect(body.config_verification.path).toBe('/config/verify');
+    expect(body.confidential_token_exchange.issued_access_token.algorithm).toBe(
+      'RS256',
+    );
+    expect(body.confidential_token_exchange.issued_access_token.forbidden_claims).toContain(
+      'client_id',
+    );
     expect(body.endpoints).toEqual(expect.any(Array));
     expect(body.endpoints.length).toBeGreaterThan(0);
 
@@ -302,5 +308,8 @@ describe('GET /llm', () => {
     expect(res.body).toContain('INTEGRATION_JWKS_HOST_MISMATCH');
     expect(res.body).toContain('Optional per-domain agreement signatures');
     expect(res.body).toContain('SIGNATURE_EVIDENCE_PUBLIC_JWKS_JSON');
+    expect(res.body).toContain('Confidential assertion exchange for Ledger');
+    expect(res.body).toContain('urn:ietf:params:oauth:grant-type:token-exchange');
+    expect(res.body).toContain('/oauth/jwks.json');
   });
 });

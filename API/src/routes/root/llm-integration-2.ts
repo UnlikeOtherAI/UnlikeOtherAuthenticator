@@ -175,7 +175,7 @@ For deep diagnostics of failed \`/auth\` requests, a UOA superuser can open **/a
 
 ## What NOT to do
 
-- Do NOT use HS256 or any algorithm other than RS256 for the CONFIG JWT. UOA rejects everything else on the config-signing path. (Access tokens returned by \`/auth/token\` are separately HS256-signed by UOA and are not your concern — see 4.3.)
+- Do NOT use HS256 or any algorithm other than RS256 for the CONFIG JWT. UOA rejects everything else on the config-signing path. (Legacy authorization-code/refresh access tokens returned by \`/auth/token\` are separately HS256-signed; confidential assertion tokens are RS256 and use \`/oauth/jwks.json\` — see 4.3 and 4.6a.)
 - Do NOT reuse a \`kid\` after rotation. Always pick a new \`kid\`.
 - Do NOT put \`client_secret\`, \`client_hash\`, \`SHARED_SECRET\`, refresh tokens, or OAuth codes into the config JWT payload.
 - Do NOT call \`/auth/token\` or \`/auth/revoke\` from the browser. The bearer is backend-only.
@@ -185,7 +185,7 @@ For deep diagnostics of failed \`/auth\` requests, a UOA superuser can open **/a
 - Do NOT skip \`/config/validate\` before pointing real users at UOA.
 - Do NOT append \`?state=…\` (or any per-request query) to \`redirect_url\`. The allowlist match is byte-for-byte; your \`/start\` endpoint must return the state token **separately** so the caller can stash it in \`sessionStorage\` or a first-party cookie. See Phase 3.1.
 - Do NOT assume \`POST /auth/token\` returns a top-level \`user\` object. It does not. See 4.1.
-- Do NOT attempt to verify \`access_token\` against the config JWKS. It is HS256 and not RP-verifiable. See 4.3.
+- Do NOT attempt to verify a legacy authorization-code/refresh \`access_token\` against the config JWKS. It is HS256 and not RP-verifiable. A confidential assertion token is verified against \`/oauth/jwks.json\`, never the config JWKS. See 4.3 and 4.6a.
 - Do NOT fall back to a synthetic tenant ID (\`"default"\`, email domain, etc.) when \`firstLogin.memberships.orgs\` is empty. See 4.5.
 - Do NOT use \`claims.role\` for RP authorization. It is the UOA platform role, not your tenant role. See 4.4.
 

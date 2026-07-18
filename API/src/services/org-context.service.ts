@@ -33,6 +33,8 @@ export async function getUserOrgContext(
     userId: string;
     domain: string;
     config: ClientConfig;
+    /** Resolve one requested organisation instead of the first active membership. */
+    orgId?: string;
   },
   deps?: OrgContextDeps,
 ): Promise<OrgContext | null> {
@@ -43,7 +45,9 @@ export async function getUserOrgContext(
 
   const userId = params.userId.trim();
   const domain = normalizeDomain(params.domain);
+  const orgId = params.orgId?.trim();
   if (!userId || !domain) throw new AppError('BAD_REQUEST', 400);
+  if (params.orgId !== undefined && !orgId) throw new AppError('BAD_REQUEST', 400);
 
   const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgContextPrisma);
 
@@ -53,6 +57,7 @@ export async function getUserOrgContext(
   const orgMembership = await prisma.orgMember.findFirst({
     where: {
       userId,
+      ...(orgId ? { orgId } : {}),
       status: 'ACTIVE',
       org: {
         domain,

@@ -129,4 +129,32 @@ describe('org-context service', () => {
     expect(prisma.teamMember.findMany).not.toHaveBeenCalled();
     expect(prisma.groupMember.findMany).not.toHaveBeenCalled();
   });
+
+  it('restricts lookup to the explicitly requested organisation', async () => {
+    const prisma = makePrismaMock();
+    prisma.orgMember.findFirst.mockResolvedValue({
+      orgId: 'org_selected',
+      role: 'member',
+    });
+    prisma.teamMember.findMany.mockResolvedValue([]);
+
+    await getUserOrgContext(
+      {
+        userId: 'user_1',
+        domain: 'acme.example.com',
+        config: makeConfig({ groups_enabled: false }),
+        orgId: 'org_selected',
+      },
+      { env, prisma },
+    );
+
+    expect(prisma.orgMember.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          orgId: 'org_selected',
+          status: 'ACTIVE',
+        }),
+      }),
+    );
+  });
 });

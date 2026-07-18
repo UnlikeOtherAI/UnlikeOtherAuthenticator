@@ -272,6 +272,29 @@ components:
                 can_accept_invite:
                   type: boolean
 
+    ConfidentialTokenExchangeResponse:
+      type: object
+      required: [access_token, issued_token_type, token_type, expires_in, scope]
+      additionalProperties: false
+      properties:
+        access_token:
+          type: string
+          description: |
+            Five-minute RS256 JWT bound to the requested resource. Verify with
+            GET /oauth/jwks.json and enforce iss + aud + exp.
+        issued_token_type:
+          type: string
+          enum: ['urn:ietf:params:oauth:token-type:access_token']
+        token_type:
+          type: string
+          enum: [Bearer]
+        expires_in:
+          type: integer
+          enum: [300]
+        scope:
+          type: string
+          enum: [ai.invoke]
+
     AdminTokenResponse:
       type: object
       required: [access_token, expires_in, token_type]
@@ -1079,10 +1102,14 @@ paths:
   /auth/token:
     post:
       tags: [Auth]
-      summary: Token exchange (authorization code or refresh token)
+      summary: Token exchange (authorization code, refresh token, or confidential JWT assertion)
       operationId: exchangeToken
       description: |
-        Exchanges an authorization code or refresh token for an access token pair.
+        Exchanges an authorization code or refresh token for the legacy access-token
+        pair. A confidential backend may instead use the RFC 8693 token-exchange grant
+        with a short-lived source-signed JWT to obtain a five-minute, resource-bound
+        RS256 access token. That grant re-resolves the current user, source-domain role,
+        and requested ACTIVE org/team membership before issue.
         Requires domain hash bearer authentication.
         Rate limited: 10/min per IP.
       security:
@@ -1125,13 +1152,42 @@ paths:
                     refresh_token:
                       type: string
                       minLength: 1
+                - title: Confidential JWT Token Exchange
+                  type: object
+                  required: [grant_type, subject_token, subject_token_type, resource]
+                  additionalProperties: false
+                  properties:
+                    grant_type:
+                      type: string
+                      enum: ['urn:ietf:params:oauth:grant-type:token-exchange']
+                    subject_token:
+                      type: string
+                      minLength: 1
+                      maxLength: 16384
+                      description: |
+                        RS256 JWT signed by a kid in the source config's same-host
+                        jwks_url. Required claims: iss and source_domain equal the
+                        source config domain; aud equals this /auth/token endpoint;
+                        stable UOA sub; active { orgId, teamId }; jti; iat; exp.
+                        exp-iat must not exceed five minutes.
+                    subject_token_type:
+                      type: string
+                      enum: ['urn:ietf:params:oauth:token-type:jwt']
+                    resource:
+                      type: string
+                      maxLength: 2048
+                      description: |
+                        Exact configured source-domain-to-resource allowlist target.
+                        This value becomes the issued access token's aud.
       responses:
         '200':
-          description: Token pair issued.
+          description: Legacy token pair or confidential resource access token issued.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TokenResponse'
+                oneOf:
+                  - $ref: '#/components/schemas/TokenResponse'
+                  - $ref: '#/components/schemas/ConfidentialTokenExchangeResponse'
         '400':
           description: Invalid request or token.
           content:

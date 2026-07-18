@@ -3,6 +3,8 @@
 // verified by resource servers via the published JWKS (GET /oauth/jwks.json) with no
 // shared secret. This is deliberately separate from the HS256 client-domain access
 // tokens (token.service.ts) and from config-JWT verification (§22.2).
+import { randomUUID } from 'node:crypto';
+
 import { type JWK, type KeyLike, SignJWT, importJWK } from 'jose';
 
 import { getEnv } from '../../config/env.js';
@@ -92,6 +94,54 @@ export async function signMcpAccessToken(claims: McpAccessTokenClaims): Promise<
       .setIssuer(claims.issuer)
       .setAudience(claims.resource)
       .setSubject(claims.subject)
+      .setIssuedAt()
+      .setExpirationTime(`${claims.ttlSeconds}s`)
+      .sign(privateKey);
+  } catch {
+    throw new AppError('INTERNAL', 500, 'TOKEN_SIGN_FAILED');
+  }
+}
+
+export interface ConfidentialAccessTokenClaims {
+  subject: string;
+  email: string;
+  sourceDomain: string;
+  resource: string;
+  issuer: string;
+  ttlSeconds: number;
+  scope: string;
+  org: OrgContext;
+  active: {
+    orgId: string;
+    teamId: string;
+  };
+}
+
+/**
+ * Sign a resource-bound access token for a confidential RFC 8693 exchange.
+ *
+ * `azp` is the non-secret source domain. In particular this profile never copies
+ * the domain-hash bearer credential into `client_id` (or any other claim).
+ */
+export async function signConfidentialAccessToken(
+  claims: ConfidentialAccessTokenClaims,
+): Promise<string> {
+  const { privateKey, kid } = await load();
+
+  try {
+    return await new SignJWT({
+      email: claims.email,
+      source_domain: claims.sourceDomain,
+      azp: claims.sourceDomain,
+      scope: claims.scope,
+      org: claims.org,
+      active: claims.active,
+    })
+      .setProtectedHeader({ alg: ALG, kid, typ: 'at+jwt' })
+      .setIssuer(claims.issuer)
+      .setAudience(claims.resource)
+      .setSubject(claims.subject)
+      .setJti(randomUUID())
       .setIssuedAt()
       .setExpirationTime(`${claims.ttlSeconds}s`)
       .sign(privateKey);

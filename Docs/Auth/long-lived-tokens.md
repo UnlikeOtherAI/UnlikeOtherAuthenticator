@@ -1,7 +1,7 @@
 # Long-Lived Tokens
 
 > **Status:** Implemented
-> **Purpose:** Define the refresh-token contract used by client backends that need long-lived sessions without re-running the full OAuth popup flow.
+> **Purpose:** Define the refresh-token contract and the separate short-lived confidential resource-token grant used by client backends.
 
 ---
 
@@ -15,10 +15,12 @@ The Authenticator now issues a **token pair** from `POST /auth/token`:
 - `expires_in`
 - `refresh_token_expires_in`
 
-`POST /auth/token` supports two grants:
+`POST /auth/token` supports three grants:
 
 1. Authorization-code exchange
 2. Refresh-token exchange with `grant_type=refresh_token`
+3. Confidential JWT assertion exchange with
+   `grant_type=urn:ietf:params:oauth:grant-type:token-exchange`
 
 `POST /auth/revoke` revokes the refresh-token family used by the caller during logout.
 
@@ -30,6 +32,7 @@ The Authenticator now issues a **token pair** from `POST /auth/token`:
 |-------|--------|----------|----------------|----------------|
 | Access token | HS256 JWT | 15-60 minutes | Memory / short-lived session | Stateless |
 | Refresh token | Opaque random base64url string | 1-90 days, default 30 | Backend-only, never browser JS | SHA-256 hash in `refresh_tokens` |
+| Confidential resource token | RS256 JWT | 5 minutes | Calling backend only | Stateless |
 
 ### Important Constraints
 
@@ -99,6 +102,17 @@ Refresh-token request:
 }
 ```
 
+Confidential assertion request:
+
+```json
+{
+  "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
+  "subject_token": "<short-lived source-signed RS256 JWT>",
+  "subject_token_type": "urn:ietf:params:oauth:token-type:jwt",
+  "resource": "https://ledger.unlikeotherai.com"
+}
+```
+
 Success response:
 
 ```json
@@ -110,6 +124,21 @@ Success response:
   "token_type": "Bearer"
 }
 ```
+
+The confidential grant instead returns only:
+
+```json
+{
+  "access_token": "<5-minute resource-bound RS256 JWT>",
+  "issued_token_type": "urn:ietf:params:oauth:token-type:access_token",
+  "token_type": "Bearer",
+  "expires_in": 300,
+  "scope": "ai.invoke"
+}
+```
+
+It does not issue or rotate a refresh token. The source backend creates a fresh
+assertion when another resource token is needed.
 
 ### `POST /auth/revoke`
 
@@ -137,6 +166,9 @@ Success response:
 |----------|---------|-------------|
 | `ACCESS_TOKEN_TTL` | `30m` | Short-lived JWT lifetime, bounded to 15-60 minutes |
 | `REFRESH_TOKEN_TTL_DAYS` | `30` | Refresh-token lifetime in days, bounded to 1-90 |
+| `CONFIDENTIAL_TOKEN_EXCHANGE_SOURCE_DOMAIN` | unset (disabled) | Exact source config domain for confidential exchange |
+| `CONFIDENTIAL_TOKEN_EXCHANGE_RESOURCE` | unset (disabled) | Exact HTTPS resource paired with the source domain |
+| `MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK` | unset | RS256 signing key whose public half is served at `/oauth/jwks.json` |
 
 ---
 

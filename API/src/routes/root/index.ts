@@ -6,6 +6,7 @@ import type { FastifyInstance } from 'fastify';
 
 import {
   accessTokenDocumentation,
+  confidentialTokenExchangeDocumentation,
   configJwtDocumentation,
   configValidationEndpointDocumentation,
   configVerificationEndpointDocumentation,
@@ -53,6 +54,7 @@ export function registerRootRoute(app: FastifyInstance): void {
       api: '/api',
       config_jwt: configJwtDocumentation,
       access_token: accessTokenDocumentation,
+      confidential_token_exchange: confidentialTokenExchangeDocumentation,
       config_validation: configValidationEndpointDocumentation,
       config_verification: configVerificationEndpointDocumentation,
       endpoints,
