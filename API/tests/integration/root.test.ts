@@ -69,6 +69,9 @@ describe('GET /api', () => {
     expect(body.confidential_token_exchange.request.subject_token).toContain(
       'optional active',
     );
+    expect(body.confidential_token_exchange.subject_assertion_binding.replay_protection).toContain(
+      'atomically consumes',
+    );
     expect(body.confidential_token_exchange.issued_access_token.claims).toContain(
       'org and active are present together',
     );
@@ -318,5 +321,6 @@ describe('GET /llm', () => {
     expect(res.body).toContain('urn:ietf:params:oauth:grant-type:token-exchange');
     expect(res.body).toContain('/oauth/jwks.json');
     expect(res.body).toContain('first-time or workspace-less users');
+    expect(res.body).toContain('concurrent replays are rejected');
   });
 });

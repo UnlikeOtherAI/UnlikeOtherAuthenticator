@@ -138,7 +138,11 @@ The confidential grant instead returns only:
 ```
 
 It does not issue or rotate a refresh token. The source backend creates a fresh
-assertion when another resource token is needed.
+assertion with a new unique `jti` when another resource token is needed. After
+identity and any selected workspace are revalidated, UOA atomically consumes
+that source-domain `jti` in PostgreSQL before signing. Exact or concurrent
+replays are rejected across instances. Only a SHA-256 digest is retained through
+the assertion's `exp` plus accepted clock tolerance, then pruned.
 
 The source assertion's `exp - iat` MUST be no more than 60 seconds. The issued
 resource access token remains five minutes (`expires_in: 300`).
@@ -202,4 +206,5 @@ Client backends integrating with the Authenticator must:
 ## Deployment Notes
 
 - The refresh-token feature requires the `refresh_tokens` Prisma migration to be deployed before the new application revision starts serving traffic.
+- Confidential assertion replay protection requires the `confidential_assertion_uses` migration to be deployed before confidential exchange traffic reaches the new revision.
 - For G Cloud / Cloud Run deployments, apply `prisma migrate deploy` as part of the rollout before or alongside the new container revision.

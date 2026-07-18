@@ -222,7 +222,10 @@ that JWKS through its SSRF-protected, same-host pipeline and requires RS256 +
 \`iat\`/\`exp\` no more than 60 seconds apart. \`active\` is optional for
 first-time or workspace-less users. When present it must be exactly
 \`{ orgId, teamId }\` with both values non-empty; partial or malformed workspace
-objects are rejected.
+objects are rejected. Mint a fresh unique \`jti\` for every attempt: after
+identity and optional workspace validation, UOA atomically consumes that
+source-domain + \`jti\` once through \`exp\` plus clock tolerance. Exact and
+concurrent replays are rejected across service instances.
 
 UOA never trusts the assertion as current identity state. Before every issue it
 re-reads the user and source-domain role. When \`active\` is supplied it also

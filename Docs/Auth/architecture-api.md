@@ -175,6 +175,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       config-secret-scan.service.ts         — Config secret-leak scanning
       config-validation-guidance.service.ts — Config validation guidance text
       config.service.ts                     — Config JWT verification orchestrator
+      confidential-assertion-use.service.ts — Durable source+jti one-time claims for confidential exchange
       confidential-token-exchange.service.ts — Verify source assertions, re-resolve workspace identity, and issue resource tokens
       domain-email-config.service.ts        — Per-domain email config + SES wiring
       domain-role.service.ts                — Domain role lookups (superuser etc.)
@@ -330,7 +331,11 @@ current identity resolution, conditional selected-workspace resolution, and
 RS256 issuance to
 `confidential-token-exchange.service.ts`. Pre-context reads use the admin Prisma
 client because the user tenant is not trusted until the assertion, user, domain
-role, and any selected memberships have been verified.
+role, and any selected memberships have been verified. Immediately after those
+checks, `confidential-assertion-use.service.ts` atomically inserts a hashed
+source-domain + `jti` claim through accepted expiry plus clock tolerance; the
+database uniqueness constraint serializes concurrent exchanges across processes
+before access-token signing.
 
 > SCIM is deferred. When implementation lands, add a `scim-auth` middleware (SCIM bearer token validation and org-scope verification for `/scim/v2/*`, returning 401 on invalid token and 403 on org scope mismatch) and update both this list and the directory tree.
 

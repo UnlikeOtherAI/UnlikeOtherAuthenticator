@@ -15,6 +15,10 @@ import {
   type ConfidentialAccessTokenClaims,
 } from './oauth/access-token.service.js';
 import { getUserOrgContext } from './org-context.service.js';
+import {
+  CONFIDENTIAL_ASSERTION_CLOCK_TOLERANCE_SECONDS,
+  consumeConfidentialAssertion,
+} from './confidential-assertion-use.service.js';
 
 export const TOKEN_EXCHANGE_GRANT_TYPE = 'urn:ietf:params:oauth:grant-type:token-exchange';
 export const JWT_SUBJECT_TOKEN_TYPE = 'urn:ietf:params:oauth:token-type:jwt';
@@ -23,7 +27,6 @@ export const CONFIDENTIAL_ACCESS_TOKEN_TTL_SECONDS = 5 * 60;
 export const CONFIDENTIAL_ACCESS_TOKEN_SCOPE = 'ai.invoke';
 
 export const SUBJECT_ASSERTION_MAX_TTL_SECONDS = 60;
-const SUBJECT_ASSERTION_CLOCK_TOLERANCE_SECONDS = 5;
 export const CONFIDENTIAL_SUBJECT_RATE_LIMIT_PER_MINUTE = 60;
 
 const consumeSubjectExchange = createKeyedRateLimiter({
@@ -69,6 +72,7 @@ type ExchangeDeps = {
   fetchJwks?: (jwksUrl: string, opts: { expectedHost: string }) => Promise<PublicRsaJwks>;
   now?: () => number;
   signAccessToken?: (claims: ConfidentialAccessTokenClaims) => Promise<string>;
+  consumeAssertion?: typeof consumeConfidentialAssertion;
   consumeSubjectRateLimit?: (key: string) => void;
 };
 
@@ -150,7 +154,7 @@ export async function verifyConfidentialSubjectToken(
       algorithms: ['RS256'],
       issuer: sourceDomain,
       audience: params.audience,
-      clockTolerance: SUBJECT_ASSERTION_CLOCK_TOLERANCE_SECONDS,
+      clockTolerance: CONFIDENTIAL_ASSERTION_CLOCK_TOLERANCE_SECONDS,
     });
     const assertion = SubjectAssertionSchema.parse(payload);
     const now = deps.now?.() ?? Math.floor(Date.now() / 1000);
@@ -161,7 +165,7 @@ export async function verifyConfidentialSubjectToken(
       assertion.source_domain !== sourceDomain ||
       assertion.exp <= assertion.iat ||
       assertion.exp - assertion.iat > SUBJECT_ASSERTION_MAX_TTL_SECONDS ||
-      assertion.iat > now + SUBJECT_ASSERTION_CLOCK_TOLERANCE_SECONDS
+      assertion.iat > now + CONFIDENTIAL_ASSERTION_CLOCK_TOLERANCE_SECONDS
     ) {
       throw invalidSubjectToken();
     }
@@ -236,6 +240,19 @@ export async function exchangeConfidentialSubjectToken(
   if (assertion.active && (!org || !org.teams.includes(assertion.active.teamId))) {
     throw new AppError('FORBIDDEN', 403, 'TOKEN_EXCHANGE_SUBJECT_FORBIDDEN');
   }
+
+  const nowSeconds = deps.now;
+  await (deps.consumeAssertion ?? consumeConfidentialAssertion)(
+    {
+      expiresAtEpochSeconds: assertion.exp,
+      jti: assertion.jti,
+      sourceDomain,
+    },
+    {
+      prisma,
+      ...(nowSeconds ? { now: () => new Date(nowSeconds() * 1000) } : {}),
+    },
+  );
 
   const workspaceClaims = assertion.active && org ? { org, active: assertion.active } : {};
 

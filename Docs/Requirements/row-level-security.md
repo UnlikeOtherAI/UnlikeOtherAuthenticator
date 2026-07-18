@@ -128,6 +128,7 @@ All four auto-onboarding tables plus the audit log are accessed exclusively thro
 | `client_domain_integration_requests` | `uoa_admin` only. Auto-onboarding service (`integration-request.service.ts`, `auto-onboarding.service.ts`) receives the admin client from its caller. `REVOKE ALL` for `uoa_app`. |
 | `integration_claim_tokens` | `uoa_admin` only. `REVOKE ALL` for `uoa_app`. |
 | `admin_audit_log` | `uoa_admin` only. `REVOKE ALL` for `uoa_app`. `audit-log.service.ts` must be refactored to accept a prisma client from the caller instead of calling `getPrisma()` (current implementation binds it to `uoa_app`, which will permission-deny). |
+| `confidential_assertion_uses` | `uoa_admin` only. The confidential exchange runs before tenant context is trusted and atomically claims a hashed source-domain `jti`; `REVOKE ALL` plus a deny-all policy for `uoa_app`. |
 
 No `app.claim_token_hash` session variable is needed — the claim route runs on `uoa_admin`.
 
@@ -149,7 +150,7 @@ Two migrations. Splitting avoids the `FORCE ROW LEVEL SECURITY` baking-in risk t
 3. Grant table/sequence privileges:
    - `uoa_app`: `SELECT, INSERT, UPDATE, DELETE` on tenant-scoped and domain-scoped tables.
    - `uoa_admin`: `SELECT, INSERT, UPDATE, DELETE` on every table listed in section 7, including admin-only.
-   - `REVOKE ALL` on admin-only tables (`client_domain_jwks`, `client_domain_integration_requests`, `integration_claim_tokens`, `admin_audit_log`, `client_domains`, `client_domain_secrets`, `handshake_error_logs`) from `uoa_app`.
+   - `REVOKE ALL` on admin-only tables (`client_domain_jwks`, `client_domain_integration_requests`, `integration_claim_tokens`, `admin_audit_log`, `client_domains`, `client_domain_secrets`, `handshake_error_logs`, `confidential_assertion_uses`) from `uoa_app`.
 4. Do **not** `ENABLE ROW LEVEL SECURITY` yet. No policies yet. Shipping this migration is a no-op for runtime behaviour as long as the app keeps using the legacy connection URL; once the app switches to `uoa_app`, it can still read/write everything that wasn't revoked.
 
 At this point, deploy the app with:
@@ -357,6 +358,7 @@ Exhaustive map of every DB access path the reviews surfaced, grouped by required
 | `/internal/admin/*` routes + their services | `uoa_admin` | Superuser scope, by design. |
 | `/integrations/claim/:token` + confirm | `uoa_admin` | Capability token in URL; no tenant context. |
 | `/.well-known/jwks.json` | `uoa_admin` | Unauthenticated. |
+| Confidential `/auth/token` assertion identity/workspace reads + one-time `jti` claim | `uoa_admin` | Caller tenancy is not trusted until the assertion and current identity/workspace pass validation; database uniqueness serializes replay claims across instances. |
 | Retention pruning timer (`app.ts:96-112` → `retention-pruning.service.ts`) | `uoa_admin` | Timer-driven, no request context. |
 | `audit-log.service.ts` writes | `uoa_admin` | Called from admin routes; service must accept client param. |
 | Post-auth org/team/group/member queries | `uoa_app` | Full context set by preHandler. |

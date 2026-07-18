@@ -96,6 +96,10 @@ function prismaMock(options?: {
         .fn()
         .mockResolvedValue(options?.domainRoleExists === false ? null : { role: 'USER' }),
     },
+    confidentialAssertionUse: {
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      create: vi.fn().mockResolvedValue({ id: 'assertion-use-1' }),
+    },
     orgMember: {
       findFirst: vi.fn().mockResolvedValue({ orgId: 'org_1', role: 'member' }),
     },
@@ -269,6 +273,7 @@ describe('confidential token exchange', () => {
     expect(claims).not.toHaveProperty('active');
     expect(prisma.orgMember.findFirst).not.toHaveBeenCalled();
     expect(prisma.teamMember.findMany).not.toHaveBeenCalled();
+    expect(prisma.confidentialAssertionUse.create).toHaveBeenCalledOnce();
   });
 
   it('re-resolves the user and selected workspace before signing', async () => {
@@ -319,6 +324,7 @@ describe('confidential token exchange', () => {
   });
 
   it('rejects an assertion when its selected team membership is no longer active', async () => {
+    const prisma = prismaMock({ activeTeam: false });
     await expect(
       exchangeConfidentialSubjectToken(
         {
@@ -328,12 +334,13 @@ describe('confidential token exchange', () => {
           configJwt,
         },
         {
-          prisma: prismaMock({ activeTeam: false }),
+          prisma,
           fetchJwks: fetchJwks(),
           signAccessToken: vi.fn(),
         },
       ),
     ).rejects.toThrow('TOKEN_EXCHANGE_SUBJECT_FORBIDDEN');
+    expect(prisma.confidentialAssertionUse.create).not.toHaveBeenCalled();
   });
 
   it('rejects identity-only assertions for an unknown user or missing source-domain role', async () => {
@@ -357,7 +364,47 @@ describe('confidential token exchange', () => {
           },
         ),
       ).rejects.toThrow('TOKEN_EXCHANGE_SUBJECT_FORBIDDEN');
+      expect(prisma.confidentialAssertionUse.create).not.toHaveBeenCalled();
     }
+  });
+
+  it('rejects an exact assertion replay while accepting a fresh jti', async () => {
+    const prisma = prismaMock();
+    const consumed = new Set<string>();
+    vi.mocked(prisma.confidentialAssertionUse.create).mockImplementation(async ({ data }) => {
+      const key = `${data.sourceDomain}:${data.jtiHash}`;
+      if (consumed.has(key)) {
+        throw { code: 'P2002' };
+      }
+      consumed.add(key);
+      return { id: `use-${consumed.size}` };
+    });
+    const signAccessToken = vi.fn().mockResolvedValue('ledger-access-token');
+    const repeatedAssertion = await signSubjectToken({ omitActive: true, jti: 'one-time-jti' });
+    const exchange = (subjectToken: string) =>
+      exchangeConfidentialSubjectToken(
+        {
+          subjectToken,
+          resource,
+          config: config(),
+          configJwt,
+        },
+        {
+          prisma,
+          fetchJwks: fetchJwks(),
+          signAccessToken,
+          consumeSubjectRateLimit: vi.fn(),
+        },
+      );
+
+    await expect(exchange(repeatedAssertion)).resolves.toMatchObject({
+      accessToken: 'ledger-access-token',
+    });
+    await expect(exchange(repeatedAssertion)).rejects.toThrow('INVALID_SUBJECT_TOKEN');
+    await expect(
+      exchange(await signSubjectToken({ omitActive: true, jti: 'fresh-jti' })),
+    ).resolves.toMatchObject({ accessToken: 'ledger-access-token' });
+    expect(signAccessToken).toHaveBeenCalledTimes(2);
   });
 
   it('rate-limits a verified user without consuming another user’s allowance', async () => {

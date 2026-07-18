@@ -712,6 +712,14 @@ source-domain role. When `active` is present, UOA additionally re-resolves the
 requested ACTIVE org and team memberships. Unknown users, missing domain roles,
 and removed/deactivated or cross-tenant selected workspaces fail closed.
 
+Each verified assertion is one-time. After the current user, source-domain role,
+and any selected workspace pass validation, UOA atomically claims the
+source-domain + `jti` in PostgreSQL before signing. Concurrent or later reuse of
+that assertion is rejected, including across service instances. The replay row
+retains only a SHA-256 digest of the source-bound `jti` through `exp` plus the
+accepted clock tolerance, after which it is eligible for pruning. A source must
+mint a fresh, unique `jti` for every exchange.
+
 The result is a five-minute RS256 access token using the §22.14 access-token
 signing key and `GET /oauth/jwks.json`. It contains `iss`, resource `aud`, stable
 `sub`, advisory `email`, `source_domain`, non-secret `azp` (source domain),

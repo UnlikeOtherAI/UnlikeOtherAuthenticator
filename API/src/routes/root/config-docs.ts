@@ -262,6 +262,8 @@ export const confidentialTokenExchangeDocumentation = {
     issuer: 'exact source config domain',
     audience: 'PUBLIC_BASE_URL + /auth/token',
     key_source: 'same-host jwks_url claim from the verified source config JWT',
+    replay_protection:
+      'A fresh unique jti is mandatory. After current identity and optional workspace validation, UOA atomically consumes source-domain+jti once in PostgreSQL through exp plus clock tolerance; exact/concurrent replay is rejected across instances.',
   },
   issued_access_token: {
     algorithm: 'RS256',

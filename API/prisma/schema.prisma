@@ -233,6 +233,21 @@ model AuthorizationCode {
   @@map("authorization_codes")
 }
 
+// One-time use ledger for confidential subject assertions. The source-provided
+// jti is hashed before storage and is unique per source domain through the
+// assertion's accepted expiry (including verifier clock tolerance).
+model ConfidentialAssertionUse {
+  id           String   @id @default(cuid())
+  sourceDomain String   @map("source_domain")
+  jtiHash      String   @map("jti_hash") @db.Char(64)
+  expiresAt    DateTime @map("expires_at")
+  consumedAt   DateTime @default(now()) @map("consumed_at")
+
+  @@unique([sourceDomain, jtiHash])
+  @@index([expiresAt])
+  @@map("confidential_assertion_uses")
+}
+
 // Public OAuth clients (brief §22.14). Registered via RFC 7591 dynamic client
 // registration for the /oauth/* public-client profile. PUBLIC clients only:
 // there is NO secret column (§22.3 preserved) — they authenticate with PKCE.

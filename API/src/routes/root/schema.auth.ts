@@ -208,7 +208,7 @@ export const authEndpoints: EndpointSchema[] = [
       'code_verifier?': 'required for authorization_code grant; must match the S256 challenge',
       'refresh_token?': 'refresh token (for refresh_token grant)',
       'subject_token?':
-        'RS256 JWT with exp-iat <= 60 seconds (for token-exchange grant), signed by the source config JWKS; must contain iss, source_domain, aud, sub, jti, iat, and exp; optional active must be exactly { orgId, teamId } with both values non-empty',
+        'One-time RS256 JWT with exp-iat <= 60 seconds (for token-exchange grant), signed by the source config JWKS; must contain iss, source_domain, aud, sub, a fresh unique jti, iat, and exp; optional active must be exactly { orgId, teamId } with both values non-empty',
       'subject_token_type?':
         '"urn:ietf:params:oauth:token-type:jwt" (required for token-exchange grant)',
       'resource?':
@@ -229,7 +229,7 @@ export const authEndpoints: EndpointSchema[] = [
       'firstLogin?':
         'object { memberships: { orgs, teams }, pending_invites, capabilities { can_create_org, can_accept_invite } } — included on authorization_code exchange when org_features.enabled is true. memberships.orgs[] = { orgId, role } camelCase; memberships.teams[] = { teamId, orgId, role } camelCase; pending_invites[] = { inviteId, type, orgId, teamId, teamName } camelCase. Not included on refresh_token grants.',
       '[note]':
-        'There is NO top-level `user` field. User identity lives inside access_token claims (read claims.sub). Confidential exchange always re-resolves the current UOA user and source-domain role; when active is supplied it also verifies the requested ACTIVE org/team membership. Identity-only tokens omit org and active. It never copies the 64-character domain bearer into client_id.',
+        'There is NO top-level `user` field. User identity lives inside access_token claims (read claims.sub). Confidential exchange always re-resolves the current UOA user and source-domain role; when active is supplied it also verifies the requested ACTIVE org/team membership. It then atomically consumes the source-domain+jti once before signing, so exact and concurrent replays fail across instances. Identity-only tokens omit org and active. It never copies the 64-character domain bearer into client_id.',
       '[rate limit]':
         'Legacy grants: 10/min per IP. Confidential exchange: 600/min per authenticated source domain plus 60/min per verified source-domain user.',
       '401 refresh policy':
