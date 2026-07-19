@@ -25,7 +25,8 @@ describe('Organisation service: member lifecycle (deactivate/reactivate)', () =>
     // Actor lookup (owner), then target member lookup (ACTIVE member).
     prisma.orgMember.findFirst
       .mockResolvedValueOnce({ id: 'm-owner', orgId: 'org-1', userId: 'u-owner', role: 'owner' })
-      .mockResolvedValueOnce({ id: 'member-target', role: 'member' });
+      .mockResolvedValueOnce({ id: 'member-target', role: 'member' })
+      .mockResolvedValue({ id: 'member-target', role: 'member' });
     prisma.orgMember.update.mockResolvedValue({ id: 'member-target', status: 'DEACTIVATED' });
     prisma.teamMember.updateMany.mockResolvedValue({ count: 1 });
 
@@ -105,7 +106,8 @@ describe('Organisation service: member lifecycle (deactivate/reactivate)', () =>
     prisma.organisation.findFirst.mockResolvedValue(baseOrg);
     prisma.orgMember.findFirst
       .mockResolvedValueOnce({ id: 'm-owner', orgId: 'org-1', userId: 'u-owner', role: 'owner' })
-      .mockResolvedValueOnce({ id: 'member-target' });
+      .mockResolvedValueOnce({ id: 'member-target' })
+      .mockResolvedValue({ id: 'member-target' });
     prisma.orgMember.update.mockResolvedValue({ id: 'member-target', status: 'ACTIVE' });
     prisma.teamMember.updateMany.mockResolvedValue({ count: 1 });
 

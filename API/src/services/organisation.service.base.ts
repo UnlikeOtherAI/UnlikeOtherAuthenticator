@@ -9,6 +9,7 @@ import { parseIconUrl } from '../utils/http-url.js';
 import {
   writeOrgAuditLog,
   type OrgAuditAction,
+  type OrgAuditLogPrisma,
   type OrgAuditTargetType,
 } from './org-audit-log.service.js';
 
@@ -322,26 +323,32 @@ export async function getOrganisationMember(
   });
 }
 
-// Best-effort org audit write (design §4.10). Runs via the BYPASSRLS admin client AFTER the primary
-// mutation has committed, and swallows errors, so auditing can never roll back or fail the mutation
-// it records. Shared by organisation.service.members.ts and organisation.service.lifecycle.ts.
-export async function auditOrg(params: {
-  orgId: string;
-  actorUserId: string;
-  action: OrgAuditAction;
-  targetType: OrgAuditTargetType;
-  targetId: string;
-  metadata?: Record<string, string | number | boolean | null>;
-}): Promise<void> {
+// Best-effort org audit write (design §4.10). Most callers omit `prisma` and write through the
+// BYPASSRLS admin client after the primary mutation commits. Atomic flows may inject their current
+// transaction so replay rollback also removes the audit row.
+export async function auditOrg(
+  params: {
+    orgId: string;
+    actorUserId: string;
+    action: OrgAuditAction;
+    targetType: OrgAuditTargetType;
+    targetId: string;
+    metadata?: Record<string, string | number | boolean | null>;
+  },
+  deps?: { prisma?: OrgAuditLogPrisma },
+): Promise<void> {
   try {
-    await writeOrgAuditLog({
-      orgId: params.orgId,
-      actorUserId: params.actorUserId,
-      action: params.action,
-      targetType: params.targetType,
-      targetId: params.targetId,
-      metadata: params.metadata ?? {},
-    });
+    await writeOrgAuditLog(
+      {
+        orgId: params.orgId,
+        actorUserId: params.actorUserId,
+        action: params.action,
+        targetType: params.targetType,
+        targetId: params.targetId,
+        metadata: params.metadata ?? {},
+      },
+      deps,
+    );
   } catch {
     // Auditing is non-critical; the mutation has already succeeded.
   }

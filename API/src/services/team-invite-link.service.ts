@@ -15,6 +15,10 @@ import {
   resolveOrganisationByDomain,
 } from './organisation.service.base.js';
 import { isOrgOrTeamManager } from './team.service.base.js';
+import {
+  assertActiveWorkspaceScope,
+  lockWorkspaceMembershipRows,
+} from './workspace-scope.service.js';
 
 // Phase 5 (design §4.7, §7 step 6, §8): shareable team invite links. A link authorizes JOINING a
 // team, never AUTHENTICATION — redemption only happens on the verified-session path
@@ -368,6 +372,10 @@ export async function redeemTeamInviteLink(
 
   const result = await runInTransaction(prisma, async (tx) => {
     const { link, team } = await findValidInviteLink(tx, { tokenHash, domain, now });
+    await lockWorkspaceMembershipRows(
+      { userId: params.userId, orgId: team.orgId, teamId: team.id },
+      { prisma: tx },
+    );
 
     // Atomic cap guard: only ONE concurrent redemption can win when useCount is one below
     // maxUses. `link.maxUses` is immutable (never updated after creation), so comparing against
@@ -389,9 +397,12 @@ export async function redeemTeamInviteLink(
     // acceptTeamInviteWithinTransaction in team-invite.service.acceptance.ts).
     const existingMembershipInDomain = await tx.orgMember.findFirst({
       where: { userId: params.userId, org: { domain } },
-      select: { id: true, orgId: true },
+      select: { id: true, orgId: true, status: true },
     });
     if (existingMembershipInDomain && existingMembershipInDomain.orgId !== team.orgId) {
+      throw new AppError('BAD_REQUEST', 400);
+    }
+    if (existingMembershipInDomain && existingMembershipInDomain.status !== 'ACTIVE') {
       throw new AppError('BAD_REQUEST', 400);
     }
     if (!existingMembershipInDomain) {
@@ -425,6 +436,16 @@ export async function redeemTeamInviteLink(
       }
     }
 
+    await assertActiveWorkspaceScope(
+      {
+        userId: params.userId,
+        domain,
+        orgId: team.orgId,
+        teamId: team.id,
+      },
+      { prisma: tx },
+    );
+
     return { teamId: team.id, orgId: team.orgId, teamMemberId };
   });
 
@@ -435,7 +456,7 @@ export async function redeemTeamInviteLink(
     targetType: 'team_member',
     targetId: result.teamMemberId,
     metadata: { teamId: result.teamId, via: 'invite_link' },
-  });
+  }, { prisma });
 
   return { teamId: result.teamId, orgId: result.orgId };
 }

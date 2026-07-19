@@ -13,7 +13,11 @@ import {
   parseMaxMembersPerTeam,
   parseMaxTeamMembershipsPerUser,
 } from './team.service.base.js';
-import { assertActiveWorkspaceScope } from './workspace-scope.service.js';
+import {
+  assertActiveWorkspaceScope,
+  lockAndAssertActiveWorkspaceScope,
+  lockWorkspaceMembershipRows,
+} from './workspace-scope.service.js';
 
 export async function acceptTeamInviteWithinTransaction(params: {
   prisma: Prisma.TransactionClient;
@@ -55,7 +59,7 @@ export async function acceptTeamInviteWithinTransaction(params: {
 
   if (invite.acceptedAt) {
     if (invite.acceptedUserId === params.userId) {
-      await assertActiveWorkspaceScope(
+      await lockAndAssertActiveWorkspaceScope(
         {
           userId: params.userId,
           domain: params.config.domain,
@@ -98,6 +102,14 @@ export async function acceptTeamInviteWithinTransaction(params: {
   }
 
   ensureOrgRole('member', parseOrgFeatureRoles(params.config));
+  await lockWorkspaceMembershipRows(
+    {
+      userId: params.userId,
+      orgId: invite.orgId,
+      teamId: invite.teamId,
+    },
+    { prisma: params.prisma },
+  );
 
   const existingMembershipInDomain = await params.prisma.orgMember.findFirst({
     where: {

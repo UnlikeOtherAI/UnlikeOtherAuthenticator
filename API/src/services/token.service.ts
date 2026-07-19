@@ -3,7 +3,8 @@ import { SignJWT } from 'jose';
 
 import { ACCESS_TOKEN_AUDIENCE } from '../config/constants.js';
 import { getAdminAuthDomain, getAuthServiceIdentifier, getEnv, requireEnv } from '../config/env.js';
-import { getPrisma } from '../db/prisma.js';
+import { getAdminPrisma, getPrisma } from '../db/prisma.js';
+import { runInTransaction } from '../db/tenant-context.js';
 import { ensureDomainRoleForUser, isPlatformSuperuser } from './domain-role.service.js';
 import { exchangeRefreshToken, issueRefreshToken } from './refresh-token.service.js';
 import { consumeAuthorizationCode } from './authorization-code.service.js';
@@ -26,6 +27,8 @@ type TokenDeps = {
   now?: () => Date;
   refreshTokenTtlDays?: number;
   sharedSecret?: string;
+  // Deterministic concurrency-test hook. Production callers leave this unset.
+  afterActiveWorkspaceLock?: () => Promise<void>;
 };
 
 function sharedSecretKey(sharedSecret: string): Uint8Array {
@@ -252,63 +255,69 @@ export async function exchangeAuthorizationCodeForTokens(
     throw new AppError('INTERNAL', 500, 'DATABASE_DISABLED');
   }
 
-  const now = deps?.now ? deps.now() : new Date();
   const sharedSecret = deps?.sharedSecret ?? requireEnv('SHARED_SECRET').SHARED_SECRET;
-  const prisma = deps?.prisma ?? getPrisma();
+  const adminPrisma = deps?.adminPrisma ?? deps?.prisma ?? getAdminPrisma();
   const clientId = params.clientId ?? resolveAccessTokenContext({
     domain: params.config.domain,
     env,
     sharedSecret,
   }).clientId;
 
-  const { userId, rememberMe, orgId, teamId } = await consumeAuthorizationCode({
-    code: params.code,
-    configUrl: params.configUrl,
-    domain: params.config.domain,
-    redirectUrl: params.redirectUrl,
-    codeVerifier: params.codeVerifier,
-    now,
-    sharedSecret,
-    prisma,
-    activeScopePrisma: deps?.adminPrisma ?? prisma,
-  });
-
-  // Both values must be present to carry an explicit or unambiguously auto-selected workspace
-  // onto the session (design §7 steps 3-4).
-  const active: ActiveWorkspace | null = orgId && teamId ? { orgId, teamId } : null;
-
-  const refreshTtlSeconds = resolveRefreshTokenTtlSeconds(params.config, rememberMe);
-  const issuedRefreshToken = await issueRefreshToken(
-    {
-      userId,
+  return runInTransaction(adminPrisma, async (tx) => {
+    const now = deps?.now ? deps.now() : new Date();
+    const { userId, rememberMe, orgId, teamId } = await consumeAuthorizationCode({
+      code: params.code,
+      configUrl: params.configUrl,
       domain: params.config.domain,
-      clientId,
-      configUrl: params.configUrl,
-      orgId,
-      teamId,
-    },
-    {
-      now: deps?.now,
-      prisma,
-      refreshTokenTtlSeconds: refreshTtlSeconds,
+      redirectUrl: params.redirectUrl,
+      codeVerifier: params.codeVerifier,
+      now,
       sharedSecret,
-    },
-  );
+      prisma: tx,
+      afterActiveScopeLock: deps?.afterActiveWorkspaceLock,
+    });
 
-  const accessTtl = resolveAccessTokenTtl(params.config, env.ACCESS_TOKEN_TTL);
-  return issueTokenPairForUser(
-    {
-      userId,
-      config: params.config,
-      configUrl: params.configUrl,
-      clientId,
-      refreshToken: issuedRefreshToken.refreshToken,
-      refreshTokenExpiresInSeconds: issuedRefreshToken.expiresInSeconds,
-      includeFirstLogin: true,
-      active,
-    },
-    { ...deps, accessTokenTtl: accessTtl },
-  );
+    // Both values must be present to carry an explicit or unambiguously auto-selected workspace
+    // onto the session (design §7 steps 3-4).
+    const active: ActiveWorkspace | null = orgId && teamId ? { orgId, teamId } : null;
+    const refreshTtlSeconds = resolveRefreshTokenTtlSeconds(params.config, rememberMe);
+    const issuedRefreshToken = await issueRefreshToken(
+      {
+        userId,
+        domain: params.config.domain,
+        clientId,
+        configUrl: params.configUrl,
+        orgId,
+        teamId,
+      },
+      {
+        now: deps?.now,
+        prisma: tx,
+        refreshTokenTtlSeconds: refreshTtlSeconds,
+        sharedSecret,
+      },
+    );
+
+    const accessTtl = resolveAccessTokenTtl(params.config, env.ACCESS_TOKEN_TTL);
+    return issueTokenPairForUser(
+      {
+        userId,
+        config: params.config,
+        configUrl: params.configUrl,
+        clientId,
+        refreshToken: issuedRefreshToken.refreshToken,
+        refreshTokenExpiresInSeconds: issuedRefreshToken.expiresInSeconds,
+        includeFirstLogin: true,
+        active,
+      },
+      {
+        ...deps,
+        prisma: tx,
+        adminPrisma: tx,
+        accessTokenTtl: accessTtl,
+      },
+    );
+  });
 }
 
 export async function exchangeRefreshTokenForTokens(

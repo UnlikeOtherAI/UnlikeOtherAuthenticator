@@ -184,9 +184,14 @@ The auth flow is state-driven, not route-driven. A single popup URL loads the ap
     invite-selected org/team scope then passes through TwoFactorVerifyPage or required
     TwoFactorSetupPage and into the team-scoped authorization code. The chooser capability signs
     the exact config URL and parsed-config fingerprint plus redirect, PKCE, remember-me, and access
-    request state. It is claimed once by hashed JTI in the final-selection transaction; chooser
+    request state. Final selection claims its hashed JTI as the transaction's first write, before
+    invite/audit/access-request-email effects; a concurrent replay stops at that unique claim, while
+    any later failure rolls the claim and all database effects back so the user may retry. Chooser
     hydration and invite decline are non-consuming. Exact ACTIVE organisation + team membership is
     rechecked at selection, after 2FA/signatures immediately before code issuance, and at exchange.
+    Selection and code exchange lock the organisation row first and team rows second, the same order
+    used by membership activation/deactivation/removal, so token issuance and lifecycle changes have
+    one serial outcome rather than a time-of-check/time-of-use gap.
     Existing-account `LOGIN_LINK` tokens resolve only their issue-time `userId`; deletion or identity
     mismatch fails closed and never falls through to registration.
 11. **Required agreements** (optional per-domain service) — after identity, workspace selection,

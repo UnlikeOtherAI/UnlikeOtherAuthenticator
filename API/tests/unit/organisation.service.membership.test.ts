@@ -181,6 +181,12 @@ describe('Organisation service: membership', () => {
         orgId: 'org-1',
         userId: 'u-member',
         role: 'member',
+      })
+      .mockResolvedValue({
+        id: 'member-target',
+        orgId: 'org-1',
+        userId: 'u-member',
+        role: 'member',
       });
     prisma.orgMember.count.mockResolvedValue(1);
     prisma.orgMember.update.mockResolvedValue({ id: 'member-target', status: 'REMOVED' });
@@ -222,7 +228,8 @@ describe('Organisation service: membership', () => {
     prisma.organisation.findFirst.mockResolvedValue(baseOrg);
     prisma.orgMember.findFirst
       .mockResolvedValueOnce({ id: 'm-owner', orgId: 'org-1', userId: 'u-owner', role: 'owner' })
-      .mockResolvedValueOnce({ id: 'member-target', orgId: 'org-1', userId: 'u-member', role: 'member' });
+      .mockResolvedValueOnce({ id: 'member-target', orgId: 'org-1', userId: 'u-member', role: 'member' })
+      .mockResolvedValue({ id: 'member-target', orgId: 'org-1', userId: 'u-member', role: 'member' });
     prisma.orgMember.count.mockResolvedValue(1);
     prisma.orgMember.update.mockResolvedValue({ id: 'member-target', status: 'REMOVED' });
     prisma.teamMember.updateMany.mockResolvedValue({ count: 1 });

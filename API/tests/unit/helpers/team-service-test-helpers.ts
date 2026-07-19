@@ -38,6 +38,7 @@ export function makePrismaMock(): PrismaClient {
     teamInvite: {
       findMany: vi.fn(),
     },
+    $queryRaw: vi.fn().mockResolvedValue([]),
     $transaction: vi.fn(),
   } as unknown as PrismaClient;
 

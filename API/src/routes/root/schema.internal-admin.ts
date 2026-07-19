@@ -21,7 +21,8 @@ export const internalAdminEndpoints: EndpointSchema[] = [
   {
     method: 'POST',
     path: '/internal/admin/token',
-    description: 'Browser-safe Admin UI authorization-code exchange; returns an admin access token only',
+    description:
+      'Browser-safe Admin UI authorization-code exchange; consumes the code and creates tokens in one BYPASSRLS transaction, and returns an admin access token only',
     auth: 'Verified config_url whose domain matches ADMIN_AUTH_DOMAIN; one-time authorization code with PKCE. Does not use domain-hash bearer auth and does not return refresh tokens.',
     body: {
       code: 'string (required)',

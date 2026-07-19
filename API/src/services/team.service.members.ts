@@ -5,6 +5,7 @@ import { runInTransaction } from '../db/tenant-context.js';
 import { AppError } from '../utils/errors.js';
 
 import { auditOrg } from './organisation.service.base.js';
+import { lockWorkspaceMembershipRows } from './workspace-scope.service.js';
 import {
   assertDatabaseEnabled,
   getOrganisationMember,
@@ -73,6 +74,10 @@ export async function addTeamMember(
   }
 
   return await runInTransaction(prisma, async (tx) => {
+    await lockWorkspaceMembershipRows(
+      { userId, orgId: org.id, teamId: team.id },
+      { prisma: tx },
+    );
     const memberCount = await tx.teamMember.count({
       where: { teamId: team.id, status: 'ACTIVE' },
     });
@@ -264,6 +269,10 @@ export async function removeTeamMember(
   }
 
   return await runInTransaction(prisma, async (tx) => {
+    await lockWorkspaceMembershipRows(
+      { userId, orgId: org.id, teamId: team.id },
+      { prisma: tx },
+    );
     // "Cannot leave your last team" counts ACTIVE team memberships only (design §4.5).
     const userTeamCount = await tx.teamMember.count({
       where: {
@@ -335,6 +344,10 @@ export async function selfJoinTeam(
   }
 
   const record = await runInTransaction(prisma, async (tx) => {
+    await lockWorkspaceMembershipRows(
+      { userId: actorUserId, orgId: org.id, teamId: team.id },
+      { prisma: tx },
+    );
     const memberCount = await tx.teamMember.count({
       where: { teamId: team.id, status: 'ACTIVE' },
     });

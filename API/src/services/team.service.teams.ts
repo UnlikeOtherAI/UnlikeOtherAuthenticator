@@ -26,6 +26,7 @@ import {
   isP2002Error,
 } from './team.service.base.js';
 import { getTeamInvitedEntries, type TeamInvitedEntry } from './team-invite.service.invited.js';
+import { lockWorkspaceMembershipRows } from './workspace-scope.service.js';
 
 const TEAM_SELECT = {
   id: true,
@@ -384,10 +385,18 @@ export async function deleteTeam(
       throw new AppError('INTERNAL', 500, 'DEFAULT_TEAM_MISSING');
     }
 
-    const members = await tx.teamMember.findMany({
-      where: { teamId: team.id, status: 'ACTIVE' },
-      select: { userId: true },
+    const membershipRows = await tx.teamMember.findMany({
+      where: { teamId: team.id },
+      orderBy: { userId: 'asc' },
+      select: { userId: true, status: true },
     });
+    for (const member of membershipRows) {
+      await lockWorkspaceMembershipRows(
+        { userId: member.userId, orgId: org.id, teamId: team.id },
+        { prisma: tx },
+      );
+    }
+    const members = membershipRows.filter((member) => member.status === 'ACTIVE');
 
     for (const member of members) {
       const userMembershipCount = await tx.teamMember.count({

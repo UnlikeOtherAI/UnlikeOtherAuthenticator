@@ -58,6 +58,7 @@ function makeOrgRow(overrides?: Record<string, unknown>) {
 
 function makePrisma() {
   return {
+    $queryRaw: vi.fn().mockResolvedValue([]),
     organisation: { findFirst: vi.fn() },
     team: { findFirst: vi.fn() },
     teamMember: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
@@ -113,7 +114,9 @@ describe('team-invite-link.service', () => {
       prisma.team.findFirst.mockResolvedValue({ id: 'team-1', joinPolicy: 'INVITE_ONLY' });
       // getOrganisationMember({activeOnly:true}) finds nothing — a deactivated admin or a plain
       // member both surface identically here (design §4.9: activeOnly is the actor gate).
-      prisma.orgMember.findFirst.mockResolvedValue(null);
+      prisma.orgMember.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValue({ id: 'om-1', orgId: 'org-1', status: 'ACTIVE' });
       prisma.teamMember.findFirst.mockResolvedValue(null);
 
       await expect(
@@ -307,7 +310,9 @@ describe('team-invite-link.service', () => {
       prisma.teamInviteLink.findUnique.mockResolvedValue(mockValidLink());
       prisma.team.findFirst.mockResolvedValue({ id: 'team-1', orgId: 'org-1', joinPolicy: 'INVITE_ONLY' });
       prisma.teamInviteLink.updateMany.mockResolvedValue({ count: 1 });
-      prisma.orgMember.findFirst.mockResolvedValue(null);
+      prisma.orgMember.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValue({ id: 'om-1', orgId: 'org-1', status: 'ACTIVE' });
       prisma.orgMember.create.mockResolvedValue({ id: 'om-1' });
       prisma.teamMember.findFirst.mockResolvedValue({ id: 'tm-1', status: 'REMOVED' });
       prisma.teamMember.update.mockResolvedValue({ id: 'tm-1' });
@@ -336,7 +341,11 @@ describe('team-invite-link.service', () => {
       prisma.teamInviteLink.findUnique.mockResolvedValue(mockValidLink());
       prisma.team.findFirst.mockResolvedValue({ id: 'team-1', orgId: 'org-1', joinPolicy: 'INVITE_ONLY' });
       prisma.teamInviteLink.updateMany.mockResolvedValue({ count: 1 });
-      prisma.orgMember.findFirst.mockResolvedValue({ id: 'om-1', orgId: 'org-1' });
+      prisma.orgMember.findFirst.mockResolvedValue({
+        id: 'om-1',
+        orgId: 'org-1',
+        status: 'ACTIVE',
+      });
       prisma.teamMember.findFirst.mockResolvedValue({ id: 'tm-1', status: 'ACTIVE' });
 
       const result = await redeemTeamInviteLink(
@@ -400,7 +409,11 @@ describe('team-invite-link.service', () => {
       const prisma = makePrisma();
       prisma.teamInviteLink.findUnique.mockResolvedValue(mockValidLink({ useCount: 399, maxUses: 400 }));
       prisma.team.findFirst.mockResolvedValue({ id: 'team-1', orgId: 'org-1', joinPolicy: 'INVITE_ONLY' });
-      prisma.orgMember.findFirst.mockResolvedValue({ id: 'om-1', orgId: 'org-1' });
+      prisma.orgMember.findFirst.mockResolvedValue({
+        id: 'om-1',
+        orgId: 'org-1',
+        status: 'ACTIVE',
+      });
       prisma.teamMember.findFirst.mockResolvedValue({ id: 'tm-1', status: 'ACTIVE' });
 
       // First redemption wins the conditional update (still under cap in the DB).

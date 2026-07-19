@@ -24,6 +24,7 @@ import {
   type OrganisationRecord,
 } from './organisation.service.base.js';
 import { deriveUniqueTeamSlug } from './team.service.base.js';
+import { lockWorkspaceMembershipRows } from './workspace-scope.service.js';
 
 const ORGANISATION_SELECT = {
   id: true,
@@ -249,7 +250,20 @@ export async function deleteOrganisation(
   }
 
   try {
-    await prisma.organisation.delete({ where: { id: org.id } });
+    await runInTransaction(prisma, async (tx) => {
+      const members = await tx.orgMember.findMany({
+        where: { orgId: org.id },
+        orderBy: { userId: 'asc' },
+        select: { userId: true },
+      });
+      for (const member of members) {
+        await lockWorkspaceMembershipRows(
+          { userId: member.userId, orgId: org.id },
+          { prisma: tx },
+        );
+      }
+      await tx.organisation.delete({ where: { id: org.id } });
+    });
   } catch (err) {
     if (isP2003Error(err)) {
       throw new AppError('BAD_REQUEST', 400);

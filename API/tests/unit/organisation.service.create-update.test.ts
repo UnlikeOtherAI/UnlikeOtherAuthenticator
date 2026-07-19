@@ -63,6 +63,7 @@ function makePrismaMock() {
     user: {
       findUnique: vi.fn(),
     },
+    $queryRaw: vi.fn().mockResolvedValue([]),
     $transaction: vi.fn(),
   } as unknown as PrismaClient;
 
@@ -412,6 +413,7 @@ describe('Organisation service: organisation CRUD', () => {
       createdAt: now,
       updatedAt: now,
     });
+    prisma.orgMember.findMany.mockResolvedValue([{ userId: 'u-owner' }]);
 
     const result = await deleteOrganisation(
       {
@@ -423,6 +425,7 @@ describe('Organisation service: organisation CRUD', () => {
     );
 
     expect(result).toEqual({ deleted: true });
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(2);
     expect(prisma.organisation.delete).toHaveBeenCalledWith({ where: { id: 'org-1' } });
   });
 

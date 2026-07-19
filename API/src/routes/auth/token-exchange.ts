@@ -1,10 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
-import { asPrismaClient } from '../../db/tenant-context.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
 import { requireDomainHashAuth } from '../../middleware/domain-hash-auth.js';
-import { setTenantContextFromRequest } from '../../plugins/tenant-context.plugin.js';
 import { AppError } from '../../utils/errors.js';
 import {
   exchangeAuthorizationCodeForTokens,
@@ -107,11 +105,6 @@ export function registerAuthTokenExchangeRoute(app: FastifyInstance): void {
         throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
       }
 
-      // Token exchange runs under domain-only tenant context. The service looks up the
-      // authorization code / refresh token row inside the tx; users policy allows that
-      // lookup with app.domain alone, and downstream token writes stay scoped the same.
-      setTenantContextFromRequest(request, { orgId: null, userId: null });
-
       reply.header('Cache-Control', 'no-store');
       reply.header('Pragma', 'no-cache');
 
@@ -170,8 +163,7 @@ export function registerAuthTokenExchangeRoute(app: FastifyInstance): void {
               },
               { prisma: request.adminDb, adminPrisma: request.adminDb },
             )
-          : await request.withTenantTx(async (tx) =>
-              exchangeAuthorizationCodeForTokens(
+          : await exchangeAuthorizationCodeForTokens(
               {
                 code: body.code,
                 config,
@@ -180,8 +172,7 @@ export function registerAuthTokenExchangeRoute(app: FastifyInstance): void {
                 codeVerifier: body.code_verifier,
                 clientId: request.domainAuthClientId,
               },
-                { prisma: asPrismaClient(tx), adminPrisma: request.adminDb },
-              ),
+              { prisma: request.adminDb, adminPrisma: request.adminDb },
             );
 
       // Keep response OAuth-ish without being overly strict about fields.

@@ -436,7 +436,6 @@ describe.skipIf(!hasDatabase)('secure one-time login continuation', () => {
         now: new Date(),
         sharedSecret: process.env.SHARED_SECRET!,
         prisma: handle.prisma,
-        activeScopePrisma: handle.prisma,
       }),
     ).rejects.toMatchObject({ statusCode: 401, message: 'INVALID_AUTH_CODE' });
     expect(

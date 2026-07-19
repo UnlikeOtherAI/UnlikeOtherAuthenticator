@@ -168,7 +168,15 @@ Slack's flow, translated into UOA's popup/config architecture. Everything happen
    * exact organisation and team memberships both exist with `status == ACTIVE` (or invite valid → accept via existing `acceptTeamInviteWithinTransaction`, which refuses `DEACTIVATED`/`REMOVED` tombstones);
    * team/org auth policy: resolve 2FA via existing `resolveTwoFaPolicy` for the *selected* org — may return a `twofa_token` challenge instead of completing;
    * `assertEmailDomainAllowedForLogin` (existing gate) still applies.
-   Then `finalizeAuthenticatedUser` issues the authorization code, now carrying the selected team (§4.4), and a unique hashed JTI claims the chooser capability in the same transaction. `/auth/session-choices` and invite decline are deliberately non-consuming. ACTIVE scope is checked again at final code issuance after 2FA/signatures and at exchange.
+   The final-selection transaction claims the unique hashed JTI **first**, before invite mutation,
+   audit, access-request notification, 2FA setup, or authorization work. A concurrent replay loses
+   at that claim and cannot perform external side effects; any later failure rolls the claim and
+   database effects back, preserving a legitimate retry. `finalizeAuthenticatedUser` then issues
+   the authorization code carrying the selected team (§4.4). `/auth/session-choices` and invite
+   decline are deliberately non-consuming. ACTIVE scope is checked again at final code issuance
+   after 2FA/signatures and at exchange. Selection, invite acceptance/redemption, code exchange,
+   and every membership-status writer lock the user's organisation membership before team
+   memberships in stable order, making deactivation/removal and token issuance serializable.
 4. Password login (`POST /auth/login`) and social callbacks route into the same selection step when `workspace_selection` is on: instead of finalizing immediately, they return the same `{ login_token, teams, pending_invites }` payload. With `workspace_selection: "off"` (default) nothing changes for existing integrators.
 
 **`LOGIN_CODE` token type**: add to `VerificationTokenType`. Same table, hashed like link tokens, but: 6 digits, ~10-minute TTL, single active code per `(userKey, domain)` (issuing supersedes prior), and a new `attemptCount Int @default(0)` column on `VerificationToken` — max 5 verify attempts, then the code is dead and the user restarts. `POST /auth/verify-code` is IP- and email-key rate-limited via the existing `rate-limiter.ts` patterns, and failures return the standard generic error (brief §22.11). Magic-link flows are unaffected; codes are strictly additive.
@@ -253,7 +261,7 @@ model TeamInviteLink {
 }
 ```
 
-  Landing at `/auth/team-invite-link/:token` requires the visitor to complete normal email verification (link or code) before membership is granted — the link authorizes *joining*, never *authentication*. `useCount` increments atomically on successful join; expiry/revocation/cap failures render the generic invalid-link page. Per Slack, invite links are refused (creation blocked) when the team's effective policy forbids self-serve entry (`HIDDEN`) — and later, when SSO-required orgs exist, links are disabled there too.
+  Landing at `/auth/team-invite-link/:token` requires the visitor to complete normal email verification (link or code) before membership is granted — the link authorizes *joining*, never *authentication*. `useCount` increments atomically on successful join; expiry/revocation/cap failures render the generic invalid-link page. Redemption locks the exact membership rows and refuses an existing inactive organisation tombstone, so it cannot silently reactivate that organisation membership or consume the link. Per Slack, invite links are refused (creation blocked) when the team's effective policy forbids self-serve entry (`HIDDEN`) — and later, when SSO-required orgs exist, links are disabled there too.
 
 ### 4.8 Guests (G8) — deferred, shape reserved
 

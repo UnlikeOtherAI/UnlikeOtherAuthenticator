@@ -22,6 +22,7 @@ describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
 
   function makePrisma() {
     return {
+      $queryRaw: vi.fn().mockResolvedValue([]),
       authorizationCode: {
         findUnique: vi.fn(),
         updateMany: vi.fn(),

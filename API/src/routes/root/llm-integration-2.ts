@@ -18,8 +18,10 @@ email exists. The \`login_token\` bridge issued by \`/auth/verify-code\` (and, w
 by every verified identity path) authorizes ONLY the original chooser continuation for that user.
 It signs the exact config URL plus a canonical fingerprint of the current verified parsed config,
 redirect, PKCE, remember-me, access-request flag, subject/domain, expiry, and JTI. Final selection
-claims the hashed JTI once in the same transaction as invite/membership mutation and authorization;
-\`session-choices\` and invite decline validate but do not consume it.
+claims the hashed JTI as the first statement in the same transaction as invite/membership mutation
+and authorization. A concurrent replay therefore loses before it can send an access-request email
+or emit invite audit state, while any later failure rolls the claim back so the original continuation
+can be retried; \`session-choices\` and invite decline validate but do not consume it.
 
 1. \`POST /auth/start?config_url=...\` — body \`{ email }\`. Same generic response as
    \`/auth/register\`; when \`email_code_enabled\` is true it additionally emails a 6-digit code.
@@ -38,7 +40,10 @@ claims the hashed JTI once in the same transaction as invite/membership mutation
    org's 2FA policy, then finalizes with the resolved
    workspace scope: the returned \`code\` carries \`orgId\`/\`teamId\`, so the eventual \`POST /auth/token\`
    exchange's access token includes the \`active: { orgId, teamId }\` claim (§4.2) next to the existing
-   \`org\` claim.
+   \`org\` claim. Code exchange locks and revalidates the exact ACTIVE organisation/team scope in the
+   same transaction that consumes the code and issues the refresh/access-token family, so a
+   concurrent membership deactivation either finishes first and rejects exchange without consuming
+   the code, or waits until the successful exchange has committed.
 4. \`POST /auth/login\` (password) also routes into the chooser when \`workspace_selection: "auto"\` and
    2FA is already satisfied: it returns \`{ login_token, teams, pending_invites, can_create_org }\`
    instead of finalizing directly, and the client then calls \`/auth/select-team\`. With the default
@@ -107,7 +112,10 @@ already proven their email via a magic link or (if enabled) a sign-in code.
    concurrent redemptions can never push \`useCount\` past \`maxUses\`), adds the caller as an ACTIVE
    team member with the link's \`roleToAssign\` (reactivating a previously removed/deactivated row;
    idempotent if already an ACTIVE member), then finalizes exactly like a normal team selection —
-   including the 2FA policy check for that org.
+   including the 2FA policy check for that org. The exact organisation and team must both already be
+   ACTIVE before redemption; an inactive organisation tombstone is rejected before \`useCount\`,
+   membership reactivation, authorization, or audit mutation, and the transaction rolls back in
+   full.
 
 ---
 

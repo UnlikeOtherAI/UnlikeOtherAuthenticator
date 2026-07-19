@@ -9,7 +9,10 @@ import { AppError } from '../utils/errors.js';
 import { getAppLogger } from '../utils/app-logger.js';
 import { tryParseRedirectUrl } from '../utils/http-url.js';
 import { verifyPkceCodeVerifier } from '../utils/pkce.js';
-import { assertActiveWorkspaceScope } from './workspace-scope.service.js';
+import {
+  assertActiveWorkspaceScope,
+  lockAndAssertActiveWorkspaceScope,
+} from './workspace-scope.service.js';
 
 type AuthorizationCodePrisma = PrismaClient;
 
@@ -147,7 +150,7 @@ export async function consumeAuthorizationCode(params: {
   now: Date;
   sharedSecret: string;
   prisma: AuthorizationCodePrisma;
-  activeScopePrisma?: AuthorizationCodePrisma;
+  afterActiveScopeLock?: () => Promise<void>;
 }): Promise<{
   userId: string;
   rememberMe: boolean;
@@ -226,18 +229,19 @@ export async function consumeAuthorizationCode(params: {
   try {
     // A code must not create a scoped session after the selected membership was
     // suspended or removed between issuance and exchange.
-    await assertActiveWorkspaceScope(
+    await lockAndAssertActiveWorkspaceScope(
       {
         userId: row.userId,
         domain: row.domain,
         orgId: row.orgId,
         teamId: row.teamId,
       },
-      { prisma: params.activeScopePrisma ?? params.prisma },
+      { prisma: params.prisma },
     );
   } catch {
     rejectAuthCode('workspace_scope_inactive');
   }
+  await params.afterActiveScopeLock?.();
 
   const updated = await params.prisma.authorizationCode.updateMany({
     where: {

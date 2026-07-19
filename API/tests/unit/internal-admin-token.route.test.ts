@@ -138,10 +138,16 @@ describe('POST /internal/admin/token', () => {
           redirectUrl: 'https://admin.example.com/admin/callback',
           codeVerifier: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
         },
-        // The exchange now runs inside a domain-scoped tenant transaction so the
-        // RLS-bound uoa_app role can see the freshly-issued authorization code.
-        expect.objectContaining({ prisma: expect.anything() }),
+        {
+          prisma: expect.anything(),
+          adminPrisma: expect.anything(),
+        },
       );
+      const deps = exchangeAuthorizationCodeForTokensMock.mock.calls[0]?.[1] as {
+        prisma: unknown;
+        adminPrisma: unknown;
+      };
+      expect(deps.prisma).toBe(deps.adminPrisma);
     } finally {
       await app.close();
     }

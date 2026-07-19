@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@prisma/client';
+import { Prisma, type PrismaClient } from '@prisma/client';
 
 import { AppError } from '../utils/errors.js';
 
@@ -6,9 +6,59 @@ type WorkspaceScopePrisma = Pick<
   PrismaClient,
   'organisation' | 'orgMember' | 'team' | 'teamMember'
 >;
+type WorkspaceLockPrisma = Pick<PrismaClient, '$queryRaw'>;
 
 function rejectWorkspaceScope(): never {
   throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
+}
+
+/**
+ * Lock one user's organisation membership first, then their team membership
+ * rows in stable id order. Token exchange and every status-changing lifecycle
+ * path use this same order, so ACTIVE-scope decisions are linearized with
+ * deactivation, removal, reactivation, and invite-link joins.
+ */
+export async function lockWorkspaceMembershipRows(
+  params: {
+    userId: string;
+    orgId: string;
+    teamId?: string;
+  },
+  deps: { prisma: WorkspaceLockPrisma },
+): Promise<void> {
+  await deps.prisma.$queryRaw(
+    Prisma.sql`
+      SELECT om.id
+      FROM "org_members" om
+      WHERE om."org_id" = ${params.orgId}
+        AND om."user_id" = ${params.userId}
+      ORDER BY om.id
+      FOR UPDATE OF om
+    `,
+  );
+
+  await deps.prisma.$queryRaw(
+    params.teamId
+      ? Prisma.sql`
+          SELECT tm.id
+          FROM "team_members" tm
+          INNER JOIN "teams" t ON t.id = tm."team_id"
+          WHERE t."org_id" = ${params.orgId}
+            AND tm."user_id" = ${params.userId}
+            AND tm."team_id" = ${params.teamId}
+          ORDER BY tm.id
+          FOR UPDATE OF tm
+        `
+      : Prisma.sql`
+          SELECT tm.id
+          FROM "team_members" tm
+          INNER JOIN "teams" t ON t.id = tm."team_id"
+          WHERE t."org_id" = ${params.orgId}
+            AND tm."user_id" = ${params.userId}
+          ORDER BY tm.id
+          FOR UPDATE OF tm
+        `,
+  );
 }
 
 /**
@@ -55,4 +105,26 @@ export async function assertActiveWorkspaceScope(
   ]);
 
   if (!orgMember || !teamMember) rejectWorkspaceScope();
+}
+
+/** Lock the exact membership rows, then validate their current committed state. */
+export async function lockAndAssertActiveWorkspaceScope(
+  params: {
+    userId: string;
+    domain: string;
+    orgId?: string | null;
+    teamId?: string | null;
+  },
+  deps: { prisma: WorkspaceScopePrisma & WorkspaceLockPrisma },
+): Promise<void> {
+  const orgId = params.orgId ?? undefined;
+  const teamId = params.teamId ?? undefined;
+  if (!orgId && !teamId) return;
+  if (!orgId || !teamId) rejectWorkspaceScope();
+
+  await lockWorkspaceMembershipRows(
+    { userId: params.userId, orgId, teamId },
+    deps,
+  );
+  await assertActiveWorkspaceScope(params, deps);
 }

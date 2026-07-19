@@ -6,6 +6,7 @@ import { getPrisma } from '../db/prisma.js';
 import { runInTransaction } from '../db/tenant-context.js';
 import { AppError } from '../utils/errors.js';
 import { revokeRefreshTokensForUserDomain } from './refresh-token.service.js';
+import { lockWorkspaceMembershipRows } from './workspace-scope.service.js';
 
 import {
   assertDatabaseEnabled,
@@ -105,6 +106,7 @@ export async function addOrganisationMember(
   }
 
   const { member: createdMember, reactivated } = await runInTransaction(prisma, async (tx) => {
+    await lockWorkspaceMembershipRows({ userId, orgId: org.id }, { prisma: tx });
     // Include the status so a prior DEACTIVATED/REMOVED row can be reactivated instead of
     // rejected (design §4.1: statuses are tombstones, re-adding flips them back to ACTIVE).
     const existingMemberInOrg = await tx.orgMember.findFirst({
@@ -303,21 +305,33 @@ export async function removeOrganisationMember(
   }
 
   await runInTransaction(prisma, async (tx) => {
+    await lockWorkspaceMembershipRows({ userId, orgId: org.id }, { prisma: tx });
+    const lockedMember = await tx.orgMember.findFirst({
+      where: { orgId: org.id, userId },
+      select: { id: true, role: true, userId: true },
+    });
+    if (!lockedMember) throw new AppError('NOT_FOUND', 404);
+
     const ownerCountTx = await tx.orgMember.count({
       where: { orgId: org.id, role: 'owner', status: 'ACTIVE' },
     });
-    if (member.role === 'owner' && ownerCountTx <= 1) {
+    if (lockedMember.role === 'owner' && ownerCountTx <= 1) {
       throw new AppError('BAD_REQUEST', 400);
     }
 
-    const owners = member.userId === org.ownerId
+    const owners = lockedMember.userId === org.ownerId
       ? await tx.orgMember.findMany({
-          where: { orgId: org.id, role: 'owner', status: 'ACTIVE', userId: { not: member.userId } },
+          where: {
+            orgId: org.id,
+            role: 'owner',
+            status: 'ACTIVE',
+            userId: { not: lockedMember.userId },
+          },
           select: { userId: true },
         })
       : [];
 
-    if (member.userId === org.ownerId && owners.length) {
+    if (lockedMember.userId === org.ownerId && owners.length) {
       await tx.organisation.update({
         where: { id: org.id },
         data: { ownerId: owners[0].userId },
@@ -347,7 +361,7 @@ export async function removeOrganisationMember(
       },
     });
     await tx.orgMember.update({
-      where: { id: member.id },
+      where: { id: lockedMember.id },
       data: { status: 'REMOVED', statusChangedAt: now },
     });
   });

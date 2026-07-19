@@ -178,6 +178,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       auth-ui.service.ts                    — Auth window HTML/asset rendering
       auth-verify-email.service.ts          — Email verification logic
       auto-onboarding.service.ts            — Auto-onboarding flow
+      authorization-code.service.ts         — Scoped code issuance and one-transaction consumption
       billing-actor.service.ts              — Credential-bound short-lived actor JWT verification
       billing-app-key.service.ts            — Product app-key minting, lookup, revocation, and audit
       billing-entitlement.service.ts        — Membership validation and team→org→default resolution
@@ -218,6 +219,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       handshake-log-context.service.ts      — Handshake log context builder
       integration-accept.service.ts         — Integration accept flow
       integration-claim-page.service.ts     — Integration claim HTML page
+      login-session-use.service.ts          — Hashed one-use chooser capability claims
       integration-claim.service.ts          — Integration claim logic
       integration-request-notify.service.ts — Integration request notifications
       integration-request.service.ts        — Integration request orchestration
@@ -276,6 +278,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       twofactor-setup-token.service.ts      — Short-lived setup token signing/verification
       user-scope.service.ts                 — User scope handling (global vs per-domain)
       user-team-requirement.service.ts      — Per-domain team-requirement enforcement
+      workspace-scope.service.ts            — Ordered membership locks and exact ACTIVE-scope checks
       /social
         apple.service.ts                    — Apple OAuth flow
         facebook.service.ts                 — Facebook OAuth flow

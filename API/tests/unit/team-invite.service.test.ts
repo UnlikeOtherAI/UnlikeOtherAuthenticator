@@ -66,6 +66,7 @@ function makeInvitePrisma() {
 
 function makeAcceptanceTx() {
   return {
+    $queryRaw: vi.fn().mockResolvedValue([]),
     teamInvite: {
       findUnique: vi.fn(),
       update: vi.fn(),

@@ -3,6 +3,7 @@ import { getPrisma } from '../db/prisma.js';
 import { runInTransaction } from '../db/tenant-context.js';
 import { AppError } from '../utils/errors.js';
 import { revokeRefreshTokensForUserDomain } from './refresh-token.service.js';
+import { lockWorkspaceMembershipRows } from './workspace-scope.service.js';
 
 import {
   assertDatabaseEnabled,
@@ -37,6 +38,7 @@ export async function deactivateOrganisationMember(
   },
   deps?: OrgServiceDeps & {
     revokeRefreshTokensForUserDomain?: typeof revokeRefreshTokensForUserDomain;
+    afterMembershipStatusWrite?: () => Promise<void>;
   },
 ): Promise<{ deactivated: boolean }> {
   const env = deps?.env ?? getEnv();
@@ -62,14 +64,23 @@ export async function deactivateOrganisationMember(
 
   const now = new Date();
   await runInTransaction(prisma, async (tx) => {
+    await lockWorkspaceMembershipRows({ userId, orgId: org.id }, { prisma: tx });
+    const lockedMember = await tx.orgMember.findFirst({
+      where: { orgId: org.id, userId, status: 'ACTIVE' },
+      select: { id: true, role: true },
+    });
+    if (!lockedMember) throw new AppError('NOT_FOUND', 404);
+    if (lockedMember.role === 'owner') throw new AppError('BAD_REQUEST', 400);
+
     await tx.orgMember.update({
-      where: { id: member.id },
+      where: { id: lockedMember.id },
       data: { status: 'DEACTIVATED', statusChangedAt: now },
     });
     await tx.teamMember.updateMany({
       where: { userId, team: { orgId: org.id }, status: 'ACTIVE' },
       data: { status: 'DEACTIVATED', statusChangedAt: now },
     });
+    await deps?.afterMembershipStatusWrite?.();
   });
 
   // Domain-scoped session revocation runs AFTER the tenant transaction commits, via the admin
@@ -103,7 +114,9 @@ export async function reactivateOrganisationMember(
     actorUserId: string;
     userId: string;
   },
-  deps?: OrgServiceDeps,
+  deps?: OrgServiceDeps & {
+    afterMembershipStatusWrite?: () => Promise<void>;
+  },
 ): Promise<{ reactivated: boolean }> {
   const env = deps?.env ?? getEnv();
   assertDatabaseEnabled(env);
@@ -127,14 +140,22 @@ export async function reactivateOrganisationMember(
 
   const now = new Date();
   await runInTransaction(prisma, async (tx) => {
+    await lockWorkspaceMembershipRows({ userId, orgId: org.id }, { prisma: tx });
+    const lockedMember = await tx.orgMember.findFirst({
+      where: { orgId: org.id, userId, status: 'DEACTIVATED' },
+      select: { id: true },
+    });
+    if (!lockedMember) throw new AppError('NOT_FOUND', 404);
+
     await tx.orgMember.update({
-      where: { id: member.id },
+      where: { id: lockedMember.id },
       data: { status: 'ACTIVE', statusChangedAt: now },
     });
     await tx.teamMember.updateMany({
       where: { userId, team: { orgId: org.id }, status: 'DEACTIVATED' },
       data: { status: 'ACTIVE', statusChangedAt: now },
     });
+    await deps?.afterMembershipStatusWrite?.();
   });
 
   // No session restore (design §4.5) — the user simply signs in again.

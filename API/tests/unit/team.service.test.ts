@@ -396,7 +396,10 @@ describe('Team service', () => {
     prisma.team.findFirst
       .mockResolvedValueOnce({ id: 'team-1', isDefault: false })
       .mockResolvedValueOnce({ id: 'team-default' });
-    prisma.teamMember.findMany.mockResolvedValue([{ userId: 'u-owner' }, { userId: 'u-2' }]);
+    prisma.teamMember.findMany.mockResolvedValue([
+      { userId: 'u-owner', status: 'ACTIVE' },
+      { userId: 'u-2', status: 'ACTIVE' },
+    ]);
     prisma.teamMember.count.mockImplementation(async (args: { where: { userId?: string } }) => {
       if (args.where.userId === 'u-owner') return 1;
       return 2;

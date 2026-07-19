@@ -45,6 +45,7 @@ vi.mock('../../src/services/ban-policy.service.js', () => ({
 
 const prismaMock = vi.hoisted(() => ({
   $executeRaw: vi.fn(),
+  $queryRaw: vi.fn(),
   domainSignatureSettings: { findUnique: vi.fn() },
   team: { findFirst: vi.fn() },
   teamMember: { findFirst: vi.fn(), findMany: vi.fn(), count: vi.fn(), create: vi.fn(), update: vi.fn() },
@@ -165,6 +166,7 @@ describe('POST /auth/select-team', () => {
     prismaMock.authorizationCode.create.mockResolvedValue({ id: 'code-row-1' });
     prismaMock.loginSessionUse.create.mockResolvedValue({ id: 'session-use-1' });
     prismaMock.$executeRaw.mockResolvedValue(1);
+    prismaMock.$queryRaw.mockResolvedValue([]);
     prismaMock.domainSignatureSettings.findUnique.mockResolvedValue(null);
   });
 
@@ -375,7 +377,7 @@ describe('POST /auth/select-team', () => {
     prismaMock.teamInviteLink.updateMany.mockResolvedValue({ count: 1 });
     prismaMock.orgMember.findFirst
       .mockResolvedValueOnce(null)
-      .mockResolvedValue({ id: 'om-1', orgId: 'org-7' });
+      .mockResolvedValue({ id: 'om-1', orgId: 'org-7', status: 'ACTIVE' });
     prismaMock.orgMember.create.mockResolvedValue({ id: 'om-1' });
     prismaMock.teamMember.findFirst
       .mockResolvedValueOnce(null)
@@ -417,7 +419,11 @@ describe('POST /auth/select-team', () => {
     });
     prismaMock.team.findFirst.mockResolvedValue({ id: 'team-8', orgId: 'org-8', joinPolicy: 'INVITE_ONLY' });
     prismaMock.teamInviteLink.updateMany.mockResolvedValue({ count: 1 });
-    prismaMock.orgMember.findFirst.mockResolvedValue({ id: 'om-2', orgId: 'org-8' });
+    prismaMock.orgMember.findFirst.mockResolvedValue({
+      id: 'om-2',
+      orgId: 'org-8',
+      status: 'ACTIVE',
+    });
     prismaMock.teamMember.findFirst.mockResolvedValue({ id: 'tm-2', status: 'ACTIVE' });
     prismaMock.user.findUnique.mockResolvedValue({ twoFaEnabled: true });
     prismaMock.clientDomain.findUnique.mockResolvedValue({ twoFaPolicy: 'REQUIRED' });

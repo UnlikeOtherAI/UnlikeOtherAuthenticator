@@ -20,7 +20,7 @@ import {
 } from '../../services/team-invite.service.js';
 import { redeemTeamInviteLink } from '../../services/team-invite-link.service.js';
 import { finalizeWithTwoFaPolicy } from '../../services/workspace-finalize.service.js';
-import { assertActiveWorkspaceScope } from '../../services/workspace-scope.service.js';
+import { lockAndAssertActiveWorkspaceScope } from '../../services/workspace-scope.service.js';
 import { AppError } from '../../utils/errors.js';
 import { parseRequiredPkceChallenge } from '../../utils/pkce.js';
 import { selectTeamRateLimiter } from './rate-limit-keys.js';
@@ -137,6 +137,17 @@ export function registerAuthSelectTeamRoute(app: FastifyInstance): void {
       }
 
       const outcome = await runInTransaction(prisma, async (tx) => {
+        // Claim first. A concurrent replay stops at the unique digest before
+        // invite audit or access-request email side effects. Any later failure
+        // rolls this insert back, so the legitimate user can retry.
+        await consumeLoginSession({
+          domain: session.domain,
+          jti: session.jti,
+          expiresAtEpochSeconds: session.expiresAtEpochSeconds,
+          prisma: tx,
+          now,
+        });
+
         let orgId: string | undefined;
         let resolvedTeamId: string | undefined;
 
@@ -167,11 +178,14 @@ export function registerAuthSelectTeamRoute(app: FastifyInstance): void {
           if (!team) rejectSelection();
           orgId = team.orgId;
           resolvedTeamId = team.id;
-          await assertActiveWorkspaceScope(
-            { userId, domain: config.domain, orgId, teamId: resolvedTeamId },
-            { prisma: tx },
-          );
         }
+
+        // Every resolved path, including shareable invite-link redemption,
+        // must finish with the exact ACTIVE org + team rows locked.
+        await lockAndAssertActiveWorkspaceScope(
+          { userId, domain: config.domain, orgId, teamId: resolvedTeamId },
+          { prisma: tx },
+        );
 
         const user = await tx.user.findUnique({
           where: { id: userId },
@@ -197,16 +211,6 @@ export function registerAuthSelectTeamRoute(app: FastifyInstance): void {
           },
           { prisma: tx },
         );
-
-        // Insert last: a concurrent replay can perform speculative work only
-        // inside its transaction. The unique collision rolls all of it back.
-        await consumeLoginSession({
-          domain: session.domain,
-          jti: session.jti,
-          expiresAtEpochSeconds: session.expiresAtEpochSeconds,
-          prisma: tx,
-          now,
-        });
         return finalized;
       });
 
