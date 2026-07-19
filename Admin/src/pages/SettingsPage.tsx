@@ -8,9 +8,10 @@ import { DataTable, PaginationFooter, Td, usePagination } from '../components/ui
 import { SegmentedTabs } from '../components/ui/Tabs';
 import { BanDialog, type BanKind } from '../components/dialogs/BanDialog';
 import { useDeleteBanMutation, useSettingsQuery } from '../features/admin/admin-queries';
+import { ConfidentialDelegationsSettings } from '../features/admin/ConfidentialDelegationsSettings';
 import { useAdminUi } from '../features/shell/admin-ui';
 
-type SettingsTab = 'bans' | 'system';
+type SettingsTab = 'bans' | 'delegations' | 'system';
 
 type BanDialogState = { banKind: BanKind };
 
@@ -19,9 +20,18 @@ export function SettingsPage() {
 
   return (
     <>
-      <PageHeader title="Settings" description="System-level controls and template examples" />
-      <SegmentedTabs<SettingsTab> value={tab} onChange={setTab} options={[{ label: 'Bans', value: 'bans' }, { label: 'System', value: 'system' }]} />
+      <PageHeader title="Settings" description="System-level security and application trust controls" />
+      <SegmentedTabs<SettingsTab>
+        value={tab}
+        onChange={setTab}
+        options={[
+          { label: 'Bans', value: 'bans' },
+          { label: 'Delegation mappings', value: 'delegations' },
+          { label: 'System', value: 'system' },
+        ]}
+      />
       {tab === 'bans' ? <BansSettings /> : null}
+      {tab === 'delegations' ? <ConfidentialDelegationsSettings /> : null}
       {tab === 'system' ? <SystemSettings /> : null}
     </>
   );

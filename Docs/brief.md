@@ -756,6 +756,12 @@ rebind); resource, scope allowlist, and enabled state are mutable. API responses
 and audit metadata contain policy only and never expose domain credential
 material.
 
+The authenticated Admin panel exposes this policy under Settings → Delegation
+mappings. It uses the existing same-origin admin session internally and never
+asks an operator to copy, decode, or reveal a browser token. The visible
+controls cover list, create, mutable-field update, enable/disable, and guarded
+delete; domain/product immutability is explained in the edit form.
+
 Before every issue, UOA re-resolves the current user and source-domain role.
 When `active` is present, UOA additionally re-resolves the requested ACTIVE org
 and team memberships. Unknown users, missing domain roles, and

@@ -114,13 +114,15 @@ Before enabling the confidential exchange in production:
    another product.
 5. Confirm each source domain publishes its assertion signing public key at the
    same-host `jwks_url` in its config JWT.
-6. Through the authenticated superuser API, create one
-   `/internal/admin/confidential-delegations` mapping per source domain/product
-   with the exact target HTTPS resource and the smallest required subset of
-   `ai.invoke`, `billing.read`, and the separately granted `token.provision`.
-   The latter is only for a dedicated Coder provisioner and must never be
-   inferred from `ai.invoke`. Mapping state is database-backed; do not add
-   source/resource env fallbacks.
+6. In the authenticated Admin panel, open **Settings → Delegation mappings** and
+   create one mapping per source domain/product with the exact target HTTPS
+   resource and the smallest required subset of `ai.invoke`, `billing.read`,
+   and the separately granted `token.provision`. The panel calls
+   `/internal/admin/confidential-delegations` with the existing same-origin
+   admin session; do not extract the browser token or expose a product
+   credential. `token.provision` is only for a dedicated Coder provisioner and
+   must never be inferred from `ai.invoke`. Mapping state is database-backed;
+   do not add source/resource env fallbacks.
 7. Verify `GET https://authentication.unlikeotherai.com/oauth/jwks.json` returns
    the configured public key, while discovery, registration, authorize, login,
    and `/oauth/token` return 404. Exercise correct and wrong product credentials,

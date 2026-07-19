@@ -126,7 +126,7 @@ Authenticated shell (`AdminSessionGuard` → `AdminUiProvider` → `AdminLayout`
 - `/feature-flags` — feature-flag apps listing (`FeatureFlagsPage`)
 - `/feature-flags/:appId` — feature-flag detail for an app (`FeatureFlagDetailPage`)
 - `/feature-flags/:appId/groups/:groupId` — audience-group detail under a feature flag (`FeatureAudienceGroupPage`)
-- `/settings` — system-level settings (`SettingsPage`)
+- `/settings` — system-level settings (`SettingsPage`), including bans and audited confidential delegation mappings. The delegation surface lists policy only (source domain, product, exact HTTPS resource, scope allowlist, enabled state, and audit metadata); it never reads or renders browser tokens, domain credentials, or application secrets. Source domain and product are immutable after creation.
 
 Catch-all:
 
@@ -141,6 +141,7 @@ When a template demonstrates a section that does not yet have a route here, use 
 - API access must be centralized behind services/query hooks
 - Components must not decode raw transport payloads ad hoc
 - Shared API error handling should map backend responses into a consistent UI-facing shape
+- Confidential delegation responses are parsed with a frontend Zod contract before rendering. Mutations use the same-origin admin bearer client; the UI must never extract or display that bearer or any product credential.
 
 ## 6. Forms
 
