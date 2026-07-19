@@ -1,7 +1,11 @@
 import { z } from 'zod';
 import dotenv from 'dotenv';
 
-import { privateRs256JwkKeyId, publicRs256JwkKeyIds } from '../utils/rs256-jwk.js';
+import {
+  privateRs256JwkKeyId,
+  privateRs256JwkMatchesPublicJwks,
+  publicRs256JwkKeyIds,
+} from '../utils/rs256-jwk.js';
 
 // Load local development environment variables from `.env` if present.
 // In production, variables should be provided by the process environment.
@@ -145,13 +149,24 @@ const EnvSchema = z
         message: 'CONFIDENTIAL_TOKEN_EXCHANGE_RESOURCE must use HTTPS',
       })
       .optional(),
-    // Dedicated RS256 key for content-free tariff/entitlement snapshots.
-    // Its public half is served at GET /billing/v1/jwks.json.
+    // Dedicated current RS256 key for content-free tariff/entitlement snapshots.
+    // It is required together with the public overlap set served at
+    // GET /billing/v1/jwks.json.
     TARIFF_SNAPSHOT_PRIVATE_JWK: z
       .string()
       .min(1)
       .refine((value) => privateRs256JwkKeyId(value) !== undefined, {
         message: 'TARIFF_SNAPSHOT_PRIVATE_JWK must be a private RS256 RSA JWK with a kid',
+      })
+      .optional(),
+    // Public-only current and retired tariff snapshot verification keys. Keeping
+    // both generations here makes signing-key rotation safe across cached JWKS
+    // responses and mixed Cloud Run revisions.
+    TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON: z
+      .string()
+      .min(1)
+      .refine((value) => publicRs256JwkKeyIds(value) !== undefined, {
+        message: 'TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON must contain public-only RS256 RSA keys',
       })
       .optional(),
     // Optional agreement-signature module. Disabled is the process default; a domain cannot be
@@ -230,6 +245,33 @@ const EnvSchema = z
         code: z.ZodIssueCode.custom,
         path: ['MCP_OAUTH_DOMAIN'],
         message: 'MCP_OAUTH_DOMAIN is required for the public OAuth profile',
+      });
+    }
+    const tariffPrivateConfigured = Boolean(env.TARIFF_SNAPSHOT_PRIVATE_JWK);
+    const tariffPublicConfigured = Boolean(env.TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON);
+    if (tariffPrivateConfigured !== tariffPublicConfigured) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [
+          tariffPrivateConfigured
+            ? 'TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON'
+            : 'TARIFF_SNAPSHOT_PRIVATE_JWK',
+        ],
+        message: 'tariff snapshot private key and public JWKS must be configured together',
+      });
+    }
+    if (
+      env.TARIFF_SNAPSHOT_PRIVATE_JWK &&
+      env.TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON &&
+      !privateRs256JwkMatchesPublicJwks(
+        env.TARIFF_SNAPSHOT_PRIVATE_JWK,
+        env.TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON,
+      )
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON'],
+        message: 'tariff snapshot public JWKS must include the current private key public pair',
       });
     }
 
@@ -338,7 +380,7 @@ export function isOAuthAccessTokenJwksEnabled(env: Env = getEnv()): boolean {
 }
 
 export function isTariffSnapshotJwksEnabled(env: Env = getEnv()): boolean {
-  return Boolean(env.TARIFF_SNAPSHOT_PRIVATE_JWK);
+  return Boolean(env.TARIFF_SNAPSHOT_PRIVATE_JWK && env.TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON);
 }
 
 /** Whether the public-client / MCP OAuth profile (brief §22.14) is enabled.

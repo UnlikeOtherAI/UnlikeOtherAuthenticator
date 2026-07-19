@@ -30,6 +30,7 @@ const envNames = [
   'DATABASE_URL',
   'PUBLIC_BASE_URL',
   'TARIFF_SNAPSHOT_PRIVATE_JWK',
+  'TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON',
 ] as const;
 const originalEnv = Object.fromEntries(envNames.map((name) => [name, process.env[name]])) as Record<
   (typeof envNames)[number],
@@ -63,9 +64,15 @@ const credential = {
 };
 
 beforeAll(async () => {
-  const { privateKey } = await generateKeyPair('RS256', { extractable: true });
-  const jwk = await exportJWK(privateKey);
-  Object.assign(jwk, {
+  const { privateKey, publicKey } = await generateKeyPair('RS256', { extractable: true });
+  const privateJwk = await exportJWK(privateKey);
+  const publicJwk = await exportJWK(publicKey);
+  Object.assign(privateJwk, {
+    kid: 'tariff-snapshot-test',
+    alg: 'RS256',
+    use: 'sig',
+  });
+  Object.assign(publicJwk, {
     kid: 'tariff-snapshot-test',
     alg: 'RS256',
     use: 'sig',
@@ -74,7 +81,8 @@ beforeAll(async () => {
   process.env.SHARED_SECRET = 'test-shared-secret-with-enough-length';
   process.env.PUBLIC_BASE_URL = 'https://auth.example.com';
   Reflect.deleteProperty(process.env, 'DATABASE_URL');
-  process.env.TARIFF_SNAPSHOT_PRIVATE_JWK = JSON.stringify(jwk);
+  process.env.TARIFF_SNAPSHOT_PRIVATE_JWK = JSON.stringify(privateJwk);
+  process.env.TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON = JSON.stringify({ keys: [publicJwk] });
   resetTariffSnapshotKeyCache();
 });
 
@@ -226,5 +234,51 @@ describe('billing app API routes', () => {
       ]);
       expect(body.keys[0]).not.toHaveProperty('d');
     });
+  });
+
+  it('fails startup before serving when configured RSA material cannot be imported', async () => {
+    const validPrivate = process.env.TARIFF_SNAPSHOT_PRIVATE_JWK;
+    const validPublic = process.env.TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON;
+    process.env.TARIFF_SNAPSHOT_PRIVATE_JWK = JSON.stringify({
+      kty: 'RSA',
+      kid: 'malformed-tariff-key',
+      alg: 'RS256',
+      use: 'sig',
+      n: 'not-a-real-modulus',
+      e: 'AQAB',
+      d: 'not-a-real-private-exponent',
+    });
+    process.env.TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON = JSON.stringify({
+      keys: [
+        {
+          kty: 'RSA',
+          kid: 'malformed-tariff-key',
+          alg: 'RS256',
+          use: 'sig',
+          n: 'not-a-real-modulus',
+          e: 'AQAB',
+        },
+      ],
+    });
+    resetTariffSnapshotKeyCache();
+
+    try {
+      await expect(createApp()).rejects.toMatchObject({
+        statusCode: 500,
+        message: 'TARIFF_SNAPSHOT_KEY_INVALID',
+      });
+    } finally {
+      if (validPrivate === undefined) {
+        Reflect.deleteProperty(process.env, 'TARIFF_SNAPSHOT_PRIVATE_JWK');
+      } else {
+        process.env.TARIFF_SNAPSHOT_PRIVATE_JWK = validPrivate;
+      }
+      if (validPublic === undefined) {
+        Reflect.deleteProperty(process.env, 'TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON');
+      } else {
+        process.env.TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON = validPublic;
+      }
+      resetTariffSnapshotKeyCache();
+    }
   });
 });

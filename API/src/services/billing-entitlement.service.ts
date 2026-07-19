@@ -15,7 +15,10 @@ import {
   billingModeToPublic,
   normalizeBillingServiceIdentifier,
 } from './billing-tariff.service.js';
-import { signEffectiveTariffSnapshot } from './billing-snapshot.service.js';
+import {
+  assertEffectiveTariffPayloadBinding,
+  signEffectiveTariffSnapshot,
+} from './billing-snapshot.service.js';
 
 export const EFFECTIVE_TARIFF_SCHEMA_VERSION = 1 as const;
 export const EFFECTIVE_TARIFF_SNAPSHOT_TTL_SECONDS = 5 * 60;
@@ -26,6 +29,9 @@ export type EffectiveTariffPayload = {
   product: {
     id: string;
     identifier: string;
+  };
+  authorized_party: {
+    app_key_id: string;
   };
   subject: {
     user_id: string;
@@ -109,6 +115,9 @@ function payloadFor(params: {
     product: {
       id: params.credential.service.id,
       identifier: params.credential.service.identifier,
+    },
+    authorized_party: {
+      app_key_id: params.credential.id,
     },
     subject: {
       user_id: params.request.userId,
@@ -270,6 +279,14 @@ export async function getEffectiveTariffSnapshot(
       scope: selected?.scope ?? null,
     },
     nowEpochSeconds: now,
+  });
+  assertEffectiveTariffPayloadBinding(payload, {
+    productId: params.credential.service.id,
+    productIdentifier: product,
+    appKeyId: params.credential.id,
+    userId: request.userId,
+    organisationId: request.organisationId,
+    teamId: request.teamId,
   });
   const snapshot = await (deps?.signSnapshot ?? signEffectiveTariffSnapshot)({
     payload,

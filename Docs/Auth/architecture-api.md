@@ -179,7 +179,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       billing-actor.service.ts              — Credential-bound short-lived actor JWT verification
       billing-app-key.service.ts            — Product app-key minting, lookup, revocation, and audit
       billing-entitlement.service.ts        — Membership validation and team→org→default resolution
-      billing-snapshot.service.ts           — Dedicated RS256 tariff snapshot signing and JWKS
+      billing-snapshot.service.ts           — Preloaded RS256 tariff signer, overlapping JWKS, and exact consumer binding guard
       billing-tariff.service.ts             — Versioned catalog, defaults, and assignments
       client-jwk.service.ts                 — Client-side JWK helpers
       config-debug.service.ts               — Config debug introspection
@@ -335,7 +335,7 @@ Request → Route → Middleware → Service → Database (Prisma)
 * **domain-hash-auth** — runs on domain-scoped API routes. Verifies the domain hash token.
 * **superuser-access-token** — validates user access tokens for superuser-only domain endpoints.
 * **admin-superuser** — runs on `/internal/admin/*`. Validates the admin access token issued by `POST /internal/admin/token` and requires `role: "superuser"` for the configured `ADMIN_AUTH_DOMAIN`. See `Docs/Requirements/roles-and-acl.md`.
-* **billing-app-auth** — runs on `POST /billing/v1/effective-tariff`. Accepts only the calling product's individual `uoa_app_…` credential, resolves its exact product and actor-verification binding through the admin database connection, and rejects duplicate or ambiguous credential headers. The route separately requires `X-UOA-Actor`; the app key never stands in for a user identity.
+* **billing-app-auth** — runs on `POST /billing/v1/effective-tariff`. Accepts only the calling product's individual `uoa_app_…` credential, resolves its exact product and actor-verification binding through the admin database connection, and rejects duplicate or ambiguous credential headers. The route separately requires `X-UOA-Actor`; the app key never stands in for a user identity. The signed result includes the non-secret app-key record ID, exact product ID/identifier, and user/organisation/team subject so consumers can reject cross-product or cross-actor replay even when products share an actor-signing key.
 * **org-features** — rejects org endpoints when `org_features.enabled` is false.
 * **groups-enabled** — rejects group endpoints when `org_features.groups_enabled` is false.
 * **org-role-guard** — validates the user access token and the user's org role for `/org/*` routes (`owner > admin > member`). Reads `OrgMember.role` for the authenticated user in the target org and returns 403 if not a member or the role is insufficient.

@@ -56,23 +56,34 @@ The team must belong to the organisation. The user must exist and hold active
 membership in both the organisation and team. A missing membership, mismatched
 product credential, inactive service, or missing default fails closed.
 
-## Raw usage and price presentation
+## Raw usage, billable units, and price presentation
 
 Raw provider usage is immutable accounting evidence. Token counts, search
-requests, storage bytes, and other metered quantities must never be multiplied
-to represent markup.
+requests, storage bytes, and other metered quantities must never be overwritten
+or relabeled to represent markup.
 
-The snapshot exposes `usage_price_multiplier_bps` for pricing only:
+The snapshot exposes one signed `usage_price_multiplier_bps`:
 
 * `free`: `0`
 * `at_cost`: `10000`
 * `standard` or `custom`: `10000 + markup_bps`
 
 Ledger applies that multiplier to the provider cost while retaining the
-original usage quantities. Consumer pages must show the raw usage and the
-customer-facing marked-up monetary amount separately. When they show tariff
-details, they should identify the markup or included commercial value rather
-than presenting inflated token counts as if the provider produced them.
+original usage quantities. It may also expose a separately labeled
+customer-facing token equivalent:
+
+```text
+customer_billable_token_equivalent =
+  raw_provider_tokens × usage_price_multiplier_bps / 10000
+```
+
+That value is a derived commercial unit, not a provider token count. Ledger must
+calculate it with decimal-safe arithmetic and retain the exact numerator and
+denominator (or an equivalent exact decimal) so display or invoice rounding
+never mutates the raw evidence. Consumer pages show raw provider tokens,
+customer billable token-equivalent units, and the customer-facing monetary
+amount as separate labeled values. They must never present the derived units as
+tokens produced by the provider.
 
 ## Individual product credentials
 
@@ -151,6 +162,9 @@ content-free business payload plus its RS256 signature:
       "id": "service-id",
       "identifier": "deepwater"
     },
+    "authorized_party": {
+      "app_key_id": "app-key-id"
+    },
     "subject": {
       "user_id": "user_123",
       "organisation_id": "org_123",
@@ -194,10 +208,22 @@ The snapshot JWT:
 * expires after five minutes;
 * contains the exact response payload plus standard JWT claims.
 
-Consumers verify the JWT against `GET /billing/v1/jwks.json`, check issuer,
-audience, expiry, and schema version, then use the signed payload. The JWKS route
-exists only when `TARIFF_SNAPSHOT_PRIVATE_JWK` is configured and publishes the
-public half only.
+Consumers verify the JWT against `GET /billing/v1/jwks.json`, check algorithm,
+`kid`, type, issuer, audience, expiry, subject, and schema version, then require
+the signed `product.id`, `product.identifier`, `authorized_party.app_key_id`,
+and all three `subject` identifiers to match the exact expected request and
+credential. A snapshot for another product or app key is rejected even when
+both products use the same Ledger issuer or actor-signing JWK. Consumers also
+require exact agreement between the signed business payload and the duplicate
+response payload; the unsigned payload is never authoritative on its own.
+
+The JWKS route is enabled only when both
+`TARIFF_SNAPSHOT_PRIVATE_JWK` and
+`TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON` are configured. The public set contains the
+current public key and any retired keys still needed during overlap; it must
+contain the exact public pair for the private key's current `kid`. UOA imports
+the private key and every published public key during process startup, failing
+before serving when any configured RSA material is unusable.
 
 The payload intentionally contains no email address, person name, organisation
 name, team name, usage, provider prompt, response, or research content.

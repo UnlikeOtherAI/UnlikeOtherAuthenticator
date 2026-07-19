@@ -121,6 +121,7 @@ describe('effective billing tariff resolution', () => {
     expect(result.payload).toMatchObject({
       schema_version: 1,
       product: { identifier: 'deepwater' },
+      authorized_party: { app_key_id: 'key_1' },
       tariff: {
         id: 'tariff_team',
         version: 3,

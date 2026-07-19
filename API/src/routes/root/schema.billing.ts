@@ -16,10 +16,10 @@ export const billingEndpoints: EndpointSchema[] = [
     method: 'GET',
     path: '/billing/v1/jwks.json',
     description:
-      'Public JWKS for content-free effective-tariff snapshots. Returns 404 until TARIFF_SNAPSHOT_PRIVATE_JWK is configured.',
+      'Public JWKS for content-free effective-tariff snapshots. It publishes the current and overlapping retired public keys, and returns 404 until both tariff snapshot key variables are configured.',
     auth: 'public',
     response: {
-      200: '{ keys: [public RS256 JWK] }',
+      200: '{ keys: [current and overlapping retired public RS256 JWKs] }',
       404: 'Tariff snapshot signing is not configured',
     },
   },
@@ -27,7 +27,7 @@ export const billingEndpoints: EndpointSchema[] = [
     method: 'POST',
     path: '/billing/v1/effective-tariff',
     description:
-      'Resolve team > organisation > service-default tariff precedence, re-check active UOA membership, and return a signed content-free snapshot. It never receives or changes token/request/search counts.',
+      'Resolve team > organisation > service-default tariff precedence, re-check active UOA membership, and return a signed content-free snapshot. Raw metered quantities remain immutable; the signed multiplier rates money and separately labeled customer billable token-equivalent units.',
     auth: 'X-UOA-App-Key: uoa_app_… credential dedicated to the requested product, plus X-UOA-Actor: short-lived RS256 actor JWT bound to that credential',
     body: {
       product: 'string (required) — exact global billing service identifier bound to the app key',
@@ -36,12 +36,12 @@ export const billingEndpoints: EndpointSchema[] = [
       user_id: 'string (required)',
     },
     response: {
-      200: '{ snapshot, payload } — snapshot is RS256 typ=uoa-tariff+jwt; payload contains schema/product/subject, immutable tariff id+key+version, mode, markup_bps, usage_price_multiplier_bps, monthly amount/currency, assignment scope, raw_usage_preserved=true, issued/expires timestamps',
+      200: '{ snapshot, payload } — snapshot is RS256 typ=uoa-tariff+jwt; payload contains schema/product/authorized app-key/subject, immutable tariff id+key+version, mode, markup_bps, usage_price_multiplier_bps, monthly amount/currency, assignment scope, raw_usage_preserved=true, issued/expires timestamps',
       '401/403':
         'Generic error for invalid/revoked/wrong-product app key, invalid actor signature, actor/body mismatch, or inactive membership',
     },
     notes:
-      'Actor claims: iss/aud exact credential values, sub=user_id, product, organisation_id, team_id, unique jti, iat/exp with maximum 60-second lifetime. Snapshot iss is PUBLIC_BASE_URL; aud is the credential actor_issuer.',
+      'Actor claims: iss/aud exact credential values, sub=user_id, product, organisation_id, team_id, unique jti, iat/exp with maximum 60-second lifetime. Snapshot iss is PUBLIC_BASE_URL; aud is the credential actor_issuer. Consumers must verify the signature and require exact signed product ID+identifier, authorized app-key ID, and user/organisation/team subject binding; shared actor signers never make snapshots portable across products. A billable token equivalent is raw_provider_tokens × usage_price_multiplier_bps / 10000 and must remain separately labeled from immutable raw provider tokens.',
   },
   {
     method: 'GET',

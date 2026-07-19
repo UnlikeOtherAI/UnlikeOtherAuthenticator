@@ -39,11 +39,12 @@ export function privateRs256JwkKeyId(input: string): string | undefined {
   return parsePrivateRs256Jwk(input)?.kid;
 }
 
-export function publicRs256JwkKeyIds(input: string): string[] | undefined {
+export function parsePublicRs256Jwks(input: string): { keys: JWK[] } | null {
   const jwks = parseJsonObject(input);
-  if (!Array.isArray(jwks?.keys) || jwks.keys.length < 1) return undefined;
+  if (!Array.isArray(jwks?.keys) || jwks.keys.length < 1) return null;
 
   const ids: string[] = [];
+  const keys: JWK[] = [];
   for (const value of jwks.keys) {
     const key = value as JsonObject | null;
     if (
@@ -59,12 +60,34 @@ export function publicRs256JwkKeyIds(input: string): string[] | undefined {
       (key.alg !== undefined && key.alg !== 'RS256') ||
       (key.use !== undefined && key.use !== 'sig')
     ) {
-      return undefined;
+      return null;
     }
     ids.push(key.kid);
+    keys.push(key as unknown as JWK);
   }
 
-  return new Set(ids).size === ids.length ? ids : undefined;
+  return new Set(ids).size === ids.length ? { keys } : null;
+}
+
+export function publicRs256JwkKeyIds(input: string): string[] | undefined {
+  return parsePublicRs256Jwks(input)?.keys.map((key) => key.kid as string);
+}
+
+export function privateRs256JwkMatchesPublicJwks(
+  privateInput: string,
+  publicInput: string,
+): boolean {
+  const privateKey = parsePrivateRs256Jwk(privateInput);
+  const publicKeys = parsePublicRs256Jwks(publicInput);
+  if (!privateKey || !publicKeys) return false;
+
+  return publicKeys.keys.some(
+    (key) =>
+      key.kid === privateKey.kid &&
+      key.kty === privateKey.jwk.kty &&
+      key.n === privateKey.jwk.n &&
+      key.e === privateKey.jwk.e,
+  );
 }
 
 export function toPublicRs256Jwk(privateJwk: JWK): JWK {

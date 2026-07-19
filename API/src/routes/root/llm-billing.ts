@@ -15,9 +15,13 @@ tariff snapshots; they do not maintain independent tariff truth.
 - The optional monthly component is an exact integer minor-unit string plus ISO currency.
   A \`free\` tariff has zero markup and zero monthly amount. An \`at_cost\` tariff may have a
   separate monthly subscription, but its usage component remains provider cost.
-- **Raw token, request, byte, and search counts are never multiplied or rewritten.** Ledger
-  keeps immutable raw usage, applies \`usage_price_multiplier_bps\` only when rating money,
-  and labels customer-facing billable value separately.
+- **Raw token, request, byte, and search counts are never multiplied, rewritten, or
+  relabeled.** Ledger keeps immutable raw usage and applies the same signed
+  \`usage_price_multiplier_bps\` when rating money and deriving a separately labeled
+  customer billable token-equivalent:
+  \`raw_provider_tokens × usage_price_multiplier_bps / 10000\`. The equivalent is a
+  commercial unit, not provider output; Ledger retains exact decimal-safe operands and
+  consumers show raw usage, billable units, and money separately.
 
 ### Dedicated product app keys
 
@@ -65,6 +69,7 @@ expiry. Its business claims mirror \`payload\`:
   "schema_version": 1,
   "snapshot_id": "uuid",
   "product": { "id": "svc_123", "identifier": "deepwater" },
+  "authorized_party": { "app_key_id": "app_key_123" },
   "subject": {
     "user_id": "usr_123",
     "organisation_id": "org_123",
@@ -90,7 +95,14 @@ expiry. Its business claims mirror \`payload\`:
 
 Verify the JWT through \`GET /billing/v1/jwks.json\`, including algorithm, \`kid\`,
 issuer, audience, type, expiry, subject, and exact business-claim agreement with the
-returned payload. Never accept the unsigned payload on its own.
+returned payload. Require the signed product ID and identifier, authorized app-key ID,
+and user/organisation/team subject to equal the expected credential and request. A
+snapshot for another product is invalid even when the same Ledger actor signer is bound
+to both products. Never accept the unsigned payload on its own.
+
+The JWKS contains the current and overlapping retired public keys. UOA signs with the
+private key whose exact public pair is present in that set and imports every key before
+serving, so malformed or incomplete rotation configuration fails at startup.
 
 All tariff catalog/default/assignment/key mutations are platform-superuser-only and are
 written to the UOA admin audit log. See [/api](/api) for exact mutation contracts.

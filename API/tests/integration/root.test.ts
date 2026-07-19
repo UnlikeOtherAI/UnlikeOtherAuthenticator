@@ -330,6 +330,8 @@ describe('GET /llm', () => {
     expect(res.body).toContain('concurrent replays are rejected');
     expect(res.body).toContain('Canonical tariff and entitlement control plane');
     expect(res.body).toContain('Raw token, request, byte, and search counts');
+    expect(res.body).toContain('customer billable token-equivalent');
+    expect(res.body).toContain('authorized app-key ID');
     expect(res.body).toContain('/billing/v1/effective-tariff');
   });
 });

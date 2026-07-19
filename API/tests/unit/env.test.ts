@@ -157,7 +157,7 @@ describe('env', () => {
     expect(env.MCP_OAUTH_PUBLIC_PROFILE_ENABLED).toBe(false);
   });
 
-  it('enables tariff snapshot JWKS only with a dedicated private RS256 key', () => {
+  it('enables tariff snapshots only with a matching private key and overlapping public JWKS', () => {
     const privateKey = JSON.stringify({
       kty: 'RSA',
       kid: 'tariff-2026-07',
@@ -167,10 +167,37 @@ describe('env', () => {
       e: 'AQAB',
       d: 'private',
     });
+    const publicKeys = JSON.stringify({
+      keys: [
+        {
+          kty: 'RSA',
+          kid: 'tariff-2026-06',
+          alg: 'RS256',
+          use: 'sig',
+          n: 'retired-modulus',
+          e: 'AQAB',
+        },
+        {
+          kty: 'RSA',
+          kid: 'tariff-2026-07',
+          alg: 'RS256',
+          use: 'sig',
+          n: 'modulus',
+          e: 'AQAB',
+        },
+      ],
+    });
 
     expect(isTariffSnapshotJwksEnabled(parseEnv(baseInput()))).toBe(false);
     expect(
-      isTariffSnapshotJwksEnabled(parseEnv(baseInput({ TARIFF_SNAPSHOT_PRIVATE_JWK: privateKey }))),
+      isTariffSnapshotJwksEnabled(
+        parseEnv(
+          baseInput({
+            TARIFF_SNAPSHOT_PRIVATE_JWK: privateKey,
+            TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON: publicKeys,
+          }),
+        ),
+      ),
     ).toBe(true);
     expect(() =>
       parseEnv(
@@ -183,6 +210,7 @@ describe('env', () => {
             n: 'modulus',
             e: 'AQAB',
           }),
+          TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON: publicKeys,
         }),
       ),
     ).toThrow();
@@ -196,6 +224,28 @@ describe('env', () => {
             n: 'modulus',
             e: 'AQAB',
             d: 'private',
+          }),
+          TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON: publicKeys,
+        }),
+      ),
+    ).toThrow();
+    expect(() => parseEnv(baseInput({ TARIFF_SNAPSHOT_PRIVATE_JWK: privateKey }))).toThrow();
+    expect(() => parseEnv(baseInput({ TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON: publicKeys }))).toThrow();
+    expect(() =>
+      parseEnv(
+        baseInput({
+          TARIFF_SNAPSHOT_PRIVATE_JWK: privateKey,
+          TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON: JSON.stringify({
+            keys: [
+              {
+                kty: 'RSA',
+                kid: 'tariff-2026-07',
+                alg: 'RS256',
+                use: 'sig',
+                n: 'different-modulus',
+                e: 'AQAB',
+              },
+            ],
           }),
         }),
       ),

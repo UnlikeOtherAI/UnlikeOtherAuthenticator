@@ -258,7 +258,8 @@ All secrets and configuration live in environment variables. Nothing is hardcode
 * `MCP_OAUTH_RESOURCES_SUPPORTED` — optional comma-separated, case-sensitive allowlist of RFC 8707 resource-server URIs the MCP profile may issue tokens for. A client-supplied `resource` must exactly match one of these or the request is rejected with `invalid_target`; when unset, no resource is allowed and clients omit `resource` (the token `aud` falls back to the issuer)
 * `CONFIDENTIAL_TOKEN_EXCHANGE_SOURCE_DOMAIN` — exact source config domain allowed to use the confidential `/auth/token` assertion grant; both confidential-exchange variables are required together
 * `CONFIDENTIAL_TOKEN_EXCHANGE_RESOURCE` — exact HTTPS resource URI paired with `CONFIDENTIAL_TOKEN_EXCHANGE_SOURCE_DOMAIN`; becomes the issued token audience
-* `TARIFF_SNAPSHOT_PRIVATE_JWK` — dedicated private RS256 RSA JWK with a unique `kid`; enables signed effective-tariff snapshots and publishes only its public half at `/billing/v1/jwks.json`. Do not reuse the config, OAuth access-token, or signature-evidence key
+* `TARIFF_SNAPSHOT_PRIVATE_JWK` — dedicated current private RS256 RSA JWK with a unique `kid`; required together with the tariff public JWKS. Do not reuse the config, OAuth access-token, or signature-evidence key
+* `TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON` — public-only JWKS containing the exact current tariff public key plus overlapping retired verification keys. UOA imports the private key and every published public key before serving and fails startup on invalid or mismatched material
 * `SIGNATURE_STORAGE_PROVIDER` — optional signature-object provider: `disabled` (default), `filesystem`, or `gcs`; filesystem storage is rejected in production
 * `SIGNATURE_FILESYSTEM_ROOT` — required private root when `SIGNATURE_STORAGE_PROVIDER=filesystem`; intended only for local development and tests
 * `SIGNATURE_GCS_BUCKET` — required private bucket when `SIGNATURE_STORAGE_PROVIDER=gcs`
