@@ -13,6 +13,7 @@ describe('billing tariff validation', () => {
         key: 'Standard',
         name: 'Standard',
         mode: 'standard',
+        collectionMode: 'stripe',
         markupBps: 4_000,
         monthlyAmountMinor: '2000',
         currency: 'usd',
@@ -20,6 +21,7 @@ describe('billing tariff validation', () => {
     ).toMatchObject({
       key: 'standard',
       mode: 'STANDARD',
+      collectionMode: 'STRIPE',
       markupBps: 4_000,
       monthlyAmountMinor: 2000n,
       currency: 'USD',
@@ -32,6 +34,7 @@ describe('billing tariff validation', () => {
         key: 'free',
         name: 'Free',
         mode: 'free',
+        collectionMode: 'none',
         markupBps: 100,
         monthlyAmountMinor: '0',
         currency: 'USD',
@@ -42,27 +45,41 @@ describe('billing tariff validation', () => {
         key: 'free',
         name: 'Free',
         mode: 'free',
+        collectionMode: 'none',
         markupBps: 0,
         monthlyAmountMinor: '1',
         currency: 'USD',
       }),
     ).toThrowError('INVALID_TARIFF_MODE_VALUES');
+    expect(() =>
+      normalizeTariffInput({
+        key: 'free',
+        name: 'Free',
+        mode: 'free',
+        collectionMode: 'stripe',
+        markupBps: 0,
+        monthlyAmountMinor: '0',
+        currency: 'USD',
+      }),
+    ).toThrowError('INVALID_TARIFF_MODE_VALUES');
   });
 
-  it('keeps at-cost usage at zero markup while allowing a separate subscription', () => {
+  it('keeps at-cost usage visible at zero markup without requiring payment collection', () => {
     expect(
       normalizeTariffInput({
         key: 'at-cost',
         name: 'At cost',
         mode: 'at_cost',
+        collectionMode: 'none',
         markupBps: 0,
-        monthlyAmountMinor: '9900',
+        monthlyAmountMinor: '0',
         currency: 'EUR',
       }),
     ).toMatchObject({
       mode: 'AT_COST',
+      collectionMode: 'NONE',
       markupBps: 0,
-      monthlyAmountMinor: 9900n,
+      monthlyAmountMinor: 0n,
     });
   });
 
@@ -73,6 +90,7 @@ describe('billing tariff validation', () => {
           key: 'standard',
           name: 'Standard',
           mode: 'standard',
+          collectionMode: 'manual',
           markupBps: 2_000,
           monthlyAmountMinor,
           currency: 'USD',

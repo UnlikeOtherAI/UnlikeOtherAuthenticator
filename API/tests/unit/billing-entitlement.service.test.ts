@@ -1,5 +1,6 @@
 import {
   BillingAssignmentScope,
+  BillingCollectionMode,
   BillingTariffMode,
   MembershipStatus,
   type PrismaClient,
@@ -30,6 +31,7 @@ const defaultTariff = {
   version: 1,
   name: 'Standard',
   mode: BillingTariffMode.STANDARD,
+  collectionMode: BillingCollectionMode.STRIPE,
   markupBps: 2_000,
   monthlyAmountMinor: 0n,
   currency: 'USD',
@@ -89,6 +91,7 @@ describe('effective billing tariff resolution', () => {
       key: 'custom',
       version: 3,
       mode: BillingTariffMode.CUSTOM,
+      collectionMode: BillingCollectionMode.NONE,
       markupBps: 4_000,
       monthlyAmountMinor: 2_000n,
     };
@@ -126,10 +129,13 @@ describe('effective billing tariff resolution', () => {
         id: 'tariff_team',
         version: 3,
         mode: 'custom',
+        collection_mode: 'none',
         markup_bps: 4_000,
         markup_percent: '40.00',
         usage_price_multiplier_bps: 14_000,
         monthly_subscription: { amount_minor: '2000', currency: 'USD' },
+        usage_billing_enabled: true,
+        payment_collection_enabled: false,
         raw_usage_preserved: true,
       },
       assignment: { scope: 'team', id: 'assignment_team' },
@@ -211,17 +217,27 @@ describe('effective billing tariff resolution', () => {
   it.each([
     {
       mode: BillingTariffMode.FREE,
+      collectionMode: BillingCollectionMode.NONE,
       usagePriceMultiplierBps: 0,
       usageBillingEnabled: false,
+      paymentCollectionEnabled: false,
     },
     {
       mode: BillingTariffMode.AT_COST,
+      collectionMode: BillingCollectionMode.NONE,
       usagePriceMultiplierBps: 10_000,
       usageBillingEnabled: true,
+      paymentCollectionEnabled: false,
     },
   ])(
     'emits the exact $mode price semantics without changing raw usage',
-    async ({ mode, usagePriceMultiplierBps, usageBillingEnabled }) => {
+    async ({
+      mode,
+      collectionMode,
+      usagePriceMultiplierBps,
+      usageBillingEnabled,
+      paymentCollectionEnabled,
+    }) => {
       const result = await getEffectiveTariffSnapshot(
         { request, actorToken: 'actor', credential },
         {
@@ -230,6 +246,7 @@ describe('effective billing tariff resolution', () => {
               ...defaultTariff,
               id: `tariff_${mode.toLowerCase()}`,
               mode,
+              collectionMode,
               markupBps: 0,
             },
           }),
@@ -241,6 +258,7 @@ describe('effective billing tariff resolution', () => {
       expect(result.payload.tariff).toMatchObject({
         usage_price_multiplier_bps: usagePriceMultiplierBps,
         usage_billing_enabled: usageBillingEnabled,
+        payment_collection_enabled: paymentCollectionEnabled,
         raw_usage_preserved: true,
       });
     },

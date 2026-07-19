@@ -7,6 +7,7 @@ type Tariff = {
   version: number;
   name: string;
   mode: string;
+  collectionMode: string;
   markupBps: number;
   monthlyAmountMinor: bigint;
   currency: string;
@@ -23,6 +24,7 @@ export function serializeBillingTariff(tariff: Tariff) {
     version: tariff.version,
     name: tariff.name,
     mode: tariff.mode.toLowerCase(),
+    collection_mode: tariff.collectionMode.toLowerCase(),
     markup_bps: tariff.markupBps,
     monthly_subscription: {
       amount_minor: tariff.monthlyAmountMinor.toString(),
