@@ -7,10 +7,17 @@ import {
   STRIPE_RATED_MINOR_UNIT_SCALE,
 } from '../../src/services/billing-stripe-catalog.service.js';
 
+const account = {
+  id: 'stripe_account_test',
+  stripeAccountId: 'acct_uoa',
+  livemode: false,
+};
+
 describe('Stripe tariff catalog', () => {
   it('creates a currency-specific sum meter without relabeling provider usage', async () => {
     let catalog = {
       id: 'catalog_1',
+      accountId: account.id,
       serviceId: 'service_1',
       currency: 'GBP',
       meterEventName: 'uoa_rated_hash',
@@ -30,9 +37,12 @@ describe('Stripe tariff catalog', () => {
       },
       billingStripeTariffPrice: {},
     };
-    const productsCreate = vi.fn().mockResolvedValue({ id: 'prod_1' });
-    const metersCreate = vi.fn().mockResolvedValue({ id: 'mtr_1' });
-    const pricesCreate = vi.fn().mockResolvedValue({ id: 'price_usage_1' });
+    const productsCreate = vi.fn().mockResolvedValue({ id: 'prod_1', livemode: false });
+    const metersCreate = vi.fn().mockResolvedValue({ id: 'mtr_1', livemode: false });
+    const pricesCreate = vi.fn().mockResolvedValue({
+      id: 'price_usage_1',
+      livemode: false,
+    });
     const stripe = {
       products: { create: productsCreate },
       billing: { meters: { create: metersCreate } },
@@ -43,6 +53,7 @@ describe('Stripe tariff catalog', () => {
       {
         service: { id: 'service_1', identifier: 'deepwater', name: 'DeepWater' },
         currency: 'GBP',
+        account,
         stripe: stripe as never,
       },
       { prisma: prisma as never },
@@ -53,6 +64,20 @@ describe('Stripe tariff catalog', () => {
       stripeMeterId: 'mtr_1',
       stripeUsagePriceId: 'price_usage_1',
     });
+    expect(prisma.billingStripeCatalog.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          accountId_serviceId_currency: {
+            accountId: account.id,
+            serviceId: 'service_1',
+            currency: 'GBP',
+          },
+        },
+      }),
+    );
+    expect(productsCreate.mock.calls[0]?.[1].idempotencyKey).toContain(
+      'acct_uoa:test:catalog-product:',
+    );
     expect(metersCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         event_name: 'uoa_rated_hash',
@@ -78,6 +103,7 @@ describe('Stripe tariff catalog', () => {
   it('maps the exact immutable tariff version to an optional monthly price', async () => {
     let mapping = {
       id: 'mapping_1',
+      accountId: account.id,
       tariffId: 'tariff_1',
       catalogId: 'catalog_1',
       monthlyAmountMinor: 2000n,
@@ -94,7 +120,10 @@ describe('Stripe tariff catalog', () => {
         }),
       },
     };
-    const pricesCreate = vi.fn().mockResolvedValue({ id: 'price_monthly_1' });
+    const pricesCreate = vi.fn().mockResolvedValue({
+      id: 'price_monthly_1',
+      livemode: false,
+    });
 
     const result = await ensureStripeTariffPrice(
       {
@@ -106,6 +135,7 @@ describe('Stripe tariff catalog', () => {
         },
         catalog: {
           id: 'catalog_1',
+          accountId: account.id,
           serviceId: 'service_1',
           currency: 'GBP',
           meterEventName: 'uoa_rated_hash',
@@ -115,6 +145,7 @@ describe('Stripe tariff catalog', () => {
           createdAt: new Date(),
           updatedAt: new Date(),
         },
+        account,
         stripe: { prices: { create: pricesCreate } } as never,
       },
       { prisma: prisma as never },
@@ -127,5 +158,54 @@ describe('Stripe tariff catalog', () => {
       uoa_tariff_id: 'tariff_1',
       uoa_tariff_version: '3',
     });
+  });
+
+  it('rejects a fixed Stripe Price on a zero-monthly tariff', async () => {
+    const mapping = {
+      id: 'mapping_zero',
+      accountId: account.id,
+      tariffId: 'tariff_zero',
+      catalogId: 'catalog_1',
+      monthlyAmountMinor: 0n,
+      stripeMonthlyPriceId: 'price_unexpected',
+      createdAt: new Date(),
+    };
+    const retrieve = vi.fn();
+
+    await expect(
+      ensureStripeTariffPrice(
+        {
+          tariff: {
+            id: 'tariff_zero',
+            key: 'at-cost',
+            version: 1,
+            monthlyAmountMinor: 0n,
+          },
+          catalog: {
+            id: 'catalog_1',
+            accountId: account.id,
+            serviceId: 'service_1',
+            currency: 'GBP',
+            meterEventName: 'uoa_rated_hash',
+            stripeProductId: 'prod_1',
+            stripeMeterId: 'mtr_1',
+            stripeUsagePriceId: 'price_usage_1',
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+          account,
+          stripe: { prices: { retrieve } } as never,
+        },
+        {
+          prisma: {
+            billingStripeCatalog: {},
+            billingStripeTariffPrice: {
+              upsert: vi.fn().mockResolvedValue(mapping),
+            },
+          } as never,
+        },
+      ),
+    ).rejects.toThrow('STRIPE_TARIFF_PRICE_MISMATCH');
+    expect(retrieve).not.toHaveBeenCalled();
   });
 });

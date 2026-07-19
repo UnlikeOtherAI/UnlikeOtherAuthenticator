@@ -15,16 +15,25 @@ import {
   resolveEffectiveTariffContext,
   type EffectiveTariffPayload,
 } from './billing-entitlement.service.js';
+import { ensureStripeCatalog, ensureStripeTariffPrice } from './billing-stripe-catalog.service.js';
 import {
-  ensureStripeCatalog,
-  ensureStripeTariffPrice,
-} from './billing-stripe-catalog.service.js';
-import { requireStripeBillingEnabled } from './billing-stripe-client.service.js';
-
-type StripeCheckoutClient = Pick<
-  Stripe,
-  'billing' | 'checkout' | 'customers' | 'prices' | 'products'
->;
+  checkoutIdempotencyKey,
+  reconcileStripeCheckoutLease,
+} from './billing-stripe-checkout-recovery.service.js';
+import {
+  assertCheckoutBinding,
+  billingScope,
+  ensureStripeCustomer,
+  overlappingCheckoutScope,
+  overlappingSubscriptionScope,
+  tariffSource,
+  type StripeCheckoutClient,
+} from './billing-stripe-checkout-state.service.js';
+import {
+  assertStripeObjectLivemode,
+  requireStripeBillingEnabled,
+  resolveStripeAccountContext,
+} from './billing-stripe-client.service.js';
 
 type CheckoutRequest = {
   product: string;
@@ -35,8 +44,8 @@ type CheckoutRequest = {
   cancelUrl: string;
 };
 
-const TERMINAL_SUBSCRIPTION_STATUSES = ['canceled', 'incomplete_expired'] as const;
 const BILLING_MANAGER_ROLES = new Set(['owner', 'admin']);
+const CHECKOUT_LEASE_MS = 10 * 60 * 1000;
 
 function digestUrl(value: string): string {
   return createHash('sha256').update(value).digest('hex');
@@ -63,27 +72,6 @@ function normalizeReturnUrl(value: string, allowedOrigins: string[]): string {
   }
 }
 
-function billingScope(
-  payload: EffectiveTariffPayload,
-): {
-  scope: BillingAssignmentScope;
-  scopeKey: string;
-  teamId: string | null;
-} {
-  if (payload.assignment.scope === 'team') {
-    return {
-      scope: BillingAssignmentScope.TEAM,
-      scopeKey: `${payload.subject.organisation_id}:${payload.subject.team_id}`,
-      teamId: payload.subject.team_id,
-    };
-  }
-  return {
-    scope: BillingAssignmentScope.ORGANISATION,
-    scopeKey: payload.subject.organisation_id,
-    teamId: null,
-  };
-}
-
 function isBillingManager(params: {
   scope: BillingAssignmentScope;
   orgRole: string;
@@ -96,48 +84,12 @@ function isBillingManager(params: {
   );
 }
 
-function assertReplayBinding(
-  checkout: {
-    appKeyId: string;
-    serviceId: string;
-    tariffId: string;
-    orgId: string;
-    teamId: string | null;
-    requestedByUserId: string;
-    successUrlDigest: string;
-    cancelUrlDigest: string;
-  },
-  expected: {
-    credential: VerifiedBillingAppKey;
-    payload: EffectiveTariffPayload;
-    scopeTeamId: string | null;
-    successUrlDigest: string;
-    cancelUrlDigest: string;
-  },
-): void {
-  if (
-    checkout.appKeyId !== expected.credential.id ||
-    checkout.serviceId !== expected.credential.service.id ||
-    checkout.tariffId !== expected.payload.tariff.id ||
-    checkout.orgId !== expected.payload.subject.organisation_id ||
-    checkout.teamId !== expected.scopeTeamId ||
-    checkout.requestedByUserId !== expected.payload.subject.user_id ||
-    checkout.successUrlDigest !== expected.successUrlDigest ||
-    checkout.cancelUrlDigest !== expected.cancelUrlDigest
-  ) {
-    throw new AppError('FORBIDDEN', 403, 'STRIPE_CHECKOUT_REPLAY_MISMATCH');
-  }
+function externalId(value: string | { id: string } | null): string | null {
+  if (!value) return null;
+  return typeof value === 'string' ? value : value.id;
 }
 
-async function existingCheckoutResult(
-  checkout: {
-    stripeCheckoutSessionId: string | null;
-    status: string;
-  },
-  stripe: StripeCheckoutClient,
-) {
-  if (!checkout.stripeCheckoutSessionId) return null;
-  const session = await stripe.checkout.sessions.retrieve(checkout.stripeCheckoutSessionId);
+function openSessionResult(session: Stripe.Checkout.Session, payload: EffectiveTariffPayload) {
   if (session.status !== 'open' || !session.url) {
     throw new AppError('BAD_REQUEST', 409, 'STRIPE_CHECKOUT_NOT_OPEN');
   }
@@ -145,7 +97,12 @@ async function existingCheckoutResult(
     checkout_session_id: session.id,
     checkout_url: session.url,
     expires_at: new Date(session.expires_at * 1000).toISOString(),
+    tariff: payload.tariff,
   };
+}
+
+function isUniqueConstraintError(error: unknown): boolean {
+  return (error as { code?: unknown } | null)?.code === 'P2002';
 }
 
 export async function createStripeCheckoutSession(
@@ -157,8 +114,10 @@ export async function createStripeCheckoutSession(
   deps?: {
     prisma?: PrismaClient;
     stripe?: StripeCheckoutClient;
+    stripeLivemode?: boolean;
     resolveTariff?: typeof resolveEffectiveTariffContext;
     now?: () => Date;
+    afterStripeSessionCreated?: () => void | Promise<void>;
   },
 ) {
   const successUrl = normalizeReturnUrl(
@@ -172,15 +131,18 @@ export async function createStripeCheckoutSession(
   const successUrlDigest = digestUrl(successUrl);
   const cancelUrlDigest = digestUrl(cancelUrl);
   const prisma = deps?.prisma ?? getAdminPrisma();
-  const stripe = deps?.stripe ?? requireStripeBillingEnabled().client;
-  const { actor, payload } = await (
-    deps?.resolveTariff ?? resolveEffectiveTariffContext
-  )({
+  const configured = deps?.stripe ? undefined : requireStripeBillingEnabled();
+  const stripe = deps?.stripe ?? configured?.client;
+  if (!stripe) {
+    throw new AppError('INTERNAL', 503, 'STRIPE_BILLING_DISABLED');
+  }
+  const livemode = deps?.stripeLivemode ?? configured?.livemode ?? false;
+  const account = await resolveStripeAccountContext(stripe, livemode, prisma);
+  const { actor, payload } = await (deps?.resolveTariff ?? resolveEffectiveTariffContext)({
     request: params.request,
     actorToken: params.actorToken,
     credential: params.credential,
   });
-
   if (
     payload.tariff.collection_mode !== 'stripe' ||
     payload.tariff.mode === 'free' ||
@@ -191,69 +153,57 @@ export async function createStripeCheckoutSession(
 
   const selectedScope = billingScope(payload);
   const details = await prisma.$transaction(async (tx) => {
-    const [user, org, team, orgMember, teamMember, tariff, activeSubscription, replay] =
-      await Promise.all([
-        tx.user.findUnique({
-          where: { id: payload.subject.user_id },
-          select: { id: true, email: true, name: true },
-        }),
-        tx.organisation.findUnique({
-          where: { id: payload.subject.organisation_id },
-          select: { id: true, name: true },
-        }),
-        selectedScope.teamId
-          ? tx.team.findUnique({
-              where: { id: selectedScope.teamId },
-              select: { id: true, name: true, orgId: true },
-            })
-          : null,
-        tx.orgMember.findUnique({
-          where: {
-            orgId_userId: {
-              orgId: payload.subject.organisation_id,
-              userId: payload.subject.user_id,
-            },
+    const [user, org, team, orgMember, teamMember, tariff, activeSubscription] = await Promise.all([
+      tx.user.findUnique({
+        where: { id: payload.subject.user_id },
+        select: { id: true, email: true, name: true },
+      }),
+      tx.organisation.findUnique({
+        where: { id: payload.subject.organisation_id },
+        select: { id: true, name: true },
+      }),
+      selectedScope.teamId
+        ? tx.team.findUnique({
+            where: { id: selectedScope.teamId },
+            select: { id: true, name: true, orgId: true },
+          })
+        : null,
+      tx.orgMember.findUnique({
+        where: {
+          orgId_userId: {
+            orgId: payload.subject.organisation_id,
+            userId: payload.subject.user_id,
           },
-          select: { role: true, status: true },
-        }),
-        selectedScope.teamId
-          ? tx.teamMember.findUnique({
-              where: {
-                teamId_userId: {
-                  teamId: selectedScope.teamId,
-                  userId: payload.subject.user_id,
-                },
+        },
+        select: { role: true, status: true },
+      }),
+      selectedScope.teamId
+        ? tx.teamMember.findUnique({
+            where: {
+              teamId_userId: {
+                teamId: selectedScope.teamId,
+                userId: payload.subject.user_id,
               },
-              select: { teamRole: true, status: true },
-            })
-          : null,
-        tx.billingTariff.findFirst({
-          where: {
-            id: payload.tariff.id,
-            serviceId: params.credential.service.id,
-          },
-        }),
-        tx.billingStripeSubscription.findFirst({
-          where: {
-            serviceId: params.credential.service.id,
-            scope: selectedScope.scope,
-            scopeKey: selectedScope.scopeKey,
-            status: { notIn: [...TERMINAL_SUBSCRIPTION_STATUSES] },
-          },
-          select: { id: true },
-        }),
-        tx.billingStripeCheckoutSession.findUnique({
-          where: {
-            appKeyId_actorJti: {
-              appKeyId: params.credential.id,
-              actorJti: actor.jti,
             },
-          },
-        }),
-      ]);
-    return { user, org, team, orgMember, teamMember, tariff, activeSubscription, replay };
+            select: { teamRole: true, status: true },
+          })
+        : null,
+      tx.billingTariff.findFirst({
+        where: { id: payload.tariff.id, serviceId: params.credential.service.id },
+      }),
+      tx.billingStripeSubscription.findFirst({
+        where: overlappingSubscriptionScope(
+          account.id,
+          params.credential.service.id,
+          payload.subject.organisation_id,
+          selectedScope.scope,
+          selectedScope.scopeKey,
+        ),
+        select: { id: true },
+      }),
+    ]);
+    return { user, org, team, orgMember, teamMember, tariff, activeSubscription };
   });
-
   if (
     !details.user ||
     !details.org ||
@@ -284,21 +234,12 @@ export async function createStripeCheckoutSession(
     throw new AppError('INTERNAL', 500, 'STRIPE_TARIFF_MISMATCH');
   }
 
-  if (details.replay) {
-    assertReplayBinding(details.replay, {
-      credential: params.credential,
-      payload,
-      scopeTeamId: selectedScope.teamId,
-      successUrlDigest,
-      cancelUrlDigest,
-    });
-    const existing = await existingCheckoutResult(details.replay, stripe);
-    if (existing) return { ...existing, tariff: payload.tariff };
-  }
-
   let customer = await prisma.billingStripeCustomer.upsert({
-    where: { scopeKey: selectedScope.scopeKey },
+    where: {
+      accountId_scopeKey: { accountId: account.id, scopeKey: selectedScope.scopeKey },
+    },
     create: {
+      accountId: account.id,
       orgId: payload.subject.organisation_id,
       teamId: selectedScope.teamId,
       scope: selectedScope.scope,
@@ -306,50 +247,114 @@ export async function createStripeCheckoutSession(
     },
     update: {},
   });
+  if (
+    customer.accountId !== account.id ||
+    customer.orgId !== payload.subject.organisation_id ||
+    customer.teamId !== selectedScope.teamId ||
+    customer.scope !== selectedScope.scope
+  ) {
+    throw new AppError('INTERNAL', 500, 'STRIPE_CUSTOMER_SCOPE_INVALID');
+  }
+  customer = await ensureStripeCustomer(
+    {
+      customer,
+      account,
+      email: details.user.email,
+      name: details.team?.name ?? details.org.name,
+      orgId: payload.subject.organisation_id,
+      teamId: selectedScope.teamId,
+      scope: selectedScope.scope,
+      scopeKey: selectedScope.scopeKey,
+    },
+    { prisma, stripe },
+  );
   if (!customer.stripeCustomerId) {
-    const stripeCustomer = await stripe.customers.create(
-      {
-        email: details.user.email,
-        name: details.team?.name ?? details.org.name,
-        metadata: {
-          uoa_scope: selectedScope.scope.toLowerCase(),
-          uoa_scope_key: selectedScope.scopeKey,
-          uoa_organisation_id: payload.subject.organisation_id,
-          ...(selectedScope.teamId ? { uoa_team_id: selectedScope.teamId } : {}),
-        },
-      },
-      { idempotencyKey: `uoa:customer:${customer.id}` },
-    );
-    customer = await prisma.billingStripeCustomer.update({
-      where: { id: customer.id },
-      data: { stripeCustomerId: stripeCustomer.id },
-    });
+    throw new AppError('INTERNAL', 500, 'STRIPE_CUSTOMER_INCOMPLETE');
   }
 
-  let checkout = details.replay;
+  const now = deps?.now?.() ?? new Date();
+  let checkout = await prisma.billingStripeCheckoutSession.findFirst({
+    where: overlappingCheckoutScope(
+      account.id,
+      params.credential.service.id,
+      payload.subject.organisation_id,
+      selectedScope.scope,
+      selectedScope.scopeKey,
+    ),
+  });
+  if (checkout) {
+    assertCheckoutBinding(checkout, {
+      account,
+      credential: params.credential,
+      customerId: customer.id,
+      payload,
+      scope: selectedScope,
+      successUrlDigest,
+      cancelUrlDigest,
+    });
+    const recovered = await reconcileStripeCheckoutLease(
+      { checkout, customerStripeId: customer.stripeCustomerId, account, now },
+      { prisma, stripe },
+    );
+    if (recovered.session) return openSessionResult(recovered.session, payload);
+    checkout = recovered.abandoned ? null : recovered.checkout;
+  }
+
   if (!checkout) {
-    try {
-      checkout = await prisma.billingStripeCheckoutSession.create({
-        data: {
-          appKeyId: params.credential.id,
+    const createData = {
+      accountId: account.id,
+      appKeyId: params.credential.id,
+      customerId: customer.id,
+      serviceId: params.credential.service.id,
+      tariffId: details.tariff.id,
+      tariffSource: tariffSource(payload),
+      tariffAssignmentId: payload.assignment.id,
+      orgId: payload.subject.organisation_id,
+      teamId: selectedScope.teamId,
+      scope: selectedScope.scope,
+      scopeKey: selectedScope.scopeKey,
+      actorJti: actor.jti,
+      requestedByUserId: payload.subject.user_id,
+      successUrlDigest,
+      cancelUrlDigest,
+      leaseExpiresAt: new Date(now.getTime() + CHECKOUT_LEASE_MS),
+    };
+    for (let attempt = 0; !checkout && attempt < 3; attempt += 1) {
+      try {
+        checkout = await prisma.billingStripeCheckoutSession.create({
+          data: createData,
+        });
+      } catch (error) {
+        if (!isUniqueConstraintError(error)) throw error;
+        checkout = await prisma.billingStripeCheckoutSession.findFirst({
+          where: overlappingCheckoutScope(
+            account.id,
+            params.credential.service.id,
+            payload.subject.organisation_id,
+            selectedScope.scope,
+            selectedScope.scopeKey,
+          ),
+        });
+        if (!checkout) continue;
+        assertCheckoutBinding(checkout, {
+          account,
+          credential: params.credential,
           customerId: customer.id,
-          serviceId: params.credential.service.id,
-          tariffId: details.tariff.id,
-          orgId: payload.subject.organisation_id,
-          teamId: selectedScope.teamId,
-          scope: selectedScope.scope,
-          scopeKey: selectedScope.scopeKey,
-          actorJti: actor.jti,
-          requestedByUserId: payload.subject.user_id,
+          payload,
+          scope: selectedScope,
           successUrlDigest,
           cancelUrlDigest,
-        },
-      });
-    } catch (error) {
-      if ((error as { code?: unknown } | null)?.code === 'P2002') {
-        throw new AppError('BAD_REQUEST', 409, 'STRIPE_CHECKOUT_ALREADY_OPEN');
+        });
+        const recovered = await reconcileStripeCheckoutLease(
+          { checkout, customerStripeId: customer.stripeCustomerId, account, now },
+          { prisma, stripe },
+        );
+        if (recovered.session) return openSessionResult(recovered.session, payload);
+        checkout = recovered.abandoned ? null : recovered.checkout;
       }
-      throw error;
+    }
+    if (!checkout) {
+      throw new AppError('INTERNAL', 503, 'STRIPE_CHECKOUT_RETRY');
     }
   }
 
@@ -357,23 +362,17 @@ export async function createStripeCheckoutSession(
     {
       service: params.credential.service,
       currency: details.tariff.currency,
+      account,
       stripe,
     },
     { prisma },
   );
   const tariffPrice = await ensureStripeTariffPrice(
-    {
-      tariff: details.tariff,
-      catalog,
-      stripe,
-    },
+    { tariff: details.tariff, catalog, account, stripe },
     { prisma },
   );
   if (!catalog.stripeUsagePriceId) {
     throw new AppError('INTERNAL', 500, 'STRIPE_CATALOG_INCOMPLETE');
-  }
-  if (!customer.stripeCustomerId) {
-    throw new AppError('INTERNAL', 500, 'STRIPE_CUSTOMER_INCOMPLETE');
   }
 
   const session = await stripe.checkout.sessions.create(
@@ -394,21 +393,31 @@ export async function createStripeCheckoutSession(
       ],
       metadata: { uoa_checkout_id: checkout.id },
       subscription_data: {
-        billing_cycle_anchor: nextUtcMonthStart(deps?.now?.() ?? new Date()),
+        billing_cycle_anchor: nextUtcMonthStart(now),
         proration_behavior: 'none',
         metadata: {
           uoa_checkout_id: checkout.id,
           uoa_service_id: params.credential.service.id,
           uoa_tariff_id: details.tariff.id,
           uoa_scope_key: selectedScope.scopeKey,
+          uoa_stripe_account_id: account.stripeAccountId,
+          uoa_stripe_mode: account.livemode ? 'live' : 'test',
         },
       },
     },
-    { idempotencyKey: `uoa:checkout:${checkout.id}` },
+    { idempotencyKey: checkoutIdempotencyKey(account, checkout.id) },
   );
-  if (!session.url) {
-    throw new AppError('INTERNAL', 502, 'STRIPE_CHECKOUT_URL_MISSING');
+  assertStripeObjectLivemode(session, account.livemode);
+  if (
+    session.client_reference_id !== checkout.id ||
+    session.metadata?.uoa_checkout_id !== checkout.id ||
+    externalId(session.customer) !== customer.stripeCustomerId ||
+    session.mode !== 'subscription' ||
+    !session.url
+  ) {
+    throw new AppError('INTERNAL', 502, 'STRIPE_CHECKOUT_BINDING_INVALID');
   }
+  await deps?.afterStripeSessionCreated?.();
 
   await prisma.$transaction([
     prisma.billingStripeCheckoutSession.update({
@@ -433,15 +442,11 @@ export async function createStripeCheckoutSession(
           scope: selectedScope.scope.toLowerCase(),
           scope_key: selectedScope.scopeKey,
           app_key_id: params.credential.id,
+          stripe_account_id: account.stripeAccountId,
+          livemode: account.livemode,
         },
       },
     }),
   ]);
-
-  return {
-    checkout_session_id: session.id,
-    checkout_url: session.url,
-    expires_at: new Date(session.expires_at * 1000).toISOString(),
-    tariff: payload.tariff,
-  };
+  return openSessionResult(session, payload);
 }

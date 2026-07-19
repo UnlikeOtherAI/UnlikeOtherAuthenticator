@@ -8,6 +8,11 @@ import {
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
+import {
+  assertDefaultTariffChangeAllowed,
+  assertTariffAssignmentChangeAllowed,
+  assertTariffAssignmentRemovalAllowed,
+} from './billing-stripe-tariff-guard.service.js';
 
 const IDENTIFIER_PATTERN = /^[a-z0-9][a-z0-9._-]{0,99}$/;
 const TARIFF_KEY_PATTERN = /^[a-z0-9][a-z0-9._-]{0,79}$/;
@@ -185,55 +190,6 @@ export async function createBillingService(
   );
 }
 
-export async function listBillingServices(deps?: { prisma?: PrismaClient }) {
-  return client(deps).billingService.findMany({
-    orderBy: { identifier: 'asc' },
-    include: {
-      tariffs: { orderBy: [{ key: 'asc' }, { version: 'desc' }] },
-      assignments: {
-        orderBy: [{ scope: 'asc' }, { scopeKey: 'asc' }],
-        include: {
-          tariff: true,
-          org: { select: { id: true, name: true } },
-          team: { select: { id: true, name: true } },
-        },
-      },
-      appKeys: {
-        orderBy: { createdAt: 'desc' },
-        select: {
-          id: true,
-          name: true,
-          keyPrefix: true,
-          actorIssuer: true,
-          actorAudience: true,
-          actorKeyId: true,
-          checkoutReturnOrigins: true,
-          lastUsedAt: true,
-          expiresAt: true,
-          revokedAt: true,
-          createdByEmail: true,
-          createdAt: true,
-        },
-      },
-      stripeCatalogs: {
-        orderBy: { currency: 'asc' },
-        include: {
-          tariffPrices: {
-            orderBy: { createdAt: 'asc' },
-          },
-        },
-      },
-      stripeSubscriptions: {
-        orderBy: { createdAt: 'desc' },
-        include: {
-          org: { select: { id: true, name: true } },
-          team: { select: { id: true, name: true } },
-        },
-      },
-    },
-  });
-}
-
 function isVersionConflict(error: unknown): boolean {
   if (!error || typeof error !== 'object' || !('code' in error)) return false;
   return error.code === 'P2002' || error.code === 'P2034';
@@ -268,6 +224,7 @@ export async function createBillingTariffVersion(
             select: { version: true },
           });
           if (params.setAsDefault) {
+            await assertDefaultTariffChangeAllowed(tx, service.id, '__new_tariff_version__');
             await tx.billingTariff.updateMany({
               where: { serviceId: service.id, isDefault: true },
               data: { isDefault: false },
@@ -323,6 +280,8 @@ export async function setDefaultBillingTariff(
             where: { id: params.tariffId, serviceId: params.serviceId },
           });
           if (!tariff) throw new AppError('NOT_FOUND', 404, 'BILLING_TARIFF_NOT_FOUND');
+          if (tariff.isDefault) return tariff;
+          await assertDefaultTariffChangeAllowed(tx, params.serviceId, tariff.id);
           await tx.billingTariff.updateMany({
             where: { serviceId: params.serviceId, isDefault: true },
             data: { isDefault: false },
@@ -388,6 +347,25 @@ export async function upsertBillingTariffAssignment(
     const scopeKey = params.teamId
       ? `${params.organisationId}:${params.teamId}`
       : params.organisationId;
+    const current = await tx.billingTariffAssignment.findUnique({
+      where: {
+        serviceId_scope_scopeKey: {
+          serviceId: params.serviceId,
+          scope,
+          scopeKey,
+        },
+      },
+      select: { id: true, tariffId: true },
+    });
+    if (current?.tariffId !== params.tariffId) {
+      await assertTariffAssignmentChangeAllowed(tx, {
+        serviceId: params.serviceId,
+        orgId: params.organisationId,
+        teamId: params.teamId ?? null,
+        targetTariffId: params.tariffId,
+        currentAssignmentId: current?.id ?? null,
+      });
+    }
     const assignment = await tx.billingTariffAssignment.upsert({
       where: {
         serviceId_scope_scopeKey: {
@@ -446,6 +424,7 @@ export async function removeBillingTariffAssignment(
     if (!assignment) {
       throw new AppError('NOT_FOUND', 404, 'BILLING_ASSIGNMENT_NOT_FOUND');
     }
+    await assertTariffAssignmentRemovalAllowed(tx, assignment.id);
     await tx.billingTariffAssignment.delete({ where: { id: assignment.id } });
     await tx.adminAuditLog.create({
       data: {
@@ -462,25 +441,4 @@ export async function removeBillingTariffAssignment(
       },
     });
   });
-}
-
-export function billingModeToPublic(mode: BillingTariffMode): PublicTariffMode {
-  const modes: Record<BillingTariffMode, PublicTariffMode> = {
-    [BillingTariffMode.STANDARD]: 'standard',
-    [BillingTariffMode.FREE]: 'free',
-    [BillingTariffMode.AT_COST]: 'at_cost',
-    [BillingTariffMode.CUSTOM]: 'custom',
-  };
-  return modes[mode];
-}
-
-export function billingCollectionModeToPublic(
-  mode: BillingCollectionMode,
-): PublicBillingCollectionMode {
-  const modes: Record<BillingCollectionMode, PublicBillingCollectionMode> = {
-    [BillingCollectionMode.STRIPE]: 'stripe',
-    [BillingCollectionMode.MANUAL]: 'manual',
-    [BillingCollectionMode.NONE]: 'none',
-  };
-  return modes[mode];
 }

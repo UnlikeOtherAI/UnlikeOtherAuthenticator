@@ -8,7 +8,12 @@ import {
   fetchLedgerBillingUsage,
   type LedgerBillingUsage,
 } from './billing-ledger-collector.service.js';
-import { requireStripeBillingEnabled } from './billing-stripe-client.service.js';
+import {
+  assertStripeObjectLivemode,
+  requireStripeBillingEnabled,
+  resolveStripeAccountContext,
+  type StripeAccountContext,
+} from './billing-stripe-client.service.js';
 import {
   assertStripeUsageScope,
   assertStripeUsageSubscription,
@@ -19,10 +24,8 @@ import {
   validatedStripeCumulativeCharges,
 } from './billing-stripe-usage-validation.service.js';
 
-type UsageExportRow = Prisma.BillingStripeUsageExportGetPayload<
-  Record<string, never>
->;
-type StripeUsageClient = Pick<Stripe, 'billing'>;
+type UsageExportRow = Prisma.BillingStripeUsageExportGetPayload<Record<string, never>>;
+type StripeUsageClient = Pick<Stripe, 'accounts' | 'billing'>;
 
 export { stripeMeterQuantityFromMajorAmount } from './billing-stripe-usage-validation.service.js';
 
@@ -43,6 +46,7 @@ export type StripeUsageExportResult = {
 };
 
 function eventIdentifier(params: {
+  accountId: string;
   subscriptionId: string;
   cursor: string;
   callerProduct: string;
@@ -51,6 +55,7 @@ function eventIdentifier(params: {
   const digest = createHash('sha256')
     .update(
       [
+        params.accountId,
         params.subscriptionId,
         params.cursor,
         params.callerProduct,
@@ -61,9 +66,7 @@ function eventIdentifier(params: {
   return `uoa_me_${digest}`;
 }
 
-function serializeExport(
-  row: UsageExportRow,
-): StripeUsageExportResult['exports'][number] {
+function serializeExport(row: UsageExportRow): StripeUsageExportResult['exports'][number] {
   return {
     id: row.id,
     billingProduct: row.billingProduct,
@@ -73,8 +76,7 @@ function serializeExport(
     cumulativeMeterQuantity: row.cumulativeMeterQuantity.toString(),
     deltaMeterQuantity: row.deltaMeterQuantity.toString(),
     stripeMeterEventIdentifier: row.stripeMeterEventIdentifier,
-    stripeMeterEventCreatedAt:
-      row.stripeMeterEventCreatedAt?.toISOString() ?? null,
+    stripeMeterEventCreatedAt: row.stripeMeterEventCreatedAt?.toISOString() ?? null,
   };
 }
 
@@ -111,10 +113,7 @@ async function prepareExports(
     }
     assertStripeUsageSubscription(subscription);
     assertStripeUsageScope(params.usage, subscription, params.billingMonth);
-    const charges = validatedStripeCumulativeCharges(
-      params.usage,
-      subscription,
-    );
+    const charges = validatedStripeCumulativeCharges(params.usage, subscription);
     const capturedAt = new Date(params.usage.snapshot.capturedAt);
     const previousRows = await tx.billingStripeUsageExport.findMany({
       where: {
@@ -124,8 +123,7 @@ async function prepareExports(
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
     const alreadyPrepared = previousRows.some(
-      (row) =>
-        row.ledgerSnapshotCursor === params.usage.snapshot.cursor,
+      (row) => row.ledgerSnapshotCursor === params.usage.snapshot.cursor,
     );
     if (
       !alreadyPrepared &&
@@ -166,20 +164,16 @@ async function prepareExports(
           existing.cumulativeCustomerCharge !== charge.amount ||
           existing.cumulativeMeterQuantity !== charge.quantity
         ) {
-          throw new AppError(
-            'INTERNAL',
-            502,
-            'LEDGER_BILLING_SNAPSHOT_MUTATED',
-          );
+          throw new AppError('INTERNAL', 502, 'LEDGER_BILLING_SNAPSHOT_MUTATED');
         }
         continue;
       }
-      const previousQuantity =
-        latestByKey.get(key)?.cumulativeMeterQuantity ?? 0n;
+      const previousQuantity = latestByKey.get(key)?.cumulativeMeterQuantity ?? 0n;
       const delta = charge.quantity - previousQuantity;
       if (delta === 0n) continue;
       await tx.billingStripeUsageExport.create({
         data: {
+          accountId: subscription.accountId,
           subscriptionId: subscription.id,
           ledgerSnapshotCursor: params.usage.snapshot.cursor,
           billingMonth: params.billingMonth,
@@ -190,6 +184,7 @@ async function prepareExports(
           cumulativeMeterQuantity: charge.quantity,
           deltaMeterQuantity: delta,
           stripeMeterEventIdentifier: eventIdentifier({
+            accountId: subscription.accountId,
             subscriptionId: subscription.id,
             cursor: params.usage.snapshot.cursor,
             callerProduct: charge.callerProduct,
@@ -206,13 +201,11 @@ async function prepareExports(
         billingMonth: params.billingMonth,
         stripeMeterEventCreatedAt: null,
       },
-      orderBy: [
-        { createdAt: 'asc' },
-        { callerProduct: 'asc' },
-        { currency: 'asc' },
-      ],
+      orderBy: [{ createdAt: 'asc' }, { callerProduct: 'asc' }, { currency: 'asc' }],
     });
-    const stripePrice = subscription.tariff.stripePrice;
+    const stripePrice = subscription.tariff.stripePrices.find(
+      (candidate) => candidate.accountId === subscription.accountId,
+    );
     const stripeCustomerId = subscription.customer.stripeCustomerId;
     if (!stripePrice || !stripeCustomerId) {
       throw new AppError('INTERNAL', 500, 'STRIPE_SUBSCRIPTION_NOT_METERABLE');
@@ -231,16 +224,13 @@ async function sendPendingExports(
     meterEventName: string;
     stripeCustomerId: string;
     now: Date;
+    account: StripeAccountContext;
   },
   stripe: StripeUsageClient,
   prisma: PrismaClient,
 ): Promise<void> {
   for (const row of params.pending) {
-    const timestamp = stripeUsageMeterTimestamp(
-      row.createdAt,
-      row.billingMonth,
-      params.now,
-    );
+    const timestamp = stripeUsageMeterTimestamp(row.createdAt, row.billingMonth, params.now);
     const event = await stripe.billing.meterEvents.create(
       {
         event_name: params.meterEventName,
@@ -253,6 +243,7 @@ async function sendPendingExports(
       },
       { idempotencyKey: row.stripeMeterEventIdentifier },
     );
+    assertStripeObjectLivemode(event, params.account.livemode);
     await prisma.billingStripeUsageExport.updateMany({
       where: {
         id: row.id,
@@ -274,6 +265,7 @@ export async function exportStripeUsage(
   deps?: {
     prisma?: PrismaClient;
     stripe?: StripeUsageClient;
+    stripeLivemode?: boolean;
     fetchUsage?: typeof fetchLedgerBillingUsage;
     now?: () => Date;
   },
@@ -283,6 +275,11 @@ export async function exportStripeUsage(
     where: { id: params.subscriptionId },
     select: {
       id: true,
+      accountId: true,
+      livemode: true,
+      account: {
+        select: { stripeAccountId: true, livemode: true },
+      },
       orgId: true,
       teamId: true,
       service: { select: { identifier: true } },
@@ -300,11 +297,25 @@ export async function exportStripeUsage(
     cursor: params.cursor,
   });
   const now = deps?.now?.() ?? new Date();
-  stripeUsageMeterTimestamp(
-    new Date(usage.snapshot.capturedAt),
-    params.billingMonth,
-    now,
+  stripeUsageMeterTimestamp(new Date(usage.snapshot.capturedAt), params.billingMonth, now);
+  const configured = deps?.stripe ? undefined : requireStripeBillingEnabled();
+  const stripe = deps?.stripe ?? configured?.client;
+  if (!stripe) {
+    throw new AppError('INTERNAL', 503, 'STRIPE_BILLING_DISABLED');
+  }
+  const account = await resolveStripeAccountContext(
+    stripe,
+    deps?.stripeLivemode ?? configured?.livemode ?? false,
+    prisma,
   );
+  if (
+    account.id !== subscription.accountId ||
+    account.stripeAccountId !== subscription.account.stripeAccountId ||
+    account.livemode !== subscription.livemode ||
+    account.livemode !== subscription.account.livemode
+  ) {
+    throw new AppError('BAD_REQUEST', 409, 'STRIPE_ACCOUNT_MISMATCH');
+  }
   const prepared = await prepareExports(
     {
       subscriptionId: subscription.id,
@@ -313,13 +324,13 @@ export async function exportStripeUsage(
     },
     prisma,
   );
-  const stripe = deps?.stripe ?? requireStripeBillingEnabled().client;
   await sendPendingExports(
     {
       pending: prepared.pending,
       meterEventName: prepared.meterEventName,
       stripeCustomerId: prepared.stripeCustomerId,
       now,
+      account,
     },
     stripe,
     prisma,

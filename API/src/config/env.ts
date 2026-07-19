@@ -1,11 +1,8 @@
 import { z } from 'zod';
 import dotenv from 'dotenv';
 
-import {
-  privateRs256JwkKeyId,
-  privateRs256JwkMatchesPublicJwks,
-  publicRs256JwkKeyIds,
-} from '../utils/rs256-jwk.js';
+import { privateRs256JwkKeyId, publicRs256JwkKeyIds } from '../utils/rs256-jwk.js';
+import { addBillingEnvironmentIssues } from './billing-env-validation.js';
 
 // Load local development environment variables from `.env` if present.
 // In production, variables should be provided by the process environment.
@@ -172,11 +169,7 @@ const EnvSchema = z
       .refine((value) => {
         const url = new URL(value);
         return (
-          url.protocol === 'https:' &&
-          !url.username &&
-          !url.password &&
-          !url.search &&
-          !url.hash
+          url.protocol === 'https:' && !url.username && !url.password && !url.search && !url.hash
         );
       }, 'LEDGER_BILLING_BASE_URL must be a credential-free HTTPS URL')
       .optional(),
@@ -218,8 +211,7 @@ const EnvSchema = z
       .string()
       .min(1)
       .refine((value) => publicRs256JwkKeyIds(value) !== undefined, {
-        message:
-          'UOA_BILLING_ASSERTION_PUBLIC_JWKS_JSON must contain public-only RS256 RSA keys',
+        message: 'UOA_BILLING_ASSERTION_PUBLIC_JWKS_JSON must contain public-only RS256 RSA keys',
       })
       .optional(),
     // Optional agreement-signature module. Disabled is the process default; a domain cannot be
@@ -275,96 +267,7 @@ const EnvSchema = z
         message: 'MCP_OAUTH_DOMAIN is required for the public OAuth profile',
       });
     }
-    const tariffPrivateConfigured = Boolean(env.TARIFF_SNAPSHOT_PRIVATE_JWK);
-    const tariffPublicConfigured = Boolean(env.TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON);
-    if (tariffPrivateConfigured !== tariffPublicConfigured) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: [
-          tariffPrivateConfigured
-            ? 'TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON'
-            : 'TARIFF_SNAPSHOT_PRIVATE_JWK',
-        ],
-        message: 'tariff snapshot private key and public JWKS must be configured together',
-      });
-    }
-    if (
-      env.TARIFF_SNAPSHOT_PRIVATE_JWK &&
-      env.TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON &&
-      !privateRs256JwkMatchesPublicJwks(
-        env.TARIFF_SNAPSHOT_PRIVATE_JWK,
-        env.TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON,
-      )
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON'],
-        message: 'tariff snapshot public JWKS must include the current private key public pair',
-      });
-    }
-    const billingAssertionPrivateConfigured = Boolean(
-      env.UOA_BILLING_ASSERTION_SIGNING_PRIVATE_JWK,
-    );
-    const billingAssertionPublicConfigured = Boolean(
-      env.UOA_BILLING_ASSERTION_PUBLIC_JWKS_JSON,
-    );
-    if (billingAssertionPrivateConfigured !== billingAssertionPublicConfigured) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: [
-          billingAssertionPrivateConfigured
-            ? 'UOA_BILLING_ASSERTION_PUBLIC_JWKS_JSON'
-            : 'UOA_BILLING_ASSERTION_SIGNING_PRIVATE_JWK',
-        ],
-        message:
-          'UOA billing assertion private key and public JWKS must be configured together',
-      });
-    }
-    if (
-      env.UOA_BILLING_ASSERTION_SIGNING_PRIVATE_JWK &&
-      env.UOA_BILLING_ASSERTION_PUBLIC_JWKS_JSON &&
-      !privateRs256JwkMatchesPublicJwks(
-        env.UOA_BILLING_ASSERTION_SIGNING_PRIVATE_JWK,
-        env.UOA_BILLING_ASSERTION_PUBLIC_JWKS_JSON,
-      )
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['UOA_BILLING_ASSERTION_PUBLIC_JWKS_JSON'],
-        message:
-          'UOA billing assertion public JWKS must include the current private key public pair',
-      });
-    }
-
-    if (
-      env.STRIPE_BILLING_ENABLED &&
-      (!env.STRIPE_SECRET_KEY || !env.STRIPE_WEBHOOK_SECRET)
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: [!env.STRIPE_SECRET_KEY ? 'STRIPE_SECRET_KEY' : 'STRIPE_WEBHOOK_SECRET'],
-        message:
-          'STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET are required when Stripe billing is enabled',
-      });
-    }
-    if (env.STRIPE_BILLING_ENABLED) {
-      const ledgerCollectorFields = [
-        'LEDGER_BILLING_BASE_URL',
-        'LEDGER_BILLING_APP_KEY',
-        'LEDGER_BILLING_APP_KEY_ID',
-        'LEDGER_BILLING_ASSERTION_AUDIENCE',
-        'UOA_BILLING_ASSERTION_SIGNING_PRIVATE_JWK',
-        'UOA_BILLING_ASSERTION_PUBLIC_JWKS_JSON',
-      ] as const;
-      const missing = ledgerCollectorFields.find((field) => !env[field]);
-      if (missing) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: [missing],
-          message: `${missing} is required when Stripe billing is enabled`,
-        });
-      }
-    }
+    addBillingEnvironmentIssues(env, ctx);
 
     if (env.SIGNATURE_STORAGE_PROVIDER === 'filesystem' && !env.SIGNATURE_FILESYSTEM_ROOT) {
       ctx.addIssue({
@@ -476,8 +379,7 @@ export function isTariffSnapshotJwksEnabled(env: Env = getEnv()): boolean {
 
 export function isBillingAssertionJwksEnabled(env: Env = getEnv()): boolean {
   return Boolean(
-    env.UOA_BILLING_ASSERTION_SIGNING_PRIVATE_JWK &&
-      env.UOA_BILLING_ASSERTION_PUBLIC_JWKS_JSON,
+    env.UOA_BILLING_ASSERTION_SIGNING_PRIVATE_JWK && env.UOA_BILLING_ASSERTION_PUBLIC_JWKS_JSON,
   );
 }
 

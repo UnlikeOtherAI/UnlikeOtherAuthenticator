@@ -1,13 +1,13 @@
 import {
-  BillingAssignmentScope,
   BillingCollectionMode,
   BillingTariffMode,
+  BillingTariffSource,
   Prisma,
 } from '@prisma/client';
 
 import { AppError } from '../utils/errors.js';
 import type { LedgerBillingUsage } from './billing-ledger-collector.service.js';
-import { billingModeToPublic } from './billing-tariff.service.js';
+import { billingModeToPublic } from './billing-tariff-serialization.service.js';
 
 const STRIPE_ZERO_DECIMAL_CURRENCIES = new Set([
   'BIF',
@@ -28,28 +28,23 @@ const STRIPE_ZERO_DECIMAL_CURRENCIES = new Set([
 ]);
 const STRIPE_METER_FRACTION_DIGITS = 6;
 const MAX_SIGNED_BIGINT = 9_223_372_036_854_775_807n;
-const METERABLE_SUBSCRIPTION_STATUSES = new Set([
-  'active',
-  'trialing',
-  'past_due',
-  'unpaid',
-]);
+const METERABLE_SUBSCRIPTION_STATUSES = new Set(['active', 'trialing', 'past_due', 'unpaid']);
 
 export const stripeUsageSubscriptionInclude =
   Prisma.validator<Prisma.BillingStripeSubscriptionInclude>()({
+    account: true,
     customer: true,
     service: true,
     tariff: {
       include: {
-        stripePrice: { include: { catalog: true } },
+        stripePrices: { include: { catalog: true } },
       },
     },
   });
 
-export type StripeUsageSubscription =
-  Prisma.BillingStripeSubscriptionGetPayload<{
-    include: typeof stripeUsageSubscriptionInclude;
-  }>;
+export type StripeUsageSubscription = Prisma.BillingStripeSubscriptionGetPayload<{
+  include: typeof stripeUsageSubscriptionInclude;
+}>;
 
 export type CumulativeCharge = {
   billingProduct: string;
@@ -68,19 +63,12 @@ function currencyMinorDigits(currency: string): number {
  * by Stripe's 0.000001-minor-unit meter price. Extra precision is rounded
  * half-up only at that final Stripe representability boundary.
  */
-export function stripeMeterQuantityFromMajorAmount(
-  amount: string,
-  currency: string,
-): bigint {
-  if (
-    !/^(0|[1-9]\d*)(\.\d+)?$/.test(amount) ||
-    !/^[A-Z]{3}$/.test(currency)
-  ) {
+export function stripeMeterQuantityFromMajorAmount(amount: string, currency: string): bigint {
+  if (!/^(0|[1-9]\d*)(\.\d+)?$/.test(amount) || !/^[A-Z]{3}$/.test(currency)) {
     throw new AppError('INTERNAL', 502, 'LEDGER_BILLING_AMOUNT_INVALID');
   }
   const [whole, fraction = ''] = amount.split('.');
-  const scaleDigits =
-    currencyMinorDigits(currency) + STRIPE_METER_FRACTION_DIGITS;
+  const scaleDigits = currencyMinorDigits(currency) + STRIPE_METER_FRACTION_DIGITS;
   const keptFraction = fraction.slice(0, scaleDigits).padEnd(scaleDigits, '0');
   const combined = `${whole}${keptFraction}`.replace(/^0+(?=\d)/, '');
   let quantity = BigInt(combined || '0');
@@ -94,9 +82,7 @@ export function stripeMeterQuantityFromMajorAmount(
   return quantity;
 }
 
-export function stripeUsageMonthBounds(
-  billingMonth: string,
-): { startsAt: Date; endsAt: Date } {
+export function stripeUsageMonthBounds(billingMonth: string): { startsAt: Date; endsAt: Date } {
   const match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(billingMonth);
   if (!match) {
     throw new AppError('BAD_REQUEST', 400, 'BILLING_MONTH_INVALID');
@@ -122,10 +108,7 @@ export function stripeUsageMeterTimestamp(
     throw new AppError('BAD_REQUEST', 409, 'STRIPE_USAGE_MONTH_OUT_OF_RANGE');
   }
   const lastSecond = Math.floor(bounds.endsAt.getTime() / 1000) - 1;
-  const timestamp = Math.min(
-    Math.floor(capturedAt.getTime() / 1000),
-    lastSecond,
-  );
+  const timestamp = Math.min(Math.floor(capturedAt.getTime() / 1000), lastSecond);
   if (timestamp < Math.floor(now.getTime() / 1000) - 35 * 24 * 60 * 60) {
     throw new AppError('BAD_REQUEST', 409, 'STRIPE_USAGE_MONTH_OUT_OF_RANGE');
   }
@@ -153,18 +136,21 @@ export function assertStripeUsageScope(
   }
 }
 
-function expectedAssignmentScopes(
-  scope: BillingAssignmentScope,
-): ReadonlySet<LedgerBillingUsage['monthlyComponents'][number]['assignmentScope']> {
-  return scope === BillingAssignmentScope.TEAM
-    ? new Set(['team'])
-    : new Set(['organisation', 'service_default']);
+function expectedAssignmentScope(
+  source: BillingTariffSource,
+): LedgerBillingUsage['monthlyComponents'][number]['assignmentScope'] {
+  const scopes = {
+    [BillingTariffSource.SERVICE_DEFAULT]: 'service_default',
+    [BillingTariffSource.ORGANISATION]: 'organisation',
+    [BillingTariffSource.TEAM]: 'team',
+  } as const;
+  return scopes[source];
 }
 
-export function assertStripeUsageSubscription(
-  subscription: StripeUsageSubscription,
-): void {
-  const price = subscription.tariff.stripePrice;
+export function assertStripeUsageSubscription(subscription: StripeUsageSubscription): void {
+  const price = subscription.tariff.stripePrices.find(
+    (candidate) => candidate.accountId === subscription.accountId,
+  );
   const catalog = price?.catalog;
   if (
     !METERABLE_SUBSCRIPTION_STATUSES.has(subscription.status) ||
@@ -173,14 +159,18 @@ export function assertStripeUsageSubscription(
     subscription.tariff.collectionMode !== BillingCollectionMode.STRIPE ||
     subscription.tariff.mode === BillingTariffMode.FREE ||
     !subscription.customer.stripeCustomerId ||
+    subscription.account.livemode !== subscription.livemode ||
+    subscription.customer.accountId !== subscription.accountId ||
     subscription.customer.orgId !== subscription.orgId ||
     subscription.customer.teamId !== subscription.teamId ||
     subscription.customer.scope !== subscription.scope ||
     subscription.customer.scopeKey !== subscription.scopeKey ||
     !price ||
+    price.accountId !== subscription.accountId ||
     price.tariffId !== subscription.tariffId ||
     price.monthlyAmountMinor !== subscription.tariff.monthlyAmountMinor ||
     !catalog ||
+    catalog.accountId !== subscription.accountId ||
     catalog.serviceId !== subscription.serviceId ||
     catalog.currency !== subscription.tariff.currency ||
     !catalog.stripeMeterId ||
@@ -195,11 +185,7 @@ function assertMonthlyComponent(
   subscription: StripeUsageSubscription,
 ): void {
   const expectedMultiplier = 10_000 + subscription.tariff.markupBps;
-  const assignmentScopes = expectedAssignmentScopes(subscription.scope);
-  const assignmentIdValid =
-    component.assignmentScope === 'service_default'
-      ? component.assignmentId === null
-      : component.assignmentId !== null;
+  const assignmentScope = expectedAssignmentScope(subscription.tariffSource);
   if (
     component.billingProduct !== subscription.service.identifier ||
     component.tariffId !== subscription.tariff.id ||
@@ -208,8 +194,8 @@ function assertMonthlyComponent(
     component.tariffMode !== billingModeToPublic(subscription.tariff.mode) ||
     component.markupBps !== subscription.tariff.markupBps ||
     component.usageMultiplierBps !== expectedMultiplier ||
-    !assignmentScopes.has(component.assignmentScope) ||
-    !assignmentIdValid ||
+    component.assignmentScope !== assignmentScope ||
+    component.assignmentId !== subscription.tariffAssignmentId ||
     component.amountMinor !== subscription.tariff.monthlyAmountMinor.toString() ||
     component.currency !== subscription.tariff.currency ||
     !component.usageBillingEnabled ||
@@ -220,10 +206,7 @@ function assertMonthlyComponent(
   }
 }
 
-export function stripeUsageChargeKey(
-  callerProduct: string,
-  currency: string,
-): string {
+export function stripeUsageChargeKey(callerProduct: string, currency: string): string {
   return `${callerProduct}\0${currency}`;
 }
 
@@ -234,10 +217,7 @@ export function validatedStripeCumulativeCharges(
   const componentsByKey = new Map<string, number>();
   for (const component of usage.monthlyComponents) {
     assertMonthlyComponent(component, subscription);
-    const key = stripeUsageChargeKey(
-      component.callerProduct,
-      component.currency,
-    );
+    const key = stripeUsageChargeKey(component.callerProduct, component.currency);
     componentsByKey.set(key, (componentsByKey.get(key) ?? 0) + 1);
   }
   if ([...componentsByKey.values()].some((count) => count !== 1)) {
@@ -263,10 +243,7 @@ export function validatedStripeCumulativeCharges(
   }
 
   for (const component of usage.monthlyComponents) {
-    const key = stripeUsageChargeKey(
-      component.callerProduct,
-      component.currency,
-    );
+    const key = stripeUsageChargeKey(component.callerProduct, component.currency);
     charges.set(
       key,
       charges.get(key) ?? {

@@ -92,11 +92,13 @@ type ListedService = {
   }>;
   stripeCatalogs: Array<{
     id: string;
+    accountId: string;
     currency: string;
     meterEventName: string;
     stripeProductId: string | null;
     stripeMeterId: string | null;
     stripeUsagePriceId: string | null;
+    account: { stripeAccountId: string; livemode: boolean };
     tariffPrices: Array<{
       id: string;
       tariffId: string;
@@ -106,7 +108,11 @@ type ListedService = {
   }>;
   stripeSubscriptions: Array<{
     id: string;
+    accountId: string;
+    checkoutId: string;
     tariffId: string;
+    tariffSource: string;
+    tariffAssignmentId: string | null;
     scope: string;
     scopeKey: string;
     stripeSubscriptionId: string;
@@ -117,6 +123,7 @@ type ListedService = {
     currentPeriodStart: Date | null;
     currentPeriodEnd: Date | null;
     livemode: boolean;
+    account: { stripeAccountId: string; livemode: boolean };
     org: { id: string; name: string };
     team: { id: string; name: string } | null;
     createdAt: Date;
@@ -158,6 +165,9 @@ export function serializeBillingService(service: ListedService) {
     })),
     stripe_catalogs: service.stripeCatalogs.map((catalog) => ({
       id: catalog.id,
+      account_id: catalog.accountId,
+      stripe_account_id: catalog.account.stripeAccountId,
+      livemode: catalog.account.livemode,
       currency: catalog.currency,
       meter_event_name: catalog.meterEventName,
       stripe_product_id: catalog.stripeProductId,
@@ -172,7 +182,12 @@ export function serializeBillingService(service: ListedService) {
     })),
     stripe_subscriptions: service.stripeSubscriptions.map((subscription) => ({
       id: subscription.id,
+      account_id: subscription.accountId,
+      stripe_account_id: subscription.account.stripeAccountId,
+      checkout_id: subscription.checkoutId,
       tariff_id: subscription.tariffId,
+      tariff_source: subscription.tariffSource.toLowerCase(),
+      tariff_assignment_id: subscription.tariffAssignmentId,
       scope: subscription.scope.toLowerCase(),
       scope_key: subscription.scopeKey,
       organisation: subscription.org,

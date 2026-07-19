@@ -107,6 +107,12 @@ describe('billing tariff validation', () => {
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
         update: vi.fn().mockResolvedValue({ ...tariff, isDefault: true }),
       },
+      billingStripeCheckoutSession: {
+        findFirst: vi.fn().mockResolvedValue(null),
+      },
+      billingStripeSubscription: {
+        findFirst: vi.fn().mockResolvedValue(null),
+      },
       adminAuditLog: {
         create: vi.fn().mockResolvedValue({}),
       },

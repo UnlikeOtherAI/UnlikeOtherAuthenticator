@@ -147,7 +147,7 @@ export const billingEndpoints: EndpointSchema[] = [
     method: 'POST',
     path: '/billing/v1/stripe/checkout-session',
     description:
-      'Create or replay one Stripe-hosted subscription Checkout session for the effective immutable tariff. Org/default tariffs bill at organisation scope; team overrides bill at team scope. Only active org/team billing managers may start Checkout.',
+      'Create or recover one account/mode-scoped Stripe-hosted subscription Checkout lease for the effective immutable tariff. Org/default tariffs bill at organisation scope and exclude team subscriptions; independent team scopes may coexist. Only active org/team billing managers may start Checkout.',
     auth: 'The requested product’s own X-UOA-App-Key plus a fresh credential-bound X-UOA-Actor assertion; never a shared product key',
     body: {
       product: 'exact product identifier bound to the app key',
@@ -164,13 +164,13 @@ export const billingEndpoints: EndpointSchema[] = [
       503: 'Stripe billing is explicitly disabled or not fully provisioned',
     },
     notes:
-      'The Checkout contains the immutable tariff monthly Price when non-zero plus one currency-specific metered Price. That meter receives customer-rated money as integer micro-minor-currency units; it never receives or relabels raw tokens, searches, or research units. Promotions are disabled because UOA tariff versions are the sole commercial authority.',
+      'The Checkout pins the exact immutable tariff version, precedence source, assignment, and billing scope until its subscription is terminal. It contains the monthly Price when non-zero plus exactly one currency-specific metered Price. That meter receives customer-rated money as integer micro-minor-currency units; it never receives or relabels raw tokens, searches, or research units. Promotions and all other discounts are disabled because UOA tariff versions are the sole commercial authority.',
   },
   {
     method: 'POST',
     path: '/billing/v1/stripe/webhook',
     description:
-      'Verify Stripe’s signature over the exact raw request body, idempotently record the event, and reconcile Checkout/subscription state to the exact UOA app-key, tariff, customer, and scope mapping.',
+      'Verify Stripe’s signature over the exact raw request body, idempotently record the event per account/mode, retrieve current Stripe state, and reconcile exact UOA app-key, Checkout, tariff source/assignment, customer, scope, and undiscounted item bindings. Reordered events cannot resurrect canceled state.',
     auth: 'Stripe-Signature with the dedicated STRIPE_WEBHOOK_SECRET; webhook signing secrets are never product app keys',
     response: {
       200: '{ received: true }; already committed event IDs are acknowledged without reapplying state',

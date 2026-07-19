@@ -1740,6 +1740,14 @@ UOA's own dedicated Ledger app key plus a short-lived service assertion; it
 exports customer-rated money as idempotent delta meter events, never raw tokens,
 searches, research units, or another application's credential. Live collection
 requires a reviewed polling and final pre-invoice reconciliation schedule.
+All Stripe projections and idempotency identities are scoped to the exact Stripe
+account and test/live mode. A subscription remains pinned to its Checkout's
+immutable tariff version, precedence source, assignment, and organisation/team
+billing scope until terminal; conflicting tariff mutations fail closed rather
+than silently repricing. Organisation subscriptions exclude team subscriptions
+for that product and organisation, while independent team subscriptions may
+coexist. Webhooks reconcile current Stripe state and exact undiscounted item
+cardinality, so reordered notifications cannot resurrect canceled state.
 
 The canonical model, modes, precedence, API and JWT contract, superuser
 administration, presentation rules, and Stripe collection boundaries are defined

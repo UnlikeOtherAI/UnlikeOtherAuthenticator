@@ -116,6 +116,23 @@ serving, so malformed or incomplete rotation configuration fails at startup.
 All tariff catalog/default/assignment/key mutations are platform-superuser-only and are
 written to the UOA admin audit log. See [/api](/api) for exact mutation contracts.
 
+### Stripe subscription invariants
+
+Stripe is an account-and-mode-scoped payment projection. Test and live resources never
+share local identities or idempotency keys. Checkout is a recoverable billing-scope lease:
+a fresh actor JWT for the same exact product key, tariff source/assignment, scope, customer,
+and return URLs recovers the winner, including after a crash between Stripe creation and
+the local write. Organisation subscriptions exclude team subscriptions for that product
+and organisation; independent team scopes may coexist.
+
+A subscription stays pinned to Checkout's immutable tariff version, precedence source,
+assignment ID, and billing scope until terminal. Conflicting default or assignment
+mutations fail with \`STRIPE_TARIFF_PINNED\`; UOA does not silently reprice the next cycle.
+Signed webhooks are reconciled against current Stripe state. Subscriptions require exactly
+the expected quantity-one monthly item when non-zero and one metered usage item, with no
+extras, duplicates, or discounts. Missing current Stripe state tombstones an existing
+local subscription, and reordered updates cannot resurrect canceled state.
+
 ### UOA-to-Ledger billing collection
 
 When Stripe collection is explicitly enabled, UOA reads Ledger’s immutable monthly

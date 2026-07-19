@@ -203,7 +203,7 @@ The React implementation should translate those templates into reusable componen
 - Tables: `users`, `domain_roles`, `login_logs`, `verification_tokens`, `confidential_assertion_uses`
 - Confidential delegation policy: `confidential_delegation_mappings` binds an authenticated `client_domains` row + product to one exact HTTPS resource and an explicit `ai.invoke` / `billing.read` / `token.provision` allowlist. Token provisioning is never implied by AI invocation. It is admin-only under forced RLS; there is no process-env fallback.
 - Organisational tables: `organisations`, `org_members`, `teams`, `team_members`, `groups`, `group_members`
-- Billing control-plane tables: `billing_services`, `billing_tariffs`, `billing_tariff_assignments`, `billing_app_keys`, `billing_stripe_customers`, `billing_stripe_catalogs`, `billing_stripe_tariff_prices`, `billing_stripe_checkout_sessions`, `billing_stripe_subscriptions`, `billing_stripe_usage_exports`, `billing_stripe_webhook_events`
+- Billing control-plane tables: `billing_services`, `billing_tariffs`, `billing_tariff_assignments`, `billing_app_keys`, `billing_stripe_accounts`, `billing_stripe_customers`, `billing_stripe_catalogs`, `billing_stripe_tariff_prices`, `billing_stripe_checkout_sessions`, `billing_stripe_subscriptions`, `billing_stripe_usage_exports`, `billing_stripe_webhook_events`
 - Optional signature-module tables: `domain_signature_settings`, `agreements`, `agreement_versions`, `signing_continuations`, `agreement_signatures`, `signature_revocations`, `signature_audit_events`
 - All schema changes go through Prisma migrations — no manual SQL
 - Prisma schema lives in `/API/prisma/schema.prisma`
@@ -218,7 +218,7 @@ The React implementation should translate those templates into reusable componen
 - **AI Translation Service** — for missing translation fallback, results cached permanently
 - **Private Signature Object Storage** — disabled by default; private local filesystem in development/test and Google Cloud Storage via Application Default Credentials when explicitly configured
 - **Ledger and Product Billing Clients** — server-to-server tariff reads use a distinct product-bound UOA app key plus a credential-bound RS256 actor assertion; UOA returns signed content-free snapshots and never receives provider content. Pricing/rating and payment collection are independent signed tariff terms (`collection_mode = stripe | manual | none`)
-- **Stripe Billing** — optional and disabled by default. UOA maps immutable tariff versions to Stripe Checkout/subscriptions, verifies webhooks over the exact raw body, and exports Ledger-rated customer money as integer micro-minor-currency delta meter events. UOA→Ledger uses UOA's own dedicated Ledger app key plus a separately signed `billing.read` service assertion verified through `/billing/v1/service-jwks.json`
+- **Stripe Billing** — optional and disabled by default. Every projection is scoped to the exact Stripe account and test/live mode. UOA pins a subscription to Checkout's immutable tariff/source/assignment and billing scope, verifies webhooks over the exact raw body before reconciling current Stripe state and exact undiscounted items, and exports Ledger-rated customer money as integer micro-minor-currency delta meter events. UOA→Ledger uses UOA's own dedicated Ledger app key plus a separately signed `billing.read` service assertion verified through `/billing/v1/service-jwks.json`
 
 ---
 

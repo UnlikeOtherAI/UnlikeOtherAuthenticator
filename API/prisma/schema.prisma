@@ -107,6 +107,12 @@ enum BillingAssignmentScope {
   TEAM
 }
 
+enum BillingTariffSource {
+  SERVICE_DEFAULT
+  ORGANISATION
+  TEAM
+}
+
 enum ConfidentialDelegationScope {
   AI_INVOKE       @map("ai.invoke")
   BILLING_READ    @map("billing.read")
@@ -1165,7 +1171,7 @@ model BillingTariff {
 
   service             BillingService                 @relation(fields: [serviceId], references: [id], onDelete: Cascade)
   assignments         BillingTariffAssignment[]
-  stripePrice         BillingStripeTariffPrice?
+  stripePrices        BillingStripeTariffPrice[]
   stripeCheckouts     BillingStripeCheckoutSession[]
   stripeSubscriptions BillingStripeSubscription[]
 
@@ -1227,21 +1233,45 @@ model BillingAppKey {
 
 // Stripe is a payment processor only. These rows map UOA's immutable tariff and
 // scope identities to Stripe resources; they never replace Ledger usage or UOA terms.
+model BillingStripeAccount {
+  id              String   @id @default(cuid())
+  stripeAccountId String   @map("stripe_account_id") @db.VarChar(255)
+  livemode        Boolean
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  customers     BillingStripeCustomer[]
+  catalogs      BillingStripeCatalog[]
+  tariffPrices  BillingStripeTariffPrice[]
+  checkouts     BillingStripeCheckoutSession[]
+  subscriptions BillingStripeSubscription[]
+  usageExports  BillingStripeUsageExport[]
+  webhookEvents BillingStripeWebhookEvent[]
+
+  @@unique([stripeAccountId, livemode])
+  @@map("billing_stripe_accounts")
+}
+
 model BillingStripeCustomer {
   id               String                 @id @default(cuid())
+  accountId        String                 @map("account_id")
   orgId            String                 @map("org_id")
   teamId           String?                @map("team_id")
   scope            BillingAssignmentScope
-  scopeKey         String                 @unique @map("scope_key") @db.VarChar(520)
-  stripeCustomerId String?                @unique @map("stripe_customer_id") @db.VarChar(255)
+  scopeKey         String                 @map("scope_key") @db.VarChar(520)
+  stripeCustomerId String?                @map("stripe_customer_id") @db.VarChar(255)
   createdAt        DateTime               @default(now()) @map("created_at")
   updatedAt        DateTime               @updatedAt @map("updated_at")
 
+  account       BillingStripeAccount           @relation(fields: [accountId], references: [id], onDelete: Restrict)
   org           Organisation                   @relation(fields: [orgId], references: [id], onDelete: Cascade)
   team          Team?                          @relation(fields: [teamId], references: [id], onDelete: Cascade)
   checkouts     BillingStripeCheckoutSession[]
   subscriptions BillingStripeSubscription[]
 
+  @@unique([accountId, scopeKey])
+  @@unique([accountId, stripeCustomerId])
+  @@index([accountId])
   @@index([orgId])
   @@index([teamId])
   @@map("billing_stripe_customers")
@@ -1249,44 +1279,59 @@ model BillingStripeCustomer {
 
 model BillingStripeCatalog {
   id                 String   @id @default(cuid())
+  accountId          String   @map("account_id")
   serviceId          String   @map("service_id")
   currency           String   @db.Char(3)
-  meterEventName     String   @unique @map("meter_event_name") @db.VarChar(100)
-  stripeProductId    String?  @unique @map("stripe_product_id") @db.VarChar(255)
-  stripeMeterId      String?  @unique @map("stripe_meter_id") @db.VarChar(255)
-  stripeUsagePriceId String?  @unique @map("stripe_usage_price_id") @db.VarChar(255)
+  meterEventName     String   @map("meter_event_name") @db.VarChar(100)
+  stripeProductId    String?  @map("stripe_product_id") @db.VarChar(255)
+  stripeMeterId      String?  @map("stripe_meter_id") @db.VarChar(255)
+  stripeUsagePriceId String?  @map("stripe_usage_price_id") @db.VarChar(255)
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")
 
+  account      BillingStripeAccount       @relation(fields: [accountId], references: [id], onDelete: Restrict)
   service      BillingService             @relation(fields: [serviceId], references: [id], onDelete: Cascade)
   tariffPrices BillingStripeTariffPrice[]
 
-  @@unique([serviceId, currency])
+  @@unique([accountId, serviceId, currency])
+  @@unique([accountId, meterEventName])
+  @@unique([accountId, stripeProductId])
+  @@unique([accountId, stripeMeterId])
+  @@unique([accountId, stripeUsagePriceId])
+  @@index([accountId])
   @@index([serviceId])
   @@map("billing_stripe_catalogs")
 }
 
 model BillingStripeTariffPrice {
   id                   String   @id @default(cuid())
-  tariffId             String   @unique @map("tariff_id")
+  accountId            String   @map("account_id")
+  tariffId             String   @map("tariff_id")
   catalogId            String   @map("catalog_id")
   monthlyAmountMinor   BigInt   @map("monthly_amount_minor")
-  stripeMonthlyPriceId String?  @unique @map("stripe_monthly_price_id") @db.VarChar(255)
+  stripeMonthlyPriceId String?  @map("stripe_monthly_price_id") @db.VarChar(255)
   createdAt            DateTime @default(now()) @map("created_at")
 
+  account BillingStripeAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
   tariff  BillingTariff        @relation(fields: [tariffId], references: [id], onDelete: Restrict)
   catalog BillingStripeCatalog @relation(fields: [catalogId], references: [id], onDelete: Restrict)
 
+  @@unique([accountId, tariffId])
+  @@unique([accountId, stripeMonthlyPriceId])
+  @@index([accountId])
   @@index([catalogId])
   @@map("billing_stripe_tariff_prices")
 }
 
 model BillingStripeCheckoutSession {
   id                      String                 @id @default(cuid())
+  accountId               String                 @map("account_id")
   appKeyId                String                 @map("app_key_id")
   customerId              String                 @map("customer_id")
   serviceId               String                 @map("service_id")
   tariffId                String                 @map("tariff_id")
+  tariffSource            BillingTariffSource    @map("tariff_source")
+  tariffAssignmentId      String?                @map("tariff_assignment_id")
   orgId                   String                 @map("org_id")
   teamId                  String?                @map("team_id")
   scope                   BillingAssignmentScope
@@ -1295,22 +1340,27 @@ model BillingStripeCheckoutSession {
   requestedByUserId       String                 @map("requested_by_user_id")
   successUrlDigest        String                 @map("success_url_digest") @db.Char(64)
   cancelUrlDigest         String                 @map("cancel_url_digest") @db.Char(64)
-  stripeCheckoutSessionId String?                @unique @map("stripe_checkout_session_id") @db.VarChar(255)
+  stripeCheckoutSessionId String?                @map("stripe_checkout_session_id") @db.VarChar(255)
   status                  String                 @default("creating") @db.VarChar(32)
+  leaseExpiresAt          DateTime               @map("lease_expires_at")
   expiresAt               DateTime?              @map("expires_at")
   completedAt             DateTime?              @map("completed_at")
   createdAt               DateTime               @default(now()) @map("created_at")
   updatedAt               DateTime               @updatedAt @map("updated_at")
 
-  appKey      BillingAppKey         @relation(fields: [appKeyId], references: [id], onDelete: Restrict)
-  customer    BillingStripeCustomer @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  service     BillingService        @relation(fields: [serviceId], references: [id], onDelete: Restrict)
-  tariff      BillingTariff         @relation(fields: [tariffId], references: [id], onDelete: Restrict)
-  org         Organisation          @relation(fields: [orgId], references: [id], onDelete: Restrict)
-  team        Team?                 @relation(fields: [teamId], references: [id], onDelete: Restrict)
-  requestedBy User                  @relation(fields: [requestedByUserId], references: [id], onDelete: Restrict)
+  account      BillingStripeAccount       @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  appKey       BillingAppKey              @relation(fields: [appKeyId], references: [id], onDelete: Restrict)
+  customer     BillingStripeCustomer      @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  service      BillingService             @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  tariff       BillingTariff              @relation(fields: [tariffId], references: [id], onDelete: Restrict)
+  org          Organisation               @relation(fields: [orgId], references: [id], onDelete: Restrict)
+  team         Team?                      @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  requestedBy  User                       @relation(fields: [requestedByUserId], references: [id], onDelete: Restrict)
+  subscription BillingStripeSubscription?
 
-  @@unique([appKeyId, actorJti])
+  @@unique([accountId, stripeCheckoutSessionId])
+  @@index([accountId, appKeyId, actorJti])
+  @@index([accountId])
   @@index([serviceId, scope, scopeKey])
   @@index([customerId])
   @@index([orgId])
@@ -1321,14 +1371,18 @@ model BillingStripeCheckoutSession {
 
 model BillingStripeSubscription {
   id                   String                 @id @default(cuid())
+  accountId            String                 @map("account_id")
+  checkoutId           String                 @unique @map("checkout_id")
   customerId           String                 @map("customer_id")
   serviceId            String                 @map("service_id")
   tariffId             String                 @map("tariff_id")
+  tariffSource         BillingTariffSource    @map("tariff_source")
+  tariffAssignmentId   String?                @map("tariff_assignment_id")
   orgId                String                 @map("org_id")
   teamId               String?                @map("team_id")
   scope                BillingAssignmentScope
   scopeKey             String                 @map("scope_key") @db.VarChar(520)
-  stripeSubscriptionId String                 @unique @map("stripe_subscription_id") @db.VarChar(255)
+  stripeSubscriptionId String                 @map("stripe_subscription_id") @db.VarChar(255)
   stripeMonthlyItemId  String?                @map("stripe_monthly_item_id") @db.VarChar(255)
   stripeUsageItemId    String                 @map("stripe_usage_item_id") @db.VarChar(255)
   status               String                 @db.VarChar(32)
@@ -1339,13 +1393,17 @@ model BillingStripeSubscription {
   createdAt            DateTime               @default(now()) @map("created_at")
   updatedAt            DateTime               @updatedAt @map("updated_at")
 
-  customer     BillingStripeCustomer      @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  service      BillingService             @relation(fields: [serviceId], references: [id], onDelete: Restrict)
-  tariff       BillingTariff              @relation(fields: [tariffId], references: [id], onDelete: Restrict)
-  org          Organisation               @relation(fields: [orgId], references: [id], onDelete: Restrict)
-  team         Team?                      @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  account      BillingStripeAccount         @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  checkout     BillingStripeCheckoutSession @relation(fields: [checkoutId], references: [id], onDelete: Restrict)
+  customer     BillingStripeCustomer        @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  service      BillingService               @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  tariff       BillingTariff                @relation(fields: [tariffId], references: [id], onDelete: Restrict)
+  org          Organisation                 @relation(fields: [orgId], references: [id], onDelete: Restrict)
+  team         Team?                        @relation(fields: [teamId], references: [id], onDelete: Restrict)
   usageExports BillingStripeUsageExport[]
 
+  @@unique([accountId, stripeSubscriptionId])
+  @@index([accountId])
   @@index([serviceId, scope, scopeKey])
   @@index([customerId])
   @@index([tariffId])
@@ -1356,6 +1414,7 @@ model BillingStripeSubscription {
 
 model BillingStripeUsageExport {
   id                         String    @id @default(cuid())
+  accountId                  String    @map("account_id")
   subscriptionId             String    @map("subscription_id")
   ledgerSnapshotCursor       String    @map("ledger_snapshot_cursor") @db.VarChar(80)
   billingMonth               String    @map("billing_month") @db.Char(7)
@@ -1369,21 +1428,29 @@ model BillingStripeUsageExport {
   stripeMeterEventCreatedAt  DateTime? @map("stripe_meter_event_created_at")
   createdAt                  DateTime  @default(now()) @map("created_at")
 
+  account      BillingStripeAccount      @relation(fields: [accountId], references: [id], onDelete: Restrict)
   subscription BillingStripeSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
 
   @@unique([subscriptionId, ledgerSnapshotCursor, callerProduct, currency])
+  @@index([accountId])
   @@index([subscriptionId, billingMonth, callerProduct, currency, createdAt])
   @@map("billing_stripe_usage_exports")
 }
 
 model BillingStripeWebhookEvent {
-  id              String   @id @db.VarChar(255)
+  id              String   @id @default(cuid())
+  accountId       String   @map("account_id")
+  stripeEventId   String   @map("stripe_event_id") @db.VarChar(255)
   type            String   @db.VarChar(120)
   apiVersion      String?  @map("api_version") @db.VarChar(32)
   livemode        Boolean
   stripeCreatedAt DateTime @map("stripe_created_at")
   receivedAt      DateTime @default(now()) @map("received_at")
 
+  account BillingStripeAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  @@unique([accountId, stripeEventId])
+  @@index([accountId])
   @@index([type, receivedAt])
   @@map("billing_stripe_webhook_events")
 }

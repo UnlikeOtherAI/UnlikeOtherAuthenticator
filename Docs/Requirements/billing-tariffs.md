@@ -294,6 +294,11 @@ Stripe resources are projections of UOA and Ledger truth:
 secrets without turning on that gate cannot call Stripe. Enabling the gate also
 requires UOA's own dedicated Ledger app key and dedicated billing-assertion key
 pair; UOA never borrows a product, user, or webhook credential to collect usage.
+Every local Stripe projection is additionally bound to the exact Stripe account
+ID and API-key mode that created it. Test and live projections may coexist, but
+their customers, catalogs, Prices, Checkout sessions, subscriptions, webhook
+event IDs, usage exports, and idempotency keys never overlap. Startup rejects a
+Stripe key whose test/live mode cannot be determined.
 
 ### Checkout and subscription scope
 
@@ -303,6 +308,21 @@ an active owner/admin at the selected billing scope. A team tariff override
 creates a team-scoped subscription; an organisation assignment or service
 default creates an organisation-scoped subscription. Return URLs must use an
 exact HTTPS origin allowlisted on that individual app-key record.
+
+An organisation-scoped Checkout or non-terminal subscription is mutually
+exclusive with every team-scoped Checkout/subscription for the same Stripe
+account, product, and organisation. Separate team scopes may subscribe
+independently. PostgreSQL advisory locks and constraints serialize these checks
+so concurrent org/team requests cannot both win.
+
+Checkout replay is a billing-scope lease, not a permanent lock on the initiating
+actor JWT ID. A fresh actor assertion for the same exact app key, tariff source,
+assignment, customer, scope, and return URLs recovers the open session. If UOA
+crashes after Stripe creates a session but before recording its ID, retry
+searches the exact Stripe customer and UOA Checkout metadata and reattaches the
+single match. A stale creating lease with no Stripe session is marked abandoned
+and releases the scope. Concurrent lease creation recovers the database winner;
+Stripe receives the winner's stable account/mode/Checkout idempotency key.
 
 UOA creates one currency-specific Stripe catalog for each product, including:
 
@@ -317,6 +337,24 @@ proration. Subscription webhooks are verified against the exact raw request
 body with the separate `STRIPE_WEBHOOK_SECRET`, recorded idempotently, and
 accepted only when the Stripe customer, product, tariff, scope, and line items
 match the immutable UOA mapping.
+
+A subscription is pinned to the exact immutable tariff version, resolved source
+(`service_default`, `organisation`, or `team`), and assignment ID recorded by
+Checkout until that subscription becomes terminal. UOA does not silently move a
+live subscription to a newer default or override. Default changes and assignment
+change/removal that would invalidate an open Checkout or live subscription fail
+with `STRIPE_TARIFF_PINNED`; operators may append new tariff versions at any
+time, but must end the pinned subscription before changing its effective
+commercial terms. Automatic next-cycle migration is not part of this foundation.
+
+Lifecycle events are notifications, not authoritative snapshots. UOA verifies
+the signature first, resolves the exact account/mode, then retrieves the current
+Checkout or Subscription from Stripe. Reordered updates cannot resurrect a
+canceled subscription, and a subscription missing at Stripe deterministically
+tombstones an existing local row. The current subscription must contain exactly
+the UOA monthly item (quantity one, when non-zero) and exactly one metered usage
+item, with no extra/duplicate items and no subscription- or item-level
+discounts.
 
 ### Ledger collection and Stripe meter units
 

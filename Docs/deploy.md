@@ -161,7 +161,10 @@ product:
    `TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON`; UOA imports every configured key before
    serving and fails startup when any key is unusable.
 2. Apply the migration and create each billing service with an explicit default
-   tariff through the platform-superuser API.
+   tariff through the platform-superuser API. The account-scoping migration
+   deliberately aborts if any pre-launch Stripe projection already exists,
+   because no trustworthy Stripe account/mode can be inferred; explicitly
+   reconcile or remove such rows before retrying rather than backfilling them.
 3. Mint a different named `uoa_app_…` key for every application connection.
    Transfer its plaintext once through the approved secret channel; UOA cannot
    recover it later.
@@ -203,7 +206,9 @@ Before enabling it in production:
    sequence used for tariff keys.
 3. Provision Stripe test-mode API and webhook secrets. Configure the webhook for
    Checkout-session and subscription lifecycle events and confirm raw-body
-   signature validation plus idempotent replay.
+   signature validation plus idempotent replay. The API key must use an explicit
+   `sk_test_`/`rk_test_` or `sk_live_`/`rk_live_` prefix; unknown mode fails
+   startup. Confirm `/v1/account` resolves the intended Stripe account.
 4. Mint a separate `uoa_app_…` key for each product/deployment that can start
    Checkout. Bind only its own actor issuer/key and exact HTTPS return origins.
 5. Exercise monthly fixed charges, rated-usage deltas, zero and negative
@@ -213,7 +218,11 @@ Before enabling it in production:
    pre-invoice reconciliation job. Stripe meter events are asynchronous, so a
    manual export is not an adequate live-billing schedule.
 7. Reconcile test invoices to UOA's exact tariff version and Ledger's customer
-   charge before setting `STRIPE_BILLING_ENABLED=true` with live credentials.
+   charge. Before switching to live, verify the live key resolves the intended
+   account, creates a separate live projection from test resources, and that no
+   Checkout/subscription remains pinned to a tariff or assignment operators
+   intend to replace. Then set `STRIPE_BILLING_ENABLED=true` with live
+   credentials.
 
 No live Stripe credentials or automated collection schedule are created by the
 repository deployment itself.

@@ -26,6 +26,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
     app.ts                  — Fastify app setup, plugin and middleware registration
     server.ts               — Server entry point
     /config
+      billing-env-validation.ts — Tariff, Stripe, and Ledger collector startup invariants
       constants.ts          — App-wide constants (token TTL defaults, retention defaults)
       env.ts                — Environment variable loading and validation
       jwt.ts                — JWT signing/verification configuration
@@ -181,6 +182,11 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       billing-app-key.service.ts            — Product app-key minting, lookup, revocation, and audit
       billing-entitlement.service.ts        — Membership validation and team→org→default resolution
       billing-snapshot.service.ts           — Preloaded RS256 tariff signer, overlapping JWKS, and exact consumer binding guard
+      billing-stripe-checkout-recovery.service.ts — Crash-safe Stripe Checkout lookup and lease reconciliation
+      billing-stripe-checkout-state.service.ts — Billing-scope overlap, binding, and customer projection rules
+      billing-stripe-client.service.ts      — Explicit Stripe account and test/live runtime identity
+      billing-stripe-tariff-guard.service.ts — Live Checkout/subscription tariff pin guards
+      billing-tariff-read.service.ts        — Admin tariff, assignment, account/mode, and subscription projection
       billing-tariff.service.ts             — Versioned catalog, defaults, and assignments
       client-jwk.service.ts                 — Client-side JWK helpers
       config-debug.service.ts               — Config debug introspection
@@ -391,7 +397,13 @@ requires an active owner/admin at the selected organisation/team billing scope.
 `billing-stripe-catalog.service.ts` maps immutable tariff versions to fixed and
 metered Stripe Prices; `billing-stripe-webhook.service.ts` verifies the exact
 raw body with a separate webhook secret and reconciles exact
-customer/product/tariff/scope/item bindings. The Ledger collector presents
+customer/product/tariff/scope/item bindings against Stripe's current state.
+Every projection is keyed to the exact Stripe account and API-key mode.
+Checkout uses a recoverable scope lease and stable account/mode idempotency,
+while a resulting subscription pins its immutable tariff source and assignment
+until terminal. Org-wide live rows exclude team rows for the same product and
+organisation; distinct team rows may coexist. Exact item cardinality, quantity,
+and absence of discounts are fail-closed. The Ledger collector presents
 UOA's own dedicated Ledger app key and a short-lived `billing.read` service
 assertion. Its separate public verification overlap is served at
 `/billing/v1/service-jwks.json`. Usage export validates Ledger's immutable

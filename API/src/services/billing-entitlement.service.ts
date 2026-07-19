@@ -15,8 +15,8 @@ import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import {
   billingCollectionModeToPublic,
   billingModeToPublic,
-  normalizeBillingServiceIdentifier,
-} from './billing-tariff.service.js';
+} from './billing-tariff-serialization.service.js';
+import { normalizeBillingServiceIdentifier } from './billing-tariff.service.js';
 import {
   assertEffectiveTariffPayloadBinding,
   signEffectiveTariffSnapshot,

@@ -10,11 +10,11 @@ import {
 import {
   createBillingService,
   createBillingTariffVersion,
-  listBillingServices,
   removeBillingTariffAssignment,
   setDefaultBillingTariff,
   upsertBillingTariffAssignment,
 } from '../../../services/billing-tariff.service.js';
+import { listBillingServices } from '../../../services/billing-tariff-read.service.js';
 import {
   serializeBillingAppKey,
   serializeBillingService,

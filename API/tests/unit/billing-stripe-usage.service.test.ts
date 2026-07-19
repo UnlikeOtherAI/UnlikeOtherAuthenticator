@@ -1,8 +1,3 @@
-import {
-  BillingAssignmentScope,
-  BillingCollectionMode,
-  BillingTariffMode,
-} from '@prisma/client';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { LedgerBillingUsage } from '../../src/services/billing-ledger-collector.service.js';
@@ -10,145 +5,16 @@ import {
   exportStripeUsage,
   stripeMeterQuantityFromMajorAmount,
 } from '../../src/services/billing-stripe-usage.service.js';
-
-const capturedAt = new Date('2026-07-19T12:00:00.000Z');
-
-function subscription() {
-  return {
-    id: 'subscription_1',
-    customerId: 'customer_1',
-    serviceId: 'service_1',
-    tariffId: 'tariff_1',
-    orgId: 'org_1',
-    teamId: 'team_1',
-    scope: BillingAssignmentScope.TEAM,
-    scopeKey: 'org_1:team_1',
-    stripeSubscriptionId: 'sub_1',
-    stripeMonthlyItemId: 'si_monthly',
-    stripeUsageItemId: 'si_usage',
-    status: 'active',
-    cancelAtPeriodEnd: false,
-    currentPeriodStart: new Date('2026-07-01T00:00:00.000Z'),
-    currentPeriodEnd: new Date('2026-08-01T00:00:00.000Z'),
-    livemode: false,
-    createdAt: capturedAt,
-    updatedAt: capturedAt,
-    customer: {
-      id: 'customer_1',
-      orgId: 'org_1',
-      teamId: 'team_1',
-      scope: BillingAssignmentScope.TEAM,
-      scopeKey: 'org_1:team_1',
-      stripeCustomerId: 'cus_1',
-      createdAt: capturedAt,
-      updatedAt: capturedAt,
-    },
-    service: {
-      id: 'service_1',
-      identifier: 'deepwater',
-      name: 'DeepWater',
-      active: true,
-      createdAt: capturedAt,
-      updatedAt: capturedAt,
-    },
-    tariff: {
-      id: 'tariff_1',
-      serviceId: 'service_1',
-      key: 'standard',
-      version: 4,
-      name: 'Standard',
-      mode: BillingTariffMode.STANDARD,
-      collectionMode: BillingCollectionMode.STRIPE,
-      markupBps: 2500,
-      monthlyAmountMinor: 2999n,
-      currency: 'USD',
-      isDefault: false,
-      createdByUserId: null,
-      createdByEmail: null,
-      createdAt: capturedAt,
-      stripePrice: {
-        id: 'price_map_1',
-        tariffId: 'tariff_1',
-        catalogId: 'catalog_1',
-        monthlyAmountMinor: 2999n,
-        stripeMonthlyPriceId: 'price_monthly_1',
-        createdAt: capturedAt,
-        catalog: {
-          id: 'catalog_1',
-          serviceId: 'service_1',
-          currency: 'USD',
-          meterEventName: 'uoa_rated_hash',
-          stripeProductId: 'prod_1',
-          stripeMeterId: 'mtr_1',
-          stripeUsagePriceId: 'price_usage_1',
-          createdAt: capturedAt,
-          updatedAt: capturedAt,
-        },
-      },
-    },
-  };
-}
-
-function usage(
-  amount = '2.5',
-  cursor = 'bus_0123456789ABCDEFGHIJKLMNOPQRSTUV',
-): LedgerBillingUsage {
-  return {
-    schemaVersion: 4,
-    product: 'deepwater',
-    scope: {
-      organizationId: 'org_1',
-      teamId: 'team_1',
-      userId: null,
-      month: '2026-07',
-      startsAt: '2026-07-01T00:00:00.000Z',
-      endsAt: '2026-08-01T00:00:00.000Z',
-    },
-    totals: {
-      calls: 2,
-      usageByService: [],
-      amounts: [],
-      customerCharges: [
-        {
-          billingProduct: 'deepwater',
-          callerProduct: 'deepsignal',
-          currency: 'USD',
-          amount,
-          calls: 2,
-        },
-      ],
-    },
-    groupBy: 'service',
-    breakdown: [],
-    monthlyComponents: [
-      {
-        billingProduct: 'deepwater',
-        callerProduct: 'deepsignal',
-        tariffId: 'tariff_1',
-        tariffKey: 'standard',
-        tariffVersion: 4,
-        tariffMode: 'standard',
-        markupBps: 2500,
-        usageMultiplierBps: 12500,
-        assignmentScope: 'team',
-        assignmentId: 'assignment_1',
-        amountMinor: '2999',
-        currency: 'USD',
-        usageBillingEnabled: true,
-        collectionMode: 'stripe',
-        paymentCollectionEnabled: true,
-      },
-    ],
-    snapshot: {
-      cursor,
-      capturedAt: capturedAt.toISOString(),
-      immutable: true,
-    },
-  };
-}
+import {
+  capturedAt,
+  stripeAccount,
+  subscriptionFixture,
+  usageFixture as usage,
+} from './billing-stripe-usage.test-fixtures.js';
 
 type ExportRow = {
   id: string;
+  accountId: string;
   subscriptionId: string;
   ledgerSnapshotCursor: string;
   billingMonth: string;
@@ -165,12 +31,18 @@ type ExportRow = {
 
 function setup(existing: ExportRow[] = []) {
   const rows = [...existing];
-  const fullSubscription = subscription();
+  const fullSubscription = subscriptionFixture();
   const findSubscription = vi.fn(async (args: { include?: unknown }) =>
     args.include
       ? fullSubscription
       : {
           id: fullSubscription.id,
+          accountId: fullSubscription.accountId,
+          livemode: fullSubscription.livemode,
+          account: {
+            stripeAccountId: fullSubscription.account.stripeAccountId,
+            livemode: fullSubscription.account.livemode,
+          },
           orgId: fullSubscription.orgId,
           teamId: fullSubscription.teamId,
           service: { identifier: fullSubscription.service.identifier },
@@ -207,9 +79,7 @@ function setup(existing: ExportRow[] = []) {
       data: { stripeMeterEventCreatedAt: Date };
     }) => {
       const row = rows.find(
-        (candidate) =>
-          candidate.id === where.id &&
-          candidate.stripeMeterEventCreatedAt === null,
+        (candidate) => candidate.id === where.id && candidate.stripeMeterEventCreatedAt === null,
       );
       if (!row) return { count: 0 };
       row.stripeMeterEventCreatedAt = data.stripeMeterEventCreatedAt;
@@ -225,6 +95,7 @@ function setup(existing: ExportRow[] = []) {
     },
   };
   const prisma = {
+    billingStripeAccount: { upsert: vi.fn().mockResolvedValue(stripeAccount) },
     billingStripeSubscription: {
       findUnique: findSubscription,
     },
@@ -236,8 +107,14 @@ function setup(existing: ExportRow[] = []) {
   };
   const meterCreate = vi.fn().mockResolvedValue({
     created: Math.floor(capturedAt.getTime() / 1000),
+    livemode: false,
   });
-  const stripe = { billing: { meterEvents: { create: meterCreate } } };
+  const stripe = {
+    accounts: {
+      retrieveCurrent: vi.fn().mockResolvedValue({ id: stripeAccount.stripeAccountId }),
+    },
+    billing: { meterEvents: { create: meterCreate } },
+  };
   return {
     rows,
     fullSubscription,
@@ -301,6 +178,7 @@ describe('Stripe usage export', () => {
   it('exports a negative cumulative delta when Ledger corrects a later snapshot', async () => {
     const prior = {
       id: 'export_1',
+      accountId: stripeAccount.id,
       subscriptionId: 'subscription_1',
       ledgerSnapshotCursor: 'bus_0123456789ABCDEFGHIJKLMNOPQRSTUV',
       billingMonth: '2026-07',
@@ -315,10 +193,7 @@ describe('Stripe usage export', () => {
       createdAt: capturedAt,
     };
     const later = new Date('2026-07-20T12:00:00.000Z');
-    const nextUsage = usage(
-      '1.25',
-      'bus_1123456789ABCDEFGHIJKLMNOPQRSTUV',
-    );
+    const nextUsage = usage('1.25', 'bus_1123456789ABCDEFGHIJKLMNOPQRSTUV');
     nextUsage.snapshot.capturedAt = later.toISOString();
     const { prisma, stripe, meterCreate } = setup([prior]);
 
@@ -343,6 +218,7 @@ describe('Stripe usage export', () => {
   it('retries a durable pending export without creating a second delta row', async () => {
     const pending = {
       id: 'export_1',
+      accountId: stripeAccount.id,
       subscriptionId: 'subscription_1',
       ledgerSnapshotCursor: 'bus_0123456789ABCDEFGHIJKLMNOPQRSTUV',
       billingMonth: '2026-07',
@@ -378,6 +254,7 @@ describe('Stripe usage export', () => {
   it('reuses each pending row snapshot time when a later snapshot triggers delivery', async () => {
     const pending = {
       id: 'export_1',
+      accountId: stripeAccount.id,
       subscriptionId: 'subscription_1',
       ledgerSnapshotCursor: 'bus_0123456789ABCDEFGHIJKLMNOPQRSTUV',
       billingMonth: '2026-07',
@@ -392,10 +269,7 @@ describe('Stripe usage export', () => {
       createdAt: capturedAt,
     };
     const later = new Date('2026-07-20T12:00:00.000Z');
-    const nextUsage = usage(
-      '3.25',
-      'bus_1123456789ABCDEFGHIJKLMNOPQRSTUV',
-    );
+    const nextUsage = usage('3.25', 'bus_1123456789ABCDEFGHIJKLMNOPQRSTUV');
     nextUsage.snapshot.capturedAt = later.toISOString();
     const { prisma, stripe, meterCreate } = setup([pending]);
 
@@ -421,9 +295,7 @@ describe('Stripe usage export', () => {
 
   it('rejects snapshots beyond Stripe clock tolerance before persisting', async () => {
     const futureUsage = usage();
-    futureUsage.snapshot.capturedAt = new Date(
-      capturedAt.getTime() + 6 * 60 * 1000,
-    ).toISOString();
+    futureUsage.snapshot.capturedAt = new Date(capturedAt.getTime() + 6 * 60 * 1000).toISOString();
     const { prisma, stripe, createExport } = setup();
 
     await expect(
@@ -442,9 +314,7 @@ describe('Stripe usage export', () => {
 
   it('rejects usage outside the subscription exact UTC billing period', async () => {
     const { prisma, stripe, fullSubscription, createExport } = setup();
-    fullSubscription.currentPeriodStart = new Date(
-      '2026-07-02T00:00:00.000Z',
-    );
+    fullSubscription.currentPeriodStart = new Date('2026-07-02T00:00:00.000Z');
 
     await expect(
       exportStripeUsage(

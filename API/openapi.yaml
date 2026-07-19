@@ -2441,8 +2441,11 @@ paths:
       description: |
         Uses the calling product/deployment's own UOA app key and a fresh actor
         assertion. Only an active owner/admin at the resulting organisation or
-        team billing scope may create Checkout. Stripe billing is disabled by
-        default.
+        team billing scope may create Checkout. The recoverable scope lease pins
+        the exact Stripe account/mode, immutable tariff source/assignment, and
+        return URLs. Organisation subscriptions exclude team subscriptions for
+        the same product and organisation; independent team scopes may coexist.
+        Stripe billing is disabled by default.
       security:
         - billingAppKey: []
           billingActor: []
@@ -2505,7 +2508,10 @@ paths:
       operationId: reconcileBillingStripeWebhook
       description: |
         Verifies `Stripe-Signature` over the exact raw request body with the
-        dedicated webhook secret. Webhook secrets are never app API keys.
+        dedicated webhook secret, then retrieves and reconciles current Stripe
+        state for the exact account/mode, Checkout, tariff source/assignment,
+        scope, and undiscounted item set. Reordered events cannot resurrect
+        canceled state. Webhook secrets are never app API keys.
       security:
         - stripeSignature: []
       requestBody:
