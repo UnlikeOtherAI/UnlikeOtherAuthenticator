@@ -83,6 +83,8 @@ Set via Cloud Run service config:
 | `MCP_OAUTH_RESOURCES_SUPPORTED` | Used only by the explicitly enabled public profile; case-sensitive RFC 8707 resource allowlist |
 | `CONFIDENTIAL_TOKEN_EXCHANGE_SOURCE_DOMAIN` | Plain production value: `api.nessie.works`; the only source config domain allowed to use the confidential assertion grant |
 | `CONFIDENTIAL_TOKEN_EXCHANGE_RESOURCE` | Plain production value: `https://ledger.unlikeotherai.com`; paired exactly with the source domain and used as the issued token audience |
+| `TARIFF_SNAPSHOT_PRIVATE_JWK` | Secret Manager: `uoa-auth-tariff-snapshot-private-jwk`; dedicated current RS256 private RSA JWK for signed tariff snapshots. Configure it only with the matching public JWKS; do not reuse another UOA signing key |
+| `TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON` | Secret Manager: `uoa-auth-tariff-snapshot-public-jwks-json`; public-only JWKS containing the current tariff key and overlapping retired verification keys. The current entry must exactly match the private key's `kid`, modulus, and exponent |
 
 `/llm` is a Markdown integration guide for LLMs and human readers. `/api` is the machine-readable JSON schema and config contract.
 
@@ -120,6 +122,49 @@ gcloud secrets versions add uoa-auth-mcp-oauth-access-token-private-jwk \
   --project gen-lang-client-0561071620 \
   --data-file=-
 ```
+
+### Billing tariff production prerequisites (not enabled)
+
+Merging the code and database migration does not mint product credentials or
+enable tariff lookups in production. Before connecting Ledger or another
+product:
+
+1. Provision `uoa-auth-tariff-snapshot-private-jwk` as a dedicated current
+   private RSA JWK with `alg=RS256`, `use=sig`, and a unique `kid`. Provision
+   `uoa-auth-tariff-snapshot-public-jwks-json` with the exact matching public key
+   plus any retired keys still inside the rotation overlap. Grant the Cloud Run
+   runtime identity access and configure both
+   `TARIFF_SNAPSHOT_PRIVATE_JWK` and
+   `TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON`; UOA imports every configured key before
+   serving and fails startup when any key is unusable.
+2. Apply the migration and create each billing service with an explicit default
+   tariff through the platform-superuser API.
+3. Mint a different named `uoa_app_…` key for every application connection.
+   Transfer its plaintext once through the approved secret channel; UOA cannot
+   recover it later.
+4. Bind each key to that caller's HTTPS actor issuer, the exact
+   `https://authentication.unlikeotherai.com/billing/v1/effective-tariff`
+   audience, and its RS256 public JWK.
+5. Verify `/billing/v1/jwks.json`, a signed actor lookup, exact signed
+   product/app-key/user/organisation/team binding, team/organisation/default
+   precedence, key revocation, and the consumer's separately labeled raw usage,
+   product-appropriate billable units (token-, search-, or research-equivalent),
+   and price presentation before enabling charges.
+
+Rotate tariff snapshot keys with an overlap:
+
+1. Publish the new public key alongside the current and still-valid retired
+   keys while continuing to sign with the old private key. Wait at least the
+   JWKS cache lifetime (currently five minutes).
+2. Switch `TARIFF_SNAPSHOT_PRIVATE_JWK` to the new key while every rolling
+   revision serves the same overlapping public set.
+3. After all old snapshots have expired, all traffic uses the new revision, and
+   at least the snapshot lifetime (currently five minutes) has elapsed, remove
+   the retired public key. Never remove it in the same rollout that changes the
+   signer.
+
+Stripe customer, subscription, invoice, and webhook configuration is outside
+this deployment slice.
 
 ### Signature module production prerequisites (not enabled)
 

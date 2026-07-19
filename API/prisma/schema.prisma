@@ -89,6 +89,18 @@ enum InviteApprovalStatus {
   DENIED
 }
 
+enum BillingTariffMode {
+  STANDARD
+  FREE
+  AT_COST
+  CUSTOM
+}
+
+enum BillingAssignmentScope {
+  ORGANISATION
+  TEAM
+}
+
 model User {
   id                       String   @id @default(cuid())
   // Note: email is not globally unique because `user_scope` can be "per_domain".
@@ -508,9 +520,9 @@ model AgreementSignature {
   continuation SigningContinuation  @relation(fields: [signingContinuationId], references: [id], onDelete: Restrict)
   revocation   SignatureRevocation?
 
+  @@unique([signingContinuationId, agreementVersionId], map: "agreement_signatures_continuation_version_key")
   @@index([userId, domain, agreementVersionId])
   @@index([domain, signedAt])
-  @@unique([signingContinuationId, agreementVersionId], map: "agreement_signatures_continuation_version_key")
   @@map("agreement_signatures")
 }
 
@@ -670,15 +682,16 @@ model Organisation {
   createdAt           DateTime     @default(now()) @map("created_at")
   updatedAt           DateTime     @updatedAt @map("updated_at")
 
-  owner          User             @relation("OrgOwner", fields: [ownerId], references: [id], onDelete: Restrict)
-  members        OrgMember[]
-  teams          Team[]
-  groups         Group[]
-  invites        TeamInvite[]
-  inviteLinks    TeamInviteLink[]
-  accessRequests AccessRequest[]
-  apps           App[]
-  bans           Ban[]
+  owner                    User                      @relation("OrgOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  members                  OrgMember[]
+  teams                    Team[]
+  groups                   Group[]
+  invites                  TeamInvite[]
+  inviteLinks              TeamInviteLink[]
+  accessRequests           AccessRequest[]
+  apps                     App[]
+  bans                     Ban[]
+  billingTariffAssignments BillingTariffAssignment[]
 
   @@unique([domain, slug])
   @@index([domain])
@@ -841,13 +854,14 @@ model Team {
   iconUrl    String?        @map("icon_url") // external URL only, no local storage (brief §15); §11.3
   joinPolicy TeamJoinPolicy @default(INVITE_ONLY) @map("join_policy") // design §4.6
 
-  org            Organisation     @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  group          Group?           @relation(fields: [groupId], references: [id], onDelete: SetNull)
-  members        TeamMember[]
-  invites        TeamInvite[]
-  inviteLinks    TeamInviteLink[]
-  accessRequests AccessRequest[]
-  bans           Ban[]
+  org                      Organisation              @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  group                    Group?                    @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  members                  TeamMember[]
+  invites                  TeamInvite[]
+  inviteLinks              TeamInviteLink[]
+  accessRequests           AccessRequest[]
+  bans                     Ban[]
+  billingTariffAssignments BillingTariffAssignment[]
 
   @@unique([orgId, name])
   @@unique([orgId, slug])
@@ -902,33 +916,33 @@ model TeamMember {
 }
 
 model TeamInvite {
-  id              String    @id @default(cuid())
-  orgId           String    @map("org_id")
-  teamId          String    @map("team_id")
-  email           String
-  inviteName      String?   @map("invite_name") @db.VarChar(120)
-  teamRole        String    @default("member") @map("team_role")
-  redirectUrl     String?   @map("redirect_url")
-  invitedByUserId String?   @map("invited_by_user_id")
-  invitedByName   String?   @map("invited_by_name") @db.VarChar(120)
-  invitedByEmail  String?   @map("invited_by_email")
-  acceptedUserId  String?   @map("accepted_user_id")
-  acceptedAt      DateTime? @map("accepted_at")
-  declinedAt      DateTime? @map("declined_at")
-  revokedAt       DateTime? @map("revoked_at")
-  openedAt        DateTime? @map("opened_at")
-  openCount       Int       @default(0) @map("open_count")
-  lastSentAt      DateTime  @map("last_sent_at")
+  id                String               @id @default(cuid())
+  orgId             String               @map("org_id")
+  teamId            String               @map("team_id")
+  email             String
+  inviteName        String?              @map("invite_name") @db.VarChar(120)
+  teamRole          String               @default("member") @map("team_role")
+  redirectUrl       String?              @map("redirect_url")
+  invitedByUserId   String?              @map("invited_by_user_id")
+  invitedByName     String?              @map("invited_by_name") @db.VarChar(120)
+  invitedByEmail    String?              @map("invited_by_email")
+  acceptedUserId    String?              @map("accepted_user_id")
+  acceptedAt        DateTime?            @map("accepted_at")
+  declinedAt        DateTime?            @map("declined_at")
+  revokedAt         DateTime?            @map("revoked_at")
+  openedAt          DateTime?            @map("opened_at")
+  openCount         Int                  @default(0) @map("open_count")
+  lastSentAt        DateTime             @map("last_sent_at")
   // Invite-level expiry (design §4.7, Phase 4), independent of the emailed token's own (much
   // shorter) TTL. Nullable so the column is additive; the migration backfills existing unresolved
   // invites to `lastSentAt + 30 days` and every new/resent invite sets `now + 30 days`.
-  expiresAt       DateTime? @map("expires_at")
+  expiresAt         DateTime?            @map("expires_at")
   // Member-initiated invite approval workflow (design §4.7, Phase 4). NOT_REQUIRED for every invite
   // created by an owner/admin (or the backend bulk-invite endpoint) — unchanged behaviour.
-  approvalStatus     InviteApprovalStatus @default(NOT_REQUIRED) @map("approval_status")
-  requestedByUserId  String?              @map("requested_by_user_id")
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
+  approvalStatus    InviteApprovalStatus @default(NOT_REQUIRED) @map("approval_status")
+  requestedByUserId String?              @map("requested_by_user_id")
+  createdAt         DateTime             @default(now()) @map("created_at")
+  updatedAt         DateTime             @updatedAt @map("updated_at")
 
   org          Organisation        @relation(fields: [orgId], references: [id], onDelete: Cascade)
   team         Team                @relation(fields: [teamId], references: [id], onDelete: Cascade)
@@ -1066,4 +1080,93 @@ model AdminApiKey {
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
   @@map("admin_api_keys")
+}
+
+// Canonical commercial control plane. Tariffs live in UOA; products and Ledger consume
+// signed content-free snapshots and keep raw provider usage separate from price multipliers.
+model BillingService {
+  id         String   @id @default(cuid())
+  identifier String   @unique @db.VarChar(100)
+  name       String   @db.VarChar(120)
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  tariffs     BillingTariff[]
+  assignments BillingTariffAssignment[]
+  appKeys     BillingAppKey[]
+
+  @@map("billing_services")
+}
+
+model BillingTariff {
+  id                 String            @id @default(cuid())
+  serviceId          String            @map("service_id")
+  key                String            @db.VarChar(80)
+  version            Int
+  name               String            @db.VarChar(120)
+  mode               BillingTariffMode
+  markupBps          Int               @map("markup_bps")
+  monthlyAmountMinor BigInt            @default(0) @map("monthly_amount_minor")
+  currency           String            @db.Char(3)
+  isDefault          Boolean           @default(false) @map("is_default")
+  createdByUserId    String?           @map("created_by_user_id")
+  createdByEmail     String?           @map("created_by_email") @db.VarChar(200)
+  createdAt          DateTime          @default(now()) @map("created_at")
+
+  service     BillingService            @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  assignments BillingTariffAssignment[]
+
+  @@unique([serviceId, key, version])
+  @@index([serviceId, isDefault])
+  @@map("billing_tariffs")
+}
+
+model BillingTariffAssignment {
+  id              String                 @id @default(cuid())
+  serviceId       String                 @map("service_id")
+  tariffId        String                 @map("tariff_id")
+  orgId           String                 @map("org_id")
+  teamId          String?                @map("team_id")
+  scope           BillingAssignmentScope
+  scopeKey        String                 @map("scope_key") @db.VarChar(520)
+  createdByUserId String?                @map("created_by_user_id")
+  createdByEmail  String?                @map("created_by_email") @db.VarChar(200)
+  createdAt       DateTime               @default(now()) @map("created_at")
+  updatedAt       DateTime               @updatedAt @map("updated_at")
+
+  service BillingService @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  tariff  BillingTariff  @relation(fields: [tariffId], references: [id], onDelete: Restrict)
+  org     Organisation   @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  team    Team?          @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([serviceId, scope, scopeKey])
+  @@index([tariffId])
+  @@index([orgId])
+  @@index([teamId])
+  @@map("billing_tariff_assignments")
+}
+
+model BillingAppKey {
+  id              String    @id @default(cuid())
+  serviceId       String    @map("service_id")
+  name            String    @db.VarChar(120)
+  keyPrefix       String    @map("key_prefix") @db.VarChar(24)
+  secretDigest    String    @unique @map("secret_digest")
+  actorIssuer     String    @map("actor_issuer") @db.VarChar(2048)
+  actorAudience   String    @map("actor_audience") @db.VarChar(2048)
+  actorKeyId      String    @map("actor_key_id") @db.VarChar(256)
+  actorPublicJwk  Json      @map("actor_public_jwk")
+  lastUsedAt      DateTime? @map("last_used_at")
+  expiresAt       DateTime? @map("expires_at")
+  revokedAt       DateTime? @map("revoked_at")
+  createdByUserId String?   @map("created_by_user_id")
+  createdByEmail  String?   @map("created_by_email") @db.VarChar(200)
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  service BillingService @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@index([serviceId])
+  @@map("billing_app_keys")
 }

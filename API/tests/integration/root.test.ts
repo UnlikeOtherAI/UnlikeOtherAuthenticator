@@ -8,8 +8,7 @@ let app: FastifyInstance;
 
 beforeAll(async () => {
   process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
-  process.env.AUTH_SERVICE_IDENTIFIER =
-    process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
+  process.env.AUTH_SERVICE_IDENTIFIER = process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
 
   app = await createApp();
   await app.ready();
@@ -50,25 +49,19 @@ describe('GET /api', () => {
     expect(body.name).toBe('UnlikeOtherAuthenticator');
     expect(body.description).toEqual(expect.any(String));
     expect(body.version).toEqual(expect.any(String));
-    expect(body.repository).toBe(
-      'https://github.com/UnlikeOtherAI/UnlikeOtherAuthenticator',
-    );
+    expect(body.repository).toBe('https://github.com/UnlikeOtherAI/UnlikeOtherAuthenticator');
     expect(body.home).toBe('/');
     expect(body.api).toBe('/api');
-    expect(body.config_jwt.required_fields.ui_theme.required_sections.colors.required_keys).toContain(
-      'primary',
-    );
+    expect(
+      body.config_jwt.required_fields.ui_theme.required_sections.colors.required_keys,
+    ).toContain('primary');
     expect(body.config_validation.path).toBe('/config/validate');
     expect(body.config_verification.path).toBe('/config/verify');
-    expect(body.confidential_token_exchange.issued_access_token.algorithm).toBe(
-      'RS256',
-    );
+    expect(body.confidential_token_exchange.issued_access_token.algorithm).toBe('RS256');
     expect(body.confidential_token_exchange.issued_access_token.forbidden_claims).toContain(
       'client_id',
     );
-    expect(body.confidential_token_exchange.request.subject_token).toContain(
-      'optional active',
-    );
+    expect(body.confidential_token_exchange.request.subject_token).toContain('optional active');
     expect(body.confidential_token_exchange.subject_assertion_binding.replay_protection).toContain(
       'atomically consumes',
     );
@@ -90,12 +83,8 @@ describe('GET /api', () => {
     }
 
     // The root holding page and API schema endpoint are listed
-    expect(body.endpoints).toContainEqual(
-      expect.objectContaining({ method: 'GET', path: '/' }),
-    );
-    expect(body.endpoints).toContainEqual(
-      expect.objectContaining({ method: 'GET', path: '/api' }),
-    );
+    expect(body.endpoints).toContainEqual(expect.objectContaining({ method: 'GET', path: '/' }));
+    expect(body.endpoints).toContainEqual(expect.objectContaining({ method: 'GET', path: '/api' }));
 
     // Spot-check well-known routes with correct methods and paths
     expect(body.endpoints).toContainEqual(
@@ -103,6 +92,16 @@ describe('GET /api', () => {
     );
     expect(body.endpoints).toContainEqual(
       expect.objectContaining({ method: 'GET', path: '/.well-known/jwks.json' }),
+    );
+    expect(body.endpoints).toContainEqual(
+      expect.objectContaining({ method: 'GET', path: '/billing/v1/jwks.json' }),
+    );
+    expect(body.endpoints).toContainEqual(
+      expect.objectContaining({
+        method: 'POST',
+        path: '/billing/v1/effective-tariff',
+        auth: expect.stringContaining('X-UOA-App-Key'),
+      }),
     );
     expect(body.endpoints).toContainEqual(
       expect.objectContaining({ method: 'POST', path: '/config/verify' }),
@@ -167,6 +166,13 @@ describe('GET /api', () => {
       expect.objectContaining({
         method: 'GET',
         path: '/internal/admin/handshake-errors',
+      }),
+    );
+    expect(body.endpoints).toContainEqual(
+      expect.objectContaining({
+        method: 'POST',
+        path: '/internal/admin/billing/services/:serviceId/app-keys',
+        auth: expect.stringContaining('superuser'),
       }),
     );
     expect(body.endpoints).toContainEqual(
@@ -322,5 +328,11 @@ describe('GET /llm', () => {
     expect(res.body).toContain('/oauth/jwks.json');
     expect(res.body).toContain('first-time or workspace-less users');
     expect(res.body).toContain('concurrent replays are rejected');
+    expect(res.body).toContain('Canonical tariff and entitlement control plane');
+    expect(res.body).toContain('Raw token, request, byte, and search counts');
+    expect(res.body).toContain('customer billable units');
+    expect(res.body).toContain('search-equivalent for SERP');
+    expect(res.body).toContain('authorized app-key ID');
+    expect(res.body).toContain('/billing/v1/effective-tariff');
   });
 });

@@ -1683,3 +1683,26 @@ non-goals, delivery phases, and unresolved decisions are defined in
 [Optional Domain Agreement Signature Module — Product Brief](./Requirements/domain-signatures.md).
 That document is incorporated into this build brief by reference and is authoritative for
 the signature module.
+
+## 2026-07 Billing Tariff Control Plane
+
+Tariffs for all UOA-backed products live in UOA. Ledger owns raw usage and
+booked-charge accounting, while products consume a signed effective-tariff
+snapshot; neither Ledger nor an end product maintains an independent tariff
+source of truth. Resolution precedence is team override, organisation override,
+then service default. Raw token and other usage quantities remain immutable.
+Ledger may derive separately labeled customer billable units as
+`raw_metered_units × usage_price_multiplier_bps / 10000`; token-metered AI,
+SERP, and DeepWater label those as token-, search-, and research-equivalent
+units respectively. A commercial unit never replaces, relabels, or masquerades
+as provider output.
+
+Every application connection uses its own revocable, product-bound app API key
+plus a short-lived RS256 actor assertion carrying the exact UOA user,
+organisation, and team. Shared cross-product API keys are forbidden.
+
+The canonical model, modes, precedence, API and JWT contract, superuser
+administration, presentation rules, and Stripe follow-on boundaries are defined
+in [Billing Tariffs and Product Entitlements](./Requirements/billing-tariffs.md).
+That document is incorporated into this build brief by reference and is
+authoritative for the billing tariff control plane.

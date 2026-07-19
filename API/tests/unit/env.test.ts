@@ -5,6 +5,7 @@ import {
   getAuthServiceIdentifier,
   isMcpOAuthPublicProfileEnabled,
   isOAuthAccessTokenJwksEnabled,
+  isTariffSnapshotJwksEnabled,
   parseEnv,
 } from '../../src/config/env.js';
 
@@ -36,7 +37,9 @@ describe('env', () => {
   });
 
   it('accepts sendgrid as EMAIL_PROVIDER', () => {
-    const env = parseEnv(baseInput({ EMAIL_PROVIDER: 'sendgrid', SENDGRID_API_KEY: 'SG.example-key' }));
+    const env = parseEnv(
+      baseInput({ EMAIL_PROVIDER: 'sendgrid', SENDGRID_API_KEY: 'SG.example-key' }),
+    );
     expect(env.EMAIL_PROVIDER).toBe('sendgrid');
     expect(env.SENDGRID_API_KEY).toBe('SG.example-key');
   });
@@ -154,10 +157,103 @@ describe('env', () => {
     expect(env.MCP_OAUTH_PUBLIC_PROFILE_ENABLED).toBe(false);
   });
 
-  it('requires an explicit flag, signing key, and dedicated domain for public OAuth', () => {
+  it('enables tariff snapshots only with a matching private key and overlapping public JWKS', () => {
+    const privateKey = JSON.stringify({
+      kty: 'RSA',
+      kid: 'tariff-2026-07',
+      alg: 'RS256',
+      use: 'sig',
+      n: 'modulus',
+      e: 'AQAB',
+      d: 'private',
+    });
+    const publicKeys = JSON.stringify({
+      keys: [
+        {
+          kty: 'RSA',
+          kid: 'tariff-2026-06',
+          alg: 'RS256',
+          use: 'sig',
+          n: 'retired-modulus',
+          e: 'AQAB',
+        },
+        {
+          kty: 'RSA',
+          kid: 'tariff-2026-07',
+          alg: 'RS256',
+          use: 'sig',
+          n: 'modulus',
+          e: 'AQAB',
+        },
+      ],
+    });
+
+    expect(isTariffSnapshotJwksEnabled(parseEnv(baseInput()))).toBe(false);
+    expect(
+      isTariffSnapshotJwksEnabled(
+        parseEnv(
+          baseInput({
+            TARIFF_SNAPSHOT_PRIVATE_JWK: privateKey,
+            TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON: publicKeys,
+          }),
+        ),
+      ),
+    ).toBe(true);
     expect(() =>
-      parseEnv(baseInput({ MCP_OAUTH_PUBLIC_PROFILE_ENABLED: 'true' })),
+      parseEnv(
+        baseInput({
+          TARIFF_SNAPSHOT_PRIVATE_JWK: JSON.stringify({
+            kty: 'RSA',
+            kid: 'public-only',
+            alg: 'RS256',
+            use: 'sig',
+            n: 'modulus',
+            e: 'AQAB',
+          }),
+          TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON: publicKeys,
+        }),
+      ),
     ).toThrow();
+    expect(() =>
+      parseEnv(
+        baseInput({
+          TARIFF_SNAPSHOT_PRIVATE_JWK: JSON.stringify({
+            kty: 'RSA',
+            kid: 'wrong-algorithm',
+            alg: 'ES256',
+            n: 'modulus',
+            e: 'AQAB',
+            d: 'private',
+          }),
+          TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON: publicKeys,
+        }),
+      ),
+    ).toThrow();
+    expect(() => parseEnv(baseInput({ TARIFF_SNAPSHOT_PRIVATE_JWK: privateKey }))).toThrow();
+    expect(() => parseEnv(baseInput({ TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON: publicKeys }))).toThrow();
+    expect(() =>
+      parseEnv(
+        baseInput({
+          TARIFF_SNAPSHOT_PRIVATE_JWK: privateKey,
+          TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON: JSON.stringify({
+            keys: [
+              {
+                kty: 'RSA',
+                kid: 'tariff-2026-07',
+                alg: 'RS256',
+                use: 'sig',
+                n: 'different-modulus',
+                e: 'AQAB',
+              },
+            ],
+          }),
+        }),
+      ),
+    ).toThrow();
+  });
+
+  it('requires an explicit flag, signing key, and dedicated domain for public OAuth', () => {
+    expect(() => parseEnv(baseInput({ MCP_OAUTH_PUBLIC_PROFILE_ENABLED: 'true' }))).toThrow();
     expect(() =>
       parseEnv(
         baseInput({
@@ -211,9 +307,7 @@ describe('env', () => {
   });
 
   it('requires a root for local signature storage and rejects it in production', () => {
-    expect(() =>
-      parseEnv(baseInput({ SIGNATURE_STORAGE_PROVIDER: 'filesystem' })),
-    ).toThrow();
+    expect(() => parseEnv(baseInput({ SIGNATURE_STORAGE_PROVIDER: 'filesystem' }))).toThrow();
     expect(() =>
       parseEnv(
         baseInput({

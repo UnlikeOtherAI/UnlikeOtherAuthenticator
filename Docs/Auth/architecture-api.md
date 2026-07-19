@@ -36,6 +36,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       tenant-context.plugin.ts — Fastify plugin that wires per-request RLS tenant context
     /middleware
       admin-superuser.ts            — Validates admin access token + superuser role for /internal/admin/*
+      billing-app-auth.ts            — Authenticates a product-bound app key for /billing/v1/*
       config-jwt-header-verifier.ts — Verifies signed config JWT supplied via header
       config-verifier.ts            — Fetches config URL, verifies JWT, attaches config to request
       domain-hash-auth.ts           — Verifies domain hash token for domain-scoped APIs
@@ -60,12 +61,15 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
         config-verify.ts    — POST /config/verify (verify a signed config JWT)
         schema.ts           — Aggregates the endpoint schema returned by /api
         schema.auth.ts      — /api schema slice: auth endpoints
+        schema.billing.ts   — /api schema slice: billing tariffs, app keys, and snapshots
         schema.config-debug.ts — /api schema slice: config debug endpoints
         schema.integrations.ts — /api schema slice: integration endpoints
         schema.internal-admin-apps.ts — /api schema slice: internal admin app/settings/search endpoints
         schema.internal-admin-signatures.ts — /api schema slice: signature settings and agreement lifecycle endpoints
+        schema.platform.ts  — /api schema slice: root, health, app, email, and domain endpoints
         schema.signatures.ts       — /api schema slice: signing session, signer, domain-status, and public verification endpoints
         schema.internal-admin.ts — /api schema slice: internal admin endpoints
+        llm-billing.ts        — /llm content: product billing integration and raw-usage rules
         llm-signatures.ts     — /llm content: optional signature operator workflow and security constraints
       /apps
         startup.ts          — GET /apps/startup (combined startup payload; config JWT auth)
@@ -88,6 +92,10 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
         email-team-invite.ts       — GET /auth/email-team-invite
         email-team-invite-open.ts  — GET /auth/email-team-invite-open
         index.ts            — Route registration for /auth
+      /billing
+        effective-tariff.ts — Product-bound app-key + signed-actor tariff resolution
+        jwks.ts             — GET /billing/v1/jwks.json (snapshot verification keys)
+        index.ts            — Route registration for /billing/v1
       /domain
         users.ts            — GET  /domain/users
         logs.ts             — GET  /domain/logs
@@ -112,6 +120,8 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
         index.ts            — Route registration for /integrations
       /internal
         /admin
+          billing.ts                — Superuser tariff, assignment, and app-key lifecycle
+          billing-serialization.ts  — Billing admin response serialization
           config.ts                 — GET  /internal/admin/config (admin auth config)
           token.ts                  — POST /internal/admin/token (admin token exchange)
           read.ts                   — Read endpoints powering the admin panel
@@ -166,6 +176,11 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       auth-ui.service.ts                    — Auth window HTML/asset rendering
       auth-verify-email.service.ts          — Email verification logic
       auto-onboarding.service.ts            — Auto-onboarding flow
+      billing-actor.service.ts              — Credential-bound short-lived actor JWT verification
+      billing-app-key.service.ts            — Product app-key minting, lookup, revocation, and audit
+      billing-entitlement.service.ts        — Membership validation and team→org→default resolution
+      billing-snapshot.service.ts           — Preloaded RS256 tariff signer, overlapping JWKS, and exact consumer binding guard
+      billing-tariff.service.ts             — Versioned catalog, defaults, and assignments
       client-jwk.service.ts                 — Client-side JWK helpers
       config-debug.service.ts               — Config debug introspection
       config-fetch.service.ts               — Config URL fetch
@@ -264,6 +279,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
         index.ts                            — Social provider registry
     /utils
       app-logger.ts                  — Structured logger (internal details only)
+      billing-app-key.ts             — Product app-key generation, digest, and display prefix
       claim-secret-crypto.ts         — Claim-secret cryptographic helpers
       client-hash.ts                 — Client-hash helpers
       display-prefixes.ts            — Public-display ID prefixes
@@ -275,6 +291,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       hash.ts                        — Hashing helpers (domain + secret, tokens)
       http-url.ts                    — HTTP URL validation
       pkce.ts                        — PKCE helpers
+      rs256-jwk.ts                   — Shared private/public RSA JWK structural validation
       ssrf.ts                        — SSRF safeguards
       static-file.ts                 — Static-file serving helpers
       theme-sanitizer.ts             — Theme sanitization
@@ -318,6 +335,7 @@ Request → Route → Middleware → Service → Database (Prisma)
 * **domain-hash-auth** — runs on domain-scoped API routes. Verifies the domain hash token.
 * **superuser-access-token** — validates user access tokens for superuser-only domain endpoints.
 * **admin-superuser** — runs on `/internal/admin/*`. Validates the admin access token issued by `POST /internal/admin/token` and requires `role: "superuser"` for the configured `ADMIN_AUTH_DOMAIN`. See `Docs/Requirements/roles-and-acl.md`.
+* **billing-app-auth** — runs on `POST /billing/v1/effective-tariff`. Accepts only the calling product's individual `uoa_app_…` credential, resolves its exact product and actor-verification binding through the admin database connection, and rejects duplicate or ambiguous credential headers. The route separately requires `X-UOA-Actor`; the app key never stands in for a user identity. The signed result includes the non-secret app-key record ID, exact product ID/identifier, and user/organisation/team subject so consumers can reject cross-product or cross-actor replay even when products share an actor-signing key.
 * **org-features** — rejects org endpoints when `org_features.enabled` is false.
 * **groups-enabled** — rejects group endpoints when `org_features.groups_enabled` is false.
 * **org-role-guard** — validates the user access token and the user's org role for `/org/*` routes (`owner > admin > member`). Reads `OrgMember.role` for the authenticated user in the target org and returns 403 if not a member or the role is insufficient.
@@ -336,6 +354,17 @@ checks, `confidential-assertion-use.service.ts` atomically inserts a hashed
 source-domain + `jti` claim through accepted expiry plus clock tolerance; the
 database uniqueness constraint serializes concurrent exchanges across processes
 before access-token signing.
+
+The billing read boundary is deliberately server-to-server. A product-bound app
+key authenticates the application, while a credential-bound RS256 actor JWT
+binds the request to an exact active UOA user, organisation, and team for no
+more than 60 seconds. `billing-entitlement.service.ts` validates both membership
+levels and resolves team assignment → organisation assignment → service
+default. `billing-snapshot.service.ts` signs a five-minute, content-free result
+using a dedicated key. Tariff and credential reads use the bypass-RLS admin
+client because tenant SQL access to the control-plane tables is denied. Full
+contract and raw-usage separation are defined in
+`Docs/Requirements/billing-tariffs.md`.
 
 > SCIM is deferred. When implementation lands, add a `scim-auth` middleware (SCIM bearer token validation and org-scope verification for `/scim/v2/*`, returning 401 on invalid token and 403 on org scope mismatch) and update both this list and the directory tree.
 

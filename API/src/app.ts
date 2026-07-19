@@ -3,17 +3,21 @@ import helmet from '@fastify/helmet';
 import multipart from '@fastify/multipart';
 import fastify, { type FastifyInstance } from 'fastify';
 
-import { getEnv, requireEnv } from './config/env.js';
+import { getEnv, isTariffSnapshotJwksEnabled, requireEnv } from './config/env.js';
 import { connectPrisma, disconnectPrisma } from './db/prisma.js';
 import { registerErrorHandler } from './middleware/error-handler.js';
 import tenantContextPlugin from './plugins/tenant-context.plugin.js';
 import { registerRoutes } from './routes/index.js';
+import { preloadTariffSnapshotSigningKey } from './services/billing-snapshot.service.js';
 import { sweepExpiredClaims } from './services/integration-claim.service.js';
 import { pruneExpiredSecurityData } from './services/retention-pruning.service.js';
 import { setAppLogger } from './utils/app-logger.js';
 
 export async function createApp(): Promise<FastifyInstance> {
   const env = getEnv();
+  if (isTariffSnapshotJwksEnabled(env)) {
+    await preloadTariffSnapshotSigningKey();
+  }
 
   const app = fastify({
     trustProxy: 1,
@@ -38,13 +42,17 @@ export async function createApp(): Promise<FastifyInstance> {
                 'req.headers.authorization',
                 'req.headers.cookie',
                 'req.headers["x-api-key"]',
+                'req.headers["x-uoa-actor"]',
                 'req.headers["x-uoa-access-token"]',
+                'req.headers["x-uoa-app-key"]',
                 // Redact common token-like keys if we ever log structured objects containing them.
                 'authorization',
                 'headers.authorization',
                 'headers.cookie',
                 'headers["x-api-key"]',
+                'headers["x-uoa-actor"]',
                 'headers["x-uoa-access-token"]',
+                'headers["x-uoa-app-key"]',
                 'token',
                 'code',
                 'access_token',
