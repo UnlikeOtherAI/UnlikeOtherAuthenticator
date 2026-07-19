@@ -266,6 +266,36 @@ adds current \`org\` and selected
 \`client_id\` and never contains the 64-character domain-hash bearer credential.
 This grant returns no refresh token.
 
+For a chained hop, the next product authenticates with that product's own
+registered config and domain-hash credential. It submits the already UOA-issued
+token whose \`aud\` is exactly that product's HTTPS API origin:
+
+\`\`\`json
+{
+  "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
+  "subject_token": "<UOA RS256 at+jwt issued to DeepSignal>",
+  "subject_token_type": "urn:ietf:params:oauth:token-type:access_token",
+  "product": "deepsignal",
+  "resource": "https://ledger.unlikeotherai.com",
+  "scope": "ai.invoke"
+}
+\`\`\`
+
+UOA binds the request credential and mapping to DeepSignal, verifies the inbound
+UOA signature/issuer/expiry and exact DeepSignal audience, requires non-null
+\`org\` + \`active\`, and revalidates the original source product mapping,
+stable user/source-domain role, ACTIVE organisation, and ACTIVE selected team.
+The requested scope must be allowed by DeepSignal's mapping and be a subset of
+the inbound scope. The result never outlives the inbound token.
+
+The chained result identifies the immediate caller through
+\`source_domain\`, \`azp\`, and \`product\`, while \`act\` preserves upstream
+product provenance (for Nessie→DeepSignal:
+\`{"sub":"api.nessie.works","product":"nessie"}\`). A chained access-token
+subject remains reusable until \`exp\`; only the first-hop source JWT assertion
+is one-time. This supports concurrent multi-process calls without weakening the
+exact audience, app-credential, workspace, or scope checks.
+
 Unknown or disabled mappings, a product selected with another app credential,
 an inexact resource (including path/trailing-slash differences), duplicate or
 unsupported scopes, and scope widening all fail closed before assertion

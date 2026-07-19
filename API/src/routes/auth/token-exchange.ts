@@ -16,6 +16,10 @@ import {
   TOKEN_EXCHANGE_GRANT_TYPE,
 } from '../../services/confidential-token-exchange.service.js';
 import {
+  ACCESS_TOKEN_SUBJECT_TOKEN_TYPE,
+  exchangeConfidentialChainedAccessToken,
+} from '../../services/confidential-chained-token-exchange.service.js';
+import {
   confidentialTokenExchangeDomainRateLimiter,
   tokenExchangePreAuthRateLimiter,
 } from './rate-limit-keys.js';
@@ -43,7 +47,7 @@ const ConfidentialTokenExchangeGrantSchema = z
       .string()
       .min(1)
       .max(16 * 1024),
-    subject_token_type: z.literal(JWT_SUBJECT_TOKEN_TYPE),
+    subject_token_type: z.enum([JWT_SUBJECT_TOKEN_TYPE, ACCESS_TOKEN_SUBJECT_TOKEN_TYPE]),
     product: z
       .string()
       .trim()
@@ -120,18 +124,31 @@ export function registerAuthTokenExchangeRoute(app: FastifyInstance): void {
         if (!authenticatedClientDomainId) {
           throw new AppError('UNAUTHORIZED', 401);
         }
-        const exchanged = await exchangeConfidentialSubjectToken(
-          {
-            authenticatedClientDomainId,
-            subjectToken: body.subject_token,
-            product: body.product,
-            resource: body.resource,
-            scope: body.scope,
-            config,
-            configJwt,
-          },
-          { prisma: request.adminDb },
-        );
+        const exchanged =
+          body.subject_token_type === ACCESS_TOKEN_SUBJECT_TOKEN_TYPE
+            ? await exchangeConfidentialChainedAccessToken(
+                {
+                  authenticatedClientDomainId,
+                  subjectToken: body.subject_token,
+                  product: body.product,
+                  resource: body.resource,
+                  scope: body.scope,
+                  config,
+                },
+                { prisma: request.adminDb },
+              )
+            : await exchangeConfidentialSubjectToken(
+                {
+                  authenticatedClientDomainId,
+                  subjectToken: body.subject_token,
+                  product: body.product,
+                  resource: body.resource,
+                  scope: body.scope,
+                  config,
+                  configJwt,
+                },
+                { prisma: request.adminDb },
+              );
         reply.status(200).send({
           access_token: exchanged.accessToken,
           issued_token_type: exchanged.issuedTokenType,

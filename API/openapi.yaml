@@ -1165,20 +1165,21 @@ paths:
   /auth/token:
     post:
       tags: [Auth]
-      summary: Token exchange (authorization code, refresh token, or confidential JWT assertion)
+      summary: Token exchange (authorization code, refresh token, or confidential subject token)
       operationId: exchangeToken
       description: |
         Exchanges an authorization code or refresh token for the legacy access-token
         pair. A confidential backend may instead use the RFC 8693 token-exchange grant
-        with its own per-domain app credential plus a short-lived source-signed JWT to
-        obtain a five-minute, resource-bound RS256 access token. An enabled DB mapping
+        with its own per-domain app credential plus either a short-lived source-signed
+        JWT assertion or an already UOA-issued access token whose audience is exactly
+        that authenticated next-hop app. An enabled DB mapping
         must bind the authenticated ClientDomain and requested product to the exact
         resource and requested scope allowlist; there is no shared credential or
-        singleton source/resource env fallback. The grant re-resolves the current user, source-domain role,
-        and, when the assertion selects a workspace, the requested ACTIVE org/team
-        membership before issue. It then atomically consumes the source-domain+jti
-        once before signing, so exact and concurrent replays fail across instances.
-        Identity-only assertions omit workspace claims.
+        singleton source/resource env fallback. Both subject profiles re-resolve the
+        current user, original source-domain role, and requested ACTIVE org/team
+        membership before issue. First-hop assertions are atomically consumed once.
+        Chained access-token subjects are reusable until exp, but scope is narrowed by
+        both mappings and the result never outlives the inbound token.
         Requires domain hash bearer authentication.
         Legacy grants are rate limited at 10/min per IP. Confidential exchange is
         isolated from that shared-egress bucket and limited at 600/min per
@@ -1223,7 +1224,7 @@ paths:
                     refresh_token:
                       type: string
                       minLength: 1
-                - title: Confidential JWT Token Exchange
+                - title: Confidential Token Exchange
                   type: object
                   required:
                     [grant_type, subject_token, subject_token_type, product, resource, scope]
@@ -1237,17 +1238,19 @@ paths:
                       minLength: 1
                       maxLength: 16384
                       description: |
-                        RS256 JWT signed by a kid in the source config's same-host
-                        jwks_url. Required claims: iss and source_domain equal the
-                        source config domain; aud equals this /auth/token endpoint;
-                        stable UOA sub; fresh unique jti; iat; exp. Optional active must be exactly
-                        { orgId, teamId } with both values non-empty. Partial or
-                        malformed workspace context is rejected. exp-iat must not
-                        exceed 60 seconds. Each source-domain+jti is accepted once
-                        through exp plus clock tolerance.
+                        With subject_token_type=jwt: an RS256 JWT signed by a kid in
+                        the source config's same-host jwks_url, with exact source
+                        issuer/audience, stable sub, fresh jti, iat/exp <= 60 seconds,
+                        and optional exact {orgId, teamId}; accepted once.
+                        With subject_token_type=access_token: a UOA RS256 at+jwt whose
+                        aud is exactly https://<authenticated caller config domain>,
+                        with consistent non-null org/active provenance. It is reusable
+                        until exp; the downstream result is scope- and expiry-capped.
                     subject_token_type:
                       type: string
-                      enum: ['urn:ietf:params:oauth:token-type:jwt']
+                      enum:
+                        - 'urn:ietf:params:oauth:token-type:jwt'
+                        - 'urn:ietf:params:oauth:token-type:access_token'
                     product:
                       type: string
                       minLength: 1

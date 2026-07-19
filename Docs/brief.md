@@ -709,6 +709,33 @@ optional so first-time or workspace-less product users can still be delegated.
 When present it must be exactly `{ orgId, teamId }`, with both identifiers
 non-empty; partial, null, or extra-field workspace objects are invalid.
 
+An app-to-app chain uses the same endpoint without sharing app credentials. For
+example, when Nessie has already obtained a UOA token whose audience is exactly
+the DeepSignal API origin, DeepSignal authenticates the next exchange with
+DeepSignal's own config and per-domain app credential and sends:
+
+```json
+{
+  "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
+  "subject_token": "<UOA-issued Nessie delegation for DeepSignal>",
+  "subject_token_type": "urn:ietf:params:oauth:token-type:access_token",
+  "product": "deepsignal",
+  "resource": "https://ledger.unlikeotherai.com",
+  "scope": "ai.invoke"
+}
+```
+
+For this chained profile, UOA verifies its own RS256 `at+jwt` signature, exact
+UOA issuer and expiry, and exact `aud = https://<authenticated DeepSignal config
+domain>`. The inbound `source_domain` and `azp` must agree. `org` and `active`
+are mandatory, must select the same organisation and team, and are never
+replaced with DeepSignal-local tenancy. UOA revalidates the inbound source
+product mapping and, for a nested chain, checks stable user/source-domain role,
+ACTIVE organisation, and ACTIVE selected team under the ultimate signed origin
+at the tail of `act`. It also resolves the immediate caller's separate mapping.
+The requested scope must be allowed by that caller mapping and be a subset of
+the inbound scope.
+
 Delegation policy is DB-backed, not process configuration. Each mapping binds
 one registered `ClientDomain` plus lowercase product identifier to one exact
 HTTPS resource and a non-empty allowlist containing only `ai.invoke`,
@@ -734,7 +761,7 @@ When `active` is present, UOA additionally re-resolves the requested ACTIVE org
 and team memberships. Unknown users, missing domain roles, and
 removed/deactivated or cross-tenant selected workspaces fail closed.
 
-Each verified assertion is one-time. After the current user, source-domain role,
+Each verified source-signed JWT assertion is one-time. After the current user, source-domain role,
 and any selected workspace pass validation, UOA atomically claims the
 source-domain + `jti` in PostgreSQL before signing. Concurrent or later reuse of
 that assertion is rejected, including across service instances. The replay row
@@ -742,13 +769,22 @@ retains only a SHA-256 digest of the source-bound `jti` through `exp` plus the
 accepted clock tolerance, after which it is eligible for pruning. A source must
 mint a fresh, unique `jti` for every exchange.
 
-The result is a five-minute RS256 access token using the §22.14 access-token
+An access-token subject is instead reusable until its `exp`. This is required
+for normal concurrent and multi-process MCP/API calls and does not weaken the
+binding: only the app authenticated for the token's exact audience may exchange
+it, and neither scope nor lifetime can widen.
+
+The result is an at-most-five-minute RS256 access token using the §22.14 access-token
 signing key and `GET /oauth/jwks.json`. It contains `iss`, resource `aud`, stable
-`sub`, advisory `email`, `source_domain`, non-secret `azp` (source domain),
+`sub`, advisory `email`, `source_domain`, non-secret `azp` (immediate caller domain),
 `product`, the exact requested `scope`, `jti`, `iat`, and `exp`. The issued scope
 is never widened to the mapping's full allowlist. When a workspace was selected
 it also contains the current `org` and selected `active`; both claims are
 omitted together for an identity-only exchange.
+For a chained exchange, the token never outlives the inbound token and includes
+an RFC 8693 `act` chain preserving upstream source/product provenance (the first
+Nessie→DeepSignal hop is
+`{ "sub": "api.nessie.works", "product": "nessie" }`).
 It deliberately contains no `client_id` and never copies the 64-character
 domain-hash bearer credential. This grant issues no refresh token.
 

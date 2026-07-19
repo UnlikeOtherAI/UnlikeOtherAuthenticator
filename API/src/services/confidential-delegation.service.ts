@@ -104,7 +104,7 @@ function normalizeScopeNames(scopes: readonly string[]): ConfidentialDelegationS
   return CONFIDENTIAL_DELEGATION_SCOPES.filter((scope) => unique.has(scope));
 }
 
-function requestedScopeNames(scope: string): ConfidentialDelegationScopeName[] {
+export function parseConfidentialDelegationScope(scope: string): ConfidentialDelegationScopeName[] {
   const requested = scope.trim().split(/\s+/);
   try {
     return normalizeScopeNames(requested);
@@ -337,7 +337,7 @@ export async function resolveConfidentialDelegation(
   let requestedScopes: ConfidentialDelegationScopeName[];
   try {
     product = normalizeProduct(params.product);
-    requestedScopes = requestedScopeNames(params.scope);
+    requestedScopes = parseConfidentialDelegationScope(params.scope);
   } catch {
     throw invalidDelegation();
   }
@@ -375,4 +375,38 @@ export async function resolveConfidentialDelegation(
     resource: mapping.resource,
     scope: requestedScopes.join(' '),
   };
+}
+
+export async function resolveConfidentialDelegationForSource(
+  params: {
+    sourceDomain: string;
+    product: string;
+    resource: string;
+    scope: string;
+  },
+  deps?: { prisma?: PrismaClient },
+): Promise<{
+  product: string;
+  resource: string;
+  scope: string;
+}> {
+  const sourceDomain = normalizeDomain(params.sourceDomain);
+  if (!sourceDomain) throw invalidDelegation();
+
+  const source = await client(deps).clientDomain.findUnique({
+    where: { domain: sourceDomain },
+    select: { id: true, status: true },
+  });
+  if (!source || source.status !== 'active') throw invalidDelegation();
+
+  return resolveConfidentialDelegation(
+    {
+      authenticatedClientDomainId: source.id,
+      sourceDomain,
+      product: params.product,
+      resource: params.resource,
+      scope: params.scope,
+    },
+    deps,
+  );
 }

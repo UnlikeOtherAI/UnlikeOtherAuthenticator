@@ -95,6 +95,10 @@ describe('mcp access-token (RS256)', () => {
         team_roles: { team_1: 'member' },
       },
       active: { orgId: 'org_1', teamId: 'team_1' },
+      actor: {
+        sub: 'api.nessie.works',
+        product: 'nessie',
+      },
     });
 
     const jwks = createLocalJWKSet(await getAccessTokenPublicJwks());
@@ -111,6 +115,7 @@ describe('mcp access-token (RS256)', () => {
       product: 'nessie',
       scope: 'ai.invoke',
       active: { orgId: 'org_1', teamId: 'team_1' },
+      act: { sub: 'api.nessie.works', product: 'nessie' },
     });
     expect(payload.jti).toEqual(expect.any(String));
     expect(payload.client_id).toBeUndefined();
@@ -145,5 +150,36 @@ describe('mcp access-token (RS256)', () => {
     });
     expect(payload.org).toBeUndefined();
     expect(payload.active).toBeUndefined();
+  });
+
+  it('uses an absolute expiry cap for a chained confidential token', async () => {
+    const resource = 'https://ledger.unlikeotherai.com';
+    const expiresAtEpochSeconds = Math.floor(Date.now() / 1000) + 45;
+    const token = await signConfidentialAccessToken({
+      subject: 'usr_1',
+      email: 'a@b.com',
+      sourceDomain: 'api.deepsignal.live',
+      product: 'deepsignal',
+      resource,
+      issuer: 'https://authentication.unlikeotherai.com',
+      ttlSeconds: 300,
+      expiresAtEpochSeconds,
+      scope: 'ai.invoke',
+      org: {
+        org_id: 'org_1',
+        org_role: 'member',
+        teams: ['team_1'],
+        team_roles: { team_1: 'member' },
+      },
+      active: { orgId: 'org_1', teamId: 'team_1' },
+      actor: { sub: 'api.nessie.works', product: 'nessie' },
+    });
+
+    const jwks = createLocalJWKSet(await getAccessTokenPublicJwks());
+    const { payload } = await jwtVerify(token, jwks, {
+      issuer: 'https://authentication.unlikeotherai.com',
+      audience: resource,
+    });
+    expect(payload.exp).toBe(expiresAtEpochSeconds);
   });
 });

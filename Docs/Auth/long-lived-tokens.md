@@ -115,6 +115,26 @@ Confidential assertion request:
 }
 ```
 
+Chained access-token request (Nessie→DeepSignal→Ledger example):
+
+```json
+{
+  "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
+  "subject_token": "<UOA access token with aud=https://api.deepsignal.live>",
+  "subject_token_type": "urn:ietf:params:oauth:token-type:access_token",
+  "product": "deepsignal",
+  "resource": "https://ledger.unlikeotherai.com",
+  "scope": "ai.invoke"
+}
+```
+
+DeepSignal authenticates that request with DeepSignal's own registered config
+and per-domain app credential. UOA verifies the inbound UOA RS256 `at+jwt`,
+requires its exact DeepSignal audience and non-null org/team provenance,
+revalidates the original Nessie product/user/membership link, and narrows scope
+through both the inbound token and DeepSignal's separate Ledger mapping. No app
+key, webhook signing secret, or fallback credential is reused between hops.
+
 Success response:
 
 ```json
@@ -139,12 +159,17 @@ The confidential grant instead returns only:
 }
 ```
 
-It does not issue or rotate a refresh token. The source backend creates a fresh
-assertion with a new unique `jti` when another resource token is needed. After
-identity and any selected workspace are revalidated, UOA atomically consumes
-that source-domain `jti` in PostgreSQL before signing. Exact or concurrent
-replays are rejected across instances. Only a SHA-256 digest is retained through
-the assertion's `exp` plus accepted clock tolerance, then pruned.
+It does not issue or rotate a refresh token. For a first-hop JWT, the source
+backend creates a fresh assertion with a new unique `jti` when another resource
+token is needed. After identity and any selected workspace are revalidated, UOA
+atomically consumes that source-domain `jti` in PostgreSQL before signing. Exact
+or concurrent replays are rejected across instances. Only a SHA-256 digest is
+retained through the assertion's `exp` plus accepted clock tolerance, then
+pruned.
+An audience-bound access-token subject is reusable until `exp`; UOA does not add
+it to the one-time assertion-use ledger. This permits concurrent calls across
+DeepSignal instances while exact audience, app authentication, workspace
+revalidation, and scope narrowing remain mandatory.
 
 Application authentication and subject provenance are separate. Each product
 uses its own existing per-domain app credential; the credential's authenticated
@@ -158,13 +183,18 @@ singleton env fallback. The issued token and response contain exactly the
 requested allowlisted scope subset plus the product claim.
 
 The source assertion's `exp - iat` MUST be no more than 60 seconds. The issued
-resource access token remains five minutes (`expires_in: 300`).
+resource access token is at most five minutes (`expires_in: 300`); a chained
+result is capped to the inbound token's remaining lifetime.
 
 The signed assertion may omit `active` for a first-time or workspace-less user.
 UOA still re-resolves the stable user and source-domain role. When `active` is
 present it must contain both non-empty `orgId` and `teamId`; UOA verifies the
 current ACTIVE memberships and includes `org` plus `active` in the resource
 token. When absent, both workspace claims are omitted from the issued token.
+Chained access-token subjects require both claims. Their output keeps the
+revalidated original workspace, identifies the immediate caller in
+`source_domain`/`azp`/`product`, and adds an RFC 8693 `act` chain for upstream
+source/product provenance.
 
 Confidential exchanges use a 600/minute authenticated source-domain ceiling and
 a 60/minute verified source-domain-user ceiling. They do not share the legacy

@@ -28,20 +28,18 @@ function ensureFeatureEnabled(config: ClientConfig): void {
   }
 }
 
-export async function getUserOrgContext(
+export async function getActiveUserOrgContext(
   params: {
     userId: string;
     domain: string;
-    config: ClientConfig;
     /** Resolve one requested organisation instead of the first active membership. */
     orgId?: string;
+    groupsEnabled?: boolean;
   },
   deps?: OrgContextDeps,
 ): Promise<OrgContext | null> {
   const env = deps?.env ?? getEnv();
   assertDatabaseEnabled(env);
-
-  ensureFeatureEnabled(params.config);
 
   const userId = params.userId.trim();
   const domain = normalizeDomain(params.domain);
@@ -99,7 +97,7 @@ export async function getUserOrgContext(
     team_roles: teamRoles,
   };
 
-  if (!params.config.org_features?.groups_enabled) {
+  if (!params.groupsEnabled) {
     return context;
   }
 
@@ -128,4 +126,26 @@ export async function getUserOrgContext(
   }
 
   return context;
+}
+
+export async function getUserOrgContext(
+  params: {
+    userId: string;
+    domain: string;
+    config: ClientConfig;
+    /** Resolve one requested organisation instead of the first active membership. */
+    orgId?: string;
+  },
+  deps?: OrgContextDeps,
+): Promise<OrgContext | null> {
+  ensureFeatureEnabled(params.config);
+  return getActiveUserOrgContext(
+    {
+      userId: params.userId,
+      domain: params.domain,
+      orgId: params.orgId,
+      groupsEnabled: params.config.org_features?.groups_enabled,
+    },
+    deps,
+  );
 }

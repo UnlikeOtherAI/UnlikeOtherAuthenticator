@@ -198,6 +198,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       config-validation-guidance.service.ts — Config validation guidance text
       config.service.ts                     — Config JWT verification orchestrator
       confidential-assertion-use.service.ts — Durable source+jti one-time claims for confidential exchange
+      confidential-chained-token-exchange.service.ts — Verify and narrow UOA-issued audience-bound subjects for app-to-app chains
       confidential-delegation.service.ts — ClientDomain/product/resource/scope policy and audited CRUD
       confidential-token-exchange.service.ts — Verify source assertions, re-resolve workspace identity, and issue resource tokens
       domain-email-config.service.ts        — Per-domain email config + SES wiring
@@ -368,6 +369,19 @@ checks, `confidential-assertion-use.service.ts` atomically inserts a hashed
 source-domain + `jti` claim through accepted expiry plus clock tolerance; the
 database uniqueness constraint serializes concurrent exchanges across processes
 before access-token signing.
+
+The chained branch accepts
+`subject_token_type=urn:ietf:params:oauth:token-type:access_token` only for an
+already UOA-issued RS256 `at+jwt` whose audience exactly equals the authenticated
+next-hop app's HTTPS config domain. The immediate caller still authenticates
+with its own app credential and mapping. UOA revalidates the inbound source
+mapping, then revalidates stable user/domain-role and ACTIVE org/team identity
+under the ultimate signed origin at the tail of `act`. It narrows the requested
+scope through both hops and caps the result to the inbound expiry. The output
+identifies the immediate caller in `source_domain`/`azp`/`product` and records
+the upstream product chain in `act`. Access-token subjects remain reusable until
+expiry for concurrent multi-process calls; only source-signed JWT assertions use
+the one-time assertion ledger.
 
 `confidential-delegation.service.ts` owns both fail-closed runtime resolution
 and the audited superuser CRUD exposed by

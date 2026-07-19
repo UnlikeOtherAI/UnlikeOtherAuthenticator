@@ -250,12 +250,13 @@ export const accessTokenDocumentation = {
 
 export const confidentialTokenExchangeDocumentation = {
   description:
-    'Confidential RFC 8693-style exchange on POST /auth/token. Each source product authenticates with its own existing per-domain app credential and selects one enabled DB mapping bound to that ClientDomain, product, exact resource, and scope allowlist; there is no shared credential or singleton env fallback. The source also supplies a short-lived RS256 subject JWT carrying user and optional org/team context. UOA verifies that assertion with the JWKS URL published in the already-verified source config, always re-resolves current identity and membership, then issues a resource-bound RS256 access token.',
+    'Confidential RFC 8693-style exchange on POST /auth/token. Every calling product authenticates with its own existing per-domain app credential and selects one enabled DB mapping bound to that ClientDomain, product, exact resource, and scope allowlist; there is no shared credential or singleton env fallback. A first hop supplies a short-lived source-signed JWT assertion. A later app-to-app hop may instead submit the already UOA-issued access token whose audience is exactly that authenticated next-hop app. Both profiles re-resolve current identity and membership before UOA issues a narrowed, resource-bound RS256 access token.',
   request: {
     grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
     subject_token:
-      'RS256 JWT with kid; maximum 60-second exp-iat and required iss, aud, sub, source_domain, jti, iat, exp; optional active must be exactly { orgId, teamId } with both values non-empty',
-    subject_token_type: 'urn:ietf:params:oauth:token-type:jwt',
+      'Either a source-signed one-time RS256 JWT assertion carrying optional active workspace context, or a UOA-issued RS256 at+jwt access token already bound to the authenticated calling app with mandatory org/active context',
+    subject_token_type:
+      'urn:ietf:params:oauth:token-type:jwt for the first hop, or urn:ietf:params:oauth:token-type:access_token for a chained hop',
     product:
       'lowercase product identifier; must match the mapping bound to the authenticated ClientDomain',
     resource: 'exact HTTPS resource URI stored in that product mapping',
@@ -264,7 +265,7 @@ export const confidentialTokenExchangeDocumentation = {
   },
   application_binding: {
     authentication:
-      'the normal domain-hash bearer for this source config domain; credential rotation preserves the ClientDomain-bound mapping',
+      'the normal domain-hash bearer for the immediate caller config domain; credential rotation preserves the ClientDomain-bound mapping',
     mapping:
       'DB-backed exact ClientDomain + product -> HTTPS resource + supported-scope allowlist; unknown, disabled, cross-domain, cross-product, wrong-resource, and widening requests fail closed',
     administration:
@@ -277,17 +278,29 @@ export const confidentialTokenExchangeDocumentation = {
     replay_protection:
       'A fresh unique jti is mandatory. After current identity and optional workspace validation, UOA atomically consumes source-domain+jti once in PostgreSQL through exp plus clock tolerance; exact/concurrent replay is rejected across instances.',
   },
+  chained_access_token_binding: {
+    authentication:
+      'the immediate caller still presents only its own per-domain app credential; another product credential, a webhook secret, a user token, or a shared fallback is never accepted as caller authentication',
+    verification:
+      'the subject must be a UOA RS256 at+jwt with iss equal to UOA and aud exactly https://<authenticated caller config domain>; source_domain and azp must identify the same inbound source product domain',
+    workspace:
+      'org and active are mandatory and internally consistent. UOA revalidates the inbound source-product mapping, then checks the stable user, source-domain role, ACTIVE organisation, and ACTIVE selected team under the ultimate signed origin at the tail of the act chain.',
+    narrowing:
+      'requested scope must be allowed by the immediate caller mapping and be a subset of the inbound token scope. The downstream expiry is capped to the remaining inbound lifetime.',
+    reuse:
+      'Unlike a source-signed JWT assertion, an audience-bound access-token subject is reusable until exp so concurrent multi-process calls do not turn a normal bearer token into a one-shot credential.',
+  },
   issued_access_token: {
     algorithm: 'RS256',
-    lifetime: '300 seconds',
+    lifetime: 'maximum 300 seconds; a chained result never outlives its inbound access token',
     jwks: 'GET /oauth/jwks.json',
     claims:
-      'iss, aud, sub, email (advisory), source_domain, azp (source domain only), product, exact requested scope, jti, iat, exp; org and active are present together only for a validated selected workspace',
+      'iss, aud, sub, email (advisory), source_domain, azp (immediate caller domain only), product, exact requested scope, jti, iat, exp; org and active are present together for a validated workspace and preserve the revalidated original tenancy. Chained tokens add an RFC 8693 act chain containing upstream source/product provenance.',
     forbidden_claims:
       'client_id and the 64-character domain-hash bearer credential are never copied into this token',
   },
   rate_limit:
-    'Confidential exchange is isolated from the legacy 10/min/IP token bucket: 600/min per authenticated source domain, plus 60/min per verified source-domain user.',
+    'Confidential exchange is isolated from the legacy 10/min/IP token bucket: 600/min per authenticated caller domain, plus 60/min per verified caller-domain user.',
   public_oauth_boundary:
     'The signing key publishes GET /oauth/jwks.json but does not enable public registration, authorize, login, or PKCE token routes. Those require MCP_OAUTH_PUBLIC_PROFILE_ENABLED=true.',
 };

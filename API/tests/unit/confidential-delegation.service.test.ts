@@ -5,6 +5,7 @@ import {
   createConfidentialDelegationMapping,
   deleteConfidentialDelegationMapping,
   resolveConfidentialDelegation,
+  resolveConfidentialDelegationForSource,
   serializeConfidentialDelegationMapping,
   updateConfidentialDelegationMapping,
 } from '../../src/services/confidential-delegation.service.js';
@@ -55,6 +56,12 @@ function resolverPrisma(row = mapping() as ReturnType<typeof mapping> | null) {
   );
   return {
     prisma: {
+      clientDomain: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: clientDomainId,
+          status: 'active',
+        }),
+      },
       confidentialDelegationMapping: { findUnique },
     } as unknown as PrismaClient,
     findUnique,
@@ -110,6 +117,30 @@ describe('confidential delegation resolution', () => {
     await expect(
       resolveConfidentialDelegation(request({ scope: 'ai.invoke' }), { prisma }),
     ).rejects.toThrow('TOKEN_EXCHANGE_DELEGATION_NOT_ALLOWED');
+  });
+
+  it('re-resolves the original active source domain before validating a chained hop', async () => {
+    const { prisma } = resolverPrisma();
+
+    await expect(
+      resolveConfidentialDelegationForSource(
+        {
+          sourceDomain,
+          product,
+          resource,
+          scope: 'ai.invoke',
+        },
+        { prisma },
+      ),
+    ).resolves.toEqual({
+      product,
+      resource,
+      scope: 'ai.invoke',
+    });
+    expect(prisma.clientDomain.findUnique).toHaveBeenCalledWith({
+      where: { domain: sourceDomain },
+      select: { id: true, status: true },
+    });
   });
 
   it.each([

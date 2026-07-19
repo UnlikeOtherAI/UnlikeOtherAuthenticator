@@ -21,7 +21,7 @@ The API is the central OAuth/auth server. It handles:
 - User registration, login, and password management
 - Social OAuth provider callbacks
 - Authorization code generation and token exchange
-- Confidential source-JWT exchange into short-lived, resource-bound RS256 access tokens
+- Confidential source-JWT and UOA access-token chaining into short-lived, resource-bound RS256 access tokens
 - 2FA setup and verification
 - Domain-scoped APIs (user list, login logs, debug)
 - Organisation, team, and group management APIs (`/org/*` and `/internal/org/*`)
@@ -201,7 +201,7 @@ The React implementation should translate those templates into reusable componen
 - **PostgreSQL** — the database
 - **Prisma** — ORM and migration tool
 - Tables: `users`, `domain_roles`, `login_logs`, `verification_tokens`, `confidential_assertion_uses`
-- Confidential delegation policy: `confidential_delegation_mappings` binds an authenticated `client_domains` row + product to one exact HTTPS resource and an explicit `ai.invoke` / `billing.read` / `token.provision` allowlist. Token provisioning is never implied by AI invocation. It is admin-only under forced RLS; there is no process-env fallback.
+- Confidential delegation policy: `confidential_delegation_mappings` binds an authenticated `client_domains` row + product to one exact HTTPS resource and an explicit `ai.invoke` / `billing.read` / `token.provision` allowlist. Every application-to-application hop authenticates with the immediate caller application's own credential and mapping. Chained UOA access tokens require the exact caller audience, narrow through the inbound token and both source/caller mappings, cannot outlive the inbound token, and preserve provenance in the `act` chain. Token provisioning is never implied by AI invocation. It is admin-only under forced RLS; there is no process-env fallback.
 - Organisational tables: `organisations`, `org_members`, `teams`, `team_members`, `groups`, `group_members`
 - Billing control-plane tables: `billing_services`, `billing_tariffs`, `billing_tariff_assignments`, `billing_app_keys`, `billing_stripe_accounts`, `billing_stripe_customers`, `billing_stripe_catalogs`, `billing_stripe_tariff_prices`, `billing_stripe_checkout_sessions`, `billing_stripe_subscriptions`, `billing_stripe_usage_exports`, `billing_stripe_webhook_events`
 - Optional signature-module tables: `domain_signature_settings`, `agreements`, `agreement_versions`, `signing_continuations`, `agreement_signatures`, `signature_revocations`, `signature_audit_events`

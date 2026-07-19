@@ -126,6 +126,20 @@ Before enabling the confidential exchange in production:
    and `/oauth/token` return 404. Exercise correct and wrong product credentials,
    resource variants, scope widening, disabled mapping, replay, and selected
    user/organisation/team membership before enabling confidential callers.
+8. For each approved chain, provision both independent mappings. The
+   Nessie→DeepSignal→Ledger path requires Nessie's mapping to the exact
+   DeepSignal API origin and DeepSignal's separate mapping to the exact Ledger
+   resource, each with only `ai.invoke` unless another scope is explicitly
+   approved. Nessie and DeepSignal must present their own registered credentials;
+   never configure either product with the other product's key or a webhook
+   signing secret.
+9. Exercise the chained `subject_token_type=...:access_token` path with a
+   UOA-issued token whose audience is exactly the authenticated DeepSignal
+   origin. Verify wrong audience/issuer/signature, inactive original mapping,
+   removed user/org/team, and either-hop scope widening fail; verify the output
+   expiry does not exceed the inbound expiry and `act` records the upstream
+   source/product. The access-token subject may be reused until expiry for
+   concurrent instances; the original source-JWT assertion must remain one-time.
 
 The secret value is one private RSA JWK JSON object with at least
 `kty="RSA"`, `alg="RS256"`, `use="sig"`, non-empty `kid`, public `n`/`e`, and

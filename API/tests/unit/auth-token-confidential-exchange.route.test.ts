@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { testUiTheme } from '../helpers/test-config.js';
 
 const exchangeConfidentialSubjectTokenMock = vi.fn();
+const exchangeConfidentialChainedAccessTokenMock = vi.fn();
 let currentConfig: ClientConfig;
 
 vi.mock('../../src/middleware/config-verifier.js', () => ({
@@ -30,8 +31,11 @@ vi.mock('../../src/middleware/domain-hash-auth.js', async () => {
       domainAuthClientId?: string;
       domainAuthClientDomainId?: string;
     }): Promise<void> => {
-      request.domainAuthClientId = 'a'.repeat(64);
-      request.domainAuthClientDomainId = 'client-domain-nessie';
+      const isDeepSignal = currentConfig.domain === 'api.deepsignal.live';
+      request.domainAuthClientId = (isDeepSignal ? 'b' : 'a').repeat(64);
+      request.domainAuthClientDomainId = isDeepSignal
+        ? 'client-domain-deepsignal'
+        : 'client-domain-nessie';
     },
   };
 });
@@ -44,6 +48,17 @@ vi.mock('../../src/services/confidential-token-exchange.service.js', async () =>
     ...actual,
     exchangeConfidentialSubjectToken: (...args: unknown[]) =>
       exchangeConfidentialSubjectTokenMock(...args),
+  };
+});
+
+vi.mock('../../src/services/confidential-chained-token-exchange.service.js', async () => {
+  const actual = await vi.importActual<
+    typeof import('../../src/services/confidential-chained-token-exchange.service.js')
+  >('../../src/services/confidential-chained-token-exchange.service.js');
+  return {
+    ...actual,
+    exchangeConfidentialChainedAccessToken: (...args: unknown[]) =>
+      exchangeConfidentialChainedAccessTokenMock(...args),
   };
 });
 
@@ -69,6 +84,12 @@ describe('POST /auth/token confidential grant', () => {
     exchangeConfidentialSubjectTokenMock.mockResolvedValue({
       accessToken: 'ledger-access-token',
       expiresInSeconds: 300,
+      issuedTokenType: 'urn:ietf:params:oauth:token-type:access_token',
+      scope: 'ai.invoke',
+    });
+    exchangeConfidentialChainedAccessTokenMock.mockResolvedValue({
+      accessToken: 'ledger-chained-access-token',
+      expiresInSeconds: 240,
       issuedTokenType: 'urn:ietf:params:oauth:token-type:access_token',
       scope: 'ai.invoke',
     });
@@ -136,6 +157,57 @@ describe('POST /auth/token confidential grant', () => {
     }
   });
 
+  it('routes an access-token subject through the chained exchange without a source JWT config key', async () => {
+    currentConfig = {
+      ...config(),
+      domain: 'api.deepsignal.live',
+      redirect_urls: ['https://app.deepsignal.live/auth/callback'],
+    };
+    const { createApp } = await import('../../src/app.js');
+    const app = await createApp();
+    await app.ready();
+
+    try {
+      const response = await app.inject({
+        method: 'POST',
+        url:
+          '/auth/token?config_url=' + encodeURIComponent('https://api.deepsignal.live/auth/config'),
+        headers: { authorization: `Bearer ${'b'.repeat(64)}` },
+        payload: {
+          grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
+          subject_token: 'uoa.nessie.access-token',
+          subject_token_type: 'urn:ietf:params:oauth:token-type:access_token',
+          product: 'deepsignal',
+          resource: 'https://ledger.unlikeotherai.com',
+          scope: 'ai.invoke',
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({
+        access_token: 'ledger-chained-access-token',
+        issued_token_type: 'urn:ietf:params:oauth:token-type:access_token',
+        token_type: 'Bearer',
+        expires_in: 240,
+        scope: 'ai.invoke',
+      });
+      expect(exchangeConfidentialChainedAccessTokenMock).toHaveBeenCalledWith(
+        {
+          authenticatedClientDomainId: 'client-domain-deepsignal',
+          subjectToken: 'uoa.nessie.access-token',
+          product: 'deepsignal',
+          resource: 'https://ledger.unlikeotherai.com',
+          scope: 'ai.invoke',
+          config: currentConfig,
+        },
+        expect.objectContaining({ prisma: expect.anything() }),
+      );
+      expect(exchangeConfidentialSubjectTokenMock).not.toHaveBeenCalled();
+    } finally {
+      await app.close();
+    }
+  });
+
   it('rejects a malformed token-exchange request before the service runs', async () => {
     const { createApp } = await import('../../src/app.js');
     const app = await createApp();
@@ -148,7 +220,7 @@ describe('POST /auth/token confidential grant', () => {
         payload: {
           grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
           subject_token: 'source.jwt.assertion',
-          subject_token_type: 'urn:ietf:params:oauth:token-type:access_token',
+          subject_token_type: 'urn:ietf:params:oauth:token-type:refresh_token',
           product: 'nessie',
           resource: 'https://ledger.unlikeotherai.com',
           scope: 'ai.invoke',
@@ -157,6 +229,7 @@ describe('POST /auth/token confidential grant', () => {
 
       expect(response.statusCode).toBe(400);
       expect(exchangeConfidentialSubjectTokenMock).not.toHaveBeenCalled();
+      expect(exchangeConfidentialChainedAccessTokenMock).not.toHaveBeenCalled();
     } finally {
       await app.close();
     }

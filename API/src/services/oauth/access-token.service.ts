@@ -115,6 +115,12 @@ type ConfidentialWorkspaceClaims =
       active?: undefined;
     };
 
+export type ConfidentialActorChain = {
+  sub: string;
+  product: string;
+  act?: ConfidentialActorChain;
+};
+
 export type ConfidentialAccessTokenClaims = {
   subject: string;
   email: string;
@@ -123,7 +129,9 @@ export type ConfidentialAccessTokenClaims = {
   resource: string;
   issuer: string;
   ttlSeconds: number;
+  expiresAtEpochSeconds?: number;
   scope: string;
+  actor?: ConfidentialActorChain;
 } & ConfidentialWorkspaceClaims;
 
 /**
@@ -147,17 +155,18 @@ export async function signConfidentialAccessToken(
     payload.org = claims.org;
     payload.active = claims.active;
   }
+  if (claims.actor) payload.act = claims.actor;
 
   try {
-    return await new SignJWT(payload)
+    const token = new SignJWT(payload)
       .setProtectedHeader({ alg: ALG, kid, typ: 'at+jwt' })
       .setIssuer(claims.issuer)
       .setAudience(claims.resource)
       .setSubject(claims.subject)
       .setJti(randomUUID())
-      .setIssuedAt()
-      .setExpirationTime(`${claims.ttlSeconds}s`)
-      .sign(privateKey);
+      .setIssuedAt();
+    token.setExpirationTime(claims.expiresAtEpochSeconds ?? `${claims.ttlSeconds}s`);
+    return await token.sign(privateKey);
   } catch {
     throw new AppError('INTERNAL', 500, 'TOKEN_SIGN_FAILED');
   }
