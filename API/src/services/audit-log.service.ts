@@ -24,6 +24,13 @@ export type AdminAuditAction =
   | 'signature.version_updated'
   | 'signature.version_uploaded'
   | 'signature.version_withdrawn'
+  | 'billing.app_key_created'
+  | 'billing.app_key_revoked'
+  | 'billing.assignment_removed'
+  | 'billing.assignment_upserted'
+  | 'billing.default_tariff_changed'
+  | 'billing.service_created'
+  | 'billing.tariff_version_created'
   | 'user.twofa_reset';
 
 export type AuditLogPrisma = Pick<PrismaClient, 'adminAuditLog'>;

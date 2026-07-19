@@ -17,6 +17,15 @@ Users who are neither `owner` nor `admin` have no named UOA system role — they
 
 Admin access is first-party UOA auth. Earlier drafts described a separate `system_admin`/`AdminUser` model with domain-hash auth; that is superseded. Browser calls to `/internal/admin/*` use `Authorization: Bearer <access_token>`. The browser-safe `POST /internal/admin/token` endpoint exchanges an admin-domain authorization code and PKCE verifier for an access token without requiring domain-hash auth and without returning a refresh token. Admin access tokens are signed with `ADMIN_ACCESS_TOKEN_SECRET`, an auth-service-only secret that client backends do not receive. Only tokens with `role: "superuser"` for the configured UOA admin domain are accepted. When the database is enabled, the token subject must also have a `SUPERUSER` `domain_roles` row for that admin domain. The admin browser must not use domain-hash shared-secret auth.
 
+The billing tariff control plane is a narrower platform-operator capability.
+Although org/team `owner` and `admin` roles conceptually manage ordinary billing
+for their tenant, the first tariff-catalog implementation permits mutations only
+to a platform superuser through `/internal/admin/billing/*`. Products read the
+result through their own product-bound app API key plus a signed actor assertion.
+Delegated customer billing controls may be added later without weakening this
+initial boundary. See
+[Billing Tariffs and Product Entitlements](./billing-tariffs.md).
+
 ### 2. Consumer-defined roles (external, custom)
 
 These are roles that a developer or org defines for their own product. UOA stores only the **label** — a string reference. UOA has no opinion on what the role permits. The consuming application owns all gating logic.

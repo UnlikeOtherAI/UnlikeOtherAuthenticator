@@ -25,6 +25,7 @@ The API is the central OAuth/auth server. It handles:
 - 2FA setup and verification
 - Domain-scoped APIs (user list, login logs, debug)
 - Organisation, team, and group management APIs (`/org/*` and `/internal/org/*`)
+- Canonical product tariff catalog, org/team assignments, and signed entitlement snapshots
 - Email dispatch (verification, password reset, login links)
 - Optional per-domain agreement signatures, private PDF evidence, and signed receipts
 
@@ -201,6 +202,7 @@ The React implementation should translate those templates into reusable componen
 - **Prisma** — ORM and migration tool
 - Tables: `users`, `domain_roles`, `login_logs`, `verification_tokens`, `confidential_assertion_uses`
 - Organisational tables: `organisations`, `org_members`, `teams`, `team_members`, `groups`, `group_members`
+- Billing control-plane tables: `billing_services`, `billing_tariffs`, `billing_tariff_assignments`, `billing_app_keys`
 - Optional signature-module tables: `domain_signature_settings`, `agreements`, `agreement_versions`, `signing_continuations`, `agreement_signatures`, `signature_revocations`, `signature_audit_events`
 - All schema changes go through Prisma migrations — no manual SQL
 - Prisma schema lives in `/API/prisma/schema.prisma`
@@ -214,6 +216,7 @@ The React implementation should translate those templates into reusable componen
 - **Email Service** — provider-abstracted (e.g. SendGrid, SES), swappable without code changes
 - **AI Translation Service** — for missing translation fallback, results cached permanently
 - **Private Signature Object Storage** — disabled by default; private local filesystem in development/test and Google Cloud Storage via Application Default Credentials when explicitly configured
+- **Ledger and Product Billing Clients** — server-to-server tariff reads use a distinct product-bound UOA app key plus a credential-bound RS256 actor assertion; UOA returns signed content-free snapshots and never receives provider content
 
 ---
 
@@ -255,6 +258,7 @@ All secrets and configuration live in environment variables. Nothing is hardcode
 * `MCP_OAUTH_RESOURCES_SUPPORTED` — optional comma-separated, case-sensitive allowlist of RFC 8707 resource-server URIs the MCP profile may issue tokens for. A client-supplied `resource` must exactly match one of these or the request is rejected with `invalid_target`; when unset, no resource is allowed and clients omit `resource` (the token `aud` falls back to the issuer)
 * `CONFIDENTIAL_TOKEN_EXCHANGE_SOURCE_DOMAIN` — exact source config domain allowed to use the confidential `/auth/token` assertion grant; both confidential-exchange variables are required together
 * `CONFIDENTIAL_TOKEN_EXCHANGE_RESOURCE` — exact HTTPS resource URI paired with `CONFIDENTIAL_TOKEN_EXCHANGE_SOURCE_DOMAIN`; becomes the issued token audience
+* `TARIFF_SNAPSHOT_PRIVATE_JWK` — dedicated private RS256 RSA JWK with a unique `kid`; enables signed effective-tariff snapshots and publishes only its public half at `/billing/v1/jwks.json`. Do not reuse the config, OAuth access-token, or signature-evidence key
 * `SIGNATURE_STORAGE_PROVIDER` — optional signature-object provider: `disabled` (default), `filesystem`, or `gcs`; filesystem storage is rejected in production
 * `SIGNATURE_FILESYSTEM_ROOT` — required private root when `SIGNATURE_STORAGE_PROVIDER=filesystem`; intended only for local development and tests
 * `SIGNATURE_GCS_BUCKET` — required private bucket when `SIGNATURE_STORAGE_PROVIDER=gcs`

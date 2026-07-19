@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import dotenv from 'dotenv';
 
+import { privateRs256JwkKeyId, publicRs256JwkKeyIds } from '../utils/rs256-jwk.js';
+
 // Load local development environment variables from `.env` if present.
 // In production, variables should be provided by the process environment.
 dotenv.config();
@@ -27,65 +29,6 @@ function normalizeBoolean(input: unknown): unknown {
   if (normalized === 'true' || normalized === '1') return true;
   if (normalized === 'false' || normalized === '0' || normalized === '') return false;
   return input;
-}
-
-type JsonObject = Record<string, unknown>;
-
-function parseJsonObject(input: string): JsonObject | undefined {
-  try {
-    const value = JSON.parse(input) as unknown;
-    return value && typeof value === 'object' && !Array.isArray(value)
-      ? (value as JsonObject)
-      : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function evidencePrivateKeyId(input: string): string | undefined {
-  const key = parseJsonObject(input);
-  if (
-    key?.kty !== 'RSA' ||
-    typeof key.kid !== 'string' ||
-    key.kid.length < 1 ||
-    typeof key.n !== 'string' ||
-    typeof key.e !== 'string' ||
-    typeof key.d !== 'string' ||
-    (key.alg !== undefined && key.alg !== 'RS256') ||
-    (key.use !== undefined && key.use !== 'sig')
-  ) {
-    return undefined;
-  }
-  return key.kid;
-}
-
-function evidencePublicKeyIds(input: string): string[] | undefined {
-  const jwks = parseJsonObject(input);
-  if (!Array.isArray(jwks?.keys) || jwks.keys.length < 1) return undefined;
-  const ids: string[] = [];
-  for (const value of jwks.keys) {
-    const key = value as JsonObject | null;
-    if (
-      !key ||
-      key.kty !== 'RSA' ||
-      typeof key.kid !== 'string' ||
-      key.kid.length < 1 ||
-      typeof key.n !== 'string' ||
-      typeof key.e !== 'string' ||
-      key.d !== undefined ||
-      key.p !== undefined ||
-      key.q !== undefined ||
-      key.dp !== undefined ||
-      key.dq !== undefined ||
-      key.qi !== undefined ||
-      (key.alg !== undefined && key.alg !== 'RS256') ||
-      (key.use !== undefined && key.use !== 'sig')
-    ) {
-      return undefined;
-    }
-    ids.push(key.kid);
-  }
-  return new Set(ids).size === ids.length ? ids : undefined;
 }
 
 const EnvSchema = z
@@ -178,10 +121,7 @@ const EnvSchema = z
     // Its public half is served at GET /oauth/jwks.json for resource verification.
     // Key presence alone MUST NOT enable public registration/login/token routes.
     MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK: z.string().min(1).optional(),
-    MCP_OAUTH_PUBLIC_PROFILE_ENABLED: z.preprocess(
-      normalizeBoolean,
-      z.boolean().default(false),
-    ),
+    MCP_OAUTH_PUBLIC_PROFILE_ENABLED: z.preprocess(normalizeBoolean, z.boolean().default(false)),
     // First-party config for the profile (no client config_url): the auth "domain"
     // used for tenant scope, and the auth methods offered on the login screen.
     MCP_OAUTH_DOMAIN: z.string().min(1).optional(),
@@ -205,6 +145,15 @@ const EnvSchema = z
         message: 'CONFIDENTIAL_TOKEN_EXCHANGE_RESOURCE must use HTTPS',
       })
       .optional(),
+    // Dedicated RS256 key for content-free tariff/entitlement snapshots.
+    // Its public half is served at GET /billing/v1/jwks.json.
+    TARIFF_SNAPSHOT_PRIVATE_JWK: z
+      .string()
+      .min(1)
+      .refine((value) => privateRs256JwkKeyId(value) !== undefined, {
+        message: 'TARIFF_SNAPSHOT_PRIVATE_JWK must be a private RS256 RSA JWK with a kid',
+      })
+      .optional(),
     // Optional agreement-signature module. Disabled is the process default; a domain cannot be
     // enabled until storage, retention, and the dedicated evidence key are configured.
     SIGNATURE_STORAGE_PROVIDER: z.enum(['disabled', 'filesystem', 'gcs']).default('disabled'),
@@ -213,22 +162,32 @@ const EnvSchema = z
     SIGNATURE_GCS_PROJECT_ID: z.string().min(1).optional(),
     SIGNATURE_MALWARE_SCANNER: z.enum(['disabled', 'clamav']).default('disabled'),
     SIGNATURE_CLAMDSCAN_PATH: z.string().min(1).default('clamdscan'),
-    SIGNATURE_MALWARE_SCAN_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120_000).default(30_000),
+    SIGNATURE_MALWARE_SCAN_TIMEOUT_MS: z.coerce
+      .number()
+      .int()
+      .min(1000)
+      .max(120_000)
+      .default(30_000),
     SIGNATURE_EVIDENCE_PRIVATE_JWK: z
       .string()
       .min(1)
-      .refine((value) => evidencePrivateKeyId(value) !== undefined, {
+      .refine((value) => privateRs256JwkKeyId(value) !== undefined, {
         message: 'SIGNATURE_EVIDENCE_PRIVATE_JWK must be a private RS256 RSA JWK with a kid',
       })
       .optional(),
     SIGNATURE_EVIDENCE_PUBLIC_JWKS_JSON: z
       .string()
       .min(1)
-      .refine((value) => evidencePublicKeyIds(value) !== undefined, {
+      .refine((value) => publicRs256JwkKeyIds(value) !== undefined, {
         message: 'SIGNATURE_EVIDENCE_PUBLIC_JWKS_JSON must contain public-only RS256 RSA keys',
       })
       .optional(),
-    SIGNATURE_MAX_PDF_BYTES: z.coerce.number().int().min(1024).max(100 * 1024 * 1024).default(25 * 1024 * 1024),
+    SIGNATURE_MAX_PDF_BYTES: z.coerce
+      .number()
+      .int()
+      .min(1024)
+      .max(100 * 1024 * 1024)
+      .default(25 * 1024 * 1024),
     SIGNATURE_MAX_PDF_PAGES: z.coerce.number().int().min(1).max(2000).default(200),
     SIGNATURE_CONTINUATION_TTL_MINUTES: z.coerce.number().int().min(2).max(30).default(10),
     SIGNATURE_MAX_SIGN_ATTEMPTS: z.coerce.number().int().min(1).max(50).default(10),
@@ -296,8 +255,8 @@ const EnvSchema = z
       });
     }
     if (env.SIGNATURE_EVIDENCE_PRIVATE_JWK && env.SIGNATURE_EVIDENCE_PUBLIC_JWKS_JSON) {
-      const privateKid = evidencePrivateKeyId(env.SIGNATURE_EVIDENCE_PRIVATE_JWK);
-      const publicKids = evidencePublicKeyIds(env.SIGNATURE_EVIDENCE_PUBLIC_JWKS_JSON);
+      const privateKid = privateRs256JwkKeyId(env.SIGNATURE_EVIDENCE_PRIVATE_JWK);
+      const publicKids = publicRs256JwkKeyIds(env.SIGNATURE_EVIDENCE_PUBLIC_JWKS_JSON);
       if (privateKid && publicKids && !publicKids.includes(privateKid)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -376,6 +335,10 @@ export function getPublicBaseUrl(env: Env = getEnv()): string {
 /** Whether RS256 resource-token verification keys may be published. */
 export function isOAuthAccessTokenJwksEnabled(env: Env = getEnv()): boolean {
   return Boolean(env.MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK);
+}
+
+export function isTariffSnapshotJwksEnabled(env: Env = getEnv()): boolean {
+  return Boolean(env.TARIFF_SNAPSHOT_PRIVATE_JWK);
 }
 
 /** Whether the public-client / MCP OAuth profile (brief §22.14) is enabled.

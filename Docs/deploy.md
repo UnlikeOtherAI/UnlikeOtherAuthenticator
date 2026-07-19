@@ -83,6 +83,7 @@ Set via Cloud Run service config:
 | `MCP_OAUTH_RESOURCES_SUPPORTED` | Used only by the explicitly enabled public profile; case-sensitive RFC 8707 resource allowlist |
 | `CONFIDENTIAL_TOKEN_EXCHANGE_SOURCE_DOMAIN` | Plain production value: `api.nessie.works`; the only source config domain allowed to use the confidential assertion grant |
 | `CONFIDENTIAL_TOKEN_EXCHANGE_RESOURCE` | Plain production value: `https://ledger.unlikeotherai.com`; paired exactly with the source domain and used as the issued token audience |
+| `TARIFF_SNAPSHOT_PRIVATE_JWK` | Secret Manager: `uoa-auth-tariff-snapshot-private-jwk`; dedicated RS256 private RSA JWK for signed tariff snapshots. Its public half is served at `/billing/v1/jwks.json`; do not reuse another UOA signing key |
 
 `/llm` is a Markdown integration guide for LLMs and human readers. `/api` is the machine-readable JSON schema and config contract.
 
@@ -120,6 +121,30 @@ gcloud secrets versions add uoa-auth-mcp-oauth-access-token-private-jwk \
   --project gen-lang-client-0561071620 \
   --data-file=-
 ```
+
+### Billing tariff production prerequisites (not enabled)
+
+Merging the code and database migration does not mint product credentials or
+enable tariff lookups in production. Before connecting Ledger or another
+product:
+
+1. Provision `uoa-auth-tariff-snapshot-private-jwk` as a dedicated private RSA
+   JWK with `alg=RS256`, `use=sig`, and a unique `kid`; grant the Cloud Run
+   runtime identity access and configure it as `TARIFF_SNAPSHOT_PRIVATE_JWK`.
+2. Apply the migration and create each billing service with an explicit default
+   tariff through the platform-superuser API.
+3. Mint a different named `uoa_app_…` key for every application connection.
+   Transfer its plaintext once through the approved secret channel; UOA cannot
+   recover it later.
+4. Bind each key to that caller's HTTPS actor issuer, the exact
+   `https://authentication.unlikeotherai.com/billing/v1/effective-tariff`
+   audience, and its RS256 public JWK.
+5. Verify `/billing/v1/jwks.json`, a signed actor lookup, team/organisation/default
+   precedence, key revocation, and the consumer's raw-usage-versus-price
+   presentation before enabling charges.
+
+Stripe customer, subscription, invoice, and webhook configuration is outside
+this deployment slice.
 
 ### Signature module production prerequisites (not enabled)
 

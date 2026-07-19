@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 
+import { llmBillingMarkdown } from './llm-billing.js';
 import { llmIntegrationMarkdown } from './llm-integration.js';
 import { llmIntegrationMarkdown2 } from './llm-integration-2.js';
 import { llmIntroMarkdown } from './llm-intro.js';
@@ -8,7 +9,7 @@ import { llmSignaturesMarkdown } from './llm-signatures.js';
 function renderLlmMarkdown(): string {
   // llmIntegrationMarkdown owns the confidential assertion contract, including
   // the mandatory fresh-jti and one-time replay-protection requirements.
-  return `${llmIntroMarkdown}\n${llmIntegrationMarkdown}\n${llmIntegrationMarkdown2}\n${llmSignaturesMarkdown}`;
+  return `${llmIntroMarkdown}\n${llmIntegrationMarkdown}\n${llmIntegrationMarkdown2}\n${llmBillingMarkdown}\n${llmSignaturesMarkdown}`;
 }
 
 export function registerLlmRoute(app: FastifyInstance): void {
