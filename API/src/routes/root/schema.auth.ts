@@ -211,12 +211,16 @@ export const authEndpoints: EndpointSchema[] = [
         'One-time RS256 JWT with exp-iat <= 60 seconds (for token-exchange grant), signed by the source config JWKS; must contain iss, source_domain, aud, sub, a fresh unique jti, iat, and exp; optional active must be exactly { orgId, teamId } with both values non-empty',
       'subject_token_type?':
         '"urn:ietf:params:oauth:token-type:jwt" (required for token-exchange grant)',
+      'product?':
+        'lowercase product identifier (required for token-exchange grant); must match the DB mapping bound to the authenticated app domain credential',
       'resource?':
-        'exact allowlisted resource URI (required for token-exchange grant; becomes access-token aud)',
+        'exact DB-allowlisted HTTPS resource URI (required for token-exchange grant; becomes access-token aud)',
+      'scope?':
+        'space-delimited exact requested scopes (required for token-exchange grant); supported values are ai.invoke, billing.read, and token.provision, and every requested scope must be allowed by the product mapping',
     },
     response: {
       access_token:
-        'Authorization-code/refresh grants: legacy HS256 JWT with aud="uoa:access-token". Confidential token-exchange grant: 5-minute RS256 JWT bound to resource, verifiable at GET /oauth/jwks.json, with stable sub, optional validated org/active context, and no domain bearer credential.',
+        'Authorization-code/refresh grants: legacy HS256 JWT with aud="uoa:access-token". Confidential token-exchange grant: 5-minute RS256 JWT bound to resource, verifiable at GET /oauth/jwks.json, with product, exact requested scope, stable sub, optional validated org/active context, and no domain bearer credential.',
       expires_in: 'number — seconds until access_token expiry',
       'refresh_token?':
         'string — opaque, server-side only; authorization-code/refresh grants only, never hand to the browser',
@@ -224,12 +228,13 @@ export const authEndpoints: EndpointSchema[] = [
         'number — seconds until refresh_token expiry; authorization-code/refresh grants only',
       'issued_token_type?':
         '"urn:ietf:params:oauth:token-type:access_token"; confidential token-exchange grant only',
-      'scope?': '"ai.invoke"; confidential token-exchange grant only',
+      'scope?':
+        'exact granted request subset of "ai.invoke", "billing.read", and/or "token.provision"; token.provision is never implied by ai.invoke; confidential token-exchange grant only',
       token_type: '"Bearer"',
       'firstLogin?':
         'object { memberships: { orgs, teams }, pending_invites, capabilities { can_create_org, can_accept_invite } } — included on authorization_code exchange when org_features.enabled is true. memberships.orgs[] = { orgId, role } camelCase; memberships.teams[] = { teamId, orgId, role } camelCase; pending_invites[] = { inviteId, type, orgId, teamId, teamName } camelCase. Not included on refresh_token grants.',
       '[note]':
-        'There is NO top-level `user` field. User identity lives inside access_token claims (read claims.sub). Confidential exchange always re-resolves the current UOA user and source-domain role; when active is supplied it also verifies the requested ACTIVE org/team membership. It then atomically consumes the source-domain+jti once before signing, so exact and concurrent replays fail across instances. Identity-only tokens omit org and active. It never copies the 64-character domain bearer into client_id.',
+        'There is NO top-level `user` field. User identity lives inside access_token claims (read claims.sub). The authenticated per-domain app credential must have one enabled DB mapping for the requested product, exact resource, and every requested scope; there is no singleton env fallback. Confidential exchange always re-resolves the current UOA user and source-domain role; when active is supplied it also verifies the requested ACTIVE org/team membership. It then atomically consumes the source-domain+jti once before signing, so exact and concurrent replays fail across instances. Identity-only tokens omit org and active. It never copies the 64-character domain bearer into client_id.',
       '[rate limit]':
         'Legacy grants: 10/min per IP. Confidential exchange: 600/min per authenticated source domain plus 60/min per verified source-domain user.',
       '401 refresh policy':

@@ -81,8 +81,6 @@ Set via Cloud Run service config:
 | `MCP_OAUTH_PUBLIC_PROFILE_ENABLED` | Plain production value: `false` for the confidential-only Ledger rollout. Set `true` only in a separate reviewed change that also configures the dedicated public profile |
 | `MCP_OAUTH_DOMAIN` | Required only when `MCP_OAUTH_PUBLIC_PROFILE_ENABLED=true`; must be a dedicated first-party tenant distinct from `ADMIN_AUTH_DOMAIN` and customer domains |
 | `MCP_OAUTH_RESOURCES_SUPPORTED` | Used only by the explicitly enabled public profile; case-sensitive RFC 8707 resource allowlist |
-| `CONFIDENTIAL_TOKEN_EXCHANGE_SOURCE_DOMAIN` | Plain production value: `api.nessie.works`; the only source config domain allowed to use the confidential assertion grant |
-| `CONFIDENTIAL_TOKEN_EXCHANGE_RESOURCE` | Plain production value: `https://ledger.unlikeotherai.com`; paired exactly with the source domain and used as the issued token audience |
 | `TARIFF_SNAPSHOT_PRIVATE_JWK` | Secret Manager: `uoa-auth-tariff-snapshot-private-jwk`; dedicated current RS256 private RSA JWK for signed tariff snapshots. Configure it only with the matching public JWKS; do not reuse another UOA signing key |
 | `TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON` | Secret Manager: `uoa-auth-tariff-snapshot-public-jwks-json`; public-only JWKS containing the current tariff key and overlapping retired verification keys. The current entry must exactly match the private key's `kid`, modulus, and exponent |
 | `STRIPE_BILLING_ENABLED` | Plain safety gate. Production default is `false`; Stripe and Ledger collection calls are forbidden until every launch prerequisite below is verified |
@@ -107,11 +105,27 @@ Before enabling the confidential exchange in production:
    accessor permission.
 2. Keep `MCP_OAUTH_PUBLIC_PROFILE_ENABLED=false`; confidential signing and JWKS
    publication do not require a public OAuth tenant.
-3. Confirm `https://api.nessie.works` publishes its assertion signing public key
-   at the `jwks_url` in its config JWT.
-4. Verify `GET https://authentication.unlikeotherai.com/oauth/jwks.json` returns
+3. Apply
+   `20260719020000_add_confidential_delegation_mappings` before the application
+   revision receives confidential exchanges.
+4. Confirm every calling product (initially Nessie, DeepWater, DeepSignal, and
+   DeepTest) has its own active registered `ClientDomain` and its own existing
+   domain-hash app credential. Never distribute one product's credential to
+   another product.
+5. Confirm each source domain publishes its assertion signing public key at the
+   same-host `jwks_url` in its config JWT.
+6. Through the authenticated superuser API, create one
+   `/internal/admin/confidential-delegations` mapping per source domain/product
+   with the exact target HTTPS resource and the smallest required subset of
+   `ai.invoke`, `billing.read`, and the separately granted `token.provision`.
+   The latter is only for a dedicated Coder provisioner and must never be
+   inferred from `ai.invoke`. Mapping state is database-backed; do not add
+   source/resource env fallbacks.
+7. Verify `GET https://authentication.unlikeotherai.com/oauth/jwks.json` returns
    the configured public key, while discovery, registration, authorize, login,
-   and `/oauth/token` return 404, before enabling confidential callers.
+   and `/oauth/token` return 404. Exercise correct and wrong product credentials,
+   resource variants, scope widening, disabled mapping, replay, and selected
+   user/organisation/team membership before enabling confidential callers.
 
 The secret value is one private RSA JWK JSON object with at least
 `kty="RSA"`, `alg="RS256"`, `use="sig"`, non-empty `kid`, public `n`/`e`, and

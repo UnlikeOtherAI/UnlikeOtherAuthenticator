@@ -201,6 +201,7 @@ The React implementation should translate those templates into reusable componen
 - **PostgreSQL** — the database
 - **Prisma** — ORM and migration tool
 - Tables: `users`, `domain_roles`, `login_logs`, `verification_tokens`, `confidential_assertion_uses`
+- Confidential delegation policy: `confidential_delegation_mappings` binds an authenticated `client_domains` row + product to one exact HTTPS resource and an explicit `ai.invoke` / `billing.read` / `token.provision` allowlist. Token provisioning is never implied by AI invocation. It is admin-only under forced RLS; there is no process-env fallback.
 - Organisational tables: `organisations`, `org_members`, `teams`, `team_members`, `groups`, `group_members`
 - Billing control-plane tables: `billing_services`, `billing_tariffs`, `billing_tariff_assignments`, `billing_app_keys`, `billing_stripe_customers`, `billing_stripe_catalogs`, `billing_stripe_tariff_prices`, `billing_stripe_checkout_sessions`, `billing_stripe_subscriptions`, `billing_stripe_usage_exports`, `billing_stripe_webhook_events`
 - Optional signature-module tables: `domain_signature_settings`, `agreements`, `agreement_versions`, `signing_continuations`, `agreement_signatures`, `signature_revocations`, `signature_audit_events`
@@ -257,8 +258,6 @@ All secrets and configuration live in environment variables. Nothing is hardcode
 * `MCP_OAUTH_ENABLED_AUTH_METHODS` — optional comma-separated auth methods offered on the MCP login screen (default: `email_password`)
 * `MCP_OAUTH_SCOPES_SUPPORTED` — optional comma-separated OAuth scopes advertised in MCP discovery metadata (default: `openid`)
 * `MCP_OAUTH_RESOURCES_SUPPORTED` — optional comma-separated, case-sensitive allowlist of RFC 8707 resource-server URIs the MCP profile may issue tokens for. A client-supplied `resource` must exactly match one of these or the request is rejected with `invalid_target`; when unset, no resource is allowed and clients omit `resource` (the token `aud` falls back to the issuer)
-* `CONFIDENTIAL_TOKEN_EXCHANGE_SOURCE_DOMAIN` — exact source config domain allowed to use the confidential `/auth/token` assertion grant; both confidential-exchange variables are required together
-* `CONFIDENTIAL_TOKEN_EXCHANGE_RESOURCE` — exact HTTPS resource URI paired with `CONFIDENTIAL_TOKEN_EXCHANGE_SOURCE_DOMAIN`; becomes the issued token audience
 * `TARIFF_SNAPSHOT_PRIVATE_JWK` — dedicated current private RS256 RSA JWK with a unique `kid`; required together with the tariff public JWKS. Do not reuse the config, OAuth access-token, or signature-evidence key
 * `TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON` — public-only JWKS containing the exact current tariff public key plus overlapping retired verification keys. UOA imports the private key and every published public key before serving and fails startup on invalid or mismatched material
 * `STRIPE_BILLING_ENABLED` — explicit fail-closed process gate; defaults to `false`

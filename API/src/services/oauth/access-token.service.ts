@@ -119,6 +119,7 @@ export type ConfidentialAccessTokenClaims = {
   subject: string;
   email: string;
   sourceDomain: string;
+  product: string;
   resource: string;
   issuer: string;
   ttlSeconds: number;
@@ -139,6 +140,7 @@ export async function signConfidentialAccessToken(
     email: claims.email,
     source_domain: claims.sourceDomain,
     azp: claims.sourceDomain,
+    product: claims.product,
     scope: claims.scope,
   };
   if (claims.org && claims.active) {

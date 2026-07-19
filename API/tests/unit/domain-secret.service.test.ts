@@ -29,6 +29,7 @@ describe('domain-secret.service', () => {
     const prisma = {
       clientDomain: {
         findUnique: async () => ({
+          id: 'client-domain-1',
           status: 'active',
           secrets: [{ hashPrefix: clientHash.slice(0, 12), secretDigest }],
         }),
@@ -42,6 +43,7 @@ describe('domain-secret.service', () => {
       ),
     ).resolves.toEqual({
       clientId: clientHash,
+      clientDomainId: 'client-domain-1',
       domain: 'client.example.com',
       hashPrefix: clientHash.slice(0, 12),
     });

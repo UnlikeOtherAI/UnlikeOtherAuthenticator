@@ -32,6 +32,9 @@ export type AdminAuditAction =
   | 'billing.service_created'
   | 'billing.stripe_usage_exported'
   | 'billing.tariff_version_created'
+  | 'confidential_delegation.created'
+  | 'confidential_delegation.updated'
+  | 'confidential_delegation.deleted'
   | 'user.twofa_reset';
 
 export type AuditLogPrisma = Pick<PrismaClient, 'adminAuditLog'>;

@@ -298,7 +298,8 @@ components:
           type: string
           description: |
             Five-minute RS256 JWT bound to the requested resource. Verify with
-            GET /oauth/jwks.json and enforce iss + aud + exp.
+            GET /oauth/jwks.json and enforce iss + aud + exp. The JWT also
+            carries the mapped product and exact requested scope subset.
         issued_token_type:
           type: string
           enum: ['urn:ietf:params:oauth:token-type:access_token']
@@ -310,7 +311,53 @@ components:
           enum: [300]
         scope:
           type: string
-          enum: [ai.invoke]
+          description: Exact granted subset of ai.invoke, billing.read, and/or separately authorized token.provision.
+
+    ConfidentialDelegationMapping:
+      type: object
+      required:
+        - id
+        - source_domain
+        - product
+        - resource
+        - scopes
+        - enabled
+        - created_at
+        - updated_at
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        source_domain:
+          type: string
+        product:
+          type: string
+          pattern: '^[a-z0-9][a-z0-9._-]{0,99}$'
+        resource:
+          type: string
+          format: uri
+        scopes:
+          type: array
+          minItems: 1
+          maxItems: 3
+          uniqueItems: true
+          items:
+            type: string
+            enum: [ai.invoke, billing.read, token.provision]
+        enabled:
+          type: boolean
+        created_by_email:
+          type: string
+          nullable: true
+        updated_by_email:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
 
     AdminTokenResponse:
       type: object
@@ -1123,8 +1170,11 @@ paths:
       description: |
         Exchanges an authorization code or refresh token for the legacy access-token
         pair. A confidential backend may instead use the RFC 8693 token-exchange grant
-        with a short-lived source-signed JWT to obtain a five-minute, resource-bound
-        RS256 access token. That grant re-resolves the current user, source-domain role,
+        with its own per-domain app credential plus a short-lived source-signed JWT to
+        obtain a five-minute, resource-bound RS256 access token. An enabled DB mapping
+        must bind the authenticated ClientDomain and requested product to the exact
+        resource and requested scope allowlist; there is no shared credential or
+        singleton source/resource env fallback. The grant re-resolves the current user, source-domain role,
         and, when the assertion selects a workspace, the requested ACTIVE org/team
         membership before issue. It then atomically consumes the source-domain+jti
         once before signing, so exact and concurrent replays fail across instances.
@@ -1175,7 +1225,8 @@ paths:
                       minLength: 1
                 - title: Confidential JWT Token Exchange
                   type: object
-                  required: [grant_type, subject_token, subject_token_type, resource]
+                  required:
+                    [grant_type, subject_token, subject_token_type, product, resource, scope]
                   additionalProperties: false
                   properties:
                     grant_type:
@@ -1197,12 +1248,29 @@ paths:
                     subject_token_type:
                       type: string
                       enum: ['urn:ietf:params:oauth:token-type:jwt']
+                    product:
+                      type: string
+                      minLength: 1
+                      maxLength: 100
+                      pattern: '^[a-z0-9][a-z0-9._-]{0,99}$'
+                      description: |
+                        Product selected within the mapping bound to the
+                        authenticated per-domain app credential.
                     resource:
                       type: string
                       maxLength: 2048
                       description: |
-                        Exact configured source-domain-to-resource allowlist target.
+                        Exact HTTPS resource in the DB-backed product mapping.
                         This value becomes the issued access token's aud.
+                    scope:
+                      type: string
+                      minLength: 1
+                      maxLength: 256
+                      description: |
+                        Space-delimited exact requested subset of ai.invoke,
+                        billing.read, and/or token.provision. Token provisioning
+                        is never implied by ai.invoke. Unsupported, duplicate,
+                        or widening scopes are rejected.
       responses:
         '200':
           description: Legacy token pair or confidential resource access token issued.
@@ -1220,6 +1288,14 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '401':
           description: Missing or invalid domain hash auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: |
+            Confidential grant mapping, target, requested scopes, source-domain
+            role, or optional workspace membership is not allowed.
           content:
             application/json:
               schema:
@@ -3519,6 +3595,195 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
           description: Not admin.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /internal/admin/confidential-delegations:
+    get:
+      tags: [Internal Admin]
+      summary: List confidential delegation mappings
+      operationId: adminListConfidentialDelegations
+      description: Lists non-secret mapping policy for superuser administration.
+      security:
+        - adminBearer: []
+      responses:
+        '200':
+          description: DB-backed product mappings; credential material is never returned.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ConfidentialDelegationMapping'
+        '401':
+          description: Missing or invalid admin bearer.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Not an admin-domain superuser.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags: [Internal Admin]
+      summary: Create a confidential delegation mapping
+      operationId: adminCreateConfidentialDelegation
+      description: |
+        Binds an active registered source domain and product to one exact HTTPS
+        resource and scope allowlist. The source app authenticates exchanges with
+        that domain's own existing rotatable credential.
+      security:
+        - adminBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [source_domain, product, resource, scopes]
+              additionalProperties: false
+              properties:
+                source_domain:
+                  type: string
+                  minLength: 1
+                  maxLength: 253
+                product:
+                  type: string
+                  pattern: '^[a-z0-9][a-z0-9._-]{0,99}$'
+                resource:
+                  type: string
+                  format: uri
+                  description: Exact HTTPS URI; userinfo and fragments are forbidden.
+                scopes:
+                  type: array
+                  minItems: 1
+                  maxItems: 3
+                  uniqueItems: true
+                  items:
+                    type: string
+                    enum: [ai.invoke, billing.read, token.provision]
+                enabled:
+                  type: boolean
+                  default: true
+      responses:
+        '201':
+          description: Mapping created and audited.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfidentialDelegationMapping'
+        '400':
+          description: Invalid, duplicate, unknown, or disabled source-domain mapping input.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or invalid admin bearer.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Not an admin-domain superuser.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /internal/admin/confidential-delegations/{mappingId}:
+    parameters:
+      - name: mappingId
+        in: path
+        required: true
+        description: Confidential delegation mapping id.
+        schema:
+          type: string
+    patch:
+      tags: [Internal Admin]
+      summary: Update a confidential delegation mapping
+      operationId: adminUpdateConfidentialDelegation
+      description: |
+        Updates resource, scope allowlist, or enabled state and audits before/after
+        policy. Source domain and product are immutable.
+      security:
+        - adminBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              additionalProperties: false
+              properties:
+                resource:
+                  type: string
+                  format: uri
+                scopes:
+                  type: array
+                  minItems: 1
+                  maxItems: 3
+                  uniqueItems: true
+                  items:
+                    type: string
+                    enum: [ai.invoke, billing.read, token.provision]
+                enabled:
+                  type: boolean
+      responses:
+        '200':
+          description: Mapping updated and audited.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfidentialDelegationMapping'
+        '401':
+          description: Missing or invalid admin bearer.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Not an admin-domain superuser.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Mapping not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags: [Internal Admin]
+      summary: Delete a confidential delegation mapping
+      operationId: adminDeleteConfidentialDelegation
+      description: Deletes the exact mapping and appends an audit event.
+      security:
+        - adminBearer: []
+      responses:
+        '204':
+          description: Mapping deleted.
+        '401':
+          description: Missing or invalid admin bearer.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Not an admin-domain superuser.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Mapping not found.
           content:
             application/json:
               schema:

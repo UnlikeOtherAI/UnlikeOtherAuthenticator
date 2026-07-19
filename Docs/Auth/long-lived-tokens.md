@@ -109,7 +109,9 @@ Confidential assertion request:
   "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
   "subject_token": "<short-lived source-signed RS256 JWT>",
   "subject_token_type": "urn:ietf:params:oauth:token-type:jwt",
-  "resource": "https://ledger.unlikeotherai.com"
+  "product": "nessie",
+  "resource": "https://ledger.unlikeotherai.com",
+  "scope": "ai.invoke billing.read"
 }
 ```
 
@@ -133,7 +135,7 @@ The confidential grant instead returns only:
   "issued_token_type": "urn:ietf:params:oauth:token-type:access_token",
   "token_type": "Bearer",
   "expires_in": 300,
-  "scope": "ai.invoke"
+  "scope": "ai.invoke billing.read"
 }
 ```
 
@@ -143,6 +145,17 @@ identity and any selected workspace are revalidated, UOA atomically consumes
 that source-domain `jti` in PostgreSQL before signing. Exact or concurrent
 replays are rejected across instances. Only a SHA-256 digest is retained through
 the assertion's `exp` plus accepted clock tolerance, then pruned.
+
+Application authentication and subject provenance are separate. Each product
+uses its own existing per-domain app credential; the credential's authenticated
+`ClientDomain` plus explicit product must match one enabled DB mapping with the
+exact requested HTTPS resource and an allowlist of `ai.invoke`, `billing.read`,
+and/or `token.provision`. The last scope is an explicit app capability used
+only by a token provisioner; `ai.invoke` never implies it. The signed assertion carries the stable user and optional
+organisation/team. A user token is never accepted as the application
+credential, credentials are not shared across products, and there is no
+singleton env fallback. The issued token and response contain exactly the
+requested allowlisted scope subset plus the product claim.
 
 The source assertion's `exp - iat` MUST be no more than 60 seconds. The issued
 resource access token remains five minutes (`expires_in: 300`).
@@ -184,8 +197,6 @@ Success response:
 |----------|---------|-------------|
 | `ACCESS_TOKEN_TTL` | `30m` | Short-lived JWT lifetime, bounded to 15-60 minutes |
 | `REFRESH_TOKEN_TTL_DAYS` | `30` | Refresh-token lifetime in days, bounded to 1-90 |
-| `CONFIDENTIAL_TOKEN_EXCHANGE_SOURCE_DOMAIN` | unset (disabled) | Exact source config domain for confidential exchange |
-| `CONFIDENTIAL_TOKEN_EXCHANGE_RESOURCE` | unset (disabled) | Exact HTTPS resource paired with the source domain |
 | `MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK` | unset | RS256 signing key whose public half is served at `/oauth/jwks.json`; key presence does not enable public OAuth routes |
 | `MCP_OAUTH_PUBLIC_PROFILE_ENABLED` | `false` | Explicit gate for discovery, registration, authorize, login, and public PKCE token routes |
 
@@ -207,4 +218,5 @@ Client backends integrating with the Authenticator must:
 
 - The refresh-token feature requires the `refresh_tokens` Prisma migration to be deployed before the new application revision starts serving traffic.
 - Confidential assertion replay protection requires the `confidential_assertion_uses` migration to be deployed before confidential exchange traffic reaches the new revision.
+- Per-product exchange requires `20260719020000_add_confidential_delegation_mappings`, an active registered ClientDomain/credential for each product, and an audited mapping provisioned before that product sends traffic. Unknown/disabled mappings fail closed.
 - For G Cloud / Cloud Run deployments, apply `prisma migrate deploy` as part of the rollout before or alongside the new container revision.

@@ -138,17 +138,6 @@ const EnvSchema = z
     // of these; otherwise the request is rejected (invalid_target). Closes the
     // confused-deputy: a public client cannot mint a token for an arbitrary `aud`.
     MCP_OAUTH_RESOURCES_SUPPORTED: z.string().min(1).optional(),
-    // Confidential RFC 8693 token exchange. Both values must be configured together;
-    // they form one exact source-domain -> resource allowlist entry. The source backend
-    // still authenticates with its domain hash and signs a short-lived subject assertion.
-    CONFIDENTIAL_TOKEN_EXCHANGE_SOURCE_DOMAIN: z.string().min(1).optional(),
-    CONFIDENTIAL_TOKEN_EXCHANGE_RESOURCE: z
-      .string()
-      .url()
-      .refine((value) => new URL(value).protocol === 'https:', {
-        message: 'CONFIDENTIAL_TOKEN_EXCHANGE_RESOURCE must use HTTPS',
-      })
-      .optional(),
     // Dedicated current RS256 key for content-free tariff/entitlement snapshots.
     // It is required together with the public overlap set served at
     // GET /billing/v1/jwks.json.
@@ -272,31 +261,6 @@ const EnvSchema = z
     SIGNATURE_MAX_SIGN_ATTEMPTS: z.coerce.number().int().min(1).max(50).default(10),
   })
   .superRefine((env, ctx) => {
-    const confidentialSourceConfigured = Boolean(env.CONFIDENTIAL_TOKEN_EXCHANGE_SOURCE_DOMAIN);
-    const confidentialResourceConfigured = Boolean(env.CONFIDENTIAL_TOKEN_EXCHANGE_RESOURCE);
-    if (confidentialSourceConfigured !== confidentialResourceConfigured) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: [
-          confidentialSourceConfigured
-            ? 'CONFIDENTIAL_TOKEN_EXCHANGE_RESOURCE'
-            : 'CONFIDENTIAL_TOKEN_EXCHANGE_SOURCE_DOMAIN',
-        ],
-        message:
-          'confidential token-exchange source domain and resource must be configured together',
-      });
-    }
-    if (
-      confidentialSourceConfigured &&
-      confidentialResourceConfigured &&
-      !env.MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK'],
-        message: 'MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK is required for confidential token exchange',
-      });
-    }
     if (env.MCP_OAUTH_PUBLIC_PROFILE_ENABLED && !env.MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

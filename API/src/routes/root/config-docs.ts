@@ -250,13 +250,25 @@ export const accessTokenDocumentation = {
 
 export const confidentialTokenExchangeDocumentation = {
   description:
-    'Confidential RFC 8693-style exchange on POST /auth/token. The source backend authenticates with its normal config_url + domain-hash bearer and supplies a short-lived RS256 subject JWT. UOA verifies that assertion with the JWKS URL published in the already-verified source config, always re-resolves the current user and source-domain role, conditionally verifies selected ACTIVE workspace membership, then issues a Ledger-bound RS256 access token.',
+    'Confidential RFC 8693-style exchange on POST /auth/token. Each source product authenticates with its own existing per-domain app credential and selects one enabled DB mapping bound to that ClientDomain, product, exact resource, and scope allowlist; there is no shared credential or singleton env fallback. The source also supplies a short-lived RS256 subject JWT carrying user and optional org/team context. UOA verifies that assertion with the JWKS URL published in the already-verified source config, always re-resolves current identity and membership, then issues a resource-bound RS256 access token.',
   request: {
     grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
     subject_token:
       'RS256 JWT with kid; maximum 60-second exp-iat and required iss, aud, sub, source_domain, jti, iat, exp; optional active must be exactly { orgId, teamId } with both values non-empty',
     subject_token_type: 'urn:ietf:params:oauth:token-type:jwt',
-    resource: 'exact configured resource URI',
+    product:
+      'lowercase product identifier; must match the mapping bound to the authenticated ClientDomain',
+    resource: 'exact HTTPS resource URI stored in that product mapping',
+    scope:
+      'space-delimited exact requested subset of ai.invoke, billing.read, and/or token.provision; token provisioning is never implied by ai.invoke and UOA rejects any scope outside the mapping allowlist',
+  },
+  application_binding: {
+    authentication:
+      'the normal domain-hash bearer for this source config domain; credential rotation preserves the ClientDomain-bound mapping',
+    mapping:
+      'DB-backed exact ClientDomain + product -> HTTPS resource + supported-scope allowlist; unknown, disabled, cross-domain, cross-product, wrong-resource, and widening requests fail closed',
+    administration:
+      'audited superuser CRUD at /internal/admin/confidential-delegations; responses never expose credential material',
   },
   subject_assertion_binding: {
     issuer: 'exact source config domain',
@@ -270,7 +282,7 @@ export const confidentialTokenExchangeDocumentation = {
     lifetime: '300 seconds',
     jwks: 'GET /oauth/jwks.json',
     claims:
-      'iss, aud, sub, email (advisory), source_domain, azp (source domain only), scope="ai.invoke", jti, iat, exp; org and active are present together only for a validated selected workspace',
+      'iss, aud, sub, email (advisory), source_domain, azp (source domain only), product, exact requested scope, jti, iat, exp; org and active are present together only for a validated selected workspace',
     forbidden_claims:
       'client_id and the 64-character domain-hash bearer credential are never copied into this token',
   },

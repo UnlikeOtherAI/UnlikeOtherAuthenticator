@@ -116,40 +116,10 @@ describe('env', () => {
     expect(() => parseEnv(baseInput({ ACCESS_TOKEN_TTL: '30' }))).toThrow();
   });
 
-  it('requires the confidential source/resource pair and its RS256 signing key', () => {
-    expect(() =>
-      parseEnv(
-        baseInput({
-          CONFIDENTIAL_TOKEN_EXCHANGE_SOURCE_DOMAIN: 'api.nessie.works',
-        }),
-      ),
-    ).toThrow();
-    expect(() =>
-      parseEnv(
-        baseInput({
-          CONFIDENTIAL_TOKEN_EXCHANGE_SOURCE_DOMAIN: 'api.nessie.works',
-          CONFIDENTIAL_TOKEN_EXCHANGE_RESOURCE: 'http://ledger.example.com',
-          MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK: '{}',
-        }),
-      ),
-    ).toThrow();
-    expect(
-      parseEnv(
-        baseInput({
-          CONFIDENTIAL_TOKEN_EXCHANGE_SOURCE_DOMAIN: 'api.nessie.works',
-          CONFIDENTIAL_TOKEN_EXCHANGE_RESOURCE: 'https://ledger.unlikeotherai.com',
-          MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK: '{}',
-        }),
-      ).CONFIDENTIAL_TOKEN_EXCHANGE_RESOURCE,
-    ).toBe('https://ledger.unlikeotherai.com');
-  });
-
-  it('keeps the public OAuth profile off when only confidential signing is configured', () => {
+  it('keeps the public OAuth profile off when only the resource-token signer is configured', () => {
     const env = parseEnv(
       baseInput({
         MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK: '{}',
-        CONFIDENTIAL_TOKEN_EXCHANGE_SOURCE_DOMAIN: 'api.nessie.works',
-        CONFIDENTIAL_TOKEN_EXCHANGE_RESOURCE: 'https://ledger.unlikeotherai.com',
       }),
     );
 

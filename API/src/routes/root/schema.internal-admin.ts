@@ -1,5 +1,6 @@
 import type { EndpointSchema } from './schema.js';
 import { buildInternalAdminAppEndpoints } from './schema.internal-admin-apps.js';
+import { buildInternalAdminConfidentialDelegationEndpoints } from './schema.internal-admin-delegations.js';
 import { buildInternalAdminSignatureEndpoints } from './schema.internal-admin-signatures.js';
 
 const adminAuth =
@@ -202,6 +203,7 @@ export const internalAdminEndpoints: EndpointSchema[] = [
     auth: adminAuth,
     response: { 204: 'No content', '401/403': authFailures },
   },
+  ...buildInternalAdminConfidentialDelegationEndpoints({ adminAuth, authFailures }),
   ...buildInternalAdminSignatureEndpoints({ adminAuth, authFailures }),
   {
     method: 'GET',
