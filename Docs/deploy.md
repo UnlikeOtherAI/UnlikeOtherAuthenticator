@@ -163,8 +163,12 @@ Rotate tariff snapshot keys with an overlap:
    the retired public key. Never remove it in the same rollout that changes the
    signer.
 
-Stripe customer, subscription, invoice, and webhook configuration is outside
-this deployment slice.
+Tariff versions now store `collection_mode = stripe | manual | none`, and signed
+snapshots expose collection intent separately from usage rating. Stripe
+customer, subscription, invoice, payment-method, and webhook configuration is
+still outside this deployment slice; `collection_mode=stripe` must not be
+treated as active collection until that later integration is provisioned and
+verified.
 
 ### Signature module production prerequisites (not enabled)
 

@@ -96,6 +96,12 @@ enum BillingTariffMode {
   CUSTOM
 }
 
+enum BillingCollectionMode {
+  STRIPE
+  MANUAL
+  NONE
+}
+
 enum BillingAssignmentScope {
   ORGANISATION
   TEAM
@@ -1100,19 +1106,20 @@ model BillingService {
 }
 
 model BillingTariff {
-  id                 String            @id @default(cuid())
-  serviceId          String            @map("service_id")
-  key                String            @db.VarChar(80)
+  id                 String                @id @default(cuid())
+  serviceId          String                @map("service_id")
+  key                String                @db.VarChar(80)
   version            Int
-  name               String            @db.VarChar(120)
+  name               String                @db.VarChar(120)
   mode               BillingTariffMode
-  markupBps          Int               @map("markup_bps")
-  monthlyAmountMinor BigInt            @default(0) @map("monthly_amount_minor")
-  currency           String            @db.Char(3)
-  isDefault          Boolean           @default(false) @map("is_default")
-  createdByUserId    String?           @map("created_by_user_id")
-  createdByEmail     String?           @map("created_by_email") @db.VarChar(200)
-  createdAt          DateTime          @default(now()) @map("created_at")
+  collectionMode     BillingCollectionMode @default(NONE) @map("collection_mode")
+  markupBps          Int                   @map("markup_bps")
+  monthlyAmountMinor BigInt                @default(0) @map("monthly_amount_minor")
+  currency           String                @db.Char(3)
+  isDefault          Boolean               @default(false) @map("is_default")
+  createdByUserId    String?               @map("created_by_user_id")
+  createdByEmail     String?               @map("created_by_email") @db.VarChar(200)
+  createdAt          DateTime              @default(now()) @map("created_at")
 
   service     BillingService            @relation(fields: [serviceId], references: [id], onDelete: Cascade)
   assignments BillingTariffAssignment[]

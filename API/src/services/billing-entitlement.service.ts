@@ -1,5 +1,6 @@
 import {
   BillingAssignmentScope,
+  BillingCollectionMode,
   BillingTariffMode,
   MembershipStatus,
   Prisma,
@@ -12,6 +13,7 @@ import { AppError } from '../utils/errors.js';
 import { verifyBillingActor } from './billing-actor.service.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import {
+  billingCollectionModeToPublic,
   billingModeToPublic,
   normalizeBillingServiceIdentifier,
 } from './billing-tariff.service.js';
@@ -43,6 +45,7 @@ export type EffectiveTariffPayload = {
     key: string;
     version: number;
     mode: 'standard' | 'free' | 'at_cost' | 'custom';
+    collection_mode: 'stripe' | 'manual' | 'none';
     markup_bps: number;
     markup_percent: string;
     usage_price_multiplier_bps: number;
@@ -51,6 +54,7 @@ export type EffectiveTariffPayload = {
       currency: string;
     };
     usage_billing_enabled: boolean;
+    payment_collection_enabled: boolean;
     raw_usage_preserved: true;
   };
   assignment: {
@@ -73,6 +77,7 @@ type TariffRow = {
   key: string;
   version: number;
   mode: BillingTariffMode;
+  collectionMode: BillingCollectionMode;
   markupBps: number;
   monthlyAmountMinor: bigint;
   currency: string;
@@ -129,6 +134,7 @@ function payloadFor(params: {
       key: params.tariff.key,
       version: params.tariff.version,
       mode: billingModeToPublic(params.tariff.mode),
+      collection_mode: billingCollectionModeToPublic(params.tariff.collectionMode),
       markup_bps: params.tariff.markupBps,
       markup_percent: (params.tariff.markupBps / 100).toFixed(2),
       usage_price_multiplier_bps: priceMultiplierBps(params.tariff),
@@ -137,6 +143,7 @@ function payloadFor(params: {
         currency: params.tariff.currency,
       },
       usage_billing_enabled: params.tariff.mode !== BillingTariffMode.FREE,
+      payment_collection_enabled: params.tariff.collectionMode !== BillingCollectionMode.NONE,
       raw_usage_preserved: true,
     },
     assignment: {

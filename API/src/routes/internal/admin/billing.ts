@@ -41,6 +41,7 @@ const TariffSchema = z
     key: z.string().trim().min(1).max(80),
     name: z.string().trim().min(1).max(120),
     mode: z.enum(['standard', 'free', 'at_cost', 'custom']),
+    collection_mode: z.enum(['stripe', 'manual', 'none']),
     markup_bps: z.number().int().min(0).max(100_000),
     monthly_subscription: MonthlySchema,
   })
@@ -94,6 +95,7 @@ function tariffInput(body: z.infer<typeof TariffSchema>) {
     key: body.key,
     name: body.name,
     mode: body.mode,
+    collectionMode: body.collection_mode,
     markupBps: body.markup_bps,
     monthlyAmountMinor: body.monthly_subscription.amount_minor,
     currency: body.monthly_subscription.currency,

@@ -6,6 +6,10 @@ const migrationUrl = new URL(
   '../../prisma/migrations/20260719010000_add_billing_tariff_control_plane/migration.sql',
   import.meta.url,
 );
+const collectionMigrationUrl = new URL(
+  '../../prisma/migrations/20260719030000_add_billing_collection_mode/migration.sql',
+  import.meta.url,
+);
 
 describe('billing tariff control-plane migration', () => {
   it('enforces immutable version identities and one default tariff per service', async () => {
@@ -38,5 +42,17 @@ describe('billing tariff control-plane migration', () => {
         `GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "${table}" TO "uoa_admin"`,
       );
     }
+  });
+
+  it('makes payment collection explicit and immutable on every tariff version', async () => {
+    const sql = await readFile(collectionMigrationUrl, 'utf8');
+
+    expect(sql).toContain(
+      "CREATE TYPE \"BillingCollectionMode\" AS ENUM ('STRIPE', 'MANUAL', 'NONE')",
+    );
+    expect(sql).toContain('"collection_mode" "BillingCollectionMode" NOT NULL');
+    expect(sql).toContain('"mode" = \'FREE\'');
+    expect(sql).toContain('"collection_mode" = \'NONE\'');
+    expect(sql).toContain('NEW."collection_mode" IS DISTINCT FROM OLD."collection_mode"');
   });
 });

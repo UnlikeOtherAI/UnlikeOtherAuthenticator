@@ -7,10 +7,11 @@ usage and booked charges; Nessie, DeepWater, DeepSignal, DeepTest, and future
 products consume UOA's effective-tariff snapshots. Products and Ledger must not
 maintain independent tariff tables or infer a tariff from usage.
 
-This first slice defines tariff storage, assignment, app authentication, and
-signed entitlement reads. It deliberately does not create Stripe customers,
-subscriptions, invoices, payment methods, or webhooks. The stored monthly
-subscription amount is the commercial input for that later integration.
+This slice defines tariff storage, assignment, app authentication, signed
+entitlement reads, and the immutable intent for how payment will be collected.
+It deliberately does not yet create Stripe customers, subscriptions, invoices,
+payment methods, or webhooks. The stored collection mode and monthly
+subscription amount are commercial inputs for that later integration.
 
 ## Product and tariff model
 
@@ -27,6 +28,7 @@ Each tariff contains:
 | Field | Meaning |
 |---|---|
 | `mode` | `standard`, `free`, `at_cost`, or `custom` |
+| `collection_mode` | `stripe`, `manual`, or `none`; independent of usage rating |
 | `markup_bps` | Price markup in basis points; 2,000 means 20.00% |
 | `monthly_subscription.amount_minor` | Monthly fixed charge in currency minor units; `"0"` means no monthly charge |
 | `monthly_subscription.currency` | Three-letter uppercase ISO-style currency code |
@@ -37,7 +39,21 @@ Mode rules:
 * `at_cost` fixes markup at zero and bills usage at 100% of provider cost. It may
   still include a monthly subscription.
 * `free` fixes markup and monthly subscription to zero and disables usage
-  billing.
+  billing. It always uses `collection_mode = none`.
+
+Collection rules:
+
+* `stripe` means the later Stripe subscription/invoice integration is expected
+  to collect payment.
+* `manual` means payment is expected but is collected outside the automated
+  Stripe flow.
+* `none` means no payment is collected. Rating and cost visibility remain
+  active for any non-free tariff, so `usage_billing_enabled` can be true while
+  `payment_collection_enabled` is false.
+* `at_cost + none + monthly_subscription.amount_minor = "0"` is the explicit
+  special plan for showing 100% provider cost with no payment.
+* Pricing mode and collection mode are separate immutable tariff-version terms.
+  A collection change creates a new version.
 
 This model supports a service default plus negotiated organisation or team
 terms. There is no per-user tariff override. User identity remains in the
@@ -178,6 +194,7 @@ content-free business payload plus its RS256 signature:
       "key": "standard",
       "version": 1,
       "mode": "standard",
+      "collection_mode": "stripe",
       "markup_bps": 2000,
       "markup_percent": "20.00",
       "usage_price_multiplier_bps": 12000,
@@ -186,6 +203,7 @@ content-free business payload plus its RS256 signature:
         "currency": "GBP"
       },
       "usage_billing_enabled": true,
+      "payment_collection_enabled": true,
       "raw_usage_preserved": true
     },
     "assignment": {
@@ -265,4 +283,7 @@ subscriptions at organisation/team scope. That phase must preserve these rules:
 * A booked charge records the immutable tariff version and signed snapshot used.
 * Free and at-cost exceptions remain explicit tariff modes, not hidden Stripe
   discounts.
+* `collection_mode` controls payment orchestration without changing rating:
+  `stripe` is automated collection, `manual` is externally collected, and
+  `none` collects nothing.
 * Each product continues to use its own app key.
