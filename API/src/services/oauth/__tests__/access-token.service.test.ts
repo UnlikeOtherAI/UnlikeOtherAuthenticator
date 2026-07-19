@@ -83,6 +83,7 @@ describe('mcp access-token (RS256)', () => {
       subject: 'usr_1',
       email: 'a@b.com',
       sourceDomain: 'api.nessie.works',
+      product: 'nessie',
       resource,
       issuer: 'https://authentication.unlikeotherai.com',
       ttlSeconds: 300,
@@ -107,6 +108,7 @@ describe('mcp access-token (RS256)', () => {
       email: 'a@b.com',
       source_domain: 'api.nessie.works',
       azp: 'api.nessie.works',
+      product: 'nessie',
       scope: 'ai.invoke',
       active: { orgId: 'org_1', teamId: 'team_1' },
     });
@@ -121,6 +123,7 @@ describe('mcp access-token (RS256)', () => {
       subject: 'usr_without_workspace',
       email: 'first-login@example.com',
       sourceDomain: 'api.nessie.works',
+      product: 'nessie',
       resource,
       issuer: 'https://authentication.unlikeotherai.com',
       ttlSeconds: 300,
@@ -137,6 +140,7 @@ describe('mcp access-token (RS256)', () => {
       email: 'first-login@example.com',
       source_domain: 'api.nessie.works',
       azp: 'api.nessie.works',
+      product: 'nessie',
       scope: 'ai.invoke',
     });
     expect(payload.org).toBeUndefined();

@@ -101,6 +101,11 @@ enum BillingAssignmentScope {
   TEAM
 }
 
+enum ConfidentialDelegationScope {
+  AI_INVOKE    @map("ai.invoke")
+  BILLING_READ @map("billing.read")
+}
+
 model User {
   id                       String   @id @default(cuid())
   // Note: email is not globally unique because `user_scope` can be "per_domain".
@@ -373,9 +378,35 @@ model ClientDomain {
   signatureSettings    DomainSignatureSettings?
   signingContinuations SigningContinuation[]
   agreementSignatures  AgreementSignature[]
+  delegationMappings   ConfidentialDelegationMapping[]
 
   @@index([status])
   @@map("client_domains")
+}
+
+// Admin-managed allowlist for confidential RFC 8693 delegation. The
+// ClientDomain relation binds a mapping to the app credential authenticated at
+// /auth/token; rotating that domain's secret does not weaken or orphan the
+// product/resource boundary.
+model ConfidentialDelegationMapping {
+  id              String                        @id @default(cuid())
+  clientDomainId  String                        @map("client_domain_id")
+  product         String                        @db.VarChar(100)
+  resource        String                        @db.VarChar(2048)
+  scopes          ConfidentialDelegationScope[]
+  enabled         Boolean                       @default(true)
+  createdByUserId String?                       @map("created_by_user_id")
+  createdByEmail  String?                       @map("created_by_email") @db.VarChar(200)
+  updatedByUserId String?                       @map("updated_by_user_id")
+  updatedByEmail  String?                       @map("updated_by_email") @db.VarChar(200)
+  createdAt       DateTime                      @default(now()) @map("created_at")
+  updatedAt       DateTime                      @updatedAt @map("updated_at")
+
+  clientDomain ClientDomain @relation(fields: [clientDomainId], references: [id], onDelete: Cascade)
+
+  @@unique([clientDomainId, product])
+  @@index([product, enabled])
+  @@map("confidential_delegation_mappings")
 }
 
 model DomainEmailConfig {

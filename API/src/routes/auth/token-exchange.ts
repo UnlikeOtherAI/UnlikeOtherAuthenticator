@@ -44,7 +44,12 @@ const ConfidentialTokenExchangeGrantSchema = z
       .min(1)
       .max(16 * 1024),
     subject_token_type: z.literal(JWT_SUBJECT_TOKEN_TYPE),
+    product: z
+      .string()
+      .trim()
+      .regex(/^[a-z0-9][a-z0-9._-]{0,99}$/),
     resource: z.string().min(1).max(2048),
+    scope: z.string().trim().min(1).max(256),
   })
   .strict();
 
@@ -111,10 +116,17 @@ export function registerAuthTokenExchangeRoute(app: FastifyInstance): void {
         if (!configJwt) {
           throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
         }
+        const authenticatedClientDomainId = request.domainAuthClientDomainId;
+        if (!authenticatedClientDomainId) {
+          throw new AppError('UNAUTHORIZED', 401);
+        }
         const exchanged = await exchangeConfidentialSubjectToken(
           {
+            authenticatedClientDomainId,
             subjectToken: body.subject_token,
+            product: body.product,
             resource: body.resource,
+            scope: body.scope,
             config,
             configJwt,
           },

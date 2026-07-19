@@ -169,14 +169,18 @@ Server-side behaviour on first verified login is controlled by \`org_features\`:
 - \`auto_create_personal_org_on_first_login\` (default \`false\`) creates a personal org with the user as \`owner\` plus a default team when no mapping matches. Skipped when \`pending_invites_block_auto_create\` is \`true\` and a pending invite exists for the email.
 - \`allow_user_create_org\` (default \`false\`) gates \`POST /org/organisations\` for end-users. Superusers bypass. Keep \`false\` for admin-provisioned tenants.
 
-### 4.6a Confidential assertion exchange for Ledger
+### 4.6a Per-product confidential assertion exchange
 
 A registered backend can exchange a short-lived user assertion, optionally
-scoped to a selected workspace, for a
-resource-bound token without forwarding its normal UOA access token or its domain
-credential to the resource server. This is a separate RFC 8693-style grant on the
-same backend-only endpoint; the authorization-code and refresh grants above remain
-unchanged.
+scoped to a selected workspace, for a resource-bound token without forwarding
+its normal UOA access token or its domain credential to the resource server.
+The calling product MUST authenticate this request with its own existing
+per-domain app credential. UOA resolves that authenticated ClientDomain plus the
+explicit product against an enabled database mapping containing one exact HTTPS
+resource and a scope allowlist. There is no shared cross-product credential and
+no singleton source/resource env fallback. This is a separate RFC 8693-style
+grant on the same backend-only endpoint; the authorization-code and refresh
+grants above remain unchanged.
 
 \`\`\`ts
 import { SignJWT } from 'jose';
@@ -209,11 +213,22 @@ const response = await fetch(
       grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
       subject_token: subjectToken,
       subject_token_type: 'urn:ietf:params:oauth:token-type:jwt',
+      product: 'nessie',
       resource: 'https://ledger.unlikeotherai.com',
+      scope: 'ai.invoke billing.read',
     }),
   },
 );
 \`\`\`
+
+Before traffic is enabled, a UOA superuser creates the corresponding mapping
+through \`/internal/admin/confidential-delegations\`. Source domain and product
+are immutable after creation; resource, allowlisted scopes, and enabled state
+are audited mutable policy. Nessie, DeepWater, DeepSignal, and DeepTest therefore
+use their own registered domains and credentials even when their target resource
+is the same Ledger deployment. A credential rotation remains valid because the
+mapping binds the registered ClientDomain, never a plaintext secret, hash, or
+individual secret row.
 
 The source config JWT MUST publish \`jwks_url\` on the source domain. UOA fetches
 that JWKS through its SSRF-protected, same-host pipeline and requires RS256 +
@@ -238,17 +253,25 @@ domain roles, and removed/deactivated or cross-org/team selections are rejected.
   "issued_token_type": "urn:ietf:params:oauth:token-type:access_token",
   "token_type": "Bearer",
   "expires_in": 300,
-  "scope": "ai.invoke"
+  "scope": "ai.invoke billing.read"
 }
 \`\`\`
 
 The issued token is verified with \`GET /oauth/jwks.json\` and contains
 \`iss\`, resource \`aud\`, stable \`sub\`, advisory \`email\`,
-\`source_domain\`, non-secret \`azp\` (the source domain), \`scope\`, \`jti\`,
-\`iat\`, and \`exp\`. A validated workspace adds current \`org\` and selected
+\`source_domain\`, non-secret \`azp\` (the source domain), \`product\`, the exact
+requested \`scope\` subset, \`jti\`, \`iat\`, and \`exp\`. A validated workspace
+adds current \`org\` and selected
 \`active\`; an identity-only exchange omits both. It contains no
 \`client_id\` and never contains the 64-character domain-hash bearer credential.
 This grant returns no refresh token.
+
+Unknown or disabled mappings, a product selected with another app credential,
+an inexact resource (including path/trailing-slash differences), duplicate or
+unsupported scopes, and scope widening all fail closed before assertion
+verification. Supported delegation scopes are currently \`ai.invoke\` and
+\`billing.read\`; the response and token contain only what that request asked
+for, never the full mapping allowlist.
 
 The confidential grant is rate-limited per authenticated source domain
 (600/minute) and per verified source-domain user (60/minute), so users behind

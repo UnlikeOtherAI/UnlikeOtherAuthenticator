@@ -21,15 +21,17 @@ vi.mock('../../src/middleware/config-verifier.js', () => ({
 }));
 
 vi.mock('../../src/middleware/domain-hash-auth.js', async () => {
-  const actual = await vi.importActual<
-    typeof import('../../src/middleware/domain-hash-auth.js')
-  >('../../src/middleware/domain-hash-auth.js');
+  const actual = await vi.importActual<typeof import('../../src/middleware/domain-hash-auth.js')>(
+    '../../src/middleware/domain-hash-auth.js',
+  );
   return {
     ...actual,
     requireDomainHashAuth: async (request: {
       domainAuthClientId?: string;
+      domainAuthClientDomainId?: string;
     }): Promise<void> => {
       request.domainAuthClientId = 'a'.repeat(64);
+      request.domainAuthClientDomainId = 'client-domain-nessie';
     },
   };
 });
@@ -94,15 +96,15 @@ describe('POST /auth/token confidential grant', () => {
     try {
       const response = await app.inject({
         method: 'POST',
-        url:
-          '/auth/token?config_url=' +
-          encodeURIComponent('https://api.nessie.works/auth/config'),
+        url: '/auth/token?config_url=' + encodeURIComponent('https://api.nessie.works/auth/config'),
         headers: { authorization: `Bearer ${'a'.repeat(64)}` },
         payload: {
           grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
           subject_token: 'source.jwt.assertion',
           subject_token_type: 'urn:ietf:params:oauth:token-type:jwt',
+          product: 'nessie',
           resource: 'https://ledger.unlikeotherai.com',
+          scope: 'ai.invoke',
         },
       });
 
@@ -119,8 +121,11 @@ describe('POST /auth/token confidential grant', () => {
       expect(response.json()).not.toHaveProperty('client_id');
       expect(exchangeConfidentialSubjectTokenMock).toHaveBeenCalledWith(
         {
+          authenticatedClientDomainId: 'client-domain-nessie',
           subjectToken: 'source.jwt.assertion',
+          product: 'nessie',
           resource: 'https://ledger.unlikeotherai.com',
+          scope: 'ai.invoke',
           config: currentConfig,
           configJwt: 'verified-config-jwt',
         },
@@ -139,14 +144,14 @@ describe('POST /auth/token confidential grant', () => {
     try {
       const response = await app.inject({
         method: 'POST',
-        url:
-          '/auth/token?config_url=' +
-          encodeURIComponent('https://api.nessie.works/auth/config'),
+        url: '/auth/token?config_url=' + encodeURIComponent('https://api.nessie.works/auth/config'),
         payload: {
           grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
           subject_token: 'source.jwt.assertion',
           subject_token_type: 'urn:ietf:params:oauth:token-type:access_token',
+          product: 'nessie',
           resource: 'https://ledger.unlikeotherai.com',
+          scope: 'ai.invoke',
         },
       });
 
@@ -176,7 +181,9 @@ describe('POST /auth/token confidential grant', () => {
             grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
             subject_token: `source.jwt.assertion.${requestNumber}`,
             subject_token_type: 'urn:ietf:params:oauth:token-type:jwt',
+            product: 'nessie',
             resource: 'https://ledger.unlikeotherai.com',
+            scope: 'ai.invoke',
           },
         });
         expect(response.statusCode).toBe(200);
@@ -205,7 +212,9 @@ describe('POST /auth/token confidential grant', () => {
             grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
             subject_token: `source.jwt.assertion.${requestNumber}`,
             subject_token_type: 'urn:ietf:params:oauth:token-type:jwt',
+            product: 'nessie',
             resource: 'https://ledger.unlikeotherai.com',
+            scope: 'ai.invoke',
           },
         });
       for (let requestNumber = 0; requestNumber < 600; requestNumber += 1) {

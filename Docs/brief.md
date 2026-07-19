@@ -678,7 +678,11 @@ unset, no unconstrained resource support is advertised.
 `POST /auth/token` also accepts a narrowly configured RFC 8693-style confidential
 exchange. It exists for a trusted product backend to turn a short-lived,
 source-signed UOA user assertion, optionally scoped to a workspace, into a
-resource-bound RS256 access token. It does not replace or alter the
+resource-bound RS256 access token. Nessie, DeepWater, DeepSignal, DeepTest, and
+future products each authenticate this request with their own existing
+per-domain app credential; a shared cross-product credential is forbidden. The
+credential authenticates the app while the signed assertion carries user and
+optional organisation/team context. This grant does not replace or alter the
 authorization-code and refresh-token grants.
 
 The caller must pass the normal verified `config_url` and per-domain hash bearer,
@@ -689,7 +693,9 @@ plus:
   "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
   "subject_token": "<RS256 JWT>",
   "subject_token_type": "urn:ietf:params:oauth:token-type:jwt",
-  "resource": "https://ledger.unlikeotherai.com"
+  "product": "nessie",
+  "resource": "https://ledger.unlikeotherai.com",
+  "scope": "ai.invoke billing.read"
 }
 ```
 
@@ -703,14 +709,29 @@ optional so first-time or workspace-less product users can still be delegated.
 When present it must be exactly `{ orgId, teamId }`, with both identifiers
 non-empty; partial, null, or extra-field workspace objects are invalid.
 
-The deployment config contains one exact
-`CONFIDENTIAL_TOKEN_EXCHANGE_SOURCE_DOMAIN` →
-`CONFIDENTIAL_TOKEN_EXCHANGE_RESOURCE` mapping. Both must be set; there is no
-open-ended target fallback and source/resource values cannot be mixed
-independently. Before every issue, UOA re-resolves the current user and
-source-domain role. When `active` is present, UOA additionally re-resolves the
-requested ACTIVE org and team memberships. Unknown users, missing domain roles,
-and removed/deactivated or cross-tenant selected workspaces fail closed.
+Delegation policy is DB-backed, not process configuration. Each mapping binds
+one registered `ClientDomain` plus lowercase product identifier to one exact
+HTTPS resource and a non-empty allowlist containing only `ai.invoke` and/or
+`billing.read`. The domain-hash middleware retains the authenticated
+`ClientDomain.id`, so another product's credential cannot select this mapping;
+secret rotation remains valid because policy does not bind plaintext,
+client-hash, digest, or an individual secret row. The request must name the
+product, resource, and exact space-delimited scope subset. Unknown or disabled
+mappings, disabled source domains, cross-domain/cross-product credentials,
+inexact resources, duplicate/unsupported scopes, and scope widening all fail
+closed. There is no singleton env fallback.
+
+Superusers manage this allowlist through audited
+`/internal/admin/confidential-delegations` list/create/update/delete endpoints.
+Source domain and product are immutable after creation (delete and recreate to
+rebind); resource, scope allowlist, and enabled state are mutable. API responses
+and audit metadata contain policy only and never expose domain credential
+material.
+
+Before every issue, UOA re-resolves the current user and source-domain role.
+When `active` is present, UOA additionally re-resolves the requested ACTIVE org
+and team memberships. Unknown users, missing domain roles, and
+removed/deactivated or cross-tenant selected workspaces fail closed.
 
 Each verified assertion is one-time. After the current user, source-domain role,
 and any selected workspace pass validation, UOA atomically claims the
@@ -723,9 +744,10 @@ mint a fresh, unique `jti` for every exchange.
 The result is a five-minute RS256 access token using the §22.14 access-token
 signing key and `GET /oauth/jwks.json`. It contains `iss`, resource `aud`, stable
 `sub`, advisory `email`, `source_domain`, non-secret `azp` (source domain),
-`scope = "ai.invoke"`, `jti`, `iat`, and `exp`. When a workspace was selected it
-also contains the current `org` and selected `active`; both claims are omitted
-together for an identity-only exchange.
+`product`, the exact requested `scope`, `jti`, `iat`, and `exp`. The issued scope
+is never widened to the mapping's full allowlist. When a workspace was selected
+it also contains the current `org` and selected `active`; both claims are
+omitted together for an identity-only exchange.
 It deliberately contains no `client_id` and never copies the 64-character
 domain-hash bearer credential. This grant issues no refresh token.
 
