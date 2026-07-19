@@ -50,6 +50,7 @@ type DomainStatus = 'active' | 'disabled';
 
 export type DomainAuthResult = {
   clientId: string;
+  clientDomainId: string;
   domain: string;
   hashPrefix: string;
 };
@@ -119,7 +120,12 @@ export async function verifyDomainAuthToken(
   const matched = row.secrets.find((secret) => secureEqualHex(digest, secret.secretDigest));
   if (!matched) throw new AppError('UNAUTHORIZED', 401);
 
-  return { clientId: clientHash, domain, hashPrefix: matched.hashPrefix };
+  return {
+    clientId: clientHash,
+    clientDomainId: row.id,
+    domain,
+    hashPrefix: matched.hashPrefix,
+  };
 }
 
 export async function createAdminDomain(

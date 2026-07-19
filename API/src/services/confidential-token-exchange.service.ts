@@ -2,7 +2,7 @@ import type { PrismaClient } from '@prisma/client';
 import { decodeJwt, decodeProtectedHeader, jwtVerify } from 'jose';
 import { z } from 'zod';
 
-import { getEnv, getPublicBaseUrl } from '../config/env.js';
+import { getPublicBaseUrl } from '../config/env.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { createKeyedRateLimiter } from '../middleware/rate-limiter.js';
 import { normalizeDomain } from '../utils/domain.js';
@@ -19,12 +19,12 @@ import {
   CONFIDENTIAL_ASSERTION_CLOCK_TOLERANCE_SECONDS,
   consumeConfidentialAssertion,
 } from './confidential-assertion-use.service.js';
+import { resolveConfidentialDelegation } from './confidential-delegation.service.js';
 
 export const TOKEN_EXCHANGE_GRANT_TYPE = 'urn:ietf:params:oauth:grant-type:token-exchange';
 export const JWT_SUBJECT_TOKEN_TYPE = 'urn:ietf:params:oauth:token-type:jwt';
 export const ACCESS_TOKEN_ISSUED_TOKEN_TYPE = 'urn:ietf:params:oauth:token-type:access_token';
 export const CONFIDENTIAL_ACCESS_TOKEN_TTL_SECONDS = 5 * 60;
-export const CONFIDENTIAL_ACCESS_TOKEN_SCOPE = 'ai.invoke';
 
 export const SUBJECT_ASSERTION_MAX_TTL_SECONDS = 60;
 export const CONFIDENTIAL_SUBJECT_RATE_LIMIT_PER_MINUTE = 60;
@@ -64,7 +64,7 @@ export interface ConfidentialTokenExchangeResult {
   accessToken: string;
   expiresInSeconds: number;
   issuedTokenType: typeof ACCESS_TOKEN_ISSUED_TOKEN_TYPE;
-  scope: typeof CONFIDENTIAL_ACCESS_TOKEN_SCOPE;
+  scope: string;
 }
 
 type ExchangeDeps = {
@@ -74,6 +74,7 @@ type ExchangeDeps = {
   signAccessToken?: (claims: ConfidentialAccessTokenClaims) => Promise<string>;
   consumeAssertion?: typeof consumeConfidentialAssertion;
   consumeSubjectRateLimit?: (key: string) => void;
+  resolveDelegation?: typeof resolveConfidentialDelegation;
 };
 
 function invalidSubjectToken(): AppError {
@@ -90,36 +91,6 @@ function getConfigJwksUrl(configJwt: string, sourceDomain: string): string {
   } catch {
     throw invalidSubjectToken();
   }
-}
-
-function getAllowedTarget(): { sourceDomain: string; resource: string } {
-  const env = getEnv();
-  const configuredSource = env.CONFIDENTIAL_TOKEN_EXCHANGE_SOURCE_DOMAIN?.trim();
-  const configuredResource = env.CONFIDENTIAL_TOKEN_EXCHANGE_RESOURCE?.trim();
-  if (!configuredSource || !configuredResource) {
-    throw new AppError('INTERNAL', 500, 'CONFIDENTIAL_TOKEN_EXCHANGE_DISABLED');
-  }
-
-  let resourceUrl: URL;
-  try {
-    resourceUrl = new URL(configuredResource);
-  } catch {
-    throw new AppError('INTERNAL', 500, 'CONFIDENTIAL_TOKEN_EXCHANGE_CONFIG_INVALID');
-  }
-  if (
-    resourceUrl.protocol !== 'https:' ||
-    resourceUrl.username ||
-    resourceUrl.password ||
-    resourceUrl.hash
-  ) {
-    throw new AppError('INTERNAL', 500, 'CONFIDENTIAL_TOKEN_EXCHANGE_CONFIG_INVALID');
-  }
-
-  const sourceDomain = normalizeDomain(configuredSource);
-  if (!sourceDomain) {
-    throw new AppError('INTERNAL', 500, 'CONFIDENTIAL_TOKEN_EXCHANGE_CONFIG_INVALID');
-  }
-  return { sourceDomain, resource: configuredResource };
 }
 
 export async function verifyConfidentialSubjectToken(
@@ -178,18 +149,27 @@ export async function verifyConfidentialSubjectToken(
 
 export async function exchangeConfidentialSubjectToken(
   params: {
+    authenticatedClientDomainId: string;
     subjectToken: string;
+    product: string;
     resource: string;
+    scope: string;
     config: ClientConfig;
     configJwt: string;
   },
   deps: ExchangeDeps = {},
 ): Promise<ConfidentialTokenExchangeResult> {
-  const allowed = getAllowedTarget();
   const sourceDomain = normalizeDomain(params.config.domain);
-  if (sourceDomain !== allowed.sourceDomain || params.resource !== allowed.resource) {
-    throw new AppError('FORBIDDEN', 403, 'TOKEN_EXCHANGE_TARGET_NOT_ALLOWED');
-  }
+  const delegation = await (deps.resolveDelegation ?? resolveConfidentialDelegation)(
+    {
+      authenticatedClientDomainId: params.authenticatedClientDomainId,
+      sourceDomain,
+      product: params.product,
+      resource: params.resource,
+      scope: params.scope,
+    },
+    { prisma: deps.prisma },
+  );
   const issuer = getPublicBaseUrl();
   const assertion = await verifyConfidentialSubjectToken(
     {
@@ -260,10 +240,11 @@ export async function exchangeConfidentialSubjectToken(
     subject: assertion.sub,
     email: user.email,
     sourceDomain,
-    resource: allowed.resource,
+    product: delegation.product,
+    resource: delegation.resource,
     issuer,
     ttlSeconds: CONFIDENTIAL_ACCESS_TOKEN_TTL_SECONDS,
-    scope: CONFIDENTIAL_ACCESS_TOKEN_SCOPE,
+    scope: delegation.scope,
     ...workspaceClaims,
   });
 
@@ -271,6 +252,6 @@ export async function exchangeConfidentialSubjectToken(
     accessToken,
     expiresInSeconds: CONFIDENTIAL_ACCESS_TOKEN_TTL_SECONDS,
     issuedTokenType: ACCESS_TOKEN_ISSUED_TOKEN_TYPE,
-    scope: CONFIDENTIAL_ACCESS_TOKEN_SCOPE,
+    scope: delegation.scope,
   };
 }

@@ -44,6 +44,7 @@ type RequestWithConfig = FastifyRequest & {
 declare module 'fastify' {
   interface FastifyRequest {
     domainAuthClientId?: string;
+    domainAuthClientDomainId?: string;
   }
 }
 
@@ -122,6 +123,7 @@ async function verifyDomainHashAuth(request: FastifyRequest, domain: string) {
 
   const result = await verifyDomainAuthToken({ domain, token });
   request.domainAuthClientId = result.clientId;
+  request.domainAuthClientDomainId = result.clientDomainId;
 }
 
 export function requireDomainHashAuthForDomainQuery(): typeof domainHashAuth;

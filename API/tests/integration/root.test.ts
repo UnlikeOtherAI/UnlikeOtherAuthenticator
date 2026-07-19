@@ -323,7 +323,7 @@ describe('GET /llm', () => {
     expect(res.body).toContain('INTEGRATION_JWKS_HOST_MISMATCH');
     expect(res.body).toContain('Optional per-domain agreement signatures');
     expect(res.body).toContain('SIGNATURE_EVIDENCE_PUBLIC_JWKS_JSON');
-    expect(res.body).toContain('Confidential assertion exchange for Ledger');
+    expect(res.body).toContain('Per-product confidential assertion exchange');
     expect(res.body).toContain('urn:ietf:params:oauth:grant-type:token-exchange');
     expect(res.body).toContain('/oauth/jwks.json');
     expect(res.body).toContain('first-time or workspace-less users');

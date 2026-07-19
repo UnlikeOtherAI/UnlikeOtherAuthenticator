@@ -10,6 +10,8 @@ import {
 import type { ConfidentialAccessTokenClaims } from '../../src/services/oauth/access-token.service.js';
 
 const sourceDomain = 'api.nessie.works';
+const clientDomainId = 'client-domain-nessie';
+const product = 'nessie';
 const resource = 'https://ledger.unlikeotherai.com';
 const audience = 'https://authentication.unlikeotherai.com/auth/token';
 const jwksUrl = `https://${sourceDomain}/.well-known/jwks.json`;
@@ -23,8 +25,6 @@ const originalEnv = {
   PUBLIC_BASE_URL: process.env.PUBLIC_BASE_URL,
   SHARED_SECRET: process.env.SHARED_SECRET,
   MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK: process.env.MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK,
-  CONFIDENTIAL_TOKEN_EXCHANGE_SOURCE_DOMAIN: process.env.CONFIDENTIAL_TOKEN_EXCHANGE_SOURCE_DOMAIN,
-  CONFIDENTIAL_TOKEN_EXCHANGE_RESOURCE: process.env.CONFIDENTIAL_TOKEN_EXCHANGE_RESOURCE,
 };
 
 function restoreEnv(name: keyof typeof originalEnv): void {
@@ -76,6 +76,22 @@ async function signSubjectToken(
 
 function fetchJwks() {
   return vi.fn().mockResolvedValue({ keys: [sourcePublicJwk] });
+}
+
+function resolveDelegation() {
+  return vi.fn().mockResolvedValue({ product, resource, scope: 'ai.invoke' });
+}
+
+function exchangeInput(subjectToken: string) {
+  return {
+    authenticatedClientDomainId: clientDomainId,
+    subjectToken,
+    product,
+    resource,
+    scope: 'ai.invoke',
+    config: config(),
+    configJwt,
+  };
 }
 
 function prismaMock(options?: {
@@ -133,8 +149,6 @@ beforeEach(() => {
   process.env.PUBLIC_BASE_URL = 'https://authentication.unlikeotherai.com';
   process.env.SHARED_SECRET = 'test-shared-secret-with-enough-length';
   process.env.MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK = '{}';
-  process.env.CONFIDENTIAL_TOKEN_EXCHANGE_SOURCE_DOMAIN = sourceDomain;
-  process.env.CONFIDENTIAL_TOKEN_EXCHANGE_RESOURCE = resource;
 });
 
 afterAll(() => {
@@ -142,8 +156,6 @@ afterAll(() => {
   restoreEnv('PUBLIC_BASE_URL');
   restoreEnv('SHARED_SECRET');
   restoreEnv('MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK');
-  restoreEnv('CONFIDENTIAL_TOKEN_EXCHANGE_SOURCE_DOMAIN');
-  restoreEnv('CONFIDENTIAL_TOKEN_EXCHANGE_RESOURCE');
 });
 
 describe('confidential subject-token verification', () => {
@@ -245,8 +257,11 @@ describe('confidential token exchange', () => {
     await expect(
       exchangeConfidentialSubjectToken(
         {
+          authenticatedClientDomainId: clientDomainId,
           subjectToken: await signSubjectToken({ omitActive: true }),
+          product,
           resource,
+          scope: 'ai.invoke',
           config: config(),
           configJwt,
         },
@@ -255,6 +270,7 @@ describe('confidential token exchange', () => {
           fetchJwks: fetchJwks(),
           signAccessToken,
           consumeSubjectRateLimit: vi.fn(),
+          resolveDelegation: resolveDelegation(),
         },
       ),
     ).resolves.toMatchObject({ accessToken: 'ledger-access-token' });
@@ -264,6 +280,7 @@ describe('confidential token exchange', () => {
         subject: 'usr_1',
         email: 'nessie-user@example.com',
         sourceDomain,
+        product,
         resource,
         scope: 'ai.invoke',
       }),
@@ -283,8 +300,11 @@ describe('confidential token exchange', () => {
 
     const result = await exchangeConfidentialSubjectToken(
       {
+        authenticatedClientDomainId: clientDomainId,
         subjectToken,
+        product,
         resource,
+        scope: 'ai.invoke',
         config: config(),
         configJwt,
       },
@@ -293,6 +313,7 @@ describe('confidential token exchange', () => {
         fetchJwks: fetchJwks(),
         signAccessToken,
         consumeSubjectRateLimit,
+        resolveDelegation: resolveDelegation(),
       },
     );
 
@@ -307,6 +328,7 @@ describe('confidential token exchange', () => {
       subject: 'usr_1',
       email: 'nessie-user@example.com',
       sourceDomain,
+      product,
       resource,
       issuer: 'https://authentication.unlikeotherai.com',
       ttlSeconds: 300,
@@ -328,8 +350,11 @@ describe('confidential token exchange', () => {
     await expect(
       exchangeConfidentialSubjectToken(
         {
+          authenticatedClientDomainId: clientDomainId,
           subjectToken: await signSubjectToken(),
+          product,
           resource,
+          scope: 'ai.invoke',
           config: config(),
           configJwt,
         },
@@ -337,6 +362,7 @@ describe('confidential token exchange', () => {
           prisma,
           fetchJwks: fetchJwks(),
           signAccessToken: vi.fn(),
+          resolveDelegation: resolveDelegation(),
         },
       ),
     ).rejects.toThrow('TOKEN_EXCHANGE_SUBJECT_FORBIDDEN');
@@ -351,8 +377,11 @@ describe('confidential token exchange', () => {
       await expect(
         exchangeConfidentialSubjectToken(
           {
+            authenticatedClientDomainId: clientDomainId,
             subjectToken: await signSubjectToken({ omitActive: true }),
+            product,
             resource,
+            scope: 'ai.invoke',
             config: config(),
             configJwt,
           },
@@ -361,6 +390,7 @@ describe('confidential token exchange', () => {
             fetchJwks: fetchJwks(),
             signAccessToken: vi.fn(),
             consumeSubjectRateLimit: vi.fn(),
+            resolveDelegation: resolveDelegation(),
           },
         ),
       ).rejects.toThrow('TOKEN_EXCHANGE_SUBJECT_FORBIDDEN');
@@ -384,8 +414,11 @@ describe('confidential token exchange', () => {
     const exchange = (subjectToken: string) =>
       exchangeConfidentialSubjectToken(
         {
+          authenticatedClientDomainId: clientDomainId,
           subjectToken,
+          product,
           resource,
+          scope: 'ai.invoke',
           config: config(),
           configJwt,
         },
@@ -394,6 +427,7 @@ describe('confidential token exchange', () => {
           fetchJwks: fetchJwks(),
           signAccessToken,
           consumeSubjectRateLimit: vi.fn(),
+          resolveDelegation: resolveDelegation(),
         },
       );
 
@@ -414,41 +448,45 @@ describe('confidential token exchange', () => {
       prisma: prismaMock(),
       fetchJwks: fetchJwks(),
       signAccessToken: vi.fn().mockResolvedValue('ledger-access-token'),
+      resolveDelegation: resolveDelegation(),
     };
 
     for (let requestNumber = 0; requestNumber < 60; requestNumber += 1) {
       await expect(
-        exchangeConfidentialSubjectToken(
-          { subjectToken: firstUserToken, resource, config: config(), configJwt },
-          deps,
-        ),
+        exchangeConfidentialSubjectToken(exchangeInput(firstUserToken), deps),
       ).resolves.toMatchObject({ accessToken: 'ledger-access-token' });
     }
     await expect(
-      exchangeConfidentialSubjectToken(
-        { subjectToken: firstUserToken, resource, config: config(), configJwt },
-        deps,
-      ),
+      exchangeConfidentialSubjectToken(exchangeInput(firstUserToken), deps),
     ).rejects.toMatchObject({ code: 'RATE_LIMITED', statusCode: 429 });
     await expect(
-      exchangeConfidentialSubjectToken(
-        { subjectToken: secondUserToken, resource, config: config(), configJwt },
-        deps,
-      ),
+      exchangeConfidentialSubjectToken(exchangeInput(secondUserToken), deps),
     ).resolves.toMatchObject({ accessToken: 'ledger-access-token' });
   });
 
-  it('enforces the exact configured source-to-resource mapping', async () => {
+  it('fails before assertion verification when DB delegation resolution rejects the target', async () => {
+    const rejectDelegation = vi
+      .fn()
+      .mockRejectedValue(new Error('TOKEN_EXCHANGE_DELEGATION_NOT_ALLOWED'));
+    const fetcher = fetchJwks();
     await expect(
       exchangeConfidentialSubjectToken(
         {
+          authenticatedClientDomainId: clientDomainId,
           subjectToken: await signSubjectToken(),
+          product,
           resource: `${resource}/other`,
+          scope: 'ai.invoke',
           config: config(),
           configJwt,
         },
-        { prisma: prismaMock(), fetchJwks: fetchJwks() },
+        {
+          prisma: prismaMock(),
+          fetchJwks: fetcher,
+          resolveDelegation: rejectDelegation,
+        },
       ),
-    ).rejects.toThrow('TOKEN_EXCHANGE_TARGET_NOT_ALLOWED');
+    ).rejects.toThrow('TOKEN_EXCHANGE_DELEGATION_NOT_ALLOWED');
+    expect(fetcher).not.toHaveBeenCalled();
   });
 });

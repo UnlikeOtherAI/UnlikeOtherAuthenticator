@@ -122,6 +122,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
         /admin
           billing.ts                — Superuser tariff, assignment, and app-key lifecycle
           billing-serialization.ts  — Billing admin response serialization
+          confidential-delegations.ts — Audited superuser delegation-mapping CRUD
           config.ts                 — GET  /internal/admin/config (admin auth config)
           token.ts                  — POST /internal/admin/token (admin token exchange)
           read.ts                   — Read endpoints powering the admin panel
@@ -191,6 +192,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       config-validation-guidance.service.ts — Config validation guidance text
       config.service.ts                     — Config JWT verification orchestrator
       confidential-assertion-use.service.ts — Durable source+jti one-time claims for confidential exchange
+      confidential-delegation.service.ts — ClientDomain/product/resource/scope policy and audited CRUD
       confidential-token-exchange.service.ts — Verify source assertions, re-resolve workspace identity, and issue resource tokens
       domain-email-config.service.ts        — Per-domain email config + SES wiring
       domain-role.service.ts                — Domain role lookups (superuser etc.)
@@ -344,9 +346,14 @@ Request → Route → Middleware → Service → Database (Prisma)
 
 `POST /auth/token` remains a thin multi-grant route. Its confidential assertion
 branch uses the same config verifier and domain-hash guard as the legacy grants,
-then delegates all source-JWKS verification, exact source→resource allowlisting,
-current identity resolution, conditional selected-workspace resolution, and
-RS256 issuance to
+retains the authenticated `ClientDomain.id`, and resolves an enabled
+ClientDomain + product mapping before assertion work. The mapping contains one
+exact HTTPS resource and an allowlist limited to `ai.invoke` / `billing.read`;
+the issued scope is the exact requested subset. This separates app provenance
+(the individual product's domain credential) from user/org/team provenance (the
+source-signed assertion), with no shared key, user-token substitution, or env
+fallback. It then delegates source-JWKS verification, current identity
+resolution, conditional selected-workspace resolution, and RS256 issuance to
 `confidential-token-exchange.service.ts`. Pre-context reads use the admin Prisma
 client because the user tenant is not trusted until the assertion, user, domain
 role, and any selected memberships have been verified. Immediately after those
@@ -354,6 +361,14 @@ checks, `confidential-assertion-use.service.ts` atomically inserts a hashed
 source-domain + `jti` claim through accepted expiry plus clock tolerance; the
 database uniqueness constraint serializes concurrent exchanges across processes
 before access-token signing.
+
+`confidential-delegation.service.ts` owns both fail-closed runtime resolution
+and the audited superuser CRUD exposed by
+`routes/internal/admin/confidential-delegations.ts`. The security-sensitive
+`confidential_delegation_mappings` table is available only to `uoa_admin`, with
+forced RLS and a deny-all `uoa_app` policy. Mappings bind ClientDomain rather
+than an individual secret row so normal per-domain credential rotation remains
+valid without ever storing or returning plaintext credentials.
 
 The billing read boundary is deliberately server-to-server. A product-bound app
 key authenticates the application, while a credential-bound RS256 actor JWT
