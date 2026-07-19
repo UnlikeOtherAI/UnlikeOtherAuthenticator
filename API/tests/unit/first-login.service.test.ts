@@ -5,6 +5,7 @@ import {
   buildFirstLoginBlock,
   buildWorkspaceChoices,
   resolveAutoSelectedWorkspace,
+  shouldPresentWorkspaceChooser,
   type WorkspaceChoices,
 } from '../../src/services/first-login.service.js';
 import { testUiTheme } from '../helpers/test-config.js';
@@ -344,5 +345,25 @@ describe('resolveAutoSelectedWorkspace', () => {
       ),
     ).toBeNull();
     expect(resolveAutoSelectedWorkspace(choices({ teams: [] }))).toBeNull();
+  });
+
+  it('presents the chooser for ambiguous choices and the empty create-workspace entrypoint', () => {
+    expect(
+      shouldPresentWorkspaceChooser(
+        choices({
+          teams: [soloTeam, { ...soloTeam, teamId: 'team-2', name: 'Second', slug: 'second' }],
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      shouldPresentWorkspaceChooser(
+        choices({
+          pending_invites: [{ inviteId: 'invite-1', teamName: 'Invited', invitedBy: 'Alice' }],
+        }),
+      ),
+    ).toBe(true);
+    expect(shouldPresentWorkspaceChooser(choices({ teams: [], can_create_org: true }))).toBe(true);
+    expect(shouldPresentWorkspaceChooser(choices())).toBe(false);
+    expect(shouldPresentWorkspaceChooser(choices({ teams: [], can_create_org: false }))).toBe(false);
   });
 });

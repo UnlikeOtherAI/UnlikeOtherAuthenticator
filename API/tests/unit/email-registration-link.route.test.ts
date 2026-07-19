@@ -247,7 +247,11 @@ describe('GET /auth/email/link — workspace chooser wiring (gap-fix B Task 1, d
     validateRegistrationEmailLandingTokenMock.mockReset().mockResolvedValue('LOGIN_LINK');
     renderAuthEntrypointHtmlMock.mockReset().mockResolvedValue('<html>login</html>');
     finalizeAuthenticatedUserMock.mockReset();
-    verifyEmailTokenMock.mockReset().mockResolvedValue({ userId: 'user-1', teamInviteId: null });
+    verifyEmailTokenMock.mockReset().mockResolvedValue({
+      userId: 'user-1',
+      twoFaEnabled: false,
+      acceptedInvite: null,
+    });
     buildWorkspaceChoicesMock.mockReset();
     signLoginSessionMock.mockReset();
     process.env.SHARED_SECRET = 'test-shared-secret-with-enough-length';
@@ -383,11 +387,15 @@ describe('GET /auth/email/link — workspace chooser wiring (gap-fix B Task 1, d
     );
   });
 
-  it('invite-bound link (teamInviteId set): the chooser is never interposed, even with workspace_selection "auto"', async () => {
+  it('invite-bound link carries its accepted scope and never interposes the chooser', async () => {
     currentConfig = baseConfig({
       login_flow: { email_code_enabled: false, workspace_selection: 'auto' },
     });
-    verifyEmailTokenMock.mockResolvedValue({ userId: 'user-1', teamInviteId: 'invite-1' });
+    verifyEmailTokenMock.mockResolvedValue({
+      userId: 'user-1',
+      twoFaEnabled: false,
+      acceptedInvite: { inviteId: 'invite-1', orgId: 'org-invite', teamId: 'team-invite' },
+    });
     finalizeAuthenticatedUserMock.mockResolvedValue({
       status: 'granted',
       code: 'abc123',
@@ -400,5 +408,30 @@ describe('GET /auth/email/link — workspace chooser wiring (gap-fix B Task 1, d
     expect(res.headers.location).toBe('https://client.example.com/oauth/callback?code=abc123');
     expect(buildWorkspaceChoicesMock).not.toHaveBeenCalled();
     expect(signLoginSessionMock).not.toHaveBeenCalled();
+    expect(finalizeAuthenticatedUserMock).toHaveBeenCalledWith(
+      expect.objectContaining({ orgId: 'org-invite', teamId: 'team-invite' }),
+      expect.anything(),
+    );
+  });
+
+  it('zero teams with create permission redirects to the chooser instead of finalizing unscoped', async () => {
+    currentConfig = baseConfig({
+      login_flow: { email_code_enabled: false, workspace_selection: 'auto' },
+    });
+    buildWorkspaceChoicesMock.mockResolvedValue({
+      teams: [],
+      pending_invites: [],
+      can_create_org: true,
+    });
+    signLoginSessionMock.mockResolvedValue('login_token_create');
+
+    const res = await getLink();
+
+    expect(res.statusCode).toBe(302);
+    const location = new URL(res.headers.location as string, 'http://localhost');
+    expect(location.pathname).toBe('/auth');
+    expect(location.searchParams.get('flow')).toBe('workspace_chooser');
+    expect(location.searchParams.get('login_token')).toBe('login_token_create');
+    expect(finalizeAuthenticatedUserMock).not.toHaveBeenCalled();
   });
 });

@@ -20,7 +20,7 @@ export async function acceptTeamInviteWithinTransaction(params: {
   userId: string;
   config: ClientConfig;
   now: Date;
-}): Promise<void> {
+}): Promise<{ orgId: string; teamId: string }> {
   const invite = await params.prisma.teamInvite.findUnique({
     where: { id: params.teamInviteId },
     select: {
@@ -54,7 +54,7 @@ export async function acceptTeamInviteWithinTransaction(params: {
 
   if (invite.acceptedAt) {
     if (invite.acceptedUserId === params.userId) {
-      return;
+      return { orgId: invite.orgId, teamId: invite.teamId };
     }
     throw new AppError('BAD_REQUEST', 400);
   }
@@ -170,6 +170,8 @@ export async function acceptTeamInviteWithinTransaction(params: {
     },
     select: { id: true },
   });
+
+  return { orgId: invite.orgId, teamId: invite.teamId };
 }
 
 /**

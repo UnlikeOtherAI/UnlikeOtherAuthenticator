@@ -299,6 +299,22 @@ describe('GET /auth/callback/:provider workspace selection', () => {
     expect(finalizeAuthenticatedUserMock).not.toHaveBeenCalled();
   });
 
+  it('preserves the chooser for a zero-team user who can create a workspace', async () => {
+    buildWorkspaceChoicesMock.mockResolvedValue({
+      teams: [],
+      pending_invites: [],
+      can_create_org: true,
+    });
+
+    const response = await runCallback();
+
+    const location = new URL(response.headers.location as string);
+    expect(location.searchParams.get('flow')).toBe('workspace_chooser');
+    expect(location.searchParams.get('login_token')).toBe('login_token_abc');
+    expect(finalizeAuthenticatedUserMock).not.toHaveBeenCalled();
+    expect(resolveTwoFaPolicyMock).not.toHaveBeenCalled();
+  });
+
   it('leaves the code unscoped when workspace selection is off', async () => {
     validateConfigFieldsMock.mockReturnValue(
       baseConfig({

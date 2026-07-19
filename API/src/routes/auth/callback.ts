@@ -16,6 +16,7 @@ import { LOGIN_SESSION_AUDIENCE } from '../../config/constants.js';
 import {
   buildWorkspaceChoices,
   resolveAutoSelectedWorkspace,
+  shouldPresentWorkspaceChooser,
   type AutoSelectedWorkspace,
 } from '../../services/first-login.service.js';
 import { signLoginSession } from '../../services/login-session.service.js';
@@ -281,10 +282,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         if (config.login_flow?.workspace_selection === 'auto') {
           const choices = await buildWorkspaceChoices({ userId, config }, { prisma });
           autoSelectedWorkspace = resolveAutoSelectedWorkspace(choices);
-          if (
-            !autoSelectedWorkspace &&
-            (choices.teams.length >= 2 || choices.pending_invites.length > 0)
-          ) {
+          if (shouldPresentWorkspaceChooser(choices, autoSelectedWorkspace)) {
             const loginToken = await signLoginSession({
               userId,
               domain: config.domain,

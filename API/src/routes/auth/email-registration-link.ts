@@ -5,10 +5,7 @@ import { LOGIN_SESSION_AUDIENCE } from '../../config/constants.js';
 import { requireEnv } from '../../config/env.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
 import { validateRegistrationEmailLandingToken } from '../../services/auth-registration-email-link.service.js';
-import {
-  finalizeAuthenticatedUser,
-  parseRequestAccessFlag,
-} from '../../services/access-request-flow.service.js';
+import { parseRequestAccessFlag } from '../../services/access-request-flow.service.js';
 import {
   renderAuthEntrypointHtml,
   sendAuthHtml,
@@ -20,12 +17,14 @@ import { verifyEmailToken } from '../../services/auth-verify-email.service.js';
 import {
   buildWorkspaceChoices,
   resolveAutoSelectedWorkspace,
+  shouldPresentWorkspaceChooser,
   type AutoSelectedWorkspace,
 } from '../../services/first-login.service.js';
 import { signLoginSession } from '../../services/login-session.service.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
 import { AppError, isAppError } from '../../utils/errors.js';
 import { parsePkceChallenge, type PkceChallenge } from '../../utils/pkce.js';
+import { finalizeWithTwoFaPolicy } from '../../services/workspace-finalize.service.js';
 import { tokenConsumeRateLimiter } from './rate-limit-keys.js';
 
 const QuerySchema = z
@@ -145,7 +144,7 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
       // No password needed — the user is signed in by clicking the link.
       if (type === 'LOGIN_LINK' || type === 'VERIFY_EMAIL') {
         try {
-          const { userId, teamInviteId } = await verifyEmailToken(
+          const { userId, twoFaEnabled, acceptedInvite } = await verifyEmailToken(
             {
               token,
               config: request.config,
@@ -159,19 +158,18 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
             requestedRedirectUrl: redirect_url,
           });
 
-          // Gap-fix B Task 1 (design §4.3 "Magic links join the same flow"): a consumed magic link
-          // now joins the same post-verification workspace chooser gate as password/social/code
-          // logins — UNLESS this link was invite-bound (teamInviteId set), in which case
-          // verifyEmailToken already ran acceptTeamInviteWithinTransaction above: the accepted invite
-          // IS the workspace selection, so the chooser must NOT be interposed on top of it.
-          let autoSelectedWorkspace: AutoSelectedWorkspace | null = null;
-          if (!teamInviteId && request.config.login_flow?.workspace_selection === 'auto') {
+          // An accepted invite is already an explicit workspace choice. Non-invite auto flows select
+          // one team only when unambiguous; a create-workspace action still requires the chooser.
+          let selectedWorkspace: AutoSelectedWorkspace | null = acceptedInvite
+            ? { orgId: acceptedInvite.orgId, teamId: acceptedInvite.teamId }
+            : null;
+          if (!acceptedInvite && request.config.login_flow?.workspace_selection === 'auto') {
             const choices = await buildWorkspaceChoices(
               { userId, config: request.config },
               { prisma: request.adminDb },
             );
-            autoSelectedWorkspace = resolveAutoSelectedWorkspace(choices);
-            if (choices.teams.length >= 2 || choices.pending_invites.length > 0) {
+            selectedWorkspace = resolveAutoSelectedWorkspace(choices);
+            if (shouldPresentWorkspaceChooser(choices, selectedWorkspace)) {
               const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
               const loginToken = await signLoginSession({
                 userId,
@@ -193,30 +191,55 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
             }
           }
 
-          const finalResult = await finalizeAuthenticatedUser(
+          const authMethod = type === 'VERIFY_EMAIL' ? 'verify_email' : 'login_link';
+          const outcome = await finalizeWithTwoFaPolicy(
             {
               userId,
+              twoFaEnabled,
               config: request.config,
               configUrl: request.configUrl,
               redirectUrl,
               rememberMe: request.config.session?.remember_me_default ?? true,
               requestAccess: parseRequestAccessFlag(request_access),
-              authMethod: type === 'VERIFY_EMAIL' ? 'verify_email' : 'login_link',
-              twoFaCompleted: false,
+              authMethod,
               codeChallenge: pkce.codeChallenge,
               codeChallengeMethod: pkce.codeChallengeMethod,
               ip: request.ip ?? null,
-              ...(autoSelectedWorkspace ?? {}),
+              ...(selectedWorkspace ?? {}),
             },
             { prisma: request.adminDb },
           );
+
+          if (outcome.kind === 'twofa') {
+            redirectNoStore(
+              reply,
+              buildTwoFaAuthUrl(request.configUrl, redirectUrl, {
+                requestAccess: parseRequestAccessFlag(request_access),
+                kind: 'challenge',
+                token: outcome.twofa_token,
+              }),
+            );
+            return;
+          }
+
+          if (outcome.kind === 'twofa_enroll_required') {
+            redirectNoStore(
+              reply,
+              buildTwoFaAuthUrl(request.configUrl, redirectUrl, {
+                requestAccess: parseRequestAccessFlag(request_access),
+                kind: 'enrollment',
+                token: outcome.setup.setup_token,
+              }),
+            );
+            return;
+          }
 
           try {
             await recordLoginLog(
               {
                 userId,
                 domain: request.config.domain,
-                authMethod: type === 'VERIFY_EMAIL' ? 'verify_email' : 'login_link',
+                authMethod,
                 ip: request.ip ?? null,
                 userAgent:
                   typeof request.headers['user-agent'] === 'string'
@@ -229,7 +252,7 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
             request.log.error({ err }, 'failed to record login log');
           }
 
-          const finalUrl = finalResult.redirectTo;
+          const finalUrl = outcome.finalResult.redirectTo;
           if (finalUrl) {
             if (isCustomSchemeUrl(finalUrl)) {
               await sendDeepLinkHandoff(reply, {
@@ -306,6 +329,26 @@ function buildWorkspaceChooserAuthUrl(
   params.set('login_token', loginToken);
   params.set('flow', 'workspace_chooser');
   if (requestAccess) params.set('request_access', 'true');
+  return `/auth?${params.toString()}`;
+}
+
+function buildTwoFaAuthUrl(
+  configUrl: string,
+  redirectUrl: string,
+  continuation:
+    | { requestAccess: boolean; kind: 'challenge'; token: string }
+    | { requestAccess: boolean; kind: 'enrollment'; token: string },
+): string {
+  const params = new URLSearchParams();
+  params.set('config_url', configUrl);
+  params.set('redirect_url', redirectUrl);
+  if (continuation.kind === 'challenge') {
+    params.set('twofa_token', continuation.token);
+  } else {
+    params.set('twofa_enroll_required', 'true');
+    params.set('twofa_setup_token', continuation.token);
+  }
+  if (continuation.requestAccess) params.set('request_access', 'true');
   return `/auth?${params.toString()}`;
 }
 

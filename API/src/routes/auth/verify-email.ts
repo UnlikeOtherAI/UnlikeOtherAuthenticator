@@ -12,15 +12,16 @@ import {
 import {
   buildWorkspaceChoices,
   resolveAutoSelectedWorkspace,
+  shouldPresentWorkspaceChooser,
   type AutoSelectedWorkspace,
 } from '../../services/first-login.service.js';
 import { signLoginSession } from '../../services/login-session.service.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
 import {
-  finalizeAuthenticatedUser,
   parseRequestAccessFlag,
 } from '../../services/access-request-flow.service.js';
 import { selectRedirectUrl } from '../../services/authorization-code.service.js';
+import { finalizeWithTwoFaPolicy } from '../../services/workspace-finalize.service.js';
 import { parseRequiredPkceChallenge } from '../../utils/pkce.js';
 import { tokenConsumeRateLimiter } from './rate-limit-keys.js';
 
@@ -75,7 +76,7 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
         throw new AppError('BAD_REQUEST', 400, 'MISSING_PASSWORD');
       }
 
-      const { userId, type, teamInviteId } = await verifyEmailToken(
+      const { userId, type, twoFaEnabled, acceptedInvite } = await verifyEmailToken(
         {
           token,
           password,
@@ -90,20 +91,19 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
         requestedRedirectUrl: redirect_url,
       });
 
-      // Gap-fix B Task 1 (design §4.3, mirrors /auth/login's chooser gate): reuse the exact
-      // login.ts pattern — return the JSON chooser payload instead of finalizing — UNLESS this
-      // token was invite-bound (teamInviteId set), in which case verifyEmailToken already ran
-      // acceptTeamInviteWithinTransaction above: the accepted invite IS the workspace selection,
-      // so the chooser must NOT be interposed on top of it. Brand-new users normally have 0 teams
-      // and 0 invites, so the gate auto-skips for them (nothing changes vs. today).
-      let autoSelectedWorkspace: AutoSelectedWorkspace | null = null;
-      if (!teamInviteId && request.config.login_flow?.workspace_selection === 'auto') {
+      // An accepted email invite is already an explicit workspace selection and always bypasses the
+      // chooser. Otherwise auto mode either selects the sole team or exposes every real action,
+      // including the zero-team "create workspace" entrypoint.
+      let selectedWorkspace: AutoSelectedWorkspace | null = acceptedInvite
+        ? { orgId: acceptedInvite.orgId, teamId: acceptedInvite.teamId }
+        : null;
+      if (!acceptedInvite && request.config.login_flow?.workspace_selection === 'auto') {
         const choices = await buildWorkspaceChoices(
           { userId, config: request.config },
           { prisma: request.adminDb },
         );
-        autoSelectedWorkspace = resolveAutoSelectedWorkspace(choices);
-        if (choices.teams.length >= 2 || choices.pending_invites.length > 0) {
+        selectedWorkspace = resolveAutoSelectedWorkspace(choices);
+        if (shouldPresentWorkspaceChooser(choices, selectedWorkspace)) {
           const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
           const loginToken = await signLoginSession({
             userId,
@@ -116,30 +116,50 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
         }
       }
 
-      const finalResult = await finalizeAuthenticatedUser(
+      const authMethod = type === 'VERIFY_EMAIL' ? 'verify_email' : 'verify_email_set_password';
+      const outcome = await finalizeWithTwoFaPolicy(
         {
           userId,
+          twoFaEnabled,
           config: request.config,
           configUrl: request.configUrl,
           redirectUrl,
           rememberMe: request.config.session?.remember_me_default ?? true,
           requestAccess: parseRequestAccessFlag(request_access),
-          authMethod: type === 'VERIFY_EMAIL' ? 'verify_email' : 'verify_email_set_password',
-          twoFaCompleted: false,
+          authMethod,
           codeChallenge: pkce.codeChallenge,
           codeChallengeMethod: pkce.codeChallengeMethod,
           ip: request.ip ?? null,
-          ...(autoSelectedWorkspace ?? {}),
+          ...(selectedWorkspace ?? {}),
         },
         { prisma: request.adminDb },
       );
+
+      if (outcome.kind === 'twofa') {
+        reply.status(200).send({
+          ok: true,
+          twofa_required: true,
+          twofa_token: outcome.twofa_token,
+        });
+        return;
+      }
+
+      if (outcome.kind === 'twofa_enroll_required') {
+        reply.status(200).send({
+          ok: true,
+          kind: 'twofa_enroll_required',
+          twofa_enroll_required: true,
+          ...outcome.setup,
+        });
+        return;
+      }
 
       try {
         await recordLoginLog(
           {
             userId,
             domain: request.config.domain,
-            authMethod: type === 'VERIFY_EMAIL' ? 'verify_email' : 'verify_email_set_password',
+            authMethod,
             ip: request.ip ?? null,
             userAgent:
               typeof request.headers['user-agent'] === 'string'
@@ -154,9 +174,9 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
 
       reply.status(200).send({
         ok: true,
-        code: finalResult.status === 'granted' ? finalResult.code : undefined,
-        redirect_to: finalResult.redirectTo,
-        access_request_status: finalResult.status === 'requested' ? 'pending' : undefined,
+        code: outcome.finalResult.status === 'granted' ? outcome.finalResult.code : undefined,
+        redirect_to: outcome.finalResult.redirectTo,
+        access_request_status: outcome.finalResult.status === 'requested' ? 'pending' : undefined,
       });
     },
   );

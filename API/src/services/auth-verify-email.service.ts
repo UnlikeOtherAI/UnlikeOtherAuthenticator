@@ -43,6 +43,19 @@ type VerifyEmailTokenRow = Prisma.VerificationTokenGetPayload<{
 
 export type VerifyEmailTokenType = 'VERIFY_EMAIL_SET_PASSWORD' | 'VERIFY_EMAIL';
 
+export type AcceptedEmailInviteWorkspace = {
+  inviteId: string;
+  orgId: string;
+  teamId: string;
+};
+
+export type VerifyEmailResult = {
+  userId: string;
+  type: VerifyEmailTokenType;
+  twoFaEnabled: boolean;
+  acceptedInvite: AcceptedEmailInviteWorkspace | null;
+};
+
 function assertVerifyEmailTokenType(
   type: VerifyEmailTokenRow['type'],
 ): asserts type is VerifyEmailTokenType {
@@ -122,7 +135,7 @@ export async function verifyEmailToken(
     config: ClientConfig;
   },
   deps?: VerifyEmailDeps,
-): Promise<{ userId: string; type: VerifyEmailTokenType; teamInviteId: string | null }> {
+): Promise<VerifyEmailResult> {
   const env = deps?.env ?? getEnv();
 
   if (!env.DATABASE_URL) {
@@ -236,14 +249,30 @@ export async function verifyEmailToken(
       prisma: tx,
     });
 
+    let acceptedInvite: AcceptedEmailInviteWorkspace | null = null;
     if (tokenRow.teamInviteId) {
-      await (deps?.acceptTeamInviteWithinTransaction ?? acceptTeamInviteWithinTransaction)({
+      const workspace = await (
+        deps?.acceptTeamInviteWithinTransaction ?? acceptTeamInviteWithinTransaction
+      )({
         prisma: tx,
         teamInviteId: tokenRow.teamInviteId,
         userId,
         config: params.config,
         now,
       });
+      acceptedInvite = {
+        inviteId: tokenRow.teamInviteId,
+        orgId: workspace.orgId,
+        teamId: workspace.teamId,
+      };
+    }
+
+    const authenticatedUser = await tx.user.findUnique({
+      where: { id: userId },
+      select: { twoFaEnabled: true },
+    });
+    if (!authenticatedUser) {
+      throw new AppError('BAD_REQUEST', 400, 'INVALID_TOKEN');
     }
 
     const updated = await tx.verificationToken.updateMany({
@@ -268,7 +297,8 @@ export async function verifyEmailToken(
       createdUser,
       setPasswordOnExistingUser,
       email: tokenRow.email,
-      teamInviteId: tokenRow.teamInviteId,
+      twoFaEnabled: authenticatedUser.twoFaEnabled,
+      acceptedInvite,
     };
   });
 
@@ -282,7 +312,7 @@ export async function verifyEmailToken(
     });
   }
 
-  if (consumed.createdUser && !consumed.teamInviteId) {
+  if (consumed.createdUser && !consumed.acceptedInvite) {
     try {
       await (deps?.placeUserInConfiguredOrganisation ?? placeUserInConfiguredOrganisation)({
         userId: consumed.userId,
@@ -301,10 +331,14 @@ export async function verifyEmailToken(
     }
   }
 
-  // Gap-fix B Task 1 (design §4.3): `teamInviteId` tells the caller whether this consumption already
-  // bound the user to a specific team via `acceptTeamInviteWithinTransaction` above — an accepted
-  // invite IS the workspace selection, so callers must not interpose the chooser on top of it.
-  return { userId: consumed.userId, type: consumed.type, teamInviteId: consumed.teamInviteId };
+  // An invite-bound token is both identity verification and an explicit workspace selection. Return
+  // the exact accepted scope so callers can enforce its 2FA policy and carry it into the code.
+  return {
+    userId: consumed.userId,
+    type: consumed.type,
+    twoFaEnabled: consumed.twoFaEnabled,
+    acceptedInvite: consumed.acceptedInvite,
+  };
 }
 
 export async function verifyEmailAndSetPassword(

@@ -176,11 +176,13 @@ The auth flow is state-driven, not route-driven. A single popup URL loads the ap
 9. **Email sign-in code** (Phase 3c, `login_flow.email_code_enabled`) → LoginPage "Email me a
    sign-in code" → CodeEntryPage → verify-code → WorkspaceChooserPage (if `workspace_selection:
    "auto"`) or straight to step 2/3
-10. **Workspace chooser** (Phase 3c, `workspace_selection: "auto"`) — reached from step 9 or a
-    successful password login (step 2/3's LoginForm) → WorkspaceChooserPage (workspace list +
-    pending invites + create-workspace, auto-skipped when there's exactly one ACTIVE team and no
-    pending invites) → TwoFactorVerifyPage (policy of the selected org) → Redirect with a
-    team-scoped code
+10. **Workspace chooser** (Phase 3c, `workspace_selection: "auto"`) — reached after any verified
+    identity path (email code/link, password, or social) → WorkspaceChooserPage (workspace list +
+    pending invites + create-workspace). It is auto-skipped only for exactly one ACTIVE team and no
+    pending invite; zero teams with `can_create_org` stays on the chooser. An invite-bound email is
+    already an exact workspace selection and bypasses the chooser. Both server-selected and
+    invite-selected org/team scope then passes through TwoFactorVerifyPage or required
+    TwoFactorSetupPage and into the team-scoped authorization code.
 11. **Required agreements** (optional per-domain service) — after identity, workspace selection,
     and required 2FA, the shared API gate redirects to `SigningPage` instead of issuing a code.
     The page renders the hash-verified source PDF, exact acceptance statement, click-wrap or

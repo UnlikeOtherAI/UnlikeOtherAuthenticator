@@ -452,7 +452,12 @@ Entry (config loaded)
   → Redirect with authorization code (team-scoped)
 ```
 
-The chooser is skipped automatically (straight to policy + redirect) when the user has exactly one active team and no pending invites, or when `workspace_selection: "off"`. New/empty users see the invite list and/or the create-workspace entry — the existing `firstLogin` precedence rules (brief §24.14) drive exactly which.
+The chooser is skipped automatically (straight to policy + redirect) when the user has exactly one
+active team and no pending invites, or when `workspace_selection: "off"`. New/empty users with
+`can_create_org` stay on the chooser so the create-workspace entry remains reachable. An
+invite-bound email is already a selection: its accepted org/team bypasses the chooser but still
+passes through the effective 2FA policy before the scoped code is issued. The existing `firstLogin`
+precedence rules (brief §24.14) drive the remaining empty/invite states.
 
 **New pages** (one per file, per `architecture-auth.md` rules):
 

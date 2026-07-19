@@ -169,7 +169,7 @@ export const authEndpoints: EndpointSchema[] = [
     method: 'POST',
     path: '/auth/verify-email',
     description:
-      'Complete email verification (registration). When config.login_flow.workspace_selection="auto" and the token was not invite-bound, 2+ ACTIVE teams or a pending invite return the workspace chooser. Exactly one ACTIVE team and no pending invite is selected server-side: that exact orgId/teamId is bound to the authorization code and resulting active token claim. workspace_selection="off" preserves the unscoped flow.',
+      'Complete email verification (registration). For a non-invite token with config.login_flow.workspace_selection="auto", 2+ ACTIVE teams, a pending invite, or zero teams with can_create_org return the workspace chooser. Exactly one ACTIVE team/no invite is selected server-side and carried through applicable 2FA into the authorization code and active claim. An invite-bound token is already an explicit selection: its accepted orgId/teamId bypasses the chooser, still enforces 2FA, and is preserved through code/access/refresh rotation. workspace_selection="off" remains unscoped for non-invite login.',
     auth: 'config_url query param',
     query: {
       redirect_url: 'string (optional)',
@@ -186,6 +186,13 @@ export const authEndpoints: EndpointSchema[] = [
       code: 'authorization code (workspace_selection "off"/skipped branch only)',
       redirect_to: 'redirect URL (workspace_selection "off"/skipped branch only)',
       access_request_status: '"pending" when request_access created a pending access request',
+      twofa_required: 'true when the selected/accepted workspace requires enrolled 2FA',
+      twofa_token:
+        'workspace-bearing challenge token when enrolled 2FA must complete before code issuance',
+      twofa_enroll_required:
+        'true when effective policy requires enrollment before the scoped code can be issued',
+      setup_token:
+        'workspace-bearing setup token when twofa_enroll_required is true (alongside QR/manual setup fields)',
       'login_token?':
         'short-lived bridge JWT (only when the chooser gate passes) — authorizes ONLY POST /auth/select-team for this verified user',
       'teams?':
@@ -288,7 +295,7 @@ export const authEndpoints: EndpointSchema[] = [
     method: 'GET',
     path: '/auth/email/link',
     description:
-      'Email registration/login link landing. For a non-invite-bound link with config.login_flow.workspace_selection="auto", 2+ ACTIVE teams or a pending invite redirect to the workspace chooser; exactly one ACTIVE team and no invite is selected server-side and its exact orgId/teamId is bound to the authorization code. Invite-bound links retain their accepted-invite behavior, and workspace_selection="off" remains unscoped.',
+      'Email registration/login link landing. For a non-invite link with config.login_flow.workspace_selection="auto", 2+ ACTIVE teams, a pending invite, or zero teams with can_create_org redirect to the workspace chooser; exactly one ACTIVE team/no invite is selected server-side and carried through applicable 2FA into the code. Invite-bound links carry the accepted invite orgId/teamId through the same 2FA/code/token pipeline without showing the chooser. workspace_selection="off" remains unscoped for non-invite login.',
     query: {
       token: 'string (required)',
       config_url: 'string (required)',
@@ -348,7 +355,7 @@ export const authEndpoints: EndpointSchema[] = [
     method: 'GET',
     path: '/auth/callback/:provider',
     description:
-      'OAuth provider callback. Requires the signed `uoa_social_state` cookie set at /auth/social to match the nonce embedded in `state` (login-CSRF protection); the cookie is single-use and cleared on consume. With workspace_selection="auto", workspace is resolved before 2FA: 2+ ACTIVE teams or any pending invite redirect with a login_token chooser bridge, while exactly one ACTIVE team/no invite is selected server-side and its exact orgId/teamId survives any 2FA challenge or enrollment token into the authorization code and active token claim. workspace_selection="off" never infers scope.',
+      'OAuth provider callback. Requires the signed `uoa_social_state` cookie set at /auth/social to match the nonce embedded in `state` (login-CSRF protection); the cookie is single-use and cleared on consume. With workspace_selection="auto", workspace is resolved before 2FA: 2+ ACTIVE teams, any pending invite, or zero teams with can_create_org redirect with a login_token chooser bridge, while exactly one ACTIVE team/no invite is selected server-side and its exact orgId/teamId survives any 2FA challenge or enrollment token into the authorization code and active token claim. workspace_selection="off" never infers scope.',
   },
   {
     method: 'GET',

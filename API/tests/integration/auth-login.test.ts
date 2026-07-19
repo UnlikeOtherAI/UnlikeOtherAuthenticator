@@ -1,5 +1,4 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createHmac } from 'node:crypto';
 
 import { createApp } from '../../src/app.js';
 import { hashPassword } from '../../src/services/password.service.js';
@@ -11,6 +10,7 @@ import {
   createTestConfigFetchHandler,
   signTestConfigJwt,
 } from '../helpers/test-config.js';
+import { computeTotp } from '../helpers/totp.js';
 
 const hasDatabase = Boolean(process.env.DATABASE_URL);
 const pkceQuery =
@@ -22,46 +22,6 @@ async function createSignedConfigJwt(
 ): Promise<string> {
   void sharedSecret;
   return await signTestConfigJwt(baseClientConfigPayload(overrides));
-}
-
-function base32Decode(value: string): Uint8Array {
-  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-  const cleaned = value.replace(/=+$/g, '').toUpperCase().replace(/[^A-Z2-7]/g, '');
-
-  let bits = 0;
-  let buffer = 0;
-  const out: number[] = [];
-  for (const ch of cleaned) {
-    const idx = alphabet.indexOf(ch);
-    if (idx === -1) continue;
-    buffer = (buffer << 5) | idx;
-    bits += 5;
-    while (bits >= 8) {
-      bits -= 8;
-      out.push((buffer >> bits) & 0xff);
-    }
-  }
-  return Uint8Array.from(out);
-}
-
-function computeTotp(params: { secret: string; nowMs: number; digits?: 6 | 8; period?: number }): string {
-  const digits = params.digits ?? 6;
-  const period = params.period ?? 30;
-
-  const counter = BigInt(Math.floor(params.nowMs / 1000 / period));
-  const counterBuf = Buffer.alloc(8);
-  counterBuf.writeBigUInt64BE(counter);
-
-  const mac = createHmac('sha1', Buffer.from(base32Decode(params.secret))).update(counterBuf).digest();
-  const offset = mac[mac.length - 1]! & 0x0f;
-  const binCode =
-    ((mac[offset]! & 0x7f) << 24) |
-    ((mac[offset + 1]! & 0xff) << 16) |
-    ((mac[offset + 2]! & 0xff) << 8) |
-    (mac[offset + 3]! & 0xff);
-  const mod = digits === 8 ? 100_000_000 : 1_000_000;
-  const otp = binCode % mod;
-  return String(otp).padStart(digits, '0');
 }
 
 describe.skipIf(!hasDatabase)('POST /auth/login', () => {

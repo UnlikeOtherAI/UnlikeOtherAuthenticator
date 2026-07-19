@@ -216,6 +216,23 @@ export function resolveAutoSelectedWorkspace(
   return { orgId: team.orgId, teamId: team.teamId };
 }
 
+/**
+ * An auto-selection flow needs the chooser whenever there is a real decision or next action that
+ * cannot be represented by an authorization code alone. In particular, an empty membership list
+ * with `can_create_org` is the create-workspace entrypoint, not an unscoped-login fallback.
+ */
+export function shouldPresentWorkspaceChooser(
+  choices: WorkspaceChoices,
+  autoSelectedWorkspace = resolveAutoSelectedWorkspace(choices),
+): boolean {
+  return (
+    !autoSelectedWorkspace &&
+    (choices.teams.length >= 2 ||
+      choices.pending_invites.length > 0 ||
+      choices.can_create_org)
+  );
+}
+
 type WorkspaceChooserPrisma = {
   user: Pick<PrismaClient['user'], 'findUnique'>;
   teamMember: Pick<PrismaClient['teamMember'], 'findMany'>;

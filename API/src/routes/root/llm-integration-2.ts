@@ -40,8 +40,9 @@ token class from \`access_token\` and \`twofa_token\` and cannot be used for any
    instead of finalizing directly, and the client then calls \`/auth/select-team\`. With the default
    \`"off"\`, \`/auth/login\` is completely unchanged.
 5. Social login (\`GET /auth/callback/:provider\`) resolves workspace immediately after identity,
-   before 2FA. With \`workspace_selection: "auto"\`, 2+ ACTIVE teams or any pending invite route to
-   the chooser. Exactly one ACTIVE team and no invite is an unambiguous server-side selection: its
+   before 2FA. With \`workspace_selection: "auto"\`, 2+ ACTIVE teams, any pending invite, or zero
+   teams with \`can_create_org: true\` route to the chooser. Exactly one ACTIVE team and no invite is
+   an unambiguous server-side selection: its
    exact \`orgId\`/\`teamId\` is carried through any 2FA challenge or required-enrollment setup token
    into the authorization code, so access and rotated refresh sessions retain
    \`active: { orgId, teamId }\`. With \`workspace_selection: "off"\`, no workspace is inferred and
@@ -56,9 +57,12 @@ token class from \`access_token\` and \`twofa_token\` and cannot be used for any
    the design's "magic links join the same flow". LOGIN_LINK/VERIFY_EMAIL redirect to \`/auth?...&
    login_token=...&flow=workspace_chooser\` exactly like the social callback; \`POST /auth/verify-email\`
    instead returns the inline JSON chooser payload exactly like \`/auth/login\`. The same exact-one
-   rule binds the sole ACTIVE team's \`orgId\`/\`teamId\` when the chooser is skipped. An invite-bound
-   link (the invite already selected the team when the token was consumed) never sees this gate —
-   an accepted invite IS the workspace selection.
+   rule binds the sole ACTIVE team's \`orgId\`/\`teamId\` when the chooser is skipped, and that exact
+   scope survives an enrolled-2FA challenge or required-enrollment setup token before code issuance.
+   Zero teams with \`can_create_org: true\` still enter the chooser so the create-workspace action is
+   reachable. An invite-bound link never sees the chooser: token consumption returns the accepted
+   invite's exact \`orgId\`/\`teamId\`, applies the effective 2FA policy, and preserves that scope
+   through the authorization code, access token, refresh token, and rotation.
 7. \`GET /auth\` accepts an optional \`team_hint=<teamId|slug>\` — a chooser preselect / one-click
    workspace switch (design §11.4): a product's sidebar links back into \`/auth\` with the workspace
    the user clicked, and if a team in that user's own (already-verified) chooser payload matches by
