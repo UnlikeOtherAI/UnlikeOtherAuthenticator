@@ -362,7 +362,11 @@ more than 60 seconds. `billing-entitlement.service.ts` validates both membership
 levels and resolves team assignment → organisation assignment → service
 default. `billing-snapshot.service.ts` signs a five-minute, content-free result
 using a dedicated key. Tariff and credential reads use the bypass-RLS admin
-client because tenant SQL access to the control-plane tables is denied. Full
+client because tenant SQL access to the control-plane tables is denied.
+Immutable tariff versions keep pricing/rating separate from payment collection:
+`collection_mode` records Stripe, manual, or no collection, and the snapshot
+emits `payment_collection_enabled` independently from
+`usage_billing_enabled`. Full
 contract and raw-usage separation are defined in
 `Docs/Requirements/billing-tariffs.md`.
 

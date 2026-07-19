@@ -6,6 +6,8 @@ const tariffBody = {
   key: 'string (required, stable tariff family key)',
   name: 'string (required, max 120)',
   mode: 'standard | free | at_cost | custom',
+  collection_mode:
+    'stripe | manual | none; free requires none; none preserves rating/visibility without collecting payment',
   markup_bps: 'integer 0-100000; 100 basis points = 1%; must be 0 for free and at_cost',
   monthly_subscription:
     '{ amount_minor: non-negative integer string, currency: three-letter uppercase ISO currency }',
@@ -36,12 +38,12 @@ export const billingEndpoints: EndpointSchema[] = [
       user_id: 'string (required)',
     },
     response: {
-      200: '{ snapshot, payload } — snapshot is RS256 typ=uoa-tariff+jwt; payload contains schema/product/authorized app-key/subject, immutable tariff id+key+version, mode, markup_bps, usage_price_multiplier_bps, monthly amount/currency, assignment scope, raw_usage_preserved=true, issued/expires timestamps',
+      200: '{ snapshot, payload } — snapshot is RS256 typ=uoa-tariff+jwt; payload contains schema/product/authorized app-key/subject, immutable tariff id+key+version, pricing mode, collection_mode, markup_bps, usage_price_multiplier_bps, monthly amount/currency, usage_billing_enabled, payment_collection_enabled, assignment scope, raw_usage_preserved=true, issued/expires timestamps',
       '401/403':
         'Generic error for invalid/revoked/wrong-product app key, invalid actor signature, actor/body mismatch, or inactive membership',
     },
     notes:
-      'Actor claims: iss/aud exact credential values, sub=user_id, product, organisation_id, team_id, unique jti, iat/exp with maximum 60-second lifetime. Snapshot iss is PUBLIC_BASE_URL; aud is the credential actor_issuer. Consumers must verify the signature and require exact signed product ID+identifier, authorized app-key ID, and user/organisation/team subject binding; shared actor signers never make snapshots portable across products. Customer billable units are raw_metered_units × usage_price_multiplier_bps / 10000 and remain separately labeled from immutable raw units: token-equivalent for token-metered AI, search-equivalent for SERP, and research-equivalent for DeepWater.',
+      'Actor claims: iss/aud exact credential values, sub=user_id, product, organisation_id, team_id, unique jti, iat/exp with maximum 60-second lifetime. Snapshot iss is PUBLIC_BASE_URL; aud is the credential actor_issuer. Consumers must verify the signature and require exact signed product ID+identifier, authorized app-key ID, and user/organisation/team subject binding; shared actor signers never make snapshots portable across products. usage_billing_enabled controls rating; payment_collection_enabled and collection_mode independently describe whether/how payment is collected. Customer billable units are raw_metered_units × usage_price_multiplier_bps / 10000 and remain separately labeled from immutable raw units: token-equivalent for token-metered AI, search-equivalent for SERP, and research-equivalent for DeepWater.',
   },
   {
     method: 'GET',

@@ -334,5 +334,6 @@ describe('GET /llm', () => {
     expect(res.body).toContain('search-equivalent for SERP');
     expect(res.body).toContain('authorized app-key ID');
     expect(res.body).toContain('/billing/v1/effective-tariff');
+    expect(res.body).toContain('collection_mode=stripe|manual|none');
   });
 });

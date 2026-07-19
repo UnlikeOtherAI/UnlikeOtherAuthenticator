@@ -1,5 +1,6 @@
 import {
   BillingAssignmentScope,
+  BillingCollectionMode,
   BillingTariffMode,
   Prisma,
   type PrismaClient,
@@ -15,18 +16,21 @@ const MAX_MARKUP_BPS = 100_000;
 const MAX_INT64 = 9_223_372_036_854_775_807n;
 
 export type PublicTariffMode = 'standard' | 'free' | 'at_cost' | 'custom';
+export type PublicBillingCollectionMode = 'stripe' | 'manual' | 'none';
 
 export type TariffInput = {
   key: string;
   name: string;
   mode: PublicTariffMode;
+  collectionMode: PublicBillingCollectionMode;
   markupBps: number;
   monthlyAmountMinor: string;
   currency: string;
 };
 
-type NormalizedTariffInput = Omit<TariffInput, 'mode' | 'monthlyAmountMinor'> & {
+type NormalizedTariffInput = Omit<TariffInput, 'mode' | 'collectionMode' | 'monthlyAmountMinor'> & {
   mode: BillingTariffMode;
+  collectionMode: BillingCollectionMode;
   monthlyAmountMinor: bigint;
 };
 
@@ -53,6 +57,15 @@ function toDatabaseMode(mode: PublicTariffMode): BillingTariffMode {
     free: BillingTariffMode.FREE,
     at_cost: BillingTariffMode.AT_COST,
     custom: BillingTariffMode.CUSTOM,
+  } as const;
+  return mapped[mode];
+}
+
+function toDatabaseCollectionMode(mode: PublicBillingCollectionMode): BillingCollectionMode {
+  const mapped = {
+    stripe: BillingCollectionMode.STRIPE,
+    manual: BillingCollectionMode.MANUAL,
+    none: BillingCollectionMode.NONE,
   } as const;
   return mapped[mode];
 }
@@ -90,10 +103,12 @@ export function normalizeTariffInput(input: TariffInput): NormalizedTariffInput 
   }
 
   const mode = toDatabaseMode(input.mode);
+  const collectionMode = toDatabaseCollectionMode(input.collectionMode);
   if (
     ((mode === BillingTariffMode.FREE || mode === BillingTariffMode.AT_COST) &&
       input.markupBps !== 0) ||
-    (mode === BillingTariffMode.FREE && monthlyAmountMinor !== 0n)
+    (mode === BillingTariffMode.FREE &&
+      (monthlyAmountMinor !== 0n || collectionMode !== BillingCollectionMode.NONE))
   ) {
     throw new AppError('BAD_REQUEST', 400, 'INVALID_TARIFF_MODE_VALUES');
   }
@@ -102,6 +117,7 @@ export function normalizeTariffInput(input: TariffInput): NormalizedTariffInput 
     key,
     name,
     mode,
+    collectionMode,
     markupBps: input.markupBps,
     monthlyAmountMinor,
     currency,
@@ -438,6 +454,17 @@ export function billingModeToPublic(mode: BillingTariffMode): PublicTariffMode {
     [BillingTariffMode.FREE]: 'free',
     [BillingTariffMode.AT_COST]: 'at_cost',
     [BillingTariffMode.CUSTOM]: 'custom',
+  };
+  return modes[mode];
+}
+
+export function billingCollectionModeToPublic(
+  mode: BillingCollectionMode,
+): PublicBillingCollectionMode {
+  const modes: Record<BillingCollectionMode, PublicBillingCollectionMode> = {
+    [BillingCollectionMode.STRIPE]: 'stripe',
+    [BillingCollectionMode.MANUAL]: 'manual',
+    [BillingCollectionMode.NONE]: 'none',
   };
   return modes[mode];
 }

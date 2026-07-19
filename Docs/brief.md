@@ -1701,6 +1701,13 @@ Every application connection uses its own revocable, product-bound app API key
 plus a short-lived RS256 actor assertion carrying the exact UOA user,
 organisation, and team. Shared cross-product API keys are forbidden.
 
+Payment collection is independent from pricing and usage rating. Every
+immutable tariff version declares `collection_mode = stripe | manual | none`.
+`none` preserves non-free cost visibility and billable-unit calculation while
+collecting no payment; specifically, `at_cost` + `none` + a zero monthly amount
+represents 100% provider-cost visibility with no charge. Free tariffs require
+`none`, zero markup, and zero monthly amount.
+
 The canonical model, modes, precedence, API and JWT contract, superuser
 administration, presentation rules, and Stripe follow-on boundaries are defined
 in [Billing Tariffs and Product Entitlements](./Requirements/billing-tariffs.md).

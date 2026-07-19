@@ -216,7 +216,7 @@ The React implementation should translate those templates into reusable componen
 - **Email Service** — provider-abstracted (e.g. SendGrid, SES), swappable without code changes
 - **AI Translation Service** — for missing translation fallback, results cached permanently
 - **Private Signature Object Storage** — disabled by default; private local filesystem in development/test and Google Cloud Storage via Application Default Credentials when explicitly configured
-- **Ledger and Product Billing Clients** — server-to-server tariff reads use a distinct product-bound UOA app key plus a credential-bound RS256 actor assertion; UOA returns signed content-free snapshots and never receives provider content
+- **Ledger and Product Billing Clients** — server-to-server tariff reads use a distinct product-bound UOA app key plus a credential-bound RS256 actor assertion; UOA returns signed content-free snapshots and never receives provider content. Pricing/rating and payment collection are independent signed tariff terms (`collection_mode = stripe | manual | none`)
 
 ---
 
