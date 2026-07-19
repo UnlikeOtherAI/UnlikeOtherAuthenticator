@@ -26,6 +26,17 @@ export const billingEndpoints: EndpointSchema[] = [
     },
   },
   {
+    method: 'GET',
+    path: '/billing/v1/service-jwks.json',
+    description:
+      'Public JWKS used only to verify UOA’s short-lived Ledger billing-collector service assertions. It contains the current and overlapping retired public keys and is separate from tariff-snapshot, OAuth-resource-token, product-app-key, and webhook credentials.',
+    auth: 'public',
+    response: {
+      200: '{ keys: [current and overlapping retired public RS256 JWKs] }',
+      404: 'Ledger billing assertion signing is not configured',
+    },
+  },
+  {
     method: 'POST',
     path: '/billing/v1/effective-tariff',
     description:
@@ -49,7 +60,7 @@ export const billingEndpoints: EndpointSchema[] = [
     method: 'GET',
     path: '/internal/admin/billing/services',
     description:
-      'List billing services with immutable tariff versions, org/team assignments, and masked app-key metadata',
+      'List billing services with immutable tariff versions, org/team assignments, masked app-key metadata, Stripe catalog readiness, and subscription state',
     auth: adminAuth,
   },
   {
@@ -119,6 +130,8 @@ export const billingEndpoints: EndpointSchema[] = [
       actor_audience: 'HTTPS UOA effective-tariff endpoint audience (required)',
       actor_public_jwk:
         'public RSA JWK (required; kid, n, e; alg RS256/use sig when present; private members forbidden)',
+      checkout_return_origins:
+        'array of up to 10 exact HTTPS origins; empty disables Stripe Checkout for this app key',
       expires_at: 'ISO timestamp | null (optional)',
     },
     response: { 201: 'Masked metadata plus one-time plaintext key (uoa_app_…)' },
@@ -129,5 +142,59 @@ export const billingEndpoints: EndpointSchema[] = [
     description: 'Revoke a product app key immediately',
     auth: adminAuth,
     response: { 204: 'No content' },
+  },
+  {
+    method: 'POST',
+    path: '/billing/v1/stripe/checkout-session',
+    description:
+      'Create or replay one Stripe-hosted subscription Checkout session for the effective immutable tariff. Org/default tariffs bill at organisation scope; team overrides bill at team scope. Only active org/team billing managers may start Checkout.',
+    auth: 'The requested product’s own X-UOA-App-Key plus a fresh credential-bound X-UOA-Actor assertion; never a shared product key',
+    body: {
+      product: 'exact product identifier bound to the app key',
+      organisation_id: 'UOA organisation ID',
+      team_id: 'UOA team ID used for entitlement resolution',
+      user_id: 'UOA user ID; must be owner/admin at the resulting billing scope',
+      success_url: 'HTTPS URL whose exact origin is allowlisted on this app key',
+      cancel_url: 'HTTPS URL whose exact origin is allowlisted on this app key',
+    },
+    response: {
+      201: '{ checkout_session_id, checkout_url, expires_at, tariff }',
+      '400/401/403/409':
+        'Invalid caller/actor/return origin, non-Stripe/free tariff, non-manager, existing subscription, open Checkout, or replay mismatch',
+      503: 'Stripe billing is explicitly disabled or not fully provisioned',
+    },
+    notes:
+      'The Checkout contains the immutable tariff monthly Price when non-zero plus one currency-specific metered Price. That meter receives customer-rated money as integer micro-minor-currency units; it never receives or relabels raw tokens, searches, or research units. Promotions are disabled because UOA tariff versions are the sole commercial authority.',
+  },
+  {
+    method: 'POST',
+    path: '/billing/v1/stripe/webhook',
+    description:
+      'Verify Stripe’s signature over the exact raw request body, idempotently record the event, and reconcile Checkout/subscription state to the exact UOA app-key, tariff, customer, and scope mapping.',
+    auth: 'Stripe-Signature with the dedicated STRIPE_WEBHOOK_SECRET; webhook signing secrets are never product app keys',
+    response: {
+      200: '{ received: true }; already committed event IDs are acknowledged without reapplying state',
+      400: 'Missing/invalid signature or body',
+    },
+  },
+  {
+    method: 'POST',
+    path: '/internal/admin/billing/stripe/usage-exports',
+    description:
+      'Fetch one immutable Ledger schema-v4 monthly snapshot through UOA’s own dedicated Ledger billing-reader key, validate its exact subscription/tariff/scope, and idempotently export customer-rated money deltas to Stripe’s meter.',
+    auth: adminAuth,
+    body: {
+      subscription_id: 'UOA BillingStripeSubscription ID',
+      billing_month: 'UTC month in YYYY-MM',
+      ledger_snapshot_cursor:
+        'optional immutable bus_… cursor for exact Ledger replay; omitted creates a fresh snapshot',
+    },
+    response: {
+      200: '{ ledger_snapshot_cursor, billing_month, exports[] } with separately labeled billing_product/caller_product, exact cumulative customer charge, cumulative/delta integer micro-minor meter quantities, stable Stripe event ID, and delivery timestamp',
+      '400/404/409/502/503':
+        'Invalid month/subscription, stale or mismatched Ledger snapshot, non-meterable tariff/period, disabled collector/Stripe, or upstream failure',
+    },
+    notes:
+      'Platform-superuser/manual reconciliation endpoint. Stripe events meter customer-rated money only, never raw tokens/searches/research units. Every call to Ledger uses UOA’s own X-Ledger-App-Key plus a fresh X-UOA-Service-Assertion; the product app key that initiated Checkout is never reused. Live collection additionally requires a reviewed recurring poll and final pre-invoice reconciliation schedule.',
   },
 ];

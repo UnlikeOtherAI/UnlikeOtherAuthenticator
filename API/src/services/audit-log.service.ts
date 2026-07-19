@@ -30,6 +30,7 @@ export type AdminAuditAction =
   | 'billing.assignment_upserted'
   | 'billing.default_tariff_changed'
   | 'billing.service_created'
+  | 'billing.stripe_usage_exported'
   | 'billing.tariff_version_created'
   | 'user.twofa_reset';
 

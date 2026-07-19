@@ -169,6 +169,70 @@ const EnvSchema = z
         message: 'TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON must contain public-only RS256 RSA keys',
       })
       .optional(),
+    // Stripe is an explicitly gated payment processor. Keys may be provisioned
+    // ahead of launch, but no customer, Checkout, subscription, or meter call is
+    // permitted until the gate is enabled and both credentials are present.
+    STRIPE_BILLING_ENABLED: z.preprocess(normalizeBoolean, z.boolean().default(false)),
+    STRIPE_SECRET_KEY: z.string().min(1).optional(),
+    STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
+    // UOA pulls immutable monthly snapshots from Ledger with UOA's own
+    // product-bound Ledger app key and a separately signed service assertion.
+    LEDGER_BILLING_BASE_URL: z
+      .string()
+      .url()
+      .refine((value) => {
+        const url = new URL(value);
+        return (
+          url.protocol === 'https:' &&
+          !url.username &&
+          !url.password &&
+          !url.search &&
+          !url.hash
+        );
+      }, 'LEDGER_BILLING_BASE_URL must be a credential-free HTTPS URL')
+      .optional(),
+    LEDGER_BILLING_APP_KEY: z
+      .string()
+      .regex(/^lk_[A-Za-z0-9_-]{16,}$/)
+      .optional(),
+    LEDGER_BILLING_APP_KEY_ID: z
+      .string()
+      .regex(/^tk_[A-Za-z0-9_-]{3,253}$/)
+      .optional(),
+    LEDGER_BILLING_ASSERTION_AUDIENCE: z
+      .string()
+      .url()
+      .refine((value) => {
+        const url = new URL(value);
+        return (
+          url.protocol === 'https:' &&
+          !url.username &&
+          !url.password &&
+          !url.search &&
+          !url.hash &&
+          url.pathname === '/'
+        );
+      }, 'LEDGER_BILLING_ASSERTION_AUDIENCE must be a credential-free HTTPS origin')
+      .optional(),
+    UOA_BILLING_ASSERTION_SIGNING_PRIVATE_JWK: z
+      .string()
+      .min(1)
+      .refine((value) => privateRs256JwkKeyId(value) !== undefined, {
+        message:
+          'UOA_BILLING_ASSERTION_SIGNING_PRIVATE_JWK must be a private RS256 RSA JWK with a kid',
+      })
+      .optional(),
+    // Public current + retired verification keys for UOA's Ledger collector
+    // assertion. This is a separate trust surface from tariff snapshots and
+    // resource-token signing.
+    UOA_BILLING_ASSERTION_PUBLIC_JWKS_JSON: z
+      .string()
+      .min(1)
+      .refine((value) => publicRs256JwkKeyIds(value) !== undefined, {
+        message:
+          'UOA_BILLING_ASSERTION_PUBLIC_JWKS_JSON must contain public-only RS256 RSA keys',
+      })
+      .optional(),
     // Optional agreement-signature module. Disabled is the process default; a domain cannot be
     // enabled until storage, retention, and the dedicated evidence key are configured.
     SIGNATURE_STORAGE_PROVIDER: z.enum(['disabled', 'filesystem', 'gcs']).default('disabled'),
@@ -273,6 +337,69 @@ const EnvSchema = z
         path: ['TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON'],
         message: 'tariff snapshot public JWKS must include the current private key public pair',
       });
+    }
+    const billingAssertionPrivateConfigured = Boolean(
+      env.UOA_BILLING_ASSERTION_SIGNING_PRIVATE_JWK,
+    );
+    const billingAssertionPublicConfigured = Boolean(
+      env.UOA_BILLING_ASSERTION_PUBLIC_JWKS_JSON,
+    );
+    if (billingAssertionPrivateConfigured !== billingAssertionPublicConfigured) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [
+          billingAssertionPrivateConfigured
+            ? 'UOA_BILLING_ASSERTION_PUBLIC_JWKS_JSON'
+            : 'UOA_BILLING_ASSERTION_SIGNING_PRIVATE_JWK',
+        ],
+        message:
+          'UOA billing assertion private key and public JWKS must be configured together',
+      });
+    }
+    if (
+      env.UOA_BILLING_ASSERTION_SIGNING_PRIVATE_JWK &&
+      env.UOA_BILLING_ASSERTION_PUBLIC_JWKS_JSON &&
+      !privateRs256JwkMatchesPublicJwks(
+        env.UOA_BILLING_ASSERTION_SIGNING_PRIVATE_JWK,
+        env.UOA_BILLING_ASSERTION_PUBLIC_JWKS_JSON,
+      )
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['UOA_BILLING_ASSERTION_PUBLIC_JWKS_JSON'],
+        message:
+          'UOA billing assertion public JWKS must include the current private key public pair',
+      });
+    }
+
+    if (
+      env.STRIPE_BILLING_ENABLED &&
+      (!env.STRIPE_SECRET_KEY || !env.STRIPE_WEBHOOK_SECRET)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [!env.STRIPE_SECRET_KEY ? 'STRIPE_SECRET_KEY' : 'STRIPE_WEBHOOK_SECRET'],
+        message:
+          'STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET are required when Stripe billing is enabled',
+      });
+    }
+    if (env.STRIPE_BILLING_ENABLED) {
+      const ledgerCollectorFields = [
+        'LEDGER_BILLING_BASE_URL',
+        'LEDGER_BILLING_APP_KEY',
+        'LEDGER_BILLING_APP_KEY_ID',
+        'LEDGER_BILLING_ASSERTION_AUDIENCE',
+        'UOA_BILLING_ASSERTION_SIGNING_PRIVATE_JWK',
+        'UOA_BILLING_ASSERTION_PUBLIC_JWKS_JSON',
+      ] as const;
+      const missing = ledgerCollectorFields.find((field) => !env[field]);
+      if (missing) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [missing],
+          message: `${missing} is required when Stripe billing is enabled`,
+        });
+      }
     }
 
     if (env.SIGNATURE_STORAGE_PROVIDER === 'filesystem' && !env.SIGNATURE_FILESYSTEM_ROOT) {
@@ -381,6 +508,13 @@ export function isOAuthAccessTokenJwksEnabled(env: Env = getEnv()): boolean {
 
 export function isTariffSnapshotJwksEnabled(env: Env = getEnv()): boolean {
   return Boolean(env.TARIFF_SNAPSHOT_PRIVATE_JWK && env.TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON);
+}
+
+export function isBillingAssertionJwksEnabled(env: Env = getEnv()): boolean {
+  return Boolean(
+    env.UOA_BILLING_ASSERTION_SIGNING_PRIVATE_JWK &&
+      env.UOA_BILLING_ASSERTION_PUBLIC_JWKS_JSON,
+  );
 }
 
 /** Whether the public-client / MCP OAuth profile (brief §22.14) is enabled.

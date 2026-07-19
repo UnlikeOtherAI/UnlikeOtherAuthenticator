@@ -2,6 +2,7 @@ import { exportJWK, generateKeyPair } from 'jose';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createApp } from '../../src/app.js';
+import { resetBillingAssertionKeyCache } from '../../src/services/billing-ledger-collector.service.js';
 import { resetTariffSnapshotKeyCache } from '../../src/services/billing-snapshot.service.js';
 
 const appKeyService = vi.hoisted(() => ({
@@ -31,6 +32,8 @@ const envNames = [
   'PUBLIC_BASE_URL',
   'TARIFF_SNAPSHOT_PRIVATE_JWK',
   'TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON',
+  'UOA_BILLING_ASSERTION_SIGNING_PRIVATE_JWK',
+  'UOA_BILLING_ASSERTION_PUBLIC_JWKS_JSON',
 ] as const;
 const originalEnv = Object.fromEntries(envNames.map((name) => [name, process.env[name]])) as Record<
   (typeof envNames)[number],
@@ -65,8 +68,15 @@ const credential = {
 
 beforeAll(async () => {
   const { privateKey, publicKey } = await generateKeyPair('RS256', { extractable: true });
+  const billingAssertionKeyPair = await generateKeyPair('RS256', { extractable: true });
   const privateJwk = await exportJWK(privateKey);
   const publicJwk = await exportJWK(publicKey);
+  const billingAssertionPrivateJwk = await exportJWK(
+    billingAssertionKeyPair.privateKey,
+  );
+  const billingAssertionPublicJwk = await exportJWK(
+    billingAssertionKeyPair.publicKey,
+  );
   Object.assign(privateJwk, {
     kid: 'tariff-snapshot-test',
     alg: 'RS256',
@@ -77,18 +87,36 @@ beforeAll(async () => {
     alg: 'RS256',
     use: 'sig',
   });
+  Object.assign(billingAssertionPrivateJwk, {
+    kid: 'billing-assertion-test',
+    alg: 'RS256',
+    use: 'sig',
+  });
+  Object.assign(billingAssertionPublicJwk, {
+    kid: 'billing-assertion-test',
+    alg: 'RS256',
+    use: 'sig',
+  });
 
   process.env.SHARED_SECRET = 'test-shared-secret-with-enough-length';
   process.env.PUBLIC_BASE_URL = 'https://auth.example.com';
   Reflect.deleteProperty(process.env, 'DATABASE_URL');
   process.env.TARIFF_SNAPSHOT_PRIVATE_JWK = JSON.stringify(privateJwk);
   process.env.TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON = JSON.stringify({ keys: [publicJwk] });
+  process.env.UOA_BILLING_ASSERTION_SIGNING_PRIVATE_JWK = JSON.stringify(
+    billingAssertionPrivateJwk,
+  );
+  process.env.UOA_BILLING_ASSERTION_PUBLIC_JWKS_JSON = JSON.stringify({
+    keys: [billingAssertionPublicJwk],
+  });
   resetTariffSnapshotKeyCache();
+  resetBillingAssertionKeyCache();
 });
 
 afterAll(() => {
   restoreEnv();
   resetTariffSnapshotKeyCache();
+  resetBillingAssertionKeyCache();
 });
 
 beforeEach(() => {
@@ -233,6 +261,29 @@ describe('billing app API routes', () => {
         }),
       ]);
       expect(body.keys[0]).not.toHaveProperty('d');
+    });
+  });
+
+  it('publishes only the dedicated Ledger collector assertion public key', async () => {
+    await withApp(async (app) => {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/billing/v1/service-jwks.json',
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.headers['cache-control']).toBe('public, max-age=300');
+      const body = response.json<{ keys: Array<Record<string, unknown>> }>();
+      expect(body.keys).toEqual([
+        expect.objectContaining({
+          kty: 'RSA',
+          kid: 'billing-assertion-test',
+          alg: 'RS256',
+          use: 'sig',
+        }),
+      ]);
+      expect(body.keys[0]).not.toHaveProperty('d');
+      expect(body.keys[0].kid).not.toBe('tariff-snapshot-test');
     });
   });
 

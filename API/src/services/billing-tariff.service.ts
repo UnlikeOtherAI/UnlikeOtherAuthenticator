@@ -207,11 +207,27 @@ export async function listBillingServices(deps?: { prisma?: PrismaClient }) {
           actorIssuer: true,
           actorAudience: true,
           actorKeyId: true,
+          checkoutReturnOrigins: true,
           lastUsedAt: true,
           expiresAt: true,
           revokedAt: true,
           createdByEmail: true,
           createdAt: true,
+        },
+      },
+      stripeCatalogs: {
+        orderBy: { currency: 'asc' },
+        include: {
+          tariffPrices: {
+            orderBy: { createdAt: 'asc' },
+          },
+        },
+      },
+      stripeSubscriptions: {
+        orderBy: { createdAt: 'desc' },
+        include: {
+          org: { select: { id: true, name: true } },
+          team: { select: { id: true, name: true } },
         },
       },
     },

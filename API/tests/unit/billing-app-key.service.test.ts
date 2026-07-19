@@ -3,6 +3,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import {
   createBillingAppKey,
+  normalizeCheckoutReturnOrigins,
   verifyBillingAppKey,
 } from '../../src/services/billing-app-key.service.js';
 import { BILLING_APP_KEY_PREFIX } from '../../src/utils/billing-app-key.js';
@@ -61,6 +62,7 @@ describe('product-dedicated billing app keys', () => {
             actorIssuer: data.actorIssuer,
             actorAudience: data.actorAudience,
             actorKeyId: data.actorKeyId,
+            checkoutReturnOrigins: data.checkoutReturnOrigins,
             lastUsedAt: null,
             expiresAt: null,
             revokedAt: null,
@@ -80,6 +82,7 @@ describe('product-dedicated billing app keys', () => {
         actorIssuer: 'https://ledger.unlikeotherai.com',
         actorAudience: 'https://authentication.unlikeotherai.com/billing/v1/effective-tariff',
         actorPublicJwk: publicJwk,
+        checkoutReturnOrigins: ['https://app.nessie.works'],
         createdBy: { userId: 'admin_1', email: 'admin@example.com' },
       },
       { prisma: prisma as never },
@@ -94,6 +97,7 @@ describe('product-dedicated billing app keys', () => {
       serviceId: 'service_1',
       actorIssuer: 'https://ledger.unlikeotherai.com',
       actorKeyId: 'ledger-shared-actor',
+      checkoutReturnOrigins: ['https://app.nessie.works'],
     });
   });
 
@@ -109,6 +113,7 @@ describe('product-dedicated billing app keys', () => {
           actorIssuer: 'https://ledger.unlikeotherai.com',
           actorAudience: 'https://authentication.unlikeotherai.com/some-other-api',
           actorPublicJwk: publicJwk,
+          checkoutReturnOrigins: [],
           createdBy: { email: 'admin@example.com' },
         },
         { prisma: {} as never },
@@ -131,6 +136,7 @@ describe('product-dedicated billing app keys', () => {
           actorAudience: 'https://authentication.unlikeotherai.com/billing/v1/effective-tariff',
           actorKeyId: 'ledger-shared-actor',
           actorPublicJwk: publicJwk,
+          checkoutReturnOrigins: [],
           revokedAt: null,
           expiresAt: null,
           service: {
@@ -190,6 +196,7 @@ describe('product-dedicated billing app keys', () => {
           actorAudience: 'https://authentication.unlikeotherai.com/billing/v1/effective-tariff',
           actorKeyId: 'ledger-shared-actor',
           actorPublicJwk: publicJwk,
+          checkoutReturnOrigins: [],
           revokedAt,
           expiresAt,
           service: {
@@ -210,5 +217,21 @@ describe('product-dedicated billing app keys', () => {
       }),
     ).rejects.toMatchObject({ statusCode: 401 });
     expect(update).not.toHaveBeenCalled();
+  });
+
+  it('canonicalizes exact HTTPS checkout return origins and rejects paths', () => {
+    expect(
+      normalizeCheckoutReturnOrigins([
+        'https://app.nessie.works/',
+        'https://app.nessie.works',
+        'https://water.example.com',
+      ]),
+    ).toEqual(['https://app.nessie.works', 'https://water.example.com']);
+    expect(() =>
+      normalizeCheckoutReturnOrigins(['https://app.nessie.works/billing']),
+    ).toThrow('INVALID_CHECKOUT_RETURN_ORIGINS');
+    expect(() =>
+      normalizeCheckoutReturnOrigins(['http://app.nessie.works']),
+    ).toThrow('INVALID_CHECKOUT_RETURN_ORIGINS');
   });
 });

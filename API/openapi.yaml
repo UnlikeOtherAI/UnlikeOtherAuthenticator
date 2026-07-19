@@ -51,6 +51,8 @@ tags:
     description: System-admin–only management endpoints
   - name: Internal Org
     description: Server-to-server group and team-group management
+  - name: Billing
+    description: Signed tariff resolution, product-scoped Checkout, Stripe webhooks, and usage reconciliation
 
 components:
   securitySchemes:
@@ -76,6 +78,21 @@ components:
       in: header
       name: X-UOA-Config-JWT
       description: RS256 config JWT signed with the domain's private key.
+    billingAppKey:
+      type: apiKey
+      in: header
+      name: X-UOA-App-Key
+      description: One revocable UOA app key dedicated to the exact calling product/deployment.
+    billingActor:
+      type: apiKey
+      in: header
+      name: X-UOA-Actor
+      description: Short-lived RS256 actor assertion bound to the exact product app key and UOA user/org/team.
+    stripeSignature:
+      type: apiKey
+      in: header
+      name: Stripe-Signature
+      description: Stripe endpoint signature verified over the exact raw request body with a separate webhook secret.
 
   parameters:
     configUrl:
@@ -624,7 +641,6 @@ components:
           type: string
 
 paths:
-
   # ── Infrastructure ────────────────────────────────────────────────────────────
 
   /:
@@ -2246,6 +2262,254 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+
+  /billing/v1/jwks.json:
+    get:
+      tags: [Billing]
+      summary: Get tariff-snapshot verification keys
+      operationId: getBillingTariffJwks
+      security: []
+      responses:
+        '200':
+          description: Current and overlapping retired public RS256 keys.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [keys]
+                properties:
+                  keys:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+        '404':
+          description: Tariff snapshot signing is not configured.
+
+  /billing/v1/service-jwks.json:
+    get:
+      tags: [Billing]
+      summary: Get UOA Ledger-collector assertion verification keys
+      operationId: getBillingServiceJwks
+      description: |
+        Dedicated current and overlapping retired public RS256 keys for
+        UOA-to-Ledger `billing.read` service assertions. These are separate from
+        tariff, OAuth resource-token, app-key, and webhook credentials.
+      security: []
+      responses:
+        '200':
+          description: Public service-assertion JWKS.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [keys]
+                properties:
+                  keys:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+        '404':
+          description: Billing service-assertion signing is not configured.
+
+  /billing/v1/effective-tariff:
+    post:
+      tags: [Billing]
+      summary: Resolve and sign the effective immutable tariff
+      operationId: resolveEffectiveBillingTariff
+      security:
+        - billingAppKey: []
+          billingActor: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [product, organisation_id, team_id, user_id]
+              properties:
+                product:
+                  type: string
+                organisation_id:
+                  type: string
+                team_id:
+                  type: string
+                user_id:
+                  type: string
+      responses:
+        '200':
+          description: Content-free tariff payload plus its RS256 snapshot JWT.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [snapshot, payload]
+                properties:
+                  snapshot:
+                    type: string
+                  payload:
+                    type: object
+                    additionalProperties: true
+        '401':
+          description: Invalid app key or actor assertion.
+        '403':
+          description: Product, subject, or active membership mismatch.
+
+  /billing/v1/stripe/checkout-session:
+    post:
+      tags: [Billing]
+      summary: Create a product-scoped Stripe subscription Checkout
+      operationId: createBillingStripeCheckoutSession
+      description: |
+        Uses the calling product/deployment's own UOA app key and a fresh actor
+        assertion. Only an active owner/admin at the resulting organisation or
+        team billing scope may create Checkout. Stripe billing is disabled by
+        default.
+      security:
+        - billingAppKey: []
+          billingActor: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [product, organisation_id, team_id, user_id, success_url, cancel_url]
+              properties:
+                product:
+                  type: string
+                organisation_id:
+                  type: string
+                team_id:
+                  type: string
+                user_id:
+                  type: string
+                success_url:
+                  type: string
+                  format: uri
+                cancel_url:
+                  type: string
+                  format: uri
+      responses:
+        '201':
+          description: Stripe-hosted Checkout URL and exact immutable tariff.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [checkout_session_id, checkout_url, expires_at, tariff]
+                properties:
+                  checkout_session_id:
+                    type: string
+                  checkout_url:
+                    type: string
+                    format: uri
+                  expires_at:
+                    type: string
+                    format: date-time
+                  tariff:
+                    type: object
+                    additionalProperties: true
+        '401':
+          description: Invalid product app key or actor assertion.
+        '403':
+          description: Actor is not a billing manager at the exact scope.
+        '409':
+          description: Tariff is not Stripe-collected or Checkout/subscription already exists.
+        '503':
+          description: Stripe billing is disabled or incompletely provisioned.
+
+  /billing/v1/stripe/webhook:
+    post:
+      tags: [Billing]
+      summary: Reconcile a signed Stripe lifecycle event
+      operationId: reconcileBillingStripeWebhook
+      description: |
+        Verifies `Stripe-Signature` over the exact raw request body with the
+        dedicated webhook secret. Webhook secrets are never app API keys.
+      security:
+        - stripeSignature: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: Event accepted or idempotently replayed.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [received]
+                properties:
+                  received:
+                    type: boolean
+                    enum: [true]
+        '400':
+          description: Missing or invalid signature/body.
+
+  /internal/admin/billing/stripe/usage-exports:
+    post:
+      tags: [Billing, Internal Admin]
+      summary: Reconcile one Ledger subscription month into Stripe usage
+      operationId: exportBillingStripeUsage
+      description: |
+        Platform-superuser reconciliation endpoint. UOA calls Ledger with UOA's
+        own dedicated Ledger app key plus a separately signed `billing.read`
+        assertion, validates the immutable schema-v4 product/scope/month/tariff,
+        and emits idempotent customer-money deltas. It never meters raw tokens,
+        searches, or research units.
+      security:
+        - adminBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [subscription_id, billing_month]
+              properties:
+                subscription_id:
+                  type: string
+                billing_month:
+                  type: string
+                  pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+                ledger_snapshot_cursor:
+                  type: string
+                  pattern: '^bus_[A-Za-z0-9_-]+$'
+      responses:
+        '200':
+          description: Immutable cursor and cumulative/delta Stripe meter exports.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ledger_snapshot_cursor, billing_month, exports]
+                properties:
+                  ledger_snapshot_cursor:
+                    type: string
+                  billing_month:
+                    type: string
+                  exports:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+        '401':
+          description: Missing or invalid platform-superuser token.
+        '409':
+          description: Subscription period is not meterable or snapshot is stale.
+        '502':
+          description: Ledger response does not exactly match the expected contract.
+        '503':
+          description: Stripe or the dedicated Ledger collector is disabled.
 
   /org/organisations/{orgId}:
     parameters:

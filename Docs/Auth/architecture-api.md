@@ -335,7 +335,7 @@ Request → Route → Middleware → Service → Database (Prisma)
 * **domain-hash-auth** — runs on domain-scoped API routes. Verifies the domain hash token.
 * **superuser-access-token** — validates user access tokens for superuser-only domain endpoints.
 * **admin-superuser** — runs on `/internal/admin/*`. Validates the admin access token issued by `POST /internal/admin/token` and requires `role: "superuser"` for the configured `ADMIN_AUTH_DOMAIN`. See `Docs/Requirements/roles-and-acl.md`.
-* **billing-app-auth** — runs on `POST /billing/v1/effective-tariff`. Accepts only the calling product's individual `uoa_app_…` credential, resolves its exact product and actor-verification binding through the admin database connection, and rejects duplicate or ambiguous credential headers. The route separately requires `X-UOA-Actor`; the app key never stands in for a user identity. The signed result includes the non-secret app-key record ID, exact product ID/identifier, and user/organisation/team subject so consumers can reject cross-product or cross-actor replay even when products share an actor-signing key.
+* **billing-app-auth** — runs on `POST /billing/v1/effective-tariff` and `POST /billing/v1/stripe/checkout-session`. Accepts only the calling product's individual `uoa_app_…` credential, resolves its exact product and actor-verification binding through the admin database connection, and rejects duplicate or ambiguous credential headers. The route separately requires `X-UOA-Actor`; the app key never stands in for a user identity. The signed result includes the non-secret app-key record ID, exact product ID/identifier, and user/organisation/team subject so consumers can reject cross-product or cross-actor replay even when products share an actor-signing key.
 * **org-features** — rejects org endpoints when `org_features.enabled` is false.
 * **groups-enabled** — rejects group endpoints when `org_features.groups_enabled` is false.
 * **org-role-guard** — validates the user access token and the user's org role for `/org/*` routes (`owner > admin > member`). Reads `OrgMember.role` for the authenticated user in the target org and returns 403 if not a member or the role is insufficient.
@@ -366,9 +366,22 @@ client because tenant SQL access to the control-plane tables is denied.
 Immutable tariff versions keep pricing/rating separate from payment collection:
 `collection_mode` records Stripe, manual, or no collection, and the snapshot
 emits `payment_collection_enabled` independently from
-`usage_billing_enabled`. Full
-contract and raw-usage separation are defined in
+`usage_billing_enabled`. Full contract and raw-usage separation are defined in
 `Docs/Requirements/billing-tariffs.md`.
+
+The Stripe boundary is an optional projection layer, disabled by default.
+Checkout reuses the exact billing app-key + actor verification path, then
+requires an active owner/admin at the selected organisation/team billing scope.
+`billing-stripe-catalog.service.ts` maps immutable tariff versions to fixed and
+metered Stripe Prices; `billing-stripe-webhook.service.ts` verifies the exact
+raw body with a separate webhook secret and reconciles exact
+customer/product/tariff/scope/item bindings. The Ledger collector presents
+UOA's own dedicated Ledger app key and a short-lived `billing.read` service
+assertion. Its separate public verification overlap is served at
+`/billing/v1/service-jwks.json`. Usage export validates Ledger's immutable
+schema-v4 product/scope/month/tariff/currency and sends only cumulative
+customer-money deltas to Stripe's sum meter. None of these paths accepts another
+product's app key, a user token, or a webhook secret as an app credential.
 
 > SCIM is deferred. When implementation lands, add a `scim-auth` middleware (SCIM bearer token validation and org-scope verification for `/scim/v2/*`, returning 401 on invalid token and 403 on org scope mismatch) and update both this list and the directory tree.
 

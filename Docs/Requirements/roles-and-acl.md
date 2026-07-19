@@ -26,6 +26,13 @@ Delegated customer billing controls may be added later without weakening this
 initial boundary. See
 [Billing Tariffs and Product Entitlements](./billing-tariffs.md).
 
+The Stripe catalog, reconciliation, and usage-export controls remain
+platform-superuser-only. A product may start hosted Checkout only with its own
+product-bound app key and a fresh actor assertion for an active user who is an
+owner/admin at the resulting billing scope. This limited Checkout permission
+does not grant tariff mutation, cross-team usage reads, webhook management, or
+collector access.
+
 ### 2. Consumer-defined roles (external, custom)
 
 These are roles that a developer or org defines for their own product. UOA stores only the **label** — a string reference. UOA has no opinion on what the role permits. The consuming application owns all gating logic.

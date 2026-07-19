@@ -85,6 +85,15 @@ Set via Cloud Run service config:
 | `CONFIDENTIAL_TOKEN_EXCHANGE_RESOURCE` | Plain production value: `https://ledger.unlikeotherai.com`; paired exactly with the source domain and used as the issued token audience |
 | `TARIFF_SNAPSHOT_PRIVATE_JWK` | Secret Manager: `uoa-auth-tariff-snapshot-private-jwk`; dedicated current RS256 private RSA JWK for signed tariff snapshots. Configure it only with the matching public JWKS; do not reuse another UOA signing key |
 | `TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON` | Secret Manager: `uoa-auth-tariff-snapshot-public-jwks-json`; public-only JWKS containing the current tariff key and overlapping retired verification keys. The current entry must exactly match the private key's `kid`, modulus, and exponent |
+| `STRIPE_BILLING_ENABLED` | Plain safety gate. Production default is `false`; Stripe and Ledger collection calls are forbidden until every launch prerequisite below is verified |
+| `STRIPE_SECRET_KEY` | Secret Manager: dedicated Stripe restricted/live key for UOA billing. Presence alone does not enable billing |
+| `STRIPE_WEBHOOK_SECRET` | Secret Manager: Stripe endpoint signing secret for `/billing/v1/stripe/webhook`; never reuse a product app key or Ledger key |
+| `LEDGER_BILLING_BASE_URL` | Plain credential-free HTTPS Ledger origin, canonical production value `https://ledger.unlikeotherai.com` |
+| `LEDGER_BILLING_APP_KEY` | Secret Manager: UOA's own dedicated, product-bound Ledger billing-reader app key. Never reuse a Nessie, DeepWater, DeepSignal, DeepTest, user, or webhook credential |
+| `LEDGER_BILLING_APP_KEY_ID` | Plain immutable Ledger record ID for that exact UOA app key; copied into the signed assertion's `azp` and verified by Ledger |
+| `LEDGER_BILLING_ASSERTION_AUDIENCE` | Exact Ledger service-assertion audience, canonical production value `https://ledger.unlikeotherai.com` |
+| `UOA_BILLING_ASSERTION_SIGNING_PRIVATE_JWK` | Secret Manager: dedicated current RS256 private JWK used only for short-lived UOA→Ledger billing-reader assertions |
+| `UOA_BILLING_ASSERTION_PUBLIC_JWKS_JSON` | Secret Manager: public-only current and overlapping retired assertion keys served at `/billing/v1/service-jwks.json`; current public pair must match the private key |
 
 `/llm` is a Markdown integration guide for LLMs and human readers. `/api` is the machine-readable JSON schema and config contract.
 
@@ -163,12 +172,37 @@ Rotate tariff snapshot keys with an overlap:
    the retired public key. Never remove it in the same rollout that changes the
    signer.
 
-Tariff versions now store `collection_mode = stripe | manual | none`, and signed
-snapshots expose collection intent separately from usage rating. Stripe
-customer, subscription, invoice, payment-method, and webhook configuration is
-still outside this deployment slice; `collection_mode=stripe` must not be
-treated as active collection until that later integration is provisioned and
-verified.
+Tariff versions store `collection_mode = stripe | manual | none`, and signed
+snapshots expose collection intent separately from usage rating.
+`collection_mode=stripe` still does not mean collection is active: the Stripe
+foundation is fail-closed behind `STRIPE_BILLING_ENABLED`.
+
+Before enabling it in production:
+
+1. Create and transfer a distinct UOA-owned Ledger billing-reader app key.
+   Configure it for `billing.read` only; record the exact key ID separately.
+2. Generate a dedicated billing-assertion RSA key pair, publish the public
+   current/retired overlap through
+   `UOA_BILLING_ASSERTION_PUBLIC_JWKS_JSON`, and configure Ledger to trust
+   `https://authentication.unlikeotherai.com/billing/v1/service-jwks.json`.
+   Rotate it with the same publish → wait → switch signer → wait → retire
+   sequence used for tariff keys.
+3. Provision Stripe test-mode API and webhook secrets. Configure the webhook for
+   Checkout-session and subscription lifecycle events and confirm raw-body
+   signature validation plus idempotent replay.
+4. Mint a separate `uoa_app_…` key for each product/deployment that can start
+   Checkout. Bind only its own actor issuer/key and exact HTTPS return origins.
+5. Exercise monthly fixed charges, rated-usage deltas, zero and negative
+   corrections, lost-response replay, UTC month boundaries, and final
+   pre-invoice reconciliation against immutable Ledger cursors.
+6. Approve and deploy a recurring current-month collector plus a final
+   pre-invoice reconciliation job. Stripe meter events are asynchronous, so a
+   manual export is not an adequate live-billing schedule.
+7. Reconcile test invoices to UOA's exact tariff version and Ledger's customer
+   charge before setting `STRIPE_BILLING_ENABLED=true` with live credentials.
+
+No live Stripe credentials or automated collection schedule are created by the
+repository deployment itself.
 
 ### Signature module production prerequisites (not enabled)
 

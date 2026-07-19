@@ -18,6 +18,7 @@ export type BillingAppKeyRecord = {
   actorIssuer: string;
   actorAudience: string;
   actorKeyId: string;
+  checkoutReturnOrigins: string[];
   lastUsedAt: Date | null;
   expiresAt: Date | null;
   revokedAt: Date | null;
@@ -31,6 +32,7 @@ export type VerifiedBillingAppKey = {
   actorAudience: string;
   actorKeyId: string;
   actorPublicJwk: Prisma.JsonValue;
+  checkoutReturnOrigins: string[];
   service: {
     id: string;
     identifier: string;
@@ -51,6 +53,7 @@ const recordSelect = {
   actorIssuer: true,
   actorAudience: true,
   actorKeyId: true,
+  checkoutReturnOrigins: true,
   lastUsedAt: true,
   expiresAt: true,
   revokedAt: true,
@@ -74,6 +77,31 @@ function normalizeHttpsUrl(value: string, code: string): string {
   }
 }
 
+export function normalizeCheckoutReturnOrigins(values: string[]): string[] {
+  if (values.length > 10) {
+    throw new AppError('BAD_REQUEST', 400, 'INVALID_CHECKOUT_RETURN_ORIGINS');
+  }
+  const origins = values.map((value) => {
+    try {
+      const url = new URL(value.trim());
+      if (
+        url.protocol !== 'https:' ||
+        url.username ||
+        url.password ||
+        url.pathname !== '/' ||
+        url.search ||
+        url.hash
+      ) {
+        throw new Error('invalid');
+      }
+      return url.origin;
+    } catch {
+      throw new AppError('BAD_REQUEST', 400, 'INVALID_CHECKOUT_RETURN_ORIGINS');
+    }
+  });
+  return [...new Set(origins)].sort();
+}
+
 function validateActorJwk(input: unknown): PublicRsaJwk {
   const jwk = parsePublicRsaJwk(input);
   if ((jwk.alg && jwk.alg !== 'RS256') || (jwk.use && jwk.use !== 'sig')) {
@@ -89,6 +117,7 @@ export async function createBillingAppKey(
     actorIssuer: string;
     actorAudience: string;
     actorPublicJwk: unknown;
+    checkoutReturnOrigins?: string[];
     expiresAt?: Date | null;
     createdBy?: { userId?: string | null; email?: string | null };
   },
@@ -112,6 +141,9 @@ export async function createBillingAppKey(
     throw new AppError('BAD_REQUEST', 400, 'INVALID_ACTOR_AUDIENCE');
   }
   const actorPublicJwk = validateActorJwk(params.actorPublicJwk);
+  const checkoutReturnOrigins = normalizeCheckoutReturnOrigins(
+    params.checkoutReturnOrigins ?? [],
+  );
   await importClientJwkKey(actorPublicJwk);
 
   const plaintext = generateBillingAppKey();
@@ -135,6 +167,7 @@ export async function createBillingAppKey(
         actorAudience,
         actorKeyId: actorPublicJwk.kid,
         actorPublicJwk: actorPublicJwk as unknown as Prisma.InputJsonValue,
+        checkoutReturnOrigins,
         expiresAt: params.expiresAt ?? null,
         createdByUserId: params.createdBy?.userId ?? null,
         createdByEmail: params.createdBy?.email ?? null,
@@ -150,6 +183,7 @@ export async function createBillingAppKey(
           product: service.identifier,
           app_key_id: created.id,
           actor_kid: actorPublicJwk.kid,
+          checkout_return_origins: checkoutReturnOrigins,
         },
       },
     });
@@ -212,6 +246,7 @@ export async function verifyBillingAppKey(
       actorAudience: true,
       actorKeyId: true,
       actorPublicJwk: true,
+      checkoutReturnOrigins: true,
       revokedAt: true,
       expiresAt: true,
       service: {
@@ -244,6 +279,7 @@ export async function verifyBillingAppKey(
     actorAudience: row.actorAudience,
     actorKeyId: row.actorKeyId,
     actorPublicJwk: row.actorPublicJwk,
+    checkoutReturnOrigins: row.checkoutReturnOrigins,
     service: {
       id: row.service.id,
       identifier: row.service.identifier,

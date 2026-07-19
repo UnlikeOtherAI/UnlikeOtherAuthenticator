@@ -129,6 +129,7 @@ All four auto-onboarding tables plus the audit log are accessed exclusively thro
 | `integration_claim_tokens` | `uoa_admin` only. `REVOKE ALL` for `uoa_app`. |
 | `admin_audit_log` | `uoa_admin` only. `REVOKE ALL` for `uoa_app`. `audit-log.service.ts` must be refactored to accept a prisma client from the caller instead of calling `getPrisma()` (current implementation binds it to `uoa_app`, which will permission-deny). |
 | `confidential_assertion_uses` | `uoa_admin` only. The confidential exchange runs before tenant context is trusted and atomically claims a hashed source-domain `jti`; `REVOKE ALL` plus a deny-all policy for `uoa_app`. |
+| `billing_stripe_customers`, `billing_stripe_catalogs`, `billing_stripe_tariff_prices`, `billing_stripe_checkout_sessions`, `billing_stripe_subscriptions`, `billing_stripe_usage_exports`, `billing_stripe_webhook_events` | `uoa_admin` only. These are global commercial/payment projections reached from product-authenticated Checkout, Stripe webhook, platform-superuser, and service-collector paths before a tenant SQL context exists. Database constraints/triggers bind every row to the exact UOA service, tariff, organisation/team scope, customer, and subscription. `REVOKE ALL` plus deny-all RLS policies block `uoa_app`. |
 
 No `app.claim_token_hash` session variable is needed — the claim route runs on `uoa_admin`.
 

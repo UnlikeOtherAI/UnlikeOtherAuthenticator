@@ -8,10 +8,12 @@ products consume UOA's effective-tariff snapshots. Products and Ledger must not
 maintain independent tariff tables or infer a tariff from usage.
 
 This slice defines tariff storage, assignment, app authentication, signed
-entitlement reads, and the immutable intent for how payment will be collected.
-It deliberately does not yet create Stripe customers, subscriptions, invoices,
-payment methods, or webhooks. The stored collection mode and monthly
-subscription amount are commercial inputs for that later integration.
+entitlement reads, and a fail-closed Stripe collection foundation. UOA can map
+an exact immutable tariff version to Stripe products/prices, create a hosted
+subscription Checkout, reconcile signed webhooks, and export Ledger-rated usage.
+The integration is disabled by default and must not create customers, prices,
+subscriptions, or meter events until its explicit production gate and every
+credential/reconciliation prerequisite are configured and verified.
 
 ## Product and tariff model
 
@@ -267,15 +269,15 @@ slice.
 | `GET /internal/admin/billing/services/:serviceId/app-keys` | List credential metadata, never plaintext secrets |
 | `POST /internal/admin/billing/services/:serviceId/app-keys` | Mint a product-bound key and bind its actor verification key |
 | `DELETE /internal/admin/billing/services/:serviceId/app-keys/:keyId` | Revoke a product credential |
+| `POST /internal/admin/billing/stripe/usage-exports` | Fetch/replay one immutable Ledger subscription-month snapshot and idempotently export its customer-money delta to Stripe |
 
 Every mutation writes the existing global admin audit log. Tariff and credential
 tables are denied to the tenant runtime database role and accessed only through
 the bypass-RLS admin connection.
 
-## Stripe follow-on
+## Stripe collection foundation
 
-The next billing phase may map exact tariff versions to Stripe Prices and create
-subscriptions at organisation/team scope. That phase must preserve these rules:
+Stripe resources are projections of UOA and Ledger truth:
 
 * UOA remains the tariff and entitlement source of truth.
 * Ledger remains the raw-usage and booked-charge source of truth.
@@ -287,3 +289,79 @@ subscriptions at organisation/team scope. That phase must preserve these rules:
   `stripe` is automated collection, `manual` is externally collected, and
   `none` collects nothing.
 * Each product continues to use its own app key.
+
+`STRIPE_BILLING_ENABLED=false` is the process default. Provisioning Stripe
+secrets without turning on that gate cannot call Stripe. Enabling the gate also
+requires UOA's own dedicated Ledger app key and dedicated billing-assertion key
+pair; UOA never borrows a product, user, or webhook credential to collect usage.
+
+### Checkout and subscription scope
+
+`POST /billing/v1/stripe/checkout-session` uses the calling product's own
+`X-UOA-App-Key` plus its fresh credential-bound `X-UOA-Actor`. The user must be
+an active owner/admin at the selected billing scope. A team tariff override
+creates a team-scoped subscription; an organisation assignment or service
+default creates an organisation-scoped subscription. Return URLs must use an
+exact HTTPS origin allowlisted on that individual app-key record.
+
+UOA creates one currency-specific Stripe catalog for each product, including:
+
+* an immutable monthly Price for the exact tariff version when its monthly
+  amount is non-zero;
+* one metered Price for rated customer money;
+* a calendar-month billing anchor aligned to Ledger's UTC month;
+* no promotion codes, because discounts must be explicit UOA tariff versions.
+
+The hosted Checkout starts the next complete UTC calendar month without
+proration. Subscription webhooks are verified against the exact raw request
+body with the separate `STRIPE_WEBHOOK_SECRET`, recorded idempotently, and
+accepted only when the Stripe customer, product, tariff, scope, and line items
+match the immutable UOA mapping.
+
+### Ledger collection and Stripe meter units
+
+UOA calls `GET /v1/billing/usage?group_by=service` with:
+
+```http
+X-Ledger-App-Key: <UOA's dedicated Ledger billing-reader app key>
+X-UOA-Service-Assertion: <short-lived RS256 service JWT>
+```
+
+The app key authenticates UOA as the calling application. The assertion
+independently binds that exact key ID to `scope=billing.read`, the billed
+product, organisation, optional team, and one UTC billing month. Ledger
+verifies it through UOA's rotation-safe
+`GET /billing/v1/service-jwks.json`; those keys are not tariff-snapshot,
+OAuth-resource-token, product-app-key, or webhook keys.
+
+Ledger's schema-v4 response is an immutable snapshot. UOA validates its exact
+product, scope, calendar boundaries, tariff version, collection mode, and
+currency before exporting anything. Each customer charge is an exact
+major-currency decimal. UOA converts it to an integer count of
+`10^-6` minor-currency units and sends only the delta since the previous
+snapshot to Stripe's sum meter, using a stable idempotent event identifier.
+Stripe therefore meters rated money—not tokens, searches, research runs, or
+their derived billable units. Raw and customer billable usage remain in Ledger
+and product UIs.
+
+Snapshot cursors and cumulative/delta exports are stored so retries can be
+replayed and audited. A lower corrected cumulative total emits a negative
+delta; it does not rewrite prior raw usage.
+
+### Launch gate
+
+Code deployment is not permission to collect money. Production collection
+remains blocked until all of the following are demonstrated:
+
+1. distinct live Stripe API and webhook secrets are provisioned;
+2. UOA has its own revocable Ledger billing-reader app key;
+3. Ledger trusts only UOA's dedicated service-assertion JWKS and exact key ID;
+4. per-product app keys and Checkout return origins are provisioned separately;
+5. current-month polling, final pre-invoice reconciliation, webhook retries,
+   negative corrections, and immutable-cursor replay are exercised in Stripe
+   test mode;
+6. invoices visibly reconcile UOA tariff terms and Ledger customer charges.
+
+Stripe meter processing is asynchronous. A reviewed scheduler and
+pre-finalisation reconciliation run are mandatory before enabling live
+collection; a manually successful export alone is insufficient.

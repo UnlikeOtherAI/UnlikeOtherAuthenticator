@@ -116,5 +116,24 @@ serving, so malformed or incomplete rotation configuration fails at startup.
 All tariff catalog/default/assignment/key mutations are platform-superuser-only and are
 written to the UOA admin audit log. See [/api](/api) for exact mutation contracts.
 
+### UOA-to-Ledger billing collection
+
+When Stripe collection is explicitly enabled, UOA reads Ledger’s immutable monthly
+billing snapshot with **UOA’s own dedicated Ledger app key** in
+\`X-Ledger-App-Key\`. It never borrows a Nessie, DeepWater, DeepSignal, DeepTest, user,
+or webhook credential. A fresh \`X-UOA-Service-Assertion\` independently binds that app
+key ID to \`scope=billing.read\`, the exact product, organisation, optional team, and
+UTC billing month. Ledger verifies the assertion through
+\`GET /billing/v1/service-jwks.json\`; those keys are dedicated to this service
+assertion and rotate with a current/retired overlap.
+
+Platform superusers can exercise or replay one subscription/month through
+\`POST /internal/admin/billing/stripe/usage-exports\`. The optional
+\`ledger_snapshot_cursor\` replays an exact immutable Ledger snapshot. The response
+separates \`billing_product\`, \`caller_product\`, the exact cumulative customer charge,
+and cumulative/delta integer Stripe quantities. This endpoint is a reconciliation tool,
+not a live schedule; asynchronous Stripe meters still require recurring collection and a
+final pre-invoice run before production enablement.
+
 ---
 `;

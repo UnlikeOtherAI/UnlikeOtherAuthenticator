@@ -1,14 +1,21 @@
 import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
 import multipart from '@fastify/multipart';
+import rawBody from 'fastify-raw-body';
 import fastify, { type FastifyInstance } from 'fastify';
 
-import { getEnv, isTariffSnapshotJwksEnabled, requireEnv } from './config/env.js';
+import {
+  getEnv,
+  isBillingAssertionJwksEnabled,
+  isTariffSnapshotJwksEnabled,
+  requireEnv,
+} from './config/env.js';
 import { connectPrisma, disconnectPrisma } from './db/prisma.js';
 import { registerErrorHandler } from './middleware/error-handler.js';
 import tenantContextPlugin from './plugins/tenant-context.plugin.js';
 import { registerRoutes } from './routes/index.js';
 import { preloadTariffSnapshotSigningKey } from './services/billing-snapshot.service.js';
+import { preloadBillingAssertionSigningKey } from './services/billing-ledger-collector.service.js';
 import { sweepExpiredClaims } from './services/integration-claim.service.js';
 import { pruneExpiredSecurityData } from './services/retention-pruning.service.js';
 import { setAppLogger } from './utils/app-logger.js';
@@ -17,6 +24,9 @@ export async function createApp(): Promise<FastifyInstance> {
   const env = getEnv();
   if (isTariffSnapshotJwksEnabled(env)) {
     await preloadTariffSnapshotSigningKey();
+  }
+  if (isBillingAssertionJwksEnabled(env)) {
+    await preloadBillingAssertionSigningKey();
   }
 
   const app = fastify({
@@ -45,6 +55,9 @@ export async function createApp(): Promise<FastifyInstance> {
                 'req.headers["x-uoa-actor"]',
                 'req.headers["x-uoa-access-token"]',
                 'req.headers["x-uoa-app-key"]',
+                'req.headers["x-ledger-app-key"]',
+                'req.headers["x-uoa-service-assertion"]',
+                'req.headers["stripe-signature"]',
                 // Redact common token-like keys if we ever log structured objects containing them.
                 'authorization',
                 'headers.authorization',
@@ -53,6 +66,9 @@ export async function createApp(): Promise<FastifyInstance> {
                 'headers["x-uoa-actor"]',
                 'headers["x-uoa-access-token"]',
                 'headers["x-uoa-app-key"]',
+                'headers["x-ledger-app-key"]',
+                'headers["x-uoa-service-assertion"]',
+                'headers["stripe-signature"]',
                 'token',
                 'code',
                 'access_token',
@@ -73,6 +89,10 @@ export async function createApp(): Promise<FastifyInstance> {
                 'config_jwt',
                 'sharedSecret',
                 'SHARED_SECRET',
+                'STRIPE_SECRET_KEY',
+                'STRIPE_WEBHOOK_SECRET',
+                'LEDGER_BILLING_APP_KEY',
+                'UOA_BILLING_ASSERTION_SIGNING_PRIVATE_JWK',
                 'req.body.password',
                 'req.body.passwordHash',
                 'req.body.code',
@@ -98,6 +118,13 @@ export async function createApp(): Promise<FastifyInstance> {
           },
   });
   setAppLogger(app.log);
+
+  await app.register(rawBody, {
+    field: 'rawBody',
+    global: false,
+    encoding: false,
+    runFirst: true,
+  });
 
   // The integration claim confirm page is a plain HTML form that browsers submit
   // as application/x-www-form-urlencoded. We do not use the body (the token is

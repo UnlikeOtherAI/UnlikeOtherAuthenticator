@@ -1708,8 +1708,18 @@ collecting no payment; specifically, `at_cost` + `none` + a zero monthly amount
 represents 100% provider-cost visibility with no charge. Free tariffs require
 `none`, zero markup, and zero monthly amount.
 
+The optional Stripe collection foundation is fail-closed behind an explicit
+process gate. It maps exact immutable tariff versions to calendar-month
+subscriptions, accepts Checkout initiation only from the product's own app key
+plus an owner/admin actor assertion, and verifies Stripe webhooks with a
+separate signing secret. UOA reads immutable Ledger monthly snapshots using
+UOA's own dedicated Ledger app key plus a short-lived service assertion; it
+exports customer-rated money as idempotent delta meter events, never raw tokens,
+searches, research units, or another application's credential. Live collection
+requires a reviewed polling and final pre-invoice reconciliation schedule.
+
 The canonical model, modes, precedence, API and JWT contract, superuser
-administration, presentation rules, and Stripe follow-on boundaries are defined
+administration, presentation rules, and Stripe collection boundaries are defined
 in [Billing Tariffs and Product Entitlements](./Requirements/billing-tariffs.md).
 That document is incorporated into this build brief by reference and is
 authoritative for the billing tariff control plane.

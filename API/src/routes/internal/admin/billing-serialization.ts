@@ -45,6 +45,7 @@ export function serializeBillingAppKey(record: BillingAppKeyRecord) {
     actor_issuer: record.actorIssuer,
     actor_audience: record.actorAudience,
     actor_key_id: record.actorKeyId,
+    checkout_return_origins: record.checkoutReturnOrigins,
     last_used_at: record.lastUsedAt?.toISOString() ?? null,
     expires_at: record.expiresAt?.toISOString() ?? null,
     revoked_at: record.revokedAt?.toISOString() ?? null,
@@ -82,11 +83,44 @@ type ListedService = {
     actorIssuer: string;
     actorAudience: string;
     actorKeyId: string;
+    checkoutReturnOrigins: string[];
     lastUsedAt: Date | null;
     expiresAt: Date | null;
     revokedAt: Date | null;
     createdByEmail: string | null;
     createdAt: Date;
+  }>;
+  stripeCatalogs: Array<{
+    id: string;
+    currency: string;
+    meterEventName: string;
+    stripeProductId: string | null;
+    stripeMeterId: string | null;
+    stripeUsagePriceId: string | null;
+    tariffPrices: Array<{
+      id: string;
+      tariffId: string;
+      monthlyAmountMinor: bigint;
+      stripeMonthlyPriceId: string | null;
+    }>;
+  }>;
+  stripeSubscriptions: Array<{
+    id: string;
+    tariffId: string;
+    scope: string;
+    scopeKey: string;
+    stripeSubscriptionId: string;
+    stripeMonthlyItemId: string | null;
+    stripeUsageItemId: string;
+    status: string;
+    cancelAtPeriodEnd: boolean;
+    currentPeriodStart: Date | null;
+    currentPeriodEnd: Date | null;
+    livemode: boolean;
+    org: { id: string; name: string };
+    team: { id: string; name: string } | null;
+    createdAt: Date;
+    updatedAt: Date;
   }>;
 };
 
@@ -115,11 +149,44 @@ export function serializeBillingService(service: ListedService) {
       actor_issuer: key.actorIssuer,
       actor_audience: key.actorAudience,
       actor_key_id: key.actorKeyId,
+      checkout_return_origins: key.checkoutReturnOrigins,
       last_used_at: key.lastUsedAt?.toISOString() ?? null,
       expires_at: key.expiresAt?.toISOString() ?? null,
       revoked_at: key.revokedAt?.toISOString() ?? null,
       created_by_email: key.createdByEmail,
       created_at: key.createdAt.toISOString(),
+    })),
+    stripe_catalogs: service.stripeCatalogs.map((catalog) => ({
+      id: catalog.id,
+      currency: catalog.currency,
+      meter_event_name: catalog.meterEventName,
+      stripe_product_id: catalog.stripeProductId,
+      stripe_meter_id: catalog.stripeMeterId,
+      stripe_usage_price_id: catalog.stripeUsagePriceId,
+      tariff_prices: catalog.tariffPrices.map((price) => ({
+        id: price.id,
+        tariff_id: price.tariffId,
+        monthly_amount_minor: price.monthlyAmountMinor.toString(),
+        stripe_monthly_price_id: price.stripeMonthlyPriceId,
+      })),
+    })),
+    stripe_subscriptions: service.stripeSubscriptions.map((subscription) => ({
+      id: subscription.id,
+      tariff_id: subscription.tariffId,
+      scope: subscription.scope.toLowerCase(),
+      scope_key: subscription.scopeKey,
+      organisation: subscription.org,
+      team: subscription.team,
+      stripe_subscription_id: subscription.stripeSubscriptionId,
+      stripe_monthly_item_id: subscription.stripeMonthlyItemId,
+      stripe_usage_item_id: subscription.stripeUsageItemId,
+      status: subscription.status,
+      cancel_at_period_end: subscription.cancelAtPeriodEnd,
+      current_period_start: subscription.currentPeriodStart?.toISOString() ?? null,
+      current_period_end: subscription.currentPeriodEnd?.toISOString() ?? null,
+      livemode: subscription.livemode,
+      created_at: subscription.createdAt.toISOString(),
+      updated_at: subscription.updatedAt.toISOString(),
     })),
     created_at: service.createdAt.toISOString(),
     updated_at: service.updatedAt.toISOString(),

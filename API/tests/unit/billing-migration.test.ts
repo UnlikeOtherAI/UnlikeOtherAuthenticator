@@ -10,6 +10,10 @@ const collectionMigrationUrl = new URL(
   '../../prisma/migrations/20260719030000_add_billing_collection_mode/migration.sql',
   import.meta.url,
 );
+const stripeMigrationUrl = new URL(
+  '../../prisma/migrations/20260719040000_add_stripe_collection_foundation/migration.sql',
+  import.meta.url,
+);
 
 describe('billing tariff control-plane migration', () => {
   it('enforces immutable version identities and one default tariff per service', async () => {
@@ -54,5 +58,28 @@ describe('billing tariff control-plane migration', () => {
     expect(sql).toContain('"mode" = \'FREE\'');
     expect(sql).toContain('"collection_mode" = \'NONE\'');
     expect(sql).toContain('NEW."collection_mode" IS DISTINCT FROM OLD."collection_mode"');
+  });
+
+  it('keeps Stripe mappings scope-bound, replay-safe, and inaccessible to the app role', async () => {
+    const sql = await readFile(stripeMigrationUrl, 'utf8');
+
+    expect(sql).toContain('billing_stripe_checkout_sessions_app_key_id_actor_jti_key');
+    expect(sql).toContain('billing_stripe_checkout_sessions_one_open_scope');
+    expect(sql).toContain('billing_stripe_subscriptions_one_live_scope');
+    expect(sql).toContain('billing_stripe_tariff_prices_coherent');
+    expect(sql).toContain('uoa_enforce_billing_stripe_scope_coherence');
+    expect(sql).toContain('"app_key_id"');
+    expect(sql).toContain('"requested_by_user_id"');
+    for (const table of [
+      'billing_stripe_customers',
+      'billing_stripe_catalogs',
+      'billing_stripe_tariff_prices',
+      'billing_stripe_checkout_sessions',
+      'billing_stripe_subscriptions',
+      'billing_stripe_webhook_events',
+    ]) {
+      expect(sql).toContain(`REVOKE ALL ON TABLE "${table}" FROM "uoa_app"`);
+      expect(sql).toContain(`ALTER TABLE "${table}" FORCE ROW LEVEL SECURITY`);
+    }
   });
 });
