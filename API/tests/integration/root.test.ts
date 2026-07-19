@@ -97,10 +97,31 @@ describe('GET /api', () => {
       expect.objectContaining({ method: 'GET', path: '/billing/v1/jwks.json' }),
     );
     expect(body.endpoints).toContainEqual(
+      expect.objectContaining({ method: 'GET', path: '/billing/v1/service-jwks.json' }),
+    );
+    expect(body.endpoints).toContainEqual(
       expect.objectContaining({
         method: 'POST',
         path: '/billing/v1/effective-tariff',
         auth: expect.stringContaining('X-UOA-App-Key'),
+      }),
+    );
+    expect(body.endpoints).toContainEqual(
+      expect.objectContaining({
+        method: 'POST',
+        path: '/billing/v1/stripe/checkout-session',
+      }),
+    );
+    expect(body.endpoints).toContainEqual(
+      expect.objectContaining({
+        method: 'POST',
+        path: '/billing/v1/stripe/webhook',
+      }),
+    );
+    expect(body.endpoints).toContainEqual(
+      expect.objectContaining({
+        method: 'POST',
+        path: '/internal/admin/billing/stripe/usage-exports',
       }),
     );
     expect(body.endpoints).toContainEqual(

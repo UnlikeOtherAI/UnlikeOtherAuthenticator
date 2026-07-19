@@ -149,8 +149,9 @@ the assertion's `exp` plus accepted clock tolerance, then pruned.
 Application authentication and subject provenance are separate. Each product
 uses its own existing per-domain app credential; the credential's authenticated
 `ClientDomain` plus explicit product must match one enabled DB mapping with the
-exact requested HTTPS resource and an allowlist of `ai.invoke` and/or
-`billing.read`. The signed assertion carries the stable user and optional
+exact requested HTTPS resource and an allowlist of `ai.invoke`, `billing.read`,
+and/or `token.provision`. The last scope is an explicit app capability used
+only by a token provisioner; `ai.invoke` never implies it. The signed assertion carries the stable user and optional
 organisation/team. A user token is never accepted as the application
 credential, credentials are not shared across products, and there is no
 singleton env fallback. The issued token and response contain exactly the

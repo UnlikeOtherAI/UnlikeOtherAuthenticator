@@ -1,11 +1,8 @@
 import { z } from 'zod';
 import dotenv from 'dotenv';
 
-import {
-  privateRs256JwkKeyId,
-  privateRs256JwkMatchesPublicJwks,
-  publicRs256JwkKeyIds,
-} from '../utils/rs256-jwk.js';
+import { privateRs256JwkKeyId, publicRs256JwkKeyIds } from '../utils/rs256-jwk.js';
+import { addBillingEnvironmentIssues } from './billing-env-validation.js';
 
 // Load local development environment variables from `.env` if present.
 // In production, variables should be provided by the process environment.
@@ -158,6 +155,65 @@ const EnvSchema = z
         message: 'TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON must contain public-only RS256 RSA keys',
       })
       .optional(),
+    // Stripe is an explicitly gated payment processor. Keys may be provisioned
+    // ahead of launch, but no customer, Checkout, subscription, or meter call is
+    // permitted until the gate is enabled and both credentials are present.
+    STRIPE_BILLING_ENABLED: z.preprocess(normalizeBoolean, z.boolean().default(false)),
+    STRIPE_SECRET_KEY: z.string().min(1).optional(),
+    STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
+    // UOA pulls immutable monthly snapshots from Ledger with UOA's own
+    // product-bound Ledger app key and a separately signed service assertion.
+    LEDGER_BILLING_BASE_URL: z
+      .string()
+      .url()
+      .refine((value) => {
+        const url = new URL(value);
+        return (
+          url.protocol === 'https:' && !url.username && !url.password && !url.search && !url.hash
+        );
+      }, 'LEDGER_BILLING_BASE_URL must be a credential-free HTTPS URL')
+      .optional(),
+    LEDGER_BILLING_APP_KEY: z
+      .string()
+      .regex(/^lk_[A-Za-z0-9_-]{16,}$/)
+      .optional(),
+    LEDGER_BILLING_APP_KEY_ID: z
+      .string()
+      .regex(/^tk_[A-Za-z0-9_-]{3,253}$/)
+      .optional(),
+    LEDGER_BILLING_ASSERTION_AUDIENCE: z
+      .string()
+      .url()
+      .refine((value) => {
+        const url = new URL(value);
+        return (
+          url.protocol === 'https:' &&
+          !url.username &&
+          !url.password &&
+          !url.search &&
+          !url.hash &&
+          url.pathname === '/'
+        );
+      }, 'LEDGER_BILLING_ASSERTION_AUDIENCE must be a credential-free HTTPS origin')
+      .optional(),
+    UOA_BILLING_ASSERTION_SIGNING_PRIVATE_JWK: z
+      .string()
+      .min(1)
+      .refine((value) => privateRs256JwkKeyId(value) !== undefined, {
+        message:
+          'UOA_BILLING_ASSERTION_SIGNING_PRIVATE_JWK must be a private RS256 RSA JWK with a kid',
+      })
+      .optional(),
+    // Public current + retired verification keys for UOA's Ledger collector
+    // assertion. This is a separate trust surface from tariff snapshots and
+    // resource-token signing.
+    UOA_BILLING_ASSERTION_PUBLIC_JWKS_JSON: z
+      .string()
+      .min(1)
+      .refine((value) => publicRs256JwkKeyIds(value) !== undefined, {
+        message: 'UOA_BILLING_ASSERTION_PUBLIC_JWKS_JSON must contain public-only RS256 RSA keys',
+      })
+      .optional(),
     // Optional agreement-signature module. Disabled is the process default; a domain cannot be
     // enabled until storage, retention, and the dedicated evidence key are configured.
     SIGNATURE_STORAGE_PROVIDER: z.enum(['disabled', 'filesystem', 'gcs']).default('disabled'),
@@ -211,33 +267,7 @@ const EnvSchema = z
         message: 'MCP_OAUTH_DOMAIN is required for the public OAuth profile',
       });
     }
-    const tariffPrivateConfigured = Boolean(env.TARIFF_SNAPSHOT_PRIVATE_JWK);
-    const tariffPublicConfigured = Boolean(env.TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON);
-    if (tariffPrivateConfigured !== tariffPublicConfigured) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: [
-          tariffPrivateConfigured
-            ? 'TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON'
-            : 'TARIFF_SNAPSHOT_PRIVATE_JWK',
-        ],
-        message: 'tariff snapshot private key and public JWKS must be configured together',
-      });
-    }
-    if (
-      env.TARIFF_SNAPSHOT_PRIVATE_JWK &&
-      env.TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON &&
-      !privateRs256JwkMatchesPublicJwks(
-        env.TARIFF_SNAPSHOT_PRIVATE_JWK,
-        env.TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON,
-      )
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON'],
-        message: 'tariff snapshot public JWKS must include the current private key public pair',
-      });
-    }
+    addBillingEnvironmentIssues(env, ctx);
 
     if (env.SIGNATURE_STORAGE_PROVIDER === 'filesystem' && !env.SIGNATURE_FILESYSTEM_ROOT) {
       ctx.addIssue({
@@ -345,6 +375,12 @@ export function isOAuthAccessTokenJwksEnabled(env: Env = getEnv()): boolean {
 
 export function isTariffSnapshotJwksEnabled(env: Env = getEnv()): boolean {
   return Boolean(env.TARIFF_SNAPSHOT_PRIVATE_JWK && env.TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON);
+}
+
+export function isBillingAssertionJwksEnabled(env: Env = getEnv()): boolean {
+  return Boolean(
+    env.UOA_BILLING_ASSERTION_SIGNING_PRIVATE_JWK && env.UOA_BILLING_ASSERTION_PUBLIC_JWKS_JSON,
+  );
 }
 
 /** Whether the public-client / MCP OAuth profile (brief §22.14) is enabled.

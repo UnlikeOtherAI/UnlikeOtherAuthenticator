@@ -711,8 +711,9 @@ non-empty; partial, null, or extra-field workspace objects are invalid.
 
 Delegation policy is DB-backed, not process configuration. Each mapping binds
 one registered `ClientDomain` plus lowercase product identifier to one exact
-HTTPS resource and a non-empty allowlist containing only `ai.invoke` and/or
-`billing.read`. The domain-hash middleware retains the authenticated
+HTTPS resource and a non-empty allowlist containing only `ai.invoke`,
+`billing.read`, and/or `token.provision`. Token provisioning is a distinct,
+explicit app capability and is never implied by `ai.invoke`. The domain-hash middleware retains the authenticated
 `ClientDomain.id`, so another product's credential cannot select this mapping;
 secret rotation remains valid because policy does not bind plaintext,
 client-hash, digest, or an individual secret row. The request must name the
@@ -1730,8 +1731,26 @@ collecting no payment; specifically, `at_cost` + `none` + a zero monthly amount
 represents 100% provider-cost visibility with no charge. Free tariffs require
 `none`, zero markup, and zero monthly amount.
 
+The optional Stripe collection foundation is fail-closed behind an explicit
+process gate. It maps exact immutable tariff versions to calendar-month
+subscriptions, accepts Checkout initiation only from the product's own app key
+plus an owner/admin actor assertion, and verifies Stripe webhooks with a
+separate signing secret. UOA reads immutable Ledger monthly snapshots using
+UOA's own dedicated Ledger app key plus a short-lived service assertion; it
+exports customer-rated money as idempotent delta meter events, never raw tokens,
+searches, research units, or another application's credential. Live collection
+requires a reviewed polling and final pre-invoice reconciliation schedule.
+All Stripe projections and idempotency identities are scoped to the exact Stripe
+account and test/live mode. A subscription remains pinned to its Checkout's
+immutable tariff version, precedence source, assignment, and organisation/team
+billing scope until terminal; conflicting tariff mutations fail closed rather
+than silently repricing. Organisation subscriptions exclude team subscriptions
+for that product and organisation, while independent team subscriptions may
+coexist. Webhooks reconcile current Stripe state and exact undiscounted item
+cardinality, so reordered notifications cannot resurrect canceled state.
+
 The canonical model, modes, precedence, API and JWT contract, superuser
-administration, presentation rules, and Stripe follow-on boundaries are defined
+administration, presentation rules, and Stripe collection boundaries are defined
 in [Billing Tariffs and Product Entitlements](./Requirements/billing-tariffs.md).
 That document is incorporated into this build brief by reference and is
 authoritative for the billing tariff control plane.

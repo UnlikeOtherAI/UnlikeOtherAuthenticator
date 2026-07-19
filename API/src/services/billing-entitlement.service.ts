@@ -10,13 +10,13 @@ import { randomUUID } from 'node:crypto';
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
-import { verifyBillingActor } from './billing-actor.service.js';
+import { verifyBillingActor, type BillingActor } from './billing-actor.service.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import {
   billingCollectionModeToPublic,
   billingModeToPublic,
-  normalizeBillingServiceIdentifier,
-} from './billing-tariff.service.js';
+} from './billing-tariff-serialization.service.js';
+import { normalizeBillingServiceIdentifier } from './billing-tariff.service.js';
 import {
   assertEffectiveTariffPayloadBinding,
   signEffectiveTariffSnapshot,
@@ -155,7 +155,7 @@ function payloadFor(params: {
   };
 }
 
-export async function getEffectiveTariffSnapshot(
+export async function resolveEffectiveTariffContext(
   params: {
     request: EffectiveTariffRequest;
     actorToken: string;
@@ -165,15 +165,14 @@ export async function getEffectiveTariffSnapshot(
     prisma?: PrismaClient;
     now?: () => number;
     verifyActor?: typeof verifyBillingActor;
-    signSnapshot?: typeof signEffectiveTariffSnapshot;
   },
-): Promise<{ snapshot: string; payload: EffectiveTariffPayload }> {
+): Promise<{ actor: BillingActor; payload: EffectiveTariffPayload }> {
   const product = normalizeBillingServiceIdentifier(params.request.product);
   if (product !== params.credential.service.identifier) {
     throw new AppError('FORBIDDEN', 403, 'BILLING_PRODUCT_MISMATCH');
   }
   const request = { ...params.request, product };
-  await (deps?.verifyActor ?? verifyBillingActor)({
+  const actor = await (deps?.verifyActor ?? verifyBillingActor)({
     token: params.actorToken,
     credential: params.credential,
     request,
@@ -295,11 +294,29 @@ export async function getEffectiveTariffSnapshot(
     organisationId: request.organisationId,
     teamId: request.teamId,
   });
+  return { actor, payload };
+}
+
+export async function getEffectiveTariffSnapshot(
+  params: {
+    request: EffectiveTariffRequest;
+    actorToken: string;
+    credential: VerifiedBillingAppKey;
+  },
+  deps?: {
+    prisma?: PrismaClient;
+    now?: () => number;
+    verifyActor?: typeof verifyBillingActor;
+    signSnapshot?: typeof signEffectiveTariffSnapshot;
+  },
+): Promise<{ snapshot: string; payload: EffectiveTariffPayload }> {
+  const { payload } = await resolveEffectiveTariffContext(params, deps);
+  const issuedAtEpochSeconds = Math.floor(Date.parse(payload.issued_at) / 1000);
   const snapshot = await (deps?.signSnapshot ?? signEffectiveTariffSnapshot)({
     payload,
     audience: params.credential.actorIssuer,
-    issuedAtEpochSeconds: now,
-    expiresAtEpochSeconds: now + EFFECTIVE_TARIFF_SNAPSHOT_TTL_SECONDS,
+    issuedAtEpochSeconds,
+    expiresAtEpochSeconds: issuedAtEpochSeconds + EFFECTIVE_TARIFF_SNAPSHOT_TTL_SECONDS,
   });
   return { snapshot, payload };
 }

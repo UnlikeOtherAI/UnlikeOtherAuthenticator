@@ -10,11 +10,11 @@ import {
 import {
   createBillingService,
   createBillingTariffVersion,
-  listBillingServices,
   removeBillingTariffAssignment,
   setDefaultBillingTariff,
   upsertBillingTariffAssignment,
 } from '../../../services/billing-tariff.service.js';
+import { listBillingServices } from '../../../services/billing-tariff-read.service.js';
 import {
   serializeBillingAppKey,
   serializeBillingService,
@@ -70,6 +70,7 @@ const CreateAppKeySchema = z
     actor_issuer: z.string().trim().url(),
     actor_audience: z.string().trim().url(),
     actor_public_jwk: z.record(z.unknown()),
+    checkout_return_origins: z.array(z.string().trim().url()).max(10).default([]),
     expires_at: z.string().datetime().nullable().optional(),
   })
   .strict();
@@ -125,6 +126,8 @@ export function registerInternalAdminBillingRoutes(app: FastifyInstance): void {
           ...service,
           assignments: [],
           appKeys: [],
+          stripeCatalogs: [],
+          stripeSubscriptions: [],
         }),
       );
     },
@@ -222,6 +225,7 @@ export function registerInternalAdminBillingRoutes(app: FastifyInstance): void {
         actorIssuer: body.actor_issuer,
         actorAudience: body.actor_audience,
         actorPublicJwk: body.actor_public_jwk,
+        checkoutReturnOrigins: body.checkout_return_origins,
         expiresAt: body.expires_at ? new Date(body.expires_at) : null,
         createdBy: mutationActor(request),
       });

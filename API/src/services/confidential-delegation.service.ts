@@ -7,17 +7,23 @@ import { AppError } from '../utils/errors.js';
 const PRODUCT_PATTERN = /^[a-z0-9][a-z0-9._-]{0,99}$/;
 const MAX_RESOURCE_LENGTH = 2048;
 
-export const CONFIDENTIAL_DELEGATION_SCOPES = ['ai.invoke', 'billing.read'] as const;
+export const CONFIDENTIAL_DELEGATION_SCOPES = [
+  'ai.invoke',
+  'billing.read',
+  'token.provision',
+] as const;
 export type ConfidentialDelegationScopeName = (typeof CONFIDENTIAL_DELEGATION_SCOPES)[number];
 
 const databaseScope = {
   'ai.invoke': ConfidentialDelegationScope.AI_INVOKE,
   'billing.read': ConfidentialDelegationScope.BILLING_READ,
+  'token.provision': ConfidentialDelegationScope.TOKEN_PROVISION,
 } satisfies Record<ConfidentialDelegationScopeName, ConfidentialDelegationScope>;
 
 const publicScope = {
   [ConfidentialDelegationScope.AI_INVOKE]: 'ai.invoke',
   [ConfidentialDelegationScope.BILLING_READ]: 'billing.read',
+  [ConfidentialDelegationScope.TOKEN_PROVISION]: 'token.provision',
 } satisfies Record<ConfidentialDelegationScope, ConfidentialDelegationScopeName>;
 
 type MutationActor = {

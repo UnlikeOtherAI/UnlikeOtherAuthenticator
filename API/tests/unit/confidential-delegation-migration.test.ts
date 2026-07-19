@@ -6,6 +6,10 @@ const migrationUrl = new URL(
   '../../prisma/migrations/20260719020000_add_confidential_delegation_mappings/migration.sql',
   import.meta.url,
 );
+const tokenProvisionMigrationUrl = new URL(
+  '../../prisma/migrations/20260719050000_add_token_provision_delegation_scope/migration.sql',
+  import.meta.url,
+);
 
 describe('confidential delegation mapping migration', () => {
   it('constrains exact domain/product mappings, HTTPS resources, and supported scopes', async () => {
@@ -33,5 +37,18 @@ describe('confidential delegation mapping migration', () => {
     );
     expect(sql).toContain('CREATE POLICY confidential_delegation_mappings_deny_app');
     expect(sql).toContain('FOR ALL TO uoa_app USING (false) WITH CHECK (false)');
+  });
+
+  it('adds token.provision without weakening exact non-duplicate scope bounds', async () => {
+    const sql = await readFile(tokenProvisionMigrationUrl, 'utf8');
+
+    expect(sql).toContain(
+      `ALTER TYPE "ConfidentialDelegationScope" ADD VALUE IF NOT EXISTS 'token.provision'`,
+    );
+    expect(sql).toContain('DROP CONSTRAINT "confidential_delegation_mappings_scopes_check"');
+    expect(sql).toContain('cardinality("scopes") BETWEEN 1 AND 3');
+    expect(sql).toContain('array_position("scopes", NULL) IS NULL');
+    expect(sql).toContain('"scopes"[1] <> "scopes"[3]');
+    expect(sql).toContain('"scopes"[2] <> "scopes"[3]');
   });
 });

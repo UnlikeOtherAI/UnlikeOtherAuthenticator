@@ -260,7 +260,7 @@ export const confidentialTokenExchangeDocumentation = {
       'lowercase product identifier; must match the mapping bound to the authenticated ClientDomain',
     resource: 'exact HTTPS resource URI stored in that product mapping',
     scope:
-      'space-delimited exact requested subset of ai.invoke and/or billing.read; UOA rejects any scope outside the mapping allowlist',
+      'space-delimited exact requested subset of ai.invoke, billing.read, and/or token.provision; token provisioning is never implied by ai.invoke and UOA rejects any scope outside the mapping allowlist',
   },
   application_binding: {
     authentication:

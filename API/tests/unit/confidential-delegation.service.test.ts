@@ -95,6 +95,23 @@ describe('confidential delegation resolution', () => {
     });
   });
 
+  it('allows token provisioning only when the exact app/product mapping grants it', async () => {
+    const { prisma } = resolverPrisma(
+      mapping({ scopes: [ConfidentialDelegationScope.TOKEN_PROVISION] }),
+    );
+
+    await expect(
+      resolveConfidentialDelegation(request({ scope: 'token.provision' }), { prisma }),
+    ).resolves.toEqual({
+      product,
+      resource,
+      scope: 'token.provision',
+    });
+    await expect(
+      resolveConfidentialDelegation(request({ scope: 'ai.invoke' }), { prisma }),
+    ).rejects.toThrow('TOKEN_EXCHANGE_DELEGATION_NOT_ALLOWED');
+  });
+
   it.each([
     ['another app credential', { authenticatedClientDomainId: 'client-domain-deepwater' }],
     ['another product', { product: 'deepwater' }],
@@ -102,6 +119,7 @@ describe('confidential delegation resolution', () => {
     ['another source domain', { sourceDomain: 'api.deepwater.works' }],
     ['another resource', { resource: `${resource}/other` }],
     ['an unsupported scope', { scope: 'admin' }],
+    ['token provisioning without a grant', { scope: 'token.provision' }],
     ['duplicate scopes', { scope: 'ai.invoke ai.invoke' }],
     ['scope widening', { scope: 'ai.invoke billing.read' }],
   ])('rejects %s against a single-scope mapping', async (_label, overrides) => {
