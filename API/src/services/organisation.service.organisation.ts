@@ -24,7 +24,10 @@ import {
   type OrganisationRecord,
 } from './organisation.service.base.js';
 import { deriveUniqueTeamSlug } from './team.service.base.js';
-import { lockWorkspaceMembershipRows } from './workspace-scope.service.js';
+import {
+  lockWorkspaceMembershipRows,
+  lockWorkspaceOrganisationRow,
+} from './workspace-scope.service.js';
 
 const ORGANISATION_SELECT = {
   id: true,
@@ -251,6 +254,9 @@ export async function deleteOrganisation(
 
   try {
     await runInTransaction(prisma, async (tx) => {
+      if (!(await lockWorkspaceOrganisationRow(org.id, { prisma: tx }))) {
+        throw new AppError('NOT_FOUND', 404);
+      }
       const members = await tx.orgMember.findMany({
         where: { orgId: org.id },
         orderBy: { userId: 'asc' },

@@ -189,9 +189,11 @@ The auth flow is state-driven, not route-driven. A single popup URL loads the ap
     any later failure rolls the claim and all database effects back so the user may retry. Chooser
     hydration and invite decline are non-consuming. Exact ACTIVE organisation + team membership is
     rechecked at selection, after 2FA/signatures immediately before code issuance, and at exchange.
-    Selection and code exchange lock the organisation row first and team rows second, the same order
-    used by membership activation/deactivation/removal, so token issuance and lifecycle changes have
-    one serial outcome rather than a time-of-check/time-of-use gap.
+    The selection and code-exchange transactions lock the organisation membership row first and
+    team membership rows second, the same order used by membership
+    activation/deactivation/removal, so those transactions and lifecycle changes have one serial
+    outcome rather than a time-of-check/time-of-use gap. Post-2FA/signature code issuance performs
+    the immediate revalidation only; exchange is the final locked authority before token creation.
     Existing-account `LOGIN_LINK` tokens resolve only their issue-time `userId`; deletion or identity
     mismatch fails closed and never falls through to registration.
 11. **Required agreements** (optional per-domain service) — after identity, workspace selection,

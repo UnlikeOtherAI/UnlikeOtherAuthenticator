@@ -112,10 +112,11 @@ already proven their email via a magic link or (if enabled) a sign-in code.
    concurrent redemptions can never push \`useCount\` past \`maxUses\`), adds the caller as an ACTIVE
    team member with the link's \`roleToAssign\` (reactivating a previously removed/deactivated row;
    idempotent if already an ACTIVE member), then finalizes exactly like a normal team selection —
-   including the 2FA policy check for that org. The exact organisation and team must both already be
-   ACTIVE before redemption; an inactive organisation tombstone is rejected before \`useCount\`,
-   membership reactivation, authorization, or audit mutation, and the transaction rolls back in
-   full.
+   including the 2FA policy check for that org. An absent organisation membership may be created,
+   but an existing inactive organisation tombstone is rejected before \`useCount\`, team-membership
+   creation/reactivation, authorization, or audit mutation. The team membership may be absent,
+   ACTIVE, or inactive and is created/reactivated as needed; the resulting exact organisation +
+   team membership scope must be ACTIVE before handoff, or the transaction rolls back in full.
 
 ---
 

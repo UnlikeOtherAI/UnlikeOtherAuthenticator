@@ -393,9 +393,10 @@ describe('Team service', () => {
       createdAt: now,
       updatedAt: now,
     });
-    prisma.team.findFirst
-      .mockResolvedValueOnce({ id: 'team-1', isDefault: false })
-      .mockResolvedValueOnce({ id: 'team-default' });
+    prisma.team.findFirst.mockResolvedValue({ id: 'team-default' });
+    prisma.$queryRaw
+      .mockResolvedValueOnce([{ id: 'org-1' }])
+      .mockResolvedValueOnce([{ id: 'team-1', isDefault: false }]);
     prisma.teamMember.findMany.mockResolvedValue([
       { userId: 'u-owner', status: 'ACTIVE' },
       { userId: 'u-2', status: 'ACTIVE' },
@@ -466,10 +467,9 @@ describe('Team service', () => {
       createdAt: now,
       updatedAt: now,
     });
-    prisma.team.findFirst.mockResolvedValue({
-      id: 'team-default',
-      isDefault: true,
-    });
+    prisma.$queryRaw
+      .mockResolvedValueOnce([{ id: 'org-1' }])
+      .mockResolvedValueOnce([{ id: 'team-default', isDefault: true }]);
 
     const promise = deleteTeam(
       {

@@ -226,7 +226,9 @@ export async function removeTeamMember(
     actorUserId: string;
     userId: string;
   },
-  deps?: OrgServiceDeps,
+  deps?: OrgServiceDeps & {
+    afterMembershipStatusWrite?: () => Promise<void>;
+  },
 ): Promise<{ removed: boolean }> {
   const env = deps?.env ?? getEnv();
   assertDatabaseEnabled(env);
@@ -257,22 +259,23 @@ export async function removeTeamMember(
     throw new AppError('NOT_FOUND', 404);
   }
 
-  const membership = await prisma.teamMember.findFirst({
-    where: {
-      teamId: team.id,
-      userId,
-    },
-    select: { id: true },
-  });
-  if (!membership) {
-    throw new AppError('NOT_FOUND', 404);
-  }
-
   return await runInTransaction(prisma, async (tx) => {
     await lockWorkspaceMembershipRows(
-      { userId, orgId: org.id, teamId: team.id },
+      { userId, orgId: org.id },
       { prisma: tx },
     );
+    const lockedMembership = await tx.teamMember.findFirst({
+      where: {
+        teamId: team.id,
+        userId,
+        status: 'ACTIVE',
+      },
+      select: { id: true },
+    });
+    if (!lockedMembership) {
+      throw new AppError('NOT_FOUND', 404);
+    }
+
     // "Cannot leave your last team" counts ACTIVE team memberships only (design §4.5).
     const userTeamCount = await tx.teamMember.count({
       where: {
@@ -291,9 +294,10 @@ export async function removeTeamMember(
     // Team removal is a tombstone, not a delete (design §4.5) — org identity is untouched;
     // no session revocation here, org membership is the session scope.
     await tx.teamMember.update({
-      where: { id: membership.id },
+      where: { id: lockedMembership.id },
       data: { status: 'REMOVED', statusChangedAt: new Date() },
     });
+    await deps?.afterMembershipStatusWrite?.();
 
     return { removed: true };
   });

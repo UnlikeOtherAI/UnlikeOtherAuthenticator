@@ -12,6 +12,43 @@ function rejectWorkspaceScope(): never {
   throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
 }
 
+/** Lock a workspace container before a destructive operation reaches membership rows. */
+export async function lockWorkspaceOrganisationRow(
+  orgId: string,
+  deps: { prisma: WorkspaceLockPrisma },
+): Promise<boolean> {
+  const rows = await deps.prisma.$queryRaw<Array<{ id: string }>>(
+    Prisma.sql`
+      SELECT o.id
+      FROM "organisations" o
+      WHERE o.id = ${orgId}
+      FOR UPDATE OF o
+    `,
+  );
+  return rows.length === 1;
+}
+
+/**
+ * Freeze one team's membership set before deletion. PostgreSQL foreign-key
+ * inserts take a KEY SHARE lock on this row, so insert-first is visible after
+ * this lock waits and delete-first prevents a late membership from surviving.
+ */
+export async function lockWorkspaceTeamRow(
+  params: { orgId: string; teamId: string },
+  deps: { prisma: WorkspaceLockPrisma },
+): Promise<{ id: string; isDefault: boolean } | null> {
+  const rows = await deps.prisma.$queryRaw<Array<{ id: string; isDefault: boolean }>>(
+    Prisma.sql`
+      SELECT t.id, t."is_default" AS "isDefault"
+      FROM "teams" t
+      WHERE t.id = ${params.teamId}
+        AND t."org_id" = ${params.orgId}
+      FOR UPDATE OF t
+    `,
+  );
+  return rows[0] ?? null;
+}
+
 /**
  * Lock one user's organisation membership first, then their team membership
  * rows in stable id order. Token exchange and every status-changing lifecycle

@@ -26,7 +26,11 @@ import {
   isP2002Error,
 } from './team.service.base.js';
 import { getTeamInvitedEntries, type TeamInvitedEntry } from './team-invite.service.invited.js';
-import { lockWorkspaceMembershipRows } from './workspace-scope.service.js';
+import {
+  lockWorkspaceMembershipRows,
+  lockWorkspaceOrganisationRow,
+  lockWorkspaceTeamRow,
+} from './workspace-scope.service.js';
 
 const TEAM_SELECT = {
   id: true,
@@ -339,7 +343,10 @@ export async function deleteTeam(
     domain: string;
     actorUserId: string;
   },
-  deps?: OrgServiceDeps,
+  deps?: OrgServiceDeps & {
+    afterTargetTeamLock?: () => Promise<void>;
+    afterMembershipLocks?: () => Promise<void>;
+  },
 ): Promise<{ deleted: boolean }> {
   const env = deps?.env ?? getEnv();
   assertDatabaseEnabled(env);
@@ -357,26 +364,22 @@ export async function deleteTeam(
   });
   await requireTeamManager(prisma, org.id, actorUserId);
 
-  const team = await prisma.team.findFirst({
-    where: {
-      id: params.teamId,
-      orgId: org.id,
-    },
-    select: {
-      id: true,
-      isDefault: true,
-    },
-  });
-
-  if (!team) {
-    throw new AppError('NOT_FOUND', 404);
-  }
-
-  if (team.isDefault) {
-    throw new AppError('BAD_REQUEST', 400);
-  }
-
   await runInTransaction(prisma, async (tx) => {
+    if (!(await lockWorkspaceOrganisationRow(org.id, { prisma: tx }))) {
+      throw new AppError('NOT_FOUND', 404);
+    }
+    const team = await lockWorkspaceTeamRow(
+      { orgId: org.id, teamId: params.teamId },
+      { prisma: tx },
+    );
+    if (!team) {
+      throw new AppError('NOT_FOUND', 404);
+    }
+    if (team.isDefault) {
+      throw new AppError('BAD_REQUEST', 400);
+    }
+    await deps?.afterTargetTeamLock?.();
+
     const defaultTeam = await tx.team.findFirst({
       where: { orgId: org.id, isDefault: true },
       select: { id: true },
@@ -388,15 +391,27 @@ export async function deleteTeam(
     const membershipRows = await tx.teamMember.findMany({
       where: { teamId: team.id },
       orderBy: { userId: 'asc' },
-      select: { userId: true, status: true },
+      select: { userId: true },
     });
     for (const member of membershipRows) {
       await lockWorkspaceMembershipRows(
-        { userId: member.userId, orgId: org.id, teamId: team.id },
+        { userId: member.userId, orgId: org.id },
         { prisma: tx },
       );
     }
-    const members = membershipRows.filter((member) => member.status === 'ACTIVE');
+    await deps?.afterMembershipLocks?.();
+
+    const members = membershipRows.length
+      ? await tx.teamMember.findMany({
+          where: {
+            teamId: team.id,
+            userId: { in: membershipRows.map((member) => member.userId) },
+            status: 'ACTIVE',
+          },
+          orderBy: { userId: 'asc' },
+          select: { userId: true },
+        })
+      : [];
 
     for (const member of members) {
       const userMembershipCount = await tx.teamMember.count({
