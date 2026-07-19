@@ -86,7 +86,7 @@ export const authEndpoints: EndpointSchema[] = [
     },
     response: {
       'login_token?':
-        'short-lived bridge JWT (only when config.login_flow.workspace_selection="auto") — authorizes ONLY POST /auth/select-team for this verified user, nothing else',
+        'short-lived, one-time chooser capability (only when config.login_flow.workspace_selection="auto") — binds this verified user/domain to the exact config URL + parsed-config fingerprint, redirect, PKCE, remember-me, request-access, expiry, and JTI; authorizes no other continuation',
       'teams?': 'array of { teamId, orgId, name, slug, role, iconUrl } — this user\'s ACTIVE team memberships on this domain (only with login_token)',
       'pending_invites?': 'array of { inviteId, teamName, invitedBy } — pending invites for this email on this domain (only with login_token)',
       'can_create_org?': 'boolean (only with login_token)',
@@ -101,7 +101,7 @@ export const authEndpoints: EndpointSchema[] = [
     method: 'POST',
     path: '/auth/select-team',
     description:
-      'Choose a workspace (or accept/decline a pending invite, or redeem a shareable invite link) using the login_token bridge from /auth/verify-code or /auth/login. Rejects (generically) an invalid/expired login_token, a teamId the user is not an ACTIVE member of, a team on another domain (IDOR), or an invalid inviteLinkToken (revoked/expired/over-cap/HIDDEN/cross-domain/unknown — all the same generic error). Enforces the selected org\'s 2FA policy before finalizing. Also reachable after /auth/login when config.login_flow.workspace_selection="auto" (that endpoint returns the same login_token + chooser payload instead of finalizing directly).',
+      'Choose a workspace (or accept/decline a pending invite, or redeem a shareable invite link) using the login_token bridge from a verified identity path. Rejects generically if the signature/expiry/config URL/semantic config fingerprint differs, if any caller-supplied redirect/PKCE/remember-me/request-access field retargets the signed continuation, if the exact org and team memberships are not both ACTIVE, or if an invite link is invalid. Final selection, invite mutation, authorization work, and hashed-JTI one-time consumption share one transaction; choices and decline are non-consuming. The selected scope is revalidated again after 2FA/signatures at code issuance and at code exchange.',
     auth: 'config_url query param + login_token body field',
     query: {
       redirect_url: 'string (optional, redirect_uri also accepted)',
@@ -117,7 +117,7 @@ export const authEndpoints: EndpointSchema[] = [
       'inviteLinkToken?':
         'string (optional) — a shareable team invite-link token (from GET /auth/team-invite-link/:token). Mutually exclusive with teamId/inviteId; redeems the link and finalizes scoped to its team, only now that identity is verified — an invite link never grants membership on its own.',
       'action?': '"accept" | "decline" (optional) — default "accept" when inviteId is present',
-      remember_me: 'boolean (optional) — defaults to session.remember_me_default from config',
+      remember_me: 'boolean (optional) — when present must equal the value signed at identity verification; omission uses that signed value',
     },
     response: {
       ok: 'true',
@@ -134,7 +134,7 @@ export const authEndpoints: EndpointSchema[] = [
     method: 'POST',
     path: '/auth/session-choices',
     description:
-      'Hydrate the workspace-chooser payload for a login_token bridge seeded via a redirect (currently: the social callback\'s workspace_chooser branch), since a GET redirect cannot inline the chooser JSON the way /auth/verify-code and /auth/login do. Rejects (generically) an invalid/expired login_token. Introduces no enumeration — it only ever answers for an already-verified login_token.',
+      'Hydrate the workspace-chooser payload for a login_token bridge seeded via a redirect, since a GET redirect cannot inline chooser JSON. Verifies signature, expiry, exact config URL, and the canonical fingerprint of the currently verified parsed config. This read is deliberately non-consuming; only final selection claims the hashed JTI. Introduces no enumeration because it answers only for an already-verified capability.',
     auth: 'config_url query param + login_token body field',
     query: { config_url: 'string (required)' },
     body: {

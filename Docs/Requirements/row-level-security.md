@@ -129,6 +129,7 @@ All four auto-onboarding tables plus the audit log are accessed exclusively thro
 | `integration_claim_tokens` | `uoa_admin` only. `REVOKE ALL` for `uoa_app`. |
 | `admin_audit_log` | `uoa_admin` only. `REVOKE ALL` for `uoa_app`. `audit-log.service.ts` must be refactored to accept a prisma client from the caller instead of calling `getPrisma()` (current implementation binds it to `uoa_app`, which will permission-deny). |
 | `confidential_assertion_uses` | `uoa_admin` only. The confidential exchange runs before tenant context is trusted and atomically claims a hashed source-domain `jti`; `REVOKE ALL` plus a deny-all policy for `uoa_app`. |
+| `login_session_uses` | `uoa_admin` only. Final workspace selection atomically claims a SHA-256 digest of the signed chooser JTI; the raw capability/JTI is never persisted. `REVOKE ALL`, forced RLS, and a deny-all `uoa_app` policy. |
 | `billing_stripe_accounts`, `billing_stripe_customers`, `billing_stripe_catalogs`, `billing_stripe_tariff_prices`, `billing_stripe_checkout_sessions`, `billing_stripe_subscriptions`, `billing_stripe_usage_exports`, `billing_stripe_webhook_events` | `uoa_admin` only. These are global commercial/payment projections reached from product-authenticated Checkout, Stripe webhook, platform-superuser, and service-collector paths before a tenant SQL context exists. Database constraints/triggers bind every row to the exact Stripe account/mode, UOA service, immutable tariff source/assignment, organisation/team scope, customer, Checkout, and subscription. `REVOKE ALL` plus deny-all RLS policies block `uoa_app`. |
 | `confidential_delegation_mappings` | `uoa_admin` only. Security policy binds the authenticated pre-context `ClientDomain` + product to one exact HTTPS resource and scope allowlist. Audited superuser CRUD and exchange resolution use the admin client; `REVOKE ALL`, forced RLS, and a deny-all `uoa_app` policy prevent tenant-role policy reads or writes. |
 
@@ -152,7 +153,7 @@ Two migrations. Splitting avoids the `FORCE ROW LEVEL SECURITY` baking-in risk t
 3. Grant table/sequence privileges:
    - `uoa_app`: `SELECT, INSERT, UPDATE, DELETE` on tenant-scoped and domain-scoped tables.
    - `uoa_admin`: `SELECT, INSERT, UPDATE, DELETE` on every table listed in section 7, including admin-only.
-   - `REVOKE ALL` on admin-only tables (`client_domain_jwks`, `client_domain_integration_requests`, `integration_claim_tokens`, `admin_audit_log`, `client_domains`, `client_domain_secrets`, `handshake_error_logs`, `confidential_assertion_uses`, `confidential_delegation_mappings`) from `uoa_app`.
+   - `REVOKE ALL` on admin-only tables (`client_domain_jwks`, `client_domain_integration_requests`, `integration_claim_tokens`, `admin_audit_log`, `client_domains`, `client_domain_secrets`, `handshake_error_logs`, `confidential_assertion_uses`, `login_session_uses`, `confidential_delegation_mappings`) from `uoa_app`.
 4. Do **not** `ENABLE ROW LEVEL SECURITY` yet. No policies yet. Shipping this migration is a no-op for runtime behaviour as long as the app keeps using the legacy connection URL; once the app switches to `uoa_app`, it can still read/write everything that wasn't revoked.
 
 At this point, deploy the app with:

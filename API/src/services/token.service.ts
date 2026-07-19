@@ -270,6 +270,7 @@ export async function exchangeAuthorizationCodeForTokens(
     now,
     sharedSecret,
     prisma,
+    activeScopePrisma: deps?.adminPrisma ?? prisma,
   });
 
   // Both values must be present to carry an explicit or unambiguously auto-selected workspace

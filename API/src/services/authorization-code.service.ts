@@ -9,6 +9,7 @@ import { AppError } from '../utils/errors.js';
 import { getAppLogger } from '../utils/app-logger.js';
 import { tryParseRedirectUrl } from '../utils/http-url.js';
 import { verifyPkceCodeVerifier } from '../utils/pkce.js';
+import { assertActiveWorkspaceScope } from './workspace-scope.service.js';
 
 type AuthorizationCodePrisma = PrismaClient;
 
@@ -91,6 +92,18 @@ export async function issueAuthorizationCode(
     throw new AppError('BAD_REQUEST', 400, 'PKCE_REQUIRED');
   }
 
+  // Revalidate immediately before the issuance write. This is the final
+  // boundary reached after chooser, 2FA, forced enrollment, or signatures.
+  await assertActiveWorkspaceScope(
+    {
+      userId: params.userId,
+      domain: params.domain,
+      orgId: params.orgId,
+      teamId: params.teamId,
+    },
+    { prisma },
+  );
+
   for (let attempt = 0; attempt < 3; attempt++) {
     const code = generateAuthorizationCode();
     const codeHash = hashAuthorizationCode(code, sharedSecret);
@@ -134,6 +147,7 @@ export async function consumeAuthorizationCode(params: {
   now: Date;
   sharedSecret: string;
   prisma: AuthorizationCodePrisma;
+  activeScopePrisma?: AuthorizationCodePrisma;
 }): Promise<{
   userId: string;
   rememberMe: boolean;
@@ -208,6 +222,22 @@ export async function consumeAuthorizationCode(params: {
   }
   if (row.usedAt) rejectAuthCode('already_used', { usedAt: row.usedAt.toISOString() });
   if (row.expiresAt.getTime() <= params.now.getTime()) rejectAuthCode('expired');
+
+  try {
+    // A code must not create a scoped session after the selected membership was
+    // suspended or removed between issuance and exchange.
+    await assertActiveWorkspaceScope(
+      {
+        userId: row.userId,
+        domain: row.domain,
+        orgId: row.orgId,
+        teamId: row.teamId,
+      },
+      { prisma: params.activeScopePrisma ?? params.prisma },
+    );
+  } catch {
+    rejectAuthCode('workspace_scope_inactive');
+  }
 
   const updated = await params.prisma.authorizationCode.updateMany({
     where: {

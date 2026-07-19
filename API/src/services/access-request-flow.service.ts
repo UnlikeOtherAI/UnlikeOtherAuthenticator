@@ -12,6 +12,10 @@ import {
 
 type FinalizeDeps = {
   prisma?: PrismaClient;
+  // Optional BYPASSRLS transaction used by workspace selection so freshly
+  // accepted membership is visible to allow-list and ban policy reads before
+  // the outer transaction commits.
+  policyPrisma?: PrismaClient;
   signatureDeps?: SignatureContinuationDeps;
 };
 
@@ -60,19 +64,33 @@ export async function finalizeAuthenticatedUser(
   | { status: 'requested'; redirectTo: string }
 > {
   // Allowed-login-email-domain restrictions (client domain / org / team). SUPERUSER bypasses.
-  // Runs on the BYPASSRLS admin client, so it does not receive the request's tenant prisma.
-  await assertEmailDomainAllowedForLogin({
+  // Workspace selection injects its BYPASSRLS transaction so just-accepted membership is visible.
+  const emailDomainPolicyInput = {
     userId: params.userId,
     domain: params.config.domain,
-  });
+  };
+  if (deps?.policyPrisma) {
+    await assertEmailDomainAllowedForLogin(emailDomainPolicyInput, {
+      prisma: deps.policyPrisma,
+    });
+  } else {
+    await assertEmailDomainAllowedForLogin(emailDomainPolicyInput);
+  }
 
   // Admin ban list (client domain / org / team). A ban overrides any allow-list; SUPERUSER
   // bypasses. Also on the BYPASSRLS admin client. IP is enforced when the route supplies it.
-  await assertNotBannedAtLogin({
+  const banPolicyInput = {
     userId: params.userId,
     domain: params.config.domain,
     ip: params.ip,
-  });
+  };
+  if (deps?.policyPrisma) {
+    await assertNotBannedAtLogin(banPolicyInput, {
+      prisma: deps.policyPrisma,
+    });
+  } else {
+    await assertNotBannedAtLogin(banPolicyInput);
+  }
 
   if (params.requestAccess) {
     const decision = await handlePostAuthenticationAccessRequest(

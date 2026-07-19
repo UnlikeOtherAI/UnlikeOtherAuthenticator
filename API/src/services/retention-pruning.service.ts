@@ -7,6 +7,7 @@ type RetentionPrisma = {
   authorizationCode: Pick<PrismaClient['authorizationCode'], 'deleteMany'>;
   confidentialAssertionUse: Pick<PrismaClient['confidentialAssertionUse'], 'deleteMany'>;
   handshakeErrorLog: Pick<PrismaClient['handshakeErrorLog'], 'deleteMany'>;
+  loginSessionUse: Pick<PrismaClient['loginSessionUse'], 'deleteMany'>;
   loginLog: Pick<PrismaClient['loginLog'], 'deleteMany'>;
   refreshToken: Pick<PrismaClient['refreshToken'], 'deleteMany'>;
   verificationToken: Pick<PrismaClient['verificationToken'], 'deleteMany'>;
@@ -22,6 +23,7 @@ export type RetentionPruneResult = {
   authorizationCodesDeleted: number;
   confidentialAssertionUsesDeleted: number;
   handshakeErrorLogsDeleted: number;
+  loginSessionUsesDeleted: number;
   loginLogsDeleted: number;
   refreshTokensDeleted: number;
   verificationTokensDeleted: number;
@@ -36,6 +38,7 @@ function emptyResult(): RetentionPruneResult {
     authorizationCodesDeleted: 0,
     confidentialAssertionUsesDeleted: 0,
     handshakeErrorLogsDeleted: 0,
+    loginSessionUsesDeleted: 0,
     loginLogsDeleted: 0,
     refreshTokensDeleted: 0,
     verificationTokensDeleted: 0,
@@ -57,6 +60,7 @@ export async function pruneExpiredSecurityData(
     refreshTokens,
     authorizationCodes,
     confidentialAssertionUses,
+    loginSessionUses,
     verificationTokens,
     loginLogs,
     handshakeErrorLogs,
@@ -68,6 +72,9 @@ export async function pruneExpiredSecurityData(
       where: { expiresAt: { lt: now } },
     }),
     prisma.confidentialAssertionUse.deleteMany({
+      where: { expiresAt: { lte: now } },
+    }),
+    prisma.loginSessionUse.deleteMany({
       where: { expiresAt: { lte: now } },
     }),
     prisma.verificationToken.deleteMany({
@@ -85,6 +92,7 @@ export async function pruneExpiredSecurityData(
     authorizationCodesDeleted: authorizationCodes.count,
     confidentialAssertionUsesDeleted: confidentialAssertionUses.count,
     handshakeErrorLogsDeleted: handshakeErrorLogs.count,
+    loginSessionUsesDeleted: loginSessionUses.count,
     loginLogsDeleted: loginLogs.count,
     refreshTokensDeleted: refreshTokens.count,
     verificationTokensDeleted: verificationTokens.count,

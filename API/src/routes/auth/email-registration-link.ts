@@ -157,6 +157,8 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
             allowedRedirectUrls: request.config.redirect_urls,
             requestedRedirectUrl: redirect_url,
           });
+          const rememberMe = request.config.session?.remember_me_default ?? true;
+          const requestAccess = parseRequestAccessFlag(request_access);
 
           // An accepted invite is already an explicit workspace choice. Non-invite auto flows select
           // one team only when unambiguous; a create-workspace action still requires the chooser.
@@ -173,7 +175,13 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
               const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
               const loginToken = await signLoginSession({
                 userId,
-                domain: request.config.domain,
+                config: request.config,
+                configUrl: request.configUrl,
+                redirectUrl,
+                rememberMe,
+                requestAccess,
+                codeChallenge: pkce.codeChallenge,
+                codeChallengeMethod: pkce.codeChallengeMethod,
                 sharedSecret: SHARED_SECRET,
                 audience: LOGIN_SESSION_AUDIENCE,
               });
@@ -183,7 +191,7 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
                   request.configUrl,
                   redirectUrl,
                   loginToken,
-                  parseRequestAccessFlag(request_access),
+                  requestAccess,
                   pkce,
                 ),
               );
@@ -199,8 +207,8 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
               config: request.config,
               configUrl: request.configUrl,
               redirectUrl,
-              rememberMe: request.config.session?.remember_me_default ?? true,
-              requestAccess: parseRequestAccessFlag(request_access),
+              rememberMe,
+              requestAccess,
               authMethod,
               codeChallenge: pkce.codeChallenge,
               codeChallengeMethod: pkce.codeChallengeMethod,
@@ -214,7 +222,7 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
             redirectNoStore(
               reply,
               buildTwoFaAuthUrl(request.configUrl, redirectUrl, {
-                requestAccess: parseRequestAccessFlag(request_access),
+                requestAccess,
                 kind: 'challenge',
                 token: outcome.twofa_token,
               }),
@@ -226,7 +234,7 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
             redirectNoStore(
               reply,
               buildTwoFaAuthUrl(request.configUrl, redirectUrl, {
-                requestAccess: parseRequestAccessFlag(request_access),
+                requestAccess,
                 kind: 'enrollment',
                 token: outcome.setup.setup_token,
               }),

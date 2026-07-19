@@ -182,7 +182,13 @@ The auth flow is state-driven, not route-driven. A single popup URL loads the ap
     pending invite; zero teams with `can_create_org` stays on the chooser. An invite-bound email is
     already an exact workspace selection and bypasses the chooser. Both server-selected and
     invite-selected org/team scope then passes through TwoFactorVerifyPage or required
-    TwoFactorSetupPage and into the team-scoped authorization code.
+    TwoFactorSetupPage and into the team-scoped authorization code. The chooser capability signs
+    the exact config URL and parsed-config fingerprint plus redirect, PKCE, remember-me, and access
+    request state. It is claimed once by hashed JTI in the final-selection transaction; chooser
+    hydration and invite decline are non-consuming. Exact ACTIVE organisation + team membership is
+    rechecked at selection, after 2FA/signatures immediately before code issuance, and at exchange.
+    Existing-account `LOGIN_LINK` tokens resolve only their issue-time `userId`; deletion or identity
+    mismatch fails closed and never falls through to registration.
 11. **Required agreements** (optional per-domain service) — after identity, workspace selection,
     and required 2FA, the shared API gate redirects to `SigningPage` instead of issuing a code.
     The page renders the hash-verified source PDF, exact acceptance statement, click-wrap or

@@ -84,6 +84,7 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
         });
 
         const rememberMe = remember_me ?? config.session?.remember_me_default ?? true;
+        const requestAccess = parseRequestAccessFlag(request_access);
 
         const twoFaPolicy = await resolveTwoFaPolicy({ config, userId });
         if (twoFaPolicy !== 'OFF' && twoFaEnabled) {
@@ -96,7 +97,7 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
             redirectUrl,
             authMethod: 'email_password',
             rememberMe,
-            requestAccess: parseRequestAccessFlag(request_access),
+            requestAccess,
             codeChallenge: pkce.codeChallenge,
             codeChallengeMethod: pkce.codeChallengeMethod,
             sharedSecret: SHARED_SECRET,
@@ -116,7 +117,7 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
                 authMethod: 'email_password',
                 redirectUrl,
                 rememberMe,
-                requestAccess: parseRequestAccessFlag(request_access),
+                requestAccess,
                 codeChallenge: pkce.codeChallenge,
                 codeChallengeMethod: pkce.codeChallengeMethod,
               },
@@ -134,7 +135,13 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
           const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
           const loginToken = await signLoginSession({
             userId,
-            domain: config.domain,
+            config,
+            configUrl,
+            redirectUrl,
+            rememberMe,
+            requestAccess,
+            codeChallenge: pkce.codeChallenge,
+            codeChallengeMethod: pkce.codeChallengeMethod,
             sharedSecret: SHARED_SECRET,
             // Must match the audience verify-code/select-team/session-choices verify against
             // (LOGIN_SESSION_AUDIENCE), NOT the auth-service identifier — otherwise a password-login
@@ -152,7 +159,7 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
             configUrl,
             redirectUrl,
             rememberMe,
-            requestAccess: parseRequestAccessFlag(request_access),
+            requestAccess,
             authMethod: 'email_password',
             twoFaCompleted: false,
             codeChallenge: pkce.codeChallenge,

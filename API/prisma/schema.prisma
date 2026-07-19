@@ -279,6 +279,21 @@ model ConfidentialAssertionUse {
   @@map("confidential_assertion_uses")
 }
 
+// One-time use ledger for login-session chooser capabilities. Only a SHA-256
+// digest of the JWT jti is stored; the raw bearer capability never reaches the
+// database. Admin-managed because it is consumed before tenant RLS context exists.
+model LoginSessionUse {
+  id         String   @id @default(cuid())
+  domain     String
+  jtiHash    String   @map("jti_hash") @db.Char(64)
+  expiresAt  DateTime @map("expires_at")
+  consumedAt DateTime @default(now()) @map("consumed_at")
+
+  @@unique([domain, jtiHash])
+  @@index([expiresAt])
+  @@map("login_session_uses")
+}
+
 // Public OAuth clients (brief §22.14). Registered via RFC 7591 dynamic client
 // registration for the /oauth/* public-client profile. PUBLIC clients only:
 // there is NO secret column (§22.3 preserved) — they authenticate with PKCE.

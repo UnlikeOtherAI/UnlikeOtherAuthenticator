@@ -35,13 +35,14 @@ type VerifyEmailTokenRow = Prisma.VerificationTokenGetPayload<{
     email: true;
     domain: true;
     configUrl: true;
+    userId: true;
     teamInviteId: true;
     expiresAt: true;
     usedAt: true;
   };
 }>;
 
-export type VerifyEmailTokenType = 'VERIFY_EMAIL_SET_PASSWORD' | 'VERIFY_EMAIL';
+export type VerifyEmailTokenType = 'LOGIN_LINK' | 'VERIFY_EMAIL_SET_PASSWORD' | 'VERIFY_EMAIL';
 
 export type AcceptedEmailInviteWorkspace = {
   inviteId: string;
@@ -59,7 +60,7 @@ export type VerifyEmailResult = {
 function assertVerifyEmailTokenType(
   type: VerifyEmailTokenRow['type'],
 ): asserts type is VerifyEmailTokenType {
-  if (type !== 'VERIFY_EMAIL_SET_PASSWORD' && type !== 'VERIFY_EMAIL') {
+  if (type !== 'LOGIN_LINK' && type !== 'VERIFY_EMAIL_SET_PASSWORD' && type !== 'VERIFY_EMAIL') {
     throw new AppError('BAD_REQUEST', 400, 'INVALID_TOKEN_TYPE');
   }
 }
@@ -114,6 +115,7 @@ export async function validateVerifyEmailToken(
       email: true,
       domain: true,
       configUrl: true,
+      userId: true,
       teamInviteId: true,
       expiresAt: true,
       usedAt: true,
@@ -159,6 +161,7 @@ export async function verifyEmailToken(
         email: true,
         domain: true,
         configUrl: true,
+        userId: true,
         teamInviteId: true,
         expiresAt: true,
         usedAt: true,
@@ -177,7 +180,27 @@ export async function verifyEmailToken(
     // (i.e. social-login / passwordless account adding a password). New users have
     // no pre-existing sessions to revoke.
     let setPasswordOnExistingUser = false;
-    if (type === 'VERIFY_EMAIL_SET_PASSWORD') {
+    if (type === 'LOGIN_LINK') {
+      // LOGIN_LINK proves possession of an existing account's mailbox; it must never
+      // degrade into registration. Resolve only the user bound when the token was
+      // minted, and fail closed if that account was deleted or its identity changed.
+      if (!tokenRow.userId) {
+        throw new AppError('BAD_REQUEST', 400, 'INVALID_TOKEN');
+      }
+      const existingUser = await tx.user.findUnique({
+        where: { id: tokenRow.userId },
+        select: { id: true, userKey: true, email: true, domain: true },
+      });
+      if (
+        !existingUser ||
+        existingUser.userKey !== tokenRow.userKey ||
+        existingUser.email.toLowerCase() !== tokenRow.email.toLowerCase() ||
+        existingUser.domain !== tokenRow.domain
+      ) {
+        throw new AppError('BAD_REQUEST', 400, 'INVALID_TOKEN');
+      }
+      userId = existingUser.id;
+    } else if (type === 'VERIFY_EMAIL_SET_PASSWORD') {
       if (!params.password) {
         throw new AppError('BAD_REQUEST', 400, 'MISSING_PASSWORD');
       }

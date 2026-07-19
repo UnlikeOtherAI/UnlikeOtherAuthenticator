@@ -285,7 +285,13 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
           if (shouldPresentWorkspaceChooser(choices, autoSelectedWorkspace)) {
             const loginToken = await signLoginSession({
               userId,
-              domain: config.domain,
+              config,
+              configUrl,
+              redirectUrl,
+              rememberMe,
+              requestAccess: socialState.request_access === true,
+              codeChallenge: socialState.code_challenge,
+              codeChallengeMethod: socialState.code_challenge_method,
               sharedSecret: SHARED_SECRET,
               audience: LOGIN_SESSION_AUDIENCE,
             });

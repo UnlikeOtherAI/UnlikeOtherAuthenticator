@@ -15,8 +15,11 @@ Additive on top of \`/auth/register\` and \`/auth/login\` — everything below i
 revealed ONLY after the user's identity has been verified (a valid sign-in code or magic link) —
 never from \`/auth/start\`, which always returns the same generic message regardless of whether the
 email exists. The \`login_token\` bridge issued by \`/auth/verify-code\` (and, when the chooser is on,
-by \`/auth/login\`) authorizes ONLY \`POST /auth/select-team\` for that verified user — it is a distinct
-token class from \`access_token\` and \`twofa_token\` and cannot be used for anything else.
+by every verified identity path) authorizes ONLY the original chooser continuation for that user.
+It signs the exact config URL plus a canonical fingerprint of the current verified parsed config,
+redirect, PKCE, remember-me, access-request flag, subject/domain, expiry, and JTI. Final selection
+claims the hashed JTI once in the same transaction as invite/membership mutation and authorization;
+\`session-choices\` and invite decline validate but do not consume it.
 
 1. \`POST /auth/start?config_url=...\` — body \`{ email }\`. Same generic response as
    \`/auth/register\`; when \`email_code_enabled\` is true it additionally emails a 6-digit code.
@@ -29,9 +32,10 @@ token class from \`access_token\` and \`twofa_token\` and cannot be used for any
      2FA still applies, only the chooser step is skipped).
 3. \`POST /auth/select-team?config_url=...\` — body \`{ login_token, teamId }\` (or
    \`{ login_token, inviteId, action: "accept" | "decline" }\`). Validates the bridge token, that the
-   team belongs to an org on this domain, and that the user holds an ACTIVE membership on it (a team
-   on another domain, or one the user isn't an ACTIVE member of, is rejected exactly like an invalid
-   token — no IDOR oracle). Enforces the selected org's 2FA policy, then finalizes with the resolved
+   caller has not changed any signed continuation field, the team belongs to an org on this domain,
+   and that the user holds exact ACTIVE organisation and team memberships (a cross-domain or
+   inactive scope is rejected exactly like an invalid token — no IDOR oracle). Enforces the selected
+   org's 2FA policy, then finalizes with the resolved
    workspace scope: the returned \`code\` carries \`orgId\`/\`teamId\`, so the eventual \`POST /auth/token\`
    exchange's access token includes the \`active: { orgId, teamId }\` claim (§4.2) next to the existing
    \`org\` claim.
@@ -63,6 +67,8 @@ token class from \`access_token\` and \`twofa_token\` and cannot be used for any
    reachable. An invite-bound link never sees the chooser: token consumption returns the accepted
    invite's exact \`orgId\`/\`teamId\`, applies the effective 2FA policy, and preserves that scope
    through the authorization code, access token, refresh token, and rotation.
+   A \`LOGIN_LINK\` resolves only the existing \`userId\` stored when it was issued; a missing,
+   deleted, or identity-mismatched account fails closed and can never become new-user registration.
 7. \`GET /auth\` accepts an optional \`team_hint=<teamId|slug>\` — a chooser preselect / one-click
    workspace switch (design §11.4): a product's sidebar links back into \`/auth\` with the workspace
    the user clicked, and if a team in that user's own (already-verified) chooser payload matches by

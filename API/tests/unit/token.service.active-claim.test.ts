@@ -35,6 +35,12 @@ describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
       domainRole: {
         findUnique: vi.fn(),
       },
+      orgMember: {
+        findFirst: vi.fn(),
+      },
+      teamMember: {
+        findFirst: vi.fn(),
+      },
     } as unknown as PrismaClient;
   }
 
@@ -63,6 +69,8 @@ describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
       teamId: 'team-active',
     });
     prisma.authorizationCode.updateMany.mockResolvedValue({ count: 1 });
+    prisma.orgMember.findFirst.mockResolvedValue({ id: 'org-member-active' });
+    prisma.teamMember.findFirst.mockResolvedValue({ id: 'team-member-active' });
     prisma.refreshToken.create.mockResolvedValue({ id: 'refresh-token-active' });
     prisma.domainRole.findUnique.mockResolvedValue({
       role: 'USER',
@@ -97,7 +105,7 @@ describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
     expect(claims.active).toEqual({ orgId: 'org-active', teamId: 'team-active' });
   });
 
-  it('omits the active claim when the code carries only one of orgId/teamId', async () => {
+  it('rejects a malformed authorization code carrying only part of a workspace scope', async () => {
     const now = new Date('2026-07-07T00:00:01.000Z');
     const sharedSecret = process.env.SHARED_SECRET!;
     const code = 'code-with-partial-scope';
@@ -130,24 +138,55 @@ describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
     });
     prisma.user.findUnique.mockResolvedValue({ email: 'partial@example.com', tokenVersion: 0 });
 
-    const { accessToken } = await exchangeAuthorizationCodeForTokens(
-      { code, config, configUrl, redirectUrl, clientId, codeVerifier: TEST_CODE_VERIFIER },
-      {
-        now: () => now,
-        sharedSecret,
-        authServiceIdentifier: process.env.AUTH_SERVICE_IDENTIFIER,
-        accessTokenTtl: '15m',
-        prisma,
-      },
-    );
+    await expect(
+      exchangeAuthorizationCodeForTokens(
+        { code, config, configUrl, redirectUrl, clientId, codeVerifier: TEST_CODE_VERIFIER },
+        {
+          now: () => now,
+          sharedSecret,
+          authServiceIdentifier: process.env.AUTH_SERVICE_IDENTIFIER,
+          accessTokenTtl: '15m',
+          prisma,
+        },
+      ),
+    ).rejects.toMatchObject({ statusCode: 401, message: 'INVALID_AUTH_CODE' });
+    expect(prisma.authorizationCode.updateMany).not.toHaveBeenCalled();
+    expect(prisma.refreshToken.create).not.toHaveBeenCalled();
+  });
 
-    const claims = await verifyAccessToken(accessToken, {
-      sharedSecret,
-      issuer: process.env.AUTH_SERVICE_IDENTIFIER,
-      prisma,
+  it('rejects exchange when the exact scoped memberships are no longer ACTIVE', async () => {
+    const now = new Date('2026-07-07T00:00:01.500Z');
+    const sharedSecret = process.env.SHARED_SECRET!;
+    const code = 'code-with-inactive-scope';
+    const config = makeConfig({ enabled: false });
+    const clientId = createClientId(config.domain, sharedSecret);
+    const configUrl = 'https://client.example.com/auth-config';
+    const redirectUrl = 'https://client.example.com/oauth/callback';
+    const prisma = makePrisma();
+    prisma.authorizationCode.findUnique.mockResolvedValue({
+      id: 'auth-code-inactive',
+      userId: 'user-inactive',
+      domain: config.domain,
+      configUrl,
+      redirectUrl,
+      codeChallenge: TEST_CODE_CHALLENGE,
+      codeChallengeMethod: 'S256',
+      expiresAt: new Date(now.getTime() + 60_000),
+      usedAt: null,
+      orgId: 'org-inactive',
+      teamId: 'team-inactive',
     });
+    prisma.orgMember.findFirst.mockResolvedValue(null);
+    prisma.teamMember.findFirst.mockResolvedValue({ id: 'team-member-inactive' });
 
-    expect(claims.active).toBeUndefined();
+    await expect(
+      exchangeAuthorizationCodeForTokens(
+        { code, config, configUrl, redirectUrl, clientId, codeVerifier: TEST_CODE_VERIFIER },
+        { now: () => now, sharedSecret, prisma },
+      ),
+    ).rejects.toMatchObject({ statusCode: 401, message: 'INVALID_AUTH_CODE' });
+    expect(prisma.authorizationCode.updateMany).not.toHaveBeenCalled();
+    expect(prisma.refreshToken.create).not.toHaveBeenCalled();
   });
 
   it('omits the active claim when the code carries neither orgId nor teamId', async () => {

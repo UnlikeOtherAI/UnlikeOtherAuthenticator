@@ -228,10 +228,14 @@ describe('team invite services', () => {
       id: 'user-1',
       name: 'Invited User',
     });
-    tx.orgMember.findFirst.mockResolvedValue(null);
+    tx.orgMember.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue({ id: 'org-member-1' });
     tx.orgMember.count.mockResolvedValue(1);
     tx.orgMember.create.mockResolvedValue({ id: 'org-member-1' });
-    tx.teamMember.findFirst.mockResolvedValue(null);
+    tx.teamMember.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue({ id: 'team-member-1' });
     tx.teamMember.count
       .mockResolvedValueOnce(1)
       .mockResolvedValueOnce(0);

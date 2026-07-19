@@ -13,6 +13,7 @@ import {
   parseMaxMembersPerTeam,
   parseMaxTeamMembershipsPerUser,
 } from './team.service.base.js';
+import { assertActiveWorkspaceScope } from './workspace-scope.service.js';
 
 export async function acceptTeamInviteWithinTransaction(params: {
   prisma: Prisma.TransactionClient;
@@ -54,6 +55,15 @@ export async function acceptTeamInviteWithinTransaction(params: {
 
   if (invite.acceptedAt) {
     if (invite.acceptedUserId === params.userId) {
+      await assertActiveWorkspaceScope(
+        {
+          userId: params.userId,
+          domain: params.config.domain,
+          orgId: invite.orgId,
+          teamId: invite.teamId,
+        },
+        { prisma: params.prisma },
+      );
       return { orgId: invite.orgId, teamId: invite.teamId };
     }
     throw new AppError('BAD_REQUEST', 400);
@@ -161,6 +171,19 @@ export async function acceptTeamInviteWithinTransaction(params: {
       select: { id: true },
     });
   }
+
+  // Existing DEACTIVATED/REMOVED rows are tombstones, not invitations to
+  // reactivate. New rows are ACTIVE by default; every existing row must already
+  // be ACTIVE at both organisation and team levels before the invite is marked.
+  await assertActiveWorkspaceScope(
+    {
+      userId: params.userId,
+      domain: params.config.domain,
+      orgId: invite.orgId,
+      teamId: invite.teamId,
+    },
+    { prisma: params.prisma },
+  );
 
   await params.prisma.teamInvite.update({
     where: { id: invite.id },

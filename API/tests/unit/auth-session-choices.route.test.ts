@@ -80,7 +80,13 @@ async function postSessionChoices(body: Record<string, unknown>) {
 async function mintLoginToken(userId: string, domain = 'client.example.com'): Promise<string> {
   return signLoginSession({
     userId,
-    domain,
+    config: baseConfig({ domain }),
+    configUrl: 'https://client.example.com/auth-config',
+    redirectUrl: 'https://client.example.com/oauth/callback',
+    codeChallenge: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+    codeChallengeMethod: 'S256',
+    rememberMe: true,
+    requestAccess: false,
     sharedSecret: SHARED_SECRET,
     audience: LOGIN_SESSION_AUDIENCE,
   });
@@ -120,7 +126,13 @@ describe('POST /auth/session-choices', () => {
   it('rejects an expired login_token with a generic error', async () => {
     const expired = await signLoginSession({
       userId: 'user-1',
-      domain: 'client.example.com',
+      config: currentConfig!,
+      configUrl: 'https://client.example.com/auth-config',
+      redirectUrl: 'https://client.example.com/oauth/callback',
+      codeChallenge: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+      codeChallengeMethod: 'S256',
+      rememberMe: true,
+      requestAccess: false,
       sharedSecret: SHARED_SECRET,
       audience: LOGIN_SESSION_AUDIENCE,
       now: new Date('2020-01-01T00:00:00.000Z'),

@@ -52,6 +52,7 @@ const prismaMock = vi.hoisted(() => ({
   teamInviteLink: { findUnique: vi.fn(), updateMany: vi.fn() },
   user: { findUnique: vi.fn(), update: vi.fn() },
   orgMember: { findFirst: vi.fn(), count: vi.fn(), create: vi.fn() },
+  loginSessionUse: { create: vi.fn() },
   authorizationCode: { create: vi.fn() },
   clientDomain: { findUnique: vi.fn() },
   organisation: { findMany: vi.fn() },
@@ -130,7 +131,13 @@ async function postSelectTeam(body: Record<string, unknown>) {
 async function mintLoginToken(userId: string, domain = 'client.example.com'): Promise<string> {
   return signLoginSession({
     userId,
-    domain,
+    config: currentConfig && domain === currentConfig.domain ? currentConfig : baseConfig({ domain }),
+    configUrl: 'https://client.example.com/auth-config',
+    redirectUrl: 'https://client.example.com/oauth/callback',
+    codeChallenge: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+    codeChallengeMethod: 'S256',
+    rememberMe: true,
+    requestAccess: false,
     sharedSecret: SHARED_SECRET,
     audience: LOGIN_SESSION_AUDIENCE,
   });
@@ -156,6 +163,7 @@ describe('POST /auth/select-team', () => {
     assertEmailDomainAllowedForLoginMock.mockReset().mockResolvedValue(undefined);
     assertNotBannedAtLoginMock.mockReset().mockResolvedValue(undefined);
     prismaMock.authorizationCode.create.mockResolvedValue({ id: 'code-row-1' });
+    prismaMock.loginSessionUse.create.mockResolvedValue({ id: 'session-use-1' });
     prismaMock.$executeRaw.mockResolvedValue(1);
     prismaMock.domainSignatureSettings.findUnique.mockResolvedValue(null);
   });
@@ -174,7 +182,13 @@ describe('POST /auth/select-team', () => {
   it('rejects an expired login_token with a generic error', async () => {
     const expired = await signLoginSession({
       userId: 'user-1',
-      domain: 'client.example.com',
+      config: currentConfig!,
+      configUrl: 'https://client.example.com/auth-config',
+      redirectUrl: 'https://client.example.com/oauth/callback',
+      codeChallenge: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+      codeChallengeMethod: 'S256',
+      rememberMe: true,
+      requestAccess: false,
       sharedSecret: SHARED_SECRET,
       audience: LOGIN_SESSION_AUDIENCE,
       now: new Date('2020-01-01T00:00:00.000Z'),
@@ -219,6 +233,7 @@ describe('POST /auth/select-team', () => {
     const loginToken = await mintLoginToken('user-1');
     prismaMock.team.findFirst.mockResolvedValue({ id: 'team-1', orgId: 'org-1' });
     prismaMock.teamMember.findFirst.mockResolvedValue({ id: 'member-1' });
+    prismaMock.orgMember.findFirst.mockResolvedValue({ id: 'org-member-1' });
     prismaMock.user.findUnique.mockResolvedValue({ twoFaEnabled: false });
 
     const res = await postSelectTeam({ login_token: loginToken, teamId: 'team-1' });
@@ -255,6 +270,7 @@ describe('POST /auth/select-team', () => {
     const loginToken = await mintLoginToken('user-1');
     prismaMock.team.findFirst.mockResolvedValue({ id: 'team-1', orgId: 'org-1' });
     prismaMock.teamMember.findFirst.mockResolvedValue({ id: 'member-1' });
+    prismaMock.orgMember.findFirst.mockResolvedValue({ id: 'org-member-1' });
     prismaMock.user.findUnique.mockResolvedValue({ twoFaEnabled: true });
     prismaMock.clientDomain.findUnique.mockResolvedValue({ twoFaPolicy: 'REQUIRED' });
     prismaMock.organisation.findMany.mockResolvedValue([]);
@@ -270,10 +286,7 @@ describe('POST /auth/select-team', () => {
 
   it('accepts a pending invite and finalizes scoped to the invite team/org', async () => {
     const loginToken = await mintLoginToken('user-1');
-    // First call: the route's own IDOR-scoping read (orgId/teamId only). Second call:
-    // acceptTeamInviteWithinTransaction's own internal (fuller) re-fetch.
-    prismaMock.teamInvite.findUnique.mockResolvedValueOnce({ orgId: 'org-9', teamId: 'team-9' });
-    prismaMock.teamInvite.findUnique.mockResolvedValueOnce({
+    prismaMock.teamInvite.findUnique.mockResolvedValue({
       id: 'invite-1',
       orgId: 'org-9',
       teamId: 'team-9',
@@ -291,10 +304,14 @@ describe('POST /auth/select-team', () => {
       }
       return null;
     });
-    prismaMock.orgMember.findFirst.mockResolvedValue(null);
+    prismaMock.orgMember.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue({ id: 'org-member-1', orgId: 'org-9' });
     prismaMock.orgMember.count.mockResolvedValue(1);
     prismaMock.orgMember.create.mockResolvedValue({ id: 'org-member-1' });
-    prismaMock.teamMember.findFirst.mockResolvedValue(null);
+    prismaMock.teamMember.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue({ id: 'team-member-1', status: 'ACTIVE' });
     prismaMock.teamMember.count.mockResolvedValueOnce(1).mockResolvedValueOnce(0);
     prismaMock.teamMember.create.mockResolvedValue({ id: 'team-member-1' });
     prismaMock.teamInvite.update.mockResolvedValue({ id: 'invite-1' });
@@ -356,9 +373,13 @@ describe('POST /auth/select-team', () => {
     });
     prismaMock.team.findFirst.mockResolvedValue({ id: 'team-7', orgId: 'org-7', joinPolicy: 'INVITE_ONLY' });
     prismaMock.teamInviteLink.updateMany.mockResolvedValue({ count: 1 });
-    prismaMock.orgMember.findFirst.mockResolvedValue(null);
+    prismaMock.orgMember.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue({ id: 'om-1', orgId: 'org-7' });
     prismaMock.orgMember.create.mockResolvedValue({ id: 'om-1' });
-    prismaMock.teamMember.findFirst.mockResolvedValue(null);
+    prismaMock.teamMember.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue({ id: 'tm-1', status: 'ACTIVE' });
     prismaMock.teamMember.create.mockResolvedValue({ id: 'tm-1' });
     prismaMock.user.findUnique.mockResolvedValue({ twoFaEnabled: false });
 

@@ -40,14 +40,16 @@ export function registerAuthSessionChoicesRoute(app: FastifyInstance): void {
       QuerySchema.parse(request.query);
 
       const config = request.config;
-      if (!config) {
+      const configUrl = request.configUrl;
+      if (!config || !configUrl) {
         throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
       }
 
       const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
       const session = await verifyLoginSession({
         token: login_token,
-        domain: config.domain,
+        config,
+        configUrl,
         sharedSecret: SHARED_SECRET,
         audience: LOGIN_SESSION_AUDIENCE,
       });

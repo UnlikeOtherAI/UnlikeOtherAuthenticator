@@ -47,10 +47,12 @@ export async function finalizeWithTwoFaPolicy(
   const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
   const audience = getAuthServiceIdentifier();
 
-  // Matches login.ts's existing call: 2FA policy resolution runs on the default (admin) prisma
-  // client regardless of the caller's tenant context, since it spans domain + all of the user's
-  // orgs on that domain rather than a single RLS-scoped org.
-  const twoFaPolicy = await resolveTwoFaPolicy({ config: params.config, userId: params.userId });
+  // When workspace selection is transactional, use that transaction so a
+  // freshly accepted invite's organisation policy is visible before commit.
+  const twoFaPolicy = await resolveTwoFaPolicy(
+    { config: params.config, userId: params.userId },
+    deps?.prisma ? { prisma: deps.prisma } : undefined,
+  );
 
   if (twoFaPolicy !== 'OFF' && params.twoFaEnabled) {
     const twofa_token = await signTwoFaChallenge({
@@ -109,7 +111,16 @@ export async function finalizeWithTwoFaPolicy(
       orgId: params.orgId,
       teamId: params.teamId,
     },
-    deps?.prisma ? { prisma: deps.prisma } : undefined,
+    deps?.prisma
+      ? {
+          prisma: deps.prisma,
+          policyPrisma: deps.prisma,
+          // Keep code/signature-continuation issuance in the caller's workspace
+          // selection transaction. A replay collision can then roll back every
+          // grant or invite mutation produced by the losing request.
+          signatureDeps: { prisma: deps.prisma },
+        }
+      : undefined,
   );
 
   return { kind: 'granted', finalResult };

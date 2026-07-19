@@ -145,7 +145,7 @@ export const configJwtDocumentation = {
     login_flow: {
       email_code_enabled: 'boolean (default false)',
       workspace_selection:
-        '"off" | "auto" (default "off") — "auto" resolves workspace after identity verification. Exactly one ACTIVE team with no pending invite is selected server-side and bound through applicable 2FA to the authorization code/active claim; multiple teams, any invite, or zero teams with can_create_org preserve the chooser. An accepted email invite is already an explicit selection and carries its exact org/team through 2FA. "off" never infers scope for non-invite login.',
+        '"off" | "auto" (default "off") — "auto" resolves workspace after identity verification. Exactly one ACTIVE org+team membership with no pending invite is selected server-side and bound through applicable 2FA to the authorization code/active claim; multiple teams, any invite, or zero teams with can_create_org preserve the chooser. The chooser login_token cryptographically binds the exact verified config URL+semantics, redirect, PKCE, remember-me, and access-request continuation and is consumed once with the final selection. An accepted email invite is already an explicit selection and carries its exact ACTIVE org/team through 2FA. "off" never infers scope for non-invite login.',
     },
     session: {
       remember_me_enabled: 'boolean (default true)',

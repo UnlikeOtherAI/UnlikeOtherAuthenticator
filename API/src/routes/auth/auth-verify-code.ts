@@ -63,6 +63,12 @@ export function registerAuthVerifyCodeRoute(app: FastifyInstance): void {
       if (!config || !configUrl) {
         throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
       }
+      const redirectUrl = selectRedirectUrl({
+        allowedRedirectUrls: config.redirect_urls,
+        requestedRedirectUrl: redirect_url,
+      });
+      const rememberMe = remember_me ?? config.session?.remember_me_default ?? true;
+      const requestAccess = parseRequestAccessFlag(request_access);
 
       const { userId } = await verifyLoginCode(
         { email, config, code },
@@ -73,7 +79,13 @@ export function registerAuthVerifyCodeRoute(app: FastifyInstance): void {
         const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
         const loginToken = await signLoginSession({
           userId,
-          domain: config.domain,
+          config,
+          configUrl,
+          redirectUrl,
+          rememberMe,
+          requestAccess,
+          codeChallenge: pkce.codeChallenge,
+          codeChallengeMethod: pkce.codeChallengeMethod,
           sharedSecret: SHARED_SECRET,
           audience: LOGIN_SESSION_AUDIENCE,
         });
@@ -86,11 +98,6 @@ export function registerAuthVerifyCodeRoute(app: FastifyInstance): void {
       }
 
       setTenantContextFromRequest(request, { orgId: null, userId });
-      const redirectUrl = selectRedirectUrl({
-        allowedRedirectUrls: config.redirect_urls,
-        requestedRedirectUrl: redirect_url,
-      });
-      const rememberMe = remember_me ?? config.session?.remember_me_default ?? true;
 
       const outcome = await request.withTenantTx(async (tx) => {
         const prisma = asPrismaClient(tx);
@@ -110,7 +117,7 @@ export function registerAuthVerifyCodeRoute(app: FastifyInstance): void {
             configUrl,
             redirectUrl,
             rememberMe,
-            requestAccess: parseRequestAccessFlag(request_access),
+            requestAccess,
             authMethod: 'email_code',
             codeChallenge: pkce.codeChallenge,
             codeChallengeMethod: pkce.codeChallengeMethod,

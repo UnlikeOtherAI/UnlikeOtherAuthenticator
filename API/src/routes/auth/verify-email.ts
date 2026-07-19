@@ -90,6 +90,8 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
         allowedRedirectUrls: request.config.redirect_urls,
         requestedRedirectUrl: redirect_url,
       });
+      const rememberMe = request.config.session?.remember_me_default ?? true;
+      const requestAccess = parseRequestAccessFlag(request_access);
 
       // An accepted email invite is already an explicit workspace selection and always bypasses the
       // chooser. Otherwise auto mode either selects the sole team or exposes every real action,
@@ -107,7 +109,13 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
           const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
           const loginToken = await signLoginSession({
             userId,
-            domain: request.config.domain,
+            config: request.config,
+            configUrl: request.configUrl,
+            redirectUrl,
+            rememberMe,
+            requestAccess,
+            codeChallenge: pkce.codeChallenge,
+            codeChallengeMethod: pkce.codeChallengeMethod,
             sharedSecret: SHARED_SECRET,
             audience: LOGIN_SESSION_AUDIENCE,
           });
@@ -116,7 +124,12 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
         }
       }
 
-      const authMethod = type === 'VERIFY_EMAIL' ? 'verify_email' : 'verify_email_set_password';
+      const authMethod =
+        type === 'LOGIN_LINK'
+          ? 'login_link'
+          : type === 'VERIFY_EMAIL'
+            ? 'verify_email'
+            : 'verify_email_set_password';
       const outcome = await finalizeWithTwoFaPolicy(
         {
           userId,
@@ -124,8 +137,8 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
           config: request.config,
           configUrl: request.configUrl,
           redirectUrl,
-          rememberMe: request.config.session?.remember_me_default ?? true,
-          requestAccess: parseRequestAccessFlag(request_access),
+          rememberMe,
+          requestAccess,
           authMethod,
           codeChallenge: pkce.codeChallenge,
           codeChallengeMethod: pkce.codeChallengeMethod,
