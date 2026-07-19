@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { ClientConfig } from '../../src/services/config.service.js';
-import { buildFirstLoginBlock, buildWorkspaceChoices } from '../../src/services/first-login.service.js';
+import {
+  buildFirstLoginBlock,
+  buildWorkspaceChoices,
+  resolveAutoSelectedWorkspace,
+  type WorkspaceChoices,
+} from '../../src/services/first-login.service.js';
 import { testUiTheme } from '../helpers/test-config.js';
 
 function makeConfig(overrides?: Partial<ClientConfig>): ClientConfig {
@@ -294,5 +299,50 @@ describe('buildWorkspaceChoices', () => {
         invitedByEmail: true,
       },
     });
+  });
+});
+
+describe('resolveAutoSelectedWorkspace', () => {
+  const soloTeam = {
+    teamId: 'team-1',
+    orgId: 'org-1',
+    name: 'Solo',
+    role: 'owner',
+    iconUrl: null,
+    slug: 'solo',
+  };
+
+  function choices(overrides?: Partial<WorkspaceChoices>): WorkspaceChoices {
+    return {
+      teams: [soloTeam],
+      pending_invites: [],
+      can_create_org: false,
+      ...overrides,
+    };
+  }
+
+  it('returns the exact org/team for one ACTIVE team with no pending invites', () => {
+    expect(resolveAutoSelectedWorkspace(choices())).toEqual({
+      orgId: 'org-1',
+      teamId: 'team-1',
+    });
+  });
+
+  it('does not select when there are multiple teams, a pending invite, or no team', () => {
+    expect(
+      resolveAutoSelectedWorkspace(
+        choices({
+          teams: [soloTeam, { ...soloTeam, teamId: 'team-2', name: 'Second', slug: 'second' }],
+        }),
+      ),
+    ).toBeNull();
+    expect(
+      resolveAutoSelectedWorkspace(
+        choices({
+          pending_invites: [{ inviteId: 'invite-1', teamName: 'Invited', invitedBy: 'Alice' }],
+        }),
+      ),
+    ).toBeNull();
+    expect(resolveAutoSelectedWorkspace(choices({ teams: [] }))).toBeNull();
   });
 });

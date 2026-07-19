@@ -6,8 +6,8 @@ Additive on top of \`/auth/register\` and \`/auth/login\` — everything below i
 \`\`\`jsonc
 "login_flow": {
   "email_code_enabled": false,      // offer a 6-digit sign-in code alongside the magic link
-  "workspace_selection": "off"      // "off" | "auto" — "auto" shows a workspace chooser after
-                                     // identity verification when the user has any teams or invites
+  "workspace_selection": "off"      // "off" | "auto" — "auto" resolves workspace after identity;
+                                     // exactly one ACTIVE team/no invite is selected automatically
 }
 \`\`\`
 
@@ -39,11 +39,15 @@ token class from \`access_token\` and \`twofa_token\` and cannot be used for any
    2FA is already satisfied: it returns \`{ login_token, teams, pending_invites, can_create_org }\`
    instead of finalizing directly, and the client then calls \`/auth/select-team\`. With the default
    \`"off"\`, \`/auth/login\` is completely unchanged.
-5. Social login (\`GET /auth/callback/:provider\`) also routes into the chooser when
-   \`workspace_selection: "auto"\`, 2FA is already satisfied, and the user has 2+ ACTIVE teams or a
-   pending invite (single-team/no-invite users redirect straight to the code, matching the
-   client-side auto-skip rule). As a GET redirect it can't inline the chooser JSON, so it mints the
-   same \`login_token\` bridge and redirects to \`/auth?config_url=...&redirect_url=...&login_token=...&flow=workspace_chooser\`.
+5. Social login (\`GET /auth/callback/:provider\`) resolves workspace immediately after identity,
+   before 2FA. With \`workspace_selection: "auto"\`, 2+ ACTIVE teams or any pending invite route to
+   the chooser. Exactly one ACTIVE team and no invite is an unambiguous server-side selection: its
+   exact \`orgId\`/\`teamId\` is carried through any 2FA challenge or required-enrollment setup token
+   into the authorization code, so access and rotated refresh sessions retain
+   \`active: { orgId, teamId }\`. With \`workspace_selection: "off"\`, no workspace is inferred and
+   the code remains unscoped. As a GET redirect the multi-choice branch can't inline the chooser
+   JSON, so it mints the same \`login_token\` bridge and redirects to
+   \`/auth?config_url=...&redirect_url=...&login_token=...&flow=workspace_chooser\`.
    The Auth UI then calls \`POST /auth/session-choices?config_url=...\` \`{ login_token }\` to hydrate
    \`{ teams, pending_invites, can_create_org }\` — generic rejection for an invalid/expired token, no
    enumeration.
@@ -51,9 +55,10 @@ token class from \`access_token\` and \`twofa_token\` and cannot be used for any
    and the VERIFY_EMAIL_SET_PASSWORD → \`POST /auth/verify-email\` path) join the same chooser gate —
    the design's "magic links join the same flow". LOGIN_LINK/VERIFY_EMAIL redirect to \`/auth?...&
    login_token=...&flow=workspace_chooser\` exactly like the social callback; \`POST /auth/verify-email\`
-   instead returns the inline JSON chooser payload exactly like \`/auth/login\`. Either way, an
-   invite-bound link (the invite already selected the team when the token was consumed) never sees
-   the chooser — an accepted invite IS the workspace selection.
+   instead returns the inline JSON chooser payload exactly like \`/auth/login\`. The same exact-one
+   rule binds the sole ACTIVE team's \`orgId\`/\`teamId\` when the chooser is skipped. An invite-bound
+   link (the invite already selected the team when the token was consumed) never sees this gate —
+   an accepted invite IS the workspace selection.
 7. \`GET /auth\` accepts an optional \`team_hint=<teamId|slug>\` — a chooser preselect / one-click
    workspace switch (design §11.4): a product's sidebar links back into \`/auth\` with the workspace
    the user clicked, and if a team in that user's own (already-verified) chooser payload matches by

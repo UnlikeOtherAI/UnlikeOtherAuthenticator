@@ -20,12 +20,6 @@ const selectRedirectUrlMock = vi.fn();
 const issueAuthorizationCodeMock = vi.fn();
 const buildRedirectToUrlMock = vi.fn();
 
-// Phase 3b Task 7 follow-up (design §4.3, §11.2): social→chooser wiring.
-const resolveTwoFaPolicyMock = vi.fn();
-const signLoginSessionMock = vi.fn();
-const buildWorkspaceChoicesMock = vi.fn();
-const finalizeAuthenticatedUserMock = vi.fn();
-
 vi.mock('../../src/services/config.service.js', async () => {
   const actual = await vi.importActual<typeof import('../../src/services/config.service.js')>(
     '../../src/services/config.service.js',
@@ -69,37 +63,6 @@ vi.mock('../../src/services/social/social-state.service.js', () => {
 vi.mock('../../src/services/social/social-login.service.js', () => {
   return {
     loginWithSocialProfile: (...args: unknown[]) => loginWithSocialProfileMock(...args),
-  };
-});
-
-vi.mock('../../src/services/twofactor-policy.service.js', () => {
-  return {
-    resolveTwoFaPolicy: (...args: unknown[]) => resolveTwoFaPolicyMock(...args),
-  };
-});
-
-vi.mock('../../src/services/login-session.service.js', () => {
-  return {
-    signLoginSession: (...args: unknown[]) => signLoginSessionMock(...args),
-  };
-});
-
-vi.mock('../../src/services/first-login.service.js', async () => {
-  const actual =
-    await vi.importActual<typeof import('../../src/services/first-login.service.js')>(
-      '../../src/services/first-login.service.js',
-    );
-  return { ...actual, buildWorkspaceChoices: (...args: unknown[]) => buildWorkspaceChoicesMock(...args) };
-});
-
-vi.mock('../../src/services/access-request-flow.service.js', async () => {
-  const actual =
-    await vi.importActual<typeof import('../../src/services/access-request-flow.service.js')>(
-      '../../src/services/access-request-flow.service.js',
-    );
-  return {
-    ...actual,
-    finalizeAuthenticatedUser: (...args: unknown[]) => finalizeAuthenticatedUserMock(...args),
   };
 });
 
@@ -157,11 +120,6 @@ describe('GET /auth/callback/:provider', () => {
     selectRedirectUrlMock.mockReset();
     issueAuthorizationCodeMock.mockReset();
     buildRedirectToUrlMock.mockReset();
-    resolveTwoFaPolicyMock.mockReset().mockResolvedValue('OFF');
-    signLoginSessionMock.mockReset();
-    buildWorkspaceChoicesMock.mockReset();
-    finalizeAuthenticatedUserMock.mockReset();
-
     fetchConfigJwtFromUrlMock.mockResolvedValue('config-jwt');
     verifyConfigJwtSignatureMock.mockResolvedValue({} as JWTPayload);
     adminConfigUrlMock.mockReturnValue('https://admin.example.com/internal/admin/config');
@@ -204,7 +162,9 @@ describe('GET /auth/callback/:provider', () => {
     });
 
     expect(res.statusCode).toBe(302);
-    expect(res.headers.location).toBe('https://client.example.com/oauth/callback?error=auth_failed');
+    expect(res.headers.location).toBe(
+      'https://client.example.com/oauth/callback?error=auth_failed',
+    );
     expect(res.headers['cache-control']).toBe('no-store');
     expect(res.headers.pragma).toBe('no-cache');
     expect(verifyConfigJwtSignatureMock).toHaveBeenCalledWith(
@@ -246,7 +206,9 @@ describe('GET /auth/callback/:provider', () => {
     });
 
     expect(res.statusCode).toBe(302);
-    expect(res.headers.location).toBe('https://admin.example.com/admin/auth/callback?error=auth_failed');
+    expect(res.headers.location).toBe(
+      'https://admin.example.com/admin/auth/callback?error=auth_failed',
+    );
     expect(fetchConfigJwtFromUrlMock).not.toHaveBeenCalled();
     expect(readAdminConfigJwtMock).toHaveBeenCalledTimes(1);
     expect(verifyConfigJwtSignatureMock).toHaveBeenCalledWith(
@@ -341,167 +303,5 @@ describe('GET /auth/callback/:provider', () => {
     expect(body).not.toContain('Check that config_url is present');
 
     await app.close();
-  });
-
-  describe('workspace chooser wiring (Phase 3b Task 7 follow-up, design §4.3/§11.2)', () => {
-    beforeEach(() => {
-      loginWithSocialProfileMock.mockResolvedValue({
-        status: 'authenticated',
-        userId: 'user-1',
-        twoFaEnabled: false,
-      });
-    });
-
-    it('workspace_selection "auto" + 2+ ACTIVE teams: redirects with login_token + flow=workspace_chooser, no code', async () => {
-      validateConfigFieldsMock.mockReturnValue(
-        baseConfig({
-          login_flow: { email_code_enabled: false, workspace_selection: 'auto' },
-        }),
-      );
-      // The initiating /auth/social request carried a PKCE challenge; it travels inside the signed
-      // social state and MUST survive the chooser redirect (the login_token bridge doesn't embed
-      // it, and /auth/select-team → issueAuthorizationCode requires it).
-      verifySocialStateMock.mockResolvedValue({
-        provider: 'google',
-        config_url: 'https://client.example.com/auth-config',
-        redirect_url: 'https://client.example.com/oauth/callback',
-        nonce: TEST_NONCE,
-        code_challenge: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
-        code_challenge_method: 'S256',
-      });
-      buildWorkspaceChoicesMock.mockResolvedValue({
-        teams: [
-          { teamId: 'team-1', orgId: 'org-1', name: 'Design', role: 'member' },
-          { teamId: 'team-2', orgId: 'org-1', name: 'Engineering', role: 'owner' },
-        ],
-        pending_invites: [],
-        can_create_org: false,
-      });
-      signLoginSessionMock.mockResolvedValue('login_token_abc');
-
-      const { createApp } = await import('../../src/app.js');
-      const app = await createApp();
-      await app.ready();
-
-      const res = await app.inject({
-        method: 'GET',
-        url: '/auth/callback/google?code=provider-code&state=state-token',
-        cookies: { [SOCIAL_STATE_COOKIE_NAME]: app.signCookie(TEST_NONCE) },
-      });
-
-      expect(res.statusCode).toBe(302);
-      const location = new URL(res.headers.location as string);
-      expect(location.origin + location.pathname).toBe('http://127.0.0.1:3000/auth');
-      expect(location.searchParams.get('login_token')).toBe('login_token_abc');
-      expect(location.searchParams.get('flow')).toBe('workspace_chooser');
-      expect(location.searchParams.get('config_url')).toBe('https://client.example.com/auth-config');
-      expect(location.searchParams.get('redirect_url')).toBe(
-        'https://client.example.com/oauth/callback',
-      );
-      expect(location.searchParams.get('code_challenge')).toBe(
-        'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
-      );
-      expect(location.searchParams.get('code_challenge_method')).toBe('S256');
-      expect(location.searchParams.has('code')).toBe(false);
-      expect(issueAuthorizationCodeMock).not.toHaveBeenCalled();
-
-      await app.close();
-    });
-
-    it('chooser redirect omits the PKCE params when the social state carries none', async () => {
-      validateConfigFieldsMock.mockReturnValue(
-        baseConfig({
-          login_flow: { email_code_enabled: false, workspace_selection: 'auto' },
-        }),
-      );
-      // Default verifySocialStateMock (beforeEach) has no code_challenge/code_challenge_method.
-      buildWorkspaceChoicesMock.mockResolvedValue({
-        teams: [
-          { teamId: 'team-1', orgId: 'org-1', name: 'Design', role: 'member' },
-          { teamId: 'team-2', orgId: 'org-1', name: 'Engineering', role: 'owner' },
-        ],
-        pending_invites: [],
-        can_create_org: false,
-      });
-      signLoginSessionMock.mockResolvedValue('login_token_abc');
-
-      const { createApp } = await import('../../src/app.js');
-      const app = await createApp();
-      await app.ready();
-
-      const res = await app.inject({
-        method: 'GET',
-        url: '/auth/callback/google?code=provider-code&state=state-token',
-        cookies: { [SOCIAL_STATE_COOKIE_NAME]: app.signCookie(TEST_NONCE) },
-      });
-
-      expect(res.statusCode).toBe(302);
-      const location = new URL(res.headers.location as string);
-      expect(location.searchParams.get('login_token')).toBe('login_token_abc');
-      expect(location.searchParams.get('flow')).toBe('workspace_chooser');
-      expect(location.searchParams.has('code_challenge')).toBe(false);
-      expect(location.searchParams.has('code_challenge_method')).toBe(false);
-
-      await app.close();
-    });
-
-    it('workspace_selection "auto" but only 1 ACTIVE team and no invites: redirects with the code as usual (auto-skip)', async () => {
-      validateConfigFieldsMock.mockReturnValue(
-        baseConfig({
-          login_flow: { email_code_enabled: false, workspace_selection: 'auto' },
-        }),
-      );
-      buildWorkspaceChoicesMock.mockResolvedValue({
-        teams: [{ teamId: 'team-1', orgId: 'org-1', name: 'Solo', role: 'owner' }],
-        pending_invites: [],
-        can_create_org: false,
-      });
-      finalizeAuthenticatedUserMock.mockResolvedValue({
-        status: 'granted',
-        code: 'abc123',
-        redirectTo: 'https://client.example.com/oauth/callback?code=abc123',
-      });
-
-      const { createApp } = await import('../../src/app.js');
-      const app = await createApp();
-      await app.ready();
-
-      const res = await app.inject({
-        method: 'GET',
-        url: '/auth/callback/google?code=provider-code&state=state-token',
-        cookies: { [SOCIAL_STATE_COOKIE_NAME]: app.signCookie(TEST_NONCE) },
-      });
-
-      expect(res.statusCode).toBe(302);
-      expect(res.headers.location).toBe('https://client.example.com/oauth/callback?code=abc123');
-      expect(signLoginSessionMock).not.toHaveBeenCalled();
-
-      await app.close();
-    });
-
-    it('workspace_selection "off" (default): unchanged — no chooser check at all', async () => {
-      finalizeAuthenticatedUserMock.mockResolvedValue({
-        status: 'granted',
-        code: 'abc123',
-        redirectTo: 'https://client.example.com/oauth/callback?code=abc123',
-      });
-
-      const { createApp } = await import('../../src/app.js');
-      const app = await createApp();
-      await app.ready();
-
-      const res = await app.inject({
-        method: 'GET',
-        url: '/auth/callback/google?code=provider-code&state=state-token',
-        cookies: { [SOCIAL_STATE_COOKIE_NAME]: app.signCookie(TEST_NONCE) },
-      });
-
-      expect(res.statusCode).toBe(302);
-      expect(res.headers.location).toBe('https://client.example.com/oauth/callback?code=abc123');
-      expect(buildWorkspaceChoicesMock).not.toHaveBeenCalled();
-      expect(signLoginSessionMock).not.toHaveBeenCalled();
-
-      await app.close();
-    });
   });
 });

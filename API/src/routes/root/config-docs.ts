@@ -142,6 +142,11 @@ export const configJwtDocumentation = {
     registration_domain_mapping:
       'array of { email_domain, org_id, team_id? } — email-domain-based org/team placement',
     language: 'string — currently selected language override',
+    login_flow: {
+      email_code_enabled: 'boolean (default false)',
+      workspace_selection:
+        '"off" | "auto" (default "off") — "auto" resolves workspace after identity verification. Exactly one ACTIVE team with no pending invite is selected server-side and bound to the authorization code/active claim; multiple teams or any invite preserve the chooser. "off" never infers workspace scope.',
+    },
     session: {
       remember_me_enabled: 'boolean (default true)',
       remember_me_default: 'boolean (default true)',

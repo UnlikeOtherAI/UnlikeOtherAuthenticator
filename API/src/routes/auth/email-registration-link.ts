@@ -17,7 +17,11 @@ import {
 import { selectRedirectUrl } from '../../services/authorization-code.service.js';
 import { isCustomSchemeUrl } from '../../utils/http-url.js';
 import { verifyEmailToken } from '../../services/auth-verify-email.service.js';
-import { buildWorkspaceChoices } from '../../services/first-login.service.js';
+import {
+  buildWorkspaceChoices,
+  resolveAutoSelectedWorkspace,
+  type AutoSelectedWorkspace,
+} from '../../services/first-login.service.js';
 import { signLoginSession } from '../../services/login-session.service.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
 import { AppError, isAppError } from '../../utils/errors.js';
@@ -160,11 +164,13 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
           // logins — UNLESS this link was invite-bound (teamInviteId set), in which case
           // verifyEmailToken already ran acceptTeamInviteWithinTransaction above: the accepted invite
           // IS the workspace selection, so the chooser must NOT be interposed on top of it.
+          let autoSelectedWorkspace: AutoSelectedWorkspace | null = null;
           if (!teamInviteId && request.config.login_flow?.workspace_selection === 'auto') {
             const choices = await buildWorkspaceChoices(
               { userId, config: request.config },
               { prisma: request.adminDb },
             );
+            autoSelectedWorkspace = resolveAutoSelectedWorkspace(choices);
             if (choices.teams.length >= 2 || choices.pending_invites.length > 0) {
               const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
               const loginToken = await signLoginSession({
@@ -200,6 +206,7 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
               codeChallenge: pkce.codeChallenge,
               codeChallengeMethod: pkce.codeChallengeMethod,
               ip: request.ip ?? null,
+              ...(autoSelectedWorkspace ?? {}),
             },
             { prisma: request.adminDb },
           );

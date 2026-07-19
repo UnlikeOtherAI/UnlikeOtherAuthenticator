@@ -13,7 +13,11 @@ import {
 import { readConfigJwtFromTrustedSource } from '../../services/config-jwt-source.service.js';
 import { applyDomainRedirectAllowlist } from '../../services/domain-redirect-allowlist.service.js';
 import { LOGIN_SESSION_AUDIENCE } from '../../config/constants.js';
-import { buildWorkspaceChoices } from '../../services/first-login.service.js';
+import {
+  buildWorkspaceChoices,
+  resolveAutoSelectedWorkspace,
+  type AutoSelectedWorkspace,
+} from '../../services/first-login.service.js';
 import { signLoginSession } from '../../services/login-session.service.js';
 import { assertSocialProviderAllowed } from '../../services/social/index.js';
 import { getAppleProfileFromCode } from '../../services/social/apple.service.js';
@@ -273,6 +277,24 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         const { userId, twoFaEnabled } = socialLoginResult;
         const rememberMe = config.session?.remember_me_default ?? true;
 
+        let autoSelectedWorkspace: AutoSelectedWorkspace | null = null;
+        if (config.login_flow?.workspace_selection === 'auto') {
+          const choices = await buildWorkspaceChoices({ userId, config }, { prisma });
+          autoSelectedWorkspace = resolveAutoSelectedWorkspace(choices);
+          if (
+            !autoSelectedWorkspace &&
+            (choices.teams.length >= 2 || choices.pending_invites.length > 0)
+          ) {
+            const loginToken = await signLoginSession({
+              userId,
+              domain: config.domain,
+              sharedSecret: SHARED_SECRET,
+              audience: LOGIN_SESSION_AUDIENCE,
+            });
+            return { kind: 'workspace_chooser' as const, loginToken };
+          }
+        }
+
         const twoFaPolicy = await resolveTwoFaPolicy({ config, userId });
         if (twoFaPolicy !== 'OFF' && twoFaEnabled) {
           const twofa_token = await signTwoFaChallenge({
@@ -285,6 +307,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
             requestAccess: socialState.request_access === true,
             codeChallenge: socialState.code_challenge,
             codeChallengeMethod: socialState.code_challenge_method,
+            ...(autoSelectedWorkspace ?? {}),
             sharedSecret: SHARED_SECRET,
             audience: authServiceIdentifier,
           });
@@ -304,6 +327,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
                 requestAccess: socialState.request_access === true,
                 codeChallenge: socialState.code_challenge,
                 codeChallengeMethod: socialState.code_challenge_method,
+                ...(autoSelectedWorkspace ?? {}),
               },
             },
             { prisma },
@@ -311,27 +335,8 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
           return { kind: 'twofa_enroll_required' as const, setupToken: setup.setup_token };
         }
 
-        // Phase 3b Task 7 follow-up (design §4.3, §11.2): route social logins into the workspace
-        // chooser too, the same way login.ts already does for password logins. 2FA is already
-        // satisfied by this point — both branches above already returned otherwise. Unlike
-        // login.ts (a JSON POST that can inline the chooser payload), this is a GET redirect, so a
-        // login_token bridge is minted instead and the SPA hydrates the payload afterwards via
-        // POST /auth/session-choices. Pre-check team/invite counts here (mirroring the client-side
-        // auto-skip rule in §11.2) so a single-workspace/no-invite social user isn't bounced
-        // through an extra redirect round-trip for a chooser that would just auto-skip anyway.
-        if (config.login_flow?.workspace_selection === 'auto') {
-          const choices = await buildWorkspaceChoices({ userId, config }, { prisma });
-          if (choices.teams.length >= 2 || choices.pending_invites.length > 0) {
-            const loginToken = await signLoginSession({
-              userId,
-              domain: config.domain,
-              sharedSecret: SHARED_SECRET,
-              audience: LOGIN_SESSION_AUDIENCE,
-            });
-            return { kind: 'workspace_chooser' as const, loginToken };
-          }
-        }
-
+        // The workspace decision happens before 2FA: an explicit chooser returns above, while an
+        // unambiguous auto-skip is carried through any 2FA bridge and bound to the final code.
         const finalResult = await finalizeAuthenticatedUser(
           {
             userId,
@@ -345,6 +350,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
             codeChallenge: socialState.code_challenge,
             codeChallengeMethod: socialState.code_challenge_method,
             ip: request.ip ?? null,
+            ...(autoSelectedWorkspace ?? {}),
           },
           { prisma },
         );

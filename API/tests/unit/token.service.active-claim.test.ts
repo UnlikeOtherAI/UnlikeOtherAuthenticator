@@ -16,9 +16,7 @@ import {
 // (issuance/org-claim/PKCE) and token.service.refresh-active-claim.test.ts (refresh re-validation)
 // for the rest. Only the location changed — no assertion here was altered from the pre-split file.
 //
-// Phase 3a (dormant): `active` workspace-scope claim. Nothing populates
-// authorization_codes.org_id/team_id yet, but the plumbing must already behave
-// correctly once Phase 3b starts writing them.
+// `active` workspace-scope claim emitted from authorization_codes.org_id/team_id.
 describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
   useTokenServiceTestEnv();
 
@@ -152,7 +150,7 @@ describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
     expect(claims.active).toBeUndefined();
   });
 
-  it('omits the active claim when the code carries neither orgId nor teamId (today\'s dormant default)', async () => {
+  it('omits the active claim when the code carries neither orgId nor teamId', async () => {
     const now = new Date('2026-07-07T00:00:02.000Z');
     const sharedSecret = process.env.SHARED_SECRET!;
     const code = 'code-with-no-scope';

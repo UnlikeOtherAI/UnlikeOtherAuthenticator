@@ -130,7 +130,7 @@ describe('verifyAccessToken', () => {
     });
   });
 
-  it('accepts a valid JWT with an active claim and returns claims including it (dormant workspace scope)', async () => {
+  it('accepts a valid JWT with an active workspace claim', async () => {
     const token = await signAccessToken({
       sharedSecret: process.env.SHARED_SECRET!,
       issuer: process.env.AUTH_SERVICE_IDENTIFIER!,

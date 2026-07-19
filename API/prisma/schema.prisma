@@ -247,8 +247,8 @@ model AuthorizationCode {
   codeChallenge       String?   @map("code_challenge")
   codeChallengeMethod String?   @map("code_challenge_method")
   rememberMe          Boolean   @default(false) @map("remember_me")
-  // Workspace scope captured at select-team time (design §7 step 3-4). Dormant until Phase 3b
-  // populates it; consumeAuthorizationCode threads it into the issued session's `active` claim.
+  // Workspace scope captured by explicit selection or an unambiguous one-team auto-selection;
+  // consumeAuthorizationCode threads it into the issued session's `active` claim.
   orgId               String?   @map("org_id")
   teamId              String?   @map("team_id")
   expiresAt           DateTime  @map("expires_at")
@@ -305,7 +305,7 @@ model RefreshToken {
   clientId          String    @map("client_id")
   configUrl         String    @map("config_url")
   // Workspace scope carried from the authorization code that created this session (design §7 step
-  // 3-4). Dormant until Phase 3b populates it; rotation preserves it onto the new row.
+  // 3-4); rotation preserves it onto the new row.
   orgId             String?   @map("org_id")
   teamId            String?   @map("team_id")
   expiresAt         DateTime  @map("expires_at")

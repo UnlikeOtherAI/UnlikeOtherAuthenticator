@@ -13,13 +13,20 @@ const issueAuthorizationCodeMock = vi.fn();
 const buildRedirectToUrlMock = vi.fn();
 const signTwoFaChallengeMock = vi.fn();
 const verifyTwoFaChallengeMock = vi.fn();
+const verifyTwoFaSetupTokenMock = vi.fn();
 const verifyTwoFactorForLoginMock = vi.fn();
+const enrollTwoFactorForUserMock = vi.fn();
+const decryptTwoFaSecretMock = vi.fn();
 const resolveTwoFaPolicyMock = vi.fn();
 const finalizeConfigAuthorizationWithSignaturesMock = vi.fn();
 
 vi.mock('../../src/middleware/config-verifier.js', () => {
   return {
-    configVerifier: async (request: { query?: { config_url?: string }; configUrl?: string; config?: ClientConfig }): Promise<void> => {
+    configVerifier: async (request: {
+      query?: { config_url?: string };
+      configUrl?: string;
+      config?: ClientConfig;
+    }): Promise<void> => {
       request.configUrl = request.query?.config_url;
       request.config = currentConfig ?? undefined;
     },
@@ -63,6 +70,30 @@ vi.mock('../../src/services/twofactor-login.service.js', () => {
   };
 });
 
+vi.mock('../../src/services/twofactor-setup-token.service.js', async () => {
+  const actual = await vi.importActual<
+    typeof import('../../src/services/twofactor-setup-token.service.js')
+  >('../../src/services/twofactor-setup-token.service.js');
+  return {
+    ...actual,
+    verifyTwoFaSetupToken: (...args: unknown[]) => verifyTwoFaSetupTokenMock(...args),
+  };
+});
+
+vi.mock('../../src/services/twofactor-enroll.service.js', () => ({
+  enrollTwoFactorForUser: (...args: unknown[]) => enrollTwoFactorForUserMock(...args),
+}));
+
+vi.mock('../../src/utils/twofa-secret.js', async () => {
+  const actual = await vi.importActual<typeof import('../../src/utils/twofa-secret.js')>(
+    '../../src/utils/twofa-secret.js',
+  );
+  return {
+    ...actual,
+    decryptTwoFaSecret: (...args: unknown[]) => decryptTwoFaSecretMock(...args),
+  };
+});
+
 vi.mock('../../src/services/twofactor-policy.service.js', () => {
   return {
     resolveTwoFaPolicy: (...args: unknown[]) => resolveTwoFaPolicyMock(...args),
@@ -98,7 +129,10 @@ describe('2FA gated by config `2fa_enabled`', () => {
     buildRedirectToUrlMock.mockReset();
     signTwoFaChallengeMock.mockReset();
     verifyTwoFaChallengeMock.mockReset();
+    verifyTwoFaSetupTokenMock.mockReset();
     verifyTwoFactorForLoginMock.mockReset();
+    enrollTwoFactorForUserMock.mockReset();
+    decryptTwoFaSecretMock.mockReset();
     resolveTwoFaPolicyMock.mockReset();
     finalizeConfigAuthorizationWithSignaturesMock.mockReset();
     resolveTwoFaPolicyMock.mockImplementation(
@@ -114,9 +148,9 @@ describe('2FA gated by config `2fa_enabled`', () => {
       };
     });
 
-    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
-    process.env.AUTH_SERVICE_IDENTIFIER =
-      process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
+    process.env.SHARED_SECRET =
+      process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
+    process.env.AUTH_SERVICE_IDENTIFIER = process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
   });
 
   afterEach(() => {
@@ -198,6 +232,99 @@ describe('2FA gated by config `2fa_enabled`', () => {
 
     expect(verifyTwoFaChallengeMock).not.toHaveBeenCalled();
     expect(verifyTwoFactorForLoginMock).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('carries an auto-selected workspace from the 2FA challenge into final code issuance', async () => {
+    currentConfig['2fa_enabled'] = true;
+    verifyTwoFaChallengeMock.mockResolvedValue({
+      userId: 'user_1',
+      configUrl: 'https://client.example.com/auth-config',
+      redirectUrl: 'https://client.example.com/oauth/callback',
+      domain: 'client.example.com',
+      authMethod: 'google',
+      rememberMe: true,
+      requestAccess: false,
+      codeChallenge: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+      codeChallengeMethod: 'S256',
+      orgId: 'org_1',
+      teamId: 'team_1',
+    });
+    verifyTwoFactorForLoginMock.mockResolvedValue(undefined);
+    finalizeConfigAuthorizationWithSignaturesMock.mockResolvedValue({
+      status: 'granted',
+      code: 'auth_code_1',
+      redirectTo: 'https://client.example.com/oauth/callback?code=auth_code_1',
+    });
+
+    const { createApp } = await import('../../src/app.js');
+    const app = await createApp();
+    await app.ready();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/2fa/verify?config_url=https%3A%2F%2Fclient.example.com%2Fauth-config',
+      payload: { twofa_token: 'twofa_token_1', code: '123456' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(finalizeConfigAuthorizationWithSignaturesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orgId: 'org_1',
+        teamId: 'team_1',
+        twoFaCompleted: true,
+      }),
+      undefined,
+    );
+
+    await app.close();
+  });
+
+  it('carries an auto-selected workspace from required enrollment into final code issuance', async () => {
+    currentConfig['2fa_enabled'] = true;
+    resolveTwoFaPolicyMock.mockResolvedValue('REQUIRED');
+    verifyTwoFaSetupTokenMock.mockResolvedValue({
+      userId: 'user_1',
+      encryptedSecret: 'encrypted-secret',
+      configUrl: 'https://client.example.com/auth-config',
+      domain: 'client.example.com',
+      authMethod: 'google',
+      redirectUrl: 'https://client.example.com/oauth/callback',
+      rememberMe: true,
+      requestAccess: false,
+      codeChallenge: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+      codeChallengeMethod: 'S256',
+      orgId: 'org_1',
+      teamId: 'team_1',
+    });
+    decryptTwoFaSecretMock.mockReturnValue('TOTPSECRET');
+    enrollTwoFactorForUserMock.mockResolvedValue(undefined);
+    finalizeConfigAuthorizationWithSignaturesMock.mockResolvedValue({
+      status: 'granted',
+      code: 'auth_code_1',
+      redirectTo: 'https://client.example.com/oauth/callback?code=auth_code_1',
+    });
+
+    const { createApp } = await import('../../src/app.js');
+    const app = await createApp();
+    await app.ready();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/2fa/enroll?config_url=https%3A%2F%2Fclient.example.com%2Fauth-config',
+      payload: { setup_token: 'setup_token_1', code: '123456' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(finalizeConfigAuthorizationWithSignaturesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orgId: 'org_1',
+        teamId: 'team_1',
+        twoFaCompleted: true,
+      }),
+      undefined,
+    );
 
     await app.close();
   });

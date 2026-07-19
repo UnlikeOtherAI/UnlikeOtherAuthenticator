@@ -100,7 +100,7 @@ export async function issueRefreshToken(
     parentTokenId?: string;
     userId: string;
     // Workspace scope carried from the authorization code / prior refresh token (design §7 step
-    // 3-4). Dormant until Phase 3b populates it; defaults to null (no scope).
+    // 3-4); defaults to null when no workspace was selected.
     orgId?: string | null;
     teamId?: string | null;
   },

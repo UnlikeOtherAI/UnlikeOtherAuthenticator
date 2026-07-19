@@ -69,8 +69,8 @@ export async function issueAuthorizationCode(
     codeChallenge?: string;
     codeChallengeMethod?: 'S256';
     rememberMe?: boolean;
-    // Workspace scope resolved by /auth/select-team (design §7 step 3-4, Phase 3b Task 6). Omitted
-    // by every other caller today, so it defaults to null and existing behaviour is unchanged.
+    // Workspace scope resolved by explicit /auth/select-team or the unambiguous one-team
+    // server-side auto-selection. Omitted when workspace selection is off or unresolved.
     orgId?: string;
     teamId?: string;
   },

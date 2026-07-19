@@ -193,6 +193,29 @@ export type WorkspaceChoices = {
   can_create_org: boolean;
 };
 
+export type AutoSelectedWorkspace = {
+  orgId: string;
+  teamId: string;
+};
+
+/**
+ * `workspace_selection: "auto"` skips the chooser only when there is exactly one unambiguous
+ * ACTIVE workspace and no pending invite. The skipped chooser is still a workspace selection:
+ * callers must bind this exact org/team to the authorization code (and any intervening 2FA
+ * bridge), just as `/auth/select-team` does for an explicit click.
+ */
+export function resolveAutoSelectedWorkspace(
+  choices: WorkspaceChoices,
+): AutoSelectedWorkspace | null {
+  if (choices.teams.length !== 1 || choices.pending_invites.length !== 0) {
+    return null;
+  }
+
+  const [team] = choices.teams;
+  if (!team) return null;
+  return { orgId: team.orgId, teamId: team.teamId };
+}
+
 type WorkspaceChooserPrisma = {
   user: Pick<PrismaClient['user'], 'findUnique'>;
   teamMember: Pick<PrismaClient['teamMember'], 'findMany'>;

@@ -38,9 +38,9 @@ vi.mock('../../src/services/auth-registration-email-link.service.js', () => ({
 }));
 
 vi.mock('../../src/services/access-request-flow.service.js', async () => {
-  const actual = await vi.importActual<typeof import('../../src/services/access-request-flow.service.js')>(
-    '../../src/services/access-request-flow.service.js',
-  );
+  const actual = await vi.importActual<
+    typeof import('../../src/services/access-request-flow.service.js')
+  >('../../src/services/access-request-flow.service.js');
 
   return {
     ...actual,
@@ -57,11 +57,13 @@ vi.mock('../../src/services/login-session.service.js', () => ({
 }));
 
 vi.mock('../../src/services/first-login.service.js', async () => {
-  const actual =
-    await vi.importActual<typeof import('../../src/services/first-login.service.js')>(
-      '../../src/services/first-login.service.js',
-    );
-  return { ...actual, buildWorkspaceChoices: (...args: unknown[]) => buildWorkspaceChoicesMock(...args) };
+  const actual = await vi.importActual<typeof import('../../src/services/first-login.service.js')>(
+    '../../src/services/first-login.service.js',
+  );
+  return {
+    ...actual,
+    buildWorkspaceChoices: (...args: unknown[]) => buildWorkspaceChoicesMock(...args),
+  };
 });
 
 vi.mock('../../src/services/auth-ui.service.js', async () => {
@@ -297,7 +299,14 @@ describe('GET /auth/email/link — workspace chooser wiring (gap-fix B Task 1, d
     });
     buildWorkspaceChoicesMock.mockResolvedValue({
       teams: [
-        { teamId: 'team-1', orgId: 'org-1', name: 'Design', slug: 'design', role: 'member', iconUrl: null },
+        {
+          teamId: 'team-1',
+          orgId: 'org-1',
+          name: 'Design',
+          slug: 'design',
+          role: 'member',
+          iconUrl: null,
+        },
         {
           teamId: 'team-2',
           orgId: 'org-1',
@@ -336,13 +345,20 @@ describe('GET /auth/email/link — workspace chooser wiring (gap-fix B Task 1, d
     );
   });
 
-  it('workspace_selection "auto" but only 1 ACTIVE team and no invites: unchanged finalize (auto-skip)', async () => {
+  it('workspace_selection "auto" but only 1 ACTIVE team and no invites: auto-skip binds that workspace to the code', async () => {
     currentConfig = baseConfig({
       login_flow: { email_code_enabled: false, workspace_selection: 'auto' },
     });
     buildWorkspaceChoicesMock.mockResolvedValue({
       teams: [
-        { teamId: 'team-1', orgId: 'org-1', name: 'Solo', slug: 'solo', role: 'owner', iconUrl: null },
+        {
+          teamId: 'team-1',
+          orgId: 'org-1',
+          name: 'Solo',
+          slug: 'solo',
+          role: 'owner',
+          iconUrl: null,
+        },
       ],
       pending_invites: [],
       can_create_org: false,
@@ -358,6 +374,13 @@ describe('GET /auth/email/link — workspace chooser wiring (gap-fix B Task 1, d
     expect(res.statusCode).toBe(302);
     expect(res.headers.location).toBe('https://client.example.com/oauth/callback?code=abc123');
     expect(signLoginSessionMock).not.toHaveBeenCalled();
+    expect(finalizeAuthenticatedUserMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orgId: 'org-1',
+        teamId: 'team-1',
+      }),
+      expect.anything(),
+    );
   });
 
   it('invite-bound link (teamInviteId set): the chooser is never interposed, even with workspace_selection "auto"', async () => {

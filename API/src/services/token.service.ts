@@ -272,8 +272,8 @@ export async function exchangeAuthorizationCodeForTokens(
     prisma,
   });
 
-  // Dormant until Phase 3b's select-team populates authorization_codes.org_id/team_id: both must
-  // be present to carry a workspace scope onto the session (design §7 steps 3-4).
+  // Both values must be present to carry an explicit or unambiguously auto-selected workspace
+  // onto the session (design §7 steps 3-4).
   const active: ActiveWorkspace | null = orgId && teamId ? { orgId, teamId } : null;
 
   const refreshTtlSeconds = resolveRefreshTokenTtlSeconds(params.config, rememberMe);
