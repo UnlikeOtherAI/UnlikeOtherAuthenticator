@@ -27,7 +27,7 @@ export const billingEndpoints: EndpointSchema[] = [
     method: 'POST',
     path: '/billing/v1/effective-tariff',
     description:
-      'Resolve team > organisation > service-default tariff precedence, re-check active UOA membership, and return a signed content-free snapshot. Raw metered quantities remain immutable; the signed multiplier rates money and separately labeled customer billable token-equivalent units.',
+      'Resolve team > organisation > service-default tariff precedence, re-check active UOA membership, and return a signed content-free snapshot. Raw metered quantities remain immutable; the signed multiplier rates money and separately labeled customer billable units.',
     auth: 'X-UOA-App-Key: uoa_app_… credential dedicated to the requested product, plus X-UOA-Actor: short-lived RS256 actor JWT bound to that credential',
     body: {
       product: 'string (required) — exact global billing service identifier bound to the app key',
@@ -41,7 +41,7 @@ export const billingEndpoints: EndpointSchema[] = [
         'Generic error for invalid/revoked/wrong-product app key, invalid actor signature, actor/body mismatch, or inactive membership',
     },
     notes:
-      'Actor claims: iss/aud exact credential values, sub=user_id, product, organisation_id, team_id, unique jti, iat/exp with maximum 60-second lifetime. Snapshot iss is PUBLIC_BASE_URL; aud is the credential actor_issuer. Consumers must verify the signature and require exact signed product ID+identifier, authorized app-key ID, and user/organisation/team subject binding; shared actor signers never make snapshots portable across products. A billable token equivalent is raw_provider_tokens × usage_price_multiplier_bps / 10000 and must remain separately labeled from immutable raw provider tokens.',
+      'Actor claims: iss/aud exact credential values, sub=user_id, product, organisation_id, team_id, unique jti, iat/exp with maximum 60-second lifetime. Snapshot iss is PUBLIC_BASE_URL; aud is the credential actor_issuer. Consumers must verify the signature and require exact signed product ID+identifier, authorized app-key ID, and user/organisation/team subject binding; shared actor signers never make snapshots portable across products. Customer billable units are raw_metered_units × usage_price_multiplier_bps / 10000 and remain separately labeled from immutable raw units: token-equivalent for token-metered AI, search-equivalent for SERP, and research-equivalent for DeepWater.',
   },
   {
     method: 'GET',

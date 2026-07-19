@@ -70,20 +70,23 @@ The snapshot exposes one signed `usage_price_multiplier_bps`:
 
 Ledger applies that multiplier to the provider cost while retaining the
 original usage quantities. It may also expose a separately labeled
-customer-facing token equivalent:
+customer-facing billable unit:
 
 ```text
-customer_billable_token_equivalent =
-  raw_provider_tokens × usage_price_multiplier_bps / 10000
+customer_billable_units =
+  raw_metered_units × usage_price_multiplier_bps / 10000
 ```
 
-That value is a derived commercial unit, not a provider token count. Ledger must
-calculate it with decimal-safe arithmetic and retain the exact numerator and
-denominator (or an equivalent exact decimal) so display or invoice rounding
-never mutates the raw evidence. Consumer pages show raw provider tokens,
-customer billable token-equivalent units, and the customer-facing monetary
-amount as separate labeled values. They must never present the derived units as
-tokens produced by the provider.
+That value is a derived commercial unit, not provider output. Ledger must
+calculate it with decimal-safe arithmetic and retain the exact raw-unit
+numerator and denominator (or an equivalent exact decimal) so display or
+invoice rounding never mutates the raw evidence. Its customer-facing label
+follows the underlying meter: billable token-equivalent units for token-metered
+AI, billable search-equivalent units for SERP, and billable
+research-equivalent units for DeepWater. Consumer pages show immutable raw
+units with their original label, separately labeled customer billable units,
+and the customer-facing monetary amount. They must never present a derived unit
+as provider output or relabel one meter as another.
 
 ## Individual product credentials
 

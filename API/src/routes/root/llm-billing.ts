@@ -18,10 +18,12 @@ tariff snapshots; they do not maintain independent tariff truth.
 - **Raw token, request, byte, and search counts are never multiplied, rewritten, or
   relabeled.** Ledger keeps immutable raw usage and applies the same signed
   \`usage_price_multiplier_bps\` when rating money and deriving a separately labeled
-  customer billable token-equivalent:
-  \`raw_provider_tokens × usage_price_multiplier_bps / 10000\`. The equivalent is a
-  commercial unit, not provider output; Ledger retains exact decimal-safe operands and
-  consumers show raw usage, billable units, and money separately.
+  customer billable units:
+  \`raw_metered_units × usage_price_multiplier_bps / 10000\`. The result is a commercial
+  unit, not provider output; Ledger retains exact decimal-safe operands and consumers
+  show raw usage, billable units, and money separately. Its label follows the underlying
+  meter: token-equivalent for token-metered AI, search-equivalent for SERP, and
+  research-equivalent for DeepWater.
 
 ### Dedicated product app keys
 

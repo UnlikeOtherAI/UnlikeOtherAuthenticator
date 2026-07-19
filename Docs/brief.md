@@ -1691,9 +1691,11 @@ booked-charge accounting, while products consume a signed effective-tariff
 snapshot; neither Ledger nor an end product maintains an independent tariff
 source of truth. Resolution precedence is team override, organisation override,
 then service default. Raw token and other usage quantities remain immutable.
-Ledger may derive a separately labeled customer billable token-equivalent as
-`raw_provider_tokens × usage_price_multiplier_bps / 10000`; that commercial
-unit never replaces or masquerades as provider output.
+Ledger may derive separately labeled customer billable units as
+`raw_metered_units × usage_price_multiplier_bps / 10000`; token-metered AI,
+SERP, and DeepWater label those as token-, search-, and research-equivalent
+units respectively. A commercial unit never replaces, relabels, or masquerades
+as provider output.
 
 Every application connection uses its own revocable, product-bound app API key
 plus a short-lived RS256 actor assertion carrying the exact UOA user,

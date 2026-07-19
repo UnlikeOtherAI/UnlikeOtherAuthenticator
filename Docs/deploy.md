@@ -148,7 +148,8 @@ product:
 5. Verify `/billing/v1/jwks.json`, a signed actor lookup, exact signed
    product/app-key/user/organisation/team binding, team/organisation/default
    precedence, key revocation, and the consumer's separately labeled raw usage,
-   billable token-equivalent, and price presentation before enabling charges.
+   product-appropriate billable units (token-, search-, or research-equivalent),
+   and price presentation before enabling charges.
 
 Rotate tariff snapshot keys with an overlap:
 
