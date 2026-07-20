@@ -73,6 +73,9 @@ function fakePrisma(params: {
     billingTariff: {
       findFirst: vi.fn().mockResolvedValue(params.fallback ?? defaultTariff),
     },
+    billingServiceAccess: {
+      upsert: vi.fn().mockResolvedValue({}),
+    },
     $transaction: vi.fn(async (run: (tx: typeof prisma) => Promise<unknown>) => await run(prisma)),
   };
   return prisma as unknown as PrismaClient;

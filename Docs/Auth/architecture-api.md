@@ -356,7 +356,7 @@ Request → Route → Middleware → Service → Database (Prisma)
 * **domain-hash-auth** — runs on domain-scoped API routes. Verifies the domain hash token.
 * **superuser-access-token** — validates user access tokens for superuser-only domain endpoints.
 * **admin-superuser** — runs on `/internal/admin/*`. Validates the admin access token issued by `POST /internal/admin/token` and requires `role: "superuser"` for the configured `ADMIN_AUTH_DOMAIN`. See `Docs/Requirements/roles-and-acl.md`.
-* **billing-app-auth** — runs on the product billing endpoints. Accepts only the calling product's individual `uoa_app_…` credential, resolves its exact product, purpose, and actor-verification binding through the admin database connection, and rejects duplicate or ambiguous credential headers. `entitlement` keys can call only effective-tariff; `customer_lifecycle` keys can call only Checkout, summary, portal, and cancellation. The route separately requires `X-UOA-Actor`; the app key never stands in for a user identity. The signed result includes the non-secret app-key record ID, exact product ID/identifier, and user/organisation/team subject so consumers can reject cross-product or cross-actor replay even when products share an actor-signing key.
+* **billing-app-auth** — runs on the product billing endpoints. Accepts only the calling product's individual `uoa_app_…` credential, resolves its exact product, purpose, and actor-verification binding through the admin database connection, and rejects duplicate or ambiguous credential headers. `entitlement` keys can call only effective-tariff; `customer_lifecycle` keys can call only direct-session confirmation, customer statement, Checkout, summary, portal, and cancellation. The route separately requires `X-UOA-Actor`; the app key never stands in for a user identity. The signed result includes the non-secret app-key record ID, exact product ID/identifier, and user/organisation/team subject so consumers can reject cross-product or cross-actor replay even when products share an actor-signing key.
 * **org-features** — rejects org endpoints when `org_features.enabled` is false.
 * **groups-enabled** — rejects group endpoints when `org_features.groups_enabled` is false.
 * **org-role-guard** — validates the user access token and the user's org role for `/org/*` routes (`owner > admin > member`). Reads `OrgMember.role` for the authenticated user in the target org and returns 403 if not a member or the role is insufficient.
@@ -403,19 +403,27 @@ forced RLS and a deny-all `uoa_app` policy. Mappings bind ClientDomain rather
 than an individual secret row so normal per-domain credential rotation remains
 valid without ever storing or returning plaintext credentials.
 
-The billing read boundary is deliberately server-to-server. A product-bound app
-key authenticates the application, while a credential-bound RS256 actor JWT
-binds the request to an exact active UOA user, organisation, and team for no
-more than 60 seconds. `billing-entitlement.service.ts` validates both membership
-levels and resolves team assignment → organisation assignment → service
-default. `billing-snapshot.service.ts` signs a five-minute, content-free result
-using a dedicated key. Tariff and credential reads use the bypass-RLS admin
-client because tenant SQL access to the control-plane tables is denied.
-Immutable tariff versions keep pricing/rating separate from payment collection:
-`collection_mode` records Stripe, manual, or no collection, and the snapshot
-emits `payment_collection_enabled` independently from
-`usage_billing_enabled`. Full contract and raw-usage separation are defined in
+The billing boundary is deliberately server-to-server. A purpose-bound product
+app key authenticates the exact deployment, while its credential-bound RS256
+actor JWT binds each request to one active UOA user, organisation, and team for
+no more than 60 seconds. `billing-entitlement.service.ts` validates both
+membership levels, confirms UOA-owned direct product-access evidence, and
+resolves team assignment → organisation assignment → service default.
+`billing-snapshot.service.ts` signs the five-minute content-free entitlement
+result. `billing-statement.service.ts` separately builds the display-ready
+`BillingStatementV1` from the exact tariff, UOA add-ons/credits, Stripe
+projection, and two immutable raw Ledger snapshots. Tariff, direct-access,
+commercial-line, and credential reads use the bypass-RLS admin client because
+tenant SQL access to those control-plane tables is denied. Full contract and
+raw-usage separation are defined in
 `Docs/Requirements/billing-tariffs.md`.
+
+`POST /billing/v1/service-access/confirm` is the mandatory direct-session seam:
+each product backend calls it immediately after its own successful UOA SSO
+exchange with that product's lifecycle key and actor. UOA rechecks active
+organisation/team membership and records the exact product/team/user in one
+repeatable-read transaction. Proxy or agent use of another product never calls
+this route for the other product and remains indirect.
 
 The Stripe boundary is an optional projection layer, disabled by default.
 Checkout and lifecycle routes require a purpose-limited customer-lifecycle app
@@ -431,16 +439,20 @@ while a resulting subscription pins its immutable tariff source and assignment
 until terminal. Org-wide live rows exclude team rows for the same product and
 organisation; distinct team rows may coexist. Exact item cardinality, quantity,
 and absence of discounts are fail-closed. The Ledger collector presents
-UOA's own dedicated Ledger app key and a short-lived `billing.read` service
+UOA's own dedicated Ledger app key and a short-lived `metering.read` service
 assertion. Its separate public verification overlap is served at
-`/billing/v1/service-jwks.json`. Usage export validates Ledger's immutable
-schema-v4 product/scope/month/tariff/currency and sends only cumulative
-customer-money deltas to Stripe's sum meter. None of these paths accepts another
+`/billing/v1/service-jwks.json`. The collector validates Ledger's immutable
+`metering-usage-v1` product/scope/month and raw provider usage/cost, rejects
+commercial fields, and UOA rates cumulative customer-money deltas before
+sending them to Stripe's sum meter. None of these paths accepts another
 product's app key, a user token, or a webhook secret as an app credential.
 The safe summary omits Stripe IDs and remains available with an explicit
 disabled flag from the last unambiguous local projection. Portal and
 period-end cancellation require the exact billing manager and return-origin
-policy. Checkout's no-proration partial alignment period is free; complete
+policy. Cancellation is an opaque preview/confirm capability that pins exact
+same-account direct subscriptions, revalidates under lock, and never promotes
+Ledger-only indirect use into a cancellation choice. Checkout's no-proration
+partial alignment period is free; complete
 renewals are UTC calendar months. When the process gate is enabled,
 `billing-stripe-scheduler.service.ts` repeatedly invokes the idempotent Ledger
 snapshot export and installs an additional pre-boundary safety timer.

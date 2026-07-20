@@ -5,7 +5,7 @@ import {
   BillingTariffSource,
 } from '@prisma/client';
 
-import type { LedgerBillingUsage } from '../../src/services/billing-ledger-collector.service.js';
+import type { NormalizedMeteringUsage } from '../../src/services/billing-metering.types.js';
 
 export const capturedAt = new Date('2026-07-19T12:00:00.000Z');
 export const stripeAccount = {
@@ -103,12 +103,13 @@ export function subscriptionFixture() {
 }
 
 export function usageFixture(
-  amount = '2.5',
-  cursor = 'bus_0123456789ABCDEFGHIJKLMNOPQRSTUV',
-): LedgerBillingUsage {
+  rawProviderCost = '2',
+  cursor = 'mus_0123456789ABCDEFGHIJKLMNOPQRSTUV',
+): NormalizedMeteringUsage {
   return {
-    schemaVersion: 4,
+    schemaVersion: 1,
     product: 'deepwater',
+    groupBy: 'service',
     scope: {
       organizationId: 'org_1',
       teamId: 'team_1',
@@ -117,45 +118,31 @@ export function usageFixture(
       startsAt: '2026-07-01T00:00:00.000Z',
       endsAt: '2026-08-01T00:00:00.000Z',
     },
-    totals: {
-      calls: 2,
-      usageByService: [],
-      amounts: [],
-      customerCharges: [
-        {
-          billingProduct: 'deepwater',
-          callerProduct: 'deepsignal',
-          currency: 'USD',
-          amount,
-          calls: 2,
-        },
-      ],
-    },
-    groupBy: 'service',
-    breakdown: [],
-    monthlyComponents: [
+    calls: '2',
+    lines: [
       {
+        serviceId: 'openai',
+        usageUnit: 'tokens',
+        calls: '2',
+        inputUnits: '100',
+        cachedInputUnits: '10',
+        outputUnits: '25',
+        estimatedProviderCost: null,
+        actualProviderCost: rawProviderCost,
+        currency: 'USD',
+        costProvenance: 'provider_invoice',
         billingProduct: 'deepwater',
         callerProduct: 'deepsignal',
-        tariffId: 'tariff_1',
-        tariffKey: 'standard',
-        tariffVersion: 4,
-        tariffMode: 'standard',
-        markupBps: 2500,
-        usageMultiplierBps: 12500,
-        assignmentScope: 'team',
-        assignmentId: 'assignment_1',
-        amountMinor: '2999',
-        currency: 'USD',
-        usageBillingEnabled: true,
-        collectionMode: 'stripe',
-        paymentCollectionEnabled: true,
+        originProduct: 'nessie',
+        userId: null,
       },
     ],
     snapshot: {
       cursor,
+      id: cursor,
       capturedAt: capturedAt.toISOString(),
       immutable: true,
+      sha256: 'a'.repeat(64),
     },
   };
 }

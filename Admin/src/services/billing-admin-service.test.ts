@@ -107,4 +107,55 @@ describe('billingAdminService', () => {
     api.get.mockResolvedValue([{ id: 'service-1', identifier: 'deepwater' }]);
     await expect(billingAdminService.listServices()).rejects.toThrow();
   });
+
+  it('sends exact minor-unit add-ons to the UOA control plane', async () => {
+    api.post.mockResolvedValue({
+      id: 'adjustment-1',
+      service_id: 'service-1',
+      key: 'priority-support',
+      name: 'Priority support',
+      kind: 'add_on',
+      cadence: 'monthly',
+      amount_minor: '1000',
+      currency: 'GBP',
+      scope: 'team',
+      scope_key: 'org-1:team-1',
+      organisation_id: 'org-1',
+      team_id: 'team-1',
+      starts_at: '2026-07-01T00:00:00.000Z',
+      ends_at: null,
+      active: true,
+      created_at: '2026-07-20T00:00:00.000Z',
+      updated_at: '2026-07-20T00:00:00.000Z',
+    });
+
+    await billingAdminService.createAdjustment('service-1', {
+      organisationId: 'org-1',
+      teamId: 'team-1',
+      key: 'priority-support',
+      name: 'Priority support',
+      kind: 'add_on',
+      cadence: 'monthly',
+      amountMinor: '1000',
+      currency: 'GBP',
+      startsAt: '2026-07-01',
+      endsAt: '',
+    });
+
+    expect(api.post).toHaveBeenCalledWith(
+      '/internal/admin/billing/services/service-1/adjustments',
+      {
+        organisation_id: 'org-1',
+        team_id: 'team-1',
+        key: 'priority-support',
+        name: 'Priority support',
+        kind: 'add_on',
+        cadence: 'monthly',
+        amount_minor: '1000',
+        currency: 'GBP',
+        starts_at: '2026-07-01T00:00:00.000Z',
+        ends_at: null,
+      },
+    );
+  });
 });

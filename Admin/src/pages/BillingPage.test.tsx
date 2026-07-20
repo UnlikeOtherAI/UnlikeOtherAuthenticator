@@ -15,6 +15,8 @@ const mocks = vi.hoisted(() => ({
   setDefault: vi.fn(),
   removeAssignment: vi.fn(),
   revokeAppKey: vi.fn(),
+  createAdjustment: vi.fn(),
+  deactivateAdjustment: vi.fn(),
 }));
 
 const service = {
@@ -81,6 +83,28 @@ const service = {
       created_at: '2026-07-20T00:00:00.000Z',
     },
   ],
+  adjustments: [
+    {
+      id: 'adjustment-1',
+      service_id: 'service-1',
+      key: 'priority-support',
+      name: 'Priority support',
+      kind: 'add_on' as const,
+      cadence: 'monthly' as const,
+      amount_minor: '1000',
+      currency: 'GBP',
+      scope: 'team' as const,
+      scope_key: 'org-1:team-1',
+      organisation: { id: 'org-1', name: 'Example Org' },
+      team: { id: 'team-1', name: 'Research' },
+      starts_at: '2026-07-01T00:00:00.000Z',
+      ends_at: null,
+      active: true,
+      created_by_email: 'operator@example.com',
+      created_at: '2026-07-20T00:00:00.000Z',
+      updated_at: '2026-07-20T00:00:00.000Z',
+    },
+  ],
   stripe_catalogs: [],
   stripe_subscriptions: [
     {
@@ -120,6 +144,8 @@ vi.mock('../features/admin/billing-admin-queries', () => ({
   useSetDefaultBillingTariffMutation: () => mutation(mocks.setDefault),
   useRemoveBillingAssignmentMutation: () => mutation(mocks.removeAssignment),
   useRevokeBillingAppKeyMutation: () => mutation(mocks.revokeAppKey),
+  useCreateBillingAdjustmentMutation: () => mutation(mocks.createAdjustment),
+  useDeactivateBillingAdjustmentMutation: () => mutation(mocks.deactivateAdjustment),
 }));
 
 vi.mock('../features/admin/admin-queries', () => ({
@@ -166,6 +192,10 @@ describe('BillingPage', () => {
     expect(screen.getByText('Example Org')).toBeTruthy();
     expect(screen.getByText('Research · team')).toBeTruthy();
     expect(screen.getByText('Test')).toBeTruthy();
+
+    await user.click(screen.getByRole('button', { name: /Add-ons & credits/ }));
+    expect(screen.getByText('Priority support')).toBeTruthy();
+    expect(screen.getByText('+1000 GBP')).toBeTruthy();
   });
 
   it('opens a safe at-cost/no-collection service form by default', async () => {

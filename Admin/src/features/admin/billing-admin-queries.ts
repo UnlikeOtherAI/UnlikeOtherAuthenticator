@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import type {
+  BillingAdjustmentFormValues,
   BillingAppKeyFormValues,
   BillingAssignmentFormValues,
   BillingServiceFormValues,
@@ -78,6 +79,24 @@ export function useRevokeBillingAppKeyMutation(serviceId: string) {
   const refresh = useRefreshBillingServices();
   return useMutation({
     mutationFn: (keyId: string) => billingAdminService.revokeAppKey(serviceId, keyId),
+    onSuccess: refresh,
+  });
+}
+
+export function useCreateBillingAdjustmentMutation(serviceId: string) {
+  const refresh = useRefreshBillingServices();
+  return useMutation({
+    mutationFn: (input: BillingAdjustmentFormValues) =>
+      billingAdminService.createAdjustment(serviceId, input),
+    onSuccess: refresh,
+  });
+}
+
+export function useDeactivateBillingAdjustmentMutation(serviceId: string) {
+  const refresh = useRefreshBillingServices();
+  return useMutation({
+    mutationFn: (adjustmentId: string) =>
+      billingAdminService.deactivateAdjustment(serviceId, adjustmentId),
     onSuccess: refresh,
   });
 }

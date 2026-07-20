@@ -3,7 +3,6 @@ import { z } from 'zod';
 
 import { requireBillingLifecycleAppKey } from '../../middleware/billing-app-auth.js';
 import {
-  cancelStripeSubscription,
   createStripePortalSession,
   getStripeSubscriptionSummary,
   type BillingSubscriptionRequest,
@@ -149,20 +148,6 @@ export function registerStripeSubscriptionRoutes(app: FastifyInstance): void {
       });
       reply.header('Cache-Control', 'private, no-store');
       return reply.status(201).send(result);
-    },
-  );
-
-  app.post(
-    '/billing/v1/stripe/subscription/cancel',
-    {
-      preHandler: [requireBillingLifecycleAppKey],
-      schema: { response: { 200: summarySchema } },
-    },
-    async (request, reply) => {
-      const body = BillingSubjectRequestSchema.parse(request.body);
-      const result = await cancelStripeSubscription(requestContext(request, body));
-      reply.header('Cache-Control', 'private, no-store');
-      return reply.send(result);
     },
   );
 }

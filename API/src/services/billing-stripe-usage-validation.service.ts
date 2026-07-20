@@ -1,31 +1,13 @@
-import {
-  BillingCollectionMode,
-  BillingTariffMode,
-  BillingTariffSource,
-  Prisma,
-} from '@prisma/client';
+import { BillingCollectionMode, BillingTariffMode, Prisma } from '@prisma/client';
 
 import { AppError } from '../utils/errors.js';
-import type { LedgerBillingUsage } from './billing-ledger-collector.service.js';
-import { billingModeToPublic } from './billing-tariff-serialization.service.js';
+import type { NormalizedMeteringUsage } from './billing-metering.types.js';
+import {
+  addBillingDecimals,
+  currencyMinorDigits,
+  multiplyBillingDecimalByBps,
+} from './billing-money.service.js';
 
-const STRIPE_ZERO_DECIMAL_CURRENCIES = new Set([
-  'BIF',
-  'CLP',
-  'DJF',
-  'GNF',
-  'JPY',
-  'KMF',
-  'KRW',
-  'MGA',
-  'PYG',
-  'RWF',
-  'VND',
-  'VUV',
-  'XAF',
-  'XOF',
-  'XPF',
-]);
 const STRIPE_METER_FRACTION_DIGITS = 6;
 const MAX_SIGNED_BIGINT = 9_223_372_036_854_775_807n;
 export const STRIPE_METERABLE_SUBSCRIPTION_STATUSES = [
@@ -60,18 +42,14 @@ export type CumulativeCharge = {
   quantity: bigint;
 };
 
-function currencyMinorDigits(currency: string): number {
-  return STRIPE_ZERO_DECIMAL_CURRENCIES.has(currency) ? 0 : 2;
-}
-
 /**
- * Converts Ledger's exact major-currency decimal into the integer quantity used
- * by Stripe's 0.000001-minor-unit meter price. Extra precision is rounded
- * half-up only at that final Stripe representability boundary.
+ * Converts UOA's exact customer-rated major-currency decimal into the integer
+ * quantity used by Stripe's 0.000001-minor-unit meter price. Extra precision is
+ * rounded half-up only at that final Stripe representability boundary.
  */
 export function stripeMeterQuantityFromMajorAmount(amount: string, currency: string): bigint {
   if (!/^(0|[1-9]\d*)(\.\d+)?$/.test(amount) || !/^[A-Z]{3}$/.test(currency)) {
-    throw new AppError('INTERNAL', 502, 'LEDGER_BILLING_AMOUNT_INVALID');
+    throw new AppError('INTERNAL', 502, 'UOA_BILLING_AMOUNT_INVALID');
   }
   const [whole, fraction = ''] = amount.split('.');
   const scaleDigits = currencyMinorDigits(currency) + STRIPE_METER_FRACTION_DIGITS;
@@ -79,25 +57,22 @@ export function stripeMeterQuantityFromMajorAmount(amount: string, currency: str
   const combined = `${whole}${keptFraction}`.replace(/^0+(?=\d)/, '');
   let quantity = BigInt(combined || '0');
   const roundingDigit = fraction.at(scaleDigits);
-  if (roundingDigit && roundingDigit >= '5') {
-    quantity += 1n;
-  }
+  if (roundingDigit && roundingDigit >= '5') quantity += 1n;
   if (quantity > MAX_SIGNED_BIGINT) {
-    throw new AppError('INTERNAL', 502, 'LEDGER_BILLING_AMOUNT_OUT_OF_RANGE');
+    throw new AppError('INTERNAL', 502, 'UOA_BILLING_AMOUNT_OUT_OF_RANGE');
   }
   return quantity;
 }
 
 export function stripeUsageMonthBounds(billingMonth: string): { startsAt: Date; endsAt: Date } {
   const match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(billingMonth);
-  if (!match) {
-    throw new AppError('BAD_REQUEST', 400, 'BILLING_MONTH_INVALID');
-  }
+  if (!match) throw new AppError('BAD_REQUEST', 400, 'BILLING_MONTH_INVALID');
   const year = Number(match[1]);
   const monthIndex = Number(match[2]) - 1;
-  const startsAt = new Date(Date.UTC(year, monthIndex, 1));
-  const endsAt = new Date(Date.UTC(year, monthIndex + 1, 1));
-  return { startsAt, endsAt };
+  return {
+    startsAt: new Date(Date.UTC(year, monthIndex, 1)),
+    endsAt: new Date(Date.UTC(year, monthIndex + 1, 1)),
+  };
 }
 
 export function stripeUsageMeterTimestamp(
@@ -122,7 +97,7 @@ export function stripeUsageMeterTimestamp(
 }
 
 export function assertStripeUsageScope(
-  usage: LedgerBillingUsage,
+  usage: NormalizedMeteringUsage,
   subscription: StripeUsageSubscription,
   billingMonth: string,
   invoicePeriod?: { startsAt: Date; endsAt: Date },
@@ -142,6 +117,7 @@ export function assertStripeUsageScope(
         subscription.currentPeriodEnd?.getTime() === advancedPeriodEnd.getTime()));
   if (
     usage.product !== subscription.service.identifier ||
+    usage.groupBy !== 'service' ||
     usage.scope.organizationId !== subscription.orgId ||
     usage.scope.teamId !== subscription.teamId ||
     usage.scope.userId !== null ||
@@ -150,19 +126,8 @@ export function assertStripeUsageScope(
     usage.scope.endsAt !== bounds.endsAt.toISOString() ||
     (!invoicePeriod ? !periodMatchesSubscription : !periodMatchesJustEndedInvoice)
   ) {
-    throw new AppError('INTERNAL', 502, 'LEDGER_BILLING_SCOPE_MISMATCH');
+    throw new AppError('INTERNAL', 502, 'LEDGER_METERING_SCOPE_MISMATCH');
   }
-}
-
-function expectedAssignmentScope(
-  source: BillingTariffSource,
-): LedgerBillingUsage['monthlyComponents'][number]['assignmentScope'] {
-  const scopes = {
-    [BillingTariffSource.SERVICE_DEFAULT]: 'service_default',
-    [BillingTariffSource.ORGANISATION]: 'organisation',
-    [BillingTariffSource.TEAM]: 'team',
-  } as const;
-  return scopes[source];
 }
 
 export function assertStripeUsageSubscription(
@@ -202,80 +167,46 @@ export function assertStripeUsageSubscription(
   }
 }
 
-function assertMonthlyComponent(
-  component: LedgerBillingUsage['monthlyComponents'][number],
-  subscription: StripeUsageSubscription,
-): void {
-  const expectedMultiplier = 10_000 + subscription.tariff.markupBps;
-  const assignmentScope = expectedAssignmentScope(subscription.tariffSource);
-  if (
-    component.billingProduct !== subscription.service.identifier ||
-    component.tariffId !== subscription.tariff.id ||
-    component.tariffKey !== subscription.tariff.key ||
-    component.tariffVersion !== subscription.tariff.version ||
-    component.tariffMode !== billingModeToPublic(subscription.tariff.mode) ||
-    component.markupBps !== subscription.tariff.markupBps ||
-    component.usageMultiplierBps !== expectedMultiplier ||
-    component.assignmentScope !== assignmentScope ||
-    component.assignmentId !== subscription.tariffAssignmentId ||
-    component.amountMinor !== subscription.tariff.monthlyAmountMinor.toString() ||
-    component.currency !== subscription.tariff.currency ||
-    !component.usageBillingEnabled ||
-    component.collectionMode !== 'stripe' ||
-    !component.paymentCollectionEnabled
-  ) {
-    throw new AppError('INTERNAL', 502, 'LEDGER_BILLING_TARIFF_MISMATCH');
-  }
-}
-
 export function stripeUsageChargeKey(callerProduct: string, currency: string): string {
   return `${callerProduct}\0${currency}`;
 }
 
 export function validatedStripeCumulativeCharges(
-  usage: LedgerBillingUsage,
+  usage: NormalizedMeteringUsage,
   subscription: StripeUsageSubscription,
 ): Map<string, CumulativeCharge> {
-  const componentsByKey = new Map<string, number>();
-  for (const component of usage.monthlyComponents) {
-    assertMonthlyComponent(component, subscription);
-    const key = stripeUsageChargeKey(component.callerProduct, component.currency);
-    componentsByKey.set(key, (componentsByKey.get(key) ?? 0) + 1);
-  }
-  if ([...componentsByKey.values()].some((count) => count !== 1)) {
-    throw new AppError('INTERNAL', 502, 'LEDGER_BILLING_COMPONENT_MISMATCH');
-  }
-
-  const charges = new Map<string, CumulativeCharge>();
-  for (const charge of usage.totals.customerCharges) {
-    if (
-      charge.billingProduct !== subscription.service.identifier ||
-      charge.currency !== subscription.tariff.currency
-    ) {
-      throw new AppError('INTERNAL', 502, 'LEDGER_BILLING_CHARGE_MISMATCH');
+  const baseCosts = new Map<
+    string,
+    { billingProduct: string; callerProduct: string; currency: string; amount: string }
+  >();
+  for (const line of usage.lines) {
+    if (line.billingProduct !== subscription.service.identifier) {
+      throw new AppError('INTERNAL', 502, 'LEDGER_METERING_PRODUCT_MISMATCH');
     }
-    const key = stripeUsageChargeKey(charge.callerProduct, charge.currency);
-    if (charges.has(key) || !componentsByKey.has(key)) {
-      throw new AppError('INTERNAL', 502, 'LEDGER_BILLING_CHARGE_MISMATCH');
+    const amount = line.actualProviderCost ?? line.estimatedProviderCost;
+    if (amount === null && line.currency === null) continue;
+    if (amount === null || line.currency !== subscription.tariff.currency) {
+      throw new AppError('INTERNAL', 502, 'LEDGER_METERING_COST_MISMATCH');
     }
-    charges.set(key, {
-      ...charge,
-      quantity: stripeMeterQuantityFromMajorAmount(charge.amount, charge.currency),
+    const key = stripeUsageChargeKey(line.callerProduct, line.currency);
+    const current = baseCosts.get(key);
+    baseCosts.set(key, {
+      billingProduct: line.billingProduct,
+      callerProduct: line.callerProduct,
+      currency: line.currency,
+      amount: addBillingDecimals(current?.amount ?? '0', amount),
     });
   }
 
-  for (const component of usage.monthlyComponents) {
-    const key = stripeUsageChargeKey(component.callerProduct, component.currency);
-    charges.set(
-      key,
-      charges.get(key) ?? {
-        billingProduct: component.billingProduct,
-        callerProduct: component.callerProduct,
-        currency: component.currency,
-        amount: '0',
-        quantity: 0n,
-      },
-    );
+  const charges = new Map<string, CumulativeCharge>();
+  const multiplierBps = 10_000 + subscription.tariff.markupBps;
+  for (const [key, base] of baseCosts) {
+    const amount = multiplyBillingDecimalByBps(base.amount, multiplierBps);
+    charges.set(key, {
+      ...base,
+      amount,
+      quantity: stripeMeterQuantityFromMajorAmount(amount, base.currency),
+    });
   }
   return charges;
 }

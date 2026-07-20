@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { LedgerBillingUsage } from '../../src/services/billing-ledger-collector.service.js';
+import type { NormalizedMeteringUsage } from '../../src/services/billing-metering.types.js';
 import {
   exportStripeUsage,
   stripeMeterQuantityFromMajorAmount,
@@ -180,7 +180,7 @@ describe('Stripe usage export', () => {
       id: 'export_1',
       accountId: stripeAccount.id,
       subscriptionId: 'subscription_1',
-      ledgerSnapshotCursor: 'bus_0123456789ABCDEFGHIJKLMNOPQRSTUV',
+      ledgerSnapshotCursor: 'mus_0123456789ABCDEFGHIJKLMNOPQRSTUV',
       billingMonth: '2026-07',
       billingProduct: 'deepwater',
       callerProduct: 'deepsignal',
@@ -193,7 +193,7 @@ describe('Stripe usage export', () => {
       createdAt: capturedAt,
     };
     const later = new Date('2026-07-20T12:00:00.000Z');
-    const nextUsage = usage('1.25', 'bus_1123456789ABCDEFGHIJKLMNOPQRSTUV');
+    const nextUsage = usage('1', 'mus_1123456789ABCDEFGHIJKLMNOPQRSTUV');
     nextUsage.snapshot.capturedAt = later.toISOString();
     const { prisma, stripe, meterCreate } = setup([prior]);
 
@@ -220,7 +220,7 @@ describe('Stripe usage export', () => {
       id: 'export_1',
       accountId: stripeAccount.id,
       subscriptionId: 'subscription_1',
-      ledgerSnapshotCursor: 'bus_0123456789ABCDEFGHIJKLMNOPQRSTUV',
+      ledgerSnapshotCursor: 'mus_0123456789ABCDEFGHIJKLMNOPQRSTUV',
       billingMonth: '2026-07',
       billingProduct: 'deepwater',
       callerProduct: 'deepsignal',
@@ -256,7 +256,7 @@ describe('Stripe usage export', () => {
       id: 'export_1',
       accountId: stripeAccount.id,
       subscriptionId: 'subscription_1',
-      ledgerSnapshotCursor: 'bus_0123456789ABCDEFGHIJKLMNOPQRSTUV',
+      ledgerSnapshotCursor: 'mus_0123456789ABCDEFGHIJKLMNOPQRSTUV',
       billingMonth: '2026-07',
       billingProduct: 'deepwater',
       callerProduct: 'deepsignal',
@@ -269,7 +269,7 @@ describe('Stripe usage export', () => {
       createdAt: capturedAt,
     };
     const later = new Date('2026-07-20T12:00:00.000Z');
-    const nextUsage = usage('3.25', 'bus_1123456789ABCDEFGHIJKLMNOPQRSTUV');
+    const nextUsage = usage('2.6', 'mus_1123456789ABCDEFGHIJKLMNOPQRSTUV');
     nextUsage.snapshot.capturedAt = later.toISOString();
     const { prisma, stripe, meterCreate } = setup([pending]);
 
@@ -299,7 +299,7 @@ describe('Stripe usage export', () => {
       id: 'export_pre_boundary',
       accountId: stripeAccount.id,
       subscriptionId: 'subscription_1',
-      ledgerSnapshotCursor: 'bus_0123456789ABCDEFGHIJKLMNOPQRSTUV',
+      ledgerSnapshotCursor: 'mus_0123456789ABCDEFGHIJKLMNOPQRSTUV',
       billingMonth: '2026-07',
       billingProduct: 'deepwater',
       callerProduct: 'deepsignal',
@@ -312,7 +312,7 @@ describe('Stripe usage export', () => {
       createdAt: preBoundaryCapturedAt,
     };
     const afterBoundary = new Date('2026-08-01T00:00:10.000Z');
-    const finalUsage = usage('2.75', 'bus_2123456789ABCDEFGHIJKLMNOPQRSTUV');
+    const finalUsage = usage('2.2', 'mus_2123456789ABCDEFGHIJKLMNOPQRSTUV');
     finalUsage.snapshot.capturedAt = afterBoundary.toISOString();
     const { prisma, stripe, fullSubscription, meterCreate, createExport } = setup([preBoundary]);
     fullSubscription.currentPeriodStart = new Date('2026-08-01T00:00:00.000Z');
@@ -381,26 +381,26 @@ describe('Stripe usage export', () => {
           now: () => capturedAt,
         },
       ),
-    ).rejects.toThrow('LEDGER_BILLING_SCOPE_MISMATCH');
+    ).rejects.toThrow('LEDGER_METERING_SCOPE_MISMATCH');
     expect(createExport).not.toHaveBeenCalled();
   });
 
   it('fails closed on cross-tenant, tariff, or collection mismatches', async () => {
     const scenarios = [
-      (value: LedgerBillingUsage) => {
+      (value: NormalizedMeteringUsage) => {
         value.scope.organizationId = 'org_other';
       },
-      (value: LedgerBillingUsage) => {
-        value.monthlyComponents[0]!.tariffId = 'tariff_other';
+      (value: NormalizedMeteringUsage) => {
+        value.product = 'deeptest';
       },
-      (value: LedgerBillingUsage) => {
-        value.monthlyComponents[0]!.collectionMode = 'none';
+      (value: NormalizedMeteringUsage) => {
+        value.lines[0]!.billingProduct = 'deeptest';
       },
-      (value: LedgerBillingUsage) => {
-        value.totals.customerCharges[0]!.currency = 'EUR';
+      (value: NormalizedMeteringUsage) => {
+        value.lines[0]!.currency = 'EUR';
       },
-      (value: LedgerBillingUsage) => {
-        value.monthlyComponents.push({ ...value.monthlyComponents[0]! });
+      (value: NormalizedMeteringUsage) => {
+        value.lines[0]!.actualProviderCost = null;
       },
     ];
 

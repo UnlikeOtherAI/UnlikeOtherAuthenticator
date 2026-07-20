@@ -4,10 +4,8 @@ import type Stripe from 'stripe';
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
-import {
-  fetchLedgerBillingUsage,
-  type LedgerBillingUsage,
-} from './billing-ledger-collector.service.js';
+import { fetchLedgerMeteringUsage } from './billing-ledger-collector.service.js';
+import type { NormalizedMeteringUsage } from './billing-metering.types.js';
 import {
   assertStripeObjectLivemode,
   requireStripeBillingEnabled,
@@ -84,7 +82,7 @@ async function prepareExports(
   params: {
     subscriptionId: string;
     billingMonth: string;
-    usage: LedgerBillingUsage;
+    usage: NormalizedMeteringUsage;
     invoicePeriod?: { startsAt: Date; endsAt: Date };
   },
   prisma: PrismaClient,
@@ -269,7 +267,7 @@ export async function exportStripeUsage(
     prisma?: PrismaClient;
     stripe?: StripeUsageClient;
     stripeLivemode?: boolean;
-    fetchUsage?: typeof fetchLedgerBillingUsage;
+    fetchUsage?: typeof fetchLedgerMeteringUsage;
     now?: () => Date;
     invoicePeriod?: { startsAt: Date; endsAt: Date };
   },
@@ -293,11 +291,12 @@ export async function exportStripeUsage(
     throw new AppError('NOT_FOUND', 404, 'STRIPE_SUBSCRIPTION_NOT_FOUND');
   }
   stripeUsageMonthBounds(params.billingMonth);
-  const usage = await (deps?.fetchUsage ?? fetchLedgerBillingUsage)({
+  const usage = await (deps?.fetchUsage ?? fetchLedgerMeteringUsage)({
     product: subscription.service.identifier,
     organisationId: subscription.orgId,
     teamId: subscription.teamId,
     billingMonth: params.billingMonth,
+    groupBy: 'service',
     cursor: params.cursor,
   });
   const now = deps?.now?.() ?? new Date();

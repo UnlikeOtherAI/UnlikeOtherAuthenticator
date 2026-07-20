@@ -92,6 +92,28 @@ type ListedService = {
     createdByEmail: string | null;
     createdAt: Date;
   }>;
+  adjustments: Array<{
+    id: string;
+    serviceId: string;
+    orgId: string;
+    teamId: string | null;
+    scope: string;
+    scopeKey: string;
+    key: string;
+    name: string;
+    kind: string;
+    cadence: string;
+    amountMinor: bigint;
+    currency: string;
+    startsAt: Date;
+    endsAt: Date | null;
+    active: boolean;
+    createdByEmail: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+    org: { id: string; name: string };
+    team: { id: string; name: string } | null;
+  }>;
   stripeCatalogs: Array<{
     id: string;
     accountId: string;
@@ -165,6 +187,26 @@ export function serializeBillingService(service: ListedService) {
       revoked_at: key.revokedAt?.toISOString() ?? null,
       created_by_email: key.createdByEmail,
       created_at: key.createdAt.toISOString(),
+    })),
+    adjustments: service.adjustments.map((adjustment) => ({
+      id: adjustment.id,
+      service_id: adjustment.serviceId,
+      key: adjustment.key,
+      name: adjustment.name,
+      kind: adjustment.kind.toLowerCase(),
+      cadence: adjustment.cadence.toLowerCase(),
+      amount_minor: adjustment.amountMinor.toString(),
+      currency: adjustment.currency,
+      scope: adjustment.scope.toLowerCase(),
+      scope_key: adjustment.scopeKey,
+      organisation: adjustment.org,
+      team: adjustment.team,
+      starts_at: adjustment.startsAt.toISOString(),
+      ends_at: adjustment.endsAt?.toISOString() ?? null,
+      active: adjustment.active,
+      created_by_email: adjustment.createdByEmail,
+      created_at: adjustment.createdAt.toISOString(),
+      updated_at: adjustment.updatedAt.toISOString(),
     })),
     stripe_catalogs: service.stripeCatalogs.map((catalog) => ({
       id: catalog.id,

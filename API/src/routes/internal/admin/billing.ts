@@ -8,6 +8,10 @@ import {
   revokeBillingAppKey,
 } from '../../../services/billing-app-key.service.js';
 import {
+  createCommercialAdjustment,
+  deactivateCommercialAdjustment,
+} from '../../../services/billing-commercial-adjustment.service.js';
+import {
   createBillingService,
   createBillingTariffVersion,
   removeBillingTariffAssignment,
@@ -29,6 +33,9 @@ const AssignmentParamsSchema = IdParamsSchema.extend({
 });
 const AppKeyParamsSchema = IdParamsSchema.extend({
   keyId: z.string().trim().min(1),
+});
+const AdjustmentParamsSchema = IdParamsSchema.extend({
+  adjustmentId: z.string().trim().min(1),
 });
 const MonthlySchema = z
   .object({
@@ -73,6 +80,20 @@ const CreateAppKeySchema = z
     actor_public_jwk: z.record(z.unknown()),
     checkout_return_origins: z.array(z.string().trim().url()).max(10).default([]),
     expires_at: z.string().datetime().nullable().optional(),
+  })
+  .strict();
+const CreateAdjustmentSchema = z
+  .object({
+    organisation_id: z.string().trim().min(1),
+    team_id: z.string().trim().min(1).nullable().optional(),
+    key: z.string().trim().min(1).max(100),
+    name: z.string().trim().min(1).max(160),
+    kind: z.enum(['add_on', 'credit']),
+    cadence: z.enum(['one_time', 'monthly']),
+    amount_minor: z.string().regex(/^(0|[1-9]\d*)$/),
+    currency: z.string().trim().length(3),
+    starts_at: z.string().datetime(),
+    ends_at: z.string().datetime().nullable().optional(),
   })
   .strict();
 
@@ -127,6 +148,7 @@ export function registerInternalAdminBillingRoutes(app: FastifyInstance): void {
           ...service,
           assignments: [],
           appKeys: [],
+          adjustments: [],
           stripeCatalogs: [],
           stripeSubscriptions: [],
         }),
@@ -199,6 +221,62 @@ export function registerInternalAdminBillingRoutes(app: FastifyInstance): void {
       await removeBillingTariffAssignment({
         serviceId,
         assignmentId,
+        actor: mutationActor(request),
+      });
+      return reply.status(204).send();
+    },
+  );
+
+  app.post(
+    '/internal/admin/billing/services/:serviceId/adjustments',
+    { ...adminRoute, schema: { response: { 201: objectSchema } } },
+    async (request, reply) => {
+      const { serviceId } = IdParamsSchema.parse(request.params);
+      const body = CreateAdjustmentSchema.parse(request.body);
+      const adjustment = await createCommercialAdjustment({
+        serviceId,
+        organisationId: body.organisation_id,
+        teamId: body.team_id,
+        key: body.key,
+        name: body.name,
+        kind: body.kind,
+        cadence: body.cadence,
+        amountMinor: body.amount_minor,
+        currency: body.currency,
+        startsAt: new Date(body.starts_at),
+        endsAt: body.ends_at ? new Date(body.ends_at) : null,
+        createdBy: mutationActor(request),
+      });
+      return reply.status(201).send({
+        id: adjustment.id,
+        service_id: adjustment.serviceId,
+        key: adjustment.key,
+        name: adjustment.name,
+        kind: adjustment.kind.toLowerCase(),
+        cadence: adjustment.cadence.toLowerCase(),
+        amount_minor: adjustment.amountMinor.toString(),
+        currency: adjustment.currency,
+        scope: adjustment.scope.toLowerCase(),
+        scope_key: adjustment.scopeKey,
+        organisation_id: adjustment.orgId,
+        team_id: adjustment.teamId,
+        starts_at: adjustment.startsAt.toISOString(),
+        ends_at: adjustment.endsAt?.toISOString() ?? null,
+        active: adjustment.active,
+        created_at: adjustment.createdAt.toISOString(),
+        updated_at: adjustment.updatedAt.toISOString(),
+      });
+    },
+  );
+
+  app.delete(
+    '/internal/admin/billing/services/:serviceId/adjustments/:adjustmentId',
+    adminRoute,
+    async (request, reply) => {
+      const { serviceId, adjustmentId } = AdjustmentParamsSchema.parse(request.params);
+      await deactivateCommercialAdjustment({
+        serviceId,
+        adjustmentId,
         actor: mutationActor(request),
       });
       return reply.status(204).send();

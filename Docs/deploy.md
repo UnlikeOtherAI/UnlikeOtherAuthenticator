@@ -90,10 +90,10 @@ Set via Cloud Run service config:
 | `STRIPE_PRE_BOUNDARY_SAFETY_LEAD_MINUTES` | Plain horizon in which the additional pre-boundary safety timer is scheduled; workflow default 360 and must cover interval plus offset |
 | `STRIPE_PRE_BOUNDARY_SAFETY_OFFSET_MINUTES` | Plain offset before UTC billing-period end for the safety pass; workflow default 1. This is not the final reconciliation |
 | `LEDGER_BILLING_BASE_URL` | Plain credential-free HTTPS Ledger origin, canonical production value `https://ledger.unlikeotherai.com` |
-| `LEDGER_BILLING_APP_KEY` | Secret Manager: UOA's own dedicated, product-bound Ledger billing-reader app key. Never reuse a Nessie, DeepWater, DeepSignal, DeepTest, user, or webhook credential |
+| `LEDGER_BILLING_APP_KEY` | Secret Manager: UOA's own dedicated, product-bound Ledger raw-metering reader app key. Never reuse a Nessie, DeepWater, DeepSignal, DeepTest, user, or webhook credential |
 | `LEDGER_BILLING_APP_KEY_ID` | Plain immutable Ledger record ID for that exact UOA app key; copied into the signed assertion's `azp` and verified by Ledger |
 | `LEDGER_BILLING_ASSERTION_AUDIENCE` | Exact Ledger service-assertion audience, canonical production value `https://ledger.unlikeotherai.com` |
-| `UOA_BILLING_ASSERTION_SIGNING_PRIVATE_JWK` | Secret Manager: dedicated current RS256 private JWK used only for short-lived UOA→Ledger billing-reader assertions |
+| `UOA_BILLING_ASSERTION_SIGNING_PRIVATE_JWK` | Secret Manager: dedicated current RS256 private JWK used only for short-lived UOA→Ledger `metering.read` assertions |
 | `UOA_BILLING_ASSERTION_PUBLIC_JWKS_JSON` | Secret Manager: public-only current and overlapping retired assertion keys served at `/billing/v1/service-jwks.json`; current public pair must match the private key |
 
 `/llm` is a Markdown integration guide for LLMs and human readers. `/api` is the machine-readable JSON schema and config contract.
@@ -234,8 +234,8 @@ foundation is fail-closed behind `STRIPE_BILLING_ENABLED`.
 
 Before enabling it in production:
 
-1. Create and transfer a distinct UOA-owned Ledger billing-reader app key.
-   Configure it for `billing.read` only; record the exact key ID separately.
+1. Create and transfer a distinct UOA-owned Ledger raw-metering reader app key.
+   Configure it for `metering.read` only; record the exact key ID separately.
 2. Generate a dedicated billing-assertion RSA key pair, publish the public
    current/retired overlap through
    `UOA_BILLING_ASSERTION_PUBLIC_JWKS_JSON`, and configure Ledger to trust
@@ -248,12 +248,15 @@ Before enabling it in production:
    `sk_test_`/`rk_test_` or `sk_live_`/`rk_live_` prefix; unknown mode fails
    startup. Confirm `/v1/account` resolves the intended Stripe account.
 4. Mint a separate `customer_lifecycle` `uoa_app_…` key for each
-   product/deployment that can start Checkout or manage a subscription. Bind
-   only its own actor issuer/key and exact HTTPS return origins. Keep its
+   product/deployment. Use it for that product's mandatory post-SSO
+   `/billing/v1/service-access/confirm` call and customer billing lifecycle;
+   bind only its own actor issuer/key and exact HTTPS return origins. Keep its
    `entitlement` key separate and origin-free.
-5. Exercise monthly fixed charges, rated-usage deltas, zero and negative
-   corrections, lost-response replay, UTC month boundaries, the pre-boundary
-   safety pass, and authoritative post-period `invoice.created`
+5. Exercise credentialed current-month `group_by=service` and `group_by=user`
+   `metering-usage-v1` reads, UOA central rating, monthly fixed charges,
+   add-ons/credits, rated-usage deltas, zero and negative corrections,
+   lost-response replay, UTC month boundaries, the pre-boundary safety pass,
+   and authoritative post-period `invoice.created`
    reconciliation against immutable Ledger cursors. Prove usage in the final
    minute reaches the draft invoice during Stripe's configured finalization
    grace period.
