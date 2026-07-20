@@ -112,7 +112,7 @@ There is no cross-App flag inheritance. Each App is its own isolated flag scope.
 ### API
 
 ```
-GET /apps/:appId/flags?userId=user_123
+GET /apps/:appId/flags?domain=api.example.com&userId=user_123&teamId=team_123
 ```
 
 Returns the fully resolved flag map for that user in that App:
@@ -124,6 +124,13 @@ Returns the fully resolved flag map for that user in that App:
   "beta_editor": true
 }
 ```
+
+This is a backend-only domain-hash-authenticated call. `:appId` is the opaque
+UOA `App.id`; `domain` is the exact product config domain registered on that
+App; `userId` is the UOA access-token `sub`; and `teamId`, when supplied, must
+be an exact active membership in the App's organisation. Cross-domain,
+inactive, unknown, or membership-mismatched state returns `{}` without
+enumeration. Capability checks require an explicit `true` and fail closed.
 
 Also embedded in the access token at login time under the App context.
 

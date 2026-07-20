@@ -311,7 +311,10 @@ components:
         Display-ready canonical UOA customer statement. The exact authoritative
         Draft 2020-12 schema is published at
         `/schemas/billing-statement-v1.json`; products render this model and do
-        not derive commercial fields.
+        not derive commercial fields. The matching synthetic fixture and exact
+        OpenAPI 3.1 consumer component are published at
+        `/schemas/billing-statement-v1.example.json` and
+        `/schemas/billing-statement-v1.openapi.json`.
       required:
         - schema_version
         - statement_id
@@ -2561,7 +2564,7 @@ paths:
           in: query
           schema:
             type: string
-            description: Reserved for multi-team flag resolution.
+            description: Exact active UOA team context for flag resolution.
       responses:
         '200':
           description: Startup payload.
@@ -2575,6 +2578,59 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+
+  /apps/{appId}/flags:
+    get:
+      tags: [Apps]
+      summary: Resolve current backend feature flags
+      operationId: getResolvedAppFeatureFlags
+      description: |
+        Backend-only, no-store flag resolution for one active App and UOA
+        subject. The App must contain the authenticated config domain. UOA
+        validates active organisation membership and, when supplied, exact
+        active team membership before applying user override, effective team
+        role value, then flag default. Unknown, disabled, inactive, or
+        cross-domain state returns an empty object without enumeration.
+      security:
+        - domainHashBearer: []
+      parameters:
+        - name: appId
+          in: path
+          required: true
+          description: Opaque UOA App.id, not the App identifier.
+          schema:
+            type: string
+        - $ref: '#/components/parameters/domainQuery'
+        - name: userId
+          in: query
+          required: true
+          description: Stable UOA access-token subject (`sub`) / User.id.
+          schema:
+            type: string
+        - name: teamId
+          in: query
+          required: false
+          description: Exact UOA Team.id; backend callers with an active team should supply it.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: |
+            Flat resolved flag map. Empty means disabled, unknown, inactive, or
+            unauthorized subject context and must fail closed for capabilities.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum: ['private, no-store']
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: boolean
+        '401':
+          description: Missing or invalid per-domain backend credential.
 
   # ── Email ─────────────────────────────────────────────────────────────────────
 
@@ -2985,6 +3041,120 @@ paths:
             application/schema+json:
               schema:
                 type: object
+                additionalProperties: true
+
+  /schemas/billing-statement-v1.example.json:
+    get:
+      tags: [Billing]
+      summary: Get the synthetic customer billing statement fixture
+      operationId: getBillingStatementV1Example
+      security: []
+      responses:
+        '200':
+          description: |
+            Synthetic, credential-free BillingStatementV1 conformance fixture.
+            No production user, tenant, or commercial data is included.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum: ['public, max-age=300']
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingStatementV1'
+
+  /schemas/billing-statement-v1.openapi.json:
+    get:
+      tags: [Billing]
+      summary: Get the exact OpenAPI 3.1 BillingStatementV1 consumer artifact
+      operationId: getBillingStatementV1OpenApi
+      security: []
+      responses:
+        '200':
+          description: |
+            Versioned OpenAPI 3.1 document embedding the exact Draft 2020-12
+            schema and synthetic conformance fixture.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum: ['public, max-age=300']
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [openapi, info, paths, components]
+                additionalProperties: true
+
+  /schemas/billing-consumer-actions-v1.json:
+    get:
+      tags: [Billing]
+      summary: Get the exact billing consumer-action schema bundle
+      operationId: getBillingConsumerActionsV1Schema
+      description: |
+        Public Draft 2020-12 components for the normalized hosted redirect,
+        cancellation selection, preview, confirm request/response, and minimal
+        error envelope. Every message object rejects additional properties.
+      security: []
+      responses:
+        '200':
+          description: Authoritative billing consumer-action v1 schema bundle.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum: ['public, max-age=300']
+          content:
+            application/schema+json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /schemas/billing-consumer-actions-v1.example.json:
+    get:
+      tags: [Billing]
+      summary: Get synthetic billing consumer-action fixtures
+      operationId: getBillingConsumerActionsV1Example
+      description: |
+        Public credential-free fixtures for every consumer-action message.
+      security: []
+      responses:
+        '200':
+          description: Synthetic fixtures with no production tenant or commercial data.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum: ['public, max-age=300']
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /schemas/billing-consumer-actions-v1.openapi.json:
+    get:
+      tags: [Billing]
+      summary: Get exact OpenAPI 3.1 billing consumer-action components
+      operationId: getBillingConsumerActionsV1OpenApi
+      description: |
+        Versioned OpenAPI 3.1 components and matching synthetic fixtures for
+        product billing action consumers.
+      security: []
+      responses:
+        '200':
+          description: Exact billing consumer-action OpenAPI component document.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum: ['public, max-age=300']
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [openapi, info, paths, components]
                 additionalProperties: true
 
   /billing/v1/effective-tariff:

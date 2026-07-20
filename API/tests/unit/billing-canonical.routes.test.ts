@@ -2,6 +2,7 @@ import { BillingAppKeyPurpose } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createApp } from '../../src/app.js';
+import { billingConsumerActionV1ConformanceFixtures } from '../../src/contracts/billing-statement-v1.js';
 
 const appKeyService = vi.hoisted(() => ({
   verifyBillingAppKey: vi.fn(),
@@ -95,14 +96,12 @@ beforeEach(() => {
     statement_id: 'bst_1',
   });
   accessService.confirmAuthenticatedDirectBillingServiceAccess.mockResolvedValue(undefined);
-  previewService.createBillingCancellationPreview.mockResolvedValue({
-    schema_version: 1,
-    preview_token: 'uoa_cancel_token',
-  });
-  confirmService.confirmBillingCancellation.mockResolvedValue({
-    schema_version: 1,
-    status: 'confirmed',
-  });
+  previewService.createBillingCancellationPreview.mockResolvedValue(
+    billingConsumerActionV1ConformanceFixtures.cancellation_preview,
+  );
+  confirmService.confirmBillingCancellation.mockResolvedValue(
+    billingConsumerActionV1ConformanceFixtures.cancellation_confirmation,
+  );
 });
 
 async function withApp(
@@ -131,6 +130,120 @@ describe('canonical customer billing routes', () => {
       expect(response.json()).toMatchObject({
         $schema: 'https://json-schema.org/draft/2020-12/schema',
         title: 'UOA canonical customer billing statement',
+      });
+    });
+  });
+
+  it('publishes the synthetic fixture and matching OpenAPI 3.1 component', async () => {
+    await withApp(async (app) => {
+      const [fixtureResponse, openApiResponse] = await Promise.all([
+        app.inject({
+          method: 'GET',
+          url: '/schemas/billing-statement-v1.example.json',
+        }),
+        app.inject({
+          method: 'GET',
+          url: '/schemas/billing-statement-v1.openapi.json',
+        }),
+      ]);
+
+      expect(fixtureResponse.statusCode).toBe(200);
+      expect(fixtureResponse.headers['cache-control']).toBe('public, max-age=300');
+      expect(fixtureResponse.json()).toMatchObject({
+        schema_version: 1,
+        statement_id: 'bst_conformance_v1',
+      });
+
+      expect(openApiResponse.statusCode).toBe(200);
+      expect(openApiResponse.headers['cache-control']).toBe('public, max-age=300');
+      expect(openApiResponse.json()).toMatchObject({
+        openapi: '3.1.0',
+        info: { version: '1.0.0' },
+        components: {
+          schemas: {
+            BillingStatementV1: {
+              $schema: 'https://json-schema.org/draft/2020-12/schema',
+            },
+          },
+          examples: {
+            BillingStatementV1Conformance: {
+              value: {
+                schema_version: 1,
+                statement_id: 'bst_conformance_v1',
+              },
+            },
+          },
+        },
+      });
+    });
+  });
+
+  it('publishes exact action schemas, synthetic fixtures, and OpenAPI components', async () => {
+    await withApp(async (app) => {
+      const [schemaResponse, fixtureResponse, openApiResponse] = await Promise.all([
+        app.inject({
+          method: 'GET',
+          url: '/schemas/billing-consumer-actions-v1.json',
+        }),
+        app.inject({
+          method: 'GET',
+          url: '/schemas/billing-consumer-actions-v1.example.json',
+        }),
+        app.inject({
+          method: 'GET',
+          url: '/schemas/billing-consumer-actions-v1.openapi.json',
+        }),
+      ]);
+
+      expect(schemaResponse.statusCode).toBe(200);
+      expect(schemaResponse.headers['content-type']).toContain('application/schema+json');
+      expect(schemaResponse.json()).toMatchObject({
+        $schema: 'https://json-schema.org/draft/2020-12/schema',
+        $defs: {
+          BillingCancellationPreviewV1: {
+            additionalProperties: false,
+            properties: {
+              confirm_action: {
+                additionalProperties: false,
+                properties: {
+                  method: { const: 'POST' },
+                  path: { const: '/billing/v1/cancellation/confirm' },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      expect(fixtureResponse.statusCode).toBe(200);
+      expect(fixtureResponse.json()).toMatchObject({
+        hosted_redirect_response: {
+          redirect_url: 'https://checkout.stripe.com/c/pay/cs_test_synthetic',
+        },
+        cancellation_preview: {
+          schema_version: 1,
+          confirm_action: {
+            method: 'POST',
+            path: '/billing/v1/cancellation/confirm',
+          },
+        },
+        cancellation_confirmation: {
+          schema_version: 1,
+          status: 'confirmed',
+        },
+        error: { error: 'billing_request_failed' },
+      });
+
+      expect(openApiResponse.statusCode).toBe(200);
+      expect(openApiResponse.json()).toMatchObject({
+        openapi: '3.1.0',
+        components: {
+          schemas: {
+            BillingHostedRedirectResponse: { additionalProperties: false },
+            BillingCancellationConfirmRequest: { additionalProperties: false },
+            BillingErrorEnvelope: { additionalProperties: false },
+          },
+        },
       });
     });
   });

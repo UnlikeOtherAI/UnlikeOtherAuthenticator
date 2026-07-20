@@ -40,6 +40,7 @@ export function registerAppStartupRoute(app: FastifyInstance): void {
           versionCode: query.versionCode,
           buildNumber: query.buildNumber,
           userId: query.userId,
+          teamId: query.teamId,
         },
         {
           env: getEnv(),

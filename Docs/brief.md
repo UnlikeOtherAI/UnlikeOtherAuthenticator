@@ -1831,6 +1831,31 @@ Each request requires that product deployment's own `customer_lifecycle` app
 key and a fresh subject-bound actor JWT; neither credential enters browser
 code.
 
+The canonical TypeScript source is the MIT-licensed, publishable
+`packages/billing-statement-protocol` workspace. UOA imports it directly; the
+package has no private API imports, credentials, or tenant data. Its generated
+JSON Schema, synthetic fixture, and OpenAPI 3.1 consumer component are also
+served publicly at `/schemas/billing-statement-v1.json`,
+`/schemas/billing-statement-v1.example.json`, and
+`/schemas/billing-statement-v1.openapi.json`. Package build/tests reject
+artifact drift, and consumers may pack or vendor the package until registry
+publication is approved.
+
+The package also owns the complete product-facing billing action contract:
+normalized hosted redirect, cancellation selection, preview (including the
+fixed confirm method/path), confirmation request/response, and minimal error
+envelope. Exact schemas reject unknown properties and are served with synthetic
+fixtures and OpenAPI components at
+`/schemas/billing-consumer-actions-v1.json`,
+`/schemas/billing-consumer-actions-v1.example.json`, and
+`/schemas/billing-consumer-actions-v1.openapi.json`.
+
+Billing action capabilities remain separate from runtime product feature
+entitlements. A capability such as `can_be_private` is resolved through UOA's
+per-App, per-user/team feature-flag API using that product's backend credential;
+missing or unavailable flags fail closed. Products do not infer runtime
+features from tariff mode/key or retain a local subscription flag as authority.
+
 Direct product access is UOA-owned evidence confirmed by the authenticated
 product app key. Every product backend confirms it immediately after its own
 successful UOA SSO exchange through
@@ -1841,7 +1866,13 @@ the complete dialog model, offers a related-direct-products choice only when
 the team actually has another same-account direct subscription, excludes
 indirect-only services from that choice, and confirms with an opaque,
 short-lived, single-use, idempotent token under database lock and state
-revalidation. The old one-step cancellation route is superseded.
+revalidation. A related subscription is eligible only when at least one current
+member of the exact organisation/team has active, non-revoked direct-access
+evidence for its exact service and it shares the current Stripe account.
+Missing, revoked, inactive-membership, other-team, or other-account evidence
+never creates a choice; with no eligible related product, only
+`current_service` is the default. The old one-step cancellation route is
+superseded.
 
 Superusers manage exact organisation/team add-ons and credits alongside
 tariffs in UOA Admin. Stripe remains a payment processor: UOA rates Ledger raw

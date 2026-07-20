@@ -2,14 +2,17 @@ import type { PrismaClient } from '@prisma/client';
 
 import { getEnv } from '../config/env.js';
 import { normalizeDomain } from '../utils/domain.js';
+import { appHasDomain, resolveAppFeatureFlags } from './feature-flag-resolution.service.js';
 
 type StartupPrisma = Pick<
   PrismaClient,
   | 'app'
   | 'featureFlagDefinition'
+  | 'featureFlagRoleValue'
   | 'featureFlagUserOverride'
   | 'killSwitchEntry'
   | 'orgMember'
+  | 'teamMember'
 >;
 
 type StartupDeps = {
@@ -25,6 +28,7 @@ type StartupParams = {
   versionCode?: string;
   buildNumber?: string;
   userId?: string;
+  teamId?: string;
 };
 
 type KillSwitchResponse = {
@@ -68,14 +72,6 @@ function emptyStartup(now = new Date()): AppStartupResponse {
 
 function normalizeIdentifier(value: string): string {
   return value.trim().toLowerCase();
-}
-
-function jsonStringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
-}
-
-function appDomains(value: unknown): string[] {
-  return jsonStringArray(value).map(normalizeDomain).filter(Boolean);
 }
 
 function versionForField(entry: KillSwitchRow, params: StartupParams): string | undefined {
@@ -141,7 +137,11 @@ function platformMatches(entry: KillSwitchRow, platform: StartupParams['platform
 }
 
 function isTestUser(entry: KillSwitchRow, userId: string | undefined): boolean {
-  return Boolean(userId && jsonStringArray(entry.testUserIds).includes(userId));
+  return Boolean(
+    userId &&
+    Array.isArray(entry.testUserIds) &&
+    entry.testUserIds.filter((item): item is string => typeof item === 'string').includes(userId),
+  );
 }
 
 function activeNow(entry: KillSwitchRow, now: Date, userId: string | undefined): boolean {
@@ -197,42 +197,6 @@ function toKillSwitchResponse(entry: KillSwitchRow, app: AppRow): KillSwitchResp
   };
 }
 
-async function resolveFlags(
-  app: AppRow,
-  params: StartupParams,
-  deps: StartupDeps,
-): Promise<Record<string, boolean>> {
-  if (!app.featureFlagsEnabled) return {};
-
-  const definitions = await deps.prisma.featureFlagDefinition.findMany({
-    where: { appId: app.id },
-    orderBy: { createdAt: 'asc' },
-    select: { key: true, defaultState: true },
-  });
-  const flags = Object.fromEntries(definitions.map((flag) => [flag.key, flag.defaultState]));
-  if (!params.userId || definitions.length === 0) return flags;
-
-  const membership = await deps.prisma.orgMember.findFirst({
-    where: { orgId: app.orgId, userId: params.userId },
-    select: { id: true },
-  });
-  if (!membership) return flags;
-
-  const overrides = await deps.prisma.featureFlagUserOverride.findMany({
-    where: {
-      appId: app.id,
-      userId: params.userId,
-      flagKey: { in: definitions.map((flag) => flag.key) },
-    },
-    select: { flagKey: true, value: true },
-  });
-  for (const override of overrides) {
-    flags[override.flagKey] = override.value;
-  }
-
-  return flags;
-}
-
 export async function getAppStartup(
   params: StartupParams,
   deps: StartupDeps,
@@ -249,11 +213,19 @@ export async function getAppStartup(
     },
     orderBy: { createdAt: 'asc' },
   });
-  const app = apps.find((candidate) => appDomains(candidate.domains).includes(domain));
+  const app = apps.find((candidate) => appHasDomain(candidate, domain));
   if (!app?.active) return emptyStartup(now);
 
   const [flags, killSwitchEntries] = await Promise.all([
-    resolveFlags(app, params, deps),
+    resolveAppFeatureFlags(
+      app,
+      {
+        userId: params.userId,
+        teamId: params.teamId,
+      },
+      deps,
+      { unauthorizedSubject: 'defaults' },
+    ),
     deps.prisma.killSwitchEntry.findMany({ where: { appId: app.id } }),
   ]);
 

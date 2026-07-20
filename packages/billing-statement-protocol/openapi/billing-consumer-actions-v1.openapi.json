@@ -1,0 +1,470 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "UOA billing consumer action protocol v1",
+    "version": "1.0.0",
+    "description": "OpenAPI 3.1 components and synthetic fixtures for product-hosted redirects and UOA cancellation."
+  },
+  "paths": {},
+  "components": {
+    "schemas": {
+      "BillingCancellationSelection": {
+        "type": "string",
+        "enum": [
+          "current_service",
+          "current_and_related_direct_services"
+        ]
+      },
+      "BillingHostedRedirectResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "redirect_url"
+        ],
+        "properties": {
+          "redirect_url": {
+            "type": "string",
+            "format": "uri",
+            "pattern": "^https://"
+          }
+        }
+      },
+      "BillingCancellationPreviewV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schema_version",
+          "preview_token",
+          "expires_at",
+          "title",
+          "message",
+          "choice_required",
+          "choices",
+          "direct_services",
+          "indirect_services",
+          "confirm_action"
+        ],
+        "properties": {
+          "schema_version": {
+            "const": 1
+          },
+          "preview_token": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 256
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "title": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "choice_required": {
+            "type": "boolean"
+          },
+          "choices": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "label",
+                "description",
+                "service_ids"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "enum": [
+                    "current_service",
+                    "current_and_related_direct_services"
+                  ]
+                },
+                "label": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "service_ids": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            }
+          },
+          "direct_services": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "service_id",
+                "product",
+                "name",
+                "display_name",
+                "direct_user_count",
+                "subscription_status"
+              ],
+              "properties": {
+                "service_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "product": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "name": {
+                  "type": "string"
+                },
+                "display_name": {
+                  "type": "string"
+                },
+                "direct_user_count": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "subscription_status": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "indirect_services": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "product",
+                "name",
+                "display_name",
+                "impact"
+              ],
+              "properties": {
+                "product": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "name": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "display_name": {
+                  "type": "string"
+                },
+                "impact": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "confirm_action": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "method",
+              "path",
+              "label",
+              "idempotency_key",
+              "selection_required",
+              "default_selection"
+            ],
+            "properties": {
+              "method": {
+                "const": "POST"
+              },
+              "path": {
+                "const": "/billing/v1/cancellation/confirm"
+              },
+              "label": {
+                "type": "string"
+              },
+              "idempotency_key": {
+                "type": "string",
+                "minLength": 16,
+                "maxLength": 200
+              },
+              "selection_required": {
+                "type": "boolean"
+              },
+              "default_selection": {
+                "enum": [
+                  "current_service",
+                  null
+                ]
+              }
+            }
+          }
+        }
+      },
+      "BillingCancellationConfirmRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "preview_token",
+          "idempotency_key",
+          "selection"
+        ],
+        "properties": {
+          "preview_token": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 256
+          },
+          "idempotency_key": {
+            "type": "string",
+            "minLength": 16,
+            "maxLength": 200
+          },
+          "selection": {
+            "enum": [
+              "current_service",
+              "current_and_related_direct_services",
+              null
+            ]
+          }
+        }
+      },
+      "BillingCancellationConfirmationV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schema_version",
+          "status",
+          "title",
+          "message",
+          "cancelled_services",
+          "indirect_services"
+        ],
+        "properties": {
+          "schema_version": {
+            "const": 1
+          },
+          "status": {
+            "const": "confirmed"
+          },
+          "title": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "cancelled_services": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "service_id",
+                "product",
+                "name",
+                "display_name",
+                "status",
+                "effective_at"
+              ],
+              "properties": {
+                "service_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "product": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "name": {
+                  "type": "string"
+                },
+                "display_name": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "effective_at": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "indirect_services": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "product",
+                "display_name",
+                "impact"
+              ],
+              "properties": {
+                "product": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "display_name": {
+                  "type": "string"
+                },
+                "impact": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "BillingErrorEnvelope": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "examples": {
+      "BillingHostedRedirectResponseConformance": {
+        "summary": "Synthetic normalized hosted billing redirect",
+        "value": {
+          "redirect_url": "https://checkout.stripe.com/c/pay/cs_test_synthetic"
+        }
+      },
+      "BillingCancellationPreviewV1Conformance": {
+        "summary": "Synthetic cancellation preview with a related direct service",
+        "value": {
+          "schema_version": 1,
+          "preview_token": "uoa_cancel_ttttttttttttttttttttttttttttttttttttttttttt",
+          "expires_at": "2026-07-20T12:05:00.000Z",
+          "title": "Cancel DeepWater?",
+          "message": "Choose which direct subscriptions to cancel.",
+          "choice_required": true,
+          "choices": [
+            {
+              "id": "current_service",
+              "label": "Cancel DeepWater only",
+              "description": "Keep the team’s other direct product subscriptions active.",
+              "service_ids": [
+                "service_deepwater"
+              ]
+            },
+            {
+              "id": "current_and_related_direct_services",
+              "label": "Cancel all related direct subscriptions",
+              "description": "Also cancel Nessie.",
+              "service_ids": [
+                "service_deepwater",
+                "service_nessie"
+              ]
+            }
+          ],
+          "direct_services": [
+            {
+              "service_id": "service_deepwater",
+              "product": "deepwater",
+              "name": "DeepWater",
+              "display_name": "DeepWater",
+              "direct_user_count": 2,
+              "subscription_status": "active"
+            },
+            {
+              "service_id": "service_nessie",
+              "product": "nessie",
+              "name": "Nessie",
+              "display_name": "Nessie",
+              "direct_user_count": 1,
+              "subscription_status": "active"
+            }
+          ],
+          "indirect_services": [
+            {
+              "product": "deepsignal",
+              "name": "DeepSignal",
+              "display_name": "DeepSignal",
+              "impact": "No separate subscription will be cancelled."
+            }
+          ],
+          "confirm_action": {
+            "method": "POST",
+            "path": "/billing/v1/cancellation/confirm",
+            "label": "Confirm cancellation",
+            "idempotency_key": "uoa_confirm_iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii",
+            "selection_required": true,
+            "default_selection": null
+          }
+        }
+      },
+      "BillingCancellationConfirmRequestConformance": {
+        "summary": "Synthetic cancellation confirmation request",
+        "value": {
+          "preview_token": "uoa_cancel_ttttttttttttttttttttttttttttttttttttttttttt",
+          "idempotency_key": "uoa_confirm_iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii",
+          "selection": "current_and_related_direct_services"
+        }
+      },
+      "BillingCancellationConfirmationV1Conformance": {
+        "summary": "Synthetic confirmed period-end cancellation",
+        "value": {
+          "schema_version": 1,
+          "status": "confirmed",
+          "title": "Cancellation scheduled",
+          "message": "2 direct subscriptions will end at their current period boundaries.",
+          "cancelled_services": [
+            {
+              "service_id": "service_deepwater",
+              "product": "deepwater",
+              "name": "DeepWater",
+              "display_name": "DeepWater",
+              "status": "cancels_at_period_end",
+              "effective_at": "2026-08-01T00:00:00.000Z"
+            },
+            {
+              "service_id": "service_nessie",
+              "product": "nessie",
+              "name": "Nessie",
+              "display_name": "Nessie",
+              "status": "cancels_at_period_end",
+              "effective_at": "2026-08-01T00:00:00.000Z"
+            }
+          ],
+          "indirect_services": [
+            {
+              "product": "deepsignal",
+              "display_name": "DeepSignal",
+              "impact": "No separate subscription was cancelled."
+            }
+          ]
+        }
+      },
+      "BillingErrorEnvelopeConformance": {
+        "summary": "Synthetic product-facing billing error",
+        "value": {
+          "error": "billing_request_failed"
+        }
+      }
+    }
+  }
+}

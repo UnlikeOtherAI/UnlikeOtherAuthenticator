@@ -2,3 +2,4 @@ packages:
   - API
   - Auth
   - Admin
+  - packages/*

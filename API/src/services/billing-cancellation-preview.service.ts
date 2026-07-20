@@ -1,6 +1,10 @@
 import type { PrismaClient } from '@prisma/client';
 import { createHash, randomBytes } from 'node:crypto';
 
+import {
+  BILLING_CONSUMER_ACTION_SCHEMA_VERSION,
+  type BillingCancellationPreviewV1,
+} from '../contracts/billing-statement-v1.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
@@ -8,45 +12,8 @@ import { loadBillingCancellationState } from './billing-cancellation-state.servi
 import { getCanonicalBillingStatement } from './billing-statement.service.js';
 import type { BillingSubscriptionRequest } from './billing-stripe-subscription.service.js';
 
-export const BILLING_CANCELLATION_SCHEMA_VERSION = 1 as const;
+export const BILLING_CANCELLATION_SCHEMA_VERSION = BILLING_CONSUMER_ACTION_SCHEMA_VERSION;
 export const BILLING_CANCELLATION_PREVIEW_TTL_MS = 5 * 60 * 1000;
-
-export type BillingCancellationPreviewV1 = {
-  schema_version: typeof BILLING_CANCELLATION_SCHEMA_VERSION;
-  preview_token: string;
-  expires_at: string;
-  title: string;
-  message: string;
-  choice_required: boolean;
-  choices: Array<{
-    id: 'current_service' | 'current_and_related_direct_services';
-    label: string;
-    description: string;
-    service_ids: string[];
-  }>;
-  direct_services: Array<{
-    service_id: string;
-    product: string;
-    name: string;
-    display_name: string;
-    direct_user_count: number;
-    subscription_status: string;
-  }>;
-  indirect_services: Array<{
-    product: string;
-    name: string | null;
-    display_name: string;
-    impact: string;
-  }>;
-  confirm_action: {
-    method: 'POST';
-    path: '/billing/v1/cancellation/confirm';
-    label: string;
-    idempotency_key: string;
-    selection_required: boolean;
-    default_selection: 'current_service' | null;
-  };
-};
 
 function opaqueValue(prefix: string): string {
   return `${prefix}_${randomBytes(32).toString('base64url')}`;
@@ -93,12 +60,21 @@ export async function createBillingCancellationPreview(
   if (!current) {
     throw new AppError('BAD_REQUEST', 409, 'BILLING_CANCELLATION_STATE_CHANGED');
   }
+  const directAccessByService = new Map(
+    state.accesses
+      .filter((access) => access.userIds.length > 0)
+      .map((access) => [access.serviceId, access]),
+  );
+  if (!directAccessByService.has(current.serviceId)) {
+    throw new AppError('BAD_REQUEST', 409, 'BILLING_CANCELLATION_STATE_CHANGED');
+  }
   const directSubscriptions = [current];
   const seenServiceIds = new Set([current.serviceId]);
   for (const subscription of state.subscriptions) {
     if (
       subscription.id === current.id ||
       subscription.accountId !== current.accountId ||
+      !directAccessByService.has(subscription.serviceId) ||
       seenServiceIds.has(subscription.serviceId)
     ) {
       continue;
@@ -106,7 +82,6 @@ export async function createBillingCancellationPreview(
     seenServiceIds.add(subscription.serviceId);
     directSubscriptions.push(subscription);
   }
-  const directAccessByService = new Map(state.accesses.map((access) => [access.serviceId, access]));
   const related = directSubscriptions.slice(1);
   const choiceRequired = related.length > 0;
   const previewToken = opaqueValue('uoa_cancel');

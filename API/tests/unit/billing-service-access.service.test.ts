@@ -177,7 +177,7 @@ describe('UOA-owned direct product access', () => {
     });
   });
 
-  it('collapses access into stable per-service user sets and fingerprints', async () => {
+  it('uses only active non-revoked access with current org and team membership', async () => {
     const findMany = vi.fn().mockResolvedValue([
       {
         serviceId: 'service_nessie',
@@ -226,6 +226,10 @@ describe('UOA-owned direct product access', () => {
     expect(findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
+          orgId: 'org_1',
+          teamId: 'team_1',
+          active: true,
+          revokedAt: null,
           user: {
             orgMembers: {
               some: { orgId: 'org_1', status: 'ACTIVE' },

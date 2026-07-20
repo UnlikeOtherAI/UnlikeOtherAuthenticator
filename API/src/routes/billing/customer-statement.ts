@@ -2,8 +2,18 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 import {
+  BILLING_CONSUMER_ACTION_EXAMPLE_PATH,
+  BILLING_CONSUMER_ACTION_OPENAPI_PATH,
+  BILLING_CONSUMER_ACTION_SCHEMA_PATH,
+  BILLING_STATEMENT_EXAMPLE_PATH,
+  BILLING_STATEMENT_OPENAPI_PATH,
   BILLING_STATEMENT_SCHEMA_PATH,
+  billingConsumerActionProtocolV1JsonSchema,
+  billingConsumerActionV1ConformanceFixtures,
+  billingConsumerActionV1OpenApiDocument,
+  billingStatementV1ConformanceFixture,
   billingStatementV1JsonSchema,
+  billingStatementV1OpenApiDocument,
 } from '../../contracts/billing-statement-v1.js';
 import { requireBillingLifecycleAppKey } from '../../middleware/billing-app-auth.js';
 import { getCanonicalBillingStatement } from '../../services/billing-statement.service.js';
@@ -21,6 +31,26 @@ export function registerCustomerStatementRoutes(app: FastifyInstance): void {
   app.get(BILLING_STATEMENT_SCHEMA_PATH, async (_request, reply) => {
     reply.header('Cache-Control', 'public, max-age=300');
     return reply.type('application/schema+json').send(billingStatementV1JsonSchema);
+  });
+  app.get(BILLING_STATEMENT_EXAMPLE_PATH, async (_request, reply) => {
+    reply.header('Cache-Control', 'public, max-age=300');
+    return reply.type('application/json').send(billingStatementV1ConformanceFixture);
+  });
+  app.get(BILLING_STATEMENT_OPENAPI_PATH, async (_request, reply) => {
+    reply.header('Cache-Control', 'public, max-age=300');
+    return reply.type('application/json').send(billingStatementV1OpenApiDocument);
+  });
+  app.get(BILLING_CONSUMER_ACTION_SCHEMA_PATH, async (_request, reply) => {
+    reply.header('Cache-Control', 'public, max-age=300');
+    return reply.type('application/schema+json').send(billingConsumerActionProtocolV1JsonSchema);
+  });
+  app.get(BILLING_CONSUMER_ACTION_EXAMPLE_PATH, async (_request, reply) => {
+    reply.header('Cache-Control', 'public, max-age=300');
+    return reply.type('application/json').send(billingConsumerActionV1ConformanceFixtures);
+  });
+  app.get(BILLING_CONSUMER_ACTION_OPENAPI_PATH, async (_request, reply) => {
+    reply.header('Cache-Control', 'public, max-age=300');
+    return reply.type('application/json').send(billingConsumerActionV1OpenApiDocument);
   });
 
   app.post(

@@ -215,6 +215,17 @@ product:
    product-appropriate billable units (token-, search-, or research-equivalent),
    and price presentation before enabling charges.
 
+For a product that also consumes a runtime UOA feature capability, provision
+one active `App` row with that product's exact config domain, enable feature
+flags, and create the exact flag definition with a fail-closed `false` default.
+The backend stores the opaque `App.id` and calls
+`GET /apps/:appId/flags?domain=<config-domain>&userId=<UOA-sub>&teamId=<UOA-team>`
+using its own domain-hash credential. Production canaries must exercise that
+real credential without printing it. Do not copy legacy local subscription or
+feature fields automatically: they are not current authority. Until an
+operator performs an explicit, audited UOA override import, legacy grants fail
+closed.
+
 Rotate tariff snapshot keys with an overlap:
 
 1. Publish the new public key alongside the current and still-valid retired

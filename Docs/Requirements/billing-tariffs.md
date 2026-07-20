@@ -572,13 +572,18 @@ never rates the customer amount.
 
 The frozen v1 paths are:
 
-| Method and path                          | Behaviour                                                                                                                                                                      |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `GET /schemas/billing-statement-v1.json` | Public Draft 2020-12 schema for the exact response                                                                                                                             |
-| `POST /billing/v1/service-access/confirm` | Records one direct product session after exact product-key, actor, and active membership verification                                                                          |
-| `POST /billing/v1/customer-statement`    | Display-ready current/past-month plan, subscription, raw and billable usage, cross-service and per-user attribution, commercial lines, exact totals, capabilities, and actions |
-| `POST /billing/v1/cancellation/preview`  | Complete confirmation-dialog model plus opaque five-minute token and server-generated idempotency key                                                                          |
-| `POST /billing/v1/cancellation/confirm`  | Locked, revalidated, idempotent confirmation for the preview's exact pinned direct subscriptions                                                                               |
+| Method and path                                  | Behaviour                                                                                                                                                                      |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `GET /schemas/billing-statement-v1.json`         | Public Draft 2020-12 schema for the exact response                                                                                                                             |
+| `GET /schemas/billing-statement-v1.example.json` | Synthetic, credential-free conformance statement for consumer tests                                                                                                            |
+| `GET /schemas/billing-statement-v1.openapi.json` | OpenAPI 3.1 component embedding the exact schema and conformance example                                                                                                       |
+| `GET /schemas/billing-consumer-actions-v1.json` | Public Draft 2020-12 components for normalized hosted redirects, cancellation selection/preview/confirm, and the minimal error envelope                                       |
+| `GET /schemas/billing-consumer-actions-v1.example.json` | Synthetic, credential-free fixtures for every billing consumer-action message                                                                                          |
+| `GET /schemas/billing-consumer-actions-v1.openapi.json` | OpenAPI 3.1 components embedding the exact action schemas and fixtures                                                                                                  |
+| `POST /billing/v1/service-access/confirm`        | Records one direct product session after exact product-key, actor, and active membership verification                                                                          |
+| `POST /billing/v1/customer-statement`            | Display-ready current/past-month plan, subscription, raw and billable usage, cross-service and per-user attribution, commercial lines, exact totals, capabilities, and actions |
+| `POST /billing/v1/cancellation/preview`          | Complete confirmation-dialog model plus opaque five-minute token and server-generated idempotency key                                                                          |
+| `POST /billing/v1/cancellation/confirm`          | Locked, revalidated, idempotent confirmation for the preview's exact pinned direct subscriptions                                                                               |
 
 All POSTs require the calling product deployment's individual
 `customer_lifecycle` app key and a fresh RS256 `X-UOA-Actor` whose product,
@@ -602,6 +607,32 @@ allowlisted return URLs. A product may whitelist these ID/path pairs and proxy
 the supplied body, but must reject unknown actions. The old
 `POST /billing/v1/stripe/subscription/cancel` route no longer exists.
 
+The versioned, MIT-licensed
+`packages/billing-statement-protocol` workspace is UOA's canonical TypeScript
+source and is safe to publish, pack, or vendor into an open-source consumer. It
+exports only protocol constants, types, JSON Schema, OpenAPI 3.1 components,
+and synthetic fixtures for both `BillingStatementV1` and the complete
+customer-action protocol. The action objects are exact
+(`additionalProperties: false`) and include the normalized hosted redirect,
+cancellation selection, preview with fixed confirm method/path, confirm
+request/response, and minimal error envelope.
+It has no UOA server imports, credentials, or tenant data. The API imports this
+package rather than maintaining a private duplicate. Build and package tests
+fail when any committed JSON artifact drifts from the typed source. Until
+registry publication is approved, consumers may vendor the whole package
+directory or fetch the six public artifacts above.
+
+`BillingStatementV1.capabilities` describes UOA-owned billing actions only. A
+product runtime capability such as `can_be_private` is not inferred from a
+tariff key, mode, local subscription row, or this display contract. It uses
+UOA's existing per-App feature-flag resolver
+(`GET /apps/:appId/flags?domain=…&userId=…&teamId=…`) through that product's own
+domain-hash backend credential and fails closed unless the exact flag is
+`true`. The App path value is opaque `App.id`, the domain is the product's
+registered config domain, and user/team values are exact UOA IDs. Automatically
+bundling a feature with a tariff requires an explicit UOA tariff-to-feature
+policy; consumers must never recreate that mapping locally.
+
 ### Direct versus indirect access
 
 `billing_service_accesses` is UOA-owned entitlement evidence confirmed only
@@ -619,11 +650,16 @@ that other product. Ledger metering can identify another product as caller or
 origin for statement attribution, but that is `indirect` access and never
 creates or implies a direct entitlement.
 
-Cancellation preview considers active same-account subscriptions for products
-that team users access directly. It offers
+Cancellation preview considers active same-account subscriptions only when at
+least one currently active member of the exact organisation/team has an
+active, non-revoked direct-access record for that exact service. It offers
 `current_and_related_direct_services` only when such a related subscription
-exists. Ledger-only indirect services are listed for explanation but never
-become a cancellation choice. UOA stores only the SHA-256 digest of the opaque
+exists on the current subscription's Stripe account. A direct record from any
+active team user is sufficient; missing, empty, revoked, inactive-membership,
+inactive-service, other-team, or other-account evidence is not. Ledger-only
+indirect services are listed for explanation but never become a cancellation
+choice. With no eligible related direct subscription, the only default is
+`current_service`. UOA stores only the SHA-256 digest of the opaque
 preview token, pins exact service/subscription IDs plus entitlement and
 subscription fingerprints, and confirms under a serializable row lock. A token
 is short-lived and single-use; the matching idempotency key and selection may

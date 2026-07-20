@@ -1,3 +1,4 @@
+import { MembershipStatus } from '@prisma/client';
 import { describe, expect, it, vi } from 'vitest';
 
 import { getAppStartup } from '../app-startup.service.js';
@@ -17,24 +18,45 @@ function makeApp(overrides: Record<string, unknown> = {}) {
     storeUrl: 'https://example.com/store',
     active: true,
     featureFlagsEnabled: true,
+    roleFlagMatrixEnabled: false,
     createdAt: new Date('2026-04-22T10:00:00.000Z'),
     ...overrides,
   };
 }
 
-function makePrisma(overrides: {
-  app?: unknown;
-  apps?: unknown[];
-  definitions?: unknown[];
-  overrides?: unknown[];
-  killSwitches?: unknown[];
-  membership?: unknown;
-} = {}) {
+function makePrisma(
+  overrides: {
+    app?: unknown;
+    apps?: unknown[];
+    definitions?: unknown[];
+    overrides?: unknown[];
+    killSwitches?: unknown[];
+    membership?: unknown;
+    teamMemberships?: unknown[];
+  } = {},
+) {
   const appFindMany = vi.fn(async () => overrides.apps ?? [overrides.app ?? makeApp()]);
   const definitionFindMany = vi.fn(async () => overrides.definitions ?? []);
   const overrideFindMany = vi.fn(async () => overrides.overrides ?? []);
   const killSwitchFindMany = vi.fn(async () => overrides.killSwitches ?? []);
-  const orgMemberFindFirst = vi.fn(async () => overrides.membership ?? { id: 'member_1' });
+  const roleValueFindMany = vi.fn(async () => []);
+  const orgMemberFindUnique = vi.fn(
+    async () =>
+      overrides.membership ?? {
+        role: 'member',
+        status: MembershipStatus.ACTIVE,
+      },
+  );
+  const teamMemberFindMany = vi.fn(
+    async () =>
+      overrides.teamMemberships ?? [
+        {
+          teamId: 'team_1',
+          teamRole: 'member',
+          createdAt: new Date('2026-04-22T10:00:00.000Z'),
+        },
+      ],
+  );
 
   return {
     mocks: {
@@ -42,14 +64,17 @@ function makePrisma(overrides: {
       definitionFindMany,
       overrideFindMany,
       killSwitchFindMany,
-      orgMemberFindFirst,
+      orgMemberFindUnique,
+      teamMemberFindMany,
     },
     prisma: {
       app: { findMany: appFindMany },
       featureFlagDefinition: { findMany: definitionFindMany },
+      featureFlagRoleValue: { findMany: roleValueFindMany },
       featureFlagUserOverride: { findMany: overrideFindMany },
       killSwitchEntry: { findMany: killSwitchFindMany },
-      orgMember: { findFirst: orgMemberFindFirst },
+      orgMember: { findUnique: orgMemberFindUnique },
+      teamMember: { findMany: teamMemberFindMany },
     } as unknown as StartupDeps['prisma'],
   };
 }
@@ -89,6 +114,34 @@ describe('getAppStartup', () => {
     );
 
     expect(response.flags).toEqual({ dark_mode: true, new_checkout: true });
+  });
+
+  it('uses only flag defaults when the supplied user/team context is not active', async () => {
+    const { prisma } = makePrisma({
+      definitions: [
+        { key: 'dark_mode', defaultState: false },
+        { key: 'new_checkout', defaultState: true },
+      ],
+      membership: {
+        role: 'member',
+        status: MembershipStatus.DEACTIVATED,
+      },
+      overrides: [{ flagKey: 'dark_mode', value: true }],
+      teamMemberships: [],
+    });
+
+    const response = await getAppStartup(
+      {
+        domain: 'app.example.com',
+        appIdentifier: 'com.example.app',
+        platform: 'ios',
+        userId: 'user_1',
+        teamId: 'team_other',
+      },
+      { env: testEnv(), prisma },
+    );
+
+    expect(response.flags).toEqual({ dark_mode: false, new_checkout: true });
   });
 
   it('resolves apps by their registered domains instead of the organisation domain', async () => {
