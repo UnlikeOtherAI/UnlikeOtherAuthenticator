@@ -549,7 +549,10 @@ X-UOA-Service-Assertion: <short-lived RS256 service JWT>
 
 The service assertion binds the exact UOA key ID, product, organisation,
 optional team, UTC month, and `scope=metering.read`. Its protected-header type
-is `uoa-metering-service+jwt` and its subject is `uoa-metering-reader`.
+is `uoa-billing-service+jwt` and its subject is `uoa-metering-reader`. The
+shared type is Ledger's dedicated machine-to-machine billing assertion
+contract; the `metering.read` scope and reader subject narrow this credential
+to raw metering collection.
 Ledger's public Draft 2020-12 schema is
 `https://ledger.unlikeotherai.com/schemas/metering-usage-v1.json`.
 

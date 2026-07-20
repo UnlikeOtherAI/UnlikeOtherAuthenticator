@@ -131,7 +131,7 @@ describe('Ledger raw metering collector', () => {
       expect(verified.protectedHeader).toMatchObject({
         alg: 'RS256',
         kid: 'uoa-billing-collector-current',
-        typ: 'uoa-metering-service+jwt',
+        typ: 'uoa-billing-service+jwt',
       });
       expect(verified.payload).toMatchObject({
         sub: 'uoa-metering-reader',
