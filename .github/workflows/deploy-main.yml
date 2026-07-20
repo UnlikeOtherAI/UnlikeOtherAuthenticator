@@ -23,30 +23,38 @@ jobs:
       GCP_CLOUD_RUN_SERVICE: ${{ vars.GCP_CLOUD_RUN_SERVICE }}
       GCP_ARTIFACT_REGISTRY_REPOSITORY: ${{ vars.GCP_ARTIFACT_REGISTRY_REPOSITORY }}
       IMAGE: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GCP_ARTIFACT_REGISTRY_REPOSITORY }}/${{ vars.GCP_CLOUD_RUN_SERVICE }}:${{ github.sha }}
+      STRIPE_BILLING_ENABLED: ${{ vars.STRIPE_BILLING_ENABLED || 'false' }}
+      UOA_STRIPE_BILLING_CONFIGURED: ${{ vars.UOA_STRIPE_BILLING_CONFIGURED || 'false' }}
+      LEDGER_BILLING_BASE_URL: ${{ vars.LEDGER_BILLING_BASE_URL || 'https://ledger.unlikeotherai.com' }}
+      LEDGER_BILLING_APP_KEY_ID: ${{ vars.LEDGER_BILLING_APP_KEY_ID }}
+      LEDGER_BILLING_ASSERTION_AUDIENCE: ${{ vars.LEDGER_BILLING_ASSERTION_AUDIENCE || 'https://ledger.unlikeotherai.com' }}
+      STRIPE_USAGE_EXPORT_INTERVAL_MINUTES: ${{ vars.STRIPE_USAGE_EXPORT_INTERVAL_MINUTES || '60' }}
+      STRIPE_PRE_BOUNDARY_SAFETY_LEAD_MINUTES: ${{ vars.STRIPE_PRE_BOUNDARY_SAFETY_LEAD_MINUTES || '360' }}
+      STRIPE_PRE_BOUNDARY_SAFETY_OFFSET_MINUTES: ${{ vars.STRIPE_PRE_BOUNDARY_SAFETY_OFFSET_MINUTES || '1' }}
     steps:
       - name: Check out repository
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Authenticate to Google Cloud
         id: auth
-        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed  # v2
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
         with:
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
           token_format: access_token
 
       - name: Set up gcloud
-        uses: google-github-actions/setup-gcloud@e427ad8a34f8676edf47cf7d7925499adf3eb74f  # v2
+        uses: google-github-actions/setup-gcloud@e427ad8a34f8676edf47cf7d7925499adf3eb74f # v2
 
       - name: Log in to Artifact Registry
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9  # v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ${{ vars.GCP_REGION }}-docker.pkg.dev
           username: oauth2accesstoken
           password: ${{ steps.auth.outputs.access_token }}
 
       - name: Build and push image
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           push: true
@@ -57,12 +65,42 @@ jobs:
         continue-on-error: true
 
       - name: Upload SBOM artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: hashFiles('sbom.json') != ''
         with:
           name: sbom-${{ github.sha }}
           path: sbom.json
           retention-days: 90
+
+      - name: Validate billing deployment configuration
+        run: |
+          case "$STRIPE_BILLING_ENABLED" in
+            true|false) ;;
+            *)
+              echo "STRIPE_BILLING_ENABLED must be exactly true or false"
+              exit 1
+              ;;
+          esac
+          case "$UOA_STRIPE_BILLING_CONFIGURED" in
+            true|false) ;;
+            *)
+              echo "UOA_STRIPE_BILLING_CONFIGURED must be exactly true or false"
+              exit 1
+              ;;
+          esac
+
+          if [[ "$STRIPE_BILLING_ENABLED" == "true" ]]; then
+            if [[ "$UOA_STRIPE_BILLING_CONFIGURED" != "true" ]]; then
+              echo "Live Stripe collection requires UOA_STRIPE_BILLING_CONFIGURED=true"
+              exit 1
+            fi
+            for name in LEDGER_BILLING_BASE_URL LEDGER_BILLING_APP_KEY_ID LEDGER_BILLING_ASSERTION_AUDIENCE; do
+              if [[ -z "${!name}" ]]; then
+                echo "$name is required before Stripe collection can be enabled"
+                exit 1
+              fi
+            done
+          fi
 
       - name: Deploy to Cloud Run
         # Secrets MUST come from GCP Secret Manager via --set-secrets, not the
@@ -70,16 +108,30 @@ jobs:
         # account needs roles/secretmanager.secretAccessor on each secret
         # referenced below. Add new secrets here and in Secret Manager as a pair.
         run: |
+          env_vars="AUTH_SERVICE_IDENTIFIER=authentication.unlikeotherai.com,PUBLIC_BASE_URL=https://authentication.unlikeotherai.com,EMAIL_PROVIDER=ses,AWS_REGION=eu-west-1,EMAIL_FROM=noreply@unlikeotherai.com,EMAIL_REPLY_TO=hello@unlikeotherai.com,ADMIN_AUTH_DOMAIN=authentication.unlikeotherai.com,CONFIG_JWKS_URL=https://authentication.unlikeotherai.com/.well-known/jwks.json,MCP_OAUTH_PUBLIC_PROFILE_ENABLED=false,STRIPE_BILLING_ENABLED=$STRIPE_BILLING_ENABLED,STRIPE_USAGE_EXPORT_INTERVAL_MINUTES=$STRIPE_USAGE_EXPORT_INTERVAL_MINUTES,STRIPE_PRE_BOUNDARY_SAFETY_LEAD_MINUTES=$STRIPE_PRE_BOUNDARY_SAFETY_LEAD_MINUTES,STRIPE_PRE_BOUNDARY_SAFETY_OFFSET_MINUTES=$STRIPE_PRE_BOUNDARY_SAFETY_OFFSET_MINUTES,LEDGER_BILLING_BASE_URL=$LEDGER_BILLING_BASE_URL,LEDGER_BILLING_APP_KEY_ID=$LEDGER_BILLING_APP_KEY_ID,LEDGER_BILLING_ASSERTION_AUDIENCE=$LEDGER_BILLING_ASSERTION_AUDIENCE"
+          secret_vars="DATABASE_URL=uoa-auth-database-url:latest,SHARED_SECRET=uoa-auth-shared-secret:latest,GOOGLE_CLIENT_ID=uoa-auth-google-client-id:latest,GOOGLE_CLIENT_SECRET=uoa-auth-google-client-secret:latest,AWS_ACCESS_KEY_ID=uoa-auth-aws-access-key-id:latest,AWS_SECRET_ACCESS_KEY=uoa-auth-aws-secret-access-key:latest,ADMIN_ACCESS_TOKEN_SECRET=uoa-admin-access-token-secret:latest,ADMIN_CONFIG_JWT=uoa-admin-config-jwt:latest,CONFIG_JWKS_JSON=uoa-auth-config-jwks-json:latest,DATABASE_ADMIN_URL=uoa-auth-database-admin-url:latest,MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK=uoa-auth-mcp-oauth-access-token-private-jwk:latest,TARIFF_SNAPSHOT_PRIVATE_JWK=uoa-auth-tariff-snapshot-private-jwk:latest,TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON=uoa-auth-tariff-snapshot-public-jwks-json:latest,UOA_BILLING_ASSERTION_SIGNING_PRIVATE_JWK=uoa-auth-billing-assertion-private-jwk:latest,UOA_BILLING_ASSERTION_PUBLIC_JWKS_JSON=uoa-auth-billing-assertion-public-jwks-json:latest,LEDGER_BILLING_APP_KEY=uoa-auth-ledger-billing-app-key:latest"
+          scaling_args=(--min-instances 0 --cpu-throttling)
+
+          if [[ "$UOA_STRIPE_BILLING_CONFIGURED" == "true" ]]; then
+            secret_vars="$secret_vars,STRIPE_SECRET_KEY=uoa-auth-stripe-secret-key:latest,STRIPE_WEBHOOK_SECRET=uoa-auth-stripe-webhook-secret:latest"
+          fi
+          if [[ "$STRIPE_BILLING_ENABLED" == "true" ]]; then
+            scaling_args=(--min-instances 1 --no-cpu-throttling)
+          fi
+
           gcloud run deploy "$GCP_CLOUD_RUN_SERVICE" \
             --project "$GCP_PROJECT_ID" \
             --region "$GCP_REGION" \
             --image "$IMAGE" \
             --add-cloudsql-instances "gen-lang-client-0561071620:europe-west1:uoa-auth-db" \
             --max-instances 3 \
-            --set-env-vars "AUTH_SERVICE_IDENTIFIER=authentication.unlikeotherai.com,PUBLIC_BASE_URL=https://authentication.unlikeotherai.com,EMAIL_PROVIDER=ses,AWS_REGION=eu-west-1,EMAIL_FROM=noreply@unlikeotherai.com,EMAIL_REPLY_TO=hello@unlikeotherai.com,ADMIN_AUTH_DOMAIN=authentication.unlikeotherai.com,CONFIG_JWKS_URL=https://authentication.unlikeotherai.com/.well-known/jwks.json,MCP_OAUTH_PUBLIC_PROFILE_ENABLED=false" \
-            --set-secrets "DATABASE_URL=uoa-auth-database-url:latest,SHARED_SECRET=uoa-auth-shared-secret:latest,GOOGLE_CLIENT_ID=uoa-auth-google-client-id:latest,GOOGLE_CLIENT_SECRET=uoa-auth-google-client-secret:latest,AWS_ACCESS_KEY_ID=uoa-auth-aws-access-key-id:latest,AWS_SECRET_ACCESS_KEY=uoa-auth-aws-secret-access-key:latest,ADMIN_ACCESS_TOKEN_SECRET=uoa-admin-access-token-secret:latest,ADMIN_CONFIG_JWT=uoa-admin-config-jwt:latest,CONFIG_JWKS_JSON=uoa-auth-config-jwks-json:latest,DATABASE_ADMIN_URL=uoa-auth-database-admin-url:latest,MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK=uoa-auth-mcp-oauth-access-token-private-jwk:latest"
+            "${scaling_args[@]}" \
+            --set-env-vars "$env_vars" \
+            --set-secrets "$secret_vars"
 
       - name: Verify health endpoint
         run: |
           curl --fail --silent --show-error https://authentication.unlikeotherai.com/health
           curl --fail --silent --show-error https://authentication.unlikeotherai.com/oauth/jwks.json
+          curl --fail --silent --show-error https://authentication.unlikeotherai.com/billing/v1/jwks.json
+          curl --fail --silent --show-error https://authentication.unlikeotherai.com/billing/v1/service-jwks.json

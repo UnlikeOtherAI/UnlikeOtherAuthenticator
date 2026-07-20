@@ -9,8 +9,15 @@ import {
   resolveStripeAccountContext,
   type StripeAccountContext,
 } from './billing-stripe-client.service.js';
+import {
+  reconcileStripeCycleInvoiceUsage,
+  type StripeInvoiceWebhookType,
+} from './billing-stripe-invoice.service.js';
 
-type StripeWebhookClient = Pick<Stripe, 'accounts' | 'checkout' | 'subscriptions' | 'webhooks'>;
+type StripeWebhookClient = Pick<
+  Stripe,
+  'accounts' | 'billing' | 'checkout' | 'invoices' | 'subscriptions' | 'webhooks'
+>;
 
 const SUBSCRIPTION_EVENTS = new Set([
   'customer.subscription.created',
@@ -18,6 +25,10 @@ const SUBSCRIPTION_EVENTS = new Set([
   'customer.subscription.deleted',
   'customer.subscription.paused',
   'customer.subscription.resumed',
+]);
+const INVOICE_RECONCILIATION_EVENTS = new Set<StripeInvoiceWebhookType>([
+  'invoice.created',
+  'invoice.finalization_failed',
 ]);
 
 function externalId(value: string | { id: string } | null | undefined): string | null {
@@ -256,7 +267,7 @@ async function terminalizeMissingSubscription(
 }
 
 async function retrieveSubscription(
-  stripe: StripeWebhookClient,
+  stripe: Pick<Stripe, 'subscriptions'>,
   subscriptionId: string,
 ): Promise<Stripe.Subscription | null> {
   try {
@@ -265,6 +276,42 @@ async function retrieveSubscription(
     if (isMissingStripeResource(error)) return null;
     throw error;
   }
+}
+
+export async function refreshStripeSubscriptionProjection(
+  params: {
+    subscriptionId: string;
+    account: StripeAccountContext;
+  },
+  deps: {
+    prisma: PrismaClient;
+    stripe: Pick<Stripe, 'subscriptions'>;
+  },
+): Promise<Stripe.Subscription | null> {
+  const subscription = await retrieveSubscription(deps.stripe, params.subscriptionId);
+  if (subscription) {
+    await syncStripeSubscriptionProjection(
+      { subscription, account: params.account },
+      { prisma: deps.prisma },
+    );
+  } else {
+    await deps.prisma.$transaction((tx) =>
+      terminalizeMissingSubscription(tx, params.account, params.subscriptionId),
+    );
+  }
+  return subscription;
+}
+
+export async function syncStripeSubscriptionProjection(
+  params: {
+    subscription: Stripe.Subscription;
+    account: StripeAccountContext;
+  },
+  deps: {
+    prisma: PrismaClient;
+  },
+): Promise<void> {
+  await deps.prisma.$transaction((tx) => syncSubscription(tx, params.subscription, params.account));
 }
 
 type CurrentEventState = {
@@ -358,6 +405,7 @@ export async function handleStripeWebhook(
     stripe?: StripeWebhookClient;
     stripeLivemode?: boolean;
     webhookSecret?: string;
+    reconcileInvoice?: typeof reconcileStripeCycleInvoiceUsage;
   },
 ): Promise<{ duplicate: boolean }> {
   const configured = deps?.stripe ? undefined : requireStripeBillingEnabled();
@@ -392,6 +440,20 @@ export async function handleStripeWebhook(
     return { duplicate: true };
   }
   const state = await currentEventState(event, stripe, account);
+  if (INVOICE_RECONCILIATION_EVENTS.has(event.type as StripeInvoiceWebhookType)) {
+    const invoice = event.data.object as Stripe.Invoice;
+    if (!invoice.id) {
+      throw new AppError('BAD_REQUEST', 400, 'STRIPE_INVOICE_BINDING_INVALID');
+    }
+    await (deps?.reconcileInvoice ?? reconcileStripeCycleInvoiceUsage)(
+      {
+        invoiceId: invoice.id,
+        eventType: event.type as StripeInvoiceWebhookType,
+        account,
+      },
+      { prisma, stripe },
+    );
+  }
   try {
     await prisma.$transaction(async (tx) => {
       await tx.billingStripeWebhookEvent.create({

@@ -1,3 +1,4 @@
+import { BillingAppKeyPurpose } from '@prisma/client';
 import { exportJWK, generateKeyPair, SignJWT } from 'jose';
 import { beforeAll, describe, expect, it } from 'vitest';
 
@@ -23,10 +24,12 @@ beforeAll(async () => {
   Object.assign(jwk, { kid: 'ledger-actor-1', alg: 'RS256', use: 'sig' });
   credential = {
     id: 'key_1',
+    purpose: BillingAppKeyPurpose.ENTITLEMENT,
     actorIssuer: 'https://ledger.unlikeotherai.com',
     actorAudience: 'https://authentication.unlikeotherai.com/billing/v1/effective-tariff',
     actorKeyId: 'ledger-actor-1',
     actorPublicJwk: jwk,
+    checkoutReturnOrigins: [],
     service: {
       id: 'service_1',
       identifier: 'deepwater',

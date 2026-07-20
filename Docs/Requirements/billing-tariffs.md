@@ -120,8 +120,18 @@ An app key:
 * is returned in plaintext only when created;
 * is stored only as a keyed digest plus a display prefix;
 * is bound to exactly one billing service;
+* has exactly one endpoint purpose: `entitlement` or `customer_lifecycle`;
 * may expire and may be revoked immediately;
 * is bound to one actor issuer, actor audience, RS256 public JWK, and `kid`.
+
+Purpose is enforced by middleware and by database constraints, not caller
+convention. An `entitlement` key can call only
+`POST /billing/v1/effective-tariff` and must have no redirect origins. A
+`customer_lifecycle` key can call only the Stripe Checkout, summary, portal,
+and cancellation routes and must have at least one exact HTTPS return origin.
+No key can cross those endpoint classes. Every request also requires its
+credential-bound actor assertion, and the body product must exactly equal the
+service bound to the key.
 
 The app key authenticates the calling product. It does not identify the user.
 Each lookup therefore also carries an independently signed actor assertion.
@@ -275,6 +285,13 @@ Every mutation writes the existing global admin audit log. Tariff and credential
 tables are denied to the tenant runtime database role and accessed only through
 the bypass-RLS admin connection.
 
+The Admin `/billing` screen is the operator surface for this control plane. It
+lists product services, immutable tariff versions, scoped assignments, masked
+purpose-bound app keys, Stripe catalog readiness, and test/live subscription
+state. It can create services with a safe `at_cost + none` default, append
+versions, move defaults, assign org/team tariffs, and mint/revoke keys. A new
+key's plaintext appears once in a non-recoverable reveal dialog.
+
 ## Stripe collection foundation
 
 Stripe resources are projections of UOA and Ledger truth:
@@ -303,11 +320,12 @@ Stripe key whose test/live mode cannot be determined.
 ### Checkout and subscription scope
 
 `POST /billing/v1/stripe/checkout-session` uses the calling product's own
-`X-UOA-App-Key` plus its fresh credential-bound `X-UOA-Actor`. The user must be
-an active owner/admin at the selected billing scope. A team tariff override
-creates a team-scoped subscription; an organisation assignment or service
-default creates an organisation-scoped subscription. Return URLs must use an
-exact HTTPS origin allowlisted on that individual app-key record.
+`customer_lifecycle` `X-UOA-App-Key` plus its fresh credential-bound
+`X-UOA-Actor`. The user must be an active owner/admin at the selected billing
+scope. A team tariff override creates a team-scoped subscription; an
+organisation assignment or service default creates an organisation-scoped
+subscription. Return URLs must use an exact HTTPS origin allowlisted on that
+individual app-key record.
 
 An organisation-scoped Checkout or non-terminal subscription is mutually
 exclusive with every team-scoped Checkout/subscription for the same Stripe
@@ -332,8 +350,14 @@ UOA creates one currency-specific Stripe catalog for each product, including:
 * a calendar-month billing anchor aligned to Ledger's UTC month;
 * no promotion codes, because discounts must be explicit UOA tariff versions.
 
-The hosted Checkout starts the next complete UTC calendar month without
-proration. Subscription webhooks are verified against the exact raw request
+The hosted Checkout sets Stripe's billing-cycle anchor to the first day of the
+next UTC month and sets `proration_behavior=none`. The partial alignment period
+between Checkout and that boundary is free; the first invoice covers the first
+complete UTC calendar month, and subsequent renewals remain calendar-aligned.
+This follows Stripe's documented
+[billing-cycle anchor](https://docs.stripe.com/billing/subscriptions/billing-cycle)
+and [no-proration](https://docs.stripe.com/billing/subscriptions/prorations)
+semantics. Subscription webhooks are verified against the exact raw request
 body with the separate `STRIPE_WEBHOOK_SECRET`, recorded idempotently, and
 accepted only when the Stripe customer, product, tariff, scope, and line items
 match the immutable UOA mapping.
@@ -355,6 +379,25 @@ tombstones an existing local row. The current subscription must contain exactly
 the UOA monthly item (quantity one, when non-zero) and exactly one metered usage
 item, with no extra/duplicate items and no subscription- or item-level
 discounts.
+
+### Customer subscription lifecycle API
+
+Customer applications use the same exact product, organisation, team, user,
+app-key, and actor binding for all lifecycle operations:
+
+| Method and path | Behaviour |
+|---|---|
+| `POST /billing/v1/stripe/subscription-summary` | Returns the effective tariff, assignment, `can_manage`, collection gate/mode, and a safe local subscription projection with no Stripe IDs |
+| `POST /billing/v1/stripe/portal-session` | Creates a Stripe-hosted portal session after billing-manager and exact return-origin checks |
+| `POST /billing/v1/stripe/subscription/cancel` | Sets `cancel_at_period_end=true`, reconciles Stripe's returned current state, audits the actor, and returns the updated summary |
+
+Summary is useful even while collection is disabled: it returns
+`stripe_collection_enabled=false` and the last single account-scoped local
+projection. If more than one account projection could match, it returns
+`STRIPE_SUBSCRIPTION_ACCOUNT_AMBIGUOUS` instead of guessing. Portal and
+cancellation remain unavailable while the process gate is off. The
+`subscription.billing_phase` field is `free_alignment_period`,
+`calendar_month`, or `unknown`.
 
 ### Ledger collection and Stripe meter units
 
@@ -386,6 +429,60 @@ Snapshot cursors and cumulative/delta exports are stored so retries can be
 replayed and audited. A lower corrected cumulative total emits a negative
 delta; it does not rewrite prior raw usage.
 
+### Recurring export, safety pass, and invoice reconciliation
+
+When `STRIPE_BILLING_ENABLED=true`, each API process starts the recurring usage
+export scheduler. Cloud Run is configured with one warm instance and
+non-throttled CPU in that mode; idempotent database export state and stable
+Stripe meter identifiers make overlapping retries safe.
+
+The scheduler:
+
+* polls every `STRIPE_USAGE_EXPORT_INTERVAL_MINUTES` (default 60);
+* selects only current, non-terminal subscriptions whose active service and
+  immutable tariff still use `collection_mode=stripe` and a non-free mode;
+* exports only exact full UTC calendar-month periods;
+* deliberately skips the initial free alignment stub;
+* reports any other non-calendar period as
+  `STRIPE_BILLING_PERIOD_NOT_CALENDAR_ALIGNED` instead of silently making it
+  free;
+* once a boundary falls inside
+  `STRIPE_PRE_BOUNDARY_SAFETY_LEAD_MINUTES`, schedules an additional safety
+  export `STRIPE_PRE_BOUNDARY_SAFETY_OFFSET_MINUTES` before period end.
+
+Each run calls the same immutable-cursor, cumulative-delta export path as the
+superuser reconciliation endpoint. The pre-boundary pass is not final because
+usage can still arrive between it and period end.
+
+For the authoritative post-period reconciliation, the signed
+`invoice.created` webhook retrieves the current Stripe invoice and acts only on
+a draft, automatically collected `subscription_cycle` invoice whose
+subscription, customer, currency, account/mode, and exact just-ended UTC
+calendar period match the local immutable projection. The current invoice must
+also expose an `automatically_finalizes_at` at least one hour after `created`;
+an absent, shorter, or custom-early window fails closed with
+`STRIPE_INVOICE_GRACE_PERIOD_INSUFFICIENT`. UOA then fetches a fresh Ledger
+snapshot and sends any remaining cumulative delta with a meter timestamp inside
+the ended service period. Only after that succeeds does UOA commit the webhook
+event and return success. A Ledger, database, or Stripe failure leaves the
+event uncommitted and returns a failure so Stripe retries and delays automatic
+finalisation. Stable cursor/delta records, meter identifiers, and Stripe
+idempotency keys make lost-response retries safe.
+
+This uses Stripe's invoice finalization grace period, during which
+subscription-cycle draft invoices include prior-period usage reported before
+finalisation. The default is one hour, and a failed `invoice.created` delivery
+can delay finalisation for up to 72 hours. UOA also handles
+`invoice.finalization_failed`: it records the signed event, logs the invoice ID,
+automatic-tax status, and structured finalization error, and re-runs the same
+post-period export when the invoice remains a valid draft cycle invoice.
+Successful meter-event creation proves durable delivery, not immediate
+aggregation visibility: Stripe processes meter events asynchronously and
+recomputes the draft invoice at finalisation. Test evidence must inspect the
+finalized invoice, not merely the meter-event response. See
+Stripe's [grace-period guidance](https://docs.stripe.com/billing/subscriptions/usage-based/configure-grace-period)
+and [subscription webhook guidance](https://docs.stripe.com/billing/subscriptions/webhooks).
+
 ### Launch gate
 
 Code deployment is not permission to collect money. Production collection
@@ -395,11 +492,16 @@ remains blocked until all of the following are demonstrated:
 2. UOA has its own revocable Ledger billing-reader app key;
 3. Ledger trusts only UOA's dedicated service-assertion JWKS and exact key ID;
 4. per-product app keys and Checkout return origins are provisioned separately;
-5. current-month polling, final pre-invoice reconciliation, webhook retries,
+5. recurring current-month polling, the pre-boundary safety pass,
+   authoritative `invoice.created` post-period reconciliation,
+   `invoice.finalization_failed` handling,
+   the free initial alignment period, calendar-month renewal, cancellation,
+   webhook retries,
    negative corrections, and immutable-cursor replay are exercised in Stripe
    test mode;
 6. invoices visibly reconcile UOA tariff terms and Ledger customer charges.
 
-Stripe meter processing is asynchronous. A reviewed scheduler and
-pre-finalisation reconciliation run are mandatory before enabling live
-collection; a manually successful export alone is insufficient.
+Stripe meter processing is asynchronous. The scheduler is deployed but inert
+while the safety gate is false. Test-mode evidence for the full lifecycle and
+an explicit production configuration review remain mandatory before enabling
+live collection; a manually successful export alone is insufficient.

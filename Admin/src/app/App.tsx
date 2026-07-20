@@ -5,6 +5,7 @@ import { AdminUiProvider } from '../features/shell/admin-ui';
 import { AdminLayout } from '../layouts/AdminLayout';
 import { AdminAuthCallbackPage } from '../pages/AdminAuthCallbackPage';
 import { ApiKeysPage } from '../pages/ApiKeysPage';
+import { BillingPage } from '../pages/BillingPage';
 import { ConnectionErrorsPage } from '../pages/ConnectionErrorsPage';
 import { FeatureAudienceGroupPage } from '../pages/FeatureAudienceGroupPage';
 import { FeatureFlagDetailPage } from '../pages/FeatureFlagDetailPage';
@@ -56,6 +57,7 @@ export function App() {
         <Route path="feature-flags/:appId/groups/:groupId" element={<FeatureAudienceGroupPage />} />
         <Route path="feature-flags/:appId" element={<FeatureFlagDetailPage />} />
         <Route path="api-keys" element={<ApiKeysPage />} />
+        <Route path="billing" element={<BillingPage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

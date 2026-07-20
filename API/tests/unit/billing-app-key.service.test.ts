@@ -1,3 +1,4 @@
+import { BillingAppKeyPurpose } from '@prisma/client';
 import { exportJWK, generateKeyPair } from 'jose';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
@@ -57,6 +58,7 @@ describe('product-dedicated billing app keys', () => {
           return {
             id: 'key_1',
             serviceId: 'service_1',
+            purpose: data.purpose,
             name: data.name,
             keyPrefix: data.keyPrefix,
             actorIssuer: data.actorIssuer,
@@ -78,8 +80,9 @@ describe('product-dedicated billing app keys', () => {
     const result = await createBillingAppKey(
       {
         serviceId: 'service_1',
+        purpose: 'customer_lifecycle',
         name: 'DeepWater production',
-        actorIssuer: 'https://ledger.unlikeotherai.com',
+        actorIssuer: 'https://api.deepwater.example',
         actorAudience: 'https://authentication.unlikeotherai.com/billing/v1/effective-tariff',
         actorPublicJwk: publicJwk,
         checkoutReturnOrigins: ['https://app.nessie.works'],
@@ -95,7 +98,8 @@ describe('product-dedicated billing app keys', () => {
     expect(persisted.secretDigest).not.toBe(result.plaintext);
     expect(persisted).toMatchObject({
       serviceId: 'service_1',
-      actorIssuer: 'https://ledger.unlikeotherai.com',
+      purpose: BillingAppKeyPurpose.CUSTOMER_LIFECYCLE,
+      actorIssuer: 'https://api.deepwater.example',
       actorKeyId: 'ledger-shared-actor',
       checkoutReturnOrigins: ['https://app.nessie.works'],
     });
@@ -109,6 +113,7 @@ describe('product-dedicated billing app keys', () => {
       createBillingAppKey(
         {
           serviceId: 'service_1',
+          purpose: 'entitlement',
           name: 'Wrong audience',
           actorIssuer: 'https://ledger.unlikeotherai.com',
           actorAudience: 'https://authentication.unlikeotherai.com/some-other-api',
@@ -132,6 +137,7 @@ describe('product-dedicated billing app keys', () => {
       billingAppKey: {
         findUnique: vi.fn().mockResolvedValue({
           id: 'key_1',
+          purpose: BillingAppKeyPurpose.ENTITLEMENT,
           actorIssuer: 'https://ledger.unlikeotherai.com',
           actorAudience: 'https://authentication.unlikeotherai.com/billing/v1/effective-tariff',
           actorKeyId: 'ledger-shared-actor',
@@ -192,6 +198,7 @@ describe('product-dedicated billing app keys', () => {
       billingAppKey: {
         findUnique: vi.fn().mockResolvedValue({
           id: 'key_1',
+          purpose: BillingAppKeyPurpose.ENTITLEMENT,
           actorIssuer: 'https://ledger.unlikeotherai.com',
           actorAudience: 'https://authentication.unlikeotherai.com/billing/v1/effective-tariff',
           actorKeyId: 'ledger-shared-actor',
@@ -227,11 +234,11 @@ describe('product-dedicated billing app keys', () => {
         'https://water.example.com',
       ]),
     ).toEqual(['https://app.nessie.works', 'https://water.example.com']);
-    expect(() =>
-      normalizeCheckoutReturnOrigins(['https://app.nessie.works/billing']),
-    ).toThrow('INVALID_CHECKOUT_RETURN_ORIGINS');
-    expect(() =>
-      normalizeCheckoutReturnOrigins(['http://app.nessie.works']),
-    ).toThrow('INVALID_CHECKOUT_RETURN_ORIGINS');
+    expect(() => normalizeCheckoutReturnOrigins(['https://app.nessie.works/billing'])).toThrow(
+      'INVALID_CHECKOUT_RETURN_ORIGINS',
+    );
+    expect(() => normalizeCheckoutReturnOrigins(['http://app.nessie.works'])).toThrow(
+      'INVALID_CHECKOUT_RETURN_ORIGINS',
+    );
   });
 });

@@ -126,6 +126,10 @@ Authenticated shell (`AdminSessionGuard` → `AdminUiProvider` → `AdminLayout`
 - `/feature-flags` — feature-flag apps listing (`FeatureFlagsPage`)
 - `/feature-flags/:appId` — feature-flag detail for an app (`FeatureFlagDetailPage`)
 - `/feature-flags/:appId/groups/:groupId` — audience-group detail under a feature flag (`FeatureAudienceGroupPage`)
+- `/billing` — platform billing control plane (`BillingPage`): services,
+  immutable tariff versions/defaults, organisation/team assignments,
+  purpose-bound product app keys with one-time secret reveal, Stripe catalog
+  readiness, and test/live subscription projections
 - `/settings` — system-level settings (`SettingsPage`), including bans and audited confidential delegation mappings. The delegation surface lists policy only (source domain, product, exact HTTPS resource, scope allowlist, enabled state, and audit metadata); it never reads or renders browser tokens, domain credentials, or application secrets. Source domain and product are immutable after creation.
 
 Catch-all:
@@ -142,6 +146,12 @@ When a template demonstrates a section that does not yet have a route here, use 
 - Components must not decode raw transport payloads ad hoc
 - Shared API error handling should map backend responses into a consistent UI-facing shape
 - Confidential delegation responses are parsed with a frontend Zod contract before rendering. Mutations use the same-origin admin bearer client; the UI must never extract or display that bearer or any product credential.
+- Billing responses are parsed by `schemas/billing.ts` and transported only
+  through `services/billing-admin-service.ts` and the TanStack Query hooks in
+  `features/admin/billing-admin-queries.ts`. App-key plaintext exists only in
+  the immediate create response and one-time reveal dialog; lists retain only
+  the masked prefix. A new service form defaults to the explicit safe
+  `at_cost + collection_mode=none` plan.
 
 ## 6. Forms
 

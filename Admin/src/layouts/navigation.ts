@@ -22,7 +22,13 @@ export const navSections: NavSection[] = [
   {
     label: 'Configuration',
     items: [
-      { label: 'New Integrations', path: '/integrations', icon: 'bell', badgeKey: 'integrationRequests', hideWhenEmpty: true },
+      {
+        label: 'New Integrations',
+        path: '/integrations',
+        icon: 'bell',
+        badgeKey: 'integrationRequests',
+        hideWhenEmpty: true,
+      },
     ],
   },
   {
@@ -49,6 +55,7 @@ export const navSections: NavSection[] = [
   {
     label: 'System',
     items: [
+      { label: 'Billing', path: '/billing', icon: 'building' },
       { label: 'API Keys', path: '/api-keys', icon: 'key' },
       { label: 'Settings', path: '/settings', icon: 'settings' },
     ],
@@ -88,6 +95,8 @@ export function navLabelForPath(pathname: string) {
     return 'Super-users';
   }
 
-  const item = navSections.flatMap((section) => section.items).find((entry) => entry.path === pathname);
+  const item = navSections
+    .flatMap((section) => section.items)
+    .find((entry) => entry.path === pathname);
   return item?.label ?? 'Dashboard';
 }

@@ -28,7 +28,13 @@ const STRIPE_ZERO_DECIMAL_CURRENCIES = new Set([
 ]);
 const STRIPE_METER_FRACTION_DIGITS = 6;
 const MAX_SIGNED_BIGINT = 9_223_372_036_854_775_807n;
-const METERABLE_SUBSCRIPTION_STATUSES = new Set(['active', 'trialing', 'past_due', 'unpaid']);
+export const STRIPE_METERABLE_SUBSCRIPTION_STATUSES = [
+  'active',
+  'trialing',
+  'past_due',
+  'unpaid',
+] as const;
+const meterableSubscriptionStatuses = new Set<string>(STRIPE_METERABLE_SUBSCRIPTION_STATUSES);
 
 export const stripeUsageSubscriptionInclude =
   Prisma.validator<Prisma.BillingStripeSubscriptionInclude>()({
@@ -119,8 +125,21 @@ export function assertStripeUsageScope(
   usage: LedgerBillingUsage,
   subscription: StripeUsageSubscription,
   billingMonth: string,
+  invoicePeriod?: { startsAt: Date; endsAt: Date },
 ): void {
   const bounds = stripeUsageMonthBounds(billingMonth);
+  const periodMatchesSubscription =
+    subscription.currentPeriodStart?.getTime() === bounds.startsAt.getTime() &&
+    subscription.currentPeriodEnd?.getTime() === bounds.endsAt.getTime();
+  const advancedPeriodEnd = new Date(
+    Date.UTC(bounds.endsAt.getUTCFullYear(), bounds.endsAt.getUTCMonth() + 1, 1),
+  );
+  const periodMatchesJustEndedInvoice =
+    invoicePeriod?.startsAt.getTime() === bounds.startsAt.getTime() &&
+    invoicePeriod.endsAt.getTime() === bounds.endsAt.getTime() &&
+    (periodMatchesSubscription ||
+      (subscription.currentPeriodStart?.getTime() === bounds.endsAt.getTime() &&
+        subscription.currentPeriodEnd?.getTime() === advancedPeriodEnd.getTime()));
   if (
     usage.product !== subscription.service.identifier ||
     usage.scope.organizationId !== subscription.orgId ||
@@ -129,8 +148,7 @@ export function assertStripeUsageScope(
     usage.scope.month !== billingMonth ||
     usage.scope.startsAt !== bounds.startsAt.toISOString() ||
     usage.scope.endsAt !== bounds.endsAt.toISOString() ||
-    subscription.currentPeriodStart?.getTime() !== bounds.startsAt.getTime() ||
-    subscription.currentPeriodEnd?.getTime() !== bounds.endsAt.getTime()
+    (!invoicePeriod ? !periodMatchesSubscription : !periodMatchesJustEndedInvoice)
   ) {
     throw new AppError('INTERNAL', 502, 'LEDGER_BILLING_SCOPE_MISMATCH');
   }
@@ -147,13 +165,17 @@ function expectedAssignmentScope(
   return scopes[source];
 }
 
-export function assertStripeUsageSubscription(subscription: StripeUsageSubscription): void {
+export function assertStripeUsageSubscription(
+  subscription: StripeUsageSubscription,
+  options?: { allowCanceledInvoicePeriod?: boolean },
+): void {
   const price = subscription.tariff.stripePrices.find(
     (candidate) => candidate.accountId === subscription.accountId,
   );
   const catalog = price?.catalog;
   if (
-    !METERABLE_SUBSCRIPTION_STATUSES.has(subscription.status) ||
+    (!meterableSubscriptionStatuses.has(subscription.status) &&
+      !(options?.allowCanceledInvoicePeriod && subscription.status === 'canceled')) ||
     !subscription.service.active ||
     subscription.tariff.serviceId !== subscription.serviceId ||
     subscription.tariff.collectionMode !== BillingCollectionMode.STRIPE ||

@@ -293,6 +293,61 @@ describe('Stripe usage export', () => {
     });
   });
 
+  it('exports usage captured after the pre-boundary safety pass into the draft renewal invoice', async () => {
+    const preBoundaryCapturedAt = new Date('2026-07-31T23:59:00.000Z');
+    const preBoundary = {
+      id: 'export_pre_boundary',
+      accountId: stripeAccount.id,
+      subscriptionId: 'subscription_1',
+      ledgerSnapshotCursor: 'bus_0123456789ABCDEFGHIJKLMNOPQRSTUV',
+      billingMonth: '2026-07',
+      billingProduct: 'deepwater',
+      callerProduct: 'deepsignal',
+      currency: 'USD',
+      cumulativeCustomerCharge: '2.5',
+      cumulativeMeterQuantity: 250_000_000n,
+      deltaMeterQuantity: 250_000_000n,
+      stripeMeterEventIdentifier: 'uoa_me_pre_boundary',
+      stripeMeterEventCreatedAt: preBoundaryCapturedAt,
+      createdAt: preBoundaryCapturedAt,
+    };
+    const afterBoundary = new Date('2026-08-01T00:00:10.000Z');
+    const finalUsage = usage('2.75', 'bus_2123456789ABCDEFGHIJKLMNOPQRSTUV');
+    finalUsage.snapshot.capturedAt = afterBoundary.toISOString();
+    const { prisma, stripe, fullSubscription, meterCreate, createExport } = setup([preBoundary]);
+    fullSubscription.currentPeriodStart = new Date('2026-08-01T00:00:00.000Z');
+    fullSubscription.currentPeriodEnd = new Date('2026-09-01T00:00:00.000Z');
+
+    await exportStripeUsage(
+      { subscriptionId: 'subscription_1', billingMonth: '2026-07' },
+      {
+        prisma: prisma as never,
+        stripe: stripe as never,
+        fetchUsage: vi.fn().mockResolvedValue(finalUsage),
+        invoicePeriod: {
+          startsAt: new Date('2026-07-01T00:00:00.000Z'),
+          endsAt: new Date('2026-08-01T00:00:00.000Z'),
+        },
+        now: () => afterBoundary,
+      },
+    );
+
+    expect(createExport).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        cumulativeMeterQuantity: 275_000_000n,
+        deltaMeterQuantity: 25_000_000n,
+        createdAt: afterBoundary,
+      }),
+    });
+    expect(meterCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({ value: '25000000' }),
+        timestamp: 1_785_542_399,
+      }),
+      expect.any(Object),
+    );
+  });
+
   it('rejects snapshots beyond Stripe clock tolerance before persisting', async () => {
     const futureUsage = usage();
     futureUsage.snapshot.capturedAt = new Date(capturedAt.getTime() + 6 * 60 * 1000).toISOString();

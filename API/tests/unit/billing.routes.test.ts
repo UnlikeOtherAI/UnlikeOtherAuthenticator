@@ -1,3 +1,4 @@
+import { BillingAppKeyPurpose } from '@prisma/client';
 import { exportJWK, generateKeyPair } from 'jose';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -50,6 +51,7 @@ function restoreEnv(): void {
 
 const credential = {
   id: 'app-key-1',
+  purpose: BillingAppKeyPurpose.ENTITLEMENT,
   actorIssuer: 'https://ledger.example.com',
   actorAudience: 'https://auth.example.com/billing/v1/effective-tariff',
   actorKeyId: 'ledger-actor-1',
@@ -71,12 +73,8 @@ beforeAll(async () => {
   const billingAssertionKeyPair = await generateKeyPair('RS256', { extractable: true });
   const privateJwk = await exportJWK(privateKey);
   const publicJwk = await exportJWK(publicKey);
-  const billingAssertionPrivateJwk = await exportJWK(
-    billingAssertionKeyPair.privateKey,
-  );
-  const billingAssertionPublicJwk = await exportJWK(
-    billingAssertionKeyPair.publicKey,
-  );
+  const billingAssertionPrivateJwk = await exportJWK(billingAssertionKeyPair.privateKey);
+  const billingAssertionPublicJwk = await exportJWK(billingAssertionKeyPair.publicKey);
   Object.assign(privateJwk, {
     kid: 'tariff-snapshot-test',
     alg: 'RS256',
@@ -196,6 +194,34 @@ describe('billing app API routes', () => {
         actorToken: 'signed-actor',
         credential,
       });
+    });
+  });
+
+  it('rejects a customer-lifecycle key at the entitlement endpoint', async () => {
+    appKeyService.verifyBillingAppKey.mockResolvedValueOnce({
+      ...credential,
+      purpose: BillingAppKeyPurpose.CUSTOMER_LIFECYCLE,
+      checkoutReturnOrigins: ['https://app.nessie.works'],
+    });
+    await withApp(async (app) => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/billing/v1/effective-tariff',
+        headers: {
+          'x-uoa-app-key': 'uoa_app_lifecycle-key',
+          'x-uoa-actor': 'signed-actor',
+        },
+        payload: {
+          product: 'deepwater',
+          organisation_id: 'org-1',
+          team_id: 'team-1',
+          user_id: 'user-1',
+        },
+      });
+
+      expect(response.statusCode).toBe(403);
+      expect(response.json()).toEqual({ error: 'Request failed' });
+      expect(entitlementService.getEffectiveTariffSnapshot).not.toHaveBeenCalled();
     });
   });
 

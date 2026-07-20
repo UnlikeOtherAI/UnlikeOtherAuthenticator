@@ -85,6 +85,7 @@ async function prepareExports(
     subscriptionId: string;
     billingMonth: string;
     usage: LedgerBillingUsage;
+    invoicePeriod?: { startsAt: Date; endsAt: Date };
   },
   prisma: PrismaClient,
 ): Promise<{
@@ -111,8 +112,10 @@ async function prepareExports(
     if (!subscription) {
       throw new AppError('NOT_FOUND', 404, 'STRIPE_SUBSCRIPTION_NOT_FOUND');
     }
-    assertStripeUsageSubscription(subscription);
-    assertStripeUsageScope(params.usage, subscription, params.billingMonth);
+    assertStripeUsageSubscription(subscription, {
+      allowCanceledInvoicePeriod: Boolean(params.invoicePeriod),
+    });
+    assertStripeUsageScope(params.usage, subscription, params.billingMonth, params.invoicePeriod);
     const charges = validatedStripeCumulativeCharges(params.usage, subscription);
     const capturedAt = new Date(params.usage.snapshot.capturedAt);
     const previousRows = await tx.billingStripeUsageExport.findMany({
@@ -268,6 +271,7 @@ export async function exportStripeUsage(
     stripeLivemode?: boolean;
     fetchUsage?: typeof fetchLedgerBillingUsage;
     now?: () => Date;
+    invoicePeriod?: { startsAt: Date; endsAt: Date };
   },
 ): Promise<StripeUsageExportResult> {
   const prisma = deps?.prisma ?? getAdminPrisma();
@@ -321,6 +325,7 @@ export async function exportStripeUsage(
       subscriptionId: subscription.id,
       billingMonth: params.billingMonth,
       usage,
+      invoicePeriod: deps?.invoicePeriod,
     },
     prisma,
   );

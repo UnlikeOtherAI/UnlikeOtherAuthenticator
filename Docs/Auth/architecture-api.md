@@ -96,6 +96,9 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       /billing
         effective-tariff.ts — Product-bound app-key + signed-actor tariff resolution
         jwks.ts             — GET /billing/v1/jwks.json (snapshot verification keys)
+        stripe-checkout.ts  — Purpose-bound hosted Checkout creation/recovery
+        stripe-subscription.ts — Safe summary, portal, and period-end cancellation
+        stripe-webhook.ts   — Exact-raw-body Stripe lifecycle reconciliation
         index.ts            — Route registration for /billing/v1
       /domain
         users.ts            — GET  /domain/users
@@ -186,6 +189,12 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       billing-stripe-checkout-recovery.service.ts — Crash-safe Stripe Checkout lookup and lease reconciliation
       billing-stripe-checkout-state.service.ts — Billing-scope overlap, binding, and customer projection rules
       billing-stripe-client.service.ts      — Explicit Stripe account and test/live runtime identity
+      billing-stripe-invoice.service.ts     — Authoritative post-period invoice reconciliation
+      billing-stripe-manager.service.ts     — Org/team billing-manager authorization
+      billing-stripe-period.service.ts      — Calendar-month and free-alignment classification
+      billing-stripe-return-url.service.ts  — Exact HTTPS origin allowlist enforcement
+      billing-stripe-scheduler.service.ts   — Recurring exports and pre-boundary safety pass
+      billing-stripe-subscription.service.ts — Safe summaries, portal, and cancellation lifecycle
       billing-stripe-tariff-guard.service.ts — Live Checkout/subscription tariff pin guards
       billing-tariff-read.service.ts        — Admin tariff, assignment, account/mode, and subscription projection
       billing-tariff.service.ts             — Versioned catalog, defaults, and assignments
@@ -347,7 +356,7 @@ Request → Route → Middleware → Service → Database (Prisma)
 * **domain-hash-auth** — runs on domain-scoped API routes. Verifies the domain hash token.
 * **superuser-access-token** — validates user access tokens for superuser-only domain endpoints.
 * **admin-superuser** — runs on `/internal/admin/*`. Validates the admin access token issued by `POST /internal/admin/token` and requires `role: "superuser"` for the configured `ADMIN_AUTH_DOMAIN`. See `Docs/Requirements/roles-and-acl.md`.
-* **billing-app-auth** — runs on `POST /billing/v1/effective-tariff` and `POST /billing/v1/stripe/checkout-session`. Accepts only the calling product's individual `uoa_app_…` credential, resolves its exact product and actor-verification binding through the admin database connection, and rejects duplicate or ambiguous credential headers. The route separately requires `X-UOA-Actor`; the app key never stands in for a user identity. The signed result includes the non-secret app-key record ID, exact product ID/identifier, and user/organisation/team subject so consumers can reject cross-product or cross-actor replay even when products share an actor-signing key.
+* **billing-app-auth** — runs on the product billing endpoints. Accepts only the calling product's individual `uoa_app_…` credential, resolves its exact product, purpose, and actor-verification binding through the admin database connection, and rejects duplicate or ambiguous credential headers. `entitlement` keys can call only effective-tariff; `customer_lifecycle` keys can call only Checkout, summary, portal, and cancellation. The route separately requires `X-UOA-Actor`; the app key never stands in for a user identity. The signed result includes the non-secret app-key record ID, exact product ID/identifier, and user/organisation/team subject so consumers can reject cross-product or cross-actor replay even when products share an actor-signing key.
 * **org-features** — rejects org endpoints when `org_features.enabled` is false.
 * **groups-enabled** — rejects group endpoints when `org_features.groups_enabled` is false.
 * **org-role-guard** — validates the user access token and the user's org role for `/org/*` routes (`owner > admin > member`). Reads `OrgMember.role` for the authenticated user in the target org and returns 403 if not a member or the role is insufficient.
@@ -409,7 +418,8 @@ emits `payment_collection_enabled` independently from
 `Docs/Requirements/billing-tariffs.md`.
 
 The Stripe boundary is an optional projection layer, disabled by default.
-Checkout reuses the exact billing app-key + actor verification path, then
+Checkout and lifecycle routes require a purpose-limited customer-lifecycle app
+key plus the exact actor verification path, then
 requires an active owner/admin at the selected organisation/team billing scope.
 `billing-stripe-catalog.service.ts` maps immutable tariff versions to fixed and
 metered Stripe Prices; `billing-stripe-webhook.service.ts` verifies the exact
@@ -427,6 +437,18 @@ assertion. Its separate public verification overlap is served at
 schema-v4 product/scope/month/tariff/currency and sends only cumulative
 customer-money deltas to Stripe's sum meter. None of these paths accepts another
 product's app key, a user token, or a webhook secret as an app credential.
+The safe summary omits Stripe IDs and remains available with an explicit
+disabled flag from the last unambiguous local projection. Portal and
+period-end cancellation require the exact billing manager and return-origin
+policy. Checkout's no-proration partial alignment period is free; complete
+renewals are UTC calendar months. When the process gate is enabled,
+`billing-stripe-scheduler.service.ts` repeatedly invokes the idempotent Ledger
+snapshot export and installs an additional pre-boundary safety timer.
+`billing-stripe-invoice.service.ts` owns the authoritative draft
+subscription-cycle `invoice.created` post-period pass before webhook commit and
+the structured `invoice.finalization_failed` handling. Free/manual/none plans
+and the alignment stub are excluded, while unexpected period drift fails
+visibly.
 
 > SCIM is deferred. When implementation lands, add a `scim-auth` middleware (SCIM bearer token validation and org-scope verification for `/scim/v2/*`, returning 401 on invalid token and 403 on org scope mismatch) and update both this list and the directory tree.
 

@@ -36,11 +36,15 @@ A platform superuser creates one UOA app key per consuming product/environment a
 
 \`POST /internal/admin/billing/services/:serviceId/app-keys\`
 
-The request binds the opaque \`uoa_app_…\` key to exactly one product and one RS256 actor
-public JWK, issuer, and audience. The plaintext key is returned once; UOA stores only a
-peppered HMAC digest. The same Ledger signing JWK may be bound to multiple credentials,
-but Nessie, DeepWater, DeepSignal, and DeepTest must keep distinct app secrets so every
-connection is independently revocable and attributable.
+The request binds the opaque \`uoa_app_…\` key to exactly one product, one endpoint
+purpose, and one RS256 actor public JWK, issuer, and audience. \`purpose=entitlement\`
+can call only the effective-tariff endpoint and forbids redirect origins.
+\`purpose=customer_lifecycle\` can call only Checkout, subscription summary, customer
+portal, and cancellation endpoints and requires at least one exact HTTPS return origin.
+The plaintext key is returned once; UOA stores only a peppered HMAC digest. The same
+Ledger signing JWK may be bound to multiple credentials, but Nessie, DeepWater,
+DeepSignal, and DeepTest must keep distinct app secrets so every connection is
+independently revocable and attributable.
 
 ### Resolve an effective tariff
 
@@ -125,6 +129,17 @@ and return URLs recovers the winner, including after a crash between Stripe crea
 the local write. Organisation subscriptions exclude team subscriptions for that product
 and organisation; independent team scopes may coexist.
 
+A hosted Checkout anchors the subscription to the first day of the next UTC month with
+proration disabled. The initial alignment stub is therefore free, the first invoice
+covers the first complete UTC calendar month, and later renewals remain calendar-aligned.
+Customer applications use \`POST /billing/v1/stripe/subscription-summary\` to read a
+safe projection without Stripe IDs, \`POST /billing/v1/stripe/portal-session\` to open
+an allowlisted Stripe portal, and
+\`POST /billing/v1/stripe/subscription/cancel\` to schedule period-end cancellation.
+Portal and cancellation require an owner/admin at the exact billing scope. Summary
+remains truthful while collection is disabled by returning the last unambiguous local
+projection with \`stripe_collection_enabled=false\`; portal and cancellation fail closed.
+
 A subscription stays pinned to Checkout's immutable tariff version, precedence source,
 assignment ID, and billing scope until terminal. Conflicting default or assignment
 mutations fail with \`STRIPE_TARIFF_PINNED\`; UOA does not silently reprice the next cycle.
@@ -148,9 +163,26 @@ Platform superusers can exercise or replay one subscription/month through
 \`POST /internal/admin/billing/stripe/usage-exports\`. The optional
 \`ledger_snapshot_cursor\` replays an exact immutable Ledger snapshot. The response
 separates \`billing_product\`, \`caller_product\`, the exact cumulative customer charge,
-and cumulative/delta integer Stripe quantities. This endpoint is a reconciliation tool,
-not a live schedule; asynchronous Stripe meters still require recurring collection and a
-final pre-invoice run before production enablement.
+and cumulative/delta integer Stripe quantities. When \`STRIPE_BILLING_ENABLED=true\`,
+UOA automatically invokes the same idempotent export for active Stripe-paid full calendar
+periods, polls at \`STRIPE_USAGE_EXPORT_INTERVAL_MINUTES\`, and schedules an additional
+pre-boundary safety pass at \`STRIPE_PRE_BOUNDARY_SAFETY_OFFSET_MINUTES\` once inside
+the configured lead window. It skips the free alignment stub and all free/manual/none
+tariffs. A non-calendar period after alignment is an operator-visible failure, never
+silently treated as free.
+
+The safety pass is not final. For a draft \`subscription_cycle\` invoice, the signed
+\`invoice.created\` webhook retrieves current Stripe state, verifies the exact
+account/mode/subscription/customer/currency/just-ended calendar period, fetches a fresh
+Ledger snapshot, and exports the remaining delta before committing the webhook event.
+The retrieved cycle invoice must retain at least one hour between \`created\` and
+\`automatically_finalizes_at\`; an absent or shorter window fails closed. Failure returns
+non-success and leaves the event uncommitted, so Stripe retries during its
+invoice-finalization grace period. \`invoice.finalization_failed\` is also recorded and
+logged with structured error/automatic-tax status, and retries post-period export while
+the invoice remains a valid draft. Meter-event creation is durable delivery evidence,
+not instant aggregate visibility; invoice reconciliation is verified after Stripe
+asynchronously recomputes the draft at finalization.
 
 ---
 `;

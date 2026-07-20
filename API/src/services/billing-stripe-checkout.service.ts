@@ -1,5 +1,4 @@
 import {
-  BillingAssignmentScope,
   BillingCollectionMode,
   BillingTariffMode,
   MembershipStatus,
@@ -34,6 +33,8 @@ import {
   requireStripeBillingEnabled,
   resolveStripeAccountContext,
 } from './billing-stripe-client.service.js';
+import { isBillingManager } from './billing-stripe-manager.service.js';
+import { normalizeStripeReturnUrl } from './billing-stripe-return-url.service.js';
 
 type CheckoutRequest = {
   product: string;
@@ -44,7 +45,6 @@ type CheckoutRequest = {
   cancelUrl: string;
 };
 
-const BILLING_MANAGER_ROLES = new Set(['owner', 'admin']);
 const CHECKOUT_LEASE_MS = 10 * 60 * 1000;
 
 function digestUrl(value: string): string {
@@ -53,35 +53,6 @@ function digestUrl(value: string): string {
 
 function nextUtcMonthStart(now: Date): number {
   return Math.floor(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1) / 1000);
-}
-
-function normalizeReturnUrl(value: string, allowedOrigins: string[]): string {
-  try {
-    const url = new URL(value);
-    if (
-      url.protocol !== 'https:' ||
-      url.username ||
-      url.password ||
-      !allowedOrigins.includes(url.origin)
-    ) {
-      throw new Error('invalid');
-    }
-    return url.toString();
-  } catch {
-    throw new AppError('BAD_REQUEST', 400, 'STRIPE_RETURN_URL_NOT_ALLOWED');
-  }
-}
-
-function isBillingManager(params: {
-  scope: BillingAssignmentScope;
-  orgRole: string;
-  teamRole?: string | null;
-}): boolean {
-  if (BILLING_MANAGER_ROLES.has(params.orgRole)) return true;
-  return (
-    params.scope === BillingAssignmentScope.TEAM &&
-    Boolean(params.teamRole && BILLING_MANAGER_ROLES.has(params.teamRole))
-  );
 }
 
 function externalId(value: string | { id: string } | null): string | null {
@@ -120,11 +91,11 @@ export async function createStripeCheckoutSession(
     afterStripeSessionCreated?: () => void | Promise<void>;
   },
 ) {
-  const successUrl = normalizeReturnUrl(
+  const successUrl = normalizeStripeReturnUrl(
     params.request.successUrl,
     params.credential.checkoutReturnOrigins,
   );
-  const cancelUrl = normalizeReturnUrl(
+  const cancelUrl = normalizeStripeReturnUrl(
     params.request.cancelUrl,
     params.credential.checkoutReturnOrigins,
   );

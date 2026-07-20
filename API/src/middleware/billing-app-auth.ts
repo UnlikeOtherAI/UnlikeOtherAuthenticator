@@ -1,3 +1,4 @@
+import { BillingAppKeyPurpose } from '@prisma/client';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
 import {
@@ -48,4 +49,29 @@ export async function requireBillingAppKey(
 ): Promise<void> {
   void reply;
   request.billingAppKey = await verifyBillingAppKey(readCredential(request));
+}
+
+async function requireBillingAppKeyPurpose(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  purpose: BillingAppKeyPurpose,
+): Promise<void> {
+  await requireBillingAppKey(request, reply);
+  if (request.billingAppKey?.purpose !== purpose) {
+    throw new AppError('FORBIDDEN', 403, 'BILLING_APP_KEY_PURPOSE_MISMATCH');
+  }
+}
+
+export function requireBillingEntitlementAppKey(
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> {
+  return requireBillingAppKeyPurpose(request, reply, BillingAppKeyPurpose.ENTITLEMENT);
+}
+
+export function requireBillingLifecycleAppKey(
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> {
+  return requireBillingAppKeyPurpose(request, reply, BillingAppKeyPurpose.CUSTOMER_LIFECYCLE);
 }

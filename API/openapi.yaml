@@ -82,7 +82,7 @@ components:
       type: apiKey
       in: header
       name: X-UOA-App-Key
-      description: One revocable UOA app key dedicated to the exact calling product/deployment.
+      description: One revocable UOA app key dedicated to the exact calling product/deployment and either entitlement or customer-lifecycle endpoints.
     billingActor:
       type: apiKey
       in: header
@@ -186,6 +186,109 @@ components:
           type: array
           items:
             type: string
+
+    BillingSubjectRequest:
+      type: object
+      additionalProperties: false
+      required: [product, organisation_id, team_id, user_id]
+      properties:
+        product:
+          type: string
+          description: Exact service identifier bound to the app key.
+        organisation_id:
+          type: string
+        team_id:
+          type: string
+        user_id:
+          type: string
+
+    BillingStripeSubscriptionSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - product
+        - subject
+        - tariff
+        - assignment
+        - stripe_collection_enabled
+        - stripe_mode
+        - can_manage
+        - subscription
+      properties:
+        product:
+          type: object
+          additionalProperties: true
+        subject:
+          type: object
+          required: [user_id, organisation_id, team_id]
+          properties:
+            user_id:
+              type: string
+            organisation_id:
+              type: string
+            team_id:
+              type: string
+        tariff:
+          type: object
+          additionalProperties: true
+        assignment:
+          type: object
+          additionalProperties: true
+        stripe_collection_enabled:
+          type: boolean
+        stripe_mode:
+          type: string
+          nullable: true
+          enum: [test, live]
+        can_manage:
+          type: boolean
+        subscription:
+          type: object
+          nullable: true
+          additionalProperties: false
+          required:
+            - id
+            - status
+            - scope
+            - scope_key
+            - tariff_id
+            - cancel_at_period_end
+            - current_period_start
+            - current_period_end
+            - billing_phase
+            - created_at
+            - synced_at
+          properties:
+            id:
+              type: string
+            status:
+              type: string
+            scope:
+              type: string
+              enum: [organisation, team]
+            scope_key:
+              type: string
+            tariff_id:
+              type: string
+            cancel_at_period_end:
+              type: boolean
+            current_period_start:
+              type: string
+              format: date-time
+              nullable: true
+            current_period_end:
+              type: string
+              format: date-time
+              nullable: true
+            billing_phase:
+              type: string
+              enum: [calendar_month, free_alignment_period, unknown]
+            created_at:
+              type: string
+              format: date-time
+            synced_at:
+              type: string
+              format: date-time
 
     OkTrue:
       type: object
@@ -2442,13 +2545,15 @@ paths:
       summary: Create a product-scoped Stripe subscription Checkout
       operationId: createBillingStripeCheckoutSession
       description: |
-        Uses the calling product/deployment's own UOA app key and a fresh actor
-        assertion. Only an active owner/admin at the resulting organisation or
-        team billing scope may create Checkout. The recoverable scope lease pins
-        the exact Stripe account/mode, immutable tariff source/assignment, and
-        return URLs. Organisation subscriptions exclude team subscriptions for
-        the same product and organisation; independent team scopes may coexist.
-        Stripe billing is disabled by default.
+        Uses the calling product/deployment's purpose=customer_lifecycle UOA app
+        key and a fresh actor assertion. Only an active owner/admin at the
+        resulting organisation or team billing scope may create Checkout. The
+        recoverable scope lease pins the exact Stripe account/mode, immutable
+        tariff source/assignment, and return URLs. Organisation subscriptions
+        exclude team subscriptions for the same product and organisation;
+        independent team scopes may coexist. The cycle anchor is the next UTC
+        month boundary with no proration, making the partial alignment period
+        free. Stripe billing is disabled by default.
       security:
         - billingAppKey: []
           billingActor: []
@@ -2504,6 +2609,138 @@ paths:
         '503':
           description: Stripe billing is disabled or incompletely provisioned.
 
+  /billing/v1/stripe/subscription-summary:
+    post:
+      tags: [Billing]
+      summary: Read a safe product subscription summary
+      operationId: getBillingStripeSubscriptionSummary
+      description: |
+        Requires the exact product's purpose=customer_lifecycle key and actor.
+        Returns no Stripe customer, subscription, item, or account identifiers.
+        With collection enabled, UOA refreshes current Stripe state first. With
+        collection disabled, it returns the last single local account
+        projection and sets stripe_collection_enabled=false; it never guesses
+        between multiple account projections.
+      security:
+        - billingAppKey: []
+          billingActor: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BillingSubjectRequest'
+      responses:
+        '200':
+          description: Effective tariff and safe current subscription projection.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum: ['private, no-store']
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingStripeSubscriptionSummary'
+        '401':
+          description: Invalid app key or actor assertion.
+        '403':
+          description: Key purpose, product, subject, or membership mismatch.
+        '409':
+          description: More than one disabled account projection could match.
+
+  /billing/v1/stripe/portal-session:
+    post:
+      tags: [Billing]
+      summary: Create an allowlisted Stripe customer portal session
+      operationId: createBillingStripePortalSession
+      description: |
+        Requires the exact product's purpose=customer_lifecycle key, fresh
+        actor, an active subscription, and owner/admin authority at its exact
+        organisation or team billing scope. The return URL's exact HTTPS origin
+        must be registered on that individual app key.
+      security:
+        - billingAppKey: []
+          billingActor: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [product, organisation_id, team_id, user_id, return_url]
+              properties:
+                product:
+                  type: string
+                organisation_id:
+                  type: string
+                team_id:
+                  type: string
+                user_id:
+                  type: string
+                return_url:
+                  type: string
+                  format: uri
+      responses:
+        '201':
+          description: Stripe-hosted portal URL.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [portal_url]
+                properties:
+                  portal_url:
+                    type: string
+                    format: uri
+        '400':
+          description: Return URL is not an exact allowlisted HTTPS origin.
+        '401':
+          description: Invalid app key or actor assertion.
+        '403':
+          description: Key purpose, product, subject, membership, or manager mismatch.
+        '404':
+          description: No active subscription exists at the billing scope.
+        '503':
+          description: Stripe billing is disabled or incompletely provisioned.
+
+  /billing/v1/stripe/subscription/cancel:
+    post:
+      tags: [Billing]
+      summary: Schedule period-end subscription cancellation
+      operationId: cancelBillingStripeSubscription
+      description: |
+        Requires the exact product's purpose=customer_lifecycle key, fresh
+        actor, and owner/admin authority at the subscription's exact billing
+        scope. Sets cancel_at_period_end=true, reconciles Stripe's returned
+        current state, and audits the requesting UOA user.
+      security:
+        - billingAppKey: []
+          billingActor: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BillingSubjectRequest'
+      responses:
+        '200':
+          description: Updated safe subscription summary.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingStripeSubscriptionSummary'
+        '401':
+          description: Invalid app key or actor assertion.
+        '403':
+          description: Key purpose, product, subject, membership, or manager mismatch.
+        '404':
+          description: No active subscription exists at the billing scope.
+        '503':
+          description: Stripe billing is disabled or incompletely provisioned.
+
   /billing/v1/stripe/webhook:
     post:
       tags: [Billing]
@@ -2514,7 +2751,12 @@ paths:
         dedicated webhook secret, then retrieves and reconciles current Stripe
         state for the exact account/mode, Checkout, tariff source/assignment,
         scope, and undiscounted item set. Reordered events cannot resurrect
-        canceled state. Webhook secrets are never app API keys.
+        canceled state. For a draft subscription-cycle invoice.created event,
+        UOA requires at least one hour of remaining automatic-finalization
+        grace and exports the exact just-ended Ledger month before committing
+        the webhook event. Any failure remains retryable. It also records and
+        logs invoice.finalization_failed with structured failure status.
+        Webhook secrets are never app API keys.
       security:
         - stripeSignature: []
       requestBody:
@@ -2538,6 +2780,350 @@ paths:
                     enum: [true]
         '400':
           description: Missing or invalid signature/body.
+
+  /internal/admin/billing/services:
+    get:
+      tags: [Billing, Internal Admin]
+      summary: List billing control-plane services
+      operationId: adminListBillingServices
+      description: |
+        Lists services with immutable tariff versions, org/team assignments,
+        masked purpose-bound app keys, Stripe catalog readiness, and test/live
+        subscription projections. Plaintext app keys and actor public-key
+        material are never returned.
+      security:
+        - adminBearer: []
+      responses:
+        '200':
+          description: Billing services and their operator metadata.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+        '401':
+          description: Missing or invalid admin token.
+        '403':
+          description: Caller is not a platform superuser.
+    post:
+      tags: [Billing, Internal Admin]
+      summary: Create a billing service and initial default tariff
+      operationId: adminCreateBillingService
+      security:
+        - adminBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [identifier, name, default_tariff]
+              properties:
+                identifier:
+                  type: string
+                  pattern: '^[a-z0-9][a-z0-9._-]{0,99}$'
+                name:
+                  type: string
+                  maxLength: 120
+                default_tariff:
+                  type: object
+                  additionalProperties: true
+                  description: Immutable tariff terms; the Admin UI defaults to at_cost + none.
+      responses:
+        '201':
+          description: Created service with version-one default tariff.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          description: Invalid service or tariff terms.
+        '401':
+          description: Missing or invalid admin token.
+        '403':
+          description: Caller is not a platform superuser.
+
+  /internal/admin/billing/services/{serviceId}/tariffs:
+    post:
+      tags: [Billing, Internal Admin]
+      summary: Append an immutable billing tariff version
+      operationId: adminCreateBillingTariffVersion
+      security:
+        - adminBearer: []
+      parameters:
+        - name: serviceId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [key, name, mode, collection_mode, markup_bps, monthly_subscription]
+              properties:
+                key:
+                  type: string
+                name:
+                  type: string
+                mode:
+                  type: string
+                  enum: [standard, free, at_cost, custom]
+                collection_mode:
+                  type: string
+                  enum: [stripe, manual, none]
+                markup_bps:
+                  type: integer
+                  minimum: 0
+                  maximum: 100000
+                monthly_subscription:
+                  type: object
+                  required: [amount_minor, currency]
+                  properties:
+                    amount_minor:
+                      type: string
+                      pattern: '^(0|[1-9]\d*)$'
+                    currency:
+                      type: string
+                      minLength: 3
+                      maxLength: 3
+                set_as_default:
+                  type: boolean
+                  default: false
+      responses:
+        '201':
+          description: Created immutable tariff version.
+        '400':
+          description: Invalid tariff terms.
+        '401':
+          description: Missing or invalid admin token.
+        '403':
+          description: Caller is not a platform superuser.
+
+  /internal/admin/billing/services/{serviceId}/default-tariff:
+    put:
+      tags: [Billing, Internal Admin]
+      summary: Move a service's default tariff pointer
+      operationId: adminSetDefaultBillingTariff
+      security:
+        - adminBearer: []
+      parameters:
+        - name: serviceId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [tariff_id]
+              properties:
+                tariff_id:
+                  type: string
+      responses:
+        '200':
+          description: New default tariff.
+        '409':
+          description: A live Stripe projection pins conflicting tariff terms.
+
+  /internal/admin/billing/services/{serviceId}/assignments:
+    put:
+      tags: [Billing, Internal Admin]
+      summary: Upsert an organisation or team tariff assignment
+      operationId: adminUpsertBillingTariffAssignment
+      security:
+        - adminBearer: []
+      parameters:
+        - name: serviceId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [tariff_id, organisation_id]
+              properties:
+                tariff_id:
+                  type: string
+                organisation_id:
+                  type: string
+                team_id:
+                  type: string
+                  nullable: true
+      responses:
+        '200':
+          description: Exact immutable assignment.
+        '409':
+          description: A live Stripe projection pins conflicting tariff terms.
+
+  /internal/admin/billing/services/{serviceId}/assignments/{assignmentId}:
+    delete:
+      tags: [Billing, Internal Admin]
+      summary: Remove a tariff assignment
+      operationId: adminRemoveBillingTariffAssignment
+      security:
+        - adminBearer: []
+      parameters:
+        - name: serviceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: assignmentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Assignment removed.
+        '409':
+          description: A live Stripe projection pins the assignment.
+
+  /internal/admin/billing/services/{serviceId}/app-keys:
+    get:
+      tags: [Billing, Internal Admin]
+      summary: List masked purpose-bound billing app keys
+      operationId: adminListBillingAppKeys
+      security:
+        - adminBearer: []
+      parameters:
+        - name: serviceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Masked key metadata including entitlement/customer_lifecycle purpose.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+    post:
+      tags: [Billing, Internal Admin]
+      summary: Mint a purpose-bound billing app key
+      operationId: adminCreateBillingAppKey
+      description: |
+        Returns plaintext exactly once. Entitlement keys forbid return origins
+        and can call only effective-tariff. Customer-lifecycle keys require at
+        least one exact HTTPS return origin and can call only Checkout,
+        subscription summary, portal, and cancellation.
+      security:
+        - adminBearer: []
+      parameters:
+        - name: serviceId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - purpose
+                - name
+                - actor_issuer
+                - actor_audience
+                - actor_public_jwk
+                - checkout_return_origins
+              properties:
+                purpose:
+                  type: string
+                  enum: [entitlement, customer_lifecycle]
+                name:
+                  type: string
+                  maxLength: 120
+                actor_issuer:
+                  type: string
+                  format: uri
+                actor_audience:
+                  type: string
+                  format: uri
+                  description: Exact UOA /billing/v1/effective-tariff URL.
+                actor_public_jwk:
+                  type: object
+                  additionalProperties: true
+                  description: Public-only RSA JWK with kid; alg RS256/use sig when present.
+                checkout_return_origins:
+                  type: array
+                  maxItems: 10
+                  uniqueItems: true
+                  items:
+                    type: string
+                    format: uri
+                expires_at:
+                  type: string
+                  format: date-time
+                  nullable: true
+      responses:
+        '201':
+          description: Masked key metadata plus one-time plaintext key.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum: ['private, no-store']
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                required: [key, purpose]
+                properties:
+                  key:
+                    type: string
+                    pattern: '^uoa_app_'
+                  purpose:
+                    type: string
+                    enum: [entitlement, customer_lifecycle]
+        '400':
+          description: Invalid purpose/origin policy, actor binding, or public JWK.
+
+  /internal/admin/billing/services/{serviceId}/app-keys/{keyId}:
+    delete:
+      tags: [Billing, Internal Admin]
+      summary: Revoke a billing app key immediately
+      operationId: adminRevokeBillingAppKey
+      security:
+        - adminBearer: []
+      parameters:
+        - name: serviceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: keyId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Key revoked.
 
   /internal/admin/billing/stripe/usage-exports:
     post:

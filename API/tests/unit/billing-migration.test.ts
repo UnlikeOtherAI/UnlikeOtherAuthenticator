@@ -18,6 +18,10 @@ const stripeHardeningMigrationUrl = new URL(
   '../../prisma/migrations/20260719060000_harden_stripe_account_and_subscription_lifecycle/migration.sql',
   import.meta.url,
 );
+const appKeyPurposeMigrationUrl = new URL(
+  '../../prisma/migrations/20260720010000_purpose_bound_billing_app_keys/migration.sql',
+  import.meta.url,
+);
 
 describe('billing tariff control-plane migration', () => {
   it('enforces immutable version identities and one default tariff per service', async () => {
@@ -104,5 +108,18 @@ describe('billing tariff control-plane migration', () => {
       'checkout."tariff_assignment_id" IS NOT DISTINCT FROM NEW."tariff_assignment_id"',
     );
     expect(sql).toContain('billing_stripe_accounts_deny_app');
+  });
+
+  it('separates entitlement and customer-lifecycle app credentials at the database boundary', async () => {
+    const sql = await readFile(appKeyPurposeMigrationUrl, 'utf8');
+
+    expect(sql).toContain(
+      "CREATE TYPE \"BillingAppKeyPurpose\" AS ENUM (\n  'ENTITLEMENT',\n  'CUSTOMER_LIFECYCLE'",
+    );
+    expect(sql).toContain('WHERE cardinality("checkout_return_origins") > 0');
+    expect(sql).toContain('billing_app_keys_purpose_origins_check');
+    expect(sql).toContain('"purpose" = \'ENTITLEMENT\'');
+    expect(sql).toContain('"purpose" = \'CUSTOMER_LIFECYCLE\'');
+    expect(sql).toContain('billing_app_keys_service_id_purpose_idx');
   });
 });

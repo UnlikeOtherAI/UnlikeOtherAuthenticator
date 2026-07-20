@@ -1,5 +1,6 @@
 import {
   BillingAssignmentScope,
+  BillingAppKeyPurpose,
   BillingCollectionMode,
   BillingTariffMode,
   MembershipStatus,
@@ -12,10 +13,12 @@ import type { VerifiedBillingAppKey } from '../../src/services/billing-app-key.s
 
 const credential: VerifiedBillingAppKey = {
   id: 'key_1',
+  purpose: BillingAppKeyPurpose.ENTITLEMENT,
   actorIssuer: 'https://ledger.unlikeotherai.com',
   actorAudience: 'https://authentication.unlikeotherai.com/billing/v1/effective-tariff',
   actorKeyId: 'ledger-key',
   actorPublicJwk: {},
+  checkoutReturnOrigins: [],
   service: { id: 'service_1', identifier: 'deepwater', name: 'DeepWater' },
 };
 const request = {

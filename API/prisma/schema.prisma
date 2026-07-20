@@ -113,6 +113,11 @@ enum BillingTariffSource {
   TEAM
 }
 
+enum BillingAppKeyPurpose {
+  ENTITLEMENT
+  CUSTOMER_LIFECYCLE
+}
+
 enum ConfidentialDelegationScope {
   AI_INVOKE       @map("ai.invoke")
   BILLING_READ    @map("billing.read")
@@ -1223,6 +1228,7 @@ model BillingTariffAssignment {
 model BillingAppKey {
   id                    String    @id @default(cuid())
   serviceId             String    @map("service_id")
+  purpose               BillingAppKeyPurpose @default(ENTITLEMENT)
   name                  String    @db.VarChar(120)
   keyPrefix             String    @map("key_prefix") @db.VarChar(24)
   secretDigest          String    @unique @map("secret_digest")

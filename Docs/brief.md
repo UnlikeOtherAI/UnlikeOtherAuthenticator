@@ -1762,9 +1762,12 @@ SERP, and DeepWater label those as token-, search-, and research-equivalent
 units respectively. A commercial unit never replaces, relabels, or masquerades
 as provider output.
 
-Every application connection uses its own revocable, product-bound app API key
-plus a short-lived RS256 actor assertion carrying the exact UOA user,
-organisation, and team. Shared cross-product API keys are forbidden.
+Every application connection uses its own revocable, product-bound,
+purpose-bound app API key plus a short-lived RS256 actor assertion carrying the
+exact UOA user, organisation, and team. Entitlement-read and customer-lifecycle
+keys are separate endpoint classes; lifecycle keys require exact HTTPS return
+origins, while entitlement keys cannot carry them. Shared cross-product or
+cross-purpose API keys are forbidden.
 
 Payment collection is independent from pricing and usage rating. Every
 immutable tariff version declares `collection_mode = stripe | manual | none`.
@@ -1780,8 +1783,15 @@ plus an owner/admin actor assertion, and verifies Stripe webhooks with a
 separate signing secret. UOA reads immutable Ledger monthly snapshots using
 UOA's own dedicated Ledger app key plus a short-lived service assertion; it
 exports customer-rated money as idempotent delta meter events, never raw tokens,
-searches, research units, or another application's credential. Live collection
-requires a reviewed polling and final pre-invoice reconciliation schedule.
+searches, research units, or another application's credential. The deployed
+scheduler polls current full UTC month periods and installs an additional
+pre-boundary safety timer; it deliberately treats Checkout's
+no-proration alignment stub as free and fails visibly on other non-calendar
+periods. A verified draft subscription-cycle `invoice.created` event performs
+the authoritative just-ended-month export before webhook commit, preserving
+retry/finalization-grace semantics and capturing usage after the safety pass.
+Finalization failures are recorded and logged. The machinery remains inert
+while the Stripe gate is false.
 All Stripe projections and idempotency identities are scoped to the exact Stripe
 account and test/live mode. A subscription remains pinned to its Checkout's
 immutable tariff version, precedence source, assignment, and organisation/team
@@ -1790,6 +1800,12 @@ than silently repricing. Organisation subscriptions exclude team subscriptions
 for that product and organisation, while independent team subscriptions may
 coexist. Webhooks reconcile current Stripe state and exact undiscounted item
 cardinality, so reordered notifications cannot resurrect canceled state.
+Product backends can read a Stripe-ID-free subscription summary, create an
+allowlisted customer-portal session, and schedule period-end cancellation; the
+last unambiguous projection remains readable with an explicit disabled flag
+when collection is off. Platform superusers operate services, immutable
+tariffs, assignments, purpose-bound keys, and subscription state through the
+Admin `/billing` screen.
 
 The canonical model, modes, precedence, API and JWT contract, superuser
 administration, presentation rules, and Stripe collection boundaries are defined

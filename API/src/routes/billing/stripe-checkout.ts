@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
-import { requireBillingAppKey } from '../../middleware/billing-app-auth.js';
+import { requireBillingLifecycleAppKey } from '../../middleware/billing-app-auth.js';
 import { createStripeCheckoutSession } from '../../services/billing-stripe-checkout.service.js';
 import { AppError } from '../../utils/errors.js';
 import { BillingSubjectRequestSchema, readBillingActorHeader } from './billing-request.js';
@@ -26,7 +26,7 @@ export function registerStripeCheckoutRoute(app: FastifyInstance): void {
   app.post(
     '/billing/v1/stripe/checkout-session',
     {
-      preHandler: [requireBillingAppKey],
+      preHandler: [requireBillingLifecycleAppKey],
       schema: { response: { 201: responseSchema } },
     },
     async (request, reply) => {

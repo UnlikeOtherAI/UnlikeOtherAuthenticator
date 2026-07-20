@@ -40,6 +40,7 @@ export function serializeBillingAppKey(record: BillingAppKeyRecord) {
   return {
     id: record.id,
     service_id: record.serviceId,
+    purpose: record.purpose.toLowerCase(),
     name: record.name,
     key_prefix: record.keyPrefix,
     actor_issuer: record.actorIssuer,
@@ -78,6 +79,7 @@ type ListedService = {
   }>;
   appKeys: Array<{
     id: string;
+    purpose: string;
     name: string;
     keyPrefix: string;
     actorIssuer: string;
@@ -151,6 +153,7 @@ export function serializeBillingService(service: ListedService) {
     })),
     app_keys: service.appKeys.map((key) => ({
       id: key.id,
+      purpose: key.purpose.toLowerCase(),
       name: key.name,
       key_prefix: key.keyPrefix,
       actor_issuer: key.actorIssuer,

@@ -1,4 +1,4 @@
-import type { Prisma, PrismaClient } from '@prisma/client';
+import { BillingAppKeyPurpose, type Prisma, type PrismaClient } from '@prisma/client';
 
 import { getEnv, getPublicBaseUrl } from '../config/env.js';
 import { getAdminPrisma } from '../db/prisma.js';
@@ -13,6 +13,7 @@ import { importClientJwkKey, parsePublicRsaJwk, type PublicRsaJwk } from './clie
 export type BillingAppKeyRecord = {
   id: string;
   serviceId: string;
+  purpose: BillingAppKeyPurpose;
   name: string;
   keyPrefix: string;
   actorIssuer: string;
@@ -28,6 +29,7 @@ export type BillingAppKeyRecord = {
 
 export type VerifiedBillingAppKey = {
   id: string;
+  purpose: BillingAppKeyPurpose;
   actorIssuer: string;
   actorAudience: string;
   actorKeyId: string;
@@ -48,6 +50,7 @@ type BillingAppKeyPrisma = Pick<
 const recordSelect = {
   id: true,
   serviceId: true,
+  purpose: true,
   name: true,
   keyPrefix: true,
   actorIssuer: true,
@@ -110,9 +113,18 @@ function validateActorJwk(input: unknown): PublicRsaJwk {
   return jwk;
 }
 
+export type PublicBillingAppKeyPurpose = 'entitlement' | 'customer_lifecycle';
+
+function appKeyPurpose(value: PublicBillingAppKeyPurpose): BillingAppKeyPurpose {
+  return value === 'customer_lifecycle'
+    ? BillingAppKeyPurpose.CUSTOMER_LIFECYCLE
+    : BillingAppKeyPurpose.ENTITLEMENT;
+}
+
 export async function createBillingAppKey(
   params: {
     serviceId: string;
+    purpose: PublicBillingAppKeyPurpose;
     name: string;
     actorIssuer: string;
     actorAudience: string;
@@ -141,9 +153,14 @@ export async function createBillingAppKey(
     throw new AppError('BAD_REQUEST', 400, 'INVALID_ACTOR_AUDIENCE');
   }
   const actorPublicJwk = validateActorJwk(params.actorPublicJwk);
-  const checkoutReturnOrigins = normalizeCheckoutReturnOrigins(
-    params.checkoutReturnOrigins ?? [],
-  );
+  const checkoutReturnOrigins = normalizeCheckoutReturnOrigins(params.checkoutReturnOrigins ?? []);
+  const purpose = appKeyPurpose(params.purpose);
+  if (
+    (purpose === BillingAppKeyPurpose.ENTITLEMENT && checkoutReturnOrigins.length > 0) ||
+    (purpose === BillingAppKeyPurpose.CUSTOMER_LIFECYCLE && checkoutReturnOrigins.length === 0)
+  ) {
+    throw new AppError('BAD_REQUEST', 400, 'BILLING_APP_KEY_PURPOSE_INVALID');
+  }
   await importClientJwkKey(actorPublicJwk);
 
   const plaintext = generateBillingAppKey();
@@ -160,6 +177,7 @@ export async function createBillingAppKey(
     const created = await tx.billingAppKey.create({
       data: {
         serviceId: service.id,
+        purpose,
         name,
         keyPrefix: billingAppKeyDisplayPrefix(plaintext),
         secretDigest: digestBillingAppKey(plaintext),
@@ -182,6 +200,7 @@ export async function createBillingAppKey(
           service_id: service.id,
           product: service.identifier,
           app_key_id: created.id,
+          purpose: purpose.toLowerCase(),
           actor_kid: actorPublicJwk.kid,
           checkout_return_origins: checkoutReturnOrigins,
         },
@@ -242,6 +261,7 @@ export async function verifyBillingAppKey(
     where: { secretDigest: digestBillingAppKey(rawKey) },
     select: {
       id: true,
+      purpose: true,
       actorIssuer: true,
       actorAudience: true,
       actorKeyId: true,
@@ -275,6 +295,7 @@ export async function verifyBillingAppKey(
 
   return {
     id: row.id,
+    purpose: row.purpose,
     actorIssuer: row.actorIssuer,
     actorAudience: row.actorAudience,
     actorKeyId: row.actorKeyId,

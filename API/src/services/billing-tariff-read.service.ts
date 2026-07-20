@@ -20,6 +20,7 @@ export async function listBillingServices(deps?: { prisma?: PrismaClient }) {
         orderBy: { createdAt: 'desc' },
         select: {
           id: true,
+          purpose: true,
           name: true,
           keyPrefix: true,
           actorIssuer: true,

@@ -86,6 +86,9 @@ Set via Cloud Run service config:
 | `STRIPE_BILLING_ENABLED` | Plain safety gate. Production default is `false`; Stripe and Ledger collection calls are forbidden until every launch prerequisite below is verified |
 | `STRIPE_SECRET_KEY` | Secret Manager: dedicated Stripe restricted/live key for UOA billing. Presence alone does not enable billing |
 | `STRIPE_WEBHOOK_SECRET` | Secret Manager: Stripe endpoint signing secret for `/billing/v1/stripe/webhook`; never reuse a product app key or Ledger key |
+| `STRIPE_USAGE_EXPORT_INTERVAL_MINUTES` | Plain recurring collector interval, 5–1,440 minutes; workflow default 60 |
+| `STRIPE_PRE_BOUNDARY_SAFETY_LEAD_MINUTES` | Plain horizon in which the additional pre-boundary safety timer is scheduled; workflow default 360 and must cover interval plus offset |
+| `STRIPE_PRE_BOUNDARY_SAFETY_OFFSET_MINUTES` | Plain offset before UTC billing-period end for the safety pass; workflow default 1. This is not the final reconciliation |
 | `LEDGER_BILLING_BASE_URL` | Plain credential-free HTTPS Ledger origin, canonical production value `https://ledger.unlikeotherai.com` |
 | `LEDGER_BILLING_APP_KEY` | Secret Manager: UOA's own dedicated, product-bound Ledger billing-reader app key. Never reuse a Nessie, DeepWater, DeepSignal, DeepTest, user, or webhook credential |
 | `LEDGER_BILLING_APP_KEY_ID` | Plain immutable Ledger record ID for that exact UOA app key; copied into the signed assertion's `azp` and verified by Ledger |
@@ -94,6 +97,22 @@ Set via Cloud Run service config:
 | `UOA_BILLING_ASSERTION_PUBLIC_JWKS_JSON` | Secret Manager: public-only current and overlapping retired assertion keys served at `/billing/v1/service-jwks.json`; current public pair must match the private key |
 
 `/llm` is a Markdown integration guide for LLMs and human readers. `/api` is the machine-readable JSON schema and config contract.
+
+The deploy workflow also reads two GitHub repository variables that are not
+runtime application config:
+
+* `UOA_STRIPE_BILLING_CONFIGURED` defaults to `false`. Only exact `true`
+  attaches the two Stripe Secret Manager entries.
+* `STRIPE_BILLING_ENABLED` defaults to `false`. Exact `true` additionally
+  requires the configured flag and all Ledger collector identifiers, keeps one
+  Cloud Run instance warm, and disables CPU throttling so the recurring
+  scheduler and pre-boundary safety timer run. False deploys with zero minimum
+  instances and throttled idle CPU.
+
+Tariff-signing, billing-assertion, and UOA's Ledger collector credentials are
+wired on every deployment because they are required for signed entitlement and
+reconciliation readiness; that does not enable Stripe or create billable
+resources.
 
 The private key used to sign `ADMIN_CONFIG_JWT` is not attached to Cloud Run. Store it separately in Secret Manager as `uoa-auth-config-jwt-private-jwk` for rotation/signing operations only.
 
@@ -181,7 +200,10 @@ product:
    deliberately aborts if any pre-launch Stripe projection already exists,
    because no trustworthy Stripe account/mode can be inferred; explicitly
    reconcile or remove such rows before retrying rather than backfilling them.
-3. Mint a different named `uoa_app_…` key for every application connection.
+3. Mint different named `uoa_app_…` keys for every application connection and
+   endpoint purpose. Use `entitlement` for effective-tariff reads and
+   `customer_lifecycle` for Checkout/summary/portal/cancellation; never reuse
+   one key across those classes.
    Transfer its plaintext once through the approved secret channel; UOA cannot
    recover it later.
 4. Bind each key to that caller's HTTPS actor issuer, the exact
@@ -225,14 +247,23 @@ Before enabling it in production:
    signature validation plus idempotent replay. The API key must use an explicit
    `sk_test_`/`rk_test_` or `sk_live_`/`rk_live_` prefix; unknown mode fails
    startup. Confirm `/v1/account` resolves the intended Stripe account.
-4. Mint a separate `uoa_app_…` key for each product/deployment that can start
-   Checkout. Bind only its own actor issuer/key and exact HTTPS return origins.
+4. Mint a separate `customer_lifecycle` `uoa_app_…` key for each
+   product/deployment that can start Checkout or manage a subscription. Bind
+   only its own actor issuer/key and exact HTTPS return origins. Keep its
+   `entitlement` key separate and origin-free.
 5. Exercise monthly fixed charges, rated-usage deltas, zero and negative
-   corrections, lost-response replay, UTC month boundaries, and final
-   pre-invoice reconciliation against immutable Ledger cursors.
-6. Approve and deploy a recurring current-month collector plus a final
-   pre-invoice reconciliation job. Stripe meter events are asynchronous, so a
-   manual export is not an adequate live-billing schedule.
+   corrections, lost-response replay, UTC month boundaries, the pre-boundary
+   safety pass, and authoritative post-period `invoice.created`
+   reconciliation against immutable Ledger cursors. Prove usage in the final
+   minute reaches the draft invoice during Stripe's configured finalization
+   grace period.
+6. Review the deployed recurring collector interval, safety lead/offset, Cloud
+   Run warm-instance/non-throttled CPU settings, the Stripe webhook
+   subscriptions for `invoice.created` and `invoice.finalization_failed`, the
+   account finalization-grace setting (cycle invoices must expose at least one
+   hour; shorter/custom-early windows fail closed), and failure alerts. Stripe
+   meter events aggregate asynchronously, so verify the finalized test invoice;
+   a successful event response or manual export is not adequate evidence.
 7. Reconcile test invoices to UOA's exact tariff version and Ledger's customer
    charge. Before switching to live, verify the live key resolves the intended
    account, creates a separate live projection from test resources, and that no
@@ -240,8 +271,10 @@ Before enabling it in production:
    intend to replace. Then set `STRIPE_BILLING_ENABLED=true` with live
    credentials.
 
-No live Stripe credentials or automated collection schedule are created by the
-repository deployment itself.
+The workflow wires the automated schedule but leaves it inert by default. It
+does not create or infer live Stripe credentials, enable the gate, or provision
+Stripe customers/subscriptions. Those remain explicit operator actions after
+test-mode evidence and review.
 
 ### Signature module production prerequisites (not enabled)
 

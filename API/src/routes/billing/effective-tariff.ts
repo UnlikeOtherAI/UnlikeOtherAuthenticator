@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { requireBillingAppKey } from '../../middleware/billing-app-auth.js';
+import { requireBillingEntitlementAppKey } from '../../middleware/billing-app-auth.js';
 import { getEffectiveTariffSnapshot } from '../../services/billing-entitlement.service.js';
 import { AppError } from '../../utils/errors.js';
 import { BillingSubjectRequestSchema, readBillingActorHeader } from './billing-request.js';
@@ -17,7 +17,7 @@ export function registerEffectiveTariffRoute(app: FastifyInstance): void {
   app.post(
     '/billing/v1/effective-tariff',
     {
-      preHandler: [requireBillingAppKey],
+      preHandler: [requireBillingEntitlementAppKey],
       schema: { response: { 200: responseSchema } },
     },
     async (request, reply) => {

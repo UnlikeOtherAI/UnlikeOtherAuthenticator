@@ -66,6 +66,7 @@ const AssignmentSchema = z
   .strict();
 const CreateAppKeySchema = z
   .object({
+    purpose: z.enum(['entitlement', 'customer_lifecycle']),
     name: z.string().trim().min(1).max(120),
     actor_issuer: z.string().trim().url(),
     actor_audience: z.string().trim().url(),
@@ -221,6 +222,7 @@ export function registerInternalAdminBillingRoutes(app: FastifyInstance): void {
       const body = CreateAppKeySchema.parse(request.body);
       const { record, plaintext } = await createBillingAppKey({
         serviceId,
+        purpose: body.purpose,
         name: body.name,
         actorIssuer: body.actor_issuer,
         actorAudience: body.actor_audience,

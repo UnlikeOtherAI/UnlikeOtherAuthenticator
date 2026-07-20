@@ -8,6 +8,9 @@ type BillingEnvironment = {
   STRIPE_BILLING_ENABLED: boolean;
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
+  STRIPE_USAGE_EXPORT_INTERVAL_MINUTES: number;
+  STRIPE_PRE_BOUNDARY_SAFETY_LEAD_MINUTES: number;
+  STRIPE_PRE_BOUNDARY_SAFETY_OFFSET_MINUTES: number;
   LEDGER_BILLING_BASE_URL?: string;
   LEDGER_BILLING_APP_KEY?: string;
   LEDGER_BILLING_APP_KEY_ID?: string;
@@ -86,6 +89,18 @@ export function addBillingEnvironmentIssues(env: BillingEnvironment, ctx: z.Refi
     });
   }
   if (!env.STRIPE_BILLING_ENABLED) return;
+
+  if (
+    env.STRIPE_PRE_BOUNDARY_SAFETY_LEAD_MINUTES <
+    env.STRIPE_USAGE_EXPORT_INTERVAL_MINUTES + env.STRIPE_PRE_BOUNDARY_SAFETY_OFFSET_MINUTES
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['STRIPE_PRE_BOUNDARY_SAFETY_LEAD_MINUTES'],
+      message:
+        'STRIPE_PRE_BOUNDARY_SAFETY_LEAD_MINUTES must cover the export interval plus safety offset',
+    });
+  }
 
   const collectorFields = [
     'LEDGER_BILLING_BASE_URL',

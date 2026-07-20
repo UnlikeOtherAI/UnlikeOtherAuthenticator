@@ -115,7 +115,7 @@ export const billingEndpoints: EndpointSchema[] = [
     method: 'GET',
     path: '/internal/admin/billing/services/:serviceId/app-keys',
     description:
-      'List masked product-dedicated app keys and their actor-signing bindings; no secret or public-key material is returned',
+      'List masked product-dedicated app keys, endpoint purpose, return-origin policy, and actor-signing bindings; no secret or public-key material is returned',
     auth: adminAuth,
   },
   {
@@ -125,13 +125,15 @@ export const billingEndpoints: EndpointSchema[] = [
       'Mint a product-dedicated app key and bind an RS256 actor public JWK. The plaintext key is returned once and only its peppered digest is stored.',
     auth: adminAuth,
     body: {
+      purpose:
+        'entitlement | customer_lifecycle (required); endpoint classes are mutually exclusive',
       name: 'string (required, max 120)',
       actor_issuer: 'HTTPS origin/URI (required)',
       actor_audience: 'HTTPS UOA effective-tariff endpoint audience (required)',
       actor_public_jwk:
         'public RSA JWK (required; kid, n, e; alg RS256/use sig when present; private members forbidden)',
       checkout_return_origins:
-        'array of up to 10 exact HTTPS origins; empty disables Stripe Checkout for this app key',
+        'array of up to 10 exact HTTPS origins; required and non-empty for customer_lifecycle, forbidden for entitlement',
       expires_at: 'ISO timestamp | null (optional)',
     },
     response: { 201: 'Masked metadata plus one-time plaintext key (uoa_app_…)' },
@@ -164,13 +166,70 @@ export const billingEndpoints: EndpointSchema[] = [
       503: 'Stripe billing is explicitly disabled or not fully provisioned',
     },
     notes:
-      'The Checkout pins the exact immutable tariff version, precedence source, assignment, and billing scope until its subscription is terminal. It contains the monthly Price when non-zero plus exactly one currency-specific metered Price. That meter receives customer-rated money as integer micro-minor-currency units; it never receives or relabels raw tokens, searches, or research units. Promotions and all other discounts are disabled because UOA tariff versions are the sole commercial authority.',
+      'Requires a customer_lifecycle app key. The Checkout pins the exact immutable tariff version, precedence source, assignment, and billing scope until its subscription is terminal. It anchors to the first day of the next UTC month with proration disabled, so the alignment stub is free and the first invoice covers the first complete calendar month. It contains the monthly Price when non-zero plus exactly one currency-specific metered Price. That meter receives customer-rated money as integer micro-minor-currency units; it never receives or relabels raw tokens, searches, or research units. Promotions and all other discounts are disabled because UOA tariff versions are the sole commercial authority.',
+  },
+  {
+    method: 'POST',
+    path: '/billing/v1/stripe/subscription-summary',
+    description:
+      'Return the effective tariff, caller management permission, and local current subscription projection without exposing Stripe identifiers. When collection is enabled, current Stripe state is refreshed first; when disabled, the last unambiguous projection is returned with stripe_collection_enabled=false.',
+    auth: 'The requested product’s customer_lifecycle X-UOA-App-Key plus a fresh credential-bound X-UOA-Actor assertion',
+    body: {
+      product: 'exact product identifier bound to the app key',
+      organisation_id: 'UOA organisation ID',
+      team_id: 'UOA team ID used for entitlement resolution',
+      user_id: 'UOA user ID',
+    },
+    response: {
+      200: '{ product, subject, tariff, assignment, stripe_collection_enabled, stripe_mode, can_manage, subscription }',
+      '401/403': 'Invalid purpose-bound app key, actor, product, membership, or subject',
+      409: 'The disabled deployment has multiple account projections and cannot select one safely',
+    },
+    notes:
+      'subscription.billing_phase is calendar_month, free_alignment_period, or unknown. All successful responses are private, no-store.',
+  },
+  {
+    method: 'POST',
+    path: '/billing/v1/stripe/portal-session',
+    description:
+      'Create a Stripe-hosted customer portal session for the exact current billing scope. The actor must be an organisation owner/admin or the selected team’s admin.',
+    auth: 'The requested product’s customer_lifecycle X-UOA-App-Key plus a fresh credential-bound X-UOA-Actor assertion',
+    body: {
+      product: 'exact product identifier bound to the app key',
+      organisation_id: 'UOA organisation ID',
+      team_id: 'UOA team ID used for entitlement resolution',
+      user_id: 'UOA user ID; must manage the resulting billing scope',
+      return_url: 'HTTPS URL whose exact origin is allowlisted on this app key',
+    },
+    response: {
+      201: '{ portal_url }',
+      '400/401/403/404': 'Invalid redirect/caller/actor, non-manager, or no subscription',
+      503: 'Stripe billing is explicitly disabled or not fully provisioned',
+    },
+  },
+  {
+    method: 'POST',
+    path: '/billing/v1/stripe/subscription/cancel',
+    description:
+      'Schedule the exact current Stripe subscription to cancel at period end, reconcile the returned Stripe state, audit the actor, and return the updated safe summary.',
+    auth: 'The requested product’s customer_lifecycle X-UOA-App-Key plus a fresh credential-bound X-UOA-Actor assertion',
+    body: {
+      product: 'exact product identifier bound to the app key',
+      organisation_id: 'UOA organisation ID',
+      team_id: 'UOA team ID used for entitlement resolution',
+      user_id: 'UOA user ID; must manage the resulting billing scope',
+    },
+    response: {
+      200: '{ product, subject, tariff, assignment, stripe_collection_enabled, stripe_mode, can_manage, subscription }',
+      '401/403/404': 'Invalid caller/actor, non-manager, or no subscription',
+      503: 'Stripe billing is explicitly disabled or not fully provisioned',
+    },
   },
   {
     method: 'POST',
     path: '/billing/v1/stripe/webhook',
     description:
-      'Verify Stripe’s signature over the exact raw request body, idempotently record the event per account/mode, retrieve current Stripe state, and reconcile exact UOA app-key, Checkout, tariff source/assignment, customer, scope, and undiscounted item bindings. Reordered events cannot resurrect canceled state.',
+      'Verify Stripe’s signature over the exact raw request body, retrieve current account/mode state, and reconcile exact UOA app-key, Checkout, tariff source/assignment, customer, scope, and undiscounted item bindings before idempotently committing the event. Reordered subscription events cannot resurrect canceled state. A draft subscription-cycle invoice.created event performs the authoritative post-period Ledger export before event commit and requires at least one hour of automatic-finalization grace; invoice.finalization_failed is recorded and logged with structured status.',
     auth: 'Stripe-Signature with the dedicated STRIPE_WEBHOOK_SECRET; webhook signing secrets are never product app keys',
     response: {
       200: '{ received: true }; already committed event IDs are acknowledged without reapplying state',
@@ -195,6 +254,6 @@ export const billingEndpoints: EndpointSchema[] = [
         'Invalid month/subscription, stale or mismatched Ledger snapshot, non-meterable tariff/period, disabled collector/Stripe, or upstream failure',
     },
     notes:
-      'Platform-superuser/manual reconciliation endpoint. Stripe events meter customer-rated money only, never raw tokens/searches/research units. Every call to Ledger uses UOA’s own X-Ledger-App-Key plus a fresh X-UOA-Service-Assertion; the product app key that initiated Checkout is never reused. Live collection additionally requires a reviewed recurring poll and final pre-invoice reconciliation schedule.',
+      'Platform-superuser/manual reconciliation endpoint. Stripe events meter customer-rated money only, never raw tokens/searches/research units. Every call to Ledger uses UOA’s own X-Ledger-App-Key plus a fresh X-UOA-Service-Assertion; the product app key that initiated Checkout is never reused. When Stripe collection is enabled, the in-process scheduler runs this same idempotent export for each active Stripe-paid full UTC month and schedules an additional pre-boundary safety pass. The authoritative post-period pass runs on a verified draft subscription-cycle invoice.created webhook whose automatic-finalization window is at least one hour, and must succeed before the webhook event is committed; failures remain retryable during Stripe’s finalization grace period. Meter-event creation is durable delivery evidence, not immediate aggregate visibility. The initial no-proration alignment stub and free/manual/none tariffs are never exported.',
   },
 ];

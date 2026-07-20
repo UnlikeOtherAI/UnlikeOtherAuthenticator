@@ -169,7 +169,7 @@ function setup() {
     },
     checkout: { sessions: { retrieve: vi.fn() } },
   };
-  const call = () =>
+  const call = (overrides: Partial<NonNullable<Parameters<typeof handleStripeWebhook>[1]>> = {}) =>
     handleStripeWebhook(
       { rawBody: Buffer.from('{}'), signature: 't=1,v1=valid' },
       {
@@ -177,6 +177,7 @@ function setup() {
         stripe: stripe as never,
         stripeLivemode: false,
         webhookSecret: 'whsec_test',
+        ...overrides,
       },
     );
   return {
@@ -185,6 +186,7 @@ function setup() {
     call,
     subscriptionModel,
     eventFind,
+    webhookEventCreate: tx.billingStripeWebhookEvent.create,
     setEvent: (event: ReturnType<typeof stripeEvent>) => {
       currentEvent = event;
     },
@@ -247,6 +249,34 @@ describe('Stripe webhook current-state reconciliation', () => {
     expect(state.stripe.accounts.retrieveCurrent).not.toHaveBeenCalled();
   });
 
+  it('does not commit invoice.created until post-period usage reconciliation succeeds', async () => {
+    const state = setup();
+    state.setEvent({
+      ...stripeEvent('evt_invoice_created'),
+      type: 'invoice.created',
+      data: { object: { id: 'in_renewal' } },
+    } as never);
+    const reconcileInvoice = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('LEDGER_TEMPORARILY_UNAVAILABLE'))
+      .mockResolvedValueOnce({
+        ledgerSnapshotCursor: 'bus_post_period',
+        billingMonth: '2026-07',
+        exports: [],
+      });
+
+    await expect(state.call({ reconcileInvoice })).rejects.toThrow(
+      'LEDGER_TEMPORARILY_UNAVAILABLE',
+    );
+    expect(state.webhookEventCreate).not.toHaveBeenCalled();
+
+    await expect(state.call({ reconcileInvoice })).resolves.toEqual({
+      duplicate: false,
+    });
+    expect(reconcileInvoice).toHaveBeenCalledTimes(2);
+    expect(state.webhookEventCreate).toHaveBeenCalledOnce();
+  });
+
   it.each([
     { account: 'acct_other', livemode: false },
     { account: 'acct_uoa', livemode: true },
@@ -288,6 +318,30 @@ describe('Stripe webhook current-state reconciliation', () => {
     );
     await state.call();
     expect(state.getLocal()).toMatchObject({ status: 'active' });
+  });
+
+  it('advances the local projection to Stripe’s next calendar-month renewal period', async () => {
+    const state = setup();
+    state.seedLocal({
+      currentPeriodStart: new Date('2026-07-20T12:00:00.000Z'),
+      currentPeriodEnd: new Date('2026-08-01T00:00:00.000Z'),
+    });
+    const renewed = subscription('active');
+    renewed.items.data = renewed.items.data.map((item) => ({
+      ...item,
+      current_period_start: 1_785_542_400,
+      current_period_end: 1_788_220_800,
+    }));
+    state.setRemote(renewed);
+    state.setEvent(stripeEvent('evt_renewed', 'customer.subscription.updated', renewed));
+
+    await state.call();
+
+    expect(state.getLocal()).toMatchObject({
+      status: 'active',
+      currentPeriodStart: new Date('2026-08-01T00:00:00.000Z'),
+      currentPeriodEnd: new Date('2026-09-01T00:00:00.000Z'),
+    });
   });
 
   it('tombstones a missing current subscription and never trusts the stale payload', async () => {
