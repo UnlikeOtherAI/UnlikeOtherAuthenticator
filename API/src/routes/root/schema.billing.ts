@@ -47,6 +47,56 @@ export const billingEndpoints: EndpointSchema[] = [
     },
   },
   {
+    method: 'GET',
+    path: '/schemas/billing-statement-v1.example.json',
+    description:
+      'Public synthetic BillingStatementV1 conformance fixture. It contains no production user, tenant, credential, or commercial data.',
+    auth: 'public',
+    response: {
+      200: 'Display-ready BillingStatementV1 example matching the exact v1 JSON Schema',
+    },
+  },
+  {
+    method: 'GET',
+    path: '/schemas/billing-statement-v1.openapi.json',
+    description:
+      'Public OpenAPI 3.1 consumer artifact embedding the exact BillingStatementV1 JSON Schema and synthetic conformance fixture.',
+    auth: 'public',
+    response: {
+      200: 'Versioned OpenAPI 3.1 components.schemas and components.examples document',
+    },
+  },
+  {
+    method: 'GET',
+    path: '/schemas/billing-consumer-actions-v1.json',
+    description:
+      'Public Draft 2020-12 schema bundle for the normalized hosted redirect, cancellation selection, exact preview and confirm_action, confirm request/response, and minimal error envelope. Every message object rejects additional properties.',
+    auth: 'public',
+    response: {
+      200: 'Exact billing consumer-action v1 JSON Schema components',
+    },
+  },
+  {
+    method: 'GET',
+    path: '/schemas/billing-consumer-actions-v1.example.json',
+    description:
+      'Public synthetic conformance fixtures for every billing consumer-action message. They contain no production user, tenant, credential, or commercial data.',
+    auth: 'public',
+    response: {
+      200: 'Hosted redirect, cancellation preview/request/confirmation, and error fixtures',
+    },
+  },
+  {
+    method: 'GET',
+    path: '/schemas/billing-consumer-actions-v1.openapi.json',
+    description:
+      'Public OpenAPI 3.1 component document embedding every exact billing consumer-action schema and synthetic fixture.',
+    auth: 'public',
+    response: {
+      200: 'Versioned OpenAPI 3.1 components.schemas and components.examples document',
+    },
+  },
+  {
     method: 'POST',
     path: '/billing/v1/effective-tariff',
     description:

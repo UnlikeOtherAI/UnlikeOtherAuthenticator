@@ -1,0 +1,57 @@
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import {
+  billingConsumerActionProtocolV1JsonSchema,
+  billingConsumerActionV1ConformanceFixtures,
+  billingConsumerActionV1OpenApiDocument,
+  billingStatementV1ConformanceFixture,
+  billingStatementV1JsonSchema,
+  billingStatementV1OpenApiDocument,
+} from '../dist/index.js';
+
+const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const artifacts = new Map([
+  [
+    resolve(packageRoot, 'schema/billing-consumer-actions-v1.json'),
+    billingConsumerActionProtocolV1JsonSchema,
+  ],
+  [
+    resolve(packageRoot, 'fixtures/billing-consumer-actions-v1.example.json'),
+    billingConsumerActionV1ConformanceFixtures,
+  ],
+  [
+    resolve(packageRoot, 'openapi/billing-consumer-actions-v1.openapi.json'),
+    billingConsumerActionV1OpenApiDocument,
+  ],
+  [resolve(packageRoot, 'schema/billing-statement-v1.json'), billingStatementV1JsonSchema],
+  [
+    resolve(packageRoot, 'fixtures/billing-statement-v1.example.json'),
+    billingStatementV1ConformanceFixture,
+  ],
+  [
+    resolve(packageRoot, 'openapi/billing-statement-v1.openapi.json'),
+    billingStatementV1OpenApiDocument,
+  ],
+]);
+const mode = process.argv[2];
+
+if (mode !== '--write' && mode !== '--check') {
+  throw new Error('Usage: generate-artifacts.mjs --write|--check');
+}
+
+for (const [path, value] of artifacts) {
+  const expected = `${JSON.stringify(value, null, 2)}\n`;
+  if (mode === '--write') {
+    await mkdir(dirname(path), { recursive: true });
+    await writeFile(path, expected, 'utf8');
+    continue;
+  }
+  const actual = await readFile(path, 'utf8').catch(() => '');
+  if (actual !== expected) {
+    throw new Error(
+      `${path} has drifted from the TypeScript source. Run pnpm --filter @unlikeotherai/billing-statement-protocol generate.`,
+    );
+  }
+}

@@ -1,6 +1,10 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
+import {
+  billingCancellationConfirmationV1JsonSchema,
+  billingCancellationPreviewV1JsonSchema,
+} from '../../contracts/billing-statement-v1.js';
 import { requireBillingLifecycleAppKey } from '../../middleware/billing-app-auth.js';
 import { confirmBillingCancellation } from '../../services/billing-cancellation-confirm.service.js';
 import { createBillingCancellationPreview } from '../../services/billing-cancellation-preview.service.js';
@@ -45,7 +49,7 @@ export function registerBillingCancellationRoutes(app: FastifyInstance): void {
     {
       preHandler: [requireBillingLifecycleAppKey],
       schema: {
-        response: { 201: { type: 'object', additionalProperties: true } },
+        response: { 201: billingCancellationPreviewV1JsonSchema },
       },
     },
     async (request, reply) => {
@@ -61,7 +65,7 @@ export function registerBillingCancellationRoutes(app: FastifyInstance): void {
     {
       preHandler: [requireBillingLifecycleAppKey],
       schema: {
-        response: { 200: { type: 'object', additionalProperties: true } },
+        response: { 200: billingCancellationConfirmationV1JsonSchema },
       },
     },
     async (request, reply) => {

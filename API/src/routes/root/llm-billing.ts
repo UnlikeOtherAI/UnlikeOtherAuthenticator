@@ -142,7 +142,13 @@ UOA is the sole commercial billing engine. Ledger returns only immutable
 billable-unit, customer-charge, add-on, credit, payment, or cancellation fields.
 
 \`GET /schemas/billing-statement-v1.json\` publishes the frozen Draft 2020-12 response
-schema. Product backends call:
+schema. The open-source-safe \`@unlikeotherai/billing-statement-protocol\` v1 package
+is the TypeScript source used by UOA itself; it has no private server imports or
+credentials. Until registry publication, consumers can vendor/pack that package
+directory or fetch the matching synthetic fixture from
+\`GET /schemas/billing-statement-v1.example.json\` and its exact OpenAPI 3.1
+component from \`GET /schemas/billing-statement-v1.openapi.json\`. Product backends
+call:
 
 \`POST /billing/v1/customer-statement\`
 
@@ -154,6 +160,15 @@ lines, exact currency totals, capabilities, and action descriptors. It pins the 
 UOA tariff version and immutable Ledger service/user cursor, ID, timestamp, and
 response hash. Products render it unchanged and never derive totals, markup wording,
 direct access, or cancellation choices.
+
+The same package freezes the full product-facing action protocol. Its exact
+Draft 2020-12 schema bundle, synthetic fixtures, and OpenAPI 3.1 components are
+served at \`/schemas/billing-consumer-actions-v1.json\`,
+\`/schemas/billing-consumer-actions-v1.example.json\`, and
+\`/schemas/billing-consumer-actions-v1.openapi.json\`. They cover the normalized
+hosted redirect, cancellation selection, preview (including the fixed
+\`POST /billing/v1/cancellation/confirm\` action), confirm request/response, and
+minimal error envelope. Every message object rejects unknown properties.
 
 Action IDs and paths are fixed: \`upgrade\` →
 \`/billing/v1/stripe/checkout-session\`, \`portal\` →

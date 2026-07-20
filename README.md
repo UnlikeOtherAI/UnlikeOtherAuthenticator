@@ -467,6 +467,33 @@ See [Section 24 of the brief](./Docs/brief.md#24-organisations-teams--groups) fo
 
 - `GET /health` — Health check endpoint
 
+### Public billing consumer protocol
+
+UOA's display-ready `BillingStatementV1` contract lives in the MIT-licensed
+[`@unlikeotherai/billing-statement-protocol`](./packages/billing-statement-protocol)
+workspace alongside the complete customer-action contract: hosted redirect,
+cancellation selection, preview and exact `confirm_action`, confirmation
+request/response, and the minimal error envelope. It exports public TypeScript
+types and exact runtime schemas, plus generated JSON Schema, OpenAPI 3.1, and
+synthetic conformance artifacts. It contains no private server imports,
+credentials, or production tenant data and can be packed or vendored by
+open-source consumers before registry publication.
+
+The same artifacts are available without authentication at:
+
+- `GET /schemas/billing-statement-v1.json`
+- `GET /schemas/billing-statement-v1.example.json`
+- `GET /schemas/billing-statement-v1.openapi.json`
+- `GET /schemas/billing-consumer-actions-v1.json`
+- `GET /schemas/billing-consumer-actions-v1.example.json`
+- `GET /schemas/billing-consumer-actions-v1.openapi.json`
+
+Backend feature authorization uses
+`GET /apps/:appId/flags?domain=…&userId=…&teamId=…` with the product's
+domain-hash credential. `:appId` is opaque UOA `App.id`, `userId` is the UOA
+token subject, and `teamId` is the exact active UOA team. Capability checks
+require explicit `true`; empty/missing/error results fail closed.
+
 ## Contributing
 
 See [`CLAUDE.md`](./CLAUDE.md) for contributor guidelines and [`Docs/brief.md`](./Docs/brief.md) for the complete specification.

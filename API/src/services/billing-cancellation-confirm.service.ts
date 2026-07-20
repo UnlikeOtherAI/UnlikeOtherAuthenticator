@@ -2,6 +2,10 @@ import { BillingCancellationIntentState, Prisma, type PrismaClient } from '@pris
 import { createHash } from 'node:crypto';
 import type Stripe from 'stripe';
 
+import type {
+  BillingCancellationConfirmationV1,
+  BillingCancellationSelection,
+} from '../contracts/billing-statement-v1.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
@@ -21,30 +25,6 @@ import {
   type BillingSubscriptionRequest,
 } from './billing-stripe-subscription.service.js';
 import { syncStripeSubscriptionProjection } from './billing-stripe-webhook.service.js';
-
-export type BillingCancellationSelection =
-  | 'current_service'
-  | 'current_and_related_direct_services';
-
-export type BillingCancellationConfirmationV1 = {
-  schema_version: typeof BILLING_CANCELLATION_SCHEMA_VERSION;
-  status: 'confirmed';
-  title: string;
-  message: string;
-  cancelled_services: Array<{
-    service_id: string;
-    product: string;
-    name: string;
-    display_name: string;
-    status: string;
-    effective_at: string | null;
-  }>;
-  indirect_services: Array<{
-    product: string;
-    display_name: string;
-    impact: string;
-  }>;
-};
 
 type StripeCancellationClient = Pick<Stripe, 'accounts' | 'subscriptions'>;
 type SubscriptionSummary = Awaited<ReturnType<typeof getStripeSubscriptionSummary>>;

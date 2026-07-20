@@ -6,7 +6,8 @@
   "workspaces": [
     "API",
     "Auth",
-    "Admin"
+    "Admin",
+    "packages/*"
   ],
   "scripts": {
     "dev:api": "pnpm --filter @uoa/api dev",

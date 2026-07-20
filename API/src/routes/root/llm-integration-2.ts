@@ -132,7 +132,7 @@ Optional query params:
 
 - \`userId\` — applies per-user flag overrides and kill-switch test targeting when the user belongs to the app's org.
 - \`versionCode\` — Android numeric version code.
-- \`teamId\` — reserved for multi-team flag resolution.
+- \`teamId\` — exact active UOA team context for flag resolution.
 
 Response:
 
@@ -148,6 +148,24 @@ Response:
 - Unknown, inactive, or cross-domain apps return a clear startup payload: \`killSwitch: null\`, \`flags: {}\`. App matching uses the registered \`appIdentifier\` plus the config JWT domain being present in the app's registered domains.
 - Feature flags return a flat key-to-boolean map. If feature flags are disabled for the App, \`flags\` is \`{}\`.
 - A matched hard or maintenance kill switch appears in \`killSwitch\`; callers should block startup before loading app content.
+
+For a backend authorization decision that must observe current state, use the
+domain-hash-authenticated direct query rather than the config-only startup
+payload:
+
+\`\`\`text
+GET /apps/<opaque App.id>/flags?domain=api.deepwater.live&userId=<UOA JWT sub>&teamId=<UOA Team.id>
+Authorization: Bearer <hex SHA256(normalizedDomain + fullClientSecret)>
+\`\`\`
+
+\`:appId\` is the opaque database App ID returned by UOA Admin, not the bundle
+identifier. The \`domain\` query is the exact config domain registered on that
+App. UOA binds the active App to that domain, validates active organisation and
+exact team membership for the UOA subject, and returns only a flat
+\`{ "flag_key": boolean }\` map with \`Cache-Control: private, no-store\`.
+Wrong/inactive app, domain, user, or team returns \`{}\` without enumeration;
+missing or invalid backend credentials return 401. Security capabilities must
+require an explicit \`true\`; missing flags and request failures fail closed.
 
 ---
 

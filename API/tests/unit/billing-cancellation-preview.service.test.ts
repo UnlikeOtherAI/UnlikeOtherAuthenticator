@@ -89,23 +89,30 @@ const anotherAccount = subscription({
   accountId: 'account_2',
 });
 
-function statement() {
+function statement(
+  services: Array<{
+    product: string;
+    name: string | null;
+    display_name: string;
+    access: 'direct' | 'indirect';
+  }> = [
+    {
+      product: 'deepsignal',
+      name: null,
+      display_name: 'DeepSignal',
+      access: 'indirect',
+    },
+  ],
+) {
   return {
     capabilities: { can_cancel: true },
     subscription: { id: current.id },
-    services: [
-      {
-        product: 'deepsignal',
-        name: null,
-        display_name: 'DeepSignal',
-        access: 'indirect',
-      },
-    ],
+    services,
   };
 }
 
 describe('billing cancellation preview', () => {
-  it('pins only exact same-account direct subscriptions and never offers indirect services', async () => {
+  it('pins a same-account related subscription when any active team user has direct access', async () => {
     const create = vi.fn().mockResolvedValue({});
     const preview = await createBillingCancellationPreview(
       { request, actorToken: 'signed-actor', credential },
@@ -127,7 +134,7 @@ describe('billing cancellation preview', () => {
               serviceId: 'service_nessie',
               product: 'nessie',
               name: 'Nessie',
-              userIds: ['user_1', 'user_2'],
+              userIds: ['user_2'],
             },
             {
               serviceId: 'service_deeptest',
@@ -163,7 +170,7 @@ describe('billing cancellation preview', () => {
         },
         {
           product: 'nessie',
-          direct_user_count: 2,
+          direct_user_count: 1,
         },
       ],
       indirect_services: [
@@ -193,7 +200,107 @@ describe('billing cancellation preview', () => {
     expect(preview.direct_services.map((service) => service.product)).not.toContain('deeptest');
   });
 
-  it('omits a choice when the only related service is Ledger-only indirect use', async () => {
+  it('keeps a same-account subscription indirect when no team user has direct access', async () => {
+    const create = vi.fn().mockResolvedValue({});
+    const preview = await createBillingCancellationPreview(
+      { request, actorToken: 'signed-actor', credential },
+      {
+        prisma: {
+          billingCancellationIntent: { create },
+        } as never,
+        now: () => now,
+        getStatement: vi.fn().mockResolvedValue(
+          statement([
+            {
+              product: 'nessie',
+              name: 'Nessie',
+              display_name: 'Nessie',
+              access: 'indirect',
+            },
+          ]),
+        ) as never,
+        loadState: vi.fn().mockResolvedValue({
+          accesses: [
+            {
+              serviceId: 'service_deepwater',
+              product: 'deepwater',
+              name: 'DeepWater',
+              userIds: ['user_1'],
+            },
+          ],
+          subscriptions: [current, related],
+          entitlementFingerprint: 'a'.repeat(64),
+          subscriptionFingerprint: 'b'.repeat(64),
+        }) as never,
+      },
+    );
+
+    expect(preview.choice_required).toBe(false);
+    expect(preview.choices).toEqual([]);
+    expect(preview.direct_services.map((service) => service.product)).toEqual(['deepwater']);
+    expect(preview.indirect_services).toEqual([
+      {
+        product: 'nessie',
+        name: 'Nessie',
+        display_name: 'Nessie',
+        impact: 'No separate subscription will be cancelled.',
+      },
+    ]);
+    expect(create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        directServiceIds: ['service_deepwater'],
+        directSubscriptionIds: [current.id],
+        indirectServiceIds: ['nessie'],
+      }),
+    });
+  });
+
+  it('treats empty stale or revoked access evidence as indirect', async () => {
+    const preview = await createBillingCancellationPreview(
+      { request, actorToken: 'signed-actor', credential },
+      {
+        prisma: {
+          billingCancellationIntent: { create: vi.fn().mockResolvedValue({}) },
+        } as never,
+        now: () => now,
+        getStatement: vi.fn().mockResolvedValue(
+          statement([
+            {
+              product: 'nessie',
+              name: 'Nessie',
+              display_name: 'Nessie',
+              access: 'indirect',
+            },
+          ]),
+        ) as never,
+        loadState: vi.fn().mockResolvedValue({
+          accesses: [
+            {
+              serviceId: 'service_deepwater',
+              product: 'deepwater',
+              name: 'DeepWater',
+              userIds: ['user_1'],
+            },
+            {
+              serviceId: 'service_nessie',
+              product: 'nessie',
+              name: 'Nessie',
+              userIds: [],
+            },
+          ],
+          subscriptions: [current, related],
+          entitlementFingerprint: 'a'.repeat(64),
+          subscriptionFingerprint: 'b'.repeat(64),
+        }) as never,
+      },
+    );
+
+    expect(preview.choice_required).toBe(false);
+    expect(preview.direct_services.map((service) => service.product)).toEqual(['deepwater']);
+    expect(preview.indirect_services.map((service) => service.product)).toEqual(['nessie']);
+  });
+
+  it('defaults to current-service-only when there is no related direct subscription', async () => {
     const preview = await createBillingCancellationPreview(
       { request, actorToken: 'signed-actor', credential },
       {
@@ -220,6 +327,7 @@ describe('billing cancellation preview', () => {
 
     expect(preview.choice_required).toBe(false);
     expect(preview.choices).toEqual([]);
+    expect(preview.direct_services.map((service) => service.product)).toEqual(['deepwater']);
     expect(preview.confirm_action).toMatchObject({
       selection_required: false,
       default_selection: 'current_service',

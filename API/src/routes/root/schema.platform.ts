@@ -71,7 +71,7 @@ export const appEndpoints: EndpointSchema[] = [
       versionCode: 'string (optional) — Android numeric version code',
       buildNumber: 'string (optional) — iOS/macOS build number',
       userId: 'string (optional) — applies per-user flag overrides and kill-switch test targeting',
-      teamId: 'string (optional) — reserved for multi-team flag resolution',
+      teamId: 'string (optional) — exact active UOA team context for flag resolution',
     },
     response: {
       killSwitch: 'object|null — matched kill-switch entry, or null when clear',
@@ -79,6 +79,23 @@ export const appEndpoints: EndpointSchema[] = [
       cacheTtl: 'number — seconds the caller may cache the response',
       serverTime: 'string — ISO timestamp',
       activatesIn: 'number (optional) — seconds until a pending kill switch activates',
+    },
+  },
+  {
+    method: 'GET',
+    path: '/apps/:appId/flags',
+    description:
+      'Backend-only real-time feature flags for one active App, UOA user subject, and optional exact active team. Wrong/inactive app, domain, membership, or disabled flag service returns an empty map without enumeration.',
+    auth: 'Authorization: Bearer SHA256(normalized config domain + full per-domain client secret)',
+    query: {
+      domain:
+        'string (required) — exact config domain registered on the App; for DeepWater this is api.deepwater.live',
+      userId: 'string (required) — stable UOA access-token sub / User.id',
+      teamId: 'string (optional) — exact UOA Team.id; callers with an active team should supply it',
+    },
+    response: {
+      200: 'flat object of resolved flag keys to booleans; Cache-Control: private, no-store',
+      401: 'missing, invalid, inactive, or wrong-domain backend credential',
     },
   },
 ];

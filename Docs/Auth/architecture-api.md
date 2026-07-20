@@ -418,12 +418,39 @@ tenant SQL access to those control-plane tables is denied. Full contract and
 raw-usage separation are defined in
 `Docs/Requirements/billing-tariffs.md`.
 
+The API re-exports the MIT-licensed
+`@unlikeotherai/billing-statement-protocol` workspace instead of owning a
+private copy of the customer contract. That package is the source for the
+TypeScript types and runtime schema and generates drift-checked JSON Schema,
+synthetic example, and OpenAPI 3.1 artifacts. It covers both
+`BillingStatementV1` and the exact product-facing hosted redirect,
+cancellation preview/confirm, selection, and error messages. The API serves
+both artifact sets under `/schemas/`; consumers can pack/vendor the package
+without importing server code. Billing action capabilities do not replace the
+App feature-flag resolver.
+
+`feature-flag-resolution.service.ts` is shared by `/apps/startup` and the
+backend-only `GET /apps/:appId/flags` route. The direct route authenticates the
+product's exact config domain with its domain-hash credential, binds the opaque
+active App to that registered domain, requires active UOA organisation
+membership and an exact active team membership when `teamId` is present, then
+returns a private/no-store flat boolean map. Cross-domain, inactive, missing,
+or mismatched state returns `{}` without enumeration. Runtime product
+capabilities require explicit `true` and fail closed on every other result.
+
 `POST /billing/v1/service-access/confirm` is the mandatory direct-session seam:
 each product backend calls it immediately after its own successful UOA SSO
 exchange with that product's lifecycle key and actor. UOA rechecks active
 organisation/team membership and records the exact product/team/user in one
 repeatable-read transaction. Proxy or agent use of another product never calls
 this route for the other product and remains indirect.
+
+Cancellation state loads only active, non-revoked access for current
+organisation/team members and active services, then selects another
+subscription only when its exact service still has at least one such user and
+its Stripe account matches the current subscription. The preview applies the
+same check defensively before pinning IDs. Empty/revoked/stale evidence,
+other-account rows, and Ledger-only attribution never create a related choice.
 
 The Stripe boundary is an optional projection layer, disabled by default.
 Checkout and lifecycle routes require a purpose-limited customer-lifecycle app

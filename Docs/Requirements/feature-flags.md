@@ -50,12 +50,28 @@ The global missing-flag default means consuming apps never get an error for an u
 ### Flag query API
 
 ```
-GET /apps/:appId/flags?userId=user_123[&teamId=team_xyz]
+GET /apps/:appId/flags?domain=api.example.com&userId=user_123[&teamId=team_xyz]
 ```
 
-**Auth:** Domain-hash auth (consuming app calling server-side). The `userId` param must correspond to a real user in the calling app's org — the server validates this. For the combined kill-switch + flag payload, use the `/apps/startup` endpoint with `config_url`; it uses the same signed config JWT verification path as `/auth/login` and `/auth/register`.
+**Auth:** Domain-hash auth (consuming app calling server-side):
+`Authorization: Bearer SHA256(normalizedDomain + fullClientSecret)`. The required
+`domain` query is that product's exact config domain registered on the App; it
+is not the UOA service domain. `:appId` is the opaque UOA `App.id`, not the App
+identifier/bundle name. `userId` is the stable UOA access-token `sub` /
+`User.id`, and must correspond to an active member of the calling App's org.
+For the combined kill-switch + flag payload, use `/apps/startup` with
+`config_url`; it uses the same signed config JWT verification path as
+`/auth/login` and `/auth/register`.
 
 `teamId` is optional. When omitted and the user has a single team membership relevant to this App, that team's role is used. When the user has multiple team memberships, `teamId` must be provided or the multi-team fallback rule (see resolution order above) applies.
+
+The route returns only a flat boolean map with
+`Cache-Control: private, no-store`. The active App must contain the normalized
+authenticated domain. Wrong/inactive App, domain, user, organisation
+membership, or exact team membership returns `{}` without revealing which
+binding failed. Missing or invalid domain-hash credentials return 401.
+Security-sensitive callers require an explicit `true`; `{}`, a missing key,
+malformed data, timeout, or UOA unavailability fails closed.
 
 Returns the fully resolved flag map for that user in that App:
 
