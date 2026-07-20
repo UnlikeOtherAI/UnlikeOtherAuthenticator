@@ -195,7 +195,7 @@ async function signServiceAssertion(
     .setProtectedHeader({
       alg: 'RS256',
       kid: config.keyId,
-      typ: 'uoa-metering-service+jwt',
+      typ: 'uoa-billing-service+jwt',
     })
     .setIssuer(config.assertionIssuer)
     .setAudience(config.assertionAudience)
