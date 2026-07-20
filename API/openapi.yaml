@@ -290,6 +290,478 @@ components:
               type: string
               format: date-time
 
+    ExactMoney:
+      type: object
+      additionalProperties: false
+      required: [amount, currency, display]
+      properties:
+        amount:
+          type: string
+          pattern: '^-?(0|[1-9][0-9]*)(\.[0-9]+)?$'
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+        display:
+          type: string
+
+    BillingStatementV1:
+      type: object
+      additionalProperties: false
+      description: |
+        Display-ready canonical UOA customer statement. The exact authoritative
+        Draft 2020-12 schema is published at
+        `/schemas/billing-statement-v1.json`; products render this model and do
+        not derive commercial fields.
+      required:
+        - schema_version
+        - statement_id
+        - generated_at
+        - product
+        - subject
+        - period
+        - pinned_inputs
+        - plan
+        - collection
+        - subscription
+        - services
+        - usage
+        - commercial_lines
+        - totals
+        - capabilities
+        - actions
+      properties:
+        schema_version:
+          type: integer
+          enum: [1]
+        statement_id:
+          type: string
+          pattern: '^bst_'
+        generated_at:
+          type: string
+          format: date-time
+        product:
+          type: object
+          additionalProperties: false
+          required: [id, identifier, name]
+          properties:
+            id:
+              type: string
+            identifier:
+              type: string
+            name:
+              type: string
+        subject:
+          type: object
+          additionalProperties: false
+          required: [user_id, organisation_id, team_id]
+          properties:
+            user_id:
+              type: string
+            organisation_id:
+              type: string
+            team_id:
+              type: string
+        period:
+          type: object
+          additionalProperties: false
+          required: [key, starts_at, ends_at, state]
+          properties:
+            key:
+              type: string
+              pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+            starts_at:
+              type: string
+              format: date-time
+            ends_at:
+              type: string
+              format: date-time
+            state:
+              type: string
+              enum: [open, closed]
+        pinned_inputs:
+          type: object
+          additionalProperties: false
+          required: [ledger_snapshots, tariff]
+          properties:
+            ledger_snapshots:
+              type: array
+              minItems: 2
+              maxItems: 2
+              items:
+                type: object
+                additionalProperties: false
+                required: [group_by, cursor, id, captured_at, sha256]
+                properties:
+                  group_by:
+                    type: string
+                    enum: [service, user]
+                  cursor:
+                    type: string
+                    pattern: '^mus_'
+                  id:
+                    type: string
+                    pattern: '^mus_'
+                  captured_at:
+                    type: string
+                    format: date-time
+                  sha256:
+                    type: string
+                    pattern: '^[a-f0-9]{64}$'
+            tariff:
+              type: object
+              additionalProperties: false
+              required: [id, version]
+              properties:
+                id:
+                  type: string
+                version:
+                  type: integer
+                  minimum: 1
+        plan:
+          type: object
+          additionalProperties: true
+          description: Exact immutable tariff, display labels, markup, monthly value, and assignment.
+        collection:
+          type: object
+          additionalProperties: false
+          required:
+            - payment_collection_enabled
+            - stripe_collection_enabled
+            - stripe_mode
+          properties:
+            payment_collection_enabled:
+              type: boolean
+            stripe_collection_enabled:
+              type: boolean
+            stripe_mode:
+              type: string
+              nullable: true
+              enum: [test, live]
+        subscription:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: Safe Stripe-ID-free current subscription projection.
+        services:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - product
+              - name
+              - display_name
+              - access
+              - direct_user_count
+              - roles
+            properties:
+              product:
+                type: string
+              name:
+                type: string
+                nullable: true
+              display_name:
+                type: string
+              access:
+                type: string
+                enum: [direct, indirect]
+              direct_user_count:
+                type: integer
+                minimum: 0
+              roles:
+                type: array
+                uniqueItems: true
+                items:
+                  type: string
+                  enum: [billing_product, caller_product, origin_product]
+        usage:
+          type: object
+          additionalProperties: false
+          required: [lines, totals, cost_totals, user_totals]
+          properties:
+            lines:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+                description: Exact raw/billable units, share, attribution, provider cost, and UOA-rated charge.
+            totals:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+            cost_totals:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+            user_totals:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+        commercial_lines:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, kind, product, label, detail, amount]
+            properties:
+              id:
+                type: string
+              kind:
+                type: string
+                enum: [monthly_subscription, usage, add_on, credit]
+              product:
+                type: string
+              label:
+                type: string
+              detail:
+                type: string
+              amount:
+                $ref: '#/components/schemas/ExactMoney'
+        totals:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+            description: Exact monthly, usage, add-on, credit, and total-due money for one currency.
+        capabilities:
+          type: object
+          additionalProperties: false
+          required: [can_upgrade, can_open_portal, can_cancel]
+          properties:
+            can_upgrade:
+              type: boolean
+            can_open_portal:
+              type: boolean
+            can_cancel:
+              type: boolean
+        actions:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - id
+              - kind
+              - label
+              - description
+              - enabled
+              - disabled_reason
+              - request
+            properties:
+              id:
+                type: string
+                enum: [upgrade, portal, cancel]
+              kind:
+                type: string
+                enum: [hosted_redirect, confirmation_dialog]
+              label:
+                type: string
+              description:
+                type: string
+              enabled:
+                type: boolean
+              disabled_reason:
+                type: string
+                nullable: true
+              request:
+                type: object
+                additionalProperties: false
+                required: [method, path, body]
+                properties:
+                  method:
+                    type: string
+                    enum: [POST]
+                  path:
+                    type: string
+                  body:
+                    type: object
+                    additionalProperties:
+                      type: string
+
+    BillingCancellationPreviewV1:
+      type: object
+      additionalProperties: false
+      required:
+        - schema_version
+        - preview_token
+        - expires_at
+        - title
+        - message
+        - choice_required
+        - choices
+        - direct_services
+        - indirect_services
+        - confirm_action
+      properties:
+        schema_version:
+          type: integer
+          enum: [1]
+        preview_token:
+          type: string
+          pattern: '^uoa_cancel_'
+        expires_at:
+          type: string
+          format: date-time
+        title:
+          type: string
+        message:
+          type: string
+        choice_required:
+          type: boolean
+        choices:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, label, description, service_ids]
+            properties:
+              id:
+                type: string
+                enum: [current_service, current_and_related_direct_services]
+              label:
+                type: string
+              description:
+                type: string
+              service_ids:
+                type: array
+                items:
+                  type: string
+        direct_services:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - service_id
+              - product
+              - name
+              - display_name
+              - direct_user_count
+              - subscription_status
+            properties:
+              service_id:
+                type: string
+              product:
+                type: string
+              name:
+                type: string
+              display_name:
+                type: string
+              direct_user_count:
+                type: integer
+                minimum: 0
+              subscription_status:
+                type: string
+        indirect_services:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [product, name, display_name, impact]
+            properties:
+              product:
+                type: string
+              name:
+                type: string
+                nullable: true
+              display_name:
+                type: string
+              impact:
+                type: string
+        confirm_action:
+          type: object
+          additionalProperties: false
+          required:
+            - method
+            - path
+            - label
+            - idempotency_key
+            - selection_required
+            - default_selection
+          properties:
+            method:
+              type: string
+              enum: [POST]
+            path:
+              type: string
+              enum: [/billing/v1/cancellation/confirm]
+            label:
+              type: string
+            idempotency_key:
+              type: string
+              pattern: '^uoa_confirm_'
+            selection_required:
+              type: boolean
+            default_selection:
+              type: string
+              nullable: true
+              enum: [current_service]
+
+    BillingCancellationConfirmationV1:
+      type: object
+      additionalProperties: false
+      required:
+        - schema_version
+        - status
+        - title
+        - message
+        - cancelled_services
+        - indirect_services
+      properties:
+        schema_version:
+          type: integer
+          enum: [1]
+        status:
+          type: string
+          enum: [confirmed]
+        title:
+          type: string
+        message:
+          type: string
+        cancelled_services:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - service_id
+              - product
+              - name
+              - display_name
+              - status
+              - effective_at
+            properties:
+              service_id:
+                type: string
+              product:
+                type: string
+              name:
+                type: string
+              display_name:
+                type: string
+              status:
+                type: string
+              effective_at:
+                type: string
+                format: date-time
+                nullable: true
+        indirect_services:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [product, display_name, impact]
+            properties:
+              product:
+                type: string
+              display_name:
+                type: string
+              impact:
+                type: string
+
     OkTrue:
       type: object
       required: [ok]
@@ -2471,11 +2943,11 @@ paths:
   /billing/v1/service-jwks.json:
     get:
       tags: [Billing]
-      summary: Get UOA Ledger-collector assertion verification keys
+      summary: Get UOA Ledger raw-metering assertion verification keys
       operationId: getBillingServiceJwks
       description: |
         Dedicated current and overlapping retired public RS256 keys for
-        UOA-to-Ledger `billing.read` service assertions. These are separate from
+        UOA-to-Ledger `metering.read` service assertions. These are separate from
         tariff, OAuth resource-token, app-key, and webhook credentials.
       security: []
       responses:
@@ -2494,6 +2966,26 @@ paths:
                       additionalProperties: true
         '404':
           description: Billing service-assertion signing is not configured.
+
+  /schemas/billing-statement-v1.json:
+    get:
+      tags: [Billing]
+      summary: Get the canonical customer billing statement schema
+      operationId: getBillingStatementV1Schema
+      security: []
+      responses:
+        '200':
+          description: Authoritative Draft 2020-12 BillingStatementV1 schema.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum: ['public, max-age=300']
+          content:
+            application/schema+json:
+              schema:
+                type: object
+                additionalProperties: true
 
   /billing/v1/effective-tariff:
     post:
@@ -2538,6 +3030,98 @@ paths:
           description: Invalid app key or actor assertion.
         '403':
           description: Product, subject, or active membership mismatch.
+
+  /billing/v1/customer-statement:
+    post:
+      tags: [Billing]
+      summary: Get the display-ready canonical customer statement
+      operationId: getCanonicalBillingCustomerStatement
+      description: |
+        UOA is the commercial system of record. It pins the exact tariff and
+        immutable Ledger service/user raw-metering snapshots, rates usage
+        centrally, and returns all display text, exact money, per-user and
+        cross-service attribution, commercial lines, capabilities, and action
+        descriptors. Products must not derive commercial fields. The product
+        backend injects its own lifecycle key and actor; browsers receive
+        neither.
+      security:
+        - billingAppKey: []
+          billingActor: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [product, organisation_id, team_id, user_id]
+              properties:
+                product:
+                  type: string
+                organisation_id:
+                  type: string
+                team_id:
+                  type: string
+                user_id:
+                  type: string
+                billing_month:
+                  type: string
+                  pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+      responses:
+        '200':
+          description: Display-ready UOA BillingStatementV1.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum: ['private, no-store']
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingStatementV1'
+        '401':
+          description: Invalid lifecycle app key or actor assertion.
+        '403':
+          description: Product, subject, manager, or active membership mismatch.
+        '502':
+          description: Ledger returned unavailable or invalid raw metering.
+        '503':
+          description: The dedicated Ledger metering reader is unconfigured.
+
+  /billing/v1/service-access/confirm:
+    post:
+      tags: [Billing]
+      summary: Confirm one authenticated direct product session
+      operationId: confirmDirectBillingServiceAccess
+      description: |
+        A product backend must call this immediately after its own successful
+        UOA SSO exchange or session establishment. The product's exact
+        purpose=customer_lifecycle app key and fresh actor assertion prove the
+        direct product boundary; UOA rechecks active organisation and team
+        membership before recording evidence. Proxy or agent use of another
+        product is indirect and must never call this route for that other
+        product. No credential or call is exposed to browser code.
+      security:
+        - billingAppKey: []
+          billingActor: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BillingSubjectRequest'
+      responses:
+        '204':
+          description: Direct access confirmed for the exact product and subject.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum: ['private, no-store']
+        '401':
+          description: Invalid lifecycle app key or actor assertion.
+        '403':
+          description: Key purpose, product, subject, or active membership mismatch.
 
   /billing/v1/stripe/checkout-session:
     post:
@@ -2706,16 +3290,19 @@ paths:
         '503':
           description: Stripe billing is disabled or incompletely provisioned.
 
-  /billing/v1/stripe/subscription/cancel:
+  /billing/v1/cancellation/preview:
     post:
       tags: [Billing]
-      summary: Schedule period-end subscription cancellation
-      operationId: cancelBillingStripeSubscription
+      summary: Preview exact direct-subscription cancellation impact
+      operationId: previewBillingCancellation
       description: |
         Requires the exact product's purpose=customer_lifecycle key, fresh
         actor, and owner/admin authority at the subscription's exact billing
-        scope. Sets cancel_at_period_end=true, reconciles Stripe's returned
-        current state, and audits the requesting UOA user.
+        scope. UOA returns the complete confirmation-dialog model, an opaque
+        five-minute token, and a server-generated idempotency key. It offers a
+        related-products choice only for same-account subscriptions backed by
+        UOA direct-access evidence. Ledger-only indirect use never becomes a
+        cancellation choice.
       security:
         - billingAppKey: []
           billingActor: []
@@ -2726,18 +3313,87 @@ paths:
             schema:
               $ref: '#/components/schemas/BillingSubjectRequest'
       responses:
-        '200':
-          description: Updated safe subscription summary.
+        '201':
+          description: Pinned cancellation preview capability and dialog model.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BillingStripeSubscriptionSummary'
+                $ref: '#/components/schemas/BillingCancellationPreviewV1'
         '401':
           description: Invalid app key or actor assertion.
         '403':
           description: Key purpose, product, subject, membership, or manager mismatch.
         '404':
           description: No active subscription exists at the billing scope.
+        '503':
+          description: Stripe billing is disabled or incompletely provisioned.
+
+  /billing/v1/cancellation/confirm:
+    post:
+      tags: [Billing]
+      summary: Confirm a pinned cancellation preview
+      operationId: confirmBillingCancellation
+      description: |
+        Locks the opaque preview intent, verifies its single-use binding,
+        revalidates exact entitlement and subscription fingerprints, and
+        schedules the selected pinned direct subscriptions to cancel at period
+        end. The same idempotency key and selection safely resume or replay an
+        interrupted/completed confirmation.
+      security:
+        - billingAppKey: []
+          billingActor: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - product
+                - organisation_id
+                - team_id
+                - user_id
+                - preview_token
+                - idempotency_key
+              properties:
+                product:
+                  type: string
+                organisation_id:
+                  type: string
+                team_id:
+                  type: string
+                user_id:
+                  type: string
+                preview_token:
+                  type: string
+                  pattern: '^uoa_cancel_'
+                idempotency_key:
+                  type: string
+                  pattern: '^uoa_confirm_'
+                selection:
+                  type: string
+                  nullable: true
+                  enum:
+                    - current_service
+                    - current_and_related_direct_services
+      responses:
+        '200':
+          description: Idempotently confirmed cancellation result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingCancellationConfirmationV1'
+        '400':
+          description: Required choice is missing or selection is not allowed.
+        '403':
+          description: Token, actor, product, subject, or manager mismatch.
+        '404':
+          description: Preview token or current subscription does not exist.
+        '409':
+          description: Preview state changed or token was reused differently.
+        '410':
+          description: Preview token expired.
         '503':
           description: Stripe billing is disabled or incompletely provisioned.
 
@@ -2788,9 +3444,9 @@ paths:
       operationId: adminListBillingServices
       description: |
         Lists services with immutable tariff versions, org/team assignments,
-        masked purpose-bound app keys, Stripe catalog readiness, and test/live
-        subscription projections. Plaintext app keys and actor public-key
-        material are never returned.
+        exact organisation/team add-ons and credits, masked purpose-bound app
+        keys, Stripe catalog readiness, and test/live subscription projections.
+        Plaintext app keys and actor public-key material are never returned.
       security:
         - adminBearer: []
       responses:
@@ -2996,6 +3652,96 @@ paths:
         '409':
           description: A live Stripe projection pins the assignment.
 
+  /internal/admin/billing/services/{serviceId}/adjustments:
+    post:
+      tags: [Billing, Internal Admin]
+      summary: Create an exact UOA-owned add-on or credit
+      operationId: adminCreateBillingCommercialAdjustment
+      security:
+        - adminBearer: []
+      parameters:
+        - name: serviceId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - organisation_id
+                - key
+                - name
+                - kind
+                - cadence
+                - amount_minor
+                - currency
+                - starts_at
+              properties:
+                organisation_id:
+                  type: string
+                team_id:
+                  type: string
+                  nullable: true
+                key:
+                  type: string
+                  pattern: '^[a-z0-9][a-z0-9._-]{0,99}$'
+                name:
+                  type: string
+                  maxLength: 160
+                kind:
+                  type: string
+                  enum: [add_on, credit]
+                cadence:
+                  type: string
+                  enum: [one_time, monthly]
+                amount_minor:
+                  type: string
+                  pattern: '^(0|[1-9]\d*)$'
+                currency:
+                  type: string
+                  pattern: '^[A-Z]{3}$'
+                starts_at:
+                  type: string
+                  format: date-time
+                ends_at:
+                  type: string
+                  format: date-time
+                  nullable: true
+      responses:
+        '201':
+          description: Created and audited commercial line.
+        '400':
+          description: Invalid value, period, product, organisation, or team.
+
+  /internal/admin/billing/services/{serviceId}/adjustments/{adjustmentId}:
+    delete:
+      tags: [Billing, Internal Admin]
+      summary: Deactivate a UOA commercial line
+      operationId: adminDeactivateBillingCommercialAdjustment
+      security:
+        - adminBearer: []
+      parameters:
+        - name: serviceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: adjustmentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Line deactivated and audit retained.
+        '404':
+          description: Active commercial line not found.
+
   /internal/admin/billing/services/{serviceId}/app-keys:
     get:
       tags: [Billing, Internal Admin]
@@ -3132,10 +3878,11 @@ paths:
       operationId: exportBillingStripeUsage
       description: |
         Platform-superuser reconciliation endpoint. UOA calls Ledger with UOA's
-        own dedicated Ledger app key plus a separately signed `billing.read`
-        assertion, validates the immutable schema-v4 product/scope/month/tariff,
-        and emits idempotent customer-money deltas. It never meters raw tokens,
-        searches, or research units.
+        own dedicated Ledger app key plus a separately signed `metering.read`
+        assertion, validates immutable metering-usage-v1 raw provider
+        usage/cost and attribution, centrally applies UOA's pinned tariff, and
+        emits idempotent customer-money deltas. Ledger supplies no commercial
+        fields. Stripe never meters raw tokens, searches, or research units.
       security:
         - adminBearer: []
       requestBody:
@@ -3154,7 +3901,7 @@ paths:
                   pattern: '^\d{4}-(0[1-9]|1[0-2])$'
                 ledger_snapshot_cursor:
                   type: string
-                  pattern: '^bus_[A-Za-z0-9_-]+$'
+                  pattern: '^mus_[A-Za-z0-9_-]{32}$'
       responses:
         '200':
           description: Immutable cursor and cumulative/delta Stripe meter exports.

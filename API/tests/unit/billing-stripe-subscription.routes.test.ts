@@ -9,7 +9,6 @@ const appKeyService = vi.hoisted(() => ({
 const subscriptionService = vi.hoisted(() => ({
   getStripeSubscriptionSummary: vi.fn(),
   createStripePortalSession: vi.fn(),
-  cancelStripeSubscription: vi.fn(),
 }));
 
 vi.mock('../../src/services/billing-app-key.service.js', async () => {
@@ -76,22 +75,6 @@ beforeEach(() => {
   subscriptionService.getStripeSubscriptionSummary.mockResolvedValue(summary);
   subscriptionService.createStripePortalSession.mockResolvedValue({
     portal_url: 'https://billing.stripe.com/p/session/test',
-  });
-  subscriptionService.cancelStripeSubscription.mockResolvedValue({
-    ...summary,
-    subscription: {
-      id: 'subscription-1',
-      status: 'active',
-      scope: 'team',
-      scope_key: 'org-1:team-1',
-      tariff_id: 'tariff-1',
-      cancel_at_period_end: true,
-      current_period_start: '2026-07-01T00:00:00.000Z',
-      current_period_end: '2026-08-01T00:00:00.000Z',
-      billing_phase: 'calendar_month',
-      created_at: '2026-07-01T00:00:00.000Z',
-      synced_at: '2026-07-20T12:00:00.000Z',
-    },
   });
 });
 
@@ -191,7 +174,7 @@ describe('Stripe customer subscription routes', () => {
     });
   });
 
-  it('rejects cancellation without a signed actor before the lifecycle service runs', async () => {
+  it('does not expose the superseded one-step cancellation route', async () => {
     await withApp(async (app) => {
       const response = await app.inject({
         method: 'POST',
@@ -199,8 +182,7 @@ describe('Stripe customer subscription routes', () => {
         headers: { 'x-uoa-app-key': 'uoa_app_product-key' },
         payload: subject,
       });
-      expect(response.statusCode).toBe(401);
-      expect(subscriptionService.cancelStripeSubscription).not.toHaveBeenCalled();
+      expect(response.statusCode).toBe(404);
     });
   });
 });

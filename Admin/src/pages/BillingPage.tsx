@@ -5,6 +5,7 @@ import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { FieldShell, SelectField } from '../components/ui/FormFields';
 import { PageHeader } from '../components/ui/PageHeader';
+import { BillingAdjustmentDialog } from '../features/admin/BillingAdjustmentDialog';
 import { BillingAppKeyDialog } from '../features/admin/BillingAppKeyDialog';
 import { BillingAssignmentDialog } from '../features/admin/BillingAssignmentDialog';
 import { useBillingServicesQuery } from '../features/admin/billing-admin-queries';
@@ -21,6 +22,7 @@ export function BillingPage() {
   const [tariffOpen, setTariffOpen] = useState(false);
   const [assignmentOpen, setAssignmentOpen] = useState(false);
   const [appKeyOpen, setAppKeyOpen] = useState(false);
+  const [adjustmentOpen, setAdjustmentOpen] = useState(false);
   const [createdKey, setCreatedKey] = useState<CreatedBillingAppKey | null>(null);
 
   useEffect(() => {
@@ -116,6 +118,7 @@ export function BillingPage() {
             onAddTariff={() => setTariffOpen(true)}
             onAddAssignment={() => setAssignmentOpen(true)}
             onAddAppKey={() => setAppKeyOpen(true)}
+            onAddAdjustment={() => setAdjustmentOpen(true)}
           />
         </div>
       ) : null}
@@ -141,6 +144,11 @@ export function BillingPage() {
               setAppKeyOpen(false);
               setCreatedKey(key);
             }}
+          />
+          <BillingAdjustmentDialog
+            open={adjustmentOpen}
+            service={selectedService}
+            onClose={() => setAdjustmentOpen(false)}
           />
         </>
       ) : null}

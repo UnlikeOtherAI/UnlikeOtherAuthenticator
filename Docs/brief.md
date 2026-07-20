@@ -1812,3 +1812,39 @@ administration, presentation rules, and Stripe collection boundaries are defined
 in [Billing Tariffs and Product Entitlements](./Requirements/billing-tariffs.md).
 That document is incorporated into this build brief by reference and is
 authoritative for the billing tariff control plane.
+
+### 2026-07-20 canonical customer statement clarification
+
+UOA is the sole commercial billing engine and customer-facing system of record.
+Ledger supplies only immutable raw metering facts—tokens, API/SERP/research
+usage, provider cost, and exact user/team/product attribution—through its
+versioned `metering-usage-v1` contract. Ledger does not supply tariff,
+subscription, markup, billable-unit, customer-charge, credit, add-on, payment,
+or cancellation fields.
+
+Product backends obtain the display-ready, product-agnostic
+`BillingStatementV1` from `POST /billing/v1/customer-statement` and render its
+labels, exact money, totals, service access, per-user usage, capabilities, and
+action descriptors without re-rating or inventing copy. The statement pins the
+two immutable Ledger service/user snapshots and the exact UOA tariff version.
+Each request requires that product deployment's own `customer_lifecycle` app
+key and a fresh subject-bound actor JWT; neither credential enters browser
+code.
+
+Direct product access is UOA-owned evidence confirmed by the authenticated
+product app key. Every product backend confirms it immediately after its own
+successful UOA SSO exchange through
+`POST /billing/v1/service-access/confirm`; proxy or agent use must not confirm
+another product. Ledger-only caller/origin use remains indirect and cannot
+create a direct entitlement. Cancellation is preview then confirm: UOA returns
+the complete dialog model, offers a related-direct-products choice only when
+the team actually has another same-account direct subscription, excludes
+indirect-only services from that choice, and confirms with an opaque,
+short-lived, single-use, idempotent token under database lock and state
+revalidation. The old one-step cancellation route is superseded.
+
+Superusers manage exact organisation/team add-ons and credits alongside
+tariffs in UOA Admin. Stripe remains a payment processor: UOA rates Ledger raw
+provider cost under the pinned tariff before exporting exact cumulative money
+deltas. This clarification supersedes earlier text that described Ledger as
+rating customer charges or product UIs reading commercial usage from Ledger.

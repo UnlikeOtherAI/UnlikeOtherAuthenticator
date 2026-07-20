@@ -2,7 +2,6 @@ import { BillingAppKeyPurpose, BillingAssignmentScope, MembershipStatus } from '
 import { describe, expect, it, vi } from 'vitest';
 
 import {
-  cancelStripeSubscription,
   createStripePortalSession,
   getStripeSubscriptionSummary,
 } from '../../src/services/billing-stripe-subscription.service.js';
@@ -59,7 +58,7 @@ const request = {
 };
 
 function setup(params?: { orgRole?: string; teamRole?: string }) {
-  let subscription = {
+  const subscription = {
     id: 'subscription_row_1',
     accountId: account.id,
     checkoutId: 'checkout_1',
@@ -132,18 +131,10 @@ function setup(params?: { orgRole?: string; teamRole?: string }) {
     },
   };
   const refreshSubscription = vi.fn().mockResolvedValue(remoteSubscription);
-  const syncSubscription = vi.fn().mockImplementation(async () => {
-    subscription = {
-      ...subscription,
-      cancelAtPeriodEnd: true,
-      updatedAt: new Date('2026-07-20T12:01:00.000Z'),
-    };
-  });
   return {
     prisma,
     stripe,
     refreshSubscription,
-    syncSubscription,
   };
 }
 
@@ -154,7 +145,6 @@ function deps(state: ReturnType<typeof setup>) {
     stripeLivemode: false,
     resolveTariff: vi.fn().mockResolvedValue({ actor: { jti: 'actor_1' }, payload }) as never,
     refreshSubscription: state.refreshSubscription as never,
-    syncSubscription: state.syncSubscription as never,
   };
 }
 
@@ -278,33 +268,5 @@ describe('Stripe customer subscription lifecycle', () => {
       ),
     ).rejects.toThrow('STRIPE_RETURN_URL_NOT_ALLOWED');
     expect(state.stripe.billingPortal.sessions.create).not.toHaveBeenCalled();
-  });
-
-  it('schedules period-end cancellation and reconciles the returned Stripe object', async () => {
-    const state = setup({ orgRole: 'admin' });
-    const result = await cancelStripeSubscription(
-      { request, actorToken: 'signed-actor', credential },
-      deps(state),
-    );
-
-    expect(state.stripe.subscriptions.update).toHaveBeenCalledWith('sub_123', {
-      cancel_at_period_end: true,
-    });
-    expect(state.syncSubscription).toHaveBeenCalledWith(
-      {
-        subscription: expect.objectContaining({ id: 'sub_123', livemode: false }),
-        account,
-      },
-      { prisma: state.prisma },
-    );
-    expect(result.subscription?.cancel_at_period_end).toBe(true);
-    expect(state.prisma.orgAuditLog.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          action: 'billing.stripe_subscription_cancel_scheduled',
-          actorUserId: 'user_1',
-        }),
-      }),
-    );
   });
 });

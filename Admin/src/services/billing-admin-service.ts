@@ -1,11 +1,13 @@
 import {
   BillingAppKeySchema,
+  CreatedBillingAdjustmentSchema,
   BillingAssignmentSchema,
   BillingServicesSchema,
   BillingServiceSchema,
   BillingTariffSchema,
   CreatedBillingAppKeySchema,
   type BillingAppKeyFormValues,
+  type BillingAdjustmentFormValues,
   type BillingAssignmentFormValues,
   type BillingServiceFormValues,
   type BillingTariffFormValues,
@@ -139,6 +141,32 @@ export const billingAdminService = {
   async revokeAppKey(serviceId: string, keyId: string): Promise<void> {
     await api.delete<unknown>(
       `/internal/admin/billing/services/${encodeURIComponent(serviceId)}/app-keys/${encodeURIComponent(keyId)}`,
+    );
+  },
+
+  async createAdjustment(serviceId: string, input: BillingAdjustmentFormValues) {
+    return CreatedBillingAdjustmentSchema.parse(
+      await api.post<unknown>(
+        `/internal/admin/billing/services/${encodeURIComponent(serviceId)}/adjustments`,
+        {
+          organisation_id: input.organisationId,
+          team_id: input.teamId || null,
+          key: input.key,
+          name: input.name,
+          kind: input.kind,
+          cadence: input.cadence,
+          amount_minor: input.amountMinor,
+          currency: input.currency,
+          starts_at: new Date(`${input.startsAt}T00:00:00.000Z`).toISOString(),
+          ends_at: input.endsAt ? new Date(`${input.endsAt}T00:00:00.000Z`).toISOString() : null,
+        },
+      ),
+    );
+  },
+
+  async deactivateAdjustment(serviceId: string, adjustmentId: string): Promise<void> {
+    await api.delete<unknown>(
+      `/internal/admin/billing/services/${encodeURIComponent(serviceId)}/adjustments/${encodeURIComponent(adjustmentId)}`,
     );
   },
 };

@@ -22,6 +22,10 @@ const appKeyPurposeMigrationUrl = new URL(
   '../../prisma/migrations/20260720010000_purpose_bound_billing_app_keys/migration.sql',
   import.meta.url,
 );
+const canonicalStatementMigrationUrl = new URL(
+  '../../prisma/migrations/20260720020000_add_canonical_billing_statement_foundation/migration.sql',
+  import.meta.url,
+);
 
 describe('billing tariff control-plane migration', () => {
   it('enforces immutable version identities and one default tariff per service', async () => {
@@ -121,5 +125,34 @@ describe('billing tariff control-plane migration', () => {
     expect(sql).toContain('"purpose" = \'ENTITLEMENT\'');
     expect(sql).toContain('"purpose" = \'CUSTOMER_LIFECYCLE\'');
     expect(sql).toContain('billing_app_keys_service_id_purpose_idx');
+  });
+
+  it('pins UOA-owned access, commercial lines, and single-use cancellation state', async () => {
+    const sql = await readFile(canonicalStatementMigrationUrl, 'utf8');
+
+    expect(sql).toContain('CREATE TABLE "billing_service_accesses"');
+    expect(sql).toContain('CREATE TABLE "billing_commercial_adjustments"');
+    expect(sql).toContain('"deactivated_at" TIMESTAMP(3)');
+    expect(sql).toContain('billing_commercial_adjustments_deactivation_check');
+    expect(sql).toContain('CREATE TABLE "billing_cancellation_intents"');
+    expect(sql).toContain('"direct_subscription_ids" TEXT[] NOT NULL');
+    expect(sql).toContain('billing_cancellation_intents_direct_targets_check');
+    expect(sql).toContain(
+      'cardinality("direct_service_ids") = cardinality("direct_subscription_ids")',
+    );
+    expect(sql).toContain('billing_cancellation_intents_state_check');
+    expect(sql).toContain("'AVAILABLE'");
+    expect(sql).toContain("'PROCESSING'");
+    expect(sql).toContain("'COMPLETED'");
+    expect(sql).toContain('uoa_enforce_canonical_billing_scope_coherence');
+    expect(sql).toContain('"purpose" = \'CUSTOMER_LIFECYCLE\'');
+    for (const table of [
+      'billing_service_accesses',
+      'billing_commercial_adjustments',
+      'billing_cancellation_intents',
+    ]) {
+      expect(sql).toContain(`REVOKE ALL ON TABLE "${table}" FROM "uoa_app"`);
+      expect(sql).toContain(`ALTER TABLE "${table}" FORCE ROW LEVEL SECURITY`);
+    }
   });
 });

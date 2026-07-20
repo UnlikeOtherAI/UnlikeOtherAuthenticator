@@ -1,91 +1,105 @@
+import { createHash, randomUUID } from 'node:crypto';
+
 import { importJWK, SignJWT, type JWK, type KeyLike } from 'jose';
-import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 
-import {
-  getAuthServiceIdentifier,
-  getEnv,
-  getPublicBaseUrl,
-  type Env,
-} from '../config/env.js';
+import { getAuthServiceIdentifier, getEnv, getPublicBaseUrl, type Env } from '../config/env.js';
 import { AppError } from '../utils/errors.js';
 import {
   parsePrivateRs256Jwk,
   parsePublicRs256Jwks,
   privateRs256JwkMatchesPublicJwks,
 } from '../utils/rs256-jwk.js';
+import type { NormalizedMeteringUsage, RawMeteringLine } from './billing-metering.types.js';
 
-const ProductSchema = z.string().regex(/^[a-z0-9][a-z0-9._-]{0,99}$/);
-const CurrencySchema = z.string().regex(/^[A-Z]{3}$/);
-const DecimalSchema = z.string().regex(/^(0|[1-9]\d*)(\.\d+)?$/);
+const ProductSchema = z.enum(['nessie', 'deepwater', 'deepsignal', 'deeptest']);
+const IntegerSchema = z.string().regex(/^(0|[1-9][0-9]*)$/);
+const DecimalSchema = z.string().regex(/^-?(0|[1-9][0-9]*)(\.[0-9]+)?$/);
 const MonthSchema = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
-
-const CustomerChargeSchema = z
+const CurrencySchema = z.string().regex(/^[A-Z]{3}$/);
+const ProductDimensionsSchema = z
   .object({
     billingProduct: ProductSchema,
-    callerProduct: ProductSchema,
-    currency: CurrencySchema,
-    amount: DecimalSchema,
-    calls: z.number().int().nonnegative(),
+    callerProduct: ProductSchema.nullable(),
+    originProduct: ProductSchema.nullable(),
   })
-  .passthrough();
+  .strict();
 
-const MonthlyComponentSchema = z
-  .object({
-    billingProduct: ProductSchema,
-    callerProduct: ProductSchema,
-    tariffId: z.string().min(1),
-    tariffKey: z.string().min(1),
-    tariffVersion: z.number().int().positive(),
-    tariffMode: z.enum(['standard', 'free', 'at_cost', 'custom']),
-    markupBps: z.number().int().nonnegative(),
-    usageMultiplierBps: z.number().int().nonnegative(),
-    assignmentScope: z.enum(['team', 'organisation', 'service_default']),
-    assignmentId: z.string().min(1).nullable(),
-    amountMinor: z.string().regex(/^(0|[1-9]\d*)$/),
-    currency: CurrencySchema,
-    usageBillingEnabled: z.boolean(),
-    collectionMode: z.enum(['stripe', 'manual', 'none']),
-    paymentCollectionEnabled: z.boolean(),
-  })
-  .passthrough();
+const UsageRowSchema = ProductDimensionsSchema.extend({
+  serviceId: z.string().trim().min(1).max(512),
+  usageUnit: z.string().trim().min(1).max(512),
+  calls: IntegerSchema,
+  rawProviderUsage: z
+    .object({
+      unitsIn: IntegerSchema,
+      unitsCachedIn: IntegerSchema,
+      unitsOut: IntegerSchema,
+    })
+    .strict(),
+}).strict();
 
-export const LedgerBillingUsageSchema = z
+const CostFieldsSchema = {
+  costProvenance: z.string().trim().min(1).max(512),
+  rawProviderCurrency: CurrencySchema.nullable(),
+  rawProviderEstimatedCost: DecimalSchema.nullable(),
+  rawProviderActualCost: DecimalSchema.nullable(),
+} as const;
+
+const CostRowSchema = ProductDimensionsSchema.extend({
+  serviceId: z.string().trim().min(1).max(512),
+  calls: IntegerSchema,
+  ...CostFieldsSchema,
+}).strict();
+
+const BreakdownRowSchema = UsageRowSchema.extend({
+  dimension: z.string().trim().min(1).max(512).nullable(),
+  ...CostFieldsSchema,
+}).strict();
+
+export const LedgerMeteringUsageSchema = z
   .object({
-    schemaVersion: z.literal(4),
+    schemaVersion: z.literal(1),
     product: ProductSchema,
     scope: z
       .object({
-        organizationId: z.string().min(1),
-        teamId: z.string().min(1).nullable(),
-        userId: z.null(),
-        month: MonthSchema,
+        organizationId: z.string().trim().min(1).max(256),
+        teamId: z.string().trim().min(1).max(256).nullable(),
+        userId: z.string().trim().min(1).max(256).nullable(),
+        month: MonthSchema.nullable(),
         startsAt: z.string().datetime(),
         endsAt: z.string().datetime(),
       })
       .strict(),
     totals: z
       .object({
-        calls: z.number().int().nonnegative(),
-        usageByService: z.array(z.record(z.unknown())),
-        amounts: z.array(z.record(z.unknown())),
-        customerCharges: z.array(CustomerChargeSchema),
+        calls: IntegerSchema,
+        usageByService: z.array(UsageRowSchema),
+        costs: z.array(CostRowSchema),
       })
       .strict(),
-    groupBy: z.literal('service'),
-    breakdown: z.array(z.record(z.unknown())),
-    monthlyComponents: z.array(MonthlyComponentSchema),
+    groupBy: z.enum(['service', 'user']),
+    breakdown: z.array(BreakdownRowSchema),
     snapshot: z
       .object({
-        cursor: z.string().regex(/^bus_[A-Za-z0-9_-]+$/),
+        cursor: z.string().regex(/^mus_[A-Za-z0-9_-]{32}$/),
+        id: z.string().regex(/^mus_[A-Za-z0-9_-]{32}$/),
         capturedAt: z.string().datetime(),
         immutable: z.literal(true),
       })
       .strict(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (value.snapshot.cursor !== value.snapshot.id) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['snapshot', 'id'],
+        message: 'snapshot id must equal cursor',
+      });
+    }
+  });
 
-export type LedgerBillingUsage = z.infer<typeof LedgerBillingUsageSchema>;
+export type LedgerMeteringUsage = z.infer<typeof LedgerMeteringUsageSchema>;
 
 type CollectorConfig = {
   baseUrl: string;
@@ -118,11 +132,7 @@ async function loadBillingAssertionKeyMaterial(
   }
   const parsedPrivate = parsePrivateRs256Jwk(privateRaw);
   const parsedPublic = parsePublicRs256Jwks(publicRaw);
-  if (
-    !parsedPrivate ||
-    !parsedPublic ||
-    !privateRs256JwkMatchesPublicJwks(privateRaw, publicRaw)
-  ) {
+  if (!parsedPrivate || !parsedPublic || !privateRs256JwkMatchesPublicJwks(privateRaw, publicRaw)) {
     throw new AppError('INTERNAL', 500, 'BILLING_ASSERTION_KEY_INVALID');
   }
   try {
@@ -142,15 +152,12 @@ async function loadBillingAssertionKeyMaterial(
 
 async function collectorConfig(env: Env = getEnv(), cacheKey = true): Promise<CollectorConfig> {
   if (
-    !env.STRIPE_BILLING_ENABLED ||
     !env.LEDGER_BILLING_BASE_URL ||
     !env.LEDGER_BILLING_APP_KEY ||
     !env.LEDGER_BILLING_APP_KEY_ID ||
-    !env.LEDGER_BILLING_ASSERTION_AUDIENCE ||
-    !env.UOA_BILLING_ASSERTION_SIGNING_PRIVATE_JWK ||
-    !env.UOA_BILLING_ASSERTION_PUBLIC_JWKS_JSON
+    !env.LEDGER_BILLING_ASSERTION_AUDIENCE
   ) {
-    throw new AppError('INTERNAL', 503, 'LEDGER_BILLING_COLLECTOR_DISABLED');
+    throw new AppError('INTERNAL', 503, 'LEDGER_METERING_READER_DISABLED');
   }
   const key = await loadBillingAssertionKeyMaterial(env, cacheKey);
   return {
@@ -179,7 +186,7 @@ async function signServiceAssertion(
   return new SignJWT({
     azp: config.appKeyId,
     source_domain: config.sourceDomain,
-    scope: 'billing.read',
+    scope: 'metering.read',
     product: params.product,
     organization_id: params.organisationId,
     ...(params.teamId ? { team_id: params.teamId } : {}),
@@ -188,15 +195,55 @@ async function signServiceAssertion(
     .setProtectedHeader({
       alg: 'RS256',
       kid: config.keyId,
-      typ: 'uoa-billing-service+jwt',
+      typ: 'uoa-metering-service+jwt',
     })
     .setIssuer(config.assertionIssuer)
     .setAudience(config.assertionAudience)
-    .setSubject('uoa-billing-collector')
+    .setSubject('uoa-metering-reader')
     .setJti(randomUUID())
     .setIssuedAt(now)
     .setExpirationTime(now + 5 * 60)
     .sign(config.privateKey);
+}
+
+function normalizeLine(
+  line: z.infer<typeof BreakdownRowSchema>,
+  groupBy: 'service' | 'user',
+): RawMeteringLine {
+  return {
+    serviceId: line.serviceId,
+    usageUnit: line.usageUnit,
+    calls: line.calls,
+    inputUnits: line.rawProviderUsage.unitsIn,
+    cachedInputUnits: line.rawProviderUsage.unitsCachedIn,
+    outputUnits: line.rawProviderUsage.unitsOut,
+    estimatedProviderCost: line.rawProviderEstimatedCost,
+    actualProviderCost: line.rawProviderActualCost,
+    currency: line.rawProviderCurrency,
+    costProvenance: line.costProvenance,
+    billingProduct: line.billingProduct,
+    callerProduct: line.callerProduct ?? line.billingProduct,
+    originProduct: line.originProduct ?? line.callerProduct ?? line.billingProduct,
+    userId: groupBy === 'user' ? line.dimension : null,
+  };
+}
+
+function normalizeUsage(usage: LedgerMeteringUsage, sha256: string): NormalizedMeteringUsage {
+  return {
+    schemaVersion: 1,
+    product: usage.product,
+    groupBy: usage.groupBy,
+    scope: usage.scope,
+    calls: usage.totals.calls,
+    lines: usage.breakdown.map((line) => normalizeLine(line, usage.groupBy)),
+    snapshot: {
+      cursor: usage.snapshot.cursor,
+      id: usage.snapshot.id,
+      capturedAt: usage.snapshot.capturedAt,
+      immutable: true,
+      sha256,
+    },
+  };
 }
 
 export function resetBillingAssertionKeyCache(): void {
@@ -212,12 +259,13 @@ export async function getBillingAssertionPublicJwks(): Promise<{ keys: JWK[] }> 
   return { keys: keys.map((key) => ({ ...key })) };
 }
 
-export async function fetchLedgerBillingUsage(
+export async function fetchLedgerMeteringUsage(
   params: {
     product: string;
     organisationId: string;
     teamId: string | null;
     billingMonth: string;
+    groupBy: 'service' | 'user';
     cursor?: string;
   },
   deps?: {
@@ -226,13 +274,13 @@ export async function fetchLedgerBillingUsage(
     now?: () => number;
     signAssertion?: typeof signServiceAssertion;
   },
-): Promise<LedgerBillingUsage> {
+): Promise<NormalizedMeteringUsage> {
   const config = await collectorConfig(deps?.env, deps?.env === undefined);
   const assertion = await (deps?.signAssertion ?? signServiceAssertion)(params, config, {
     now: deps?.now,
   });
-  const url = new URL(`${config.baseUrl}/v1/billing/usage`);
-  url.searchParams.set('group_by', 'service');
+  const url = new URL(`${config.baseUrl}/v1/metering/usage`);
+  url.searchParams.set('group_by', params.groupBy);
   if (params.cursor) url.searchParams.set('cursor', params.cursor);
 
   let response: Response;
@@ -247,18 +295,29 @@ export async function fetchLedgerBillingUsage(
       signal: AbortSignal.timeout(20_000),
     });
   } catch {
-    throw new AppError('INTERNAL', 502, 'LEDGER_BILLING_REQUEST_FAILED');
+    throw new AppError('INTERNAL', 502, 'LEDGER_METERING_REQUEST_FAILED');
   }
   if (!response.ok) {
-    throw new AppError('INTERNAL', 502, 'LEDGER_BILLING_REQUEST_FAILED');
+    throw new AppError('INTERNAL', 502, 'LEDGER_METERING_REQUEST_FAILED');
   }
   const text = await response.text();
   if (text.length > 2 * 1024 * 1024) {
-    throw new AppError('INTERNAL', 502, 'LEDGER_BILLING_RESPONSE_TOO_LARGE');
+    throw new AppError('INTERNAL', 502, 'LEDGER_METERING_RESPONSE_TOO_LARGE');
   }
   try {
-    return LedgerBillingUsageSchema.parse(JSON.parse(text));
+    const usage = LedgerMeteringUsageSchema.parse(JSON.parse(text));
+    if (
+      usage.product !== params.product ||
+      usage.groupBy !== params.groupBy ||
+      usage.scope.organizationId !== params.organisationId ||
+      usage.scope.teamId !== params.teamId ||
+      usage.scope.userId !== null ||
+      usage.scope.month !== params.billingMonth
+    ) {
+      throw new Error('scope mismatch');
+    }
+    return normalizeUsage(usage, createHash('sha256').update(text).digest('hex'));
   } catch {
-    throw new AppError('INTERNAL', 502, 'LEDGER_BILLING_RESPONSE_INVALID');
+    throw new AppError('INTERNAL', 502, 'LEDGER_METERING_RESPONSE_INVALID');
   }
 }

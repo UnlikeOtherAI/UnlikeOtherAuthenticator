@@ -8,12 +8,13 @@ import { UnderlineTabs } from '../../components/ui/Tabs';
 import type { BillingService } from '../../schemas/billing';
 import { useAdminUi } from '../shell/admin-ui';
 import {
+  useDeactivateBillingAdjustmentMutation,
   useRemoveBillingAssignmentMutation,
   useRevokeBillingAppKeyMutation,
   useSetDefaultBillingTariffMutation,
 } from './billing-admin-queries';
 
-type BillingTab = 'tariffs' | 'assignments' | 'app-keys' | 'subscriptions';
+type BillingTab = 'tariffs' | 'assignments' | 'adjustments' | 'app-keys' | 'subscriptions';
 
 function date(value: string | null): string {
   return value ? new Date(value).toLocaleString() : '—';
@@ -43,11 +44,13 @@ function subscriptionStatus(status: string): BadgeVariant {
 
 export function BillingServicePanel({
   onAddAppKey,
+  onAddAdjustment,
   onAddAssignment,
   onAddTariff,
   service,
 }: {
   onAddAppKey: () => void;
+  onAddAdjustment: () => void;
   onAddAssignment: () => void;
   onAddTariff: () => void;
   service: BillingService;
@@ -56,6 +59,7 @@ export function BillingServicePanel({
   const setDefault = useSetDefaultBillingTariffMutation(service.id);
   const removeAssignment = useRemoveBillingAssignmentMutation(service.id);
   const revokeKey = useRevokeBillingAppKeyMutation(service.id);
+  const deactivateAdjustment = useDeactivateBillingAdjustmentMutation(service.id);
   const { confirm } = useAdminUi();
 
   return (
@@ -82,6 +86,9 @@ export function BillingServicePanel({
           <Button icon="building" size="sm" onClick={onAddAssignment}>
             Assignment
           </Button>
+          <Button icon="plus" size="sm" onClick={onAddAdjustment}>
+            Commercial line
+          </Button>
           <Button icon="key" size="sm" variant="primary" onClick={onAddAppKey}>
             Product key
           </Button>
@@ -94,6 +101,11 @@ export function BillingServicePanel({
           options={[
             { label: 'Tariffs', value: 'tariffs', count: service.tariffs.length },
             { label: 'Assignments', value: 'assignments', count: service.assignments.length },
+            {
+              label: 'Add-ons & credits',
+              value: 'adjustments',
+              count: service.adjustments.length,
+            },
             { label: 'App keys', value: 'app-keys', count: service.app_keys.length },
             {
               label: 'Stripe subscriptions',
@@ -273,6 +285,84 @@ export function BillingServicePanel({
             <tr>
               <Td colSpan={6} className="text-gray-400">
                 No product has been issued a billing app key.
+              </Td>
+            </tr>
+          ) : null}
+        </DataTable>
+      ) : null}
+
+      {tab === 'adjustments' ? (
+        <DataTable
+          headers={[
+            'Scope',
+            'Commercial line',
+            'Kind',
+            'Exact amount',
+            'Effective period',
+            'Status',
+          ]}
+        >
+          {service.adjustments.map((adjustment) => (
+            <tr key={adjustment.id}>
+              <Td>
+                <p className="font-medium text-gray-700">{adjustment.organisation.name}</p>
+                <span className="text-xs text-gray-400">
+                  {adjustment.team?.name ?? 'Entire organisation'}
+                </span>
+              </Td>
+              <Td>
+                <p className="font-medium text-gray-700">{adjustment.name}</p>
+                <code className="text-xs text-gray-400">{adjustment.key}</code>
+              </Td>
+              <Td>
+                <Badge variant={adjustment.kind === 'credit' ? 'green' : 'purple'}>
+                  {adjustment.kind.replace('_', '-')}
+                </Badge>
+                <span className="mt-1 block text-[11px] text-gray-400">
+                  {adjustment.cadence.replace('_', ' ')}
+                </span>
+              </Td>
+              <Td>
+                <span className="font-mono text-xs">
+                  {adjustment.kind === 'credit' ? '−' : '+'}
+                  {adjustment.amount_minor} {adjustment.currency}
+                </span>
+                <span className="block text-[11px] text-gray-400">minor units</span>
+              </Td>
+              <Td className="text-xs">
+                {date(adjustment.starts_at)}
+                <span className="block text-[11px] text-gray-400">
+                  to {date(adjustment.ends_at)}
+                </span>
+              </Td>
+              <Td>
+                <Badge variant={adjustment.active ? 'blue' : 'slate'}>
+                  {adjustment.active ? 'Active' : 'Inactive'}
+                </Badge>
+                {adjustment.active ? (
+                  <Button
+                    className="mt-2"
+                    size="sm"
+                    variant="danger"
+                    disabled={deactivateAdjustment.isPending}
+                    onClick={() =>
+                      confirm(
+                        `Deactivate ${adjustment.name}?`,
+                        'Future statements will omit this line. Existing pinned statements remain unchanged.',
+                        () => deactivateAdjustment.mutateAsync(adjustment.id),
+                      )
+                    }
+                  >
+                    Deactivate
+                  </Button>
+                ) : null}
+              </Td>
+            </tr>
+          ))}
+          {service.adjustments.length === 0 ? (
+            <tr>
+              <Td colSpan={6} className="text-gray-400">
+                No UOA-owned add-ons or credits for this service.
               </Td>
             </tr>
           ) : null}

@@ -34,6 +34,13 @@ export async function listBillingServices(deps?: { prisma?: PrismaClient }) {
           createdAt: true,
         },
       },
+      adjustments: {
+        orderBy: [{ active: 'desc' }, { startsAt: 'desc' }],
+        include: {
+          org: { select: { id: true, name: true } },
+          team: { select: { id: true, name: true } },
+        },
+      },
       stripeCatalogs: {
         orderBy: { currency: 'asc' },
         include: {

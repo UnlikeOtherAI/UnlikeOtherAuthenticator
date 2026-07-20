@@ -10,7 +10,8 @@ maintain independent tariff tables or infer a tariff from usage.
 This slice defines tariff storage, assignment, app authentication, signed
 entitlement reads, and a fail-closed Stripe collection foundation. UOA can map
 an exact immutable tariff version to Stripe products/prices, create a hosted
-subscription Checkout, reconcile signed webhooks, and export Ledger-rated usage.
+subscription Checkout, reconcile signed webhooks, and export UOA-rated customer
+amounts derived from Ledger's raw immutable metering.
 The integration is disabled by default and must not create customers, prices,
 subscriptions, or meter events until its explicit production gate and every
 credential/reconciliation prerequisite are configured and verified.
@@ -127,9 +128,10 @@ An app key:
 Purpose is enforced by middleware and by database constraints, not caller
 convention. An `entitlement` key can call only
 `POST /billing/v1/effective-tariff` and must have no redirect origins. A
-`customer_lifecycle` key can call only the Stripe Checkout, summary, portal,
-and cancellation routes and must have at least one exact HTTPS return origin.
-No key can cross those endpoint classes. Every request also requires its
+`customer_lifecycle` key can call only direct-session access confirmation, the
+canonical customer statement, Stripe Checkout, summary, portal, and
+cancellation routes and must have at least one exact HTTPS return origin. No
+key can cross those endpoint classes. Every request also requires its
 credential-bound actor assertion, and the body product must exactly equal the
 service bound to the key.
 
@@ -388,42 +390,46 @@ app-key, and actor binding for all lifecycle operations:
 | Method and path | Behaviour |
 |---|---|
 | `POST /billing/v1/stripe/subscription-summary` | Returns the effective tariff, assignment, `can_manage`, collection gate/mode, and a safe local subscription projection with no Stripe IDs |
-| `POST /billing/v1/stripe/portal-session` | Creates a Stripe-hosted portal session after billing-manager and exact return-origin checks |
-| `POST /billing/v1/stripe/subscription/cancel` | Sets `cancel_at_period_end=true`, reconciles Stripe's returned current state, audits the actor, and returns the updated summary |
+| `POST /billing/v1/stripe/portal-session`       | Creates a Stripe-hosted portal session after billing-manager and exact return-origin checks                                               |
+| `POST /billing/v1/cancellation/preview`        | Returns the complete confirmation model and an opaque, short-lived token for exact direct subscriptions                                   |
+| `POST /billing/v1/cancellation/confirm`        | Revalidates and idempotently schedules cancellation for the preview's exact selected direct subscriptions                                 |
 
 Summary is useful even while collection is disabled: it returns
 `stripe_collection_enabled=false` and the last single account-scoped local
 projection. If more than one account projection could match, it returns
 `STRIPE_SUBSCRIPTION_ACCOUNT_AMBIGUOUS` instead of guessing. Portal and
-cancellation remain unavailable while the process gate is off. The
+cancellation preview/confirmation remain unavailable while the process gate is
+off. The
 `subscription.billing_phase` field is `free_alignment_period`,
 `calendar_month`, or `unknown`.
 
 ### Ledger collection and Stripe meter units
 
-UOA calls `GET /v1/billing/usage?group_by=service` with:
+UOA calls `GET /v1/metering/usage?group_by=service` with:
 
 ```http
-X-Ledger-App-Key: <UOA's dedicated Ledger billing-reader app key>
+X-Ledger-App-Key: <UOA's dedicated Ledger raw-metering reader app key>
 X-UOA-Service-Assertion: <short-lived RS256 service JWT>
 ```
 
 The app key authenticates UOA as the calling application. The assertion
-independently binds that exact key ID to `scope=billing.read`, the billed
+independently binds that exact key ID to `scope=metering.read`, the billed
 product, organisation, optional team, and one UTC billing month. Ledger
 verifies it through UOA's rotation-safe
 `GET /billing/v1/service-jwks.json`; those keys are not tariff-snapshot,
 OAuth-resource-token, product-app-key, or webhook keys.
 
-Ledger's schema-v4 response is an immutable snapshot. UOA validates its exact
-product, scope, calendar boundaries, tariff version, collection mode, and
-currency before exporting anything. Each customer charge is an exact
-major-currency decimal. UOA converts it to an integer count of
+Ledger's `metering-usage-v1` response is an immutable raw snapshot. UOA
+validates its exact product, scope, calendar boundaries, grouping, string
+quantities/costs, and immutable snapshot identity before rating anything.
+Commercial fields are rejected. UOA applies the pinned immutable tariff to raw
+provider cost, producing each exact major-currency customer charge. UOA then
+converts it to an integer count of
 `10^-6` minor-currency units and sends only the delta since the previous
 snapshot to Stripe's sum meter, using a stable idempotent event identifier.
 Stripe therefore meters rated money—not tokens, searches, research runs, or
-their derived billable units. Raw and customer billable usage remain in Ledger
-and product UIs.
+their derived billable units. Raw facts remain in Ledger; customer billable
+usage and display-ready totals belong to UOA and flow unchanged to product UIs.
 
 Snapshot cursors and cumulative/delta exports are stored so retries can be
 replayed and audited. A lower corrected cumulative total emits a negative
@@ -505,3 +511,130 @@ Stripe meter processing is asynchronous. The scheduler is deployed but inert
 while the safety gate is false. Test-mode evidence for the full lifecycle and
 an explicit production configuration review remain mandatory before enabling
 live collection; a manually successful export alone is insufficient.
+
+## 2026-07-20 canonical statement and raw-metering contract
+
+This section is the authoritative cross-product statement and raw-metering
+contract. The lifecycle and export descriptions above use the same boundaries.
+
+### System-of-record boundary
+
+UOA is the only commercial billing engine and system of record. It owns:
+
+- immutable tariff terms and assignment precedence;
+- centrally rated billable units, markup, customer charges, exact totals, and
+  currencies;
+- monthly subscriptions, add-ons, credits, collection state, and customer
+  actions;
+- direct product-access evidence and cancellation scope;
+- the canonical customer statement and all display wording.
+
+Ledger owns immutable metering facts only: token/API/SERP/research/provider
+usage, provider-estimated or provider-actual cost, and exact
+user/organisation/team/billing-product/caller-product/origin-product
+attribution. Ledger must not return tariff, subscription, markup,
+billable-unit, customer-charge, add-on, credit, payment, invoice, or
+cancellation fields. Stripe is only the payment processor.
+
+### Ledger `metering-usage-v1`
+
+UOA calls:
+
+```http
+GET https://ledger.unlikeotherai.com/v1/metering/usage?group_by=service
+GET https://ledger.unlikeotherai.com/v1/metering/usage?group_by=user
+X-Ledger-App-Key: <UOA's dedicated metering-reader app key>
+X-UOA-Service-Assertion: <short-lived RS256 service JWT>
+```
+
+The service assertion binds the exact UOA key ID, product, organisation,
+optional team, UTC month, and `scope=metering.read`. Its protected-header type
+is `uoa-metering-service+jwt` and its subject is `uoa-metering-reader`.
+Ledger's public Draft 2020-12 schema is
+`https://ledger.unlikeotherai.com/schemas/metering-usage-v1.json`.
+
+UOA accepts only schema version 1 with exact string quantities and costs, the
+requested scope/grouping, and an immutable `mus_…` snapshot whose `id` equals
+its `cursor`. UOA hashes the exact response bytes and pins
+`cursor`/`id`/`capturedAt`/SHA-256 in the customer statement. Unknown or
+commercial fields fail closed.
+
+For Stripe usage export, UOA selects actual provider cost when present,
+otherwise estimated provider cost, aggregates by caller and currency, applies
+the immutable tariff multiplier centrally, then converts the resulting exact
+major-currency amount to Stripe's integer micro-minor meter quantity. Ledger
+never rates the customer amount.
+
+### Canonical public customer contract
+
+The frozen v1 paths are:
+
+| Method and path                          | Behaviour                                                                                                                                                                      |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `GET /schemas/billing-statement-v1.json` | Public Draft 2020-12 schema for the exact response                                                                                                                             |
+| `POST /billing/v1/service-access/confirm` | Records one direct product session after exact product-key, actor, and active membership verification                                                                          |
+| `POST /billing/v1/customer-statement`    | Display-ready current/past-month plan, subscription, raw and billable usage, cross-service and per-user attribution, commercial lines, exact totals, capabilities, and actions |
+| `POST /billing/v1/cancellation/preview`  | Complete confirmation-dialog model plus opaque five-minute token and server-generated idempotency key                                                                          |
+| `POST /billing/v1/cancellation/confirm`  | Locked, revalidated, idempotent confirmation for the preview's exact pinned direct subscriptions                                                                               |
+
+All POSTs require the calling product deployment's individual
+`customer_lifecycle` app key and a fresh RS256 `X-UOA-Actor` whose product,
+user, organisation, and team exactly match the body. The actor lifetime is at
+most 60 seconds and its audience is the exact audience stored on the app key.
+Product backends inject both credentials; browsers receive neither.
+The canonical UOA and Ledger product identifiers are `nessie`, `deepwater`,
+`deepsignal`, and `deeptest`. Hyphenated repository or application slugs are
+mapped at the product boundary and are never sent in billing subjects.
+
+Products render `BillingStatementV1` unchanged. They must not derive tariff
+copy, totals, markup, cancellation scope, or action choices. The three action
+IDs and fixed routes are:
+
+- `upgrade` → `/billing/v1/stripe/checkout-session`;
+- `portal` → `/billing/v1/stripe/portal-session`;
+- `cancel` → `/billing/v1/cancellation/preview`.
+
+The statement supplies the exact request body, including server-pinned
+allowlisted return URLs. A product may whitelist these ID/path pairs and proxy
+the supplied body, but must reject unknown actions. The old
+`POST /billing/v1/stripe/subscription/cancel` route no longer exists.
+
+### Direct versus indirect access
+
+`billing_service_accesses` is UOA-owned entitlement evidence confirmed only
+after a product's own app key and actor have passed membership checks. Every
+product backend MUST call `POST /billing/v1/service-access/confirm` immediately
+after its own successful UOA SSO exchange or direct session establishment. The
+route requires that product's `customer_lifecycle` key and fresh actor, rechecks
+the exact active organisation and team memberships, and records the exact
+service, organisation, team, and user transactionally. Statement and
+cancellation reads count only users whose organisation and team memberships
+remain active.
+
+Proxy or agent use of another product MUST NOT call the confirmation route for
+that other product. Ledger metering can identify another product as caller or
+origin for statement attribution, but that is `indirect` access and never
+creates or implies a direct entitlement.
+
+Cancellation preview considers active same-account subscriptions for products
+that team users access directly. It offers
+`current_and_related_direct_services` only when such a related subscription
+exists. Ledger-only indirect services are listed for explanation but never
+become a cancellation choice. UOA stores only the SHA-256 digest of the opaque
+preview token, pins exact service/subscription IDs plus entitlement and
+subscription fingerprints, and confirms under a serializable row lock. A token
+is short-lived and single-use; the matching idempotency key and selection may
+resume or replay a completed result without repeating the customer-visible
+operation.
+
+### Add-ons and credits
+
+`billing_commercial_adjustments` stores UOA-owned organisation/team add-ons and
+credits as non-negative integer minor-currency values. Sign is derived from
+kind, never accepted as ambiguous input. Lines are one-time or monthly with
+explicit effective bounds, deactivated rather than deleted, and audited.
+Deactivation records its exact time: already-effective lines remain visible in
+historical statements, while future one-time lines cancelled before their
+effective instant do not appear.
+Applicable lines appear unchanged in the canonical statement. They are never
+sent to or accepted from Ledger.

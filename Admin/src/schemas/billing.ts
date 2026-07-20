@@ -74,6 +74,35 @@ export const BillingStripeSubscriptionSchema = z.object({
   updated_at: z.string(),
 });
 
+export const BillingAdjustmentSchema = z.object({
+  id: z.string(),
+  service_id: z.string(),
+  key: z.string(),
+  name: z.string(),
+  kind: z.enum(['add_on', 'credit']),
+  cadence: z.enum(['one_time', 'monthly']),
+  amount_minor: z.string(),
+  currency: z.string(),
+  scope: z.enum(['organisation', 'team']),
+  scope_key: z.string(),
+  organisation: z.object({ id: z.string(), name: z.string() }),
+  team: z.object({ id: z.string(), name: z.string() }).nullable(),
+  starts_at: z.string(),
+  ends_at: z.string().nullable(),
+  active: z.boolean(),
+  created_by_email: z.string().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+export const CreatedBillingAdjustmentSchema = BillingAdjustmentSchema.omit({
+  organisation: true,
+  team: true,
+  created_by_email: true,
+}).extend({
+  organisation_id: z.string(),
+  team_id: z.string().nullable(),
+});
+
 export const BillingServiceSchema = z.object({
   id: z.string(),
   identifier: z.string(),
@@ -82,6 +111,7 @@ export const BillingServiceSchema = z.object({
   tariffs: z.array(BillingTariffSchema),
   assignments: z.array(BillingAssignmentSchema),
   app_keys: z.array(BillingAppKeySchema),
+  adjustments: z.array(BillingAdjustmentSchema),
   stripe_catalogs: z.array(z.object({ id: z.string() }).passthrough()),
   stripe_subscriptions: z.array(BillingStripeSubscriptionSchema),
   created_at: z.string(),
@@ -197,12 +227,44 @@ export const BillingAppKeyFormSchema = z
     }
   });
 
+export const BillingAdjustmentFormSchema = z
+  .object({
+    organisationId: z.string().min(1, 'Select an organisation.'),
+    teamId: z.string(),
+    key: z
+      .string()
+      .trim()
+      .regex(/^[a-z0-9][a-z0-9._-]{0,99}$/, 'Use lowercase letters, numbers, dots, _ or -.'),
+    name: z.string().trim().min(1).max(160),
+    kind: z.enum(['add_on', 'credit']),
+    cadence: z.enum(['one_time', 'monthly']),
+    amountMinor: z.string().regex(/^(0|[1-9]\d*)$/, 'Enter an integer in minor currency units.'),
+    currency: z
+      .string()
+      .trim()
+      .length(3)
+      .transform((value) => value.toUpperCase()),
+    startsAt: z.string().date(),
+    endsAt: z.string(),
+  })
+  .superRefine((value, context) => {
+    if (value.endsAt && value.endsAt <= value.startsAt) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['endsAt'],
+        message: 'End date must be after the start date.',
+      });
+    }
+  });
+
 export type BillingService = z.infer<typeof BillingServiceSchema>;
 export type BillingTariff = z.infer<typeof BillingTariffSchema>;
 export type BillingAssignment = z.infer<typeof BillingAssignmentSchema>;
 export type BillingAppKey = z.infer<typeof BillingAppKeySchema>;
+export type BillingAdjustment = z.infer<typeof BillingAdjustmentSchema>;
 export type CreatedBillingAppKey = z.infer<typeof CreatedBillingAppKeySchema>;
 export type BillingServiceFormValues = z.infer<typeof BillingServiceFormSchema>;
 export type BillingTariffFormValues = z.infer<typeof BillingTariffFormSchema>;
 export type BillingAssignmentFormValues = z.infer<typeof BillingAssignmentFormSchema>;
 export type BillingAppKeyFormValues = z.infer<typeof BillingAppKeyFormSchema>;
+export type BillingAdjustmentFormValues = z.infer<typeof BillingAdjustmentFormSchema>;

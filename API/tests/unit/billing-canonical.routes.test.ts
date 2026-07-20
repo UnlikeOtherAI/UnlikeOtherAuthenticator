@@ -1,0 +1,277 @@
+import { BillingAppKeyPurpose } from '@prisma/client';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { createApp } from '../../src/app.js';
+
+const appKeyService = vi.hoisted(() => ({
+  verifyBillingAppKey: vi.fn(),
+}));
+const statementService = vi.hoisted(() => ({
+  getCanonicalBillingStatement: vi.fn(),
+}));
+const accessService = vi.hoisted(() => ({
+  confirmAuthenticatedDirectBillingServiceAccess: vi.fn(),
+}));
+const previewService = vi.hoisted(() => ({
+  createBillingCancellationPreview: vi.fn(),
+}));
+const confirmService = vi.hoisted(() => ({
+  confirmBillingCancellation: vi.fn(),
+}));
+
+vi.mock('../../src/services/billing-app-key.service.js', async () => {
+  const actual = await vi.importActual<
+    typeof import('../../src/services/billing-app-key.service.js')
+  >('../../src/services/billing-app-key.service.js');
+  return { ...actual, ...appKeyService };
+});
+vi.mock('../../src/services/billing-statement.service.js', async () => {
+  const actual = await vi.importActual<
+    typeof import('../../src/services/billing-statement.service.js')
+  >('../../src/services/billing-statement.service.js');
+  return { ...actual, ...statementService };
+});
+vi.mock('../../src/services/billing-service-access.service.js', async () => {
+  const actual = await vi.importActual<
+    typeof import('../../src/services/billing-service-access.service.js')
+  >('../../src/services/billing-service-access.service.js');
+  return { ...actual, ...accessService };
+});
+vi.mock('../../src/services/billing-cancellation-preview.service.js', async () => {
+  const actual = await vi.importActual<
+    typeof import('../../src/services/billing-cancellation-preview.service.js')
+  >('../../src/services/billing-cancellation-preview.service.js');
+  return { ...actual, ...previewService };
+});
+vi.mock('../../src/services/billing-cancellation-confirm.service.js', async () => {
+  const actual = await vi.importActual<
+    typeof import('../../src/services/billing-cancellation-confirm.service.js')
+  >('../../src/services/billing-cancellation-confirm.service.js');
+  return { ...actual, ...confirmService };
+});
+
+const originalSharedSecret = process.env.SHARED_SECRET;
+const originalDatabaseUrl = process.env.DATABASE_URL;
+const credential = {
+  id: 'app_key_1',
+  purpose: BillingAppKeyPurpose.CUSTOMER_LIFECYCLE,
+  actorIssuer: 'https://api.deepwater.example',
+  actorAudience: 'https://authentication.unlikeotherai.com/billing/v1/effective-tariff',
+  actorKeyId: 'actor_key_1',
+  actorPublicJwk: {},
+  checkoutReturnOrigins: ['https://app.deepwater.example'],
+  service: { id: 'service_1', identifier: 'deepwater', name: 'DeepWater' },
+};
+const subject = {
+  product: 'deepwater',
+  organisation_id: 'org_1',
+  team_id: 'team_1',
+  user_id: 'user_1',
+};
+
+beforeAll(() => {
+  process.env.SHARED_SECRET = 'test-shared-secret-with-enough-length';
+  Reflect.deleteProperty(process.env, 'DATABASE_URL');
+});
+
+afterAll(() => {
+  if (originalSharedSecret === undefined) {
+    Reflect.deleteProperty(process.env, 'SHARED_SECRET');
+  } else {
+    process.env.SHARED_SECRET = originalSharedSecret;
+  }
+  if (originalDatabaseUrl === undefined) {
+    Reflect.deleteProperty(process.env, 'DATABASE_URL');
+  } else {
+    process.env.DATABASE_URL = originalDatabaseUrl;
+  }
+});
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  appKeyService.verifyBillingAppKey.mockResolvedValue(credential);
+  statementService.getCanonicalBillingStatement.mockResolvedValue({
+    schema_version: 1,
+    statement_id: 'bst_1',
+  });
+  accessService.confirmAuthenticatedDirectBillingServiceAccess.mockResolvedValue(undefined);
+  previewService.createBillingCancellationPreview.mockResolvedValue({
+    schema_version: 1,
+    preview_token: 'uoa_cancel_token',
+  });
+  confirmService.confirmBillingCancellation.mockResolvedValue({
+    schema_version: 1,
+    status: 'confirmed',
+  });
+});
+
+async function withApp(
+  callback: (app: Awaited<ReturnType<typeof createApp>>) => Promise<void>,
+): Promise<void> {
+  const app = await createApp();
+  await app.ready();
+  try {
+    await callback(app);
+  } finally {
+    await app.close();
+  }
+}
+
+describe('canonical customer billing routes', () => {
+  it('publishes the immutable statement schema without credentials', async () => {
+    await withApp(async (app) => {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/schemas/billing-statement-v1.json',
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.headers['content-type']).toContain('application/schema+json');
+      expect(response.headers['cache-control']).toBe('public, max-age=300');
+      expect(response.json()).toMatchObject({
+        $schema: 'https://json-schema.org/draft/2020-12/schema',
+        title: 'UOA canonical customer billing statement',
+      });
+    });
+  });
+
+  it('binds a lifecycle key and actor to one statement subject and month', async () => {
+    await withApp(async (app) => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/billing/v1/customer-statement',
+        headers: {
+          'x-uoa-app-key': 'uoa_app_product_key',
+          'x-uoa-actor': 'signed-actor',
+        },
+        payload: { ...subject, billing_month: '2026-07' },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.headers['cache-control']).toBe('private, no-store');
+      expect(statementService.getCanonicalBillingStatement).toHaveBeenCalledWith({
+        credential,
+        actorToken: 'signed-actor',
+        billingMonth: '2026-07',
+        request: {
+          product: 'deepwater',
+          organisationId: 'org_1',
+          teamId: 'team_1',
+          userId: 'user_1',
+        },
+      });
+    });
+  });
+
+  it('records a direct product session through the product-bound lifecycle key', async () => {
+    await withApp(async (app) => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/billing/v1/service-access/confirm',
+        headers: {
+          'x-uoa-app-key': 'uoa_app_product_key',
+          'x-uoa-actor': 'signed-actor',
+        },
+        payload: subject,
+      });
+
+      expect(response.statusCode).toBe(204);
+      expect(response.headers['cache-control']).toBe('private, no-store');
+      expect(response.body).toBe('');
+      expect(accessService.confirmAuthenticatedDirectBillingServiceAccess).toHaveBeenCalledWith({
+        credential,
+        actorToken: 'signed-actor',
+        request: {
+          product: 'deepwater',
+          organisationId: 'org_1',
+          teamId: 'team_1',
+          userId: 'user_1',
+        },
+      });
+    });
+  });
+
+  it('forwards only the frozen preview and confirmation inputs', async () => {
+    await withApp(async (app) => {
+      const preview = await app.inject({
+        method: 'POST',
+        url: '/billing/v1/cancellation/preview',
+        headers: {
+          'x-uoa-app-key': 'uoa_app_product_key',
+          'x-uoa-actor': 'signed-actor',
+        },
+        payload: subject,
+      });
+      expect(preview.statusCode).toBe(201);
+      expect(previewService.createBillingCancellationPreview).toHaveBeenCalledWith({
+        credential,
+        actorToken: 'signed-actor',
+        request: {
+          product: 'deepwater',
+          organisationId: 'org_1',
+          teamId: 'team_1',
+          userId: 'user_1',
+        },
+      });
+
+      const confirmation = await app.inject({
+        method: 'POST',
+        url: '/billing/v1/cancellation/confirm',
+        headers: {
+          'x-uoa-app-key': 'uoa_app_product_key',
+          'x-uoa-actor': 'signed-actor',
+        },
+        payload: {
+          ...subject,
+          preview_token: 'uoa_cancel_012345678901234567890123456789',
+          idempotency_key: 'uoa_confirm_012345678901234567890123456789',
+          selection: 'current_service',
+        },
+      });
+      expect(confirmation.statusCode).toBe(200);
+      expect(confirmService.confirmBillingCancellation).toHaveBeenCalledWith({
+        credential,
+        actorToken: 'signed-actor',
+        request: {
+          product: 'deepwater',
+          organisationId: 'org_1',
+          teamId: 'team_1',
+          userId: 'user_1',
+        },
+        token: 'uoa_cancel_012345678901234567890123456789',
+        idempotencyKey: 'uoa_confirm_012345678901234567890123456789',
+        selection: 'current_service',
+      });
+    });
+  });
+
+  it('rejects missing actor or entitlement-only keys before statement generation', async () => {
+    await withApp(async (app) => {
+      const noActor = await app.inject({
+        method: 'POST',
+        url: '/billing/v1/customer-statement',
+        headers: { 'x-uoa-app-key': 'uoa_app_product_key' },
+        payload: subject,
+      });
+      expect(noActor.statusCode).toBe(401);
+    });
+    appKeyService.verifyBillingAppKey.mockResolvedValueOnce({
+      ...credential,
+      purpose: BillingAppKeyPurpose.ENTITLEMENT,
+      checkoutReturnOrigins: [],
+    });
+    await withApp(async (app) => {
+      const wrongPurpose = await app.inject({
+        method: 'POST',
+        url: '/billing/v1/customer-statement',
+        headers: {
+          'x-uoa-app-key': 'uoa_app_entitlement_key',
+          'x-uoa-actor': 'signed-actor',
+        },
+        payload: subject,
+      });
+      expect(wrongPurpose.statusCode).toBe(403);
+    });
+    expect(statementService.getCanonicalBillingStatement).not.toHaveBeenCalled();
+  });
+});

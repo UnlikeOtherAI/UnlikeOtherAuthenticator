@@ -25,10 +25,7 @@ import { billingScope } from './billing-stripe-checkout-state.service.js';
 import { isBillingManager } from './billing-stripe-manager.service.js';
 import { stripeBillingPeriodPhase } from './billing-stripe-period.service.js';
 import { normalizeStripeReturnUrl } from './billing-stripe-return-url.service.js';
-import {
-  refreshStripeSubscriptionProjection,
-  syncStripeSubscriptionProjection,
-} from './billing-stripe-webhook.service.js';
+import { refreshStripeSubscriptionProjection } from './billing-stripe-webhook.service.js';
 
 export type BillingSubscriptionRequest = {
   product: string;
@@ -45,7 +42,6 @@ type Dependencies = {
   stripeLivemode?: boolean;
   resolveTariff?: typeof resolveEffectiveTariffContext;
   refreshSubscription?: typeof refreshStripeSubscriptionProjection;
-  syncSubscription?: typeof syncStripeSubscriptionProjection;
 };
 
 type SubscriptionWithCustomer = BillingStripeSubscription & {
@@ -344,49 +340,4 @@ export async function createStripePortalSession(
     },
   });
   return { portal_url: session.url };
-}
-
-export async function cancelStripeSubscription(
-  params: {
-    request: BillingSubscriptionRequest;
-    actorToken: string;
-    credential: VerifiedBillingAppKey;
-  },
-  deps?: Dependencies,
-) {
-  const context = await lifecycleContext(params, deps);
-  const { account, stripe, subscription } = requireManageableSubscription(context);
-  const remote = await stripe.subscriptions.update(subscription.stripeSubscriptionId, {
-    cancel_at_period_end: true,
-  });
-  assertStripeObjectLivemode(remote, account.livemode);
-  await (deps?.syncSubscription ?? syncStripeSubscriptionProjection)(
-    { subscription: remote, account },
-    { prisma: context.prisma },
-  );
-  const refreshed = await currentSubscription(
-    context.prisma,
-    account,
-    params.credential.service.id,
-    context.payload,
-  );
-  const finalContext = { ...context, subscription: refreshed };
-  await context.prisma.orgAuditLog.create({
-    data: {
-      orgId: context.payload.subject.organisation_id,
-      actorUserId: context.payload.subject.user_id,
-      action: 'billing.stripe_subscription_cancel_scheduled',
-      targetType: 'billing_stripe_subscription',
-      targetId: subscription.id,
-      metadata: {
-        product: params.credential.service.identifier,
-        service_id: params.credential.service.id,
-        scope: subscription.scope.toLowerCase(),
-        scope_key: subscription.scopeKey,
-        stripe_account_id: account.stripeAccountId,
-        livemode: account.livemode,
-      },
-    },
-  });
-  return serializeSubscription(finalContext);
 }
