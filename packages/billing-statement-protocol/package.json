@@ -1,6 +1,6 @@
 {
   "name": "@unlikeotherai/billing-statement-protocol",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Public UOA billing statement and customer-action consumer contracts",
   "license": "MIT",
   "type": "module",
@@ -30,12 +30,18 @@
     "./schema/billing-statement-v1.json": "./schema/billing-statement-v1.json",
     "./schema/billing-statement-v2.json": "./schema/billing-statement-v2.json",
     "./schema/billing-consumer-actions-v1.json": "./schema/billing-consumer-actions-v1.json",
+    "./schema/billing-credits-v1.json": "./schema/billing-credits-v1.json",
+    "./schema/billing-recurring-addons-v1.json": "./schema/billing-recurring-addons-v1.json",
     "./fixtures/billing-statement-v1.example.json": "./fixtures/billing-statement-v1.example.json",
     "./fixtures/billing-statement-v2.example.json": "./fixtures/billing-statement-v2.example.json",
     "./fixtures/billing-consumer-actions-v1.example.json": "./fixtures/billing-consumer-actions-v1.example.json",
+    "./fixtures/billing-credits-v1.example.json": "./fixtures/billing-credits-v1.example.json",
+    "./fixtures/billing-recurring-addons-v1.example.json": "./fixtures/billing-recurring-addons-v1.example.json",
     "./openapi/billing-statement-v1.openapi.json": "./openapi/billing-statement-v1.openapi.json",
     "./openapi/billing-statement-v2.openapi.json": "./openapi/billing-statement-v2.openapi.json",
-    "./openapi/billing-consumer-actions-v1.openapi.json": "./openapi/billing-consumer-actions-v1.openapi.json"
+    "./openapi/billing-consumer-actions-v1.openapi.json": "./openapi/billing-consumer-actions-v1.openapi.json",
+    "./openapi/billing-credits-v1.openapi.json": "./openapi/billing-credits-v1.openapi.json",
+    "./openapi/billing-recurring-addons-v1.openapi.json": "./openapi/billing-recurring-addons-v1.openapi.json"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json && node scripts/generate-artifacts.mjs --check",

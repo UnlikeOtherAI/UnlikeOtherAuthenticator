@@ -6,16 +6,43 @@ import {
   billingConsumerActionProtocolV1JsonSchema,
   billingConsumerActionV1ConformanceFixtures,
   billingConsumerActionV1OpenApiDocument,
+  billingRecurringAddonProtocolV1JsonSchema,
+  billingRecurringAddonV1ConformanceFixtures,
+  billingRecurringAddonV1OpenApiDocument,
   billingStatementV1ConformanceFixture,
   billingStatementV1JsonSchema,
   billingStatementV1OpenApiDocument,
   billingStatementV2ConformanceFixture,
   billingStatementV2JsonSchema,
   billingStatementV2OpenApiDocument,
+  billingCreditsV1ConformanceFixture,
+  billingCreditsV1JsonSchema,
+  billingCreditsV1OpenApiDocument,
 } from '../dist/index.js';
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const artifacts = new Map([
+  [resolve(packageRoot, 'schema/billing-credits-v1.json'), billingCreditsV1JsonSchema],
+  [
+    resolve(packageRoot, 'fixtures/billing-credits-v1.example.json'),
+    billingCreditsV1ConformanceFixture,
+  ],
+  [
+    resolve(packageRoot, 'openapi/billing-credits-v1.openapi.json'),
+    billingCreditsV1OpenApiDocument,
+  ],
+  [
+    resolve(packageRoot, 'schema/billing-recurring-addons-v1.json'),
+    billingRecurringAddonProtocolV1JsonSchema,
+  ],
+  [
+    resolve(packageRoot, 'fixtures/billing-recurring-addons-v1.example.json'),
+    billingRecurringAddonV1ConformanceFixtures,
+  ],
+  [
+    resolve(packageRoot, 'openapi/billing-recurring-addons-v1.openapi.json'),
+    billingRecurringAddonV1OpenApiDocument,
+  ],
   [
     resolve(packageRoot, 'schema/billing-consumer-actions-v1.json'),
     billingConsumerActionProtocolV1JsonSchema,

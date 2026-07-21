@@ -725,3 +725,94 @@ historical statements, while future one-time lines cancelled before their
 effective instant do not appear.
 Applicable lines appear unchanged in the canonical statement. They are never
 sent to or accepted from Ledger.
+
+The funding foundation adds a distinct customer term, **Credits**. `Wallet` is
+not a public or internal product concept. The conversion never varies by
+service or tariff:
+
+```text
+1,000 credits = US$1.00
+1 cent = 10 credits
+1 credit = 1,000,000 internal microcredits
+1 Ledger USD micro-minor = 10 internal microcredits
+```
+
+Every stored commercial credit amount is divisible by 10 microcredits. Public
+credit values therefore carry at most five decimal places and their exact USD
+equivalents at most eight. Microcredits, raw Ledger token counts, and provider
+cost never appear in the public credit protocol.
+
+There is one exact-team credit account per Stripe account/mode and currency,
+shared across all connected services. A product can present its own versioned,
+fixed top-up offers, but a successful Stripe payment funds that same team
+balance. Stripe Products/Prices may be reused when their immutable currency,
+payment amount, and credit quantity match; product provenance remains the
+calling service's individual `customer_lifecycle` app key and actor assertion.
+The customer-facing heading is exactly **Remaining credits**.
+
+UOA alone converts and settles Ledger raw usage into credits. Each settlement
+pins one immutable team-wide, user-grouped Ledger portfolio snapshot. The
+settlement and its corrections retain exact service, user, and explicit
+unattributed allocations without asking Ledger to rate them. Origin-product
+transparency remains in `BillingStatementV2`, derived from its separately
+pinned portfolio. Products render UOA's prepared team balance, current-period
+consumption, connected-service totals, and privacy-filtered attribution. They
+must not duplicate balance, conversion, share, price, or billing-manager logic.
+
+All connected services can expose manual top-up and bounded automatic top-up
+through `BillingCreditsV1`. UOA supplies the complete fixed action for every
+offer and auto-top-up option; the product whitelists its action/path and relays
+the exact body unchanged. Auto-top-up records immutable consent revisions,
+threshold, refill offer, monthly charge cap, payment-method proof, every system
+attempt, and terminal Stripe evidence. Refunds and disputes create exact debit
+entries and move an enabled auto-top-up account to review. Recovery requires a
+new verified consent revision. An ordinary active member cannot initiate a
+top-up, set/update/recover auto-top-up, or alter consent; the database requires
+an active organisation and exact-team billing manager for every
+customer-initiated funding or consent mutation. Automatic attempts, Stripe
+refunds/disputes, usage settlements, and superuser adjustments use their own
+immutable system/admin proof instead of customer manager authority.
+
+The public credit view is a manager/member discriminated union. A manager may
+receive per-user usage, payment-method display data, consent actor details, and
+enabled funding actions. An ordinary member receives their own consumption,
+the aggregate consumption of other team members, and an explicit unattributed
+bucket. Member responses have no arbitrary user identifiers, card brand/last
+four digits, consent actor identity, or enabled funding actions. Free-form
+labels/details must never smuggle another user's identity or payment-instrument
+details into the member shape.
+
+Recurring add-ons are versioned UOA offers with organisation, team, or
+subscribing-user entitlement scope and exact Stripe invoice-paid evidence.
+DeepWater's privacy option is the ordinary versioned **US$50/month** privacy
+offer. The requested team is always retained as actor context even when an
+organisation entitlement has no team. Organisation-scoped checkout and
+cancellation require an active organisation owner/admin; an exact-team
+owner/admin can act only for team and subscribing-user scopes. Cancellation is
+an opaque, expiring, one-use intent with an immutable subject fingerprint and
+idempotent result. Expired intents become terminal `EXPIRED` rows before a new
+preview can be issued.
+
+`BillingCreditsV1` and the recurring-add-on protocol are public, MIT-licensed
+interfaces from `@unlikeotherai/billing-statement-protocol`. Their generated
+JSON Schema, fixtures, and OpenAPI 3.1 components are the consumer contract.
+This migration establishes persistence, constraints, and those protocol
+artifacts; HTTP routes, Stripe orchestration, and product UI wiring are a
+separate runtime slice and must not be inferred from schema availability.
+
+### Contract invoice calculator and invoice privacy
+
+Contract pricing is UOA-owned and administrated only by platform superusers.
+An organisation contract pins a versioned organisation-wide margin used by the
+invoice calculator. A later margin change creates a new version and cannot
+rewrite an issued invoice. The calculator may use Ledger's immutable raw usage
+and provider-cost facts internally, but the customer invoice projection is a
+separate privacy boundary.
+
+Issued-invoice views expose calculated customer price grouped by service plus
+ordinary fixed subscriptions, add-ons, credits, adjustments, taxes, payments,
+and totals as applicable. They must not expose token counts, raw API/search/
+research units, raw provider cost, cost-token equivalents, tariff markup, or
+the margin calculation. Even operator-created descriptions must not encode
+those prohibited facts. Product applications receive only UOA's display-ready
+invoice view model and never reproduce the calculator.

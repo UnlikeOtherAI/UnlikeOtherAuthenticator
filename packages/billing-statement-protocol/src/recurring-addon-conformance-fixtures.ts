@@ -1,0 +1,189 @@
+import type {
+  BillingRecurringAddonConformanceFixturesV1,
+} from './recurring-addon-types.js';
+
+const subject = {
+  organisation_id: 'org_example',
+  team_id: 'team_example',
+  user_id: 'user_example',
+};
+const requestSubject = { product: 'deepwater', ...subject };
+
+const previewToken = 'addon_preview_0123456789abcdefghijklmnop';
+const idempotencyKey = 'addon_cancel_0123456789';
+
+export const billingRecurringAddonV1ConformanceFixtures: BillingRecurringAddonConformanceFixturesV1 =
+  {
+    recurring_addons: {
+      schema_version: 1,
+      generated_at: '2026-07-21T12:00:00.000Z',
+      product: { id: 'service_deepwater', identifier: 'deepwater', name: 'DeepWater' },
+      subject: {
+        user_id: subject.user_id,
+        organisation_id: subject.organisation_id,
+        team_id: subject.team_id,
+      },
+      viewer: {
+        role: 'billing_manager',
+        entitlement_visibility: 'full_team',
+        description: 'This viewer may manage team add-ons and see full entitlement status.',
+      },
+      capabilities: { can_manage_addons: true },
+      collection: { stripe_collection_enabled: true, stripe_mode: 'test' },
+      title: 'DeepWater add-ons',
+      description: 'Optional subscriptions are billed separately from metered usage credits.',
+      offers: [
+        {
+          id: 'rao_deepwater_privacy_v1',
+          key: 'privacy',
+          version: 1,
+          name: 'Private research',
+          description: 'Keep eligible DeepWater research private for this team.',
+          benefits: ['Private eligible research', 'Team-wide entitlement managed by UOA'],
+          monthly_price: {
+            amount: '50',
+            amount_minor: '5000',
+            currency: 'USD',
+            display: '$50.00/month',
+          },
+          interval: 'month',
+          available: true,
+          unavailable_reason: null,
+          entitlement: {
+            state: 'active',
+            display_status: 'Private research is active',
+            description:
+              'UOA resolves the runtime entitlement independently; the product does not infer it from payment state.',
+          },
+          subscription: {
+            id: 'ras_deepwater_privacy_example',
+            status: 'active',
+            display_status: 'Active',
+            scope: 'team',
+            owner_user_id: null,
+            cancel_at_period_end: false,
+            current_period_start: '2026-07-01T00:00:00.000Z',
+            current_period_end: '2026-08-01T00:00:00.000Z',
+          },
+          actions: [
+            {
+              id: 'subscribe',
+              kind: 'hosted_redirect',
+              label: 'Subscribe for $50.00/month',
+              description: 'Open secure Checkout for this exact UOA offer.',
+              enabled: false,
+              disabled_reason: 'This team already has the add-on.',
+              request: {
+                method: 'POST',
+                path: '/billing/v1/recurring-addons/checkout',
+                body: { ...requestSubject, offer_id: 'rao_deepwater_privacy_v1' },
+              },
+            },
+            {
+              id: 'cancel',
+              kind: 'confirmation_dialog',
+              label: 'Cancel private research',
+              description: 'Review when the team entitlement will end before confirming.',
+              enabled: true,
+              disabled_reason: null,
+              request: {
+                method: 'POST',
+                path: '/billing/v1/recurring-addons/cancellation/preview',
+                body: {
+                  ...requestSubject,
+                  subscription_id: 'ras_deepwater_privacy_example',
+                },
+              },
+            },
+          ],
+        },
+      ],
+    },
+    recurring_addons_member: {
+      schema_version: 1,
+      generated_at: '2026-07-21T12:00:00.000Z',
+      product: { id: 'service_deepwater', identifier: 'deepwater', name: 'DeepWater' },
+      subject,
+      viewer: {
+        role: 'member',
+        entitlement_visibility: 'own_plus_team_status',
+        description:
+          'This viewer may see their own relationship and the team entitlement status.',
+      },
+      capabilities: { can_manage_addons: false },
+      collection: { stripe_collection_enabled: true, stripe_mode: 'test' },
+      title: 'DeepWater add-ons',
+      description: 'Optional subscriptions are billed separately from metered usage credits.',
+      offers: [
+        {
+          id: 'rao_deepwater_privacy_v1',
+          key: 'privacy',
+          version: 1,
+          name: 'Private research',
+          description: 'Keep eligible DeepWater research private for this team.',
+          benefits: ['Private eligible research', 'Team-wide entitlement managed by UOA'],
+          monthly_price: {
+            amount: '50',
+            amount_minor: '5000',
+            currency: 'USD',
+            display: '$50.00/month',
+          },
+          interval: 'month',
+          available: true,
+          unavailable_reason: null,
+          entitlement: {
+            state: 'active',
+            display_status: 'Private research is active',
+            description: 'The team entitlement is active.',
+          },
+          subscription: {
+            status: 'active',
+            display_status: 'Active',
+            scope: 'team',
+            owner_relationship: 'team',
+            cancel_at_period_end: false,
+            current_period_start: '2026-07-01T00:00:00.000Z',
+            current_period_end: '2026-08-01T00:00:00.000Z',
+          },
+          actions: [],
+        },
+      ],
+    },
+    cancellation_preview: {
+      schema_version: 1,
+      preview_token: previewToken,
+      idempotency_key: idempotencyKey,
+      expires_at: '2026-07-21T12:05:00.000Z',
+      title: 'Cancel private research?',
+      description: 'Private research remains active until the end of the current billing period.',
+      subscription: {
+        id: 'ras_deepwater_privacy_example',
+        offer_name: 'Private research',
+        display_status: 'Active',
+        cancellation_effective_at: '2026-08-01T00:00:00.000Z',
+      },
+      confirm_action: {
+        method: 'POST',
+        path: '/billing/v1/recurring-addons/cancellation/confirm',
+        body: {
+          ...requestSubject,
+          preview_token: previewToken,
+          idempotency_key: idempotencyKey,
+          choice: 'cancel_addon',
+        },
+      },
+    },
+    cancellation_confirm_request: {
+      ...requestSubject,
+      preview_token: previewToken,
+      idempotency_key: idempotencyKey,
+      choice: 'cancel_addon',
+    },
+    cancellation_confirmation: {
+      schema_version: 1,
+      status: 'scheduled',
+      title: 'Cancellation scheduled',
+      description: 'Private research remains active until 1 August 2026.',
+      cancellation_effective_at: '2026-08-01T00:00:00.000Z',
+    },
+  };

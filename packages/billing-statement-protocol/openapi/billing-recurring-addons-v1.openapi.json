@@ -1,0 +1,2891 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "UOA recurring add-on consumer API",
+    "version": "1.0.0",
+    "description": "Exact display-ready recurring add-on API. UOA resolves visibility, manager capabilities, paid entitlement, and cancellation; products only render and relay frozen actions."
+  },
+  "paths": {
+    "/billing/v1/recurring-addons": {
+      "post": {
+        "security": [
+          {
+            "UoaAppKey": [],
+            "UoaActor": []
+          },
+          {
+            "UoaBearerAppKey": [],
+            "UoaActor": []
+          }
+        ],
+        "operationId": "getBillingRecurringAddonsV1",
+        "summary": "Read add-on offers and team entitlement status",
+        "description": "The product posts the exact subject bound into X-UOA-Actor. Active exact-team members receive a UOA-filtered display projection. Only billing managers receive enabled subscribe or cancel actions.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "product",
+                  "organisation_id",
+                  "team_id",
+                  "user_id"
+                ],
+                "properties": {
+                  "product": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "organisation_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "team_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "user_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Display-ready recurring add-ons.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Customer billing responses are never cacheable.",
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingRecurringAddonsV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UOA billing error envelope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "UOA billing error envelope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "UOA billing error envelope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "UOA billing error envelope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/billing/v1/recurring-addons/checkout": {
+      "post": {
+        "security": [
+          {
+            "UoaAppKey": [],
+            "UoaActor": []
+          },
+          {
+            "UoaBearerAppKey": [],
+            "UoaActor": []
+          }
+        ],
+        "operationId": "createBillingRecurringAddonCheckout",
+        "summary": "Create Checkout for one exact UOA add-on offer",
+        "description": "Products re-fetch the projection and relay the complete frozen action body unchanged. UOA verifies its subject against the app key and actor, then derives idempotency from the exact scope and offer.",
+        "x-uoa-idempotency": "server-derived-exact-scope",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "product",
+                  "organisation_id",
+                  "team_id",
+                  "user_id",
+                  "offer_id"
+                ],
+                "properties": {
+                  "product": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "organisation_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "team_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "user_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "offer_id": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Normalized HTTPS Stripe Checkout redirect.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Customer billing responses are never cacheable.",
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingHostedRedirectResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "UOA billing error envelope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UOA billing error envelope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "UOA billing error envelope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "UOA billing error envelope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "UOA billing error envelope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/billing/v1/recurring-addons/cancellation/preview": {
+      "post": {
+        "security": [
+          {
+            "UoaAppKey": [],
+            "UoaActor": []
+          },
+          {
+            "UoaBearerAppKey": [],
+            "UoaActor": []
+          }
+        ],
+        "operationId": "previewBillingRecurringAddonCancellation",
+        "summary": "Preview cancellation for one exact UOA subscription",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "product",
+                  "organisation_id",
+                  "team_id",
+                  "user_id",
+                  "subscription_id"
+                ],
+                "properties": {
+                  "product": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "organisation_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "team_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "user_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "subscription_id": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Short-lived UOA cancellation preview.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Customer billing responses are never cacheable.",
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingRecurringAddonCancellationPreviewV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "UOA billing error envelope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UOA billing error envelope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "UOA billing error envelope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "UOA billing error envelope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "UOA billing error envelope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/billing/v1/recurring-addons/cancellation/confirm": {
+      "post": {
+        "security": [
+          {
+            "UoaAppKey": [],
+            "UoaActor": []
+          },
+          {
+            "UoaBearerAppKey": [],
+            "UoaActor": []
+          }
+        ],
+        "operationId": "confirmBillingRecurringAddonCancellation",
+        "summary": "Confirm one still-valid UOA cancellation preview",
+        "description": "Replay-safe through the opaque UOA preview token and UOA-issued idempotency key returned by the preview.",
+        "x-uoa-idempotency": "uoa-issued-preview-key",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BillingRecurringAddonCancellationConfirmRequestV1"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Cancellation scheduled or already scheduled.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Customer billing responses are never cacheable.",
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingRecurringAddonCancellationConfirmationV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "UOA billing error envelope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UOA billing error envelope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "UOA billing error envelope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "UOA billing error envelope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "UOA billing error envelope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "UoaAppKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-UOA-App-Key"
+      },
+      "UoaBearerAppKey": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "uoa_app_…"
+      },
+      "UoaActor": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-UOA-Actor",
+        "description": "Fresh credential-bound RS256 actor assertion for the exact user/org/team."
+      }
+    },
+    "schemas": {
+      "BillingSubjectRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "product",
+          "organisation_id",
+          "team_id",
+          "user_id"
+        ],
+        "properties": {
+          "product": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "organisation_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "team_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "user_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        }
+      },
+      "BillingRecurringAddonProtocolV1": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "/schemas/billing-recurring-addons-v1.json",
+        "title": "UOA recurring add-on consumer protocol v1",
+        "description": "Exact display model and single-add-on subscription cancellation messages. Runtime entitlements remain UOA-resolved.",
+        "oneOf": [
+          {
+            "$ref": "#/$defs/BillingRecurringAddonsV1"
+          },
+          {
+            "$ref": "#/$defs/BillingRecurringAddonCancellationPreviewV1"
+          },
+          {
+            "$ref": "#/$defs/BillingRecurringAddonCancellationConfirmRequestV1"
+          },
+          {
+            "$ref": "#/$defs/BillingRecurringAddonCancellationConfirmationV1"
+          }
+        ],
+        "$defs": {
+          "BillingRecurringAddonsV1": {
+            "type": "object",
+            "additionalProperties": false,
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "viewer": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "role",
+                      "entitlement_visibility",
+                      "description"
+                    ],
+                    "properties": {
+                      "role": {
+                        "const": "billing_manager"
+                      },
+                      "entitlement_visibility": {
+                        "const": "full_team"
+                      },
+                      "description": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "capabilities": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "can_manage_addons"
+                    ],
+                    "properties": {
+                      "can_manage_addons": {
+                        "type": "boolean"
+                      }
+                    }
+                  },
+                  "offers": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "subscription",
+                        "actions"
+                      ],
+                      "properties": {
+                        "subscription": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "status",
+                                "display_status",
+                                "scope",
+                                "cancel_at_period_end",
+                                "current_period_start",
+                                "current_period_end",
+                                "id",
+                                "owner_user_id"
+                              ],
+                              "properties": {
+                                "status": {
+                                  "type": "string"
+                                },
+                                "display_status": {
+                                  "type": "string"
+                                },
+                                "scope": {
+                                  "enum": [
+                                    "organisation",
+                                    "team",
+                                    "subscribing_user"
+                                  ]
+                                },
+                                "cancel_at_period_end": {
+                                  "type": "boolean"
+                                },
+                                "current_period_start": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "format": "date-time"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "current_period_end": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "format": "date-time"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "id": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "owner_user_id": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ],
+                                  "minLength": 1
+                                }
+                              }
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "actions": {
+                          "type": "array",
+                          "items": {
+                            "type": "object"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "viewer": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "role",
+                      "entitlement_visibility",
+                      "description"
+                    ],
+                    "properties": {
+                      "role": {
+                        "const": "member"
+                      },
+                      "entitlement_visibility": {
+                        "const": "own_plus_team_status"
+                      },
+                      "description": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "capabilities": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "can_manage_addons"
+                    ],
+                    "properties": {
+                      "can_manage_addons": {
+                        "const": false
+                      }
+                    }
+                  },
+                  "offers": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "subscription",
+                        "actions"
+                      ],
+                      "properties": {
+                        "subscription": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "status",
+                                "display_status",
+                                "scope",
+                                "cancel_at_period_end",
+                                "current_period_start",
+                                "current_period_end",
+                                "owner_relationship"
+                              ],
+                              "properties": {
+                                "status": {
+                                  "type": "string"
+                                },
+                                "display_status": {
+                                  "type": "string"
+                                },
+                                "scope": {
+                                  "enum": [
+                                    "organisation",
+                                    "team",
+                                    "subscribing_user"
+                                  ]
+                                },
+                                "cancel_at_period_end": {
+                                  "type": "boolean"
+                                },
+                                "current_period_start": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "format": "date-time"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "current_period_end": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "format": "date-time"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "owner_relationship": {
+                                  "enum": [
+                                    "organisation",
+                                    "team",
+                                    "viewer",
+                                    "other_team_member"
+                                  ]
+                                }
+                              }
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "actions": {
+                          "type": "array",
+                          "maxItems": 0
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            ],
+            "required": [
+              "schema_version",
+              "generated_at",
+              "product",
+              "subject",
+              "viewer",
+              "capabilities",
+              "collection",
+              "title",
+              "description",
+              "offers"
+            ],
+            "properties": {
+              "schema_version": {
+                "const": 1
+              },
+              "generated_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "product": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "identifier",
+                  "name"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "identifier": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              },
+              "subject": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "user_id",
+                  "organisation_id",
+                  "team_id"
+                ],
+                "properties": {
+                  "user_id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "organisation_id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "team_id": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              },
+              "viewer": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "role",
+                  "entitlement_visibility",
+                  "description"
+                ],
+                "properties": {
+                  "role": {
+                    "enum": [
+                      "member",
+                      "billing_manager"
+                    ]
+                  },
+                  "entitlement_visibility": {
+                    "enum": [
+                      "own_plus_team_status",
+                      "full_team"
+                    ]
+                  },
+                  "description": {
+                    "type": "string"
+                  }
+                }
+              },
+              "capabilities": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "can_manage_addons"
+                ],
+                "properties": {
+                  "can_manage_addons": {
+                    "type": "boolean"
+                  }
+                }
+              },
+              "collection": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "stripe_collection_enabled",
+                  "stripe_mode"
+                ],
+                "properties": {
+                  "stripe_collection_enabled": {
+                    "type": "boolean"
+                  },
+                  "stripe_mode": {
+                    "enum": [
+                      "test",
+                      "live",
+                      null
+                    ]
+                  }
+                }
+              },
+              "title": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "offers": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id",
+                    "key",
+                    "version",
+                    "name",
+                    "description",
+                    "benefits",
+                    "monthly_price",
+                    "interval",
+                    "available",
+                    "unavailable_reason",
+                    "entitlement",
+                    "subscription",
+                    "actions"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "key": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "version": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "benefits": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "monthly_price": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "amount",
+                        "amount_minor",
+                        "currency",
+                        "display"
+                      ],
+                      "properties": {
+                        "amount": {
+                          "type": "string",
+                          "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]+)?|0\\.[0-9]*[1-9][0-9]*)$"
+                        },
+                        "amount_minor": {
+                          "type": "string",
+                          "pattern": "^[1-9][0-9]*$"
+                        },
+                        "currency": {
+                          "type": "string",
+                          "pattern": "^[A-Z]{3}$"
+                        },
+                        "display": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "interval": {
+                      "const": "month"
+                    },
+                    "available": {
+                      "type": "boolean"
+                    },
+                    "unavailable_reason": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "entitlement": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "state",
+                        "display_status",
+                        "description"
+                      ],
+                      "properties": {
+                        "state": {
+                          "enum": [
+                            "inactive",
+                            "pending",
+                            "active",
+                            "unavailable"
+                          ]
+                        },
+                        "display_status": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "subscription": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "status",
+                            "display_status",
+                            "scope",
+                            "cancel_at_period_end",
+                            "current_period_start",
+                            "current_period_end",
+                            "id",
+                            "owner_user_id"
+                          ],
+                          "properties": {
+                            "status": {
+                              "type": "string"
+                            },
+                            "display_status": {
+                              "type": "string"
+                            },
+                            "scope": {
+                              "enum": [
+                                "organisation",
+                                "team",
+                                "subscribing_user"
+                              ]
+                            },
+                            "cancel_at_period_end": {
+                              "type": "boolean"
+                            },
+                            "current_period_start": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "format": "date-time"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "current_period_end": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "format": "date-time"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "id": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "owner_user_id": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "minLength": 1
+                            }
+                          }
+                        },
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "status",
+                            "display_status",
+                            "scope",
+                            "cancel_at_period_end",
+                            "current_period_start",
+                            "current_period_end",
+                            "owner_relationship"
+                          ],
+                          "properties": {
+                            "status": {
+                              "type": "string"
+                            },
+                            "display_status": {
+                              "type": "string"
+                            },
+                            "scope": {
+                              "enum": [
+                                "organisation",
+                                "team",
+                                "subscribing_user"
+                              ]
+                            },
+                            "cancel_at_period_end": {
+                              "type": "boolean"
+                            },
+                            "current_period_start": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "format": "date-time"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "current_period_end": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "format": "date-time"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "owner_relationship": {
+                              "enum": [
+                                "organisation",
+                                "team",
+                                "viewer",
+                                "other_team_member"
+                              ]
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "actions": {
+                      "type": "array",
+                      "items": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "id",
+                              "kind",
+                              "label",
+                              "description",
+                              "enabled",
+                              "disabled_reason",
+                              "request"
+                            ],
+                            "properties": {
+                              "id": {
+                                "const": "subscribe"
+                              },
+                              "kind": {
+                                "const": "hosted_redirect"
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "description": {
+                                "type": "string"
+                              },
+                              "enabled": {
+                                "type": "boolean"
+                              },
+                              "disabled_reason": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "request": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "method",
+                                  "path",
+                                  "body"
+                                ],
+                                "properties": {
+                                  "method": {
+                                    "const": "POST"
+                                  },
+                                  "path": {
+                                    "const": "/billing/v1/recurring-addons/checkout"
+                                  },
+                                  "body": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "product",
+                                      "organisation_id",
+                                      "team_id",
+                                      "user_id",
+                                      "offer_id"
+                                    ],
+                                    "properties": {
+                                      "product": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 100
+                                      },
+                                      "organisation_id": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 256
+                                      },
+                                      "team_id": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 256
+                                      },
+                                      "user_id": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 256
+                                      },
+                                      "offer_id": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "id",
+                              "kind",
+                              "label",
+                              "description",
+                              "enabled",
+                              "disabled_reason",
+                              "request"
+                            ],
+                            "properties": {
+                              "id": {
+                                "const": "cancel"
+                              },
+                              "kind": {
+                                "const": "confirmation_dialog"
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "description": {
+                                "type": "string"
+                              },
+                              "enabled": {
+                                "type": "boolean"
+                              },
+                              "disabled_reason": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "request": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "method",
+                                  "path",
+                                  "body"
+                                ],
+                                "properties": {
+                                  "method": {
+                                    "const": "POST"
+                                  },
+                                  "path": {
+                                    "const": "/billing/v1/recurring-addons/cancellation/preview"
+                                  },
+                                  "body": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "product",
+                                      "organisation_id",
+                                      "team_id",
+                                      "user_id",
+                                      "subscription_id"
+                                    ],
+                                    "properties": {
+                                      "product": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 100
+                                      },
+                                      "organisation_id": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 256
+                                      },
+                                      "team_id": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 256
+                                      },
+                                      "user_id": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 256
+                                      },
+                                      "subscription_id": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "BillingRecurringAddonCancellationPreviewV1": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "schema_version",
+              "preview_token",
+              "idempotency_key",
+              "expires_at",
+              "title",
+              "description",
+              "subscription",
+              "confirm_action"
+            ],
+            "properties": {
+              "schema_version": {
+                "const": 1
+              },
+              "preview_token": {
+                "type": "string",
+                "minLength": 32,
+                "maxLength": 256
+              },
+              "idempotency_key": {
+                "type": "string",
+                "minLength": 16,
+                "maxLength": 200
+              },
+              "expires_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "title": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "subscription": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "offer_name",
+                  "display_status",
+                  "cancellation_effective_at"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "offer_name": {
+                    "type": "string"
+                  },
+                  "display_status": {
+                    "type": "string"
+                  },
+                  "cancellation_effective_at": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              },
+              "confirm_action": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "method",
+                  "path",
+                  "body"
+                ],
+                "properties": {
+                  "method": {
+                    "const": "POST"
+                  },
+                  "path": {
+                    "const": "/billing/v1/recurring-addons/cancellation/confirm"
+                  },
+                  "body": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "product",
+                      "organisation_id",
+                      "team_id",
+                      "user_id",
+                      "preview_token",
+                      "idempotency_key",
+                      "choice"
+                    ],
+                    "properties": {
+                      "product": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                      },
+                      "organisation_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 256
+                      },
+                      "team_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 256
+                      },
+                      "user_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 256
+                      },
+                      "preview_token": {
+                        "type": "string",
+                        "minLength": 32,
+                        "maxLength": 256
+                      },
+                      "idempotency_key": {
+                        "type": "string",
+                        "minLength": 16,
+                        "maxLength": 200
+                      },
+                      "choice": {
+                        "const": "cancel_addon"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "BillingRecurringAddonCancellationConfirmRequestV1": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "product",
+              "organisation_id",
+              "team_id",
+              "user_id",
+              "preview_token",
+              "idempotency_key",
+              "choice"
+            ],
+            "properties": {
+              "product": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "organisation_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "team_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "user_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "preview_token": {
+                "type": "string",
+                "minLength": 32,
+                "maxLength": 256
+              },
+              "idempotency_key": {
+                "type": "string",
+                "minLength": 16,
+                "maxLength": 200
+              },
+              "choice": {
+                "const": "cancel_addon"
+              }
+            }
+          },
+          "BillingRecurringAddonCancellationConfirmationV1": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "schema_version",
+              "status",
+              "title",
+              "description",
+              "cancellation_effective_at"
+            ],
+            "properties": {
+              "schema_version": {
+                "const": 1
+              },
+              "status": {
+                "enum": [
+                  "scheduled",
+                  "already_scheduled"
+                ]
+              },
+              "title": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "cancellation_effective_at": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "BillingRecurringAddonsV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "viewer": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "role",
+                  "entitlement_visibility",
+                  "description"
+                ],
+                "properties": {
+                  "role": {
+                    "const": "billing_manager"
+                  },
+                  "entitlement_visibility": {
+                    "const": "full_team"
+                  },
+                  "description": {
+                    "type": "string"
+                  }
+                }
+              },
+              "capabilities": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "can_manage_addons"
+                ],
+                "properties": {
+                  "can_manage_addons": {
+                    "type": "boolean"
+                  }
+                }
+              },
+              "offers": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "subscription",
+                    "actions"
+                  ],
+                  "properties": {
+                    "subscription": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "status",
+                            "display_status",
+                            "scope",
+                            "cancel_at_period_end",
+                            "current_period_start",
+                            "current_period_end",
+                            "id",
+                            "owner_user_id"
+                          ],
+                          "properties": {
+                            "status": {
+                              "type": "string"
+                            },
+                            "display_status": {
+                              "type": "string"
+                            },
+                            "scope": {
+                              "enum": [
+                                "organisation",
+                                "team",
+                                "subscribing_user"
+                              ]
+                            },
+                            "cancel_at_period_end": {
+                              "type": "boolean"
+                            },
+                            "current_period_start": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "format": "date-time"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "current_period_end": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "format": "date-time"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "id": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "owner_user_id": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "minLength": 1
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "actions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "viewer": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "role",
+                  "entitlement_visibility",
+                  "description"
+                ],
+                "properties": {
+                  "role": {
+                    "const": "member"
+                  },
+                  "entitlement_visibility": {
+                    "const": "own_plus_team_status"
+                  },
+                  "description": {
+                    "type": "string"
+                  }
+                }
+              },
+              "capabilities": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "can_manage_addons"
+                ],
+                "properties": {
+                  "can_manage_addons": {
+                    "const": false
+                  }
+                }
+              },
+              "offers": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "subscription",
+                    "actions"
+                  ],
+                  "properties": {
+                    "subscription": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "status",
+                            "display_status",
+                            "scope",
+                            "cancel_at_period_end",
+                            "current_period_start",
+                            "current_period_end",
+                            "owner_relationship"
+                          ],
+                          "properties": {
+                            "status": {
+                              "type": "string"
+                            },
+                            "display_status": {
+                              "type": "string"
+                            },
+                            "scope": {
+                              "enum": [
+                                "organisation",
+                                "team",
+                                "subscribing_user"
+                              ]
+                            },
+                            "cancel_at_period_end": {
+                              "type": "boolean"
+                            },
+                            "current_period_start": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "format": "date-time"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "current_period_end": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "format": "date-time"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "owner_relationship": {
+                              "enum": [
+                                "organisation",
+                                "team",
+                                "viewer",
+                                "other_team_member"
+                              ]
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "actions": {
+                      "type": "array",
+                      "maxItems": 0
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "required": [
+          "schema_version",
+          "generated_at",
+          "product",
+          "subject",
+          "viewer",
+          "capabilities",
+          "collection",
+          "title",
+          "description",
+          "offers"
+        ],
+        "properties": {
+          "schema_version": {
+            "const": 1
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "product": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "identifier",
+              "name"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "identifier": {
+                "type": "string",
+                "minLength": 1
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "subject": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "user_id",
+              "organisation_id",
+              "team_id"
+            ],
+            "properties": {
+              "user_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "organisation_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "team_id": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "viewer": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "role",
+              "entitlement_visibility",
+              "description"
+            ],
+            "properties": {
+              "role": {
+                "enum": [
+                  "member",
+                  "billing_manager"
+                ]
+              },
+              "entitlement_visibility": {
+                "enum": [
+                  "own_plus_team_status",
+                  "full_team"
+                ]
+              },
+              "description": {
+                "type": "string"
+              }
+            }
+          },
+          "capabilities": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "can_manage_addons"
+            ],
+            "properties": {
+              "can_manage_addons": {
+                "type": "boolean"
+              }
+            }
+          },
+          "collection": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "stripe_collection_enabled",
+              "stripe_mode"
+            ],
+            "properties": {
+              "stripe_collection_enabled": {
+                "type": "boolean"
+              },
+              "stripe_mode": {
+                "enum": [
+                  "test",
+                  "live",
+                  null
+                ]
+              }
+            }
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "offers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "key",
+                "version",
+                "name",
+                "description",
+                "benefits",
+                "monthly_price",
+                "interval",
+                "available",
+                "unavailable_reason",
+                "entitlement",
+                "subscription",
+                "actions"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "key": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "version": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "name": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "benefits": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "monthly_price": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "amount",
+                    "amount_minor",
+                    "currency",
+                    "display"
+                  ],
+                  "properties": {
+                    "amount": {
+                      "type": "string",
+                      "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]+)?|0\\.[0-9]*[1-9][0-9]*)$"
+                    },
+                    "amount_minor": {
+                      "type": "string",
+                      "pattern": "^[1-9][0-9]*$"
+                    },
+                    "currency": {
+                      "type": "string",
+                      "pattern": "^[A-Z]{3}$"
+                    },
+                    "display": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "interval": {
+                  "const": "month"
+                },
+                "available": {
+                  "type": "boolean"
+                },
+                "unavailable_reason": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "entitlement": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "state",
+                    "display_status",
+                    "description"
+                  ],
+                  "properties": {
+                    "state": {
+                      "enum": [
+                        "inactive",
+                        "pending",
+                        "active",
+                        "unavailable"
+                      ]
+                    },
+                    "display_status": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "subscription": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "status",
+                        "display_status",
+                        "scope",
+                        "cancel_at_period_end",
+                        "current_period_start",
+                        "current_period_end",
+                        "id",
+                        "owner_user_id"
+                      ],
+                      "properties": {
+                        "status": {
+                          "type": "string"
+                        },
+                        "display_status": {
+                          "type": "string"
+                        },
+                        "scope": {
+                          "enum": [
+                            "organisation",
+                            "team",
+                            "subscribing_user"
+                          ]
+                        },
+                        "cancel_at_period_end": {
+                          "type": "boolean"
+                        },
+                        "current_period_start": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "current_period_end": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "owner_user_id": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "minLength": 1
+                        }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "status",
+                        "display_status",
+                        "scope",
+                        "cancel_at_period_end",
+                        "current_period_start",
+                        "current_period_end",
+                        "owner_relationship"
+                      ],
+                      "properties": {
+                        "status": {
+                          "type": "string"
+                        },
+                        "display_status": {
+                          "type": "string"
+                        },
+                        "scope": {
+                          "enum": [
+                            "organisation",
+                            "team",
+                            "subscribing_user"
+                          ]
+                        },
+                        "cancel_at_period_end": {
+                          "type": "boolean"
+                        },
+                        "current_period_start": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "current_period_end": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "owner_relationship": {
+                          "enum": [
+                            "organisation",
+                            "team",
+                            "viewer",
+                            "other_team_member"
+                          ]
+                        }
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "actions": {
+                  "type": "array",
+                  "items": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "id",
+                          "kind",
+                          "label",
+                          "description",
+                          "enabled",
+                          "disabled_reason",
+                          "request"
+                        ],
+                        "properties": {
+                          "id": {
+                            "const": "subscribe"
+                          },
+                          "kind": {
+                            "const": "hosted_redirect"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "disabled_reason": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "request": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "method",
+                              "path",
+                              "body"
+                            ],
+                            "properties": {
+                              "method": {
+                                "const": "POST"
+                              },
+                              "path": {
+                                "const": "/billing/v1/recurring-addons/checkout"
+                              },
+                              "body": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "product",
+                                  "organisation_id",
+                                  "team_id",
+                                  "user_id",
+                                  "offer_id"
+                                ],
+                                "properties": {
+                                  "product": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 100
+                                  },
+                                  "organisation_id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 256
+                                  },
+                                  "team_id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 256
+                                  },
+                                  "user_id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 256
+                                  },
+                                  "offer_id": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "id",
+                          "kind",
+                          "label",
+                          "description",
+                          "enabled",
+                          "disabled_reason",
+                          "request"
+                        ],
+                        "properties": {
+                          "id": {
+                            "const": "cancel"
+                          },
+                          "kind": {
+                            "const": "confirmation_dialog"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "disabled_reason": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "request": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "method",
+                              "path",
+                              "body"
+                            ],
+                            "properties": {
+                              "method": {
+                                "const": "POST"
+                              },
+                              "path": {
+                                "const": "/billing/v1/recurring-addons/cancellation/preview"
+                              },
+                              "body": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "product",
+                                  "organisation_id",
+                                  "team_id",
+                                  "user_id",
+                                  "subscription_id"
+                                ],
+                                "properties": {
+                                  "product": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 100
+                                  },
+                                  "organisation_id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 256
+                                  },
+                                  "team_id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 256
+                                  },
+                                  "user_id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 256
+                                  },
+                                  "subscription_id": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "BillingRecurringAddonCancellationPreviewV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schema_version",
+          "preview_token",
+          "idempotency_key",
+          "expires_at",
+          "title",
+          "description",
+          "subscription",
+          "confirm_action"
+        ],
+        "properties": {
+          "schema_version": {
+            "const": 1
+          },
+          "preview_token": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 256
+          },
+          "idempotency_key": {
+            "type": "string",
+            "minLength": 16,
+            "maxLength": 200
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "subscription": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "offer_name",
+              "display_status",
+              "cancellation_effective_at"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "offer_name": {
+                "type": "string"
+              },
+              "display_status": {
+                "type": "string"
+              },
+              "cancellation_effective_at": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "confirm_action": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "method",
+              "path",
+              "body"
+            ],
+            "properties": {
+              "method": {
+                "const": "POST"
+              },
+              "path": {
+                "const": "/billing/v1/recurring-addons/cancellation/confirm"
+              },
+              "body": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "product",
+                  "organisation_id",
+                  "team_id",
+                  "user_id",
+                  "preview_token",
+                  "idempotency_key",
+                  "choice"
+                ],
+                "properties": {
+                  "product": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "organisation_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "team_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "user_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "preview_token": {
+                    "type": "string",
+                    "minLength": 32,
+                    "maxLength": 256
+                  },
+                  "idempotency_key": {
+                    "type": "string",
+                    "minLength": 16,
+                    "maxLength": 200
+                  },
+                  "choice": {
+                    "const": "cancel_addon"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "BillingRecurringAddonCancellationConfirmRequestV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "product",
+          "organisation_id",
+          "team_id",
+          "user_id",
+          "preview_token",
+          "idempotency_key",
+          "choice"
+        ],
+        "properties": {
+          "product": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "organisation_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "team_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "user_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "preview_token": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 256
+          },
+          "idempotency_key": {
+            "type": "string",
+            "minLength": 16,
+            "maxLength": 200
+          },
+          "choice": {
+            "const": "cancel_addon"
+          }
+        }
+      },
+      "BillingRecurringAddonCancellationConfirmationV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schema_version",
+          "status",
+          "title",
+          "description",
+          "cancellation_effective_at"
+        ],
+        "properties": {
+          "schema_version": {
+            "const": 1
+          },
+          "status": {
+            "enum": [
+              "scheduled",
+              "already_scheduled"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "cancellation_effective_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "BillingHostedRedirectResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "redirect_url"
+        ],
+        "properties": {
+          "redirect_url": {
+            "type": "string",
+            "format": "uri",
+            "pattern": "^https://"
+          }
+        }
+      },
+      "BillingErrorEnvelope": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "examples": {
+      "BillingRecurringAddonV1Conformance": {
+        "summary": "DeepWater $50 monthly privacy add-on and its exact cancellation flow",
+        "value": {
+          "recurring_addons": {
+            "schema_version": 1,
+            "generated_at": "2026-07-21T12:00:00.000Z",
+            "product": {
+              "id": "service_deepwater",
+              "identifier": "deepwater",
+              "name": "DeepWater"
+            },
+            "subject": {
+              "user_id": "user_example",
+              "organisation_id": "org_example",
+              "team_id": "team_example"
+            },
+            "viewer": {
+              "role": "billing_manager",
+              "entitlement_visibility": "full_team",
+              "description": "This viewer may manage team add-ons and see full entitlement status."
+            },
+            "capabilities": {
+              "can_manage_addons": true
+            },
+            "collection": {
+              "stripe_collection_enabled": true,
+              "stripe_mode": "test"
+            },
+            "title": "DeepWater add-ons",
+            "description": "Optional subscriptions are billed separately from metered usage credits.",
+            "offers": [
+              {
+                "id": "rao_deepwater_privacy_v1",
+                "key": "privacy",
+                "version": 1,
+                "name": "Private research",
+                "description": "Keep eligible DeepWater research private for this team.",
+                "benefits": [
+                  "Private eligible research",
+                  "Team-wide entitlement managed by UOA"
+                ],
+                "monthly_price": {
+                  "amount": "50",
+                  "amount_minor": "5000",
+                  "currency": "USD",
+                  "display": "$50.00/month"
+                },
+                "interval": "month",
+                "available": true,
+                "unavailable_reason": null,
+                "entitlement": {
+                  "state": "active",
+                  "display_status": "Private research is active",
+                  "description": "UOA resolves the runtime entitlement independently; the product does not infer it from payment state."
+                },
+                "subscription": {
+                  "id": "ras_deepwater_privacy_example",
+                  "status": "active",
+                  "display_status": "Active",
+                  "scope": "team",
+                  "owner_user_id": null,
+                  "cancel_at_period_end": false,
+                  "current_period_start": "2026-07-01T00:00:00.000Z",
+                  "current_period_end": "2026-08-01T00:00:00.000Z"
+                },
+                "actions": [
+                  {
+                    "id": "subscribe",
+                    "kind": "hosted_redirect",
+                    "label": "Subscribe for $50.00/month",
+                    "description": "Open secure Checkout for this exact UOA offer.",
+                    "enabled": false,
+                    "disabled_reason": "This team already has the add-on.",
+                    "request": {
+                      "method": "POST",
+                      "path": "/billing/v1/recurring-addons/checkout",
+                      "body": {
+                        "product": "deepwater",
+                        "organisation_id": "org_example",
+                        "team_id": "team_example",
+                        "user_id": "user_example",
+                        "offer_id": "rao_deepwater_privacy_v1"
+                      }
+                    }
+                  },
+                  {
+                    "id": "cancel",
+                    "kind": "confirmation_dialog",
+                    "label": "Cancel private research",
+                    "description": "Review when the team entitlement will end before confirming.",
+                    "enabled": true,
+                    "disabled_reason": null,
+                    "request": {
+                      "method": "POST",
+                      "path": "/billing/v1/recurring-addons/cancellation/preview",
+                      "body": {
+                        "product": "deepwater",
+                        "organisation_id": "org_example",
+                        "team_id": "team_example",
+                        "user_id": "user_example",
+                        "subscription_id": "ras_deepwater_privacy_example"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "recurring_addons_member": {
+            "schema_version": 1,
+            "generated_at": "2026-07-21T12:00:00.000Z",
+            "product": {
+              "id": "service_deepwater",
+              "identifier": "deepwater",
+              "name": "DeepWater"
+            },
+            "subject": {
+              "organisation_id": "org_example",
+              "team_id": "team_example",
+              "user_id": "user_example"
+            },
+            "viewer": {
+              "role": "member",
+              "entitlement_visibility": "own_plus_team_status",
+              "description": "This viewer may see their own relationship and the team entitlement status."
+            },
+            "capabilities": {
+              "can_manage_addons": false
+            },
+            "collection": {
+              "stripe_collection_enabled": true,
+              "stripe_mode": "test"
+            },
+            "title": "DeepWater add-ons",
+            "description": "Optional subscriptions are billed separately from metered usage credits.",
+            "offers": [
+              {
+                "id": "rao_deepwater_privacy_v1",
+                "key": "privacy",
+                "version": 1,
+                "name": "Private research",
+                "description": "Keep eligible DeepWater research private for this team.",
+                "benefits": [
+                  "Private eligible research",
+                  "Team-wide entitlement managed by UOA"
+                ],
+                "monthly_price": {
+                  "amount": "50",
+                  "amount_minor": "5000",
+                  "currency": "USD",
+                  "display": "$50.00/month"
+                },
+                "interval": "month",
+                "available": true,
+                "unavailable_reason": null,
+                "entitlement": {
+                  "state": "active",
+                  "display_status": "Private research is active",
+                  "description": "The team entitlement is active."
+                },
+                "subscription": {
+                  "status": "active",
+                  "display_status": "Active",
+                  "scope": "team",
+                  "owner_relationship": "team",
+                  "cancel_at_period_end": false,
+                  "current_period_start": "2026-07-01T00:00:00.000Z",
+                  "current_period_end": "2026-08-01T00:00:00.000Z"
+                },
+                "actions": []
+              }
+            ]
+          },
+          "cancellation_preview": {
+            "schema_version": 1,
+            "preview_token": "addon_preview_0123456789abcdefghijklmnop",
+            "idempotency_key": "addon_cancel_0123456789",
+            "expires_at": "2026-07-21T12:05:00.000Z",
+            "title": "Cancel private research?",
+            "description": "Private research remains active until the end of the current billing period.",
+            "subscription": {
+              "id": "ras_deepwater_privacy_example",
+              "offer_name": "Private research",
+              "display_status": "Active",
+              "cancellation_effective_at": "2026-08-01T00:00:00.000Z"
+            },
+            "confirm_action": {
+              "method": "POST",
+              "path": "/billing/v1/recurring-addons/cancellation/confirm",
+              "body": {
+                "product": "deepwater",
+                "organisation_id": "org_example",
+                "team_id": "team_example",
+                "user_id": "user_example",
+                "preview_token": "addon_preview_0123456789abcdefghijklmnop",
+                "idempotency_key": "addon_cancel_0123456789",
+                "choice": "cancel_addon"
+              }
+            }
+          },
+          "cancellation_confirm_request": {
+            "product": "deepwater",
+            "organisation_id": "org_example",
+            "team_id": "team_example",
+            "user_id": "user_example",
+            "preview_token": "addon_preview_0123456789abcdefghijklmnop",
+            "idempotency_key": "addon_cancel_0123456789",
+            "choice": "cancel_addon"
+          },
+          "cancellation_confirmation": {
+            "schema_version": 1,
+            "status": "scheduled",
+            "title": "Cancellation scheduled",
+            "description": "Private research remains active until 1 August 2026.",
+            "cancellation_effective_at": "2026-08-01T00:00:00.000Z"
+          }
+        }
+      }
+    }
+  }
+}

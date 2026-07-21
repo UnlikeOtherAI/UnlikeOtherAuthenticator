@@ -1915,3 +1915,43 @@ Nessie-originated DeepWater work—without creating direct DeepWater access.
 Only UOA's current exact-team direct-session evidence can make another
 same-account subscription eligible for a cancel-one-versus-cancel-related
 choice.
+
+### 2026-07-21 shared credits, add-ons, and contract invoices
+
+UOA owns one exact-team credit balance shared across every connected product in
+the same Stripe account/mode. The fixed customer conversion is 1,000 credits =
+US$1.00 and the required product heading is `Remaining credits`. Individual
+products may advertise different fixed top-up offers, but every successful
+payment funds the shared account. Manual and bounded automatic top-up are
+available to all services only through UOA-authored frozen actions; products
+never calculate credits, choose a payment amount, or rebuild an action body.
+
+UOA stores immutable auto-top-up consent revisions, payment proof, monthly caps,
+attempt outcomes, refunds, and disputes. Every customer-initiated funding,
+consent, or add-on mutation requires the appropriate active billing manager at
+the database boundary; automatic attempts, Stripe corrections, settlements,
+and superuser adjustments use their separate immutable proof paths. Manager
+credit views may contain per-user and payment-method display detail;
+ordinary members receive only their own usage, categorical other-team and
+unattributed aggregates, payment-method status, and no enabled money actions.
+
+Recurring add-ons are UOA subscriptions scoped to an organisation, team, or
+subscribing user. DeepWater privacy is a versioned US$50/month offer.
+Organisation-scoped purchase or cancellation requires an organisation
+owner/admin; team managers cannot escalate their authority through the actor's
+requested-team context. Team and subscribing-user scopes may use the exact-team
+owner/admin policy. Opaque cancellation intents expire terminally and preserve
+the exact subject and Stripe subscription evidence.
+
+For negotiated organisation contracts, the UOA Admin billing area owns the
+versioned organisation margin and invoice calculator. Customer invoices show
+only calculated customer price per service and ordinary fixed subscriptions,
+add-ons, credits, adjustments, taxes, payments, and totals. They never expose
+raw token/API/SERP/research quantities, provider cost, cost-token equivalents,
+markup, or margin calculations. Connected products consume a display-ready UOA
+invoice view model and contain no local invoice-rating logic.
+
+The current funding slice establishes the Prisma persistence constraints and
+the public `BillingCreditsV1`/recurring-add-on protocol artifacts. Runtime HTTP
+handlers, Stripe calls, and product UI wiring are completed in their dedicated
+integration slices; schema presence alone does not enable collection.

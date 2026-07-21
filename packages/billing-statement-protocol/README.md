@@ -1,7 +1,8 @@
 # `@unlikeotherai/billing-statement-protocol`
 
 Public, open-source-safe consumer contracts for UOA's display-ready
-`BillingStatementV1`, `BillingStatementV2`, and customer billing actions.
+`BillingStatementV1`, `BillingStatementV2`, shared `BillingCreditsV1`, recurring
+add-ons, and customer billing actions.
 
 V1 remains frozen for existing consumers. V2 adds a complete team-wide
 connected-service portfolio, already aggregated and labelled by UOA, while
@@ -37,17 +38,27 @@ The public HTTP artifacts are:
 - `/schemas/billing-consumer-actions-v1.json`
 - `/schemas/billing-consumer-actions-v1.example.json`
 - `/schemas/billing-consumer-actions-v1.openapi.json`
+- `/schemas/billing-credits-v1.json`
+- `/schemas/billing-credits-v1.example.json`
+- `/schemas/billing-credits-v1.openapi.json`
+- `/schemas/billing-recurring-addons-v1.json`
+- `/schemas/billing-recurring-addons-v1.example.json`
+- `/schemas/billing-recurring-addons-v1.openapi.json`
 
 TypeScript consumers use the package root:
 
 ```ts
 import {
   BILLING_STATEMENT_SCHEMA_VERSION,
+  type BillingCreditsV1,
   type BillingCancellationPreviewV1,
   type BillingHostedRedirectResponse,
+  type BillingRecurringAddonsV1,
   type BillingStatementV1,
   type BillingStatementV2,
+  billingCreditsV1JsonSchema,
   billingCancellationPreviewV1JsonSchema,
+  billingRecurringAddonProtocolV1JsonSchema,
   billingStatementV1JsonSchema,
   billingStatementV2JsonSchema,
 } from '@unlikeotherai/billing-statement-protocol';
@@ -70,6 +81,27 @@ Upgrade, portal, and cancellation controls continue to use the v1 action
 contract. Products whitelist the supplied action ID/path pair, proxy the
 server-pinned body to UOA, and render UOA's response. They do not own Stripe or
 subscription state.
+
+`BillingCreditsV1` displays the exact team's one shared cross-service balance
+under the required heading `Remaining credits`. The fixed public conversion is
+1,000 credits = US$1.00 (one cent = 10 credits); the protocol admits at most
+five credit decimals and eight US-dollar decimals, matching UOA persistence.
+UOA supplies fixed top-up offers and every complete auto-top-up action. The
+consumer relays the frozen action body unchanged and never chooses an offer or
+option by rebuilding its subject.
+
+Both credits and recurring add-ons use manager/member discriminated unions.
+Managers can receive exact-user breakdowns, payment-method display data, and
+enabled commercial actions. Members receive only their own usage plus
+categorical team/unattributed aggregates, payment-method status without card
+identity, and no enabled money actions. Free-form labels and descriptions must
+not encode another user's identity or payment-instrument details.
+
+Recurring add-ons support organisation, team, and subscribing-user entitlement
+scopes. An organisation-scoped purchase or cancellation requires an active
+organisation owner/admin; exact-team managers can act only on team or
+subscribing-user scopes. DeepWater's privacy subscription is represented as an
+ordinary versioned US$50/month offer, not product-local billing logic.
 
 Run `pnpm generate` after an intentional protocol change. Build and test fail if
 the committed JSON Schema, example, or OpenAPI artifact drifts from the typed
