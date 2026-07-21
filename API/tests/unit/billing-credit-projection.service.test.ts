@@ -109,6 +109,7 @@ function projectionData(balanceMicrocredits = 2_000_000_000n): BillingCreditProj
     ],
     periodEntries: [],
     pending: [],
+    unresolvedAttempts: [],
     autoTopUpChargedMinor: 0n,
   } as unknown as BillingCreditProjectionData;
 }
@@ -206,5 +207,94 @@ describe('privacy-safe shared credit projection', () => {
 
     expect(() => assertBillingCreditsContract(result)).not.toThrow();
     expect(result.credit_balance).toMatchObject({ state: 'debt', credits: '-250' });
+  });
+
+  it('enables only manager actions backed by exact policy and Stripe catalog evidence', () => {
+    const data = projectionData();
+    Object.assign(data.creditAccount, {
+      autoTopUpState: BillingCreditAutoTopUpState.DISABLED,
+      autoTopUpOptionId: null,
+      autoTopUpConsentRevisionId: null,
+      autoTopUpConsentVersion: null,
+      autoTopUpConsentedAt: null,
+      autoTopUpConsentedBy: null,
+      stripePaymentMethodId: null,
+      paymentMethodSummary: null,
+    });
+    data.policy = {
+      id: 'policy_1',
+      topUpEnabled: true,
+      automaticTopUpEnabled: true,
+      automaticConsentVersion: 'credits-v1',
+      topUpOffers: [
+        {
+          id: 'offer_1',
+          key: '20k',
+          name: '20,000 credits',
+          description: 'Fixed offer',
+          catalogKey: 'credits-20k',
+          catalogVersion: 1,
+          paymentAmountMinor: 2_000n,
+          creditsReceivedMicrocredits: 20_000_000_000n,
+        },
+      ],
+      autoTopUpOptions: [
+        {
+          id: 'option_1',
+          thresholdMicrocredits: 5_000_000_000n,
+          monthlyChargeCapMinor: 10_000n,
+          refillOfferId: 'offer_1',
+          refillOffer: {
+            id: 'offer_1',
+            active: true,
+            automaticTopUpEligible: true,
+            catalogKey: 'credits-20k',
+            catalogVersion: 1,
+            paymentAmountMinor: 2_000n,
+            creditsReceivedMicrocredits: 20_000_000_000n,
+          },
+        },
+      ],
+    } as NonNullable<BillingCreditProjectionData['policy']>;
+    data.catalogs = [
+      {
+        id: 'catalog_1',
+        key: 'credits-20k',
+        version: 1,
+        paymentAmountMinor: 2_000n,
+        creditsReceivedMicrocredits: 20_000_000_000n,
+        stripeProductId: 'prod_20k',
+        stripePriceId: 'price_20k',
+      },
+    ] as BillingCreditProjectionData['catalogs'];
+
+    const available = buildBillingCreditsProjection({
+      credential,
+      collection,
+      viewer: viewer(true),
+      period,
+      data,
+      now,
+    });
+    expect(available).toMatchObject({
+      capabilities: { can_top_up: true, can_manage_automatic_top_up: true },
+      funding_policy: { offers: [{ available: true, action: { enabled: true } }] },
+      automatic_top_up: { options: [{ setup_action: { enabled: true } }] },
+    });
+
+    data.catalogs = [];
+    const unavailable = buildBillingCreditsProjection({
+      credential,
+      collection,
+      viewer: viewer(true),
+      period,
+      data,
+      now,
+    });
+    expect(unavailable).toMatchObject({
+      capabilities: { can_top_up: false, can_manage_automatic_top_up: false },
+      funding_policy: { offers: [{ available: false, action: { enabled: false } }] },
+      automatic_top_up: { options: [{ setup_action: { enabled: false } }] },
+    });
   });
 });

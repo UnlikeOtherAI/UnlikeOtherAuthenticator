@@ -2508,6 +2508,7 @@ model BillingCreditTopUpCheckout {
 
   @@unique([accountId, stripeCheckoutSessionId])
   @@unique([accountId, stripePaymentIntentId])
+  @@unique([appKeyId, actorJti, offerId], map: "billing_credit_top_up_checkouts_actor_offer_key")
   @@index([creditAccountId, status])
   @@index([appKeyId, actorJti])
   @@index([requestedByUserId])
@@ -2558,6 +2559,7 @@ model BillingCreditSetupCheckout {
 
   @@unique([accountId, stripeCheckoutSessionId])
   @@unique([accountId, stripeSetupIntentId])
+  @@unique([appKeyId, actorJti, optionId], map: "billing_credit_setup_checkouts_actor_option_key")
   @@index([creditAccountId, status])
   @@index([appKeyId, actorJti])
   @@index([requestedByUserId])

@@ -224,6 +224,21 @@ The exact response schema, synthetic fixture, and OpenAPI 3.1 artifact are publi
 \`/schemas/billing-credits-v1.json\`, \`/schemas/billing-credits-v1.example.json\`, and
 \`/schemas/billing-credits-v1.openapi.json\`.
 
+Billing-manager mutation actions in that projection are live only when UOA has the
+active exact service policy, fixed offer/option, matching active Stripe-account catalog,
+and required consent/payment evidence. Products relay the complete action body unchanged:
+\`/billing/v1/credits/top-up-checkout\`, \`/billing/v1/credits/auto-top-up/setup\`,
+\`/update\`, \`/disable\`, and \`/recover\`. These routes require the product's exact
+customer-lifecycle app key, a fresh actor assertion, and current ACTIVE organisation/team
+billing-manager membership. A caller can identify only the UOA offer or option shown in
+the projection; it cannot supply an amount, Stripe Price, currency, quantity, customer,
+metadata, PaymentIntent, or return/recovery URL. UOA writes the immutable local intent
+before Stripe, derives account/mode-scoped idempotency, and accepts webhook completion
+only when Stripe metadata and stored subject/catalog/customer evidence match exactly.
+Checkout responses contain one verified HTTPS \`redirect_url\`; update and disable return
+\`204\`. Missing or drifted policy, catalog, consent, payment, or Stripe evidence fails
+closed and keeps the matching action disabled in later projections.
+
 \`POST /billing/v1/recurring-addons\` returns UOA-owned offers and exact
 organisation/team/subscribing-user subscription projections for that product. Manager
 views may contain subscription identity; member views expose only the viewer's

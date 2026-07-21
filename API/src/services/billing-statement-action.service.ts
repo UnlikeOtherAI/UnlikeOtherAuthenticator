@@ -2,33 +2,14 @@ import type {
   BillingStatementAction,
   BillingStatementV1,
 } from '../contracts/billing-statement-v1.js';
-import { AppError } from '../utils/errors.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
+import { pinnedBillingReturnUrls } from './billing-return-url-policy.service.js';
 import {
   getStripeSubscriptionSummary,
   type BillingSubscriptionRequest,
 } from './billing-stripe-subscription.service.js';
 
 type SubscriptionSummary = Awaited<ReturnType<typeof getStripeSubscriptionSummary>>;
-
-function pinnedReturnUrls(origins: string[]): {
-  checkoutSuccess: string;
-  checkoutCancel: string;
-  portal: string;
-} {
-  const origin = origins[0];
-  if (!origin) throw new AppError('INTERNAL', 500, 'BILLING_RETURN_URL_UNSET');
-  const portal = new URL('/', origin);
-  const success = new URL(portal);
-  success.searchParams.set('uoa_billing', 'checkout_complete');
-  const cancel = new URL(portal);
-  cancel.searchParams.set('uoa_billing', 'checkout_cancelled');
-  return {
-    checkoutSuccess: success.toString(),
-    checkoutCancel: cancel.toString(),
-    portal: portal.toString(),
-  };
-}
 
 function actionBody(request: BillingSubscriptionRequest): Record<string, string> {
   return {
@@ -62,7 +43,7 @@ export function billingStatementActions(
     !subscription.cancel_at_period_end &&
     summary.stripe_collection_enabled,
   );
-  const returns = pinnedReturnUrls(credential.checkoutReturnOrigins);
+  const returns = pinnedBillingReturnUrls(credential.checkoutReturnOrigins);
   const body = actionBody(request);
   return {
     capabilities: {

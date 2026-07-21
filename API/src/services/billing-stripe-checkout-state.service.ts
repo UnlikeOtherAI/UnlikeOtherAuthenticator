@@ -21,6 +21,8 @@ export type StripeCheckoutClient = Pick<
   'accounts' | 'billing' | 'checkout' | 'customers' | 'prices' | 'products'
 >;
 
+export type StripeCustomerClient = Pick<Stripe, 'customers'>;
+
 export function billingScope(payload: EffectiveTariffPayload): {
   scope: BillingAssignmentScope;
   scopeKey: string;
@@ -137,7 +139,7 @@ export async function ensureStripeCustomer(
     scope: BillingAssignmentScope;
     scopeKey: string;
   },
-  deps: { prisma: PrismaClient; stripe: StripeCheckoutClient },
+  deps: { prisma: PrismaClient; stripe: StripeCustomerClient },
 ): Promise<BillingStripeCustomer> {
   const metadata = {
     uoa_scope: params.scope.toLowerCase(),
