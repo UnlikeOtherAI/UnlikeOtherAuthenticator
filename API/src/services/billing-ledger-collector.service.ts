@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 
 import { importJWK, SignJWT, type JWK, type KeyLike } from 'jose';
 import { z } from 'zod';
@@ -10,18 +10,24 @@ import {
   parsePublicRs256Jwks,
   privateRs256JwkMatchesPublicJwks,
 } from '../utils/rs256-jwk.js';
-import type { NormalizedMeteringUsage, RawMeteringLine } from './billing-metering.types.js';
+import type {
+  NormalizedMeteringPortfolio,
+  NormalizedMeteringUsage,
+  RawMeteringLine,
+} from './billing-metering.types.js';
+import { fetchLedgerJsonResponse } from './billing-ledger-http.service.js';
 
 const ProductSchema = z.enum(['nessie', 'deepwater', 'deepsignal', 'deeptest']);
 const IntegerSchema = z.string().regex(/^(0|[1-9][0-9]*)$/);
 const DecimalSchema = z.string().regex(/^-?(0|[1-9][0-9]*)(\.[0-9]+)?$/);
 const MonthSchema = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
 const CurrencySchema = z.string().regex(/^[A-Z]{3}$/);
+const AttributionProductSchema = z.string().trim().min(1).max(128);
 const ProductDimensionsSchema = z
   .object({
     billingProduct: ProductSchema,
-    callerProduct: ProductSchema.nullable(),
-    originProduct: ProductSchema.nullable(),
+    callerProduct: AttributionProductSchema.nullable(),
+    originProduct: AttributionProductSchema.nullable(),
   })
   .strict();
 
@@ -43,6 +49,7 @@ const CostFieldsSchema = {
   rawProviderCurrency: CurrencySchema.nullable(),
   rawProviderEstimatedCost: DecimalSchema.nullable(),
   rawProviderActualCost: DecimalSchema.nullable(),
+  rawProviderSelectedCost: DecimalSchema.nullable(),
 } as const;
 
 const CostRowSchema = ProductDimensionsSchema.extend({
@@ -56,27 +63,41 @@ const BreakdownRowSchema = UsageRowSchema.extend({
   ...CostFieldsSchema,
 }).strict();
 
+const MeteringScopeSchema = z
+  .object({
+    organizationId: z.string().trim().min(1).max(256),
+    teamId: z.string().trim().min(1).max(256).nullable(),
+    userId: z.string().trim().min(1).max(256).nullable(),
+    month: MonthSchema.nullable(),
+    startsAt: z.string().datetime(),
+    endsAt: z.string().datetime(),
+  })
+  .strict();
+
+const MeteringPortfolioScopeSchema = z
+  .object({
+    organizationId: z.string().trim().min(1).max(256),
+    teamId: z.string().trim().min(1).max(256),
+    month: MonthSchema,
+    startsAt: z.string().datetime(),
+    endsAt: z.string().datetime(),
+  })
+  .strict();
+
+const MeteringTotalsSchema = z
+  .object({
+    calls: IntegerSchema,
+    usageByService: z.array(UsageRowSchema),
+    costs: z.array(CostRowSchema),
+  })
+  .strict();
+
 export const LedgerMeteringUsageSchema = z
   .object({
     schemaVersion: z.literal(1),
     product: ProductSchema,
-    scope: z
-      .object({
-        organizationId: z.string().trim().min(1).max(256),
-        teamId: z.string().trim().min(1).max(256).nullable(),
-        userId: z.string().trim().min(1).max(256).nullable(),
-        month: MonthSchema.nullable(),
-        startsAt: z.string().datetime(),
-        endsAt: z.string().datetime(),
-      })
-      .strict(),
-    totals: z
-      .object({
-        calls: IntegerSchema,
-        usageByService: z.array(UsageRowSchema),
-        costs: z.array(CostRowSchema),
-      })
-      .strict(),
+    scope: MeteringScopeSchema,
+    totals: MeteringTotalsSchema,
     groupBy: z.enum(['service', 'user']),
     breakdown: z.array(BreakdownRowSchema),
     snapshot: z
@@ -100,6 +121,48 @@ export const LedgerMeteringUsageSchema = z
   });
 
 export type LedgerMeteringUsage = z.infer<typeof LedgerMeteringUsageSchema>;
+
+export const LedgerMeteringPortfolioSchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    contract: z.literal('metering-portfolio-v1'),
+    perspectiveProduct: ProductSchema,
+    scope: MeteringPortfolioScopeSchema,
+    totals: MeteringTotalsSchema,
+    groupBy: z.enum(['service', 'user']),
+    breakdown: z.array(BreakdownRowSchema),
+    snapshot: z
+      .object({
+        cursor: z.string().regex(/^mup_[A-Za-z0-9_-]{32}$/),
+        id: z.string().regex(/^mup_[A-Za-z0-9_-]{32}$/),
+        capturedAt: z.string().datetime(),
+        immutable: z.literal(true),
+      })
+      .strict(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.snapshot.cursor !== value.snapshot.id) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['snapshot', 'id'],
+        message: 'snapshot id must equal cursor',
+      });
+    }
+  });
+
+export type LedgerMeteringPortfolio = z.infer<typeof LedgerMeteringPortfolioSchema>;
+
+function billingMonthBounds(billingMonth: string): { startsAt: string; endsAt: string } {
+  const match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(billingMonth);
+  if (!match) throw new AppError('BAD_REQUEST', 400, 'BILLING_MONTH_INVALID');
+  const year = Number(match[1]);
+  const month = Number(match[2]) - 1;
+  return {
+    startsAt: new Date(Date.UTC(year, month, 1)).toISOString(),
+    endsAt: new Date(Date.UTC(year, month + 1, 1)).toISOString(),
+  };
+}
 
 type CollectorConfig = {
   baseUrl: string;
@@ -178,6 +241,7 @@ async function signServiceAssertion(
     organisationId: string;
     teamId: string | null;
     billingMonth: string;
+    view?: 'team_portfolio';
   },
   config: CollectorConfig,
   deps?: { now?: () => number },
@@ -190,6 +254,7 @@ async function signServiceAssertion(
     product: params.product,
     organization_id: params.organisationId,
     ...(params.teamId ? { team_id: params.teamId } : {}),
+    ...(params.view ? { view: params.view } : {}),
     billing_month: params.billingMonth,
   })
     .setProtectedHeader({
@@ -219,11 +284,12 @@ function normalizeLine(
     outputUnits: line.rawProviderUsage.unitsOut,
     estimatedProviderCost: line.rawProviderEstimatedCost,
     actualProviderCost: line.rawProviderActualCost,
+    selectedProviderCost: line.rawProviderSelectedCost,
     currency: line.rawProviderCurrency,
     costProvenance: line.costProvenance,
     billingProduct: line.billingProduct,
-    callerProduct: line.callerProduct ?? line.billingProduct,
-    originProduct: line.originProduct ?? line.callerProduct ?? line.billingProduct,
+    callerProduct: line.callerProduct,
+    originProduct: line.originProduct,
     userId: groupBy === 'user' ? line.dimension : null,
   };
 }
@@ -232,6 +298,28 @@ function normalizeUsage(usage: LedgerMeteringUsage, sha256: string): NormalizedM
   return {
     schemaVersion: 1,
     product: usage.product,
+    groupBy: usage.groupBy,
+    scope: usage.scope,
+    calls: usage.totals.calls,
+    lines: usage.breakdown.map((line) => normalizeLine(line, usage.groupBy)),
+    snapshot: {
+      cursor: usage.snapshot.cursor,
+      id: usage.snapshot.id,
+      capturedAt: usage.snapshot.capturedAt,
+      immutable: true,
+      sha256,
+    },
+  };
+}
+
+function normalizePortfolio(
+  usage: LedgerMeteringPortfolio,
+  sha256: string,
+): NormalizedMeteringPortfolio {
+  return {
+    schemaVersion: 1,
+    contract: usage.contract,
+    perspectiveProduct: usage.perspectiveProduct,
     groupBy: usage.groupBy,
     scope: usage.scope,
     calls: usage.totals.calls,
@@ -275,6 +363,7 @@ export async function fetchLedgerMeteringUsage(
     signAssertion?: typeof signServiceAssertion;
   },
 ): Promise<NormalizedMeteringUsage> {
+  const period = billingMonthBounds(params.billingMonth);
   const config = await collectorConfig(deps?.env, deps?.env === undefined);
   const assertion = await (deps?.signAssertion ?? signServiceAssertion)(params, config, {
     now: deps?.now,
@@ -283,41 +372,100 @@ export async function fetchLedgerMeteringUsage(
   url.searchParams.set('group_by', params.groupBy);
   if (params.cursor) url.searchParams.set('cursor', params.cursor);
 
-  let response: Response;
-  try {
-    response = await (deps?.fetch ?? fetch)(url, {
-      method: 'GET',
+  const response = await fetchLedgerJsonResponse(
+    {
+      url,
       headers: {
         Accept: 'application/json',
         'X-Ledger-App-Key': config.appKey,
         'X-UOA-Service-Assertion': assertion,
       },
-      signal: AbortSignal.timeout(20_000),
-    });
-  } catch {
-    throw new AppError('INTERNAL', 502, 'LEDGER_METERING_REQUEST_FAILED');
-  }
-  if (!response.ok) {
-    throw new AppError('INTERNAL', 502, 'LEDGER_METERING_REQUEST_FAILED');
-  }
-  const text = await response.text();
-  if (text.length > 2 * 1024 * 1024) {
-    throw new AppError('INTERNAL', 502, 'LEDGER_METERING_RESPONSE_TOO_LARGE');
-  }
+      errors: {
+        requestFailed: 'LEDGER_METERING_REQUEST_FAILED',
+        responseTooLarge: 'LEDGER_METERING_RESPONSE_TOO_LARGE',
+        responseInvalid: 'LEDGER_METERING_RESPONSE_INVALID',
+      },
+    },
+    { fetch: deps?.fetch },
+  );
   try {
-    const usage = LedgerMeteringUsageSchema.parse(JSON.parse(text));
+    const usage = LedgerMeteringUsageSchema.parse(response.value);
     if (
       usage.product !== params.product ||
       usage.groupBy !== params.groupBy ||
       usage.scope.organizationId !== params.organisationId ||
       usage.scope.teamId !== params.teamId ||
       usage.scope.userId !== null ||
-      usage.scope.month !== params.billingMonth
+      usage.scope.month !== params.billingMonth ||
+      usage.scope.startsAt !== period.startsAt ||
+      usage.scope.endsAt !== period.endsAt
     ) {
       throw new Error('scope mismatch');
     }
-    return normalizeUsage(usage, createHash('sha256').update(text).digest('hex'));
+    return normalizeUsage(usage, response.sha256);
   } catch {
     throw new AppError('INTERNAL', 502, 'LEDGER_METERING_RESPONSE_INVALID');
+  }
+}
+
+export async function fetchLedgerMeteringPortfolio(
+  params: {
+    product: string;
+    organisationId: string;
+    teamId: string;
+    billingMonth: string;
+    groupBy: 'service' | 'user';
+    cursor?: string;
+  },
+  deps?: {
+    env?: Env;
+    fetch?: typeof fetch;
+    now?: () => number;
+    signAssertion?: typeof signServiceAssertion;
+  },
+): Promise<NormalizedMeteringPortfolio> {
+  const period = billingMonthBounds(params.billingMonth);
+  const config = await collectorConfig(deps?.env, deps?.env === undefined);
+  const assertion = await (deps?.signAssertion ?? signServiceAssertion)(
+    { ...params, view: 'team_portfolio' },
+    config,
+    { now: deps?.now },
+  );
+  const url = new URL(`${config.baseUrl}/v1/metering/portfolio`);
+  url.searchParams.set('group_by', params.groupBy);
+  if (params.cursor) url.searchParams.set('cursor', params.cursor);
+
+  const response = await fetchLedgerJsonResponse(
+    {
+      url,
+      headers: {
+        Accept: 'application/json',
+        'X-Ledger-App-Key': config.appKey,
+        'X-UOA-Service-Assertion': assertion,
+      },
+      errors: {
+        requestFailed: 'LEDGER_METERING_PORTFOLIO_REQUEST_FAILED',
+        responseTooLarge: 'LEDGER_METERING_PORTFOLIO_RESPONSE_TOO_LARGE',
+        responseInvalid: 'LEDGER_METERING_PORTFOLIO_RESPONSE_INVALID',
+      },
+    },
+    { fetch: deps?.fetch },
+  );
+  try {
+    const usage = LedgerMeteringPortfolioSchema.parse(response.value);
+    if (
+      usage.perspectiveProduct !== params.product ||
+      usage.groupBy !== params.groupBy ||
+      usage.scope.organizationId !== params.organisationId ||
+      usage.scope.teamId !== params.teamId ||
+      usage.scope.month !== params.billingMonth ||
+      usage.scope.startsAt !== period.startsAt ||
+      usage.scope.endsAt !== period.endsAt
+    ) {
+      throw new Error('scope mismatch');
+    }
+    return normalizePortfolio(usage, response.sha256);
+  } catch {
+    throw new AppError('INTERNAL', 502, 'LEDGER_METERING_PORTFOLIO_RESPONSE_INVALID');
   }
 }

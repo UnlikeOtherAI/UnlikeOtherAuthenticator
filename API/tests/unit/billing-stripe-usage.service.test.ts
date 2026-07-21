@@ -175,6 +175,33 @@ describe('Stripe usage export', () => {
     });
   });
 
+  it('rates Ledger selected cost without dropping estimate-only rows from a mixed aggregate', async () => {
+    const mixedUsage = usage();
+    const line = mixedUsage.lines[0];
+    if (!line) throw new Error('usage fixture requires one line');
+    line.estimatedProviderCost = '3.5';
+    line.actualProviderCost = '1';
+    line.selectedProviderCost = '3';
+    const { prisma, stripe, createExport } = setup();
+
+    await exportStripeUsage(
+      { subscriptionId: 'subscription_1', billingMonth: '2026-07' },
+      {
+        prisma: prisma as never,
+        stripe: stripe as never,
+        fetchUsage: vi.fn().mockResolvedValue(mixedUsage),
+        now: () => capturedAt,
+      },
+    );
+
+    expect(createExport).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        cumulativeCustomerCharge: '3.75',
+        cumulativeMeterQuantity: 375_000_000n,
+      }),
+    });
+  });
+
   it('exports a negative cumulative delta when Ledger corrects a later snapshot', async () => {
     const prior = {
       id: 'export_1',
@@ -400,7 +427,7 @@ describe('Stripe usage export', () => {
         value.lines[0]!.currency = 'EUR';
       },
       (value: NormalizedMeteringUsage) => {
-        value.lines[0]!.actualProviderCost = null;
+        value.lines[0]!.selectedProviderCost = null;
       },
     ];
 

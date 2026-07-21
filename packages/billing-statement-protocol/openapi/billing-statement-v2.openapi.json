@@ -1,0 +1,2295 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "UOA BillingStatementV2 consumer contract",
+    "version": "2.0.0",
+    "description": "OpenAPI 3.1 component and conformance fixture for the SSO-filled customer statement and team-wide connected-service usage portfolio."
+  },
+  "paths": {},
+  "components": {
+    "schemas": {
+      "BillingStatementV2": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "/schemas/billing-statement-v2.json",
+        "title": "UOA canonical customer billing statement with connected-service portfolio",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schema_version",
+          "statement_id",
+          "generated_at",
+          "product",
+          "subject",
+          "period",
+          "pinned_inputs",
+          "plan",
+          "collection",
+          "subscription",
+          "services",
+          "usage",
+          "commercial_lines",
+          "totals",
+          "capabilities",
+          "actions",
+          "connected_service_usage"
+        ],
+        "properties": {
+          "schema_version": {
+            "const": 2
+          },
+          "statement_id": {
+            "type": "string",
+            "pattern": "^bst_[A-Za-z0-9_-]+$"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "product": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "identifier",
+              "name"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "identifier": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            }
+          },
+          "subject": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "user_id",
+              "organisation_id",
+              "team_id"
+            ],
+            "properties": {
+              "user_id": {
+                "type": "string"
+              },
+              "organisation_id": {
+                "type": "string"
+              },
+              "team_id": {
+                "type": "string"
+              }
+            }
+          },
+          "period": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "key",
+              "starts_at",
+              "ends_at",
+              "state"
+            ],
+            "properties": {
+              "key": {
+                "type": "string",
+                "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+              },
+              "starts_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "ends_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "open",
+                  "closed"
+                ]
+              }
+            }
+          },
+          "pinned_inputs": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "ledger_snapshots",
+              "tariff"
+            ],
+            "properties": {
+              "ledger_snapshots": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 1,
+                "prefixItems": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "contract",
+                      "group_by",
+                      "cursor",
+                      "id",
+                      "captured_at",
+                      "sha256"
+                    ],
+                    "properties": {
+                      "contract": {
+                        "const": "metering-portfolio-v1"
+                      },
+                      "group_by": {
+                        "const": "user"
+                      },
+                      "cursor": {
+                        "type": "string",
+                        "pattern": "^mup_[A-Za-z0-9_-]{32}$"
+                      },
+                      "id": {
+                        "type": "string",
+                        "pattern": "^mup_[A-Za-z0-9_-]{32}$"
+                      },
+                      "captured_at": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "sha256": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      }
+                    }
+                  }
+                ],
+                "items": false
+              },
+              "tariff": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "version"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          },
+          "plan": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "tariff_id",
+              "key",
+              "version",
+              "name",
+              "display_name",
+              "mode",
+              "collection_mode",
+              "markup_bps",
+              "markup_percent",
+              "markup_display",
+              "usage_multiplier_bps",
+              "monthly_subscription",
+              "assignment"
+            ],
+            "properties": {
+              "tariff_id": {
+                "type": "string"
+              },
+              "key": {
+                "type": "string"
+              },
+              "version": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "name": {
+                "type": "string"
+              },
+              "display_name": {
+                "type": "string"
+              },
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "standard",
+                  "free",
+                  "at_cost",
+                  "custom"
+                ]
+              },
+              "collection_mode": {
+                "type": "string",
+                "enum": [
+                  "stripe",
+                  "manual",
+                  "none"
+                ]
+              },
+              "markup_bps": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "markup_percent": {
+                "type": "string"
+              },
+              "markup_display": {
+                "type": "string"
+              },
+              "usage_multiplier_bps": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "monthly_subscription": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "amount",
+                  "currency",
+                  "display",
+                  "amount_minor"
+                ],
+                "properties": {
+                  "amount": {
+                    "type": "string",
+                    "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                  },
+                  "currency": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
+                  "display": {
+                    "type": "string"
+                  },
+                  "amount_minor": {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]*)$"
+                  }
+                }
+              },
+              "assignment": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "scope",
+                  "id"
+                ],
+                "properties": {
+                  "scope": {
+                    "type": "string",
+                    "enum": [
+                      "team",
+                      "organisation",
+                      "service_default"
+                    ]
+                  },
+                  "id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "collection": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "payment_collection_enabled",
+              "stripe_collection_enabled",
+              "stripe_mode"
+            ],
+            "properties": {
+              "payment_collection_enabled": {
+                "type": "boolean"
+              },
+              "stripe_collection_enabled": {
+                "type": "boolean"
+              },
+              "stripe_mode": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "test",
+                  "live",
+                  null
+                ]
+              }
+            }
+          },
+          "subscription": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "status",
+              "display_status",
+              "scope",
+              "cancel_at_period_end",
+              "current_period_start",
+              "current_period_end"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "display_status": {
+                "type": "string"
+              },
+              "scope": {
+                "type": "string",
+                "enum": [
+                  "team",
+                  "organisation"
+                ]
+              },
+              "cancel_at_period_end": {
+                "type": "boolean"
+              },
+              "current_period_start": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              },
+              "current_period_end": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              }
+            }
+          },
+          "services": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "product",
+                "name",
+                "display_name",
+                "access",
+                "direct_user_count",
+                "roles"
+              ],
+              "properties": {
+                "product": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "display_name": {
+                  "type": "string"
+                },
+                "access": {
+                  "type": "string",
+                  "enum": [
+                    "direct",
+                    "indirect"
+                  ]
+                },
+                "direct_user_count": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "roles": {
+                  "type": "array",
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "billing_product",
+                      "caller_product",
+                      "origin_product"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "usage": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "lines",
+              "totals",
+              "cost_totals",
+              "user_totals"
+            ],
+            "properties": {
+              "lines": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id",
+                    "service_id",
+                    "usage_unit",
+                    "calls",
+                    "attribution",
+                    "raw_units",
+                    "billable_units",
+                    "share",
+                    "provider_cost",
+                    "rated_charge"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "service_id": {
+                      "type": "string"
+                    },
+                    "usage_unit": {
+                      "type": "string"
+                    },
+                    "calls": {
+                      "type": "string",
+                      "pattern": "^(0|[1-9][0-9]*)$"
+                    },
+                    "attribution": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "user_id",
+                        "billing_product",
+                        "caller_product",
+                        "origin_product"
+                      ],
+                      "properties": {
+                        "user_id": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "billing_product": {
+                          "type": "string"
+                        },
+                        "caller_product": {
+                          "type": "string"
+                        },
+                        "origin_product": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "raw_units": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "input",
+                        "cached_input",
+                        "output",
+                        "total"
+                      ],
+                      "properties": {
+                        "input": {
+                          "type": "string",
+                          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                        },
+                        "cached_input": {
+                          "type": "string",
+                          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                        },
+                        "output": {
+                          "type": "string",
+                          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                        },
+                        "total": {
+                          "type": "string",
+                          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                        }
+                      }
+                    },
+                    "billable_units": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "input",
+                        "cached_input",
+                        "output",
+                        "total"
+                      ],
+                      "properties": {
+                        "input": {
+                          "type": "string",
+                          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                        },
+                        "cached_input": {
+                          "type": "string",
+                          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                        },
+                        "output": {
+                          "type": "string",
+                          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                        },
+                        "total": {
+                          "type": "string",
+                          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                        }
+                      }
+                    },
+                    "share": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "basis_points",
+                        "percent",
+                        "display"
+                      ],
+                      "properties": {
+                        "basis_points": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 10000
+                        },
+                        "percent": {
+                          "type": "string"
+                        },
+                        "display": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "provider_cost": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "amount",
+                            "currency",
+                            "display",
+                            "provenance"
+                          ],
+                          "properties": {
+                            "amount": {
+                              "type": "string",
+                              "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                            },
+                            "currency": {
+                              "type": "string",
+                              "pattern": "^[A-Z]{3}$"
+                            },
+                            "display": {
+                              "type": "string"
+                            },
+                            "provenance": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    "rated_charge": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "additionalProperties": false,
+                      "required": [
+                        "base",
+                        "markup",
+                        "total"
+                      ],
+                      "properties": {
+                        "base": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "amount",
+                            "currency",
+                            "display"
+                          ],
+                          "properties": {
+                            "amount": {
+                              "type": "string",
+                              "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                            },
+                            "currency": {
+                              "type": "string",
+                              "pattern": "^[A-Z]{3}$"
+                            },
+                            "display": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "markup": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "amount",
+                            "currency",
+                            "display"
+                          ],
+                          "properties": {
+                            "amount": {
+                              "type": "string",
+                              "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                            },
+                            "currency": {
+                              "type": "string",
+                              "pattern": "^[A-Z]{3}$"
+                            },
+                            "display": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "total": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "amount",
+                            "currency",
+                            "display"
+                          ],
+                          "properties": {
+                            "amount": {
+                              "type": "string",
+                              "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                            },
+                            "currency": {
+                              "type": "string",
+                              "pattern": "^[A-Z]{3}$"
+                            },
+                            "display": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "totals": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "usage_unit",
+                    "raw_units",
+                    "billable_units",
+                    "display"
+                  ],
+                  "properties": {
+                    "usage_unit": {
+                      "type": "string"
+                    },
+                    "raw_units": {
+                      "type": "string"
+                    },
+                    "billable_units": {
+                      "type": "string"
+                    },
+                    "display": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "cost_totals": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "currency",
+                    "provider_cost",
+                    "markup",
+                    "usage_charge"
+                  ],
+                  "properties": {
+                    "currency": {
+                      "type": "string"
+                    },
+                    "provider_cost": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "amount",
+                        "currency",
+                        "display"
+                      ],
+                      "properties": {
+                        "amount": {
+                          "type": "string",
+                          "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                        },
+                        "currency": {
+                          "type": "string",
+                          "pattern": "^[A-Z]{3}$"
+                        },
+                        "display": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "markup": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "amount",
+                        "currency",
+                        "display"
+                      ],
+                      "properties": {
+                        "amount": {
+                          "type": "string",
+                          "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                        },
+                        "currency": {
+                          "type": "string",
+                          "pattern": "^[A-Z]{3}$"
+                        },
+                        "display": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "usage_charge": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "amount",
+                        "currency",
+                        "display"
+                      ],
+                      "properties": {
+                        "amount": {
+                          "type": "string",
+                          "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                        },
+                        "currency": {
+                          "type": "string",
+                          "pattern": "^[A-Z]{3}$"
+                        },
+                        "display": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "user_totals": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "user_id",
+                    "name",
+                    "email",
+                    "calls",
+                    "usage",
+                    "costs"
+                  ],
+                  "properties": {
+                    "user_id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "email": {
+                      "type": "string"
+                    },
+                    "calls": {
+                      "type": "string",
+                      "pattern": "^(0|[1-9][0-9]*)$"
+                    },
+                    "usage": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "usage_unit",
+                          "raw_units",
+                          "billable_units"
+                        ],
+                        "properties": {
+                          "usage_unit": {
+                            "type": "string"
+                          },
+                          "raw_units": {
+                            "type": "string"
+                          },
+                          "billable_units": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "costs": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "currency",
+                          "provider_cost",
+                          "markup",
+                          "usage_charge"
+                        ],
+                        "properties": {
+                          "currency": {
+                            "type": "string"
+                          },
+                          "provider_cost": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "amount",
+                              "currency",
+                              "display"
+                            ],
+                            "properties": {
+                              "amount": {
+                                "type": "string",
+                                "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                              },
+                              "currency": {
+                                "type": "string",
+                                "pattern": "^[A-Z]{3}$"
+                              },
+                              "display": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "markup": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "amount",
+                              "currency",
+                              "display"
+                            ],
+                            "properties": {
+                              "amount": {
+                                "type": "string",
+                                "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                              },
+                              "currency": {
+                                "type": "string",
+                                "pattern": "^[A-Z]{3}$"
+                              },
+                              "display": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "usage_charge": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "amount",
+                              "currency",
+                              "display"
+                            ],
+                            "properties": {
+                              "amount": {
+                                "type": "string",
+                                "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                              },
+                              "currency": {
+                                "type": "string",
+                                "pattern": "^[A-Z]{3}$"
+                              },
+                              "display": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "commercial_lines": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "kind",
+                "product",
+                "label",
+                "detail",
+                "amount"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "monthly_subscription",
+                    "usage",
+                    "add_on",
+                    "credit"
+                  ]
+                },
+                "product": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "detail": {
+                  "type": "string"
+                },
+                "amount": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "amount",
+                    "currency",
+                    "display"
+                  ],
+                  "properties": {
+                    "amount": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                    },
+                    "currency": {
+                      "type": "string",
+                      "pattern": "^[A-Z]{3}$"
+                    },
+                    "display": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "totals": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "currency",
+                "monthly",
+                "usage",
+                "add_ons",
+                "credits",
+                "total_due"
+              ],
+              "properties": {
+                "currency": {
+                  "type": "string"
+                },
+                "monthly": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "amount",
+                    "currency",
+                    "display"
+                  ],
+                  "properties": {
+                    "amount": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                    },
+                    "currency": {
+                      "type": "string",
+                      "pattern": "^[A-Z]{3}$"
+                    },
+                    "display": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "usage": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "amount",
+                    "currency",
+                    "display"
+                  ],
+                  "properties": {
+                    "amount": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                    },
+                    "currency": {
+                      "type": "string",
+                      "pattern": "^[A-Z]{3}$"
+                    },
+                    "display": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "add_ons": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "amount",
+                    "currency",
+                    "display"
+                  ],
+                  "properties": {
+                    "amount": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                    },
+                    "currency": {
+                      "type": "string",
+                      "pattern": "^[A-Z]{3}$"
+                    },
+                    "display": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "credits": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "amount",
+                    "currency",
+                    "display"
+                  ],
+                  "properties": {
+                    "amount": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                    },
+                    "currency": {
+                      "type": "string",
+                      "pattern": "^[A-Z]{3}$"
+                    },
+                    "display": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "total_due": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "amount",
+                    "currency",
+                    "display"
+                  ],
+                  "properties": {
+                    "amount": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                    },
+                    "currency": {
+                      "type": "string",
+                      "pattern": "^[A-Z]{3}$"
+                    },
+                    "display": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "capabilities": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "can_upgrade",
+              "can_open_portal",
+              "can_cancel"
+            ],
+            "properties": {
+              "can_upgrade": {
+                "type": "boolean"
+              },
+              "can_open_portal": {
+                "type": "boolean"
+              },
+              "can_cancel": {
+                "type": "boolean"
+              }
+            }
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "kind",
+                "label",
+                "description",
+                "enabled",
+                "disabled_reason",
+                "request"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "enum": [
+                    "upgrade",
+                    "portal",
+                    "cancel"
+                  ]
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "hosted_redirect",
+                    "confirmation_dialog"
+                  ]
+                },
+                "label": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "enabled": {
+                  "type": "boolean"
+                },
+                "disabled_reason": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "request": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "method",
+                    "path",
+                    "body"
+                  ],
+                  "properties": {
+                    "method": {
+                      "const": "POST"
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "body": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "connected_service_usage": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "title",
+              "description",
+              "statement_product",
+              "services"
+            ],
+            "properties": {
+              "title": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "statement_product": {
+                "type": "string"
+              },
+              "services": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "billing_product",
+                    "name",
+                    "display_name",
+                    "access",
+                    "direct_user_count",
+                    "title",
+                    "description",
+                    "totals",
+                    "origins",
+                    "users"
+                  ],
+                  "properties": {
+                    "billing_product": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "display_name": {
+                      "type": "string"
+                    },
+                    "access": {
+                      "type": "string",
+                      "enum": [
+                        "direct",
+                        "indirect"
+                      ]
+                    },
+                    "direct_user_count": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "totals": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "calls",
+                        "usage",
+                        "provider_costs"
+                      ],
+                      "properties": {
+                        "calls": {
+                          "type": "string",
+                          "pattern": "^(0|[1-9][0-9]*)$"
+                        },
+                        "usage": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "usage_unit",
+                              "raw_units",
+                              "display"
+                            ],
+                            "properties": {
+                              "usage_unit": {
+                                "type": "string"
+                              },
+                              "raw_units": {
+                                "type": "string",
+                                "pattern": "^(0|[1-9][0-9]*)$"
+                              },
+                              "display": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        },
+                        "provider_costs": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "currency",
+                              "provider_cost",
+                              "display"
+                            ],
+                            "properties": {
+                              "currency": {
+                                "type": "string",
+                                "pattern": "^[A-Z]{3}$"
+                              },
+                              "provider_cost": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "amount",
+                                  "currency",
+                                  "display"
+                                ],
+                                "properties": {
+                                  "amount": {
+                                    "type": "string",
+                                    "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                                  },
+                                  "currency": {
+                                    "type": "string",
+                                    "pattern": "^[A-Z]{3}$"
+                                  },
+                                  "display": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "display": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "origins": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "product",
+                          "name",
+                          "display_name",
+                          "is_statement_product",
+                          "calls",
+                          "call_share",
+                          "usage",
+                          "provider_costs"
+                        ],
+                        "properties": {
+                          "product": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "name": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "display_name": {
+                            "type": "string"
+                          },
+                          "is_statement_product": {
+                            "type": "boolean"
+                          },
+                          "calls": {
+                            "type": "string",
+                            "pattern": "^(0|[1-9][0-9]*)$"
+                          },
+                          "call_share": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "basis_points",
+                              "percent",
+                              "display"
+                            ],
+                            "properties": {
+                              "basis_points": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 10000
+                              },
+                              "percent": {
+                                "type": "string",
+                                "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                              },
+                              "display": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "usage": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "usage_unit",
+                                "raw_units",
+                                "display",
+                                "share"
+                              ],
+                              "properties": {
+                                "usage_unit": {
+                                  "type": "string"
+                                },
+                                "raw_units": {
+                                  "type": "string",
+                                  "pattern": "^(0|[1-9][0-9]*)$"
+                                },
+                                "display": {
+                                  "type": "string"
+                                },
+                                "share": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "required": [
+                                    "basis_points",
+                                    "percent",
+                                    "display"
+                                  ],
+                                  "properties": {
+                                    "basis_points": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 10000
+                                    },
+                                    "percent": {
+                                      "type": "string",
+                                      "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                                    },
+                                    "display": {
+                                      "type": "string"
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "provider_costs": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "currency",
+                                "provider_cost",
+                                "display",
+                                "share"
+                              ],
+                              "properties": {
+                                "currency": {
+                                  "type": "string",
+                                  "pattern": "^[A-Z]{3}$"
+                                },
+                                "provider_cost": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "required": [
+                                    "amount",
+                                    "currency",
+                                    "display"
+                                  ],
+                                  "properties": {
+                                    "amount": {
+                                      "type": "string",
+                                      "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                                    },
+                                    "currency": {
+                                      "type": "string",
+                                      "pattern": "^[A-Z]{3}$"
+                                    },
+                                    "display": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "display": {
+                                  "type": "string"
+                                },
+                                "share": {
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "additionalProperties": false,
+                                      "required": [
+                                        "basis_points",
+                                        "percent",
+                                        "display"
+                                      ],
+                                      "properties": {
+                                        "basis_points": {
+                                          "type": "integer",
+                                          "minimum": 0,
+                                          "maximum": 10000
+                                        },
+                                        "percent": {
+                                          "type": "string",
+                                          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                                        },
+                                        "display": {
+                                          "type": "string"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "users": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "user_id",
+                          "name",
+                          "email",
+                          "display_name",
+                          "calls",
+                          "call_share",
+                          "usage",
+                          "provider_costs"
+                        ],
+                        "properties": {
+                          "user_id": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "name": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "email": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "display_name": {
+                            "type": "string"
+                          },
+                          "calls": {
+                            "type": "string",
+                            "pattern": "^(0|[1-9][0-9]*)$"
+                          },
+                          "call_share": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "basis_points",
+                              "percent",
+                              "display"
+                            ],
+                            "properties": {
+                              "basis_points": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 10000
+                              },
+                              "percent": {
+                                "type": "string",
+                                "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                              },
+                              "display": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "usage": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "usage_unit",
+                                "raw_units",
+                                "display",
+                                "share"
+                              ],
+                              "properties": {
+                                "usage_unit": {
+                                  "type": "string"
+                                },
+                                "raw_units": {
+                                  "type": "string",
+                                  "pattern": "^(0|[1-9][0-9]*)$"
+                                },
+                                "display": {
+                                  "type": "string"
+                                },
+                                "share": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "required": [
+                                    "basis_points",
+                                    "percent",
+                                    "display"
+                                  ],
+                                  "properties": {
+                                    "basis_points": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 10000
+                                    },
+                                    "percent": {
+                                      "type": "string",
+                                      "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                                    },
+                                    "display": {
+                                      "type": "string"
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "provider_costs": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "currency",
+                                "provider_cost",
+                                "display",
+                                "share"
+                              ],
+                              "properties": {
+                                "currency": {
+                                  "type": "string",
+                                  "pattern": "^[A-Z]{3}$"
+                                },
+                                "provider_cost": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "required": [
+                                    "amount",
+                                    "currency",
+                                    "display"
+                                  ],
+                                  "properties": {
+                                    "amount": {
+                                      "type": "string",
+                                      "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                                    },
+                                    "currency": {
+                                      "type": "string",
+                                      "pattern": "^[A-Z]{3}$"
+                                    },
+                                    "display": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "display": {
+                                  "type": "string"
+                                },
+                                "share": {
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "additionalProperties": false,
+                                      "required": [
+                                        "basis_points",
+                                        "percent",
+                                        "display"
+                                      ],
+                                      "properties": {
+                                        "basis_points": {
+                                          "type": "integer",
+                                          "minimum": 0,
+                                          "maximum": 10000
+                                        },
+                                        "percent": {
+                                          "type": "string",
+                                          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                                        },
+                                        "display": {
+                                          "type": "string"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "examples": {
+      "BillingStatementV2Conformance": {
+        "summary": "Display-ready BillingStatementV2 example with team, origin-product, and user usage transparency",
+        "value": {
+          "schema_version": 2,
+          "statement_id": "bst_conformance_v2",
+          "generated_at": "2026-07-20T12:00:00.000Z",
+          "product": {
+            "id": "service_deepwater_example",
+            "identifier": "deepwater",
+            "name": "DeepWater"
+          },
+          "subject": {
+            "user_id": "user_example",
+            "organisation_id": "org_example",
+            "team_id": "team_example"
+          },
+          "period": {
+            "key": "2026-07",
+            "starts_at": "2026-07-01T00:00:00.000Z",
+            "ends_at": "2026-08-01T00:00:00.000Z",
+            "state": "open"
+          },
+          "pinned_inputs": {
+            "ledger_snapshots": [
+              {
+                "contract": "metering-portfolio-v1",
+                "group_by": "user",
+                "cursor": "mup_1123456789ABCDEFGHIJKLMNOPQRSTUV",
+                "id": "mup_1123456789ABCDEFGHIJKLMNOPQRSTUV",
+                "captured_at": "2026-07-20T11:59:00.000Z",
+                "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+              }
+            ],
+            "tariff": {
+              "id": "tariff_standard_example",
+              "version": 4
+            }
+          },
+          "plan": {
+            "tariff_id": "tariff_standard_example",
+            "key": "standard",
+            "version": 4,
+            "name": "Standard",
+            "display_name": "Standard · v4",
+            "mode": "standard",
+            "collection_mode": "stripe",
+            "markup_bps": 2000,
+            "markup_percent": "20.00",
+            "markup_display": "20.00%",
+            "usage_multiplier_bps": 12000,
+            "monthly_subscription": {
+              "amount": "20",
+              "amount_minor": "2000",
+              "currency": "GBP",
+              "display": "£20"
+            },
+            "assignment": {
+              "scope": "team",
+              "id": "assignment_example"
+            }
+          },
+          "collection": {
+            "payment_collection_enabled": true,
+            "stripe_collection_enabled": true,
+            "stripe_mode": "test"
+          },
+          "subscription": {
+            "id": "subscription_example",
+            "status": "active",
+            "display_status": "active",
+            "scope": "team",
+            "cancel_at_period_end": false,
+            "current_period_start": "2026-07-01T00:00:00.000Z",
+            "current_period_end": "2026-08-01T00:00:00.000Z"
+          },
+          "services": [
+            {
+              "product": "deepwater",
+              "name": "DeepWater",
+              "display_name": "DeepWater",
+              "access": "direct",
+              "direct_user_count": 2,
+              "roles": [
+                "billing_product"
+              ]
+            },
+            {
+              "product": "nessie",
+              "name": "Nessie",
+              "display_name": "Nessie",
+              "access": "indirect",
+              "direct_user_count": 0,
+              "roles": [
+                "caller_product",
+                "origin_product"
+              ]
+            }
+          ],
+          "usage": {
+            "lines": [
+              {
+                "id": "usage_openai_example",
+                "service_id": "openai",
+                "usage_unit": "tokens",
+                "calls": "2",
+                "attribution": {
+                  "user_id": null,
+                  "billing_product": "deepwater",
+                  "caller_product": "nessie",
+                  "origin_product": "nessie"
+                },
+                "raw_units": {
+                  "input": "100",
+                  "cached_input": "0",
+                  "output": "50",
+                  "total": "150"
+                },
+                "billable_units": {
+                  "input": "120",
+                  "cached_input": "0",
+                  "output": "60",
+                  "total": "180"
+                },
+                "share": {
+                  "basis_points": 10000,
+                  "percent": "100.00",
+                  "display": "100.00%"
+                },
+                "provider_cost": {
+                  "amount": "3",
+                  "currency": "USD",
+                  "display": "$3",
+                  "provenance": "provider_invoice"
+                },
+                "rated_charge": {
+                  "base": {
+                    "amount": "3",
+                    "currency": "USD",
+                    "display": "$3"
+                  },
+                  "markup": {
+                    "amount": "0.6",
+                    "currency": "USD",
+                    "display": "$0.6"
+                  },
+                  "total": {
+                    "amount": "3.6",
+                    "currency": "USD",
+                    "display": "$3.6"
+                  }
+                }
+              }
+            ],
+            "totals": [
+              {
+                "usage_unit": "tokens",
+                "raw_units": "150",
+                "billable_units": "180",
+                "display": "180 billable tokens (150 raw)"
+              }
+            ],
+            "cost_totals": [
+              {
+                "currency": "USD",
+                "provider_cost": {
+                  "amount": "3",
+                  "currency": "USD",
+                  "display": "$3"
+                },
+                "markup": {
+                  "amount": "0.6",
+                  "currency": "USD",
+                  "display": "$0.6"
+                },
+                "usage_charge": {
+                  "amount": "3.6",
+                  "currency": "USD",
+                  "display": "$3.6"
+                }
+              }
+            ],
+            "user_totals": [
+              {
+                "user_id": "user_example",
+                "name": "Example User",
+                "email": "example@example.invalid",
+                "calls": "2",
+                "usage": [
+                  {
+                    "usage_unit": "tokens",
+                    "raw_units": "150",
+                    "billable_units": "180"
+                  }
+                ],
+                "costs": [
+                  {
+                    "currency": "USD",
+                    "provider_cost": {
+                      "amount": "3",
+                      "currency": "USD",
+                      "display": "$3"
+                    },
+                    "markup": {
+                      "amount": "0.6",
+                      "currency": "USD",
+                      "display": "$0.6"
+                    },
+                    "usage_charge": {
+                      "amount": "3.6",
+                      "currency": "USD",
+                      "display": "$3.6"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "commercial_lines": [
+            {
+              "id": "monthly_subscription_example",
+              "kind": "monthly_subscription",
+              "product": "deepwater",
+              "label": "Standard monthly subscription",
+              "detail": "Standard · v4",
+              "amount": {
+                "amount": "20",
+                "currency": "GBP",
+                "display": "£20"
+              }
+            },
+            {
+              "id": "usage_usd_example",
+              "kind": "usage",
+              "product": "deepwater",
+              "label": "Usage",
+              "detail": "Provider cost plus 20.00% markup",
+              "amount": {
+                "amount": "3.6",
+                "currency": "USD",
+                "display": "$3.6"
+              }
+            }
+          ],
+          "totals": [
+            {
+              "currency": "GBP",
+              "monthly": {
+                "amount": "20",
+                "currency": "GBP",
+                "display": "£20"
+              },
+              "usage": {
+                "amount": "0",
+                "currency": "GBP",
+                "display": "£0"
+              },
+              "add_ons": {
+                "amount": "0",
+                "currency": "GBP",
+                "display": "£0"
+              },
+              "credits": {
+                "amount": "0",
+                "currency": "GBP",
+                "display": "£0"
+              },
+              "total_due": {
+                "amount": "20",
+                "currency": "GBP",
+                "display": "£20"
+              }
+            },
+            {
+              "currency": "USD",
+              "monthly": {
+                "amount": "0",
+                "currency": "USD",
+                "display": "$0"
+              },
+              "usage": {
+                "amount": "3.6",
+                "currency": "USD",
+                "display": "$3.6"
+              },
+              "add_ons": {
+                "amount": "0",
+                "currency": "USD",
+                "display": "$0"
+              },
+              "credits": {
+                "amount": "0",
+                "currency": "USD",
+                "display": "$0"
+              },
+              "total_due": {
+                "amount": "3.6",
+                "currency": "USD",
+                "display": "$3.6"
+              }
+            }
+          ],
+          "capabilities": {
+            "can_upgrade": false,
+            "can_open_portal": true,
+            "can_cancel": true
+          },
+          "actions": [
+            {
+              "id": "upgrade",
+              "kind": "hosted_redirect",
+              "label": "Change plan",
+              "description": "Plan changes are unavailable for this tariff.",
+              "enabled": false,
+              "disabled_reason": "No alternative tariff is available.",
+              "request": {
+                "method": "POST",
+                "path": "/billing/v1/stripe/checkout-session",
+                "body": {
+                  "product": "deepwater",
+                  "organisation_id": "org_example",
+                  "team_id": "team_example",
+                  "user_id": "user_example"
+                }
+              }
+            },
+            {
+              "id": "portal",
+              "kind": "hosted_redirect",
+              "label": "Manage payment method",
+              "description": "Open the hosted Stripe billing portal.",
+              "enabled": true,
+              "disabled_reason": null,
+              "request": {
+                "method": "POST",
+                "path": "/billing/v1/stripe/portal-session",
+                "body": {
+                  "product": "deepwater",
+                  "organisation_id": "org_example",
+                  "team_id": "team_example",
+                  "user_id": "user_example"
+                }
+              }
+            },
+            {
+              "id": "cancel",
+              "kind": "confirmation_dialog",
+              "label": "Cancel subscription",
+              "description": "Review the exact direct subscriptions before confirming.",
+              "enabled": true,
+              "disabled_reason": null,
+              "request": {
+                "method": "POST",
+                "path": "/billing/v1/cancellation/preview",
+                "body": {
+                  "product": "deepwater",
+                  "organisation_id": "org_example",
+                  "team_id": "team_example",
+                  "user_id": "user_example"
+                }
+              }
+            }
+          ],
+          "connected_service_usage": {
+            "title": "Connected-service usage",
+            "description": "Team-wide raw usage across connected services. Other services are shown for transparency and are not added to this statement total.",
+            "statement_product": "deepwater",
+            "services": [
+              {
+                "billing_product": "deepwater",
+                "name": "DeepWater",
+                "display_name": "DeepWater",
+                "access": "direct",
+                "direct_user_count": 2,
+                "title": "DeepWater team usage",
+                "description": "DeepWater used 1,000 raw tokens across this team. DeepWater originated 56.00%; Nessie originated 44.00%.",
+                "totals": {
+                  "calls": "10",
+                  "usage": [
+                    {
+                      "usage_unit": "tokens",
+                      "raw_units": "1000",
+                      "display": "1,000 raw tokens across this team"
+                    }
+                  ],
+                  "provider_costs": [
+                    {
+                      "currency": "USD",
+                      "provider_cost": {
+                        "amount": "10",
+                        "currency": "USD",
+                        "display": "$10"
+                      },
+                      "display": "$10 raw provider cost across this team"
+                    }
+                  ]
+                },
+                "origins": [
+                  {
+                    "product": "deepwater",
+                    "name": "DeepWater",
+                    "display_name": "DeepWater",
+                    "is_statement_product": true,
+                    "calls": "6",
+                    "call_share": {
+                      "basis_points": 6000,
+                      "percent": "60.00",
+                      "display": "60.00% of DeepWater calls"
+                    },
+                    "usage": [
+                      {
+                        "usage_unit": "tokens",
+                        "raw_units": "560",
+                        "share": {
+                          "basis_points": 5600,
+                          "percent": "56.00",
+                          "display": "56.00% of DeepWater tokens"
+                        },
+                        "display": "DeepWater originated 560 raw tokens (56.00%)"
+                      }
+                    ],
+                    "provider_costs": [
+                      {
+                        "currency": "USD",
+                        "provider_cost": {
+                          "amount": "5.6",
+                          "currency": "USD",
+                          "display": "$5.6"
+                        },
+                        "share": {
+                          "basis_points": 5600,
+                          "percent": "56.00",
+                          "display": "56.00% of DeepWater USD provider cost"
+                        },
+                        "display": "DeepWater originated $5.6 raw provider cost (56.00%)"
+                      }
+                    ]
+                  },
+                  {
+                    "product": "nessie",
+                    "name": "Nessie",
+                    "display_name": "Nessie",
+                    "is_statement_product": false,
+                    "calls": "4",
+                    "call_share": {
+                      "basis_points": 4000,
+                      "percent": "40.00",
+                      "display": "40.00% of DeepWater calls"
+                    },
+                    "usage": [
+                      {
+                        "usage_unit": "tokens",
+                        "raw_units": "440",
+                        "share": {
+                          "basis_points": 4400,
+                          "percent": "44.00",
+                          "display": "44.00% of DeepWater tokens"
+                        },
+                        "display": "Nessie originated 440 raw tokens (44.00%)"
+                      }
+                    ],
+                    "provider_costs": [
+                      {
+                        "currency": "USD",
+                        "provider_cost": {
+                          "amount": "4.4",
+                          "currency": "USD",
+                          "display": "$4.4"
+                        },
+                        "share": {
+                          "basis_points": 4400,
+                          "percent": "44.00",
+                          "display": "44.00% of DeepWater USD provider cost"
+                        },
+                        "display": "Nessie originated $4.4 raw provider cost (44.00%)"
+                      }
+                    ]
+                  }
+                ],
+                "users": [
+                  {
+                    "user_id": "user_example",
+                    "name": "Example User",
+                    "email": "example@example.invalid",
+                    "display_name": "Example User",
+                    "calls": "6",
+                    "call_share": {
+                      "basis_points": 6000,
+                      "percent": "60.00",
+                      "display": "60.00% of DeepWater calls"
+                    },
+                    "usage": [
+                      {
+                        "usage_unit": "tokens",
+                        "raw_units": "600",
+                        "share": {
+                          "basis_points": 6000,
+                          "percent": "60.00",
+                          "display": "60.00% of DeepWater tokens"
+                        },
+                        "display": "Example User used 600 raw tokens (60.00%)"
+                      }
+                    ],
+                    "provider_costs": [
+                      {
+                        "currency": "USD",
+                        "provider_cost": {
+                          "amount": "6",
+                          "currency": "USD",
+                          "display": "$6"
+                        },
+                        "share": {
+                          "basis_points": 6000,
+                          "percent": "60.00",
+                          "display": "60.00% of DeepWater USD provider cost"
+                        },
+                        "display": "Example User used $6 raw provider cost (60.00%)"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

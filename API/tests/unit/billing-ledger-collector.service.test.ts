@@ -1,10 +1,14 @@
 import { createHash } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 
 import { exportJWK, generateKeyPair, jwtVerify } from 'jose';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { parseEnv, type Env } from '../../src/config/env.js';
-import { fetchLedgerMeteringUsage } from '../../src/services/billing-ledger-collector.service.js';
+import {
+  fetchLedgerMeteringPortfolio,
+  fetchLedgerMeteringUsage,
+} from '../../src/services/billing-ledger-collector.service.js';
 
 let env: Env;
 let verificationKey: CryptoKey;
@@ -80,6 +84,7 @@ function rawMeteringResponse(groupBy: 'service' | 'user' = 'service') {
           calls: '2',
           rawProviderEstimatedCost: '1.2',
           rawProviderActualCost: '1.1',
+          rawProviderSelectedCost: '1.1',
         },
       ],
     },
@@ -102,12 +107,57 @@ function rawMeteringResponse(groupBy: 'service' | 'user' = 'service') {
         },
         rawProviderEstimatedCost: '1.2',
         rawProviderActualCost: '1.1',
+        rawProviderSelectedCost: '1.1',
       },
     ],
     snapshot: {
       cursor: 'mus_0123456789ABCDEFGHIJKLMNOPQRSTUV',
       id: 'mus_0123456789ABCDEFGHIJKLMNOPQRSTUV',
       capturedAt: '2026-07-19T12:00:00.000Z',
+      immutable: true,
+    },
+  };
+}
+
+function rawPortfolioResponse(groupBy: 'service' | 'user' = 'service') {
+  const usage = rawMeteringResponse(groupBy);
+  return {
+    ...usage,
+    contract: 'metering-portfolio-v1',
+    perspectiveProduct: usage.product,
+    product: undefined,
+    scope: {
+      organizationId: usage.scope.organizationId,
+      teamId: usage.scope.teamId,
+      month: usage.scope.month,
+      startsAt: usage.scope.startsAt,
+      endsAt: usage.scope.endsAt,
+    },
+    totals: {
+      ...usage.totals,
+      usageByService: [
+        ...usage.totals.usageByService,
+        {
+          ...usage.totals.usageByService[0],
+          billingProduct: 'nessie',
+          callerProduct: 'nessie',
+          originProduct: 'nessie',
+        },
+      ],
+    },
+    breakdown: [
+      ...usage.breakdown,
+      {
+        ...usage.breakdown[0],
+        billingProduct: 'nessie',
+        callerProduct: 'nessie',
+        originProduct: 'nessie',
+      },
+    ],
+    snapshot: {
+      cursor: 'mup_0123456789ABCDEFGHIJKLMNOPQRSTUV',
+      id: 'mup_0123456789ABCDEFGHIJKLMNOPQRSTUV',
+      capturedAt: usage.snapshot.capturedAt,
       immutable: true,
     },
   };
@@ -175,6 +225,7 @@ describe('Ledger raw metering collector', () => {
         {
           serviceId: 'openai',
           actualProviderCost: '1.1',
+          selectedProviderCost: '1.1',
           billingProduct: 'deepwater',
           callerProduct: 'nessie',
           userId: null,
@@ -203,6 +254,13 @@ describe('Ledger raw metering collector', () => {
           id: 'mus_1123456789ABCDEFGHIJKLMNOPQRSTUV',
         },
       },
+      {
+        ...rawMeteringResponse(),
+        scope: {
+          ...rawMeteringResponse().scope,
+          startsAt: '2026-07-02T00:00:00.000Z',
+        },
+      },
     ]) {
       await expect(
         fetchLedgerMeteringUsage(
@@ -224,6 +282,121 @@ describe('Ledger raw metering collector', () => {
           },
         ),
       ).rejects.toThrow('LEDGER_METERING_RESPONSE_INVALID');
+    }
+  });
+
+  it('requests one exact team portfolio with the statement product only as perspective', async () => {
+    const now = Math.floor(Date.parse('2026-07-19T12:00:00.000Z') / 1000);
+    let responseText = '';
+    const fetchMock = vi.fn(async (_input: URL | RequestInfo, init?: RequestInit) => {
+      const assertion = new Headers(init?.headers).get('X-UOA-Service-Assertion');
+      const verified = await jwtVerify(assertion as string, verificationKey, {
+        algorithms: ['RS256'],
+        issuer: 'https://authentication.unlikeotherai.com',
+        audience: 'https://ledger.unlikeotherai.com',
+        currentDate: new Date(now * 1000),
+      });
+      expect(verified.payload).toMatchObject({
+        sub: 'uoa-metering-reader',
+        scope: 'metering.read',
+        product: 'deepwater',
+        organization_id: 'org_123',
+        team_id: 'team_123',
+        billing_month: '2026-07',
+        view: 'team_portfolio',
+      });
+      responseText = JSON.stringify(rawPortfolioResponse('user'), (_key, value) =>
+        value === undefined ? undefined : value,
+      );
+      return new Response(responseText, { status: 200 });
+    });
+
+    const result = await fetchLedgerMeteringPortfolio(
+      {
+        product: 'deepwater',
+        organisationId: 'org_123',
+        teamId: 'team_123',
+        billingMonth: '2026-07',
+        groupBy: 'user',
+      },
+      { env, fetch: fetchMock as unknown as typeof fetch, now: () => now },
+    );
+
+    expect(result).toMatchObject({
+      contract: 'metering-portfolio-v1',
+      perspectiveProduct: 'deepwater',
+      groupBy: 'user',
+      lines: [
+        expect.objectContaining({ billingProduct: 'deepwater' }),
+        expect.objectContaining({ billingProduct: 'nessie' }),
+      ],
+      snapshot: { cursor: 'mup_0123456789ABCDEFGHIJKLMNOPQRSTUV' },
+    });
+    expect(result.scope).not.toHaveProperty('userId');
+    expect(result.snapshot.sha256).toBe(createHash('sha256').update(responseText).digest('hex'));
+    expect((fetchMock.mock.calls[0]?.[0] as URL).toString()).toBe(
+      'https://ledger.unlikeotherai.com/v1/metering/portfolio?group_by=user',
+    );
+  });
+
+  it('accepts Ledger’s committed public cross-product portfolio fixture exactly', async () => {
+    const responseText = await readFile(
+      new URL('../fixtures/ledger-metering-portfolio-v1.example.json', import.meta.url),
+      'utf8',
+    );
+    const result = await fetchLedgerMeteringPortfolio(
+      {
+        product: 'nessie',
+        organisationId: 'org_example',
+        teamId: 'team_example',
+        billingMonth: '2026-07',
+        groupBy: 'service',
+      },
+      {
+        env,
+        fetch: vi.fn().mockResolvedValue(new Response(responseText, { status: 200 })),
+      },
+    );
+
+    expect(result.scope).toEqual({
+      organizationId: 'org_example',
+      teamId: 'team_example',
+      month: '2026-07',
+      startsAt: '2026-07-01T00:00:00.000Z',
+      endsAt: '2026-08-01T00:00:00.000Z',
+    });
+    expect(result.lines.map((line) => line.billingProduct)).toEqual(['deepwater', 'nessie']);
+  });
+
+  it('rejects portfolio responses with commercial fields or a mismatched perspective', async () => {
+    for (const response of [
+      { ...rawPortfolioResponse(), tariffs: [] },
+      { ...rawPortfolioResponse(), perspectiveProduct: 'nessie' },
+      {
+        ...rawPortfolioResponse(),
+        scope: {
+          ...rawPortfolioResponse().scope,
+          endsAt: '2026-08-02T00:00:00.000Z',
+        },
+      },
+    ]) {
+      await expect(
+        fetchLedgerMeteringPortfolio(
+          {
+            product: 'deepwater',
+            organisationId: 'org_123',
+            teamId: 'team_123',
+            billingMonth: '2026-07',
+            groupBy: 'service',
+          },
+          {
+            env,
+            fetch: vi
+              .fn()
+              .mockResolvedValue(new Response(JSON.stringify(response), { status: 200 })),
+          },
+        ),
+      ).rejects.toThrow('LEDGER_METERING_PORTFOLIO_RESPONSE_INVALID');
     }
   });
 });

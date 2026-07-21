@@ -1,4 +1,5 @@
 export type MeteringGroup = 'service' | 'user';
+export const UNATTRIBUTED_BILLING_PRODUCT = 'unattributed' as const;
 
 export type RawMeteringLine = {
   serviceId: string;
@@ -9,11 +10,12 @@ export type RawMeteringLine = {
   outputUnits: string;
   estimatedProviderCost: string | null;
   actualProviderCost: string | null;
+  selectedProviderCost: string | null;
   currency: string | null;
   costProvenance: string | null;
   billingProduct: string;
-  callerProduct: string;
-  originProduct: string;
+  callerProduct: string | null;
+  originProduct: string | null;
   userId: string | null;
 };
 
@@ -48,3 +50,24 @@ export type FetchMeteringUsage = (params: {
   groupBy: MeteringGroup;
   cursor?: string;
 }) => Promise<NormalizedMeteringUsage>;
+
+export type NormalizedMeteringPortfolio = Omit<NormalizedMeteringUsage, 'product' | 'scope'> & {
+  contract: 'metering-portfolio-v1';
+  perspectiveProduct: string;
+  scope: {
+    organizationId: string;
+    teamId: string;
+    month: string;
+    startsAt: string;
+    endsAt: string;
+  };
+};
+
+export type FetchMeteringPortfolio = (params: {
+  product: string;
+  organisationId: string;
+  teamId: string;
+  billingMonth: string;
+  groupBy: MeteringGroup;
+  cursor?: string;
+}) => Promise<NormalizedMeteringPortfolio>;

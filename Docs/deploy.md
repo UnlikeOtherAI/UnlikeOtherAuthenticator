@@ -27,14 +27,14 @@ The production root `https://authentication.unlikeotherai.com/` is a Tailwind ho
 
 Configured as GitHub repository variables:
 
-| Variable | Value |
-|----------|-------|
-| `GCP_PROJECT_ID` | `gen-lang-client-0561071620` |
-| `GCP_REGION` | `europe-west1` |
-| `GCP_CLOUD_RUN_SERVICE` | `uoa-auth` |
-| `GCP_ARTIFACT_REGISTRY_REPOSITORY` | `uoa-docker` |
-| `GCP_WORKLOAD_IDENTITY_PROVIDER` | `projects/193510011126/locations/global/workloadIdentityPools/github-actions/providers/github` |
-| `GCP_SERVICE_ACCOUNT` | `gha-uoa-auth-deploy@gen-lang-client-0561071620.iam.gserviceaccount.com` |
+| Variable                           | Value                                                                                          |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `GCP_PROJECT_ID`                   | `gen-lang-client-0561071620`                                                                   |
+| `GCP_REGION`                       | `europe-west1`                                                                                 |
+| `GCP_CLOUD_RUN_SERVICE`            | `uoa-auth`                                                                                     |
+| `GCP_ARTIFACT_REGISTRY_REPOSITORY` | `uoa-docker`                                                                                   |
+| `GCP_WORKLOAD_IDENTITY_PROVIDER`   | `projects/193510011126/locations/global/workloadIdentityPools/github-actions/providers/github` |
+| `GCP_SERVICE_ACCOUNT`              | `gha-uoa-auth-deploy@gen-lang-client-0561071620.iam.gserviceaccount.com`                       |
 
 The workload identity provider is restricted to GitHub repository `UnlikeOtherAI/UnlikeOtherAuthenticator`.
 
@@ -62,48 +62,48 @@ curl https://authentication.unlikeotherai.com/health
 
 Set via Cloud Run service config:
 
-| Variable | Source |
-|----------|--------|
-| `AUTH_SERVICE_IDENTIFIER` | Optional plain override; internal issuer/audience for service-issued tokens. Defaults to the `PUBLIC_BASE_URL` host and is not required in client config JWTs |
-| `ADMIN_AUTH_DOMAIN` | Optional plain override; domain allowed into the Admin panel. Defaults to the resolved auth service identifier |
-| `ADMIN_ACCESS_TOKEN_SECRET` | Secret Manager: `uoa-admin-access-token-secret`; used to sign tokens issued for `ADMIN_AUTH_DOMAIN`; route-level requirement for admin access |
-| `ADMIN_CONFIG_JWT` | Secret Manager: `uoa-admin-config-jwt`; signed RS256 config JWT served from `/internal/admin/config`; must disable registration and allow only Google |
-| `ADMIN_BOOTSTRAP_EMAILS` | Optional comma-separated allowlist of emails allowed to bootstrap the initial `SUPERUSER` on `ADMIN_AUTH_DOMAIN`. Unset → first admin-domain login wins |
-| `CONFIG_JWKS_URL` | Plain value: `https://authentication.unlikeotherai.com/.well-known/jwks.json`; trusted JWKS URL for RS256 config JWT verification; route-level requirement for config-backed auth |
-| `CONFIG_JWKS_JSON` | Secret Manager: `uoa-auth-config-jwks-json`; public JWKS JSON served from `/.well-known/jwks.json`; must contain public keys only |
-| `PUBLIC_BASE_URL` | Plain value: `https://authentication.unlikeotherai.com` |
-| `DATABASE_URL` | Secret Manager: `uoa-auth-database-url`; runtime connection used for post-context (tenant) DB paths; should point at the `uoa_app` role once RLS M2 is enforced |
-| `DATABASE_ADMIN_URL` | Secret Manager: `uoa-auth-database-admin-url`; bootstrap/admin connection used for domain-hash auth, admin routes, auto-onboarding, claim flow, retention pruning, audit log, and `/.well-known/jwks.json`; must connect as a `BYPASSRLS` role (`uoa_admin`). Falls back to `DATABASE_URL` when unset |
-| `SHARED_SECRET` | Secret Manager: `uoa-auth-shared-secret` |
-| `GOOGLE_CLIENT_ID` | Secret Manager: `uoa-auth-google-client-id` |
-| `GOOGLE_CLIENT_SECRET` | Secret Manager: `uoa-auth-google-client-secret` |
-| `MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK` | Secret Manager: `uoa-auth-mcp-oauth-access-token-private-jwk`; RS256 private JWK (JSON) for confidential resource tokens and optional public-profile tokens. Its public half is served at `/oauth/jwks.json`; key presence alone does not open public OAuth routes |
-| `MCP_OAUTH_PUBLIC_PROFILE_ENABLED` | Plain production value: `false` for the confidential-only Ledger rollout. Set `true` only in a separate reviewed change that also configures the dedicated public profile |
-| `MCP_OAUTH_DOMAIN` | Required only when `MCP_OAUTH_PUBLIC_PROFILE_ENABLED=true`; must be a dedicated first-party tenant distinct from `ADMIN_AUTH_DOMAIN` and customer domains |
-| `MCP_OAUTH_RESOURCES_SUPPORTED` | Used only by the explicitly enabled public profile; case-sensitive RFC 8707 resource allowlist |
-| `TARIFF_SNAPSHOT_PRIVATE_JWK` | Secret Manager: `uoa-auth-tariff-snapshot-private-jwk`; dedicated current RS256 private RSA JWK for signed tariff snapshots. Configure it only with the matching public JWKS; do not reuse another UOA signing key |
-| `TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON` | Secret Manager: `uoa-auth-tariff-snapshot-public-jwks-json`; public-only JWKS containing the current tariff key and overlapping retired verification keys. The current entry must exactly match the private key's `kid`, modulus, and exponent |
-| `STRIPE_BILLING_ENABLED` | Plain safety gate. Production default is `false`; Stripe and Ledger collection calls are forbidden until every launch prerequisite below is verified |
-| `STRIPE_SECRET_KEY` | Secret Manager: dedicated Stripe restricted/live key for UOA billing. Presence alone does not enable billing |
-| `STRIPE_WEBHOOK_SECRET` | Secret Manager: Stripe endpoint signing secret for `/billing/v1/stripe/webhook`; never reuse a product app key or Ledger key |
-| `STRIPE_USAGE_EXPORT_INTERVAL_MINUTES` | Plain recurring collector interval, 5–1,440 minutes; workflow default 60 |
-| `STRIPE_PRE_BOUNDARY_SAFETY_LEAD_MINUTES` | Plain horizon in which the additional pre-boundary safety timer is scheduled; workflow default 360 and must cover interval plus offset |
-| `STRIPE_PRE_BOUNDARY_SAFETY_OFFSET_MINUTES` | Plain offset before UTC billing-period end for the safety pass; workflow default 1. This is not the final reconciliation |
-| `LEDGER_BILLING_BASE_URL` | Plain credential-free HTTPS Ledger origin, canonical production value `https://ledger.unlikeotherai.com` |
-| `LEDGER_BILLING_APP_KEY` | Secret Manager: UOA's own dedicated, product-bound Ledger raw-metering reader app key. Never reuse a Nessie, DeepWater, DeepSignal, DeepTest, user, or webhook credential |
-| `LEDGER_BILLING_APP_KEY_ID` | Plain immutable Ledger record ID for that exact UOA app key; copied into the signed assertion's `azp` and verified by Ledger |
-| `LEDGER_BILLING_ASSERTION_AUDIENCE` | Exact Ledger service-assertion audience, canonical production value `https://ledger.unlikeotherai.com` |
-| `UOA_BILLING_ASSERTION_SIGNING_PRIVATE_JWK` | Secret Manager: dedicated current RS256 private JWK used only for short-lived UOA→Ledger `metering.read` assertions |
-| `UOA_BILLING_ASSERTION_PUBLIC_JWKS_JSON` | Secret Manager: public-only current and overlapping retired assertion keys served at `/billing/v1/service-jwks.json`; current public pair must match the private key |
+| Variable                                    | Source                                                                                                                                                                                                                                                                                                |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AUTH_SERVICE_IDENTIFIER`                   | Optional plain override; internal issuer/audience for service-issued tokens. Defaults to the `PUBLIC_BASE_URL` host and is not required in client config JWTs                                                                                                                                         |
+| `ADMIN_AUTH_DOMAIN`                         | Optional plain override; domain allowed into the Admin panel. Defaults to the resolved auth service identifier                                                                                                                                                                                        |
+| `ADMIN_ACCESS_TOKEN_SECRET`                 | Secret Manager: `uoa-admin-access-token-secret`; used to sign tokens issued for `ADMIN_AUTH_DOMAIN`; route-level requirement for admin access                                                                                                                                                         |
+| `ADMIN_CONFIG_JWT`                          | Secret Manager: `uoa-admin-config-jwt`; signed RS256 config JWT served from `/internal/admin/config`; must disable registration and allow only Google                                                                                                                                                 |
+| `ADMIN_BOOTSTRAP_EMAILS`                    | Optional comma-separated allowlist of emails allowed to bootstrap the initial `SUPERUSER` on `ADMIN_AUTH_DOMAIN`. Unset → first admin-domain login wins                                                                                                                                               |
+| `CONFIG_JWKS_URL`                           | Plain value: `https://authentication.unlikeotherai.com/.well-known/jwks.json`; trusted JWKS URL for RS256 config JWT verification; route-level requirement for config-backed auth                                                                                                                     |
+| `CONFIG_JWKS_JSON`                          | Secret Manager: `uoa-auth-config-jwks-json`; public JWKS JSON served from `/.well-known/jwks.json`; must contain public keys only                                                                                                                                                                     |
+| `PUBLIC_BASE_URL`                           | Plain value: `https://authentication.unlikeotherai.com`                                                                                                                                                                                                                                               |
+| `DATABASE_URL`                              | Secret Manager: `uoa-auth-database-url`; runtime connection used for post-context (tenant) DB paths; should point at the `uoa_app` role once RLS M2 is enforced                                                                                                                                       |
+| `DATABASE_ADMIN_URL`                        | Secret Manager: `uoa-auth-database-admin-url`; bootstrap/admin connection used for domain-hash auth, admin routes, auto-onboarding, claim flow, retention pruning, audit log, and `/.well-known/jwks.json`; must connect as a `BYPASSRLS` role (`uoa_admin`). Falls back to `DATABASE_URL` when unset |
+| `SHARED_SECRET`                             | Secret Manager: `uoa-auth-shared-secret`                                                                                                                                                                                                                                                              |
+| `GOOGLE_CLIENT_ID`                          | Secret Manager: `uoa-auth-google-client-id`                                                                                                                                                                                                                                                           |
+| `GOOGLE_CLIENT_SECRET`                      | Secret Manager: `uoa-auth-google-client-secret`                                                                                                                                                                                                                                                       |
+| `MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK`        | Secret Manager: `uoa-auth-mcp-oauth-access-token-private-jwk`; RS256 private JWK (JSON) for confidential resource tokens and optional public-profile tokens. Its public half is served at `/oauth/jwks.json`; key presence alone does not open public OAuth routes                                    |
+| `MCP_OAUTH_PUBLIC_PROFILE_ENABLED`          | Plain production value: `false` for the confidential-only Ledger rollout. Set `true` only in a separate reviewed change that also configures the dedicated public profile                                                                                                                             |
+| `MCP_OAUTH_DOMAIN`                          | Required only when `MCP_OAUTH_PUBLIC_PROFILE_ENABLED=true`; must be a dedicated first-party tenant distinct from `ADMIN_AUTH_DOMAIN` and customer domains                                                                                                                                             |
+| `MCP_OAUTH_RESOURCES_SUPPORTED`             | Used only by the explicitly enabled public profile; case-sensitive RFC 8707 resource allowlist                                                                                                                                                                                                        |
+| `TARIFF_SNAPSHOT_PRIVATE_JWK`               | Secret Manager: `uoa-auth-tariff-snapshot-private-jwk`; dedicated current RS256 private RSA JWK for signed tariff snapshots. Configure it only with the matching public JWKS; do not reuse another UOA signing key                                                                                    |
+| `TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON`          | Secret Manager: `uoa-auth-tariff-snapshot-public-jwks-json`; public-only JWKS containing the current tariff key and overlapping retired verification keys. The current entry must exactly match the private key's `kid`, modulus, and exponent                                                        |
+| `STRIPE_BILLING_ENABLED`                    | Plain safety gate. Production default is `false`; Stripe and Ledger collection calls are forbidden until every launch prerequisite below is verified                                                                                                                                                  |
+| `STRIPE_SECRET_KEY`                         | Secret Manager: dedicated Stripe restricted/live key for UOA billing. Presence alone does not enable billing                                                                                                                                                                                          |
+| `STRIPE_WEBHOOK_SECRET`                     | Secret Manager: Stripe endpoint signing secret for `/billing/v1/stripe/webhook`; never reuse a product app key or Ledger key                                                                                                                                                                          |
+| `STRIPE_USAGE_EXPORT_INTERVAL_MINUTES`      | Plain recurring collector interval, 5–1,440 minutes; workflow default 60                                                                                                                                                                                                                              |
+| `STRIPE_PRE_BOUNDARY_SAFETY_LEAD_MINUTES`   | Plain horizon in which the additional pre-boundary safety timer is scheduled; workflow default 360 and must cover interval plus offset                                                                                                                                                                |
+| `STRIPE_PRE_BOUNDARY_SAFETY_OFFSET_MINUTES` | Plain offset before UTC billing-period end for the safety pass; workflow default 1. This is not the final reconciliation                                                                                                                                                                              |
+| `LEDGER_BILLING_BASE_URL`                   | Plain credential-free HTTPS Ledger origin, canonical production value `https://ledger.unlikeotherai.com`                                                                                                                                                                                              |
+| `LEDGER_BILLING_APP_KEY`                    | Secret Manager: UOA's own dedicated, product-bound Ledger raw-metering reader app key. Never reuse a Nessie, DeepWater, DeepSignal, DeepTest, user, or webhook credential                                                                                                                             |
+| `LEDGER_BILLING_APP_KEY_ID`                 | Plain immutable Ledger record ID for that exact UOA app key; copied into the signed assertion's `azp` and verified by Ledger                                                                                                                                                                          |
+| `LEDGER_BILLING_ASSERTION_AUDIENCE`         | Exact Ledger service-assertion audience, canonical production value `https://ledger.unlikeotherai.com`                                                                                                                                                                                                |
+| `UOA_BILLING_ASSERTION_SIGNING_PRIVATE_JWK` | Secret Manager: dedicated current RS256 private JWK used only for short-lived UOA→Ledger `metering.read` assertions                                                                                                                                                                                   |
+| `UOA_BILLING_ASSERTION_PUBLIC_JWKS_JSON`    | Secret Manager: public-only current and overlapping retired assertion keys served at `/billing/v1/service-jwks.json`; current public pair must match the private key                                                                                                                                  |
 
 `/llm` is a Markdown integration guide for LLMs and human readers. `/api` is the machine-readable JSON schema and config contract.
 
 The deploy workflow also reads two GitHub repository variables that are not
 runtime application config:
 
-* `UOA_STRIPE_BILLING_CONFIGURED` defaults to `false`. Only exact `true`
+- `UOA_STRIPE_BILLING_CONFIGURED` defaults to `false`. Only exact `true`
   attaches the two Stripe Secret Manager entries.
-* `STRIPE_BILLING_ENABLED` defaults to `false`. Exact `true` additionally
+- `STRIPE_BILLING_ENABLED` defaults to `false`. Exact `true` additionally
   requires the configured flag and all Ledger collector identifiers, keeps one
   Cloud Run instance warm, and disables CPU throttling so the recurring
   scheduler and pre-boundary safety timer run. False deploys with zero minimum
@@ -264,10 +264,14 @@ Before enabling it in production:
    bind only its own actor issuer/key and exact HTTPS return origins. Keep its
    `entitlement` key separate and origin-free.
 5. Exercise credentialed current-month `group_by=service` and `group_by=user`
-   `metering-usage-v1` reads, UOA central rating, monthly fixed charges,
-   add-ons/credits, rated-usage deltas, zero and negative corrections,
-   lost-response replay, UTC month boundaries, the pre-boundary safety pass,
-   and authoritative post-period `invoice.created`
+   `metering-usage-v1` reads plus the single exact-team
+   `metering-portfolio-v1?group_by=user` read with `view=team_portfolio`. Prove
+   v2 derives rating plus every service, origin, and user total from that one
+   pinned snapshot; indirect or unattributed origin use must not become
+   direct-access or cancellation evidence. Then verify UOA central
+   rating, monthly fixed charges, add-ons/credits, rated-usage deltas, zero and
+   negative corrections, lost-response replay, UTC month boundaries, the
+   pre-boundary safety pass, and authoritative post-period `invoice.created`
    reconciliation against immutable Ledger cursors. Prove usage in the final
    minute reaches the draft invoice during Stripe's configured finalization
    grace period.
@@ -294,17 +298,17 @@ test-mode evidence and review.
 
 The per-domain agreement-signature service remains process-disabled by default and this implementation work does not change the Cloud Run service configuration or enable any production domain. Before production enablement, operators must provision and review all of the following together:
 
-| Variable / dependency | Required production configuration |
-|---|---|
-| `SIGNATURE_STORAGE_PROVIDER` | `gcs`; local filesystem storage is rejected in production |
-| `SIGNATURE_GCS_BUCKET` | Dedicated private bucket with public access prevention, residency/backup/lifecycle policy, and create/read/delete permissions restricted to the Cloud Run service account |
-| `SIGNATURE_GCS_PROJECT_ID` | Optional project override when the bucket is outside the runtime project |
-| `SIGNATURE_MALWARE_SCANNER` | `clamav`; uploads fail closed while disabled or unavailable |
-| `SIGNATURE_CLAMDSCAN_PATH` | Path to the reviewed `clamdscan` client in the runtime image; a reachable, updated ClamAV daemon is also required |
-| `SIGNATURE_MALWARE_SCAN_TIMEOUT_MS` | Bounded scan timeout, default 30 seconds |
-| `SIGNATURE_EVIDENCE_PRIVATE_JWK` | Secret Manager: dedicated RS256 private RSA JWK with a unique `kid`; never reuse another UOA signing key |
-| `SIGNATURE_EVIDENCE_PUBLIC_JWKS_JSON` | Public-only current and retired evidence keys; must include the private key's current `kid` |
-| `SIGNATURE_MAX_PDF_BYTES` / `SIGNATURE_MAX_PDF_PAGES` | Reviewed operational upload bounds (implementation defaults: 25 MiB / 200 pages) |
+| Variable / dependency                                 | Required production configuration                                                                                                                                         |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SIGNATURE_STORAGE_PROVIDER`                          | `gcs`; local filesystem storage is rejected in production                                                                                                                 |
+| `SIGNATURE_GCS_BUCKET`                                | Dedicated private bucket with public access prevention, residency/backup/lifecycle policy, and create/read/delete permissions restricted to the Cloud Run service account |
+| `SIGNATURE_GCS_PROJECT_ID`                            | Optional project override when the bucket is outside the runtime project                                                                                                  |
+| `SIGNATURE_MALWARE_SCANNER`                           | `clamav`; uploads fail closed while disabled or unavailable                                                                                                               |
+| `SIGNATURE_CLAMDSCAN_PATH`                            | Path to the reviewed `clamdscan` client in the runtime image; a reachable, updated ClamAV daemon is also required                                                         |
+| `SIGNATURE_MALWARE_SCAN_TIMEOUT_MS`                   | Bounded scan timeout, default 30 seconds                                                                                                                                  |
+| `SIGNATURE_EVIDENCE_PRIVATE_JWK`                      | Secret Manager: dedicated RS256 private RSA JWK with a unique `kid`; never reuse another UOA signing key                                                                  |
+| `SIGNATURE_EVIDENCE_PUBLIC_JWKS_JSON`                 | Public-only current and retired evidence keys; must include the private key's current `kid`                                                                               |
+| `SIGNATURE_MAX_PDF_BYTES` / `SIGNATURE_MAX_PDF_PAGES` | Reviewed operational upload bounds (implementation defaults: 25 MiB / 200 pages)                                                                                          |
 
 Enabling an individual domain additionally requires an explicit retention period and at least one active published required agreement version. Legal retention, bucket residency, encryption-key ownership, evidence-key custody/rotation, ClamAV packaging, and backup policy require an approved production change; they are not inferred from local defaults.
 

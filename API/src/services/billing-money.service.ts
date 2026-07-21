@@ -87,6 +87,13 @@ export function multiplyBillingDecimalByBps(value: string, basisPoints: number):
   });
 }
 
+export function billingDecimalRatioBasisPoints(part: string, total: string): number | null {
+  const [partValue, totalValue] = align(parseDecimal(part), parseDecimal(total));
+  if (partValue < 0n || totalValue <= 0n || partValue > totalValue) return null;
+  const rounded = (partValue * 10_000n + totalValue / 2n) / totalValue;
+  return Number(rounded);
+}
+
 export function sumBillingDecimals(values: string[]): string {
   return values.reduce(addBillingDecimals, '0');
 }

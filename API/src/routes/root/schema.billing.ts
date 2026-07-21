@@ -68,6 +68,36 @@ export const billingEndpoints: EndpointSchema[] = [
   },
   {
     method: 'GET',
+    path: '/schemas/billing-statement-v2.json',
+    description:
+      'Public Draft 2020-12 schema for the SSO-filled customer statement and team-wide connected-service portfolio. V1 remains frozen and available.',
+    auth: 'public',
+    response: {
+      200: 'BillingStatementV2 JSON Schema',
+    },
+  },
+  {
+    method: 'GET',
+    path: '/schemas/billing-statement-v2.example.json',
+    description:
+      'Public synthetic BillingStatementV2 conformance fixture with service, origin-product, and per-user transparency and no production data.',
+    auth: 'public',
+    response: {
+      200: 'Display-ready BillingStatementV2 example matching the exact v2 JSON Schema',
+    },
+  },
+  {
+    method: 'GET',
+    path: '/schemas/billing-statement-v2.openapi.json',
+    description:
+      'Public OpenAPI 3.1 consumer artifact embedding the exact BillingStatementV2 JSON Schema and synthetic conformance fixture.',
+    auth: 'public',
+    response: {
+      200: 'Versioned OpenAPI 3.1 components.schemas and components.examples document',
+    },
+  },
+  {
+    method: 'GET',
     path: '/schemas/billing-consumer-actions-v1.json',
     description:
       'Public Draft 2020-12 schema bundle for the normalized hosted redirect, cancellation selection, exact preview and confirm_action, confirm request/response, and minimal error envelope. Every message object rejects additional properties.',
@@ -137,6 +167,28 @@ export const billingEndpoints: EndpointSchema[] = [
     },
     notes:
       'Products render this model and proxy only whitelisted action ID/path pairs. They never derive totals, markup wording, direct access, or cancellation choices. The browser receives neither app key nor actor JWT.',
+  },
+  {
+    method: 'POST',
+    path: '/billing/v2/customer-statement',
+    description:
+      'Return BillingStatementV2: the complete v1 commercial statement plus a display-ready, team-wide raw connected-service portfolio grouped by billing service, origin product, and user. UOA rates only the requested product; other-service totals are explanatory and never become charges on this statement.',
+    auth: 'The requested product’s customer_lifecycle X-UOA-App-Key plus a fresh credential-bound X-UOA-Actor assertion; both remain backend-only',
+    body: {
+      product: 'exact product identifier bound to the app key and portfolio perspective',
+      organisation_id: 'UOA organisation ID',
+      team_id: 'UOA team ID',
+      user_id: 'UOA user ID',
+      billing_month: 'optional UTC YYYY-MM; current or past only',
+    },
+    response: {
+      200: 'BillingStatementV2 exactly matching /schemas/billing-statement-v2.json',
+      '401/403': 'Invalid purpose-bound app key, actor, product, membership, or subject',
+      '502/503':
+        'Ledger’s immutable metering-portfolio-v1 snapshot is invalid/unavailable or the dedicated UOA reader is unconfigured',
+    },
+    notes:
+      'UOA derives commercial rating plus every service, origin, and per-user total from one exact user-grouped metering-portfolio-v1 snapshot. Products render the title, descriptions, totals, origin shares, per-user shares, and action model verbatim. The portfolio uses origin_product for delegated attribution, so Nessie→DeepWater usage contributes to Nessie’s share without creating direct DeepWater access or a related cancellation choice. Null origins render as Unattributed origin and likewise create no access or choice. Products perform no aggregation, rating, or cancellation inference.',
   },
   {
     method: 'POST',

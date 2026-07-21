@@ -6,7 +6,11 @@ import {
   subtractBillingDecimals,
   sumBillingDecimals,
 } from './billing-money.service.js';
-import type { NormalizedMeteringUsage, RawMeteringLine } from './billing-metering.types.js';
+import {
+  UNATTRIBUTED_BILLING_PRODUCT,
+  type NormalizedMeteringUsage,
+  type RawMeteringLine,
+} from './billing-metering.types.js';
 
 type RatingPlan = {
   product: string;
@@ -53,22 +57,12 @@ function selectedProviderCost(line: RawMeteringLine): {
   currency: string;
   provenance: string;
 } | null {
-  if (!line.currency) return null;
-  if (line.actualProviderCost !== null) {
-    return {
-      amount: line.actualProviderCost,
-      currency: line.currency,
-      provenance: line.costProvenance ?? 'provider_actual',
-    };
-  }
-  if (line.estimatedProviderCost !== null) {
-    return {
-      amount: line.estimatedProviderCost,
-      currency: line.currency,
-      provenance: line.costProvenance ?? 'provider_estimated',
-    };
-  }
-  return null;
+  if (!line.currency || line.selectedProviderCost === null) return null;
+  return {
+    amount: line.selectedProviderCost,
+    currency: line.currency,
+    provenance: line.costProvenance ?? 'provider_selected',
+  };
 }
 
 function ratedCharge(
@@ -118,8 +112,8 @@ function serviceLines(metering: NormalizedMeteringUsage, plan: RatingPlan): Usag
       attribution: {
         user_id: line.userId,
         billing_product: line.billingProduct,
-        caller_product: line.callerProduct,
-        origin_product: line.originProduct,
+        caller_product: line.callerProduct ?? UNATTRIBUTED_BILLING_PRODUCT,
+        origin_product: line.originProduct ?? UNATTRIBUTED_BILLING_PRODUCT,
       },
       raw_units: raw,
       billable_units: billableUnits(line, usageMultiplierBps(plan)),

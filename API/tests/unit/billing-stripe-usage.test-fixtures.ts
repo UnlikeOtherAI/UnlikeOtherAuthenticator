@@ -129,6 +129,7 @@ export function usageFixture(
         outputUnits: '25',
         estimatedProviderCost: null,
         actualProviderCost: rawProviderCost,
+        selectedProviderCost: rawProviderCost,
         currency: 'USD',
         costProvenance: 'provider_invoice',
         billingProduct: 'deepwater',

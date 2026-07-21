@@ -109,6 +109,7 @@ function metering(groupBy: 'service' | 'user'): NormalizedMeteringUsage {
           outputUnits: '50',
           estimatedProviderCost: null,
           actualProviderCost: '2',
+          selectedProviderCost: '2',
           currency: 'USD',
           costProvenance: 'provider_invoice',
           billingProduct: 'deepwater',
@@ -125,6 +126,7 @@ function metering(groupBy: 'service' | 'user'): NormalizedMeteringUsage {
           outputUnits: '0',
           estimatedProviderCost: '1',
           actualProviderCost: null,
+          selectedProviderCost: '1',
           currency: 'USD',
           costProvenance: 'provider_pricebook',
           billingProduct: 'deepwater',
@@ -147,6 +149,7 @@ function metering(groupBy: 'service' | 'user'): NormalizedMeteringUsage {
         outputUnits: '20',
         estimatedProviderCost: '1',
         actualProviderCost: null,
+        selectedProviderCost: '1',
         currency: 'USD',
         costProvenance: 'provider_pricebook',
         billingProduct: 'deepwater',
@@ -163,6 +166,7 @@ function metering(groupBy: 'service' | 'user'): NormalizedMeteringUsage {
         outputUnits: '30',
         estimatedProviderCost: null,
         actualProviderCost: '1',
+        selectedProviderCost: '1',
         currency: 'USD',
         costProvenance: 'provider_invoice',
         billingProduct: 'deepwater',
@@ -183,6 +187,13 @@ describe('canonical UOA billing statement', () => {
     const prisma = {
       billingTariff: {
         findUnique: vi.fn().mockResolvedValue({ name: 'Standard' }),
+      },
+      billingService: {
+        findMany: vi.fn().mockResolvedValue([
+          { identifier: 'deepwater', name: 'DeepWater' },
+          { identifier: 'nessie', name: 'Nessie' },
+          { identifier: 'deepsignal', name: 'DeepSignal' },
+        ]),
       },
       billingCommercialAdjustment: {
         findMany: vi.fn().mockResolvedValue([

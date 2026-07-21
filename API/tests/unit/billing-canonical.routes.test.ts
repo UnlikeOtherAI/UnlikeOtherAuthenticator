@@ -2,13 +2,17 @@ import { BillingAppKeyPurpose } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createApp } from '../../src/app.js';
-import { billingConsumerActionV1ConformanceFixtures } from '../../src/contracts/billing-statement-v1.js';
+import {
+  billingConsumerActionV1ConformanceFixtures,
+  billingStatementV2ConformanceFixture,
+} from '../../src/contracts/billing-statement-v1.js';
 
 const appKeyService = vi.hoisted(() => ({
   verifyBillingAppKey: vi.fn(),
 }));
 const statementService = vi.hoisted(() => ({
   getCanonicalBillingStatement: vi.fn(),
+  getCanonicalBillingStatementV2: vi.fn(),
 }));
 const accessService = vi.hoisted(() => ({
   confirmAuthenticatedDirectBillingServiceAccess: vi.fn(),
@@ -95,6 +99,9 @@ beforeEach(() => {
     schema_version: 1,
     statement_id: 'bst_1',
   });
+  statementService.getCanonicalBillingStatementV2.mockResolvedValue(
+    billingStatementV2ConformanceFixture,
+  );
   accessService.confirmAuthenticatedDirectBillingServiceAccess.mockResolvedValue(undefined);
   previewService.createBillingCancellationPreview.mockResolvedValue(
     billingConsumerActionV1ConformanceFixtures.cancellation_preview,
@@ -173,6 +180,50 @@ describe('canonical customer billing routes', () => {
               },
             },
           },
+        },
+      });
+    });
+  });
+
+  it('publishes the exact V2 portfolio schema, fixture, and OpenAPI component', async () => {
+    await withApp(async (app) => {
+      const [schemaResponse, fixtureResponse, openApiResponse] = await Promise.all([
+        app.inject({ method: 'GET', url: '/schemas/billing-statement-v2.json' }),
+        app.inject({ method: 'GET', url: '/schemas/billing-statement-v2.example.json' }),
+        app.inject({ method: 'GET', url: '/schemas/billing-statement-v2.openapi.json' }),
+      ]);
+
+      expect(schemaResponse.statusCode).toBe(200);
+      expect(schemaResponse.json()).toMatchObject({
+        $id: '/schemas/billing-statement-v2.json',
+        properties: {
+          schema_version: { const: 2 },
+          connected_service_usage: { additionalProperties: false },
+        },
+      });
+      expect(fixtureResponse.statusCode).toBe(200);
+      expect(fixtureResponse.json()).toMatchObject({
+        schema_version: 2,
+        statement_id: 'bst_conformance_v2',
+        connected_service_usage: {
+          statement_product: 'deepwater',
+          services: [
+            {
+              billing_product: 'deepwater',
+              origins: [
+                expect.objectContaining({ product: 'deepwater' }),
+                expect.objectContaining({ product: 'nessie' }),
+              ],
+            },
+          ],
+        },
+      });
+      expect(openApiResponse.statusCode).toBe(200);
+      expect(openApiResponse.json()).toMatchObject({
+        openapi: '3.1.0',
+        info: { version: '2.0.0' },
+        components: {
+          schemas: { BillingStatementV2: { properties: { schema_version: { const: 2 } } } },
         },
       });
     });
@@ -273,6 +324,62 @@ describe('canonical customer billing routes', () => {
           userId: 'user_1',
         },
       });
+    });
+  });
+
+  it('binds the V2 SSO-filled portfolio to the same exact lifecycle subject', async () => {
+    await withApp(async (app) => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/billing/v2/customer-statement',
+        headers: {
+          'x-uoa-app-key': 'uoa_app_product_key',
+          'x-uoa-actor': 'signed-actor',
+        },
+        payload: { ...subject, billing_month: '2026-07' },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.headers['cache-control']).toBe('private, no-store');
+      expect(response.json()).toEqual(billingStatementV2ConformanceFixture);
+      expect(statementService.getCanonicalBillingStatementV2).toHaveBeenCalledWith({
+        credential,
+        actorToken: 'signed-actor',
+        billingMonth: '2026-07',
+        request: {
+          product: 'deepwater',
+          organisationId: 'org_1',
+          teamId: 'team_1',
+          userId: 'user_1',
+        },
+      });
+    });
+  });
+
+  it('fails closed when the V2 service returns a missing or locally extended field', async () => {
+    const injectStatement = (app: Awaited<ReturnType<typeof createApp>>) =>
+      app.inject({
+        method: 'POST',
+        url: '/billing/v2/customer-statement',
+        headers: { 'x-uoa-app-key': 'uoa_app_product_key', 'x-uoa-actor': 'signed-actor' },
+        payload: subject,
+      });
+
+    statementService.getCanonicalBillingStatementV2.mockResolvedValueOnce({
+      schema_version: 2,
+    });
+    await withApp(async (app) => {
+      const response = await injectStatement(app);
+      expect(response.statusCode).toBe(500);
+    });
+
+    statementService.getCanonicalBillingStatementV2.mockResolvedValueOnce({
+      ...billingStatementV2ConformanceFixture,
+      locally_calculated_total: 'forbidden',
+    });
+    await withApp(async (app) => {
+      const response = await injectStatement(app);
+      expect(response.statusCode).toBe(500);
     });
   });
 

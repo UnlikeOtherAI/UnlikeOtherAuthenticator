@@ -158,14 +158,7 @@ export const billingCancellationConfirmationV1JsonSchema = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: [
-          'service_id',
-          'product',
-          'name',
-          'display_name',
-          'status',
-          'effective_at',
-        ],
+        required: ['service_id', 'product', 'name', 'display_name', 'status', 'effective_at'],
         properties: {
           service_id: { type: 'string', minLength: 1 },
           product: { type: 'string', minLength: 1 },
@@ -173,10 +166,7 @@ export const billingCancellationConfirmationV1JsonSchema = {
           display_name: { type: 'string' },
           status: { type: 'string' },
           effective_at: {
-            anyOf: [
-              { type: 'string', format: 'date-time' },
-              { type: 'null' },
-            ],
+            anyOf: [{ type: 'string', format: 'date-time' }, { type: 'null' }],
           },
         },
       },

@@ -82,14 +82,14 @@ The API is the central OAuth/auth server. It handles:
 
 ### Internal API
 
-* `POST /internal/org/organisations/:orgId/groups` — create group
-* `PUT /internal/org/organisations/:orgId/groups/:groupId` — update group
-* `DELETE /internal/org/organisations/:orgId/groups/:groupId` — delete group
-* `POST /internal/org/organisations/:orgId/groups/:groupId/members` — add group member
-* `PUT /internal/org/organisations/:orgId/groups/:groupId/members/:userId` — toggle `is_admin`
-* `DELETE /internal/org/organisations/:orgId/groups/:groupId/members/:userId` — remove group member
-* `PUT /internal/org/organisations/:orgId/teams/:teamId/group` — assign/unassign team
-* `/internal/admin/*` is the planned system-admin route family for the admin panel; see `Docs/Requirements/roles-and-acl.md` and `Docs/Admin/architecture-admin.md`
+- `POST /internal/org/organisations/:orgId/groups` — create group
+- `PUT /internal/org/organisations/:orgId/groups/:groupId` — update group
+- `DELETE /internal/org/organisations/:orgId/groups/:groupId` — delete group
+- `POST /internal/org/organisations/:orgId/groups/:groupId/members` — add group member
+- `PUT /internal/org/organisations/:orgId/groups/:groupId/members/:userId` — toggle `is_admin`
+- `DELETE /internal/org/organisations/:orgId/groups/:groupId/members/:userId` — remove group member
+- `PUT /internal/org/organisations/:orgId/teams/:teamId/group` — assign/unassign team
+- `/internal/admin/*` is the planned system-admin route family for the admin panel; see `Docs/Requirements/roles-and-acl.md` and `Docs/Admin/architecture-admin.md`
 
 ---
 
@@ -142,57 +142,57 @@ Do not rebuild the admin UI from scratch.
 
 Use these existing template files as the visual and structural baseline:
 
-* `Docs/Admin/template-login.html`
-* `Docs/Admin/template-folder.html`
-* `Docs/Admin/template-admin.html`
+- `Docs/Admin/template-login.html`
+- `Docs/Admin/template-folder.html`
+- `Docs/Admin/template-admin.html`
 
 The React implementation should translate those templates into reusable components and route layouts.
 
 ### Recommended Stack
 
-* **React** — frontend UI runtime
-* **TypeScript** — required for all admin code
-* **Vite** — frontend build tool
-* **React Router** — client-side routing
-* **Tailwind CSS** — the only styling system
-* **TanStack Query** — server-state and cache management
-* **native `fetch` via a shared client** — HTTP transport
-* **react-hook-form + Zod** — form state and validation at the boundary
-* **React Context** — small shared UI state only (selected org, shell state, user preferences). Do not add Zustand unless the state shape actually outgrows Context.
-* **Vitest** — frontend unit/component test runner
+- **React** — frontend UI runtime
+- **TypeScript** — required for all admin code
+- **Vite** — frontend build tool
+- **React Router** — client-side routing
+- **Tailwind CSS** — the only styling system
+- **TanStack Query** — server-state and cache management
+- **native `fetch` via a shared client** — HTTP transport
+- **react-hook-form + Zod** — form state and validation at the boundary
+- **React Context** — small shared UI state only (selected org, shell state, user preferences). Do not add Zustand unless the state shape actually outgrows Context.
+- **Vitest** — frontend unit/component test runner
 
 ### Key Decisions
 
-* CSR only for authenticated admin workflows
-* Architecture, module boundaries, forms, and auth rules live in `Docs/Admin/architecture-admin.md`
-* No Prisma or backend-only models in frontend code
-* The admin app must be under strict linting and strict TypeScript rules
+- CSR only for authenticated admin workflows
+- Architecture, module boundaries, forms, and auth rules live in `Docs/Admin/architecture-admin.md`
+- No Prisma or backend-only models in frontend code
+- The admin app must be under strict linting and strict TypeScript rules
 
 ### Environment and API Wiring
 
-* The admin app must read its API base URL from Vite environment configuration, for example `VITE_API_BASE_URL`
-* Do not hardcode hosts or protocols in components or services
-* Keep API client creation centralized so headers, error mapping, and auth behavior are not duplicated
+- The admin app must read its API base URL from Vite environment configuration, for example `VITE_API_BASE_URL`
+- Do not hardcode hosts or protocols in components or services
+- Keep API client creation centralized so headers, error mapping, and auth behavior are not duplicated
 
 ### Assets and Icons
 
-* Reuse `/assets` for UOA-owned branding assets such as app icons, favicons, and admin brand marks
-* For product UI action icons, use inline SVG components consistently rather than mixing icon sources
+- Reuse `/assets` for UOA-owned branding assets such as app icons, favicons, and admin brand marks
+- For product UI action icons, use inline SVG components consistently rather than mixing icon sources
 
 ### Quality Gate
 
-* `Admin` source files must be covered by ESLint
-* Lint must fail the build on violations
-* Strict TypeScript settings must remain enabled
-* Components should remain small and composable
-* Avoid `any`, dead exports, and page-local duplicated UI patterns
+- `Admin` source files must be covered by ESLint
+- Lint must fail the build on violations
+- Strict TypeScript settings must remain enabled
+- Components should remain small and composable
+- Avoid `any`, dead exports, and page-local duplicated UI patterns
 
 ### Canonical Documentation Rule
 
-* `Docs/Admin/README.md` is the canonical template-baseline document
-* `Docs/Admin/architecture-admin.md` is the canonical admin architecture document
-* `Docs/techstack.md` is the canonical admin stack and environment document
-* Implementation plans should reference these documents rather than restating their rules in full
+- `Docs/Admin/README.md` is the canonical template-baseline document
+- `Docs/Admin/architecture-admin.md` is the canonical admin architecture document
+- `Docs/techstack.md` is the canonical admin stack and environment document
+- Implementation plans should reference these documents rather than restating their rules in full
 
 ---
 
@@ -218,7 +218,7 @@ The React implementation should translate those templates into reusable componen
 - **AI Translation Service** — for missing translation fallback, results cached permanently
 - **Private Signature Object Storage** — disabled by default; private local filesystem in development/test and Google Cloud Storage via Application Default Credentials when explicitly configured
 - **Ledger and Product Billing Clients** — server-to-server tariff reads use a distinct product- and purpose-bound UOA app key plus a credential-bound RS256 actor assertion; entitlement keys cannot call lifecycle routes, lifecycle keys cannot call effective-tariff, and every body product must match the bound service. Each product confirms its own direct session after UOA SSO through `/billing/v1/service-access/confirm`; proxy use never confirms another product. UOA returns signed content-free snapshots and never receives provider content. Pricing/rating and payment collection are independent signed tariff terms (`collection_mode = stripe | manual | none`)
-- **Canonical UOA billing + Stripe Billing** — UOA is the commercial system of record. Product backends use their individual purpose-bound app key and a fresh actor JWT to fetch the display-ready `BillingStatementV1`; products never re-rate raw usage or invent totals, wording, or cancellation choices. The MIT-licensed `@unlikeotherai/billing-statement-protocol` workspace is the single TypeScript/JSON Schema/OpenAPI 3.1/fixture source and has no private server imports or secrets, so open-source products can pack or vendor it without coupling to UOA internals. Runtime product entitlements remain in UOA's per-App feature-flag service rather than being inferred from tariff keys. UOA pins Ledger's immutable service/user `metering-usage-v1` snapshots, centrally applies the immutable tariff to raw provider cost and units, and owns subscriptions, exact organisation/team add-ons and credits, direct product-access evidence, and the preview/confirm cancellation state machine. Related cancellation choices require active, non-revoked direct access by at least one current exact-team user and a same-account subscription. Ledger contains no commercial fields. Stripe Billing is an optional payment processor disabled by default. Every projection is scoped to the exact Stripe account and test/live mode. Checkout's initial no-proration alignment stub is free; renewals are full UTC calendar months. A gate-controlled scheduler polls active Stripe-paid periods and installs a pre-boundary safety timer; verified draft `invoice.created` cycle events perform the authoritative just-ended-month export before webhook commit, while finalization failures are logged and retained. UOA→Ledger uses UOA's own dedicated Ledger app key plus a separately signed `metering.read` service assertion verified through `/billing/v1/service-jwks.json`
+- **Canonical UOA billing + Stripe Billing** — UOA is the commercial system of record. Product backends use their individual purpose-bound app key and a fresh actor JWT to fetch a display-ready billing statement; products never re-rate raw usage or invent totals, shares, wording, or cancellation choices. Frozen `BillingStatementV1` remains available, while `BillingStatementV2` adds UOA's complete team-wide connected-service, origin-product, and per-user portfolio. The MIT-licensed `@unlikeotherai/billing-statement-protocol` workspace is the single TypeScript/JSON Schema/OpenAPI 3.1/fixture source and has no private server imports or secrets, so open-source products can pack or vendor it without coupling to UOA internals. Runtime product entitlements remain in UOA's per-App feature-flag service rather than being inferred from tariff keys. UOA pins Ledger's immutable product-scoped `metering-usage-v1` snapshots for commercial rating/Stripe export and exact-team `metering-portfolio-v1` snapshots for v2 transparency. It centrally applies the immutable tariff only to the statement product and owns subscriptions, exact organisation/team add-ons and credits, direct product-access evidence, and the preview/confirm cancellation state machine. Other portfolio services are explanatory and never current-statement charges. Related cancellation choices require active, non-revoked direct access by at least one current exact-team user and a same-account subscription; indirect origin attribution never qualifies. Ledger contains no commercial fields. Stripe Billing is an optional payment processor disabled by default. Every projection is scoped to the exact Stripe account and test/live mode. Checkout's initial no-proration alignment stub is free; renewals are full UTC calendar months. A gate-controlled scheduler polls active Stripe-paid periods and installs a pre-boundary safety timer; verified draft `invoice.created` cycle events perform the authoritative just-ended-month export before webhook commit, while finalization failures are logged and retained. UOA→Ledger uses UOA's own dedicated Ledger app key plus a separately signed `metering.read` service assertion verified through `/billing/v1/service-jwks.json`
 
 ---
 
@@ -226,59 +226,59 @@ The React implementation should translate those templates into reusable componen
 
 All secrets and configuration live in environment variables. Nothing is hardcoded.
 
-* `SHARED_SECRET` — the single global shared secret for domain hashing and client-domain access tokens
-* `AUTH_SERVICE_IDENTIFIER` — optional internal auth-service issuer/audience override for service-issued tokens; defaults to the `PUBLIC_BASE_URL` host and is not required in client config JWTs
-* `ADMIN_AUTH_DOMAIN` — domain whose superuser access tokens may access the Admin panel; defaults to the resolved auth service identifier
-* `ADMIN_ACCESS_TOKEN_SECRET` — auth-service-only signing secret used for access tokens issued to `ADMIN_AUTH_DOMAIN`; required by admin routes, not process boot
-* `ADMIN_CONFIG_JWT` — signed RS256 config JWT served from `/internal/admin/config` for `/admin/login`; required before the production Admin login handoff can work
-* `ADMIN_BOOTSTRAP_EMAILS` — optional comma-separated allowlist of emails permitted to bootstrap the initial `SUPERUSER` on `ADMIN_AUTH_DOMAIN`; when unset, the first admin-domain login wins (see brief 22.5)
-* `CONFIG_JWKS_URL` — trusted JWKS endpoint for RS256 config JWT verification by `kid`; required by config-backed auth routes, not process boot
-* `CONFIG_JWKS_JSON` — public JWKS JSON served from `/.well-known/jwks.json`; must contain public keys only
-* `DATABASE_URL` — database connection string for post-context tenant paths (will be scoped to the `uoa_app` role once RLS M2 is enforced; see `Docs/Requirements/row-level-security.md`)
-* `DATABASE_ADMIN_URL` — bootstrap/admin connection string used for domain-hash auth, admin routes, auto-onboarding, claim flow, retention pruning, audit log, and `/.well-known/jwks.json`; must connect as a `BYPASSRLS` role (`uoa_admin`). Falls back to `DATABASE_URL` when unset, so local/dev without RLS keeps working unchanged
-* Social provider credentials (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, etc.)
-* Email service credentials:
-  * `EMAIL_PROVIDER` — `disabled` (default behavior) or `smtp`
-  * `EMAIL_FROM` — required for `smtp`
-  * `EMAIL_REPLY_TO` — optional reply-to address
-  * `SMTP_HOST` — required for `smtp`
-  * `SMTP_PORT` — optional (default: 587)
-  * `SMTP_SECURE` — optional (`true`/`false`, default: `false`)
-  * `SMTP_USER` / `SMTP_PASSWORD` — optional (SMTP auth)
-* AI translation service credentials
-* `ACCESS_TOKEN_TTL` — access token lifetime (minutes-only, 15m–60m; default: 30m)
-* `TOKEN_PRUNE_RETENTION_DAYS` — days after refresh-token expiry before expired refresh token rows are pruned (default: 7, max 365)
-* `LOG_RETENTION_DAYS` — login log retention window (default: 90, max 365)
-* `DEBUG_ENABLED` — include internal error/debug details in responses when set to `true` (default: `false`)
-* `VITE_API_BASE_URL` — admin frontend API base URL
-* `VITE_ADMIN_BYPASS_AUTH` — development-only admin auth bypass flag; must not be relied on in production
-* `MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK` — RS256 private JWK (JSON) shared by confidential token exchange and the optional public-client profile; presence enables signing and publishes its public half at `/oauth/jwks.json`, but does not open public OAuth routes
-* `MCP_OAUTH_PUBLIC_PROFILE_ENABLED` — explicit boolean gate for discovery, dynamic registration, authorize, login, and the public PKCE token endpoint; defaults to `false` and additionally requires the signing key plus a valid dedicated `MCP_OAUTH_DOMAIN`
-* `MCP_OAUTH_DOMAIN` — **required when the MCP OAuth profile is enabled**; the dedicated first-party tenant domain for `/oauth/*`. Must be distinct from `ADMIN_AUTH_DOMAIN` (and any customer domain) — the service fails closed if it is unset or equals `ADMIN_AUTH_DOMAIN`
-* `MCP_OAUTH_ENABLED_AUTH_METHODS` — optional comma-separated auth methods offered on the MCP login screen (default: `email_password`)
-* `MCP_OAUTH_SCOPES_SUPPORTED` — optional comma-separated OAuth scopes advertised in MCP discovery metadata (default: `openid`)
-* `MCP_OAUTH_RESOURCES_SUPPORTED` — optional comma-separated, case-sensitive allowlist of RFC 8707 resource-server URIs the MCP profile may issue tokens for. A client-supplied `resource` must exactly match one of these or the request is rejected with `invalid_target`; when unset, no resource is allowed and clients omit `resource` (the token `aud` falls back to the issuer)
-* `TARIFF_SNAPSHOT_PRIVATE_JWK` — dedicated current private RS256 RSA JWK with a unique `kid`; required together with the tariff public JWKS. Do not reuse the config, OAuth access-token, or signature-evidence key
-* `TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON` — public-only JWKS containing the exact current tariff public key plus overlapping retired verification keys. UOA imports the private key and every published public key before serving and fails startup on invalid or mismatched material
-* `STRIPE_BILLING_ENABLED` — explicit fail-closed process gate; defaults to `false`
-* `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` — UOA's Stripe request key and the separate raw-body webhook verification secret; neither is an app-to-app product key
-* `STRIPE_USAGE_EXPORT_INTERVAL_MINUTES` — recurring active-period export interval (default 60, range 5–1,440)
-* `STRIPE_PRE_BOUNDARY_SAFETY_LEAD_MINUTES` / `STRIPE_PRE_BOUNDARY_SAFETY_OFFSET_MINUTES` — safety-timer horizon and exact pre-boundary offset; the lead must cover the recurring interval plus offset. The final export is webhook-driven after period end
-* `LEDGER_BILLING_BASE_URL` — credential-free HTTPS Ledger origin used only by the UOA collection worker
-* `LEDGER_BILLING_APP_KEY` / `LEDGER_BILLING_APP_KEY_ID` — UOA's own dedicated Ledger raw-metering reader `lk_…` secret and exact public `tk_…` record ID; never another product's key
-* `LEDGER_BILLING_ASSERTION_AUDIENCE` — exact credential-free HTTPS Ledger origin bound into UOA service assertions
-* `UOA_BILLING_ASSERTION_SIGNING_PRIVATE_JWK` — dedicated current private RS256 JWK used only for UOA→Ledger `metering.read` service assertions
-* `UOA_BILLING_ASSERTION_PUBLIC_JWKS_JSON` — current and overlapping retired public-only assertion keys served at `/billing/v1/service-jwks.json`
-* `SIGNATURE_STORAGE_PROVIDER` — optional signature-object provider: `disabled` (default), `filesystem`, or `gcs`; filesystem storage is rejected in production
-* `SIGNATURE_FILESYSTEM_ROOT` — required private root when `SIGNATURE_STORAGE_PROVIDER=filesystem`; intended only for local development and tests
-* `SIGNATURE_GCS_BUCKET` — required private bucket when `SIGNATURE_STORAGE_PROVIDER=gcs`
-* `SIGNATURE_GCS_PROJECT_ID` — optional Google Cloud project override; authentication otherwise uses Application Default Credentials
-* `SIGNATURE_MALWARE_SCANNER` — `disabled` (default/fail closed for uploads) or `clamav`; enabled domains require `clamav`
-* `SIGNATURE_CLAMDSCAN_PATH` — ClamAV daemon scanner executable path (default `clamdscan`); invoked without a shell
-* `SIGNATURE_MALWARE_SCAN_TIMEOUT_MS` — per-upload ClamAV timeout (default 30,000; allowed 1,000–120,000)
-* `SIGNATURE_EVIDENCE_PRIVATE_JWK` — dedicated private RSA JWK with `kid` used only for RS256 agreement-evidence manifests
-* `SIGNATURE_EVIDENCE_PUBLIC_JWKS_JSON` — public-only current and retired evidence keys used to verify historical manifests after rotation
-* `SIGNATURE_MAX_PDF_BYTES` — bounded source upload limit (default 25 MiB, allowed 1 KiB–100 MiB)
-* `SIGNATURE_MAX_PDF_PAGES` — bounded source page limit (default 200, allowed 1–2,000)
-* `SIGNATURE_CONTINUATION_TTL_MINUTES` — short-lived signing capability lifetime (default 10, allowed 2–30 minutes)
-* `SIGNATURE_MAX_SIGN_ATTEMPTS` — maximum failed signing submissions before a continuation is rejected (default 10, allowed 1–50)
+- `SHARED_SECRET` — the single global shared secret for domain hashing and client-domain access tokens
+- `AUTH_SERVICE_IDENTIFIER` — optional internal auth-service issuer/audience override for service-issued tokens; defaults to the `PUBLIC_BASE_URL` host and is not required in client config JWTs
+- `ADMIN_AUTH_DOMAIN` — domain whose superuser access tokens may access the Admin panel; defaults to the resolved auth service identifier
+- `ADMIN_ACCESS_TOKEN_SECRET` — auth-service-only signing secret used for access tokens issued to `ADMIN_AUTH_DOMAIN`; required by admin routes, not process boot
+- `ADMIN_CONFIG_JWT` — signed RS256 config JWT served from `/internal/admin/config` for `/admin/login`; required before the production Admin login handoff can work
+- `ADMIN_BOOTSTRAP_EMAILS` — optional comma-separated allowlist of emails permitted to bootstrap the initial `SUPERUSER` on `ADMIN_AUTH_DOMAIN`; when unset, the first admin-domain login wins (see brief 22.5)
+- `CONFIG_JWKS_URL` — trusted JWKS endpoint for RS256 config JWT verification by `kid`; required by config-backed auth routes, not process boot
+- `CONFIG_JWKS_JSON` — public JWKS JSON served from `/.well-known/jwks.json`; must contain public keys only
+- `DATABASE_URL` — database connection string for post-context tenant paths (will be scoped to the `uoa_app` role once RLS M2 is enforced; see `Docs/Requirements/row-level-security.md`)
+- `DATABASE_ADMIN_URL` — bootstrap/admin connection string used for domain-hash auth, admin routes, auto-onboarding, claim flow, retention pruning, audit log, and `/.well-known/jwks.json`; must connect as a `BYPASSRLS` role (`uoa_admin`). Falls back to `DATABASE_URL` when unset, so local/dev without RLS keeps working unchanged
+- Social provider credentials (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, etc.)
+- Email service credentials:
+  - `EMAIL_PROVIDER` — `disabled` (default behavior) or `smtp`
+  - `EMAIL_FROM` — required for `smtp`
+  - `EMAIL_REPLY_TO` — optional reply-to address
+  - `SMTP_HOST` — required for `smtp`
+  - `SMTP_PORT` — optional (default: 587)
+  - `SMTP_SECURE` — optional (`true`/`false`, default: `false`)
+  - `SMTP_USER` / `SMTP_PASSWORD` — optional (SMTP auth)
+- AI translation service credentials
+- `ACCESS_TOKEN_TTL` — access token lifetime (minutes-only, 15m–60m; default: 30m)
+- `TOKEN_PRUNE_RETENTION_DAYS` — days after refresh-token expiry before expired refresh token rows are pruned (default: 7, max 365)
+- `LOG_RETENTION_DAYS` — login log retention window (default: 90, max 365)
+- `DEBUG_ENABLED` — include internal error/debug details in responses when set to `true` (default: `false`)
+- `VITE_API_BASE_URL` — admin frontend API base URL
+- `VITE_ADMIN_BYPASS_AUTH` — development-only admin auth bypass flag; must not be relied on in production
+- `MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK` — RS256 private JWK (JSON) shared by confidential token exchange and the optional public-client profile; presence enables signing and publishes its public half at `/oauth/jwks.json`, but does not open public OAuth routes
+- `MCP_OAUTH_PUBLIC_PROFILE_ENABLED` — explicit boolean gate for discovery, dynamic registration, authorize, login, and the public PKCE token endpoint; defaults to `false` and additionally requires the signing key plus a valid dedicated `MCP_OAUTH_DOMAIN`
+- `MCP_OAUTH_DOMAIN` — **required when the MCP OAuth profile is enabled**; the dedicated first-party tenant domain for `/oauth/*`. Must be distinct from `ADMIN_AUTH_DOMAIN` (and any customer domain) — the service fails closed if it is unset or equals `ADMIN_AUTH_DOMAIN`
+- `MCP_OAUTH_ENABLED_AUTH_METHODS` — optional comma-separated auth methods offered on the MCP login screen (default: `email_password`)
+- `MCP_OAUTH_SCOPES_SUPPORTED` — optional comma-separated OAuth scopes advertised in MCP discovery metadata (default: `openid`)
+- `MCP_OAUTH_RESOURCES_SUPPORTED` — optional comma-separated, case-sensitive allowlist of RFC 8707 resource-server URIs the MCP profile may issue tokens for. A client-supplied `resource` must exactly match one of these or the request is rejected with `invalid_target`; when unset, no resource is allowed and clients omit `resource` (the token `aud` falls back to the issuer)
+- `TARIFF_SNAPSHOT_PRIVATE_JWK` — dedicated current private RS256 RSA JWK with a unique `kid`; required together with the tariff public JWKS. Do not reuse the config, OAuth access-token, or signature-evidence key
+- `TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON` — public-only JWKS containing the exact current tariff public key plus overlapping retired verification keys. UOA imports the private key and every published public key before serving and fails startup on invalid or mismatched material
+- `STRIPE_BILLING_ENABLED` — explicit fail-closed process gate; defaults to `false`
+- `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` — UOA's Stripe request key and the separate raw-body webhook verification secret; neither is an app-to-app product key
+- `STRIPE_USAGE_EXPORT_INTERVAL_MINUTES` — recurring active-period export interval (default 60, range 5–1,440)
+- `STRIPE_PRE_BOUNDARY_SAFETY_LEAD_MINUTES` / `STRIPE_PRE_BOUNDARY_SAFETY_OFFSET_MINUTES` — safety-timer horizon and exact pre-boundary offset; the lead must cover the recurring interval plus offset. The final export is webhook-driven after period end
+- `LEDGER_BILLING_BASE_URL` — credential-free HTTPS Ledger origin used only by the UOA collection worker
+- `LEDGER_BILLING_APP_KEY` / `LEDGER_BILLING_APP_KEY_ID` — UOA's own dedicated Ledger raw-metering reader `lk_…` secret and exact public `tk_…` record ID; never another product's key
+- `LEDGER_BILLING_ASSERTION_AUDIENCE` — exact credential-free HTTPS Ledger origin bound into UOA service assertions
+- `UOA_BILLING_ASSERTION_SIGNING_PRIVATE_JWK` — dedicated current private RS256 JWK used only for UOA→Ledger `metering.read` service assertions
+- `UOA_BILLING_ASSERTION_PUBLIC_JWKS_JSON` — current and overlapping retired public-only assertion keys served at `/billing/v1/service-jwks.json`
+- `SIGNATURE_STORAGE_PROVIDER` — optional signature-object provider: `disabled` (default), `filesystem`, or `gcs`; filesystem storage is rejected in production
+- `SIGNATURE_FILESYSTEM_ROOT` — required private root when `SIGNATURE_STORAGE_PROVIDER=filesystem`; intended only for local development and tests
+- `SIGNATURE_GCS_BUCKET` — required private bucket when `SIGNATURE_STORAGE_PROVIDER=gcs`
+- `SIGNATURE_GCS_PROJECT_ID` — optional Google Cloud project override; authentication otherwise uses Application Default Credentials
+- `SIGNATURE_MALWARE_SCANNER` — `disabled` (default/fail closed for uploads) or `clamav`; enabled domains require `clamav`
+- `SIGNATURE_CLAMDSCAN_PATH` — ClamAV daemon scanner executable path (default `clamdscan`); invoked without a shell
+- `SIGNATURE_MALWARE_SCAN_TIMEOUT_MS` — per-upload ClamAV timeout (default 30,000; allowed 1,000–120,000)
+- `SIGNATURE_EVIDENCE_PRIVATE_JWK` — dedicated private RSA JWK with `kid` used only for RS256 agreement-evidence manifests
+- `SIGNATURE_EVIDENCE_PUBLIC_JWKS_JSON` — public-only current and retired evidence keys used to verify historical manifests after rotation
+- `SIGNATURE_MAX_PDF_BYTES` — bounded source upload limit (default 25 MiB, allowed 1 KiB–100 MiB)
+- `SIGNATURE_MAX_PDF_PAGES` — bounded source page limit (default 200, allowed 1–2,000)
+- `SIGNATURE_CONTINUATION_TTL_MINUTES` — short-lived signing capability lifetime (default 10, allowed 2–30 minutes)
+- `SIGNATURE_MAX_SIGN_ATTEMPTS` — maximum failed signing submissions before a continuation is rejected (default 10, allowed 1–50)
