@@ -378,9 +378,38 @@ describe('public BillingCreditsV1 consumer protocol', () => {
       })),
     } as unknown as BillingCreditsMemberV1;
 
+    const emptyManager = {
+      ...manager,
+      credit_summary: { ...manager.credit_summary, consumed_breakdown: [] },
+      recent_entries: [],
+    };
+    const emptyMember = {
+      ...member,
+      credit_summary: { ...member.credit_summary, consumed_breakdown: [] },
+      recent_entries: [],
+    };
+
+    expect(validate(emptyManager), JSON.stringify(validate.errors)).toBe(true);
+    expect(validate(emptyMember), JSON.stringify(validate.errors)).toBe(true);
     expect(validate(member), JSON.stringify(validate.errors)).toBe(true);
     expect(validate({ ...member, credit_summary: manager.credit_summary })).toBe(false);
     expect(validate({ ...member, recent_entries: [manager.recent_entries[1]] })).toBe(false);
+    expect(
+      validate({
+        ...manager,
+        credit_summary: {
+          ...manager.credit_summary,
+          consumed_breakdown: [member.credit_summary.consumed_breakdown[0]],
+        },
+      }),
+    ).toBe(false);
+    expect(validate({ ...manager, recent_entries: [member.recent_entries[0]] })).toBe(false);
+    expect(
+      validate({
+        ...manager,
+        recent_entries: [manager.recent_entries[0], member.recent_entries[0]],
+      }),
+    ).toBe(false);
     expect(
       validate({
         ...member,

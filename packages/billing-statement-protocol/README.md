@@ -102,8 +102,11 @@ enabled commercial actions. Members receive only their own usage plus
 categorical team/unattributed aggregates, payment-method status without card
 identity, the shared remaining/pending credit quantities without a pending
 payment amount, and no offers, prices, thresholds, caps, consent details, or
-enabled money actions. Free-form labels and descriptions must not encode
-another user's identity or payment-instrument details.
+enabled money actions. Zero-activity teams may have empty usage-breakdown and
+recent-entry arrays; the outer viewer-role discriminator remains authoritative
+for selecting the manager or member privacy shape. Free-form labels and
+descriptions must not encode another user's identity or payment-instrument
+details.
 
 Recurring add-ons support organisation, team, and subscribing-user entitlement
 scopes. An organisation-scoped purchase or cancellation requires an active

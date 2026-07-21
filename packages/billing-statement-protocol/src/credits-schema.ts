@@ -147,7 +147,7 @@ export const billingCreditsV1JsonSchema = {
       },
     },
     credit_summary: {
-      oneOf: [billingCreditsManagerSummaryJsonSchema, billingCreditsMemberSummaryJsonSchema],
+      anyOf: [billingCreditsManagerSummaryJsonSchema, billingCreditsMemberSummaryJsonSchema],
     },
     funding_policy: {
       oneOf: [
@@ -287,7 +287,7 @@ export const billingCreditsV1JsonSchema = {
       ],
     },
     recent_entries: {
-      oneOf: [
+      anyOf: [
         billingCreditsManagerRecentEntriesJsonSchema,
         billingCreditsMemberRecentEntriesJsonSchema,
       ],

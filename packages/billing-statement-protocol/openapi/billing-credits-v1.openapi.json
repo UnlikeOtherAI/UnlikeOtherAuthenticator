@@ -2381,7 +2381,7 @@
             }
           },
           "credit_summary": {
-            "oneOf": [
+            "anyOf": [
               {
                 "type": "object",
                 "additionalProperties": false,
@@ -4111,7 +4111,7 @@
             ]
           },
           "recent_entries": {
-            "oneOf": [
+            "anyOf": [
               {
                 "type": "array",
                 "items": {
