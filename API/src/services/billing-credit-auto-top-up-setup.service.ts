@@ -342,13 +342,21 @@ export async function createBillingCreditAutoTopUpSetup(
     throw new AppError('INTERNAL', 502, 'STRIPE_CREDIT_CHECKOUT_BINDING_INVALID');
   }
   await deps?.afterStripeSessionCreated?.();
-  await prisma.billingCreditSetupCheckout.update({
-    where: { id: checkout.id },
+  const opened = await prisma.billingCreditSetupCheckout.updateMany({
+    where: {
+      id: checkout.id,
+      status: BillingCreditCheckoutStatus.CREATING,
+      expectedGeneration: checkout.expectedGeneration,
+      expectedConsentRevisionId: checkout.expectedConsentRevisionId,
+    },
     data: {
       stripeCheckoutSessionId: session.id,
       status: BillingCreditCheckoutStatus.OPEN,
       expiresAt: new Date(session.expires_at * 1000),
     },
   });
+  if (opened.count !== 1) {
+    throw new AppError('BAD_REQUEST', 409, 'BILLING_CREDIT_SETUP_PREDECESSOR_CHANGED');
+  }
   return openRedirect(session);
 }

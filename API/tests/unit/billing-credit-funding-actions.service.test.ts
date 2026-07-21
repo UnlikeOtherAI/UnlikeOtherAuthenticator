@@ -236,7 +236,7 @@ describe('UOA credit funding mutation services', () => {
           ...data,
           id: 'checkout_setup_1',
         })),
-        update: vi.fn(),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
     } as unknown as PrismaClient;
     state.sessionsCreate.mockImplementation(async (input) => ({

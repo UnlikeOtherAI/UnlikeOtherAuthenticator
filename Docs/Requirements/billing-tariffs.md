@@ -776,12 +776,17 @@ attempt, and terminal Stripe evidence. Setup Checkout pins the expected consent
 predecessor and account generation. Consent update or disable increments that
 generation and abandons every open Setup Checkout under the account lock; a
 late SetupIntent webhook can activate consent only with the exact predecessor
-and generation through a compare-and-swap update. Refunds and disputes create
+and generation through a compare-and-swap update. Attaching a newly created
+Stripe session is itself a `CREATING`-state compare-and-swap, and the database
+rechecks the locked predecessor on every actionable transition; `COMPLETE`,
+`EXPIRED`, and `ABANDONED` Setup Checkouts can never reopen. Refunds and disputes create
 exact debit entries and move an enabled auto-top-up account to review. Recovery
 requires current Stripe PaymentIntent evidence for the exact attempt. A
 replaceable failed intent is safely canceled and terminalized before UOA offers
-a replacement Setup Checkout; an executable action URL is relayed only while it
-still matches the current intent. An ordinary active member cannot initiate a
+a replacement Setup Checkout. A requires-action intent with an unsafe redirect
+is likewise canceled only after the returned object passes the complete binding
+check, then CAS-terminalized before replacement. An executable action URL is
+relayed only while it still matches the current intent. An ordinary active member cannot initiate a
 top-up, set/update/recover auto-top-up, or alter consent; the database requires
 an active organisation and exact-team billing manager for every
 customer-initiated funding or consent mutation. Automatic attempts, Stripe
@@ -929,9 +934,11 @@ fails a forged direct request closed.
 Disable authority is bound inside the database transaction. The immutable
 disable audit event identifies the exact requester, active lifecycle app key,
 organisation, team, account, prior consent, and generation. Its database
-trigger takes the account lock and independently rechecks current exact-team
-billing-manager membership before accepting the event. Revocation racing an
-API authorization check therefore prevents the consent transition.
+trigger takes the account lock, then locks the exact lifecycle app key,
+organisation, team, organisation membership, and team membership before
+independently rechecking current exact-team billing-manager authority. An
+in-flight revocation therefore serializes before or after the disable event;
+one that began first prevents the consent transition.
 
 #### Stripe commercial-catalog provisioning
 

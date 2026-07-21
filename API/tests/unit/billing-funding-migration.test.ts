@@ -10,6 +10,10 @@ const hardeningMigrationUrl = new URL(
   '../../prisma/migrations/20260721180000_harden_credit_funding_lifecycle/migration.sql',
   import.meta.url,
 );
+const raceGuardMigrationUrl = new URL(
+  '../../prisma/migrations/20260721181000_guard_credit_setup_and_disable_races/migration.sql',
+  import.meta.url,
+);
 
 describe('billing funding foundation migration', () => {
   it('keeps one exact shared team credit account and fixed public conversion', async () => {
@@ -138,5 +142,24 @@ describe('billing funding lifecycle hardening migration', () => {
     expect(sql).toContain(
       'GRANT SELECT, INSERT ON TABLE "billing_credit_auto_top_up_disable_events" TO uoa_admin',
     );
+  });
+
+  it('keeps terminal setup rows closed and serializes disable with authority changes', async () => {
+    const sql = await readFile(raceGuardMigrationUrl, 'utf8');
+
+    expect(sql).toContain("OLD.\"status\" IN ('COMPLETE', 'EXPIRED', 'ABANDONED')");
+    expect(sql).toContain('terminal automatic top-up setup cannot be reopened');
+    expect(sql).toContain("NEW.\"status\" IN ('CREATING', 'OPEN', 'NEEDS_REVIEW')");
+    for (const table of [
+      'billing_app_keys',
+      'organisations',
+      'teams',
+      'org_members',
+      'team_members',
+    ]) {
+      expect(sql).toContain(`FROM "${table}"`);
+    }
+    expect(sql.match(/FOR UPDATE;/g)?.length).toBeGreaterThanOrEqual(6);
+    expect(sql).toContain('automatic top-up disable event lacks current exact authority');
   });
 });

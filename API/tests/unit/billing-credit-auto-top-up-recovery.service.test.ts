@@ -187,8 +187,9 @@ describe('automatic credit top-up recovery', () => {
     expect(terminalize).toHaveBeenCalledWith({
       where: {
         id: 'attempt_failed_1',
+        stripePaymentIntentId: intent.id,
         status: BillingCreditAutoTopUpAttemptStatus.NEEDS_REVIEW,
-        stateWebhookEventId: { not: null },
+        stateWebhookEventId: 'webhook_failed_1',
       },
       data: {
         status: BillingCreditAutoTopUpAttemptStatus.FAILED,
@@ -204,5 +205,173 @@ describe('automatic credit top-up recovery', () => {
       { prisma },
     );
     expect(result.redirect_url).toContain('checkout.stripe.com');
+  });
+
+  it('validates and terminalizes an unsafe requires-action intent before replacement', async () => {
+    const state = recoveryContext(BillingCreditAutoTopUpState.REQUIRES_ACTION, 'option_safe');
+    const intent = {
+      id: 'pi_unsafe_redirect',
+      livemode: false,
+      status: 'requires_action',
+      amount: 2_000,
+      currency: 'usd',
+      customer: 'cus_team_1',
+      payment_method: 'pm_1',
+      metadata: fundingMetadata('attempt_unsafe_redirect'),
+      next_action: {
+        type: 'redirect_to_url',
+        redirect_to_url: { url: 'http://unsafe.example/recovery' },
+      },
+    };
+    state.stripe.paymentIntents.retrieve.mockResolvedValue(intent);
+    state.stripe.paymentIntents.cancel.mockResolvedValue({ ...intent, status: 'canceled' });
+    const terminalize = vi.fn().mockResolvedValue({ count: 1 });
+    const prisma = {
+      billingCreditAutoTopUpAttempt: {
+        findFirst: vi.fn().mockResolvedValue(
+          unresolvedAttempt({
+            id: 'attempt_unsafe_redirect',
+            stripePaymentIntentId: intent.id,
+            status: BillingCreditAutoTopUpAttemptStatus.REQUIRES_ACTION,
+            failureCode: null,
+            stateWebhookEventId: 'webhook_requires_action',
+            stateWebhookEvent: { type: 'payment_intent.requires_action' },
+          }),
+        ),
+        updateMany: terminalize,
+      },
+    } as unknown as PrismaClient;
+    const createSetup = vi.fn().mockResolvedValue({
+      redirect_url: 'https://checkout.stripe.com/c/pay/replacement',
+    });
+
+    await expect(
+      recoverBillingCreditAutoTopUp(
+        { request, actorToken: 'actor', credential },
+        {
+          prisma,
+          resolveContext: vi.fn().mockResolvedValue(state.context),
+          createSetup,
+        },
+      ),
+    ).resolves.toEqual({ redirect_url: 'https://checkout.stripe.com/c/pay/replacement' });
+    expect(terminalize).toHaveBeenCalledWith({
+      where: {
+        id: 'attempt_unsafe_redirect',
+        stripePaymentIntentId: intent.id,
+        status: BillingCreditAutoTopUpAttemptStatus.REQUIRES_ACTION,
+        stateWebhookEventId: 'webhook_requires_action',
+      },
+      data: {
+        status: BillingCreditAutoTopUpAttemptStatus.CANCELED,
+        failureCode: 'unsafe_recovery_redirect',
+        resolvedAt: expect.any(Date),
+      },
+    });
+  });
+
+  it('rejects a rebound PaymentIntent returned from cancellation', async () => {
+    const state = recoveryContext(BillingCreditAutoTopUpState.REQUIRES_ACTION, 'option_safe');
+    const intent = {
+      id: 'pi_cancel_rebound',
+      livemode: false,
+      status: 'requires_action',
+      amount: 2_000,
+      currency: 'usd',
+      customer: 'cus_team_1',
+      payment_method: 'pm_1',
+      metadata: fundingMetadata('attempt_cancel_rebound'),
+      next_action: {
+        type: 'redirect_to_url',
+        redirect_to_url: { url: 'http://unsafe.example/recovery' },
+      },
+    };
+    state.stripe.paymentIntents.retrieve.mockResolvedValue(intent);
+    state.stripe.paymentIntents.cancel.mockResolvedValue({
+      ...intent,
+      status: 'canceled',
+      metadata: fundingMetadata('attempt_attacker'),
+    });
+    const terminalize = vi.fn();
+    const prisma = {
+      billingCreditAutoTopUpAttempt: {
+        findFirst: vi.fn().mockResolvedValue(
+          unresolvedAttempt({
+            id: 'attempt_cancel_rebound',
+            stripePaymentIntentId: intent.id,
+            status: BillingCreditAutoTopUpAttemptStatus.REQUIRES_ACTION,
+            failureCode: null,
+            stateWebhookEventId: 'webhook_requires_action',
+          }),
+        ),
+        updateMany: terminalize,
+      },
+    } as unknown as PrismaClient;
+
+    await expect(
+      recoverBillingCreditAutoTopUp(
+        { request, actorToken: 'actor', credential },
+        { prisma, resolveContext: vi.fn().mockResolvedValue(state.context) },
+      ),
+    ).rejects.toThrow('STRIPE_CREDIT_AUTO_TOP_UP_CANCEL_INVALID');
+    expect(terminalize).not.toHaveBeenCalled();
+  });
+
+  it('reconciles an already-canceled current intent without waiting for its webhook', async () => {
+    const state = recoveryContext(BillingCreditAutoTopUpState.NEEDS_REVIEW, 'option_safe');
+    const intent = {
+      id: 'pi_already_canceled',
+      livemode: false,
+      status: 'canceled',
+      amount: 2_000,
+      currency: 'usd',
+      customer: 'cus_team_1',
+      payment_method: 'pm_1',
+      metadata: fundingMetadata('attempt_already_canceled'),
+    };
+    state.stripe.paymentIntents.retrieve.mockResolvedValue(intent);
+    const terminalize = vi.fn().mockResolvedValue({ count: 1 });
+    const prisma = {
+      billingCreditAutoTopUpAttempt: {
+        findFirst: vi.fn().mockResolvedValue(
+          unresolvedAttempt({
+            id: 'attempt_already_canceled',
+            stripePaymentIntentId: intent.id,
+            status: BillingCreditAutoTopUpAttemptStatus.NEEDS_REVIEW,
+            failureCode: 'payment_failed',
+            stateWebhookEventId: 'webhook_review',
+          }),
+        ),
+        updateMany: terminalize,
+      },
+    } as unknown as PrismaClient;
+    const createSetup = vi.fn().mockResolvedValue({
+      redirect_url: 'https://checkout.stripe.com/c/pay/replacement',
+    });
+
+    await expect(
+      recoverBillingCreditAutoTopUp(
+        { request, actorToken: 'actor', credential },
+        {
+          prisma,
+          resolveContext: vi.fn().mockResolvedValue(state.context),
+          createSetup,
+        },
+      ),
+    ).resolves.toEqual({ redirect_url: 'https://checkout.stripe.com/c/pay/replacement' });
+    expect(state.stripe.paymentIntents.cancel).not.toHaveBeenCalled();
+    expect(terminalize).toHaveBeenCalledWith({
+      where: {
+        id: 'attempt_already_canceled',
+        stripePaymentIntentId: intent.id,
+        status: BillingCreditAutoTopUpAttemptStatus.NEEDS_REVIEW,
+        stateWebhookEventId: 'webhook_review',
+      },
+      data: {
+        status: BillingCreditAutoTopUpAttemptStatus.CANCELED,
+        failureCode: 'payment_failed',
+        resolvedAt: expect.any(Date),
+      },
+    });
   });
 });

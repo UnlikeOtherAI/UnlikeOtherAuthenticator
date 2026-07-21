@@ -130,7 +130,15 @@ async function currentRecoveryReady(
       exactMinor(intent.amount) === attempt.paymentAmountMinor &&
       requireUsd(intent.currency) === 'USD';
     if (!exact) return false;
-    if (intent.status === 'requires_action') return safeRedirect(intent);
+    if (intent.status === 'requires_action') {
+      return (
+        safeRedirect(intent) ||
+        (attempt.status === BillingCreditAutoTopUpAttemptStatus.REQUIRES_ACTION &&
+          selectedCatalogReady &&
+          returnUrlsReady)
+      );
+    }
+    if (intent.status === 'canceled') return selectedCatalogReady && returnUrlsReady;
     return (
       attempt.status === BillingCreditAutoTopUpAttemptStatus.NEEDS_REVIEW &&
       attempt.stateWebhookEvent?.type === 'payment_intent.payment_failed' &&

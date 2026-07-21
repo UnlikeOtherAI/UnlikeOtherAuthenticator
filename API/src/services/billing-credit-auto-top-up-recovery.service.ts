@@ -12,6 +12,7 @@ import { assertCreditFundingMetadata } from './billing-credit-funding-binding.se
 import { exactMinor, requireUsd } from './billing-credit-funding-webhook-validation.service.js';
 import {
   resolveCreditFundingActionContext,
+  type CreditFundingActionContext,
   type CreditFundingActionRequest,
 } from './billing-credit-funding-context.service.js';
 import { createBillingCreditAutoTopUpSetup } from './billing-credit-auto-top-up-setup.service.js';
@@ -34,6 +35,84 @@ function safeRedirectUrl(intent: Stripe.PaymentIntent): string | null {
   } catch {
     return null;
   }
+}
+
+type RecoveryAttempt = {
+  id: string;
+  creditAccountId: string;
+  serviceId: string;
+  appKeyId: string;
+  stripePaymentIntentId: string | null;
+  paymentAmountMinor: bigint;
+  failureCode: string | null;
+  status: BillingCreditAutoTopUpAttemptStatus;
+  stateWebhookEventId: string | null;
+  consentRevision: { stripePaymentMethodId: string };
+};
+
+function assertRecoveryIntent(
+  intent: Stripe.PaymentIntent,
+  attempt: RecoveryAttempt,
+  context: CreditFundingActionContext,
+  errorCode: string,
+): void {
+  assertStripeObjectLivemode(intent, context.account.livemode);
+  assertCreditFundingMetadata(
+    intent.metadata,
+    {
+      localType: 'automatic_top_up',
+      localId: attempt.id,
+      serviceId: attempt.serviceId,
+      appKeyId: attempt.appKeyId,
+      creditAccountId: attempt.creditAccountId,
+    },
+    errorCode,
+  );
+  if (
+    stripeExternalId(intent.customer) !== context.customer.stripeCustomerId ||
+    stripeExternalId(intent.payment_method) !== attempt.consentRevision.stripePaymentMethodId ||
+    exactMinor(intent.amount) !== attempt.paymentAmountMinor ||
+    requireUsd(intent.currency) !== 'USD'
+  ) {
+    throw new AppError('INTERNAL', 502, errorCode);
+  }
+}
+
+async function terminalizeCurrentAttempt(
+  intent: Stripe.PaymentIntent,
+  attempt: RecoveryAttempt,
+  prisma: PrismaClient,
+  status: BillingCreditAutoTopUpAttemptStatus,
+  failureCode: string,
+): Promise<void> {
+  const terminalized = await prisma.billingCreditAutoTopUpAttempt.updateMany({
+    where: {
+      id: attempt.id,
+      stripePaymentIntentId: intent.id,
+      status: attempt.status,
+      stateWebhookEventId: attempt.stateWebhookEventId,
+    },
+    data: { status, failureCode, resolvedAt: new Date() },
+  });
+  if (terminalized.count !== 1) {
+    throw new AppError('BAD_REQUEST', 409, 'BILLING_CREDIT_AUTO_TOP_UP_RECOVERY_PENDING');
+  }
+}
+
+async function cancelAndTerminalize(
+  intent: Stripe.PaymentIntent,
+  attempt: RecoveryAttempt,
+  context: CreditFundingActionContext,
+  prisma: PrismaClient,
+  status: BillingCreditAutoTopUpAttemptStatus,
+  failureCode: string,
+): Promise<void> {
+  const canceled = await context.stripe.paymentIntents.cancel(intent.id);
+  assertRecoveryIntent(canceled, attempt, context, 'STRIPE_CREDIT_AUTO_TOP_UP_CANCEL_INVALID');
+  if (canceled.status !== 'canceled') {
+    throw new AppError('INTERNAL', 502, 'STRIPE_CREDIT_AUTO_TOP_UP_CANCEL_INVALID');
+  }
+  await terminalizeCurrentAttempt(intent, attempt, prisma, status, failureCode);
 }
 
 export async function recoverBillingCreditAutoTopUp(
@@ -76,78 +155,45 @@ export async function recoverBillingCreditAutoTopUp(
       throw new AppError('INTERNAL', 503, 'BILLING_CREDIT_AUTO_TOP_UP_PAYMENT_PENDING');
     }
     const intent = await context.stripe.paymentIntents.retrieve(unresolved.stripePaymentIntentId);
-    assertStripeObjectLivemode(intent, context.account.livemode);
-    assertCreditFundingMetadata(
-      intent.metadata,
-      {
-        localType: 'automatic_top_up',
-        localId: unresolved.id,
-        serviceId: unresolved.serviceId,
-        appKeyId: unresolved.appKeyId,
-        creditAccountId: unresolved.creditAccountId,
-      },
-      'STRIPE_CREDIT_AUTO_TOP_UP_BINDING_INVALID',
-    );
-    if (
-      stripeExternalId(intent.customer) !== context.customer.stripeCustomerId ||
-      stripeExternalId(intent.payment_method) !==
-        unresolved.consentRevision.stripePaymentMethodId ||
-      exactMinor(intent.amount) !== unresolved.paymentAmountMinor ||
-      requireUsd(intent.currency) !== 'USD'
-    ) {
-      throw new AppError('INTERNAL', 502, 'STRIPE_CREDIT_AUTO_TOP_UP_BINDING_INVALID');
-    }
+    assertRecoveryIntent(intent, unresolved, context, 'STRIPE_CREDIT_AUTO_TOP_UP_BINDING_INVALID');
     const redirectUrl = safeRedirectUrl(intent);
     if (intent.status === 'requires_action' && redirectUrl) {
       return { redirect_url: redirectUrl };
     }
-    if (
+    if (intent.status === 'canceled') {
+      await terminalizeCurrentAttempt(
+        intent,
+        unresolved,
+        prisma,
+        BillingCreditAutoTopUpAttemptStatus.CANCELED,
+        unresolved.failureCode ?? 'payment_intent_canceled',
+      );
+    } else if (
       ['requires_payment_method', 'requires_confirmation'].includes(intent.status) &&
       unresolved.status === BillingCreditAutoTopUpAttemptStatus.NEEDS_REVIEW &&
       unresolved.stateWebhookEvent?.type === 'payment_intent.payment_failed'
     ) {
-      const canceled = await context.stripe.paymentIntents.cancel(intent.id);
-      assertStripeObjectLivemode(canceled, context.account.livemode);
-      assertCreditFundingMetadata(
-        canceled.metadata,
-        {
-          localType: 'automatic_top_up',
-          localId: unresolved.id,
-          serviceId: unresolved.serviceId,
-          appKeyId: unresolved.appKeyId,
-          creditAccountId: unresolved.creditAccountId,
-        },
-        'STRIPE_CREDIT_AUTO_TOP_UP_BINDING_INVALID',
+      await cancelAndTerminalize(
+        intent,
+        unresolved,
+        context,
+        prisma,
+        BillingCreditAutoTopUpAttemptStatus.FAILED,
+        unresolved.failureCode ?? 'payment_method_replacement_required',
       );
-      if (
-        canceled.status !== 'canceled' ||
-        stripeExternalId(canceled.customer) !== context.customer.stripeCustomerId ||
-        stripeExternalId(canceled.payment_method) !==
-          unresolved.consentRevision.stripePaymentMethodId ||
-        exactMinor(canceled.amount) !== unresolved.paymentAmountMinor ||
-        requireUsd(canceled.currency) !== 'USD'
-      ) {
-        throw new AppError('INTERNAL', 502, 'STRIPE_CREDIT_AUTO_TOP_UP_CANCEL_INVALID');
-      }
-      const terminalized = await prisma.billingCreditAutoTopUpAttempt.updateMany({
-        where: {
-          id: unresolved.id,
-          status: BillingCreditAutoTopUpAttemptStatus.NEEDS_REVIEW,
-          stateWebhookEventId: { not: null },
-        },
-        data: {
-          status: BillingCreditAutoTopUpAttemptStatus.FAILED,
-          failureCode: unresolved.failureCode ?? 'payment_method_replacement_required',
-          resolvedAt: new Date(),
-        },
-      });
-      if (terminalized.count !== 1) {
-        throw new AppError('BAD_REQUEST', 409, 'BILLING_CREDIT_AUTO_TOP_UP_RECOVERY_PENDING');
-      }
+    } else if (
+      intent.status === 'requires_action' &&
+      unresolved.status === BillingCreditAutoTopUpAttemptStatus.REQUIRES_ACTION
+    ) {
+      await cancelAndTerminalize(
+        intent,
+        unresolved,
+        context,
+        prisma,
+        BillingCreditAutoTopUpAttemptStatus.CANCELED,
+        'unsafe_recovery_redirect',
+      );
     } else {
-      if (intent.status === 'requires_action' && !redirectUrl) {
-        await context.stripe.paymentIntents.cancel(intent.id);
-      }
       throw new AppError('BAD_REQUEST', 409, 'BILLING_CREDIT_AUTO_TOP_UP_RECOVERY_PENDING');
     }
   }

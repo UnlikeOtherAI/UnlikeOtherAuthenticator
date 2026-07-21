@@ -163,6 +163,34 @@ describe('credit funding action readiness', () => {
     });
     expect(result.recoverReady).toBe(true);
 
+    data.creditAccount.autoTopUpOptionId = 'option_1';
+    data.policy.autoTopUpOptions = [{ id: 'option_1', refillOffer: offer }] as never;
+    client.paymentIntents.retrieve.mockResolvedValueOnce({
+      ...recoveryIntent(),
+      next_action: {
+        type: 'redirect_to_url',
+        redirect_to_url: { url: 'http://unsafe.example/recovery' },
+      },
+    });
+    const replaceableRedirect = await resolveBillingCreditActionReadiness({
+      collection: { account, stripeCollectionEnabled: true, stripe: client as never },
+      credential: credential as never,
+      data: data as never,
+    });
+    expect(replaceableRedirect.recoverReady).toBe(true);
+
+    client.paymentIntents.retrieve.mockResolvedValueOnce({
+      ...recoveryIntent(),
+      status: 'canceled',
+      next_action: null,
+    });
+    const canceled = await resolveBillingCreditActionReadiness({
+      collection: { account, stripeCollectionEnabled: true, stripe: client as never },
+      credential: credential as never,
+      data: data as never,
+    });
+    expect(canceled.recoverReady).toBe(true);
+
     client.paymentIntents.retrieve.mockResolvedValueOnce({
       ...recoveryIntent(),
       metadata: {

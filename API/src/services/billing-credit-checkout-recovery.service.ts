@@ -142,7 +142,22 @@ async function updateCheckout(
   if (kind === 'top_up') {
     await prisma.billingCreditTopUpCheckout.update({ where: { id: checkout.id }, data });
   } else {
-    await prisma.billingCreditSetupCheckout.update({ where: { id: checkout.id }, data });
+    const updated = await prisma.billingCreditSetupCheckout.updateMany({
+      where: {
+        id: checkout.id,
+        status: {
+          in: [
+            BillingCreditCheckoutStatus.CREATING,
+            BillingCreditCheckoutStatus.OPEN,
+            BillingCreditCheckoutStatus.NEEDS_REVIEW,
+          ],
+        },
+      },
+      data,
+    });
+    if (updated.count !== 1) {
+      throw new AppError('BAD_REQUEST', 409, 'BILLING_CREDIT_SETUP_PREDECESSOR_CHANGED');
+    }
   }
 }
 
