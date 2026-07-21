@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import type {
   BillingAdjustmentFormValues,
@@ -28,10 +28,17 @@ export function useBillingServicesQuery() {
   });
 }
 
-export function useBillingCreditAccountsQuery() {
-  return useQuery({
-    queryKey: billingCreditAccountsKey,
-    queryFn: billingAdminService.listCreditAccounts,
+export function useBillingCreditAccountsQuery(search = '') {
+  return useInfiniteQuery({
+    queryKey: [...billingCreditAccountsKey, { search }],
+    queryFn: ({ pageParam }) =>
+      billingAdminService.listCreditAccounts({
+        ...(search ? { search } : {}),
+        ...(pageParam ? { cursor: pageParam } : {}),
+      }),
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) =>
+      lastPage.has_more ? (lastPage.next_cursor ?? undefined) : undefined,
   });
 }
 
@@ -113,11 +120,18 @@ export function useDeactivateBillingAdjustmentMutation(serviceId: string) {
   });
 }
 
-export function useCreateBillingCreditAdjustmentMutation(account: BillingCreditAccount) {
-  const queryClient = useQueryClient();
+export function usePreviewBillingCreditAdjustmentMutation(account: BillingCreditAccount) {
   return useMutation({
     mutationFn: (input: BillingCreditAdjustmentFormValues) =>
-      billingAdminService.createCreditAdjustment(account, input),
+      billingAdminService.previewCreditAdjustment(account, input),
+  });
+}
+
+export function useCreateBillingCreditAdjustmentMutation(accountId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (confirmationToken: string) =>
+      billingAdminService.createCreditAdjustment(accountId, confirmationToken),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: billingCreditAccountsKey });
     },

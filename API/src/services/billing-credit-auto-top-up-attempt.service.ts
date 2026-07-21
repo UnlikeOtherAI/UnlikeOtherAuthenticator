@@ -10,6 +10,8 @@ import {
 } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 
+import { lockCreditAccountAgainstAutoTopUp } from './billing-credit-balance-lock.service.js';
+
 const OPEN_ATTEMPT_STATUSES = [
   BillingCreditAutoTopUpAttemptStatus.PENDING,
   BillingCreditAutoTopUpAttemptStatus.PROCESSING,
@@ -46,27 +48,6 @@ type BillingClock = {
   currentTime: Date;
 };
 
-async function lockCreditAccount(
-  tx: Prisma.TransactionClient,
-  creditAccountId: string,
-): Promise<boolean> {
-  await tx.$queryRaw(Prisma.sql`
-    WITH account_lock AS (
-      SELECT pg_advisory_xact_lock(
-        hashtextextended(${`credit-auto-top-up:${creditAccountId}`}, 0)
-      )
-    )
-    SELECT 1::integer AS "locked" FROM account_lock
-  `);
-  const rows = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
-    SELECT "id"
-    FROM "billing_credit_accounts"
-    WHERE "id" = ${creditAccountId}
-    FOR UPDATE
-  `);
-  return rows.length === 1;
-}
-
 function activeConfigurationIsExact(
   credit: NonNullable<Awaited<ReturnType<typeof loadCreditConfiguration>>>,
   accountId: string,
@@ -80,60 +61,60 @@ function activeConfigurationIsExact(
   const customer = credit.customer;
   return Boolean(
     revision &&
-      policy &&
-      option &&
-      offer &&
-      appKey &&
-      credit.accountId === accountId &&
-      credit.currency === 'USD' &&
-      credit.autoTopUpState === BillingCreditAutoTopUpState.ACTIVE &&
-      customer.accountId === accountId &&
-      customer.orgId === credit.orgId &&
-      customer.teamId === credit.teamId &&
-      customer.scope === BillingAssignmentScope.TEAM &&
-      customer.scopeKey === `${credit.orgId}:${credit.teamId}` &&
-      Boolean(customer.stripeCustomerId) &&
-      credit.autoTopUpPolicyId === policy.id &&
-      credit.autoTopUpServiceId === policy.serviceId &&
-      credit.autoTopUpAppKeyId === appKey.id &&
-      credit.autoTopUpConsentRevisionId === revision.id &&
-      credit.autoTopUpOptionId === option.id &&
-      credit.autoTopUpRefillOfferId === offer.id &&
-      credit.autoTopUpThresholdMicrocredits === revision.thresholdMicrocredits &&
-      credit.autoTopUpMonthlyChargeCapMinor === revision.monthlyChargeCapMinor &&
-      credit.autoTopUpConsentVersion === revision.consentVersion &&
-      credit.autoTopUpConsentedAt?.getTime() === revision.consentedAt.getTime() &&
-      credit.autoTopUpConsentedByUserId === revision.consentedByUserId &&
-      credit.stripePaymentMethodId === revision.stripePaymentMethodId &&
-      revision.accountId === accountId &&
-      revision.creditAccountId === credit.id &&
-      revision.orgId === credit.orgId &&
-      revision.teamId === credit.teamId &&
-      revision.serviceId === policy.serviceId &&
-      revision.appKeyId === appKey.id &&
-      revision.policyId === policy.id &&
-      revision.optionId === option.id &&
-      revision.refillOfferId === offer.id &&
-      policy.currency === 'USD' &&
-      policy.active &&
-      policy.automaticTopUpEnabled &&
-      policy.automaticConsentVersion === revision.consentVersion &&
-      option.active &&
-      option.policyId === policy.id &&
-      option.serviceId === policy.serviceId &&
-      option.refillOfferId === offer.id &&
-      option.thresholdMicrocredits === revision.thresholdMicrocredits &&
-      option.monthlyChargeCapMinor === revision.monthlyChargeCapMinor &&
-      offer.active &&
-      offer.policyId === policy.id &&
-      offer.serviceId === policy.serviceId &&
-      offer.automaticTopUpEligible &&
-      offer.paymentAmountMinor === revision.refillPaymentAmountMinor &&
-      offer.creditsReceivedMicrocredits === revision.refillCreditsMicrocredits &&
-      appKey.serviceId === policy.serviceId &&
-      appKey.purpose === BillingAppKeyPurpose.CUSTOMER_LIFECYCLE &&
-      !appKey.revokedAt &&
-      (!appKey.expiresAt || appKey.expiresAt > currentTime),
+    policy &&
+    option &&
+    offer &&
+    appKey &&
+    credit.accountId === accountId &&
+    credit.currency === 'USD' &&
+    credit.autoTopUpState === BillingCreditAutoTopUpState.ACTIVE &&
+    customer.accountId === accountId &&
+    customer.orgId === credit.orgId &&
+    customer.teamId === credit.teamId &&
+    customer.scope === BillingAssignmentScope.TEAM &&
+    customer.scopeKey === `${credit.orgId}:${credit.teamId}` &&
+    Boolean(customer.stripeCustomerId) &&
+    credit.autoTopUpPolicyId === policy.id &&
+    credit.autoTopUpServiceId === policy.serviceId &&
+    credit.autoTopUpAppKeyId === appKey.id &&
+    credit.autoTopUpConsentRevisionId === revision.id &&
+    credit.autoTopUpOptionId === option.id &&
+    credit.autoTopUpRefillOfferId === offer.id &&
+    credit.autoTopUpThresholdMicrocredits === revision.thresholdMicrocredits &&
+    credit.autoTopUpMonthlyChargeCapMinor === revision.monthlyChargeCapMinor &&
+    credit.autoTopUpConsentVersion === revision.consentVersion &&
+    credit.autoTopUpConsentedAt?.getTime() === revision.consentedAt.getTime() &&
+    credit.autoTopUpConsentedByUserId === revision.consentedByUserId &&
+    credit.stripePaymentMethodId === revision.stripePaymentMethodId &&
+    revision.accountId === accountId &&
+    revision.creditAccountId === credit.id &&
+    revision.orgId === credit.orgId &&
+    revision.teamId === credit.teamId &&
+    revision.serviceId === policy.serviceId &&
+    revision.appKeyId === appKey.id &&
+    revision.policyId === policy.id &&
+    revision.optionId === option.id &&
+    revision.refillOfferId === offer.id &&
+    policy.currency === 'USD' &&
+    policy.active &&
+    policy.automaticTopUpEnabled &&
+    policy.automaticConsentVersion === revision.consentVersion &&
+    option.active &&
+    option.policyId === policy.id &&
+    option.serviceId === policy.serviceId &&
+    option.refillOfferId === offer.id &&
+    option.thresholdMicrocredits === revision.thresholdMicrocredits &&
+    option.monthlyChargeCapMinor === revision.monthlyChargeCapMinor &&
+    offer.active &&
+    offer.policyId === policy.id &&
+    offer.serviceId === policy.serviceId &&
+    offer.automaticTopUpEligible &&
+    offer.paymentAmountMinor === revision.refillPaymentAmountMinor &&
+    offer.creditsReceivedMicrocredits === revision.refillCreditsMicrocredits &&
+    appKey.serviceId === policy.serviceId &&
+    appKey.purpose === BillingAppKeyPurpose.CUSTOMER_LIFECYCLE &&
+    !appKey.revokedAt &&
+    (!appKey.expiresAt || appKey.expiresAt > currentTime),
   );
 }
 
@@ -200,16 +181,17 @@ export async function listCreditAutoTopUpCandidateIds(
 
 export async function claimCreditAutoTopUpAttempt(
   params: { accountId: string; creditAccountId: string },
-  deps: { prisma: PrismaClient; createId?: () => string },
+  deps: { prisma: PrismaClient; createId?: () => string; afterAccountLock?: () => Promise<void> },
 ): Promise<CreditAutoTopUpClaim> {
   return deps.prisma.$transaction(async (tx) => {
-    if (!(await lockCreditAccount(tx, params.creditAccountId))) {
+    if ((await lockCreditAccountAgainstAutoTopUp(tx, params.creditAccountId)) === null) {
       return {
         kind: 'skipped',
         creditAccountId: params.creditAccountId,
         reason: 'account_not_found',
       };
     }
+    await deps.afterAccountLock?.();
     const unresolved = await tx.billingCreditAutoTopUpAttempt.findFirst({
       where: {
         creditAccountId: params.creditAccountId,

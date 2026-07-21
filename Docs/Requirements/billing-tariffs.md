@@ -273,20 +273,21 @@ superuser authenticated through the existing `/internal/admin/*` access-token
 guard. Org/team owners and admins do not receive tariff mutation access in this
 slice.
 
-| Method and path                                                                | Purpose                                                                                                                  |
-| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
-| `GET /internal/admin/billing/services`                                         | List services, versions, assignments, and app-key metadata                                                               |
-| `POST /internal/admin/billing/services`                                        | Create a service and its initial default tariff                                                                          |
-| `POST /internal/admin/billing/services/:serviceId/tariffs`                     | Append a tariff version; optionally make it default                                                                      |
-| `PUT /internal/admin/billing/services/:serviceId/default-tariff`               | Move the service default pointer                                                                                         |
-| `PUT /internal/admin/billing/services/:serviceId/assignments`                  | Upsert an organisation or team assignment                                                                                |
-| `DELETE /internal/admin/billing/services/:serviceId/assignments/:assignmentId` | Remove an override and fall back through precedence                                                                      |
-| `GET /internal/admin/billing/services/:serviceId/app-keys`                     | List credential metadata, never plaintext secrets                                                                        |
-| `POST /internal/admin/billing/services/:serviceId/app-keys`                    | Mint a product-bound key and bind its actor verification key                                                             |
-| `DELETE /internal/admin/billing/services/:serviceId/app-keys/:keyId`           | Revoke a product credential                                                                                              |
-| `POST /internal/admin/billing/stripe/usage-exports`                            | Fetch/replay one immutable Ledger subscription-month snapshot and idempotently export its customer-money delta to Stripe |
-| `GET /internal/admin/billing/credit-accounts`                                  | List exact-team remaining credits, test/live mode, and recent immutable admin adjustments                                |
-| `POST /internal/admin/billing/credit-accounts/:creditAccountId/adjustments`    | Append a signed credit grant/debit with exact scope, reason, actor evidence, and stable idempotency                      |
+| Method and path                                                                    | Purpose                                                                                                                  |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `GET /internal/admin/billing/services`                                             | List services, versions, assignments, and app-key metadata                                                               |
+| `POST /internal/admin/billing/services`                                            | Create a service and its initial default tariff                                                                          |
+| `POST /internal/admin/billing/services/:serviceId/tariffs`                         | Append a tariff version; optionally make it default                                                                      |
+| `PUT /internal/admin/billing/services/:serviceId/default-tariff`                   | Move the service default pointer                                                                                         |
+| `PUT /internal/admin/billing/services/:serviceId/assignments`                      | Upsert an organisation or team assignment                                                                                |
+| `DELETE /internal/admin/billing/services/:serviceId/assignments/:assignmentId`     | Remove an override and fall back through precedence                                                                      |
+| `GET /internal/admin/billing/services/:serviceId/app-keys`                         | List credential metadata, never plaintext secrets                                                                        |
+| `POST /internal/admin/billing/services/:serviceId/app-keys`                        | Mint a product-bound key and bind its actor verification key                                                             |
+| `DELETE /internal/admin/billing/services/:serviceId/app-keys/:keyId`               | Revoke a product credential                                                                                              |
+| `POST /internal/admin/billing/stripe/usage-exports`                                | Fetch/replay one immutable Ledger subscription-month snapshot and idempotently export its customer-money delta to Stripe |
+| `GET /internal/admin/billing/credit-accounts`                                      | Cursor-page/search exact-team remaining credits, test/live mode, stable IDs, and recent immutable admin adjustments      |
+| `POST /internal/admin/billing/credit-accounts/:creditAccountId/adjustment-preview` | Freeze a display-safe signed-delta review and short-lived automatic-top-up-aware confirmation                            |
+| `POST /internal/admin/billing/credit-accounts/:creditAccountId/adjustments`        | Consume the exact server confirmation and append its actor-audited credit entry idempotently                             |
 
 Every mutation writes the existing global admin audit log. Tariff and credential
 tables are denied to the tenant runtime database role and accessed only through
@@ -799,14 +800,30 @@ immutable system/admin proof instead of customer manager authority.
 The superuser adjustment surface accepts a non-zero signed credit decimal with
 at most five decimal places, an exact credit-account/organisation/team binding,
 a required reason, and one stable same-account idempotency key retained across
-retries. Its serializable transaction sets the trusted admin-domain context,
-locks the account, and commits the append-only adjustment, exact linked credit
-entry, and global audit event together. An identical replay returns the original
-result without a second entry or audit; any changed amount, reason, actor, or
-admin domain under that key fails closed. An administrative debit cannot create
-or worsen debt. The operator API/UI exposes only display-ready credits and USD
-equivalents, never internal microcredits, raw usage, provider cost, tokens, or
-Stripe identifiers.
+retries. It is a mandatory two-step operation. Preview takes the same per-account
+PostgreSQL advisory lock as the automatic-top-up scheduler and then the credit
+account row lock. While holding both it rejects every unresolved `PENDING`,
+`PROCESSING`, `REQUIRES_ACTION`, or `NEEDS_REVIEW` attempt and returns a
+display-safe current/change/resulting review. The two-minute signed confirmation
+binds the exact account, organisation, team, test/live mode, actor/admin domain,
+credit values, reason, idempotency key, and automatic-top-up generation, state,
+threshold, refill, and threshold consequence.
+
+Confirmation repeats those ordered locks, unresolved-attempt check, and every
+bound-value comparison in one atomic `READ COMMITTED` transaction before committing the
+append-only adjustment, exact linked credit entry, and global audit event. If the
+scheduler wins the lock it creates its durable attempt and confirmation fails;
+if the adjustment wins, the scheduler evaluates the committed resulting balance.
+`READ COMMITTED` is deliberate here: a waiter must read the durable attempt or
+balance written by the lock winner rather than retain the pre-wait snapshot of a
+serializable transaction.
+An identical replay returns the original adjustment plus the current account
+projection without a second entry or audit; any changed amount, reason, actor, or
+admin domain under that key fails closed. Missing and stale account locks return
+safe 404/409 responses. An administrative debit cannot create or worsen debt.
+The operator API/UI exposes only display-ready credits and USD equivalents, never
+internal credit storage units, raw usage, provider cost, tokens, or Stripe
+identifiers.
 Failed or canceled refunds and reinstated disputes create explicit reversal
 credit entries. Those entries restore only the principal that remains removed
 after all refund and dispute evidence for the original payment is reconciled,

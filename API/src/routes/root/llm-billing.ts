@@ -223,16 +223,27 @@ reallocate shared credits locally.
 Platform superusers can inspect and repair an exact team balance through the Admin
 **Team credits** view. \`GET /internal/admin/billing/credit-accounts\` returns only
 display-ready remaining credits, organisation/team identity, explicit test/live mode,
-and recent immutable adjustments. \`POST
-/internal/admin/billing/credit-accounts/:creditAccountId/adjustments\` accepts a non-zero
-signed credit decimal (at most five decimal places), required reason, exact org/team,
-and a stable same-account idempotency key. UOA locks the account in a serializable
-transaction, records the superuser/domain evidence, inserts the adjustment plus its
-exact linked credit entry, and appends one audit event. An exact retry returns the
-original result without another entry or audit; changed intent under the same key fails
-with 409. Administrative debits cannot create or worsen debt. The UI visibly confirms
-test versus live mode and preserves the submission key across retries. Neither endpoint
-returns microcredits, raw usage, provider cost, token counts, or Stripe identifiers.
+stable copyable account/org/team IDs, and recent immutable adjustments. It uses
+\`(updated_at DESC, id DESC)\` cursor pagination plus exact ID/name search; the UI says
+how many rows are loaded while another page exists, never a false total.
+
+\`POST /internal/admin/billing/credit-accounts/:creditAccountId/adjustment-preview\`
+accepts a non-zero signed credit decimal (at most five decimal places), required reason,
+exact org/team, and stable same-account idempotency key. Under the automatic-top-up
+advisory lock and credit-account row lock, UOA rejects any unresolved automatic payment
+attempt and returns a display-safe current/change/resulting review. Its two-minute signed
+confirmation binds the exact account/org/team/mode, actor/domain, balances, reason,
+idempotency key, and automatic-top-up generation/state/threshold/refill consequence.
+
+The final \`POST /internal/admin/billing/credit-accounts/:creditAccountId/adjustments\`
+accepts only that confirmation token. It takes the same ordered locks, rejects an
+unresolved attempt, and transactionally revalidates every frozen value before inserting
+the immutable adjustment, exact linked credit entry, and one audit event. An exact retry
+returns the original adjustment plus the **current** account projection without another
+entry or audit; changed intent under the same key fails with 409. Administrative debits
+cannot create or worsen debt. Editing any reviewed field invalidates the browser review,
+and live mode requires a separate acknowledgement. These endpoints return no internal
+credit storage units, raw usage, provider cost, token counts, or Stripe identifiers.
 
 The exact response schema, synthetic fixture, and OpenAPI 3.1 artifact are public at
 \`/schemas/billing-credits-v1.json\`, \`/schemas/billing-credits-v1.example.json\`, and

@@ -6,6 +6,7 @@ import { Card, CardHeader } from '../../components/ui/Card';
 import type { BillingCreditAccount, BillingCreditAdjustment } from '../../schemas/billing-credits';
 import { useBillingCreditAccountsQuery } from './billing-admin-queries';
 import { BillingCreditAdjustmentDialog } from './BillingCreditAdjustmentDialog';
+import { CopyableIdentifier } from './CopyableIdentifier';
 
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat(undefined, {
@@ -20,8 +21,13 @@ type AdjustmentRow = {
 };
 
 export function BillingCreditAccountsPanel() {
-  const accountsQuery = useBillingCreditAccountsQuery();
-  const accounts = useMemo(() => accountsQuery.data ?? [], [accountsQuery.data]);
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  const accountsQuery = useBillingCreditAccountsQuery(search);
+  const accounts = useMemo(
+    () => accountsQuery.data?.pages.flatMap((page) => page.accounts) ?? [],
+    [accountsQuery.data],
+  );
   const [selectedAccount, setSelectedAccount] = useState<BillingCreditAccount | null>(null);
   const adjustments = useMemo(
     () =>
@@ -52,8 +58,45 @@ export function BillingCreditAccountsPanel() {
               Remaining customer-facing credits for each exact organisation and team.
             </p>
           </div>
-          <Badge variant="blue">{accounts.length} accounts</Badge>
+          <Badge variant="blue">
+            {accountsQuery.hasNextPage
+              ? `${accounts.length} loaded`
+              : `${accounts.length} ${accounts.length === 1 ? 'account' : 'accounts'}`}
+          </Badge>
         </CardHeader>
+
+        <form
+          className="flex flex-wrap items-end gap-2 border-t border-gray-100 px-5 py-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            setSearch(searchInput.trim());
+          }}
+        >
+          <label className="min-w-64 flex-1 text-xs font-medium text-gray-700">
+            Exact account, organisation, or team ID/name
+            <input
+              aria-label="Search team credit accounts"
+              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-normal text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+              placeholder="Paste an ID or enter an exact name"
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
+            />
+          </label>
+          <Button size="sm" type="submit">
+            Search
+          </Button>
+          {search ? (
+            <Button
+              size="sm"
+              onClick={() => {
+                setSearchInput('');
+                setSearch('');
+              }}
+            >
+              Clear
+            </Button>
+          ) : null}
+        </form>
 
         {accountsQuery.isLoading ? (
           <p className="px-5 py-8 text-sm text-gray-400">Loading team credit accounts...</p>
@@ -63,9 +106,13 @@ export function BillingCreditAccountsPanel() {
         ) : null}
         {!accountsQuery.isLoading && !accountsQuery.isError && accounts.length === 0 ? (
           <div className="px-5 py-10 text-center">
-            <p className="text-sm font-semibold text-gray-800">No team credit accounts yet</p>
+            <p className="text-sm font-semibold text-gray-800">
+              {search ? 'No exact account match' : 'No team credit accounts yet'}
+            </p>
             <p className="mt-1 text-sm text-gray-500">
-              An account appears after a team first enters the UOA funding lifecycle.
+              {search
+                ? 'Check the complete ID or exact organisation/team name.'
+                : 'An account appears after a team first enters the UOA funding lifecycle.'}
             </p>
           </div>
         ) : null}
@@ -88,6 +135,11 @@ export function BillingCreditAccountsPanel() {
                     <td className="px-5 py-4">
                       <p className="font-medium text-gray-900">{account.team.name}</p>
                       <p className="mt-0.5 text-xs text-gray-500">{account.organisation.name}</p>
+                      <div className="mt-2 space-y-1">
+                        <CopyableIdentifier label="Account" value={account.id} />
+                        <CopyableIdentifier label="Organisation" value={account.organisation.id} />
+                        <CopyableIdentifier label="Team" value={account.team.id} />
+                      </div>
                     </td>
                     <td className="px-4 py-4 font-semibold text-gray-900">
                       {account.remaining_credits.display}
@@ -112,6 +164,16 @@ export function BillingCreditAccountsPanel() {
                 ))}
               </tbody>
             </table>
+          </div>
+        ) : null}
+        {accountsQuery.hasNextPage ? (
+          <div className="border-t border-gray-100 px-5 py-4 text-center">
+            <Button
+              disabled={accountsQuery.isFetchingNextPage}
+              onClick={() => void accountsQuery.fetchNextPage()}
+            >
+              {accountsQuery.isFetchingNextPage ? 'Loading...' : 'Load more accounts'}
+            </Button>
           </div>
         ) : null}
       </Card>

@@ -150,6 +150,13 @@ describe('GET /api', () => {
     expect(body.endpoints).toContainEqual(
       expect.objectContaining({
         method: 'POST',
+        path: '/internal/admin/billing/credit-accounts/:creditAccountId/adjustment-preview',
+        auth: expect.stringContaining('superuser'),
+      }),
+    );
+    expect(body.endpoints).toContainEqual(
+      expect.objectContaining({
+        method: 'POST',
         path: '/internal/admin/billing/credit-accounts/:creditAccountId/adjustments',
         auth: expect.stringContaining('superuser'),
       }),

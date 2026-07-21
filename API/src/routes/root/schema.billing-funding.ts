@@ -240,16 +240,17 @@ export const billingFundingEndpoints: EndpointSchema[] = [
       'List exact-team shared credit accounts, display-ready remaining credits, test/live mode, and recent immutable superuser adjustments without Stripe identifiers or raw metering.',
     auth: 'first-party Admin access token for a current platform superuser',
     response: {
-      200: 'Display-only exact-team credit accounts and their recent adjustment audit trail',
+      200: '{ accounts, next_cursor, has_more } display-only exact-team page and recent adjustment trail',
       '401/403': 'Missing, invalid, wrong-domain, or no-longer-authorized superuser',
     },
-    notes: 'Private no-store operator response. The fixed conversion is 1,000 credits = US$1.',
+    notes:
+      'Private no-store operator response. Uses stable (updated_at DESC, id DESC) cursor pagination and exact account/org/team ID or case-insensitive exact organisation/team name search. A partial page is never labeled as a total. The fixed conversion is 1,000 credits = US$1.',
   },
   {
     method: 'POST',
-    path: '/internal/admin/billing/credit-accounts/:creditAccountId/adjustments',
+    path: '/internal/admin/billing/credit-accounts/:creditAccountId/adjustment-preview',
     description:
-      'Append one signed credit grant or debit to an exact organisation/team account with required reason, actor evidence, and same-account idempotency.',
+      'Lock and preview one exact signed credit change, including current/resulting credits and automatic-top-up consequence, then mint a two-minute server confirmation.',
     auth: 'first-party Admin access token for a current platform superuser',
     body: {
       organisation_id: 'exact UOA organisation ID',
@@ -259,12 +260,29 @@ export const billingFundingEndpoints: EndpointSchema[] = [
       idempotency_key: 'stable operator request key preserved across retries',
     },
     response: {
-      201: 'New immutable adjustment and resulting display-ready account',
-      200: 'Exact idempotent replay; no second entry or audit event',
-      '400/409': 'Invalid value/scope, insufficient balance, or changed idempotent intent',
+      200: 'Display-safe frozen preview plus short-lived confirmation_token',
+      404: 'The exact credit account no longer exists',
+      409: 'Scope/balance conflict or an automatic top-up attempt is unresolved',
       '401/403': 'Missing, invalid, wrong-domain, or no-longer-authorized superuser',
     },
     notes:
-      'UOA locks the shared account, writes the immutable adjustment and exact linked entry in one serializable transaction, and never exposes microcredits, raw usage, provider cost, or Stripe IDs.',
+      'The token binds exact account/org/team/mode, actor/domain, current/resulting/delta, reason, idempotency, and automatic-top-up generation/state/threshold/refill consequence. It contains no Stripe identifier or internal credit storage unit.',
+  },
+  {
+    method: 'POST',
+    path: '/internal/admin/billing/credit-accounts/:creditAccountId/adjustments',
+    description:
+      'Append one signed credit grant or debit to an exact organisation/team account with required reason, actor evidence, and same-account idempotency.',
+    auth: 'first-party Admin access token for a current platform superuser',
+    body: { confirmation_token: 'exact short-lived token returned by adjustment-preview' },
+    response: {
+      201: 'New immutable adjustment and resulting display-ready account',
+      200: 'Exact idempotent replay returns the original adjustment plus the current account projection; no second entry or audit event',
+      404: 'The exact credit account no longer exists',
+      409: 'Invalid/expired/stale confirmation, insufficient balance, unresolved automatic top-up, or changed idempotent intent',
+      '401/403': 'Missing, invalid, wrong-domain, or no-longer-authorized superuser',
+    },
+    notes:
+      'UOA takes the same per-account advisory lock as the automatic-top-up scheduler before the credit-account row lock, then uses READ COMMITTED so a waiter sees the lock winner’s durable attempt. It rejects unresolved attempts, revalidates every frozen value, and writes the immutable adjustment and exact linked entry atomically. The API never exposes internal credit storage units, raw usage, provider cost, or Stripe IDs.',
   },
 ];

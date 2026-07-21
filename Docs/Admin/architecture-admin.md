@@ -131,9 +131,13 @@ Authenticated shell (`AdminSessionGuard` → `AdminUiProvider` → `AdminLayout`
   organisation/team assignments, exact organisation/team add-ons and credits,
   purpose-bound product app keys with one-time secret reveal, Stripe catalog
   readiness, and test/live subscription projections. **Team credits** shows
-  display-ready exact-team remaining credits, explicit test/live mode, and
-  recent immutable superuser adjustments; its signed grant/debit form requires
-  a reason and preserves one idempotency reference across retries. **Contracts & invoices**
+  cursor-paged/searchable display-ready exact-team remaining credits, copyable
+  stable account/org/team IDs, explicit test/live mode, and recent immutable
+  superuser adjustments. Its signed grant/debit form requires a reason and
+  preserves one idempotency reference across retries, but cannot post directly:
+  it first renders UOA's short-lived current/change/resulting and automatic-top-up
+  consequence review, invalidates that review on any edit, and requires an extra
+  live-mode acknowledgement. **Contracts & invoices**
   lets platform superusers create organisation contracts and version terms,
   activate exact monthly prices per service, manage explicit issuer and buyer
   profiles, calculate and inspect customer-safe invoice revisions, issue or
@@ -165,8 +169,11 @@ When a template demonstrates a section that does not yet have a route here, use 
   and are deactivated rather than deleted.
 - Team-credit admin responses are parsed by `schemas/billing-credits.ts` and use
   the same billing service/query boundary. The browser renders UOA-prepared
-  credit/USD displays and never handles microcredits, raw metering, provider
-  cost, or Stripe identifiers.
+  credit/USD displays, posts only the server confirmation token at the mutation
+  boundary, and never handles internal credit storage units, raw metering,
+  provider cost, or Stripe identifiers. Infinite-query pages enumerate every
+  exact search result while the loaded-row badge avoids presenting a partial
+  page as a total.
 - Contract and invoice responses are parsed by
   `schemas/billing-contracts.ts`, transported through
   `services/billing-contract-admin-service.ts`, and orchestrated by

@@ -1,12 +1,16 @@
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
-import { createAdminCreditAdjustment } from '../../src/services/billing-credit-admin-adjustment.service.js';
+import {
+  createAdminCreditAdjustment,
+  previewAdminCreditAdjustment,
+} from '../../src/services/billing-credit-admin-adjustment.service.js';
 import { createTestDb } from '../helpers/test-db.js';
 
 const databaseTestsEnabled =
   process.env.BILLING_FUNDING_DATABASE_TESTS === 'true' && Boolean(process.env.DATABASE_URL);
 const adminDomain = 'admin.credit-adjustment.test';
+const confirmationSecret = 'database-confirmation-secret-at-least-32-chars';
 const ids = {
   user: 'usr_credit_admin',
   org: 'org_credit_admin',
@@ -127,9 +131,27 @@ describe.skipIf(!databaseTestsEnabled)('superuser credit adjustment persistence'
 
   it('serializes concurrent exact retries into one entry and one audit event', async () => {
     const input = request('restore-concurrent-1');
+    const preview = await previewAdminCreditAdjustment(input, {
+      prisma: handle!.prisma,
+      adminDomain,
+      confirmationSecret,
+    });
+    const confirmation = {
+      creditAccountId: ids.creditAccount,
+      confirmationToken: preview.confirmation_token,
+      actor: input.actor,
+    };
     const results = await Promise.all([
-      createAdminCreditAdjustment(input, { prisma: handle!.prisma, adminDomain }),
-      createAdminCreditAdjustment(input, { prisma: handle!.prisma, adminDomain }),
+      createAdminCreditAdjustment(confirmation, {
+        prisma: handle!.prisma,
+        adminDomain,
+        confirmationSecret,
+      }),
+      createAdminCreditAdjustment(confirmation, {
+        prisma: handle!.prisma,
+        adminDomain,
+        confirmationSecret,
+      }),
     ]);
     expect(results.map((result) => result.replayed).sort()).toEqual([false, true]);
 
@@ -163,11 +185,25 @@ describe.skipIf(!databaseTestsEnabled)('superuser credit adjustment persistence'
 
   it('returns a deterministic conflict for a key owned by another entry source', async () => {
     await seedCrossSourceEntry(handle!.prisma);
+    const input = request('cross-source-key');
+    const preview = await previewAdminCreditAdjustment(input, {
+      prisma: handle!.prisma,
+      adminDomain,
+      confirmationSecret,
+    });
     await expect(
-      createAdminCreditAdjustment(request('cross-source-key'), {
-        prisma: handle!.prisma,
-        adminDomain,
-      }),
+      createAdminCreditAdjustment(
+        {
+          creditAccountId: ids.creditAccount,
+          confirmationToken: preview.confirmation_token,
+          actor: input.actor,
+        },
+        {
+          prisma: handle!.prisma,
+          adminDomain,
+          confirmationSecret,
+        },
+      ),
     ).rejects.toMatchObject({
       statusCode: 409,
       message: 'BILLING_CREDIT_ADJUSTMENT_IDEMPOTENCY_CONFLICT',

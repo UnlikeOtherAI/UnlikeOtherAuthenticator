@@ -4,8 +4,9 @@ import { z } from 'zod';
 import { requireAdminSuperuser } from '../../../middleware/admin-superuser.js';
 import {
   createAdminCreditAdjustment,
-  listAdminCreditAccounts,
+  previewAdminCreditAdjustment,
 } from '../../../services/billing-credit-admin-adjustment.service.js';
+import { listAdminCreditAccounts } from '../../../services/billing-credit-admin-account.service.js';
 import { AppError } from '../../../utils/errors.js';
 
 const IdentifierSchema = z.string().trim().min(1).max(256);
@@ -18,10 +19,12 @@ const CreditAccountQuerySchema = z
   .object({
     organisation_id: IdentifierSchema.optional(),
     team_id: IdentifierSchema.optional(),
+    search: z.string().trim().min(1).max(256).optional(),
+    cursor: z.string().trim().min(1).max(1024).optional(),
     limit: z.coerce.number().int().min(1).max(100).optional(),
   })
   .strict();
-const CreateAdjustmentSchema = z
+const PreviewAdjustmentSchema = z
   .object({
     organisation_id: IdentifierSchema,
     team_id: IdentifierSchema,
@@ -33,6 +36,9 @@ const CreateAdjustmentSchema = z
     reason: z.string().trim().min(1).max(1000),
     idempotency_key: IdempotencyKeySchema,
   })
+  .strict();
+const ConfirmAdjustmentSchema = z
+  .object({ confirmation_token: z.string().trim().min(32).max(12_000) })
   .strict();
 
 const creditAmountSchema = {
@@ -114,8 +120,73 @@ const accountSchema = {
 const accountListSchema = {
   type: 'object',
   additionalProperties: false,
-  required: ['accounts'],
-  properties: { accounts: { type: 'array', items: accountSchema } },
+  required: ['accounts', 'next_cursor', 'has_more'],
+  properties: {
+    accounts: { type: 'array', items: accountSchema },
+    next_cursor: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+    has_more: { type: 'boolean' },
+  },
+} as const;
+
+const automaticTopUpSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['generation', 'state', 'threshold_credits', 'refill_credits', 'consequence'],
+  properties: {
+    generation: { type: 'integer', minimum: 0 },
+    state: {
+      type: 'string',
+      enum: ['disabled', 'active', 'paused', 'requires_action', 'needs_review'],
+    },
+    threshold_credits: { anyOf: [creditAmountSchema, { type: 'null' }] },
+    refill_credits: { anyOf: [creditAmountSchema, { type: 'null' }] },
+    consequence: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['code', 'message'],
+      properties: {
+        code: {
+          type: 'string',
+          enum: [
+            'not_active',
+            'configuration_incomplete',
+            'remains_above_threshold',
+            'crosses_below_threshold',
+            'remains_below_threshold',
+            'crosses_above_threshold',
+          ],
+        },
+        message: { type: 'string' },
+      },
+    },
+  },
+} as const;
+
+const previewResponseSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: [
+    'account',
+    'current_credits',
+    'signed_credits',
+    'resulting_credits',
+    'reason',
+    'idempotency_key',
+    'automatic_top_up',
+    'expires_at',
+    'confirmation_token',
+  ],
+  properties: {
+    account: accountSchema,
+    current_credits: creditAmountSchema,
+    signed_credits: creditAmountSchema,
+    resulting_credits: creditAmountSchema,
+    reason: { type: 'string' },
+    idempotency_key: { type: 'string' },
+    automatic_top_up: automaticTopUpSchema,
+    expires_at: { type: 'string' },
+    confirmation_token: { type: 'string' },
+  },
 } as const;
 
 const mutationResponseSchema = {
@@ -152,13 +223,31 @@ export function registerInternalAdminBillingCreditAdjustmentRoutes(app: FastifyI
     { ...adminRoute, schema: { response: { 200: accountListSchema } } },
     async (request) => {
       const query = CreditAccountQuerySchema.parse(request.query);
-      return {
-        accounts: await listAdminCreditAccounts({
-          organisationId: query.organisation_id,
-          teamId: query.team_id,
-          limit: query.limit,
-        }),
-      };
+      return listAdminCreditAccounts({
+        organisationId: query.organisation_id,
+        teamId: query.team_id,
+        search: query.search,
+        cursor: query.cursor,
+        limit: query.limit,
+      });
+    },
+  );
+
+  app.post(
+    '/internal/admin/billing/credit-accounts/:creditAccountId/adjustment-preview',
+    { ...adminRoute, schema: { response: { 200: previewResponseSchema } } },
+    async (request) => {
+      const { creditAccountId } = CreditAccountParamsSchema.parse(request.params);
+      const body = PreviewAdjustmentSchema.parse(request.body);
+      return previewAdminCreditAdjustment({
+        creditAccountId,
+        organisationId: body.organisation_id,
+        teamId: body.team_id,
+        signedCredits: body.signed_credits,
+        reason: body.reason,
+        idempotencyKey: body.idempotency_key,
+        actor: actor(request),
+      });
     },
   );
 
@@ -170,14 +259,10 @@ export function registerInternalAdminBillingCreditAdjustmentRoutes(app: FastifyI
     },
     async (request, reply) => {
       const { creditAccountId } = CreditAccountParamsSchema.parse(request.params);
-      const body = CreateAdjustmentSchema.parse(request.body);
+      const body = ConfirmAdjustmentSchema.parse(request.body);
       const result = await createAdminCreditAdjustment({
         creditAccountId,
-        organisationId: body.organisation_id,
-        teamId: body.team_id,
-        signedCredits: body.signed_credits,
-        reason: body.reason,
-        idempotencyKey: body.idempotency_key,
+        confirmationToken: body.confirmation_token,
         actor: actor(request),
       });
       return reply.status(result.replayed ? 200 : 201).send(result);

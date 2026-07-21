@@ -14,8 +14,11 @@ import {
 } from '../schemas/billing';
 import {
   BillingCreditAccountsResponseSchema,
+  BillingCreditAdjustmentPreviewSchema,
   BillingCreditAdjustmentResponseSchema,
   type BillingCreditAccount,
+  type BillingCreditAccountsResponse,
+  type BillingCreditAdjustmentPreview,
   type BillingCreditAdjustmentFormValues,
 } from '../schemas/billing-credits';
 import { createApiClient } from './api-client';
@@ -176,20 +179,30 @@ export const billingAdminService = {
     );
   },
 
-  async listCreditAccounts(): Promise<BillingCreditAccount[]> {
-    const response = BillingCreditAccountsResponseSchema.parse(
-      await api.get<unknown>('/internal/admin/billing/credit-accounts'),
+  async listCreditAccounts(
+    params: {
+      search?: string;
+      cursor?: string;
+      limit?: number;
+    } = {},
+  ): Promise<BillingCreditAccountsResponse> {
+    const query = new URLSearchParams();
+    if (params.search) query.set('search', params.search);
+    if (params.cursor) query.set('cursor', params.cursor);
+    if (params.limit) query.set('limit', String(params.limit));
+    const suffix = query.size > 0 ? `?${query.toString()}` : '';
+    return BillingCreditAccountsResponseSchema.parse(
+      await api.get<unknown>(`/internal/admin/billing/credit-accounts${suffix}`),
     );
-    return response.accounts;
   },
 
-  async createCreditAdjustment(
+  async previewCreditAdjustment(
     account: Pick<BillingCreditAccount, 'id' | 'organisation' | 'team'>,
     input: BillingCreditAdjustmentFormValues,
-  ) {
-    return BillingCreditAdjustmentResponseSchema.parse(
+  ): Promise<BillingCreditAdjustmentPreview> {
+    return BillingCreditAdjustmentPreviewSchema.parse(
       await api.post<unknown>(
-        `/internal/admin/billing/credit-accounts/${encodeURIComponent(account.id)}/adjustments`,
+        `/internal/admin/billing/credit-accounts/${encodeURIComponent(account.id)}/adjustment-preview`,
         {
           organisation_id: account.organisation.id,
           team_id: account.team.id,
@@ -197,6 +210,15 @@ export const billingAdminService = {
           reason: input.reason,
           idempotency_key: input.idempotencyKey,
         },
+      ),
+    );
+  },
+
+  async createCreditAdjustment(accountId: string, confirmationToken: string) {
+    return BillingCreditAdjustmentResponseSchema.parse(
+      await api.post<unknown>(
+        `/internal/admin/billing/credit-accounts/${encodeURIComponent(accountId)}/adjustments`,
+        { confirmation_token: confirmationToken },
       ),
     );
   },

@@ -162,11 +162,18 @@ vi.mock('../features/admin/billing-admin-queries', () => ({
   useCreateBillingAdjustmentMutation: () => mutation(mocks.createAdjustment),
   useDeactivateBillingAdjustmentMutation: () => mutation(mocks.deactivateAdjustment),
   useBillingCreditAccountsQuery: () => ({
-    data: [creditAccount],
+    data: {
+      pages: [{ accounts: [creditAccount], next_cursor: null, has_more: false }],
+      pageParams: [null],
+    },
     isError: false,
     isLoading: false,
+    hasNextPage: false,
+    isFetchingNextPage: false,
+    fetchNextPage: vi.fn(),
   }),
   useCreateBillingCreditAdjustmentMutation: () => mutation(mocks.createCreditBalanceAdjustment),
+  usePreviewBillingCreditAdjustmentMutation: () => mutation(vi.fn()),
 }));
 
 vi.mock('../features/admin/admin-queries', () => ({

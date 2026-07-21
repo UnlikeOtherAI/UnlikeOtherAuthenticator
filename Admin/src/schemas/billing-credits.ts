@@ -35,6 +35,38 @@ export const BillingCreditAccountSchema = z.object({
 
 export const BillingCreditAccountsResponseSchema = z.object({
   accounts: z.array(BillingCreditAccountSchema),
+  next_cursor: z.string().nullable(),
+  has_more: z.boolean(),
+});
+
+export const BillingCreditAutoTopUpPreviewSchema = z.object({
+  generation: z.number().int().nonnegative(),
+  state: z.enum(['disabled', 'active', 'paused', 'requires_action', 'needs_review']),
+  threshold_credits: BillingCreditAmountSchema.nullable(),
+  refill_credits: BillingCreditAmountSchema.nullable(),
+  consequence: z.object({
+    code: z.enum([
+      'not_active',
+      'configuration_incomplete',
+      'remains_above_threshold',
+      'crosses_below_threshold',
+      'remains_below_threshold',
+      'crosses_above_threshold',
+    ]),
+    message: z.string(),
+  }),
+});
+
+export const BillingCreditAdjustmentPreviewSchema = z.object({
+  account: BillingCreditAccountSchema,
+  current_credits: BillingCreditAmountSchema,
+  signed_credits: BillingCreditAmountSchema,
+  resulting_credits: BillingCreditAmountSchema,
+  reason: z.string(),
+  idempotency_key: z.string(),
+  automatic_top_up: BillingCreditAutoTopUpPreviewSchema,
+  expires_at: z.string(),
+  confirmation_token: z.string(),
 });
 
 export const BillingCreditAdjustmentResponseSchema = z.object({
@@ -44,16 +76,17 @@ export const BillingCreditAdjustmentResponseSchema = z.object({
 });
 
 const signedCreditsPattern = /^-?(0|[1-9]\d{0,12})(\.\d{1,5})?$/;
-const maxSignedMicrocredits = 9_223_372_036_854_775_807n;
+const maxCreditWhole = '9223372036854';
+const maxCreditFraction = '77580';
 
 function creditDeltaInRange(value: string): boolean {
   if (!signedCreditsPattern.test(value)) return false;
-  const negative = value.startsWith('-');
-  const unsigned = negative ? value.slice(1) : value;
+  const unsigned = value.startsWith('-') ? value.slice(1) : value;
   const [whole, fraction = ''] = unsigned.split('.');
-  const microcredits = BigInt(whole) * 1_000_000n + BigInt(fraction.padEnd(6, '0'));
-  if (microcredits === 0n) return false;
-  return microcredits <= maxSignedMicrocredits;
+  if (whole === '0' && !/[1-9]/.test(fraction)) return false;
+  if (whole.length !== maxCreditWhole.length) return whole.length < maxCreditWhole.length;
+  if (whole !== maxCreditWhole) return whole < maxCreditWhole;
+  return fraction.padEnd(5, '0') <= maxCreditFraction;
 }
 
 export const BillingCreditAdjustmentFormSchema = z.object({
@@ -75,5 +108,7 @@ export const BillingCreditAdjustmentFormSchema = z.object({
 });
 
 export type BillingCreditAccount = z.infer<typeof BillingCreditAccountSchema>;
+export type BillingCreditAccountsResponse = z.infer<typeof BillingCreditAccountsResponseSchema>;
 export type BillingCreditAdjustment = z.infer<typeof BillingCreditAdjustmentSchema>;
+export type BillingCreditAdjustmentPreview = z.infer<typeof BillingCreditAdjustmentPreviewSchema>;
 export type BillingCreditAdjustmentFormValues = z.infer<typeof BillingCreditAdjustmentFormSchema>;

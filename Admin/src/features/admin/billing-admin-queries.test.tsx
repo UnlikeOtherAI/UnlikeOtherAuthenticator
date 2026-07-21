@@ -11,6 +11,7 @@ import {
   billingCreditAccountsKey,
   useBillingCreditAccountsQuery,
   useCreateBillingCreditAdjustmentMutation,
+  usePreviewBillingCreditAdjustmentMutation,
 } from './billing-admin-queries';
 
 const account = {
@@ -44,14 +45,52 @@ afterEach(() => {
 
 describe('billing credit account queries', () => {
   it('loads the UOA-owned account projection', async () => {
-    vi.spyOn(billingAdminService, 'listCreditAccounts').mockResolvedValue([account]);
+    vi.spyOn(billingAdminService, 'listCreditAccounts').mockResolvedValue({
+      accounts: [account],
+      next_cursor: null,
+      has_more: false,
+    });
     const { wrapper } = harness();
 
     const { result } = renderHook(() => useBillingCreditAccountsQuery(), { wrapper });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data).toEqual([account]);
+    expect(result.current.data?.pages[0].accounts).toEqual([account]);
     expect(billingAdminService.listCreditAccounts).toHaveBeenCalledTimes(1);
+  });
+
+  it('requests a server confirmation preview with the exact form values', async () => {
+    const input = {
+      signedCredits: '1000',
+      reason: 'Verified support grant',
+      idempotencyKey: 'support:team-1:2026-07-21',
+    };
+    const preview = vi.spyOn(billingAdminService, 'previewCreditAdjustment').mockResolvedValue({
+      account,
+      current_credits: account.remaining_credits,
+      signed_credits: account.remaining_credits,
+      resulting_credits: account.remaining_credits,
+      reason: input.reason,
+      idempotency_key: input.idempotencyKey,
+      automatic_top_up: {
+        generation: 0,
+        state: 'disabled',
+        threshold_credits: null,
+        refill_credits: null,
+        consequence: { code: 'not_active', message: 'Automatic top-up is not active.' },
+      },
+      expires_at: '2026-07-21T10:02:00.000Z',
+      confirmation_token: 'confirmation-token',
+    });
+    const { wrapper } = harness();
+    const { result } = renderHook(() => usePreviewBillingCreditAdjustmentMutation(account), {
+      wrapper,
+    });
+
+    await act(async () => {
+      await result.current.mutateAsync(input);
+    });
+    expect(preview).toHaveBeenCalledWith(account, input);
   });
 
   it('refreshes shared balances after an adjustment succeeds', async () => {
@@ -80,20 +119,15 @@ describe('billing credit account queries', () => {
       .mockResolvedValue(response);
     const { queryClient, wrapper } = harness();
     const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
-    const { result } = renderHook(() => useCreateBillingCreditAdjustmentMutation(account), {
+    const { result } = renderHook(() => useCreateBillingCreditAdjustmentMutation(account.id), {
       wrapper,
     });
-    const input = {
-      signedCredits: '1000',
-      reason: 'Verified support grant',
-      idempotencyKey: 'support:team-1:2026-07-21',
-    };
 
     await act(async () => {
-      await result.current.mutateAsync(input);
+      await result.current.mutateAsync('confirmation-token');
     });
 
-    expect(create).toHaveBeenCalledWith(account, input);
+    expect(create).toHaveBeenCalledWith(account.id, 'confirmation-token');
     expect(invalidate).toHaveBeenCalledWith({ queryKey: billingCreditAccountsKey });
   });
 });

@@ -4,6 +4,7 @@ import { createApp } from '../../src/app.js';
 
 const services = vi.hoisted(() => ({
   createAdminCreditAdjustment: vi.fn(),
+  previewAdminCreditAdjustment: vi.fn(),
   listAdminCreditAccounts: vi.fn(),
 }));
 
@@ -23,6 +24,7 @@ vi.mock('../../src/middleware/admin-superuser.js', () => ({
 }));
 
 vi.mock('../../src/services/billing-credit-admin-adjustment.service.js', () => services);
+vi.mock('../../src/services/billing-credit-admin-account.service.js', () => services);
 
 const amount = {
   credits: '10',
@@ -50,6 +52,31 @@ const account = {
   updated_at: '2026-07-21T12:00:00.000Z',
   recent_adjustments: [adjustment],
 };
+const confirmationToken = 'confirmation-token-at-least-thirty-two-characters';
+const preview = {
+  account,
+  current_credits: amount,
+  signed_credits: amount,
+  resulting_credits: {
+    credits: '20',
+    display: '20 credits',
+    usd_equivalent: { amount: '0.02', currency: 'USD', display: 'US$0.02' },
+  },
+  reason: adjustment.reason,
+  idempotency_key: adjustment.idempotency_key,
+  automatic_top_up: {
+    generation: 0,
+    state: 'disabled',
+    threshold_credits: null,
+    refill_credits: null,
+    consequence: {
+      code: 'not_active',
+      message: 'Automatic top-up is not active.',
+    },
+  },
+  expires_at: '2026-07-21T12:02:00.000Z',
+  confirmation_token: confirmationToken,
+};
 
 describe('superuser credit adjustment routes', () => {
   const originalSharedSecret = process.env.SHARED_SECRET;
@@ -58,7 +85,12 @@ describe('superuser credit adjustment routes', () => {
   beforeEach(() => {
     process.env.SHARED_SECRET = 'test-shared-secret-with-enough-length';
     Reflect.deleteProperty(process.env, 'DATABASE_URL');
-    services.listAdminCreditAccounts.mockResolvedValue([account]);
+    services.listAdminCreditAccounts.mockResolvedValue({
+      accounts: [account],
+      next_cursor: 'next-page',
+      has_more: true,
+    });
+    services.previewAdminCreditAdjustment.mockResolvedValue(preview);
     services.createAdminCreditAdjustment.mockResolvedValue({
       account,
       adjustment,
@@ -93,16 +125,22 @@ describe('superuser credit adjustment routes', () => {
     try {
       const response = await app.inject({
         method: 'GET',
-        url: '/internal/admin/billing/credit-accounts?organisation_id=org_1&team_id=team_1',
+        url: '/internal/admin/billing/credit-accounts?organisation_id=org_1&team_id=team_1&search=Research&cursor=cursor-1&limit=25',
         headers: { authorization: 'Bearer admin-token' },
       });
       expect(response.statusCode).toBe(200);
       expect(response.headers['cache-control']).toBe('private, no-store');
-      expect(response.json()).toEqual({ accounts: [account] });
+      expect(response.json()).toEqual({
+        accounts: [account],
+        next_cursor: 'next-page',
+        has_more: true,
+      });
       expect(services.listAdminCreditAccounts).toHaveBeenCalledWith({
         organisationId: 'org_1',
         teamId: 'team_1',
-        limit: undefined,
+        search: 'Research',
+        cursor: 'cursor-1',
+        limit: 25,
       });
       expect(response.body).not.toContain('microcredits');
       expect(response.body).not.toContain('stripe');
@@ -111,12 +149,12 @@ describe('superuser credit adjustment routes', () => {
     }
   });
 
-  it('creates a signed adjustment with the authenticated actor', async () => {
+  it('creates a display-safe server confirmation preview with the authenticated actor', async () => {
     const app = await createApp();
     try {
       const response = await app.inject({
         method: 'POST',
-        url: '/internal/admin/billing/credit-accounts/credit_1/adjustments',
+        url: '/internal/admin/billing/credit-accounts/credit_1/adjustment-preview',
         headers: { authorization: 'Bearer admin-token' },
         payload: {
           organisation_id: 'org_1',
@@ -126,14 +164,36 @@ describe('superuser credit adjustment routes', () => {
           idempotency_key: 'restore.test-1',
         },
       });
-      expect(response.statusCode).toBe(201);
-      expect(services.createAdminCreditAdjustment).toHaveBeenCalledWith({
+      expect(response.statusCode).toBe(200);
+      expect(response.body).not.toContain('microcredits');
+      expect(response.body).not.toContain('stripe');
+      expect(services.previewAdminCreditAdjustment).toHaveBeenCalledWith({
         creditAccountId: 'credit_1',
         organisationId: 'org_1',
         teamId: 'team_1',
         signedCredits: '10',
         reason: 'Restore test balance',
         idempotencyKey: 'restore.test-1',
+        actor: { userId: 'admin_1', email: 'admin@example.com' },
+      });
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('posts only the server-authored confirmation token', async () => {
+    const app = await createApp();
+    try {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/internal/admin/billing/credit-accounts/credit_1/adjustments',
+        headers: { authorization: 'Bearer admin-token' },
+        payload: { confirmation_token: confirmationToken },
+      });
+      expect(response.statusCode).toBe(201);
+      expect(services.createAdminCreditAdjustment).toHaveBeenCalledWith({
+        creditAccountId: 'credit_1',
+        confirmationToken,
         actor: { userId: 'admin_1', email: 'admin@example.com' },
       });
     } finally {
@@ -153,13 +213,7 @@ describe('superuser credit adjustment routes', () => {
         method: 'POST',
         url: '/internal/admin/billing/credit-accounts/credit_1/adjustments',
         headers: { authorization: 'Bearer admin-token' },
-        payload: {
-          organisation_id: 'org_1',
-          team_id: 'team_1',
-          signed_credits: '10',
-          reason: 'Restore test balance',
-          idempotency_key: 'restore.test-1',
-        },
+        payload: { confirmation_token: confirmationToken },
       });
       expect(response.statusCode).toBe(200);
       expect(response.json().replayed).toBe(true);
@@ -176,12 +230,8 @@ describe('superuser credit adjustment routes', () => {
         url: '/internal/admin/billing/credit-accounts/credit_1/adjustments',
         headers: { authorization: 'Bearer admin-token' },
         payload: {
-          organisation_id: 'org_1',
-          team_id: 'team_1',
+          confirmation_token: confirmationToken,
           signed_credits: '10',
-          reason: 'Restore test balance',
-          idempotency_key: 'restore.test-1',
-          balance_microcredits: '999999999',
         },
       });
       expect(response.statusCode).toBe(400);

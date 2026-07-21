@@ -191,38 +191,71 @@ describe('billingAdminService', () => {
   });
 
   it('loads display-ready shared team credit accounts without local conversion', async () => {
-    api.get.mockResolvedValue({ accounts: [creditAccount] });
+    api.get.mockResolvedValue({
+      accounts: [creditAccount],
+      next_cursor: 'next-page',
+      has_more: true,
+    });
 
-    const accounts = await billingAdminService.listCreditAccounts();
+    const page = await billingAdminService.listCreditAccounts({ search: 'Research', limit: 25 });
 
-    expect(api.get).toHaveBeenCalledWith('/internal/admin/billing/credit-accounts');
-    expect(accounts[0]?.remaining_credits.display).toBe('50,000 credits');
-    expect(accounts[0]?.remaining_credits.usd_equivalent.display).toBe('US$50.00');
-    expect(accounts[0]?.recent_adjustments[0]?.signed_credits.display).toBe('+50,000 credits');
+    expect(api.get).toHaveBeenCalledWith(
+      '/internal/admin/billing/credit-accounts?search=Research&limit=25',
+    );
+    expect(page.accounts[0]?.remaining_credits.display).toBe('50,000 credits');
+    expect(page.accounts[0]?.remaining_credits.usd_equivalent.display).toBe('US$50.00');
+    expect(page.accounts[0]?.recent_adjustments[0]?.signed_credits.display).toBe('+50,000 credits');
+    expect(page).toMatchObject({ next_cursor: 'next-page', has_more: true });
   });
 
-  it('posts a signed team credit delta with exact scope and stable request reference', async () => {
+  it('previews a signed delta with exact scope before posting only its server token', async () => {
+    const input = {
+      signedCredits: '-2500',
+      reason: 'Reverse a duplicate support grant',
+      idempotencyKey: 'support-reversal:team-1:2026-07-21',
+    };
+    api.post.mockResolvedValueOnce({
+      account: creditAccount,
+      current_credits: creditAccount.remaining_credits,
+      signed_credits: creditAccount.recent_adjustments[0].signed_credits,
+      resulting_credits: creditAccount.remaining_credits,
+      reason: input.reason,
+      idempotency_key: input.idempotencyKey,
+      automatic_top_up: {
+        generation: 0,
+        state: 'disabled',
+        threshold_credits: null,
+        refill_credits: null,
+        consequence: { code: 'not_active', message: 'Automatic top-up is not active.' },
+      },
+      expires_at: '2026-07-21T10:02:00.000Z',
+      confirmation_token: 'signed-confirmation-token',
+    });
+    const preview = await billingAdminService.previewCreditAdjustment(creditAccount, input);
+    expect(api.post).toHaveBeenCalledWith(
+      '/internal/admin/billing/credit-accounts/credit-account-1/adjustment-preview',
+      {
+        organisation_id: 'org-1',
+        team_id: 'team-1',
+        signed_credits: '-2500',
+        reason: input.reason,
+        idempotency_key: input.idempotencyKey,
+      },
+    );
+
     api.post.mockResolvedValue({
       account: creditAccount,
       adjustment: creditAccount.recent_adjustments[0],
       replayed: false,
     });
-
-    const result = await billingAdminService.createCreditAdjustment(creditAccount, {
-      signedCredits: '-2500',
-      reason: 'Reverse a duplicate support grant',
-      idempotencyKey: 'support-reversal:team-1:2026-07-21',
-    });
+    const result = await billingAdminService.createCreditAdjustment(
+      creditAccount.id,
+      preview.confirmation_token,
+    );
 
     expect(api.post).toHaveBeenCalledWith(
       '/internal/admin/billing/credit-accounts/credit-account-1/adjustments',
-      {
-        organisation_id: 'org-1',
-        team_id: 'team-1',
-        signed_credits: '-2500',
-        reason: 'Reverse a duplicate support grant',
-        idempotency_key: 'support-reversal:team-1:2026-07-21',
-      },
+      { confirmation_token: 'signed-confirmation-token' },
     );
     expect(result.replayed).toBe(false);
   });
