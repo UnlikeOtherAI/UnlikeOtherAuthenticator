@@ -162,6 +162,7 @@ const EnvSchema = z
     STRIPE_SECRET_KEY: z.string().min(1).optional(),
     STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
     STRIPE_USAGE_EXPORT_INTERVAL_MINUTES: z.coerce.number().int().min(5).max(1440).default(60),
+    STRIPE_AUTO_TOP_UP_INTERVAL_MINUTES: z.coerce.number().int().min(1).max(60).default(1),
     STRIPE_PRE_BOUNDARY_SAFETY_LEAD_MINUTES: z.coerce.number().int().min(5).max(1440).default(360),
     STRIPE_PRE_BOUNDARY_SAFETY_OFFSET_MINUTES: z.coerce.number().int().min(1).max(60).default(1),
     // UOA pulls immutable monthly snapshots from Ledger with UOA's own

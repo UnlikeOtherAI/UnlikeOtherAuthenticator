@@ -1950,6 +1950,12 @@ and superuser adjustments use their separate immutable proof paths. Manager
 credit views may contain per-user and payment-method display detail;
 ordinary members receive only their own usage, categorical other-team and
 unattributed aggregates, payment-method status, and no enabled money actions.
+The Stripe-gated billing scheduler identifies only active exact-team accounts
+below their UOA consent threshold, rechecks current policy/offer/catalog and the
+UTC monthly cap under a database lock, and commits one attributed attempt before
+any off-session payment. A second per-account PostgreSQL lock serializes Stripe
+dispatch across replicas. Lost responses reuse that attempt's deterministic
+Stripe idempotency key; only signed webhooks terminalize it or add credits.
 
 Recurring add-ons are UOA subscriptions scoped to an organisation, team, or
 subscribing user. DeepWater privacy is a versioned US$50/month offer.

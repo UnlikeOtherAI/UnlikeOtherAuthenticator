@@ -788,6 +788,37 @@ after all refund and dispute evidence for the original payment is reconciled,
 so overlapping adjustments cannot restore the same credits twice. Products
 display those UOA-authored entries and the resulting remaining balance without
 recalculating either value.
+
+When the Stripe collection gate is enabled, UOA's billing scheduler polls for
+exact-team credit accounts whose state is `ACTIVE` and whose locked balance is
+below the threshold in their active immutable consent revision. Before it may
+dispatch, one database transaction revalidates the current UOA policy, exact
+product lifecycle app key/service, consent actor, option, refill offer,
+account/mode catalog, fixed amount/credit conversion, and successful charges
+already counted against the UTC monthly cap. The database repeats those checks
+under the credit-account row lock. No caller supplies an amount, threshold,
+payment method, service, user, or cap.
+
+That transaction commits exactly one `PENDING` automatic-top-up attempt before
+Stripe is called. A second transaction takes the same per-account PostgreSQL
+advisory lock, locks the attempt and all immutable dispatch bindings, then
+creates and confirms one off-session PaymentIntent using the consented customer
+and payment method. The PaymentIntent carries only
+`uoa_credit_auto_top_up_attempt_id`; its Stripe idempotency key is the attempt's
+deterministic stored key. Concurrent API replicas therefore serialize per
+account. If Stripe accepted the request but its response was lost, later polls
+recover the same pending attempt and repeat the same idempotent request rather
+than creating another attempt or charge. A returned or Stripe-error-embedded
+PaymentIntent must match the exact amount, USD currency, mode, customer,
+payment method, and reserved metadata before its ID is attached. Signed Stripe
+webhooks remain the only path that changes attempt payment state or credits the
+team balance; the scheduler never infers success from a create response.
+
+The automatic-top-up poll uses `STRIPE_AUTO_TOP_UP_INTERVAL_MINUTES` (default
+one minute) and shares the existing Stripe scheduler lifecycle. Turning
+`STRIPE_BILLING_ENABLED` off prevents the scheduler from starting and makes a
+direct non-test cycle fail before database or Stripe work.
+
 Funding and subscription webhooks compare the signed event's reserved UOA
 binding metadata with the freshly retrieved Stripe object. An unrelated event
 with no UOA markers is acknowledged, while removed, added, or rebound UOA
