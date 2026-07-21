@@ -1099,7 +1099,7 @@ groupMembers  GroupMember[]
 
 When removing a user from an org (`DELETE /org/organisations/:orgId/members/:userId`), the service must within one fail-closed transaction:
 
-1. Lock the exact organisation membership and all of that user's team memberships in the org.
+1. Lock the exact `(userId, domain)` refresh-session key, then the organisation membership and all of that user's team memberships in the org.
 2. Tombstone the `OrgMember` and `TeamMember` rows as `REMOVED`; delete the org's `GroupMember` rows, which have no lifecycle status.
 3. Revoke every scoped refresh-token family for the exact `(userId, orgId)` across all issuing product domains.
 4. Revoke same-domain refresh rows as compatibility for legacy sessions that carry no org/team scope.
@@ -1233,12 +1233,16 @@ When `org_features.enabled` is `true` and the user belongs to an org, the access
 - If user has no org on this domain, the `org` claim is **omitted entirely** (not null, not empty — absent).
 - JWT size grows linearly with memberships. `max_team_memberships_per_user` (default: 50) caps this. With 50 teams and 20 groups, expect ~4-5KB additional payload. Consuming products may need to increase reverse proxy header buffer sizes.
 - JWT `org` claims are populated at issuance time, not updated mid-session. Changes require re-authentication (consistent with Section 22.10).
-- Refresh rotation preserves nullable `orgId`/`teamId` session scope and takes the canonical
-  organisation-then-team membership locks before creating a replacement. Membership lifecycle
-  writers take the same locks before the status tombstone and scoped revocation. If refresh commits
-  first, the lifecycle transaction revokes its replacement; if lifecycle commits first, refresh
-  fails without creating one. Exact org/team revocation is independent of the product domain that
-  issued the session.
+- Every refresh decision takes a PostgreSQL transaction lock scoped to exact `(userId, domain)`,
+  then re-reads the opaque-token row. Scoped rotation subsequently takes the canonical
+  organisation-then-team membership locks before creating a replacement. Org lifecycle writers
+  take the same session lock before membership locks, so legacy unscoped rotation is linearized as
+  well: refresh-first leaves a replacement for the writer to revoke, while lifecycle-first is seen
+  by the refresh re-read and creates none. Exact org/team revocation remains independent of the
+  issuing product domain.
+- Reuse of an already-rotated token revokes its whole family while holding that session lock. UOA
+  commits the revocation before returning the normal opaque `INVALID_REFRESH_TOKEN` response, so
+  the current replacement remains dead and concurrent rotation cannot escape.
 - **Refresh token + org claims:** Refresh tokens may carry the exact optional `orgId` / `teamId`
   selected (or newly placed) for the session. Rotation preserves and revalidates that scope before
   signing the next `active` claim; it fails closed instead of silently dropping, switching, or

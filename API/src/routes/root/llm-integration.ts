@@ -45,6 +45,9 @@ The authorization-code grant returns exactly the shape below. **There is no top-
 \`\`\`
 
 Store the refresh token server-side ONLY; browser clients never receive or persist refresh tokens. \`firstLogin\` is only present on the authorization-code grant; refresh-token grants never include it.
+Presenting an already-rotated token is treated as theft/replay: UOA durably revokes the complete
+family before returning the normal authentication failure, so the current replacement cannot be
+used afterward. Replace stored refresh state atomically and never retry an older token.
 
 If optional agreement signatures are enabled for the domain, a newly published version or revoked signature can make the next refresh return the normal authentication failure. UOA deliberately leaves that still-valid refresh token unconsumed and unrotated; restart the interactive authorization flow so the authenticated user can review/sign the current version. Do not retry refresh in a loop.
 
@@ -317,6 +320,9 @@ Membership rows carry a \`status\`: \`ACTIVE\` | \`DEACTIVATED\` | \`REMOVED\`. 
 - \`DELETE /org/organisations/:orgId/members/:userId\` — now a soft-remove: status becomes \`REMOVED\` (not a row delete), and the exact-org plus legacy same-domain revocation above applies. Re-adding a previously removed user via \`POST /org/organisations/:orgId/members\` **reactivates** their existing row (and re-activates their default-team membership) but never restores revoked sessions.
 - \`DELETE /org/organisations/:orgId/teams/:teamId/members/:userId\` — tombstones only that team membership and atomically revokes exact user+team refresh families across all issuing product domains. Other-team sessions remain valid; re-add does not restore the revoked families.
 - \`GET /org/organisations/:orgId/members\` defaults to \`ACTIVE\` members only. Pass \`?status=DEACTIVATED\`, \`?status=REMOVED\`, or \`?status=all\` to see other lifecycle states (e.g. for an admin roster view that lists suspended/removed accounts).
+
+Org lifecycle is serialized with both current scoped refresh and legacy unscoped same-domain
+refresh. A concurrent refresh therefore cannot mint a surviving replacement after revocation.
 
 To revoke on logout:
 

@@ -76,10 +76,16 @@ Every successful refresh-token exchange:
 If an already-rotated refresh token is presented again:
 
 1. The entire token family is revoked
-2. The request fails with a generic unauthorized response
-3. Subsequent refresh attempts from that family also fail
+2. That revocation transaction commits
+3. Only after commit, the request fails with the same generic unauthorized response used for every invalid refresh
+4. Subsequent refresh attempts from that family also fail
 
-This is the theft-detection path for replayed refresh tokens.
+This is the theft-detection path for replayed refresh tokens. Every production refresh decision
+holds a PostgreSQL transaction advisory lock scoped to exact `(user_id, domain)`. Because the raw
+token is needed to discover that identity, UOA performs an opaque lookup, takes the lock, and then
+re-reads the row before deciding reuse, rejection, or rotation. Reuse and a current-token rotation
+therefore cannot cross: whichever commits first determines the state observed by the waiter, and no
+new live replacement can escape the family revocation.
 
 ## Workspace Lifecycle Revocation
 
@@ -93,13 +99,16 @@ Workspace-scoped refresh families are terminated when their membership stops bei
 - Reactivating or re-adding a membership never clears `revoked_at`; the user must complete a new
   interactive authorization flow.
 
-The status tombstone and refresh-row updates run in one fail-closed `uoa_admin` transaction after
-the canonical organisation-then-team membership locks. Refresh rotation takes those same ordered
-locks before creating its replacement. Therefore a refresh that commits first is followed and
-revoked by the lifecycle writer, while a lifecycle writer that commits first makes the waiting
-refresh fail without creating a replacement. Lifecycle revocation does not bump the user's global
-token version: already-issued access tokens expire at their normal short TTL, and unrelated
-workspace/product sessions are not globally invalidated.
+The status tombstone and refresh-row updates run in one fail-closed `uoa_admin` transaction. Org
+lifecycle takes the exact user+domain refresh-session lock before the canonical
+organisation-then-team membership locks; refresh takes that same session lock and, when scoped, the
+same membership locks before creating a replacement. This also serializes legacy unscoped rows,
+which have no org/team IDs available to lock. A refresh that commits first is followed and revoked
+by the lifecycle writer, while a lifecycle writer that commits first is observed by the refresh's
+post-lock re-read and no replacement is created. Team-only lifecycle remains serialized by its
+exact membership locks. Lifecycle revocation does not bump the user's global token version:
+already-issued access tokens expire at their normal short TTL, and unrelated workspace/product
+sessions are not globally invalidated.
 
 ---
 

@@ -23,7 +23,11 @@ import {
 } from './required-workspace-placement.service.js';
 import { lockTokenIssuanceProductPolicy } from './product-workspace-policy-lock.service.js';
 import { resolveProductWorkspacePolicy } from './product-workspace-policy.service.js';
-import { createRefreshTokenRotationPolicyGuard } from './refresh-token-rotation-policy.service.js';
+import {
+  createRefreshTokenFamilyDecisionLock,
+  createRefreshTokenRotationPolicyGuard,
+} from './refresh-token-rotation-policy.service.js';
+import { runRefreshTokenExchangeTransaction } from './refresh-token-transaction.service.js';
 import {
   accessTokenExpiresInSeconds,
   resolveAccessTokenTtl,
@@ -42,6 +46,7 @@ type TokenDeps = {
   sharedSecret?: string;
   // Deterministic concurrency-test hook. Production callers leave this unset.
   afterProductWorkspacePolicyLock?: () => Promise<void>;
+  afterRefreshSessionLock?: () => Promise<void>;
   afterActiveWorkspaceLock?: () => Promise<void>;
   afterRequiredWorkspaceLock?: () => Promise<void>;
 };
@@ -402,6 +407,10 @@ export async function exchangeRefreshTokenForTokens(
         now: deps?.now,
         prisma: tx,
         sharedSecret,
+        beforeFamilyDecision: createRefreshTokenFamilyDecisionLock({
+          prisma: tx,
+          afterLock: deps?.afterRefreshSessionLock,
+        }),
         beforeRotate: createRefreshTokenRotationPolicyGuard({
           prisma: tx,
           now: deps?.now,
@@ -472,10 +481,5 @@ export async function exchangeRefreshTokenForTokens(
 
   // Production passes the BYPASSRLS client here. Keeping the complete refresh decision in
   // one transaction makes policy publication/revocation checks atomic with token rotation.
-  if (typeof adminPrisma.$transaction === 'function') {
-    return adminPrisma.$transaction(async (tx) =>
-      exchangeInsideTransaction(tx as unknown as PrismaClient),
-    );
-  }
-  return exchangeInsideTransaction(adminPrisma);
+  return runRefreshTokenExchangeTransaction(adminPrisma, exchangeInsideTransaction);
 }

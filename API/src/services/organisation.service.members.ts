@@ -9,6 +9,7 @@ import {
   revokeRefreshTokenFamiliesForUserOrganisation,
   revokeRefreshTokensForUserDomain,
 } from './refresh-token.service.js';
+import { lockRefreshSessionUserDomain } from './refresh-session-lock.service.js';
 import { lockWorkspaceMembershipRows } from './workspace-scope.service.js';
 
 import {
@@ -270,6 +271,7 @@ export async function removeOrganisationMember(
     userId: string;
   },
   deps?: OrgServiceDeps & {
+    afterMembershipStatusWrite?: () => Promise<void>;
     revokeRefreshTokenFamiliesForUserOrganisation?:
       typeof revokeRefreshTokenFamiliesForUserOrganisation;
     revokeRefreshTokensForUserDomain?: typeof revokeRefreshTokensForUserDomain;
@@ -312,6 +314,7 @@ export async function removeOrganisationMember(
   }
 
   await runInTransaction(prisma, async (tx) => {
+    await lockRefreshSessionUserDomain({ userId, domain: org.domain }, { prisma: tx });
     await lockWorkspaceMembershipRows({ userId, orgId: org.id }, { prisma: tx });
     const lockedMember = await tx.orgMember.findFirst({
       where: { orgId: org.id, userId },
@@ -371,6 +374,7 @@ export async function removeOrganisationMember(
       where: { id: lockedMember.id },
       data: { status: 'REMOVED', statusChangedAt: now },
     });
+    await deps?.afterMembershipStatusWrite?.();
 
     const revokeDeps = { now: () => now, prisma: tx };
     await (

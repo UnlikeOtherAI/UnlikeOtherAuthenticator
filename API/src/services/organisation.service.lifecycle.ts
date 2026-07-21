@@ -6,6 +6,7 @@ import {
   revokeRefreshTokenFamiliesForUserOrganisation,
   revokeRefreshTokensForUserDomain,
 } from './refresh-token.service.js';
+import { lockRefreshSessionUserDomain } from './refresh-session-lock.service.js';
 import { lockWorkspaceMembershipRows } from './workspace-scope.service.js';
 
 import {
@@ -71,6 +72,7 @@ export async function deactivateOrganisationMember(
   if (member.role === 'owner') throw new AppError('BAD_REQUEST', 400);
 
   await runInTransaction(prisma, async (tx) => {
+    await lockRefreshSessionUserDomain({ userId, domain: org.domain }, { prisma: tx });
     await lockWorkspaceMembershipRows({ userId, orgId: org.id }, { prisma: tx });
     const lockedMember = await tx.orgMember.findFirst({
       where: { orgId: org.id, userId, status: 'ACTIVE' },

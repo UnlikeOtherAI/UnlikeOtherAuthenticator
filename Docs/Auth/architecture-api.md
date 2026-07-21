@@ -294,8 +294,10 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       organisation.service.organisation.ts  — Organisation CRUD + slug generation (slice entry point)
       organisation.service.members.ts       — Org membership lifecycle
       password.service.ts                   — Hashing, validation rules, comparison
+      refresh-session-lock.service.ts       — Narrow user/domain transaction serialization
       refresh-token-rotation-policy.service.ts — Workspace/signature gates held through refresh rotation
       refresh-token.service.ts              — Refresh token issuance, rotation, reuse detection, revocation
+      refresh-token-transaction.service.ts  — Durable reuse revocation commit before opaque rejection
       retention-pruning.service.ts          — Retention pruning jobs
       root-page.service.ts                  — Root holding page rendering
       ses-admin.service.ts                  — AWS SES identity admin operations
@@ -411,16 +413,18 @@ Request → Route → Middleware → Service → Database (Prisma)
 - **error-handler** — catches all errors. Returns a generic public body via `utils/error-response.ts` to the caller and logs specifics internally.
 - **rate-limiter** — request rate limiting; keyed helpers for auth routes live in `routes/auth/rate-limit-keys.ts`.
 
-Refresh rotation and destructive membership lifecycle share one concurrency boundary. A scoped
-refresh takes the exact organisation-membership lock and then its team-membership lock before it
-creates a replacement. Org deactivation/removal locks the organisation and all of that user's team
-memberships in the same order, while team removal locks the organisation before its team set. The
-lifecycle transaction then writes the status tombstone and revokes exact user+org or user+team
-refresh families across all issuing product domains. These lifecycle endpoints deliberately use
-the BYPASSRLS admin client because `uoa_app` cannot see sibling-domain refresh rows; the service
-repeats actor and target authorization and fails the whole transaction if revocation fails. Org
-lifecycle also revokes same-domain rows for legacy unscoped compatibility. Reactivation and re-add
-never clear revoked state.
+Refresh rotation and destructive membership lifecycle share one concurrency boundary. After the
+opaque lookup discovers the subject, every refresh takes a transaction advisory lock keyed to exact
+user+normalized-domain and re-reads the row. Scoped refresh then takes the exact organisation and
+team membership locks before replacement. Org deactivation/removal takes the same session lock
+before locking the organisation and all of that user's team memberships; team removal continues to
+serialize through the exact membership rows. The lifecycle transaction writes status and revokes
+exact user+org or user+team families across all issuing domains, plus legacy same-domain unscoped
+rows for org lifecycle. These endpoints deliberately use the BYPASSRLS admin client because
+`uoa_app` cannot see sibling-domain refresh rows; services repeat actor/target authorization and
+fail the whole transaction if revocation fails. Reuse detection holds the same session lock, revokes
+the family, returns a private commit signal from the transaction, and only then raises the ordinary
+opaque 401. Reactivation and re-add never clear revoked state.
 
 `POST /auth/token` remains a thin multi-grant route. Its confidential assertion
 branch uses the same config verifier and domain-hash guard as the legacy grants,

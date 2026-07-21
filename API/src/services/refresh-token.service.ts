@@ -8,10 +8,29 @@ import { AppError } from '../utils/errors.js';
 
 const MIN_INHERITED_REFRESH_TTL_SECONDS = 5 * 60;
 
+class RefreshTokenReuseDetectedError extends AppError {
+  public constructor() {
+    super('UNAUTHORIZED', 401, 'INVALID_REFRESH_TOKEN');
+  }
+}
+
+/** Identify the private commit signal without exposing a distinct public refresh error. */
+export function isRefreshTokenReuseDetectedError(
+  error: unknown,
+): error is RefreshTokenReuseDetectedError {
+  return error instanceof RefreshTokenReuseDetectedError;
+}
+
 type RefreshTokenPrisma = Pick<PrismaClient, 'refreshToken'>;
 type UserVersionPrisma = Pick<PrismaClient, 'user'>;
 
 type RefreshTokenDeps = {
+  beforeFamilyDecision?: (row: {
+    userId: string;
+    domain: string;
+    orgId: string | null;
+    teamId: string | null;
+  }) => Promise<void>;
   beforeRotate?: (row: {
     userId: string;
     domain: string;
@@ -161,23 +180,25 @@ export async function exchangeRefreshToken(
   const sharedSecret = getSharedSecret(deps);
   const tokenHash = hashRefreshToken(params.refreshToken, sharedSecret);
 
-  const row = await prisma.refreshToken.findUnique({
-    where: { tokenHash },
-    select: {
-      id: true,
-      familyId: true,
-      userId: true,
-      domain: true,
-      clientId: true,
-      configUrl: true,
-      createdAt: true,
-      expiresAt: true,
-      revokedAt: true,
-      replacedByTokenId: true,
-      orgId: true,
-      teamId: true,
-    },
-  });
+  const findTokenRow = () =>
+    prisma.refreshToken.findUnique({
+      where: { tokenHash },
+      select: {
+        id: true,
+        familyId: true,
+        userId: true,
+        domain: true,
+        clientId: true,
+        configUrl: true,
+        createdAt: true,
+        expiresAt: true,
+        revokedAt: true,
+        replacedByTokenId: true,
+        orgId: true,
+        teamId: true,
+      },
+    });
+  let row = await findTokenRow();
 
   if (!row) {
     throw new AppError('UNAUTHORIZED', 401, 'INVALID_REFRESH_TOKEN');
@@ -187,9 +208,25 @@ export async function exchangeRefreshToken(
     throw new AppError('UNAUTHORIZED', 401, 'INVALID_REFRESH_TOKEN');
   }
 
+  // The opaque lookup is needed to discover the lock identity. Production callers acquire their
+  // user+domain transaction lock here, then this second read observes anything that committed
+  // while the lock was pending before reuse/revocation/rotation is decided.
+  if (deps?.beforeFamilyDecision) {
+    await deps.beforeFamilyDecision({
+      userId: row.userId,
+      domain: row.domain,
+      orgId: row.orgId,
+      teamId: row.teamId,
+    });
+    row = await findTokenRow();
+    if (!row || !matchesRefreshTokenContext(row, params)) {
+      throw new AppError('UNAUTHORIZED', 401, 'INVALID_REFRESH_TOKEN');
+    }
+  }
+
   if (row.replacedByTokenId) {
     await revokeRefreshTokenFamilyInternal(prisma, row.familyId, now);
-    throw new AppError('UNAUTHORIZED', 401, 'INVALID_REFRESH_TOKEN');
+    throw new RefreshTokenReuseDetectedError();
   }
 
   if (row.revokedAt || row.expiresAt.getTime() <= now.getTime()) {

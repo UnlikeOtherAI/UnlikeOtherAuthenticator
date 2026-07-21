@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@prisma/client';
 
 import { AppError } from '../utils/errors.js';
+import { lockRefreshSessionUserDomain } from './refresh-session-lock.service.js';
 import { lockSignaturePolicyForDecision } from './signature-continuation.service.js';
 import { evaluateSignaturePolicy } from './signature-policy.service.js';
 import { lockAndAssertRefreshWorkspaceScope } from './workspace-scope.service.js';
@@ -11,6 +12,17 @@ type RefreshRotationRow = {
   orgId: string | null;
   teamId: string | null;
 };
+
+/** Acquire the narrow lock shared by refresh decisions and legacy same-domain revocation. */
+export function createRefreshTokenFamilyDecisionLock(params: {
+  prisma: PrismaClient;
+  afterLock?: () => Promise<void>;
+}): (row: RefreshRotationRow) => Promise<void> {
+  return async ({ userId, domain }) => {
+    await lockRefreshSessionUserDomain({ userId, domain }, { prisma: params.prisma });
+    await params.afterLock?.();
+  };
+}
 
 /** Build the policy gate that runs after opaque-token validation and before any rotation write. */
 export function createRefreshTokenRotationPolicyGuard(params: {
