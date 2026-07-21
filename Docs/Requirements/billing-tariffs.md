@@ -132,8 +132,9 @@ convention. An `entitlement` key can call only
 `POST /billing/v1/effective-tariff` and must have no redirect origins. A
 `customer_lifecycle` key can call only direct-session access confirmation, the
 canonical customer statement, Stripe Checkout, summary, portal, and
-cancellation routes and must have at least one exact HTTPS return origin. No
-key can cross those endpoint classes. Every request also requires its
+cancellation routes, plus the UOA-owned credits and recurring-add-on customer
+surface, and must have at least one exact HTTPS return origin. No key can cross
+those endpoint classes. Every request also requires its
 credential-bound actor assertion, and the body product must exactly equal the
 service bound to the key.
 
@@ -773,7 +774,9 @@ the exact body unchanged. Auto-top-up records immutable consent revisions,
 threshold, refill offer, monthly charge cap, payment-method proof, every system
 attempt, and terminal Stripe evidence. Refunds and disputes create exact debit
 entries and move an enabled auto-top-up account to review. Recovery requires a
-new verified consent revision. An ordinary active member cannot initiate a
+verified exact-attempt Stripe action URL, or a replacement Setup Checkout that
+creates a new consent revision when no unresolved payment remains. An ordinary
+active member cannot initiate a
 top-up, set/update/recover auto-top-up, or alter consent; the database requires
 an active organisation and exact-team billing manager for every
 customer-initiated funding or consent mutation. Automatic attempts, Stripe
@@ -826,6 +829,22 @@ app key plus a fresh exact actor assertion. The read endpoints and settlement
 runtime do not imply that any mutation action is enabled: Checkout, top-up,
 auto-top-up, and add-on actions appear enabled only when their dedicated Stripe
 runtime and fixed UOA policy/catalog evidence are available.
+
+The customer credit mutations are the frozen routes
+`/billing/v1/credits/top-up-checkout` and
+`/billing/v1/credits/auto-top-up/{setup,update,disable,recover}`. Every call
+re-verifies the exact product app key, fresh actor, active organisation/team
+memberships, and exact-team billing-manager role. The product may send only the
+subject body plus the UOA `offer_id` or `option_id` supplied by the latest
+projection. Amount, currency, quantity, Stripe Product/Price/customer/intent,
+metadata, and return or recovery URLs are never caller inputs. UOA validates
+the active policy and account/mode catalog against current Stripe objects,
+writes an immutable exact binding before making a Stripe call, and recovers
+open sessions through a server-derived idempotency key. Setup and payment
+webhooks must match the local customer, immutable terms, and reserved metadata
+before funding or consent is committed. A policy, catalog, payment method,
+consent, or Stripe binding gap disables the corresponding projected action and
+fails a forged direct request closed.
 
 ### Contract invoice calculator and invoice privacy
 

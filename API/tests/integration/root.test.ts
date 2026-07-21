@@ -113,6 +113,21 @@ describe('GET /api', () => {
         auth: expect.stringContaining('customer_lifecycle'),
       }),
     );
+    for (const path of [
+      '/billing/v1/credits/top-up-checkout',
+      '/billing/v1/credits/auto-top-up/setup',
+      '/billing/v1/credits/auto-top-up/update',
+      '/billing/v1/credits/auto-top-up/disable',
+      '/billing/v1/credits/auto-top-up/recover',
+    ]) {
+      expect(body.endpoints).toContainEqual(
+        expect.objectContaining({
+          method: 'POST',
+          path,
+          auth: expect.stringContaining('customer_lifecycle'),
+        }),
+      );
+    }
     expect(body.endpoints).toContainEqual(
       expect.objectContaining({
         method: 'POST',

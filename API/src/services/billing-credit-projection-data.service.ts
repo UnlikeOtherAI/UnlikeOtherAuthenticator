@@ -83,7 +83,13 @@ export async function loadBillingCreditProjectionData(
       prisma.billingCreditTopUpCheckout.findMany({
         where: {
           creditAccountId: params.creditAccountId,
-          status: { in: [BillingCreditCheckoutStatus.CREATING, BillingCreditCheckoutStatus.OPEN] },
+          status: {
+            in: [
+              BillingCreditCheckoutStatus.CREATING,
+              BillingCreditCheckoutStatus.OPEN,
+              BillingCreditCheckoutStatus.NEEDS_REVIEW,
+            ],
+          },
         },
         select: { paymentAmountMinor: true, creditsReceivedMicrocredits: true },
       }),
@@ -94,10 +100,17 @@ export async function loadBillingCreditProjectionData(
             in: [
               BillingCreditAutoTopUpAttemptStatus.PENDING,
               BillingCreditAutoTopUpAttemptStatus.PROCESSING,
+              BillingCreditAutoTopUpAttemptStatus.REQUIRES_ACTION,
+              BillingCreditAutoTopUpAttemptStatus.NEEDS_REVIEW,
             ],
           },
         },
-        select: { paymentAmountMinor: true, creditsReceivedMicrocredits: true },
+        select: {
+          catalogId: true,
+          status: true,
+          paymentAmountMinor: true,
+          creditsReceivedMicrocredits: true,
+        },
       }),
     ]);
   if (
@@ -166,6 +179,7 @@ export async function loadBillingCreditProjectionData(
     entries,
     periodEntries,
     pending: [...pendingCheckouts, ...pendingAttempts],
+    unresolvedAttempts: pendingAttempts,
     autoTopUpChargedMinor: successfulAutoTopUps._sum.paymentAmountMinor ?? 0n,
   };
 }

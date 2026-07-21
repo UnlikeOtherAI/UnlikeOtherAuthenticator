@@ -1979,3 +1979,16 @@ then enforces manager/member visibility, while the add-on read applies the same
 exact subject boundary. Read/schema availability alone does not enable a money
 action: each Checkout/top-up/auto-top-up/add-on action requires its dedicated
 verified Stripe runtime and UOA policy/catalog evidence.
+
+Credit funding mutations are UOA-owned at
+`/billing/v1/credits/top-up-checkout` and
+`/billing/v1/credits/auto-top-up/{setup,update,disable,recover}`. Each accepts
+only the frozen subject plus a UOA offer/option ID, rechecks the exact product
+key, fresh actor, and active exact-team billing manager, and derives every
+amount, Stripe Price/customer, consent term, metadata value, and allowlisted
+return URL from UOA state. UOA persists the immutable local intent before
+calling Stripe, uses account/mode-scoped idempotency, recovers the same open
+Checkout across a fresh exact-scope actor, and applies webhooks only after
+current Stripe metadata matches the stored customer/catalog/intent binding.
+Missing policy, catalog, payment, consent, or Stripe evidence fails closed and
+keeps the corresponding projected action disabled.
