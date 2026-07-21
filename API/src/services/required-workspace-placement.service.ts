@@ -47,6 +47,8 @@ export async function resolveRequiredAuthorizationWorkspace(
     workspacePrisma: PrismaClient;
   },
 ): Promise<RequiredAuthorizationWorkspace | null> {
+  await lockRequiredTeamPlacementUser(params.userId, { prisma: deps.prisma });
+
   const policy = await resolveProductWorkspacePolicy(
     { domain: params.config.domain },
     { prisma: deps.workspacePrisma },
@@ -57,7 +59,6 @@ export async function resolveRequiredAuthorizationWorkspace(
     params.config.org_features?.enabled === true &&
     params.config.org_features.user_needs_team === true;
   if (!placementAllowed && !exactSelectionRequired) return null;
-  await lockRequiredTeamPlacementUser(params.userId, { prisma: deps.prisma });
 
   if (autoSelection || policy.scope === 'all_active_memberships') {
     const choices = await buildWorkspaceChoices(
