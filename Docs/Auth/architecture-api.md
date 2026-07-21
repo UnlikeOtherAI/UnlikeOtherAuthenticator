@@ -63,6 +63,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
         schema.ts           — Aggregates the endpoint schema returned by /api
         schema.auth.ts      — /api schema slice: auth endpoints
         schema.billing.ts   — /api schema slice: tariffs, contract invoices, app keys, and snapshots
+        schema.billing-funding.ts — /api schema slice: shared-credit and recurring-add-on reads/artifacts
         schema.config-debug.ts — /api schema slice: config debug endpoints
         schema.integrations.ts — /api schema slice: integration endpoints
         schema.internal-admin-apps.ts — /api schema slice: internal admin app/settings/search endpoints
@@ -94,9 +95,12 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
         email-team-invite-open.ts  — GET /auth/email-team-invite-open
         index.ts            — Route registration for /auth
       /billing
+        credits.ts          — POST /billing/v1/credits and strict BillingCreditsV1 validation
         customer-statement.ts — Exact v1/v2 display model and public protocol artifacts
         effective-tariff.ts — Product-bound app-key + signed-actor tariff resolution
+        funding-artifacts.ts — Public credit/add-on JSON Schema, fixture, and OpenAPI artifacts
         jwks.ts             — GET /billing/v1/jwks.json (snapshot verification keys)
+        recurring-addons.ts — POST /billing/v1/recurring-addons and strict protocol validation
         stripe-checkout.ts  — Purpose-bound hosted Checkout creation/recovery
         stripe-subscription.ts — Safe summary, portal, and period-end cancellation
         stripe-webhook.ts   — Exact-raw-body Stripe lifecycle reconciliation
@@ -187,9 +191,20 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       authorization-code.service.ts         — Scoped code issuance and one-transaction consumption
       billing-actor.service.ts              — Credential-bound short-lived actor JWT verification
       billing-app-key.service.ts            — Product app-key minting, lookup, revocation, and audit
+      billing-credit-account.service.ts     — Exact Stripe account/mode shared-team credit account and portfolio perspective
+      billing-credit-display.service.ts     — Exact microcredit/credit/USD display conversion
+      billing-credit-entry-projection.service.ts — Manager/member-safe credit-entry attribution
+      billing-credit-projection-data.service.ts — Credit, funding-policy, settlement, allocation, and pending-payment reads
+      billing-credit-projection.service.ts  — Strict manager/member BillingCreditsV1 view model
+      billing-credit-rating.service.ts      — Deterministic all-service tariff rating and scarce-credit allocation
+      billing-credit-settlement-write.service.ts — Append-only settlement, entry, and allocation persistence
+      billing-credit-settlement.service.ts  — Serializable cursor-idempotent team portfolio settlement
+      billing-credits.service.ts            — Credits read orchestration across entitlement, Ledger, settlement, and projection
       billing-entitlement.service.ts        — Membership validation and team→org→default resolution
+      billing-funding-viewer.service.ts      — Exact-scope manager/member visibility resolution
       billing-ledger-collector.service.ts   — Strict immutable Ledger usage/portfolio snapshots
       billing-rating.service.ts             — Shared exact statement, Stripe, and contract-invoice rating core
+      billing-recurring-addons.service.ts   — Privacy-safe exact-scope recurring add-on projection
       billing-contract-guard.service.ts     — Active-contract assignment mutation guard
       billing-contract.service.ts           — Immutable org contracts and atomic service tariff projection
       billing-invoice-calculation.service.ts — Closed-month org calculator and private evidence persistence
@@ -442,6 +457,23 @@ admin client because tenant SQL access to those control-plane tables is denied.
 Full contract and raw-usage separation are defined in
 `Docs/Requirements/billing-tariffs.md`.
 
+The shared-credit read is a state-changing settlement boundary behind a
+read-shaped product API. `billing-credits.service.ts` authenticates the exact
+lifecycle key/actor/subject, resolves one stable team portfolio perspective,
+fetches one current-month `metering-portfolio-v1` cursor grouped by user, and
+passes it to `billing-credit-settlement.service.ts`. That service takes the
+shared credit-account row lock in a serializable transaction and settles every
+current or previously seen service together. It pins each service's first
+effective tariff, applies corrections before new debits, allocates scarce
+credits deterministically, and writes the full rated-but-unfunded liability.
+Usage cannot push an available balance below zero; only verified credit-entry
+reversals can produce debt. Cursor replay is idempotent and a conflicting or
+partially persisted cursor fails closed. `billing-credit-projection.service.ts`
+then returns the strict manager or member protocol branch, with `Remaining
+credits` first and no cross-user/card leakage to members. Recurring add-ons use
+the same lifecycle and viewer boundary but remain a separate, read-only
+subscription projection.
+
 The platform-superuser contract-invoice boundary is separate from the
 product-facing statement. `billing-contract.service.ts` owns immutable
 organisation contract versions and atomic CUSTOM+MANUAL tariff projection;
@@ -470,7 +502,8 @@ TypeScript types and runtime schema and generates drift-checked JSON Schema,
 synthetic example, and OpenAPI 3.1 artifacts. It covers
 `BillingStatementV1`, additive `BillingStatementV2`, and the exact
 product-facing hosted redirect, cancellation preview/confirm, selection, and
-error messages. The API serves all artifact sets under `/schemas/`; consumers
+error messages, plus discriminated `BillingCreditsV1` and recurring-add-on
+manager/member views. The API serves all artifact sets under `/schemas/`; consumers
 can pack/vendor the package without importing server code. Billing action
 capabilities do not replace the App feature-flag resolver.
 

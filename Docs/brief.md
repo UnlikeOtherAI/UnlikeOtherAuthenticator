@@ -1969,7 +1969,13 @@ raw token/API/SERP/research quantities, provider cost, cost-token equivalents,
 markup, or margin calculations. Connected products consume a display-ready UOA
 invoice view model and contain no local invoice-rating logic.
 
-The current funding slice establishes the Prisma persistence constraints and
-the public `BillingCreditsV1`/recurring-add-on protocol artifacts. Runtime HTTP
-handlers, Stripe calls, and product UI wiring are completed in their dedicated
-integration slices; schema presence alone does not enable collection.
+The UOA runtime serves the public `BillingCreditsV1`/recurring-add-on protocol
+artifacts plus product-authenticated reads. A credit read pins one exact
+team-wide Ledger cursor and settles every service atomically against the shared
+balance; it is concurrency-safe and cursor-idempotent, releases corrections
+before allocating new usage, stops ordinary usage at zero, and retains the full
+unfunded liability. Only verified reversals may create debt. The display model
+then enforces manager/member visibility, while the add-on read applies the same
+exact subject boundary. Read/schema availability alone does not enable a money
+action: each Checkout/top-up/auto-top-up/add-on action requires its dedicated
+verified Stripe runtime and UOA policy/catalog evidence.

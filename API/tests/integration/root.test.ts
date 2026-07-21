@@ -109,6 +109,25 @@ describe('GET /api', () => {
     expect(body.endpoints).toContainEqual(
       expect.objectContaining({
         method: 'POST',
+        path: '/billing/v1/credits',
+        auth: expect.stringContaining('customer_lifecycle'),
+      }),
+    );
+    expect(body.endpoints).toContainEqual(
+      expect.objectContaining({
+        method: 'POST',
+        path: '/billing/v1/recurring-addons',
+      }),
+    );
+    expect(body.endpoints).toContainEqual(
+      expect.objectContaining({
+        method: 'GET',
+        path: '/schemas/billing-credits-v1.json',
+      }),
+    );
+    expect(body.endpoints).toContainEqual(
+      expect.objectContaining({
+        method: 'POST',
         path: '/billing/v1/stripe/checkout-session',
       }),
     );
@@ -356,5 +375,9 @@ describe('GET /llm', () => {
     expect(res.body).toContain('authorized app-key ID');
     expect(res.body).toContain('/billing/v1/effective-tariff');
     expect(res.body).toContain('collection_mode=stripe|manual|none');
+    expect(res.body).toContain('Shared team credits and recurring add-ons');
+    expect(res.body).toContain('Remaining credits');
+    expect(res.body).toContain('/billing/v1/credits');
+    expect(res.body).toContain('/billing/v1/recurring-addons');
   });
 });
