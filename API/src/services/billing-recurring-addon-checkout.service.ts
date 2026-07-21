@@ -168,6 +168,7 @@ export async function createRecurringAddonCheckout(
     {
       catalog,
       offer,
+      serviceIdentifier: params.credential.service.identifier,
       serviceName: params.credential.service.name,
       account,
       stripe,

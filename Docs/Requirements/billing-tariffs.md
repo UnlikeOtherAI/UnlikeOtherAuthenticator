@@ -904,6 +904,47 @@ before funding or consent is committed. A policy, catalog, payment method,
 consent, or Stripe binding gap disables the corresponding projected action and
 fails a forged direct request closed.
 
+#### Stripe commercial-catalog provisioning
+
+Commercial catalog bootstrap is an explicit, idempotent operator command; it
+is not SQL, a schema migration, application startup logic, or a Stripe object
+creator. The operator must provide the exact Stripe account and `test` or
+`live` mode. `--dry-run` performs all remote and local validation without a
+write. `--apply` additionally requires the exact confirmation string
+`PROVISION_UOA_STRIPE_CATALOG:<account>:<mode>`, and commits all local changes in
+one serializable transaction.
+
+The remote Stripe objects must already exist. UOA validates their account,
+mode, active state, lookup key, Product binding, exact metadata, USD amount,
+one-time/recurring type, and monthly licensed recurrence before opening the
+write transaction. The command never creates, updates, archives, or replaces a
+Stripe Product or Price. It may bind an exact local catalog only when both of
+its Stripe identifiers are still null; a partial or different binding is
+drift. Re-running against the exact state is a no-op.
+
+The version-1 shared-credit Product has four one-time Prices:
+
+| Lookup key               | Charge | Credits |
+| ------------------------ | -----: | ------: |
+| `uoa_credits_usd_10_v1`  |  US$10 |  10,000 |
+| `uoa_credits_usd_25_v1`  |  US$25 |  25,000 |
+| `uoa_credits_usd_50_v1`  |  US$50 |  50,000 |
+| `uoa_credits_usd_100_v1` | US$100 | 100,000 |
+
+The same offers are projected for the exact active services `nessie`,
+`deepwater`, `deepsignal`, and `deeptest`. Each receives top-up and
+automatic-top-up policy plus the default automatic option: refill 25,000
+credits below 5,000, with a US$100 monthly cap and consent version
+`credits-auto-top-up-v1`.
+
+DeepWater privacy is a separate US$50/month licensed Price with lookup key
+`deepwater_privacy_usd_month_v1`. It is bound to the active,
+feature-flags-enabled `deepwater-api` app, the `can_be_private` flag (default
+off), an exact TEAM feature policy, and recurring add-on key/version
+`privacy`/`1`. Stable Stripe metadata uses the public service identifier
+`deep-water`; UOA's canonical billing-service key remains `deepwater`. Neither
+form is a local database identifier.
+
 ### Contract invoice calculator and invoice privacy
 
 Contract pricing is UOA-owned and administrated only by platform superusers.

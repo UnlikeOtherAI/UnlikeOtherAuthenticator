@@ -25,6 +25,9 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
   /src
     app.ts                  — Fastify app setup, plugin and middleware registration
     server.ts               — Server entry point
+    /cli
+      provision-stripe-commercial-catalog.ts — Guarded Stripe catalog validation and local provisioning entry point
+      stripe-catalog-provisioning-args.ts — Exact dry-run/apply, account, mode, and confirmation parsing
     /config
       billing-env-validation.ts — Tariff, Stripe, and Ledger collector startup invariants
       constants.ts          — App-wide constants (token TTL defaults, retention defaults)
@@ -226,6 +229,12 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       billing-stripe-checkout-recovery.service.ts — Crash-safe Stripe Checkout lookup and lease reconciliation
       billing-stripe-checkout-state.service.ts — Billing-scope overlap, binding, and customer projection rules
       billing-stripe-client.service.ts      — Explicit Stripe account and test/live runtime identity
+      billing-stripe-catalog-provisioning.service.ts — Read-first provisioning orchestration and serializable apply
+      billing-stripe-catalog-provisioning-spec.ts — Canonical credit and DeepWater privacy commercial terms
+      billing-stripe-catalog-provisioning-remote.service.ts — Exact read-only Stripe contract validation
+      billing-stripe-catalog-provisioning-local.service.ts — Local account, app feature, and add-on reconciliation
+      billing-stripe-catalog-provisioning-credits-local.service.ts — Local credit policy, offer, option, and catalog reconciliation
+      billing-stripe-catalog-provisioning-local.shared.ts — Narrow transaction, action, and drift primitives
       billing-stripe-invoice.service.ts     — Authoritative post-period invoice reconciliation
       billing-stripe-manager.service.ts     — Org/team billing-manager authorization
       billing-stripe-period.service.ts      — Calendar-month and free-alignment classification

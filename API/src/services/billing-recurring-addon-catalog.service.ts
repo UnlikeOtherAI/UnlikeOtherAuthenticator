@@ -10,6 +10,10 @@ import {
   assertStripeObjectLivemode,
   type StripeAccountContext,
 } from './billing-stripe-client.service.js';
+import {
+  recurringAddonPriceMetadata,
+  recurringAddonProductMetadata,
+} from './billing-stripe-catalog-provisioning-spec.js';
 
 export type RecurringAddonCatalogClient = Pick<Stripe, 'prices' | 'products'>;
 
@@ -22,34 +26,29 @@ function externalId(value: string | { id: string } | null): string | null {
 }
 
 function productMetadata(
-  catalog: BillingRecurringAddonCatalog,
   offer: BillingRecurringAddonOffer,
-  account: StripeAccountContext,
+  serviceIdentifier: string,
 ): Stripe.MetadataParam {
-  return {
-    uoa_binding_kind: 'recurring_addon_catalog',
-    uoa_recurring_addon_catalog_id: catalog.id,
-    uoa_service_id: offer.serviceId,
-    uoa_offer_id: offer.id,
-    uoa_offer_key: offer.key,
-    uoa_offer_version: offer.version.toString(),
-    uoa_stripe_account_id: account.stripeAccountId,
-    uoa_stripe_mode: account.livemode ? 'live' : 'test',
-  };
+  return recurringAddonProductMetadata({
+    serviceIdentifier,
+    offerKey: offer.key,
+    offerVersion: offer.version,
+  });
 }
 
 function priceMetadata(
-  catalog: BillingRecurringAddonCatalog,
   offer: BillingRecurringAddonOffer,
-  account: StripeAccountContext,
+  serviceIdentifier: string,
 ): Stripe.MetadataParam {
-  return { ...productMetadata(catalog, offer, account), uoa_billing_interval: 'month' };
+  return recurringAddonPriceMetadata({ serviceIdentifier, offerKey: offer.key });
 }
 
 function assertMetadata(actual: Stripe.Metadata, expected: Stripe.MetadataParam): void {
-  const actualUoaKeys = Object.keys(actual).filter((key) => key.startsWith('uoa_'));
+  const actualKeys = Object.keys(actual).sort();
+  const expectedKeys = Object.keys(expected).sort();
   if (
-    actualUoaKeys.length !== Object.keys(expected).length ||
+    actualKeys.length !== expectedKeys.length ||
+    actualKeys.some((key, index) => key !== expectedKeys[index]) ||
     Object.entries(expected).some(([key, value]) => actual[key] !== value)
   ) {
     throw new AppError('INTERNAL', 503, 'STRIPE_RECURRING_ADDON_CATALOG_DRIFT');
@@ -75,6 +74,7 @@ function assertTerms(
 async function validateRemoteCatalog(params: {
   catalog: BillingRecurringAddonCatalog;
   offer: BillingRecurringAddonOffer;
+  serviceIdentifier: string;
   account: StripeAccountContext;
   stripe: RecurringAddonCatalogClient;
 }): Promise<void> {
@@ -95,20 +95,25 @@ async function validateRemoteCatalog(params: {
     externalId(price.product) !== product.id ||
     price.lookup_key !== catalog.stripeLookupKey ||
     price.currency !== catalog.currency.toLowerCase() ||
+    price.type !== 'recurring' ||
     price.unit_amount !== Number(catalog.monthlyAmountMinor) ||
+    price.unit_amount_decimal?.toString() !== catalog.monthlyAmountMinor.toString() ||
     price.recurring?.interval !== 'month' ||
-    price.recurring.usage_type !== 'licensed'
+    price.recurring.interval_count !== 1 ||
+    price.recurring.usage_type !== 'licensed' ||
+    price.recurring.meter !== null
   ) {
     throw new AppError('INTERNAL', 503, 'STRIPE_RECURRING_ADDON_CATALOG_DRIFT');
   }
-  assertMetadata(product.metadata, productMetadata(catalog, offer, account));
-  assertMetadata(price.metadata, priceMetadata(catalog, offer, account));
+  assertMetadata(product.metadata, productMetadata(offer, params.serviceIdentifier));
+  assertMetadata(price.metadata, priceMetadata(offer, params.serviceIdentifier));
 }
 
 export async function ensureRecurringAddonStripeCatalog(
   params: {
     catalog: BillingRecurringAddonCatalog;
     offer: BillingRecurringAddonOffer;
+    serviceIdentifier: string;
     serviceName: string;
     account: StripeAccountContext;
     stripe: RecurringAddonCatalogClient;
@@ -125,7 +130,7 @@ export async function ensureRecurringAddonStripeCatalog(
     {
       name: `${params.serviceName} — ${params.offer.name}`,
       description: params.offer.description,
-      metadata: productMetadata(params.catalog, params.offer, params.account),
+      metadata: productMetadata(params.offer, params.serviceIdentifier),
     },
     {
       idempotencyKey: idempotencyKey(params.account, 'recurring-addon-product', params.catalog.id),
@@ -140,7 +145,7 @@ export async function ensureRecurringAddonStripeCatalog(
       recurring: { interval: 'month', usage_type: 'licensed' },
       lookup_key: params.catalog.stripeLookupKey,
       nickname: `${params.offer.key} v${params.offer.version} monthly`,
-      metadata: priceMetadata(params.catalog, params.offer, params.account),
+      metadata: priceMetadata(params.offer, params.serviceIdentifier),
     },
     {
       idempotencyKey: idempotencyKey(params.account, 'recurring-addon-price', params.catalog.id),

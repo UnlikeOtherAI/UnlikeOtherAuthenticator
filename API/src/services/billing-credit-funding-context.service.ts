@@ -18,6 +18,10 @@ import {
 } from './billing-stripe-client.service.js';
 import { ensureStripeCustomer } from './billing-stripe-checkout-state.service.js';
 import { stripeExternalId } from './billing-stripe-webhook-utils.service.js';
+import {
+  CREDIT_PRODUCT_METADATA,
+  creditPriceMetadata,
+} from './billing-stripe-catalog-provisioning-spec.js';
 
 export type CreditFundingActionRequest = {
   product: string;
@@ -235,6 +239,7 @@ export async function assertCreditCatalogPrice(
     stripeProductId: string | null;
     stripePriceId: string | null;
     paymentAmountMinor: bigint;
+    creditsReceivedMicrocredits: bigint;
   },
 ): Promise<void> {
   if (!catalog.stripePriceId || !catalog.stripeProductId) {
@@ -244,6 +249,15 @@ export async function assertCreditCatalogPrice(
   assertStripeObjectLivemode(price, account.livemode);
   const productId = stripeExternalId(price.product);
   const product = typeof price.product === 'string' ? null : price.product;
+  const credits = catalog.creditsReceivedMicrocredits / 1_000_000n;
+  const exactMetadata = (actual: Stripe.Metadata, expected: Record<string, string>): boolean => {
+    const actualKeys = Object.keys(actual).sort();
+    const expectedKeys = Object.keys(expected).sort();
+    return (
+      actualKeys.length === expectedKeys.length &&
+      actualKeys.every((key, index) => key === expectedKeys[index] && actual[key] === expected[key])
+    );
+  };
   if (
     price.id !== catalog.stripePriceId ||
     !price.active ||
@@ -255,7 +269,10 @@ export async function assertCreditCatalogPrice(
     productId !== catalog.stripeProductId ||
     !product ||
     'deleted' in product ||
-    !product.active
+    !product.active ||
+    catalog.creditsReceivedMicrocredits % 1_000_000n !== 0n ||
+    !exactMetadata(price.metadata, creditPriceMetadata({ credits })) ||
+    !exactMetadata(product.metadata, CREDIT_PRODUCT_METADATA)
   ) {
     throw new AppError('INTERNAL', 502, 'STRIPE_CREDIT_CATALOG_BINDING_INVALID');
   }
