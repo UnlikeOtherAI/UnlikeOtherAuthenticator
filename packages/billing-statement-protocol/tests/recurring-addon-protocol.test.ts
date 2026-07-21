@@ -26,9 +26,7 @@ describe('public recurring add-on consumer protocol', () => {
       expect(validate({ ...fixture, unexpected: true })).toBe(false);
     }
 
-    const zeroPrice = structuredClone(
-      billingRecurringAddonV1ConformanceFixtures.recurring_addons,
-    );
+    const zeroPrice = structuredClone(billingRecurringAddonV1ConformanceFixtures.recurring_addons);
     zeroPrice.offers[0]!.monthly_price.amount = '0';
     expect(validate(zeroPrice)).toBe(false);
 

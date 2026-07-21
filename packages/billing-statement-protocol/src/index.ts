@@ -93,9 +93,7 @@ export type {
   BillingCreditsTopUpAction,
   BillingCreditsV1,
 } from './credits-types.js';
-export {
-  billingSubjectRequestJsonSchema,
-} from './funding-schema-primitives.js';
+export { billingSubjectRequestJsonSchema } from './funding-schema-primitives.js';
 export type { BillingSubjectRequest } from './funding-schema-primitives.js';
 export {
   BILLING_CREDITS_AUTO_TOP_UP_DISABLE_PATH,

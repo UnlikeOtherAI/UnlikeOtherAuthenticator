@@ -809,9 +809,12 @@ rewrite an issued invoice. The calculator may use Ledger's immutable raw usage
 and provider-cost facts internally, but the customer invoice projection is a
 separate privacy boundary.
 
-Issued-invoice views expose calculated customer price grouped by service plus
-ordinary fixed subscriptions, add-ons, credits, adjustments, taxes, payments,
-and totals as applicable. They must not expose token counts, raw API/search/
+Issued-invoice views expose gross calculated customer price grouped by service,
+then one separate canonical funded-credit settlement, ordinary fixed
+subscriptions, adjustments, taxes, payments, and totals as applicable. Paid
+recurring add-ons remain on their canonical Stripe subscription, are labelled
+as collected separately, and are excluded from the manual amount due. They must
+not expose token counts, raw API/search/
 research units, raw provider cost, cost-token equivalents, tariff markup, or
 the margin calculation. Even operator-created descriptions must not encode
 those prohibited facts. Product applications receive only UOA's display-ready

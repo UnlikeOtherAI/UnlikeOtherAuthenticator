@@ -53,6 +53,7 @@ RUN pnpm --filter @uoa/api prisma:generate
 
 COPY --from=build --chown=node:node /app/API/dist/ API/dist/
 COPY --from=build --chown=node:node /app/API/prisma/ API/prisma/
+COPY --from=build --chown=node:node /app/assets/fonts/ assets/fonts/
 COPY --from=build --chown=node:node /app/packages/billing-statement-protocol/dist/ packages/billing-statement-protocol/dist/
 COPY --from=build --chown=node:node /app/packages/billing-statement-protocol/schema/ packages/billing-statement-protocol/schema/
 COPY --from=build --chown=node:node /app/packages/billing-statement-protocol/fixtures/ packages/billing-statement-protocol/fixtures/

@@ -3,9 +3,9 @@ import {
   addBillingDecimals,
   exactMoney,
   multiplyBillingDecimalByBps,
-  subtractBillingDecimals,
   sumBillingDecimals,
 } from './billing-money.service.js';
+import { rateProviderCost, usagePriceMultiplierBps } from './billing-rating.service.js';
 import {
   UNATTRIBUTED_BILLING_PRODUCT,
   type NormalizedMeteringUsage,
@@ -29,7 +29,7 @@ type CostTotal = BillingStatementV1['usage']['cost_totals'][number];
 type CommercialLine = BillingStatementV1['commercial_lines'][number];
 
 function usageMultiplierBps(plan: RatingPlan): number {
-  return plan.mode === 'free' ? 0 : 10_000 + plan.markupBps;
+  return usagePriceMultiplierBps({ mode: plan.mode, markupBps: plan.markupBps });
 }
 
 function rawUnits(line: RawMeteringLine) {
@@ -70,13 +70,14 @@ function ratedCharge(
   plan: RatingPlan,
 ): UsageLine['rated_charge'] {
   if (!cost) return null;
-  const total =
-    plan.mode === 'free' ? '0' : multiplyBillingDecimalByBps(cost.amount, 10_000 + plan.markupBps);
-  const markup = plan.mode === 'free' ? '0' : subtractBillingDecimals(total, cost.amount);
+  const rated = rateProviderCost(cost.amount, cost.currency, {
+    mode: plan.mode,
+    markupBps: plan.markupBps,
+  });
   return {
-    base: exactMoney(cost.amount, cost.currency),
-    markup: exactMoney(markup, cost.currency),
-    total: exactMoney(total, cost.currency),
+    base: exactMoney(rated.base, rated.currency),
+    markup: exactMoney(rated.markup, rated.currency),
+    total: exactMoney(rated.total, rated.currency),
   };
 }
 

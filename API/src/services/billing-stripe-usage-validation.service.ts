@@ -5,11 +5,8 @@ import {
   UNATTRIBUTED_BILLING_PRODUCT,
   type NormalizedMeteringUsage,
 } from './billing-metering.types.js';
-import {
-  addBillingDecimals,
-  currencyMinorDigits,
-  multiplyBillingDecimalByBps,
-} from './billing-money.service.js';
+import { currencyMinorDigits } from './billing-money.service.js';
+import { rateMeteringByCaller } from './billing-rating.service.js';
 
 const STRIPE_METER_FRACTION_DIGITS = 6;
 const MAX_SIGNED_BIGINT = 9_223_372_036_854_775_807n;
@@ -178,38 +175,29 @@ export function validatedStripeCumulativeCharges(
   usage: NormalizedMeteringUsage,
   subscription: StripeUsageSubscription,
 ): Map<string, CumulativeCharge> {
-  const baseCosts = new Map<
-    string,
-    { billingProduct: string; callerProduct: string; currency: string; amount: string }
-  >();
-  for (const line of usage.lines) {
-    if (line.billingProduct !== subscription.service.identifier) {
-      throw new AppError('INTERNAL', 502, 'LEDGER_METERING_PRODUCT_MISMATCH');
-    }
-    const amount = line.selectedProviderCost;
-    if (amount === null && line.currency === null) continue;
-    if (amount === null || line.currency !== subscription.tariff.currency) {
-      throw new AppError('INTERNAL', 502, 'LEDGER_METERING_COST_MISMATCH');
-    }
-    const callerProduct = line.callerProduct ?? UNATTRIBUTED_BILLING_PRODUCT;
-    const key = stripeUsageChargeKey(callerProduct, line.currency);
-    const current = baseCosts.get(key);
-    baseCosts.set(key, {
-      billingProduct: line.billingProduct,
-      callerProduct,
-      currency: line.currency,
-      amount: addBillingDecimals(current?.amount ?? '0', amount),
-    });
-  }
-
   const charges = new Map<string, CumulativeCharge>();
-  const multiplierBps = 10_000 + subscription.tariff.markupBps;
-  for (const [key, base] of baseCosts) {
-    const amount = multiplyBillingDecimalByBps(base.amount, multiplierBps);
+  const rated = rateMeteringByCaller({
+    usage,
+    product: subscription.service.identifier,
+    currency: subscription.tariff.currency,
+    terms: {
+      mode: subscription.tariff.mode.toLowerCase() as 'standard' | 'at_cost' | 'custom',
+      markupBps: subscription.tariff.markupBps,
+    },
+    unattributedCaller: UNATTRIBUTED_BILLING_PRODUCT,
+    // Preserve the existing Stripe behaviour: rows with no cost at all do not
+    // create a meter event, while half-present/mismatched cost data fails.
+    missingCost: 'skip',
+  });
+  for (const item of rated) {
+    const key = stripeUsageChargeKey(item.callerProduct, item.currency);
+    const amount = item.total;
     charges.set(key, {
-      ...base,
+      billingProduct: item.billingProduct,
+      callerProduct: item.callerProduct,
+      currency: item.currency,
       amount,
-      quantity: stripeMeterQuantityFromMajorAmount(amount, base.currency),
+      quantity: stripeMeterQuantityFromMajorAmount(amount, item.currency),
     });
   }
   return charges;

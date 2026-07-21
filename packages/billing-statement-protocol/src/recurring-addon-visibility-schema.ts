@@ -85,10 +85,7 @@ export const billingRecurringAddonVisibilityDiscriminatorJsonSchema = {
           required: ['can_manage_addons'],
           properties: { can_manage_addons: { type: 'boolean' } },
         },
-        offers: offerVisibilitySchema(
-          billingRecurringAddonManagerSubscriptionJsonSchema,
-          false,
-        ),
+        offers: offerVisibilitySchema(billingRecurringAddonManagerSubscriptionJsonSchema, false),
       },
     },
     {
@@ -101,10 +98,7 @@ export const billingRecurringAddonVisibilityDiscriminatorJsonSchema = {
           required: ['can_manage_addons'],
           properties: { can_manage_addons: { const: false } },
         },
-        offers: offerVisibilitySchema(
-          billingRecurringAddonMemberSubscriptionJsonSchema,
-          true,
-        ),
+        offers: offerVisibilitySchema(billingRecurringAddonMemberSubscriptionJsonSchema, true),
       },
     },
   ],

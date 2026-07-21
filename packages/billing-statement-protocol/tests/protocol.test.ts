@@ -304,7 +304,7 @@ describe('public BillingCreditsV1 consumer protocol', () => {
     const incompleteBody = structuredClone(manager);
     incompleteBody.automatic_top_up.options[0]!.setup_action.request.body = {
       option_id: 'option_other',
-    } as typeof incompleteBody.automatic_top_up.options[0]['setup_action']['request']['body'];
+    } as (typeof incompleteBody.automatic_top_up.options)[0]['setup_action']['request']['body'];
     expect(validate(incompleteBody)).toBe(false);
   });
 

@@ -30,6 +30,29 @@ function baseInput(overrides?: Partial<NodeJS.ProcessEnv>): NodeJS.ProcessEnv {
 }
 
 describe('env', () => {
+  it('requires private production-safe storage when contract invoice PDFs are enabled', () => {
+    expect(parseEnv(baseInput()).BILLING_INVOICE_STORAGE_PROVIDER).toBe('disabled');
+    expect(() => parseEnv(baseInput({ BILLING_INVOICE_STORAGE_PROVIDER: 'filesystem' }))).toThrow();
+    expect(
+      parseEnv(
+        baseInput({
+          BILLING_INVOICE_STORAGE_PROVIDER: 'filesystem',
+          BILLING_INVOICE_FILESYSTEM_ROOT: '/tmp/uoa-invoices',
+        }),
+      ).BILLING_INVOICE_FILESYSTEM_ROOT,
+    ).toBe('/tmp/uoa-invoices');
+    expect(() =>
+      parseEnv(
+        baseInput({
+          NODE_ENV: 'production',
+          BILLING_INVOICE_STORAGE_PROVIDER: 'filesystem',
+          BILLING_INVOICE_FILESYSTEM_ROOT: '/tmp/uoa-invoices',
+        }),
+      ),
+    ).toThrow();
+    expect(() => parseEnv(baseInput({ BILLING_INVOICE_STORAGE_PROVIDER: 'gcs' }))).toThrow();
+  });
+
   it('accepts ses as EMAIL_PROVIDER', () => {
     const env = parseEnv(baseInput({ EMAIL_PROVIDER: 'ses', AWS_REGION: 'eu-west-1' }));
     expect(env.EMAIL_PROVIDER).toBe('ses');
