@@ -142,6 +142,20 @@ describe('GET /api', () => {
     );
     expect(body.endpoints).toContainEqual(
       expect.objectContaining({
+        method: 'GET',
+        path: '/internal/admin/billing/credit-accounts',
+        auth: expect.stringContaining('superuser'),
+      }),
+    );
+    expect(body.endpoints).toContainEqual(
+      expect.objectContaining({
+        method: 'POST',
+        path: '/internal/admin/billing/credit-accounts/:creditAccountId/adjustments',
+        auth: expect.stringContaining('superuser'),
+      }),
+    );
+    expect(body.endpoints).toContainEqual(
+      expect.objectContaining({
         method: 'POST',
         path: '/billing/v1/stripe/checkout-session',
       }),

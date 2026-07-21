@@ -28,6 +28,37 @@ const tariff = {
   created_at: '2026-07-20T00:00:00.000Z',
 };
 
+const creditAccount = {
+  id: 'credit-account-1',
+  organisation: { id: 'org-1', name: 'Example Org' },
+  team: { id: 'team-1', name: 'Research' },
+  mode: 'live',
+  remaining_credits: {
+    credits: '50000',
+    display: '50,000 credits',
+    usd_equivalent: { amount: '50', currency: 'USD', display: 'US$50.00' },
+  },
+  updated_at: '2026-07-21T10:00:00.000Z',
+  recent_adjustments: [
+    {
+      id: 'credit-adjustment-1',
+      signed_credits: {
+        credits: '50000',
+        display: '+50,000 credits',
+        usd_equivalent: { amount: '50', currency: 'USD', display: '+US$50.00' },
+      },
+      reason: 'Restore the verified pre-test balance',
+      idempotency_key: 'restore:team-1:2026-07-21',
+      created_by: {
+        user_id: 'user-1',
+        email: 'operator@example.com',
+        admin_domain: 'admin.example.com',
+      },
+      created_at: '2026-07-21T10:00:00.000Z',
+    },
+  ],
+};
+
 describe('billingAdminService', () => {
   beforeEach(() => {
     Object.values(api).forEach((mock) => mock.mockReset());
@@ -157,5 +188,42 @@ describe('billingAdminService', () => {
         ends_at: null,
       },
     );
+  });
+
+  it('loads display-ready shared team credit accounts without local conversion', async () => {
+    api.get.mockResolvedValue({ accounts: [creditAccount] });
+
+    const accounts = await billingAdminService.listCreditAccounts();
+
+    expect(api.get).toHaveBeenCalledWith('/internal/admin/billing/credit-accounts');
+    expect(accounts[0]?.remaining_credits.display).toBe('50,000 credits');
+    expect(accounts[0]?.remaining_credits.usd_equivalent.display).toBe('US$50.00');
+    expect(accounts[0]?.recent_adjustments[0]?.signed_credits.display).toBe('+50,000 credits');
+  });
+
+  it('posts a signed team credit delta with exact scope and stable request reference', async () => {
+    api.post.mockResolvedValue({
+      account: creditAccount,
+      adjustment: creditAccount.recent_adjustments[0],
+      replayed: false,
+    });
+
+    const result = await billingAdminService.createCreditAdjustment(creditAccount, {
+      signedCredits: '-2500',
+      reason: 'Reverse a duplicate support grant',
+      idempotencyKey: 'support-reversal:team-1:2026-07-21',
+    });
+
+    expect(api.post).toHaveBeenCalledWith(
+      '/internal/admin/billing/credit-accounts/credit-account-1/adjustments',
+      {
+        organisation_id: 'org-1',
+        team_id: 'team-1',
+        signed_credits: '-2500',
+        reason: 'Reverse a duplicate support grant',
+        idempotency_key: 'support-reversal:team-1:2026-07-21',
+      },
+    );
+    expect(result.replayed).toBe(false);
   });
 });

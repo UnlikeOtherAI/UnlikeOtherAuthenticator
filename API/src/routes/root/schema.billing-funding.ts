@@ -233,4 +233,38 @@ export const billingFundingEndpoints: EndpointSchema[] = [
     notes:
       'UOA rechecks the actor and exact scope under a row lock, uses one stable Stripe idempotency key, and persists the exact result before acknowledging success.',
   },
+  {
+    method: 'GET',
+    path: '/internal/admin/billing/credit-accounts',
+    description:
+      'List exact-team shared credit accounts, display-ready remaining credits, test/live mode, and recent immutable superuser adjustments without Stripe identifiers or raw metering.',
+    auth: 'first-party Admin access token for a current platform superuser',
+    response: {
+      200: 'Display-only exact-team credit accounts and their recent adjustment audit trail',
+      '401/403': 'Missing, invalid, wrong-domain, or no-longer-authorized superuser',
+    },
+    notes: 'Private no-store operator response. The fixed conversion is 1,000 credits = US$1.',
+  },
+  {
+    method: 'POST',
+    path: '/internal/admin/billing/credit-accounts/:creditAccountId/adjustments',
+    description:
+      'Append one signed credit grant or debit to an exact organisation/team account with required reason, actor evidence, and same-account idempotency.',
+    auth: 'first-party Admin access token for a current platform superuser',
+    body: {
+      organisation_id: 'exact UOA organisation ID',
+      team_id: 'exact UOA team ID',
+      signed_credits: 'non-zero decimal credits with at most five decimal places',
+      reason: 'required immutable operator reason',
+      idempotency_key: 'stable operator request key preserved across retries',
+    },
+    response: {
+      201: 'New immutable adjustment and resulting display-ready account',
+      200: 'Exact idempotent replay; no second entry or audit event',
+      '400/409': 'Invalid value/scope, insufficient balance, or changed idempotent intent',
+      '401/403': 'Missing, invalid, wrong-domain, or no-longer-authorized superuser',
+    },
+    notes:
+      'UOA locks the shared account, writes the immutable adjustment and exact linked entry in one serializable transaction, and never exposes microcredits, raw usage, provider cost, or Stripe IDs.',
+  },
 ];

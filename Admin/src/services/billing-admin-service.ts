@@ -12,6 +12,12 @@ import {
   type BillingServiceFormValues,
   type BillingTariffFormValues,
 } from '../schemas/billing';
+import {
+  BillingCreditAccountsResponseSchema,
+  BillingCreditAdjustmentResponseSchema,
+  type BillingCreditAccount,
+  type BillingCreditAdjustmentFormValues,
+} from '../schemas/billing-credits';
 import { createApiClient } from './api-client';
 
 const api = createApiClient();
@@ -167,6 +173,31 @@ export const billingAdminService = {
   async deactivateAdjustment(serviceId: string, adjustmentId: string): Promise<void> {
     await api.delete<unknown>(
       `/internal/admin/billing/services/${encodeURIComponent(serviceId)}/adjustments/${encodeURIComponent(adjustmentId)}`,
+    );
+  },
+
+  async listCreditAccounts(): Promise<BillingCreditAccount[]> {
+    const response = BillingCreditAccountsResponseSchema.parse(
+      await api.get<unknown>('/internal/admin/billing/credit-accounts'),
+    );
+    return response.accounts;
+  },
+
+  async createCreditAdjustment(
+    account: Pick<BillingCreditAccount, 'id' | 'organisation' | 'team'>,
+    input: BillingCreditAdjustmentFormValues,
+  ) {
+    return BillingCreditAdjustmentResponseSchema.parse(
+      await api.post<unknown>(
+        `/internal/admin/billing/credit-accounts/${encodeURIComponent(account.id)}/adjustments`,
+        {
+          organisation_id: account.organisation.id,
+          team_id: account.team.id,
+          signed_credits: input.signedCredits,
+          reason: input.reason,
+          idempotency_key: input.idempotencyKey,
+        },
+      ),
     );
   },
 };

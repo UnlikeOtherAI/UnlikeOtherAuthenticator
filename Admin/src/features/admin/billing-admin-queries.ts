@@ -7,9 +7,14 @@ import type {
   BillingServiceFormValues,
   BillingTariffFormValues,
 } from '../../schemas/billing';
+import type {
+  BillingCreditAccount,
+  BillingCreditAdjustmentFormValues,
+} from '../../schemas/billing-credits';
 import { billingAdminService } from '../../services/billing-admin-service';
 
 const billingServicesKey = ['admin', 'billing', 'services'] as const;
+export const billingCreditAccountsKey = ['admin', 'billing', 'credit-accounts'] as const;
 
 function useRefreshBillingServices() {
   const queryClient = useQueryClient();
@@ -20,6 +25,13 @@ export function useBillingServicesQuery() {
   return useQuery({
     queryKey: billingServicesKey,
     queryFn: billingAdminService.listServices,
+  });
+}
+
+export function useBillingCreditAccountsQuery() {
+  return useQuery({
+    queryKey: billingCreditAccountsKey,
+    queryFn: billingAdminService.listCreditAccounts,
   });
 }
 
@@ -98,5 +110,16 @@ export function useDeactivateBillingAdjustmentMutation(serviceId: string) {
     mutationFn: (adjustmentId: string) =>
       billingAdminService.deactivateAdjustment(serviceId, adjustmentId),
     onSuccess: refresh,
+  });
+}
+
+export function useCreateBillingCreditAdjustmentMutation(account: BillingCreditAccount) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: BillingCreditAdjustmentFormValues) =>
+      billingAdminService.createCreditAdjustment(account, input),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: billingCreditAccountsKey });
+    },
   });
 }

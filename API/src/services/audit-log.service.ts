@@ -28,6 +28,7 @@ export type AdminAuditAction =
   | 'billing.app_key_revoked'
   | 'billing.assignment_removed'
   | 'billing.assignment_upserted'
+  | 'billing.credit_adjustment_created'
   | 'billing.default_tariff_changed'
   | 'billing.service_created'
   | 'billing.stripe_usage_exported'

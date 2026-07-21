@@ -15,6 +15,7 @@ import { BillingServiceDialog } from '../features/admin/BillingServiceDialog';
 import { BillingServicePanel } from '../features/admin/BillingServicePanel';
 import { BillingTariffDialog } from '../features/admin/BillingTariffDialog';
 import { BillingContractsPanel } from '../features/admin/BillingContractsPanel';
+import { BillingCreditAccountsPanel } from '../features/admin/BillingCreditAccountsPanel';
 import type { CreatedBillingAppKey } from '../schemas/billing';
 
 export function BillingPage() {
@@ -26,7 +27,7 @@ export function BillingPage() {
   const [appKeyOpen, setAppKeyOpen] = useState(false);
   const [adjustmentOpen, setAdjustmentOpen] = useState(false);
   const [createdKey, setCreatedKey] = useState<CreatedBillingAppKey | null>(null);
-  const [section, setSection] = useState<'products' | 'contracts'>('products');
+  const [section, setSection] = useState<'products' | 'credits' | 'contracts'>('products');
 
   useEffect(() => {
     if (services.length > 0 && !services.some((service) => service.id === selectedServiceId)) {
@@ -48,7 +49,7 @@ export function BillingPage() {
     <>
       <PageHeader
         title="Billing"
-        description="Global product tariffs, scoped assignments, product credentials, and Stripe lifecycle."
+        description="Global product tariffs, shared team credits, contracts, and Stripe lifecycle."
         badges={
           <>
             <Badge variant="blue">{services.length} services</Badge>
@@ -71,6 +72,7 @@ export function BillingPage() {
         onChange={setSection}
         options={[
           { label: 'Product billing', value: 'products', count: services.length },
+          { label: 'Team credits', value: 'credits' },
           { label: 'Contracts & invoices', value: 'contracts' },
         ]}
       />
@@ -141,6 +143,8 @@ export function BillingPage() {
             </div>
           ) : null}
         </>
+      ) : section === 'credits' ? (
+        <BillingCreditAccountsPanel />
       ) : (
         <BillingContractsPanel
           services={services}

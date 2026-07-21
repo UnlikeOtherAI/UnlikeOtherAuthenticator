@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   revokeAppKey: vi.fn(),
   createAdjustment: vi.fn(),
   deactivateAdjustment: vi.fn(),
+  createCreditBalanceAdjustment: vi.fn(),
 }));
 
 const service = {
@@ -135,6 +136,20 @@ const service = {
   updated_at: '2026-07-20T00:00:00.000Z',
 };
 
+const creditAccount = {
+  id: 'credit-account-1',
+  organisation: { id: 'org-1', name: 'Example Org' },
+  team: { id: 'team-1', name: 'Research' },
+  mode: 'test' as const,
+  remaining_credits: {
+    credits: '25000',
+    display: '25,000 credits',
+    usd_equivalent: { amount: '25', currency: 'USD' as const, display: 'US$25.00' },
+  },
+  updated_at: '2026-07-21T10:00:00.000Z',
+  recent_adjustments: [],
+};
+
 vi.mock('../features/admin/billing-admin-queries', () => ({
   useBillingServicesQuery: () => ({ data: [service], isError: false, isLoading: false }),
   useCreateBillingServiceMutation: () => mutation(mocks.createService),
@@ -146,6 +161,12 @@ vi.mock('../features/admin/billing-admin-queries', () => ({
   useRevokeBillingAppKeyMutation: () => mutation(mocks.revokeAppKey),
   useCreateBillingAdjustmentMutation: () => mutation(mocks.createAdjustment),
   useDeactivateBillingAdjustmentMutation: () => mutation(mocks.deactivateAdjustment),
+  useBillingCreditAccountsQuery: () => ({
+    data: [creditAccount],
+    isError: false,
+    isLoading: false,
+  }),
+  useCreateBillingCreditAdjustmentMutation: () => mutation(mocks.createCreditBalanceAdjustment),
 }));
 
 vi.mock('../features/admin/admin-queries', () => ({
@@ -163,6 +184,7 @@ function mutation(mutateAsync: ReturnType<typeof vi.fn>) {
     isError: false,
     isPending: false,
     mutateAsync,
+    reset: vi.fn(),
   };
 }
 
@@ -211,5 +233,18 @@ describe('BillingPage', () => {
     expect((screen.getByRole('combobox', { name: /Collection/ }) as HTMLSelectElement).value).toBe(
       'none',
     );
+  });
+
+  it('exposes shared team credits as a top-level billing section', async () => {
+    const user = userEvent.setup();
+    render(<BillingPage />);
+
+    await user.click(screen.getByRole('button', { name: 'Team credits' }));
+
+    expect(screen.getByRole('heading', { name: 'Team credit accounts' })).toBeTruthy();
+    expect(screen.getByText('25,000 credits')).toBeTruthy();
+    expect(screen.getByText('US$25.00')).toBeTruthy();
+    expect(screen.getByText('Test')).toBeTruthy();
+    expect(screen.getByText(/1,000 credits = US\$1\.00/)).toBeTruthy();
   });
 });

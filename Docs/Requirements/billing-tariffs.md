@@ -285,6 +285,8 @@ slice.
 | `POST /internal/admin/billing/services/:serviceId/app-keys`                    | Mint a product-bound key and bind its actor verification key                                                             |
 | `DELETE /internal/admin/billing/services/:serviceId/app-keys/:keyId`           | Revoke a product credential                                                                                              |
 | `POST /internal/admin/billing/stripe/usage-exports`                            | Fetch/replay one immutable Ledger subscription-month snapshot and idempotently export its customer-money delta to Stripe |
+| `GET /internal/admin/billing/credit-accounts`                                  | List exact-team remaining credits, test/live mode, and recent immutable admin adjustments                                |
+| `POST /internal/admin/billing/credit-accounts/:creditAccountId/adjustments`    | Append a signed credit grant/debit with exact scope, reason, actor evidence, and stable idempotency                      |
 
 Every mutation writes the existing global admin audit log. Tariff and credential
 tables are denied to the tenant runtime database role and accessed only through
@@ -293,7 +295,9 @@ the bypass-RLS admin connection.
 The Admin `/billing` screen is the operator surface for this control plane. It
 lists product services, immutable tariff versions, scoped assignments, masked
 purpose-bound app keys, Stripe catalog readiness, and test/live subscription
-state. It can create services with a safe `at_cost + none` default, append
+state. Its separate **Team credits** view shows each exact organisation/team
+shared balance, visibly distinguishes test and live mode, and shows the recent
+immutable adjustment trail. It can create services with a safe `at_cost + none` default, append
 versions, move defaults, assign org/team tariffs, and mint/revoke keys. A new
 key's plaintext appears once in a non-recoverable reveal dialog.
 
@@ -792,6 +796,17 @@ an active organisation and exact-team billing manager for every
 customer-initiated funding or consent mutation. Automatic attempts, Stripe
 refunds/disputes, usage settlements, and superuser adjustments use their own
 immutable system/admin proof instead of customer manager authority.
+The superuser adjustment surface accepts a non-zero signed credit decimal with
+at most five decimal places, an exact credit-account/organisation/team binding,
+a required reason, and one stable same-account idempotency key retained across
+retries. Its serializable transaction sets the trusted admin-domain context,
+locks the account, and commits the append-only adjustment, exact linked credit
+entry, and global audit event together. An identical replay returns the original
+result without a second entry or audit; any changed amount, reason, actor, or
+admin domain under that key fails closed. An administrative debit cannot create
+or worsen debt. The operator API/UI exposes only display-ready credits and USD
+equivalents, never internal microcredits, raw usage, provider cost, tokens, or
+Stripe identifiers.
 Failed or canceled refunds and reinstated disputes create explicit reversal
 credit entries. Those entries restore only the principal that remains removed
 after all refund and dispute evidence for the original payment is reconciled,
