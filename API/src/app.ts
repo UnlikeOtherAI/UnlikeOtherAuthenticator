@@ -15,7 +15,7 @@ import { registerErrorHandler } from './middleware/error-handler.js';
 import tenantContextPlugin from './plugins/tenant-context.plugin.js';
 import { registerRoutes } from './routes/index.js';
 import { preloadTariffSnapshotSigningKey } from './services/billing-snapshot.service.js';
-import { startStripeUsageExportScheduler } from './services/billing-stripe-scheduler.service.js';
+import { startStripeBillingScheduler } from './services/billing-stripe-scheduler.service.js';
 import { preloadBillingAssertionSigningKey } from './services/billing-ledger-collector.service.js';
 import { sweepExpiredClaims } from './services/integration-claim.service.js';
 import { pruneExpiredSecurityData } from './services/retention-pruning.service.js';
@@ -207,9 +207,9 @@ export async function createApp(): Promise<FastifyInstance> {
       });
 
       if (env.STRIPE_BILLING_ENABLED) {
-        const stripeUsageScheduler = startStripeUsageExportScheduler({ log: app.log });
+        const stripeBillingScheduler = startStripeBillingScheduler({ log: app.log });
         app.addHook('onClose', async () => {
-          stripeUsageScheduler.stop();
+          stripeBillingScheduler.stop();
         });
       }
     }

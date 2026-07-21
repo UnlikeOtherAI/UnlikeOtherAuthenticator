@@ -13,6 +13,10 @@ import {
   requireStripeBillingEnabled,
   resolveStripeAccountContext,
 } from './billing-stripe-client.service.js';
+import {
+  runCreditAutoTopUpCycle,
+  startCreditAutoTopUpScheduler,
+} from './billing-credit-auto-top-up-runtime.service.js';
 
 type StripeSchedulerClient = Pick<Stripe, 'accounts' | 'billing'>;
 
@@ -235,6 +239,30 @@ export function startStripeUsageExportScheduler(params: {
       clearInterval(timer);
       for (const safetyTimer of safetyTimers.values()) clearTimeout(safetyTimer);
       safetyTimers.clear();
+    },
+  };
+}
+
+export function startStripeBillingScheduler(params: {
+  log: {
+    info: (details: object, message: string) => void;
+    error: (details: object, message: string) => void;
+  };
+  runUsageCycle?: typeof runStripeUsageExportCycle;
+  runAutoTopUpCycle?: typeof runCreditAutoTopUpCycle;
+}): { stop: () => void } {
+  const usage = startStripeUsageExportScheduler({
+    log: params.log,
+    ...(params.runUsageCycle ? { runCycle: params.runUsageCycle } : {}),
+  });
+  const automaticTopUp = startCreditAutoTopUpScheduler({
+    log: params.log,
+    ...(params.runAutoTopUpCycle ? { runCycle: params.runAutoTopUpCycle } : {}),
+  });
+  return {
+    stop: () => {
+      usage.stop();
+      automaticTopUp.stop();
     },
   };
 }

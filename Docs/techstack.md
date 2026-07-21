@@ -263,6 +263,7 @@ All secrets and configuration live in environment variables. Nothing is hardcode
 - `STRIPE_BILLING_ENABLED` — explicit fail-closed process gate; defaults to `false`
 - `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` — UOA's Stripe request key and the separate raw-body webhook verification secret; neither is an app-to-app product key
 - `STRIPE_USAGE_EXPORT_INTERVAL_MINUTES` — recurring active-period export interval (default 60, range 5–1,440)
+- `STRIPE_AUTO_TOP_UP_INTERVAL_MINUTES` — exact-team automatic-credit-top-up poll interval (default 1, range 1–60); inactive under the Stripe billing gate
 - `STRIPE_PRE_BOUNDARY_SAFETY_LEAD_MINUTES` / `STRIPE_PRE_BOUNDARY_SAFETY_OFFSET_MINUTES` — safety-timer horizon and exact pre-boundary offset; the lead must cover the recurring interval plus offset. The final export is webhook-driven after period end
 - `LEDGER_BILLING_BASE_URL` — credential-free HTTPS Ledger origin used only by the UOA collection worker
 - `LEDGER_BILLING_APP_KEY` / `LEDGER_BILLING_APP_KEY_ID` — UOA's own dedicated Ledger raw-metering reader `lk_…` secret and exact public `tk_…` record ID; never another product's key
