@@ -15,7 +15,7 @@ export type StripeAccountContext = {
   livemode: boolean;
 };
 
-function secretKeyLivemode(secretKey: string): boolean {
+export function stripeSecretKeyLivemode(secretKey: string): boolean {
   const match = /^(?:sk|rk)_(test|live)_/.exec(secretKey);
   if (!match) {
     throw new AppError('INTERNAL', 503, 'STRIPE_SECRET_KEY_MODE_UNKNOWN');
@@ -44,7 +44,7 @@ export function requireStripeWebhookConfigured(): {
   if (!env.STRIPE_SECRET_KEY || !env.STRIPE_WEBHOOK_SECRET) {
     throw new AppError('INTERNAL', 503, 'STRIPE_WEBHOOK_DISABLED');
   }
-  const livemode = secretKeyLivemode(env.STRIPE_SECRET_KEY);
+  const livemode = stripeSecretKeyLivemode(env.STRIPE_SECRET_KEY);
   cachedClient ??= new Stripe(env.STRIPE_SECRET_KEY, {
     apiVersion: STRIPE_BILLING_API_VERSION,
     maxNetworkRetries: 2,
