@@ -25,6 +25,10 @@ const LoginRestrictionsSchema = z
 const OrganisationUpdateSchema = LoginRestrictionsSchema.extend({
   twoFaPolicy: z.enum(['inherit', 'off', 'optional', 'required']).optional(),
 }).strict();
+const TeamUpdateSchema = LoginRestrictionsSchema.extend({
+  name: z.string().trim().min(1).max(100).optional(),
+  description: z.string().trim().max(500).nullable().optional(),
+}).strict();
 const CreateOrganisationSchema = z
   .object({
     name: z.string().trim().min(1).max(100),
@@ -86,8 +90,10 @@ export function registerInternalAdminOrganisationRoutes(app: FastifyInstance): v
     adminRoute(nullableObjectSchema),
     async (request) => {
       const { orgId, teamId } = TeamParamsSchema.parse(request.params);
-      const body = LoginRestrictionsSchema.parse(request.body);
+      const body = TeamUpdateSchema.parse(request.body);
       return updateAdminTeam(orgId, teamId, {
+        name: body.name,
+        description: body.description,
         allowedEmailDomains: body.allowed_email_domains,
         allowedEmails: body.allowed_emails,
       });

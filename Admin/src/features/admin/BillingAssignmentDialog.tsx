@@ -100,7 +100,7 @@ export function BillingAssignmentDialog({
             <option value="">Entire organisation</option>
             {eligibleTeams.map((team) => (
               <option key={team.id} value={team.id}>
-                {team.name}
+                {team.name} · {team.orgName} · {team.members} member{team.members === 1 ? '' : 's'}
               </option>
             ))}
           </SelectField>

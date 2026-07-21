@@ -26,6 +26,13 @@ export const NewOrganisationFormSchema = z.object({
 
 export type NewOrganisationFormValues = z.infer<typeof NewOrganisationFormSchema>;
 
+export const TeamFormSchema = z.object({
+  name: z.string().trim().min(1, 'Team name is required.').max(100, 'Team name is too long.'),
+  description: z.string().trim().max(500, 'Description is too long.'),
+});
+
+export type TeamFormValues = z.infer<typeof TeamFormSchema>;
+
 export const RegisterAppFormSchema = z.object({
   name: z.string().trim().min(1, 'App name is required.'),
   identifier: z.string().trim().min(1, 'Identifier is required.'),
