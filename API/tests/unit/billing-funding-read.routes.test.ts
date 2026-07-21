@@ -10,6 +10,13 @@ import {
 const appKeyService = vi.hoisted(() => ({ verifyBillingAppKey: vi.fn() }));
 const creditsService = vi.hoisted(() => ({ getBillingCredits: vi.fn() }));
 const addonsService = vi.hoisted(() => ({ getBillingRecurringAddons: vi.fn() }));
+const addonCheckoutService = vi.hoisted(() => ({ createRecurringAddonCheckout: vi.fn() }));
+const addonPreviewService = vi.hoisted(() => ({
+  createRecurringAddonCancellationPreview: vi.fn(),
+}));
+const addonConfirmService = vi.hoisted(() => ({
+  confirmRecurringAddonCancellation: vi.fn(),
+}));
 
 vi.mock('../../src/services/billing-app-key.service.js', async () => {
   const actual = await vi.importActual<
@@ -18,9 +25,9 @@ vi.mock('../../src/services/billing-app-key.service.js', async () => {
   return { ...actual, ...appKeyService };
 });
 vi.mock('../../src/services/billing-credits.service.js', async () => {
-  const actual = await vi.importActual<typeof import('../../src/services/billing-credits.service.js')>(
-    '../../src/services/billing-credits.service.js',
-  );
+  const actual = await vi.importActual<
+    typeof import('../../src/services/billing-credits.service.js')
+  >('../../src/services/billing-credits.service.js');
   return { ...actual, ...creditsService };
 });
 vi.mock('../../src/services/billing-recurring-addons.service.js', async () => {
@@ -28,6 +35,24 @@ vi.mock('../../src/services/billing-recurring-addons.service.js', async () => {
     typeof import('../../src/services/billing-recurring-addons.service.js')
   >('../../src/services/billing-recurring-addons.service.js');
   return { ...actual, ...addonsService };
+});
+vi.mock('../../src/services/billing-recurring-addon-checkout.service.js', async () => {
+  const actual = await vi.importActual<
+    typeof import('../../src/services/billing-recurring-addon-checkout.service.js')
+  >('../../src/services/billing-recurring-addon-checkout.service.js');
+  return { ...actual, ...addonCheckoutService };
+});
+vi.mock('../../src/services/billing-recurring-addon-cancellation-preview.service.js', async () => {
+  const actual = await vi.importActual<
+    typeof import('../../src/services/billing-recurring-addon-cancellation-preview.service.js')
+  >('../../src/services/billing-recurring-addon-cancellation-preview.service.js');
+  return { ...actual, ...addonPreviewService };
+});
+vi.mock('../../src/services/billing-recurring-addon-cancellation-confirm.service.js', async () => {
+  const actual = await vi.importActual<
+    typeof import('../../src/services/billing-recurring-addon-cancellation-confirm.service.js')
+  >('../../src/services/billing-recurring-addon-cancellation-confirm.service.js');
+  return { ...actual, ...addonConfirmService };
 });
 
 const originalSharedSecret = process.env.SHARED_SECRET;
@@ -68,6 +93,15 @@ beforeEach(() => {
   addonsService.getBillingRecurringAddons.mockResolvedValue(
     billingRecurringAddonV1ConformanceFixtures.recurring_addons,
   );
+  addonCheckoutService.createRecurringAddonCheckout.mockResolvedValue({
+    redirect_url: 'https://checkout.stripe.com/c/pay/cs_test_example',
+  });
+  addonPreviewService.createRecurringAddonCancellationPreview.mockResolvedValue(
+    billingRecurringAddonV1ConformanceFixtures.cancellation_preview,
+  );
+  addonConfirmService.confirmRecurringAddonCancellation.mockResolvedValue(
+    billingRecurringAddonV1ConformanceFixtures.cancellation_confirmation,
+  );
 });
 
 async function withApp(
@@ -93,13 +127,12 @@ describe('shared credits and recurring add-on read routes', () => {
         '/schemas/billing-recurring-addons-v1.example.json',
         '/schemas/billing-recurring-addons-v1.openapi.json',
       ];
-      const responses = await Promise.all(
-        urls.map((url) => app.inject({ method: 'GET', url })),
-      );
+      const responses = await Promise.all(urls.map((url) => app.inject({ method: 'GET', url })));
 
       expect(responses.every((response) => response.statusCode === 200)).toBe(true);
-      expect(responses.every((response) => response.headers['cache-control'] === 'public, max-age=300'))
-        .toBe(true);
+      expect(
+        responses.every((response) => response.headers['cache-control'] === 'public, max-age=300'),
+      ).toBe(true);
       expect(responses[0].json()).toMatchObject({ $id: '/schemas/billing-credits-v1.json' });
       expect(responses[1].json()).toMatchObject({
         schema_version: 1,
@@ -113,7 +146,15 @@ describe('shared credits and recurring add-on read routes', () => {
         recurring_addons: { schema_version: 1 },
         recurring_addons_member: { viewer: { role: 'member' } },
       });
-      expect(responses[5].json()).toMatchObject({ openapi: '3.1.0' });
+      expect(responses[5].json()).toMatchObject({
+        openapi: '3.1.0',
+        paths: {
+          '/billing/v1/recurring-addons': { post: expect.any(Object) },
+          '/billing/v1/recurring-addons/checkout': { post: expect.any(Object) },
+          '/billing/v1/recurring-addons/cancellation/preview': { post: expect.any(Object) },
+          '/billing/v1/recurring-addons/cancellation/confirm': { post: expect.any(Object) },
+        },
+      });
     });
   });
 
@@ -160,6 +201,135 @@ describe('shared credits and recurring add-on read routes', () => {
       expect(addonsService.getBillingRecurringAddons).toHaveBeenCalledWith(
         expect.objectContaining({ actorToken: 'signed-actor', credential }),
       );
+    });
+  });
+
+  it('binds the frozen recurring add-on Checkout action to the lifecycle caller', async () => {
+    await withApp(async (app) => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/billing/v1/recurring-addons/checkout',
+        headers: { 'x-uoa-app-key': 'uoa_app_key', 'x-uoa-actor': 'signed-actor' },
+        payload: { ...body, offer_id: 'offer_privacy' },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.headers['cache-control']).toBe('private, no-store');
+      expect(response.json()).toEqual({
+        redirect_url: 'https://checkout.stripe.com/c/pay/cs_test_example',
+      });
+      expect(addonCheckoutService.createRecurringAddonCheckout).toHaveBeenCalledWith({
+        credential,
+        actorToken: 'signed-actor',
+        request: {
+          product: 'deepwater',
+          organisationId: 'org_example',
+          teamId: 'team_example',
+          userId: 'user_example',
+          offerId: 'offer_privacy',
+        },
+      });
+    });
+  });
+
+  it('relays only UOA-issued recurring add-on cancellation state', async () => {
+    await withApp(async (app) => {
+      const preview = await app.inject({
+        method: 'POST',
+        url: '/billing/v1/recurring-addons/cancellation/preview',
+        headers: { authorization: 'Bearer uoa_app_key', 'x-uoa-actor': 'signed-actor' },
+        payload: { ...body, subscription_id: 'ras_deepwater_privacy_example' },
+      });
+      const confirmationRequest =
+        billingRecurringAddonV1ConformanceFixtures.cancellation_confirm_request;
+      const confirmation = await app.inject({
+        method: 'POST',
+        url: '/billing/v1/recurring-addons/cancellation/confirm',
+        headers: { authorization: 'Bearer uoa_app_key', 'x-uoa-actor': 'signed-actor' },
+        payload: confirmationRequest,
+      });
+
+      expect(preview.statusCode).toBe(200);
+      expect(preview.json()).toEqual(
+        billingRecurringAddonV1ConformanceFixtures.cancellation_preview,
+      );
+      expect(confirmation.statusCode).toBe(200);
+      expect(confirmation.json()).toEqual(
+        billingRecurringAddonV1ConformanceFixtures.cancellation_confirmation,
+      );
+      expect(addonPreviewService.createRecurringAddonCancellationPreview).toHaveBeenCalledWith({
+        credential,
+        actorToken: 'signed-actor',
+        request: {
+          product: 'deepwater',
+          organisationId: 'org_example',
+          teamId: 'team_example',
+          userId: 'user_example',
+          subscriptionId: 'ras_deepwater_privacy_example',
+        },
+      });
+      expect(addonConfirmService.confirmRecurringAddonCancellation).toHaveBeenCalledWith({
+        credential,
+        actorToken: 'signed-actor',
+        request: {
+          product: confirmationRequest.product,
+          organisationId: confirmationRequest.organisation_id,
+          teamId: confirmationRequest.team_id,
+          userId: confirmationRequest.user_id,
+          previewToken: confirmationRequest.preview_token,
+          idempotencyKey: confirmationRequest.idempotency_key,
+          choice: 'cancel_addon',
+        },
+      });
+    });
+  });
+
+  it('rejects caller-invented cancellation choices and extra Checkout fields', async () => {
+    await withApp(async (app) => {
+      const [checkout, preview, confirmation] = await Promise.all([
+        app.inject({
+          method: 'POST',
+          url: '/billing/v1/recurring-addons/checkout',
+          headers: { 'x-uoa-app-key': 'uoa_app_key', 'x-uoa-actor': 'signed-actor' },
+          payload: { ...body, offer_id: 'offer_privacy', price_id: 'price_attacker' },
+        }),
+        app.inject({
+          method: 'POST',
+          url: '/billing/v1/recurring-addons/cancellation/preview',
+          headers: { 'x-uoa-app-key': 'uoa_app_key', 'x-uoa-actor': 'signed-actor' },
+          payload: { ...body, unexpected_subscription: 'ras_attacker' },
+        }),
+        app.inject({
+          method: 'POST',
+          url: '/billing/v1/recurring-addons/cancellation/confirm',
+          headers: { 'x-uoa-app-key': 'uoa_app_key', 'x-uoa-actor': 'signed-actor' },
+          payload: {
+            ...billingRecurringAddonV1ConformanceFixtures.cancellation_confirm_request,
+            choice: 'cancel_everything',
+          },
+        }),
+      ]);
+
+      expect(checkout.statusCode).toBe(400);
+      expect(preview.statusCode).toBe(400);
+      expect(confirmation.statusCode).toBe(400);
+      expect(addonCheckoutService.createRecurringAddonCheckout).not.toHaveBeenCalled();
+      expect(addonPreviewService.createRecurringAddonCancellationPreview).not.toHaveBeenCalled();
+      expect(addonConfirmService.confirmRecurringAddonCancellation).not.toHaveBeenCalled();
+    });
+  });
+
+  it('fails recurring add-on mutations closed without the actor assertion', async () => {
+    await withApp(async (app) => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/billing/v1/recurring-addons/checkout',
+        headers: { 'x-uoa-app-key': 'uoa_app_key' },
+        payload: { ...body, offer_id: 'offer_privacy' },
+      });
+
+      expect(response.statusCode).toBe(401);
+      expect(addonCheckoutService.createRecurringAddonCheckout).not.toHaveBeenCalled();
     });
   });
 

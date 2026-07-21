@@ -849,6 +849,27 @@ an opaque, expiring, one-use intent with an immutable subject fingerprint and
 idempotent result. Expired intents become terminal `EXPIRED` rows before a new
 preview can be issued.
 
+The add-on Checkout runtime accepts only the frozen `offer_id` action returned
+by UOA. It derives the exact organisation/team customer, scope, immutable
+catalog Price, HTTPS return URLs, and stable idempotency key, then creates one
+licensed monthly item with discounts, promotion codes, and automatic tax off.
+The signed Checkout completion is reconciled against a fresh Stripe session and
+subscription and creates only a pending projection. UOA activates entitlement
+only after `invoice.paid` proves the exact `subscription_create` invoice,
+customer, subscription/item/Price, quantity, amount, currency, and absence of
+discounts, tax, credits, shipping, or proration. Removed, added, or rebound UOA
+metadata fails retryably rather than consuming the webhook event.
+
+Cancellation preview refreshes Stripe before minting an opaque five-minute
+capability, stores only its digest, and permits one unresolved intent per exact
+subscription. Confirmation locks that intent, rechecks the lifecycle app key,
+actor, membership, scope manager, immutable offer terms, and current Stripe
+binding, then schedules period-end cancellation with one stable UOA
+idempotency key. An exact replay returns the stored result; a changed token,
+key, choice, subject, scope, or subscription conflicts. Disabling a future
+offer never strands an existing customer: its immutable historical policy and
+terms remain cancellable.
+
 `BillingCreditsV1` and the recurring-add-on protocol are public, MIT-licensed
 interfaces from `@unlikeotherai/billing-statement-protocol`. Their generated
 JSON Schema, fixtures, and OpenAPI 3.1 components are the consumer contract.
@@ -860,6 +881,12 @@ app key plus a fresh exact actor assertion. The read endpoints and settlement
 runtime do not imply that any mutation action is enabled: Checkout, top-up,
 auto-top-up, and add-on actions appear enabled only when their dedicated Stripe
 runtime and fixed UOA policy/catalog evidence are available.
+Enabled add-on actions use
+`POST /billing/v1/recurring-addons/checkout`,
+`POST /billing/v1/recurring-addons/cancellation/preview`, and
+`POST /billing/v1/recurring-addons/cancellation/confirm`; products relay UOA's
+complete frozen bodies and never supply a Price, amount, customer, return URL,
+or alternative cancellation choice.
 
 The customer credit mutations are the frozen routes
 `/billing/v1/credits/top-up-checkout` and

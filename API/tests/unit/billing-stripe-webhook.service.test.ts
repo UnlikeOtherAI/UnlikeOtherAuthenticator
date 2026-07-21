@@ -146,10 +146,19 @@ function setup() {
     },
     billingStripeCheckoutSession: checkoutModel,
     billingStripeSubscription: subscriptionModel,
+    billingRecurringAddonCheckout: {
+      findUnique: vi.fn().mockResolvedValue(null),
+      findFirst: vi.fn().mockResolvedValue(null),
+    },
+    billingRecurringAddonSubscription: {
+      findUnique: vi.fn().mockResolvedValue(null),
+    },
   };
   const prisma = {
     billingStripeAccount: { upsert: vi.fn().mockResolvedValue(account) },
     billingStripeWebhookEvent: { findUnique: eventFind },
+    billingRecurringAddonCheckout: tx.billingRecurringAddonCheckout,
+    billingRecurringAddonSubscription: tx.billingRecurringAddonSubscription,
     $transaction: vi.fn(async (run: (client: typeof tx) => unknown) => run(tx)),
   };
   const stripe = {
@@ -168,6 +177,7 @@ function setup() {
       }),
     },
     checkout: { sessions: { retrieve: vi.fn() } },
+    invoices: { retrieve: vi.fn() },
   };
   const call = (overrides: Partial<NonNullable<Parameters<typeof handleStripeWebhook>[1]>> = {}) =>
     handleStripeWebhook(
@@ -347,16 +357,12 @@ describe('Stripe webhook current-state reconciliation', () => {
         exports: [],
       });
 
-    await expect(
-      state.call({ reconcileInvoice, collectionEnabled: true }),
-    ).rejects.toThrow(
+    await expect(state.call({ reconcileInvoice, collectionEnabled: true })).rejects.toThrow(
       'LEDGER_TEMPORARILY_UNAVAILABLE',
     );
     expect(state.webhookEventCreate).not.toHaveBeenCalled();
 
-    await expect(
-      state.call({ reconcileInvoice, collectionEnabled: true }),
-    ).resolves.toEqual({
+    await expect(state.call({ reconcileInvoice, collectionEnabled: true })).resolves.toEqual({
       duplicate: false,
     });
     expect(reconcileInvoice).toHaveBeenCalledTimes(2);
@@ -372,9 +378,9 @@ describe('Stripe webhook current-state reconciliation', () => {
     } as never);
     const reconcileInvoice = vi.fn();
 
-    await expect(
-      state.call({ reconcileInvoice, collectionEnabled: false }),
-    ).rejects.toThrow('STRIPE_INVOICE_RECONCILIATION_DISABLED');
+    await expect(state.call({ reconcileInvoice, collectionEnabled: false })).rejects.toThrow(
+      'STRIPE_INVOICE_RECONCILIATION_DISABLED',
+    );
     expect(reconcileInvoice).not.toHaveBeenCalled();
     expect(state.webhookEventCreate).not.toHaveBeenCalled();
   });

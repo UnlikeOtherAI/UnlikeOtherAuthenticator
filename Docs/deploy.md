@@ -268,13 +268,14 @@ Before enabling it in production:
    endpoint at `https://authentication.unlikeotherai.com/billing/v1/stripe/webhook`
    pinned to API version `2026-06-24.dahlia`; a different event API version is
    rejected. Subscribe it to exactly:
-
    - `checkout.session.completed`, `checkout.session.expired`;
    - `customer.subscription.created`, `customer.subscription.updated`,
      `customer.subscription.deleted`, `customer.subscription.paused`,
      `customer.subscription.pending_update_applied`, and
      `customer.subscription.resumed`;
-   - `invoice.created`, `invoice.finalization_failed`;
+   - `invoice.created`, `invoice.finalization_failed`, `invoice.paid`,
+     `invoice.payment_failed`, `invoice.marked_uncollectible`, and
+     `invoice.voided`;
    - `payment_intent.succeeded`, `payment_intent.payment_failed`,
      `payment_intent.processing`, `payment_intent.requires_action`, and
      `payment_intent.canceled`;
@@ -285,12 +286,17 @@ Before enabling it in production:
 
    Do not reuse or modify another product's endpoint. Confirm raw-body signature
    validation, signed/current reserved-metadata agreement, and idempotent replay.
+   Prove a recurring add-on Checkout completion creates no entitlement until its
+   exact undiscounted `subscription_create` `invoice.paid` event arrives. Then
+   prove an amount, Price, discount, tax, credit, quantity, item, customer, or
+   subscription mismatch remains retryable and cannot activate the add-on.
    While `STRIPE_BILLING_ENABLED=false`, invoice reconciliation events return a
    retryable error and are not recorded as consumed; reconcile them before or
    immediately after enabling collection. Other UOA lifecycle and corrective
    webhooks remain live when the collection gate is off. The API key must use an
    explicit `sk_test_`/`rk_test_` or `sk_live_`/`rk_live_` prefix; unknown mode
    fails startup. Confirm `/v1/account` resolves the intended Stripe account.
+
 4. Mint a separate `customer_lifecycle` `uoa_app_…` key for each
    product/deployment. Use it for that product's mandatory post-SSO
    `/billing/v1/service-access/confirm` call, canonical statement, shared-credit

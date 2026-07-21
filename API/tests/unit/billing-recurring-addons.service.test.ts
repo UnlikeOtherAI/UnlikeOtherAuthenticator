@@ -78,13 +78,11 @@ function addonData(
         updatedAt: now,
       },
     ],
+    checkouts: [],
   };
 }
 
-function dependencies(
-  data: ReturnType<typeof addonData>,
-  billingManager: boolean,
-) {
+function dependencies(data: ReturnType<typeof addonData>, billingManager: boolean) {
   return {
     now: () => now,
     resolveEntitlement: vi.fn().mockResolvedValue({ actor: {}, payload: {} }),
@@ -128,35 +126,33 @@ describe('privacy-safe recurring add-on scopes', () => {
       userId: 'user_secret_other',
       relationship: 'other_team_member',
     },
-  ])('shows $scope entitlement without leaking owner identity to members', async ({
-    scope,
-    entitlementScope,
-    userId,
-    relationship,
-  }) => {
-    const result = await getBillingRecurringAddons(
-      { request, actorToken: 'signed-actor', credential },
-      dependencies(addonData(scope, entitlementScope, userId), false) as never,
-    );
-    const serialized = JSON.stringify(result);
+  ])(
+    'shows $scope entitlement without leaking owner identity to members',
+    async ({ scope, entitlementScope, userId, relationship }) => {
+      const result = await getBillingRecurringAddons(
+        { request, actorToken: 'signed-actor', credential },
+        dependencies(addonData(scope, entitlementScope, userId), false) as never,
+      );
+      const serialized = JSON.stringify(result);
 
-    expect(() => assertBillingRecurringAddonsContract(result)).not.toThrow();
-    expect(result).toMatchObject({
-      viewer: { role: 'member' },
-      capabilities: { can_manage_addons: false },
-      offers: [
-        {
-          key: 'privacy',
-          monthly_price: { amount: '50', amount_minor: '5000' },
-          entitlement: { state: 'active' },
-          subscription: { owner_relationship: relationship },
-          actions: [],
-        },
-      ],
-    });
-    expect(serialized).not.toContain('subscription_secret');
-    expect(serialized).not.toContain('user_secret_other');
-  });
+      expect(() => assertBillingRecurringAddonsContract(result)).not.toThrow();
+      expect(result).toMatchObject({
+        viewer: { role: 'member' },
+        capabilities: { can_manage_addons: false },
+        offers: [
+          {
+            key: 'privacy',
+            monthly_price: { amount: '50', amount_minor: '5000' },
+            entitlement: { state: 'active' },
+            subscription: { owner_relationship: relationship },
+            actions: [],
+          },
+        ],
+      });
+      expect(serialized).not.toContain('subscription_secret');
+      expect(serialized).not.toContain('user_secret_other');
+    },
+  );
 
   it('gives billing managers the exact subscription and subscribing-user identity', async () => {
     const result = await getBillingRecurringAddons(
@@ -174,14 +170,27 @@ describe('privacy-safe recurring add-on scopes', () => {
     expect(() => assertBillingRecurringAddonsContract(result)).not.toThrow();
     expect(result).toMatchObject({
       viewer: { role: 'billing_manager' },
-      capabilities: { can_manage_addons: false },
+      capabilities: { can_manage_addons: true },
       offers: [
         {
           subscription: {
             id: 'subscription_secret',
             owner_user_id: 'user_secret_other',
           },
-          actions: [],
+          actions: [
+            {
+              id: 'cancel',
+              enabled: true,
+              request: {
+                body: {
+                  subscription_id: 'subscription_secret',
+                  organisation_id: request.organisationId,
+                  team_id: request.teamId,
+                  user_id: request.userId,
+                },
+              },
+            },
+          ],
         },
       ],
     });

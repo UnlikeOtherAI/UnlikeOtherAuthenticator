@@ -100,7 +100,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
         effective-tariff.ts — Product-bound app-key + signed-actor tariff resolution
         funding-artifacts.ts — Public credit/add-on JSON Schema, fixture, and OpenAPI artifacts
         jwks.ts             — GET /billing/v1/jwks.json (snapshot verification keys)
-        recurring-addons.ts — POST /billing/v1/recurring-addons and strict protocol validation
+        recurring-addons.ts — Strict add-on read, Checkout, cancellation-preview, and cancellation-confirm routes
         stripe-checkout.ts  — Purpose-bound hosted Checkout creation/recovery
         stripe-subscription.ts — Safe summary, portal, and period-end cancellation
         stripe-webhook.ts   — Exact-raw-body Stripe lifecycle reconciliation
@@ -205,6 +205,13 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       billing-ledger-collector.service.ts   — Strict immutable Ledger usage/portfolio snapshots
       billing-rating.service.ts             — Shared exact statement, Stripe, and contract-invoice rating core
       billing-recurring-addons.service.ts   — Privacy-safe exact-scope recurring add-on projection
+      billing-recurring-addon-catalog.service.ts — Immutable offer/catalog to exact Stripe Product/monthly Price binding
+      billing-recurring-addon-checkout.service.ts — Scope-authorized one-item add-on Checkout and race recovery
+      billing-recurring-addon-cancellation-preview.service.ts — Current-state refresh and opaque five-minute cancellation capability
+      billing-recurring-addon-cancellation-confirm.service.ts — Locked replay-safe period-end cancellation
+      billing-recurring-addon-subscription.service.ts — Exact Stripe add-on subscription validation and terminal projection
+      billing-recurring-addon-webhook.service.ts — Signed/current Checkout, subscription, and initial-invoice proof
+      billing-recurring-addon-webhook-apply.service.ts — Atomic add-on projection, activation, and deactivation writes
       billing-contract-guard.service.ts     — Active-contract assignment mutation guard
       billing-contract.service.ts           — Immutable org contracts and atomic service tariff projection
       billing-invoice-calculation.service.ts — Closed-month org calculator and private evidence persistence
@@ -471,8 +478,13 @@ reversals can produce debt. Cursor replay is idempotent and a conflicting or
 partially persisted cursor fails closed. `billing-credit-projection.service.ts`
 then returns the strict manager or member protocol branch, with `Remaining
 credits` first and no cross-user/card leakage to members. Recurring add-ons use
-the same lifecycle and viewer boundary but remain a separate, read-only
-subscription projection.
+the same lifecycle and viewer boundary but remain a separate subscription and
+entitlement path. Managers relay exact frozen actions to UOA's Checkout and
+cancellation routes. Checkout creates a one-item licensed monthly Stripe
+subscription but no entitlement; only an exact undiscounted initial
+`invoice.paid` proof activates it. Opaque five-minute cancellation intents are
+single-use, exact-subject-bound, row-locked, and replay their stored result.
+Stripe lifecycle events terminalize the entitlement without resurrection.
 
 The platform-superuser contract-invoice boundary is separate from the
 product-facing statement. `billing-contract.service.ts` owns immutable
