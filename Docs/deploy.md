@@ -357,6 +357,10 @@ Prerequisites:
   mode. The command rejects a test/live mismatch before its first network call.
 - `DATABASE_ADMIN_URL`, falling back to `DATABASE_URL`, must target the intended
   UOA database.
+- The provisioner constructs its own short-lived admin Prisma client from that
+  URL. It intentionally does not load or require unrelated API-server settings
+  such as `SHARED_SECRET`, which keeps the documented two-secret operator job
+  isolated from the runtime service configuration.
 - The database must contain exactly the active billing services `nessie`,
   `deepwater`, `deepsignal`, and `deeptest`, and exactly one active,
   feature-flags-enabled app identified as `deepwater-api`. Unexpected active

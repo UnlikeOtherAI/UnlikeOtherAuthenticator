@@ -1,6 +1,6 @@
+import { PrismaClient } from '@prisma/client';
 import Stripe from 'stripe';
 
-import { disconnectPrisma } from '../db/prisma.js';
 import {
   STRIPE_BILLING_API_VERSION,
   stripeSecretKeyLivemode,
@@ -8,6 +8,7 @@ import {
 import { provisionStripeCommercialCatalog } from '../services/billing-stripe-catalog-provisioning.service.js';
 import { AppError, isAppError } from '../utils/errors.js';
 import { parseStripeCatalogCliArgs } from './stripe-catalog-provisioning-args.js';
+import { resolveStripeCatalogDatabaseUrl } from './stripe-catalog-provisioning-runtime.js';
 
 function usage(): string {
   return `Usage:
@@ -38,25 +39,31 @@ async function main(): Promise<void> {
   if (actualLivemode !== options.livemode) {
     throw new AppError('INTERNAL', 409, 'STRIPE_COMMERCIAL_CATALOG_MODE_MISMATCH');
   }
+  const prisma = new PrismaClient({
+    datasources: { db: { url: resolveStripeCatalogDatabaseUrl(process.env) } },
+  });
   const stripe = new Stripe(secretKey, {
     apiVersion: STRIPE_BILLING_API_VERSION,
     maxNetworkRetries: 2,
     timeout: 20_000,
   });
-  const result = await provisionStripeCommercialCatalog({
-    stripe,
-    expectedStripeAccountId: options.stripeAccountId,
-    expectedLivemode: options.livemode,
-    dryRun: options.dryRun,
-  });
-  process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  try {
+    const result = await provisionStripeCommercialCatalog(
+      {
+        stripe,
+        expectedStripeAccountId: options.stripeAccountId,
+        expectedLivemode: options.livemode,
+        dryRun: options.dryRun,
+      },
+      { prisma },
+    );
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  } finally {
+    await prisma.$disconnect();
+  }
 }
 
-main()
-  .catch((error: unknown) => {
-    process.stderr.write(`${JSON.stringify({ error: safeErrorCode(error) })}\n`);
-    process.exitCode = 1;
-  })
-  .finally(async () => {
-    await disconnectPrisma();
-  });
+main().catch((error: unknown) => {
+  process.stderr.write(`${JSON.stringify({ error: safeErrorCode(error) })}\n`);
+  process.exitCode = 1;
+});
