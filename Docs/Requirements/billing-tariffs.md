@@ -981,6 +981,13 @@ off), an exact TEAM feature policy, and recurring add-on key/version
 `deep-water`; UOA's canonical billing-service key remains `deepwater`. Neither
 form is a local database identifier.
 
+The paid privacy flag is the exact `deepwater-api` / `can_be_private`
+definition, remains default-off, and is described as a team entitlement. The
+normalization migration accepts only the exact pre-billing description and
+refuses to reinterpret any existing role or user override; those grants must be
+reviewed and removed explicitly before a deployment can adopt the paid,
+team-scoped contract.
+
 ### Contract invoice calculator and invoice privacy
 
 Contract pricing is UOA-owned and administrated only by platform superusers.
