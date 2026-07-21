@@ -1,4 +1,7 @@
-import { billingErrorEnvelopeJsonSchema, billingHostedRedirectResponseJsonSchema } from './action-schema.js';
+import {
+  billingErrorEnvelopeJsonSchema,
+  billingHostedRedirectResponseJsonSchema,
+} from './action-schema.js';
 import { billingRecurringAddonV1ConformanceFixtures } from './recurring-addon-conformance-fixtures.js';
 import {
   billingSubjectActionBodySchema,
@@ -43,10 +46,9 @@ function selectorBody(selector: 'offer_id' | 'subscription_id') {
     required: true,
     content: {
       'application/json': {
-        schema: billingSubjectActionBodySchema(
-          { [selector]: { type: 'string', minLength: 1 } },
-          [selector],
-        ),
+        schema: billingSubjectActionBodySchema({ [selector]: { type: 'string', minLength: 1 } }, [
+          selector,
+        ]),
       },
     },
   } as const;
@@ -212,5 +214,4 @@ export const billingRecurringAddonV1OpenApiDocument = {
   },
 } as const;
 
-export type BillingRecurringAddonV1OpenApiDocument =
-  typeof billingRecurringAddonV1OpenApiDocument;
+export type BillingRecurringAddonV1OpenApiDocument = typeof billingRecurringAddonV1OpenApiDocument;

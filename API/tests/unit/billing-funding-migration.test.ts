@@ -28,11 +28,11 @@ describe('billing funding foundation migration', () => {
     const sql = await readFile(migrationUrl, 'utf8');
 
     expect(sql).toContain('billing_assert_credit_app_key');
-    expect(sql).toContain("key.\"purpose\" = 'CUSTOMER_LIFECYCLE'");
+    expect(sql).toContain('key."purpose" = \'CUSTOMER_LIFECYCLE\'');
     expect(sql).toContain('completed credit checkout proof is immutable');
     expect(sql).toContain('successful automatic top-up does not match its immutable entry');
     expect(sql).toContain('Stripe payment adjustment evidence is not exact');
-    expect(sql).not.toContain("'REVERSAL'::\"BillingCreditEntryKind\"");
+    expect(sql).not.toContain('\'REVERSAL\'::"BillingCreditEntryKind"');
   });
 
   it('makes consent immutable, caps automatic charges, and fails closed after payment trouble', async () => {
@@ -60,8 +60,10 @@ describe('billing funding foundation migration', () => {
     const sql = await readFile(migrationUrl, 'utf8');
 
     expect(sql).toContain('"perspective_service_id"');
-    expect(sql).toContain("\"group_by\" = 'user'");
-    expect(sql).toContain('settlement adjustment must use the exact team-wide user portfolio snapshot');
+    expect(sql).toContain('"group_by" = \'user\'');
+    expect(sql).toContain(
+      'settlement adjustment must use the exact team-wide user portfolio snapshot',
+    );
     expect(sql).toContain('settlement adjustment sequence does not continue the locked chain');
     expect(sql).toContain('usage allocation totals must equal the aggregate settlement adjustment');
     expect(sql).toContain('Stripe credit line must project the latest exact settlement cumulative');
@@ -86,7 +88,7 @@ describe('billing funding foundation migration', () => {
 
     expect(sql).toContain("current_setting('app.admin_auth_domain', true)");
     expect(sql).toContain('NEW."created_by_admin_domain"');
-    expect(sql).toContain("role.\"role\" = 'SUPERUSER'");
+    expect(sql).toContain('role."role" = \'SUPERUSER\'');
     expect(sql).toContain('credit admin adjustment requires exact team and superuser evidence');
   });
 

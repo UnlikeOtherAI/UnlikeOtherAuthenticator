@@ -9,6 +9,10 @@ import {
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import {
+  assertContractAssignmentRemovalAllowed,
+  assertContractAssignmentWriteAllowed,
+} from './billing-contract-guard.service.js';
+import {
   assertDefaultTariffChangeAllowed,
   assertTariffAssignmentChangeAllowed,
   assertTariffAssignmentRemovalAllowed,
@@ -342,6 +346,11 @@ export async function upsertBillingTariffAssignment(
     if (!service?.active || !tariff || !org || (params.teamId && !team)) {
       throw new AppError('BAD_REQUEST', 400, 'INVALID_TARIFF_ASSIGNMENT');
     }
+    await assertContractAssignmentWriteAllowed(tx, {
+      serviceId: params.serviceId,
+      organisationId: params.organisationId,
+      teamId: params.teamId ?? null,
+    });
 
     const scope = params.teamId ? BillingAssignmentScope.TEAM : BillingAssignmentScope.ORGANISATION;
     const scopeKey = params.teamId
@@ -424,6 +433,7 @@ export async function removeBillingTariffAssignment(
     if (!assignment) {
       throw new AppError('NOT_FOUND', 404, 'BILLING_ASSIGNMENT_NOT_FOUND');
     }
+    await assertContractAssignmentRemovalAllowed(tx, assignment.id);
     await assertTariffAssignmentRemovalAllowed(tx, assignment.id);
     await tx.billingTariffAssignment.delete({ where: { id: assignment.id } });
     await tx.adminAuditLog.create({

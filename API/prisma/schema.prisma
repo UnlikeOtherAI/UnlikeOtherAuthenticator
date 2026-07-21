@@ -134,6 +134,33 @@ enum BillingCancellationIntentState {
   COMPLETED
 }
 
+enum BillingOrganisationContractStatus {
+  DRAFT
+  ACTIVE
+  TERMINATED
+}
+
+enum BillingInvoiceStatus {
+  DRAFT
+  ISSUING
+  ISSUED
+  VOID
+}
+
+enum BillingInvoicePaymentEventKind {
+  PAYMENT
+  REFUND
+  WRITE_OFF
+}
+
+enum BillingInvoicePaymentEventSource {
+  MANUAL
+}
+
+enum BillingInvoiceAddonCollection {
+  STRIPE_SEPARATE
+}
+
 enum BillingCreditEntryDirection {
   CREDIT
   DEBIT
@@ -235,36 +262,36 @@ enum ConfidentialDelegationScope {
 }
 
 model User {
-  id                            String                                  @id @default(cuid())
+  id                                   String                                    @id @default(cuid())
   // Note: email is not globally unique because `user_scope` can be "per_domain".
   // Uniqueness is enforced via `user_key` instead (global: email, per_domain: domain|email).
-  email                         String                                  @db.Citext
-  userKey                       String                                  @unique @map("user_key")
-  domain                        String?
-  passwordHash                  String?                                 @map("password_hash")
-  name                          String?
-  twoFaEnabled                  Boolean                                 @default(false) @map("2fa_enabled")
-  twoFaSecret                   String?                                 @map("2fa_secret")
-  twoFaLastAcceptedCounter      Int?                                    @map("2fa_last_accepted_counter")
-  avatarUrl                     String?                                 @map("avatar_url")
-  tokenVersion                  Int                                     @default(0) @map("token_version")
-  createdAt                     DateTime                                @default(now()) @map("created_at")
-  billingStripeCheckouts        BillingStripeCheckoutSession[]
-  billingServiceAccesses        BillingServiceAccess[]
-  billingCancellationIntents    BillingCancellationIntent[]
-  billingCreditConsents         BillingCreditAccount[]                  @relation("CreditAutoTopUpConsent")
-  billingCreditConsentRevisions BillingCreditAutoTopUpConsentRevision[] @relation("CreditAutoTopUpRevisionConsenter")
-  billingCreditEntries          BillingCreditEntry[]                    @relation("CreditEntryAttribution")
-  billingCreditTopUps           BillingCreditTopUpCheckout[]            @relation("CreditTopUpRequester")
-  billingCreditSetups           BillingCreditSetupCheckout[]            @relation("CreditSetupRequester")
-  billingCreditAutoTopUps       BillingCreditAutoTopUpAttempt[]         @relation("CreditAutoTopUpAttribution")
-  billingCreditUsageAllocations BillingCreditUsageAllocation[]          @relation("CreditUsageAllocationAttribution")
-  billingCreditAdminAdjustments BillingCreditAdminAdjustment[]          @relation("CreditAdminAdjustmentCreator")
-  recurringAddonCheckouts       BillingRecurringAddonCheckout[]         @relation("RecurringAddonCheckoutRequester")
-  recurringAddonSubscriptionsAsUser BillingRecurringAddonSubscription[] @relation("RecurringAddonSubscriptionSubscriber")
-  recurringAddonCheckoutsAsUser BillingRecurringAddonCheckout[]         @relation("RecurringAddonCheckoutSubscriber")
+  email                                String                                    @db.Citext
+  userKey                              String                                    @unique @map("user_key")
+  domain                               String?
+  passwordHash                         String?                                   @map("password_hash")
+  name                                 String?
+  twoFaEnabled                         Boolean                                   @default(false) @map("2fa_enabled")
+  twoFaSecret                          String?                                   @map("2fa_secret")
+  twoFaLastAcceptedCounter             Int?                                      @map("2fa_last_accepted_counter")
+  avatarUrl                            String?                                   @map("avatar_url")
+  tokenVersion                         Int                                       @default(0) @map("token_version")
+  createdAt                            DateTime                                  @default(now()) @map("created_at")
+  billingStripeCheckouts               BillingStripeCheckoutSession[]
+  billingServiceAccesses               BillingServiceAccess[]
+  billingCancellationIntents           BillingCancellationIntent[]
+  billingCreditConsents                BillingCreditAccount[]                    @relation("CreditAutoTopUpConsent")
+  billingCreditConsentRevisions        BillingCreditAutoTopUpConsentRevision[]   @relation("CreditAutoTopUpRevisionConsenter")
+  billingCreditEntries                 BillingCreditEntry[]                      @relation("CreditEntryAttribution")
+  billingCreditTopUps                  BillingCreditTopUpCheckout[]              @relation("CreditTopUpRequester")
+  billingCreditSetups                  BillingCreditSetupCheckout[]              @relation("CreditSetupRequester")
+  billingCreditAutoTopUps              BillingCreditAutoTopUpAttempt[]           @relation("CreditAutoTopUpAttribution")
+  billingCreditUsageAllocations        BillingCreditUsageAllocation[]            @relation("CreditUsageAllocationAttribution")
+  billingCreditAdminAdjustments        BillingCreditAdminAdjustment[]            @relation("CreditAdminAdjustmentCreator")
+  recurringAddonCheckouts              BillingRecurringAddonCheckout[]           @relation("RecurringAddonCheckoutRequester")
+  recurringAddonSubscriptionsAsUser    BillingRecurringAddonSubscription[]       @relation("RecurringAddonSubscriptionSubscriber")
+  recurringAddonCheckoutsAsUser        BillingRecurringAddonCheckout[]           @relation("RecurringAddonCheckoutSubscriber")
   recurringAddonCancellationsRequested BillingRecurringAddonCancellationIntent[] @relation("RecurringAddonCancellationRequester")
-  recurringAddonCancellationsAsUser BillingRecurringAddonCancellationIntent[] @relation("RecurringAddonCancellationSubscriber")
+  recurringAddonCancellationsAsUser    BillingRecurringAddonCancellationIntent[] @relation("RecurringAddonCancellationSubscriber")
 
   domainRoles            DomainRole[]
   authIdentities         AuthIdentity[]
@@ -872,29 +899,32 @@ model Organisation {
   createdAt           DateTime     @default(now()) @map("created_at")
   updatedAt           DateTime     @updatedAt @map("updated_at")
 
-  owner                           User                                    @relation("OrgOwner", fields: [ownerId], references: [id], onDelete: Restrict)
-  members                         OrgMember[]
-  teams                           Team[]
-  groups                          Group[]
-  invites                         TeamInvite[]
-  inviteLinks                     TeamInviteLink[]
-  accessRequests                  AccessRequest[]
-  apps                            App[]
-  bans                            Ban[]
-  billingTariffAssignments        BillingTariffAssignment[]
-  billingStripeCustomers          BillingStripeCustomer[]
-  billingStripeCheckouts          BillingStripeCheckoutSession[]
-  billingStripeSubscriptions      BillingStripeSubscription[]
-  billingServiceAccesses          BillingServiceAccess[]
-  billingAdjustments              BillingCommercialAdjustment[]
-  billingCancellationIntents      BillingCancellationIntent[]
-  billingCredits                  BillingCreditAccount[]
-  billingCreditAdminAdjustments   BillingCreditAdminAdjustment[]
-  billingCreditPortfolioSnapshots BillingCreditPortfolioSnapshot[]
-  billingCreditConsentRevisions   BillingCreditAutoTopUpConsentRevision[]
-  recurringAddonCheckouts         BillingRecurringAddonCheckout[]
-  recurringAddonSubscriptions     BillingRecurringAddonSubscription[]
+  owner                             User                                      @relation("OrgOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  members                           OrgMember[]
+  teams                             Team[]
+  groups                            Group[]
+  invites                           TeamInvite[]
+  inviteLinks                       TeamInviteLink[]
+  accessRequests                    AccessRequest[]
+  apps                              App[]
+  bans                              Ban[]
+  billingTariffAssignments          BillingTariffAssignment[]
+  billingStripeCustomers            BillingStripeCustomer[]
+  billingStripeCheckouts            BillingStripeCheckoutSession[]
+  billingStripeSubscriptions        BillingStripeSubscription[]
+  billingServiceAccesses            BillingServiceAccess[]
+  billingAdjustments                BillingCommercialAdjustment[]
+  billingCancellationIntents        BillingCancellationIntent[]
+  billingCredits                    BillingCreditAccount[]
+  billingCreditAdminAdjustments     BillingCreditAdminAdjustment[]
+  billingCreditPortfolioSnapshots   BillingCreditPortfolioSnapshot[]
+  billingCreditConsentRevisions     BillingCreditAutoTopUpConsentRevision[]
+  recurringAddonCheckouts           BillingRecurringAddonCheckout[]
+  recurringAddonSubscriptions       BillingRecurringAddonSubscription[]
   recurringAddonCancellationIntents BillingRecurringAddonCancellationIntent[]
+  billingContracts                  BillingOrganisationContract[]
+  billingInvoiceProfiles            BillingOrganisationInvoiceProfile[]
+  billingInvoices                   BillingInvoice[]
 
   @@unique([domain, slug])
   @@index([domain])
@@ -1059,28 +1089,28 @@ model Team {
   iconUrl    String?        @map("icon_url") // external URL only, no local storage (brief §15); §11.3
   joinPolicy TeamJoinPolicy @default(INVITE_ONLY) @map("join_policy") // design §4.6
 
-  org                             Organisation                            @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  group                           Group?                                  @relation(fields: [groupId], references: [id], onDelete: SetNull)
-  members                         TeamMember[]
-  invites                         TeamInvite[]
-  inviteLinks                     TeamInviteLink[]
-  accessRequests                  AccessRequest[]
-  bans                            Ban[]
-  billingTariffAssignments        BillingTariffAssignment[]
-  billingStripeCustomers          BillingStripeCustomer[]
-  billingStripeCheckouts          BillingStripeCheckoutSession[]
-  billingStripeSubscriptions      BillingStripeSubscription[]
-  billingServiceAccesses          BillingServiceAccess[]
-  billingAdjustments              BillingCommercialAdjustment[]
-  billingCancellationIntents      BillingCancellationIntent[]
-  billingCredits                  BillingCreditAccount[]
-  billingCreditAdminAdjustments   BillingCreditAdminAdjustment[]
-  billingCreditPortfolioSnapshots BillingCreditPortfolioSnapshot[]
-  billingCreditConsentRevisions   BillingCreditAutoTopUpConsentRevision[]
-  recurringAddonScopeCheckouts    BillingRecurringAddonCheckout[] @relation("RecurringAddonCheckoutScopeTeam")
-  recurringAddonRequestCheckouts  BillingRecurringAddonCheckout[] @relation("RecurringAddonCheckoutRequestTeam")
-  recurringAddonSubscriptions     BillingRecurringAddonSubscription[]
-  recurringAddonCancellationScopeIntents BillingRecurringAddonCancellationIntent[] @relation("RecurringAddonCancellationScopeTeam")
+  org                                      Organisation                              @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  group                                    Group?                                    @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  members                                  TeamMember[]
+  invites                                  TeamInvite[]
+  inviteLinks                              TeamInviteLink[]
+  accessRequests                           AccessRequest[]
+  bans                                     Ban[]
+  billingTariffAssignments                 BillingTariffAssignment[]
+  billingStripeCustomers                   BillingStripeCustomer[]
+  billingStripeCheckouts                   BillingStripeCheckoutSession[]
+  billingStripeSubscriptions               BillingStripeSubscription[]
+  billingServiceAccesses                   BillingServiceAccess[]
+  billingAdjustments                       BillingCommercialAdjustment[]
+  billingCancellationIntents               BillingCancellationIntent[]
+  billingCredits                           BillingCreditAccount[]
+  billingCreditAdminAdjustments            BillingCreditAdminAdjustment[]
+  billingCreditPortfolioSnapshots          BillingCreditPortfolioSnapshot[]
+  billingCreditConsentRevisions            BillingCreditAutoTopUpConsentRevision[]
+  recurringAddonScopeCheckouts             BillingRecurringAddonCheckout[]           @relation("RecurringAddonCheckoutScopeTeam")
+  recurringAddonRequestCheckouts           BillingRecurringAddonCheckout[]           @relation("RecurringAddonCheckoutRequestTeam")
+  recurringAddonSubscriptions              BillingRecurringAddonSubscription[]
+  recurringAddonCancellationScopeIntents   BillingRecurringAddonCancellationIntent[] @relation("RecurringAddonCancellationScopeTeam")
   recurringAddonCancellationRequestIntents BillingRecurringAddonCancellationIntent[] @relation("RecurringAddonCancellationRequestTeam")
 
   @@unique([orgId, name])
@@ -1312,35 +1342,40 @@ model BillingService {
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
 
-  tariffs                       BillingTariff[]
-  assignments                   BillingTariffAssignment[]
-  appKeys                       BillingAppKey[]
-  stripeCatalogs                BillingStripeCatalog[]
-  stripeCheckouts               BillingStripeCheckoutSession[]
-  stripeSubscriptions           BillingStripeSubscription[]
-  accesses                      BillingServiceAccess[]
-  adjustments                   BillingCommercialAdjustment[]
-  cancellationIntents           BillingCancellationIntent[]
-  creditFundingPolicies         BillingCreditFundingPolicy[]
-  creditTopUpOffers             BillingCreditTopUpOffer[]
-  creditAutoTopUpOptions        BillingCreditAutoTopUpOption[]
-  creditAccountAutoTopUps       BillingCreditAccount[]                   @relation("CreditAccountAutoTopUpService")
-  creditEntries                 BillingCreditEntry[]
-  creditPaymentAdjustments      BillingCreditPaymentAdjustment[]
-  creditTopUpCheckouts          BillingCreditTopUpCheckout[]
-  creditSetupCheckouts          BillingCreditSetupCheckout[]
-  creditAutoTopUpAttempts       BillingCreditAutoTopUpAttempt[]
-  creditSettlements             BillingCreditUsageSettlement[]
-  creditSettlementAdjustments   BillingCreditUsageSettlementAdjustment[]
-  creditUsageAllocations        BillingCreditUsageAllocation[]
-  creditConsentRevisions        BillingCreditAutoTopUpConsentRevision[]
-  creditPortfolioPerspectives   BillingCreditPortfolioSnapshot[]         @relation("CreditPortfolioPerspectiveService")
-  recurringAddonOffers          BillingRecurringAddonOffer[]
-  recurringAddonCatalogs        BillingRecurringAddonCatalog[]
-  recurringAddonCheckouts       BillingRecurringAddonCheckout[]
-  recurringAddonSubscriptions   BillingRecurringAddonSubscription[]
-  recurringAddonFeaturePolicies BillingRecurringAddonFeaturePolicy[]
+  tariffs                           BillingTariff[]
+  assignments                       BillingTariffAssignment[]
+  appKeys                           BillingAppKey[]
+  stripeCatalogs                    BillingStripeCatalog[]
+  stripeCheckouts                   BillingStripeCheckoutSession[]
+  stripeSubscriptions               BillingStripeSubscription[]
+  accesses                          BillingServiceAccess[]
+  adjustments                       BillingCommercialAdjustment[]
+  cancellationIntents               BillingCancellationIntent[]
+  creditFundingPolicies             BillingCreditFundingPolicy[]
+  creditTopUpOffers                 BillingCreditTopUpOffer[]
+  creditAutoTopUpOptions            BillingCreditAutoTopUpOption[]
+  creditAccountAutoTopUps           BillingCreditAccount[]                    @relation("CreditAccountAutoTopUpService")
+  creditEntries                     BillingCreditEntry[]
+  creditPaymentAdjustments          BillingCreditPaymentAdjustment[]
+  creditTopUpCheckouts              BillingCreditTopUpCheckout[]
+  creditSetupCheckouts              BillingCreditSetupCheckout[]
+  creditAutoTopUpAttempts           BillingCreditAutoTopUpAttempt[]
+  creditSettlements                 BillingCreditUsageSettlement[]
+  creditSettlementAdjustments       BillingCreditUsageSettlementAdjustment[]
+  creditUsageAllocations            BillingCreditUsageAllocation[]
+  creditConsentRevisions            BillingCreditAutoTopUpConsentRevision[]
+  creditPortfolioPerspectives       BillingCreditPortfolioSnapshot[]          @relation("CreditPortfolioPerspectiveService")
+  recurringAddonOffers              BillingRecurringAddonOffer[]
+  recurringAddonCatalogs            BillingRecurringAddonCatalog[]
+  recurringAddonCheckouts           BillingRecurringAddonCheckout[]
+  recurringAddonSubscriptions       BillingRecurringAddonSubscription[]
+  recurringAddonFeaturePolicies     BillingRecurringAddonFeaturePolicy[]
   recurringAddonCancellationIntents BillingRecurringAddonCancellationIntent[]
+  contractServiceTerms              BillingContractServiceTerm[]
+  invoiceLines                      BillingInvoiceLine[]
+  invoiceMeteringRefs               BillingInvoiceMeteringReference[]
+  invoiceCreditSettlementRefs       BillingInvoiceCreditSettlementReference[]
+  invoiceAddonLines                 BillingInvoiceAddonLine[]
 
   @@map("billing_services")
 }
@@ -1361,12 +1396,13 @@ model BillingTariff {
   createdByEmail     String?               @map("created_by_email") @db.VarChar(200)
   createdAt          DateTime              @default(now()) @map("created_at")
 
-  service             BillingService                 @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-  assignments         BillingTariffAssignment[]
-  stripePrices        BillingStripeTariffPrice[]
-  stripeCheckouts     BillingStripeCheckoutSession[]
-  stripeSubscriptions BillingStripeSubscription[]
-  creditSettlements   BillingCreditUsageSettlement[]
+  service              BillingService                 @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  assignments          BillingTariffAssignment[]
+  stripePrices         BillingStripeTariffPrice[]
+  stripeCheckouts      BillingStripeCheckoutSession[]
+  stripeSubscriptions  BillingStripeSubscription[]
+  creditSettlements    BillingCreditUsageSettlement[]
+  contractServiceTerms BillingContractServiceTerm[]
 
   @@unique([serviceId, key, version])
   @@index([serviceId, isDefault])
@@ -1386,10 +1422,11 @@ model BillingTariffAssignment {
   createdAt       DateTime               @default(now()) @map("created_at")
   updatedAt       DateTime               @updatedAt @map("updated_at")
 
-  service BillingService @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-  tariff  BillingTariff  @relation(fields: [tariffId], references: [id], onDelete: Restrict)
-  org     Organisation   @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  team    Team?          @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  service              BillingService               @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  tariff               BillingTariff                @relation(fields: [tariffId], references: [id], onDelete: Restrict)
+  org                  Organisation                 @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  team                 Team?                        @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  contractServiceTerms BillingContractServiceTerm[]
 
   @@unique([serviceId, scope, scopeKey])
   @@index([tariffId])
@@ -1418,21 +1455,21 @@ model BillingAppKey {
   createdAt             DateTime             @default(now()) @map("created_at")
   updatedAt             DateTime             @updatedAt @map("updated_at")
 
-  service                     BillingService                           @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-  stripeCheckouts             BillingStripeCheckoutSession[]
-  serviceAccesses             BillingServiceAccess[]
-  cancellationIntents         BillingCancellationIntent[]
-  creditAccountAutoTopUps     BillingCreditAccount[]                   @relation("CreditAccountAutoTopUpAppKey")
-  creditEntries               BillingCreditEntry[]
-  creditPaymentAdjustments    BillingCreditPaymentAdjustment[]
-  creditTopUpCheckouts        BillingCreditTopUpCheckout[]
-  creditSetupCheckouts        BillingCreditSetupCheckout[]
-  creditAutoTopUpAttempts     BillingCreditAutoTopUpAttempt[]
-  creditSettlements           BillingCreditUsageSettlement[]
-  creditSettlementAdjustments BillingCreditUsageSettlementAdjustment[]
-  creditUsageAllocations      BillingCreditUsageAllocation[]
-  creditConsentRevisions      BillingCreditAutoTopUpConsentRevision[]
-  recurringAddonCheckouts     BillingRecurringAddonCheckout[]
+  service                           BillingService                            @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  stripeCheckouts                   BillingStripeCheckoutSession[]
+  serviceAccesses                   BillingServiceAccess[]
+  cancellationIntents               BillingCancellationIntent[]
+  creditAccountAutoTopUps           BillingCreditAccount[]                    @relation("CreditAccountAutoTopUpAppKey")
+  creditEntries                     BillingCreditEntry[]
+  creditPaymentAdjustments          BillingCreditPaymentAdjustment[]
+  creditTopUpCheckouts              BillingCreditTopUpCheckout[]
+  creditSetupCheckouts              BillingCreditSetupCheckout[]
+  creditAutoTopUpAttempts           BillingCreditAutoTopUpAttempt[]
+  creditSettlements                 BillingCreditUsageSettlement[]
+  creditSettlementAdjustments       BillingCreditUsageSettlementAdjustment[]
+  creditUsageAllocations            BillingCreditUsageAllocation[]
+  creditConsentRevisions            BillingCreditAutoTopUpConsentRevision[]
+  recurringAddonCheckouts           BillingRecurringAddonCheckout[]
   recurringAddonCancellationIntents BillingRecurringAddonCancellationIntent[]
 
   @@index([serviceId])
@@ -1545,28 +1582,28 @@ model BillingStripeAccount {
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
-  customers                   BillingStripeCustomer[]
-  catalogs                    BillingStripeCatalog[]
-  tariffPrices                BillingStripeTariffPrice[]
-  checkouts                   BillingStripeCheckoutSession[]
-  subscriptions               BillingStripeSubscription[]
-  usageExports                BillingStripeUsageExport[]
-  webhookEvents               BillingStripeWebhookEvent[]
-  creditAccounts              BillingCreditAccount[]
-  creditTopUpCatalogs         BillingCreditTopUpCatalog[]
-  creditTopUpCheckouts        BillingCreditTopUpCheckout[]
-  creditSetupCheckouts        BillingCreditSetupCheckout[]
-  creditAutoTopUpAttempts     BillingCreditAutoTopUpAttempt[]
-  creditSettlements           BillingCreditUsageSettlement[]
-  creditSettlementAdjustments BillingCreditUsageSettlementAdjustment[]
-  creditInvoiceLines          BillingCreditInvoiceLine[]
-  creditAdminAdjustments      BillingCreditAdminAdjustment[]
-  creditPortfolioSnapshots    BillingCreditPortfolioSnapshot[]
-  creditPaymentAdjustments    BillingCreditPaymentAdjustment[]
-  creditConsentRevisions      BillingCreditAutoTopUpConsentRevision[]
-  recurringAddonCatalogs      BillingRecurringAddonCatalog[]
-  recurringAddonCheckouts     BillingRecurringAddonCheckout[]
-  recurringAddonSubscriptions BillingRecurringAddonSubscription[]
+  customers                         BillingStripeCustomer[]
+  catalogs                          BillingStripeCatalog[]
+  tariffPrices                      BillingStripeTariffPrice[]
+  checkouts                         BillingStripeCheckoutSession[]
+  subscriptions                     BillingStripeSubscription[]
+  usageExports                      BillingStripeUsageExport[]
+  webhookEvents                     BillingStripeWebhookEvent[]
+  creditAccounts                    BillingCreditAccount[]
+  creditTopUpCatalogs               BillingCreditTopUpCatalog[]
+  creditTopUpCheckouts              BillingCreditTopUpCheckout[]
+  creditSetupCheckouts              BillingCreditSetupCheckout[]
+  creditAutoTopUpAttempts           BillingCreditAutoTopUpAttempt[]
+  creditSettlements                 BillingCreditUsageSettlement[]
+  creditSettlementAdjustments       BillingCreditUsageSettlementAdjustment[]
+  creditInvoiceLines                BillingCreditInvoiceLine[]
+  creditAdminAdjustments            BillingCreditAdminAdjustment[]
+  creditPortfolioSnapshots          BillingCreditPortfolioSnapshot[]
+  creditPaymentAdjustments          BillingCreditPaymentAdjustment[]
+  creditConsentRevisions            BillingCreditAutoTopUpConsentRevision[]
+  recurringAddonCatalogs            BillingRecurringAddonCatalog[]
+  recurringAddonCheckouts           BillingRecurringAddonCheckout[]
+  recurringAddonSubscriptions       BillingRecurringAddonSubscription[]
   recurringAddonCancellationIntents BillingRecurringAddonCancellationIntent[]
 
   @@unique([stripeAccountId, livemode])
@@ -1787,18 +1824,312 @@ model BillingStripeWebhookEvent {
   currency                 String?  @db.Char(3)
   receivedAt               DateTime @default(now()) @map("received_at")
 
-  account                  BillingStripeAccount             @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  account                  BillingStripeAccount                @relation(fields: [accountId], references: [id], onDelete: Restrict)
   creditPaymentAdjustments BillingCreditPaymentAdjustment[]
-  creditTopUpCompletions   BillingCreditTopUpCheckout[]      @relation("CreditTopUpCompletionEvent")
-  creditSetupCompletions   BillingCreditSetupCheckout[]      @relation("CreditSetupCompletionEvent")
-  creditAutoTopUpSuccesses BillingCreditAutoTopUpAttempt[]   @relation("CreditAutoTopUpSuccessEvent")
-  addonCheckoutCompletions BillingRecurringAddonCheckout[]   @relation("RecurringAddonCheckoutCompletionEvent")
+  creditTopUpCompletions   BillingCreditTopUpCheckout[]        @relation("CreditTopUpCompletionEvent")
+  creditSetupCompletions   BillingCreditSetupCheckout[]        @relation("CreditSetupCompletionEvent")
+  creditAutoTopUpSuccesses BillingCreditAutoTopUpAttempt[]     @relation("CreditAutoTopUpSuccessEvent")
+  addonCheckoutCompletions BillingRecurringAddonCheckout[]     @relation("RecurringAddonCheckoutCompletionEvent")
   addonActivations         BillingRecurringAddonSubscription[] @relation("RecurringAddonActivationEvent")
 
   @@unique([accountId, stripeEventId])
   @@index([accountId])
   @@index([type, receivedAt])
   @@map("billing_stripe_webhook_events")
+}
+
+// Organisation contracts are UOA-owned commercial agreements. Versions and
+// their service terms are append-only; an invoice pins one exact version.
+model BillingOrganisationContract {
+  id              String                            @id @default(cuid())
+  orgId           String                            @map("org_id")
+  reference       String                            @db.VarChar(100)
+  name            String                            @db.VarChar(160)
+  status          BillingOrganisationContractStatus @default(DRAFT)
+  activatedAt     DateTime?                         @map("activated_at")
+  terminatedAt    DateTime?                         @map("terminated_at")
+  createdByUserId String?                           @map("created_by_user_id")
+  createdByEmail  String?                           @map("created_by_email") @db.VarChar(200)
+  createdAt       DateTime                          @default(now()) @map("created_at")
+  updatedAt       DateTime                          @updatedAt @map("updated_at")
+
+  org      Organisation                         @relation(fields: [orgId], references: [id], onDelete: Restrict)
+  versions BillingOrganisationContractVersion[]
+  invoices BillingInvoice[]
+
+  @@unique([orgId, reference])
+  @@index([orgId, status])
+  @@map("billing_organisation_contracts")
+}
+
+model BillingOrganisationContractVersion {
+  id                 String   @id @default(cuid())
+  contractId         String   @map("contract_id")
+  version            Int
+  usageMarkupBps     Int      @map("usage_markup_bps")
+  currency           String   @db.Char(3)
+  paymentTermsDays   Int      @map("payment_terms_days")
+  effectiveFromMonth String   @map("effective_from_month") @db.Char(7)
+  createdByUserId    String?  @map("created_by_user_id")
+  createdByEmail     String?  @map("created_by_email") @db.VarChar(200)
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  contract     BillingOrganisationContract  @relation(fields: [contractId], references: [id], onDelete: Restrict)
+  serviceTerms BillingContractServiceTerm[]
+  invoices     BillingInvoice[]
+
+  @@unique([contractId, version])
+  @@unique([contractId, effectiveFromMonth])
+  @@index([contractId, effectiveFromMonth])
+  @@map("billing_organisation_contract_versions")
+}
+
+model BillingContractServiceTerm {
+  id                 String   @id @default(cuid())
+  contractVersionId  String   @map("contract_version_id")
+  serviceId          String   @map("service_id")
+  tariffId           String   @map("tariff_id")
+  tariffAssignmentId String?  @map("tariff_assignment_id")
+  monthlyAmountMinor BigInt   @map("monthly_amount_minor")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  contractVersion  BillingOrganisationContractVersion @relation(fields: [contractVersionId], references: [id], onDelete: Restrict)
+  service          BillingService                     @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  tariff           BillingTariff                      @relation(fields: [tariffId], references: [id], onDelete: Restrict)
+  tariffAssignment BillingTariffAssignment?           @relation(fields: [tariffAssignmentId], references: [id], onDelete: SetNull)
+
+  @@unique([contractVersionId, serviceId])
+  @@index([serviceId])
+  @@index([tariffId])
+  @@index([tariffAssignmentId])
+  @@map("billing_contract_service_terms")
+}
+
+model BillingInvoiceIssuerProfile {
+  id                        String    @id @default(cuid())
+  key                       String    @unique @db.VarChar(80)
+  legalName                 String    @map("legal_name") @db.VarChar(200)
+  tradingName               String?   @map("trading_name") @db.VarChar(200)
+  billingEmail              String    @map("billing_email") @db.Citext
+  address                   Json
+  taxIdentifier             String?   @map("tax_identifier") @db.VarChar(100)
+  companyRegistrationNumber String?   @map("company_registration_number") @db.VarChar(100)
+  invoiceNumberPrefix       String    @unique @map("invoice_number_prefix") @db.VarChar(32)
+  active                    Boolean   @default(true)
+  deactivatedAt             DateTime? @map("deactivated_at")
+  createdAt                 DateTime  @default(now()) @map("created_at")
+  updatedAt                 DateTime  @updatedAt @map("updated_at")
+
+  invoices  BillingInvoice[]
+  sequences BillingInvoiceNumberSequence[]
+
+  @@index([active])
+  @@map("billing_invoice_issuer_profiles")
+}
+
+model BillingOrganisationInvoiceProfile {
+  id                     String   @id @default(cuid())
+  orgId                  String   @unique @map("org_id")
+  legalName              String   @map("legal_name") @db.VarChar(200)
+  billingEmail           String   @map("billing_email") @db.Citext
+  billingAddress         Json     @map("billing_address")
+  taxIdentifier          String?  @map("tax_identifier") @db.VarChar(100)
+  purchaseOrderReference String?  @map("purchase_order_reference") @db.VarChar(120)
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  org      Organisation     @relation(fields: [orgId], references: [id], onDelete: Restrict)
+  invoices BillingInvoice[]
+
+  @@map("billing_organisation_invoice_profiles")
+}
+
+model BillingInvoice {
+  id                  String               @id @default(cuid())
+  orgId               String               @map("org_id")
+  contractId          String               @map("contract_id")
+  contractVersionId   String               @map("contract_version_id")
+  issuerProfileId     String               @map("issuer_profile_id")
+  buyerProfileId      String               @map("buyer_profile_id")
+  billingMonth        String               @map("billing_month") @db.Char(7)
+  revision            Int                  @default(1)
+  status              BillingInvoiceStatus @default(DRAFT)
+  invoiceNumber       String?              @unique @map("invoice_number") @db.VarChar(80)
+  issueDate           DateTime?            @map("issue_date")
+  dueDate             DateTime?            @map("due_date")
+  currency            String               @db.Char(3)
+  subtotalMinor       BigInt               @map("subtotal_minor")
+  taxAmountMinor      BigInt               @default(0) @map("tax_amount_minor")
+  totalMinor          BigInt               @map("total_minor")
+  creditsAppliedMinor BigInt               @default(0) @map("credits_applied_minor")
+  issuerSnapshot      Json                 @map("issuer_snapshot")
+  buyerSnapshot       Json                 @map("buyer_snapshot")
+  calculationDigest   String               @map("calculation_digest") @db.Char(64)
+  pdfObjectKey        String?              @map("pdf_object_key") @db.VarChar(1024)
+  pdfSha256           String?              @map("pdf_sha256") @db.Char(64)
+  pdfTemplateVersion  String?              @map("pdf_template_version") @db.VarChar(80)
+  issuedAt            DateTime?            @map("issued_at")
+  voidedAt            DateTime?            @map("voided_at")
+  voidReason          String?              @map("void_reason") @db.VarChar(500)
+  createdByUserId     String?              @map("created_by_user_id")
+  createdByEmail      String?              @map("created_by_email") @db.VarChar(200)
+  createdAt           DateTime             @default(now()) @map("created_at")
+  updatedAt           DateTime             @updatedAt @map("updated_at")
+
+  org                  Organisation                              @relation(fields: [orgId], references: [id], onDelete: Restrict)
+  contract             BillingOrganisationContract               @relation(fields: [contractId], references: [id], onDelete: Restrict)
+  contractVersion      BillingOrganisationContractVersion        @relation(fields: [contractVersionId], references: [id], onDelete: Restrict)
+  issuerProfile        BillingInvoiceIssuerProfile               @relation(fields: [issuerProfileId], references: [id], onDelete: Restrict)
+  buyerProfile         BillingOrganisationInvoiceProfile         @relation(fields: [buyerProfileId], references: [id], onDelete: Restrict)
+  lines                BillingInvoiceLine[]
+  meteringRefs         BillingInvoiceMeteringReference[]
+  creditSettlementRefs BillingInvoiceCreditSettlementReference[]
+  addonLines           BillingInvoiceAddonLine[]
+  paymentEvents        BillingInvoicePaymentEvent[]
+
+  @@unique([contractId, billingMonth, revision])
+  @@index([orgId, billingMonth, status])
+  @@index([contractVersionId])
+  @@index([issuerProfileId])
+  @@index([buyerProfileId])
+  @@map("billing_invoices")
+}
+
+// Customer-facing invoice lines contain only the final calculated price for a
+// service. Provider cost, usage units, and token detail never enter this table.
+model BillingInvoiceLine {
+  id                String   @id @default(cuid())
+  invoiceId         String   @map("invoice_id")
+  serviceId         String   @map("service_id")
+  serviceIdentifier String   @map("service_identifier") @db.VarChar(100)
+  serviceName       String   @map("service_name") @db.VarChar(120)
+  amountMinor       BigInt   @map("amount_minor")
+  currency          String   @db.Char(3)
+  position          Int
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  invoice BillingInvoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  service BillingService @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+
+  @@unique([invoiceId, serviceId])
+  @@unique([invoiceId, position])
+  @@index([serviceId])
+  @@map("billing_invoice_lines")
+}
+
+// Ledger evidence is private calculation provenance and is never part of the
+// customer invoice view model or generated document.
+model BillingInvoiceMeteringReference {
+  id                   String   @id @default(cuid())
+  invoiceId            String   @map("invoice_id")
+  serviceId            String   @map("service_id")
+  ledgerSnapshotCursor String   @map("ledger_snapshot_cursor")
+  ledgerSnapshotSha256 String   @map("ledger_snapshot_sha256") @db.Char(64)
+  capturedAt           DateTime @map("captured_at")
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  invoice BillingInvoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  service BillingService @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+
+  @@unique([invoiceId, serviceId])
+  @@index([serviceId])
+  @@map("billing_invoice_metering_references")
+}
+
+// Private evidence that an invoice credit came from UOA's canonical exact-team
+// settlement chain. Microcredits never enter customer DTOs or PDFs.
+model BillingInvoiceCreditSettlementReference {
+  id                         String   @id @default(cuid())
+  invoiceId                  String   @map("invoice_id")
+  serviceId                  String   @map("service_id")
+  settlementId               String   @map("settlement_id")
+  adjustmentId               String   @map("adjustment_id")
+  creditsAppliedMicrocredits BigInt   @map("credits_applied_microcredits")
+  createdAt                  DateTime @default(now()) @map("created_at")
+
+  invoice    BillingInvoice                         @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  service    BillingService                         @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  settlement BillingCreditUsageSettlement           @relation(fields: [settlementId], references: [id], onDelete: Restrict)
+  adjustment BillingCreditUsageSettlementAdjustment @relation(fields: [adjustmentId], references: [id], onDelete: Restrict)
+
+  @@unique([invoiceId, settlementId], map: "billing_invoice_credit_refs_invoice_settlement_key")
+  @@unique([invoiceId, adjustmentId], map: "billing_invoice_credit_refs_invoice_adjustment_key")
+  @@index([serviceId], map: "billing_invoice_credit_refs_service_idx")
+  @@index([settlementId], map: "billing_invoice_credit_refs_settlement_idx")
+  @@index([adjustmentId], map: "billing_invoice_credit_refs_adjustment_idx")
+  @@map("billing_invoice_credit_settlement_references")
+}
+
+// Recurring add-ons remain on their authoritative Stripe subscription. The
+// invoice displays their final price as separately billed and excludes them
+// from this invoice's subtotal, total, credits, and amount due.
+model BillingInvoiceAddonLine {
+  id                  String                                 @id @default(cuid())
+  invoiceId           String                                 @map("invoice_id")
+  serviceId           String                                 @map("service_id")
+  serviceIdentifier   String                                 @map("service_identifier") @db.VarChar(100)
+  serviceName         String                                 @map("service_name") @db.VarChar(120)
+  addonSubscriptionId String                                 @map("addon_subscription_id")
+  offerId             String                                 @map("offer_id")
+  offerVersion        Int                                    @map("offer_version")
+  catalogId           String                                 @map("catalog_id")
+  offerKey            String                                 @map("offer_key") @db.VarChar(80)
+  offerName           String                                 @map("offer_name") @db.VarChar(120)
+  monthlyAmountMinor  BigInt                                 @map("monthly_amount_minor")
+  currency            String                                 @db.Char(3)
+  scope               BillingRecurringAddonSubscriptionScope
+  collection          BillingInvoiceAddonCollection          @default(STRIPE_SEPARATE)
+  position            Int
+  createdAt           DateTime                               @default(now()) @map("created_at")
+
+  invoice           BillingInvoice                    @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  service           BillingService                    @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  offer             BillingRecurringAddonOffer        @relation(fields: [offerId], references: [id], onDelete: Restrict)
+  catalog           BillingRecurringAddonCatalog      @relation(fields: [catalogId], references: [id], onDelete: Restrict)
+  addonSubscription BillingRecurringAddonSubscription @relation(fields: [addonSubscriptionId], references: [id], onDelete: Restrict)
+
+  @@unique([invoiceId, addonSubscriptionId], map: "billing_invoice_addon_lines_invoice_subscription_key")
+  @@unique([invoiceId, position], map: "billing_invoice_addon_lines_invoice_position_key")
+  @@index([serviceId], map: "billing_invoice_addon_lines_service_idx")
+  @@index([offerId], map: "billing_invoice_addon_lines_offer_idx")
+  @@index([catalogId], map: "billing_invoice_addon_lines_catalog_idx")
+  @@index([addonSubscriptionId], map: "billing_invoice_addon_lines_subscription_idx")
+  @@map("billing_invoice_addon_lines")
+}
+
+model BillingInvoiceNumberSequence {
+  id              String   @id @default(cuid())
+  issuerProfileId String   @map("issuer_profile_id")
+  year            Int
+  lastValue       BigInt   @default(0) @map("last_value")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  issuerProfile BillingInvoiceIssuerProfile @relation(fields: [issuerProfileId], references: [id], onDelete: Restrict)
+
+  @@unique([issuerProfileId, year])
+  @@map("billing_invoice_number_sequences")
+}
+
+model BillingInvoicePaymentEvent {
+  id              String                           @id @default(cuid())
+  invoiceId       String                           @map("invoice_id")
+  kind            BillingInvoicePaymentEventKind
+  source          BillingInvoicePaymentEventSource
+  amountMinor     BigInt                           @map("amount_minor")
+  currency        String                           @db.Char(3)
+  idempotencyKey  String                           @map("idempotency_key") @db.VarChar(200)
+  reference       String?                          @db.VarChar(255)
+  occurredAt      DateTime                         @map("occurred_at")
+  createdByUserId String?                          @map("created_by_user_id")
+  createdByEmail  String?                          @map("created_by_email") @db.VarChar(200)
+  createdAt       DateTime                         @default(now()) @map("created_at")
+
+  invoice BillingInvoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+
+  @@unique([invoiceId, idempotencyKey])
+  @@index([invoiceId, occurredAt])
+  @@map("billing_invoice_payment_events")
 }
 
 // Credits are a universal UOA unit: 1,000 credits always equals US$1 of UOA-rated
@@ -2158,15 +2489,15 @@ model BillingCreditTopUpCheckout {
   createdAt                   DateTime                    @default(now()) @map("created_at")
   updatedAt                   DateTime                    @updatedAt @map("updated_at")
 
-  account       BillingStripeAccount      @relation(fields: [accountId], references: [id], onDelete: Restrict)
-  creditAccount BillingCreditAccount      @relation(fields: [creditAccountId], references: [id], onDelete: Restrict)
-  customer      BillingStripeCustomer     @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  catalog       BillingCreditTopUpCatalog @relation(fields: [catalogId], references: [id], onDelete: Restrict)
-  service       BillingService            @relation(fields: [serviceId], references: [id], onDelete: Restrict)
-  appKey        BillingAppKey             @relation(fields: [appKeyId], references: [id], onDelete: Restrict)
-  offer         BillingCreditTopUpOffer   @relation(fields: [offerId], references: [id], onDelete: Restrict)
-  requestedBy   User                      @relation("CreditTopUpRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
-  creditEntry   BillingCreditEntry?       @relation(fields: [creditEntryId], references: [id], onDelete: Restrict)
+  account                BillingStripeAccount       @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  creditAccount          BillingCreditAccount       @relation(fields: [creditAccountId], references: [id], onDelete: Restrict)
+  customer               BillingStripeCustomer      @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  catalog                BillingCreditTopUpCatalog  @relation(fields: [catalogId], references: [id], onDelete: Restrict)
+  service                BillingService             @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  appKey                 BillingAppKey              @relation(fields: [appKeyId], references: [id], onDelete: Restrict)
+  offer                  BillingCreditTopUpOffer    @relation(fields: [offerId], references: [id], onDelete: Restrict)
+  requestedBy            User                       @relation("CreditTopUpRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
+  creditEntry            BillingCreditEntry?        @relation(fields: [creditEntryId], references: [id], onDelete: Restrict)
   completionWebhookEvent BillingStripeWebhookEvent? @relation("CreditTopUpCompletionEvent", fields: [completionWebhookEventId], references: [id], onDelete: Restrict)
 
   @@unique([accountId, stripeCheckoutSessionId])
@@ -2207,17 +2538,17 @@ model BillingCreditSetupCheckout {
   createdAt                 DateTime                    @default(now()) @map("created_at")
   updatedAt                 DateTime                    @updatedAt @map("updated_at")
 
-  account         BillingStripeAccount                   @relation(fields: [accountId], references: [id], onDelete: Restrict)
-  creditAccount   BillingCreditAccount                   @relation(fields: [creditAccountId], references: [id], onDelete: Restrict)
-  customer        BillingStripeCustomer                  @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  service         BillingService                         @relation(fields: [serviceId], references: [id], onDelete: Restrict)
-  appKey          BillingAppKey                          @relation(fields: [appKeyId], references: [id], onDelete: Restrict)
-  policy          BillingCreditFundingPolicy             @relation(fields: [policyId], references: [id], onDelete: Restrict)
-  option          BillingCreditAutoTopUpOption           @relation(fields: [optionId], references: [id], onDelete: Restrict)
-  refillOffer     BillingCreditTopUpOffer                @relation(fields: [refillOfferId], references: [id], onDelete: Restrict)
-  requestedBy     User                                   @relation("CreditSetupRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
-  consentRevision BillingCreditAutoTopUpConsentRevision?
-  completionWebhookEvent BillingStripeWebhookEvent?      @relation("CreditSetupCompletionEvent", fields: [completionWebhookEventId], references: [id], onDelete: Restrict)
+  account                BillingStripeAccount                   @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  creditAccount          BillingCreditAccount                   @relation(fields: [creditAccountId], references: [id], onDelete: Restrict)
+  customer               BillingStripeCustomer                  @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  service                BillingService                         @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  appKey                 BillingAppKey                          @relation(fields: [appKeyId], references: [id], onDelete: Restrict)
+  policy                 BillingCreditFundingPolicy             @relation(fields: [policyId], references: [id], onDelete: Restrict)
+  option                 BillingCreditAutoTopUpOption           @relation(fields: [optionId], references: [id], onDelete: Restrict)
+  refillOffer            BillingCreditTopUpOffer                @relation(fields: [refillOfferId], references: [id], onDelete: Restrict)
+  requestedBy            User                                   @relation("CreditSetupRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
+  consentRevision        BillingCreditAutoTopUpConsentRevision?
+  completionWebhookEvent BillingStripeWebhookEvent?             @relation("CreditSetupCompletionEvent", fields: [completionWebhookEventId], references: [id], onDelete: Restrict)
 
   @@unique([accountId, stripeCheckoutSessionId])
   @@unique([accountId, stripeSetupIntentId])
@@ -2306,18 +2637,18 @@ model BillingCreditAutoTopUpAttempt {
   createdAt                   DateTime                            @default(now()) @map("created_at")
   updatedAt                   DateTime                            @updatedAt @map("updated_at")
 
-  account         BillingStripeAccount                  @relation(fields: [accountId], references: [id], onDelete: Restrict)
-  creditAccount   BillingCreditAccount                  @relation(fields: [creditAccountId], references: [id], onDelete: Restrict)
-  catalog         BillingCreditTopUpCatalog             @relation(fields: [catalogId], references: [id], onDelete: Restrict)
-  service         BillingService                        @relation(fields: [serviceId], references: [id], onDelete: Restrict)
-  appKey          BillingAppKey                         @relation(fields: [appKeyId], references: [id], onDelete: Restrict)
-  attributedUser  User                                  @relation("CreditAutoTopUpAttribution", fields: [attributedUserId], references: [id], onDelete: Restrict)
-  option          BillingCreditAutoTopUpOption          @relation(fields: [optionId], references: [id], onDelete: Restrict)
-  offer           BillingCreditTopUpOffer               @relation(fields: [offerId], references: [id], onDelete: Restrict)
-  triggerEntry    BillingCreditEntry?                   @relation("CreditAutoTopUpTrigger", fields: [triggerEntryId], references: [id], onDelete: Restrict)
-  consentRevision BillingCreditAutoTopUpConsentRevision @relation(fields: [consentRevisionId], references: [id], onDelete: Restrict)
-  creditEntry     BillingCreditEntry?                   @relation("CreditAutoTopUpCredit", fields: [creditEntryId], references: [id], onDelete: Restrict)
-  successWebhookEvent BillingStripeWebhookEvent?        @relation("CreditAutoTopUpSuccessEvent", fields: [successWebhookEventId], references: [id], onDelete: Restrict)
+  account             BillingStripeAccount                  @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  creditAccount       BillingCreditAccount                  @relation(fields: [creditAccountId], references: [id], onDelete: Restrict)
+  catalog             BillingCreditTopUpCatalog             @relation(fields: [catalogId], references: [id], onDelete: Restrict)
+  service             BillingService                        @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  appKey              BillingAppKey                         @relation(fields: [appKeyId], references: [id], onDelete: Restrict)
+  attributedUser      User                                  @relation("CreditAutoTopUpAttribution", fields: [attributedUserId], references: [id], onDelete: Restrict)
+  option              BillingCreditAutoTopUpOption          @relation(fields: [optionId], references: [id], onDelete: Restrict)
+  offer               BillingCreditTopUpOffer               @relation(fields: [offerId], references: [id], onDelete: Restrict)
+  triggerEntry        BillingCreditEntry?                   @relation("CreditAutoTopUpTrigger", fields: [triggerEntryId], references: [id], onDelete: Restrict)
+  consentRevision     BillingCreditAutoTopUpConsentRevision @relation(fields: [consentRevisionId], references: [id], onDelete: Restrict)
+  creditEntry         BillingCreditEntry?                   @relation("CreditAutoTopUpCredit", fields: [creditEntryId], references: [id], onDelete: Restrict)
+  successWebhookEvent BillingStripeWebhookEvent?            @relation("CreditAutoTopUpSuccessEvent", fields: [successWebhookEventId], references: [id], onDelete: Restrict)
 
   @@unique([creditAccountId, idempotencyKey])
   @@unique([accountId, stripePaymentIntentId])
@@ -2349,15 +2680,16 @@ model BillingCreditUsageSettlement {
   createdAt                                DateTime                           @default(now()) @map("created_at")
   updatedAt                                DateTime                           @updatedAt @map("updated_at")
 
-  account       BillingStripeAccount                     @relation(fields: [accountId], references: [id], onDelete: Restrict)
-  creditAccount BillingCreditAccount                     @relation(fields: [creditAccountId], references: [id], onDelete: Restrict)
-  subscription  BillingStripeSubscription?               @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
-  tariff        BillingTariff                            @relation(fields: [tariffId], references: [id], onDelete: Restrict)
-  service       BillingService                           @relation(fields: [serviceId], references: [id], onDelete: Restrict)
-  appKey        BillingAppKey                            @relation(fields: [appKeyId], references: [id], onDelete: Restrict)
-  adjustments   BillingCreditUsageSettlementAdjustment[]
-  allocations   BillingCreditUsageAllocation[]
-  invoiceLines  BillingCreditInvoiceLine[]
+  account             BillingStripeAccount                      @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  creditAccount       BillingCreditAccount                      @relation(fields: [creditAccountId], references: [id], onDelete: Restrict)
+  subscription        BillingStripeSubscription?                @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  tariff              BillingTariff                             @relation(fields: [tariffId], references: [id], onDelete: Restrict)
+  service             BillingService                            @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  appKey              BillingAppKey                             @relation(fields: [appKeyId], references: [id], onDelete: Restrict)
+  adjustments         BillingCreditUsageSettlementAdjustment[]
+  allocations         BillingCreditUsageAllocation[]
+  invoiceLines        BillingCreditInvoiceLine[]
+  contractInvoiceRefs BillingInvoiceCreditSettlementReference[]
 
   @@unique([creditAccountId, serviceId, billingMonth])
   @@index([accountId])
@@ -2386,15 +2718,16 @@ model BillingCreditUsageSettlementAdjustment {
   creditEntryId                            String?  @unique @map("credit_entry_id")
   createdAt                                DateTime @default(now()) @map("created_at")
 
-  settlement        BillingCreditUsageSettlement   @relation(fields: [settlementId], references: [id], onDelete: Restrict)
-  account           BillingStripeAccount           @relation(fields: [accountId], references: [id], onDelete: Restrict)
-  creditAccount     BillingCreditAccount           @relation(fields: [creditAccountId], references: [id], onDelete: Restrict)
-  service           BillingService                 @relation(fields: [serviceId], references: [id], onDelete: Restrict)
-  appKey            BillingAppKey                  @relation(fields: [appKeyId], references: [id], onDelete: Restrict)
-  portfolioSnapshot BillingCreditPortfolioSnapshot @relation(fields: [portfolioSnapshotId], references: [id], onDelete: Restrict)
-  creditEntry       BillingCreditEntry?            @relation(fields: [creditEntryId], references: [id], onDelete: Restrict)
-  allocations       BillingCreditUsageAllocation[]
-  currentForLines   BillingCreditInvoiceLine[]     @relation("CreditInvoiceLineCurrentAdjustment")
+  settlement          BillingCreditUsageSettlement              @relation(fields: [settlementId], references: [id], onDelete: Restrict)
+  account             BillingStripeAccount                      @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  creditAccount       BillingCreditAccount                      @relation(fields: [creditAccountId], references: [id], onDelete: Restrict)
+  service             BillingService                            @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  appKey              BillingAppKey                             @relation(fields: [appKeyId], references: [id], onDelete: Restrict)
+  portfolioSnapshot   BillingCreditPortfolioSnapshot            @relation(fields: [portfolioSnapshotId], references: [id], onDelete: Restrict)
+  creditEntry         BillingCreditEntry?                       @relation(fields: [creditEntryId], references: [id], onDelete: Restrict)
+  allocations         BillingCreditUsageAllocation[]
+  currentForLines     BillingCreditInvoiceLine[]                @relation("CreditInvoiceLineCurrentAdjustment")
+  contractInvoiceRefs BillingInvoiceCreditSettlementReference[]
 
   @@unique([settlementId, portfolioSnapshotId])
   @@unique([settlementId, sequence])
@@ -2487,12 +2820,13 @@ model BillingRecurringAddonOffer {
   createdAt          DateTime  @default(now()) @map("created_at")
   updatedAt          DateTime  @updatedAt @map("updated_at")
 
-  service         BillingService                       @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-  catalogs        BillingRecurringAddonCatalog[]
-  checkouts       BillingRecurringAddonCheckout[]
-  subscriptions   BillingRecurringAddonSubscription[]
-  featurePolicies BillingRecurringAddonFeaturePolicy[]
-  cancellationIntents BillingRecurringAddonCancellationIntent[]
+  service              BillingService                            @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  catalogs             BillingRecurringAddonCatalog[]
+  checkouts            BillingRecurringAddonCheckout[]
+  subscriptions        BillingRecurringAddonSubscription[]
+  featurePolicies      BillingRecurringAddonFeaturePolicy[]
+  cancellationIntents  BillingRecurringAddonCancellationIntent[]
+  contractInvoiceLines BillingInvoiceAddonLine[]
 
   @@unique([serviceId, key, version])
   @@index([serviceId, active])
@@ -2536,11 +2870,12 @@ model BillingRecurringAddonCatalog {
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")
 
-  account       BillingStripeAccount                @relation(fields: [accountId], references: [id], onDelete: Restrict)
-  service       BillingService                      @relation(fields: [serviceId], references: [id], onDelete: Restrict)
-  offer         BillingRecurringAddonOffer          @relation(fields: [offerId], references: [id], onDelete: Restrict)
-  checkouts     BillingRecurringAddonCheckout[]
-  subscriptions BillingRecurringAddonSubscription[]
+  account              BillingStripeAccount                @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  service              BillingService                      @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  offer                BillingRecurringAddonOffer          @relation(fields: [offerId], references: [id], onDelete: Restrict)
+  checkouts            BillingRecurringAddonCheckout[]
+  subscriptions        BillingRecurringAddonSubscription[]
+  contractInvoiceLines BillingInvoiceAddonLine[]
 
   @@unique([accountId, offerId])
   @@unique([accountId, stripeLookupKey])
@@ -2551,48 +2886,48 @@ model BillingRecurringAddonCatalog {
 }
 
 model BillingRecurringAddonCheckout {
-  id                      String                              @id @default(cuid())
-  accountId               String                              @map("account_id")
-  appKeyId                String                              @map("app_key_id")
-  customerId              String                              @map("customer_id")
-  catalogId               String                              @map("catalog_id")
-  serviceId               String                              @map("service_id")
-  offerId                 String                              @map("offer_id")
-  offerKey                String                              @map("offer_key") @db.VarChar(80)
-  orgId                   String                              @map("org_id")
-  teamId                  String?                             @map("team_id")
-  requestedTeamId         String                              @map("requested_team_id")
-  subscribingUserId       String?                             @map("subscribing_user_id")
-  scope                   BillingRecurringAddonSubscriptionScope
-  scopeKey                String                              @map("scope_key") @db.VarChar(520)
-  actorJti                String                              @map("actor_jti") @db.VarChar(256)
-  subjectFingerprint      String                              @map("subject_fingerprint") @db.Char(64)
-  requestedByUserId       String                              @map("requested_by_user_id")
-  successUrlDigest        String                              @map("success_url_digest") @db.Char(64)
-  cancelUrlDigest         String                              @map("cancel_url_digest") @db.Char(64)
-  stripeCheckoutSessionId String?                             @map("stripe_checkout_session_id") @db.VarChar(255)
-  stripeSubscriptionId    String?                             @map("stripe_subscription_id") @db.VarChar(255)
-  completionWebhookEventId String?                            @unique @map("completion_webhook_event_id")
-  status                  BillingRecurringAddonCheckoutStatus @default(CREATING)
-  leaseExpiresAt          DateTime                            @map("lease_expires_at")
-  expiresAt               DateTime?                           @map("expires_at")
-  completedAt             DateTime?                           @map("completed_at")
-  createdAt               DateTime                            @default(now()) @map("created_at")
-  updatedAt               DateTime                            @updatedAt @map("updated_at")
+  id                       String                                 @id @default(cuid())
+  accountId                String                                 @map("account_id")
+  appKeyId                 String                                 @map("app_key_id")
+  customerId               String                                 @map("customer_id")
+  catalogId                String                                 @map("catalog_id")
+  serviceId                String                                 @map("service_id")
+  offerId                  String                                 @map("offer_id")
+  offerKey                 String                                 @map("offer_key") @db.VarChar(80)
+  orgId                    String                                 @map("org_id")
+  teamId                   String?                                @map("team_id")
+  requestedTeamId          String                                 @map("requested_team_id")
+  subscribingUserId        String?                                @map("subscribing_user_id")
+  scope                    BillingRecurringAddonSubscriptionScope
+  scopeKey                 String                                 @map("scope_key") @db.VarChar(520)
+  actorJti                 String                                 @map("actor_jti") @db.VarChar(256)
+  subjectFingerprint       String                                 @map("subject_fingerprint") @db.Char(64)
+  requestedByUserId        String                                 @map("requested_by_user_id")
+  successUrlDigest         String                                 @map("success_url_digest") @db.Char(64)
+  cancelUrlDigest          String                                 @map("cancel_url_digest") @db.Char(64)
+  stripeCheckoutSessionId  String?                                @map("stripe_checkout_session_id") @db.VarChar(255)
+  stripeSubscriptionId     String?                                @map("stripe_subscription_id") @db.VarChar(255)
+  completionWebhookEventId String?                                @unique @map("completion_webhook_event_id")
+  status                   BillingRecurringAddonCheckoutStatus    @default(CREATING)
+  leaseExpiresAt           DateTime                               @map("lease_expires_at")
+  expiresAt                DateTime?                              @map("expires_at")
+  completedAt              DateTime?                              @map("completed_at")
+  createdAt                DateTime                               @default(now()) @map("created_at")
+  updatedAt                DateTime                               @updatedAt @map("updated_at")
 
-  account      BillingStripeAccount               @relation(fields: [accountId], references: [id], onDelete: Restrict)
-  appKey       BillingAppKey                      @relation(fields: [appKeyId], references: [id], onDelete: Restrict)
-  customer     BillingStripeCustomer              @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  catalog      BillingRecurringAddonCatalog       @relation(fields: [catalogId], references: [id], onDelete: Restrict)
-  service      BillingService                     @relation(fields: [serviceId], references: [id], onDelete: Restrict)
-  offer        BillingRecurringAddonOffer         @relation(fields: [offerId], references: [id], onDelete: Restrict)
-  org          Organisation                       @relation(fields: [orgId], references: [id], onDelete: Restrict)
-  team         Team?                              @relation("RecurringAddonCheckoutScopeTeam", fields: [teamId], references: [id], onDelete: Restrict)
-  requestedTeam Team                              @relation("RecurringAddonCheckoutRequestTeam", fields: [requestedTeamId], references: [id], onDelete: Restrict)
-  requestedBy  User                               @relation("RecurringAddonCheckoutRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
-  subscribingUser User?                            @relation("RecurringAddonCheckoutSubscriber", fields: [subscribingUserId], references: [id], onDelete: Restrict)
-  subscription BillingRecurringAddonSubscription?
-  completionWebhookEvent BillingStripeWebhookEvent? @relation("RecurringAddonCheckoutCompletionEvent", fields: [completionWebhookEventId], references: [id], onDelete: Restrict)
+  account                BillingStripeAccount               @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  appKey                 BillingAppKey                      @relation(fields: [appKeyId], references: [id], onDelete: Restrict)
+  customer               BillingStripeCustomer              @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  catalog                BillingRecurringAddonCatalog       @relation(fields: [catalogId], references: [id], onDelete: Restrict)
+  service                BillingService                     @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  offer                  BillingRecurringAddonOffer         @relation(fields: [offerId], references: [id], onDelete: Restrict)
+  org                    Organisation                       @relation(fields: [orgId], references: [id], onDelete: Restrict)
+  team                   Team?                              @relation("RecurringAddonCheckoutScopeTeam", fields: [teamId], references: [id], onDelete: Restrict)
+  requestedTeam          Team                               @relation("RecurringAddonCheckoutRequestTeam", fields: [requestedTeamId], references: [id], onDelete: Restrict)
+  requestedBy            User                               @relation("RecurringAddonCheckoutRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
+  subscribingUser        User?                              @relation("RecurringAddonCheckoutSubscriber", fields: [subscribingUserId], references: [id], onDelete: Restrict)
+  subscription           BillingRecurringAddonSubscription?
+  completionWebhookEvent BillingStripeWebhookEvent?         @relation("RecurringAddonCheckoutCompletionEvent", fields: [completionWebhookEventId], references: [id], onDelete: Restrict)
 
   @@unique([accountId, stripeCheckoutSessionId])
   @@unique([accountId, stripeSubscriptionId])
@@ -2607,45 +2942,46 @@ model BillingRecurringAddonCheckout {
 }
 
 model BillingRecurringAddonSubscription {
-  id                       String                 @id @default(cuid())
-  accountId                String                 @map("account_id")
-  checkoutId               String                 @unique @map("checkout_id")
-  customerId               String                 @map("customer_id")
-  catalogId                String                 @map("catalog_id")
-  serviceId                String                 @map("service_id")
-  offerId                  String                 @map("offer_id")
-  offerKey                 String                 @map("offer_key") @db.VarChar(80)
-  orgId                    String                 @map("org_id")
-  teamId                   String?                @map("team_id")
-  subscribingUserId        String?                @map("subscribing_user_id")
+  id                       String                                 @id @default(cuid())
+  accountId                String                                 @map("account_id")
+  checkoutId               String                                 @unique @map("checkout_id")
+  customerId               String                                 @map("customer_id")
+  catalogId                String                                 @map("catalog_id")
+  serviceId                String                                 @map("service_id")
+  offerId                  String                                 @map("offer_id")
+  offerKey                 String                                 @map("offer_key") @db.VarChar(80)
+  orgId                    String                                 @map("org_id")
+  teamId                   String?                                @map("team_id")
+  subscribingUserId        String?                                @map("subscribing_user_id")
   scope                    BillingRecurringAddonSubscriptionScope
-  scopeKey                 String                 @map("scope_key") @db.VarChar(520)
-  stripeSubscriptionId     String                 @map("stripe_subscription_id") @db.VarChar(255)
-  stripeItemId             String                 @map("stripe_item_id") @db.VarChar(255)
-  status                   String                 @db.VarChar(32)
-  cancelAtPeriodEnd        Boolean                @default(false) @map("cancel_at_period_end")
-  currentPeriodStart       DateTime?              @map("current_period_start")
-  currentPeriodEnd         DateTime?              @map("current_period_end")
-  initialInvoicePaidAt     DateTime?              @map("initial_invoice_paid_at")
-  initialInvoiceId         String?                @map("initial_invoice_id") @db.VarChar(255)
-  activationWebhookEventId String?                @unique @map("activation_webhook_event_id")
-  entitlementActivatedAt   DateTime?              @map("entitlement_activated_at")
-  entitlementDeactivatedAt DateTime?              @map("entitlement_deactivated_at")
+  scopeKey                 String                                 @map("scope_key") @db.VarChar(520)
+  stripeSubscriptionId     String                                 @map("stripe_subscription_id") @db.VarChar(255)
+  stripeItemId             String                                 @map("stripe_item_id") @db.VarChar(255)
+  status                   String                                 @db.VarChar(32)
+  cancelAtPeriodEnd        Boolean                                @default(false) @map("cancel_at_period_end")
+  currentPeriodStart       DateTime?                              @map("current_period_start")
+  currentPeriodEnd         DateTime?                              @map("current_period_end")
+  initialInvoicePaidAt     DateTime?                              @map("initial_invoice_paid_at")
+  initialInvoiceId         String?                                @map("initial_invoice_id") @db.VarChar(255)
+  activationWebhookEventId String?                                @unique @map("activation_webhook_event_id")
+  entitlementActivatedAt   DateTime?                              @map("entitlement_activated_at")
+  entitlementDeactivatedAt DateTime?                              @map("entitlement_deactivated_at")
   livemode                 Boolean
-  createdAt                DateTime               @default(now()) @map("created_at")
-  updatedAt                DateTime               @updatedAt @map("updated_at")
+  createdAt                DateTime                               @default(now()) @map("created_at")
+  updatedAt                DateTime                               @updatedAt @map("updated_at")
 
-  account  BillingStripeAccount          @relation(fields: [accountId], references: [id], onDelete: Restrict)
-  checkout BillingRecurringAddonCheckout @relation(fields: [checkoutId], references: [id], onDelete: Restrict)
-  customer BillingStripeCustomer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  catalog  BillingRecurringAddonCatalog  @relation(fields: [catalogId], references: [id], onDelete: Restrict)
-  service  BillingService                @relation(fields: [serviceId], references: [id], onDelete: Restrict)
-  offer    BillingRecurringAddonOffer    @relation(fields: [offerId], references: [id], onDelete: Restrict)
-  org      Organisation                  @relation(fields: [orgId], references: [id], onDelete: Restrict)
-  team     Team?                         @relation(fields: [teamId], references: [id], onDelete: Restrict)
-  subscribingUser User?                  @relation("RecurringAddonSubscriptionSubscriber", fields: [subscribingUserId], references: [id], onDelete: Restrict)
-  activationWebhookEvent BillingStripeWebhookEvent? @relation("RecurringAddonActivationEvent", fields: [activationWebhookEventId], references: [id], onDelete: Restrict)
-  cancellationIntents BillingRecurringAddonCancellationIntent[]
+  account                BillingStripeAccount                      @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  checkout               BillingRecurringAddonCheckout             @relation(fields: [checkoutId], references: [id], onDelete: Restrict)
+  customer               BillingStripeCustomer                     @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  catalog                BillingRecurringAddonCatalog              @relation(fields: [catalogId], references: [id], onDelete: Restrict)
+  service                BillingService                            @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  offer                  BillingRecurringAddonOffer                @relation(fields: [offerId], references: [id], onDelete: Restrict)
+  org                    Organisation                              @relation(fields: [orgId], references: [id], onDelete: Restrict)
+  team                   Team?                                     @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  subscribingUser        User?                                     @relation("RecurringAddonSubscriptionSubscriber", fields: [subscribingUserId], references: [id], onDelete: Restrict)
+  activationWebhookEvent BillingStripeWebhookEvent?                @relation("RecurringAddonActivationEvent", fields: [activationWebhookEventId], references: [id], onDelete: Restrict)
+  cancellationIntents    BillingRecurringAddonCancellationIntent[]
+  contractInvoiceLines   BillingInvoiceAddonLine[]
 
   @@unique([accountId, stripeSubscriptionId])
   @@unique([accountId, stripeItemId])
@@ -2662,36 +2998,36 @@ model BillingRecurringAddonSubscription {
 // exact paid add-on, product actor, requester, and entitlement scope. Only a
 // digest of the opaque token is persisted.
 model BillingRecurringAddonCancellationIntent {
-  id                        String                         @id @default(cuid())
-  accountId                 String                         @map("account_id")
-  appKeyId                  String                         @map("app_key_id")
-  subscriptionId            String                         @map("subscription_id")
-  serviceId                 String                         @map("service_id")
-  offerId                   String                         @map("offer_id")
-  orgId                     String                         @map("org_id")
-  teamId                    String?                        @map("team_id")
-  requestedTeamId           String                         @map("requested_team_id")
-  subscribingUserId         String?                        @map("subscribing_user_id")
+  id                        String                                       @id @default(cuid())
+  accountId                 String                                       @map("account_id")
+  appKeyId                  String                                       @map("app_key_id")
+  subscriptionId            String                                       @map("subscription_id")
+  serviceId                 String                                       @map("service_id")
+  offerId                   String                                       @map("offer_id")
+  orgId                     String                                       @map("org_id")
+  teamId                    String?                                      @map("team_id")
+  requestedTeamId           String                                       @map("requested_team_id")
+  subscribingUserId         String?                                      @map("subscribing_user_id")
   scope                     BillingRecurringAddonSubscriptionScope
-  scopeKey                  String                         @map("scope_key") @db.VarChar(520)
-  requestedByUserId         String                         @map("requested_by_user_id")
-  actorJti                  String                         @map("actor_jti") @db.VarChar(256)
-  tokenDigest               String                         @unique @map("token_digest") @db.Char(64)
-  subjectFingerprint        String                         @map("subject_fingerprint") @db.Char(64)
-  idempotencyKey            String                         @map("idempotency_key") @db.VarChar(200)
-  choice                    String                         @default("cancel_addon") @db.VarChar(32)
+  scopeKey                  String                                       @map("scope_key") @db.VarChar(520)
+  requestedByUserId         String                                       @map("requested_by_user_id")
+  actorJti                  String                                       @map("actor_jti") @db.VarChar(256)
+  tokenDigest               String                                       @unique @map("token_digest") @db.Char(64)
+  subjectFingerprint        String                                       @map("subject_fingerprint") @db.Char(64)
+  idempotencyKey            String                                       @map("idempotency_key") @db.VarChar(200)
+  choice                    String                                       @default("cancel_addon") @db.VarChar(32)
   state                     BillingRecurringAddonCancellationIntentState @default(AVAILABLE)
-  confirmationRequestDigest String?                        @map("confirmation_request_digest") @db.Char(64)
+  confirmationRequestDigest String?                                      @map("confirmation_request_digest") @db.Char(64)
   result                    Json?
-  expiresAt                 DateTime                       @map("expires_at")
-  consumedAt                DateTime?                      @map("consumed_at")
-  createdAt                 DateTime                       @default(now()) @map("created_at")
-  updatedAt                 DateTime                       @updatedAt @map("updated_at")
+  expiresAt                 DateTime                                     @map("expires_at")
+  consumedAt                DateTime?                                    @map("consumed_at")
+  createdAt                 DateTime                                     @default(now()) @map("created_at")
+  updatedAt                 DateTime                                     @updatedAt @map("updated_at")
 
-  account         BillingStripeAccount               @relation(fields: [accountId], references: [id], onDelete: Restrict)
-  appKey          BillingAppKey                      @relation(fields: [appKeyId], references: [id], onDelete: Restrict)
+  account         BillingStripeAccount              @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  appKey          BillingAppKey                     @relation(fields: [appKeyId], references: [id], onDelete: Restrict)
   subscription    BillingRecurringAddonSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
-  service         BillingService                     @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  service         BillingService                    @relation(fields: [serviceId], references: [id], onDelete: Restrict)
   offer           BillingRecurringAddonOffer        @relation(fields: [offerId], references: [id], onDelete: Restrict)
   org             Organisation                      @relation(fields: [orgId], references: [id], onDelete: Restrict)
   team            Team?                             @relation("RecurringAddonCancellationScopeTeam", fields: [teamId], references: [id], onDelete: Restrict)

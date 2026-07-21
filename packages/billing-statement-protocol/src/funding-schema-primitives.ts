@@ -1,6 +1,5 @@
 export const unsignedDecimalPattern = '^(0|[1-9][0-9]*)(\\.[0-9]+)?$';
-export const positiveDecimalPattern =
-  '^(?:[1-9][0-9]*(?:\\.[0-9]+)?|0\\.[0-9]*[1-9][0-9]*)$';
+export const positiveDecimalPattern = '^(?:[1-9][0-9]*(?:\\.[0-9]+)?|0\\.[0-9]*[1-9][0-9]*)$';
 export const signedDecimalPattern = '^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$';
 export const unsignedMinorPattern = '^(0|[1-9][0-9]*)$';
 export const positiveMinorPattern = '^[1-9][0-9]*$';

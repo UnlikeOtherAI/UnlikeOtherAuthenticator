@@ -192,6 +192,61 @@ export async function listApplicableCommercialAdjustments(
   );
 }
 
+/**
+ * Contract invoices cover the whole organisation. Organisation adjustments
+ * are included once and every team-scoped adjustment is included once; callers
+ * must not invoke the team statement helper repeatedly and duplicate the org row.
+ */
+export async function listApplicableOrganisationInvoiceAdjustments(
+  params: {
+    serviceId: string;
+    organisationId: string;
+    startsAt: Date;
+    endsAt: Date;
+  },
+  deps?: { prisma?: AdjustmentPrisma },
+) {
+  const rows = await client(deps).billingCommercialAdjustment.findMany({
+    where: {
+      serviceId: params.serviceId,
+      orgId: params.organisationId,
+      AND: [
+        {
+          OR: [
+            {
+              cadence: BillingAdjustmentCadence.ONE_TIME,
+              startsAt: { gte: params.startsAt, lt: params.endsAt },
+              OR: [{ active: true }, { deactivatedAt: { gt: params.startsAt } }],
+            },
+            {
+              cadence: BillingAdjustmentCadence.MONTHLY,
+              startsAt: { lt: params.endsAt },
+              AND: [
+                { OR: [{ endsAt: null }, { endsAt: { gt: params.startsAt } }] },
+                { OR: [{ active: true }, { deactivatedAt: { gt: params.startsAt } }] },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+    orderBy: [
+      { serviceId: 'asc' },
+      { scope: 'asc' },
+      { scopeKey: 'asc' },
+      { kind: 'asc' },
+      { key: 'asc' },
+      { startsAt: 'asc' },
+    ],
+  });
+  return rows.filter(
+    (row) =>
+      row.cadence !== BillingAdjustmentCadence.ONE_TIME ||
+      row.active ||
+      Boolean(row.deactivatedAt && row.deactivatedAt > row.startsAt),
+  );
+}
+
 export async function deactivateCommercialAdjustment(
   params: {
     serviceId: string;

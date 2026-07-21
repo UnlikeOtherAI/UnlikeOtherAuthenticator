@@ -269,6 +269,11 @@ All secrets and configuration live in environment variables. Nothing is hardcode
 - `LEDGER_BILLING_ASSERTION_AUDIENCE` — exact credential-free HTTPS Ledger origin bound into UOA service assertions
 - `UOA_BILLING_ASSERTION_SIGNING_PRIVATE_JWK` — dedicated current private RS256 JWK used only for UOA→Ledger `metering.read` service assertions
 - `UOA_BILLING_ASSERTION_PUBLIC_JWKS_JSON` — current and overlapping retired public-only assertion keys served at `/billing/v1/service-jwks.json`
+- `BILLING_INVOICE_STORAGE_PROVIDER` — private immutable contract-invoice PDF provider: `disabled` (default), `filesystem`, or `gcs`; production rejects filesystem and issuance fails closed while disabled
+- `BILLING_INVOICE_FILESYSTEM_ROOT` — required private root for local/test filesystem invoice storage
+- `BILLING_INVOICE_GCS_BUCKET` — required dedicated private bucket when invoice storage is `gcs`; public access prevention and create/read permissions belong only to the UOA runtime identity
+- `BILLING_INVOICE_GCS_PROJECT_ID` — optional project override for the invoice bucket
+- Contract invoice PDFs embed the vendored DejaVu Sans regular/bold fonts under `assets/fonts/`; the runtime image copies those licensed assets and `@pdf-lib/fontkit` supplies Unicode shaping/subsetting.
 - `SIGNATURE_STORAGE_PROVIDER` — optional signature-object provider: `disabled` (default), `filesystem`, or `gcs`; filesystem storage is rejected in production
 - `SIGNATURE_FILESYSTEM_ROOT` — required private root when `SIGNATURE_STORAGE_PROVIDER=filesystem`; intended only for local development and tests
 - `SIGNATURE_GCS_BUCKET` — required private bucket when `SIGNATURE_STORAGE_PROVIDER=gcs`

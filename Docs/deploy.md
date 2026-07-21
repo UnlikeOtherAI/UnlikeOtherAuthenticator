@@ -114,6 +114,16 @@ wired on every deployment because they are required for signed entitlement and
 reconciliation readiness; that does not enable Stripe or create billable
 resources.
 
+Contract invoice calculation is database-backed and remains available without
+PDF storage. Issuance is deliberately fail-closed until an operator creates an
+explicit issuer legal profile and configures a dedicated private object store.
+Set `BILLING_INVOICE_STORAGE_PROVIDER=gcs`,
+`BILLING_INVOICE_GCS_BUCKET` to a bucket with public access prevention, and
+optionally `BILLING_INVOICE_GCS_PROJECT_ID`. Grant the Cloud Run runtime identity
+create/read access only; invoice objects are create-only and are never deleted
+or overwritten by the application. The deploy workflow accepts only `disabled`
+or `gcs` in production and refuses `gcs` without the bucket variable.
+
 The private key used to sign `ADMIN_CONFIG_JWT` is not attached to Cloud Run. Store it separately in Secret Manager as `uoa-auth-config-jwt-private-jwk` for rotation/signing operations only.
 
 Before enabling the confidential exchange in production:

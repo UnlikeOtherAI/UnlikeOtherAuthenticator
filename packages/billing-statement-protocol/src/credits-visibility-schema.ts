@@ -35,12 +35,7 @@ export const billingCreditsManagerSummaryJsonSchema = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: [
-          'service',
-          'credits_consumed',
-          'unattributed_credits_consumed',
-          'users',
-        ],
+        required: ['service', 'credits_consumed', 'unattributed_credits_consumed', 'users'],
         properties: {
           service: serviceSchema,
           credits_consumed: unsignedCredits,
@@ -168,13 +163,7 @@ export const billingCreditsMemberRecentEntriesJsonSchema = {
     properties: {
       ...recentEntryBaseProperties,
       attribution: {
-        enum: [
-          'viewer',
-          'other_team_members',
-          'unattributed',
-          'system',
-          'team_aggregate',
-        ],
+        enum: ['viewer', 'other_team_members', 'unattributed', 'system', 'team_aggregate'],
       },
     },
   },
