@@ -35,84 +35,117 @@ export async function loadBillingCreditProjectionData(
   deps?: { prisma?: PrismaClient },
 ) {
   const prisma = deps?.prisma ?? getAdminPrisma();
-  const [creditAccount, policy, catalogs, settlements, entries, pendingCheckouts, pendingAttempts] =
-    await Promise.all([
-      prisma.billingCreditAccount.findUnique({
-        where: { id: params.creditAccountId },
-        include: { autoTopUpConsentedBy: { select: { id: true, name: true } } },
-      }),
-      prisma.billingCreditFundingPolicy.findFirst({
-        where: {
-          serviceId: params.storefrontServiceId,
-          currency: 'USD',
-          active: true,
+  const [
+    creditAccount,
+    policy,
+    catalogs,
+    settlements,
+    entries,
+    pendingCheckouts,
+    pendingSetupCheckouts,
+    pendingAttempts,
+  ] = await Promise.all([
+    prisma.billingCreditAccount.findUnique({
+      where: { id: params.creditAccountId },
+      include: {
+        autoTopUpConsentedBy: { select: { id: true, name: true } },
+        customer: { select: { stripeCustomerId: true } },
+      },
+    }),
+    prisma.billingCreditFundingPolicy.findFirst({
+      where: {
+        serviceId: params.storefrontServiceId,
+        currency: 'USD',
+        active: true,
+      },
+      orderBy: { version: 'desc' },
+      include: {
+        topUpOffers: {
+          where: { active: true },
+          orderBy: [{ paymentAmountMinor: 'asc' }, { key: 'asc' }],
         },
-        orderBy: { version: 'desc' },
-        include: {
-          topUpOffers: {
-            where: { active: true },
-            orderBy: [{ paymentAmountMinor: 'asc' }, { key: 'asc' }],
-          },
-          autoTopUpOptions: {
-            where: { active: true },
-            orderBy: [{ thresholdMicrocredits: 'asc' }, { key: 'asc' }],
-            include: { refillOffer: true },
-          },
+        autoTopUpOptions: {
+          where: { active: true },
+          orderBy: [{ thresholdMicrocredits: 'asc' }, { key: 'asc' }],
+          include: { refillOffer: true },
         },
-      }),
-      prisma.billingCreditTopUpCatalog.findMany({
-        where: { accountId: params.accountId, currency: 'USD' },
-      }),
-      prisma.billingCreditUsageSettlement.findMany({
-        where: {
-          creditAccountId: params.creditAccountId,
-          billingMonth: params.period.key,
+      },
+    }),
+    prisma.billingCreditTopUpCatalog.findMany({
+      where: { accountId: params.accountId, currency: 'USD' },
+    }),
+    prisma.billingCreditUsageSettlement.findMany({
+      where: {
+        creditAccountId: params.creditAccountId,
+        billingMonth: params.period.key,
+      },
+      orderBy: { service: { identifier: 'asc' } },
+      include: { service: true },
+    }),
+    prisma.billingCreditEntry.findMany({
+      where: { creditAccountId: params.creditAccountId },
+      orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
+      take: 20,
+      include: {
+        service: { select: { id: true, identifier: true, name: true } },
+        attributedUser: { select: { id: true, name: true } },
+      },
+    }),
+    prisma.billingCreditTopUpCheckout.findMany({
+      where: {
+        creditAccountId: params.creditAccountId,
+        status: {
+          in: [
+            BillingCreditCheckoutStatus.CREATING,
+            BillingCreditCheckoutStatus.OPEN,
+            BillingCreditCheckoutStatus.NEEDS_REVIEW,
+          ],
         },
-        orderBy: { service: { identifier: 'asc' } },
-        include: { service: true },
-      }),
-      prisma.billingCreditEntry.findMany({
-        where: { creditAccountId: params.creditAccountId },
-        orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
-        take: 20,
-        include: {
-          service: { select: { id: true, identifier: true, name: true } },
-          attributedUser: { select: { id: true, name: true } },
+      },
+      select: { id: true, paymentAmountMinor: true, creditsReceivedMicrocredits: true },
+    }),
+    prisma.billingCreditSetupCheckout.findMany({
+      where: {
+        creditAccountId: params.creditAccountId,
+        status: {
+          in: [
+            BillingCreditCheckoutStatus.CREATING,
+            BillingCreditCheckoutStatus.OPEN,
+            BillingCreditCheckoutStatus.NEEDS_REVIEW,
+          ],
         },
-      }),
-      prisma.billingCreditTopUpCheckout.findMany({
-        where: {
-          creditAccountId: params.creditAccountId,
-          status: {
-            in: [
-              BillingCreditCheckoutStatus.CREATING,
-              BillingCreditCheckoutStatus.OPEN,
-              BillingCreditCheckoutStatus.NEEDS_REVIEW,
-            ],
-          },
+      },
+      select: { id: true },
+    }),
+    prisma.billingCreditAutoTopUpAttempt.findMany({
+      where: {
+        creditAccountId: params.creditAccountId,
+        status: {
+          in: [
+            BillingCreditAutoTopUpAttemptStatus.PENDING,
+            BillingCreditAutoTopUpAttemptStatus.PROCESSING,
+            BillingCreditAutoTopUpAttemptStatus.REQUIRES_ACTION,
+            BillingCreditAutoTopUpAttemptStatus.NEEDS_REVIEW,
+          ],
         },
-        select: { paymentAmountMinor: true, creditsReceivedMicrocredits: true },
-      }),
-      prisma.billingCreditAutoTopUpAttempt.findMany({
-        where: {
-          creditAccountId: params.creditAccountId,
-          status: {
-            in: [
-              BillingCreditAutoTopUpAttemptStatus.PENDING,
-              BillingCreditAutoTopUpAttemptStatus.PROCESSING,
-              BillingCreditAutoTopUpAttemptStatus.REQUIRES_ACTION,
-              BillingCreditAutoTopUpAttemptStatus.NEEDS_REVIEW,
-            ],
-          },
-        },
-        select: {
-          catalogId: true,
-          status: true,
-          paymentAmountMinor: true,
-          creditsReceivedMicrocredits: true,
-        },
-      }),
-    ]);
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      select: {
+        id: true,
+        creditAccountId: true,
+        catalogId: true,
+        serviceId: true,
+        appKeyId: true,
+        status: true,
+        stripePaymentIntentId: true,
+        failureCode: true,
+        paymentAmountMinor: true,
+        creditsReceivedMicrocredits: true,
+        consentRevision: { select: { stripePaymentMethodId: true } },
+        stateWebhookEvent: { select: { type: true } },
+      },
+    }),
+  ]);
   if (
     !creditAccount ||
     creditAccount.accountId !== params.accountId ||
@@ -179,6 +212,8 @@ export async function loadBillingCreditProjectionData(
     entries,
     periodEntries,
     pending: [...pendingCheckouts, ...pendingAttempts],
+    unresolvedTopUpCheckouts: pendingCheckouts,
+    unresolvedSetupCheckouts: pendingSetupCheckouts,
     unresolvedAttempts: pendingAttempts,
     autoTopUpChargedMinor: successfulAutoTopUps._sum.paymentAmountMinor ?? 0n,
   };

@@ -1,7 +1,4 @@
-import {
-  BillingCreditPaymentAdjustmentKind,
-  type PrismaClient,
-} from '@prisma/client';
+import { BillingCreditPaymentAdjustmentKind, type PrismaClient } from '@prisma/client';
 import type Stripe from 'stripe';
 
 import { AppError } from '../utils/errors.js';
@@ -10,16 +7,16 @@ import {
   type StripeAccountContext,
 } from './billing-stripe-client.service.js';
 import { stripeExternalId } from './billing-stripe-webhook-utils.service.js';
-import { paymentBinding } from './billing-credit-funding-binding.service.js';
+import {
+  assertCreditFundingMetadata,
+  paymentBinding,
+} from './billing-credit-funding-binding.service.js';
 import type {
   CreditFundingWebhookClient,
   CreditPaymentBinding,
   PreparedCreditFundingWebhook,
 } from './billing-credit-funding-webhook.types.js';
-import {
-  exactMinor,
-  requireUsd,
-} from './billing-credit-funding-webhook-validation.service.js';
+import { exactMinor, requireUsd } from './billing-credit-funding-webhook-validation.service.js';
 
 function disputePrincipalMovement(dispute: Stripe.Dispute, reinstated: boolean): number {
   const movement = dispute.balance_transactions.reduce((total, transaction) => {
@@ -90,6 +87,17 @@ async function resolveStoredPaymentBinding(
     ) {
       throw new AppError('INTERNAL', 502, 'STRIPE_CREDIT_TOP_UP_BINDING_INVALID');
     }
+    assertCreditFundingMetadata(
+      intent.metadata,
+      {
+        localType: 'top_up',
+        localId: checkout.id,
+        serviceId: checkout.serviceId,
+        appKeyId: checkout.appKeyId,
+        creditAccountId: checkout.creditAccountId,
+      },
+      'STRIPE_CREDIT_TOP_UP_BINDING_INVALID',
+    );
     return { localId: checkout.id, localType: 'top_up' };
   }
   if (attempt) {
@@ -101,6 +109,17 @@ async function resolveStoredPaymentBinding(
     ) {
       throw new AppError('INTERNAL', 502, 'STRIPE_CREDIT_AUTO_TOP_UP_BINDING_INVALID');
     }
+    assertCreditFundingMetadata(
+      intent.metadata,
+      {
+        localType: 'automatic_top_up',
+        localId: attempt.id,
+        serviceId: attempt.serviceId,
+        appKeyId: attempt.appKeyId,
+        creditAccountId: attempt.creditAccountId,
+      },
+      'STRIPE_CREDIT_AUTO_TOP_UP_BINDING_INVALID',
+    );
     return { localId: attempt.id, localType: 'automatic_top_up' };
   }
   return null;

@@ -229,7 +229,12 @@ function paymentIntent(attemptId: string, suffix: string): Stripe.PaymentIntent 
     currency: 'usd',
     customer: `cus_auto_top_up_${suffix}`,
     payment_method: `pm_auto_top_up_${suffix}`,
-    metadata: { uoa_credit_auto_top_up_attempt_id: attemptId },
+    metadata: {
+      uoa_credit_auto_top_up_attempt_id: attemptId,
+      uoa_service_id: ids.service,
+      uoa_app_key_id: ids.appKey,
+      uoa_credit_account_id: scopedIds(suffix).creditAccount,
+    },
     livemode: false,
     status: 'processing',
   } as Stripe.PaymentIntent;
@@ -311,7 +316,12 @@ describe.skipIf(!databaseTestsEnabled)('credit automatic top-up PostgreSQL runti
         payment_method: 'pm_auto_top_up_concurrency',
         confirm: true,
         off_session: true,
-        metadata: { uoa_credit_auto_top_up_attempt_id: attempts[0].id },
+        metadata: {
+          uoa_credit_auto_top_up_attempt_id: attempts[0].id,
+          uoa_service_id: ids.service,
+          uoa_app_key_id: ids.appKey,
+          uoa_credit_account_id: concurrency.creditAccount,
+        },
         description: 'UOA automatic credit top-up',
       },
       { idempotencyKey: attempts[0].idempotencyKey },

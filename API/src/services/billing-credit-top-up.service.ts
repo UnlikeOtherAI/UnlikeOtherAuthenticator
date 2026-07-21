@@ -16,6 +16,10 @@ import {
   type CreditFundingActionContext,
   type CreditFundingActionRequest,
 } from './billing-credit-funding-context.service.js';
+import {
+  assertCreditFundingMetadata,
+  creditFundingMetadata,
+} from './billing-credit-funding-binding.service.js';
 import { pinnedBillingReturnUrls } from './billing-return-url-policy.service.js';
 import { assertStripeObjectLivemode } from './billing-stripe-client.service.js';
 import { stripeExternalId } from './billing-stripe-webhook-utils.service.js';
@@ -248,12 +252,13 @@ export async function createBillingCreditTopUpCheckout(
     throw new AppError('BAD_REQUEST', 409, 'BILLING_CREDIT_TOP_UP_PENDING');
   }
 
-  const metadata = {
-    uoa_credit_top_up_checkout_id: checkout.id,
-    uoa_service_id: params.credential.service.id,
-    uoa_app_key_id: params.credential.id,
-    uoa_credit_account_id: context.creditAccount.id,
-  };
+  const metadata = creditFundingMetadata({
+    localType: 'top_up',
+    localId: checkout.id,
+    serviceId: checkout.serviceId,
+    appKeyId: checkout.appKeyId,
+    creditAccountId: checkout.creditAccountId,
+  });
   const session = await context.stripe.checkout.sessions.create(
     {
       mode: 'payment',
@@ -272,10 +277,16 @@ export async function createBillingCreditTopUpCheckout(
     },
   );
   assertStripeObjectLivemode(session, context.account.livemode);
+  assertCreditFundingMetadata(session.metadata, {
+    localType: 'top_up',
+    localId: checkout.id,
+    serviceId: checkout.serviceId,
+    appKeyId: checkout.appKeyId,
+    creditAccountId: checkout.creditAccountId,
+  });
   if (
     session.mode !== 'payment' ||
     session.client_reference_id !== checkout.id ||
-    session.metadata?.uoa_credit_top_up_checkout_id !== checkout.id ||
     stripeExternalId(session.customer) !== context.customer.stripeCustomerId ||
     !session.url
   ) {

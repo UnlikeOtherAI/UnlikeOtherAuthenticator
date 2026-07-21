@@ -772,11 +772,16 @@ through `BillingCreditsV1`. UOA supplies the complete fixed action for every
 offer and auto-top-up option; the product whitelists its action/path and relays
 the exact body unchanged. Auto-top-up records immutable consent revisions,
 threshold, refill offer, monthly charge cap, payment-method proof, every system
-attempt, and terminal Stripe evidence. Refunds and disputes create exact debit
-entries and move an enabled auto-top-up account to review. Recovery requires a
-verified exact-attempt Stripe action URL, or a replacement Setup Checkout that
-creates a new consent revision when no unresolved payment remains. An ordinary
-active member cannot initiate a
+attempt, and terminal Stripe evidence. Setup Checkout pins the expected consent
+predecessor and account generation. Consent update or disable increments that
+generation and abandons every open Setup Checkout under the account lock; a
+late SetupIntent webhook can activate consent only with the exact predecessor
+and generation through a compare-and-swap update. Refunds and disputes create
+exact debit entries and move an enabled auto-top-up account to review. Recovery
+requires current Stripe PaymentIntent evidence for the exact attempt. A
+replaceable failed intent is safely canceled and terminalized before UOA offers
+a replacement Setup Checkout; an executable action URL is relayed only while it
+still matches the current intent. An ordinary active member cannot initiate a
 top-up, set/update/recover auto-top-up, or alter consent; the database requires
 an active organisation and exact-team billing manager for every
 customer-initiated funding or consent mutation. Automatic attempts, Stripe
@@ -820,9 +825,13 @@ one minute) and shares the existing Stripe scheduler lifecycle. Turning
 direct non-test cycle fail before database or Stripe work.
 
 Funding and subscription webhooks compare the signed event's reserved UOA
-binding metadata with the freshly retrieved Stripe object. An unrelated event
-with no UOA markers is acknowledged, while removed, added, or rebound UOA
-metadata fails retryably and cannot consume the event id as an ignored event.
+binding metadata with the freshly retrieved Stripe object. Funding bindings
+always include the complete service, lifecycle app-key, and credit-account
+fingerprint in addition to their local checkout, Setup Checkout, or automatic
+attempt identifier; every local write, Stripe create/retrieve/cancel boundary,
+and webhook comparison validates the complete fingerprint. An unrelated event
+with no UOA markers is acknowledged, while removed, added, partial, or rebound
+UOA metadata fails retryably and cannot consume the event id as an ignored event.
 The webhook endpoint and Stripe SDK are pinned to API version
 `2026-06-24.dahlia`. Immutable amount, currency, customer, payment-method,
 charge, SetupIntent, refund, and dispute binding drift also fails retryably.
@@ -831,10 +840,12 @@ unconsumed so an operator can replay/reconcile them before enabling collection.
 
 The public credit view is a manager/member discriminated union. A manager may
 receive per-user usage, payment-method display data, consent actor details, and
-enabled funding actions. An ordinary member receives their own consumption,
-the aggregate consumption of other team members, and an explicit unattributed
-bucket. Member responses have no arbitrary user identifiers, card brand/last
-four digits, consent actor identity, or enabled funding actions. Free-form
+enabled funding actions. An ordinary member receives the shared remaining and
+pending credit quantities, their own consumption, the aggregate consumption of
+other team members, an explicit unattributed bucket, and payment-method status
+only. Member responses have no pending payment amount, offers, prices,
+thresholds, refill quantities, monthly caps, consent details, arbitrary user
+identifiers, card brand/last four digits, or enabled funding actions. Free-form
 labels/details must never smuggle another user's identity or payment-instrument
 details into the member shape.
 
@@ -852,14 +863,23 @@ preview can be issued.
 `BillingCreditsV1` and the recurring-add-on protocol are public, MIT-licensed
 interfaces from `@unlikeotherai/billing-statement-protocol`. Their generated
 JSON Schema, fixtures, and OpenAPI 3.1 components are the consumer contract.
+The credits contract is still unreleased: this privacy-hardening shape replaces
+the earlier unpublished draft as one coordinated V1 update across UOA and its
+four initial consumers, rather than claiming a compatible semantic-version
+minor change. Its protocol version therefore remains `1.0.0` until launch.
 UOA serves those artifacts under `/schemas/billing-credits-v1.*` and
 `/schemas/billing-recurring-addons-v1.*`. A product reads the current shared
 balance through `POST /billing/v1/credits` and its scoped add-on catalog through
 `POST /billing/v1/recurring-addons`, always with that product's own lifecycle
 app key plus a fresh exact actor assertion. The read endpoints and settlement
-runtime do not imply that any mutation action is enabled: Checkout, top-up,
-auto-top-up, and add-on actions appear enabled only when their dedicated Stripe
-runtime and fixed UOA policy/catalog evidence are available.
+runtime do not imply that any mutation action is enabled. When the Stripe
+collection gate is off, UOA resolves only one unambiguous persisted account/mode
+and still returns the shared read projection, including `Remaining credits`,
+but freezes every funding action without making a Stripe read. When collection
+is on, Checkout, top-up, auto-top-up, recovery, and add-on actions appear enabled
+only after fresh current Stripe catalog/payment-method/PaymentIntent evidence
+proves that the exact action is executable. An evidence read failure freezes the
+affected action without failing the balance read.
 
 The customer credit mutations are the frozen routes
 `/billing/v1/credits/top-up-checkout` and
@@ -876,6 +896,13 @@ webhooks must match the local customer, immutable terms, and reserved metadata
 before funding or consent is committed. A policy, catalog, payment method,
 consent, or Stripe binding gap disables the corresponding projected action and
 fails a forged direct request closed.
+
+Disable authority is bound inside the database transaction. The immutable
+disable audit event identifies the exact requester, active lifecycle app key,
+organisation, team, account, prior consent, and generation. Its database
+trigger takes the account lock and independently rechecks current exact-team
+billing-manager membership before accepting the event. Revocation racing an
+API authorization check therefore prevents the consent transition.
 
 ### Contract invoice calculator and invoice privacy
 

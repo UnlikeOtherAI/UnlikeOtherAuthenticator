@@ -9,7 +9,9 @@ import {
 import { stripeExternalId } from './billing-stripe-webhook-utils.service.js';
 import { preparePaymentAdjustmentWebhook } from './billing-credit-payment-adjustment-prepare.service.js';
 import {
+  assertCreditFundingMetadata,
   paymentBinding,
+  sameCreditFundingMetadata,
   setupBinding,
 } from './billing-credit-funding-binding.service.js';
 import type {
@@ -17,10 +19,7 @@ import type {
   CreditPaymentBinding,
   PreparedCreditFundingWebhook,
 } from './billing-credit-funding-webhook.types.js';
-import {
-  exactMinor,
-  requireUsd,
-} from './billing-credit-funding-webhook-validation.service.js';
+import { exactMinor, requireUsd } from './billing-credit-funding-webhook-validation.service.js';
 
 function methodSummary(method: Stripe.PaymentMethod): Prisma.InputJsonValue {
   if (!method.card) return { type: method.type };
@@ -37,10 +36,7 @@ function samePaymentBinding(
   left: CreditPaymentBinding | null,
   right: CreditPaymentBinding | null,
 ): boolean {
-  return (
-    left?.localId === right?.localId &&
-    left?.localType === right?.localType
-  );
+  return left?.localId === right?.localId && left?.localType === right?.localType;
 }
 
 function creditBindingDrift(): never {
@@ -103,6 +99,17 @@ async function validatePaymentBinding(
     ) {
       throw new AppError('INTERNAL', 502, 'STRIPE_CREDIT_TOP_UP_BINDING_INVALID');
     }
+    assertCreditFundingMetadata(
+      intent.metadata,
+      {
+        localType: 'top_up',
+        localId: checkout.id,
+        serviceId: checkout.serviceId,
+        appKeyId: checkout.appKeyId,
+        creditAccountId: checkout.creditAccountId,
+      },
+      'STRIPE_CREDIT_TOP_UP_BINDING_INVALID',
+    );
     const session = await retrieveBoundSession(stripe, {
       sessionId: checkout.stripeCheckoutSessionId,
       account,
@@ -112,6 +119,17 @@ async function validatePaymentBinding(
       localId: checkout.id,
       intentId: intent.id,
     });
+    assertCreditFundingMetadata(
+      session.metadata,
+      {
+        localType: 'top_up',
+        localId: checkout.id,
+        serviceId: checkout.serviceId,
+        appKeyId: checkout.appKeyId,
+        creditAccountId: checkout.creditAccountId,
+      },
+      'STRIPE_CREDIT_CHECKOUT_BINDING_INVALID',
+    );
     return session.id;
   }
 
@@ -133,6 +151,17 @@ async function validatePaymentBinding(
   ) {
     throw new AppError('INTERNAL', 502, 'STRIPE_CREDIT_AUTO_TOP_UP_BINDING_INVALID');
   }
+  assertCreditFundingMetadata(
+    intent.metadata,
+    {
+      localType: 'automatic_top_up',
+      localId: attempt.id,
+      serviceId: attempt.serviceId,
+      appKeyId: attempt.appKeyId,
+      creditAccountId: attempt.creditAccountId,
+    },
+    'STRIPE_CREDIT_AUTO_TOP_UP_BINDING_INVALID',
+  );
   return null;
 }
 
@@ -158,7 +187,12 @@ async function preparePaymentIntent(
   const binding = paymentBinding(intent.metadata);
   const payloadBinding = paymentBinding(payload.metadata);
   if (!binding && !payloadBinding) return null;
-  if (!binding || !payloadBinding || !samePaymentBinding(binding, payloadBinding)) {
+  if (
+    !binding ||
+    !payloadBinding ||
+    !samePaymentBinding(binding, payloadBinding) ||
+    !sameCreditFundingMetadata(intent.metadata, payload.metadata)
+  ) {
     creditBindingDrift();
   }
   if (
@@ -192,13 +226,7 @@ async function preparePaymentIntent(
           ? ('canceled' as const)
           : null;
   if (!succeeded && !failed && !state) return null;
-  const checkoutSessionId = await validatePaymentBinding(
-    binding,
-    intent,
-    stripe,
-    account,
-    prisma,
-  );
+  const checkoutSessionId = await validatePaymentBinding(binding, intent, stripe, account, prisma);
   const paymentMethodId = stripeExternalId(intent.payment_method);
   const chargeId = stripeExternalId(intent.latest_charge);
   if (succeeded && (!paymentMethodId || !chargeId || intent.amount_received !== intent.amount)) {
@@ -218,22 +246,22 @@ async function preparePaymentIntent(
         }
       : succeeded
         ? {
-          kind: 'payment_succeeded',
-          ...binding,
-          paymentIntent: intent,
-          paymentMethodId: paymentMethodId as string,
-          chargeId: chargeId as string,
-          checkoutSessionId,
-          occurredAt,
+            kind: 'payment_succeeded',
+            ...binding,
+            paymentIntent: intent,
+            paymentMethodId: paymentMethodId as string,
+            chargeId: chargeId as string,
+            checkoutSessionId,
+            occurredAt,
           }
         : {
-          kind: 'payment_failed',
-          ...binding,
-          paymentIntent: intent,
-          paymentMethodId,
-          chargeId,
-          checkoutSessionId,
-          occurredAt,
+            kind: 'payment_failed',
+            ...binding,
+            paymentIntent: intent,
+            paymentMethodId,
+            chargeId,
+            checkoutSessionId,
+            occurredAt,
           },
     eventFields: {
       stripeObjectId: intent.id,
@@ -263,7 +291,13 @@ async function prepareSetupIntent(
   const localId = setupBinding(intent.metadata);
   const payloadLocalId = setupBinding(payload.metadata);
   if (!localId && !payloadLocalId) return null;
-  if (!localId || !payloadLocalId || localId !== payloadLocalId) creditBindingDrift();
+  if (
+    !localId ||
+    !payloadLocalId ||
+    localId !== payloadLocalId ||
+    !sameCreditFundingMetadata(intent.metadata, payload.metadata)
+  )
+    creditBindingDrift();
   if (
     payload.status !== intent.status ||
     payload.usage !== intent.usage ||
@@ -290,6 +324,17 @@ async function prepareSetupIntent(
   ) {
     throw new AppError('INTERNAL', 502, 'STRIPE_CREDIT_SETUP_BINDING_INVALID');
   }
+  assertCreditFundingMetadata(
+    intent.metadata,
+    {
+      localType: 'setup',
+      localId: checkout.id,
+      serviceId: checkout.serviceId,
+      appKeyId: checkout.appKeyId,
+      creditAccountId: checkout.creditAccountId,
+    },
+    'STRIPE_CREDIT_SETUP_BINDING_INVALID',
+  );
   const session = await retrieveBoundSession(stripe, {
     sessionId: checkout.stripeCheckoutSessionId,
     account,
@@ -299,6 +344,17 @@ async function prepareSetupIntent(
     localId,
     intentId: intent.id,
   });
+  assertCreditFundingMetadata(
+    session.metadata,
+    {
+      localType: 'setup',
+      localId: checkout.id,
+      serviceId: checkout.serviceId,
+      appKeyId: checkout.appKeyId,
+      creditAccountId: checkout.creditAccountId,
+    },
+    'STRIPE_CREDIT_CHECKOUT_BINDING_INVALID',
+  );
   const method = await stripe.paymentMethods.retrieve(paymentMethodId);
   assertStripeObjectLivemode(method, account.livemode);
   if (stripeExternalId(method.customer) !== customerId) {
@@ -342,7 +398,11 @@ async function prepareExpiredCheckout(
   const payloadTopUpId = paymentBinding(payload.metadata);
   const payloadSetupId = setupBinding(payload.metadata);
   if (!topUpId && !setupId && !payloadTopUpId && !payloadSetupId) return null;
-  if (!samePaymentBinding(topUpId, payloadTopUpId) || setupId !== payloadSetupId) {
+  if (
+    !samePaymentBinding(topUpId, payloadTopUpId) ||
+    setupId !== payloadSetupId ||
+    !sameCreditFundingMetadata(session.metadata, payload.metadata)
+  ) {
     creditBindingDrift();
   }
   if (topUpId?.localType === 'automatic_top_up' || (topUpId && setupId)) {
@@ -375,6 +435,17 @@ async function prepareExpiredCheckout(
   ) {
     throw new AppError('INTERNAL', 502, 'STRIPE_CREDIT_CHECKOUT_BINDING_INVALID');
   }
+  assertCreditFundingMetadata(
+    session.metadata,
+    {
+      localType,
+      localId: checkout.id,
+      serviceId: checkout.serviceId,
+      appKeyId: checkout.appKeyId,
+      creditAccountId: checkout.creditAccountId,
+    },
+    'STRIPE_CREDIT_CHECKOUT_BINDING_INVALID',
+  );
   const occurredAt = new Date(event.created * 1000);
   return {
     event: {

@@ -26,7 +26,10 @@ const actionBaseRequired = [
 
 function actionRequestSchema(path: string, selector: 'offer_id' | 'option_id' | null) {
   const body = selector
-    ? billingSubjectActionBodySchema({ [selector]: { type: 'string', minLength: 1 } }, [selector])
+    ? billingSubjectActionBodySchema(
+        { [selector]: { type: 'string', minLength: 1, maxLength: 256 } },
+        [selector],
+      )
     : billingSubjectActionBodySchema();
   return {
     type: 'object',

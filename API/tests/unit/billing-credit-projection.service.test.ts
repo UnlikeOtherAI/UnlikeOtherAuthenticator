@@ -176,6 +176,8 @@ describe('privacy-safe shared credit projection', () => {
     expect(result).toMatchObject({
       viewer: { role: 'member' },
       capabilities: { can_top_up: false, can_manage_automatic_top_up: false },
+      pending_credits: { payment_amount: null },
+      funding_policy: null,
       automatic_top_up: { payment_method: { status: 'ready' } },
       credit_summary: {
         consumed_breakdown: [
@@ -193,6 +195,8 @@ describe('privacy-safe shared credit projection', () => {
     expect(serialized).not.toContain('Secret colleague');
     expect(serialized).not.toContain('4242');
     expect(serialized).not.toContain('consented_by');
+    expect(serialized).not.toContain('monthly_cap');
+    expect(serialized).not.toContain('threshold');
   });
 
   it('represents verified reversal debt without allowing an unsigned balance shape', () => {
@@ -275,6 +279,14 @@ describe('privacy-safe shared credit projection', () => {
       period,
       data,
       now,
+      actionReadiness: {
+        executableCatalogIds: new Set(['catalog_1']),
+        paymentMethodReady: false,
+        topUpCheckoutReady: true,
+        setupCheckoutReady: true,
+        disableReady: true,
+        recoverReady: false,
+      },
     });
     expect(available).toMatchObject({
       capabilities: { can_top_up: true, can_manage_automatic_top_up: true },
@@ -290,6 +302,14 @@ describe('privacy-safe shared credit projection', () => {
       period,
       data,
       now,
+      actionReadiness: {
+        executableCatalogIds: new Set(),
+        paymentMethodReady: false,
+        topUpCheckoutReady: true,
+        setupCheckoutReady: true,
+        disableReady: true,
+        recoverReady: false,
+      },
     });
     expect(unavailable).toMatchObject({
       capabilities: { can_top_up: false, can_manage_automatic_top_up: false },

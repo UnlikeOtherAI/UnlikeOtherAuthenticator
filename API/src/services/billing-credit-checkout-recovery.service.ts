@@ -7,6 +7,7 @@ import {
 import type Stripe from 'stripe';
 
 import { AppError } from '../utils/errors.js';
+import { assertCreditFundingMetadata } from './billing-credit-funding-binding.service.js';
 import {
   assertStripeObjectLivemode,
   type StripeAccountContext,
@@ -36,15 +37,22 @@ function assertSessionBinding(
 ): void {
   assertStripeObjectLivemode(session, account.livemode);
   const key = metadataKey(kind);
+  assertCreditFundingMetadata(
+    session.metadata,
+    {
+      localType: kind,
+      localId: checkout.id,
+      serviceId: checkout.serviceId,
+      appKeyId: checkout.appKeyId,
+      creditAccountId: checkout.creditAccountId,
+    },
+    'STRIPE_CREDIT_CHECKOUT_BINDING_INVALID',
+  );
   if (
     session.client_reference_id !== checkout.id ||
-    session.metadata?.[key] !== checkout.id ||
     stripeExternalId(session.customer) !== customerStripeId ||
     session.mode !== (kind === 'top_up' ? 'payment' : 'setup') ||
-    (kind === 'top_up' && session.metadata?.uoa_credit_setup_checkout_id) ||
-    (kind === 'setup' &&
-      (session.metadata?.uoa_credit_top_up_checkout_id ||
-        session.metadata?.uoa_credit_auto_top_up_attempt_id))
+    session.metadata?.[key] !== checkout.id
   ) {
     throw new AppError('INTERNAL', 502, 'STRIPE_CREDIT_CHECKOUT_BINDING_INVALID');
   }

@@ -20,6 +20,10 @@ import {
   type CreditFundingActionContext,
   type CreditFundingActionRequest,
 } from './billing-credit-funding-context.service.js';
+import {
+  assertCreditFundingMetadata,
+  creditFundingMetadata,
+} from './billing-credit-funding-binding.service.js';
 import { pinnedBillingReturnUrls } from './billing-return-url-policy.service.js';
 import { assertStripeObjectLivemode } from './billing-stripe-client.service.js';
 import { stripeExternalId } from './billing-stripe-webhook-utils.service.js';
@@ -52,6 +56,8 @@ function assertLocalBinding(
     optionId: string;
     actorJti: string;
     requestedByUserId: string;
+    expectedGeneration: number;
+    expectedConsentRevisionId: string | null;
     consentVersion: string;
     thresholdMicrocredits: bigint;
     refillOfferId: string;
@@ -68,6 +74,8 @@ function assertLocalBinding(
     optionId: string;
     actorJti: string;
     userId: string;
+    expectedGeneration: number;
+    expectedConsentRevisionId: string | null;
     consentVersion: string;
     thresholdMicrocredits: bigint;
     refillOfferId: string;
@@ -99,6 +107,8 @@ function sameScopeBinding(
     checkout.appKeyId === expected.credential.id &&
     checkout.policyId === expected.policyId &&
     checkout.optionId === expected.optionId &&
+    checkout.expectedGeneration === expected.expectedGeneration &&
+    checkout.expectedConsentRevisionId === expected.expectedConsentRevisionId &&
     checkout.consentVersion === expected.consentVersion &&
     checkout.thresholdMicrocredits === expected.thresholdMicrocredits &&
     checkout.refillOfferId === expected.refillOfferId &&
@@ -169,6 +179,8 @@ export async function createBillingCreditAutoTopUpSetup(
     optionId: selection.option.id,
     actorJti: context.actor.jti,
     userId: params.request.userId,
+    expectedGeneration: context.creditAccount.autoTopUpGeneration,
+    expectedConsentRevisionId: context.creditAccount.autoTopUpConsentRevisionId,
     consentVersion: selection.policy.automaticConsentVersion,
     thresholdMicrocredits: selection.option.thresholdMicrocredits,
     refillOfferId: selection.offer.id,
@@ -248,6 +260,8 @@ export async function createBillingCreditAutoTopUpSetup(
         optionId: selection.option.id,
         actorJti: context.actor.jti,
         requestedByUserId: params.request.userId,
+        expectedGeneration: context.creditAccount.autoTopUpGeneration,
+        expectedConsentRevisionId: context.creditAccount.autoTopUpConsentRevisionId,
         consentVersion: selection.policy.automaticConsentVersion,
         thresholdMicrocredits: selection.option.thresholdMicrocredits,
         refillOfferId: selection.offer.id,
@@ -289,12 +303,13 @@ export async function createBillingCreditAutoTopUpSetup(
     throw new AppError('BAD_REQUEST', 409, 'BILLING_CREDIT_SETUP_PENDING');
   }
 
-  const metadata = {
-    uoa_credit_setup_checkout_id: checkout.id,
-    uoa_service_id: params.credential.service.id,
-    uoa_app_key_id: params.credential.id,
-    uoa_credit_account_id: context.creditAccount.id,
-  };
+  const metadata = creditFundingMetadata({
+    localType: 'setup',
+    localId: checkout.id,
+    serviceId: checkout.serviceId,
+    appKeyId: checkout.appKeyId,
+    creditAccountId: checkout.creditAccountId,
+  });
   const session = await context.stripe.checkout.sessions.create(
     {
       mode: 'setup',
@@ -311,10 +326,16 @@ export async function createBillingCreditAutoTopUpSetup(
     },
   );
   assertStripeObjectLivemode(session, context.account.livemode);
+  assertCreditFundingMetadata(session.metadata, {
+    localType: 'setup',
+    localId: checkout.id,
+    serviceId: checkout.serviceId,
+    appKeyId: checkout.appKeyId,
+    creditAccountId: checkout.creditAccountId,
+  });
   if (
     session.mode !== 'setup' ||
     session.client_reference_id !== checkout.id ||
-    session.metadata?.uoa_credit_setup_checkout_id !== checkout.id ||
     stripeExternalId(session.customer) !== context.customer.stripeCustomerId ||
     !session.url
   ) {

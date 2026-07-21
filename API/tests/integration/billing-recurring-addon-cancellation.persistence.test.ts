@@ -223,14 +223,15 @@ async function insertSetupCheckout(
     INSERT INTO "billing_credit_setup_checkouts" (
       "id", "account_id", "credit_account_id", "customer_id", "service_id",
       "app_key_id", "policy_id", "option_id", "actor_jti", "requested_by_user_id",
-      "consent_version", "threshold_microcredits", "refill_offer_id",
+      "expected_generation", "expected_consent_revision_id", "consent_version",
+      "threshold_microcredits", "refill_offer_id",
       "refill_credits_microcredits", "refill_payment_amount_minor",
       "monthly_charge_cap_minor", "success_url_digest", "cancel_url_digest",
       "lease_expires_at", "updated_at"
     ) VALUES (
       ${id}, ${ids.account}, ${ids.creditAccount}, ${ids.customer}, ${ids.service},
       ${ids.appKey}, ${ids.fundingPolicy}, ${ids.autoTopUpOption}, ${`actor-${id}`},
-      ${requester}, 'consent-v1', 5000000000, ${ids.topUpOffer}, 50000000000,
+      ${requester}, 0, NULL, 'consent-v1', 5000000000, ${ids.topUpOffer}, 50000000000,
       5000, 10000, ${'c'.repeat(64)}, ${'d'.repeat(64)},
       CURRENT_TIMESTAMP + INTERVAL '5 minutes', CURRENT_TIMESTAMP
     )

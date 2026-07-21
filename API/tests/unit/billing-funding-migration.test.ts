@@ -6,6 +6,10 @@ const migrationUrl = new URL(
   '../../prisma/migrations/20260721120000_add_billing_funding_foundation/migration.sql',
   import.meta.url,
 );
+const hardeningMigrationUrl = new URL(
+  '../../prisma/migrations/20260721180000_harden_credit_funding_lifecycle/migration.sql',
+  import.meta.url,
+);
 
 describe('billing funding foundation migration', () => {
   it('keeps one exact shared team credit account and fixed public conversion', async () => {
@@ -108,5 +112,31 @@ describe('billing funding foundation migration', () => {
     }
     expect(sql).toContain("EXECUTE format('ALTER TABLE %I FORCE ROW LEVEL SECURITY', table_name)");
     expect(sql).toContain("'CREATE POLICY %I ON %I FOR ALL TO uoa_app USING (false)");
+  });
+});
+
+describe('billing funding lifecycle hardening migration', () => {
+  it('pins setup activation to an exact locked consent predecessor', async () => {
+    const sql = await readFile(hardeningMigrationUrl, 'utf8');
+
+    expect(sql).toContain('"auto_top_up_generation" INTEGER NOT NULL DEFAULT 0');
+    expect(sql).toContain('"expected_consent_revision_id" TEXT');
+    expect(sql).toContain('billing_credit_setup_predecessor_guard');
+    expect(sql).toContain('FOR UPDATE');
+    expect(sql).toContain('automatic top-up setup predecessor changed');
+    expect(sql).toContain('automatic top-up consent change must advance generation once');
+  });
+
+  it('requires a current database-verified manager audit for disable', async () => {
+    const sql = await readFile(hardeningMigrationUrl, 'utf8');
+
+    expect(sql).toContain('CREATE TABLE "billing_credit_auto_top_up_disable_events"');
+    expect(sql).toContain('billing_credit_auto_top_up_disable_event_coherence');
+    expect(sql).toContain('billing_assert_credit_team_manager');
+    expect(sql).toContain('automatic top-up disable requires manager-audited evidence');
+    expect(sql).toContain('billing_credit_auto_top_up_disable_event_append_only');
+    expect(sql).toContain(
+      'GRANT SELECT, INSERT ON TABLE "billing_credit_auto_top_up_disable_events" TO uoa_admin',
+    );
   });
 });

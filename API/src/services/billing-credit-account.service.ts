@@ -1,5 +1,7 @@
 import { BillingAssignmentScope, Prisma, type PrismaClient } from '@prisma/client';
+import type Stripe from 'stripe';
 
+import { getEnv } from '../config/env.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import {
@@ -11,25 +13,66 @@ import {
 export type CreditCollectionContext = {
   account: StripeAccountContext;
   stripeCollectionEnabled: boolean;
+  stripe?: Pick<Stripe, 'paymentIntents' | 'paymentMethods' | 'prices' | 'products'> | null;
 };
 
 function isRetryableTransactionError(error: unknown): boolean {
   const candidate = error as { code?: unknown; meta?: { code?: unknown } } | null;
   return (
-    candidate?.code === 'P2034' ||
-    (candidate?.code === 'P2010' && candidate.meta?.code === '40001')
+    candidate?.code === 'P2034' || (candidate?.code === 'P2010' && candidate.meta?.code === '40001')
   );
 }
 
 const CANONICAL_PORTFOLIO_PRODUCTS = ['deeptest', 'deepsignal', 'deepwater', 'nessie'] as const;
 
-export async function resolveCreditCollectionContext(deps?: {
-  prisma?: PrismaClient;
-}): Promise<CreditCollectionContext> {
+async function resolvePersistedCreditAccount(
+  params: { organisationId: string; teamId: string },
+  prisma: PrismaClient,
+): Promise<StripeAccountContext> {
+  const scoped = await prisma.billingCreditAccount.findMany({
+    where: { orgId: params.organisationId, teamId: params.teamId, currency: 'USD' },
+    orderBy: { updatedAt: 'desc' },
+    take: 2,
+    select: { account: { select: { id: true, stripeAccountId: true, livemode: true } } },
+  });
+  if (scoped.length > 1) {
+    throw new AppError('BAD_REQUEST', 409, 'BILLING_CREDIT_ACCOUNT_AMBIGUOUS');
+  }
+  if (scoped[0]) return scoped[0].account;
+
+  const persisted = await prisma.billingStripeAccount.findMany({
+    orderBy: { updatedAt: 'desc' },
+    take: 2,
+    select: { id: true, stripeAccountId: true, livemode: true },
+  });
+  if (persisted.length !== 1) {
+    throw new AppError(
+      'BAD_REQUEST',
+      409,
+      persisted.length > 1
+        ? 'BILLING_CREDIT_ACCOUNT_AMBIGUOUS'
+        : 'BILLING_CREDIT_ACCOUNT_NOT_PROVISIONED',
+    );
+  }
+  const account = persisted[0];
+  if (!account) {
+    throw new AppError('BAD_REQUEST', 409, 'BILLING_CREDIT_ACCOUNT_NOT_PROVISIONED');
+  }
+  return account;
+}
+
+export async function resolveCreditCollectionContext(
+  params: { organisationId: string; teamId: string },
+  deps?: { prisma?: PrismaClient },
+): Promise<CreditCollectionContext> {
   const prisma = deps?.prisma ?? getAdminPrisma();
+  if (!getEnv().STRIPE_BILLING_ENABLED) {
+    const account = await resolvePersistedCreditAccount(params, prisma);
+    return { account, stripeCollectionEnabled: false, stripe: null };
+  }
   const configured = requireStripeBillingEnabled();
   const account = await resolveStripeAccountContext(configured.client, configured.livemode, prisma);
-  return { account, stripeCollectionEnabled: true };
+  return { account, stripeCollectionEnabled: true, stripe: configured.client };
 }
 
 export async function ensureTeamCreditAccount(

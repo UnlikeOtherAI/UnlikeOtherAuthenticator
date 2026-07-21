@@ -1,4 +1,4 @@
-import { BillingCreditAutoTopUpAttemptStatus, BillingCreditAutoTopUpState } from '@prisma/client';
+import { BillingCreditAutoTopUpState } from '@prisma/client';
 
 import type {
   BillingCreditsManagerV1,
@@ -9,6 +9,7 @@ import {
   billingCreditsPaymentMoney,
 } from './billing-credit-display.service.js';
 import type { BillingCreditProjectionData } from './billing-credit-projection-data.service.js';
+import type { BillingCreditActionReadiness } from './billing-credit-action-readiness.service.js';
 
 export type BillingCreditActionSubject = {
   product: string;
@@ -25,12 +26,15 @@ function configuredCatalog(
     paymentAmountMinor: bigint;
     creditsReceivedMicrocredits: bigint;
   },
+  readiness: BillingCreditActionReadiness,
 ): boolean {
   const catalog = data.catalogs.find(
     (row) => row.key === offer.catalogKey && row.version === offer.catalogVersion,
   );
   return Boolean(
-    catalog?.stripeProductId &&
+    catalog &&
+    readiness.executableCatalogIds.has(catalog.id) &&
+    catalog.stripeProductId &&
     catalog.stripePriceId &&
     catalog.paymentAmountMinor === offer.paymentAmountMinor &&
     catalog.creditsReceivedMicrocredits === offer.creditsReceivedMicrocredits,
@@ -66,6 +70,7 @@ function fundingPolicy(
   requestBody: BillingCreditActionSubject,
   manager: boolean,
   collectionEnabled: boolean,
+  readiness: BillingCreditActionReadiness,
 ) {
   const policy = data.policy;
   return {
@@ -76,7 +81,10 @@ function fundingPolicy(
       'Credits fund metered usage across connected services. Subscriptions and add-ons remain separate.',
     offers: (policy?.topUpOffers ?? []).map((offer) => {
       const available = Boolean(
-        policy?.topUpEnabled && collectionEnabled && configuredCatalog(data, offer),
+        policy?.topUpEnabled &&
+        collectionEnabled &&
+        readiness.topUpCheckoutReady &&
+        configuredCatalog(data, offer, readiness),
       );
       return {
         id: offer.id,
@@ -120,6 +128,7 @@ function optionActions(
   requestBody: BillingCreditActionSubject,
   manager: boolean,
   collectionEnabled: boolean,
+  readiness: BillingCreditActionReadiness,
 ) {
   const account = data.creditAccount;
   const policy = data.policy;
@@ -134,12 +143,13 @@ function optionActions(
       option.refillOffer.active &&
       option.refillOffer.automaticTopUpEligible &&
       option.monthlyChargeCapMinor >= option.refillOffer.paymentAmountMinor &&
-      configuredCatalog(data, option.refillOffer),
+      configuredCatalog(data, option.refillOffer, readiness),
     );
     const setupEnabled = Boolean(
       collectionEnabled &&
       policy?.automaticTopUpEnabled &&
       configured &&
+      readiness.setupCheckoutReady &&
       account.autoTopUpState === BillingCreditAutoTopUpState.DISABLED &&
       !account.stripePaymentMethodId,
     );
@@ -148,7 +158,8 @@ function optionActions(
       policy?.automaticTopUpEnabled &&
       configured &&
       canChange &&
-      hasVerifiedMethod,
+      hasVerifiedMethod &&
+      readiness.paymentMethodReady,
     );
     return {
       selected: account.autoTopUpOptionId === option.id,
@@ -202,34 +213,18 @@ function automaticTopUp(
   requestBody: BillingCreditActionSubject,
   manager: boolean,
   collectionEnabled: boolean,
+  readiness: BillingCreditActionReadiness,
 ) {
   const account = data.creditAccount;
   const policy = data.policy;
   const state = account.autoTopUpState.toLowerCase() as Lowercase<BillingCreditAutoTopUpState>;
   const charged = data.autoTopUpChargedMinor;
   const cap = account.autoTopUpMonthlyChargeCapMinor;
-  const selectedOption = policy?.autoTopUpOptions.find(
-    (option) => option.id === account.autoTopUpOptionId,
-  );
-  const selectedConfigured = Boolean(
-    selectedOption && configuredCatalog(data, selectedOption.refillOffer),
-  );
-  const hasRecoverableAttempt = data.unresolvedAttempts.some(
-    (attempt) =>
-      (attempt.status === BillingCreditAutoTopUpAttemptStatus.REQUIRES_ACTION ||
-        attempt.status === BillingCreditAutoTopUpAttemptStatus.NEEDS_REVIEW) &&
-      data.catalogs.some(
-        (catalog) =>
-          catalog.id === attempt.catalogId && catalog.stripeProductId && catalog.stripePriceId,
-      ),
-  );
   const recoverableState =
     account.autoTopUpState === BillingCreditAutoTopUpState.REQUIRES_ACTION ||
     account.autoTopUpState === BillingCreditAutoTopUpState.NEEDS_REVIEW ||
     account.autoTopUpState === BillingCreditAutoTopUpState.PAUSED;
-  const recoverEnabled = Boolean(
-    collectionEnabled && recoverableState && (hasRecoverableAttempt || selectedConfigured),
-  );
+  const recoverEnabled = Boolean(collectionEnabled && recoverableState && readiness.recoverReady);
   const consentStatus = !account.autoTopUpConsentVersion
     ? ('missing' as const)
     : account.autoTopUpConsentVersion === policy?.automaticConsentVersion
@@ -267,7 +262,7 @@ function automaticTopUp(
           version: account.autoTopUpConsentVersion,
           consented_at: account.autoTopUpConsentedAt?.toISOString() ?? null,
         },
-    options: optionActions(data, requestBody, manager, collectionEnabled),
+    options: optionActions(data, requestBody, manager, collectionEnabled, readiness),
     disable_action:
       manager && account.autoTopUpState !== BillingCreditAutoTopUpState.DISABLED
         ? {
@@ -275,9 +270,9 @@ function automaticTopUp(
             kind: 'mutation' as const,
             label: 'Turn off automatic top-up',
             description: 'Stop future automatic charges without changing available credits.',
-            enabled: Boolean(collectionEnabled && selectedConfigured),
+            enabled: Boolean(collectionEnabled && readiness.disableReady),
             disabled_reason:
-              collectionEnabled && selectedConfigured
+              collectionEnabled && readiness.disableReady
                 ? null
                 : 'The current automatic top-up policy is unavailable.',
             request: {
@@ -311,19 +306,19 @@ export function buildManagerCreditActionsProjection(
   data: BillingCreditProjectionData,
   body: BillingCreditActionSubject,
   collectionEnabled: boolean,
+  readiness: BillingCreditActionReadiness,
 ): Pick<BillingCreditsManagerV1, 'funding_policy' | 'automatic_top_up'> {
   return {
-    funding_policy: fundingPolicy(data, body, true, collectionEnabled),
-    automatic_top_up: automaticTopUp(data, body, true, collectionEnabled),
+    funding_policy: fundingPolicy(data, body, true, collectionEnabled, readiness),
+    automatic_top_up: automaticTopUp(data, body, true, collectionEnabled, readiness),
   } as Pick<BillingCreditsManagerV1, 'funding_policy' | 'automatic_top_up'>;
 }
 
 export function buildMemberCreditActionsProjection(
   data: BillingCreditProjectionData,
-  body: BillingCreditActionSubject,
 ): Pick<BillingCreditsMemberV1, 'funding_policy' | 'automatic_top_up'> {
   return {
-    funding_policy: fundingPolicy(data, body, false, false),
-    automatic_top_up: automaticTopUp(data, body, false, false),
-  } as Pick<BillingCreditsMemberV1, 'funding_policy' | 'automatic_top_up'>;
+    funding_policy: null,
+    automatic_top_up: { payment_method: { status: paymentMethod(data).status } },
+  };
 }

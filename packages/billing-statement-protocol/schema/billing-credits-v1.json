@@ -334,6 +334,14 @@
             }
           }
         },
+        "pending_credits": {
+          "type": "object",
+          "properties": {
+            "payment_amount": {
+              "type": "object"
+            }
+          }
+        },
         "funding_policy": {
           "type": "object",
           "properties": {
@@ -1021,24 +1029,23 @@
             }
           }
         },
-        "funding_policy": {
+        "pending_credits": {
           "type": "object",
           "properties": {
-            "offers": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "action": {
-                    "type": "null"
-                  }
-                }
-              }
+            "payment_amount": {
+              "type": "null"
             }
           }
         },
+        "funding_policy": {
+          "type": "null"
+        },
         "automatic_top_up": {
           "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "payment_method"
+          ],
           "properties": {
             "payment_method": {
               "type": "object",
@@ -1056,65 +1063,6 @@
                   ]
                 }
               }
-            },
-            "consent": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "status",
-                "version",
-                "consented_at"
-              ],
-              "properties": {
-                "status": {
-                  "enum": [
-                    "missing",
-                    "current",
-                    "outdated"
-                  ]
-                },
-                "version": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "consented_at": {
-                  "anyOf": [
-                    {
-                      "type": "string",
-                      "format": "date-time"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                }
-              }
-            },
-            "options": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "required": [
-                  "setup_action",
-                  "update_action"
-                ],
-                "properties": {
-                  "setup_action": {
-                    "type": "null"
-                  },
-                  "update_action": {
-                    "type": "null"
-                  }
-                }
-              }
-            },
-            "disable_action": {
-              "type": "null"
-            },
-            "recover_action": {
-              "type": "null"
             }
           }
         },
@@ -1539,30 +1487,37 @@
           "minimum": 0
         },
         "payment_amount": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "amount",
-            "amount_minor",
-            "currency",
-            "display"
-          ],
-          "properties": {
-            "amount": {
-              "type": "string",
-              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "amount",
+                "amount_minor",
+                "currency",
+                "display"
+              ],
+              "properties": {
+                "amount": {
+                  "type": "string",
+                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                },
+                "amount_minor": {
+                  "type": "string",
+                  "pattern": "^(0|[1-9][0-9]*)$"
+                },
+                "currency": {
+                  "const": "USD"
+                },
+                "display": {
+                  "type": "string"
+                }
+              }
             },
-            "amount_minor": {
-              "type": "string",
-              "pattern": "^(0|[1-9][0-9]*)$"
-            },
-            "currency": {
-              "const": "USD"
-            },
-            "display": {
-              "type": "string"
+            {
+              "type": "null"
             }
-          }
+          ]
         },
         "credits_received": {
           "type": "object",
@@ -2245,113 +2200,78 @@
       ]
     },
     "funding_policy": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "top_up_enabled",
-        "automatic_top_up_enabled",
-        "title",
-        "description",
-        "offers"
-      ],
-      "properties": {
-        "top_up_enabled": {
-          "type": "boolean"
-        },
-        "automatic_top_up_enabled": {
-          "type": "boolean"
-        },
-        "title": {
-          "type": "string"
-        },
-        "description": {
-          "type": "string"
-        },
-        "offers": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": [
-              "id",
-              "key",
-              "name",
-              "description",
-              "payment_amount",
-              "credits_received",
-              "available",
-              "unavailable_reason",
-              "action"
-            ],
-            "properties": {
-              "id": {
-                "type": "string",
-                "minLength": 1
-              },
-              "key": {
-                "type": "string",
-                "minLength": 1
-              },
-              "name": {
-                "type": "string"
-              },
-              "description": {
-                "type": "string"
-              },
-              "payment_amount": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "top_up_enabled",
+            "automatic_top_up_enabled",
+            "title",
+            "description",
+            "offers"
+          ],
+          "properties": {
+            "top_up_enabled": {
+              "type": "boolean"
+            },
+            "automatic_top_up_enabled": {
+              "type": "boolean"
+            },
+            "title": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "offers": {
+              "type": "array",
+              "items": {
                 "type": "object",
                 "additionalProperties": false,
                 "required": [
-                  "amount",
-                  "amount_minor",
-                  "currency",
-                  "display"
+                  "id",
+                  "key",
+                  "name",
+                  "description",
+                  "payment_amount",
+                  "credits_received",
+                  "available",
+                  "unavailable_reason",
+                  "action"
                 ],
                 "properties": {
-                  "amount": {
+                  "id": {
                     "type": "string",
-                    "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]+)?|0\\.[0-9]*[1-9][0-9]*)$"
+                    "minLength": 1
                   },
-                  "amount_minor": {
+                  "key": {
                     "type": "string",
-                    "pattern": "^[1-9][0-9]*$"
+                    "minLength": 1
                   },
-                  "currency": {
-                    "const": "USD"
-                  },
-                  "display": {
-                    "type": "string"
-                  }
-                }
-              },
-              "credits_received": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "credits",
-                  "display",
-                  "usd_equivalent"
-                ],
-                "properties": {
-                  "credits": {
-                    "type": "string",
-                    "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]{1,5})?|0\\.(?=[0-9]{1,5}$)[0-9]*[1-9][0-9]*)$"
-                  },
-                  "display": {
+                  "name": {
                     "type": "string"
                   },
-                  "usd_equivalent": {
+                  "description": {
+                    "type": "string"
+                  },
+                  "payment_amount": {
                     "type": "object",
                     "additionalProperties": false,
                     "required": [
                       "amount",
+                      "amount_minor",
                       "currency",
                       "display"
                     ],
                     "properties": {
                       "amount": {
                         "type": "string",
-                        "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]{1,8})?|0\\.(?=[0-9]{1,8}$)[0-9]*[1-9][0-9]*)$"
+                        "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]+)?|0\\.[0-9]*[1-9][0-9]*)$"
+                      },
+                      "amount_minor": {
+                        "type": "string",
+                        "pattern": "^[1-9][0-9]*$"
                       },
                       "currency": {
                         "const": "USD"
@@ -2360,184 +2280,296 @@
                         "type": "string"
                       }
                     }
-                  }
-                }
-              },
-              "available": {
-                "type": "boolean"
-              },
-              "unavailable_reason": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "action": {
-                "oneOf": [
-                  {
+                  },
+                  "credits_received": {
                     "type": "object",
                     "additionalProperties": false,
                     "required": [
-                      "id",
-                      "kind",
-                      "label",
-                      "description",
-                      "enabled",
-                      "disabled_reason",
-                      "request"
+                      "credits",
+                      "display",
+                      "usd_equivalent"
                     ],
                     "properties": {
-                      "id": {
-                        "const": "top_up"
+                      "credits": {
+                        "type": "string",
+                        "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]{1,5})?|0\\.(?=[0-9]{1,5}$)[0-9]*[1-9][0-9]*)$"
                       },
-                      "kind": {
-                        "const": "hosted_redirect"
-                      },
-                      "label": {
+                      "display": {
                         "type": "string"
                       },
-                      "description": {
-                        "type": "string"
-                      },
-                      "enabled": {
-                        "type": "boolean"
-                      },
-                      "disabled_reason": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
-                      },
-                      "request": {
+                      "usd_equivalent": {
                         "type": "object",
                         "additionalProperties": false,
                         "required": [
-                          "method",
-                          "path",
-                          "body"
+                          "amount",
+                          "currency",
+                          "display"
                         ],
                         "properties": {
-                          "method": {
-                            "const": "POST"
+                          "amount": {
+                            "type": "string",
+                            "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]{1,8})?|0\\.(?=[0-9]{1,8}$)[0-9]*[1-9][0-9]*)$"
                           },
-                          "path": {
-                            "const": "/billing/v1/credits/top-up-checkout"
+                          "currency": {
+                            "const": "USD"
                           },
-                          "body": {
-                            "type": "object",
-                            "additionalProperties": false,
-                            "required": [
-                              "product",
-                              "organisation_id",
-                              "team_id",
-                              "user_id",
-                              "offer_id"
-                            ],
-                            "properties": {
-                              "product": {
-                                "type": "string",
-                                "minLength": 1,
-                                "maxLength": 100
-                              },
-                              "organisation_id": {
-                                "type": "string",
-                                "minLength": 1,
-                                "maxLength": 256
-                              },
-                              "team_id": {
-                                "type": "string",
-                                "minLength": 1,
-                                "maxLength": 256
-                              },
-                              "user_id": {
-                                "type": "string",
-                                "minLength": 1,
-                                "maxLength": 256
-                              },
-                              "offer_id": {
-                                "type": "string",
-                                "minLength": 1
-                              }
-                            }
+                          "display": {
+                            "type": "string"
                           }
                         }
                       }
                     }
                   },
-                  {
-                    "type": "null"
+                  "available": {
+                    "type": "boolean"
+                  },
+                  "unavailable_reason": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "action": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "id",
+                          "kind",
+                          "label",
+                          "description",
+                          "enabled",
+                          "disabled_reason",
+                          "request"
+                        ],
+                        "properties": {
+                          "id": {
+                            "const": "top_up"
+                          },
+                          "kind": {
+                            "const": "hosted_redirect"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "disabled_reason": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "request": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "method",
+                              "path",
+                              "body"
+                            ],
+                            "properties": {
+                              "method": {
+                                "const": "POST"
+                              },
+                              "path": {
+                                "const": "/billing/v1/credits/top-up-checkout"
+                              },
+                              "body": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "product",
+                                  "organisation_id",
+                                  "team_id",
+                                  "user_id",
+                                  "offer_id"
+                                ],
+                                "properties": {
+                                  "product": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 100
+                                  },
+                                  "organisation_id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 256
+                                  },
+                                  "team_id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 256
+                                  },
+                                  "user_id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 256
+                                  },
+                                  "offer_id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 256
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
-                ]
+                }
               }
             }
           }
+        },
+        {
+          "type": "null"
         }
-      }
+      ]
     },
     "automatic_top_up": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "state",
-        "display_status",
-        "description",
-        "threshold",
-        "refill_offer_id",
-        "monthly_cap",
-        "charged_this_month",
-        "remaining_monthly_cap",
-        "payment_method",
-        "consent",
-        "options",
-        "disable_action",
-        "recover_action"
-      ],
-      "properties": {
-        "state": {
-          "enum": [
-            "disabled",
-            "active",
-            "paused",
-            "requires_action",
-            "needs_review"
-          ]
-        },
-        "display_status": {
-          "type": "string"
-        },
-        "description": {
-          "type": "string"
-        },
-        "threshold": {
-          "oneOf": [
-            {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "payment_method"
+          ],
+          "properties": {
+            "payment_method": {
               "type": "object",
               "additionalProperties": false,
               "required": [
-                "credits",
-                "display",
-                "usd_equivalent"
+                "status"
               ],
               "properties": {
-                "credits": {
-                  "type": "string",
-                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,5})?$"
+                "status": {
+                  "enum": [
+                    "missing",
+                    "ready",
+                    "requires_action",
+                    "expired"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "state",
+            "display_status",
+            "description",
+            "threshold",
+            "refill_offer_id",
+            "monthly_cap",
+            "charged_this_month",
+            "remaining_monthly_cap",
+            "payment_method",
+            "consent",
+            "options",
+            "disable_action",
+            "recover_action"
+          ],
+          "properties": {
+            "state": {
+              "enum": [
+                "disabled",
+                "active",
+                "paused",
+                "requires_action",
+                "needs_review"
+              ]
+            },
+            "display_status": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "threshold": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "credits",
+                    "display",
+                    "usd_equivalent"
+                  ],
+                  "properties": {
+                    "credits": {
+                      "type": "string",
+                      "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,5})?$"
+                    },
+                    "display": {
+                      "type": "string"
+                    },
+                    "usd_equivalent": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "amount",
+                        "currency",
+                        "display"
+                      ],
+                      "properties": {
+                        "amount": {
+                          "type": "string",
+                          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$"
+                        },
+                        "currency": {
+                          "const": "USD"
+                        },
+                        "display": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
                 },
-                "display": {
-                  "type": "string"
-                },
-                "usd_equivalent": {
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "refill_offer_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "monthly_cap": {
+              "oneOf": [
+                {
                   "type": "object",
                   "additionalProperties": false,
                   "required": [
                     "amount",
+                    "amount_minor",
                     "currency",
                     "display"
                   ],
                   "properties": {
                     "amount": {
                       "type": "string",
-                      "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$"
+                      "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]+)?|0\\.[0-9]*[1-9][0-9]*)$"
+                    },
+                    "amount_minor": {
+                      "type": "string",
+                      "pattern": "^[1-9][0-9]*$"
                     },
                     "currency": {
                       "const": "USD"
@@ -2546,82 +2578,13 @@
                       "type": "string"
                     }
                   }
+                },
+                {
+                  "type": "null"
                 }
-              }
+              ]
             },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "refill_offer_id": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "monthly_cap": {
-          "oneOf": [
-            {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "amount",
-                "amount_minor",
-                "currency",
-                "display"
-              ],
-              "properties": {
-                "amount": {
-                  "type": "string",
-                  "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]+)?|0\\.[0-9]*[1-9][0-9]*)$"
-                },
-                "amount_minor": {
-                  "type": "string",
-                  "pattern": "^[1-9][0-9]*$"
-                },
-                "currency": {
-                  "const": "USD"
-                },
-                "display": {
-                  "type": "string"
-                }
-              }
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "charged_this_month": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "amount",
-            "amount_minor",
-            "currency",
-            "display"
-          ],
-          "properties": {
-            "amount": {
-              "type": "string",
-              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
-            },
-            "amount_minor": {
-              "type": "string",
-              "pattern": "^(0|[1-9][0-9]*)$"
-            },
-            "currency": {
-              "const": "USD"
-            },
-            "display": {
-              "type": "string"
-            }
-          }
-        },
-        "remaining_monthly_cap": {
-          "oneOf": [
-            {
+            "charged_this_month": {
               "type": "object",
               "additionalProperties": false,
               "required": [
@@ -2647,694 +2610,691 @@
                 }
               }
             },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "payment_method": {
-          "oneOf": [
-            {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "status",
-                "display"
-              ],
-              "properties": {
-                "status": {
-                  "enum": [
-                    "missing",
-                    "ready",
-                    "requires_action",
-                    "expired"
-                  ]
+            "remaining_monthly_cap": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "amount",
+                    "amount_minor",
+                    "currency",
+                    "display"
+                  ],
+                  "properties": {
+                    "amount": {
+                      "type": "string",
+                      "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                    },
+                    "amount_minor": {
+                      "type": "string",
+                      "pattern": "^(0|[1-9][0-9]*)$"
+                    },
+                    "currency": {
+                      "const": "USD"
+                    },
+                    "display": {
+                      "type": "string"
+                    }
+                  }
                 },
-                "display": {
-                  "type": "string"
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "payment_method": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "status",
+                    "display"
+                  ],
+                  "properties": {
+                    "status": {
+                      "enum": [
+                        "missing",
+                        "ready",
+                        "requires_action",
+                        "expired"
+                      ]
+                    },
+                    "display": {
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "enum": [
+                        "missing",
+                        "ready",
+                        "requires_action",
+                        "expired"
+                      ]
+                    }
+                  }
+                }
+              ]
+            },
+            "consent": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "status",
+                    "version",
+                    "consented_at",
+                    "consented_by",
+                    "description"
+                  ],
+                  "properties": {
+                    "status": {
+                      "enum": [
+                        "missing",
+                        "current",
+                        "outdated"
+                      ]
+                    },
+                    "version": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "consented_at": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "consented_by": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "display_name"
+                          ],
+                          "properties": {
+                            "display_name": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "description": {
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "options": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "selected",
+                  "label",
+                  "description",
+                  "threshold",
+                  "refill_offer_id",
+                  "refill_payment_amount",
+                  "refill_credits_received",
+                  "monthly_cap",
+                  "setup_action",
+                  "update_action"
+                ],
+                "properties": {
+                  "selected": {
+                    "type": "boolean"
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "threshold": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "credits",
+                      "display",
+                      "usd_equivalent"
+                    ],
+                    "properties": {
+                      "credits": {
+                        "type": "string",
+                        "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,5})?$"
+                      },
+                      "display": {
+                        "type": "string"
+                      },
+                      "usd_equivalent": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "amount",
+                          "currency",
+                          "display"
+                        ],
+                        "properties": {
+                          "amount": {
+                            "type": "string",
+                            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$"
+                          },
+                          "currency": {
+                            "const": "USD"
+                          },
+                          "display": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "refill_offer_id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "refill_payment_amount": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "amount",
+                      "amount_minor",
+                      "currency",
+                      "display"
+                    ],
+                    "properties": {
+                      "amount": {
+                        "type": "string",
+                        "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]+)?|0\\.[0-9]*[1-9][0-9]*)$"
+                      },
+                      "amount_minor": {
+                        "type": "string",
+                        "pattern": "^[1-9][0-9]*$"
+                      },
+                      "currency": {
+                        "const": "USD"
+                      },
+                      "display": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "refill_credits_received": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "credits",
+                      "display",
+                      "usd_equivalent"
+                    ],
+                    "properties": {
+                      "credits": {
+                        "type": "string",
+                        "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]{1,5})?|0\\.(?=[0-9]{1,5}$)[0-9]*[1-9][0-9]*)$"
+                      },
+                      "display": {
+                        "type": "string"
+                      },
+                      "usd_equivalent": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "amount",
+                          "currency",
+                          "display"
+                        ],
+                        "properties": {
+                          "amount": {
+                            "type": "string",
+                            "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]{1,8})?|0\\.(?=[0-9]{1,8}$)[0-9]*[1-9][0-9]*)$"
+                          },
+                          "currency": {
+                            "const": "USD"
+                          },
+                          "display": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "monthly_cap": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "amount",
+                      "amount_minor",
+                      "currency",
+                      "display"
+                    ],
+                    "properties": {
+                      "amount": {
+                        "type": "string",
+                        "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]+)?|0\\.[0-9]*[1-9][0-9]*)$"
+                      },
+                      "amount_minor": {
+                        "type": "string",
+                        "pattern": "^[1-9][0-9]*$"
+                      },
+                      "currency": {
+                        "const": "USD"
+                      },
+                      "display": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "setup_action": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "id",
+                          "kind",
+                          "label",
+                          "description",
+                          "enabled",
+                          "disabled_reason",
+                          "request"
+                        ],
+                        "properties": {
+                          "id": {
+                            "const": "auto_top_up_setup"
+                          },
+                          "kind": {
+                            "const": "hosted_redirect"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "disabled_reason": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "request": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "method",
+                              "path",
+                              "body"
+                            ],
+                            "properties": {
+                              "method": {
+                                "const": "POST"
+                              },
+                              "path": {
+                                "const": "/billing/v1/credits/auto-top-up/setup"
+                              },
+                              "body": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "product",
+                                  "organisation_id",
+                                  "team_id",
+                                  "user_id",
+                                  "option_id"
+                                ],
+                                "properties": {
+                                  "product": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 100
+                                  },
+                                  "organisation_id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 256
+                                  },
+                                  "team_id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 256
+                                  },
+                                  "user_id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 256
+                                  },
+                                  "option_id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 256
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "update_action": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "id",
+                          "kind",
+                          "label",
+                          "description",
+                          "enabled",
+                          "disabled_reason",
+                          "request"
+                        ],
+                        "properties": {
+                          "id": {
+                            "const": "auto_top_up_update"
+                          },
+                          "kind": {
+                            "const": "mutation"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "disabled_reason": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "request": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "method",
+                              "path",
+                              "body"
+                            ],
+                            "properties": {
+                              "method": {
+                                "const": "POST"
+                              },
+                              "path": {
+                                "const": "/billing/v1/credits/auto-top-up/update"
+                              },
+                              "body": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "product",
+                                  "organisation_id",
+                                  "team_id",
+                                  "user_id",
+                                  "option_id"
+                                ],
+                                "properties": {
+                                  "product": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 100
+                                  },
+                                  "organisation_id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 256
+                                  },
+                                  "team_id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 256
+                                  },
+                                  "user_id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 256
+                                  },
+                                  "option_id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 256
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
                 }
               }
             },
-            {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "status"
-              ],
-              "properties": {
-                "status": {
-                  "enum": [
-                    "missing",
-                    "ready",
-                    "requires_action",
-                    "expired"
-                  ]
-                }
-              }
-            }
-          ]
-        },
-        "consent": {
-          "oneOf": [
-            {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "status",
-                "version",
-                "consented_at",
-                "consented_by",
-                "description"
-              ],
-              "properties": {
-                "status": {
-                  "enum": [
-                    "missing",
-                    "current",
-                    "outdated"
-                  ]
-                },
-                "version": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "consented_at": {
-                  "anyOf": [
-                    {
-                      "type": "string",
-                      "format": "date-time"
+            "disable_action": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id",
+                    "kind",
+                    "label",
+                    "description",
+                    "enabled",
+                    "disabled_reason",
+                    "request"
+                  ],
+                  "properties": {
+                    "id": {
+                      "const": "auto_top_up_disable"
                     },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
-                "consented_by": {
-                  "oneOf": [
-                    {
+                    "kind": {
+                      "const": "mutation"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "disabled_reason": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "request": {
                       "type": "object",
                       "additionalProperties": false,
                       "required": [
-                        "display_name"
+                        "method",
+                        "path",
+                        "body"
                       ],
                       "properties": {
-                        "display_name": {
-                          "type": "string"
+                        "method": {
+                          "const": "POST"
+                        },
+                        "path": {
+                          "const": "/billing/v1/credits/auto-top-up/disable"
+                        },
+                        "body": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "product",
+                            "organisation_id",
+                            "team_id",
+                            "user_id"
+                          ],
+                          "properties": {
+                            "product": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 100
+                            },
+                            "organisation_id": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 256
+                            },
+                            "team_id": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 256
+                            },
+                            "user_id": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 256
+                            }
+                          }
                         }
                       }
-                    },
-                    {
-                      "type": "null"
                     }
-                  ]
+                  }
                 },
-                "description": {
-                  "type": "string"
+                {
+                  "type": "null"
                 }
-              }
+              ]
             },
-            {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "status",
-                "version",
-                "consented_at"
-              ],
-              "properties": {
-                "status": {
-                  "enum": [
-                    "missing",
-                    "current",
-                    "outdated"
-                  ]
-                },
-                "version": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "consented_at": {
-                  "anyOf": [
-                    {
-                      "type": "string",
-                      "format": "date-time"
+            "recover_action": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id",
+                    "kind",
+                    "label",
+                    "description",
+                    "enabled",
+                    "disabled_reason",
+                    "request"
+                  ],
+                  "properties": {
+                    "id": {
+                      "const": "auto_top_up_recover"
                     },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                }
-              }
-            }
-          ]
-        },
-        "options": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": [
-              "selected",
-              "label",
-              "description",
-              "threshold",
-              "refill_offer_id",
-              "refill_payment_amount",
-              "refill_credits_received",
-              "monthly_cap",
-              "setup_action",
-              "update_action"
-            ],
-            "properties": {
-              "selected": {
-                "type": "boolean"
-              },
-              "label": {
-                "type": "string"
-              },
-              "description": {
-                "type": "string"
-              },
-              "threshold": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "credits",
-                  "display",
-                  "usd_equivalent"
-                ],
-                "properties": {
-                  "credits": {
-                    "type": "string",
-                    "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,5})?$"
-                  },
-                  "display": {
-                    "type": "string"
-                  },
-                  "usd_equivalent": {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "required": [
-                      "amount",
-                      "currency",
-                      "display"
-                    ],
-                    "properties": {
-                      "amount": {
-                        "type": "string",
-                        "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$"
-                      },
-                      "currency": {
-                        "const": "USD"
-                      },
-                      "display": {
-                        "type": "string"
-                      }
-                    }
-                  }
-                }
-              },
-              "refill_offer_id": {
-                "type": "string",
-                "minLength": 1
-              },
-              "refill_payment_amount": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "amount",
-                  "amount_minor",
-                  "currency",
-                  "display"
-                ],
-                "properties": {
-                  "amount": {
-                    "type": "string",
-                    "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]+)?|0\\.[0-9]*[1-9][0-9]*)$"
-                  },
-                  "amount_minor": {
-                    "type": "string",
-                    "pattern": "^[1-9][0-9]*$"
-                  },
-                  "currency": {
-                    "const": "USD"
-                  },
-                  "display": {
-                    "type": "string"
-                  }
-                }
-              },
-              "refill_credits_received": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "credits",
-                  "display",
-                  "usd_equivalent"
-                ],
-                "properties": {
-                  "credits": {
-                    "type": "string",
-                    "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]{1,5})?|0\\.(?=[0-9]{1,5}$)[0-9]*[1-9][0-9]*)$"
-                  },
-                  "display": {
-                    "type": "string"
-                  },
-                  "usd_equivalent": {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "required": [
-                      "amount",
-                      "currency",
-                      "display"
-                    ],
-                    "properties": {
-                      "amount": {
-                        "type": "string",
-                        "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]{1,8})?|0\\.(?=[0-9]{1,8}$)[0-9]*[1-9][0-9]*)$"
-                      },
-                      "currency": {
-                        "const": "USD"
-                      },
-                      "display": {
-                        "type": "string"
-                      }
-                    }
-                  }
-                }
-              },
-              "monthly_cap": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "amount",
-                  "amount_minor",
-                  "currency",
-                  "display"
-                ],
-                "properties": {
-                  "amount": {
-                    "type": "string",
-                    "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]+)?|0\\.[0-9]*[1-9][0-9]*)$"
-                  },
-                  "amount_minor": {
-                    "type": "string",
-                    "pattern": "^[1-9][0-9]*$"
-                  },
-                  "currency": {
-                    "const": "USD"
-                  },
-                  "display": {
-                    "type": "string"
-                  }
-                }
-              },
-              "setup_action": {
-                "oneOf": [
-                  {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "required": [
-                      "id",
-                      "kind",
-                      "label",
-                      "description",
-                      "enabled",
-                      "disabled_reason",
-                      "request"
-                    ],
-                    "properties": {
-                      "id": {
-                        "const": "auto_top_up_setup"
-                      },
-                      "kind": {
-                        "const": "hosted_redirect"
-                      },
-                      "label": {
-                        "type": "string"
-                      },
-                      "description": {
-                        "type": "string"
-                      },
-                      "enabled": {
-                        "type": "boolean"
-                      },
-                      "disabled_reason": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
-                      },
-                      "request": {
-                        "type": "object",
-                        "additionalProperties": false,
-                        "required": [
-                          "method",
-                          "path",
-                          "body"
-                        ],
-                        "properties": {
-                          "method": {
-                            "const": "POST"
-                          },
-                          "path": {
-                            "const": "/billing/v1/credits/auto-top-up/setup"
-                          },
-                          "body": {
-                            "type": "object",
-                            "additionalProperties": false,
-                            "required": [
-                              "product",
-                              "organisation_id",
-                              "team_id",
-                              "user_id",
-                              "option_id"
-                            ],
-                            "properties": {
-                              "product": {
-                                "type": "string",
-                                "minLength": 1,
-                                "maxLength": 100
-                              },
-                              "organisation_id": {
-                                "type": "string",
-                                "minLength": 1,
-                                "maxLength": 256
-                              },
-                              "team_id": {
-                                "type": "string",
-                                "minLength": 1,
-                                "maxLength": 256
-                              },
-                              "user_id": {
-                                "type": "string",
-                                "minLength": 1,
-                                "maxLength": 256
-                              },
-                              "option_id": {
-                                "type": "string",
-                                "minLength": 1
-                              }
+                    "kind": {
+                      "const": "hosted_redirect"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "disabled_reason": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "request": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "method",
+                        "path",
+                        "body"
+                      ],
+                      "properties": {
+                        "method": {
+                          "const": "POST"
+                        },
+                        "path": {
+                          "const": "/billing/v1/credits/auto-top-up/recover"
+                        },
+                        "body": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "product",
+                            "organisation_id",
+                            "team_id",
+                            "user_id"
+                          ],
+                          "properties": {
+                            "product": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 100
+                            },
+                            "organisation_id": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 256
+                            },
+                            "team_id": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 256
+                            },
+                            "user_id": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 256
                             }
                           }
                         }
                       }
                     }
-                  },
-                  {
-                    "type": "null"
                   }
-                ]
-              },
-              "update_action": {
-                "oneOf": [
-                  {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "required": [
-                      "id",
-                      "kind",
-                      "label",
-                      "description",
-                      "enabled",
-                      "disabled_reason",
-                      "request"
-                    ],
-                    "properties": {
-                      "id": {
-                        "const": "auto_top_up_update"
-                      },
-                      "kind": {
-                        "const": "mutation"
-                      },
-                      "label": {
-                        "type": "string"
-                      },
-                      "description": {
-                        "type": "string"
-                      },
-                      "enabled": {
-                        "type": "boolean"
-                      },
-                      "disabled_reason": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
-                      },
-                      "request": {
-                        "type": "object",
-                        "additionalProperties": false,
-                        "required": [
-                          "method",
-                          "path",
-                          "body"
-                        ],
-                        "properties": {
-                          "method": {
-                            "const": "POST"
-                          },
-                          "path": {
-                            "const": "/billing/v1/credits/auto-top-up/update"
-                          },
-                          "body": {
-                            "type": "object",
-                            "additionalProperties": false,
-                            "required": [
-                              "product",
-                              "organisation_id",
-                              "team_id",
-                              "user_id",
-                              "option_id"
-                            ],
-                            "properties": {
-                              "product": {
-                                "type": "string",
-                                "minLength": 1,
-                                "maxLength": 100
-                              },
-                              "organisation_id": {
-                                "type": "string",
-                                "minLength": 1,
-                                "maxLength": 256
-                              },
-                              "team_id": {
-                                "type": "string",
-                                "minLength": 1,
-                                "maxLength": 256
-                              },
-                              "user_id": {
-                                "type": "string",
-                                "minLength": 1,
-                                "maxLength": 256
-                              },
-                              "option_id": {
-                                "type": "string",
-                                "minLength": 1
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
-              }
+                },
+                {
+                  "type": "null"
+                }
+              ]
             }
           }
-        },
-        "disable_action": {
-          "oneOf": [
-            {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "id",
-                "kind",
-                "label",
-                "description",
-                "enabled",
-                "disabled_reason",
-                "request"
-              ],
-              "properties": {
-                "id": {
-                  "const": "auto_top_up_disable"
-                },
-                "kind": {
-                  "const": "mutation"
-                },
-                "label": {
-                  "type": "string"
-                },
-                "description": {
-                  "type": "string"
-                },
-                "enabled": {
-                  "type": "boolean"
-                },
-                "disabled_reason": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "request": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "method",
-                    "path",
-                    "body"
-                  ],
-                  "properties": {
-                    "method": {
-                      "const": "POST"
-                    },
-                    "path": {
-                      "const": "/billing/v1/credits/auto-top-up/disable"
-                    },
-                    "body": {
-                      "type": "object",
-                      "additionalProperties": false,
-                      "required": [
-                        "product",
-                        "organisation_id",
-                        "team_id",
-                        "user_id"
-                      ],
-                      "properties": {
-                        "product": {
-                          "type": "string",
-                          "minLength": 1,
-                          "maxLength": 100
-                        },
-                        "organisation_id": {
-                          "type": "string",
-                          "minLength": 1,
-                          "maxLength": 256
-                        },
-                        "team_id": {
-                          "type": "string",
-                          "minLength": 1,
-                          "maxLength": 256
-                        },
-                        "user_id": {
-                          "type": "string",
-                          "minLength": 1,
-                          "maxLength": 256
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "recover_action": {
-          "oneOf": [
-            {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "id",
-                "kind",
-                "label",
-                "description",
-                "enabled",
-                "disabled_reason",
-                "request"
-              ],
-              "properties": {
-                "id": {
-                  "const": "auto_top_up_recover"
-                },
-                "kind": {
-                  "const": "hosted_redirect"
-                },
-                "label": {
-                  "type": "string"
-                },
-                "description": {
-                  "type": "string"
-                },
-                "enabled": {
-                  "type": "boolean"
-                },
-                "disabled_reason": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "request": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "method",
-                    "path",
-                    "body"
-                  ],
-                  "properties": {
-                    "method": {
-                      "const": "POST"
-                    },
-                    "path": {
-                      "const": "/billing/v1/credits/auto-top-up/recover"
-                    },
-                    "body": {
-                      "type": "object",
-                      "additionalProperties": false,
-                      "required": [
-                        "product",
-                        "organisation_id",
-                        "team_id",
-                        "user_id"
-                      ],
-                      "properties": {
-                        "product": {
-                          "type": "string",
-                          "minLength": 1,
-                          "maxLength": 100
-                        },
-                        "organisation_id": {
-                          "type": "string",
-                          "minLength": 1,
-                          "maxLength": 256
-                        },
-                        "team_id": {
-                          "type": "string",
-                          "minLength": 1,
-                          "maxLength": 256
-                        },
-                        "user_id": {
-                          "type": "string",
-                          "minLength": 1,
-                          "maxLength": 256
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            },
-            {
-              "type": "null"
-            }
-          ]
         }
-      }
+      ]
     },
     "recent_entries": {
       "oneOf": [

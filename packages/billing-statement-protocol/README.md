@@ -90,12 +90,20 @@ UOA supplies fixed top-up offers and every complete auto-top-up action. The
 consumer relays the frozen action body unchanged and never chooses an offer or
 option by rebuilding its subject.
 
+`BillingCreditsV1` is an unreleased, coordinated launch contract. Its four
+initial consumers must update from the earlier unpublished draft together. The
+privacy-hardening shape in this package supersedes that draft before the first
+release, so the protocol remains version `1.0.0`; this is not presented as a
+compatible minor update to a published contract.
+
 Both credits and recurring add-ons use manager/member discriminated unions.
 Managers can receive exact-user breakdowns, payment-method display data, and
 enabled commercial actions. Members receive only their own usage plus
 categorical team/unattributed aggregates, payment-method status without card
-identity, and no enabled money actions. Free-form labels and descriptions must
-not encode another user's identity or payment-instrument details.
+identity, the shared remaining/pending credit quantities without a pending
+payment amount, and no offers, prices, thresholds, caps, consent details, or
+enabled money actions. Free-form labels and descriptions must not encode
+another user's identity or payment-instrument details.
 
 Recurring add-ons support organisation, team, and subscribing-user entitlement
 scopes. An organisation-scoped purchase or cancellation requires an active

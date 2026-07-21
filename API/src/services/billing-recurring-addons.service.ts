@@ -106,7 +106,11 @@ function entitlement(subscription: Subscription | null, hasPolicy: boolean) {
   };
 }
 
-function scopeRank(scope: BillingRecurringAddonSubscriptionScope, viewerId: string, userId: string | null) {
+function scopeRank(
+  scope: BillingRecurringAddonSubscriptionScope,
+  viewerId: string,
+  userId: string | null,
+) {
   if (scope === BillingRecurringAddonSubscriptionScope.SUBSCRIBING_USER && userId === viewerId) {
     return 0;
   }
@@ -137,7 +141,8 @@ function selectSubscription(
           !['canceled', 'incomplete_expired'].includes(subscription.status),
       )
       .sort((left, right) => {
-        const rank = scopeRank(left.scope, viewerId, left.subscribingUserId) -
+        const rank =
+          scopeRank(left.scope, viewerId, left.subscribingUserId) -
           scopeRank(right.scope, viewerId, right.subscribingUserId);
         return rank || right.updatedAt.getTime() - left.updatedAt.getTime();
       })[0] ?? null
@@ -206,9 +211,9 @@ function offersForManager(
     const catalog = offer.catalogs[0];
     const available = Boolean(
       offer.featurePolicies.length &&
-        catalog?.stripePriceId &&
-        catalog.currency === offer.currency &&
-        catalog.monthlyAmountMinor === offer.monthlyAmountMinor,
+      catalog?.stripePriceId &&
+      catalog.currency === offer.currency &&
+      catalog.monthlyAmountMinor === offer.monthlyAmountMinor,
     );
     return {
       id: offer.id,
@@ -242,9 +247,9 @@ function offersForMember(
     const catalog = offer.catalogs[0];
     const available = Boolean(
       offer.featurePolicies.length &&
-        catalog?.stripePriceId &&
-        catalog.currency === offer.currency &&
-        catalog.monthlyAmountMinor === offer.monthlyAmountMinor,
+      catalog?.stripePriceId &&
+      catalog.currency === offer.currency &&
+      catalog.monthlyAmountMinor === offer.monthlyAmountMinor,
     );
     return {
       id: offer.id,
@@ -294,7 +299,13 @@ export async function getBillingRecurringAddons(
     { prisma },
   );
   const [collection, viewer] = await Promise.all([
-    (deps?.resolveCollection ?? resolveCreditCollectionContext)({ prisma }),
+    (deps?.resolveCollection ?? resolveCreditCollectionContext)(
+      {
+        organisationId: params.request.organisationId,
+        teamId: params.request.teamId,
+      },
+      { prisma },
+    ),
     (deps?.resolveViewer ?? resolveBillingFundingViewer)(
       {
         userId: params.request.userId,
