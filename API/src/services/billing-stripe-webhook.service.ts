@@ -304,6 +304,23 @@ function hasUoaMetadata(metadata: Stripe.Metadata | null | undefined): boolean {
   return Object.keys(metadata ?? {}).some((key) => key.startsWith('uoa_'));
 }
 
+function uoaMetadataFingerprint(metadata: Stripe.Metadata | null | undefined): string {
+  return Object.entries(metadata ?? {})
+    .filter(([key]) => key.startsWith('uoa_'))
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => `${key}\0${value}`)
+    .join('\0');
+}
+
+function assertSameUoaMetadata(
+  signed: Stripe.Metadata | null | undefined,
+  current: Stripe.Metadata | null | undefined,
+): void {
+  if (uoaMetadataFingerprint(signed) !== uoaMetadataFingerprint(current)) {
+    throw new AppError('INTERNAL', 503, 'STRIPE_WEBHOOK_BINDING_STATE_DRIFT');
+  }
+}
+
 async function currentEventState(
   event: Stripe.Event,
   stripe: StripeWebhookClient,
@@ -313,10 +330,17 @@ async function currentEventState(
     const payload = event.data.object as Stripe.Checkout.Session;
     const session = await stripe.checkout.sessions.retrieve(payload.id);
     assertStripeObjectLivemode(session, account.livemode);
+    if (payload.mode !== session.mode) {
+      if (hasUoaMetadata(payload.metadata) || hasUoaMetadata(session.metadata)) {
+        throw new AppError('INTERNAL', 503, 'STRIPE_WEBHOOK_BINDING_STATE_DRIFT');
+      }
+      return { checkoutSession: null, subscriptionId: null, subscription: null };
+    }
     if (session.mode !== 'subscription') {
       return { checkoutSession: null, subscriptionId: null, subscription: null };
     }
-    if (!hasUoaMetadata(session.metadata)) {
+    assertSameUoaMetadata(payload.metadata, session.metadata);
+    if (!hasUoaMetadata(payload.metadata)) {
       return { checkoutSession: null, subscriptionId: null, subscription: null };
     }
     const subscriptionId = stripeExternalId(session.subscription);
@@ -330,13 +354,22 @@ async function currentEventState(
   }
   if (SUBSCRIPTION_EVENTS.has(event.type)) {
     const payload = event.data.object as Stripe.Subscription;
+    const subscription = await retrieveStripeSubscription(stripe, payload.id);
+    if (!subscription) {
+      return {
+        checkoutSession: null,
+        subscriptionId: hasUoaMetadata(payload.metadata) ? payload.id : null,
+        subscription: null,
+      };
+    }
+    assertSameUoaMetadata(payload.metadata, subscription.metadata);
     if (!hasUoaMetadata(payload.metadata)) {
       return { checkoutSession: null, subscriptionId: null, subscription: null };
     }
     return {
       checkoutSession: null,
       subscriptionId: payload.id,
-      subscription: await retrieveStripeSubscription(stripe, payload.id),
+      subscription,
     };
   }
   return { checkoutSession: null, subscriptionId: null, subscription: null };

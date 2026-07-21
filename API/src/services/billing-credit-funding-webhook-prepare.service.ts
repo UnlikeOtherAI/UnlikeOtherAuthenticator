@@ -33,6 +33,20 @@ function methodSummary(method: Stripe.PaymentMethod): Prisma.InputJsonValue {
   };
 }
 
+function samePaymentBinding(
+  left: CreditPaymentBinding | null,
+  right: CreditPaymentBinding | null,
+): boolean {
+  return (
+    left?.localId === right?.localId &&
+    left?.localType === right?.localType
+  );
+}
+
+function creditBindingDrift(): never {
+  throw new AppError('INTERNAL', 503, 'STRIPE_CREDIT_BINDING_STATE_DRIFT');
+}
+
 async function retrieveBoundSession(
   stripe: CreditFundingWebhookClient,
   params: {
@@ -142,12 +156,12 @@ async function preparePaymentIntent(
   const intent = await stripe.paymentIntents.retrieve(payload.id);
   assertStripeObjectLivemode(intent, account.livemode);
   const binding = paymentBinding(intent.metadata);
-  if (!binding) return null;
   const payloadBinding = paymentBinding(payload.metadata);
-  if (!payloadBinding) return null;
+  if (!binding && !payloadBinding) return null;
+  if (!binding || !payloadBinding || !samePaymentBinding(binding, payloadBinding)) {
+    creditBindingDrift();
+  }
   if (
-    payloadBinding.localId !== binding.localId ||
-    payloadBinding.localType !== binding.localType ||
     payload.status !== intent.status ||
     payload.amount !== intent.amount ||
     payload.currency !== intent.currency ||
@@ -243,7 +257,9 @@ async function prepareSetupIntent(
   const intent = await stripe.setupIntents.retrieve(payload.id);
   assertStripeObjectLivemode(intent, account.livemode);
   const localId = setupBinding(intent.metadata);
-  if (!localId) return null;
+  const payloadLocalId = setupBinding(payload.metadata);
+  if (!localId && !payloadLocalId) return null;
+  if (!localId || !payloadLocalId || localId !== payloadLocalId) creditBindingDrift();
   const checkout = await prisma.billingCreditSetupCheckout.findUnique({
     where: { id: localId },
     include: { customer: true },
@@ -311,7 +327,12 @@ async function prepareExpiredCheckout(
   assertStripeObjectLivemode(session, account.livemode);
   const topUpId = paymentBinding(session.metadata);
   const setupId = setupBinding(session.metadata);
-  if (!topUpId && !setupId) return null;
+  const payloadTopUpId = paymentBinding(payload.metadata);
+  const payloadSetupId = setupBinding(payload.metadata);
+  if (!topUpId && !setupId && !payloadTopUpId && !payloadSetupId) return null;
+  if (!samePaymentBinding(topUpId, payloadTopUpId) || setupId !== payloadSetupId) {
+    creditBindingDrift();
+  }
   if (topUpId?.localType === 'automatic_top_up' || (topUpId && setupId)) {
     throw new AppError('BAD_REQUEST', 400, 'STRIPE_CREDIT_METADATA_INVALID');
   }

@@ -170,6 +170,89 @@ describe('credit funding Stripe webhook preparation', () => {
     ).rejects.toThrow('STRIPE_CREDIT_METADATA_INVALID');
   });
 
+  it.each([
+    {
+      name: 'removed',
+      signed: { uoa_credit_top_up_checkout_id: 'credit_checkout_1' },
+      current: {},
+    },
+    {
+      name: 'added after signing',
+      signed: {},
+      current: { uoa_credit_top_up_checkout_id: 'credit_checkout_1' },
+    },
+    {
+      name: 'rebound',
+      signed: { uoa_credit_top_up_checkout_id: 'credit_checkout_1' },
+      current: { uoa_credit_top_up_checkout_id: 'credit_checkout_2' },
+    },
+  ])('retries when PaymentIntent UOA binding metadata was $name', async ({ signed, current }) => {
+    const signedIntent = paymentIntent(signed);
+    const deps = preparationDeps(paymentIntent(current));
+
+    await expect(
+      prepareCreditFundingWebhook(
+        paymentEvent('payment_intent.succeeded', signedIntent) as never,
+        deps.stripe as never,
+        account,
+        deps.prisma as never,
+      ),
+    ).rejects.toThrow('STRIPE_CREDIT_BINDING_STATE_DRIFT');
+    expect(deps.prisma.billingCreditTopUpCheckout.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('retries when a signed SetupIntent loses its UOA binding metadata', async () => {
+    const signed = {
+      id: 'seti_credit_1',
+      customer: 'cus_team_1',
+      livemode: false,
+      metadata: { uoa_credit_setup_checkout_id: 'setup_checkout_1' },
+      payment_method: 'pm_credit_1',
+      status: 'succeeded',
+      usage: 'off_session',
+    };
+    const deps = preparationDeps();
+    deps.stripe.setupIntents.retrieve.mockResolvedValue({ ...signed, metadata: {} });
+
+    await expect(
+      prepareCreditFundingWebhook(
+        {
+          ...paymentEvent('payment_intent.succeeded', paymentIntent()),
+          id: 'evt_setup_1',
+          type: 'setup_intent.succeeded',
+          data: { object: signed },
+        } as never,
+        deps.stripe as never,
+        account,
+        deps.prisma as never,
+      ),
+    ).rejects.toThrow('STRIPE_CREDIT_BINDING_STATE_DRIFT');
+    expect(deps.prisma.billingCreditSetupCheckout.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('retries when an expired credit Checkout loses its signed UOA binding metadata', async () => {
+    const signed = {
+      ...checkoutSession({ uoa_credit_top_up_checkout_id: 'credit_checkout_1' }),
+      status: 'expired',
+    };
+    const deps = preparationDeps();
+    deps.stripe.checkout.sessions.retrieve.mockResolvedValue({ ...signed, metadata: {} });
+
+    await expect(
+      prepareCreditFundingWebhook(
+        {
+          ...paymentEvent('payment_intent.succeeded', paymentIntent()),
+          id: 'evt_checkout_expired_1',
+          type: 'checkout.session.expired',
+          data: { object: signed },
+        } as never,
+        deps.stripe as never,
+        account,
+        deps.prisma as never,
+      ),
+    ).rejects.toThrow('STRIPE_CREDIT_BINDING_STATE_DRIFT');
+  });
+
   it('uses a succeeded refund plus its original paid intent as adjustment evidence', async () => {
     const intent = paymentIntent({ uoa_credit_top_up_checkout_id: 'credit_checkout_1' });
     const deps = preparationDeps(intent);

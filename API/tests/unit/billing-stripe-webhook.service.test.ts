@@ -242,6 +242,7 @@ describe('Stripe webhook current-state reconciliation', () => {
 
   it('acknowledges an unrelated account-wide subscription event without projecting it', async () => {
     const state = setup();
+    state.setRemote(subscription('active', { metadata: {} }));
     state.setEvent(
       stripeEvent(
         'evt_unrelated_subscription',
@@ -251,7 +252,7 @@ describe('Stripe webhook current-state reconciliation', () => {
     );
 
     await expect(state.call()).resolves.toEqual({ duplicate: false });
-    expect(state.stripe.subscriptions.retrieve).not.toHaveBeenCalled();
+    expect(state.stripe.subscriptions.retrieve).toHaveBeenCalledOnce();
     expect(state.subscriptionModel.create).not.toHaveBeenCalled();
   });
 
@@ -272,6 +273,39 @@ describe('Stripe webhook current-state reconciliation', () => {
     await expect(state.call()).resolves.toEqual({ duplicate: false });
     expect(state.subscriptionModel.create).not.toHaveBeenCalled();
     expect(state.stripe.subscriptions.retrieve).not.toHaveBeenCalled();
+  });
+
+  it('retries instead of acknowledging a signed UOA Checkout whose binding was removed', async () => {
+    const state = setup();
+    const signed = {
+      id: 'cs_1',
+      mode: 'subscription',
+      metadata: { uoa_checkout_id: 'checkout_1' },
+      livemode: false,
+      subscription: 'sub_1',
+    };
+    state.stripe.checkout.sessions.retrieve.mockResolvedValue({
+      ...signed,
+      metadata: {},
+    });
+    state.setEvent(
+      stripeEvent('evt_checkout_binding_removed', 'checkout.session.completed', signed as never),
+    );
+
+    await expect(state.call()).rejects.toThrow('STRIPE_WEBHOOK_BINDING_STATE_DRIFT');
+    expect(state.subscriptionModel.create).not.toHaveBeenCalled();
+  });
+
+  it('retries instead of acknowledging a signed UOA subscription whose binding was removed', async () => {
+    const state = setup();
+    const signed = subscription();
+    state.setRemote(subscription('active', { metadata: {} }));
+    state.setEvent(
+      stripeEvent('evt_subscription_binding_removed', 'customer.subscription.updated', signed),
+    );
+
+    await expect(state.call()).rejects.toThrow('STRIPE_WEBHOOK_BINDING_STATE_DRIFT');
+    expect(state.subscriptionModel.create).not.toHaveBeenCalled();
   });
 
   it('fails closed for a UOA-marked subscription with incomplete binding metadata', async () => {
