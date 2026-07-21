@@ -860,6 +860,27 @@ an opaque, expiring, one-use intent with an immutable subject fingerprint and
 idempotent result. Expired intents become terminal `EXPIRED` rows before a new
 preview can be issued.
 
+The add-on Checkout runtime accepts only the frozen `offer_id` action returned
+by UOA. It derives the exact organisation/team customer, scope, immutable
+catalog Price, HTTPS return URLs, and stable idempotency key, then creates one
+licensed monthly item with discounts, promotion codes, and automatic tax off.
+The signed Checkout completion is reconciled against a fresh Stripe session and
+subscription and creates only a pending projection. UOA activates entitlement
+only after `invoice.paid` proves the exact `subscription_create` invoice,
+customer, subscription/item/Price, quantity, amount, currency, and absence of
+discounts, tax, credits, shipping, or proration. Removed, added, or rebound UOA
+metadata fails retryably rather than consuming the webhook event.
+
+Cancellation preview refreshes Stripe before minting an opaque five-minute
+capability, stores only its digest, and permits one unresolved intent per exact
+subscription. Confirmation locks that intent, rechecks the lifecycle app key,
+actor, membership, scope manager, immutable offer terms, and current Stripe
+binding, then schedules period-end cancellation with one stable UOA
+idempotency key. An exact replay returns the stored result; a changed token,
+key, choice, subject, scope, or subscription conflicts. Disabling a future
+offer never strands an existing customer: its immutable historical policy and
+terms remain cancellable.
+
 `BillingCreditsV1` and the recurring-add-on protocol are public, MIT-licensed
 interfaces from `@unlikeotherai/billing-statement-protocol`. Their generated
 JSON Schema, fixtures, and OpenAPI 3.1 components are the consumer contract.
@@ -876,10 +897,18 @@ runtime do not imply that any mutation action is enabled. When the Stripe
 collection gate is off, UOA resolves only one unambiguous persisted account/mode
 and still returns the shared read projection, including `Remaining credits`,
 but freezes every funding action without making a Stripe read. When collection
-is on, Checkout, top-up, auto-top-up, recovery, and add-on actions appear enabled
-only after fresh current Stripe catalog/payment-method/PaymentIntent evidence
-proves that the exact action is executable. An evidence read failure freezes the
-affected action without failing the balance read.
+is on, credit Checkout, top-up, auto-top-up, and recovery actions appear enabled
+only after fresh current Stripe catalog, payment-method, Checkout, or
+PaymentIntent evidence proves that the exact action is executable. Add-on
+actions additionally require one complete persisted Product/Price binding with
+exact local offer terms and no unresolved checkout. An evidence read failure
+freezes the affected action without failing the balance read. Enabled add-on
+actions use
+`POST /billing/v1/recurring-addons/checkout`,
+`POST /billing/v1/recurring-addons/cancellation/preview`, and
+`POST /billing/v1/recurring-addons/cancellation/confirm`; products relay UOA's
+complete frozen bodies and never supply a Price, amount, customer, return URL,
+or alternative cancellation choice.
 
 The customer credit mutations are the frozen routes
 `/billing/v1/credits/top-up-checkout` and
@@ -903,6 +932,47 @@ organisation, team, account, prior consent, and generation. Its database
 trigger takes the account lock and independently rechecks current exact-team
 billing-manager membership before accepting the event. Revocation racing an
 API authorization check therefore prevents the consent transition.
+
+#### Stripe commercial-catalog provisioning
+
+Commercial catalog bootstrap is an explicit, idempotent operator command; it
+is not SQL, a schema migration, application startup logic, or a Stripe object
+creator. The operator must provide the exact Stripe account and `test` or
+`live` mode. `--dry-run` performs all remote and local validation without a
+write. `--apply` additionally requires the exact confirmation string
+`PROVISION_UOA_STRIPE_CATALOG:<account>:<mode>`, and commits all local changes in
+one serializable transaction.
+
+The remote Stripe objects must already exist. UOA validates their account,
+mode, active state, lookup key, Product binding, exact metadata, USD amount,
+one-time/recurring type, and monthly licensed recurrence before opening the
+write transaction. The command never creates, updates, archives, or replaces a
+Stripe Product or Price. It may bind an exact local catalog only when both of
+its Stripe identifiers are still null; a partial or different binding is
+drift. Re-running against the exact state is a no-op.
+
+The version-1 shared-credit Product has four one-time Prices:
+
+| Lookup key               | Charge | Credits |
+| ------------------------ | -----: | ------: |
+| `uoa_credits_usd_10_v1`  |  US$10 |  10,000 |
+| `uoa_credits_usd_25_v1`  |  US$25 |  25,000 |
+| `uoa_credits_usd_50_v1`  |  US$50 |  50,000 |
+| `uoa_credits_usd_100_v1` | US$100 | 100,000 |
+
+The same offers are projected for the exact active services `nessie`,
+`deepwater`, `deepsignal`, and `deeptest`. Each receives top-up and
+automatic-top-up policy plus the default automatic option: refill 25,000
+credits below 5,000, with a US$100 monthly cap and consent version
+`credits-auto-top-up-v1`.
+
+DeepWater privacy is a separate US$50/month licensed Price with lookup key
+`deepwater_privacy_usd_month_v1`. It is bound to the active,
+feature-flags-enabled `deepwater-api` app, the `can_be_private` flag (default
+off), an exact TEAM feature policy, and recurring add-on key/version
+`privacy`/`1`. Stable Stripe metadata uses the public service identifier
+`deep-water`; UOA's canonical billing-service key remains `deepwater`. Neither
+form is a local database identifier.
 
 ### Contract invoice calculator and invoice privacy
 

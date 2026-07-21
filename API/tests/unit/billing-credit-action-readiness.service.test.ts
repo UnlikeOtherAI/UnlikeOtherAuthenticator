@@ -56,7 +56,17 @@ function stripe() {
         unit_amount: 2_000,
         lookup_key: 'credits-20k-v1',
         livemode: false,
-        product: { id: 'prod_1', active: true, livemode: false },
+        metadata: { credits: '20000', uoa_kind: 'team_credit_top_up' },
+        product: {
+          id: 'prod_1',
+          active: true,
+          livemode: false,
+          metadata: {
+            contract_version: '1',
+            credits_per_usd: '1000',
+            uoa_kind: 'team_credits',
+          },
+        },
       }),
     },
     paymentMethods: { retrieve: vi.fn() },

@@ -25,6 +25,9 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
   /src
     app.ts                  — Fastify app setup, plugin and middleware registration
     server.ts               — Server entry point
+    /cli
+      provision-stripe-commercial-catalog.ts — Guarded Stripe catalog validation and local provisioning entry point
+      stripe-catalog-provisioning-args.ts — Exact dry-run/apply, account, mode, and confirmation parsing
     /config
       billing-env-validation.ts — Tariff, Stripe, and Ledger collector startup invariants
       constants.ts          — App-wide constants (token TTL defaults, retention defaults)
@@ -100,7 +103,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
         effective-tariff.ts — Product-bound app-key + signed-actor tariff resolution
         funding-artifacts.ts — Public credit/add-on JSON Schema, fixture, and OpenAPI artifacts
         jwks.ts             — GET /billing/v1/jwks.json (snapshot verification keys)
-        recurring-addons.ts — POST /billing/v1/recurring-addons and strict protocol validation
+        recurring-addons.ts — Strict add-on read, Checkout, cancellation-preview, and cancellation-confirm routes
         stripe-checkout.ts  — Purpose-bound hosted Checkout creation/recovery
         stripe-subscription.ts — Safe summary, portal, and period-end cancellation
         stripe-webhook.ts   — Exact-raw-body Stripe lifecycle reconciliation
@@ -205,6 +208,13 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       billing-ledger-collector.service.ts   — Strict immutable Ledger usage/portfolio snapshots
       billing-rating.service.ts             — Shared exact statement, Stripe, and contract-invoice rating core
       billing-recurring-addons.service.ts   — Privacy-safe exact-scope recurring add-on projection
+      billing-recurring-addon-catalog.service.ts — Immutable offer/catalog to exact Stripe Product/monthly Price binding
+      billing-recurring-addon-checkout.service.ts — Scope-authorized one-item add-on Checkout and race recovery
+      billing-recurring-addon-cancellation-preview.service.ts — Current-state refresh and opaque five-minute cancellation capability
+      billing-recurring-addon-cancellation-confirm.service.ts — Locked replay-safe period-end cancellation
+      billing-recurring-addon-subscription.service.ts — Exact Stripe add-on subscription validation and terminal projection
+      billing-recurring-addon-webhook.service.ts — Signed/current Checkout, subscription, and initial-invoice proof
+      billing-recurring-addon-webhook-apply.service.ts — Atomic add-on projection, activation, and deactivation writes
       billing-contract-guard.service.ts     — Active-contract assignment mutation guard
       billing-contract.service.ts           — Immutable org contracts and atomic service tariff projection
       billing-invoice-calculation.service.ts — Closed-month org calculator and private evidence persistence
@@ -219,6 +229,12 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       billing-stripe-checkout-recovery.service.ts — Crash-safe Stripe Checkout lookup and lease reconciliation
       billing-stripe-checkout-state.service.ts — Billing-scope overlap, binding, and customer projection rules
       billing-stripe-client.service.ts      — Explicit Stripe account and test/live runtime identity
+      billing-stripe-catalog-provisioning.service.ts — Read-first provisioning orchestration and serializable apply
+      billing-stripe-catalog-provisioning-spec.ts — Canonical credit and DeepWater privacy commercial terms
+      billing-stripe-catalog-provisioning-remote.service.ts — Exact read-only Stripe contract validation
+      billing-stripe-catalog-provisioning-local.service.ts — Local account, app feature, and add-on reconciliation
+      billing-stripe-catalog-provisioning-credits-local.service.ts — Local credit policy, offer, option, and catalog reconciliation
+      billing-stripe-catalog-provisioning-local.shared.ts — Narrow transaction, action, and drift primitives
       billing-stripe-invoice.service.ts     — Authoritative post-period invoice reconciliation
       billing-stripe-manager.service.ts     — Org/team billing-manager authorization
       billing-stripe-period.service.ts      — Calendar-month and free-alignment classification
@@ -471,8 +487,13 @@ reversals can produce debt. Cursor replay is idempotent and a conflicting or
 partially persisted cursor fails closed. `billing-credit-projection.service.ts`
 then returns the strict manager or member protocol branch, with `Remaining
 credits` first and no cross-user/card leakage to members. Recurring add-ons use
-the same lifecycle and viewer boundary but remain a separate, read-only
-subscription projection.
+the same lifecycle and viewer boundary but remain a separate subscription and
+entitlement path. Managers relay exact frozen actions to UOA's Checkout and
+cancellation routes. Checkout creates a one-item licensed monthly Stripe
+subscription but no entitlement; only an exact undiscounted initial
+`invoice.paid` proof activates it. Opaque five-minute cancellation intents are
+single-use, exact-subject-bound, row-locked, and replay their stored result.
+Stripe lifecycle events terminalize the entitlement without resurrection.
 
 The platform-superuser contract-invoice boundary is separate from the
 product-facing statement. `billing-contract.service.ts` owns immutable

@@ -1964,6 +1964,13 @@ owner/admin; team managers cannot escalate their authority through the actor's
 requested-team context. Team and subscribing-user scopes may use the exact-team
 owner/admin policy. Opaque cancellation intents expire terminally and preserve
 the exact subject and Stripe subscription evidence.
+UOA provisions or validates the immutable Stripe Product/monthly Price from its
+offer catalog, creates one licensed monthly item with server-derived customer,
+return URLs, and idempotency, and activates entitlement only after verifying the
+exact undiscounted paid initial invoice. Checkout completion alone never grants
+the add-on. Cancellation preview and confirmation recheck the exact actor/scope,
+use a five-minute opaque capability and stable Stripe idempotency key, and replay
+the stored confirmation without issuing a second cancellation.
 
 For negotiated organisation contracts, the UOA Admin billing area owns the
 versioned organisation margin and invoice calculator. Customer invoices show
@@ -1976,15 +1983,16 @@ markup, or margin calculations. Connected products consume a display-ready UOA
 invoice view model and contain no local invoice-rating logic.
 
 The UOA runtime serves the public `BillingCreditsV1`/recurring-add-on protocol
-artifacts plus product-authenticated reads. A credit read pins one exact
+artifacts, product-authenticated reads, and the protocol's frozen add-on
+Checkout/cancellation actions. A credit read pins one exact
 team-wide Ledger cursor and settles every service atomically against the shared
 balance; it is concurrency-safe and cursor-idempotent, releases corrections
 before allocating new usage, stops ordinary usage at zero, and retains the full
 unfunded liability. Only verified reversals may create debt. The display model
-then enforces manager/member visibility, while the add-on read applies the same
-exact subject boundary. Read/schema availability alone does not enable a money
-action: each Checkout/top-up/auto-top-up/add-on action requires its dedicated
-verified Stripe runtime and UOA policy/catalog evidence.
+then enforces manager/member visibility, while every add-on read or mutation
+applies the same exact subject boundary. Read/schema availability alone does not
+enable a money action: each Checkout/top-up/auto-top-up/add-on action requires
+its dedicated verified Stripe runtime and UOA policy/catalog evidence.
 
 Credit funding mutations are UOA-owned at
 `/billing/v1/credits/top-up-checkout` and
@@ -1998,3 +2006,16 @@ Checkout across a fresh exact-scope actor, and applies webhooks only after
 current Stripe metadata matches the stored customer/catalog/intent binding.
 Missing policy, catalog, payment, consent, or Stripe evidence fails closed and
 keeps the corresponding projected action disabled.
+
+The initial commercial catalog is installed through a typed operator command,
+not a migration or startup side effect. It requires an explicit Stripe account
+and test/live mode, defaults to read-only `--dry-run`, and requires an
+account-and-mode-bound confirmation for `--apply`. Before any database write it
+retrieves and validates the existing immutable Stripe Products and Prices for
+the four shared-credit offers and DeepWater privacy add-on. Apply then creates
+or binds, in one serializable transaction, the credit policy, offers, default
+automatic-top-up option for `nessie`, `deepwater`, `deepsignal`, and `deeptest`,
+plus DeepWater's team feature policy and recurring add-on catalog. Stripe
+metadata contains stable public contract identifiers only, never UOA database
+IDs. Any local or remote drift aborts instead of mutating or replacing an
+existing Stripe object or local binding.

@@ -124,6 +124,10 @@ optionally `BILLING_INVOICE_GCS_PROJECT_ID`. Grant the Cloud Run runtime identit
 create/read access only; invoice objects are create-only and are never deleted
 or overwritten by the application. The deploy workflow accepts only `disabled`
 or `gcs` in production and refuses `gcs` without the bucket variable.
+Configure those values as GitHub repository variables; the main-branch workflow
+passes them to Cloud Run on every deployment. It also forwards
+`STRIPE_AUTO_TOP_UP_INTERVAL_MINUTES` (default `1`) so the documented bounded
+auto-top-up cadence is not silently replaced by an old revision's environment.
 
 The private key used to sign `ADMIN_CONFIG_JWT` is not attached to Cloud Run. Store it separately in Secret Manager as `uoa-auth-config-jwt-private-jwk` for rotation/signing operations only.
 
@@ -268,13 +272,14 @@ Before enabling it in production:
    endpoint at `https://authentication.unlikeotherai.com/billing/v1/stripe/webhook`
    pinned to API version `2026-06-24.dahlia`; a different event API version is
    rejected. Subscribe it to exactly:
-
    - `checkout.session.completed`, `checkout.session.expired`;
    - `customer.subscription.created`, `customer.subscription.updated`,
      `customer.subscription.deleted`, `customer.subscription.paused`,
      `customer.subscription.pending_update_applied`, and
      `customer.subscription.resumed`;
-   - `invoice.created`, `invoice.finalization_failed`;
+   - `invoice.created`, `invoice.finalization_failed`, `invoice.paid`,
+     `invoice.payment_failed`, `invoice.marked_uncollectible`, and
+     `invoice.voided`;
    - `payment_intent.succeeded`, `payment_intent.payment_failed`,
      `payment_intent.processing`, `payment_intent.requires_action`, and
      `payment_intent.canceled`;
@@ -285,12 +290,17 @@ Before enabling it in production:
 
    Do not reuse or modify another product's endpoint. Confirm raw-body signature
    validation, signed/current reserved-metadata agreement, and idempotent replay.
+   Prove a recurring add-on Checkout completion creates no entitlement until its
+   exact undiscounted `subscription_create` `invoice.paid` event arrives. Then
+   prove an amount, Price, discount, tax, credit, quantity, item, customer, or
+   subscription mismatch remains retryable and cannot activate the add-on.
    While `STRIPE_BILLING_ENABLED=false`, invoice reconciliation events return a
    retryable error and are not recorded as consumed; reconcile them before or
    immediately after enabling collection. Other UOA lifecycle and corrective
    webhooks remain live when the collection gate is off. The API key must use an
    explicit `sk_test_`/`rk_test_` or `sk_live_`/`rk_live_` prefix; unknown mode
    fails startup. Confirm `/v1/account` resolves the intended Stripe account.
+
 4. Mint a separate `customer_lifecycle` `uoa_app_…` key for each
    product/deployment. Use it for that product's mandatory post-SSO
    `/billing/v1/service-access/confirm` call, canonical statement, shared-credit
@@ -332,6 +342,69 @@ The workflow wires the automated schedule but leaves it inert by default. It
 does not create or infer live Stripe credentials, enable the gate, or provision
 Stripe customers/subscriptions. Those remain explicit operator actions after
 test-mode evidence and review.
+
+#### Provision the immutable Stripe commercial catalog
+
+Provisioning UOA's local credit and recurring-add-on catalog is an explicit
+operator step. It validates pre-existing Stripe objects and maps their IDs into
+UOA; it never creates or mutates a Stripe Product or Price, never enables
+`STRIPE_BILLING_ENABLED`, and does not configure customers, subscriptions, or
+webhooks.
+
+Prerequisites:
+
+- `STRIPE_SECRET_KEY` must be the key for the intended account and selected
+  mode. The command rejects a test/live mismatch before its first network call.
+- `DATABASE_ADMIN_URL`, falling back to `DATABASE_URL`, must target the intended
+  UOA database.
+- The database must contain exactly the active billing services `nessie`,
+  `deepwater`, `deepsignal`, and `deeptest`, and exactly one active,
+  feature-flags-enabled app identified as `deepwater-api`. Unexpected active
+  services or ambiguous app state fail closed.
+- Stripe must already contain one shared-credit Product, its four active
+  one-time USD Prices, and a distinct DeepWater privacy Product with its active
+  monthly licensed USD Price. Prices are located by lookup key, so Stripe IDs
+  are neither copied into source nor supplied on the command line.
+
+The exact Stripe contract is:
+
+| Object                    | Lookup/terms                                                      | Exact metadata                                                                                      |
+| ------------------------- | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Shared-credit Product     | active                                                            | `contract_version=1`, `credits_per_usd=1000`, `uoa_kind=team_credits`                               |
+| US$10 credit Price        | `uoa_credits_usd_10_v1`, one-time, 10,000 credits                 | `credits=10000`, `uoa_kind=team_credit_top_up`                                                      |
+| US$25 credit Price        | `uoa_credits_usd_25_v1`, one-time, 25,000 credits                 | `credits=25000`, `uoa_kind=team_credit_top_up`                                                      |
+| US$50 credit Price        | `uoa_credits_usd_50_v1`, one-time, 50,000 credits                 | `credits=50000`, `uoa_kind=team_credit_top_up`                                                      |
+| US$100 credit Price       | `uoa_credits_usd_100_v1`, one-time, 100,000 credits               | `credits=100000`, `uoa_kind=team_credit_top_up`                                                     |
+| DeepWater privacy Product | active, distinct from credit Product                              | `contract_version=1`, `uoa_addon_key=privacy`, `uoa_kind=recurring_addon`, `uoa_service=deep-water` |
+| DeepWater privacy Price   | `deepwater_privacy_usd_month_v1`, US$50/month, licensed, no meter | `uoa_addon_key=privacy`, `uoa_kind=recurring_addon`, `uoa_service=deep-water`                       |
+
+Metadata is an exact set: extra, absent, or changed keys are drift. Begin with
+the read-only operation:
+
+```bash
+STRIPE_SECRET_KEY='sk_test_...' DATABASE_ADMIN_URL='postgresql://...' \
+  pnpm billing:provision-stripe-catalog \
+  --dry-run --stripe-account acct_REPLACE_ME --stripe-mode test
+```
+
+In dry-run output, `created` actions are planned local inserts or bindings; no
+database write has occurred. Review the account, mode, and complete action list.
+Apply only with the exact account-and-mode confirmation:
+
+```bash
+STRIPE_SECRET_KEY='sk_test_...' DATABASE_ADMIN_URL='postgresql://...' \
+  pnpm billing:provision-stripe-catalog \
+  --apply --stripe-account acct_REPLACE_ME --stripe-mode test \
+  --confirm 'PROVISION_UOA_STRIPE_CATALOG:acct_REPLACE_ME:test'
+```
+
+For live mode, use an `sk_live_...` key, `--stripe-mode live`, and the `:live`
+confirmation suffix. Apply revalidates Stripe before opening one serializable
+database transaction. It creates only missing exact UOA rows and binds only
+catalog rows whose Product and Price IDs are both null. Any partial binding,
+changed immutable term, or remote mismatch aborts the whole operation. A second
+exact run reports no-op actions. Output contains IDs and decisions but no
+credentials.
 
 The opt-in PostgreSQL credit-settlement integration gate is:
 

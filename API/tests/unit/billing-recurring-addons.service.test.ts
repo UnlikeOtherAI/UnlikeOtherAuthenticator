@@ -56,6 +56,7 @@ function addonData(
         featurePolicies: [{ entitlementScope }],
         catalogs: [
           {
+            stripeProductId: 'prod_privacy',
             stripePriceId: 'price_privacy',
             currency: 'USD',
             monthlyAmountMinor: 5000n,
@@ -78,6 +79,7 @@ function addonData(
         updatedAt: now,
       },
     ],
+    checkouts: [],
   };
 }
 
@@ -104,6 +106,34 @@ function dependencies(
 }
 
 describe('privacy-safe recurring add-on scopes', () => {
+  it('freezes subscribe when the persisted Stripe catalog binding is incomplete', async () => {
+    const data = addonData(
+      BillingRecurringAddonSubscriptionScope.TEAM,
+      BillingRecurringAddonEntitlementScope.TEAM,
+      null,
+    );
+    data.subscriptions = [];
+    data.offers[0]!.catalogs = [
+      { ...data.offers[0]!.catalogs[0]!, stripeProductId: null },
+    ] as never;
+
+    const result = await getBillingRecurringAddons(
+      { request, actorToken: 'signed-actor', credential },
+      dependencies(data, true) as never,
+    );
+
+    expect(result).toMatchObject({
+      capabilities: { can_manage_addons: false },
+      offers: [
+        {
+          available: false,
+          unavailable_reason: 'Checkout is not configured for this offer.',
+          actions: [{ id: 'subscribe', enabled: false }],
+        },
+      ],
+    });
+  });
+
   it('keeps the read projection available while collection actions are frozen', async () => {
     const result = await getBillingRecurringAddons(
       { request, actorToken: 'signed-actor', credential },
@@ -121,7 +151,7 @@ describe('privacy-safe recurring add-on scopes', () => {
     expect(result).toMatchObject({
       collection: { stripe_collection_enabled: false, stripe_mode: 'test' },
       capabilities: { can_manage_addons: false },
-      offers: [{ actions: [] }],
+      offers: [{ actions: [{ id: 'cancel', enabled: false }] }],
     });
   });
 
@@ -194,14 +224,27 @@ describe('privacy-safe recurring add-on scopes', () => {
     expect(() => assertBillingRecurringAddonsContract(result)).not.toThrow();
     expect(result).toMatchObject({
       viewer: { role: 'billing_manager' },
-      capabilities: { can_manage_addons: false },
+      capabilities: { can_manage_addons: true },
       offers: [
         {
           subscription: {
             id: 'subscription_secret',
             owner_user_id: 'user_secret_other',
           },
-          actions: [],
+          actions: [
+            {
+              id: 'cancel',
+              enabled: true,
+              request: {
+                body: {
+                  subscription_id: 'subscription_secret',
+                  organisation_id: request.organisationId,
+                  team_id: request.teamId,
+                  user_id: request.userId,
+                },
+              },
+            },
+          ],
         },
       ],
     });

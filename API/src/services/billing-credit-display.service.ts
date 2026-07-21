@@ -59,7 +59,18 @@ export function billingCreditsPaymentMoney(amountMinor: bigint): BillingCreditsP
   };
 }
 
-export function billingRecurringAddonMoney(amountMinor: bigint): BillingRecurringAddonMoney {
-  const money = billingCreditsPaymentMoney(amountMinor);
-  return { ...money, display: `${money.display}/month` };
+export function billingRecurringAddonMoney(
+  amountMinor: bigint,
+  currency: string,
+): BillingRecurringAddonMoney {
+  if (amountMinor < 0n || !/^[A-Z]{3}$/.test(currency)) {
+    throw new AppError('INTERNAL', 500, 'BILLING_RECURRING_ADDON_PRICE_INVALID');
+  }
+  const amount = scaledDecimal(amountMinor, 2);
+  return {
+    amount,
+    amount_minor: amountMinor.toString(),
+    currency,
+    display: `${currency === 'USD' ? usdDisplay(amount) : `${currency} ${grouped(amount)}`}/month`,
+  };
 }

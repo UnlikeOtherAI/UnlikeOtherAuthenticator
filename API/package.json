@@ -12,6 +12,7 @@
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
+    "billing:provision-stripe-catalog": "tsx src/cli/provision-stripe-commercial-catalog.ts",
     "lint": "node ../node_modules/eslint/bin/eslint.js \"**/*.{ts,tsx,js,jsx,mjs,cjs}\" --no-error-on-unmatched-pattern",
     "lint:openapi": "redocly lint openapi.yaml",
     "typecheck": "tsc -p tsconfig.json",
