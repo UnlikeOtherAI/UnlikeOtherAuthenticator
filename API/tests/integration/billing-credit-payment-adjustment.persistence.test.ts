@@ -3,7 +3,7 @@ import {
   Prisma,
   type PrismaClient,
 } from '@prisma/client';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { applyPaymentAdjustment } from '../../src/services/billing-credit-payment-adjustment-webhook.service.js';
 import { createTestDb } from '../helpers/test-db.js';
@@ -138,7 +138,7 @@ async function applyAdjustment(prisma: PrismaClient, input: AdjustmentInput): Pr
         accountId: ids.account,
         stripeEventId: eventId,
         type: input.eventType,
-        apiVersion: '2026-06-30.basil',
+        apiVersion: '2026-06-24.dahlia',
         livemode: false,
         stripeCreatedAt: occurredAt,
         stripeObjectId: input.objectId,
@@ -182,8 +182,14 @@ describe.skipIf(!databaseTestsEnabled)('credit payment adjustment persistence', 
   beforeAll(async () => {
     handle = await createTestDb();
     if (!handle) throw new Error('DATABASE_URL is required for DB-backed tests');
-    await seedPaidCredits(handle.prisma);
   }, 60_000);
+
+  beforeEach(async () => {
+    await handle.prisma.$executeRawUnsafe(
+      'TRUNCATE TABLE "users", "billing_services", "billing_stripe_accounts" CASCADE',
+    );
+    await seedPaidCredits(handle.prisma);
+  });
 
   afterAll(async () => {
     if (handle) await handle.cleanup();
@@ -216,6 +222,9 @@ describe.skipIf(!databaseTestsEnabled)('credit payment adjustment persistence', 
   });
 
   it('reconciles refund/dispute overlap without restoring credits still under dispute', async () => {
+    const initial = await handle.prisma.billingCreditAccount.findUniqueOrThrow({
+      where: { id: ids.creditAccount },
+    });
     await applyAdjustment(handle.prisma, {
       checkout: 'overlap',
       kind: BillingCreditPaymentAdjustmentKind.REFUND,
@@ -261,6 +270,6 @@ describe.skipIf(!databaseTestsEnabled)('credit payment adjustment persistence', 
     const account = await handle.prisma.billingCreditAccount.findUniqueOrThrow({
       where: { id: ids.creditAccount },
     });
-    expect(account.balanceMicrocredits).toBe(14_000_000_000n);
+    expect(account.balanceMicrocredits).toBe(initial.balanceMicrocredits);
   });
 });
