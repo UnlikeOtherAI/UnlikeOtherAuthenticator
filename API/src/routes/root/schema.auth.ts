@@ -11,7 +11,7 @@ export const authEndpoints: EndpointSchema[] = [
       code_challenge: 'string (required for sign-in actions) — exactly 43-char PKCE S256 challenge',
       code_challenge_method: '"S256" when code_challenge is sent',
       team_hint:
-        'string (optional, ≤256 chars, id/slug-safe charset) — chooser preselect / one-click workspace switch (design §11.4): when the workspace chooser renders, a team already in the verified user\'s own chooser payload matching this teamId or slug is auto-selected, same as the single-team auto-skip. Client-side ONLY — an invalid or non-matching value is silently ignored (chooser renders normally) and select-team\'s server-side ACTIVE-membership + domain check remains the sole authority; it can never select a team the user doesn\'t already have.',
+        "string (optional, ≤256 chars, id/slug-safe charset) — chooser preselect / one-click workspace switch (design §11.4): when the workspace chooser renders, a team already in the verified user's own chooser payload matching this teamId or slug is auto-selected, same as the single-team auto-skip. Client-side ONLY — an invalid or non-matching value is silently ignored (chooser renders normally) and select-team's server-side product-policy + exact ACTIVE-membership check remains the sole authority; it can never select a team the user doesn't already have.",
     },
   },
   {
@@ -41,7 +41,8 @@ export const authEndpoints: EndpointSchema[] = [
       twofa_enroll_required: 'true (only if effective policy is required and user is not enrolled)',
       setup_token: 'short-lived 2FA setup token (only with twofa_enroll_required)',
       otpauth_uri: 'otpauth:// URI (only with twofa_enroll_required)',
-      qr_svg: 'self-contained data:image/svg+xml;base64 QR with logo (only with twofa_enroll_required)',
+      qr_svg:
+        'self-contained data:image/svg+xml;base64 QR with logo (only with twofa_enroll_required)',
       manual_secret: 'manual-entry TOTP secret text (only with twofa_enroll_required)',
       access_request_status: '"pending" when request_access created a pending access request',
     },
@@ -62,8 +63,7 @@ export const authEndpoints: EndpointSchema[] = [
     body: { email: 'string (required)' },
     response: {
       message: '"We sent instructions to your email" (always, regardless of email code issuance)',
-      code:
-        '"EMAIL_ALREADY_REGISTERED" with HTTP 409 only when existing_user_registration_behavior="inline_sign_in"',
+      code: '"EMAIL_ALREADY_REGISTERED" with HTTP 409 only when existing_user_registration_behavior="inline_sign_in"',
     },
   },
   {
@@ -87,8 +87,10 @@ export const authEndpoints: EndpointSchema[] = [
     response: {
       'login_token?':
         'short-lived, one-time chooser capability (only when config.login_flow.workspace_selection="auto") — binds this verified user/domain to the exact config URL + parsed-config fingerprint, redirect, PKCE, remember-me, request-access, expiry, and JTI; authorizes no other continuation',
-      'teams?': 'array of { teamId, orgId, name, slug, role, iconUrl } — this user\'s ACTIVE team memberships on this domain (only with login_token)',
-      'pending_invites?': 'array of { inviteId, teamName, invitedBy } — pending invites for this email on this domain (only with login_token)',
+      'teams?':
+        "array of { teamId, orgId, name, slug, role, iconUrl } — this user's ACTIVE team memberships on this domain (only with login_token)",
+      'pending_invites?':
+        'array of { inviteId, teamName, invitedBy } — pending invites for this email on this domain (only with login_token)',
       'can_create_org?': 'boolean (only with login_token)',
       ok: 'true (when workspace_selection is "off" — finalizes immediately like /auth/login)',
       code: 'authorization code (workspace_selection "off" branch only)',
@@ -117,7 +119,8 @@ export const authEndpoints: EndpointSchema[] = [
       'inviteLinkToken?':
         'string (optional) — a shareable team invite-link token (from GET /auth/team-invite-link/:token). Mutually exclusive with teamId/inviteId; redeems the link and finalizes scoped to its team, only now that identity is verified — an invite link never grants membership on its own.',
       'action?': '"accept" | "decline" (optional) — default "accept" when inviteId is present',
-      remember_me: 'boolean (optional) — when present must equal the value signed at identity verification; omission uses that signed value',
+      remember_me:
+        'boolean (optional) — when present must equal the value signed at identity verification; omission uses that signed value',
     },
     response: {
       ok: 'true',
@@ -125,7 +128,8 @@ export const authEndpoints: EndpointSchema[] = [
       redirect_to: 'full redirect URL with code',
       twofa_required: 'true (only if the selected org requires 2FA)',
       twofa_token: 'challenge token (only if 2FA needed)',
-      twofa_enroll_required: 'true (only if the selected org requires 2FA and the user is not enrolled)',
+      twofa_enroll_required:
+        'true (only if the selected org requires 2FA and the user is not enrolled)',
       'login_token?': 'refreshed bridge token + chooser payload (decline-invite response only)',
       access_request_status: '"pending" when request_access created a pending access request',
     },
@@ -138,18 +142,22 @@ export const authEndpoints: EndpointSchema[] = [
     auth: 'config_url query param + login_token body field',
     query: { config_url: 'string (required)' },
     body: {
-      login_token: 'string (required) — bridge token from the redirecting flow (e.g. the social callback)',
+      login_token:
+        'string (required) — bridge token from the redirecting flow (e.g. the social callback)',
     },
     response: {
-      teams: 'array of { teamId, orgId, name, slug, role, iconUrl } — this user\'s ACTIVE team memberships on this domain',
-      pending_invites: 'array of { inviteId, teamName, invitedBy } — pending invites for this email on this domain',
+      teams:
+        "array of { teamId, orgId, name, slug, role, iconUrl } — this user's ACTIVE team memberships on this domain",
+      pending_invites:
+        'array of { inviteId, teamName, invitedBy } — pending invites for this email on this domain',
       can_create_org: 'boolean',
     },
   },
   {
     method: 'POST',
     path: '/auth/register',
-    description: 'User registration — sends verification email, or an inline already-registered response when the signed config opts in',
+    description:
+      'User registration — sends verification email, or an inline already-registered response when the signed config opts in',
     auth: 'config_url query param',
     query: {
       redirect_url: 'string (optional)',
@@ -161,8 +169,7 @@ export const authEndpoints: EndpointSchema[] = [
     body: { email: 'string (required)' },
     response: {
       message: '"We sent instructions to your email" (default, no enumeration)',
-      code:
-        '"EMAIL_ALREADY_REGISTERED" with HTTP 409 only when existing_user_registration_behavior="inline_sign_in"',
+      code: '"EMAIL_ALREADY_REGISTERED" with HTTP 409 only when existing_user_registration_behavior="inline_sign_in"',
     },
   },
   {
@@ -195,8 +202,7 @@ export const authEndpoints: EndpointSchema[] = [
         'workspace-bearing setup token when twofa_enroll_required is true (alongside QR/manual setup fields)',
       'login_token?':
         'short-lived bridge JWT (only when the chooser gate passes) — authorizes ONLY POST /auth/select-team for this verified user',
-      'teams?':
-        'array of { teamId, orgId, name, slug, role, iconUrl } (only with login_token)',
+      'teams?': 'array of { teamId, orgId, name, slug, role, iconUrl } (only with login_token)',
       'pending_invites?': 'array of { inviteId, teamName, invitedBy } (only with login_token)',
       'can_create_org?': 'boolean (only with login_token)',
     },
@@ -239,13 +245,13 @@ export const authEndpoints: EndpointSchema[] = [
         'exact granted request subset of "ai.invoke", "billing.read", and/or "token.provision"; token.provision is never implied by ai.invoke; confidential token-exchange grant only',
       token_type: '"Bearer"',
       'firstLogin?':
-        'object { memberships: { orgs, teams }, pending_invites, capabilities { can_create_org, can_accept_invite } } — included on authorization_code exchange when org_features.enabled is true. memberships.orgs[] = { orgId, role } camelCase; memberships.teams[] = { teamId, orgId, role } camelCase; pending_invites[] = { inviteId, type, orgId, teamId, teamName } camelCase. Not included on refresh_token grants.',
+        'object { memberships: { orgs, teams }, pending_invites, capabilities { can_create_org, can_accept_invite } } — included on authorization_code exchange when org_features.enabled is true. memberships.orgs[] = { orgId, role } camelCase; memberships.teams[] = { teamId, orgId, role } camelCase; pending_invites[] = { inviteId, type, orgId, teamId, teamName } camelCase. Legacy clients receive same-domain ACTIVE memberships. A UOA-recognized product domain receives all exact ACTIVE memberships under the same server-owned app-key policy that validated active; pending invites stay same-domain. Not included on refresh_token grants.',
       '[note]':
         'There is NO top-level `user` field. User identity lives inside access_token claims (read claims.sub). Every immediate caller uses its own app credential and enabled DB mapping; no shared/cross-app/fallback key or webhook secret is accepted. First-hop JWT assertions are atomically consumed once. Chained access-token subjects remain reusable until exp, but must be UOA-signed, audience-bound exactly to the authenticated caller, scope-narrowed by both hops, and carry a current ACTIVE original org/team. The output source_domain/azp/product identify the immediate caller, while act preserves the signed upstream source/product chain. It never copies the 64-character domain bearer into client_id.',
       '[rate limit]':
         'Legacy grants: 10/min per IP. Confidential exchange: 600/min per authenticated source domain plus 60/min per verified source-domain user.',
       '401 refresh policy':
-        'If the domain signature policy changed and the refresh-token user is incomplete, the valid refresh token is not rotated or consumed. Restart interactive authorization so the user can sign.',
+        'If the domain signature policy changed and the refresh-token user is incomplete, or a stored scoped session no longer has its exact active product mapping plus ACTIVE org/team memberships, the valid refresh token is not rotated or consumed. Restart interactive authorization so the user can sign and/or select an eligible workspace; UOA never silently changes the workspace.',
     },
   },
   {
@@ -390,7 +396,8 @@ export const authEndpoints: EndpointSchema[] = [
     description: 'Verify the initial TOTP code and enable 2FA',
     auth: 'config_url query param + setup_token body. X-UOA-Access-Token is accepted for normal self-service binding but is not required for forced enrollment before code grant.',
     body: {
-      setup_token: 'string (required) — short-lived setup token from /2fa/setup or login enforcement',
+      setup_token:
+        'string (required) — short-lived setup token from /2fa/setup or login enforcement',
       code: 'string (required) — current 6-digit TOTP',
     },
     response: {

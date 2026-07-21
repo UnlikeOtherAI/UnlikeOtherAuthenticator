@@ -8,6 +8,7 @@ import {
   shouldPresentWorkspaceChooser,
   type WorkspaceChoices,
 } from '../../src/services/first-login.service.js';
+import { CLIENT_DOMAIN_WORKSPACE_POLICY } from '../../src/services/product-workspace-policy.service.js';
 import { testUiTheme } from '../helpers/test-config.js';
 
 function makeConfig(overrides?: Partial<ClientConfig>): ClientConfig {
@@ -94,7 +95,7 @@ describe('first-login.service', () => {
         userId: 'user-1',
         config: makeConfig({ org_features: { allow_user_create_org: true } }),
       },
-      { prisma },
+      { policy: CLIENT_DOMAIN_WORKSPACE_POLICY, prisma },
     );
 
     expect(result).toEqual({
@@ -135,7 +136,7 @@ describe('first-login.service', () => {
         userId: 'user-1',
         config: makeConfig({ org_features: { allow_user_create_org: false } }),
       },
-      { prisma },
+      { policy: CLIENT_DOMAIN_WORKSPACE_POLICY, prisma },
     );
 
     expect(result).toEqual({
@@ -180,6 +181,75 @@ describe('first-login.service', () => {
       },
     });
   });
+
+  it('includes selected cross-domain memberships in firstLogin for a bound product', async () => {
+    const prisma = {
+      user: { findUnique: vi.fn(async () => ({ email: 'jane@acme.com' })) },
+      orgMember: { findMany: vi.fn(async () => []) },
+      teamMember: { findMany: vi.fn(async () => []) },
+      teamInvite: { findMany: vi.fn(async () => []) },
+    };
+    const crossProductPrisma = {
+      user: { findUnique: vi.fn() },
+      orgMember: {
+        findMany: vi.fn(async () => [{ orgId: 'org-nessie', role: 'member' }]),
+      },
+      teamMember: {
+        findMany: vi.fn(async () => [
+          {
+            teamId: 'team-nessie',
+            teamRole: 'member',
+            team: { orgId: 'org-nessie', iconUrl: null },
+          },
+        ]),
+      },
+      teamInvite: { findMany: vi.fn() },
+    };
+
+    const result = await buildFirstLoginBlock(
+      {
+        userId: 'user-1',
+        config: makeConfig({ domain: 'api.deepsignal.live' }),
+      },
+      {
+        crossProductPrisma,
+        policy: {
+          scope: 'all_active_memberships',
+          serviceId: 'service-deepsignal',
+          product: 'deepsignal',
+        },
+        prisma,
+      },
+    );
+
+    expect(result?.memberships).toEqual({
+      orgs: [{ orgId: 'org-nessie', role: 'member' }],
+      teams: [
+        {
+          teamId: 'team-nessie',
+          orgId: 'org-nessie',
+          role: 'member',
+          iconUrl: null,
+        },
+      ],
+    });
+    expect(crossProductPrisma.teamMember.findMany).toHaveBeenCalledWith({
+      where: {
+        userId: 'user-1',
+        status: 'ACTIVE',
+        team: {
+          org: {
+            members: { some: { userId: 'user-1', status: 'ACTIVE' } },
+          },
+        },
+      },
+      select: {
+        teamId: true,
+        teamRole: true,
+        team: { select: { orgId: true, iconUrl: true } },
+      },
+    });
+  });
 });
 
 describe('buildWorkspaceChoices', () => {
@@ -192,7 +262,7 @@ describe('buildWorkspaceChoices', () => {
 
     const result = await buildWorkspaceChoices(
       { userId: 'user-1', config: makeConfig() },
-      { prisma },
+      { policy: CLIENT_DOMAIN_WORKSPACE_POLICY, prisma },
     );
 
     expect(result).toEqual({ teams: [], pending_invites: [], can_create_org: false });
@@ -221,7 +291,7 @@ describe('buildWorkspaceChoices', () => {
 
     const result = await buildWorkspaceChoices(
       { userId: 'user-1', config: makeConfig({ org_features: { allow_user_create_org: true } }) },
-      { prisma },
+      { policy: CLIENT_DOMAIN_WORKSPACE_POLICY, prisma },
     );
 
     expect(result).toEqual({
@@ -276,7 +346,7 @@ describe('buildWorkspaceChoices', () => {
 
     const result = await buildWorkspaceChoices(
       { userId: 'user-1', config: makeConfig() },
-      { prisma },
+      { policy: CLIENT_DOMAIN_WORKSPACE_POLICY, prisma },
     );
 
     expect(result.pending_invites).toEqual([
@@ -300,6 +370,76 @@ describe('buildWorkspaceChoices', () => {
         invitedByEmail: true,
       },
     });
+  });
+
+  it('lists all exact ACTIVE memberships for one centrally bound product', async () => {
+    const prisma = {
+      user: { findUnique: vi.fn(async () => ({ email: 'jane@acme.com' })) },
+      teamMember: { findMany: vi.fn(async () => []) },
+      teamInvite: { findMany: vi.fn(async () => []) },
+    };
+    const crossProductPrisma = {
+      user: { findUnique: vi.fn() },
+      teamMember: {
+        findMany: vi.fn(async () => [
+          {
+            teamId: 'team-nessie',
+            teamRole: 'owner',
+            team: {
+              name: 'Nessie Works',
+              slug: 'nessie-works',
+              orgId: 'org-nessie',
+              iconUrl: null,
+            },
+          },
+          {
+            teamId: 'team-second',
+            teamRole: 'member',
+            team: {
+              name: 'Second Team',
+              slug: 'second-team',
+              orgId: 'org-second',
+              iconUrl: null,
+            },
+          },
+        ]),
+      },
+      teamInvite: { findMany: vi.fn() },
+    };
+
+    const result = await buildWorkspaceChoices(
+      { userId: 'user-1', config: makeConfig({ domain: 'api.deepsignal.live' }) },
+      {
+        crossProductPrisma,
+        policy: {
+          scope: 'all_active_memberships',
+          serviceId: 'service-deepsignal',
+          product: 'deepsignal',
+        },
+        prisma,
+      },
+    );
+
+    expect(result.teams.map((team) => team.teamId)).toEqual(['team-nessie', 'team-second']);
+    expect(crossProductPrisma.teamMember.findMany).toHaveBeenCalledWith({
+      where: {
+        userId: 'user-1',
+        status: 'ACTIVE',
+        team: {
+          org: {
+            members: {
+              some: { userId: 'user-1', status: 'ACTIVE' },
+            },
+          },
+        },
+      },
+      select: {
+        teamId: true,
+        teamRole: true,
+        team: { select: { name: true, slug: true, orgId: true, iconUrl: true } },
+      },
+    });
+    expect(shouldPresentWorkspaceChooser(result)).toBe(true);
   });
 });
 
@@ -364,6 +504,8 @@ describe('resolveAutoSelectedWorkspace', () => {
     ).toBe(true);
     expect(shouldPresentWorkspaceChooser(choices({ teams: [], can_create_org: true }))).toBe(true);
     expect(shouldPresentWorkspaceChooser(choices())).toBe(false);
-    expect(shouldPresentWorkspaceChooser(choices({ teams: [], can_create_org: false }))).toBe(false);
+    expect(shouldPresentWorkspaceChooser(choices({ teams: [], can_create_org: false }))).toBe(
+      false,
+    );
   });
 });

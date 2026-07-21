@@ -38,10 +38,17 @@ describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
       },
       orgMember: {
         findFirst: vi.fn(),
+        findMany: vi.fn(),
       },
       teamMember: {
         findFirst: vi.fn(),
+        findMany: vi.fn(),
       },
+      teamInvite: { findMany: vi.fn() },
+      clientDomain: { findUnique: vi.fn() },
+      billingAppKey: { findMany: vi.fn() },
+      organisation: { create: vi.fn() },
+      team: { create: vi.fn() },
     } as unknown as PrismaClient;
   }
 
@@ -70,8 +77,13 @@ describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
       teamId: 'team-active',
     });
     prisma.authorizationCode.updateMany.mockResolvedValue({ count: 1 });
-    prisma.orgMember.findFirst.mockResolvedValue({ id: 'org-member-active' });
+    prisma.orgMember.findFirst.mockResolvedValue({
+      id: 'org-member-active',
+      orgId: 'org-active',
+      role: 'member',
+    });
     prisma.teamMember.findFirst.mockResolvedValue({ id: 'team-member-active' });
+    prisma.teamMember.findMany.mockResolvedValue([{ teamId: 'team-active', teamRole: 'member' }]);
     prisma.refreshToken.create.mockResolvedValue({ id: 'refresh-token-active' });
     prisma.domainRole.findUnique.mockResolvedValue({
       role: 'USER',
@@ -104,6 +116,173 @@ describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
     });
 
     expect(claims.active).toEqual({ orgId: 'org-active', teamId: 'team-active' });
+  });
+
+  it('resolves one cross-product workspace for an unscoped off-flow without creating a ghost product workspace', async () => {
+    const now = new Date('2026-07-07T00:00:00.500Z');
+    const sharedSecret = process.env.SHARED_SECRET!;
+    const code = 'code-with-cross-product-scope';
+    const config = {
+      ...makeConfig({ enabled: true, groups_enabled: false, user_needs_team: true }),
+      domain: 'api.deepsignal.live',
+      login_flow: { email_code_enabled: false, workspace_selection: 'off' as const },
+    };
+    const clientId = createClientId(config.domain, sharedSecret);
+    const configUrl = 'https://api.deepsignal.live/auth-config';
+    const redirectUrl = 'https://api.deepsignal.live/oauth/callback';
+    const prisma = makePrisma();
+
+    prisma.authorizationCode.findUnique.mockResolvedValue({
+      id: 'auth-code-cross',
+      userId: 'user-active',
+      domain: config.domain,
+      configUrl,
+      redirectUrl,
+      codeChallenge: TEST_CODE_CHALLENGE,
+      codeChallengeMethod: 'S256',
+      expiresAt: new Date(now.getTime() + 60_000),
+      usedAt: null,
+    });
+    prisma.authorizationCode.updateMany.mockResolvedValue({ count: 1 });
+    prisma.orgMember.findFirst.mockImplementation(async (args: { where: { org?: unknown } }) =>
+      args.where.org ? null : { id: 'org-member-nessie', orgId: 'org-nessie', role: 'member' },
+    );
+    prisma.teamMember.findFirst.mockImplementation(
+      async (args: { where: { team?: { org?: unknown } } }) =>
+        args.where.team?.org ? null : { id: 'team-member-nessie' },
+    );
+    prisma.orgMember.findMany.mockImplementation(async (args: { where: { org?: unknown } }) =>
+      args.where.org ? [] : [{ orgId: 'org-nessie', role: 'member' }],
+    );
+    prisma.teamMember.findMany.mockImplementation(
+      async (args: { where: { team?: { orgId?: string; org?: unknown } } }) => {
+        if (args.where.team?.orgId) {
+          return [{ teamId: 'team-nessie', teamRole: 'member' }];
+        }
+        const org = args.where.team?.org;
+        if (org && typeof org === 'object' && 'members' in org) {
+          return [
+            {
+              teamId: 'team-nessie',
+              teamRole: 'member',
+              team: { orgId: 'org-nessie', iconUrl: null },
+            },
+          ];
+        }
+        return [];
+      },
+    );
+    prisma.teamInvite.findMany.mockResolvedValue([]);
+    prisma.clientDomain.findUnique.mockResolvedValue({ status: 'active' });
+    prisma.billingAppKey.findMany.mockResolvedValue([
+      {
+        serviceId: 'service-deepsignal',
+        service: { identifier: 'deepsignal' },
+      },
+    ]);
+    prisma.refreshToken.create.mockResolvedValue({ id: 'refresh-token-active' });
+    prisma.domainRole.findUnique.mockResolvedValue({
+      role: 'USER',
+      domain: config.domain,
+      userId: 'user-active',
+    });
+    prisma.user.findUnique.mockResolvedValue({
+      email: 'active@example.com',
+      tokenVersion: 0,
+    });
+
+    const { accessToken, firstLogin } = await exchangeAuthorizationCodeForTokens(
+      { code, config, configUrl, redirectUrl, clientId, codeVerifier: TEST_CODE_VERIFIER },
+      {
+        now: () => now,
+        sharedSecret,
+        authServiceIdentifier: process.env.AUTH_SERVICE_IDENTIFIER,
+        accessTokenTtl: '15m',
+        adminPrisma: prisma,
+        prisma,
+      },
+    );
+
+    const claims = await verifyAccessToken(accessToken, {
+      sharedSecret,
+      issuer: process.env.AUTH_SERVICE_IDENTIFIER,
+      prisma,
+    });
+    expect(claims.active).toEqual({ orgId: 'org-nessie', teamId: 'team-nessie' });
+    expect(firstLogin?.memberships.teams).toContainEqual({
+      teamId: 'team-nessie',
+      orgId: 'org-nessie',
+      role: 'member',
+      iconUrl: null,
+    });
+    expect(prisma.organisation.create).not.toHaveBeenCalled();
+    expect(prisma.team.create).not.toHaveBeenCalled();
+  });
+
+  it('fails closed if a product mapping is revoked after code validation but before signing', async () => {
+    const now = new Date('2026-07-07T00:00:00.750Z');
+    const sharedSecret = process.env.SHARED_SECRET!;
+    const config = {
+      ...makeConfig({ enabled: false }),
+      domain: 'api.deepsignal.live',
+    };
+    const configUrl = 'https://api.deepsignal.live/auth-config';
+    const redirectUrl = 'https://api.deepsignal.live/oauth/callback';
+    const prisma = makePrisma();
+    prisma.authorizationCode.findUnique.mockResolvedValue({
+      id: 'auth-code-revoked-race',
+      userId: 'user-active',
+      domain: config.domain,
+      configUrl,
+      redirectUrl,
+      codeChallenge: TEST_CODE_CHALLENGE,
+      codeChallengeMethod: 'S256',
+      expiresAt: new Date(now.getTime() + 60_000),
+      usedAt: null,
+      orgId: 'org-nessie',
+      teamId: 'team-nessie',
+    });
+    prisma.authorizationCode.updateMany.mockResolvedValue({ count: 1 });
+    prisma.orgMember.findFirst.mockImplementation(async (args: { where: { org?: unknown } }) =>
+      args.where.org ? null : { id: 'org-member-nessie', orgId: 'org-nessie', role: 'member' },
+    );
+    prisma.teamMember.findFirst.mockImplementation(
+      async (args: { where: { team?: { org?: unknown } } }) =>
+        args.where.team?.org ? null : { id: 'team-member-nessie' },
+    );
+    prisma.clientDomain.findUnique.mockResolvedValue({ status: 'active' });
+    prisma.billingAppKey.findMany
+      .mockResolvedValueOnce([
+        {
+          serviceId: 'service-deepsignal',
+          service: { identifier: 'deepsignal' },
+        },
+      ])
+      .mockResolvedValueOnce([]);
+    prisma.refreshToken.create.mockResolvedValue({ id: 'refresh-token-active' });
+    prisma.domainRole.findUnique.mockResolvedValue({
+      role: 'USER',
+      domain: config.domain,
+      userId: 'user-active',
+    });
+    prisma.user.findUnique.mockResolvedValue({
+      email: 'active@example.com',
+      tokenVersion: 0,
+    });
+
+    await expect(
+      exchangeAuthorizationCodeForTokens(
+        {
+          code: 'code-revoked-race',
+          config,
+          configUrl,
+          redirectUrl,
+          clientId: createClientId(config.domain, sharedSecret),
+          codeVerifier: TEST_CODE_VERIFIER,
+        },
+        { now: () => now, sharedSecret, adminPrisma: prisma, prisma },
+      ),
+    ).rejects.toMatchObject({ statusCode: 401, message: 'AUTHENTICATION_FAILED' });
   });
 
   it('rejects a malformed authorization code carrying only part of a workspace scope', async () => {

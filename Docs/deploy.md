@@ -72,7 +72,7 @@ Set via Cloud Run service config:
 | `CONFIG_JWKS_URL`                           | Plain value: `https://authentication.unlikeotherai.com/.well-known/jwks.json`; trusted JWKS URL for RS256 config JWT verification; route-level requirement for config-backed auth                                                                                                                     |
 | `CONFIG_JWKS_JSON`                          | Secret Manager: `uoa-auth-config-jwks-json`; public JWKS JSON served from `/.well-known/jwks.json`; must contain public keys only                                                                                                                                                                     |
 | `PUBLIC_BASE_URL`                           | Plain value: `https://authentication.unlikeotherai.com`                                                                                                                                                                                                                                               |
-| `DATABASE_URL`                              | Secret Manager: `uoa-auth-database-url`; runtime connection used for post-context (tenant) DB paths; should point at the `uoa_app` role once RLS M2 is enforced                                                                                                                                       |
+| `DATABASE_URL`                              | Secret Manager: `uoa-auth-database-url`; runtime connection used for post-context tenant DB paths; production must connect as `uoa_app` and must not have `BYPASSRLS`                                                                                                                                 |
 | `DATABASE_ADMIN_URL`                        | Secret Manager: `uoa-auth-database-admin-url`; bootstrap/admin connection used for domain-hash auth, admin routes, auto-onboarding, claim flow, retention pruning, audit log, and `/.well-known/jwks.json`; must connect as a `BYPASSRLS` role (`uoa_admin`). Falls back to `DATABASE_URL` when unset |
 | `SHARED_SECRET`                             | Secret Manager: `uoa-auth-shared-secret`                                                                                                                                                                                                                                                              |
 | `GOOGLE_CLIENT_ID`                          | Secret Manager: `uoa-auth-google-client-id`                                                                                                                                                                                                                                                           |
@@ -98,6 +98,54 @@ Set via Cloud Run service config:
 | `UOA_BILLING_ASSERTION_PUBLIC_JWKS_JSON`    | Secret Manager: public-only current and overlapping retired assertion keys served at `/billing/v1/service-jwks.json`; current public pair must match the private key                                                                                                                                  |
 
 `/llm` is a Markdown integration guide for LLMs and human readers. `/api` is the machine-readable JSON schema and config contract.
+
+### Database role verification and rollback-safe rotation
+
+Production requires two genuinely distinct principals. `DATABASE_URL` must
+report `current_user = 'uoa_app'`; `DATABASE_ADMIN_URL` must report
+`current_user = 'uoa_admin'`, and only the latter may have `BYPASSRLS`. Merely
+using two Secret Manager names is not evidence that the credentials differ.
+The opt-in, read-only canary verifies the role split, confirms that `uoa_app`
+cannot read the product billing control plane, and proves that an ordinary
+pre-auth tenant transaction can receive cross-product choices only through the
+explicit admin client:
+
+```sh
+RUN_PRODUCT_WORKSPACE_RLS_TESTS=true \
+  DATABASE_URL='<uoa_app DSN>' \
+  DATABASE_ADMIN_URL='<uoa_admin DSN>' \
+  pnpm --filter @uoa/api exec vitest run \
+    tests/integration/product-workspace-policy-rls.test.ts
+```
+
+Never print either DSN or place it in shell history. To repair a drifted
+runtime credential without an all-at-once cutover:
+
+1. Keep the current deployed Secret Manager version enabled for rollback.
+2. Generate a new random `uoa_app` password and set it through an audited Cloud
+   SQL administrator or credential-management path (for example, the Cloud SQL
+   users set-password operation). Do not assume the runtime `uoa_admin` role has
+   `CREATEROLE`. Construct the candidate DSN entirely in a protected local
+   environment.
+3. Run `SELECT current_user`, the canary above, API typecheck, and focused auth
+   tests against the candidate before adding it as a secret version.
+4. Add the validated candidate as a new version of
+   `uoa-auth-database-url`. Do not change `uoa-auth-database-admin-url`.
+5. Deploy a no-traffic Cloud Run revision pinned to the candidate's explicit
+   Secret Manager version (never `latest`), verify startup/health and one
+   same-domain plus one product-domain login, then move traffic gradually.
+   Existing database sessions continue on the prior revision during the shift.
+6. If any check fails, move traffic back, repoint the runtime secret to the
+   prior version, and redeploy. Do not weaken RLS grants as a workaround.
+7. After the observation window, disable the superseded runtime-secret version
+   and record the rotation evidence. Keep the admin credential separately
+   scoped and independently rotatable.
+
+On 2026-07-21 the production-role canary found both configured DSNs connecting
+as `uoa_admin`; no valid historical `uoa_app` secret version was available.
+That credential repair is intentionally a separate, approved production
+operation. Code deployment must not be represented as restoring RLS until the
+canary passes with distinct roles.
 
 The deploy workflow also reads two GitHub repository variables that are not
 runtime application config:

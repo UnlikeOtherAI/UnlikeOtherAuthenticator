@@ -34,9 +34,13 @@ can be retried; \`session-choices\` and invite decline validate but do not consu
      2FA still applies, only the chooser step is skipped).
 3. \`POST /auth/select-team?config_url=...\` — body \`{ login_token, teamId }\` (or
    \`{ login_token, inviteId, action: "accept" | "decline" }\`). Validates the bridge token, that the
-   caller has not changed any signed continuation field, the team belongs to an org on this domain,
-   and that the user holds exact ACTIVE organisation and team memberships (a cross-domain or
-   inactive scope is rejected exactly like an invalid token — no IDOR oracle). Enforces the selected
+   caller has not changed any signed continuation field, and that the user holds exact ACTIVE
+   organisation and team memberships. Legacy clients remain limited to their own config domain. A
+   product domain expands to all exact ACTIVE memberships only when UOA's server-owned control plane
+   has an active ClientDomain and current CUSTOMER_LIFECYCLE app keys whose exact HTTPS actorIssuer
+   maps unambiguously to one active BillingService. Unknown, inactive, expired, revoked, or ambiguous
+   mappings remain same-domain; pending invites are never expanded. Ineligible or inactive scope is
+   rejected exactly like an invalid token — no IDOR oracle. Enforces the selected
    org's 2FA policy, then finalizes with the resolved
    workspace scope: the returned \`code\` carries \`orgId\`/\`teamId\`, so the eventual \`POST /auth/token\`
    exchange's access token includes the \`active: { orgId, teamId }\` claim (§4.2) next to the existing
@@ -44,6 +48,9 @@ can be retried; \`session-choices\` and invite decline validate but do not consu
    same transaction that consumes the code and issues the refresh/access-token family, so a
    concurrent membership deactivation either finishes first and rejects exchange without consuming
    the code, or waits until the successful exchange has committed.
+   The same central policy builds \`firstLogin.memberships\`. Every scoped refresh revalidates the
+   exact mapping and memberships and fails without rotating if they changed; UOA never silently
+   drops \`active\`, switches tenants, or creates a product-domain workspace.
 4. \`POST /auth/login\` (password) also routes into the chooser when \`workspace_selection: "auto"\` and
    2FA is already satisfied: it returns \`{ login_token, teams, pending_invites, can_create_org }\`
    instead of finalizing directly, and the client then calls \`/auth/select-team\`. With the default
@@ -79,7 +86,7 @@ can be retried; \`session-choices\` and invite decline validate but do not consu
    the user clicked, and if a team in that user's own (already-verified) chooser payload matches by
    \`teamId\` or \`slug\`, the Auth UI auto-selects it via the same code path as the single-team
    auto-skip. Client-side preselect ONLY — an invalid or non-matching hint is silently ignored (the
-   chooser just renders normally); \`select-team\`'s ACTIVE-membership + domain check is still the sole
+   chooser just renders normally); \`select-team\`'s product-policy + exact ACTIVE-membership check is the sole
    authority and a hint can never select a team the user isn't already a member of.
 
 ---

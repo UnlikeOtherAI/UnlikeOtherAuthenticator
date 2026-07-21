@@ -96,7 +96,7 @@ describe('ensureUserHasRequiredTeam', () => {
       $transaction: vi.fn(async (fn: (inner: typeof tx) => Promise<void>) => await fn(tx)),
     } as unknown as PrismaClient;
 
-    await ensureUserHasRequiredTeam(
+    const placement = await ensureUserHasRequiredTeam(
       {
         userId: 'user-1',
         config: makeConfig(),
@@ -128,6 +128,7 @@ describe('ensureUserHasRequiredTeam', () => {
       where: { id: 'org-member-1' },
       data: { role: 'admin' },
     });
+    expect(placement).toEqual({ orgId: 'org-1', teamId: 'team-1' });
   });
 
   it('creates a personal org and default team when the user has no org on the domain', async () => {
@@ -160,7 +161,7 @@ describe('ensureUserHasRequiredTeam', () => {
       $transaction: vi.fn(async (fn: (inner: typeof tx) => Promise<void>) => await fn(tx)),
     } as unknown as PrismaClient;
 
-    await ensureUserHasRequiredTeam(
+    const placement = await ensureUserHasRequiredTeam(
       {
         userId: 'user-1',
         config: makeConfig(),
@@ -203,5 +204,6 @@ describe('ensureUserHasRequiredTeam', () => {
         teamRole: 'admin',
       },
     });
+    expect(placement).toEqual({ orgId: 'org-1', teamId: 'team-1' });
   });
 });

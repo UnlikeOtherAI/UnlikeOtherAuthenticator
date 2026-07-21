@@ -20,7 +20,7 @@ import {
 } from '../../services/team-invite.service.js';
 import { redeemTeamInviteLink } from '../../services/team-invite-link.service.js';
 import { finalizeWithTwoFaPolicy } from '../../services/workspace-finalize.service.js';
-import { lockAndAssertActiveWorkspaceScope } from '../../services/workspace-scope.service.js';
+import { lockAndAssertActiveClientWorkspaceScope } from '../../services/workspace-scope.service.js';
 import { AppError } from '../../utils/errors.js';
 import { parseRequiredPkceChallenge } from '../../utils/pkce.js';
 import { selectTeamRateLimiter } from './rate-limit-keys.js';
@@ -68,9 +68,10 @@ function rejectSelection(): never {
 /**
  * Phase 3b (design §4.3, §11.5, §8): choose a workspace (or accept/decline a pending invite) for an
  * already-verified user carrying a `login_token` bridge. Validates the bridge token, the selected
- * team's ACTIVE membership and domain (IDOR guard — a team on another domain, or one the user isn't
- * an ACTIVE member of, is rejected identically to an invalid token), enforces the selected org's 2FA
- * policy, and finalizes with the resolved workspace scope threaded onto the authorization code.
+ * team's ACTIVE membership and centrally resolved client/product policy (IDOR guard — an
+ * ineligible team or one the user isn't an ACTIVE member of is rejected identically to an invalid
+ * token), enforces the selected org's 2FA policy, and finalizes with the resolved workspace scope
+ * threaded onto the authorization code.
  */
 export function registerAuthSelectTeamRoute(app: FastifyInstance): void {
   app.post(
@@ -79,9 +80,8 @@ export function registerAuthSelectTeamRoute(app: FastifyInstance): void {
       preHandler: [selectTeamRateLimiter, configVerifier],
     },
     async (request, reply) => {
-      const { login_token, teamId, inviteId, inviteLinkToken, action, remember_me } = BodySchema.parse(
-        request.body,
-      );
+      const { login_token, teamId, inviteId, inviteLinkToken, action, remember_me } =
+        BodySchema.parse(request.body);
       const { redirect_url, code_challenge, code_challenge_method, request_access } =
         QuerySchema.parse(request.query);
 
@@ -172,7 +172,9 @@ export function registerAuthSelectTeamRoute(app: FastifyInstance): void {
           resolvedTeamId = accepted.teamId;
         } else if (teamId) {
           const team = await tx.team.findFirst({
-            where: { id: teamId, org: { domain: config.domain } },
+            // Membership and product eligibility are checked together below. Looking up only the
+            // opaque id here avoids duplicating (and drifting from) that central policy.
+            where: { id: teamId },
             select: { id: true, orgId: true },
           });
           if (!team) rejectSelection();
@@ -182,9 +184,9 @@ export function registerAuthSelectTeamRoute(app: FastifyInstance): void {
 
         // Every resolved path, including shareable invite-link redemption,
         // must finish with the exact ACTIVE org + team rows locked.
-        await lockAndAssertActiveWorkspaceScope(
+        await lockAndAssertActiveClientWorkspaceScope(
           { userId, domain: config.domain, orgId, teamId: resolvedTeamId },
-          { prisma: tx },
+          { crossProductPrisma: tx, policyPrisma: tx, prisma: tx },
         );
 
         const user = await tx.user.findUnique({
@@ -209,13 +211,15 @@ export function registerAuthSelectTeamRoute(app: FastifyInstance): void {
             orgId,
             teamId: resolvedTeamId,
           },
-          { prisma: tx },
+          { policyPrisma: tx, prisma: tx, workspacePrisma: tx },
         );
         return finalized;
       });
 
       if (outcome.kind === 'twofa') {
-        reply.status(200).send({ ok: true, twofa_required: true, twofa_token: outcome.twofa_token });
+        reply
+          .status(200)
+          .send({ ok: true, twofa_required: true, twofa_token: outcome.twofa_token });
         return;
       }
 

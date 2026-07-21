@@ -11,11 +11,15 @@ import { consumeAuthorizationCode } from './authorization-code.service.js';
 import { AppError } from '../utils/errors.js';
 import { normalizeDomain } from '../utils/domain.js';
 import type { ClientConfig } from './config.service.js';
-import { getUserOrgContext, type OrgContext } from './org-context.service.js';
-import { ensureUserHasRequiredTeam } from './user-team-requirement.service.js';
+import {
+  getActiveClientOrgContext,
+  getUserOrgContext,
+  type OrgContext,
+} from './org-context.service.js';
 import { buildFirstLoginBlock, type FirstLoginBlock } from './first-login.service.js';
 import { evaluateSignaturePolicy } from './signature-policy.service.js';
 import { lockSignaturePolicyForDecision } from './signature-continuation.service.js';
+import { resolveRequiredAuthorizationWorkspace } from './required-workspace-placement.service.js';
 
 type TokenPrisma = PrismaClient;
 
@@ -192,22 +196,43 @@ async function issueTokenPairForUser(
     clientId: params.clientId,
     sharedSecret,
   });
-  await ensureUserHasRequiredTeam(
-    {
-      userId: params.userId,
-      config: params.config,
-    },
-    { env, prisma },
-  );
+  const activeOrgContext = params.active
+    ? await getActiveClientOrgContext(
+        {
+          userId: params.userId,
+          domain: params.config.domain,
+          orgId: params.active.orgId,
+          groupsEnabled: params.config.org_features?.groups_enabled,
+        },
+        {
+          crossProductPrisma: deps?.adminPrisma ?? prisma,
+          env,
+          policyPrisma: deps?.adminPrisma ?? prisma,
+          prisma,
+        },
+      )
+    : null;
+  if (
+    params.active &&
+    (activeOrgContext?.org_id !== params.active.orgId ||
+      !activeOrgContext.teams.includes(params.active.teamId))
+  ) {
+    // Never sign a caller-supplied/stored active scope merely because it was
+    // valid earlier in the flow. The exact product policy and both ACTIVE
+    // memberships must still hold at the signing boundary.
+    throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
+  }
+
   const org = params.config.org_features?.enabled
-    ? await getUserOrgContext(
+    ? (activeOrgContext ??
+      (await getUserOrgContext(
         {
           userId: params.userId,
           domain: params.config.domain,
           config: params.config,
         },
         { env, prisma },
-      )
+      )))
     : null;
 
   const accessToken = await signAccessToken({
@@ -225,8 +250,14 @@ async function issueTokenPairForUser(
   });
 
   const firstLogin = params.includeFirstLogin
-    ? (await buildFirstLoginBlock({ userId: params.userId, config: params.config }, { prisma })) ??
-      undefined
+    ? ((await buildFirstLoginBlock(
+        { userId: params.userId, config: params.config },
+        {
+          crossProductPrisma: deps?.adminPrisma ?? prisma,
+          policyPrisma: deps?.adminPrisma ?? prisma,
+          prisma,
+        },
+      )) ?? undefined)
     : undefined;
 
   return {
@@ -257,11 +288,13 @@ export async function exchangeAuthorizationCodeForTokens(
 
   const sharedSecret = deps?.sharedSecret ?? requireEnv('SHARED_SECRET').SHARED_SECRET;
   const adminPrisma = deps?.adminPrisma ?? deps?.prisma ?? getAdminPrisma();
-  const clientId = params.clientId ?? resolveAccessTokenContext({
-    domain: params.config.domain,
-    env,
-    sharedSecret,
-  }).clientId;
+  const clientId =
+    params.clientId ??
+    resolveAccessTokenContext({
+      domain: params.config.domain,
+      env,
+      sharedSecret,
+    }).clientId;
 
   return runInTransaction(adminPrisma, async (tx) => {
     const now = deps?.now ? deps.now() : new Date();
@@ -274,12 +307,20 @@ export async function exchangeAuthorizationCodeForTokens(
       now,
       sharedSecret,
       prisma: tx,
+      crossProductPrisma: tx,
+      policyPrisma: tx,
       afterActiveScopeLock: deps?.afterActiveWorkspaceLock,
     });
 
     // Both values must be present to carry an explicit or unambiguously auto-selected workspace
     // onto the session (design §7 steps 3-4).
-    const active: ActiveWorkspace | null = orgId && teamId ? { orgId, teamId } : null;
+    let active: ActiveWorkspace | null = orgId && teamId ? { orgId, teamId } : null;
+    if (!active) {
+      active = await resolveRequiredAuthorizationWorkspace(
+        { userId, config: params.config },
+        { env, prisma: tx, workspacePrisma: tx },
+      );
+    }
     const refreshTtlSeconds = resolveRefreshTokenTtlSeconds(params.config, rememberMe);
     const issuedRefreshToken = await issueRefreshToken(
       {
@@ -287,8 +328,8 @@ export async function exchangeAuthorizationCodeForTokens(
         domain: params.config.domain,
         clientId,
         configUrl: params.configUrl,
-        orgId,
-        teamId,
+        orgId: active?.orgId,
+        teamId: active?.teamId,
       },
       {
         now: deps?.now,
@@ -338,11 +379,13 @@ export async function exchangeRefreshTokenForTokens(
   const sharedSecret = deps?.sharedSecret ?? requireEnv('SHARED_SECRET').SHARED_SECRET;
   const prisma = deps?.prisma ?? getPrisma();
   const adminPrisma = deps?.adminPrisma ?? prisma;
-  const clientId = params.clientId ?? resolveAccessTokenContext({
-    domain: params.config.domain,
-    env,
-    sharedSecret,
-  }).clientId;
+  const clientId =
+    params.clientId ??
+    resolveAccessTokenContext({
+      domain: params.config.domain,
+      env,
+      sharedSecret,
+    }).clientId;
 
   const exchangeInsideTransaction = async (tx: PrismaClient): Promise<IssuedTokenPair> => {
     const rotatedRefreshToken = await exchangeRefreshToken(
@@ -371,24 +414,35 @@ export async function exchangeRefreshTokenForTokens(
       },
     );
 
-    // Re-validate the session's workspace scope on every refresh (design §7 step 4): a deactivated
-    // or removed membership must not linger in `active` past the current access-token TTL. Dormant
-    // today since nothing populates refresh_tokens.org_id/team_id yet.
+    // Re-validate the exact selected workspace on every refresh. Product-bound
+    // clients use the same central eligibility policy as the chooser and code
+    // exchange; deactivated/removed membership or revoked product policy drops
+    // `active` within one access-token TTL.
+    const storedScopePresent = Boolean(rotatedRefreshToken.orgId || rotatedRefreshToken.teamId);
     let active: ActiveWorkspace | null = null;
-    if (rotatedRefreshToken.orgId && rotatedRefreshToken.teamId) {
-      const orgContext = params.config.org_features?.enabled
-        ? await getUserOrgContext(
-            {
-              userId: rotatedRefreshToken.userId,
-              domain: params.config.domain,
-              config: params.config,
-            },
-            { env, prisma: tx },
-          )
-        : null;
-      if (orgContext?.teams.includes(rotatedRefreshToken.teamId)) {
-        active = { orgId: rotatedRefreshToken.orgId, teamId: rotatedRefreshToken.teamId };
+    if (storedScopePresent) {
+      if (!rotatedRefreshToken.orgId || !rotatedRefreshToken.teamId) {
+        throw new AppError('UNAUTHORIZED', 401, 'INVALID_REFRESH_TOKEN');
       }
+      const orgContext = await getActiveClientOrgContext(
+        {
+          userId: rotatedRefreshToken.userId,
+          domain: params.config.domain,
+          orgId: rotatedRefreshToken.orgId,
+          groupsEnabled: params.config.org_features?.groups_enabled,
+        },
+        { crossProductPrisma: tx, env, policyPrisma: tx, prisma: tx },
+      );
+      if (
+        orgContext?.org_id !== rotatedRefreshToken.orgId ||
+        !orgContext.teams.includes(rotatedRefreshToken.teamId)
+      ) {
+        // Rotation and this decision share the same admin transaction. Throwing
+        // rolls the replacement token back and forces an interactive workspace
+        // selection instead of silently switching or creating a workspace.
+        throw new AppError('UNAUTHORIZED', 401, 'INVALID_REFRESH_TOKEN');
+      }
+      active = { orgId: rotatedRefreshToken.orgId, teamId: rotatedRefreshToken.teamId };
     }
 
     const accessTtl = resolveAccessTokenTtl(params.config, getEnv().ACCESS_TOKEN_TTL);

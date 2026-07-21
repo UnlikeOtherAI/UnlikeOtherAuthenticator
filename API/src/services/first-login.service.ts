@@ -1,7 +1,12 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 
 import type { ClientConfig } from './config.service.js';
-import { getPrisma } from '../db/prisma.js';
+import { getAdminPrisma, getPrisma } from '../db/prisma.js';
+import {
+  resolveProductWorkspacePolicy,
+  type ProductWorkspacePolicy,
+  type ProductWorkspacePolicyPrisma,
+} from './product-workspace-policy.service.js';
 
 type FirstLoginPrisma = {
   user: Pick<PrismaClient['user'], 'findUnique'>;
@@ -77,7 +82,13 @@ export async function buildFirstLoginBlock(
     userId: string;
     config: ClientConfig;
   },
-  deps?: { prisma?: FirstLoginPrisma; now?: () => Date },
+  deps?: {
+    policy?: ProductWorkspacePolicy;
+    policyPrisma?: ProductWorkspacePolicyPrisma;
+    crossProductPrisma?: FirstLoginPrisma;
+    prisma?: FirstLoginPrisma;
+    now?: () => Date;
+  },
 ): Promise<FirstLoginBlock | null> {
   if (!params.config.org_features?.enabled) {
     return null;
@@ -96,7 +107,7 @@ export async function buildFirstLoginBlock(
 
   const domain = params.config.domain.trim().toLowerCase().replace(/\.$/, '');
 
-  const [orgRows, teamRows, inviteRows] = await Promise.all([
+  const [sameDomainOrgRows, sameDomainTeamRows, inviteRows, policy] = await Promise.all([
     prisma.orgMember.findMany({
       where: {
         userId: params.userId,
@@ -135,7 +146,60 @@ export async function buildFirstLoginBlock(
         team: { select: { name: true } },
       },
     }),
+    deps?.policy ??
+      resolveProductWorkspacePolicy(
+        { domain },
+        {
+          now: deps?.now,
+          prisma:
+            deps?.policyPrisma ?? (getAdminPrisma() as unknown as ProductWorkspacePolicyPrisma),
+        },
+      ),
   ]);
+
+  let productOrgRows: typeof sameDomainOrgRows = [];
+  let productTeamRows: typeof sameDomainTeamRows = [];
+  if (policy.scope === 'all_active_memberships') {
+    // Product workspace expansion is a pre-auth, cross-tenant operation. It is
+    // intentionally isolated on the BYPASSRLS client; the supplied tenant
+    // transaction still contributes same-domain rows created earlier in the
+    // login transaction.
+    const crossProductPrisma =
+      deps?.crossProductPrisma ?? (getAdminPrisma() as unknown as FirstLoginPrisma);
+    [productOrgRows, productTeamRows] = await Promise.all([
+      crossProductPrisma.orgMember.findMany({
+        where: { userId: params.userId, status: 'ACTIVE' },
+        select: { orgId: true, role: true },
+      }),
+      crossProductPrisma.teamMember.findMany({
+        where: {
+          userId: params.userId,
+          status: 'ACTIVE',
+          team: {
+            org: {
+              members: {
+                some: { userId: params.userId, status: 'ACTIVE' },
+              },
+            },
+          },
+        },
+        select: {
+          teamId: true,
+          teamRole: true,
+          team: { select: { orgId: true, iconUrl: true } },
+        },
+      }),
+    ]);
+  }
+
+  const orgRows = [
+    ...new Map([...sameDomainOrgRows, ...productOrgRows].map((row) => [row.orgId, row])).values(),
+  ];
+  const teamRows = [
+    ...new Map(
+      [...sameDomainTeamRows, ...productTeamRows].map((row) => [row.teamId, row]),
+    ).values(),
+  ];
 
   const orgs: FirstLoginMembershipOrg[] = orgRows.map((row) => ({
     orgId: row.orgId,
@@ -227,9 +291,7 @@ export function shouldPresentWorkspaceChooser(
 ): boolean {
   return (
     !autoSelectedWorkspace &&
-    (choices.teams.length >= 2 ||
-      choices.pending_invites.length > 0 ||
-      choices.can_create_org)
+    (choices.teams.length >= 2 || choices.pending_invites.length > 0 || choices.can_create_org)
   );
 }
 
@@ -251,7 +313,13 @@ export async function buildWorkspaceChoices(
     userId: string;
     config: ClientConfig;
   },
-  deps?: { prisma?: WorkspaceChooserPrisma; now?: () => Date },
+  deps?: {
+    policy?: ProductWorkspacePolicy;
+    policyPrisma?: ProductWorkspacePolicyPrisma;
+    crossProductPrisma?: WorkspaceChooserPrisma;
+    prisma?: WorkspaceChooserPrisma;
+    now?: () => Date;
+  },
 ): Promise<WorkspaceChoices> {
   const prisma = deps?.prisma ?? (getPrisma() as unknown as WorkspaceChooserPrisma);
   const now = deps?.now ? deps.now() : new Date();
@@ -265,8 +333,17 @@ export async function buildWorkspaceChoices(
   }
 
   const domain = params.config.domain.trim().toLowerCase().replace(/\.$/, '');
+  const policy =
+    deps?.policy ??
+    (await resolveProductWorkspacePolicy(
+      { domain },
+      {
+        now: deps?.now,
+        prisma: deps?.policyPrisma ?? (getAdminPrisma() as unknown as ProductWorkspacePolicyPrisma),
+      },
+    ));
 
-  const [teamRows, inviteRows] = await Promise.all([
+  const [sameDomainTeamRows, inviteRows] = await Promise.all([
     prisma.teamMember.findMany({
       where: {
         userId: params.userId,
@@ -295,6 +372,36 @@ export async function buildWorkspaceChoices(
       },
     }),
   ]);
+
+  let productTeamRows: typeof sameDomainTeamRows = [];
+  if (policy.scope === 'all_active_memberships') {
+    const crossProductPrisma =
+      deps?.crossProductPrisma ?? (getAdminPrisma() as unknown as WorkspaceChooserPrisma);
+    productTeamRows = await crossProductPrisma.teamMember.findMany({
+      where: {
+        userId: params.userId,
+        status: 'ACTIVE',
+        team: {
+          org: {
+            members: {
+              some: { userId: params.userId, status: 'ACTIVE' },
+            },
+          },
+        },
+      },
+      select: {
+        teamId: true,
+        teamRole: true,
+        team: { select: { name: true, slug: true, orgId: true, iconUrl: true } },
+      },
+    });
+  }
+
+  const teamRows = [
+    ...new Map(
+      [...sameDomainTeamRows, ...productTeamRows].map((row) => [row.teamId, row]),
+    ).values(),
+  ];
 
   const teams: WorkspaceChoiceTeam[] = teamRows.map((row) => ({
     teamId: row.teamId,

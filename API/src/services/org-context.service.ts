@@ -1,15 +1,21 @@
 import type { PrismaClient } from '@prisma/client';
 
 import { getEnv } from '../config/env.js';
-import { getPrisma } from '../db/prisma.js';
+import { getAdminPrisma, getPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import type { ClientConfig } from './config.service.js';
 import { assertDatabaseEnabled, normalizeDomain } from './organisation.service.base.js';
+import {
+  resolveProductWorkspacePolicy,
+  type ProductWorkspacePolicyPrisma,
+} from './product-workspace-policy.service.js';
 
 type OrgContextPrisma = PrismaClient;
 
 type OrgContextDeps = {
+  crossProductPrisma?: OrgContextPrisma;
   env?: ReturnType<typeof getEnv>;
+  policyPrisma?: ProductWorkspacePolicyPrisma;
   prisma?: OrgContextPrisma;
 };
 
@@ -35,6 +41,8 @@ export async function getActiveUserOrgContext(
     /** Resolve one requested organisation instead of the first active membership. */
     orgId?: string;
     groupsEnabled?: boolean;
+    /** Server-owned product policy only; callers must never derive this from browser input. */
+    allowCrossDomain?: boolean;
   },
   deps?: OrgContextDeps,
 ): Promise<OrgContext | null> {
@@ -57,9 +65,7 @@ export async function getActiveUserOrgContext(
       userId,
       ...(orgId ? { orgId } : {}),
       status: 'ACTIVE',
-      org: {
-        domain,
-      },
+      ...(params.allowCrossDomain ? {} : { org: { domain } }),
     },
     select: {
       orgId: true,
@@ -126,6 +132,38 @@ export async function getActiveUserOrgContext(
   }
 
   return context;
+}
+
+/**
+ * Resolve one exact active organisation for a client. Legacy same-domain scope
+ * wins; only an unambiguous active product mapping may retry across domains.
+ */
+export async function getActiveClientOrgContext(
+  params: {
+    userId: string;
+    domain: string;
+    orgId: string;
+    groupsEnabled?: boolean;
+  },
+  deps?: OrgContextDeps,
+): Promise<OrgContext | null> {
+  const sameDomain = await getActiveUserOrgContext(params, deps);
+  if (sameDomain) return sameDomain;
+
+  const policy = await resolveProductWorkspacePolicy(
+    { domain: params.domain },
+    {
+      prisma: deps?.policyPrisma ?? (getAdminPrisma() as unknown as ProductWorkspacePolicyPrisma),
+    },
+  );
+  if (policy.scope !== 'all_active_memberships') return null;
+
+  const crossProductPrisma =
+    deps?.crossProductPrisma ?? (getAdminPrisma() as unknown as OrgContextPrisma);
+  return getActiveUserOrgContext(
+    { ...params, allowCrossDomain: true },
+    { ...deps, prisma: crossProductPrisma },
+  );
 }
 
 export async function getUserOrgContext(

@@ -61,6 +61,12 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
       groupMember: {
         findMany: vi.fn(),
       },
+      clientDomain: {
+        findUnique: vi.fn(),
+      },
+      billingAppKey: {
+        findMany: vi.fn(),
+      },
     } as unknown as PrismaClient;
 
     prisma.authorizationCode.findUnique.mockResolvedValue({
@@ -97,6 +103,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
       { groupId: 'group-1', isAdmin: true },
       { groupId: 'group-2', isAdmin: false },
     ]);
+    prisma.clientDomain.findUnique.mockResolvedValue({ status: 'inactive' });
 
     const { accessToken, refreshToken } = await exchangeAuthorizationCodeForTokens(
       { code, config, configUrl, redirectUrl, clientId, codeVerifier: TEST_CODE_VERIFIER },
@@ -261,6 +268,12 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
       groupMember: {
         findMany: vi.fn(),
       },
+      clientDomain: {
+        findUnique: vi.fn(),
+      },
+      billingAppKey: {
+        findMany: vi.fn(),
+      },
     } as unknown as PrismaClient;
 
     prisma.authorizationCode.findUnique.mockResolvedValue({
@@ -287,6 +300,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
     prisma.orgMember.findMany.mockResolvedValue([]);
     prisma.teamMember.findMany.mockResolvedValue([]);
     prisma.teamInvite.findMany.mockResolvedValue([]);
+    prisma.clientDomain.findUnique.mockResolvedValue({ status: 'inactive' });
 
     const { accessToken, refreshToken } = await exchangeAuthorizationCodeForTokens(
       { code, config, configUrl, redirectUrl, clientId, codeVerifier: TEST_CODE_VERIFIER },

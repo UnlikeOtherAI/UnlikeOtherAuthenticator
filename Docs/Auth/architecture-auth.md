@@ -8,12 +8,12 @@ For the full product spec, see [brief.md](./brief.md). For tech stack, see [tech
 
 ## Guiding Principles
 
-* **No code file longer than 500 lines.** If a file approaches this limit, split it.
-* **Keep the codebase reusable and clean.** This is the hard rule. If a component is reusable, it gets its own file. Small helper components that only serve a single parent can live in the same file if it makes sense.
-* **Components are small and focused.** A component does one thing. If it does two things, consider splitting it.
-* **All styling via Tailwind.** No CSS modules, no styled-components, no inline style objects. Tailwind classes only.
-* **All theming from config.** No hardcoded colors, radii, fonts, or brand-specific styles anywhere in code.
-* **Flat over nested.** Prefer shallow directory structures.
+- **No code file longer than 500 lines.** If a file approaches this limit, split it.
+- **Keep the codebase reusable and clean.** This is the hard rule. If a component is reusable, it gets its own file. Small helper components that only serve a single parent can live in the same file if it makes sense.
+- **Components are small and focused.** A component does one thing. If it does two things, consider splitting it.
+- **All styling via Tailwind.** No CSS modules, no styled-components, no inline style objects. Tailwind classes only.
+- **All theming from config.** No hardcoded colors, radii, fonts, or brand-specific styles anywhere in code.
+- **Flat over nested.** Prefer shallow directory structures.
 
 ---
 
@@ -114,50 +114,50 @@ PopupContainer
 
 ### Pages
 
-* Each page represents one screen in the auth flow
-* Pages compose form components and UI components
-* Pages use hooks for state, config, and translations
-* Pages handle navigation between auth steps
-* One page per file, no exceptions
+- Each page represents one screen in the auth flow
+- Pages compose form components and UI components
+- Pages use hooks for state, config, and translations
+- Pages handle navigation between auth steps
+- One page per file, no exceptions
 
 ### Components
 
-* **`/ui`** — Primitive building blocks. Button, Card, Input, etc. Styled entirely from theme config via Tailwind classes.
-* **`/form`** — Auth-specific form components. Each form handles its own input state and validation. Forms call the API client, they don't manage auth flow.
-* **`/social`** — Social login button rendering. Reads social provider names from `enabled_auth_methods` to decide what to show.
-* **`/layout`** — Structural wrappers. AuthLayout applies the theme card, logo, and language selector. PopupContainer manages the popup lifecycle, including forced 2FA setup and 2FA verification branches.
-* **`/twofactor`** — 2FA-specific components. QR code display, setup/enrollment flow, and login verification.
+- **`/ui`** — Primitive building blocks. Button, Card, Input, etc. Styled entirely from theme config via Tailwind classes.
+- **`/form`** — Auth-specific form components. Each form handles its own input state and validation. Forms call the API client, they don't manage auth flow.
+- **`/social`** — Social login button rendering. Reads social provider names from `enabled_auth_methods` to decide what to show.
+- **`/layout`** — Structural wrappers. AuthLayout applies the theme card, logo, and language selector. PopupContainer manages the popup lifecycle, including forced 2FA setup and 2FA verification branches.
+- **`/twofactor`** — 2FA-specific components. QR code display, setup/enrollment flow, and login verification.
 
 ### Rules
 
-* Reusable components get their own file — always
-* Small helper components that only serve one parent can live in the same file
-* No component file exceeds 500 lines
-* If a component grows complex, extract sub-components into separate files
-* Components receive theme values through context (ThemeProvider), never from props drilling raw config
+- Reusable components get their own file — always
+- Small helper components that only serve one parent can live in the same file
+- No component file exceeds 500 lines
+- If a component grows complex, extract sub-components into separate files
+- Components receive theme values through context (ThemeProvider), never from props drilling raw config
 
 ---
 
 ## Theming
 
-* `ThemeProvider` wraps the entire app
-* It reads the `ui_theme` property from the config JWT
-* It maps config values (colors, radii, typography, logo, density) to Tailwind utility classes
-* All components consume theme via the `use-theme` hook
-* **No hardcoded brand styles anywhere** — every visual property comes from config
-* `ui_theme` must be fully specified; missing theme properties should fail config validation
+- `ThemeProvider` wraps the entire app
+- It reads the `ui_theme` property from the config JWT
+- It maps config values (colors, radii, typography, logo, density) to Tailwind utility classes
+- All components consume theme via the `use-theme` hook
+- **No hardcoded brand styles anywhere** — every visual property comes from config
+- `ui_theme` must be fully specified; missing theme properties should fail config validation
 
 ---
 
 ## i18n
 
-* `I18nProvider` wraps the entire app
-* It loads the translation file for the selected language
-* Components use the `use-translation` hook which returns a `t("key")` function
-* If a translation key is missing, the AI fallback is triggered via `language-loader.ts`
-* AI-generated translations are cached server-side permanently
-* Language selector dropdown is only rendered if config provides multiple languages
-* Default language comes from the client website's selection (passed in config as optional `language`)
+- `I18nProvider` wraps the entire app
+- It loads the translation file for the selected language
+- Components use the `use-translation` hook which returns a `t("key")` function
+- If a translation key is missing, the AI fallback is triggered via `language-loader.ts`
+- AI-generated translations are cached server-side permanently
+- Language selector dropdown is only rendered if config provides multiple languages
+- Default language comes from the client website's selection (passed in config as optional `language`)
 
 ---
 
@@ -175,7 +175,7 @@ The auth flow is state-driven, not route-driven. A single popup URL loads the ap
 8. **Error** → ErrorPage (generic message only)
 9. **Email sign-in code** (Phase 3c, `login_flow.email_code_enabled`) → LoginPage "Email me a
    sign-in code" → CodeEntryPage → verify-code → WorkspaceChooserPage (if `workspace_selection:
-   "auto"`) or straight to step 2/3
+"auto"`) or straight to step 2/3
 10. **Workspace chooser** (Phase 3c, `workspace_selection: "auto"`) — reached after any verified
     identity path (email code/link, password, or social) → WorkspaceChooserPage (workspace list +
     pending invites + create-workspace). It is auto-skipped only for exactly one ACTIVE team and no
@@ -187,13 +187,31 @@ The auth flow is state-driven, not route-driven. A single popup URL loads the ap
     request state. Final selection claims its hashed JTI as the transaction's first write, before
     invite/audit/access-request-email effects; a concurrent replay stops at that unique claim, while
     any later failure rolls the claim and all database effects back so the user may retry. Chooser
-    hydration and invite decline are non-consuming. Exact ACTIVE organisation + team membership is
+    hydration and invite decline are non-consuming. Legacy clients list only ACTIVE teams belonging
+    to their own config domain. A verified first-party product domain may list all of the user's
+    exact ACTIVE organisation + team memberships only when UOA's control plane has (a) an active
+    `ClientDomain`, and (b) current `CUSTOMER_LIFECYCLE` app keys whose exact HTTPS `actorIssuer`
+    maps unambiguously to one active `BillingService`. Unknown, inactive, expired, revoked, or
+    multi-service mappings retain legacy same-domain isolation. Pending invites always remain
+    same-domain. This product expansion is server-owned and read only through `uoa_admin`; signed
+    config or browser input cannot opt into it. Exact ACTIVE organisation + team membership is
     rechecked at selection, after 2FA/signatures immediately before code issuance, and at exchange.
     The selection and code-exchange transactions lock the organisation membership row first and
     team membership rows second, the same order used by membership
     activation/deactivation/removal, so those transactions and lifecycle changes have one serial
     outcome rather than a time-of-check/time-of-use gap. Post-2FA/signature code issuance performs
     the immediate revalidation only; exchange is the final locked authority before token creation.
+    `firstLogin.memberships` uses the same product policy, so it cannot contradict the signed
+    `active` claim. A scoped refresh revalidates the exact policy, org, and team and fails with the
+    normal invalid-refresh response if any of them changed; it never drops scope and silently
+    selects or creates a different product-domain workspace. Same-domain selections remain valid
+    if an unrelated product binding is later revoked. When `user_needs_team` reaches token exchange
+    with an originally unscoped code, UOA resolves placement before creating the refresh token: an
+    auto flow may select one exact eligible ACTIVE workspace, and a recognized product also reuses
+    its sole cross-product workspace when selection is off so it cannot create a ghost product org.
+    Multiple eligible workspaces fail closed and require the chooser; zero eligible workspaces may
+    create one personal org/team, whose exact IDs are validated, persisted on the refresh token,
+    and signed as `active`. Refresh rotation never performs placement or workspace switching.
     Existing-account `LOGIN_LINK` tokens resolve only their issue-time `userId`; deletion or identity
     mismatch fails closed and never falls through to registration.
 11. **Required agreements** (optional per-domain service) — after identity, workspace selection,
@@ -211,17 +229,17 @@ These two steps are held entirely in client state (`use-popup.tsx`'s `pendingEma
 
 ## File Size Rules
 
-* **Maximum 500 lines per code file.** No exceptions.
-* **One React component per file.** No exceptions where it makes sense to separate.
-* If a component grows past 200 lines, consider extracting sub-components
-* If a page grows past 300 lines, extract form sections into separate components
-* Utility files should stay under 200 lines — split by concern if needed
+- **Maximum 500 lines per code file.** No exceptions.
+- **One React component per file.** No exceptions where it makes sense to separate.
+- If a component grows past 200 lines, consider extracting sub-components
+- If a page grows past 300 lines, extract form sections into separate components
+- Utility files should stay under 200 lines — split by concern if needed
 
 ---
 
 ## API Communication
 
-* All API calls go through `/utils/api.ts`
-* The API client handles base URL, headers, and error normalization
-* API errors are always displayed generically — the API client never surfaces specific error messages to the UI
-* Loading and error states managed by the `use-auth` hook
+- All API calls go through `/utils/api.ts`
+- The API client handles base URL, headers, and error normalization
+- API errors are always displayed generically — the API client never surfaces specific error messages to the UI
+- Loading and error states managed by the `use-auth` hook

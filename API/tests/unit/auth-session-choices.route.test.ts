@@ -21,6 +21,8 @@ vi.mock('../../src/middleware/config-verifier.js', () => ({
 }));
 
 const prismaMock = vi.hoisted(() => ({
+  billingAppKey: { findMany: vi.fn() },
+  clientDomain: { findUnique: vi.fn() },
   user: { findUnique: vi.fn() },
   teamMember: { findMany: vi.fn() },
   teamInvite: { findMany: vi.fn() },
@@ -110,6 +112,7 @@ describe('POST /auth/session-choices', () => {
         (fn as ReturnType<typeof vi.fn>).mockReset();
       }
     }
+    prismaMock.clientDomain.findUnique.mockResolvedValue({ status: 'inactive' });
   });
 
   afterEach(() => {

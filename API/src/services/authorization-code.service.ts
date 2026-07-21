@@ -10,13 +10,16 @@ import { getAppLogger } from '../utils/app-logger.js';
 import { tryParseRedirectUrl } from '../utils/http-url.js';
 import { verifyPkceCodeVerifier } from '../utils/pkce.js';
 import {
-  assertActiveWorkspaceScope,
-  lockAndAssertActiveWorkspaceScope,
+  assertActiveClientWorkspaceScope,
+  lockAndAssertActiveClientWorkspaceScope,
 } from './workspace-scope.service.js';
+import type { ProductWorkspacePolicyPrisma } from './product-workspace-policy.service.js';
 
 type AuthorizationCodePrisma = PrismaClient;
 
 type AuthorizationCodeDeps = {
+  crossProductPrisma?: AuthorizationCodePrisma;
+  policyPrisma?: ProductWorkspacePolicyPrisma;
   prisma?: AuthorizationCodePrisma;
   now?: () => Date;
   sharedSecret?: string;
@@ -97,14 +100,18 @@ export async function issueAuthorizationCode(
 
   // Revalidate immediately before the issuance write. This is the final
   // boundary reached after chooser, 2FA, forced enrollment, or signatures.
-  await assertActiveWorkspaceScope(
+  await assertActiveClientWorkspaceScope(
     {
       userId: params.userId,
       domain: params.domain,
       orgId: params.orgId,
       teamId: params.teamId,
     },
-    { prisma },
+    {
+      crossProductPrisma: deps?.crossProductPrisma,
+      policyPrisma: deps?.policyPrisma,
+      prisma,
+    },
   );
 
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -150,6 +157,8 @@ export async function consumeAuthorizationCode(params: {
   now: Date;
   sharedSecret: string;
   prisma: AuthorizationCodePrisma;
+  crossProductPrisma?: AuthorizationCodePrisma;
+  policyPrisma?: ProductWorkspacePolicyPrisma;
   afterActiveScopeLock?: () => Promise<void>;
 }): Promise<{
   userId: string;
@@ -194,8 +203,7 @@ export async function consumeAuthorizationCode(params: {
   };
 
   if (!row) return rejectAuthCode('code_not_found');
-  if (row.domain !== params.domain)
-    rejectAuthCode('domain_mismatch', { rowDomain: row.domain });
+  if (row.domain !== params.domain) rejectAuthCode('domain_mismatch', { rowDomain: row.domain });
   if (row.configUrl !== params.configUrl)
     rejectAuthCode('config_url_mismatch', { rowConfigUrl: row.configUrl });
   if (row.redirectUrl !== params.redirectUrl)
@@ -229,14 +237,18 @@ export async function consumeAuthorizationCode(params: {
   try {
     // A code must not create a scoped session after the selected membership was
     // suspended or removed between issuance and exchange.
-    await lockAndAssertActiveWorkspaceScope(
+    await lockAndAssertActiveClientWorkspaceScope(
       {
         userId: row.userId,
         domain: row.domain,
         orgId: row.orgId,
         teamId: row.teamId,
       },
-      { prisma: params.prisma },
+      {
+        crossProductPrisma: params.crossProductPrisma,
+        policyPrisma: params.policyPrisma,
+        prisma: params.prisma,
+      },
     );
   } catch {
     rejectAuthCode('workspace_scope_inactive');

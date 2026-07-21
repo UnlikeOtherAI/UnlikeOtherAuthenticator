@@ -26,6 +26,11 @@ type UserIdentity = {
   name: string | null;
 };
 
+export type RequiredTeamPlacement = {
+  orgId: string;
+  teamId: string;
+};
+
 function isUserNeedsTeamEnabled(config: ClientConfig): boolean {
   return config.org_features?.enabled === true && config.org_features?.user_needs_team === true;
 }
@@ -56,7 +61,7 @@ async function createPersonalOrgAndTeam(params: {
   tx: UserTeamRequirementTx;
   domain: string;
   user: UserIdentity;
-}): Promise<void> {
+}): Promise<RequiredTeamPlacement> {
   const orgName = buildPersonalOrgName(params.user);
   const teamName = buildPersonalTeamName(params.user);
 
@@ -100,6 +105,8 @@ async function createPersonalOrgAndTeam(params: {
       teamRole: 'admin',
     },
   });
+
+  return { orgId: org.id, teamId: team.id };
 }
 
 async function createPersonalTeamForExistingOrg(params: {
@@ -107,7 +114,7 @@ async function createPersonalTeamForExistingOrg(params: {
   config: ClientConfig;
   user: UserIdentity;
   orgMembership: { id: string; orgId: string; role: string };
-}): Promise<void> {
+}): Promise<RequiredTeamPlacement> {
   const teamCount = await params.tx.team.count({
     where: { orgId: params.orgMembership.orgId },
   });
@@ -147,6 +154,8 @@ async function createPersonalTeamForExistingOrg(params: {
       data: { role: 'admin' },
     });
   }
+
+  return { orgId: params.orgMembership.orgId, teamId: team.id };
 }
 
 export async function ensureUserHasRequiredTeam(
@@ -155,9 +164,9 @@ export async function ensureUserHasRequiredTeam(
     config: ClientConfig;
   },
   deps?: UserTeamRequirementDeps,
-): Promise<void> {
+): Promise<RequiredTeamPlacement | null> {
   if (!isUserNeedsTeamEnabled(params.config)) {
-    return;
+    return null;
   }
 
   const env = deps?.env ?? getEnv();
@@ -167,7 +176,7 @@ export async function ensureUserHasRequiredTeam(
   const userId = params.userId.trim();
   const domain = normalizeDomain(params.config.domain);
   if (!userId || !domain) {
-    return;
+    return null;
   }
 
   const user = await prisma.user.findUnique({
@@ -179,10 +188,10 @@ export async function ensureUserHasRequiredTeam(
     },
   });
   if (!user) {
-    return;
+    return null;
   }
 
-  await runInTransaction(prisma, async (tx) => {
+  return runInTransaction(prisma, async (tx) => {
     const orgMembership = await tx.orgMember.findFirst({
       where: {
         userId,
@@ -196,12 +205,11 @@ export async function ensureUserHasRequiredTeam(
     });
 
     if (!orgMembership) {
-      await createPersonalOrgAndTeam({
+      return createPersonalOrgAndTeam({
         tx,
         domain,
         user,
       });
-      return;
     }
 
     const teamMembershipCount = await tx.teamMember.count({
@@ -213,10 +221,10 @@ export async function ensureUserHasRequiredTeam(
       },
     });
     if (teamMembershipCount > 0) {
-      return;
+      return null;
     }
 
-    await createPersonalTeamForExistingOrg({
+    return createPersonalTeamForExistingOrg({
       tx,
       config: params.config,
       user,

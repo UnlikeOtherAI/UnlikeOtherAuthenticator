@@ -16,7 +16,10 @@ import { signLoginSession } from '../../services/login-session.service.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
 import { resolveTwoFaPolicy } from '../../services/twofactor-policy.service.js';
 import { signTwoFaChallenge } from '../../services/twofactor-challenge.service.js';
-import { startTwoFactorSetup, type TwoFactorSetupResult } from '../../services/twofactor-setup.service.js';
+import {
+  startTwoFactorSetup,
+  type TwoFactorSetupResult,
+} from '../../services/twofactor-setup.service.js';
 import { selectRedirectUrl } from '../../services/authorization-code.service.js';
 import { parseRequiredPkceChallenge } from '../../utils/pkce.js';
 import { loginRateLimiter } from './rate-limit-keys.js';
@@ -148,7 +151,14 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
             // login_token fails verifyLoginSession at select-team and the chooser flow breaks.
             audience: LOGIN_SESSION_AUDIENCE,
           });
-          const choices = await buildWorkspaceChoices({ userId, config }, { prisma });
+          const choices = await buildWorkspaceChoices(
+            { userId, config },
+            {
+              crossProductPrisma: request.adminDb,
+              policyPrisma: request.adminDb,
+              prisma,
+            },
+          );
           return { kind: 'workspace_chooser' as const, loginToken, choices };
         }
 
@@ -166,7 +176,7 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
             codeChallengeMethod: pkce.codeChallengeMethod,
             ip: request.ip ?? null,
           },
-          { prisma },
+          { workspacePrisma: request.adminDb, prisma },
         );
 
         try {
@@ -192,7 +202,9 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
       });
 
       if (outcome.kind === 'twofa') {
-        reply.status(200).send({ ok: true, twofa_required: true, twofa_token: outcome.twofa_token });
+        reply
+          .status(200)
+          .send({ ok: true, twofa_required: true, twofa_token: outcome.twofa_token });
         return;
       }
 

@@ -1152,6 +1152,11 @@ Organisation slugs are derived from the `name` field:
 - If `org_features.user_needs_team = true`, successful auth must self-heal users with no team membership:
   - If the user already belongs to an org on the domain but has zero teams, create a personal team named `"{user name}'s team"` and add them as `lead`. **⚠ SUPERSEDED:** `lead` is replaced by `admin` per `api-changes-rebac.md §1`.
   - If the user does not belong to any org on the domain, create a new personal org for them, create a default personal team named `"{user name}'s team"`, and place them there.
+  - Resolve this during authorization-code exchange, before refresh-token creation. If placement
+    creates a workspace, validate and persist its exact org/team IDs and emit them as `active`;
+    never create or switch workspaces during refresh rotation. A recognized product reuses one
+    exact eligible cross-product workspace and fails closed on an ambiguous set rather than
+    creating a product-domain duplicate.
 
 #### Default Team
 
@@ -1221,7 +1226,11 @@ When `org_features.enabled` is `true` and the user belongs to an org, the access
 - If user has no org on this domain, the `org` claim is **omitted entirely** (not null, not empty — absent).
 - JWT size grows linearly with memberships. `max_team_memberships_per_user` (default: 50) caps this. With 50 teams and 20 groups, expect ~4-5KB additional payload. Consuming products may need to increase reverse proxy header buffer sizes.
 - JWT `org` claims are populated at issuance time, not updated mid-session. Changes require re-authentication (consistent with Section 22.10).
-- **Refresh token + org claims:** Refresh tokens carry no org context themselves — they are scoped only to the user identity. When a refresh token is used to issue a new access token, org claims are re-resolved from the current DB state at that moment. A user added to or removed from an org will see the change reflected on the next token refresh, without requiring full re-authentication.
+- **Refresh token + org claims:** Refresh tokens may carry the exact optional `orgId` / `teamId`
+  selected (or newly placed) for the session. Rotation preserves and revalidates that scope before
+  signing the next `active` claim; it fails closed instead of silently dropping, switching, or
+  creating a workspace. The wider display-only `org` claim is re-resolved from current database
+  state on each issuance.
 
 #### Implementation
 
@@ -1453,7 +1462,9 @@ Apply exactly one branch on first verified login:
 3. **`auto_create_personal_org_on_first_login: true`.** Create a personal org with the user as `owner` (default team created alongside per 24.3). Skipped if branch 1 matched and `pending_invites_block_auto_create: true`.
 4. **None of the above.** User record exists; no org, no team, no memberships. Client renders onboarding based on `firstLogin.capabilities`.
 
-`user_needs_team` (24.1) is **orthogonal**: it runs on every successful auth as a self-heal, not just first login. First-login behaviour runs once; `user_needs_team` runs forever.
+`user_needs_team` (24.1) is **orthogonal**: it runs on every successful interactive authorization
+as a self-heal, not just first login. First-login behaviour runs once; `user_needs_team` remains
+applicable to later interactive logins, but never runs during refresh rotation.
 
 #### Design notes
 

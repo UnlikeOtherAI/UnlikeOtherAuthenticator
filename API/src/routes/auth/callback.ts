@@ -101,10 +101,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         throw new AppError('BAD_REQUEST', 400, 'MISSING_SOCIAL_CALLBACK_PARAMS');
       }
 
-      const { SHARED_SECRET, CONFIG_JWKS_URL } = requireEnv(
-        'SHARED_SECRET',
-        'CONFIG_JWKS_URL',
-      );
+      const { SHARED_SECRET, CONFIG_JWKS_URL } = requireEnv('SHARED_SECRET', 'CONFIG_JWKS_URL');
       const authServiceIdentifier = getAuthServiceIdentifier();
       const baseUrl = resolvePublicBaseUrl();
 
@@ -143,10 +140,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
 
       // Brief 22.1 + 22.4: fetch and verify config on each auth initiation.
       const configJwt = await readConfigJwtFromTrustedSource(configUrl);
-      const payload = await verifyConfigJwtSignature(
-        configJwt,
-        CONFIG_JWKS_URL,
-      );
+      const payload = await verifyConfigJwtSignature(configJwt, CONFIG_JWKS_URL);
       const baseConfig = validateConfigFields(payload);
       assertConfigDomainMatchesConfigUrl(baseConfig.domain, configUrl);
       assertSocialProviderAllowed({ config: baseConfig, provider });
@@ -280,7 +274,14 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
 
         let autoSelectedWorkspace: AutoSelectedWorkspace | null = null;
         if (config.login_flow?.workspace_selection === 'auto') {
-          const choices = await buildWorkspaceChoices({ userId, config }, { prisma });
+          const choices = await buildWorkspaceChoices(
+            { userId, config },
+            {
+              crossProductPrisma: request.adminDb,
+              policyPrisma: request.adminDb,
+              prisma,
+            },
+          );
           autoSelectedWorkspace = resolveAutoSelectedWorkspace(choices);
           if (shouldPresentWorkspaceChooser(choices, autoSelectedWorkspace)) {
             const loginToken = await signLoginSession({
@@ -356,7 +357,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
             ip: request.ip ?? null,
             ...(autoSelectedWorkspace ?? {}),
           },
-          { prisma },
+          { workspacePrisma: request.adminDb, prisma },
         );
 
         try {

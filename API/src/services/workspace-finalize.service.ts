@@ -8,7 +8,9 @@ import { signTwoFaChallenge } from './twofactor-challenge.service.js';
 import { startTwoFactorSetup, type TwoFactorSetupResult } from './twofactor-setup.service.js';
 
 type FinalizeWithPolicyDeps = {
+  policyPrisma?: PrismaClient;
   prisma?: PrismaClient;
+  workspacePrisma?: PrismaClient;
 };
 
 export type WorkspaceFinalizeOutcome =
@@ -114,11 +116,15 @@ export async function finalizeWithTwoFaPolicy(
     deps?.prisma
       ? {
           prisma: deps.prisma,
-          policyPrisma: deps.prisma,
+          policyPrisma: deps.policyPrisma ?? deps.prisma,
           // Keep code/signature-continuation issuance in the caller's workspace
           // selection transaction. A replay collision can then roll back every
           // grant or invite mutation produced by the losing request.
-          signatureDeps: { prisma: deps.prisma },
+          signatureDeps: {
+            prisma: deps.prisma,
+            workspacePrisma: deps.workspacePrisma ?? deps.prisma,
+          },
+          workspacePrisma: deps.workspacePrisma,
         }
       : undefined,
   );

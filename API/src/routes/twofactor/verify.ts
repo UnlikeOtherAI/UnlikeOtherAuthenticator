@@ -83,7 +83,7 @@ export function registerTwoFactorVerifyRoute(app: FastifyInstance): void {
             orgId: challenge.orgId,
             teamId: challenge.teamId,
           },
-          { prisma },
+          { workspacePrisma: request.adminDb, prisma },
         );
 
         try {

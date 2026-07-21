@@ -275,7 +275,7 @@ describe('2FA gated by config `2fa_enabled`', () => {
         teamId: 'team_1',
         twoFaCompleted: true,
       }),
-      undefined,
+      expect.objectContaining({ workspacePrisma: expect.anything() }),
     );
 
     await app.close();
@@ -323,7 +323,7 @@ describe('2FA gated by config `2fa_enabled`', () => {
         teamId: 'team_1',
         twoFaCompleted: true,
       }),
-      undefined,
+      expect.objectContaining({ workspacePrisma: expect.anything() }),
     );
 
     await app.close();

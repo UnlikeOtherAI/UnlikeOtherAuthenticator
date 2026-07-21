@@ -20,6 +20,8 @@ export type SignatureContinuationDeps = {
   issuePublicCode?: PublicCodeIssuer;
   now?: () => Date;
   prisma?: PrismaClient;
+  /** BYPASSRLS client for centrally bound product workspace policy/membership reads. */
+  workspacePrisma?: PrismaClient;
   publicBaseUrl?: string;
   sharedSecret?: string;
 };
@@ -82,10 +84,10 @@ function rejectContinuation(): never {
   throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
 }
 
-function requirePkce(params: {
-  codeChallenge?: string;
-  codeChallengeMethod?: string;
-}): { codeChallenge: string; codeChallengeMethod: 'S256' } {
+function requirePkce(params: { codeChallenge?: string; codeChallengeMethod?: string }): {
+  codeChallenge: string;
+  codeChallengeMethod: 'S256';
+} {
   if (!params.codeChallenge || params.codeChallengeMethod !== 'S256') {
     throw new AppError('BAD_REQUEST', 400, 'PKCE_REQUIRED');
   }
@@ -245,7 +247,13 @@ export async function finalizeConfigAuthorizationWithSignatures(
     if (policy.complete) {
       const issued = await (deps?.issueConfigCode ?? issueAuthorizationCode)(
         { ...input, ...pkce, domain },
-        { prisma: tx, now: deps?.now, sharedSecret: sharedSecret(deps) },
+        {
+          crossProductPrisma: deps?.workspacePrisma ?? tx,
+          policyPrisma: deps?.workspacePrisma ?? tx,
+          prisma: tx,
+          now: deps?.now,
+          sharedSecret: sharedSecret(deps),
+        },
       );
       return {
         status: 'granted',
@@ -299,7 +307,11 @@ export async function finalizePublicOAuthAuthorizationWithSignatures(
         tx as unknown as Prisma.TransactionClient,
         currentTime(deps),
       );
-      return { status: 'granted', code: issued.code, redirectTo: publicCodeRedirect(input, issued.code) };
+      return {
+        status: 'granted',
+        code: issued.code,
+        redirectTo: publicCodeRedirect(input, issued.code),
+      };
     }
     const continuation = await createContinuation(
       { ...input, ...pkce, domain },
@@ -317,7 +329,10 @@ export async function finalizePublicOAuthAuthorizationWithSignatures(
   });
 }
 
-function publicCodeRedirect(input: Pick<PublicOAuthGateInput, 'redirectUrl' | 'state'>, code: string): string {
+function publicCodeRedirect(
+  input: Pick<PublicOAuthGateInput, 'redirectUrl' | 'state'>,
+  code: string,
+): string {
   const url = new URL(input.redirectUrl);
   url.searchParams.set('code', code);
   if (input.state) url.searchParams.set('state', input.state);
@@ -371,12 +386,21 @@ export async function completeSigningContinuation(
           orgId: continuation.orgId ?? undefined,
           teamId: continuation.teamId ?? undefined,
         },
-        { prisma: tx, now: deps?.now, sharedSecret: sharedSecret(deps) },
+        {
+          crossProductPrisma: deps?.workspacePrisma ?? tx,
+          policyPrisma: deps?.workspacePrisma ?? tx,
+          prisma: tx,
+          now: deps?.now,
+          sharedSecret: sharedSecret(deps),
+        },
       );
       return {
         status: 'granted',
         code: issued.code,
-        redirectTo: buildRedirectToUrl({ redirectUrl: continuation.redirectUrl, code: issued.code }),
+        redirectTo: buildRedirectToUrl({
+          redirectUrl: continuation.redirectUrl,
+          code: issued.code,
+        }),
       };
     }
 

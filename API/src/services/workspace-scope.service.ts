@@ -1,6 +1,11 @@
 import { Prisma, type PrismaClient } from '@prisma/client';
 
+import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
+import {
+  resolveProductWorkspacePolicy,
+  type ProductWorkspacePolicyPrisma,
+} from './product-workspace-policy.service.js';
 
 type WorkspaceScopePrisma = Pick<
   PrismaClient,
@@ -10,6 +15,48 @@ type WorkspaceLockPrisma = Pick<PrismaClient, '$queryRaw'>;
 
 function rejectWorkspaceScope(): never {
   throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
+}
+
+async function activeWorkspaceScopeExists(
+  params: {
+    allowCrossDomain: boolean;
+    userId: string;
+    domain: string;
+    orgId?: string | null;
+    teamId?: string | null;
+  },
+  deps: { prisma: WorkspaceScopePrisma },
+): Promise<boolean> {
+  const orgId = params.orgId ?? undefined;
+  const teamId = params.teamId ?? undefined;
+  if (!orgId && !teamId) return true;
+  if (!orgId || !teamId) return false;
+
+  const [orgMember, teamMember] = await Promise.all([
+    deps.prisma.orgMember.findFirst({
+      where: {
+        orgId,
+        userId: params.userId,
+        status: 'ACTIVE',
+        ...(params.allowCrossDomain ? {} : { org: { domain: params.domain } }),
+      },
+      select: { id: true },
+    }),
+    deps.prisma.teamMember.findFirst({
+      where: {
+        teamId,
+        userId: params.userId,
+        status: 'ACTIVE',
+        team: {
+          orgId,
+          ...(params.allowCrossDomain ? {} : { org: { domain: params.domain } }),
+        },
+      },
+      select: { id: true },
+    }),
+  ]);
+
+  return Boolean(orgMember && teamMember);
 }
 
 /** Lock a workspace container before a destructive operation reaches membership rows. */
@@ -112,36 +159,48 @@ export async function assertActiveWorkspaceScope(
   },
   deps: { prisma: WorkspaceScopePrisma },
 ): Promise<void> {
-  const orgId = params.orgId ?? undefined;
-  const teamId = params.teamId ?? undefined;
-  if (!orgId && !teamId) return;
-  if (!orgId || !teamId) rejectWorkspaceScope();
+  if (!(await activeWorkspaceScopeExists({ ...params, allowCrossDomain: false }, deps))) {
+    rejectWorkspaceScope();
+  }
+}
 
-  const [orgMember, teamMember] = await Promise.all([
-    deps.prisma.orgMember.findFirst({
-      where: {
-        orgId,
-        userId: params.userId,
-        status: 'ACTIVE',
-        org: { domain: params.domain },
-      },
-      select: { id: true },
-    }),
-    deps.prisma.teamMember.findFirst({
-      where: {
-        teamId,
-        userId: params.userId,
-        status: 'ACTIVE',
-        team: {
-          orgId,
-          org: { domain: params.domain },
-        },
-      },
-      select: { id: true },
-    }),
-  ]);
+/**
+ * Validate a selected workspace against the client domain first. A cross-domain
+ * retry is permitted only for one unambiguous, active UOA product mapping and
+ * still requires exact ACTIVE organisation and team memberships.
+ */
+export async function assertActiveClientWorkspaceScope(
+  params: {
+    userId: string;
+    domain: string;
+    orgId?: string | null;
+    teamId?: string | null;
+  },
+  deps: {
+    crossProductPrisma?: WorkspaceScopePrisma;
+    policyPrisma?: ProductWorkspacePolicyPrisma;
+    prisma: WorkspaceScopePrisma;
+  },
+): Promise<void> {
+  if (await activeWorkspaceScopeExists({ ...params, allowCrossDomain: false }, deps)) return;
 
-  if (!orgMember || !teamMember) rejectWorkspaceScope();
+  const policy = await resolveProductWorkspacePolicy(
+    { domain: params.domain },
+    {
+      prisma: deps.policyPrisma ?? (getAdminPrisma() as unknown as ProductWorkspacePolicyPrisma),
+    },
+  );
+  if (
+    policy.scope !== 'all_active_memberships' ||
+    !(await activeWorkspaceScopeExists(
+      { ...params, allowCrossDomain: true },
+      {
+        prisma: deps.crossProductPrisma ?? (getAdminPrisma() as unknown as WorkspaceScopePrisma),
+      },
+    ))
+  ) {
+    rejectWorkspaceScope();
+  }
 }
 
 /** Lock the exact membership rows, then validate their current committed state. */
@@ -159,9 +218,60 @@ export async function lockAndAssertActiveWorkspaceScope(
   if (!orgId && !teamId) return;
   if (!orgId || !teamId) rejectWorkspaceScope();
 
+  await lockWorkspaceMembershipRows({ userId: params.userId, orgId, teamId }, deps);
+  await assertActiveWorkspaceScope(params, deps);
+}
+
+/** Lock the exact rows, then apply the client/product-aware scope policy. */
+export async function lockAndAssertActiveClientWorkspaceScope(
+  params: {
+    userId: string;
+    domain: string;
+    orgId?: string | null;
+    teamId?: string | null;
+  },
+  deps: {
+    crossProductPrisma?: WorkspaceScopePrisma & WorkspaceLockPrisma;
+    policyPrisma?: ProductWorkspacePolicyPrisma;
+    prisma: WorkspaceScopePrisma & WorkspaceLockPrisma;
+  },
+): Promise<void> {
+  const orgId = params.orgId ?? undefined;
+  const teamId = params.teamId ?? undefined;
+  if (!orgId && !teamId) return;
+  if (!orgId || !teamId) rejectWorkspaceScope();
+
+  // Preserve the legacy transaction and lock order when the selected workspace
+  // belongs to the client domain. Cross-domain membership rows and the
+  // product-key policy are never read through the tenant role: the caller must
+  // use (or this service defaults to) the BYPASSRLS client.
+  if (await activeWorkspaceScopeExists({ ...params, allowCrossDomain: false }, deps)) {
+    await lockWorkspaceMembershipRows({ userId: params.userId, orgId, teamId }, deps);
+    await assertActiveWorkspaceScope(params, deps);
+    return;
+  }
+
+  const policyPrisma =
+    deps.policyPrisma ?? (getAdminPrisma() as unknown as ProductWorkspacePolicyPrisma);
+  const policy = await resolveProductWorkspacePolicy(
+    { domain: params.domain },
+    { prisma: policyPrisma },
+  );
+  if (policy.scope !== 'all_active_memberships') rejectWorkspaceScope();
+
+  const crossProductPrisma =
+    deps.crossProductPrisma ??
+    (getAdminPrisma() as unknown as WorkspaceScopePrisma & WorkspaceLockPrisma);
   await lockWorkspaceMembershipRows(
     { userId: params.userId, orgId, teamId },
-    deps,
+    { prisma: crossProductPrisma },
   );
-  await assertActiveWorkspaceScope(params, deps);
+  if (
+    !(await activeWorkspaceScopeExists(
+      { ...params, allowCrossDomain: true },
+      { prisma: crossProductPrisma },
+    ))
+  ) {
+    rejectWorkspaceScope();
+  }
 }

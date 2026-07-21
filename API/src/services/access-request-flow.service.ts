@@ -16,6 +16,10 @@ type FinalizeDeps = {
   // accepted membership is visible to allow-list and ban policy reads before
   // the outer transaction commits.
   policyPrisma?: PrismaClient;
+  // Explicit BYPASSRLS client for cross-product workspace lookup and scope
+  // validation. This stays separate from login policy so ordinary route tests
+  // and same-domain policy reads do not accidentally cross the RLS boundary.
+  workspacePrisma?: PrismaClient;
   signatureDeps?: SignatureContinuationDeps;
 };
 
@@ -112,6 +116,14 @@ export async function finalizeAuthenticatedUser(
     }
   }
 
+  const signatureDeps =
+    deps?.signatureDeps || deps?.workspacePrisma
+      ? {
+          ...deps?.signatureDeps,
+          workspacePrisma: deps?.signatureDeps?.workspacePrisma ?? deps?.workspacePrisma,
+        }
+      : undefined;
+
   const gate = await finalizeConfigAuthorizationWithSignatures(
     {
       userId: params.userId,
@@ -127,7 +139,7 @@ export async function finalizeAuthenticatedUser(
       authMethod: params.authMethod,
       twoFaCompleted: params.twoFaCompleted,
     },
-    deps?.signatureDeps,
+    signatureDeps,
   );
 
   if (gate.status === 'signing_required') {
