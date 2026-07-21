@@ -2006,3 +2006,16 @@ Checkout across a fresh exact-scope actor, and applies webhooks only after
 current Stripe metadata matches the stored customer/catalog/intent binding.
 Missing policy, catalog, payment, consent, or Stripe evidence fails closed and
 keeps the corresponding projected action disabled.
+
+The initial commercial catalog is installed through a typed operator command,
+not a migration or startup side effect. It requires an explicit Stripe account
+and test/live mode, defaults to read-only `--dry-run`, and requires an
+account-and-mode-bound confirmation for `--apply`. Before any database write it
+retrieves and validates the existing immutable Stripe Products and Prices for
+the four shared-credit offers and DeepWater privacy add-on. Apply then creates
+or binds, in one serializable transaction, the credit policy, offers, default
+automatic-top-up option for `nessie`, `deepwater`, `deepsignal`, and `deeptest`,
+plus DeepWater's team feature policy and recurring add-on catalog. Stripe
+metadata contains stable public contract identifiers only, never UOA database
+IDs. Any local or remote drift aborts instead of mutating or replacing an
+existing Stripe object or local binding.

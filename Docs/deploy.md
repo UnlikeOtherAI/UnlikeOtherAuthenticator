@@ -339,6 +339,69 @@ does not create or infer live Stripe credentials, enable the gate, or provision
 Stripe customers/subscriptions. Those remain explicit operator actions after
 test-mode evidence and review.
 
+#### Provision the immutable Stripe commercial catalog
+
+Provisioning UOA's local credit and recurring-add-on catalog is an explicit
+operator step. It validates pre-existing Stripe objects and maps their IDs into
+UOA; it never creates or mutates a Stripe Product or Price, never enables
+`STRIPE_BILLING_ENABLED`, and does not configure customers, subscriptions, or
+webhooks.
+
+Prerequisites:
+
+- `STRIPE_SECRET_KEY` must be the key for the intended account and selected
+  mode. The command rejects a test/live mismatch before its first network call.
+- `DATABASE_ADMIN_URL`, falling back to `DATABASE_URL`, must target the intended
+  UOA database.
+- The database must contain exactly the active billing services `nessie`,
+  `deepwater`, `deepsignal`, and `deeptest`, and exactly one active,
+  feature-flags-enabled app identified as `deepwater-api`. Unexpected active
+  services or ambiguous app state fail closed.
+- Stripe must already contain one shared-credit Product, its four active
+  one-time USD Prices, and a distinct DeepWater privacy Product with its active
+  monthly licensed USD Price. Prices are located by lookup key, so Stripe IDs
+  are neither copied into source nor supplied on the command line.
+
+The exact Stripe contract is:
+
+| Object                    | Lookup/terms                                                      | Exact metadata                                                                                      |
+| ------------------------- | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Shared-credit Product     | active                                                            | `contract_version=1`, `credits_per_usd=1000`, `uoa_kind=team_credits`                               |
+| US$10 credit Price        | `uoa_credits_usd_10_v1`, one-time, 10,000 credits                 | `credits=10000`, `uoa_kind=team_credit_top_up`                                                      |
+| US$25 credit Price        | `uoa_credits_usd_25_v1`, one-time, 25,000 credits                 | `credits=25000`, `uoa_kind=team_credit_top_up`                                                      |
+| US$50 credit Price        | `uoa_credits_usd_50_v1`, one-time, 50,000 credits                 | `credits=50000`, `uoa_kind=team_credit_top_up`                                                      |
+| US$100 credit Price       | `uoa_credits_usd_100_v1`, one-time, 100,000 credits               | `credits=100000`, `uoa_kind=team_credit_top_up`                                                     |
+| DeepWater privacy Product | active, distinct from credit Product                              | `contract_version=1`, `uoa_addon_key=privacy`, `uoa_kind=recurring_addon`, `uoa_service=deep-water` |
+| DeepWater privacy Price   | `deepwater_privacy_usd_month_v1`, US$50/month, licensed, no meter | `uoa_addon_key=privacy`, `uoa_kind=recurring_addon`, `uoa_service=deep-water`                       |
+
+Metadata is an exact set: extra, absent, or changed keys are drift. Begin with
+the read-only operation:
+
+```bash
+STRIPE_SECRET_KEY='sk_test_...' DATABASE_ADMIN_URL='postgresql://...' \
+  pnpm billing:provision-stripe-catalog \
+  --dry-run --stripe-account acct_REPLACE_ME --stripe-mode test
+```
+
+In dry-run output, `created` actions are planned local inserts or bindings; no
+database write has occurred. Review the account, mode, and complete action list.
+Apply only with the exact account-and-mode confirmation:
+
+```bash
+STRIPE_SECRET_KEY='sk_test_...' DATABASE_ADMIN_URL='postgresql://...' \
+  pnpm billing:provision-stripe-catalog \
+  --apply --stripe-account acct_REPLACE_ME --stripe-mode test \
+  --confirm 'PROVISION_UOA_STRIPE_CATALOG:acct_REPLACE_ME:test'
+```
+
+For live mode, use an `sk_live_...` key, `--stripe-mode live`, and the `:live`
+confirmation suffix. Apply revalidates Stripe before opening one serializable
+database transaction. It creates only missing exact UOA rows and binds only
+catalog rows whose Product and Price IDs are both null. Any partial binding,
+changed immutable term, or remote mismatch aborts the whole operation. A second
+exact run reports no-op actions. Output contains IDs and decisions but no
+credentials.
+
 The opt-in PostgreSQL credit-settlement integration gate is:
 
 ```bash

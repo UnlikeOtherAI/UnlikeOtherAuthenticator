@@ -13,6 +13,7 @@
     "dev:api": "pnpm --filter @uoa/api dev",
     "dev:auth": "pnpm --filter @uoa/auth dev",
     "dev:admin": "pnpm --filter @uoa/admin dev",
+    "billing:provision-stripe-catalog": "pnpm --filter @uoa/api billing:provision-stripe-catalog",
     "build": "pnpm -r --if-present build",
     "lint": "pnpm -r --if-present lint",
     "format": "prettier -w .",

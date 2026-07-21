@@ -8,6 +8,7 @@ const catalog = {
   stripeProductId: 'prod_credits_20k',
   stripePriceId: 'price_credits_20k',
   paymentAmountMinor: 2_000n,
+  creditsReceivedMicrocredits: 20_000_000_000n,
 };
 
 function remotePrice(amount = 2_000) {
@@ -19,10 +20,19 @@ function remotePrice(amount = 2_000) {
     currency: 'usd',
     unit_amount: amount,
     lookup_key: catalog.stripeLookupKey,
+    metadata: {
+      credits: '20000',
+      uoa_kind: 'team_credit_top_up',
+    },
     product: {
       id: catalog.stripeProductId,
       livemode: false,
       active: true,
+      metadata: {
+        contract_version: '1',
+        credits_per_usd: '1000',
+        uoa_kind: 'team_credits',
+      },
     },
   };
 }
