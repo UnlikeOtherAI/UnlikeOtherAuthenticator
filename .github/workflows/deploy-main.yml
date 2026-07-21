@@ -29,8 +29,12 @@ jobs:
       LEDGER_BILLING_APP_KEY_ID: ${{ vars.LEDGER_BILLING_APP_KEY_ID }}
       LEDGER_BILLING_ASSERTION_AUDIENCE: ${{ vars.LEDGER_BILLING_ASSERTION_AUDIENCE || 'https://ledger.unlikeotherai.com' }}
       STRIPE_USAGE_EXPORT_INTERVAL_MINUTES: ${{ vars.STRIPE_USAGE_EXPORT_INTERVAL_MINUTES || '60' }}
+      STRIPE_AUTO_TOP_UP_INTERVAL_MINUTES: ${{ vars.STRIPE_AUTO_TOP_UP_INTERVAL_MINUTES || '1' }}
       STRIPE_PRE_BOUNDARY_SAFETY_LEAD_MINUTES: ${{ vars.STRIPE_PRE_BOUNDARY_SAFETY_LEAD_MINUTES || '360' }}
       STRIPE_PRE_BOUNDARY_SAFETY_OFFSET_MINUTES: ${{ vars.STRIPE_PRE_BOUNDARY_SAFETY_OFFSET_MINUTES || '1' }}
+      BILLING_INVOICE_STORAGE_PROVIDER: ${{ vars.BILLING_INVOICE_STORAGE_PROVIDER || 'disabled' }}
+      BILLING_INVOICE_GCS_BUCKET: ${{ vars.BILLING_INVOICE_GCS_BUCKET }}
+      BILLING_INVOICE_GCS_PROJECT_ID: ${{ vars.BILLING_INVOICE_GCS_PROJECT_ID }}
     steps:
       - name: Check out repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -89,6 +93,25 @@ jobs:
               ;;
           esac
 
+          case "$BILLING_INVOICE_STORAGE_PROVIDER" in
+            disabled|gcs) ;;
+            *)
+              echo "BILLING_INVOICE_STORAGE_PROVIDER must be exactly disabled or gcs"
+              exit 1
+              ;;
+          esac
+
+          if [[ "$BILLING_INVOICE_STORAGE_PROVIDER" == "gcs" && -z "$BILLING_INVOICE_GCS_BUCKET" ]]; then
+            echo "BILLING_INVOICE_GCS_BUCKET is required when invoice storage uses gcs"
+            exit 1
+          fi
+
+          if ! [[ "$STRIPE_AUTO_TOP_UP_INTERVAL_MINUTES" =~ ^[0-9]+$ ]] \
+            || (( STRIPE_AUTO_TOP_UP_INTERVAL_MINUTES < 1 || STRIPE_AUTO_TOP_UP_INTERVAL_MINUTES > 60 )); then
+            echo "STRIPE_AUTO_TOP_UP_INTERVAL_MINUTES must be an integer from 1 to 60"
+            exit 1
+          fi
+
           if [[ "$STRIPE_BILLING_ENABLED" == "true" ]]; then
             if [[ "$UOA_STRIPE_BILLING_CONFIGURED" != "true" ]]; then
               echo "Live Stripe collection requires UOA_STRIPE_BILLING_CONFIGURED=true"
@@ -108,7 +131,13 @@ jobs:
         # account needs roles/secretmanager.secretAccessor on each secret
         # referenced below. Add new secrets here and in Secret Manager as a pair.
         run: |
-          env_vars="AUTH_SERVICE_IDENTIFIER=authentication.unlikeotherai.com,PUBLIC_BASE_URL=https://authentication.unlikeotherai.com,EMAIL_PROVIDER=ses,AWS_REGION=eu-west-1,EMAIL_FROM=noreply@unlikeotherai.com,EMAIL_REPLY_TO=hello@unlikeotherai.com,ADMIN_AUTH_DOMAIN=authentication.unlikeotherai.com,CONFIG_JWKS_URL=https://authentication.unlikeotherai.com/.well-known/jwks.json,MCP_OAUTH_PUBLIC_PROFILE_ENABLED=false,STRIPE_BILLING_ENABLED=$STRIPE_BILLING_ENABLED,STRIPE_USAGE_EXPORT_INTERVAL_MINUTES=$STRIPE_USAGE_EXPORT_INTERVAL_MINUTES,STRIPE_PRE_BOUNDARY_SAFETY_LEAD_MINUTES=$STRIPE_PRE_BOUNDARY_SAFETY_LEAD_MINUTES,STRIPE_PRE_BOUNDARY_SAFETY_OFFSET_MINUTES=$STRIPE_PRE_BOUNDARY_SAFETY_OFFSET_MINUTES,LEDGER_BILLING_BASE_URL=$LEDGER_BILLING_BASE_URL,LEDGER_BILLING_APP_KEY_ID=$LEDGER_BILLING_APP_KEY_ID,LEDGER_BILLING_ASSERTION_AUDIENCE=$LEDGER_BILLING_ASSERTION_AUDIENCE"
+          env_vars="AUTH_SERVICE_IDENTIFIER=authentication.unlikeotherai.com,PUBLIC_BASE_URL=https://authentication.unlikeotherai.com,EMAIL_PROVIDER=ses,AWS_REGION=eu-west-1,EMAIL_FROM=noreply@unlikeotherai.com,EMAIL_REPLY_TO=hello@unlikeotherai.com,ADMIN_AUTH_DOMAIN=authentication.unlikeotherai.com,CONFIG_JWKS_URL=https://authentication.unlikeotherai.com/.well-known/jwks.json,MCP_OAUTH_PUBLIC_PROFILE_ENABLED=false,STRIPE_BILLING_ENABLED=$STRIPE_BILLING_ENABLED,STRIPE_USAGE_EXPORT_INTERVAL_MINUTES=$STRIPE_USAGE_EXPORT_INTERVAL_MINUTES,STRIPE_AUTO_TOP_UP_INTERVAL_MINUTES=$STRIPE_AUTO_TOP_UP_INTERVAL_MINUTES,STRIPE_PRE_BOUNDARY_SAFETY_LEAD_MINUTES=$STRIPE_PRE_BOUNDARY_SAFETY_LEAD_MINUTES,STRIPE_PRE_BOUNDARY_SAFETY_OFFSET_MINUTES=$STRIPE_PRE_BOUNDARY_SAFETY_OFFSET_MINUTES,LEDGER_BILLING_BASE_URL=$LEDGER_BILLING_BASE_URL,LEDGER_BILLING_APP_KEY_ID=$LEDGER_BILLING_APP_KEY_ID,LEDGER_BILLING_ASSERTION_AUDIENCE=$LEDGER_BILLING_ASSERTION_AUDIENCE,BILLING_INVOICE_STORAGE_PROVIDER=$BILLING_INVOICE_STORAGE_PROVIDER"
+          if [[ -n "$BILLING_INVOICE_GCS_BUCKET" ]]; then
+            env_vars="$env_vars,BILLING_INVOICE_GCS_BUCKET=$BILLING_INVOICE_GCS_BUCKET"
+          fi
+          if [[ -n "$BILLING_INVOICE_GCS_PROJECT_ID" ]]; then
+            env_vars="$env_vars,BILLING_INVOICE_GCS_PROJECT_ID=$BILLING_INVOICE_GCS_PROJECT_ID"
+          fi
           secret_vars="DATABASE_URL=uoa-auth-database-url:latest,SHARED_SECRET=uoa-auth-shared-secret:latest,GOOGLE_CLIENT_ID=uoa-auth-google-client-id:latest,GOOGLE_CLIENT_SECRET=uoa-auth-google-client-secret:latest,AWS_ACCESS_KEY_ID=uoa-auth-aws-access-key-id:latest,AWS_SECRET_ACCESS_KEY=uoa-auth-aws-secret-access-key:latest,ADMIN_ACCESS_TOKEN_SECRET=uoa-admin-access-token-secret:latest,ADMIN_CONFIG_JWT=uoa-admin-config-jwt:latest,CONFIG_JWKS_JSON=uoa-auth-config-jwks-json:latest,DATABASE_ADMIN_URL=uoa-auth-database-admin-url:latest,MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK=uoa-auth-mcp-oauth-access-token-private-jwk:latest,TARIFF_SNAPSHOT_PRIVATE_JWK=uoa-auth-tariff-snapshot-private-jwk:latest,TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON=uoa-auth-tariff-snapshot-public-jwks-json:latest,UOA_BILLING_ASSERTION_SIGNING_PRIVATE_JWK=uoa-auth-billing-assertion-private-jwk:latest,UOA_BILLING_ASSERTION_PUBLIC_JWKS_JSON=uoa-auth-billing-assertion-public-jwks-json:latest,LEDGER_BILLING_APP_KEY=uoa-auth-ledger-billing-app-key:latest"
           scaling_args=(--min-instances 0 --cpu-throttling)
 
