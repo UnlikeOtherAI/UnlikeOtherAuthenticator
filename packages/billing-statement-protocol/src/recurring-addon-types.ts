@@ -56,16 +56,14 @@ type BillingRecurringAddonSubscriptionBase = {
   current_period_end: string | null;
 };
 
-export type BillingRecurringAddonManagerSubscription =
-  BillingRecurringAddonSubscriptionBase & {
-    id: string;
-    owner_user_id: string | null;
-  };
+export type BillingRecurringAddonManagerSubscription = BillingRecurringAddonSubscriptionBase & {
+  id: string;
+  owner_user_id: string | null;
+};
 
-export type BillingRecurringAddonMemberSubscription =
-  BillingRecurringAddonSubscriptionBase & {
-    owner_relationship: 'organisation' | 'team' | 'viewer' | 'other_team_member';
-  };
+export type BillingRecurringAddonMemberSubscription = BillingRecurringAddonSubscriptionBase & {
+  owner_relationship: 'organisation' | 'team' | 'viewer' | 'other_team_member';
+};
 
 type BillingRecurringAddonOffer<
   Subscription,

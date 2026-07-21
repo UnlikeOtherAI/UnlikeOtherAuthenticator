@@ -1,6 +1,4 @@
-import type {
-  BillingRecurringAddonConformanceFixturesV1,
-} from './recurring-addon-types.js';
+import type { BillingRecurringAddonConformanceFixturesV1 } from './recurring-addon-types.js';
 
 const subject = {
   organisation_id: 'org_example',
@@ -107,8 +105,7 @@ export const billingRecurringAddonV1ConformanceFixtures: BillingRecurringAddonCo
       viewer: {
         role: 'member',
         entitlement_visibility: 'own_plus_team_status',
-        description:
-          'This viewer may see their own relationship and the team entitlement status.',
+        description: 'This viewer may see their own relationship and the team entitlement status.',
       },
       capabilities: { can_manage_addons: false },
       collection: { stripe_collection_enabled: true, stripe_mode: 'test' },

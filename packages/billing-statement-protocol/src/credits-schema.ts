@@ -18,10 +18,7 @@ import {
   billingCreditsMemberPaymentMethodJsonSchema,
   billingCreditsVisibilityDiscriminatorJsonSchema,
 } from './credits-visibility-schema.js';
-import {
-  BILLING_CREDITS_SCHEMA_PATH,
-  BILLING_CREDITS_SCHEMA_VERSION,
-} from './credits-types.js';
+import { BILLING_CREDITS_SCHEMA_PATH, BILLING_CREDITS_SCHEMA_VERSION } from './credits-types.js';
 
 const signedCredits = creditAmountSchema({ signed: true });
 const positiveCredits = creditAmountSchema({ positive: true });
@@ -102,11 +99,7 @@ export const billingCreditsV1JsonSchema = {
     conversion: {
       type: 'object',
       additionalProperties: false,
-      required: [
-        'credits_per_usd',
-        'settlement_currency',
-        'description',
-      ],
+      required: ['credits_per_usd', 'settlement_currency', 'description'],
       properties: {
         credits_per_usd: { const: '1000' },
         settlement_currency: { const: 'USD' },
@@ -144,13 +137,7 @@ export const billingCreditsV1JsonSchema = {
     pending_credits: {
       type: 'object',
       additionalProperties: false,
-      required: [
-        'top_up_count',
-        'payment_amount',
-        'credits_received',
-        'label',
-        'description',
-      ],
+      required: ['top_up_count', 'payment_amount', 'credits_received', 'label', 'description'],
       properties: {
         top_up_count: { type: 'integer', minimum: 0 },
         payment_amount: usdMoney,
@@ -165,13 +152,7 @@ export const billingCreditsV1JsonSchema = {
     funding_policy: {
       type: 'object',
       additionalProperties: false,
-      required: [
-        'top_up_enabled',
-        'automatic_top_up_enabled',
-        'title',
-        'description',
-        'offers',
-      ],
+      required: ['top_up_enabled', 'automatic_top_up_enabled', 'title', 'description', 'offers'],
       properties: {
         top_up_enabled: { type: 'boolean' },
         automatic_top_up_enabled: { type: 'boolean' },
@@ -244,10 +225,7 @@ export const billingCreditsV1JsonSchema = {
           ],
         },
         consent: {
-          oneOf: [
-            billingCreditsManagerConsentJsonSchema,
-            billingCreditsMemberConsentJsonSchema,
-          ],
+          oneOf: [billingCreditsManagerConsentJsonSchema, billingCreditsMemberConsentJsonSchema],
         },
         options: {
           type: 'array',
@@ -284,8 +262,12 @@ export const billingCreditsV1JsonSchema = {
             },
           },
         },
-        disable_action: nullableBillingCreditsAction(billingCreditsAutoTopUpDisableActionJsonSchema),
-        recover_action: nullableBillingCreditsAction(billingCreditsAutoTopUpRecoverActionJsonSchema),
+        disable_action: nullableBillingCreditsAction(
+          billingCreditsAutoTopUpDisableActionJsonSchema,
+        ),
+        recover_action: nullableBillingCreditsAction(
+          billingCreditsAutoTopUpRecoverActionJsonSchema,
+        ),
       },
     },
     recent_entries: {

@@ -1,17 +1,23 @@
 import type { FastifyInstance } from 'fastify';
 
 import { registerBillingCancellationRoutes } from './cancellation.js';
+import { registerBillingCreditsRoute } from './credits.js';
 import { registerCustomerStatementRoutes } from './customer-statement.js';
 import { registerEffectiveTariffRoute } from './effective-tariff.js';
+import { registerBillingFundingArtifactRoutes } from './funding-artifacts.js';
 import { registerBillingJwksRoute } from './jwks.js';
 import { registerBillingServiceAccessRoutes } from './service-access.js';
 import { registerBillingServiceJwksRoute } from './service-jwks.js';
+import { registerBillingRecurringAddonsRoute } from './recurring-addons.js';
 import { registerStripeCheckoutRoute } from './stripe-checkout.js';
 import { registerStripeSubscriptionRoutes } from './stripe-subscription.js';
 import { registerStripeWebhookRoute } from './stripe-webhook.js';
 
 export function registerBillingRoutes(app: FastifyInstance): void {
   registerBillingCancellationRoutes(app);
+  registerBillingCreditsRoute(app);
+  registerBillingRecurringAddonsRoute(app);
+  registerBillingFundingArtifactRoutes(app);
   registerCustomerStatementRoutes(app);
   registerBillingServiceAccessRoutes(app);
   registerBillingJwksRoute(app);

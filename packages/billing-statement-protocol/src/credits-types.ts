@@ -279,12 +279,7 @@ export type BillingCreditsMemberV1 = BillingCreditsCommonV1 & {
   };
   recent_entries: Array<
     BillingCreditsRecentEntryBase & {
-      attribution:
-        | 'viewer'
-        | 'other_team_members'
-        | 'unattributed'
-        | 'system'
-        | 'team_aggregate';
+      attribution: 'viewer' | 'other_team_members' | 'unattributed' | 'system' | 'team_aggregate';
     }
   >;
 };

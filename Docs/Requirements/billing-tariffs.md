@@ -751,9 +751,16 @@ calling service's individual `customer_lifecycle` app key and actor assertion.
 The customer-facing heading is exactly **Remaining credits**.
 
 UOA alone converts and settles Ledger raw usage into credits. Each settlement
-pins one immutable team-wide, user-grouped Ledger portfolio snapshot. The
-settlement and its corrections retain exact service, user, and explicit
-unattributed allocations without asking Ledger to rate them. Origin-product
+pins one immutable team-wide, user-grouped Ledger portfolio snapshot. One
+serializable shared-account transaction rates and settles every service in that
+exact cursor, including previously settled services that disappear from a
+corrected snapshot. The settlement and its corrections retain exact service,
+user, and explicit unattributed allocations without asking Ledger to rate them.
+Corrections release prior credits before deterministic largest-remainder
+reallocation. New usage consumes only the non-negative available balance while
+the full rated-but-unfunded liability is retained; only a verified credit-entry
+reversal can produce debt. Same-cursor replay is idempotent, while content drift
+or a partial cursor application fails closed. Origin-product
 transparency remains in `BillingStatementV2`, derived from its separately
 pinned portfolio. Products render UOA's prepared team balance, current-period
 consumption, connected-service totals, and privacy-filtered attribution. They
@@ -796,9 +803,14 @@ preview can be issued.
 `BillingCreditsV1` and the recurring-add-on protocol are public, MIT-licensed
 interfaces from `@unlikeotherai/billing-statement-protocol`. Their generated
 JSON Schema, fixtures, and OpenAPI 3.1 components are the consumer contract.
-This migration establishes persistence, constraints, and those protocol
-artifacts; HTTP routes, Stripe orchestration, and product UI wiring are a
-separate runtime slice and must not be inferred from schema availability.
+UOA serves those artifacts under `/schemas/billing-credits-v1.*` and
+`/schemas/billing-recurring-addons-v1.*`. A product reads the current shared
+balance through `POST /billing/v1/credits` and its scoped add-on catalog through
+`POST /billing/v1/recurring-addons`, always with that product's own lifecycle
+app key plus a fresh exact actor assertion. The read endpoints and settlement
+runtime do not imply that any mutation action is enabled: Checkout, top-up,
+auto-top-up, and add-on actions appear enabled only when their dedicated Stripe
+runtime and fixed UOA policy/catalog evidence are available.
 
 ### Contract invoice calculator and invoice privacy
 
@@ -809,9 +821,12 @@ rewrite an issued invoice. The calculator may use Ledger's immutable raw usage
 and provider-cost facts internally, but the customer invoice projection is a
 separate privacy boundary.
 
-Issued-invoice views expose calculated customer price grouped by service plus
-ordinary fixed subscriptions, add-ons, credits, adjustments, taxes, payments,
-and totals as applicable. They must not expose token counts, raw API/search/
+Issued-invoice views expose gross calculated customer price grouped by service,
+then one separate canonical funded-credit settlement, ordinary fixed
+subscriptions, adjustments, taxes, payments, and totals as applicable. Paid
+recurring add-ons remain on their canonical Stripe subscription, are labelled
+as collected separately, and are excluded from the manual amount due. They must
+not expose token counts, raw API/search/
 research units, raw provider cost, cost-token equivalents, tariff markup, or
 the margin calculation. Even operator-created descriptions must not encode
 those prohibited facts. Product applications receive only UOA's display-ready

@@ -114,6 +114,29 @@ export function minorAmountToMajor(amountMinor: string, currency: string): strin
   });
 }
 
+/**
+ * Rounds an exact major-currency decimal once at the final currency boundary.
+ * Half values round away from zero so credits remain the exact inverse of
+ * charges. Intermediate billing calculations must stay decimal strings.
+ */
+export function majorAmountToMinorRounded(amount: string, currency: string): bigint {
+  if (!/^[A-Z]{3}$/.test(currency)) {
+    throw new AppError('INTERNAL', 500, 'BILLING_MONEY_INVALID');
+  }
+  const decimal = parseDecimal(amount);
+  const minorScale = currencyMinorDigits(currency);
+  if (decimal.scale <= minorScale) {
+    return decimal.coefficient * powerOfTen(minorScale - decimal.scale);
+  }
+
+  const divisor = powerOfTen(decimal.scale - minorScale);
+  const negative = decimal.coefficient < 0n;
+  const absolute = negative ? -decimal.coefficient : decimal.coefficient;
+  let rounded = absolute / divisor;
+  if ((absolute % divisor) * 2n >= divisor) rounded += 1n;
+  return negative ? -rounded : rounded;
+}
+
 function groupedDigits(value: string): string {
   const negative = value.startsWith('-');
   const unsigned = negative ? value.slice(1) : value;

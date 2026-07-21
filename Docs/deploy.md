@@ -114,6 +114,16 @@ wired on every deployment because they are required for signed entitlement and
 reconciliation readiness; that does not enable Stripe or create billable
 resources.
 
+Contract invoice calculation is database-backed and remains available without
+PDF storage. Issuance is deliberately fail-closed until an operator creates an
+explicit issuer legal profile and configures a dedicated private object store.
+Set `BILLING_INVOICE_STORAGE_PROVIDER=gcs`,
+`BILLING_INVOICE_GCS_BUCKET` to a bucket with public access prevention, and
+optionally `BILLING_INVOICE_GCS_PROJECT_ID`. Grant the Cloud Run runtime identity
+create/read access only; invoice objects are create-only and are never deleted
+or overwritten by the application. The deploy workflow accepts only `disabled`
+or `gcs` in production and refuses `gcs` without the bucket variable.
+
 The private key used to sign `ADMIN_CONFIG_JWT` is not attached to Cloud Run. Store it separately in Secret Manager as `uoa-auth-config-jwt-private-jwk` for rotation/signing operations only.
 
 Before enabling the confidential exchange in production:
@@ -260,7 +270,8 @@ Before enabling it in production:
    startup. Confirm `/v1/account` resolves the intended Stripe account.
 4. Mint a separate `customer_lifecycle` `uoa_app_…` key for each
    product/deployment. Use it for that product's mandatory post-SSO
-   `/billing/v1/service-access/confirm` call and customer billing lifecycle;
+   `/billing/v1/service-access/confirm` call, canonical statement, shared-credit
+   and recurring-add-on reads, and customer billing lifecycle;
    bind only its own actor issuer/key and exact HTTPS return origins. Keep its
    `entitlement` key separate and origin-free.
 5. Exercise credentialed current-month `group_by=service` and `group_by=user`
@@ -274,7 +285,12 @@ Before enabling it in production:
    pre-boundary safety pass, and authoritative post-period `invoice.created`
    reconciliation against immutable Ledger cursors. Prove usage in the final
    minute reaches the draft invoice during Stripe's configured finalization
-   grace period.
+   grace period. For shared credits, race two different product lifecycle keys
+   against the same exact team portfolio cursor and prove one settlement plus
+   one replay, one adjustment per service, a non-negative usage-funded balance,
+   and no partial snapshot. Then apply a lower corrected cursor and verify that
+   credits are released and user attribution is reallocated without rewriting
+   history.
 6. Review the deployed recurring collector interval, safety lead/offset, Cloud
    Run warm-instance/non-throttled CPU settings, the Stripe webhook
    subscriptions for `invoice.created` and `invoice.finalization_failed`, the
@@ -293,6 +309,17 @@ The workflow wires the automated schedule but leaves it inert by default. It
 does not create or infer live Stripe credentials, enable the gate, or provision
 Stripe customers/subscriptions. Those remain explicit operator actions after
 test-mode evidence and review.
+
+The opt-in PostgreSQL credit-settlement integration gate is:
+
+```bash
+BILLING_FUNDING_DATABASE_TESTS=true DATABASE_URL='<isolated PostgreSQL URL>' \
+  pnpm --filter @uoa/api exec vitest run \
+  tests/integration/billing-credit-settlement.persistence.test.ts
+```
+
+Run it only against a disposable database: the shared test helper applies the
+complete migration chain and creates/drops an isolated test database.
 
 ### Signature module production prerequisites (not enabled)
 

@@ -1820,6 +1820,22 @@ in [Billing Tariffs and Product Entitlements](./Requirements/billing-tariffs.md)
 That document is incorporated into this build brief by reference and is
 authoritative for the billing tariff control plane.
 
+Organisation contract invoicing is the manual-collection extension of that
+control plane. A contract pins one organisation-wide usage markup, currency,
+payment terms, service set, and monthly service prices in immutable effective
+versions. Closed-month calculation consumes organisation-scoped Ledger facts
+through UOA's shared rating core, while every customer invoice DTO and PDF shows
+only the gross final calculated price per service and separately labelled
+credit/payment/write-off settlement totals—never provider cost, token/API units,
+calls, markup, or private Ledger evidence. Future versions cannot project their
+tariff assignments before their effective UTC month; calculated drafts freeze
+their header, lines, and evidence at commit, and recalculation creates the next
+revision. Issuance uses monotonic numbering and deterministic wrapping-safe
+Unicode PDFs in private immutable storage; voids and corrections preserve the
+audit chain. The complete model and operational rules are defined in
+[Organisation Contract Invoicing](./Requirements/contract-invoicing.md), which
+is incorporated into this brief by reference.
+
 ### 2026-07-20 canonical customer statement clarification
 
 UOA is the sole commercial billing engine and customer-facing system of record.
@@ -1945,13 +1961,21 @@ the exact subject and Stripe subscription evidence.
 
 For negotiated organisation contracts, the UOA Admin billing area owns the
 versioned organisation margin and invoice calculator. Customer invoices show
-only calculated customer price per service and ordinary fixed subscriptions,
-add-ons, credits, adjustments, taxes, payments, and totals. They never expose
+only calculated gross customer price per service, a separate canonical
+funded-credit settlement, ordinary fixed subscriptions, adjustments, taxes,
+payments, and totals. Paid recurring add-ons are labelled as collected
+separately and excluded from the manual amount due. They never expose
 raw token/API/SERP/research quantities, provider cost, cost-token equivalents,
 markup, or margin calculations. Connected products consume a display-ready UOA
 invoice view model and contain no local invoice-rating logic.
 
-The current funding slice establishes the Prisma persistence constraints and
-the public `BillingCreditsV1`/recurring-add-on protocol artifacts. Runtime HTTP
-handlers, Stripe calls, and product UI wiring are completed in their dedicated
-integration slices; schema presence alone does not enable collection.
+The UOA runtime serves the public `BillingCreditsV1`/recurring-add-on protocol
+artifacts plus product-authenticated reads. A credit read pins one exact
+team-wide Ledger cursor and settles every service atomically against the shared
+balance; it is concurrency-safe and cursor-idempotent, releases corrections
+before allocating new usage, stops ordinary usage at zero, and retains the full
+unfunded liability. Only verified reversals may create debt. The display model
+then enforces manager/member visibility, while the add-on read applies the same
+exact subject boundary. Read/schema availability alone does not enable a money
+action: each Checkout/top-up/auto-top-up/add-on action requires its dedicated
+verified Stripe runtime and UOA policy/catalog evidence.

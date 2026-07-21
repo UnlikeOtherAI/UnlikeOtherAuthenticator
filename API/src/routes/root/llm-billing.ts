@@ -203,6 +203,79 @@ Platform superusers create exact organisation/team one-time or monthly add-ons a
 credits in UOA Admin. Values are integer minor-currency strings, audited, and
 deactivated rather than deleted. Ledger never receives them.
 
+### Shared team credits and recurring add-ons
+
+\`POST /billing/v1/credits\` is UOA's display-ready shared credit read. A product calls it
+with its own \`customer_lifecycle\` app key, a fresh bound actor assertion, and the exact
+product/organisation/team/user subject. The first field is always **Remaining credits**.
+Billing managers receive the full per-service and per-user breakdown plus safe payment
+and consent summaries; members receive their own usage, other-team-member aggregates,
+and unattributed totals without another user's identity or card detail.
+
+Before projecting a read, UOA pins one exact user-grouped Ledger portfolio cursor for
+the team and settles every service in that snapshot together under a serializable team
+credit-account lock. Replay is idempotent. Corrections release prior allocations before
+reallocating them deterministically. Available credits never cross below zero from new
+usage, but the full centrally rated service/user liability remains recorded; only a
+verified reversal can create a debt balance. Products never rate, debit, aggregate, or
+reallocate shared credits locally.
+
+The exact response schema, synthetic fixture, and OpenAPI 3.1 artifact are public at
+\`/schemas/billing-credits-v1.json\`, \`/schemas/billing-credits-v1.example.json\`, and
+\`/schemas/billing-credits-v1.openapi.json\`.
+
+\`POST /billing/v1/recurring-addons\` returns UOA-owned offers and exact
+organisation/team/subscribing-user subscription projections for that product. Manager
+views may contain subscription identity; member views expose only the viewer's
+relationship to a subscription and never another user's identity or payment details.
+The matching public artifacts use the \`billing-recurring-addons-v1\` filenames under
+\`/schemas\`. Recurring add-ons, including DeepWater privacy, remain separate from shared
+credits and from usage rating.
+
+### Contract invoices
+
+UOA also owns manual organisation-contract invoicing. A platform superuser creates a
+contract, appends immutable forward-effective versions, and sets one organisation-wide
+usage markup plus one exact currency and payment term. Activating a version atomically
+creates an immutable \`CUSTOM + MANUAL\` tariff and organisation assignment for each
+selected service. A future-effective version can be authored but cannot be activated
+before its UTC month. Activation fails on carried-assignment drift, while any covered
+service has a team override, during a nonterminal Stripe Checkout/subscription, or while
+a completed Checkout still awaits terminal subscription reconciliation. Stripe
+projection and manual activation share the exact service/organisation lock in both
+directions. The
+service set and monthly price per service are pinned to the version; an assignment
+pointer may move for a later version and is not historical proof—the term's immutable
+tariff ID is authoritative.
+
+The calculator accepts only a closed UTC month. It fetches one immutable organisation-
+scoped \`metering-usage-v1\` snapshot per contracted service (no team filter), applies the
+same central exact rating core used by customer statements and Stripe exports, adds that
+service's monthly amount, then rounds once at the currency boundary. Credits come only
+from the latest canonical funded exact-team usage settlements, remain a separately
+labelled aggregate, and never alter a service line. Paid recurring add-ons are shown as
+collected separately and never enter the manual invoice total. Currency mismatch, missing selected provider
+cost, absent explicit issuer/buyer legal profiles, or unavailable Ledger evidence fails
+closed. UOA performs no tax or FX inference.
+
+\`POST /internal/admin/billing/invoices/calculate\` and every invoice list/detail/mutation
+return only final customer price per service, legal profile snapshots, totals, and
+separate credit/payment/write-off/outstanding settlement totals plus display-only
+separately collected recurring add-ons. They never return
+provider cost, token or other units, calls, usage markup, Ledger cursor/hash, or the
+internal calculation digest. Credits are never folded into or renamed as service prices.
+The contract-editor routes are the only place the organisation markup is shown.
+
+Issuance allocates a contiguous contract/month revision and monotonic issuer/year number
+under database advisory locks, stores a
+private create-only Unicode PDF, and verifies its SHA-256 on download. Every calculated
+draft header, line, and private metering reference freezes at calculation commit. Voiding
+retains the number and PDF and is forbidden after settlement; changed calculations and
+corrections are new revisions.
+Manual payment, refund, and write-off events are positive, append-only, idempotent records and
+never mutate a service price. All routes are platform-superuser-only and private,
+no-store.
+
 ### Stripe subscription invariants
 
 Stripe is an account-and-mode-scoped payment projection. Test and live resources never

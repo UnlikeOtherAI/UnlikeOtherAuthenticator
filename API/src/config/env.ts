@@ -217,6 +217,12 @@ const EnvSchema = z
         message: 'UOA_BILLING_ASSERTION_PUBLIC_JWKS_JSON must contain public-only RS256 RSA keys',
       })
       .optional(),
+    // Private immutable PDFs for manually issued contract invoices. Contract
+    // calculation remains available when disabled, but issuance fails closed.
+    BILLING_INVOICE_STORAGE_PROVIDER: z.enum(['disabled', 'filesystem', 'gcs']).default('disabled'),
+    BILLING_INVOICE_FILESYSTEM_ROOT: z.string().min(1).optional(),
+    BILLING_INVOICE_GCS_BUCKET: z.string().min(1).optional(),
+    BILLING_INVOICE_GCS_PROJECT_ID: z.string().min(1).optional(),
     // Optional agreement-signature module. Disabled is the process default; a domain cannot be
     // enabled until storage, retention, and the dedicated evidence key are configured.
     SIGNATURE_STORAGE_PROVIDER: z.enum(['disabled', 'filesystem', 'gcs']).default('disabled'),
@@ -271,6 +277,31 @@ const EnvSchema = z
       });
     }
     addBillingEnvironmentIssues(env, ctx);
+
+    if (
+      env.BILLING_INVOICE_STORAGE_PROVIDER === 'filesystem' &&
+      !env.BILLING_INVOICE_FILESYSTEM_ROOT
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['BILLING_INVOICE_FILESYSTEM_ROOT'],
+        message: 'BILLING_INVOICE_FILESYSTEM_ROOT is required for filesystem invoice storage',
+      });
+    }
+    if (env.BILLING_INVOICE_STORAGE_PROVIDER === 'filesystem' && env.NODE_ENV === 'production') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['BILLING_INVOICE_STORAGE_PROVIDER'],
+        message: 'filesystem invoice storage is not allowed in production',
+      });
+    }
+    if (env.BILLING_INVOICE_STORAGE_PROVIDER === 'gcs' && !env.BILLING_INVOICE_GCS_BUCKET) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['BILLING_INVOICE_GCS_BUCKET'],
+        message: 'BILLING_INVOICE_GCS_BUCKET is required for GCS invoice storage',
+      });
+    }
 
     if (env.SIGNATURE_STORAGE_PROVIDER === 'filesystem' && !env.SIGNATURE_FILESYSTEM_ROOT) {
       ctx.addIssue({
