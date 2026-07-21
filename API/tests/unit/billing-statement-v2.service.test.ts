@@ -144,6 +144,9 @@ function prisma() {
           { user: { id: 'user_2', name: 'Lin', email: 'lin@example.com' } },
         ]),
     },
+    billingServiceAccess: {
+      upsert: vi.fn(),
+    },
   };
 }
 
@@ -161,7 +164,6 @@ function dependencies(
       now: () => now,
       resolveSummary: vi.fn().mockResolvedValue(summary) as never,
       fetchPortfolio,
-      confirmAccess: vi.fn().mockResolvedValue(undefined),
       listDirectAccess: vi.fn().mockResolvedValue([
         {
           serviceId: 'service_deepwater',
@@ -234,6 +236,7 @@ describe('canonical UOA BillingStatementV2', () => {
     );
 
     expect(fetchPortfolio).toHaveBeenCalledTimes(1);
+    expect(deps.database.billingServiceAccess.upsert).not.toHaveBeenCalled();
     expect(fetchPortfolio).toHaveBeenCalledWith({
       product: 'deepwater',
       organisationId: 'org_1',

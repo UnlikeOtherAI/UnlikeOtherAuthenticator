@@ -23,7 +23,6 @@ import {
 } from './billing-metering.types.js';
 import { addBillingDecimals, exactMoney, minorAmountToMajor } from './billing-money.service.js';
 import {
-  confirmDirectBillingServiceAccess,
   listDirectTeamBillingServiceAccess,
   type DirectBillingServiceAccess,
 } from './billing-service-access.service.js';
@@ -53,7 +52,6 @@ type Dependencies = {
   resolveSummary?: (params: StatementContext) => Promise<SubscriptionSummary>;
   fetchMetering?: FetchMeteringUsage;
   fetchPortfolio?: FetchMeteringPortfolio;
-  confirmAccess?: typeof confirmDirectBillingServiceAccess;
   listDirectAccess?: typeof listDirectTeamBillingServiceAccess;
 };
 
@@ -206,16 +204,6 @@ async function buildCanonicalBillingStatement(
   )(context);
   const statementProduct = summary.product.identifier;
   const canonicalRequest = { ...context.request, product: statementProduct };
-  await (deps?.confirmAccess ?? confirmDirectBillingServiceAccess)(
-    {
-      serviceId: context.credential.service.id,
-      appKeyId: context.credential.id,
-      organisationId: context.request.organisationId,
-      teamId: context.request.teamId,
-      userId: context.request.userId,
-    },
-    { prisma },
-  );
 
   const fetchMetering = deps?.fetchMetering ?? fetchLedgerMeteringUsage;
   const fetchPortfolio = deps?.fetchPortfolio ?? fetchLedgerMeteringPortfolio;

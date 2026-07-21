@@ -180,10 +180,10 @@ function metering(groupBy: 'service' | 'user'): NormalizedMeteringUsage {
 
 describe('canonical UOA billing statement', () => {
   it('rates immutable raw metering centrally and emits a display-ready v1 model', async () => {
-    const confirmAccess = vi.fn().mockResolvedValue(undefined);
     const fetchMetering = vi.fn(async (params: { groupBy: 'service' | 'user' }) =>
       metering(params.groupBy),
     );
+    const accessUpsert = vi.fn();
     const prisma = {
       billingTariff: {
         findUnique: vi.fn().mockResolvedValue({ name: 'Standard' }),
@@ -225,6 +225,9 @@ describe('canonical UOA billing statement', () => {
             { user: { id: 'user_2', name: 'Lin', email: 'lin@example.com' } },
           ]),
       },
+      billingServiceAccess: {
+        upsert: accessUpsert,
+      },
     };
 
     const statement = await getCanonicalBillingStatement(
@@ -234,7 +237,6 @@ describe('canonical UOA billing statement', () => {
         now: () => now,
         resolveSummary: vi.fn().mockResolvedValue(summary) as never,
         fetchMetering: fetchMetering as never,
-        confirmAccess,
         listDirectAccess: vi.fn().mockResolvedValue([
           {
             serviceId: 'service_deepwater',
@@ -252,16 +254,7 @@ describe('canonical UOA billing statement', () => {
       },
     );
 
-    expect(confirmAccess).toHaveBeenCalledWith(
-      {
-        serviceId: 'service_deepwater',
-        appKeyId: 'app_key_deepwater_lifecycle',
-        organisationId: 'org_1',
-        teamId: 'team_1',
-        userId: 'user_1',
-      },
-      { prisma },
-    );
+    expect(accessUpsert).not.toHaveBeenCalled();
     expect(fetchMetering).toHaveBeenCalledTimes(2);
     expect(statement).toMatchObject({
       schema_version: 1,

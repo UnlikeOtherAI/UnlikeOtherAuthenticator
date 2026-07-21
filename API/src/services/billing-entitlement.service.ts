@@ -17,7 +17,6 @@ import {
   billingModeToPublic,
 } from './billing-tariff-serialization.service.js';
 import { normalizeBillingServiceIdentifier } from './billing-tariff.service.js';
-import { confirmDirectBillingServiceAccess } from './billing-service-access.service.js';
 import {
   assertEffectiveTariffPayloadBinding,
   signEffectiveTariffSnapshot,
@@ -309,20 +308,9 @@ export async function getEffectiveTariffSnapshot(
     now?: () => number;
     verifyActor?: typeof verifyBillingActor;
     signSnapshot?: typeof signEffectiveTariffSnapshot;
-    confirmAccess?: typeof confirmDirectBillingServiceAccess;
   },
 ): Promise<{ snapshot: string; payload: EffectiveTariffPayload }> {
   const { payload } = await resolveEffectiveTariffContext(params, deps);
-  await (deps?.confirmAccess ?? confirmDirectBillingServiceAccess)(
-    {
-      serviceId: params.credential.service.id,
-      appKeyId: params.credential.id,
-      organisationId: params.request.organisationId,
-      teamId: params.request.teamId,
-      userId: params.request.userId,
-    },
-    { prisma: deps?.prisma },
-  );
   const issuedAtEpochSeconds = Math.floor(Date.parse(payload.issued_at) / 1000);
   const snapshot = await (deps?.signSnapshot ?? signEffectiveTariffSnapshot)({
     payload,
