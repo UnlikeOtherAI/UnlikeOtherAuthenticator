@@ -1,5 +1,6 @@
 import type {
   BillingRecurringAddonCatalog,
+  BillingRecurringAddonEntitlementScope,
   BillingRecurringAddonOffer,
   PrismaClient,
 } from '@prisma/client';
@@ -14,8 +15,38 @@ import {
   recurringAddonPriceMetadata,
   recurringAddonProductMetadata,
 } from './billing-stripe-catalog-provisioning-spec.js';
+import { uniqueEntitlementScope } from './billing-recurring-addon-scope.service.js';
 
 export type RecurringAddonCatalogClient = Pick<Stripe, 'prices' | 'products'>;
+
+export function recurringAddonOfferAvailability(
+  offer: BillingRecurringAddonOffer & {
+    catalogs: BillingRecurringAddonCatalog[];
+    featurePolicies: Array<{ entitlementScope: BillingRecurringAddonEntitlementScope }>;
+  },
+  collectionEnabled: boolean,
+) {
+  const entitlementScope = uniqueEntitlementScope(offer.featurePolicies);
+  const catalog = offer.catalogs[0];
+  const catalogMatches = Boolean(
+    catalog?.stripeProductId &&
+    catalog.stripePriceId &&
+    catalog.currency === offer.currency &&
+    catalog.monthlyAmountMinor === offer.monthlyAmountMinor,
+  );
+  const available = Boolean(collectionEnabled && entitlementScope && catalogMatches);
+  return {
+    entitlementScope,
+    available,
+    unavailableReason: available
+      ? null
+      : !collectionEnabled
+        ? 'Stripe collection is not enabled.'
+        : !entitlementScope
+          ? 'This offer does not have one exact active entitlement scope.'
+          : 'Checkout is not configured for this offer.',
+  };
+}
 
 function idempotencyKey(account: StripeAccountContext, kind: string, id: string): string {
   return `uoa:${account.stripeAccountId}:${account.livemode ? 'live' : 'test'}:${kind}:${id}`;

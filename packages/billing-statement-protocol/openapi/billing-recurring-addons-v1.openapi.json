@@ -175,7 +175,8 @@
                   },
                   "offer_id": {
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "maxLength": 256
                   }
                 }
               }
@@ -305,7 +306,8 @@
                   },
                   "subscription_id": {
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "maxLength": 256
                   }
                 }
               }
@@ -1266,7 +1268,8 @@
                                       },
                                       "offer_id": {
                                         "type": "string",
-                                        "minLength": 1
+                                        "minLength": 1,
+                                        "maxLength": 256
                                       }
                                     }
                                   }
@@ -1356,7 +1359,8 @@
                                       },
                                       "subscription_id": {
                                         "type": "string",
-                                        "minLength": 1
+                                        "minLength": 1,
+                                        "maxLength": 256
                                       }
                                     }
                                   }
@@ -2309,7 +2313,8 @@
                                   },
                                   "offer_id": {
                                     "type": "string",
-                                    "minLength": 1
+                                    "minLength": 1,
+                                    "maxLength": 256
                                   }
                                 }
                               }
@@ -2399,7 +2404,8 @@
                                   },
                                   "subscription_id": {
                                     "type": "string",
-                                    "minLength": 1
+                                    "minLength": 1,
+                                    "maxLength": 256
                                   }
                                 }
                               }

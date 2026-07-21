@@ -198,6 +198,10 @@ describe('public billing consumer action protocol', () => {
 });
 
 describe('public BillingCreditsV1 consumer protocol', () => {
+  it('keeps the coordinated unreleased V1 contract version', () => {
+    expect(BILLING_CREDITS_PROTOCOL_VERSION).toBe('1.0.0');
+  });
+
   it('validates shared team credits, system adjustments, and fixed conversion', () => {
     const ajv = new Ajv2020({ allErrors: true, strict: true });
     addFormats(ajv);
@@ -308,6 +312,24 @@ describe('public BillingCreditsV1 consumer protocol', () => {
     expect(validate(incompleteBody)).toBe(false);
   });
 
+  it('pins credit offer and option selectors to 256 characters', () => {
+    const ajv = new Ajv2020({ allErrors: true, strict: true });
+    addFormats(ajv);
+    const validate = ajv.compile(billingCreditsV1JsonSchema);
+    const accepted = structuredClone(billingCreditsV1ConformanceFixture);
+    accepted.funding_policy.offers[0]!.action.request.body.offer_id = 'x'.repeat(256);
+    accepted.automatic_top_up.options[0]!.setup_action.request.body.option_id = 'x'.repeat(256);
+    accepted.automatic_top_up.options[0]!.update_action.request.body.option_id = 'x'.repeat(256);
+    expect(validate(accepted), JSON.stringify(validate.errors)).toBe(true);
+
+    const longOffer = structuredClone(accepted);
+    longOffer.funding_policy.offers[0]!.action.request.body.offer_id = 'x'.repeat(257);
+    expect(validate(longOffer)).toBe(false);
+    const longOption = structuredClone(accepted);
+    longOption.automatic_top_up.options[0]!.setup_action.request.body.option_id = 'x'.repeat(257);
+    expect(validate(longOption)).toBe(false);
+  });
+
   it('makes ordinary-member usage and funding projections structurally privacy-safe', () => {
     const ajv = new Ajv2020({ allErrors: true, strict: true });
     addFormats(ajv);
@@ -340,28 +362,10 @@ describe('public BillingCreditsV1 consumer protocol', () => {
           unattributed_credits_consumed: service.unattributed_credits_consumed,
         })),
       },
-      funding_policy: {
-        ...manager.funding_policy,
-        offers: manager.funding_policy.offers.map((offer) => ({
-          ...offer,
-          action: null,
-        })),
-      },
+      pending_credits: { ...manager.pending_credits, payment_amount: null },
+      funding_policy: null,
       automatic_top_up: {
-        ...manager.automatic_top_up,
         payment_method: { status: manager.automatic_top_up.payment_method.status },
-        consent: {
-          status: manager.automatic_top_up.consent.status,
-          version: manager.automatic_top_up.consent.version,
-          consented_at: manager.automatic_top_up.consent.consented_at,
-        },
-        options: manager.automatic_top_up.options.map((option) => ({
-          ...option,
-          setup_action: null,
-          update_action: null,
-        })),
-        disable_action: null,
-        recover_action: null,
       },
       recent_entries: manager.recent_entries.map(({ attribution, ...entry }) => ({
         ...entry,
@@ -388,17 +392,14 @@ describe('public BillingCreditsV1 consumer protocol', () => {
         ],
       }),
     ).toBe(false);
+    expect(validate({ ...member, pending_credits: manager.pending_credits })).toBe(false);
+    expect(validate({ ...member, funding_policy: manager.funding_policy })).toBe(false);
     expect(
       validate({
         ...member,
-        funding_policy: {
-          ...member.funding_policy,
-          offers: [
-            {
-              ...member.funding_policy.offers[0],
-              action: manager.funding_policy.offers[0]!.action,
-            },
-          ],
+        automatic_top_up: {
+          ...member.automatic_top_up,
+          threshold: manager.automatic_top_up.threshold,
         },
       }),
     ).toBe(false);
@@ -408,24 +409,6 @@ describe('public BillingCreditsV1 consumer protocol', () => {
         automatic_top_up: {
           ...member.automatic_top_up,
           payment_method: manager.automatic_top_up.payment_method,
-        },
-      }),
-    ).toBe(false);
-    expect(
-      validate({
-        ...member,
-        automatic_top_up: {
-          ...member.automatic_top_up,
-          consent: manager.automatic_top_up.consent,
-        },
-      }),
-    ).toBe(false);
-    expect(
-      validate({
-        ...member,
-        automatic_top_up: {
-          ...member.automatic_top_up,
-          options: manager.automatic_top_up.options,
         },
       }),
     ).toBe(false);

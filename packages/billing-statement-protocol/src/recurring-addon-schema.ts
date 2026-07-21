@@ -48,9 +48,10 @@ export const billingRecurringAddonCheckoutActionJsonSchema = {
       properties: {
         method: { const: 'POST' },
         path: { const: BILLING_RECURRING_ADDONS_CHECKOUT_PATH },
-        body: billingSubjectActionBodySchema({ offer_id: { type: 'string', minLength: 1 } }, [
-          'offer_id',
-        ]),
+        body: billingSubjectActionBodySchema(
+          { offer_id: { type: 'string', minLength: 1, maxLength: 256 } },
+          ['offer_id'],
+        ),
       },
     },
   },
@@ -72,7 +73,7 @@ export const billingRecurringAddonCancelActionJsonSchema = {
         method: { const: 'POST' },
         path: { const: BILLING_RECURRING_ADDONS_CANCELLATION_PREVIEW_PATH },
         body: billingSubjectActionBodySchema(
-          { subscription_id: { type: 'string', minLength: 1 } },
+          { subscription_id: { type: 'string', minLength: 1, maxLength: 256 } },
           ['subscription_id'],
         ),
       },

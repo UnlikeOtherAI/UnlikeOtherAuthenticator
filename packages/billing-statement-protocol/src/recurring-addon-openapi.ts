@@ -46,9 +46,10 @@ function selectorBody(selector: 'offer_id' | 'subscription_id') {
     required: true,
     content: {
       'application/json': {
-        schema: billingSubjectActionBodySchema({ [selector]: { type: 'string', minLength: 1 } }, [
-          selector,
-        ]),
+        schema: billingSubjectActionBodySchema(
+          { [selector]: { type: 'string', minLength: 1, maxLength: 256 } },
+          [selector],
+        ),
       },
     },
   } as const;

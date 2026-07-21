@@ -93,6 +93,23 @@ describe('public recurring add-on consumer protocol', () => {
     ).toBe(false);
   });
 
+  it('pins add-on offer and subscription selectors to 256 characters', () => {
+    const ajv = new Ajv2020({ allErrors: true, strict: true });
+    addFormats(ajv);
+    const validate = ajv.compile(billingRecurringAddonProtocolV1JsonSchema);
+    const addons = structuredClone(billingRecurringAddonV1ConformanceFixtures.recurring_addons);
+    addons.offers[0]!.actions[0]!.request.body.offer_id = 'x'.repeat(256);
+    addons.offers[0]!.actions[1]!.request.body.subscription_id = 'x'.repeat(256);
+    expect(validate(addons), JSON.stringify(validate.errors)).toBe(true);
+
+    const longOffer = structuredClone(addons);
+    longOffer.offers[0]!.actions[0]!.request.body.offer_id = 'x'.repeat(257);
+    expect(validate(longOffer)).toBe(false);
+    const longSubscription = structuredClone(addons);
+    longSubscription.offers[0]!.actions[1]!.request.body.subscription_id = 'x'.repeat(257);
+    expect(validate(longSubscription)).toBe(false);
+  });
+
   it('keeps generated add-on schema, fixtures, and OpenAPI artifacts drift-free', async () => {
     const [schemaArtifact, fixtureArtifact, openApiArtifact] = await Promise.all([
       readJson('../schema/billing-recurring-addons-v1.json'),

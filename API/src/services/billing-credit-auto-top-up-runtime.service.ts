@@ -15,7 +15,10 @@ import {
   listCreditAutoTopUpCandidateIds,
   type CreditAutoTopUpClaim,
 } from './billing-credit-auto-top-up-attempt.service.js';
-import { paymentBinding } from './billing-credit-funding-binding.service.js';
+import {
+  assertCreditFundingMetadata,
+  creditFundingMetadata,
+} from './billing-credit-funding-binding.service.js';
 import {
   assertStripeObjectLivemode,
   requireStripeBillingEnabled,
@@ -180,8 +183,7 @@ function assertAttemptBinding(attempt: DispatchAttempt, account: StripeAccountCo
     attempt.creditsReceivedMicrocredits !== revision.refillCreditsMicrocredits ||
     attempt.attributedUserId !== revision.consentedByUserId ||
     attempt.idempotencyKey !== `uoa:auto-top-up:${attempt.id}` ||
-    attempt.chargedThisMonthBeforeMinor + attempt.paymentAmountMinor >
-      attempt.monthlyChargeCapMinor
+    attempt.chargedThisMonthBeforeMinor + attempt.paymentAmountMinor > attempt.monthlyChargeCapMinor
   ) {
     throw new AppError('INTERNAL', 500, 'BILLING_CREDIT_AUTO_TOP_UP_BINDING_INVALID');
   }
@@ -193,16 +195,24 @@ function assertPaymentIntent(
   account: StripeAccountContext,
 ): void {
   assertStripeObjectLivemode(intent, account.livemode);
-  const binding = paymentBinding(intent.metadata);
+  assertCreditFundingMetadata(
+    intent.metadata,
+    {
+      localType: 'automatic_top_up',
+      localId: attempt.id,
+      serviceId: attempt.serviceId,
+      appKeyId: attempt.appKeyId,
+      creditAccountId: attempt.creditAccountId,
+    },
+    'STRIPE_CREDIT_AUTO_TOP_UP_BINDING_INVALID',
+  );
   if (
     intent.object !== 'payment_intent' ||
     !intent.id.startsWith('pi_') ||
     intent.amount !== stripeAmount(attempt.paymentAmountMinor) ||
     intent.currency.toUpperCase() !== 'USD' ||
     stripeExternalId(intent.customer) !== attempt.creditAccount.customer.stripeCustomerId ||
-    stripeExternalId(intent.payment_method) !== attempt.consentRevision.stripePaymentMethodId ||
-    binding?.localType !== 'automatic_top_up' ||
-    binding.localId !== attempt.id
+    stripeExternalId(intent.payment_method) !== attempt.consentRevision.stripePaymentMethodId
   ) {
     throw new AppError('INTERNAL', 502, 'STRIPE_CREDIT_AUTO_TOP_UP_BINDING_INVALID');
   }
@@ -222,7 +232,13 @@ async function createPaymentIntent(
         payment_method: attempt.consentRevision.stripePaymentMethodId,
         confirm: true,
         off_session: true,
-        metadata: { uoa_credit_auto_top_up_attempt_id: attempt.id },
+        metadata: creditFundingMetadata({
+          localType: 'automatic_top_up',
+          localId: attempt.id,
+          serviceId: attempt.serviceId,
+          appKeyId: attempt.appKeyId,
+          creditAccountId: attempt.creditAccountId,
+        }),
         description: 'UOA automatic credit top-up',
       },
       { idempotencyKey: attempt.idempotencyKey },
@@ -439,10 +455,7 @@ export function startCreditAutoTopUpScheduler(params: {
   };
 
   void run();
-  const timer = setInterval(
-    () => void run(),
-    env.STRIPE_AUTO_TOP_UP_INTERVAL_MINUTES * 60_000,
-  );
+  const timer = setInterval(() => void run(), env.STRIPE_AUTO_TOP_UP_INTERVAL_MINUTES * 60_000);
   timer.unref();
   return {
     stop: () => {

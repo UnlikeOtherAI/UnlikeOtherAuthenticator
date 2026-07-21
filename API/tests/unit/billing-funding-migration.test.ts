@@ -6,6 +6,14 @@ const migrationUrl = new URL(
   '../../prisma/migrations/20260721120000_add_billing_funding_foundation/migration.sql',
   import.meta.url,
 );
+const hardeningMigrationUrl = new URL(
+  '../../prisma/migrations/20260721180000_harden_credit_funding_lifecycle/migration.sql',
+  import.meta.url,
+);
+const raceGuardMigrationUrl = new URL(
+  '../../prisma/migrations/20260721181000_guard_credit_setup_and_disable_races/migration.sql',
+  import.meta.url,
+);
 
 describe('billing funding foundation migration', () => {
   it('keeps one exact shared team credit account and fixed public conversion', async () => {
@@ -108,5 +116,50 @@ describe('billing funding foundation migration', () => {
     }
     expect(sql).toContain("EXECUTE format('ALTER TABLE %I FORCE ROW LEVEL SECURITY', table_name)");
     expect(sql).toContain("'CREATE POLICY %I ON %I FOR ALL TO uoa_app USING (false)");
+  });
+});
+
+describe('billing funding lifecycle hardening migration', () => {
+  it('pins setup activation to an exact locked consent predecessor', async () => {
+    const sql = await readFile(hardeningMigrationUrl, 'utf8');
+
+    expect(sql).toContain('"auto_top_up_generation" INTEGER NOT NULL DEFAULT 0');
+    expect(sql).toContain('"expected_consent_revision_id" TEXT');
+    expect(sql).toContain('billing_credit_setup_predecessor_guard');
+    expect(sql).toContain('FOR UPDATE');
+    expect(sql).toContain('automatic top-up setup predecessor changed');
+    expect(sql).toContain('automatic top-up consent change must advance generation once');
+  });
+
+  it('requires a current database-verified manager audit for disable', async () => {
+    const sql = await readFile(hardeningMigrationUrl, 'utf8');
+
+    expect(sql).toContain('CREATE TABLE "billing_credit_auto_top_up_disable_events"');
+    expect(sql).toContain('billing_credit_auto_top_up_disable_event_coherence');
+    expect(sql).toContain('billing_assert_credit_team_manager');
+    expect(sql).toContain('automatic top-up disable requires manager-audited evidence');
+    expect(sql).toContain('billing_credit_auto_top_up_disable_event_append_only');
+    expect(sql).toContain(
+      'GRANT SELECT, INSERT ON TABLE "billing_credit_auto_top_up_disable_events" TO uoa_admin',
+    );
+  });
+
+  it('keeps terminal setup rows closed and serializes disable with authority changes', async () => {
+    const sql = await readFile(raceGuardMigrationUrl, 'utf8');
+
+    expect(sql).toContain("OLD.\"status\" IN ('COMPLETE', 'EXPIRED', 'ABANDONED')");
+    expect(sql).toContain('terminal automatic top-up setup cannot be reopened');
+    expect(sql).toContain("NEW.\"status\" IN ('CREATING', 'OPEN', 'NEEDS_REVIEW')");
+    for (const table of [
+      'billing_app_keys',
+      'organisations',
+      'teams',
+      'org_members',
+      'team_members',
+    ]) {
+      expect(sql).toContain(`FROM "${table}"`);
+    }
+    expect(sql.match(/FOR UPDATE;/g)?.length).toBeGreaterThanOrEqual(6);
+    expect(sql).toContain('automatic top-up disable event lacks current exact authority');
   });
 });

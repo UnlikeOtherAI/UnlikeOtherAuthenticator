@@ -89,6 +89,20 @@ async function withApp(
 const headers = { 'x-uoa-app-key': 'uoa_app_key', 'x-uoa-actor': 'signed-actor' };
 
 describe('billing credit funding action routes', () => {
+  it('rejects selectors above the public 256-character bound before dispatch', async () => {
+    await withApp(async (app) => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/billing/v1/credits/top-up-checkout',
+        headers,
+        payload: { ...subject, offer_id: 'x'.repeat(257) },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(topUpService.createBillingCreditTopUpCheckout).not.toHaveBeenCalled();
+    });
+  });
+
   it('relays only the exact offer to UOA-owned top-up Checkout', async () => {
     await withApp(async (app) => {
       const response = await app.inject({

@@ -2,6 +2,7 @@ import {
   BillingCreditAutoTopUpAttemptStatus,
   BillingCreditAutoTopUpConsentSource,
   BillingCreditAutoTopUpState,
+  BillingCreditCheckoutStatus,
   Prisma,
   type PrismaClient,
 } from '@prisma/client';
@@ -26,6 +27,34 @@ type Dependencies = {
   resolveOption?: typeof resolveCreditAutoTopUpOption;
   validateCatalog?: typeof assertCreditCatalogPrice;
 };
+
+type LockedConsentSnapshot = {
+  id: string;
+  autoTopUpGeneration: number;
+  autoTopUpConsentRevisionId: string | null;
+  autoTopUpState: BillingCreditAutoTopUpState;
+  stripePaymentMethodId: string | null;
+};
+
+async function lockConsentSnapshot(
+  tx: Prisma.TransactionClient,
+  creditAccountId: string,
+): Promise<LockedConsentSnapshot> {
+  const rows = await tx.$queryRaw<LockedConsentSnapshot[]>(Prisma.sql`
+    SELECT
+      "id",
+      "auto_top_up_generation" AS "autoTopUpGeneration",
+      "auto_top_up_consent_revision_id" AS "autoTopUpConsentRevisionId",
+      "auto_top_up_state" AS "autoTopUpState",
+      "stripe_payment_method_id" AS "stripePaymentMethodId"
+    FROM "billing_credit_accounts"
+    WHERE "id" = ${creditAccountId}
+    FOR UPDATE
+  `);
+  const account = rows[0];
+  if (!account) throw new AppError('BAD_REQUEST', 409, 'BILLING_CREDIT_ACCOUNT_MISSING');
+  return account;
+}
 
 function isUniqueConstraintError(error: unknown): boolean {
   return (error as { code?: unknown } | null)?.code === 'P2002';
@@ -131,6 +160,16 @@ export async function updateBillingCreditAutoTopUp(
   try {
     await prisma.$transaction(
       async (tx) => {
+        const locked = await lockConsentSnapshot(tx, context.creditAccount.id);
+        if (
+          locked.autoTopUpGeneration !== context.creditAccount.autoTopUpGeneration ||
+          locked.autoTopUpConsentRevisionId !== context.creditAccount.autoTopUpConsentRevisionId ||
+          locked.stripePaymentMethodId !== context.creditAccount.stripePaymentMethodId ||
+          (locked.autoTopUpState !== BillingCreditAutoTopUpState.ACTIVE &&
+            locked.autoTopUpState !== BillingCreditAutoTopUpState.PAUSED)
+        ) {
+          throw new AppError('BAD_REQUEST', 409, 'BILLING_CREDIT_CONSENT_PREDECESSOR_CHANGED');
+        }
         const replay = await tx.billingCreditAutoTopUpConsentRevision.findUnique({
           where: {
             appKeyId_actorJti: {
@@ -167,9 +206,14 @@ export async function updateBillingCreditAutoTopUp(
             consentedAt,
           },
         });
-        await tx.billingCreditAccount.update({
-          where: { id: context.creditAccount.id },
+        const changed = await tx.billingCreditAccount.updateMany({
+          where: {
+            id: context.creditAccount.id,
+            autoTopUpGeneration: locked.autoTopUpGeneration,
+            autoTopUpConsentRevisionId: locked.autoTopUpConsentRevisionId,
+          },
           data: {
+            autoTopUpGeneration: { increment: 1 },
             autoTopUpState: BillingCreditAutoTopUpState.ACTIVE,
             autoTopUpPolicyId: selection.policy.id,
             autoTopUpServiceId: params.credential.service.id,
@@ -185,6 +229,22 @@ export async function updateBillingCreditAutoTopUp(
             stripePaymentMethodId: method.id,
             paymentMethodSummary,
           },
+        });
+        if (changed.count !== 1) {
+          throw new AppError('BAD_REQUEST', 409, 'BILLING_CREDIT_CONSENT_PREDECESSOR_CHANGED');
+        }
+        await tx.billingCreditSetupCheckout.updateMany({
+          where: {
+            creditAccountId: context.creditAccount.id,
+            status: {
+              in: [
+                BillingCreditCheckoutStatus.CREATING,
+                BillingCreditCheckoutStatus.OPEN,
+                BillingCreditCheckoutStatus.NEEDS_REVIEW,
+              ],
+            },
+          },
+          data: { status: BillingCreditCheckoutStatus.ABANDONED },
         });
         await tx.orgAuditLog.create({
           data: {
@@ -236,10 +296,7 @@ export async function disableBillingCreditAutoTopUp(
   if (context.creditAccount.autoTopUpState === BillingCreditAutoTopUpState.DISABLED) return;
   await prisma.$transaction(
     async (tx) => {
-      const account = await tx.billingCreditAccount.findUnique({
-        where: { id: context.creditAccount.id },
-      });
-      if (!account) throw new AppError('BAD_REQUEST', 409, 'BILLING_CREDIT_ACCOUNT_MISSING');
+      const account = await lockConsentSnapshot(tx, context.creditAccount.id);
       if (account.autoTopUpState === BillingCreditAutoTopUpState.DISABLED) return;
       const unresolved = await tx.billingCreditAutoTopUpAttempt.findFirst({
         where: {
@@ -258,9 +315,40 @@ export async function disableBillingCreditAutoTopUp(
       if (unresolved) {
         throw new AppError('BAD_REQUEST', 409, 'BILLING_CREDIT_AUTO_TOP_UP_PAYMENT_PENDING');
       }
+      if (!account.autoTopUpConsentRevisionId) {
+        throw new AppError('BAD_REQUEST', 409, 'BILLING_CREDIT_CONSENT_PREDECESSOR_MISSING');
+      }
+      await tx.billingCreditAutoTopUpDisableEvent.create({
+        data: {
+          accountId: context.account.id,
+          creditAccountId: context.creditAccount.id,
+          orgId: params.request.organisationId,
+          teamId: params.request.teamId,
+          serviceId: params.credential.service.id,
+          appKeyId: params.credential.id,
+          previousConsentRevisionId: account.autoTopUpConsentRevisionId,
+          previousGeneration: account.autoTopUpGeneration,
+          actorJti: context.actor.jti,
+          requestedByUserId: params.request.userId,
+        },
+      });
+      await tx.billingCreditSetupCheckout.updateMany({
+        where: {
+          creditAccountId: account.id,
+          status: {
+            in: [
+              BillingCreditCheckoutStatus.CREATING,
+              BillingCreditCheckoutStatus.OPEN,
+              BillingCreditCheckoutStatus.NEEDS_REVIEW,
+            ],
+          },
+        },
+        data: { status: BillingCreditCheckoutStatus.ABANDONED },
+      });
       await tx.billingCreditAccount.update({
         where: { id: account.id },
         data: {
+          autoTopUpGeneration: { increment: 1 },
           autoTopUpState: BillingCreditAutoTopUpState.DISABLED,
           autoTopUpPolicyId: null,
           autoTopUpServiceId: null,
