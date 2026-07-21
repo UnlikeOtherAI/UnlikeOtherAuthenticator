@@ -324,6 +324,8 @@ export function buildBillingCreditsProjection(params: {
           [
             BillingCreditEntryKind.TOP_UP,
             BillingCreditEntryKind.AUTOMATIC_TOP_UP,
+            BillingCreditEntryKind.REFUND_REVERSAL,
+            BillingCreditEntryKind.DISPUTE_REVERSAL,
             BillingCreditEntryKind.ADJUSTMENT,
           ].some((kind: BillingCreditEntryKind) => kind === entry.kind),
       )

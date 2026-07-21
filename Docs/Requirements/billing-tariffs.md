@@ -779,6 +779,12 @@ an active organisation and exact-team billing manager for every
 customer-initiated funding or consent mutation. Automatic attempts, Stripe
 refunds/disputes, usage settlements, and superuser adjustments use their own
 immutable system/admin proof instead of customer manager authority.
+Failed or canceled refunds and reinstated disputes create explicit reversal
+credit entries. Those entries restore only the principal that remains removed
+after all refund and dispute evidence for the original payment is reconciled,
+so overlapping adjustments cannot restore the same credits twice. Products
+display those UOA-authored entries and the resulting remaining balance without
+recalculating either value.
 
 The public credit view is a manager/member discriminated union. A manager may
 receive per-user usage, payment-method display data, consent actor details, and

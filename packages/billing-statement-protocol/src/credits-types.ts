@@ -219,6 +219,8 @@ type BillingCreditsRecentEntryBase = {
     | 'usage_settlement_correction'
     | 'refund'
     | 'dispute'
+    | 'refund_reversal'
+    | 'dispute_reversal'
     | 'adjustment';
   direction: 'credit' | 'debit';
   label: string;

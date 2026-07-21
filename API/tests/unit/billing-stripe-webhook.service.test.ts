@@ -240,6 +240,54 @@ describe('Stripe webhook current-state reconciliation', () => {
     expect(state.subscriptionModel.create).toHaveBeenCalledTimes(1);
   });
 
+  it('acknowledges an unrelated account-wide subscription event without projecting it', async () => {
+    const state = setup();
+    state.setEvent(
+      stripeEvent(
+        'evt_unrelated_subscription',
+        'customer.subscription.updated',
+        subscription('active', { metadata: {} }),
+      ),
+    );
+
+    await expect(state.call()).resolves.toEqual({ duplicate: false });
+    expect(state.stripe.subscriptions.retrieve).not.toHaveBeenCalled();
+    expect(state.subscriptionModel.create).not.toHaveBeenCalled();
+  });
+
+  it('acknowledges an unrelated subscription Checkout session without projecting it', async () => {
+    const state = setup();
+    const session = {
+      id: 'cs_unrelated',
+      mode: 'subscription',
+      metadata: {},
+      livemode: false,
+      subscription: 'sub_unrelated',
+    };
+    state.stripe.checkout.sessions.retrieve.mockResolvedValue(session);
+    state.setEvent(
+      stripeEvent('evt_unrelated_checkout', 'checkout.session.completed', session as never),
+    );
+
+    await expect(state.call()).resolves.toEqual({ duplicate: false });
+    expect(state.subscriptionModel.create).not.toHaveBeenCalled();
+    expect(state.stripe.subscriptions.retrieve).not.toHaveBeenCalled();
+  });
+
+  it('fails closed for a UOA-marked subscription with incomplete binding metadata', async () => {
+    const state = setup();
+    const malformed = subscription('active', {
+      metadata: { uoa_tariff_id: 'tariff_1' },
+    });
+    state.setRemote(malformed);
+    state.setEvent(
+      stripeEvent('evt_malformed_uoa_subscription', 'customer.subscription.updated', malformed),
+    );
+
+    await expect(state.call()).rejects.toThrow('STRIPE_SUBSCRIPTION_BINDING_INVALID');
+    expect(state.subscriptionModel.create).not.toHaveBeenCalled();
+  });
+
   it('rejects a bad signature before resolving a Stripe account', async () => {
     const state = setup();
     state.stripe.webhooks.constructEvent.mockImplementation(() => {

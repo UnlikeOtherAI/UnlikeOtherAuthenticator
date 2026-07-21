@@ -40,6 +40,16 @@ function entryCopy(kind: BillingCreditEntryKind, serviceName: string | null, cre
         label: `${product} payment dispute`,
         detail: `A verified payment dispute removed ${credits} credits from the shared team balance.`,
       };
+    case BillingCreditEntryKind.REFUND_REVERSAL:
+      return {
+        label: `${product} refund reversal`,
+        detail: `A verified failed or canceled refund restored ${credits} credits to the shared team balance.`,
+      };
+    case BillingCreditEntryKind.DISPUTE_REVERSAL:
+      return {
+        label: `${product} dispute reinstatement`,
+        detail: `Verified reinstated dispute funds restored ${credits} credits to the shared team balance.`,
+      };
     case BillingCreditEntryKind.ADJUSTMENT:
       return {
         label: 'Account credit adjustment',

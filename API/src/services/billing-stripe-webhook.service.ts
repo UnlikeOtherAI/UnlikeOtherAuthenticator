@@ -300,6 +300,10 @@ type CurrentEventState = {
   subscription: Stripe.Subscription | null;
 };
 
+function hasUoaMetadata(metadata: Stripe.Metadata | null | undefined): boolean {
+  return Object.keys(metadata ?? {}).some((key) => key.startsWith('uoa_'));
+}
+
 async function currentEventState(
   event: Stripe.Event,
   stripe: StripeWebhookClient,
@@ -310,6 +314,9 @@ async function currentEventState(
     const session = await stripe.checkout.sessions.retrieve(payload.id);
     assertStripeObjectLivemode(session, account.livemode);
     if (session.mode !== 'subscription') {
+      return { checkoutSession: null, subscriptionId: null, subscription: null };
+    }
+    if (!hasUoaMetadata(session.metadata)) {
       return { checkoutSession: null, subscriptionId: null, subscription: null };
     }
     const subscriptionId = stripeExternalId(session.subscription);
@@ -323,6 +330,9 @@ async function currentEventState(
   }
   if (SUBSCRIPTION_EVENTS.has(event.type)) {
     const payload = event.data.object as Stripe.Subscription;
+    if (!hasUoaMetadata(payload.metadata)) {
+      return { checkoutSession: null, subscriptionId: null, subscription: null };
+    }
     return {
       checkoutSession: null,
       subscriptionId: payload.id,
