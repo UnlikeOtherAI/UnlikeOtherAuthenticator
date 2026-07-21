@@ -1,7 +1,10 @@
 import { BillingCollectionMode, BillingTariffMode, Prisma } from '@prisma/client';
 
 import { AppError } from '../utils/errors.js';
-import type { NormalizedMeteringUsage } from './billing-metering.types.js';
+import {
+  UNATTRIBUTED_BILLING_PRODUCT,
+  type NormalizedMeteringUsage,
+} from './billing-metering.types.js';
 import {
   addBillingDecimals,
   currencyMinorDigits,
@@ -183,16 +186,17 @@ export function validatedStripeCumulativeCharges(
     if (line.billingProduct !== subscription.service.identifier) {
       throw new AppError('INTERNAL', 502, 'LEDGER_METERING_PRODUCT_MISMATCH');
     }
-    const amount = line.actualProviderCost ?? line.estimatedProviderCost;
+    const amount = line.selectedProviderCost;
     if (amount === null && line.currency === null) continue;
     if (amount === null || line.currency !== subscription.tariff.currency) {
       throw new AppError('INTERNAL', 502, 'LEDGER_METERING_COST_MISMATCH');
     }
-    const key = stripeUsageChargeKey(line.callerProduct, line.currency);
+    const callerProduct = line.callerProduct ?? UNATTRIBUTED_BILLING_PRODUCT;
+    const key = stripeUsageChargeKey(callerProduct, line.currency);
     const current = baseCosts.get(key);
     baseCosts.set(key, {
       billingProduct: line.billingProduct,
-      callerProduct: line.callerProduct,
+      callerProduct,
       currency: line.currency,
       amount: addBillingDecimals(current?.amount ?? '0', amount),
     });

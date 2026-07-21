@@ -1,0 +1,116 @@
+{
+  "schemaVersion": 1,
+  "contract": "metering-portfolio-v1",
+  "perspectiveProduct": "nessie",
+  "scope": {
+    "organizationId": "org_example",
+    "teamId": "team_example",
+    "month": "2026-07",
+    "startsAt": "2026-07-01T00:00:00.000Z",
+    "endsAt": "2026-08-01T00:00:00.000Z"
+  },
+  "totals": {
+    "calls": "3",
+    "usageByService": [
+      {
+        "billingProduct": "deepwater",
+        "callerProduct": "deepwater",
+        "originProduct": "nessie",
+        "serviceId": "deepwater",
+        "usageUnit": "researches",
+        "calls": "1",
+        "rawProviderUsage": {
+          "unitsIn": "1",
+          "unitsCachedIn": "0",
+          "unitsOut": "0"
+        }
+      },
+      {
+        "billingProduct": "nessie",
+        "callerProduct": "nessie",
+        "originProduct": "nessie",
+        "serviceId": "openai",
+        "usageUnit": "tokens",
+        "calls": "2",
+        "rawProviderUsage": {
+          "unitsIn": "1200",
+          "unitsCachedIn": "400",
+          "unitsOut": "300"
+        }
+      }
+    ],
+    "costs": [
+      {
+        "billingProduct": "deepwater",
+        "callerProduct": "deepwater",
+        "originProduct": "nessie",
+        "serviceId": "deepwater",
+        "costProvenance": "provider_response",
+        "rawProviderCurrency": "USD",
+        "calls": "1",
+        "rawProviderEstimatedCost": "0.250000000000",
+        "rawProviderActualCost": null,
+        "rawProviderSelectedCost": "0.250000000000"
+      },
+      {
+        "billingProduct": "nessie",
+        "callerProduct": "nessie",
+        "originProduct": "nessie",
+        "serviceId": "openai",
+        "costProvenance": "provider_response",
+        "rawProviderCurrency": "USD",
+        "calls": "2",
+        "rawProviderEstimatedCost": "3.500000000000",
+        "rawProviderActualCost": "1.000000000000",
+        "rawProviderSelectedCost": "3.000000000000"
+      }
+    ]
+  },
+  "groupBy": "service",
+  "breakdown": [
+    {
+      "dimension": "deepwater",
+      "billingProduct": "deepwater",
+      "callerProduct": "deepwater",
+      "originProduct": "nessie",
+      "serviceId": "deepwater",
+      "usageUnit": "researches",
+      "costProvenance": "provider_response",
+      "rawProviderCurrency": "USD",
+      "calls": "1",
+      "rawProviderUsage": {
+        "unitsIn": "1",
+        "unitsCachedIn": "0",
+        "unitsOut": "0"
+      },
+      "rawProviderEstimatedCost": "0.250000000000",
+      "rawProviderActualCost": null,
+      "rawProviderSelectedCost": "0.250000000000"
+    },
+    {
+      "dimension": "openai",
+      "billingProduct": "nessie",
+      "callerProduct": "nessie",
+      "originProduct": "nessie",
+      "serviceId": "openai",
+      "usageUnit": "tokens",
+      "costProvenance": "provider_response",
+      "rawProviderCurrency": "USD",
+      "calls": "2",
+      "rawProviderUsage": {
+        "unitsIn": "1200",
+        "unitsCachedIn": "400",
+        "unitsOut": "300"
+      },
+      "rawProviderEstimatedCost": "3.500000000000",
+      "rawProviderActualCost": "1.000000000000",
+      "rawProviderSelectedCost": "3.000000000000"
+    }
+  ],
+  "snapshot": {
+    "cursor": "mup_0123456789abcdefghijklmnopqrstuv",
+    "id": "mup_0123456789abcdefghijklmnopqrstuv",
+    "capturedAt": "2026-08-01T00:05:00.000Z",
+    "immutable": true
+  }
+}

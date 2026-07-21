@@ -142,24 +142,36 @@ UOA is the sole commercial billing engine. Ledger returns only immutable
 billable-unit, customer-charge, add-on, credit, payment, or cancellation fields.
 
 \`GET /schemas/billing-statement-v1.json\` publishes the frozen Draft 2020-12 response
-schema. The open-source-safe \`@unlikeotherai/billing-statement-protocol\` v1 package
+schema. \`GET /schemas/billing-statement-v2.json\` adds the complete SSO-filled,
+team-wide connected-service portfolio without mutating v1. The open-source-safe
+\`@unlikeotherai/billing-statement-protocol\` package
 is the TypeScript source used by UOA itself; it has no private server imports or
 credentials. Until registry publication, consumers can vendor/pack that package
 directory or fetch the matching synthetic fixture from
-\`GET /schemas/billing-statement-v1.example.json\` and its exact OpenAPI 3.1
-component from \`GET /schemas/billing-statement-v1.openapi.json\`. Product backends
+\`GET /schemas/billing-statement-v2.example.json\` and its exact OpenAPI 3.1
+component from \`GET /schemas/billing-statement-v2.openapi.json\`. Product backends
 call:
 
-\`POST /billing/v1/customer-statement\`
+\`POST /billing/v2/customer-statement\`
 
 with their own \`customer_lifecycle\` app key, a fresh bound \`X-UOA-Actor\`, and the
 same product/organisation/team/user subject body (plus optional \`billing_month\`).
 The response is display-ready: exact current plan and subscription, raw and billable
 usage, service/caller/origin attribution, per-user totals, monthly/usage/add-on/credit
-lines, exact currency totals, capabilities, and action descriptors. It pins the exact
-UOA tariff version and immutable Ledger service/user cursor, ID, timestamp, and
-response hash. Products render it unchanged and never derive totals, markup wording,
-direct access, or cancellation choices.
+lines, exact currency totals, capabilities, and action descriptors. V2 additionally
+contains team-wide raw totals for every connected billing product, complete
+\`origin_product\` contributions and shares, and per-user service shares. UOA rates
+only the requested product. Other-service totals are explanatory and never become
+line items or charges on the current statement. One pinned, user-grouped
+\`metering-portfolio-v1\` snapshot covers the exact team and month; UOA derives
+commercial rating plus all service, origin, and user totals from it.
+
+Products render the supplied labels, descriptions, totals, shares, and actions
+unchanged. They never derive totals, markup wording, direct access, cancellation
+choices, or a missing-origin remainder. A Nessie-originated DeepWater call therefore
+appears in Nessie’s DeepWater origin share but remains indirect access and cannot
+create a related cancellation choice. A null legacy origin renders as
+\`Unattributed origin\` and likewise creates no service, access, or choice.
 
 The same package freezes the full product-facing action protocol. Its exact
 Draft 2020-12 schema bundle, synthetic fixtures, and OpenAPI 3.1 components are
@@ -231,13 +243,22 @@ UTC billing month. Ledger verifies the assertion through
 \`GET /billing/v1/service-jwks.json\`; those keys are dedicated to this service
 assertion and rotate with a current/retired overlap.
 
-UOA requests \`GET /v1/metering/usage?group_by=service\` for customer totals and
-\`group_by=user\` for team-user attribution. The public Ledger schema is
+Stripe export continues to request \`GET /v1/metering/usage?group_by=service\`
+for one exact billed product. BillingStatementV2 instead requests
+\`GET /v1/metering/portfolio?group_by=user\` with an exact signed team and
+\`view=team_portfolio\`, producing one immutable \`metering-portfolio-v1\`
+snapshot across billing products. UOA derives commercial rating plus every
+service, origin, and user total from that same pinned snapshot. The statement
+product in that assertion is a display perspective, never a filter or a tariff grant.
+The public product-scoped Ledger schema is
 \`https://ledger.unlikeotherai.com/schemas/metering-usage-v1.json\`. Exact
-\`mus_…\` cursor/ID snapshots contain string raw units, provider-estimated/actual cost,
-currency/provenance, and billing/caller/origin dimensions. UOA rejects unknown
+\`mus_…\` cursor/ID snapshots contain string raw units, provider-estimated,
+provider-actual, and exact selected cost
+(\`SUM(COALESCE(actual, estimated))\`), currency/provenance, and
+billing/caller/origin dimensions. UOA rejects unknown
 commercial fields and centrally applies the pinned tariff before anything reaches
-Stripe.
+Stripe. Null caller/origin attribution remains unattributed; it never creates a
+service, direct-access record, or cancellation choice.
 
 Platform superusers can exercise or replay one subscription/month through
 \`POST /internal/admin/billing/stripe/usage-exports\`. The optional

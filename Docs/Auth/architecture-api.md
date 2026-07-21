@@ -8,11 +8,11 @@ For the full product spec, see [brief.md](./brief.md). For tech stack, see [tech
 
 ## Guiding Principles
 
-* **No code file longer than 500 lines.** If a file approaches this limit, split it.
-* **One responsibility per file.** A route file handles routing. A service file handles logic. They don't mix.
-* **Thin routes, fat services.** Route handlers validate input, call a service, and return a response. Business logic lives in services.
-* **Flat over nested.** Prefer shallow directory structures. Avoid deeply nested folders.
-* **Explicit over clever.** Straightforward code beats abstractions. No magic.
+- **No code file longer than 500 lines.** If a file approaches this limit, split it.
+- **One responsibility per file.** A route file handles routing. A service file handles logic. They don't mix.
+- **Thin routes, fat services.** Route handlers validate input, call a service, and return a response. Business logic lives in services.
+- **Flat over nested.** Prefer shallow directory structures. Avoid deeply nested folders.
+- **Explicit over clever.** Straightforward code beats abstractions. No magic.
 
 ---
 
@@ -94,6 +94,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
         email-team-invite-open.ts  — GET /auth/email-team-invite-open
         index.ts            — Route registration for /auth
       /billing
+        customer-statement.ts — Exact v1/v2 display model and public protocol artifacts
         effective-tariff.ts — Product-bound app-key + signed-actor tariff resolution
         jwks.ts             — GET /billing/v1/jwks.json (snapshot verification keys)
         stripe-checkout.ts  — Purpose-bound hosted Checkout creation/recovery
@@ -185,6 +186,9 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       billing-actor.service.ts              — Credential-bound short-lived actor JWT verification
       billing-app-key.service.ts            — Product app-key minting, lookup, revocation, and audit
       billing-entitlement.service.ts        — Membership validation and team→org→default resolution
+      billing-ledger-collector.service.ts   — Strict immutable Ledger usage/portfolio snapshots
+      billing-statement-portfolio.service.ts — UOA-only connected-service/origin/user aggregation
+      billing-statement.service.ts          — Canonical display-ready v1/v2 billing statements
       billing-snapshot.service.ts           — Preloaded RS256 tariff signer, overlapping JWKS, and exact consumer binding guard
       billing-stripe-checkout-recovery.service.ts — Crash-safe Stripe Checkout lookup and lease reconciliation
       billing-stripe-checkout-state.service.ts — Billing-scope overlap, binding, and customer projection rules
@@ -343,25 +347,25 @@ Request → Route → Middleware → Service → Database (Prisma)
 
 ### Routes (thin)
 
-* Parse and validate request input
-* Call the appropriate service
-* Return the response
-* No business logic
-* Each route file handles one endpoint or a tight group of related endpoints
+- Parse and validate request input
+- Call the appropriate service
+- Return the response
+- No business logic
+- Each route file handles one endpoint or a tight group of related endpoints
 
 ### Middleware
 
-* **config-verifier** — runs on OAuth entry points and the server-facing `GET /apps/startup` endpoint. Fetches config from URL, verifies JWT, attaches parsed config to the request context. **Bypass exceptions** (SDK-facing or unauthenticated documentation endpoints called without a backend config context): `GET /` (holding page), `GET /api` (JSON schema), `GET /llm` (Markdown config docs), `GET /.well-known/jwks.json`, the `/health` endpoint, and the static admin SPA served under `/admin`.
-* **config-jwt-header-verifier** — verifies a signed config JWT supplied via header for endpoints that accept the config out-of-band rather than via a `config_url` query parameter.
-* **domain-hash-auth** — runs on domain-scoped API routes. Verifies the domain hash token.
-* **superuser-access-token** — validates user access tokens for superuser-only domain endpoints.
-* **admin-superuser** — runs on `/internal/admin/*`. Validates the admin access token issued by `POST /internal/admin/token` and requires `role: "superuser"` for the configured `ADMIN_AUTH_DOMAIN`. See `Docs/Requirements/roles-and-acl.md`.
-* **billing-app-auth** — runs on the product billing endpoints. Accepts only the calling product's individual `uoa_app_…` credential, resolves its exact product, purpose, and actor-verification binding through the admin database connection, and rejects duplicate or ambiguous credential headers. `entitlement` keys can call only effective-tariff; `customer_lifecycle` keys can call only direct-session confirmation, customer statement, Checkout, summary, portal, and cancellation. The route separately requires `X-UOA-Actor`; the app key never stands in for a user identity. The signed result includes the non-secret app-key record ID, exact product ID/identifier, and user/organisation/team subject so consumers can reject cross-product or cross-actor replay even when products share an actor-signing key.
-* **org-features** — rejects org endpoints when `org_features.enabled` is false.
-* **groups-enabled** — rejects group endpoints when `org_features.groups_enabled` is false.
-* **org-role-guard** — validates the user access token and the user's org role for `/org/*` routes (`owner > admin > member`). Reads `OrgMember.role` for the authenticated user in the target org and returns 403 if not a member or the role is insufficient.
-* **error-handler** — catches all errors. Returns a generic public body via `utils/error-response.ts` to the caller and logs specifics internally.
-* **rate-limiter** — request rate limiting; keyed helpers for auth routes live in `routes/auth/rate-limit-keys.ts`.
+- **config-verifier** — runs on OAuth entry points and the server-facing `GET /apps/startup` endpoint. Fetches config from URL, verifies JWT, attaches parsed config to the request context. **Bypass exceptions** (SDK-facing or unauthenticated documentation endpoints called without a backend config context): `GET /` (holding page), `GET /api` (JSON schema), `GET /llm` (Markdown config docs), `GET /.well-known/jwks.json`, the `/health` endpoint, and the static admin SPA served under `/admin`.
+- **config-jwt-header-verifier** — verifies a signed config JWT supplied via header for endpoints that accept the config out-of-band rather than via a `config_url` query parameter.
+- **domain-hash-auth** — runs on domain-scoped API routes. Verifies the domain hash token.
+- **superuser-access-token** — validates user access tokens for superuser-only domain endpoints.
+- **admin-superuser** — runs on `/internal/admin/*`. Validates the admin access token issued by `POST /internal/admin/token` and requires `role: "superuser"` for the configured `ADMIN_AUTH_DOMAIN`. See `Docs/Requirements/roles-and-acl.md`.
+- **billing-app-auth** — runs on the product billing endpoints. Accepts only the calling product's individual `uoa_app_…` credential, resolves its exact product, purpose, and actor-verification binding through the admin database connection, and rejects duplicate or ambiguous credential headers. `entitlement` keys can call only effective-tariff; `customer_lifecycle` keys can call only direct-session confirmation, customer statement, Checkout, summary, portal, and cancellation. The route separately requires `X-UOA-Actor`; the app key never stands in for a user identity. The signed result includes the non-secret app-key record ID, exact product ID/identifier, and user/organisation/team subject so consumers can reject cross-product or cross-actor replay even when products share an actor-signing key.
+- **org-features** — rejects org endpoints when `org_features.enabled` is false.
+- **groups-enabled** — rejects group endpoints when `org_features.groups_enabled` is false.
+- **org-role-guard** — validates the user access token and the user's org role for `/org/*` routes (`owner > admin > member`). Reads `OrgMember.role` for the authenticated user in the target org and returns 403 if not a member or the role is insufficient.
+- **error-handler** — catches all errors. Returns a generic public body via `utils/error-response.ts` to the caller and logs specifics internally.
+- **rate-limiter** — request rate limiting; keyed helpers for auth routes live in `routes/auth/rate-limit-keys.ts`.
 
 `POST /auth/token` remains a thin multi-grant route. Its confidential assertion
 branch uses the same config verifier and domain-hash guard as the legacy grants,
@@ -411,23 +415,30 @@ membership levels, confirms UOA-owned direct product-access evidence, and
 resolves team assignment → organisation assignment → service default.
 `billing-snapshot.service.ts` signs the five-minute content-free entitlement
 result. `billing-statement.service.ts` separately builds the display-ready
-`BillingStatementV1` from the exact tariff, UOA add-ons/credits, Stripe
-projection, and two immutable raw Ledger snapshots. Tariff, direct-access,
-commercial-line, and credential reads use the bypass-RLS admin client because
-tenant SQL access to those control-plane tables is denied. Full contract and
-raw-usage separation are defined in
+`BillingStatementV1` or `BillingStatementV2` from the exact tariff, UOA
+add-ons/credits, Stripe projection, and immutable raw Ledger snapshots. V1
+remains frozen. V2 adds a UOA-aggregated team-wide connected-service portfolio
+from one exact user-grouped `metering-portfolio-v1` snapshot. UOA derives the
+commercial rating and all service/origin/user totals from that same pinned fact
+set; only the requested product is commercially rated. Other products, origins,
+and users are display-only transparency and cannot affect the current statement
+total. Null legacy origin attribution remains unattributed and cannot create a
+service or cancellation choice.
+Tariff, direct-access, commercial-line, and credential reads use the bypass-RLS
+admin client because tenant SQL access to those control-plane tables is denied.
+Full contract and raw-usage separation are defined in
 `Docs/Requirements/billing-tariffs.md`.
 
 The API re-exports the MIT-licensed
 `@unlikeotherai/billing-statement-protocol` workspace instead of owning a
 private copy of the customer contract. That package is the source for the
 TypeScript types and runtime schema and generates drift-checked JSON Schema,
-synthetic example, and OpenAPI 3.1 artifacts. It covers both
-`BillingStatementV1` and the exact product-facing hosted redirect,
-cancellation preview/confirm, selection, and error messages. The API serves
-both artifact sets under `/schemas/`; consumers can pack/vendor the package
-without importing server code. Billing action capabilities do not replace the
-App feature-flag resolver.
+synthetic example, and OpenAPI 3.1 artifacts. It covers
+`BillingStatementV1`, additive `BillingStatementV2`, and the exact
+product-facing hosted redirect, cancellation preview/confirm, selection, and
+error messages. The API serves all artifact sets under `/schemas/`; consumers
+can pack/vendor the package without importing server code. Billing action
+capabilities do not replace the App feature-flag resolver.
 
 `feature-flag-resolution.service.ts` is shared by `/apps/startup` and the
 backend-only `GET /apps/:appId/flags` route. The direct route authenticates the
@@ -465,12 +476,19 @@ Checkout uses a recoverable scope lease and stable account/mode idempotency,
 while a resulting subscription pins its immutable tariff source and assignment
 until terminal. Org-wide live rows exclude team rows for the same product and
 organisation; distinct team rows may coexist. Exact item cardinality, quantity,
-and absence of discounts are fail-closed. The Ledger collector presents
-UOA's own dedicated Ledger app key and a short-lived `metering.read` service
+and absence of discounts are fail-closed. The Ledger collector presents UOA's
+own dedicated Ledger app key and a short-lived `metering.read` service
 assertion. Its separate public verification overlap is served at
-`/billing/v1/service-jwks.json`. The collector validates Ledger's immutable
-`metering-usage-v1` product/scope/month and raw provider usage/cost, rejects
-commercial fields, and UOA rates cumulative customer-money deltas before
+`/billing/v1/service-jwks.json`. For commercial rating and Stripe export, the
+collector validates Ledger's immutable, product-scoped
+`metering-usage-v1` response. For `BillingStatementV2` transparency it validates
+one exact-team, user-grouped `metering-portfolio-v1` response with
+`view=team_portfolio`; the asserted product is only the requesting
+perspective. UOA derives the rating and all connected-service transparency
+from that same pinned fact set. Both contracts contain raw provider usage,
+estimated/actual cost, and the exact aggregate selected cost
+`SUM(COALESCE(actual, estimated))`; they reject commercial fields. UOA alone
+rates cumulative customer-money deltas before
 sending them to Stripe's sum meter. None of these paths accepts another
 product's app key, a user token, or a webhook secret as an app credential.
 The safe summary omits Stripe IDs and remains available with an explicit
@@ -493,54 +511,54 @@ visibly.
 
 ### Services (fat)
 
-* All business logic lives here
-* Services call Prisma for database access
-* Services call other services when needed (e.g. auth service calls password service)
-* Each service file covers one domain of logic
-* Social providers each get their own file, sharing a common base interface
+- All business logic lives here
+- Services call Prisma for database access
+- Services call other services when needed (e.g. auth service calls password service)
+- Each service file covers one domain of logic
+- Social providers each get their own file, sharing a common base interface
 
 ### Utils
 
-* Pure helper functions with no side effects
-* No database access
-* No external API calls
+- Pure helper functions with no side effects
+- No database access
+- No external API calls
 
 ---
 
 ## File Size Rules
 
-* **Maximum 500 lines per code file.** No exceptions.
-* If a service grows past this, split by sub-concern. Two patterns are used in the tree today:
-  * **Flow-level split** — peer files named for the sub-flow, e.g. `auth-login.service.ts`, `auth-register.service.ts`, `auth-reset-password.service.ts`.
-  * **Domain slice split** — sibling `<domain>.service.<slice>.ts` files, optionally with an orchestration entry point. Two flavours in the tree today: `internal-admin.service.ts` is the entry point that re-exports from `internal-admin.service.base.ts`, `internal-admin.service.domains.ts`, `internal-admin.service.organisations.ts`, and `internal-admin.service.users.ts`; the `organisation.service.*` family uses no orchestration entry — callers import directly from `organisation.service.organisation.ts`, `organisation.service.members.ts`, or `organisation.service.base.ts`. Pick the form that fits the call sites.
-* If a route file grows past this, split by endpoint.
-* Tests have no line limit but should still be organized logically.
+- **Maximum 500 lines per code file.** No exceptions.
+- If a service grows past this, split by sub-concern. Two patterns are used in the tree today:
+  - **Flow-level split** — peer files named for the sub-flow, e.g. `auth-login.service.ts`, `auth-register.service.ts`, `auth-reset-password.service.ts`.
+  - **Domain slice split** — sibling `<domain>.service.<slice>.ts` files, optionally with an orchestration entry point. Two flavours in the tree today: `internal-admin.service.ts` is the entry point that re-exports from `internal-admin.service.base.ts`, `internal-admin.service.domains.ts`, `internal-admin.service.organisations.ts`, and `internal-admin.service.users.ts`; the `organisation.service.*` family uses no orchestration entry — callers import directly from `organisation.service.organisation.ts`, `organisation.service.members.ts`, or `organisation.service.base.ts`. Pick the form that fits the call sites.
+- If a route file grows past this, split by endpoint.
+- Tests have no line limit but should still be organized logically.
 
 ---
 
 ## Error Handling
 
-* All errors thrown internally use structured error objects with codes
-* The global error handler catches everything
-* User-facing responses are always generic: `"Authentication failed"`, `"Request failed"`, etc.
-* Internal logs include the full error with stack trace, context, and specifics
-* Never return: "wrong password", "email exists", "2FA failed", "wrong provider", or any other specific reason
+- All errors thrown internally use structured error objects with codes
+- The global error handler catches everything
+- User-facing responses are always generic: `"Authentication failed"`, `"Request failed"`, etc.
+- Internal logs include the full error with stack trace, context, and specifics
+- Never return: "wrong password", "email exists", "2FA failed", "wrong provider", or any other specific reason
 
 ---
 
 ## Database Access
 
-* **Prisma only** — no raw SQL unless absolutely necessary
-* All queries go through services, never directly from routes
-* Transactions used where atomicity matters (e.g. user creation + superuser assignment)
-* Connection pooling handled by Prisma
+- **Prisma only** — no raw SQL unless absolutely necessary
+- All queries go through services, never directly from routes
+- Transactions used where atomicity matters (e.g. user creation + superuser assignment)
+- Connection pooling handled by Prisma
 
 ---
 
 ## Testing
 
-* Unit tests for all services
-* Integration tests for all API endpoints
-* Tests verify generic error responses (no leakage)
-* Tests verify enumeration protection
-* Test files live alongside what they test or in `/tests`
+- Unit tests for all services
+- Integration tests for all API endpoints
+- Tests verify generic error responses (no leakage)
+- Tests verify enumeration protection
+- Test files live alongside what they test or in `/tests`

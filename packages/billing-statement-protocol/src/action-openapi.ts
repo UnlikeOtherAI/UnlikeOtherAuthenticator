@@ -52,5 +52,4 @@ export const billingConsumerActionV1OpenApiDocument = {
   },
 } as const;
 
-export type BillingConsumerActionV1OpenApiDocument =
-  typeof billingConsumerActionV1OpenApiDocument;
+export type BillingConsumerActionV1OpenApiDocument = typeof billingConsumerActionV1OpenApiDocument;

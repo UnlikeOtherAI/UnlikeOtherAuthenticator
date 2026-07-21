@@ -9,6 +9,9 @@ import {
   billingStatementV1ConformanceFixture,
   billingStatementV1JsonSchema,
   billingStatementV1OpenApiDocument,
+  billingStatementV2ConformanceFixture,
+  billingStatementV2JsonSchema,
+  billingStatementV2OpenApiDocument,
 } from '../dist/index.js';
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -33,6 +36,15 @@ const artifacts = new Map([
   [
     resolve(packageRoot, 'openapi/billing-statement-v1.openapi.json'),
     billingStatementV1OpenApiDocument,
+  ],
+  [resolve(packageRoot, 'schema/billing-statement-v2.json'), billingStatementV2JsonSchema],
+  [
+    resolve(packageRoot, 'fixtures/billing-statement-v2.example.json'),
+    billingStatementV2ConformanceFixture,
+  ],
+  [
+    resolve(packageRoot, 'openapi/billing-statement-v2.openapi.json'),
+    billingStatementV2OpenApiDocument,
   ],
 ]);
 const mode = process.argv[2];

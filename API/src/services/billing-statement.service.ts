@@ -3,14 +3,24 @@ import { randomUUID } from 'node:crypto';
 
 import {
   BILLING_STATEMENT_SCHEMA_VERSION,
+  BILLING_STATEMENT_V2_SCHEMA_VERSION,
   type BillingStatementV1,
+  type BillingStatementV2,
 } from '../contracts/billing-statement-v1.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import { listApplicableCommercialAdjustments } from './billing-commercial-adjustment.service.js';
-import { fetchLedgerMeteringUsage } from './billing-ledger-collector.service.js';
-import type { FetchMeteringUsage } from './billing-metering.types.js';
+import {
+  fetchLedgerMeteringPortfolio,
+  fetchLedgerMeteringUsage,
+} from './billing-ledger-collector.service.js';
+import {
+  type FetchMeteringPortfolio,
+  type FetchMeteringUsage,
+  type NormalizedMeteringPortfolio,
+  type NormalizedMeteringUsage,
+} from './billing-metering.types.js';
 import { addBillingDecimals, exactMoney, minorAmountToMajor } from './billing-money.service.js';
 import {
   confirmDirectBillingServiceAccess,
@@ -18,6 +28,10 @@ import {
   type DirectBillingServiceAccess,
 } from './billing-service-access.service.js';
 import { billingStatementActions } from './billing-statement-action.service.js';
+import {
+  buildConnectedServicePortfolio,
+  filterPortfolioForProduct,
+} from './billing-statement-portfolio.service.js';
 import { rateBillingStatementUsage } from './billing-statement-rating.service.js';
 import {
   getStripeSubscriptionSummary,
@@ -38,6 +52,7 @@ type Dependencies = {
   now?: () => Date;
   resolveSummary?: (params: StatementContext) => Promise<SubscriptionSummary>;
   fetchMetering?: FetchMeteringUsage;
+  fetchPortfolio?: FetchMeteringPortfolio;
   confirmAccess?: typeof confirmDirectBillingServiceAccess;
   listDirectAccess?: typeof listDirectTeamBillingServiceAccess;
 };
@@ -72,17 +87,27 @@ function modeFromSummary(value: string): 'standard' | 'free' | 'at_cost' | 'cust
 }
 
 function serviceGraph(
-  lines: BillingStatementV1['usage']['lines'],
+  attributions: Array<{
+    billingProduct: string;
+    callerProduct: string | null;
+    originProduct: string | null;
+  }>,
   accesses: DirectBillingServiceAccess[],
+  products: Array<{ identifier: string; name: string }> = [],
 ): BillingStatementV1['services'] {
   const accessByProduct = new Map(accesses.map((access) => [access.product, access]));
+  const productNames = new Map(products.map((product) => [product.identifier, product.name]));
   const roles = new Map<string, Set<'billing_product' | 'caller_product' | 'origin_product'>>();
-  for (const line of lines) {
-    const values = [
-      ['billing_product', line.attribution.billing_product],
-      ['caller_product', line.attribution.caller_product],
-      ['origin_product', line.attribution.origin_product],
-    ] as const;
+  for (const attribution of attributions) {
+    const values: Array<
+      [role: 'billing_product' | 'caller_product' | 'origin_product', product: string]
+    > = [['billing_product', attribution.billingProduct]];
+    if (attribution.callerProduct !== null) {
+      values.push(['caller_product', attribution.callerProduct]);
+    }
+    if (attribution.originProduct !== null) {
+      values.push(['origin_product', attribution.originProduct]);
+    }
     for (const [role, product] of values) {
       const productRoles = roles.get(product) ?? new Set();
       productRoles.add(role);
@@ -96,10 +121,11 @@ function serviceGraph(
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([product, productRoles]) => {
       const access = accessByProduct.get(product);
+      const name = access?.name ?? productNames.get(product) ?? null;
       return {
         product,
-        name: access?.name ?? null,
-        display_name: access?.name ?? product,
+        name,
+        display_name: name ?? product,
         access: access ? ('direct' as const) : ('indirect' as const),
         direct_user_count: access?.userIds.length ?? 0,
         roles: [...productRoles].sort(),
@@ -167,16 +193,19 @@ function commercialTotals(
     }));
 }
 
-export async function getCanonicalBillingStatement(
+async function buildCanonicalBillingStatement(
   context: StatementContext,
+  version: 'v1' | 'v2',
   deps?: Dependencies,
-): Promise<BillingStatementV1> {
+): Promise<BillingStatementV1 | BillingStatementV2> {
   const now = deps?.now?.() ?? new Date();
   const period = monthPeriod(context.billingMonth, now);
   const prisma = deps?.prisma ?? getAdminPrisma();
   const summary = await (
     deps?.resolveSummary ?? ((params) => getStripeSubscriptionSummary(params, { prisma }))
   )(context);
+  const statementProduct = summary.product.identifier;
+  const canonicalRequest = { ...context.request, product: statementProduct };
   await (deps?.confirmAccess ?? confirmDirectBillingServiceAccess)(
     {
       serviceId: context.credential.service.id,
@@ -189,57 +218,92 @@ export async function getCanonicalBillingStatement(
   );
 
   const fetchMetering = deps?.fetchMetering ?? fetchLedgerMeteringUsage;
-  const [tariff, accesses, adjustments, members, serviceMetering, userMetering] = await Promise.all(
-    [
-      prisma.billingTariff.findUnique({
-        where: { id: summary.tariff.id },
-        select: { name: true },
-      }),
-      (deps?.listDirectAccess ?? listDirectTeamBillingServiceAccess)(
-        {
+  const fetchPortfolio = deps?.fetchPortfolio ?? fetchLedgerMeteringPortfolio;
+  const meteringPromise =
+    version === 'v2'
+      ? fetchPortfolio({
+          product: statementProduct,
           organisationId: context.request.organisationId,
           teamId: context.request.teamId,
-        },
-        { prisma },
-      ),
-      listApplicableCommercialAdjustments(
-        {
-          serviceId: context.credential.service.id,
-          organisationId: context.request.organisationId,
-          teamId: context.request.teamId,
-          startsAt: period.startsAtDate,
-          endsAt: period.endsAtDate,
-        },
-        { prisma },
-      ),
-      prisma.teamMember.findMany({
-        where: { teamId: context.request.teamId, status: 'ACTIVE' },
-        select: { user: { select: { id: true, name: true, email: true } } },
-      }),
-      fetchMetering({
-        product: context.request.product,
+          billingMonth: period.key,
+          groupBy: 'user',
+        }).then((portfolio) => ({ service: portfolio, user: portfolio }))
+      : Promise.all([
+          fetchMetering({
+            product: statementProduct,
+            organisationId: context.request.organisationId,
+            teamId: context.request.teamId,
+            billingMonth: period.key,
+            groupBy: 'service',
+          }),
+          fetchMetering({
+            product: statementProduct,
+            organisationId: context.request.organisationId,
+            teamId: context.request.teamId,
+            billingMonth: period.key,
+            groupBy: 'user',
+          }),
+        ]).then(([service, user]) => ({ service, user }));
+  const [tariff, products, accesses, adjustments, members, metering] = await Promise.all([
+    prisma.billingTariff.findUnique({
+      where: { id: summary.tariff.id },
+      select: { name: true },
+    }),
+    prisma.billingService.findMany({
+      where: { active: true },
+      select: { identifier: true, name: true },
+    }),
+    (deps?.listDirectAccess ?? listDirectTeamBillingServiceAccess)(
+      {
         organisationId: context.request.organisationId,
         teamId: context.request.teamId,
-        billingMonth: period.key,
-        groupBy: 'service',
-      }),
-      fetchMetering({
-        product: context.request.product,
+      },
+      { prisma },
+    ),
+    listApplicableCommercialAdjustments(
+      {
+        serviceId: context.credential.service.id,
         organisationId: context.request.organisationId,
         teamId: context.request.teamId,
-        billingMonth: period.key,
-        groupBy: 'user',
-      }),
-    ],
-  );
+        startsAt: period.startsAtDate,
+        endsAt: period.endsAtDate,
+      },
+      { prisma },
+    ),
+    prisma.teamMember.findMany({
+      where: {
+        teamId: context.request.teamId,
+        status: 'ACTIVE',
+        user: {
+          orgMembers: {
+            some: {
+              orgId: context.request.organisationId,
+              status: 'ACTIVE',
+            },
+          },
+        },
+      },
+      select: { user: { select: { id: true, name: true, email: true } } },
+    }),
+    meteringPromise,
+  ]);
+  const { service: serviceMetering, user: userMetering } = metering;
   if (!tariff) throw new AppError('INTERNAL', 500, 'BILLING_TARIFF_NOT_FOUND');
 
   const mode = modeFromSummary(summary.tariff.mode);
+  const ratedServiceMetering =
+    version === 'v2'
+      ? filterPortfolioForProduct(serviceMetering as NormalizedMeteringPortfolio, statementProduct)
+      : (serviceMetering as NormalizedMeteringUsage);
+  const ratedUserMetering =
+    version === 'v2'
+      ? filterPortfolioForProduct(userMetering as NormalizedMeteringPortfolio, statementProduct)
+      : (userMetering as NormalizedMeteringUsage);
   const rated = rateBillingStatementUsage({
-    serviceMetering,
-    userMetering,
+    serviceMetering: ratedServiceMetering,
+    userMetering: ratedUserMetering,
     plan: {
-      product: context.request.product,
+      product: statementProduct,
       mode,
       markupBps: summary.tariff.markup_bps,
     },
@@ -254,7 +318,7 @@ export async function getCanonicalBillingStatement(
     {
       id: `monthly_${summary.tariff.id}`,
       kind: 'monthly_subscription',
-      product: context.request.product,
+      product: statementProduct,
       label: `${tariff.name} monthly subscription`,
       detail: `Tariff ${summary.tariff.key} v${summary.tariff.version}`,
       amount: exactMoney(monthlyAmount, currency),
@@ -270,17 +334,17 @@ export async function getCanonicalBillingStatement(
           adjustment.kind === BillingAdjustmentKind.CREDIT
             ? ('credit' as const)
             : ('add_on' as const),
-        product: context.request.product,
+        product: statementProduct,
         label: adjustment.name,
         detail: adjustment.cadence === 'MONTHLY' ? 'Monthly adjustment' : 'One-time adjustment',
         amount: exactMoney(signed, adjustment.currency),
       };
     }),
   ];
-  const actions = billingStatementActions(summary, context.request, context.credential);
+  const actions = billingStatementActions(summary, canonicalRequest, context.credential);
   const markupPercent = (summary.tariff.markup_bps / 100).toFixed(2);
 
-  return {
+  const statement: BillingStatementV1 = {
     schema_version: BILLING_STATEMENT_SCHEMA_VERSION,
     statement_id: `bst_${randomUUID()}`,
     generated_at: now.toISOString(),
@@ -330,10 +394,56 @@ export async function getCanonicalBillingStatement(
       stripe_mode: summary.stripe_mode,
     },
     subscription: subscriptionProjection(summary),
-    services: serviceGraph(rated.usage.lines, accesses),
+    services: serviceGraph(
+      version === 'v2'
+        ? (userMetering as NormalizedMeteringPortfolio).lines
+        : (serviceMetering as NormalizedMeteringUsage).lines,
+      accesses,
+      products,
+    ),
     usage: rated.usage,
     commercial_lines: commercialLines,
     totals: commercialTotals(commercialLines),
     ...actions,
   };
+  if (version === 'v1') return statement;
+  const portfolioUserMetering = userMetering as NormalizedMeteringPortfolio;
+  return {
+    ...statement,
+    schema_version: BILLING_STATEMENT_V2_SCHEMA_VERSION,
+    pinned_inputs: {
+      ledger_snapshots: [
+        {
+          contract: 'metering-portfolio-v1',
+          group_by: 'user',
+          cursor: portfolioUserMetering.snapshot.cursor,
+          id: portfolioUserMetering.snapshot.id,
+          captured_at: portfolioUserMetering.snapshot.capturedAt,
+          sha256: portfolioUserMetering.snapshot.sha256,
+        },
+      ],
+      tariff: statement.pinned_inputs.tariff,
+    },
+    connected_service_usage: buildConnectedServicePortfolio({
+      statementProduct,
+      userMetering: portfolioUserMetering,
+      products,
+      accesses,
+      users: members.map((member) => member.user),
+    }),
+  };
+}
+
+export async function getCanonicalBillingStatement(
+  context: StatementContext,
+  deps?: Dependencies,
+): Promise<BillingStatementV1> {
+  return (await buildCanonicalBillingStatement(context, 'v1', deps)) as BillingStatementV1;
+}
+
+export async function getCanonicalBillingStatementV2(
+  context: StatementContext,
+  deps?: Dependencies,
+): Promise<BillingStatementV2> {
+  return (await buildCanonicalBillingStatement(context, 'v2', deps)) as BillingStatementV2;
 }
