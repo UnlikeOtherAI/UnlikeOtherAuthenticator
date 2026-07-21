@@ -133,14 +133,14 @@ export async function preparePaymentAdjustmentWebhook(
     currency = refund.currency;
     objectStatus = refund.status;
     if (
-      payload.status !== refund.status ||
       payload.amount !== refund.amount ||
       payload.currency !== refund.currency ||
       stripeExternalId(payload.payment_intent) !== paymentIntentId ||
       stripeExternalId(payload.charge) !== chargeId
     ) {
-      return null;
+      throw new AppError('INTERNAL', 503, 'STRIPE_CREDIT_ADJUSTMENT_STATE_DRIFT');
     }
+    if (payload.status !== refund.status) return null;
     if (['pending', 'requires_action'].includes(refund.status ?? '')) return null;
     if (!refund.status || !['succeeded', 'failed', 'canceled'].includes(refund.status)) {
       throw new AppError('INTERNAL', 502, 'STRIPE_CREDIT_REFUND_STATUS_INVALID');
@@ -170,11 +170,11 @@ export async function preparePaymentAdjustmentWebhook(
       payload.amount !== dispute.amount ||
       payload.currency !== dispute.currency ||
       stripeExternalId(payload.payment_intent) !== paymentIntentId ||
-      stripeExternalId(payload.charge) !== chargeId ||
-      disputeProof(payload) !== disputeProof(dispute)
+      stripeExternalId(payload.charge) !== chargeId
     ) {
-      return null;
+      throw new AppError('INTERNAL', 503, 'STRIPE_CREDIT_ADJUSTMENT_STATE_DRIFT');
     }
+    if (disputeProof(payload) !== disputeProof(dispute)) return null;
   } else {
     return null;
   }

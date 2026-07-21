@@ -8,6 +8,7 @@ import {
   assertStripeObjectLivemode,
   requireStripeWebhookConfigured,
   resolveStripeAccountContext,
+  STRIPE_BILLING_API_VERSION,
   type StripeAccountContext,
 } from './billing-stripe-client.service.js';
 import {
@@ -35,6 +36,7 @@ const SUBSCRIPTION_EVENTS = new Set([
   'customer.subscription.updated',
   'customer.subscription.deleted',
   'customer.subscription.paused',
+  'customer.subscription.pending_update_applied',
   'customer.subscription.resumed',
 ]);
 const INVOICE_RECONCILIATION_EVENTS = new Set<StripeInvoiceWebhookType>([
@@ -449,6 +451,9 @@ export async function handleStripeWebhook(
   } catch {
     throw new AppError('BAD_REQUEST', 400, 'INVALID_STRIPE_WEBHOOK_SIGNATURE');
   }
+  if (event.api_version !== STRIPE_BILLING_API_VERSION) {
+    throw new AppError('BAD_REQUEST', 400, 'STRIPE_WEBHOOK_API_VERSION_UNSUPPORTED');
+  }
 
   const prisma = deps?.prisma ?? getAdminPrisma();
   const livemode = deps?.stripeLivemode ?? configured?.livemode ?? false;
@@ -468,9 +473,15 @@ export async function handleStripeWebhook(
   if (await prisma.billingStripeWebhookEvent.findUnique({ where: eventKey })) {
     return { duplicate: true };
   }
+  const collectionEnabled = deps?.collectionEnabled ?? getEnv().STRIPE_BILLING_ENABLED;
+  if (
+    !collectionEnabled &&
+    INVOICE_RECONCILIATION_EVENTS.has(event.type as StripeInvoiceWebhookType)
+  ) {
+    throw new AppError('INTERNAL', 503, 'STRIPE_INVOICE_RECONCILIATION_DISABLED');
+  }
   const state = await currentEventState(event, stripe, account);
   const creditFunding = await prepareCreditFundingWebhook(event, stripe, account, prisma);
-  const collectionEnabled = deps?.collectionEnabled ?? getEnv().STRIPE_BILLING_ENABLED;
   if (
     collectionEnabled &&
     INVOICE_RECONCILIATION_EVENTS.has(event.type as StripeInvoiceWebhookType)

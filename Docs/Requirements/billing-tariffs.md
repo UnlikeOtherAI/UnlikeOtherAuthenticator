@@ -789,6 +789,11 @@ Funding and subscription webhooks compare the signed event's reserved UOA
 binding metadata with the freshly retrieved Stripe object. An unrelated event
 with no UOA markers is acknowledged, while removed, added, or rebound UOA
 metadata fails retryably and cannot consume the event id as an ignored event.
+The webhook endpoint and Stripe SDK are pinned to API version
+`2026-06-24.dahlia`. Immutable amount, currency, customer, payment-method,
+charge, SetupIntent, refund, and dispute binding drift also fails retryably.
+Invoice reconciliation events received while collection is disabled remain
+unconsumed so an operator can replay/reconcile them before enabling collection.
 
 The public credit view is a manager/member discriminated union. A manager may
 receive per-user usage, payment-method display data, consent actor details, and

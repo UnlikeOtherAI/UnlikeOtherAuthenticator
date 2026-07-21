@@ -30,7 +30,7 @@ function paymentEvent(type: 'payment_intent.payment_failed' | 'payment_intent.su
   return {
     id: 'evt_credit_1',
     type,
-    api_version: '2026-06-30.basil',
+    api_version: '2026-06-24.dahlia',
     account: 'acct_uoa',
     livemode: false,
     created: Math.floor(occurredAt.getTime() / 1000),
@@ -201,6 +201,27 @@ describe('credit funding Stripe webhook preparation', () => {
     expect(deps.prisma.billingCreditTopUpCheckout.findUnique).not.toHaveBeenCalled();
   });
 
+  it.each([
+    { field: 'amount', current: { amount: 2000 } },
+    { field: 'currency', current: { currency: 'gbp' } },
+    { field: 'customer', current: { customer: 'cus_other' } },
+    { field: 'payment method', current: { payment_method: 'pm_other' } },
+    { field: 'charge', current: { latest_charge: 'ch_other' } },
+  ])('retries when immutable PaymentIntent $field evidence drifts', async ({ current }) => {
+    const metadata = { uoa_credit_top_up_checkout_id: 'credit_checkout_1' };
+    const signedIntent = paymentIntent(metadata);
+    const deps = preparationDeps({ ...paymentIntent(metadata), ...current });
+
+    await expect(
+      prepareCreditFundingWebhook(
+        paymentEvent('payment_intent.succeeded', signedIntent) as never,
+        deps.stripe as never,
+        account,
+        deps.prisma as never,
+      ),
+    ).rejects.toThrow('STRIPE_CREDIT_BINDING_STATE_DRIFT');
+  });
+
   it('retries when a signed SetupIntent loses its UOA binding metadata', async () => {
     const signed = {
       id: 'seti_credit_1',
@@ -228,6 +249,37 @@ describe('credit funding Stripe webhook preparation', () => {
       ),
     ).rejects.toThrow('STRIPE_CREDIT_BINDING_STATE_DRIFT');
     expect(deps.prisma.billingCreditSetupCheckout.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('retries when immutable SetupIntent payment evidence drifts', async () => {
+    const signed = {
+      id: 'seti_credit_1',
+      customer: 'cus_team_1',
+      livemode: false,
+      metadata: { uoa_credit_setup_checkout_id: 'setup_checkout_1' },
+      payment_method: 'pm_credit_1',
+      status: 'succeeded',
+      usage: 'off_session',
+    };
+    const deps = preparationDeps();
+    deps.stripe.setupIntents.retrieve.mockResolvedValue({
+      ...signed,
+      payment_method: 'pm_other',
+    });
+
+    await expect(
+      prepareCreditFundingWebhook(
+        {
+          ...paymentEvent('payment_intent.succeeded', paymentIntent()),
+          id: 'evt_setup_drift',
+          type: 'setup_intent.succeeded',
+          data: { object: signed },
+        } as never,
+        deps.stripe as never,
+        account,
+        deps.prisma as never,
+      ),
+    ).rejects.toThrow('STRIPE_CREDIT_BINDING_STATE_DRIFT');
   });
 
   it('retries when an expired credit Checkout loses its signed UOA binding metadata', async () => {
@@ -307,6 +359,35 @@ describe('credit funding Stripe webhook preparation', () => {
         amountMinor: 250n,
       },
     });
+  });
+
+  it('retries when immutable refund payment evidence drifts', async () => {
+    const intent = paymentIntent({ uoa_credit_top_up_checkout_id: 'credit_checkout_1' });
+    const deps = preparationDeps(intent);
+    const signed = {
+      id: 're_credit_drift',
+      object: 'refund',
+      amount: 250,
+      charge: 'ch_credit_1',
+      currency: 'usd',
+      payment_intent: intent.id,
+      status: 'succeeded',
+    };
+    deps.stripe.refunds.retrieve.mockResolvedValue({ ...signed, amount: 500 });
+
+    await expect(
+      prepareCreditFundingWebhook(
+        {
+          ...paymentEvent('payment_intent.succeeded', intent),
+          id: 'evt_refund_drift',
+          type: 'refund.updated',
+          data: { object: signed },
+        } as never,
+        deps.stripe as never,
+        account,
+        deps.prisma as never,
+      ),
+    ).rejects.toThrow('STRIPE_CREDIT_ADJUSTMENT_STATE_DRIFT');
   });
 
   it('retries a bound refund until the paid credit projection exists', async () => {

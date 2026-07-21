@@ -61,7 +61,7 @@ function stripeEvent(id: string, type = 'customer.subscription.updated', payload
   return {
     id,
     type,
-    api_version: '2026-06-30.basil',
+    api_version: '2026-06-24.dahlia',
     account: 'acct_uoa',
     livemode: false,
     created: 1_784_467_200,
@@ -363,7 +363,7 @@ describe('Stripe webhook current-state reconciliation', () => {
     expect(state.webhookEventCreate).toHaveBeenCalledOnce();
   });
 
-  it('keeps lifecycle webhooks live without exporting usage when collection is disabled', async () => {
+  it('leaves invoice reconciliation replayable while collection is disabled', async () => {
     const state = setup();
     state.setEvent({
       ...stripeEvent('evt_invoice_disabled'),
@@ -374,9 +374,20 @@ describe('Stripe webhook current-state reconciliation', () => {
 
     await expect(
       state.call({ reconcileInvoice, collectionEnabled: false }),
-    ).resolves.toEqual({ duplicate: false });
+    ).rejects.toThrow('STRIPE_INVOICE_RECONCILIATION_DISABLED');
     expect(reconcileInvoice).not.toHaveBeenCalled();
-    expect(state.webhookEventCreate).toHaveBeenCalledOnce();
+    expect(state.webhookEventCreate).not.toHaveBeenCalled();
+  });
+
+  it('rejects webhook events created under a different Stripe API version', async () => {
+    const state = setup();
+    state.setEvent({
+      ...stripeEvent('evt_wrong_api_version'),
+      api_version: '2026-06-30.basil',
+    });
+
+    await expect(state.call()).rejects.toThrow('STRIPE_WEBHOOK_API_VERSION_UNSUPPORTED');
+    expect(state.stripe.accounts.retrieveCurrent).not.toHaveBeenCalled();
   });
 
   it.each([

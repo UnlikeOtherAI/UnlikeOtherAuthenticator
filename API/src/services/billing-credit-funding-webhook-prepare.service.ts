@@ -162,12 +162,16 @@ async function preparePaymentIntent(
     creditBindingDrift();
   }
   if (
-    payload.status !== intent.status ||
     payload.amount !== intent.amount ||
     payload.currency !== intent.currency ||
     stripeExternalId(payload.customer) !== stripeExternalId(intent.customer) ||
     stripeExternalId(payload.payment_method) !== stripeExternalId(intent.payment_method) ||
-    stripeExternalId(payload.latest_charge) !== stripeExternalId(intent.latest_charge) ||
+    stripeExternalId(payload.latest_charge) !== stripeExternalId(intent.latest_charge)
+  ) {
+    creditBindingDrift();
+  }
+  if (
+    payload.status !== intent.status ||
     payload.last_payment_error?.code !== intent.last_payment_error?.code ||
     payload.cancellation_reason !== intent.cancellation_reason
   ) {
@@ -260,6 +264,14 @@ async function prepareSetupIntent(
   const payloadLocalId = setupBinding(payload.metadata);
   if (!localId && !payloadLocalId) return null;
   if (!localId || !payloadLocalId || localId !== payloadLocalId) creditBindingDrift();
+  if (
+    payload.status !== intent.status ||
+    payload.usage !== intent.usage ||
+    stripeExternalId(payload.customer) !== stripeExternalId(intent.customer) ||
+    stripeExternalId(payload.payment_method) !== stripeExternalId(intent.payment_method)
+  ) {
+    creditBindingDrift();
+  }
   const checkout = await prisma.billingCreditSetupCheckout.findUnique({
     where: { id: localId },
     include: { customer: true },

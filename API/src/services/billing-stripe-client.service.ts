@@ -7,6 +7,8 @@ import { AppError } from '../utils/errors.js';
 
 let cachedClient: Stripe | undefined;
 
+export const STRIPE_BILLING_API_VERSION = '2026-06-24.dahlia' as const;
+
 export type StripeAccountContext = {
   id: string;
   stripeAccountId: string;
@@ -44,6 +46,7 @@ export function requireStripeWebhookConfigured(): {
   }
   const livemode = secretKeyLivemode(env.STRIPE_SECRET_KEY);
   cachedClient ??= new Stripe(env.STRIPE_SECRET_KEY, {
+    apiVersion: STRIPE_BILLING_API_VERSION,
     maxNetworkRetries: 2,
     timeout: 20_000,
   });
