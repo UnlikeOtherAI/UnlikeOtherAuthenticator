@@ -101,6 +101,18 @@ describe('effective billing tariff resolution', () => {
       markupBps: 4_000,
       monthlyAmountMinor: 2_000n,
     };
+    const prisma = fakePrisma({
+      teamAssignment: {
+        id: 'assignment_team',
+        scope: BillingAssignmentScope.TEAM,
+        tariff: teamTariff,
+      },
+      orgAssignment: {
+        id: 'assignment_org',
+        scope: BillingAssignmentScope.ORGANISATION,
+        tariff: defaultTariff,
+      },
+    });
     const result = await getEffectiveTariffSnapshot(
       {
         request,
@@ -108,18 +120,7 @@ describe('effective billing tariff resolution', () => {
         credential,
       },
       {
-        prisma: fakePrisma({
-          teamAssignment: {
-            id: 'assignment_team',
-            scope: BillingAssignmentScope.TEAM,
-            tariff: teamTariff,
-          },
-          orgAssignment: {
-            id: 'assignment_org',
-            scope: BillingAssignmentScope.ORGANISATION,
-            tariff: defaultTariff,
-          },
-        }),
+        prisma,
         now: () => 1_800_000_000,
         verifyActor,
         signSnapshot,
@@ -148,6 +149,7 @@ describe('effective billing tariff resolution', () => {
     });
     expect(result.payload).not.toHaveProperty('tokens');
     expect(result.payload).not.toHaveProperty('usage');
+    expect(prisma.billingServiceAccess.upsert).not.toHaveBeenCalled();
   });
 
   it('falls back from organisation assignment to service default', async () => {

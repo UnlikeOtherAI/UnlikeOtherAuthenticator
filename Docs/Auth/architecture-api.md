@@ -411,8 +411,8 @@ The billing boundary is deliberately server-to-server. A purpose-bound product
 app key authenticates the exact deployment, while its credential-bound RS256
 actor JWT binds each request to one active UOA user, organisation, and team for
 no more than 60 seconds. `billing-entitlement.service.ts` validates both
-membership levels, confirms UOA-owned direct product-access evidence, and
-resolves team assignment → organisation assignment → service default.
+membership levels and resolves team assignment → organisation assignment →
+service default without mutating direct product-access evidence.
 `billing-snapshot.service.ts` signs the five-minute content-free entitlement
 result. `billing-statement.service.ts` separately builds the display-ready
 `BillingStatementV1` or `BillingStatementV2` from the exact tariff, UOA
@@ -423,7 +423,9 @@ commercial rating and all service/origin/user totals from that same pinned fact
 set; only the requested product is commercially rated. Other products, origins,
 and users are display-only transparency and cannot affect the current statement
 total. Null legacy origin attribution remains unattributed and cannot create a
-service or cancellation choice.
+service or cancellation choice. Effective-tariff and statement reads are
+passive: only the explicit post-SSO service-access confirmation route may create
+or refresh direct-access evidence.
 Tariff, direct-access, commercial-line, and credential reads use the bypass-RLS
 admin client because tenant SQL access to those control-plane tables is denied.
 Full contract and raw-usage separation are defined in
