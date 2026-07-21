@@ -35,6 +35,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
     const redirectUrl = 'https://client.example.com/oauth/callback';
 
     const prisma = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
       authorizationCode: {
         findUnique: vi.fn(),
         updateMany: vi.fn(),
@@ -153,6 +154,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
     const redirectUrl = 'https://client.example.com/oauth/callback';
 
     const prisma = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
       authorizationCode: {
         findUnique: vi.fn(),
         updateMany: vi.fn(),
@@ -175,6 +177,8 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
       groupMember: {
         findMany: vi.fn(),
       },
+      clientDomain: { findUnique: vi.fn().mockResolvedValue(null) },
+      billingAppKey: { findMany: vi.fn().mockResolvedValue([]) },
     } as unknown as PrismaClient;
 
     prisma.authorizationCode.findUnique.mockResolvedValue({
@@ -242,6 +246,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
     const redirectUrl = 'https://client.example.com/oauth/callback';
 
     const prisma = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
       authorizationCode: {
         findUnique: vi.fn(),
         updateMany: vi.fn(),
@@ -342,6 +347,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
     const redirectUrl = 'https://client.example.com/oauth/callback';
 
     const prisma = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
       authorizationCode: {
         findUnique: vi.fn(),
         updateMany: vi.fn(),
@@ -364,6 +370,8 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
       groupMember: {
         findMany: vi.fn(),
       },
+      clientDomain: { findUnique: vi.fn().mockResolvedValue(null) },
+      billingAppKey: { findMany: vi.fn().mockResolvedValue([]) },
     } as unknown as PrismaClient;
 
     prisma.authorizationCode.findUnique.mockResolvedValue({
@@ -430,6 +438,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
     const redirectUrl = 'https://client.example.com/oauth/callback';
 
     const prisma = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
       authorizationCode: { findUnique: vi.fn(), updateMany: vi.fn() },
       refreshToken: { create: vi.fn() },
       user: { findUnique: vi.fn() },

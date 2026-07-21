@@ -112,6 +112,10 @@ function prismaMock(options?: {
   userExists?: boolean;
 }): PrismaClient {
   return {
+    $queryRaw: vi.fn().mockResolvedValue([]),
+    clientDomain: {
+      findUnique: vi.fn().mockResolvedValue({ domain: callerDomain, status: 'active' }),
+    },
     user: {
       findUnique: vi
         .fn()

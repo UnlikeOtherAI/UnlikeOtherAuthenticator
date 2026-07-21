@@ -118,6 +118,16 @@ RUN_PRODUCT_WORKSPACE_RLS_TESTS=true \
     tests/integration/product-workspace-policy-rls.test.ts
 ```
 
+Product-workspace policy is a live token-issuance kill switch. Change
+`client_domains.status`, `billing_services.active`, lifecycle
+`billing_app_keys`, or integration acceptance only through the supported Admin
+services: domain create/update, BillingService create, lifecycle app-key
+create/revoke, and integration-request acceptance. Those paths take the global
+exclusive product-policy advisory lock. Direct SQL changes are prohibited
+because they can bypass issuance linearization; any future service-disable or
+mapping mutator must take the same exclusive lock before its first policy read
+or write. App-key secret rotation does not change this mapping rule.
+
 Never print either DSN or place it in shell history. To repair a drifted
 runtime credential without an all-at-once cutover:
 

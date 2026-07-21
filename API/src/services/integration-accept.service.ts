@@ -21,6 +21,7 @@ import {
   type IntegrationClaimTokenRow,
 } from './integration-claim.service.js';
 import type { IntegrationRequestRow } from './integration-request.service.js';
+import { lockProductWorkspacePolicyExclusive } from './product-workspace-policy-lock.service.js';
 
 type AcceptPrisma = Pick<
   PrismaClient,
@@ -84,6 +85,7 @@ export async function acceptIntegrationRequest(
   }
 
   return runInTransaction(prisma as unknown as PrismaClient, async (tx) => {
+    await lockProductWorkspacePolicyExclusive(tx);
     const existing = (await tx.clientDomainIntegrationRequest.findUnique({
       where: { id: params.id },
     })) as IntegrationRequestRow | null;

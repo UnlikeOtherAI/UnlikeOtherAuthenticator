@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import { getPublicBaseUrl } from '../config/env.js';
 import { getAdminPrisma } from '../db/prisma.js';
+import { runInTransaction } from '../db/tenant-context.js';
 import { createKeyedRateLimiter } from '../middleware/rate-limiter.js';
 import { normalizeDomain } from '../utils/domain.js';
 import { AppError } from '../utils/errors.js';
@@ -14,12 +15,15 @@ import {
   signConfidentialAccessToken,
   type ConfidentialAccessTokenClaims,
 } from './oauth/access-token.service.js';
-import { getUserOrgContext } from './org-context.service.js';
+import { getActiveClientOrgContext } from './org-context.service.js';
 import {
   CONFIDENTIAL_ASSERTION_CLOCK_TOLERANCE_SECONDS,
   consumeConfidentialAssertion,
 } from './confidential-assertion-use.service.js';
 import { resolveConfidentialDelegation } from './confidential-delegation.service.js';
+import { lockTokenIssuanceProductPolicy } from './product-workspace-policy-lock.service.js';
+import { resolveProductWorkspacePolicy } from './product-workspace-policy.service.js';
+import { requiresExactAuthorizationWorkspace } from './required-workspace-placement.service.js';
 
 export const TOKEN_EXCHANGE_GRANT_TYPE = 'urn:ietf:params:oauth:grant-type:token-exchange';
 export const JWT_SUBJECT_TOKEN_TYPE = 'urn:ietf:params:oauth:token-type:jwt';
@@ -147,7 +151,7 @@ export async function verifyConfidentialSubjectToken(
   }
 }
 
-export async function exchangeConfidentialSubjectToken(
+async function exchangeConfidentialSubjectTokenInsidePolicyLock(
   params: {
     authenticatedClientDomainId: string;
     subjectToken: string;
@@ -157,34 +161,34 @@ export async function exchangeConfidentialSubjectToken(
     config: ClientConfig;
     configJwt: string;
   },
+  verified: {
+    assertion: VerifiedSubjectAssertion;
+    issuer: string;
+    sourceDomain: string;
+  },
   deps: ExchangeDeps = {},
 ): Promise<ConfidentialTokenExchangeResult> {
-  const sourceDomain = normalizeDomain(params.config.domain);
   const delegation = await (deps.resolveDelegation ?? resolveConfidentialDelegation)(
     {
       authenticatedClientDomainId: params.authenticatedClientDomainId,
-      sourceDomain,
+      sourceDomain: verified.sourceDomain,
       product: params.product,
       resource: params.resource,
       scope: params.scope,
     },
     { prisma: deps.prisma },
   );
-  const issuer = getPublicBaseUrl();
-  const assertion = await verifyConfidentialSubjectToken(
-    {
-      subjectToken: params.subjectToken,
-      configJwt: params.configJwt,
-      sourceDomain,
-      audience: `${issuer}/auth/token`,
-    },
-    deps,
-  );
-  (deps.consumeSubjectRateLimit ?? consumeSubjectExchange)(`${sourceDomain}:${assertion.sub}`);
+  const { assertion, issuer, sourceDomain } = verified;
 
   const prisma = deps.prisma ?? getAdminPrisma();
-  if (assertion.active && !params.config.org_features?.enabled) {
+  const workspacePolicy = await resolveProductWorkspacePolicy({ domain: sourceDomain }, { prisma });
+  if (!assertion.active && requiresExactAuthorizationWorkspace(params.config, workspacePolicy)) {
     throw new AppError('FORBIDDEN', 403, 'TOKEN_EXCHANGE_SUBJECT_FORBIDDEN');
+  }
+  if (assertion.active && !params.config.org_features?.enabled) {
+    if (workspacePolicy.scope !== 'all_active_memberships') {
+      throw new AppError('FORBIDDEN', 403, 'TOKEN_EXCHANGE_SUBJECT_FORBIDDEN');
+    }
   }
 
   const [user, domainRole, org] = await Promise.all([
@@ -202,14 +206,14 @@ export async function exchangeConfidentialSubjectToken(
       select: { role: true },
     }),
     assertion.active
-      ? getUserOrgContext(
+      ? getActiveClientOrgContext(
           {
             userId: assertion.sub,
             domain: sourceDomain,
-            config: params.config,
             orgId: assertion.active.orgId,
+            groupsEnabled: params.config.org_features?.groups_enabled,
           },
-          { prisma },
+          { crossProductPrisma: prisma, policyPrisma: prisma, prisma },
         )
       : Promise.resolve(null),
   ]);
@@ -254,4 +258,56 @@ export async function exchangeConfidentialSubjectToken(
     issuedTokenType: ACCESS_TOKEN_ISSUED_TOKEN_TYPE,
     scope: delegation.scope,
   };
+}
+
+export async function exchangeConfidentialSubjectToken(
+  params: {
+    authenticatedClientDomainId: string;
+    subjectToken: string;
+    product: string;
+    resource: string;
+    scope: string;
+    config: ClientConfig;
+    configJwt: string;
+  },
+  deps: ExchangeDeps = {},
+): Promise<ConfidentialTokenExchangeResult> {
+  const prisma = deps.prisma ?? getAdminPrisma();
+  const sourceDomain = normalizeDomain(params.config.domain);
+  const resolveDelegation = deps.resolveDelegation ?? resolveConfidentialDelegation;
+  // Cheap DB preflight preserves fail-fast target rejection. The same mapping
+  // is authoritatively re-read under the shared policy lock below.
+  await resolveDelegation(
+    {
+      authenticatedClientDomainId: params.authenticatedClientDomainId,
+      sourceDomain,
+      product: params.product,
+      resource: params.resource,
+      scope: params.scope,
+    },
+    { prisma },
+  );
+  const issuer = getPublicBaseUrl();
+  const assertion = await verifyConfidentialSubjectToken(
+    {
+      subjectToken: params.subjectToken,
+      configJwt: params.configJwt,
+      sourceDomain,
+      audience: `${issuer}/auth/token`,
+    },
+    deps,
+  );
+  (deps.consumeSubjectRateLimit ?? consumeSubjectExchange)(`${sourceDomain}:${assertion.sub}`);
+
+  return runInTransaction(prisma, async (tx) => {
+    await lockTokenIssuanceProductPolicy(
+      { clientDomainId: params.authenticatedClientDomainId, domain: params.config.domain },
+      { prisma: tx },
+    );
+    return exchangeConfidentialSubjectTokenInsidePolicyLock(
+      params,
+      { assertion, issuer, sourceDomain },
+      { ...deps, prisma: tx, resolveDelegation },
+    );
+  });
 }

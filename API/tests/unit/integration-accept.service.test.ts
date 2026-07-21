@@ -81,13 +81,16 @@ function makePrisma(init: {
   const auditCreate = vi.fn(async () => ({}));
 
   const tx = {
+    $queryRaw: vi.fn().mockResolvedValue([]),
     clientDomainIntegrationRequest: {
       findUnique: vi.fn(async () => integrationRow),
-      update: vi.fn(async ({ where, data }: { where: { id: string }; data: Partial<IntegrationRow> }) => ({
-        ...(integrationRow as IntegrationRow),
-        ...data,
-        id: where.id,
-      })),
+      update: vi.fn(
+        async ({ where, data }: { where: { id: string }; data: Partial<IntegrationRow> }) => ({
+          ...(integrationRow as IntegrationRow),
+          ...data,
+          id: where.id,
+        }),
+      ),
     },
     clientDomain: {
       findUnique: vi.fn(async () => init.conflict ?? null),
@@ -108,33 +111,19 @@ function makePrisma(init: {
         return row;
       }),
       findFirst: vi.fn(
-        async ({
-          where,
-        }: {
-          where: { integrationId: string; usedAt: null };
-        }) =>
-          claimRows.find(
-            (r) => r.integrationId === where.integrationId && r.usedAt === null,
-          ) ?? null,
+        async ({ where }: { where: { integrationId: string; usedAt: null } }) =>
+          claimRows.find((r) => r.integrationId === where.integrationId && r.usedAt === null) ??
+          null,
       ),
-      deleteMany: vi.fn(
-        async ({
-          where,
-        }: {
-          where: { integrationId: string; usedAt: null };
-        }) => {
-          const before = claimRows.length;
-          for (let i = claimRows.length - 1; i >= 0; i -= 1) {
-            if (
-              claimRows[i].integrationId === where.integrationId &&
-              claimRows[i].usedAt === null
-            ) {
-              claimRows.splice(i, 1);
-            }
+      deleteMany: vi.fn(async ({ where }: { where: { integrationId: string; usedAt: null } }) => {
+        const before = claimRows.length;
+        for (let i = claimRows.length - 1; i >= 0; i -= 1) {
+          if (claimRows[i].integrationId === where.integrationId && claimRows[i].usedAt === null) {
+            claimRows.splice(i, 1);
           }
-          return { count: before - claimRows.length };
-        },
-      ),
+        }
+        return { count: before - claimRows.length };
+      }),
     },
   };
 

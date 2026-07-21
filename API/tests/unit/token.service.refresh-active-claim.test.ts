@@ -26,6 +26,7 @@ describe('exchangeRefreshTokenForTokens active-claim re-validation (unit)', () =
       now,
       prisma: {
         $executeRaw: vi.fn().mockResolvedValue(1),
+        $queryRaw: vi.fn().mockResolvedValue([]),
         domainSignatureSettings: {
           findUnique: vi.fn().mockResolvedValue(null),
         },
@@ -61,18 +62,22 @@ describe('exchangeRefreshTokenForTokens active-claim re-validation (unit)', () =
           findUnique: vi.fn().mockResolvedValue({ status: 'active' }),
         },
         billingAppKey: {
-          findMany: vi.fn().mockResolvedValue([
-            {
-              serviceId: 'service-deepsignal',
-              service: { identifier: 'deepsignal' },
-            },
-          ]),
+          findMany: vi.fn().mockResolvedValue(
+            params.crossDomain
+              ? [
+                  {
+                    serviceId: 'service-deepsignal',
+                    service: { identifier: 'deepsignal' },
+                  },
+                ]
+              : [],
+          ),
         },
         orgMember: {
           findFirst: vi.fn(async (args: { where?: { org?: unknown } }) =>
             params.crossDomain && args.where?.org
               ? null
-              : { orgId: params.storedOrgId, role: 'member' },
+              : { orgId: params.storedOrgId ?? 'org-existing', role: 'member' },
           ),
         },
         teamMember: {
@@ -251,5 +256,59 @@ describe('exchangeRefreshTokenForTokens active-claim re-validation (unit)', () =
       ),
     ).rejects.toMatchObject({ statusCode: 401, message: 'INVALID_REFRESH_TOKEN' });
     expect(prisma.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('rejects an unscoped refresh when automatic workspace selection requires an exact team', async () => {
+    const { now, prisma } = makeRotationPrisma({
+      storedOrgId: null,
+      storedTeamId: null,
+      contextTeamIds: [],
+    });
+    const config = {
+      ...makeConfig({ enabled: true, user_needs_team: true }),
+      login_flow: { email_code_enabled: false, workspace_selection: 'auto' as const },
+    };
+
+    await expect(
+      exchangeRefreshTokenForTokens(
+        {
+          config,
+          configUrl: 'https://client.example.com/auth-config',
+          refreshToken: 'unscoped-refresh-token',
+          clientId: 'client-id',
+        },
+        { now: () => now, prisma, sharedSecret: process.env.SHARED_SECRET! },
+      ),
+    ).rejects.toMatchObject({ statusCode: 401, message: 'INVALID_REFRESH_TOKEN' });
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('preserves a legacy unscoped refresh for an off-flow user who already has a team', async () => {
+    const { now, prisma } = makeRotationPrisma({
+      storedOrgId: null,
+      storedTeamId: null,
+      contextTeamIds: ['team-existing'],
+    });
+    const config = {
+      ...makeConfig({ enabled: true, user_needs_team: true }),
+      login_flow: { email_code_enabled: false, workspace_selection: 'off' as const },
+    };
+
+    const result = await exchangeRefreshTokenForTokens(
+      {
+        config,
+        configUrl: 'https://client.example.com/auth-config',
+        refreshToken: 'legacy-unscoped-refresh-token',
+        clientId: 'client-id',
+      },
+      { now: () => now, prisma, sharedSecret: process.env.SHARED_SECRET! },
+    );
+
+    expect(result.accessToken.length).toBeGreaterThan(20);
+    expect(prisma.refreshToken.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ orgId: null, teamId: null }),
+      }),
+    );
   });
 });

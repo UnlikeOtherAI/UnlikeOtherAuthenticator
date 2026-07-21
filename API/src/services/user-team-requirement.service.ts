@@ -1,4 +1,4 @@
-import type { Prisma, PrismaClient } from '@prisma/client';
+import { Prisma, type PrismaClient } from '@prisma/client';
 
 import { getEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
@@ -30,6 +30,25 @@ export type RequiredTeamPlacement = {
   orgId: string;
   teamId: string;
 };
+
+/**
+ * Serialize the first placement decision for one stable UOA user. Product
+ * choice resolution must take this lock before reading memberships, otherwise
+ * two first-time product exchanges can both observe zero rows and create two
+ * personal workspaces.
+ */
+export async function lockRequiredTeamPlacementUser(
+  userId: string,
+  deps: { prisma: Pick<PrismaClient, '$queryRaw'> },
+): Promise<void> {
+  await deps.prisma.$queryRaw(
+    Prisma.sql`
+      SELECT pg_advisory_xact_lock(
+        hashtextextended(${`uoa:required-team-placement:${userId}`}, 0)
+      )::text AS "lockResult"
+    `,
+  );
+}
 
 function isUserNeedsTeamEnabled(config: ClientConfig): boolean {
   return config.org_features?.enabled === true && config.org_features?.user_needs_team === true;
@@ -113,7 +132,7 @@ async function createPersonalTeamForExistingOrg(params: {
   tx: UserTeamRequirementTx;
   config: ClientConfig;
   user: UserIdentity;
-  orgMembership: { id: string; orgId: string; role: string };
+  orgMembership: { id: string; orgId: string; role: string; status: string };
 }): Promise<RequiredTeamPlacement> {
   const teamCount = await params.tx.team.count({
     where: { orgId: params.orgMembership.orgId },
@@ -179,19 +198,19 @@ export async function ensureUserHasRequiredTeam(
     return null;
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: {
-      id: true,
-      email: true,
-      name: true,
-    },
-  });
-  if (!user) {
-    return null;
-  }
-
   return runInTransaction(prisma, async (tx) => {
+    await lockRequiredTeamPlacementUser(userId, { prisma: tx });
+
+    const user = await tx.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+      },
+    });
+    if (!user) return null;
+
     const orgMembership = await tx.orgMember.findFirst({
       where: {
         userId,
@@ -201,6 +220,7 @@ export async function ensureUserHasRequiredTeam(
         id: true,
         orgId: true,
         role: true,
+        status: true,
       },
     });
 
@@ -211,6 +231,10 @@ export async function ensureUserHasRequiredTeam(
         user,
       });
     }
+
+    // Lifecycle tombstones are an intentional denial, not an absence to heal
+    // around. Creating a new workspace here would bypass deactivation/removal.
+    if (orgMembership.status !== 'ACTIVE') return null;
 
     const teamMembershipCount = await tx.teamMember.count({
       where: {

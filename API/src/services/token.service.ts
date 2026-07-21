@@ -19,7 +19,17 @@ import {
 import { buildFirstLoginBlock, type FirstLoginBlock } from './first-login.service.js';
 import { evaluateSignaturePolicy } from './signature-policy.service.js';
 import { lockSignaturePolicyForDecision } from './signature-continuation.service.js';
-import { resolveRequiredAuthorizationWorkspace } from './required-workspace-placement.service.js';
+import {
+  requiresExactAuthorizationWorkspace,
+  resolveRequiredAuthorizationWorkspace,
+} from './required-workspace-placement.service.js';
+import { lockTokenIssuanceProductPolicy } from './product-workspace-policy-lock.service.js';
+import { resolveProductWorkspacePolicy } from './product-workspace-policy.service.js';
+import {
+  accessTokenExpiresInSeconds,
+  resolveAccessTokenTtl,
+  resolveRefreshTokenTtlSeconds,
+} from './token-session-ttl.service.js';
 
 type TokenPrisma = PrismaClient;
 
@@ -32,7 +42,9 @@ type TokenDeps = {
   refreshTokenTtlDays?: number;
   sharedSecret?: string;
   // Deterministic concurrency-test hook. Production callers leave this unset.
+  afterProductWorkspacePolicyLock?: () => Promise<void>;
   afterActiveWorkspaceLock?: () => Promise<void>;
+  afterRequiredWorkspaceLock?: () => Promise<void>;
 };
 
 function sharedSecretKey(sharedSecret: string): Uint8Array {
@@ -90,30 +102,6 @@ async function signAccessToken(params: {
   } catch {
     throw new AppError('INTERNAL', 500, 'TOKEN_SIGN_FAILED');
   }
-}
-
-function accessTokenExpiresInSeconds(ttl: string): number {
-  const minutes = Number(ttl.replace(/m$/, ''));
-  if (!Number.isFinite(minutes) || minutes <= 0) {
-    throw new AppError('INTERNAL', 500, 'INVALID_ACCESS_TOKEN_TTL');
-  }
-  return minutes * 60;
-}
-
-function resolveAccessTokenTtl(config: ClientConfig, envTtl: string): string {
-  const configMinutes = config.session?.access_token_ttl_minutes;
-  if (configMinutes != null) return `${configMinutes}m`;
-  return envTtl;
-}
-
-function resolveRefreshTokenTtlSeconds(config: ClientConfig, rememberMe: boolean): number {
-  const session = config.session;
-  if (rememberMe) {
-    const days = session?.long_refresh_token_ttl_days ?? 30;
-    return days * 24 * 60 * 60;
-  }
-  const hours = session?.short_refresh_token_ttl_hours ?? 1;
-  return hours * 60 * 60;
 }
 
 function resolveAccessTokenContext(params: {
@@ -223,17 +211,18 @@ async function issueTokenPairForUser(
     throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
   }
 
-  const org = params.config.org_features?.enabled
-    ? (activeOrgContext ??
-      (await getUserOrgContext(
-        {
-          userId: params.userId,
-          domain: params.config.domain,
-          config: params.config,
-        },
-        { env, prisma },
-      )))
-    : null;
+  const org =
+    activeOrgContext ??
+    (params.config.org_features?.enabled
+      ? await getUserOrgContext(
+          {
+            userId: params.userId,
+            domain: params.config.domain,
+            config: params.config,
+          },
+          { env, prisma },
+        )
+      : null);
 
   const accessToken = await signAccessToken({
     userId: params.userId,
@@ -277,6 +266,7 @@ export async function exchangeAuthorizationCodeForTokens(
     redirectUrl: string;
     codeVerifier?: string;
     clientId?: string;
+    authenticatedClientDomainId?: string;
   },
   deps?: TokenIssuerDeps,
 ): Promise<IssuedTokenPair> {
@@ -297,6 +287,10 @@ export async function exchangeAuthorizationCodeForTokens(
     }).clientId;
 
   return runInTransaction(adminPrisma, async (tx) => {
+    await lockTokenIssuanceProductPolicy(
+      { clientDomainId: params.authenticatedClientDomainId, domain: params.config.domain },
+      { prisma: tx, afterLock: deps?.afterProductWorkspacePolicyLock },
+    );
     const now = deps?.now ? deps.now() : new Date();
     const { userId, rememberMe, orgId, teamId } = await consumeAuthorizationCode({
       code: params.code,
@@ -318,7 +312,12 @@ export async function exchangeAuthorizationCodeForTokens(
     if (!active) {
       active = await resolveRequiredAuthorizationWorkspace(
         { userId, config: params.config },
-        { env, prisma: tx, workspacePrisma: tx },
+        {
+          afterWorkspaceLock: deps?.afterRequiredWorkspaceLock,
+          env,
+          prisma: tx,
+          workspacePrisma: tx,
+        },
       );
     }
     const refreshTtlSeconds = resolveRefreshTokenTtlSeconds(params.config, rememberMe);
@@ -367,6 +366,7 @@ export async function exchangeRefreshTokenForTokens(
     configUrl: string;
     refreshToken: string;
     clientId?: string;
+    authenticatedClientDomainId?: string;
   },
   deps?: TokenIssuerDeps,
 ): Promise<IssuedTokenPair> {
@@ -388,6 +388,10 @@ export async function exchangeRefreshTokenForTokens(
     }).clientId;
 
   const exchangeInsideTransaction = async (tx: PrismaClient): Promise<IssuedTokenPair> => {
+    await lockTokenIssuanceProductPolicy(
+      { clientDomainId: params.authenticatedClientDomainId, domain: params.config.domain },
+      { prisma: tx, afterLock: deps?.afterProductWorkspacePolicyLock },
+    );
     const rotatedRefreshToken = await exchangeRefreshToken(
       {
         refreshToken: params.refreshToken,
@@ -419,6 +423,15 @@ export async function exchangeRefreshTokenForTokens(
     // exchange; deactivated/removed membership or revoked product policy drops
     // `active` within one access-token TTL.
     const storedScopePresent = Boolean(rotatedRefreshToken.orgId || rotatedRefreshToken.teamId);
+    if (!storedScopePresent) {
+      const policy = await resolveProductWorkspacePolicy(
+        { domain: params.config.domain },
+        { prisma: tx },
+      );
+      if (requiresExactAuthorizationWorkspace(params.config, policy)) {
+        throw new AppError('UNAUTHORIZED', 401, 'INVALID_REFRESH_TOKEN');
+      }
+    }
     let active: ActiveWorkspace | null = null;
     if (storedScopePresent) {
       if (!rotatedRefreshToken.orgId || !rotatedRefreshToken.teamId) {

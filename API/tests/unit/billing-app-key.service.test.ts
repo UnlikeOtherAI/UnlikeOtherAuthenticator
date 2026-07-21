@@ -45,6 +45,7 @@ describe('product-dedicated billing app keys', () => {
     const createdAt = new Date('2026-07-19T00:00:00.000Z');
     let persisted: Record<string, unknown> = {};
     const prisma = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
       billingService: {
         findUnique: vi.fn().mockResolvedValue({
           id: 'service_1',

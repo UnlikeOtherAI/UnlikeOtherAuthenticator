@@ -22,7 +22,7 @@ describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
 
   function makePrisma() {
     return {
-      $queryRaw: vi.fn().mockResolvedValue([]),
+      $queryRaw: vi.fn().mockResolvedValue([{ id: 'user-active' }]),
       authorizationCode: {
         findUnique: vi.fn(),
         updateMany: vi.fn(),
@@ -123,7 +123,7 @@ describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
     const sharedSecret = process.env.SHARED_SECRET!;
     const code = 'code-with-cross-product-scope';
     const config = {
-      ...makeConfig({ enabled: true, groups_enabled: false, user_needs_team: true }),
+      ...makeConfig({ enabled: false }),
       domain: 'api.deepsignal.live',
       login_flow: { email_code_enabled: false, workspace_selection: 'off' as const },
     };
@@ -191,7 +191,7 @@ describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
       tokenVersion: 0,
     });
 
-    const { accessToken, firstLogin } = await exchangeAuthorizationCodeForTokens(
+    const { accessToken } = await exchangeAuthorizationCodeForTokens(
       { code, config, configUrl, redirectUrl, clientId, codeVerifier: TEST_CODE_VERIFIER },
       {
         now: () => now,
@@ -209,12 +209,7 @@ describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
       prisma,
     });
     expect(claims.active).toEqual({ orgId: 'org-nessie', teamId: 'team-nessie' });
-    expect(firstLogin?.memberships.teams).toContainEqual({
-      teamId: 'team-nessie',
-      orgId: 'org-nessie',
-      role: 'member',
-      iconUrl: null,
-    });
+    expect(claims.org).toMatchObject({ org_id: 'org-nessie', teams: ['team-nessie'] });
     expect(prisma.organisation.create).not.toHaveBeenCalled();
     expect(prisma.team.create).not.toHaveBeenCalled();
   });

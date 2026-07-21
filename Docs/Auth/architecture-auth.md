@@ -194,24 +194,38 @@ The auth flow is state-driven, not route-driven. A single popup URL loads the ap
     maps unambiguously to one active `BillingService`. Unknown, inactive, expired, revoked, or
     multi-service mappings retain legacy same-domain isolation. Pending invites always remain
     same-domain. This product expansion is server-owned and read only through `uoa_admin`; signed
-    config or browser input cannot opt into it. Exact ACTIVE organisation + team membership is
-    rechecked at selection, after 2FA/signatures immediately before code issuance, and at exchange.
+    config or browser input cannot opt into it. A recognized product requires one exact ACTIVE
+    organisation + team even if its signed config disables org display or omits
+    `user_needs_team`; those client-controlled flags cannot remove billing attribution. Exact
+    membership is rechecked at selection, after 2FA/signatures immediately before code issuance,
+    and at exchange.
     The selection and code-exchange transactions lock the organisation membership row first and
     team membership rows second, the same order used by membership
     activation/deactivation/removal, so those transactions and lifecycle changes have one serial
     outcome rather than a time-of-check/time-of-use gap. Post-2FA/signature code issuance performs
     the immediate revalidation only; exchange is the final locked authority before token creation.
-    `firstLogin.memberships` uses the same product policy, so it cannot contradict the signed
-    `active` claim. A scoped refresh revalidates the exact policy, org, and team and fails with the
+    Auth-code, refresh, and confidential token issuance hold one global shared product-policy
+    advisory lock through commit. The supported ClientDomain, lifecycle app-key, integration
+    acceptance, and BillingService mutators take its exclusive form before reading or writing
+    policy. Token issuance also re-reads the exact authenticated ClientDomain id/domain/status
+    under the shared lock, closing the pre-handler/disable gap. `firstLogin.memberships` uses the
+    same product policy, so it cannot contradict the signed `active` claim. A scoped refresh
+    revalidates the exact policy, org, and team and fails with the
     normal invalid-refresh response if any of them changed; it never drops scope and silently
     selects or creates a different product-domain workspace. Same-domain selections remain valid
-    if an unrelated product binding is later revoked. When `user_needs_team` reaches token exchange
-    with an originally unscoped code, UOA resolves placement before creating the refresh token: an
-    auto flow may select one exact eligible ACTIVE workspace, and a recognized product also reuses
-    its sole cross-product workspace when selection is off so it cannot create a ghost product org.
-    Multiple eligible workspaces fail closed and require the chooser; zero eligible workspaces may
-    create one personal org/team, whose exact IDs are validated, persisted on the refresh token,
-    and signed as `active`. Refresh rotation never performs placement or workspace switching.
+    if an unrelated product binding is later revoked. For an originally unscoped code, an auto flow
+    or recognized product may select only one exact eligible ACTIVE workspace. Multiple choices
+    fail closed. Zero choices create a personal org/team only when the config explicitly enables
+    `user_needs_team`; otherwise a recognized product fails closed. First placement is serialized
+    by a per-user transaction advisory lock, so simultaneous first logins from different products
+    create one workspace and the loser reuses it. Legacy same-domain `workspace_selection: off`
+    clients keep historical unscoped sessions when placement is already satisfied (or a lifecycle
+    tombstone deliberately prevents healing), and their existing unscoped refreshes remain valid.
+    Refresh rotation never performs placement or workspace switching. Confidential subject and
+    chained grants perform outbound/JWT verification before opening this transaction, then recheck
+    ClientDomain, product policy, exact cross-product membership, delegation, and one-time use under
+    the shared lock before signing. Recognized products may not omit `active` from a subject
+    assertion, so Ledger/AI attribution cannot become unscoped.
     Existing-account `LOGIN_LINK` tokens resolve only their issue-time `userId`; deletion or identity
     mismatch fails closed and never falls through to registration.
 11. **Required agreements** (optional per-domain service) — after identity, workspace selection,

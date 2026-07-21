@@ -4,14 +4,32 @@ import { getEnv } from '../config/env.js';
 import { AppError } from '../utils/errors.js';
 import type { ClientConfig } from './config.service.js';
 import { buildWorkspaceChoices, resolveAutoSelectedWorkspace } from './first-login.service.js';
-import { resolveProductWorkspacePolicy } from './product-workspace-policy.service.js';
-import { ensureUserHasRequiredTeam } from './user-team-requirement.service.js';
-import { assertActiveClientWorkspaceScope } from './workspace-scope.service.js';
+import {
+  resolveProductWorkspacePolicy,
+  type ProductWorkspacePolicy,
+} from './product-workspace-policy.service.js';
+import {
+  ensureUserHasRequiredTeam,
+  lockRequiredTeamPlacementUser,
+} from './user-team-requirement.service.js';
+import { lockAndAssertActiveClientWorkspaceScope } from './workspace-scope.service.js';
 
 export type RequiredAuthorizationWorkspace = {
   orgId: string;
   teamId: string;
 };
+
+export function requiresExactAuthorizationWorkspace(
+  config: ClientConfig,
+  policy: ProductWorkspacePolicy,
+): boolean {
+  return (
+    policy.scope === 'all_active_memberships' ||
+    (config.org_features?.enabled === true &&
+      config.org_features.user_needs_team === true &&
+      config.login_flow?.workspace_selection === 'auto')
+  );
+}
 
 /**
  * Resolve the exact workspace for an originally unscoped authorization code.
@@ -24,22 +42,22 @@ export async function resolveRequiredAuthorizationWorkspace(
   params: { config: ClientConfig; userId: string },
   deps: {
     env?: ReturnType<typeof getEnv>;
+    afterWorkspaceLock?: () => Promise<void>;
     prisma: PrismaClient;
     workspacePrisma: PrismaClient;
   },
 ): Promise<RequiredAuthorizationWorkspace | null> {
-  if (
-    params.config.org_features?.enabled !== true ||
-    params.config.org_features.user_needs_team !== true
-  ) {
-    return null;
-  }
-
   const policy = await resolveProductWorkspacePolicy(
     { domain: params.config.domain },
     { prisma: deps.workspacePrisma },
   );
   const autoSelection = params.config.login_flow?.workspace_selection === 'auto';
+  const exactSelectionRequired = requiresExactAuthorizationWorkspace(params.config, policy);
+  const placementAllowed =
+    params.config.org_features?.enabled === true &&
+    params.config.org_features.user_needs_team === true;
+  if (!placementAllowed && !exactSelectionRequired) return null;
+  await lockRequiredTeamPlacementUser(params.userId, { prisma: deps.prisma });
 
   if (autoSelection || policy.scope === 'all_active_memberships') {
     const choices = await buildWorkspaceChoices(
@@ -61,20 +79,37 @@ export async function resolveRequiredAuthorizationWorkspace(
     }
   }
 
+  if (!placementAllowed) {
+    throw new AppError('UNAUTHORIZED', 401, 'INVALID_AUTH_CODE');
+  }
+
   const created = await ensureUserHasRequiredTeam(params, {
     env: deps.env,
     prisma: deps.prisma,
   });
-  if (created) await validateWorkspace(params, created, deps);
+  if (!created) {
+    if (exactSelectionRequired) {
+      throw new AppError('UNAUTHORIZED', 401, 'INVALID_AUTH_CODE');
+    }
+    // Legacy same-domain clients with workspace selection disabled historically
+    // issued unscoped sessions once the user already had a team. Preserve that
+    // contract; exact product/auto-selection clients are handled above.
+    return null;
+  }
+  await validateWorkspace(params, created, deps);
   return created;
 }
 
 async function validateWorkspace(
   params: { config: ClientConfig; userId: string },
   active: RequiredAuthorizationWorkspace,
-  deps: { prisma: PrismaClient; workspacePrisma: PrismaClient },
+  deps: {
+    afterWorkspaceLock?: () => Promise<void>;
+    prisma: PrismaClient;
+    workspacePrisma: PrismaClient;
+  },
 ): Promise<void> {
-  await assertActiveClientWorkspaceScope(
+  await lockAndAssertActiveClientWorkspaceScope(
     { userId: params.userId, domain: params.config.domain, ...active },
     {
       crossProductPrisma: deps.workspacePrisma,
@@ -82,4 +117,5 @@ async function validateWorkspace(
       prisma: deps.prisma,
     },
   );
+  await deps.afterWorkspaceLock?.();
 }

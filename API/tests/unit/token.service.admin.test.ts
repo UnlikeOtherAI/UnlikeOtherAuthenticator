@@ -67,6 +67,7 @@ describe('admin-domain token issuance', () => {
     const redirectUrl = 'https://admin.example.com/oauth/callback';
 
     const prisma = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
       authorizationCode: {
         findUnique: vi.fn(),
         updateMany: vi.fn(),
@@ -80,6 +81,8 @@ describe('admin-domain token issuance', () => {
       domainRole: {
         findUnique: vi.fn(),
       },
+      clientDomain: { findUnique: vi.fn().mockResolvedValue(null) },
+      billingAppKey: { findMany: vi.fn().mockResolvedValue([]) },
     } as unknown as PrismaClient;
 
     prisma.authorizationCode.findUnique.mockResolvedValue({
@@ -150,10 +153,13 @@ describe('admin-domain token issuance', () => {
     const clientId = createClientId(config.domain, sharedSecret);
 
     const prisma = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
       authorizationCode: { findUnique: vi.fn(), updateMany: vi.fn() },
       refreshToken: { create: vi.fn() },
       user: { findUnique: vi.fn() },
       domainRole: { findUnique: vi.fn() },
+      clientDomain: { findUnique: vi.fn().mockResolvedValue(null) },
+      billingAppKey: { findMany: vi.fn().mockResolvedValue([]) },
     } as unknown as PrismaClient;
 
     prisma.authorizationCode.findUnique.mockResolvedValue({
@@ -171,12 +177,14 @@ describe('admin-domain token issuance', () => {
     prisma.authorizationCode.updateMany.mockResolvedValue({ count: 1 });
     prisma.refreshToken.create.mockResolvedValue({ id: 'refresh-token-client' });
     // USER on the client domain, but SUPERUSER on ADMIN_AUTH_DOMAIN (admin-panel grant).
-    prisma.domainRole.findUnique.mockImplementation(async (args: { where: { domain_userId: { domain: string } } }) => {
-      const domain = args.where.domain_userId.domain;
-      return domain === 'admin.example.com'
-        ? { role: 'SUPERUSER', domain, userId: 'client-user' }
-        : { role: 'USER', domain, userId: 'client-user' };
-    });
+    prisma.domainRole.findUnique.mockImplementation(
+      async (args: { where: { domain_userId: { domain: string } } }) => {
+        const domain = args.where.domain_userId.domain;
+        return domain === 'admin.example.com'
+          ? { role: 'SUPERUSER', domain, userId: 'client-user' }
+          : { role: 'USER', domain, userId: 'client-user' };
+      },
+    );
     prisma.user.findUnique.mockResolvedValue({ email: 'operator@example.com', tokenVersion: 0 });
 
     const { accessToken } = await exchangeAuthorizationCodeForTokens(

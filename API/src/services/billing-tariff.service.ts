@@ -17,6 +17,7 @@ import {
   assertTariffAssignmentChangeAllowed,
   assertTariffAssignmentRemovalAllowed,
 } from './billing-stripe-tariff-guard.service.js';
+import { lockProductWorkspacePolicyExclusive } from './product-workspace-policy-lock.service.js';
 
 const IDENTIFIER_PATTERN = /^[a-z0-9][a-z0-9._-]{0,99}$/;
 const TARIFF_KEY_PATTERN = /^[a-z0-9][a-z0-9._-]{0,79}$/;
@@ -158,6 +159,7 @@ export async function createBillingService(
 
   return client(deps).$transaction(
     async (tx) => {
+      await lockProductWorkspacePolicyExclusive(tx);
       const existing = await tx.billingService.findUnique({
         where: { identifier },
         select: { id: true },

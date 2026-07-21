@@ -160,6 +160,7 @@ export function registerAuthTokenExchangeRoute(app: FastifyInstance): void {
                 config,
                 configUrl,
                 clientId: request.domainAuthClientId,
+                authenticatedClientDomainId: request.domainAuthClientDomainId,
               },
               { prisma: request.adminDb, adminPrisma: request.adminDb },
             )
@@ -171,6 +172,7 @@ export function registerAuthTokenExchangeRoute(app: FastifyInstance): void {
                 redirectUrl: body.redirect_url,
                 codeVerifier: body.code_verifier,
                 clientId: request.domainAuthClientId,
+                authenticatedClientDomainId: request.domainAuthClientDomainId,
               },
               { prisma: request.adminDb, adminPrisma: request.adminDb },
             );

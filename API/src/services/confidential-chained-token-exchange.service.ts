@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import { getPublicBaseUrl } from '../config/env.js';
 import { getAdminPrisma } from '../db/prisma.js';
+import { runInTransaction } from '../db/tenant-context.js';
 import { createKeyedRateLimiter } from '../middleware/rate-limiter.js';
 import { normalizeDomain } from '../utils/domain.js';
 import { AppError } from '../utils/errors.js';
@@ -23,8 +24,9 @@ import {
   type ConfidentialAccessTokenClaims,
   type ConfidentialActorChain,
 } from './oauth/access-token.service.js';
-import { getActiveUserOrgContext, type OrgContext } from './org-context.service.js';
+import { getActiveClientOrgContext, type OrgContext } from './org-context.service.js';
 import { CONFIDENTIAL_ASSERTION_CLOCK_TOLERANCE_SECONDS } from './confidential-assertion-use.service.js';
+import { lockTokenIssuanceProductPolicy } from './product-workspace-policy-lock.service.js';
 
 export const ACCESS_TOKEN_SUBJECT_TOKEN_TYPE = 'urn:ietf:params:oauth:token-type:access_token';
 
@@ -216,7 +218,7 @@ function narrowOrgContext(current: OrgContext, inbound: OrgContext): OrgContext 
   };
 }
 
-export async function exchangeConfidentialChainedAccessToken(
+async function exchangeConfidentialChainedAccessTokenInsidePolicyLock(
   params: {
     authenticatedClientDomainId: string;
     subjectToken: string;
@@ -225,10 +227,15 @@ export async function exchangeConfidentialChainedAccessToken(
     scope: string;
     config: ClientConfig;
   },
+  verified: {
+    callerAudience: string;
+    callerDomain: string;
+    issuer: string;
+    subject: VerifiedChainedSubjectAccessToken;
+  },
   deps: ChainedExchangeDeps = {},
 ): Promise<ConfidentialTokenExchangeResult> {
-  const callerDomain = normalizeDomain(params.config.domain);
-  const callerAudience = httpsOriginForDomain(callerDomain);
+  const { callerAudience, callerDomain, issuer, subject } = verified;
   const delegation = await (deps.resolveDelegation ?? resolveConfidentialDelegation)(
     {
       authenticatedClientDomainId: params.authenticatedClientDomainId,
@@ -239,17 +246,6 @@ export async function exchangeConfidentialChainedAccessToken(
     },
     { prisma: deps.prisma },
   );
-  const issuer = getPublicBaseUrl();
-  const subject = await verifyChainedSubjectAccessToken(
-    {
-      subjectToken: params.subjectToken,
-      callerAudience,
-      issuer,
-    },
-    deps,
-  );
-  (deps.consumeSubjectRateLimit ?? consumeChainedSubjectExchange)(`${callerDomain}:${subject.sub}`);
-
   const requestedScopes = parseConfidentialDelegationScope(delegation.scope);
   const inboundScopes = new Set(parseConfidentialDelegationScope(subject.scope));
   if (requestedScopes.some((scope) => !inboundScopes.has(scope))) {
@@ -281,14 +277,14 @@ export async function exchangeConfidentialChainedAccessToken(
       },
       select: { role: true },
     }),
-    getActiveUserOrgContext(
+    getActiveClientOrgContext(
       {
         userId: subject.sub,
         domain: identityDomain,
         orgId: subject.active.orgId,
         groupsEnabled: false,
       },
-      { prisma },
+      { crossProductPrisma: prisma, policyPrisma: prisma, prisma },
     ),
   ]);
 
@@ -338,4 +334,51 @@ export async function exchangeConfidentialChainedAccessToken(
     issuedTokenType: 'urn:ietf:params:oauth:token-type:access_token',
     scope: delegation.scope,
   };
+}
+
+export async function exchangeConfidentialChainedAccessToken(
+  params: {
+    authenticatedClientDomainId: string;
+    subjectToken: string;
+    product: string;
+    resource: string;
+    scope: string;
+    config: ClientConfig;
+  },
+  deps: ChainedExchangeDeps = {},
+): Promise<ConfidentialTokenExchangeResult> {
+  const prisma = deps.prisma ?? getAdminPrisma();
+  const callerDomain = normalizeDomain(params.config.domain);
+  const callerAudience = httpsOriginForDomain(callerDomain);
+  const resolveDelegation = deps.resolveDelegation ?? resolveConfidentialDelegation;
+  // Reject unsupported targets before verification, then repeat the mapping
+  // decision under the policy lock so this preflight never becomes authority.
+  await resolveDelegation(
+    {
+      authenticatedClientDomainId: params.authenticatedClientDomainId,
+      sourceDomain: callerDomain,
+      product: params.product,
+      resource: params.resource,
+      scope: params.scope,
+    },
+    { prisma },
+  );
+  const issuer = getPublicBaseUrl();
+  const subject = await verifyChainedSubjectAccessToken(
+    { subjectToken: params.subjectToken, callerAudience, issuer },
+    deps,
+  );
+  (deps.consumeSubjectRateLimit ?? consumeChainedSubjectExchange)(`${callerDomain}:${subject.sub}`);
+
+  return runInTransaction(prisma, async (tx) => {
+    await lockTokenIssuanceProductPolicy(
+      { clientDomainId: params.authenticatedClientDomainId, domain: params.config.domain },
+      { prisma: tx },
+    );
+    return exchangeConfidentialChainedAccessTokenInsidePolicyLock(
+      params,
+      { callerAudience, callerDomain, issuer, subject },
+      { ...deps, prisma: tx, resolveDelegation },
+    );
+  });
 }

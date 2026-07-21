@@ -66,11 +66,13 @@ describe('ensureUserHasRequiredTeam', () => {
 
   it('creates a personal team and promotes the user to admin when they are in an org but have zero teams', async () => {
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([{ id: 'user-1' }]),
       orgMember: {
         findFirst: vi.fn().mockResolvedValue({
           id: 'org-member-1',
           orgId: 'org-1',
           role: 'member',
+          status: 'ACTIVE',
         }),
         update: vi.fn().mockResolvedValue({ id: 'org-member-1' }),
       },
@@ -82,6 +84,13 @@ describe('ensureUserHasRequiredTeam', () => {
         count: vi.fn().mockResolvedValue(1),
         findFirst: vi.fn().mockResolvedValue(null),
         create: vi.fn().mockResolvedValue({ id: 'team-1' }),
+      },
+      user: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: 'user-1',
+          email: 'alice@example.com',
+          name: 'Alice',
+        }),
       },
     };
 
@@ -133,6 +142,7 @@ describe('ensureUserHasRequiredTeam', () => {
 
   it('creates a personal org and default team when the user has no org on the domain', async () => {
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([{ id: 'user-1' }]),
       orgMember: {
         findFirst: vi.fn().mockResolvedValue(null),
         create: vi.fn().mockResolvedValue({ id: 'org-member-1' }),
@@ -147,6 +157,13 @@ describe('ensureUserHasRequiredTeam', () => {
       },
       teamMember: {
         create: vi.fn().mockResolvedValue({ id: 'team-member-1' }),
+      },
+      user: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: 'user-1',
+          email: 'alice@example.com',
+          name: 'Alice',
+        }),
       },
     };
 

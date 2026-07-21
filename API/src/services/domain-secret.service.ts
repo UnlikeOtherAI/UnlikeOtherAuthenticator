@@ -24,6 +24,7 @@ import {
   type ClaimTokenPrisma,
 } from './integration-claim.service.js';
 import type { TwoFaPolicyValue } from './twofactor-policy.service.js';
+import { lockProductWorkspacePolicyExclusive } from './product-workspace-policy-lock.service.js';
 
 type DomainSecretPrisma = Pick<
   PrismaClient,
@@ -63,7 +64,8 @@ export type DomainMutationResult = {
 };
 
 function prismaClient(deps?: { prisma?: DomainSecretPrisma }): DomainSecretPrisma {
-  if (!getEnv().DATABASE_URL) throw new AppError('INTERNAL', 500, 'DOMAIN_SECRETS_DATABASE_REQUIRED');
+  if (!getEnv().DATABASE_URL)
+    throw new AppError('INTERNAL', 500, 'DOMAIN_SECRETS_DATABASE_REQUIRED');
   return deps?.prisma ?? (getAdminPrisma() as unknown as DomainSecretPrisma);
 }
 
@@ -109,7 +111,9 @@ export async function verifyDomainAuthToken(
   const clientHash = assertClientHash(params.token);
   const row = await prismaClient(deps).clientDomain.findUnique({
     where: { domain },
-    include: { secrets: { where: { active: true }, select: { secretDigest: true, hashPrefix: true } } },
+    include: {
+      secrets: { where: { active: true }, select: { secretDigest: true, hashPrefix: true } },
+    },
   });
 
   if (!row || normalizeStatus(row.status) !== 'active' || row.secrets.length === 0) {
@@ -137,6 +141,7 @@ export async function createAdminDomain(
   const secret = await createSecretData(domain, params.clientSecret);
 
   const row = await runInTransaction(prisma as unknown as PrismaClient, async (tx) => {
+    await lockProductWorkspacePolicyExclusive(tx);
     const existing = await tx.clientDomain.findUnique({ where: { domain }, select: { id: true } });
     if (existing) throw new AppError('BAD_REQUEST', 400, 'DOMAIN_ALREADY_EXISTS');
 
@@ -169,7 +174,12 @@ export async function createAdminDomain(
     return created;
   });
 
-  return { clientHash: secret.clientHash, clientHashPrefix: secret.hashPrefix, clientSecret: secret.clientSecret, domain: row };
+  return {
+    clientHash: secret.clientHash,
+    clientHashPrefix: secret.hashPrefix,
+    clientSecret: secret.clientSecret,
+    domain: row,
+  };
 }
 
 export async function updateAdminDomain(
@@ -183,7 +193,10 @@ export async function updateAdminDomain(
     twoFaPolicy?: TwoFaPolicyValue;
     actorEmail: string;
   },
-  deps?: { prisma?: DomainSecretPrisma },
+  deps?: {
+    prisma?: DomainSecretPrisma;
+    afterProductPolicyLock?: () => Promise<void>;
+  },
 ): Promise<DomainWithActiveSecret> {
   const prisma = prismaClient(deps);
   const domain = normalizeDomain(params.domain);
@@ -202,6 +215,8 @@ export async function updateAdminDomain(
   const twoFaPolicy = params.twoFaPolicy;
 
   return runInTransaction(prisma as unknown as PrismaClient, async (tx) => {
+    await lockProductWorkspacePolicyExclusive(tx);
+    await deps?.afterProductPolicyLock?.();
     const prior = await tx.clientDomain.findUnique({
       where: { domain },
       select: { status: true, twoFaPolicy: true },

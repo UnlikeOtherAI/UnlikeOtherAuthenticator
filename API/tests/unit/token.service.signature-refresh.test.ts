@@ -22,6 +22,7 @@ describe('exchangeRefreshTokenForTokens signature policy gate (unit)', () => {
   }) {
     const tx = {
       $executeRaw: vi.fn().mockResolvedValue(1),
+      $queryRaw: vi.fn().mockResolvedValue([]),
       domainSignatureSettings: {
         findUnique: vi.fn().mockResolvedValue(params.settings),
       },
@@ -87,6 +88,8 @@ describe('exchangeRefreshTokenForTokens signature policy gate (unit)', () => {
           userId: 'user-1',
         }),
       },
+      clientDomain: { findUnique: vi.fn().mockResolvedValue(null) },
+      billingAppKey: { findMany: vi.fn().mockResolvedValue([]) },
     };
     const prisma = {
       ...tx,
