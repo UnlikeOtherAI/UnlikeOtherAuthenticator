@@ -397,7 +397,7 @@ describe('UOA credit funding mutation services', () => {
 
   it('returns only the exact bound HTTPS PaymentIntent recovery URL', async () => {
     const state = baseContext({ autoTopUpState: BillingCreditAutoTopUpState.REQUIRES_ACTION });
-    state.stripe.paymentIntents.retrieve.mockResolvedValue({
+    const intent = {
       id: 'pi_auto_1',
       livemode: false,
       status: 'requires_action',
@@ -410,7 +410,8 @@ describe('UOA credit funding mutation services', () => {
         type: 'redirect_to_url',
         redirect_to_url: { url: 'https://hooks.stripe.com/redirect/authenticate/pi_auto_1' },
       },
-    });
+    };
+    state.stripe.paymentIntents.retrieve.mockResolvedValue(intent);
     const prisma = {
       billingCreditAutoTopUpAttempt: {
         findFirst: vi.fn().mockResolvedValue({
@@ -430,6 +431,14 @@ describe('UOA credit funding mutation services', () => {
     expect(result).toEqual({
       redirect_url: 'https://hooks.stripe.com/redirect/authenticate/pi_auto_1',
     });
+
+    intent.amount = Number.MAX_SAFE_INTEGER + 1;
+    await expect(
+      recoverBillingCreditAutoTopUp(
+        { request, actorToken: 'actor', credential },
+        { prisma, resolveContext: vi.fn().mockResolvedValue(state.context) },
+      ),
+    ).rejects.toThrow('STRIPE_CREDIT_AMOUNT_INVALID');
   });
 
   it('rejects recovery when Stripe metadata is rebound to another attempt', async () => {

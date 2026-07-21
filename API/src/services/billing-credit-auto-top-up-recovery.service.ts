@@ -9,6 +9,7 @@ import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import { paymentBinding } from './billing-credit-funding-binding.service.js';
+import { exactMinor, requireUsd } from './billing-credit-funding-webhook-validation.service.js';
 import {
   resolveCreditFundingActionContext,
   type CreditFundingActionRequest,
@@ -83,8 +84,8 @@ export async function recoverBillingCreditAutoTopUp(
       stripeExternalId(intent.customer) !== context.customer.stripeCustomerId ||
       stripeExternalId(intent.payment_method) !==
         unresolved.consentRevision.stripePaymentMethodId ||
-      intent.amount !== Number(unresolved.paymentAmountMinor) ||
-      intent.currency.toUpperCase() !== 'USD'
+      exactMinor(intent.amount) !== unresolved.paymentAmountMinor ||
+      requireUsd(intent.currency) !== 'USD'
     ) {
       throw new AppError('INTERNAL', 502, 'STRIPE_CREDIT_AUTO_TOP_UP_BINDING_INVALID');
     }
