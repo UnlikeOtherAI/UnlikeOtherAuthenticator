@@ -1,5 +1,6 @@
 import type { EndpointSchema } from './schema.js';
 import { billingContractInvoiceEndpoints } from './schema.billing-contract-invoices.js';
+import { billingFundingEndpoints } from './schema.billing-funding.js';
 
 const adminAuth =
   'Authorization: Bearer <access_token>; token must be an ADMIN_AUTH_DOMAIN platform superuser and remain backed by a SUPERUSER domain_roles row';
@@ -127,6 +128,7 @@ export const billingEndpoints: EndpointSchema[] = [
       200: 'Versioned OpenAPI 3.1 components.schemas and components.examples document',
     },
   },
+  ...billingFundingEndpoints,
   {
     method: 'POST',
     path: '/billing/v1/effective-tariff',

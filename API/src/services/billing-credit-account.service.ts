@@ -1,0 +1,136 @@
+import { BillingAssignmentScope, Prisma, type PrismaClient } from '@prisma/client';
+
+import { getAdminPrisma } from '../db/prisma.js';
+import { AppError } from '../utils/errors.js';
+import {
+  requireStripeBillingEnabled,
+  resolveStripeAccountContext,
+  type StripeAccountContext,
+} from './billing-stripe-client.service.js';
+
+export type CreditCollectionContext = {
+  account: StripeAccountContext;
+  stripeCollectionEnabled: boolean;
+};
+
+function isRetryableTransactionError(error: unknown): boolean {
+  const candidate = error as { code?: unknown; meta?: { code?: unknown } } | null;
+  return (
+    candidate?.code === 'P2034' ||
+    (candidate?.code === 'P2010' && candidate.meta?.code === '40001')
+  );
+}
+
+const CANONICAL_PORTFOLIO_PRODUCTS = ['deeptest', 'deepsignal', 'deepwater', 'nessie'] as const;
+
+export async function resolveCreditCollectionContext(deps?: {
+  prisma?: PrismaClient;
+}): Promise<CreditCollectionContext> {
+  const prisma = deps?.prisma ?? getAdminPrisma();
+  const configured = requireStripeBillingEnabled();
+  const account = await resolveStripeAccountContext(configured.client, configured.livemode, prisma);
+  return { account, stripeCollectionEnabled: true };
+}
+
+export async function ensureTeamCreditAccount(
+  params: {
+    account: StripeAccountContext;
+    organisationId: string;
+    teamId: string;
+  },
+  deps?: { prisma?: PrismaClient },
+) {
+  const prisma = deps?.prisma ?? getAdminPrisma();
+  const scopeKey = `${params.organisationId}:${params.teamId}`;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await prisma.$transaction(
+        async (tx) => {
+          const customer = await tx.billingStripeCustomer.upsert({
+            where: {
+              accountId_scopeKey: { accountId: params.account.id, scopeKey },
+            },
+            create: {
+              accountId: params.account.id,
+              orgId: params.organisationId,
+              teamId: params.teamId,
+              scope: BillingAssignmentScope.TEAM,
+              scopeKey,
+            },
+            update: {},
+          });
+          if (
+            customer.accountId !== params.account.id ||
+            customer.orgId !== params.organisationId ||
+            customer.teamId !== params.teamId ||
+            customer.scope !== BillingAssignmentScope.TEAM ||
+            customer.scopeKey !== scopeKey
+          ) {
+            throw new AppError('INTERNAL', 409, 'BILLING_CREDIT_CUSTOMER_SCOPE_CONFLICT');
+          }
+          const creditAccount = await tx.billingCreditAccount.upsert({
+            where: {
+              accountId_teamId_currency: {
+                accountId: params.account.id,
+                teamId: params.teamId,
+                currency: 'USD',
+              },
+            },
+            create: {
+              accountId: params.account.id,
+              customerId: customer.id,
+              orgId: params.organisationId,
+              teamId: params.teamId,
+              currency: 'USD',
+            },
+            update: {},
+          });
+          if (
+            creditAccount.accountId !== params.account.id ||
+            creditAccount.customerId !== customer.id ||
+            creditAccount.orgId !== params.organisationId ||
+            creditAccount.teamId !== params.teamId ||
+            creditAccount.currency !== 'USD'
+          ) {
+            throw new AppError('INTERNAL', 409, 'BILLING_CREDIT_ACCOUNT_SCOPE_CONFLICT');
+          }
+          return creditAccount;
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (error) {
+      if (!isRetryableTransactionError(error) || attempt === 2) throw error;
+    }
+  }
+  throw new AppError('INTERNAL', 503, 'BILLING_CREDIT_ACCOUNT_RETRY_EXHAUSTED');
+}
+
+export async function resolveCanonicalPortfolioProduct(
+  params: {
+    creditAccountId: string;
+    billingMonth: string;
+    fallbackProduct: string;
+  },
+  deps?: { prisma?: PrismaClient },
+): Promise<string> {
+  const prisma = deps?.prisma ?? getAdminPrisma();
+  const [existing, activeServices] = await Promise.all([
+    prisma.billingCreditPortfolioSnapshot.findFirst({
+      where: {
+        creditAccountId: params.creditAccountId,
+        billingMonth: params.billingMonth,
+      },
+      orderBy: [{ capturedAt: 'desc' }, { ledgerSnapshotCursor: 'desc' }],
+      select: { perspectiveProduct: true },
+    }),
+    prisma.billingService.findMany({
+      where: {
+        active: true,
+        identifier: { in: [...CANONICAL_PORTFOLIO_PRODUCTS] },
+      },
+      orderBy: { identifier: 'asc' },
+      select: { identifier: true },
+    }),
+  ]);
+  return existing?.perspectiveProduct ?? activeServices[0]?.identifier ?? params.fallbackProduct;
+}

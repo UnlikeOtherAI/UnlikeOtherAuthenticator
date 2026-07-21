@@ -203,6 +203,35 @@ Platform superusers create exact organisation/team one-time or monthly add-ons a
 credits in UOA Admin. Values are integer minor-currency strings, audited, and
 deactivated rather than deleted. Ledger never receives them.
 
+### Shared team credits and recurring add-ons
+
+\`POST /billing/v1/credits\` is UOA's display-ready shared credit read. A product calls it
+with its own \`customer_lifecycle\` app key, a fresh bound actor assertion, and the exact
+product/organisation/team/user subject. The first field is always **Remaining credits**.
+Billing managers receive the full per-service and per-user breakdown plus safe payment
+and consent summaries; members receive their own usage, other-team-member aggregates,
+and unattributed totals without another user's identity or card detail.
+
+Before projecting a read, UOA pins one exact user-grouped Ledger portfolio cursor for
+the team and settles every service in that snapshot together under a serializable team
+credit-account lock. Replay is idempotent. Corrections release prior allocations before
+reallocating them deterministically. Available credits never cross below zero from new
+usage, but the full centrally rated service/user liability remains recorded; only a
+verified reversal can create a debt balance. Products never rate, debit, aggregate, or
+reallocate shared credits locally.
+
+The exact response schema, synthetic fixture, and OpenAPI 3.1 artifact are public at
+\`/schemas/billing-credits-v1.json\`, \`/schemas/billing-credits-v1.example.json\`, and
+\`/schemas/billing-credits-v1.openapi.json\`.
+
+\`POST /billing/v1/recurring-addons\` returns UOA-owned offers and exact
+organisation/team/subscribing-user subscription projections for that product. Manager
+views may contain subscription identity; member views expose only the viewer's
+relationship to a subscription and never another user's identity or payment details.
+The matching public artifacts use the \`billing-recurring-addons-v1\` filenames under
+\`/schemas\`. Recurring add-ons, including DeepWater privacy, remain separate from shared
+credits and from usage rating.
+
 ### Contract invoices
 
 UOA also owns manual organisation-contract invoicing. A platform superuser creates a
