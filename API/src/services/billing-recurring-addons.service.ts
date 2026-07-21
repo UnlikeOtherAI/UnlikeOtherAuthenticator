@@ -5,11 +5,17 @@ import {
 } from '@prisma/client';
 
 import type {
+  BillingRecurringAddonCancelAction,
+  BillingRecurringAddonCheckoutAction,
   BillingRecurringAddonManagerSubscription,
   BillingRecurringAddonMemberSubscription,
   BillingRecurringAddonsManagerV1,
   BillingRecurringAddonsMemberV1,
   BillingRecurringAddonsV1,
+} from '../contracts/billing-statement-v1.js';
+import {
+  BILLING_RECURRING_ADDONS_CANCELLATION_PREVIEW_PATH,
+  BILLING_RECURRING_ADDONS_CHECKOUT_PATH,
 } from '../contracts/billing-statement-v1.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
@@ -20,6 +26,11 @@ import {
   resolveBillingFundingViewer,
   type BillingFundingViewer,
 } from './billing-funding-viewer.service.js';
+import {
+  canManageRecurringAddonScope,
+  recurringAddonScope,
+  uniqueEntitlementScope,
+} from './billing-recurring-addon-scope.service.js';
 
 type Subscription = Awaited<ReturnType<typeof loadAddonData>>['subscriptions'][number];
 
@@ -106,7 +117,11 @@ function entitlement(subscription: Subscription | null, hasPolicy: boolean) {
   };
 }
 
-function scopeRank(scope: BillingRecurringAddonSubscriptionScope, viewerId: string, userId: string | null) {
+function scopeRank(
+  scope: BillingRecurringAddonSubscriptionScope,
+  viewerId: string,
+  userId: string | null,
+) {
   if (scope === BillingRecurringAddonSubscriptionScope.SUBSCRIBING_USER && userId === viewerId) {
     return 0;
   }
@@ -137,7 +152,8 @@ function selectSubscription(
           !['canceled', 'incomplete_expired'].includes(subscription.status),
       )
       .sort((left, right) => {
-        const rank = scopeRank(left.scope, viewerId, left.subscribingUserId) -
+        const rank =
+          scopeRank(left.scope, viewerId, left.subscribingUserId) -
           scopeRank(right.scope, viewerId, right.subscribingUserId);
         return rank || right.updatedAt.getTime() - left.updatedAt.getTime();
       })[0] ?? null
@@ -154,7 +170,7 @@ async function loadAddonData(
   deps?: { prisma?: PrismaClient },
 ) {
   const prisma = deps?.prisma ?? getAdminPrisma();
-  const [offers, subscriptions] = await Promise.all([
+  const [offers, subscriptions, checkouts] = await Promise.all([
     prisma.billingRecurringAddonOffer.findMany({
       where: { serviceId: params.serviceId, active: true },
       orderBy: [{ key: 'asc' }, { version: 'desc' }],
@@ -188,13 +204,133 @@ async function loadAddonData(
       },
       orderBy: { updatedAt: 'desc' },
     }),
+    prisma.billingRecurringAddonCheckout.findMany({
+      where: {
+        accountId: params.accountId,
+        serviceId: params.serviceId,
+        orgId: params.organisationId,
+        requestedTeamId: params.teamId,
+        status: { in: ['CREATING', 'OPEN', 'NEEDS_REVIEW'] },
+      },
+      orderBy: { updatedAt: 'desc' },
+    }),
   ]);
-  return { offers, subscriptions };
+  return { offers, subscriptions, checkouts };
+}
+
+type OfferContext = {
+  product: string;
+  organisationId: string;
+  teamId: string;
+  userId: string;
+  collectionEnabled: boolean;
+};
+
+function offerAvailability(
+  offer: Awaited<ReturnType<typeof loadAddonData>>['offers'][number],
+  context: OfferContext,
+) {
+  const entitlementScope = uniqueEntitlementScope(offer.featurePolicies);
+  const catalog = offer.catalogs[0];
+  const catalogMatches = Boolean(
+    catalog &&
+    catalog.currency === offer.currency &&
+    catalog.monthlyAmountMinor === offer.monthlyAmountMinor,
+  );
+  const available = Boolean(context.collectionEnabled && entitlementScope && catalogMatches);
+  return {
+    entitlementScope,
+    available,
+    unavailableReason: available
+      ? null
+      : !context.collectionEnabled
+        ? 'Stripe collection is not enabled.'
+        : !entitlementScope
+          ? 'This offer does not have one exact active entitlement scope.'
+          : 'Checkout is not configured for this offer.',
+  };
+}
+
+function managerActions(params: {
+  offer: Awaited<ReturnType<typeof loadAddonData>>['offers'][number];
+  subscription: Subscription | null;
+  data: Awaited<ReturnType<typeof loadAddonData>>;
+  viewer: BillingFundingViewer;
+  context: OfferContext;
+  availability: ReturnType<typeof offerAvailability>;
+}): Array<BillingRecurringAddonCheckoutAction | BillingRecurringAddonCancelAction> {
+  if (!params.availability.entitlementScope) return [];
+  const scope = recurringAddonScope(params.availability.entitlementScope, {
+    product: params.context.product,
+    organisationId: params.context.organisationId,
+    teamId: params.context.teamId,
+    userId: params.context.userId,
+  });
+  if (!canManageRecurringAddonScope(params.viewer, scope.scope)) return [];
+  if (params.subscription) {
+    const enabled =
+      !params.subscription.cancelAtPeriodEnd &&
+      !['canceled', 'incomplete_expired'].includes(params.subscription.status);
+    return [
+      {
+        id: 'cancel',
+        kind: 'confirmation_dialog',
+        label: 'Cancel add-on',
+        description: 'Schedule this add-on to end at its current billing-period boundary.',
+        enabled,
+        disabled_reason: enabled ? null : 'Cancellation is already scheduled.',
+        request: {
+          method: 'POST',
+          path: BILLING_RECURRING_ADDONS_CANCELLATION_PREVIEW_PATH,
+          body: {
+            product: params.context.product,
+            organisation_id: params.context.organisationId,
+            team_id: params.context.teamId,
+            user_id: params.context.userId,
+            subscription_id: params.subscription.id,
+          },
+        },
+      },
+    ];
+  }
+  const pending = params.data.checkouts.some(
+    (checkout) =>
+      checkout.offerId === params.offer.id &&
+      checkout.scope === scope.scope &&
+      checkout.scopeKey === scope.scopeKey,
+  );
+  const enabled = params.availability.available && !pending;
+  return [
+    {
+      id: 'subscribe',
+      kind: 'hosted_redirect',
+      label: 'Subscribe',
+      description: 'Open secure Stripe Checkout for this fixed monthly add-on.',
+      enabled,
+      disabled_reason: enabled
+        ? null
+        : pending
+          ? 'A Checkout session is already in progress.'
+          : params.availability.unavailableReason,
+      request: {
+        method: 'POST',
+        path: BILLING_RECURRING_ADDONS_CHECKOUT_PATH,
+        body: {
+          product: params.context.product,
+          organisation_id: params.context.organisationId,
+          team_id: params.context.teamId,
+          user_id: params.context.userId,
+          offer_id: params.offer.id,
+        },
+      },
+    },
+  ];
 }
 
 function offersForManager(
   data: Awaited<ReturnType<typeof loadAddonData>>,
   viewer: BillingFundingViewer,
+  context: OfferContext,
 ): BillingRecurringAddonsManagerV1['offers'] {
   return data.offers.map((offer) => {
     const scopes = new Set(offer.featurePolicies.map((policy) => policy.entitlementScope));
@@ -203,13 +339,7 @@ function offersForManager(
       scopes,
       viewer.userId,
     );
-    const catalog = offer.catalogs[0];
-    const available = Boolean(
-      offer.featurePolicies.length &&
-        catalog?.stripePriceId &&
-        catalog.currency === offer.currency &&
-        catalog.monthlyAmountMinor === offer.monthlyAmountMinor,
-    );
+    const availability = offerAvailability(offer, context);
     return {
       id: offer.id,
       key: offer.key,
@@ -217,13 +347,13 @@ function offersForManager(
       name: offer.name,
       description: offer.description,
       benefits: offer.benefits,
-      monthly_price: billingRecurringAddonMoney(offer.monthlyAmountMinor),
+      monthly_price: billingRecurringAddonMoney(offer.monthlyAmountMinor, offer.currency),
       interval: 'month',
-      available,
-      unavailable_reason: available ? null : 'Checkout is not configured for this offer.',
+      available: availability.available,
+      unavailable_reason: availability.unavailableReason,
       entitlement: entitlement(subscription, offer.featurePolicies.length > 0),
       subscription: managerSubscription(subscription),
-      actions: [],
+      actions: managerActions({ offer, subscription, data, viewer, context, availability }),
     };
   });
 }
@@ -231,6 +361,7 @@ function offersForManager(
 function offersForMember(
   data: Awaited<ReturnType<typeof loadAddonData>>,
   viewer: BillingFundingViewer,
+  context: OfferContext,
 ): BillingRecurringAddonsMemberV1['offers'] {
   return data.offers.map((offer) => {
     const scopes = new Set(offer.featurePolicies.map((policy) => policy.entitlementScope));
@@ -239,13 +370,7 @@ function offersForMember(
       scopes,
       viewer.userId,
     );
-    const catalog = offer.catalogs[0];
-    const available = Boolean(
-      offer.featurePolicies.length &&
-        catalog?.stripePriceId &&
-        catalog.currency === offer.currency &&
-        catalog.monthlyAmountMinor === offer.monthlyAmountMinor,
-    );
+    const availability = offerAvailability(offer, context);
     return {
       id: offer.id,
       key: offer.key,
@@ -253,10 +378,10 @@ function offersForMember(
       name: offer.name,
       description: offer.description,
       benefits: offer.benefits,
-      monthly_price: billingRecurringAddonMoney(offer.monthlyAmountMinor),
+      monthly_price: billingRecurringAddonMoney(offer.monthlyAmountMinor, offer.currency),
       interval: 'month',
-      available,
-      unavailable_reason: available ? null : 'Checkout is not configured for this offer.',
+      available: availability.available,
+      unavailable_reason: availability.unavailableReason,
       entitlement: entitlement(subscription, offer.featurePolicies.length > 0),
       subscription: memberSubscription(subscription, viewer.userId),
       actions: [],
@@ -334,7 +459,15 @@ export async function getBillingRecurringAddons(
     title: `${params.credential.service.name} add-ons`,
     description: 'Optional subscriptions are billed separately from metered usage credits.',
   };
+  const offerContext: OfferContext = {
+    product: params.credential.service.identifier,
+    organisationId: params.request.organisationId,
+    teamId: params.request.teamId,
+    userId: params.request.userId,
+    collectionEnabled: collection.stripeCollectionEnabled,
+  };
   if (viewer.billingManager) {
+    const offers = offersForManager(data, viewer, offerContext);
     return {
       ...common,
       viewer: {
@@ -342,8 +475,10 @@ export async function getBillingRecurringAddons(
         entitlement_visibility: 'full_team',
         description: 'This viewer may see full entitlement status and manage team add-ons.',
       },
-      capabilities: { can_manage_addons: false },
-      offers: offersForManager(data, viewer),
+      capabilities: {
+        can_manage_addons: offers.some((offer) => offer.actions.some((action) => action.enabled)),
+      },
+      offers,
     };
   }
   return {
@@ -354,6 +489,6 @@ export async function getBillingRecurringAddons(
       description: 'This viewer may see their relationship and privacy-safe team status.',
     },
     capabilities: { can_manage_addons: false },
-    offers: offersForMember(data, viewer),
+    offers: offersForMember(data, viewer, offerContext),
   };
 }

@@ -1,4 +1,4 @@
-import { Prisma, type PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createTestDb } from '../helpers/test-db.js';
@@ -239,14 +239,18 @@ async function insertSetupCheckout(
 
 describe.skipIf(!databaseTestsEnabled)('recurring add-on cancellation persistence', () => {
   let handle: Awaited<ReturnType<typeof createTestDb>>;
+  let secondPrisma: PrismaClient;
 
   beforeAll(async () => {
     handle = await createTestDb();
     if (!handle) throw new Error('DATABASE_URL is required for DB-backed tests');
     await seedCancellationSubject(handle.prisma);
+    secondPrisma = new PrismaClient({ datasources: { db: { url: handle.databaseUrl } } });
+    await secondPrisma.$connect();
   }, 60_000);
 
   afterAll(async () => {
+    await secondPrisma?.$disconnect();
     if (handle) await handle.cleanup();
   });
 
@@ -266,6 +270,42 @@ describe.skipIf(!databaseTestsEnabled)('recurring add-on cancellation persistenc
     await expect(
       insertSetupCheckout(handle.prisma, 'bcsc_owner_valid', ids.owner),
     ).resolves.toBeUndefined();
+  });
+
+  it('allows exactly one concurrent cancellation preview for a subscription', async () => {
+    if (!handle) throw new Error('db handle missing');
+
+    const results = await Promise.allSettled([
+      insertIntent(handle.prisma, {
+        id: 'raci_race_primary',
+        requester: ids.owner,
+        tokenCharacter: '8',
+        idempotencyKey: 'cancel-race-primary',
+      }),
+      insertIntent(secondPrisma, {
+        id: 'raci_race_secondary',
+        requester: ids.owner,
+        tokenCharacter: '9',
+        idempotencyKey: 'cancel-race-secondary',
+      }),
+    ]);
+
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
+    expect(
+      await handle.prisma.billingRecurringAddonCancellationIntent.count({
+        where: { subscriptionId: ids.subscription, state: 'AVAILABLE' },
+      }),
+    ).toBe(1);
+
+    await handle.prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe('SET LOCAL session_replication_role = replica');
+      await tx.$executeRaw(Prisma.sql`
+        UPDATE "billing_recurring_addon_cancellation_intents"
+        SET "state" = 'EXPIRED', "updated_at" = CURRENT_TIMESTAMP
+        WHERE "id" IN ('raci_race_primary', 'raci_race_secondary')
+      `);
+    });
   });
 
   it('requires active exact tenancy and manager authority before minting a preview', async () => {

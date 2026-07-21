@@ -243,6 +243,14 @@ closed and keeps the matching action disabled in later projections.
 organisation/team/subscribing-user subscription projections for that product. Manager
 views may contain subscription identity; member views expose only the viewer's
 relationship to a subscription and never another user's identity or payment details.
+Enabled manager actions relay their frozen UOA body to
+\`/billing/v1/recurring-addons/checkout\` or
+\`/billing/v1/recurring-addons/cancellation/preview\`. Checkout is one exact licensed
+monthly Stripe item with server-derived price, customer, return URLs, and idempotency.
+Checkout completion does not activate the entitlement: UOA requires an exact paid,
+undiscounted initial invoice. A preview returns an opaque five-minute token and UOA
+idempotency key; \`/billing/v1/recurring-addons/cancellation/confirm\` rechecks the actor
+and subscription, schedules period-end cancellation, and replays the stored exact result.
 The matching public artifacts use the \`billing-recurring-addons-v1\` filenames under
 \`/schemas\`. Recurring add-ons, including DeepWater privacy, remain separate from shared
 credits and from usage rating.

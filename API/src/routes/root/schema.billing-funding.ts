@@ -10,6 +10,23 @@ const fundingSubject = {
   user_id: 'UOA user ID',
 };
 
+const recurringAddonCheckoutSubject = {
+  ...fundingSubject,
+  offer_id: 'the exact active UOA recurring add-on offer ID returned by the read projection',
+};
+
+const recurringAddonCancellationPreviewSubject = {
+  ...fundingSubject,
+  subscription_id: 'the exact UOA subscription ID returned in a manager projection',
+};
+
+const recurringAddonCancellationConfirmationSubject = {
+  ...fundingSubject,
+  preview_token: 'the opaque short-lived UOA token returned by the cancellation preview',
+  idempotency_key: 'the UOA-issued idempotency key returned by the same preview',
+  choice: 'the literal cancel_addon choice frozen by UOA',
+};
+
 export const billingFundingEndpoints: EndpointSchema[] = [
   {
     method: 'GET',
@@ -165,6 +182,55 @@ export const billingFundingEndpoints: EndpointSchema[] = [
       503: 'Stripe collection context is unavailable',
     },
     notes:
-      'Billing managers may see subscription identifiers and subscribing-user identity. Members receive relationship-only subscription visibility and no payment or other-user identity details. Mutation actions remain UOA-owned and are exposed only when their verified runtime is available.',
+      'Billing managers may see subscription identifiers and subscribing-user identity. Members receive relationship-only subscription visibility and no payment or other-user identity details. Enabled mutation actions contain complete frozen UOA request bodies.',
+  },
+  {
+    method: 'POST',
+    path: '/billing/v1/recurring-addons/checkout',
+    description:
+      'Create or recover one exact, one-item monthly Stripe Checkout session for a UOA recurring add-on offer. UOA derives the customer, price, scope, return URLs, and idempotency identity.',
+    auth: lifecycleAuth,
+    body: recurringAddonCheckoutSubject,
+    response: {
+      200: 'A normalized HTTPS Stripe Checkout redirect',
+      '401/403': 'Invalid lifecycle credential, actor, membership, subject, or scope manager',
+      409: 'The offer, scope policy, customer, live subscription, or unresolved Checkout conflicts',
+      503: 'The exact UOA Stripe catalog or current Stripe binding is unavailable',
+    },
+    notes:
+      'Checkout completion creates only a pending local subscription projection. Entitlement activates only after an exact, undiscounted initial invoice.paid webhook is verified.',
+  },
+  {
+    method: 'POST',
+    path: '/billing/v1/recurring-addons/cancellation/preview',
+    description:
+      'Refresh and preview period-end cancellation for one exact UOA recurring add-on subscription, returning an opaque five-minute capability and frozen confirm body.',
+    auth: lifecycleAuth,
+    body: recurringAddonCancellationPreviewSubject,
+    response: {
+      200: 'BillingRecurringAddonCancellationPreviewV1',
+      '401/403': 'Invalid lifecycle credential, actor, membership, subject, or scope manager',
+      409: 'The subscription is terminal, already scheduled, changed, or already has a preview',
+      503: 'Current Stripe subscription evidence is unavailable or inconsistent',
+    },
+    notes:
+      'Only the token digest is stored. Exactly one AVAILABLE or PROCESSING preview may exist for a subscription.',
+  },
+  {
+    method: 'POST',
+    path: '/billing/v1/recurring-addons/cancellation/confirm',
+    description:
+      'Consume one still-valid UOA recurring add-on cancellation preview and schedule the exact Stripe subscription to cancel at period end.',
+    auth: lifecycleAuth,
+    body: recurringAddonCancellationConfirmationSubject,
+    response: {
+      200: 'BillingRecurringAddonCancellationConfirmationV1, replayed byte-for-byte for the same request',
+      '401/403': 'Invalid lifecycle credential, actor, membership, subject, or scope manager',
+      '404/410': 'The opaque preview token is invalid or expired',
+      409: 'The token was reused with a different request or its subscription binding changed',
+      503: 'Current Stripe cancellation evidence is unavailable or inconsistent',
+    },
+    notes:
+      'UOA rechecks the actor and exact scope under a row lock, uses one stable Stripe idempotency key, and persists the exact result before acknowledging success.',
   },
 ];
