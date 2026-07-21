@@ -1820,6 +1820,22 @@ in [Billing Tariffs and Product Entitlements](./Requirements/billing-tariffs.md)
 That document is incorporated into this build brief by reference and is
 authoritative for the billing tariff control plane.
 
+Organisation contract invoicing is the manual-collection extension of that
+control plane. A contract pins one organisation-wide usage markup, currency,
+payment terms, service set, and monthly service prices in immutable effective
+versions. Closed-month calculation consumes organisation-scoped Ledger facts
+through UOA's shared rating core, while every customer invoice DTO and PDF shows
+only the gross final calculated price per service and separately labelled
+credit/payment/write-off settlement totals—never provider cost, token/API units,
+calls, markup, or private Ledger evidence. Future versions cannot project their
+tariff assignments before their effective UTC month; calculated drafts freeze
+their header, lines, and evidence at commit, and recalculation creates the next
+revision. Issuance uses monotonic numbering and deterministic wrapping-safe
+Unicode PDFs in private immutable storage; voids and corrections preserve the
+audit chain. The complete model and operational rules are defined in
+[Organisation Contract Invoicing](./Requirements/contract-invoicing.md), which
+is incorporated into this brief by reference.
+
 ### 2026-07-20 canonical customer statement clarification
 
 UOA is the sole commercial billing engine and customer-facing system of record.

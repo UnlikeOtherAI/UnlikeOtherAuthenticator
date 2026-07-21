@@ -62,7 +62,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
         config-verify.ts    — POST /config/verify (verify a signed config JWT)
         schema.ts           — Aggregates the endpoint schema returned by /api
         schema.auth.ts      — /api schema slice: auth endpoints
-        schema.billing.ts   — /api schema slice: billing tariffs, app keys, and snapshots
+        schema.billing.ts   — /api schema slice: tariffs, contract invoices, app keys, and snapshots
         schema.config-debug.ts — /api schema slice: config debug endpoints
         schema.integrations.ts — /api schema slice: integration endpoints
         schema.internal-admin-apps.ts — /api schema slice: internal admin app/settings/search endpoints
@@ -126,6 +126,8 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       /internal
         /admin
           billing.ts                — Superuser tariff, assignment, and app-key lifecycle
+          billing-contract-invoices.ts — Contract/version, profile, calculator, invoice, PDF, and settlement routes
+          billing-contract-invoice-response-schemas.ts — Exact final-price-only invoice response schemas
           billing-serialization.ts  — Billing admin response serialization
           confidential-delegations.ts — Audited superuser delegation-mapping CRUD
           config.ts                 — GET  /internal/admin/config (admin auth config)
@@ -187,6 +189,15 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       billing-app-key.service.ts            — Product app-key minting, lookup, revocation, and audit
       billing-entitlement.service.ts        — Membership validation and team→org→default resolution
       billing-ledger-collector.service.ts   — Strict immutable Ledger usage/portfolio snapshots
+      billing-rating.service.ts             — Shared exact statement, Stripe, and contract-invoice rating core
+      billing-contract-guard.service.ts     — Active-contract assignment mutation guard
+      billing-contract.service.ts           — Immutable org contracts and atomic service tariff projection
+      billing-invoice-calculation.service.ts — Closed-month org calculator and private evidence persistence
+      billing-invoice-lifecycle.service.ts  — Serial issuance, PDF integrity, void, and settlement lifecycle
+      billing-invoice-pdf.service.ts        — Final-price-only immutable PDF generator
+      billing-invoice-profile.service.ts    — Explicit issuer/buyer legal profiles
+      billing-invoice-storage.service.ts    — Dedicated private create-only invoice PDF storage
+      billing-invoice-view.service.ts       — Exact customer-safe invoice serializer and settlement projection
       billing-statement-portfolio.service.ts — UOA-only connected-service/origin/user aggregation
       billing-statement.service.ts          — Canonical display-ready v1/v2 billing statements
       billing-snapshot.service.ts           — Preloaded RS256 tariff signer, overlapping JWKS, and exact consumer binding guard
@@ -430,6 +441,22 @@ Tariff, direct-access, commercial-line, and credential reads use the bypass-RLS
 admin client because tenant SQL access to those control-plane tables is denied.
 Full contract and raw-usage separation are defined in
 `Docs/Requirements/billing-tariffs.md`.
+
+The platform-superuser contract-invoice boundary is separate from the
+product-facing statement. `billing-contract.service.ts` owns immutable
+organisation contract versions and atomic CUSTOM+MANUAL tariff projection;
+`billing-invoice-calculation.service.ts` fetches closed-month organisation-level
+Ledger snapshots and uses the shared `billing-rating.service.ts` core;
+`billing-invoice-lifecycle.service.ts` owns serial numbering, issuance, voiding,
+and append-only settlement events. The customer-safe serializer and exact route
+schema expose final per-service prices only. Private Ledger cursor/hash evidence
+and the calculation digest remain in admin-only RLS tables and never enter the
+DTO or `billing-invoice-pdf.service.ts`. Credits remain a separate settlement
+value rather than changing a line. Contract, version, issuer, buyer, and invoice
+routes all use exact response schemas. Issuance renders embedded DejaVu Unicode
+fonts with measured wrapping, writes create-only PDFs through the dedicated
+invoice storage abstraction, and re-verifies SHA-256 on download.
+See `Docs/Requirements/contract-invoicing.md`.
 
 The API re-exports the MIT-licensed
 `@unlikeotherai/billing-statement-protocol` workspace instead of owning a
