@@ -124,6 +124,10 @@ optionally `BILLING_INVOICE_GCS_PROJECT_ID`. Grant the Cloud Run runtime identit
 create/read access only; invoice objects are create-only and are never deleted
 or overwritten by the application. The deploy workflow accepts only `disabled`
 or `gcs` in production and refuses `gcs` without the bucket variable.
+Configure those values as GitHub repository variables; the main-branch workflow
+passes them to Cloud Run on every deployment. It also forwards
+`STRIPE_AUTO_TOP_UP_INTERVAL_MINUTES` (default `1`) so the documented bounded
+auto-top-up cadence is not silently replaced by an old revision's environment.
 
 The private key used to sign `ADMIN_CONFIG_JWT` is not attached to Cloud Run. Store it separately in Secret Manager as `uoa-auth-config-jwt-private-jwk` for rotation/signing operations only.
 
