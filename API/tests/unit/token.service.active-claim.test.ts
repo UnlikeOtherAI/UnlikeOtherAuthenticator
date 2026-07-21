@@ -118,7 +118,7 @@ describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
     expect(claims.active).toEqual({ orgId: 'org-active', teamId: 'team-active' });
   });
 
-  it('resolves one cross-product workspace for an unscoped off-flow without creating a ghost product workspace', async () => {
+  it('rejects a recognized-product code that deferred workspace binding until exchange', async () => {
     const now = new Date('2026-07-07T00:00:00.500Z');
     const sharedSecret = process.env.SHARED_SECRET!;
     const code = 'code-with-cross-product-scope';
@@ -191,25 +191,21 @@ describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
       tokenVersion: 0,
     });
 
-    const { accessToken } = await exchangeAuthorizationCodeForTokens(
-      { code, config, configUrl, redirectUrl, clientId, codeVerifier: TEST_CODE_VERIFIER },
-      {
-        now: () => now,
-        sharedSecret,
-        authServiceIdentifier: process.env.AUTH_SERVICE_IDENTIFIER,
-        accessTokenTtl: '15m',
-        adminPrisma: prisma,
-        prisma,
-      },
-    );
+    await expect(
+      exchangeAuthorizationCodeForTokens(
+        { code, config, configUrl, redirectUrl, clientId, codeVerifier: TEST_CODE_VERIFIER },
+        {
+          now: () => now,
+          sharedSecret,
+          authServiceIdentifier: process.env.AUTH_SERVICE_IDENTIFIER,
+          accessTokenTtl: '15m',
+          adminPrisma: prisma,
+          prisma,
+        },
+      ),
+    ).rejects.toMatchObject({ statusCode: 401, message: 'INVALID_AUTH_CODE' });
 
-    const claims = await verifyAccessToken(accessToken, {
-      sharedSecret,
-      issuer: process.env.AUTH_SERVICE_IDENTIFIER,
-      prisma,
-    });
-    expect(claims.active).toEqual({ orgId: 'org-nessie', teamId: 'team-nessie' });
-    expect(claims.org).toMatchObject({ org_id: 'org-nessie', teams: ['team-nessie'] });
+    expect(prisma.refreshToken.create).not.toHaveBeenCalled();
     expect(prisma.organisation.create).not.toHaveBeenCalled();
     expect(prisma.team.create).not.toHaveBeenCalled();
   });

@@ -20,11 +20,12 @@ import { buildFirstLoginBlock, type FirstLoginBlock } from './first-login.servic
 import { evaluateSignaturePolicy } from './signature-policy.service.js';
 import { lockSignaturePolicyForDecision } from './signature-continuation.service.js';
 import {
+  resolveAuthorizationCodeWorkspace,
   requiresExactAuthorizationWorkspace,
-  resolveRequiredAuthorizationWorkspace,
 } from './required-workspace-placement.service.js';
 import { lockTokenIssuanceProductPolicy } from './product-workspace-policy-lock.service.js';
 import { resolveProductWorkspacePolicy } from './product-workspace-policy.service.js';
+import { assertAuthorizationTwoFaProof } from './authorization-twofactor-proof.service.js';
 import {
   accessTokenExpiresInSeconds,
   resolveAccessTokenTtl,
@@ -292,7 +293,7 @@ export async function exchangeAuthorizationCodeForTokens(
       { prisma: tx, afterLock: deps?.afterProductWorkspacePolicyLock },
     );
     const now = deps?.now ? deps.now() : new Date();
-    const { userId, rememberMe, orgId, teamId } = await consumeAuthorizationCode({
+    const { userId, rememberMe, twoFaCompleted, orgId, teamId } = await consumeAuthorizationCode({
       code: params.code,
       configUrl: params.configUrl,
       domain: params.config.domain,
@@ -308,18 +309,23 @@ export async function exchangeAuthorizationCodeForTokens(
 
     // Both values must be present to carry an explicit or unambiguously auto-selected workspace
     // onto the session (design §7 steps 3-4).
-    let active: ActiveWorkspace | null = orgId && teamId ? { orgId, teamId } : null;
-    if (!active) {
-      active = await resolveRequiredAuthorizationWorkspace(
-        { userId, config: params.config },
-        {
-          afterWorkspaceLock: deps?.afterRequiredWorkspaceLock,
-          env,
-          prisma: tx,
-          workspacePrisma: tx,
-        },
-      );
-    }
+    const active: ActiveWorkspace | null = await resolveAuthorizationCodeWorkspace(
+      { userId, config: params.config, stored: { orgId, teamId } },
+      {
+        afterWorkspaceLock: deps?.afterRequiredWorkspaceLock,
+        env,
+        prisma: tx,
+        workspacePrisma: tx,
+      },
+    );
+
+    // Re-evaluate the strongest current policy after the exact workspace is
+    // locked/resolved. A policy or enrollment change after interactive auth
+    // can invalidate the code, but can never downgrade the required proof.
+    await assertAuthorizationTwoFaProof(
+      { config: params.config, userId, orgId: active?.orgId, twoFaCompleted },
+      { prisma: tx },
+    );
     const refreshTtlSeconds = resolveRefreshTokenTtlSeconds(params.config, rememberMe);
     const issuedRefreshToken = await issueRefreshToken(
       {

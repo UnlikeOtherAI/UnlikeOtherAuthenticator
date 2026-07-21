@@ -237,7 +237,7 @@ Optional fields are documented at \`/api\` under \`config_jwt_documentation.opti
 
 ### 2.5 Two-factor policy model
 
-\`2fa_enabled\` in the config JWT is the master gate. If it is false or absent, UOA treats 2FA as off for that integration even if an Admin policy exists. If it is true, UOA resolves the effective policy from the DB-backed Service/domain policy plus the user's Organisation policies. The strongest policy wins: \`off < optional < required\`.
+\`2fa_enabled\` in the config JWT is the master gate. If it is false or absent, UOA treats 2FA as off for that integration even if an Admin policy exists. If it is true, UOA resolves the effective policy from the DB-backed Service/domain policy, same-domain Organisation policies, and the exact selected Organisation even when a recognized product selected it across domains. The strongest policy wins: \`off < optional < required\`. Recognized products resolve exact scope before 2FA even with \`workspace_selection: "off"\`; authorization-code exchange rechecks current policy/enrollment against persisted interactive TOTP proof before creating tokens.
 
 - \`off\`: login proceeds without a TOTP prompt.
 - \`optional\`: users may enroll themselves; enrolled users must verify a code at login.

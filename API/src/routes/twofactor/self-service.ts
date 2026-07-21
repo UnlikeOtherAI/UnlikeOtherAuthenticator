@@ -65,10 +65,14 @@ async function requireAccessTokenClaims(request: FastifyRequest): Promise<Access
 async function assertPolicyAllowsSetup(params: {
   request: FastifyRequest;
   userId: string;
+  orgId?: string;
 }): Promise<void> {
   const config = params.request.config;
   if (!config) throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
-  const policy = await resolveTwoFaPolicy({ config, userId: params.userId });
+  const policy = await resolveTwoFaPolicy(
+    { config, userId: params.userId, orgId: params.orgId },
+    { prisma: params.request.adminDb },
+  );
   if (policy === 'OFF') {
     throw new AppError('NOT_FOUND', 404, 'TWOFA_NOT_AVAILABLE');
   }
@@ -94,7 +98,11 @@ export function registerTwoFactorSelfServiceRoutes(app: FastifyInstance): void {
         if (setup.configUrl !== configUrl || setup.domain !== config.domain) {
           throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
         }
-        await assertPolicyAllowsSetup({ request, userId: setup.userId });
+        await assertPolicyAllowsSetup({
+          request,
+          userId: setup.userId,
+          orgId: setup.orgId,
+        });
         const totpSecret = decryptTwoFaSecret({
           encryptedSecret: setup.encryptedSecret,
           sharedSecret: SHARED_SECRET,
@@ -108,7 +116,11 @@ export function registerTwoFactorSelfServiceRoutes(app: FastifyInstance): void {
       }
 
       const claims = await requireAccessTokenClaims(request);
-      await assertPolicyAllowsSetup({ request, userId: claims.userId });
+      await assertPolicyAllowsSetup({
+        request,
+        userId: claims.userId,
+        orgId: claims.active?.orgId,
+      });
 
       const setup = await startTwoFactorSetup(
         { userId: claims.userId, config, configUrl },
@@ -147,7 +159,11 @@ export function registerTwoFactorSelfServiceRoutes(app: FastifyInstance): void {
         request.accessTokenClaims = claims;
       }
 
-      await assertPolicyAllowsSetup({ request, userId: setup.userId });
+      await assertPolicyAllowsSetup({
+        request,
+        userId: setup.userId,
+        orgId: setup.orgId,
+      });
       const totpSecret = decryptTwoFaSecret({
         encryptedSecret: setup.encryptedSecret,
         sharedSecret: SHARED_SECRET,
@@ -224,7 +240,10 @@ export function registerTwoFactorSelfServiceRoutes(app: FastifyInstance): void {
 
       const { code } = DisableBodySchema.parse(request.body);
       const claims = await requireAccessTokenClaims(request);
-      const policy = await resolveTwoFaPolicy({ config, userId: claims.userId });
+      const policy = await resolveTwoFaPolicy(
+        { config, userId: claims.userId, orgId: claims.active?.orgId },
+        { prisma: request.adminDb },
+      );
       if (policy === 'OFF') throw new AppError('NOT_FOUND', 404, 'TWOFA_NOT_AVAILABLE');
       if (policy === 'REQUIRED') throw new AppError('BAD_REQUEST', 400, 'TWOFA_REQUIRED');
 

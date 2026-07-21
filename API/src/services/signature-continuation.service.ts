@@ -246,7 +246,12 @@ export async function finalizeConfigAuthorizationWithSignatures(
     );
     if (policy.complete) {
       const issued = await (deps?.issueConfigCode ?? issueAuthorizationCode)(
-        { ...input, ...pkce, domain },
+        {
+          ...input,
+          ...pkce,
+          domain,
+          twoFaCompleted: input.twoFaCompleted,
+        },
         {
           crossProductPrisma: deps?.workspacePrisma ?? tx,
           policyPrisma: deps?.workspacePrisma ?? tx,
@@ -383,6 +388,7 @@ export async function completeSigningContinuation(
           codeChallenge: continuation.codeChallenge,
           codeChallengeMethod: 'S256',
           rememberMe: continuation.rememberMe,
+          twoFaCompleted: continuation.twoFaCompleted,
           orgId: continuation.orgId ?? undefined,
           teamId: continuation.teamId ?? undefined,
         },

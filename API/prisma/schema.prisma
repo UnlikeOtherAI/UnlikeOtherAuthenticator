@@ -409,6 +409,9 @@ model AuthorizationCode {
   codeChallenge       String?   @map("code_challenge")
   codeChallengeMethod String?   @map("code_challenge_method")
   rememberMe          Boolean   @default(false) @map("remember_me")
+  // Proof state captured at interactive code issuance and rechecked against
+  // the current exact-workspace 2FA policy during confidential code exchange.
+  twoFaCompleted      Boolean   @default(false) @map("two_fa_completed")
   // Workspace scope captured by explicit selection or an unambiguous one-team auto-selection;
   // consumeAuthorizationCode threads it into the issued session's `active` claim.
   orgId               String?   @map("org_id")

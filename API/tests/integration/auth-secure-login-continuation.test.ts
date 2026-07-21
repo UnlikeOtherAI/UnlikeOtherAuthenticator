@@ -342,7 +342,9 @@ describe.skipIf(!hasDatabase)('secure one-time login continuation', () => {
         payload: { login_token: loginToken, inviteId: invite.id },
       });
       expect(replay.statusCode, replay.body).toBe(401);
-      expect(await handle.prisma.authorizationCode.count({ where: { userId: invitee.id } })).toBe(1);
+      expect(await handle.prisma.authorizationCode.count({ where: { userId: invitee.id } })).toBe(
+        1,
+      );
       expect(await handle.prisma.loginSessionUse.count()).toBe(1);
     } finally {
       await app.close();
@@ -395,9 +397,7 @@ describe.skipIf(!hasDatabase)('secure one-time login continuation', () => {
   it('rejects code exchange if the exact workspace membership became inactive', async () => {
     const workspace = await seedWorkspace({ email: 'exchange-inactive@example.com' });
     const verifier = 'exchange-verifier-abcdefghijklmnopqrstuvwxyz0123456789';
-    const exchangeChallenge = createHash('sha256')
-      .update(verifier, 'utf8')
-      .digest('base64url');
+    const exchangeChallenge = createHash('sha256').update(verifier, 'utf8').digest('base64url');
     const issued = await issueAuthorizationCode(
       {
         userId: workspace.userId,
@@ -407,6 +407,7 @@ describe.skipIf(!hasDatabase)('secure one-time login continuation', () => {
         codeChallenge: exchangeChallenge,
         codeChallengeMethod: 'S256',
         rememberMe: true,
+        twoFaCompleted: false,
         orgId: workspace.orgId,
         teamId: workspace.teamId,
       },

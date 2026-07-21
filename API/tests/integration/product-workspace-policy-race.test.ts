@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 
-import { BillingAppKeyPurpose } from '@prisma/client';
+import { BillingAppKeyPurpose, TwoFaPolicy } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { issueAuthorizationCode } from '../../src/services/authorization-code.service.js';
@@ -27,6 +27,7 @@ type Seed = {
   code: string;
   serviceId: string;
   userId: string;
+  orgId: string;
 };
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
@@ -37,9 +38,10 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
   return { promise, resolve };
 }
 
-function productConfig(): ClientConfig {
+function productConfig(twoFaEnabled = false): ClientConfig {
   return validateConfigFields(
     baseClientConfigPayload({
+      '2fa_enabled': twoFaEnabled,
       domain: productDomain,
       redirect_urls: [redirectUrl],
       login_flow: { email_code_enabled: false, workspace_selection: 'off' },
@@ -91,7 +93,7 @@ describe.skipIf(!hasDatabase)('product workspace policy token races', () => {
     await handle.prisma.clientDomain.deleteMany();
   });
 
-  async function seed(): Promise<Seed> {
+  async function seed(twoFaCompleted = false): Promise<Seed> {
     const user = await handle.prisma.user.create({
       data: { email: `race-${randomUUID()}@example.com`, userKey: randomUUID() },
       select: { id: true },
@@ -147,6 +149,7 @@ describe.skipIf(!hasDatabase)('product workspace policy token races', () => {
         codeChallenge: createHash('sha256').update(verifier).digest('base64url'),
         codeChallengeMethod: 'S256',
         rememberMe: true,
+        twoFaCompleted,
         orgId: org.id,
         teamId: team.id,
       },
@@ -156,19 +159,20 @@ describe.skipIf(!hasDatabase)('product workspace policy token races', () => {
       appKeyId: appKey.id,
       clientDomainId: clientDomain.id,
       code: issued.code,
+      orgId: org.id,
       serviceId: service.id,
       userId: user.id,
     };
   }
 
-  function exchangeCode(seedRow: Seed, afterLock?: () => Promise<void>) {
+  function exchangeCode(seedRow: Seed, afterLock?: () => Promise<void>, twoFaEnabled = false) {
     return exchangeAuthorizationCodeForTokens(
       {
         authenticatedClientDomainId: seedRow.clientDomainId,
         clientId: createClientId(productDomain, process.env.SHARED_SECRET!),
         code: seedRow.code,
         codeVerifier: verifier,
-        config: productConfig(),
+        config: productConfig(twoFaEnabled),
         configUrl,
         redirectUrl,
       },
@@ -259,6 +263,45 @@ describe.skipIf(!hasDatabase)('product workspace policy token races', () => {
         select: { usedAt: true },
       }),
     ).toEqual({ usedAt: null });
+  });
+
+  it.each([false, true])(
+    'rejects a proof-free cross-product code after exact-org 2FA becomes required (enrolled=%s)',
+    async (enrolled) => {
+      const seeded = await seed();
+      await handle.prisma.user.update({
+        where: { id: seeded.userId },
+        data: { twoFaEnabled: enrolled },
+      });
+      await handle.prisma.organisation.update({
+        where: { id: seeded.orgId },
+        data: { twoFaPolicy: TwoFaPolicy.REQUIRED },
+      });
+
+      await expect(exchangeCode(seeded, undefined, true)).rejects.toMatchObject({
+        statusCode: 401,
+        message: 'INVALID_AUTH_CODE',
+      });
+      expect(await handle.prisma.refreshToken.count()).toBe(0);
+      expect(
+        await handle.prisma.authorizationCode.findFirstOrThrow({
+          where: { userId: seeded.userId },
+          select: { usedAt: true },
+        }),
+      ).toEqual({ usedAt: null });
+    },
+  );
+
+  it('accepts a cross-product code carrying completed 2FA proof under exact-org required policy', async () => {
+    const seeded = await seed(true);
+    await handle.prisma.organisation.update({
+      where: { id: seeded.orgId },
+      data: { twoFaPolicy: TwoFaPolicy.REQUIRED },
+    });
+
+    await expect(exchangeCode(seeded, undefined, true)).resolves.toMatchObject({
+      refreshToken: expect.any(String),
+    });
   });
 
   it('lets refresh rotation commit before a waiting app-key revocation', async () => {

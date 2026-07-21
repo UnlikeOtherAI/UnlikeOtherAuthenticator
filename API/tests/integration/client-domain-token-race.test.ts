@@ -118,6 +118,7 @@ describe.skipIf(!hasDatabase)('ClientDomain disable versus token issuance', () =
         codeChallenge: createHash('sha256').update(verifier).digest('base64url'),
         codeChallengeMethod: 'S256',
         rememberMe: true,
+        twoFaCompleted: false,
         orgId: org.id,
         teamId: team.id,
       },

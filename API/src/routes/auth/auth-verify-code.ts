@@ -11,6 +11,7 @@ import { verifyLoginCode } from '../../services/login-code.service.js';
 import { signLoginSession } from '../../services/login-session.service.js';
 import { parseRequestAccessFlag } from '../../services/access-request-flow.service.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
+import { resolveProductWorkspaceBeforeTwoFa } from '../../services/required-workspace-placement.service.js';
 import { selectRedirectUrl } from '../../services/authorization-code.service.js';
 import { finalizeWithTwoFaPolicy } from '../../services/workspace-finalize.service.js';
 import { AppError } from '../../utils/errors.js';
@@ -40,8 +41,8 @@ const QuerySchema = z
  * - `workspace_selection: "auto"` — mint a `login_token` bridge and return the workspace chooser
  *   payload (teams/pending_invites/can_create_org). 2FA is deferred to /auth/select-team for the
  *   selected org (design §11.2 flow order: identity → chooser → 2FA → redirect).
- * - `workspace_selection: "off"` (default) — finalize immediately, mirroring /auth/login's own
- *   2FA-aware branching (2FA still applies; only the chooser step is skipped).
+ * - `workspace_selection: "off"` (default) — skip the chooser and finalize immediately.
+ *   Recognized products still pre-bind their server-owned exact workspace before 2FA.
  */
 export function registerAuthVerifyCodeRoute(app: FastifyInstance): void {
   app.post(
@@ -108,6 +109,10 @@ export function registerAuthVerifyCodeRoute(app: FastifyInstance): void {
         if (!user) {
           throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
         }
+        const selectedWorkspace = await resolveProductWorkspaceBeforeTwoFa(
+          { userId, config },
+          { prisma, workspacePrisma: request.adminDb },
+        );
 
         const result = await finalizeWithTwoFaPolicy(
           {
@@ -122,8 +127,13 @@ export function registerAuthVerifyCodeRoute(app: FastifyInstance): void {
             codeChallenge: pkce.codeChallenge,
             codeChallengeMethod: pkce.codeChallengeMethod,
             ip: request.ip ?? null,
+            ...(selectedWorkspace ?? {}),
           },
-          { prisma },
+          {
+            twoFaPolicyPrisma: request.adminDb,
+            workspacePrisma: request.adminDb,
+            prisma,
+          },
         );
 
         if (result.kind === 'granted') {
@@ -151,7 +161,9 @@ export function registerAuthVerifyCodeRoute(app: FastifyInstance): void {
       });
 
       if (outcome.kind === 'twofa') {
-        reply.status(200).send({ ok: true, twofa_required: true, twofa_token: outcome.twofa_token });
+        reply
+          .status(200)
+          .send({ ok: true, twofa_required: true, twofa_token: outcome.twofa_token });
         return;
       }
 

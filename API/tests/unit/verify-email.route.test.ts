@@ -12,6 +12,7 @@ const buildWorkspaceChoicesMock = vi.fn();
 const signLoginSessionMock = vi.fn();
 const resolveTwoFaPolicyMock = vi.fn();
 const startTwoFactorSetupMock = vi.fn();
+const resolveProductWorkspaceBeforeTwoFaMock = vi.fn();
 
 let currentConfig: ClientConfig | null = null;
 const PKCE_QUERY =
@@ -56,6 +57,17 @@ vi.mock('../../src/services/first-login.service.js', async () => {
 vi.mock('../../src/services/login-session.service.js', () => ({
   signLoginSession: (...args: unknown[]) => signLoginSessionMock(...args),
 }));
+
+vi.mock('../../src/services/required-workspace-placement.service.js', async () => {
+  const actual = await vi.importActual<
+    typeof import('../../src/services/required-workspace-placement.service.js')
+  >('../../src/services/required-workspace-placement.service.js');
+  return {
+    ...actual,
+    resolveProductWorkspaceBeforeTwoFa: (...args: unknown[]) =>
+      resolveProductWorkspaceBeforeTwoFaMock(...args),
+  };
+});
 
 vi.mock('../../src/services/twofactor-policy.service.js', () => ({
   resolveTwoFaPolicy: (...args: unknown[]) => resolveTwoFaPolicyMock(...args),
@@ -107,6 +119,7 @@ describe('POST /auth/verify-email — workspace chooser wiring (gap-fix B Task 1
     signLoginSessionMock.mockReset();
     resolveTwoFaPolicyMock.mockReset().mockResolvedValue('OFF');
     startTwoFactorSetupMock.mockReset();
+    resolveProductWorkspaceBeforeTwoFaMock.mockReset().mockResolvedValue(null);
     process.env.SHARED_SECRET = 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER = 'uoa-auth-service';
   });
@@ -150,6 +163,38 @@ describe('POST /auth/verify-email — workspace chooser wiring (gap-fix B Task 1
     });
     expect(buildWorkspaceChoicesMock).not.toHaveBeenCalled();
     expect(signLoginSessionMock).not.toHaveBeenCalled();
+  });
+
+  it('pre-binds the recognized product workspace before required email-link enrollment', async () => {
+    currentConfig = baseConfig({
+      '2fa_enabled': true,
+      login_flow: { email_code_enabled: false, workspace_selection: 'off' },
+    });
+    resolveProductWorkspaceBeforeTwoFaMock.mockResolvedValue({
+      orgId: 'org-cross',
+      teamId: 'team-cross',
+    });
+    resolveTwoFaPolicyMock.mockResolvedValue('REQUIRED');
+    startTwoFactorSetupMock.mockResolvedValue({
+      setup_token: 'setup-token',
+      otpauth_uri: 'otpauth://totp/test',
+      qr_svg: '<svg/>',
+      manual_secret: 'secret',
+    });
+
+    const res = await postVerifyEmail();
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      kind: 'twofa_enroll_required',
+      setup_token: 'setup-token',
+    });
+    expect(startTwoFactorSetupMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        finalize: expect.objectContaining({ orgId: 'org-cross', teamId: 'team-cross' }),
+      }),
+      expect.anything(),
+    );
   });
 
   it('workspace_selection "auto" + 2+ ACTIVE teams: returns the login_token + chooser payload instead of finalizing', async () => {

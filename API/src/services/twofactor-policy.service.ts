@@ -20,6 +20,10 @@ type PolicyPrisma = {
     }): Promise<{ twoFaPolicy: TwoFaPolicyValue } | null>;
   };
   organisation: {
+    findUnique(args: {
+      where: { id: string };
+      select: { twoFaPolicy: true };
+    }): Promise<{ twoFaPolicy: TwoFaPolicyValue | null } | null>;
     findMany(args: {
       where: { domain: string; members: { some: { userId: string } } };
       select: { twoFaPolicy: true };
@@ -58,6 +62,8 @@ export async function resolveTwoFaPolicy(
   params: {
     config: Pick<ClientConfig, '2fa_enabled' | 'domain'>;
     userId?: string | null;
+    /** Exact workspace selected before 2FA. It may belong to another product domain. */
+    orgId?: string | null;
   },
   deps?: { prisma?: PolicyPrisma },
 ): Promise<TwoFaPolicyValue> {
@@ -66,7 +72,7 @@ export async function resolveTwoFaPolicy(
   }
 
   const prisma = prismaClient(deps);
-  const [domainPolicy, orgPolicies] = await Promise.all([
+  const [domainPolicy, orgPolicies, selectedOrgPolicy] = await Promise.all([
     prisma.clientDomain.findUnique({
       where: { domain: params.config.domain },
       select: { twoFaPolicy: true },
@@ -80,11 +86,20 @@ export async function resolveTwoFaPolicy(
           select: { twoFaPolicy: true },
         })
       : Promise.resolve([]),
+    params.orgId
+      ? prisma.organisation.findUnique({
+          where: { id: params.orgId },
+          select: { twoFaPolicy: true },
+        })
+      : Promise.resolve(null),
   ]);
 
   let effective: TwoFaPolicyValue = domainPolicy?.twoFaPolicy ?? 'OPTIONAL';
   for (const org of orgPolicies) {
     effective = strongestTwoFaPolicy(effective, org.twoFaPolicy ?? 'OFF');
+  }
+  if (selectedOrgPolicy) {
+    effective = strongestTwoFaPolicy(effective, selectedOrgPolicy.twoFaPolicy ?? 'OFF');
   }
 
   return effective;

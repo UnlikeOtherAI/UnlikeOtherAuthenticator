@@ -15,6 +15,7 @@ function config(enabled: boolean): Pick<ClientConfig, '2fa_enabled' | 'domain'> 
 function prisma(params: {
   domainPolicy?: TwoFaPolicyValue | null;
   orgPolicies?: Array<TwoFaPolicyValue | null>;
+  selectedOrgPolicy?: TwoFaPolicyValue | null;
 }) {
   return {
     clientDomain: {
@@ -23,6 +24,9 @@ function prisma(params: {
       ),
     },
     organisation: {
+      findUnique: vi.fn(async () =>
+        params.selectedOrgPolicy ? { twoFaPolicy: params.selectedOrgPolicy } : null,
+      ),
       findMany: vi.fn(async () =>
         (params.orgPolicies ?? []).map((twoFaPolicy) => ({ twoFaPolicy })),
       ),
@@ -58,6 +62,21 @@ describe('twofactor policy resolution', () => {
       resolveTwoFaPolicy(
         { config: config(true), userId: 'user_1' },
         { prisma: prisma({ domainPolicy: 'OFF', orgPolicies: [null, 'OPTIONAL', 'REQUIRED'] }) },
+      ),
+    ).resolves.toBe('REQUIRED');
+  });
+
+  it('includes the exact selected cross-domain organisation in strongest-wins', async () => {
+    await expect(
+      resolveTwoFaPolicy(
+        { config: config(true), userId: 'user_1', orgId: 'org_cross_product' },
+        {
+          prisma: prisma({
+            domainPolicy: 'OFF',
+            orgPolicies: ['OPTIONAL'],
+            selectedOrgPolicy: 'REQUIRED',
+          }),
+        },
       ),
     ).resolves.toBe('REQUIRED');
   });

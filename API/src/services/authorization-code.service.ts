@@ -76,8 +76,9 @@ export async function issueAuthorizationCode(
     codeChallenge?: string;
     codeChallengeMethod?: 'S256';
     rememberMe?: boolean;
-    // Workspace scope resolved by explicit /auth/select-team or the unambiguous one-team
-    // server-side auto-selection. Omitted when workspace selection is off or unresolved.
+    twoFaCompleted: boolean;
+    // Workspace scope resolved by explicit selection, auto-selection, or the
+    // server-owned recognized-product placement performed before 2FA.
     orgId?: string;
     teamId?: string;
   },
@@ -130,6 +131,7 @@ export async function issueAuthorizationCode(
           codeChallenge: params.codeChallenge,
           codeChallengeMethod: params.codeChallengeMethod,
           rememberMe: params.rememberMe ?? false,
+          twoFaCompleted: params.twoFaCompleted,
           orgId: params.orgId ?? null,
           teamId: params.teamId ?? null,
           expiresAt,
@@ -163,6 +165,7 @@ export async function consumeAuthorizationCode(params: {
 }): Promise<{
   userId: string;
   rememberMe: boolean;
+  twoFaCompleted: boolean;
   orgId: string | null;
   teamId: string | null;
 }> {
@@ -178,6 +181,7 @@ export async function consumeAuthorizationCode(params: {
       codeChallenge: true,
       codeChallengeMethod: true,
       rememberMe: true,
+      twoFaCompleted: true,
       expiresAt: true,
       usedAt: true,
       orgId: true,
@@ -272,6 +276,7 @@ export async function consumeAuthorizationCode(params: {
   return {
     userId: row.userId,
     rememberMe: row.rememberMe,
+    twoFaCompleted: row.twoFaCompleted,
     orgId: row.orgId ?? null,
     teamId: row.teamId ?? null,
   };

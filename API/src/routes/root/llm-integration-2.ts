@@ -1,13 +1,13 @@
 export const llmIntegrationMarkdown2 = `## Phase 4.8 — Slack-style email sign-in codes + workspace selection (opt-in)
 
-Additive on top of \`/auth/register\` and \`/auth/login\` — everything below is gated by config
-\`login_flow\` and changes NOTHING when left at its defaults:
+Additive on top of \`/auth/register\` and \`/auth/login\` — chooser UI remains gated by config
+\`login_flow\`. Legacy clients are unchanged at the defaults; server-recognized products still
+pre-bind their mandatory exact workspace before 2FA when the chooser is off:
 
 \`\`\`jsonc
 "login_flow": {
   "email_code_enabled": false,      // offer a 6-digit sign-in code alongside the magic link
-  "workspace_selection": "off"      // "off" | "auto" — "auto" resolves workspace after identity;
-                                     // exactly one ACTIVE team/no invite is selected automatically
+  "workspace_selection": "off"      // "off" suppresses the chooser; "auto" may show it
 }
 \`\`\`
 
@@ -31,7 +31,8 @@ can be retried; \`session-choices\` and invite decline validate but do not consu
    - \`workspace_selection: "auto"\` → \`{ login_token, teams: [{ teamId, orgId, name, slug, role, iconUrl }], pending_invites: [{ inviteId, teamName, invitedBy }], can_create_org }\`.
    - \`workspace_selection: "off"\` (default) → finalizes immediately, same response shape as
      \`/auth/login\` (\`{ ok, code, redirect_to }\`, or a \`twofa_token\`/\`twofa_enroll_required\` branch —
-     2FA still applies, only the chooser step is skipped).
+     2FA still applies, only the chooser step is skipped). A recognized product first resolves its
+     exact server-owned workspace and includes that Organisation in strongest-wins 2FA policy.
 3. \`POST /auth/select-team?config_url=...\` — body \`{ login_token, teamId }\` (or
    \`{ login_token, inviteId, action: "accept" | "decline" }\`). Validates the bridge token, that the
    caller has not changed any signed continuation field, and that the user holds exact ACTIVE
@@ -54,15 +55,18 @@ can be retried; \`session-choices\` and invite decline validate but do not consu
 4. \`POST /auth/login\` (password) also routes into the chooser when \`workspace_selection: "auto"\` and
    2FA is already satisfied: it returns \`{ login_token, teams, pending_invites, can_create_org }\`
    instead of finalizing directly, and the client then calls \`/auth/select-team\`. With the default
-   \`"off"\`, \`/auth/login\` is completely unchanged.
+   \`"off"\`, legacy clients remain unchanged; recognized products suppress the chooser but resolve
+   one exact workspace (or required first placement) before any 2FA decision and fail closed on
+   ambiguous choices.
 5. Social login (\`GET /auth/callback/:provider\`) resolves workspace immediately after identity,
    before 2FA. With \`workspace_selection: "auto"\`, 2+ ACTIVE teams, any pending invite, or zero
    teams with \`can_create_org: true\` route to the chooser. Exactly one ACTIVE team and no invite is
    an unambiguous server-side selection: its
    exact \`orgId\`/\`teamId\` is carried through any 2FA challenge or required-enrollment setup token
    into the authorization code, so access and rotated refresh sessions retain
-   \`active: { orgId, teamId }\`. With \`workspace_selection: "off"\`, no workspace is inferred and
-   the code remains unscoped. As a GET redirect the multi-choice branch can't inline the chooser
+   \`active: { orgId, teamId }\`. With \`workspace_selection: "off"\`, legacy clients remain unscoped,
+   while recognized products pre-bind the same exact scope without showing a chooser. As a GET
+   redirect the multi-choice branch can't inline the chooser
    JSON, so it mints the same \`login_token\` bridge and redirects to
    \`/auth?config_url=...&redirect_url=...&login_token=...&flow=workspace_chooser\`.
    The Auth UI then calls \`POST /auth/session-choices?config_url=...\` \`{ login_token }\` to hydrate
@@ -81,6 +85,9 @@ can be retried; \`session-choices\` and invite decline validate but do not consu
    through the authorization code, access token, refresh token, and rotation.
    A \`LOGIN_LINK\` resolves only the existing \`userId\` stored when it was issued; a missing,
    deleted, or identity-mismatched account fails closed and can never become new-user registration.
+   At code exchange UOA re-resolves the current exact-workspace policy and enrollment state. The
+   code carries whether TOTP was completed, so a newly stricter policy rejects a proof-free code
+   transactionally instead of issuing a refresh/access-token family.
 7. \`GET /auth\` accepts an optional \`team_hint=<teamId|slug>\` — a chooser preselect / one-click
    workspace switch (design §11.4): a product's sidebar links back into \`/auth\` with the workspace
    the user clicked, and if a team in that user's own (already-verified) chooser payload matches by

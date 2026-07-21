@@ -22,6 +22,7 @@ import {
 } from '../../services/first-login.service.js';
 import { signLoginSession } from '../../services/login-session.service.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
+import { resolveProductWorkspaceBeforeTwoFa } from '../../services/required-workspace-placement.service.js';
 import { AppError, isAppError } from '../../utils/errors.js';
 import { parsePkceChallenge, type PkceChallenge } from '../../utils/pkce.js';
 import { finalizeWithTwoFaPolicy } from '../../services/workspace-finalize.service.js';
@@ -198,6 +199,10 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
               return;
             }
           }
+          selectedWorkspace ??= await resolveProductWorkspaceBeforeTwoFa(
+            { userId, config: request.config },
+            { prisma: request.adminDb, workspacePrisma: request.adminDb },
+          );
 
           const authMethod = type === 'VERIFY_EMAIL' ? 'verify_email' : 'login_link';
           const outcome = await finalizeWithTwoFaPolicy(
@@ -215,7 +220,11 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
               ip: request.ip ?? null,
               ...(selectedWorkspace ?? {}),
             },
-            { prisma: request.adminDb },
+            {
+              prisma: request.adminDb,
+              twoFaPolicyPrisma: request.adminDb,
+              workspacePrisma: request.adminDb,
+            },
           );
 
           if (outcome.kind === 'twofa') {

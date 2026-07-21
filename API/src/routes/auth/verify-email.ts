@@ -17,9 +17,8 @@ import {
 } from '../../services/first-login.service.js';
 import { signLoginSession } from '../../services/login-session.service.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
-import {
-  parseRequestAccessFlag,
-} from '../../services/access-request-flow.service.js';
+import { parseRequestAccessFlag } from '../../services/access-request-flow.service.js';
+import { resolveProductWorkspaceBeforeTwoFa } from '../../services/required-workspace-placement.service.js';
 import { selectRedirectUrl } from '../../services/authorization-code.service.js';
 import { finalizeWithTwoFaPolicy } from '../../services/workspace-finalize.service.js';
 import { parseRequiredPkceChallenge } from '../../utils/pkce.js';
@@ -123,6 +122,10 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
           return;
         }
       }
+      selectedWorkspace ??= await resolveProductWorkspaceBeforeTwoFa(
+        { userId, config: request.config },
+        { prisma: request.adminDb, workspacePrisma: request.adminDb },
+      );
 
       const authMethod =
         type === 'LOGIN_LINK'
@@ -145,7 +148,11 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
           ip: request.ip ?? null,
           ...(selectedWorkspace ?? {}),
         },
-        { prisma: request.adminDb },
+        {
+          prisma: request.adminDb,
+          twoFaPolicyPrisma: request.adminDb,
+          workspacePrisma: request.adminDb,
+        },
       );
 
       if (outcome.kind === 'twofa') {

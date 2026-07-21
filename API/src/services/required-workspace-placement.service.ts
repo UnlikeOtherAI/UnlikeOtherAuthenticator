@@ -19,6 +19,11 @@ export type RequiredAuthorizationWorkspace = {
   teamId: string;
 };
 
+export type StoredAuthorizationWorkspace = {
+  orgId: string | null;
+  teamId: string | null;
+};
+
 export function requiresExactAuthorizationWorkspace(
   config: ClientConfig,
   policy: ProductWorkspacePolicy,
@@ -99,6 +104,62 @@ export async function resolveRequiredAuthorizationWorkspace(
   }
   await validateWorkspace(params, created, deps);
   return created;
+}
+
+/**
+ * Resolve a server-recognized product's exact workspace before any interactive
+ * 2FA decision. Signed `workspace_selection: "off"` suppresses the chooser, but
+ * it cannot defer this server-owned scope decision until token exchange.
+ */
+export async function resolveProductWorkspaceBeforeTwoFa(
+  params: { config: ClientConfig; userId: string },
+  deps: {
+    env?: ReturnType<typeof getEnv>;
+    afterWorkspaceLock?: () => Promise<void>;
+    prisma: PrismaClient;
+    workspacePrisma: PrismaClient;
+  },
+): Promise<RequiredAuthorizationWorkspace | null> {
+  const policy = await resolveProductWorkspacePolicy(
+    { domain: params.config.domain },
+    { prisma: deps.workspacePrisma },
+  );
+  if (policy.scope !== 'all_active_memberships') return null;
+  return resolveRequiredAuthorizationWorkspace(params, deps);
+}
+
+/**
+ * Resolve a legacy unscoped authorization code after consumption. Recognized
+ * products are deliberately excluded: their exact scope must already have
+ * been bound before interactive 2FA and persisted on the code.
+ */
+export async function resolveAuthorizationCodeWorkspace(
+  params: {
+    config: ClientConfig;
+    stored: StoredAuthorizationWorkspace;
+    userId: string;
+  },
+  deps: {
+    env?: ReturnType<typeof getEnv>;
+    afterWorkspaceLock?: () => Promise<void>;
+    prisma: PrismaClient;
+    workspacePrisma: PrismaClient;
+  },
+): Promise<RequiredAuthorizationWorkspace | null> {
+  if (params.stored.orgId && params.stored.teamId) {
+    return { orgId: params.stored.orgId, teamId: params.stored.teamId };
+  }
+  const policy = await resolveProductWorkspacePolicy(
+    { domain: params.config.domain },
+    { prisma: deps.workspacePrisma },
+  );
+  if (policy.scope === 'all_active_memberships') {
+    throw new AppError('UNAUTHORIZED', 401, 'INVALID_AUTH_CODE');
+  }
+  return resolveRequiredAuthorizationWorkspace(
+    { userId: params.userId, config: params.config },
+    deps,
+  );
 }
 
 async function validateWorkspace(

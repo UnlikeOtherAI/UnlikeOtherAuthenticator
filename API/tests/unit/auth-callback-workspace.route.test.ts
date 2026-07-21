@@ -18,6 +18,7 @@ const signLoginSessionMock = vi.fn();
 const buildWorkspaceChoicesMock = vi.fn();
 const finalizeAuthenticatedUserMock = vi.fn();
 const startTwoFactorSetupMock = vi.fn();
+const resolveProductWorkspaceBeforeTwoFaMock = vi.fn();
 
 vi.mock('../../src/services/config-jwt-source.service.js', () => ({
   readConfigJwtFromTrustedSource: (...args: unknown[]) =>
@@ -60,6 +61,17 @@ vi.mock('../../src/services/twofactor-policy.service.js', () => ({
 vi.mock('../../src/services/login-session.service.js', () => ({
   signLoginSession: (...args: unknown[]) => signLoginSessionMock(...args),
 }));
+
+vi.mock('../../src/services/required-workspace-placement.service.js', async () => {
+  const actual = await vi.importActual<
+    typeof import('../../src/services/required-workspace-placement.service.js')
+  >('../../src/services/required-workspace-placement.service.js');
+  return {
+    ...actual,
+    resolveProductWorkspaceBeforeTwoFa: (...args: unknown[]) =>
+      resolveProductWorkspaceBeforeTwoFaMock(...args),
+  };
+});
 
 vi.mock('../../src/services/first-login.service.js', async () => {
   const actual = await vi.importActual<typeof import('../../src/services/first-login.service.js')>(
@@ -171,6 +183,7 @@ describe('GET /auth/callback/:provider workspace selection', () => {
       redirectTo: `${REDIRECT_URL}?code=abc123`,
     });
     startTwoFactorSetupMock.mockReset();
+    resolveProductWorkspaceBeforeTwoFaMock.mockReset().mockResolvedValue(null);
   });
 
   afterEach(() => {
@@ -332,5 +345,37 @@ describe('GET /auth/callback/:provider workspace selection', () => {
       | undefined;
     expect(finalizeParams).not.toHaveProperty('orgId');
     expect(finalizeParams).not.toHaveProperty('teamId');
+  });
+
+  it('pre-binds the recognized product workspace before required social enrollment', async () => {
+    validateConfigFieldsMock.mockReturnValue(
+      baseConfig({
+        '2fa_enabled': true,
+        login_flow: { email_code_enabled: false, workspace_selection: 'off' },
+      }),
+    );
+    resolveProductWorkspaceBeforeTwoFaMock.mockResolvedValue({
+      orgId: 'org-cross',
+      teamId: 'team-cross',
+    });
+    resolveTwoFaPolicyMock.mockResolvedValue('REQUIRED');
+    startTwoFactorSetupMock.mockResolvedValue({
+      setup_token: 'setup-token',
+      otpauth_uri: 'otpauth://totp/test',
+      qr_svg: '<svg/>',
+      manual_secret: 'secret',
+    });
+
+    const response = await runCallback();
+
+    const location = new URL(response.headers.location as string);
+    expect(location.searchParams.get('twofa_enroll_required')).toBe('true');
+    expect(startTwoFactorSetupMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        finalize: expect.objectContaining({ orgId: 'org-cross', teamId: 'team-cross' }),
+      }),
+      expect.anything(),
+    );
+    expect(finalizeAuthenticatedUserMock).not.toHaveBeenCalled();
   });
 });

@@ -19,6 +19,7 @@ const enrollTwoFactorForUserMock = vi.fn();
 const decryptTwoFaSecretMock = vi.fn();
 const resolveTwoFaPolicyMock = vi.fn();
 const finalizeConfigAuthorizationWithSignaturesMock = vi.fn();
+const resolveProductWorkspaceBeforeTwoFaMock = vi.fn();
 
 vi.mock('../../src/middleware/config-verifier.js', () => {
   return {
@@ -100,6 +101,17 @@ vi.mock('../../src/services/twofactor-policy.service.js', () => {
   };
 });
 
+vi.mock('../../src/services/required-workspace-placement.service.js', async () => {
+  const actual = await vi.importActual<
+    typeof import('../../src/services/required-workspace-placement.service.js')
+  >('../../src/services/required-workspace-placement.service.js');
+  return {
+    ...actual,
+    resolveProductWorkspaceBeforeTwoFa: (...args: unknown[]) =>
+      resolveProductWorkspaceBeforeTwoFaMock(...args),
+  };
+});
+
 vi.mock('../../src/services/signature-continuation.service.js', async () => {
   const actual = await vi.importActual<
     typeof import('../../src/services/signature-continuation.service.js')
@@ -135,6 +147,7 @@ describe('2FA gated by config `2fa_enabled`', () => {
     decryptTwoFaSecretMock.mockReset();
     resolveTwoFaPolicyMock.mockReset();
     finalizeConfigAuthorizationWithSignaturesMock.mockReset();
+    resolveProductWorkspaceBeforeTwoFaMock.mockReset().mockResolvedValue(null);
     resolveTwoFaPolicyMock.mockImplementation(
       ({ config }: { config: Pick<ClientConfig, '2fa_enabled'> }) =>
         config['2fa_enabled'] === true ? 'OPTIONAL' : 'OFF',

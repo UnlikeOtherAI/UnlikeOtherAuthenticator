@@ -98,6 +98,7 @@ describe.skipIf(!hasDatabase)('first-placement per-user advisory lock', () => {
         codeChallenge: createHash('sha256').update(verifier).digest('base64url'),
         codeChallengeMethod: 'S256',
         rememberMe: true,
+        twoFaCompleted: false,
       },
       { prisma: handle.prisma, sharedSecret: process.env.SHARED_SECRET! },
     );

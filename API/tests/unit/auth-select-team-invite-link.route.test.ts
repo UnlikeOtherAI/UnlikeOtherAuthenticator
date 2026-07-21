@@ -63,7 +63,7 @@ const prismaMock = vi.hoisted(() => ({
   authorizationCode: { create: vi.fn() },
   billingAppKey: { findMany: vi.fn() },
   clientDomain: { findUnique: vi.fn() },
-  organisation: { findMany: vi.fn() },
+  organisation: { findMany: vi.fn(), findUnique: vi.fn() },
 }));
 
 vi.mock('../../src/db/prisma.js', () => ({
