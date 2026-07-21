@@ -69,7 +69,10 @@ export function addBillingEnvironmentIssues(env: BillingEnvironment, ctx: z.Refi
       'UOA billing assertion public JWKS must include the current private key public pair',
   });
 
-  if (env.STRIPE_BILLING_ENABLED && (!env.STRIPE_SECRET_KEY || !env.STRIPE_WEBHOOK_SECRET)) {
+  if (
+    env.STRIPE_BILLING_ENABLED &&
+    (!env.STRIPE_SECRET_KEY || !env.STRIPE_WEBHOOK_SECRET)
+  ) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: [!env.STRIPE_SECRET_KEY ? 'STRIPE_SECRET_KEY' : 'STRIPE_WEBHOOK_SECRET'],
@@ -77,8 +80,15 @@ export function addBillingEnvironmentIssues(env: BillingEnvironment, ctx: z.Refi
         'STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET are required when Stripe billing is enabled',
     });
   }
+  if (Boolean(env.STRIPE_SECRET_KEY) !== Boolean(env.STRIPE_WEBHOOK_SECRET)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: [!env.STRIPE_SECRET_KEY ? 'STRIPE_SECRET_KEY' : 'STRIPE_WEBHOOK_SECRET'],
+      message:
+        'STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET must remain configured together for webhook reconciliation',
+    });
+  }
   if (
-    env.STRIPE_BILLING_ENABLED &&
     env.STRIPE_SECRET_KEY &&
     !/^(?:sk|rk)_(?:test|live)_/.test(env.STRIPE_SECRET_KEY)
   ) {

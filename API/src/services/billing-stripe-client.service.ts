@@ -27,8 +27,20 @@ export function requireStripeBillingEnabled(): {
   livemode: boolean;
 } {
   const env = getEnv();
-  if (!env.STRIPE_BILLING_ENABLED || !env.STRIPE_SECRET_KEY || !env.STRIPE_WEBHOOK_SECRET) {
+  if (!env.STRIPE_BILLING_ENABLED) {
     throw new AppError('INTERNAL', 503, 'STRIPE_BILLING_DISABLED');
+  }
+  return requireStripeWebhookConfigured();
+}
+
+export function requireStripeWebhookConfigured(): {
+  client: Stripe;
+  webhookSecret: string;
+  livemode: boolean;
+} {
+  const env = getEnv();
+  if (!env.STRIPE_SECRET_KEY || !env.STRIPE_WEBHOOK_SECRET) {
+    throw new AppError('INTERNAL', 503, 'STRIPE_WEBHOOK_DISABLED');
   }
   const livemode = secretKeyLivemode(env.STRIPE_SECRET_KEY);
   cachedClient ??= new Stripe(env.STRIPE_SECRET_KEY, {

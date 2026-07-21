@@ -1,23 +1,34 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 import type Stripe from 'stripe';
 
+import { getEnv } from '../config/env.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import {
   assertStripeObjectLivemode,
-  requireStripeBillingEnabled,
+  requireStripeWebhookConfigured,
   resolveStripeAccountContext,
   type StripeAccountContext,
 } from './billing-stripe-client.service.js';
 import {
+  applyCreditFundingWebhook,
+  prepareCreditFundingWebhook,
+  type CreditFundingWebhookClient,
+} from './billing-credit-funding-webhook.service.js';
+import {
   reconcileStripeCycleInvoiceUsage,
   type StripeInvoiceWebhookType,
 } from './billing-stripe-invoice.service.js';
+import {
+  retrieveStripeSubscription,
+  stripeExternalId,
+} from './billing-stripe-webhook-utils.service.js';
 
 type StripeWebhookClient = Pick<
   Stripe,
   'accounts' | 'billing' | 'checkout' | 'invoices' | 'subscriptions' | 'webhooks'
->;
+> &
+  CreditFundingWebhookClient;
 
 const SUBSCRIPTION_EVENTS = new Set([
   'customer.subscription.created',
@@ -30,25 +41,6 @@ const INVOICE_RECONCILIATION_EVENTS = new Set<StripeInvoiceWebhookType>([
   'invoice.created',
   'invoice.finalization_failed',
 ]);
-
-function externalId(value: string | { id: string } | null | undefined): string | null {
-  if (!value) return null;
-  return typeof value === 'string' ? value : value.id;
-}
-
-function isMissingStripeResource(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false;
-  const candidate = error as {
-    code?: unknown;
-    statusCode?: unknown;
-    raw?: { code?: unknown };
-  };
-  return (
-    candidate.code === 'resource_missing' ||
-    candidate.raw?.code === 'resource_missing' ||
-    candidate.statusCode === 404
-  );
-}
 
 function subscriptionPeriod(subscription: Stripe.Subscription): {
   start: Date | null;
@@ -198,7 +190,7 @@ async function syncSubscription(
     subscription.metadata.uoa_scope_key !== checkout.scopeKey ||
     subscription.metadata.uoa_stripe_account_id !== account.stripeAccountId ||
     subscription.metadata.uoa_stripe_mode !== (account.livemode ? 'live' : 'test') ||
-    externalId(subscription.customer) !== checkout.customer.stripeCustomerId
+    stripeExternalId(subscription.customer) !== checkout.customer.stripeCustomerId
   ) {
     throw new AppError('INTERNAL', 502, 'STRIPE_SUBSCRIPTION_BINDING_INVALID');
   }
@@ -266,18 +258,6 @@ async function terminalizeMissingSubscription(
   });
 }
 
-async function retrieveSubscription(
-  stripe: Pick<Stripe, 'subscriptions'>,
-  subscriptionId: string,
-): Promise<Stripe.Subscription | null> {
-  try {
-    return await stripe.subscriptions.retrieve(subscriptionId);
-  } catch (error) {
-    if (isMissingStripeResource(error)) return null;
-    throw error;
-  }
-}
-
 export async function refreshStripeSubscriptionProjection(
   params: {
     subscriptionId: string;
@@ -288,7 +268,7 @@ export async function refreshStripeSubscriptionProjection(
     stripe: Pick<Stripe, 'subscriptions'>;
   },
 ): Promise<Stripe.Subscription | null> {
-  const subscription = await retrieveSubscription(deps.stripe, params.subscriptionId);
+  const subscription = await retrieveStripeSubscription(deps.stripe, params.subscriptionId);
   if (subscription) {
     await syncStripeSubscriptionProjection(
       { subscription, account: params.account },
@@ -329,11 +309,16 @@ async function currentEventState(
     const payload = event.data.object as Stripe.Checkout.Session;
     const session = await stripe.checkout.sessions.retrieve(payload.id);
     assertStripeObjectLivemode(session, account.livemode);
-    const subscriptionId = externalId(session.subscription);
+    if (session.mode !== 'subscription') {
+      return { checkoutSession: null, subscriptionId: null, subscription: null };
+    }
+    const subscriptionId = stripeExternalId(session.subscription);
     return {
       checkoutSession: session,
       subscriptionId,
-      subscription: subscriptionId ? await retrieveSubscription(stripe, subscriptionId) : null,
+      subscription: subscriptionId
+        ? await retrieveStripeSubscription(stripe, subscriptionId)
+        : null,
     };
   }
   if (SUBSCRIPTION_EVENTS.has(event.type)) {
@@ -341,7 +326,7 @@ async function currentEventState(
     return {
       checkoutSession: null,
       subscriptionId: payload.id,
-      subscription: await retrieveSubscription(stripe, payload.id),
+      subscription: await retrieveStripeSubscription(stripe, payload.id),
     };
   }
   return { checkoutSession: null, subscriptionId: null, subscription: null };
@@ -365,7 +350,7 @@ async function syncCheckoutSession(
     !checkout ||
     checkout.accountId !== account.id ||
     (checkout.stripeCheckoutSessionId && checkout.stripeCheckoutSessionId !== session.id) ||
-    externalId(session.customer) !== checkout.customer.stripeCustomerId ||
+    stripeExternalId(session.customer) !== checkout.customer.stripeCustomerId ||
     session.mode !== 'subscription'
   ) {
     throw new AppError('INTERNAL', 502, 'STRIPE_CHECKOUT_BINDING_INVALID');
@@ -405,10 +390,11 @@ export async function handleStripeWebhook(
     stripe?: StripeWebhookClient;
     stripeLivemode?: boolean;
     webhookSecret?: string;
+    collectionEnabled?: boolean;
     reconcileInvoice?: typeof reconcileStripeCycleInvoiceUsage;
   },
 ): Promise<{ duplicate: boolean }> {
-  const configured = deps?.stripe ? undefined : requireStripeBillingEnabled();
+  const configured = deps?.stripe ? undefined : requireStripeWebhookConfigured();
   const stripe = (deps?.stripe ?? configured?.client) as StripeWebhookClient | undefined;
   const webhookSecret = deps?.webhookSecret ?? configured?.webhookSecret;
   if (!stripe || !webhookSecret) {
@@ -440,7 +426,12 @@ export async function handleStripeWebhook(
     return { duplicate: true };
   }
   const state = await currentEventState(event, stripe, account);
-  if (INVOICE_RECONCILIATION_EVENTS.has(event.type as StripeInvoiceWebhookType)) {
+  const creditFunding = await prepareCreditFundingWebhook(event, stripe, account, prisma);
+  const collectionEnabled = deps?.collectionEnabled ?? getEnv().STRIPE_BILLING_ENABLED;
+  if (
+    collectionEnabled &&
+    INVOICE_RECONCILIATION_EVENTS.has(event.type as StripeInvoiceWebhookType)
+  ) {
     const invoice = event.data.object as Stripe.Invoice;
     if (!invoice.id) {
       throw new AppError('BAD_REQUEST', 400, 'STRIPE_INVOICE_BINDING_INVALID');
@@ -456,7 +447,7 @@ export async function handleStripeWebhook(
   }
   try {
     await prisma.$transaction(async (tx) => {
-      await tx.billingStripeWebhookEvent.create({
+      const webhookEvent = await tx.billingStripeWebhookEvent.create({
         data: {
           accountId: account.id,
           stripeEventId: event.id,
@@ -464,9 +455,13 @@ export async function handleStripeWebhook(
           apiVersion: event.api_version,
           livemode: event.livemode,
           stripeCreatedAt: new Date(event.created * 1000),
+          ...creditFunding?.eventFields,
         },
       });
       await processEvent(tx, state, account);
+      if (creditFunding) {
+        await applyCreditFundingWebhook(tx, creditFunding, webhookEvent.id, account);
+      }
     });
     return { duplicate: false };
   } catch (error) {

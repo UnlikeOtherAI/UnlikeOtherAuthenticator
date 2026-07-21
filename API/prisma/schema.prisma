@@ -146,12 +146,16 @@ enum BillingCreditEntryKind {
   USAGE_SETTLEMENT_CORRECTION
   REFUND
   DISPUTE
+  REFUND_REVERSAL
+  DISPUTE_REVERSAL
   ADJUSTMENT
 }
 
 enum BillingCreditPaymentAdjustmentKind {
   REFUND
   DISPUTE
+  REFUND_REVERSAL
+  DISPUTE_REVERSAL
 }
 
 enum BillingCreditAutoTopUpState {
@@ -1774,6 +1778,7 @@ model BillingStripeWebhookEvent {
   livemode                 Boolean
   stripeCreatedAt          DateTime @map("stripe_created_at")
   stripeObjectId           String?  @map("stripe_object_id") @db.VarChar(255)
+  stripeObjectStatus       String?  @map("stripe_object_status") @db.VarChar(80)
   stripeCustomerId         String?  @map("stripe_customer_id") @db.VarChar(255)
   stripeCheckoutSessionId  String?  @map("stripe_checkout_session_id") @db.VarChar(255)
   stripePaymentIntentId    String?  @map("stripe_payment_intent_id") @db.VarChar(255)
@@ -1792,6 +1797,7 @@ model BillingStripeWebhookEvent {
   creditTopUpCompletions   BillingCreditTopUpCheckout[]      @relation("CreditTopUpCompletionEvent")
   creditSetupCompletions   BillingCreditSetupCheckout[]      @relation("CreditSetupCompletionEvent")
   creditAutoTopUpSuccesses BillingCreditAutoTopUpAttempt[]   @relation("CreditAutoTopUpSuccessEvent")
+  creditAutoTopUpStates    BillingCreditAutoTopUpAttempt[]   @relation("CreditAutoTopUpStateEvent")
   addonCheckoutCompletions BillingRecurringAddonCheckout[]   @relation("RecurringAddonCheckoutCompletionEvent")
   addonActivations         BillingRecurringAddonSubscription[] @relation("RecurringAddonActivationEvent")
 
@@ -2074,7 +2080,7 @@ model BillingCreditPaymentAdjustment {
   currency              String                             @default("USD") @db.Char(3)
   livemode              Boolean
   idempotencyKey        String                             @map("idempotency_key") @db.VarChar(200)
-  creditEntryId         String                             @unique @map("credit_entry_id")
+  creditEntryId         String?                            @unique @map("credit_entry_id")
   occurredAt            DateTime                           @map("occurred_at")
   createdAt             DateTime                           @default(now()) @map("created_at")
 
@@ -2084,7 +2090,7 @@ model BillingCreditPaymentAdjustment {
   appKey        BillingAppKey             @relation(fields: [appKeyId], references: [id], onDelete: Restrict)
   originalEntry BillingCreditEntry        @relation("CreditPaymentAdjustmentOriginal", fields: [originalEntryId], references: [id], onDelete: Restrict)
   webhookEvent  BillingStripeWebhookEvent @relation(fields: [webhookEventId], references: [id], onDelete: Restrict)
-  creditEntry   BillingCreditEntry        @relation("CreditPaymentAdjustmentDebit", fields: [creditEntryId], references: [id], onDelete: Restrict)
+  creditEntry   BillingCreditEntry?       @relation("CreditPaymentAdjustmentDebit", fields: [creditEntryId], references: [id], onDelete: Restrict)
 
   @@unique([accountId, kind, stripeObjectId])
   @@unique([creditAccountId, idempotencyKey])
@@ -2299,6 +2305,7 @@ model BillingCreditAutoTopUpAttempt {
   idempotencyKey              String                              @map("idempotency_key") @db.VarChar(200)
   stripePaymentIntentId       String?                             @map("stripe_payment_intent_id") @db.VarChar(255)
   successWebhookEventId       String?                             @unique @map("success_webhook_event_id")
+  stateWebhookEventId         String?                             @unique @map("state_webhook_event_id")
   status                      BillingCreditAutoTopUpAttemptStatus @default(PENDING)
   failureCode                 String?                             @map("failure_code") @db.VarChar(120)
   creditEntryId               String?                             @unique @map("credit_entry_id")
@@ -2318,6 +2325,7 @@ model BillingCreditAutoTopUpAttempt {
   consentRevision BillingCreditAutoTopUpConsentRevision @relation(fields: [consentRevisionId], references: [id], onDelete: Restrict)
   creditEntry     BillingCreditEntry?                   @relation("CreditAutoTopUpCredit", fields: [creditEntryId], references: [id], onDelete: Restrict)
   successWebhookEvent BillingStripeWebhookEvent?        @relation("CreditAutoTopUpSuccessEvent", fields: [successWebhookEventId], references: [id], onDelete: Restrict)
+  stateWebhookEvent BillingStripeWebhookEvent?          @relation("CreditAutoTopUpStateEvent", fields: [stateWebhookEventId], references: [id], onDelete: Restrict)
 
   @@unique([creditAccountId, idempotencyKey])
   @@unique([accountId, stripePaymentIntentId])

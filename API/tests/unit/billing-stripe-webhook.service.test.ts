@@ -265,15 +265,35 @@ describe('Stripe webhook current-state reconciliation', () => {
         exports: [],
       });
 
-    await expect(state.call({ reconcileInvoice })).rejects.toThrow(
+    await expect(
+      state.call({ reconcileInvoice, collectionEnabled: true }),
+    ).rejects.toThrow(
       'LEDGER_TEMPORARILY_UNAVAILABLE',
     );
     expect(state.webhookEventCreate).not.toHaveBeenCalled();
 
-    await expect(state.call({ reconcileInvoice })).resolves.toEqual({
+    await expect(
+      state.call({ reconcileInvoice, collectionEnabled: true }),
+    ).resolves.toEqual({
       duplicate: false,
     });
     expect(reconcileInvoice).toHaveBeenCalledTimes(2);
+    expect(state.webhookEventCreate).toHaveBeenCalledOnce();
+  });
+
+  it('keeps lifecycle webhooks live without exporting usage when collection is disabled', async () => {
+    const state = setup();
+    state.setEvent({
+      ...stripeEvent('evt_invoice_disabled'),
+      type: 'invoice.created',
+      data: { object: { id: 'in_disabled' } },
+    } as never);
+    const reconcileInvoice = vi.fn();
+
+    await expect(
+      state.call({ reconcileInvoice, collectionEnabled: false }),
+    ).resolves.toEqual({ duplicate: false });
+    expect(reconcileInvoice).not.toHaveBeenCalled();
     expect(state.webhookEventCreate).toHaveBeenCalledOnce();
   });
 
