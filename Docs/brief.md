@@ -1095,13 +1095,16 @@ groupMembers  GroupMember[]
 3. Set the new owner's `OrgMember.role` to `"owner"`.
 4. Set the old owner's `OrgMember.role` to `"admin"`.
 
-#### User Removal Cascade
+#### User Removal Lifecycle
 
-When removing a user from an org (`DELETE /org/organisations/:orgId/members/:userId`), the service must within the same transaction:
+When removing a user from an org (`DELETE /org/organisations/:orgId/members/:userId`), the service must within one fail-closed transaction:
 
-1. Delete all `TeamMember` records where the user belongs to teams in this org.
-2. Delete all `GroupMember` records where the user belongs to groups in this org.
-3. Delete the `OrgMember` record.
+1. Lock the exact organisation membership and all of that user's team memberships in the org.
+2. Tombstone the `OrgMember` and `TeamMember` rows as `REMOVED`; delete the org's `GroupMember` rows, which have no lifecycle status.
+3. Revoke every scoped refresh-token family for the exact `(userId, orgId)` across all issuing product domains.
+4. Revoke same-domain refresh rows as compatibility for legacy sessions that carry no org/team scope.
+
+Deactivation uses the same locks and atomic revocation while writing `DEACTIVATED`. Reactivation or re-add never restores a revoked refresh family; the user must sign in again.
 
 #### Sole Owner Deletion
 
@@ -1165,6 +1168,10 @@ Organisation slugs are derived from the `name` field:
 - The default team **cannot be deleted**.
 - The default team can be renamed but `isDefault` cannot be changed.
 - A user cannot be removed from their last team — remove them from the org instead.
+- Removing a user from a non-final team tombstones that exact team membership and, in the same
+  transaction, revokes every scoped refresh-token family for `(userId, teamId)` across all issuing
+  product domains. Other-team sessions remain valid, and re-adding the membership does not restore
+  revoked families.
 
 #### Team Membership Constraints
 
@@ -1226,6 +1233,12 @@ When `org_features.enabled` is `true` and the user belongs to an org, the access
 - If user has no org on this domain, the `org` claim is **omitted entirely** (not null, not empty — absent).
 - JWT size grows linearly with memberships. `max_team_memberships_per_user` (default: 50) caps this. With 50 teams and 20 groups, expect ~4-5KB additional payload. Consuming products may need to increase reverse proxy header buffer sizes.
 - JWT `org` claims are populated at issuance time, not updated mid-session. Changes require re-authentication (consistent with Section 22.10).
+- Refresh rotation preserves nullable `orgId`/`teamId` session scope and takes the canonical
+  organisation-then-team membership locks before creating a replacement. Membership lifecycle
+  writers take the same locks before the status tombstone and scoped revocation. If refresh commits
+  first, the lifecycle transaction revokes its replacement; if lifecycle commits first, refresh
+  fails without creating one. Exact org/team revocation is independent of the product domain that
+  issued the session.
 - **Refresh token + org claims:** Refresh tokens may carry the exact optional `orgId` / `teamId`
   selected (or newly placed) for the session. Rotation preserves and revalidates that scope before
   signing the next `active` claim; it fails closed instead of silently dropping, switching, or

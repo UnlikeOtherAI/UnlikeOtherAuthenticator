@@ -1,10 +1,11 @@
 import type { ClientConfig } from './config.service.js';
 import { getEnv } from '../config/env.js';
-import { getPrisma } from '../db/prisma.js';
+import { getAdminPrisma, getPrisma } from '../db/prisma.js';
 import { runInTransaction } from '../db/tenant-context.js';
 import { AppError } from '../utils/errors.js';
 
 import { auditOrg } from './organisation.service.base.js';
+import { revokeRefreshTokenFamiliesForUserTeam } from './refresh-token.service.js';
 import { lockWorkspaceMembershipRows } from './workspace-scope.service.js';
 import {
   assertDatabaseEnabled,
@@ -228,6 +229,7 @@ export async function removeTeamMember(
   },
   deps?: OrgServiceDeps & {
     afterMembershipStatusWrite?: () => Promise<void>;
+    revokeRefreshTokenFamiliesForUserTeam?: typeof revokeRefreshTokenFamiliesForUserTeam;
   },
 ): Promise<{ removed: boolean }> {
   const env = deps?.env ?? getEnv();
@@ -240,7 +242,9 @@ export async function removeTeamMember(
     throw new AppError('BAD_REQUEST', 400);
   }
 
-  const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
+  // Team-scoped sessions may have been issued by any recognized product domain. Keep the
+  // membership tombstone and exact-team revocation in one BYPASSRLS transaction.
+  const prisma = deps?.prisma ?? (getAdminPrisma() as unknown as OrgServicePrisma);
   const org = await resolveAndAuthorizeTeamOrg(prisma, {
     orgId: params.orgId,
     domain: params.domain,
@@ -291,13 +295,17 @@ export async function removeTeamMember(
       throw new AppError('BAD_REQUEST', 400);
     }
 
-    // Team removal is a tombstone, not a delete (design §4.5) — org identity is untouched;
-    // no session revocation here, org membership is the session scope.
+    // Team removal is a tombstone, not a delete (design §4.5). Organisation identity remains
+    // active, while only refresh families carrying this exact team scope are revoked.
+    const now = new Date();
     await tx.teamMember.update({
       where: { id: lockedMembership.id },
-      data: { status: 'REMOVED', statusChangedAt: new Date() },
+      data: { status: 'REMOVED', statusChangedAt: now },
     });
     await deps?.afterMembershipStatusWrite?.();
+    await (
+      deps?.revokeRefreshTokenFamiliesForUserTeam ?? revokeRefreshTokenFamiliesForUserTeam
+    )(userId, team.id, { now: () => now, prisma: tx });
 
     return { removed: true };
   });

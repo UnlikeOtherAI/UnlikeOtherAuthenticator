@@ -301,12 +301,9 @@ export function registerTeamRoutes(app: FastifyInstance): void {
       const userId = getMemberUserIdFromParams(request.params);
       const actorUserId = getActorUserId(request as RequestWithClaims);
 
-      setTenantContextFromRequest(request, { orgId, userId: actorUserId });
-      await request.withTenantTx((tx) =>
-        removeTeamMember(
-          { orgId, teamId, domain, actorUserId, userId },
-          { prisma: asPrismaClient(tx) },
-        ),
+      await removeTeamMember(
+        { orgId, teamId, domain, actorUserId, userId },
+        { prisma: request.adminDb },
       );
 
       reply.status(200).send({ ok: true });

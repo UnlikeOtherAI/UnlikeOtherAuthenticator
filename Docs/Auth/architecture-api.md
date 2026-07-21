@@ -290,9 +290,11 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       org-context.service.ts                — Resolve user org context for JWT enrichment and /org/me
       org-placement.service.ts              — Org placement decisions during onboarding
       organisation.service.base.ts          — Organisation service building blocks
+      organisation.service.lifecycle.ts     — Org deactivation/reactivation with ordered membership locking
       organisation.service.organisation.ts  — Organisation CRUD + slug generation (slice entry point)
       organisation.service.members.ts       — Org membership lifecycle
       password.service.ts                   — Hashing, validation rules, comparison
+      refresh-token-rotation-policy.service.ts — Workspace/signature gates held through refresh rotation
       refresh-token.service.ts              — Refresh token issuance, rotation, reuse detection, revocation
       retention-pruning.service.ts          — Retention pruning jobs
       root-page.service.ts                  — Root holding page rendering
@@ -408,6 +410,17 @@ Request → Route → Middleware → Service → Database (Prisma)
 - **org-role-guard** — validates the user access token and the user's org role for `/org/*` routes (`owner > admin > member`). Reads `OrgMember.role` for the authenticated user in the target org and returns 403 if not a member or the role is insufficient.
 - **error-handler** — catches all errors. Returns a generic public body via `utils/error-response.ts` to the caller and logs specifics internally.
 - **rate-limiter** — request rate limiting; keyed helpers for auth routes live in `routes/auth/rate-limit-keys.ts`.
+
+Refresh rotation and destructive membership lifecycle share one concurrency boundary. A scoped
+refresh takes the exact organisation-membership lock and then its team-membership lock before it
+creates a replacement. Org deactivation/removal locks the organisation and all of that user's team
+memberships in the same order, while team removal locks the organisation before its team set. The
+lifecycle transaction then writes the status tombstone and revokes exact user+org or user+team
+refresh families across all issuing product domains. These lifecycle endpoints deliberately use
+the BYPASSRLS admin client because `uoa_app` cannot see sibling-domain refresh rows; the service
+repeats actor and target authorization and fails the whole transaction if revocation fails. Org
+lifecycle also revokes same-domain rows for legacy unscoped compatibility. Reactivation and re-add
+never clear revoked state.
 
 `POST /auth/token` remains a thin multi-grant route. Its confidential assertion
 branch uses the same config verifier and domain-hash guard as the legacy grants,

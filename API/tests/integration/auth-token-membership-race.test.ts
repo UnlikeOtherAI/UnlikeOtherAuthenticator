@@ -6,7 +6,6 @@ import type { ClientConfig } from '../../src/services/config.service.js';
 import { issueAuthorizationCode } from '../../src/services/authorization-code.service.js';
 import { validateConfigFields } from '../../src/services/config.service.js';
 import { deactivateOrganisationMember } from '../../src/services/organisation.service.lifecycle.js';
-import { revokeRefreshTokensForUserDomain } from '../../src/services/refresh-token.service.js';
 import { exchangeAuthorizationCodeForTokens } from '../../src/services/token.service.js';
 import { createClientId } from '../../src/utils/hash.js';
 import { baseClientConfigPayload } from '../helpers/test-config.js';
@@ -210,7 +209,6 @@ describe.skipIf(!hasDatabase)('authorization-code and membership lifecycle race'
   function deactivate(
     workspace: SeededWorkspace,
     afterMembershipStatusWrite?: () => Promise<void>,
-    revokeRealRefreshTokens = false,
   ) {
     return deactivateOrganisationMember(
       {
@@ -221,10 +219,6 @@ describe.skipIf(!hasDatabase)('authorization-code and membership lifecycle race'
       },
       {
         prisma: handle.prisma,
-        revokeRefreshTokensForUserDomain: revokeRealRefreshTokens
-          ? (userId, targetDomain) =>
-              revokeRefreshTokensForUserDomain(userId, targetDomain, { prisma: handle.prisma })
-          : async () => ({ revokedCount: 0 }),
         afterMembershipStatusWrite,
       },
     );
@@ -297,7 +291,12 @@ describe.skipIf(!hasDatabase)('authorization-code and membership lifecycle race'
         select: { usedAt: true },
       }),
     ).toEqual({ usedAt: expect.any(Date) });
-    expect(await handle.prisma.refreshToken.count({ where: { userId: workspace.userId } })).toBe(1);
+    expect(
+      await handle.prisma.refreshToken.findFirstOrThrow({
+        where: { userId: workspace.userId },
+        select: { revokedAt: true },
+      }),
+    ).toEqual({ revokedAt: expect.any(Date) });
     expect(
       await handle.prisma.orgMember.findUniqueOrThrow({
         where: { orgId_userId: { orgId: workspace.orgId, userId: workspace.userId } },
@@ -339,7 +338,7 @@ describe.skipIf(!hasDatabase)('authorization-code and membership lifecycle race'
     });
     await placementLocked.promise;
 
-    const deactivation = deactivate(workspace, undefined, true);
+    const deactivation = deactivate(workspace);
     await expectStillPending(deactivation);
     releaseExchange.resolve();
 

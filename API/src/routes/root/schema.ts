@@ -102,14 +102,14 @@ const orgEndpoints: EndpointSchema[] = [
     method: 'DELETE',
     path: '/org/organisations/:orgId/members/:userId',
     description:
-      "Remove organisation member (soft-remove: status becomes REMOVED, tombstoned for audit; also revokes the member's sessions on this domain)",
+      "Remove organisation member (soft-remove: status becomes REMOVED; atomically revokes exact user+org refresh families across product domains plus legacy sessions on this domain)",
     auth: 'domain hash bearer token',
   },
   {
     method: 'POST',
     path: '/org/organisations/:orgId/members/:userId/deactivate',
     description:
-      'Deactivate an organisation member: suspends access (org + team rows become DEACTIVATED, sessions on this domain revoked) without deleting history; cannot deactivate an owner (transfer ownership first)',
+      'Deactivate an organisation member: suspends access and atomically revokes exact user+org refresh families across product domains plus legacy sessions on this domain; cannot deactivate an owner',
     auth: 'domain hash bearer token',
     response: { ok: 'true' },
   },
@@ -358,7 +358,8 @@ const orgEndpoints: EndpointSchema[] = [
   {
     method: 'DELETE',
     path: '/org/organisations/:orgId/teams/:teamId/members/:userId',
-    description: 'Remove team member',
+    description:
+      'Remove team member (soft-remove; atomically revokes exact user+team refresh families across product domains without affecting other-team sessions)',
     auth: 'domain hash bearer token',
   },
   {

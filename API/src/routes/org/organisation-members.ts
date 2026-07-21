@@ -150,12 +150,9 @@ export function registerOrganisationMemberRoutes(app: FastifyInstance) {
       const userId = getUserIdFromParams(request.params);
       const actorUserId = getActorUserId(request as RequestWithClaims);
 
-      setTenantContextFromRequest(request, { orgId, userId: actorUserId });
-      await request.withTenantTx((tx) =>
-        removeOrganisationMember(
-          { orgId, domain, actorUserId, userId },
-          { prisma: asPrismaClient(tx) },
-        ),
+      await removeOrganisationMember(
+        { orgId, domain, actorUserId, userId },
+        { prisma: request.adminDb },
       );
 
       reply.status(200).send({ ok: true });
@@ -179,12 +176,9 @@ export function registerOrganisationMemberRoutes(app: FastifyInstance) {
       const userId = getUserIdFromParams(request.params);
       const actorUserId = getActorUserId(request as RequestWithClaims);
 
-      setTenantContextFromRequest(request, { orgId, userId: actorUserId });
-      await request.withTenantTx((tx) =>
-        deactivateOrganisationMember(
-          { orgId, domain, actorUserId, userId },
-          { prisma: asPrismaClient(tx) },
-        ),
+      await deactivateOrganisationMember(
+        { orgId, domain, actorUserId, userId },
+        { prisma: request.adminDb },
       );
 
       reply.status(200).send({ ok: true });

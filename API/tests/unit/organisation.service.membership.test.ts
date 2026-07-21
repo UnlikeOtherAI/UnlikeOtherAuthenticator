@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import {
   addOrganisationMember,
@@ -164,7 +164,7 @@ describe('Organisation service: membership', () => {
     expect(result).toMatchObject({ id: 'member-target', role: 'admin' });
   });
 
-  it('removes a member (soft-remove), cascades team/group memberships, and revokes domain sessions', async () => {
+  it('removes a member and atomically revokes exact-org plus legacy domain sessions', async () => {
     const prisma = makePrismaMock();
 
     prisma.organisation.findFirst.mockResolvedValue(baseOrg);
@@ -193,8 +193,6 @@ describe('Organisation service: membership', () => {
     prisma.teamMember.updateMany.mockResolvedValue({ count: 1 });
     prisma.groupMember.deleteMany.mockResolvedValue({ count: 0 });
 
-    const revokeRefreshTokensForUserDomain = vi.fn().mockResolvedValue({ revokedCount: 2 });
-
     await removeOrganisationMember(
       {
         orgId: 'org-1',
@@ -202,7 +200,7 @@ describe('Organisation service: membership', () => {
         actorUserId: 'u-owner',
         userId: 'u-member',
       },
-      { prisma, revokeRefreshTokensForUserDomain },
+      { prisma },
     );
 
     expect(prisma.teamMember.updateMany).toHaveBeenCalledWith({
@@ -217,12 +215,17 @@ describe('Organisation service: membership', () => {
       where: { id: 'member-target' },
       data: { status: 'REMOVED', statusChangedAt: expect.any(Date) },
     });
-    // Domain-scoped revocation must NOT bump the global user token version — it must only ever
-    // call the scoped revoke function, never touch prisma.user.update directly.
-    expect(revokeRefreshTokensForUserDomain).toHaveBeenCalledWith('u-member', 'acme.example.com');
+    expect(prisma.refreshToken.updateMany).toHaveBeenNthCalledWith(1, {
+      where: { userId: 'u-member', orgId: 'org-1', revokedAt: null },
+      data: { revokedAt: expect.any(Date) },
+    });
+    expect(prisma.refreshToken.updateMany).toHaveBeenNthCalledWith(2, {
+      where: { userId: 'u-member', domain: 'acme.example.com', revokedAt: null },
+      data: { revokedAt: expect.any(Date) },
+    });
   });
 
-  it('does not let a removal failure occur when session revocation throws (best-effort)', async () => {
+  it('fails closed when session revocation throws', async () => {
     const prisma = makePrismaMock();
 
     prisma.organisation.findFirst.mockResolvedValue(baseOrg);
@@ -235,19 +238,19 @@ describe('Organisation service: membership', () => {
     prisma.teamMember.updateMany.mockResolvedValue({ count: 1 });
     prisma.groupMember.deleteMany.mockResolvedValue({ count: 0 });
 
-    const revokeRefreshTokensForUserDomain = vi.fn().mockRejectedValue(new Error('unreachable admin db'));
+    prisma.refreshToken.updateMany.mockRejectedValueOnce(new Error('unreachable admin db'));
 
-    const result = await removeOrganisationMember(
-      {
-        orgId: 'org-1',
-        domain: 'acme.example.com',
-        actorUserId: 'u-owner',
-        userId: 'u-member',
-      },
-      { prisma, revokeRefreshTokensForUserDomain },
-    );
-
-    expect(result).toEqual({ removed: true });
+    await expect(
+      removeOrganisationMember(
+        {
+          orgId: 'org-1',
+          domain: 'acme.example.com',
+          actorUserId: 'u-owner',
+          userId: 'u-member',
+        },
+        { prisma },
+      ),
+    ).rejects.toThrow('unreachable admin db');
   });
 
   it('prevents removing the sole organisation owner', async () => {

@@ -275,3 +275,30 @@ export async function lockAndAssertActiveClientWorkspaceScope(
     rejectWorkspaceScope();
   }
 }
+
+/**
+ * Refresh-specific fail-closed wrapper around the canonical ordered membership lock. Keeping the
+ * mapping here prevents token orchestration from duplicating workspace-policy error semantics.
+ */
+export async function lockAndAssertRefreshWorkspaceScope(
+  params: {
+    userId: string;
+    domain: string;
+    orgId?: string | null;
+    teamId?: string | null;
+  },
+  deps: {
+    crossProductPrisma?: WorkspaceScopePrisma & WorkspaceLockPrisma;
+    policyPrisma?: ProductWorkspacePolicyPrisma;
+    prisma: WorkspaceScopePrisma & WorkspaceLockPrisma;
+  },
+): Promise<void> {
+  try {
+    await lockAndAssertActiveClientWorkspaceScope(params, deps);
+  } catch (error) {
+    if (error instanceof AppError && error.statusCode === 401) {
+      throw new AppError('UNAUTHORIZED', 401, 'INVALID_REFRESH_TOKEN');
+    }
+    throw error;
+  }
+}

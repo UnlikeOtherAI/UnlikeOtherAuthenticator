@@ -2,10 +2,13 @@ import type { MembershipStatus } from '@prisma/client';
 
 import type { ClientConfig } from './config.service.js';
 import { getEnv } from '../config/env.js';
-import { getPrisma } from '../db/prisma.js';
+import { getAdminPrisma, getPrisma } from '../db/prisma.js';
 import { runInTransaction } from '../db/tenant-context.js';
 import { AppError } from '../utils/errors.js';
-import { revokeRefreshTokensForUserDomain } from './refresh-token.service.js';
+import {
+  revokeRefreshTokenFamiliesForUserOrganisation,
+  revokeRefreshTokensForUserDomain,
+} from './refresh-token.service.js';
 import { lockWorkspaceMembershipRows } from './workspace-scope.service.js';
 
 import {
@@ -267,6 +270,8 @@ export async function removeOrganisationMember(
     userId: string;
   },
   deps?: OrgServiceDeps & {
+    revokeRefreshTokenFamiliesForUserOrganisation?:
+      typeof revokeRefreshTokenFamiliesForUserOrganisation;
     revokeRefreshTokensForUserDomain?: typeof revokeRefreshTokensForUserDomain;
   },
 ): Promise<{ removed: boolean }> {
@@ -277,7 +282,9 @@ export async function removeOrganisationMember(
   const userId = params.userId.trim();
   if (!actorUserId || !userId) throw new AppError('BAD_REQUEST', 400);
 
-  const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
+  // This destructive lifecycle boundary must revoke scoped sessions issued by every product
+  // domain in the same transaction, which requires the BYPASSRLS client.
+  const prisma = deps?.prisma ?? (getAdminPrisma() as unknown as OrgServicePrisma);
   const org = await resolveOrganisationByDomain(prisma, params);
 
   const actorMembership = await getOrganisationMember(prisma, { orgId: org.id, userId: actorUserId }, { activeOnly: true });
@@ -364,19 +371,18 @@ export async function removeOrganisationMember(
       where: { id: lockedMember.id },
       data: { status: 'REMOVED', statusChangedAt: now },
     });
-  });
 
-  // Domain-scoped session revocation runs AFTER the tenant transaction commits, via the admin
-  // client, best-effort — a revoke failure must not undo (or appear to undo) the removal that
-  // already succeeded.
-  try {
+    const revokeDeps = { now: () => now, prisma: tx };
+    await (
+      deps?.revokeRefreshTokenFamiliesForUserOrganisation ??
+      revokeRefreshTokenFamiliesForUserOrganisation
+    )(userId, org.id, revokeDeps);
     await (deps?.revokeRefreshTokensForUserDomain ?? revokeRefreshTokensForUserDomain)(
       userId,
       org.domain,
+      revokeDeps,
     );
-  } catch {
-    // Best-effort; the removal already succeeded.
-  }
+  });
 
   await auditOrg({
     orgId: org.id,

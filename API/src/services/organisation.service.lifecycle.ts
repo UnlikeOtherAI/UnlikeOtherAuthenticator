@@ -1,8 +1,11 @@
 import { getEnv } from '../config/env.js';
-import { getPrisma } from '../db/prisma.js';
+import { getAdminPrisma } from '../db/prisma.js';
 import { runInTransaction } from '../db/tenant-context.js';
 import { AppError } from '../utils/errors.js';
-import { revokeRefreshTokensForUserDomain } from './refresh-token.service.js';
+import {
+  revokeRefreshTokenFamiliesForUserOrganisation,
+  revokeRefreshTokensForUserDomain,
+} from './refresh-token.service.js';
 import { lockWorkspaceMembershipRows } from './workspace-scope.service.js';
 
 import {
@@ -37,6 +40,8 @@ export async function deactivateOrganisationMember(
     userId: string;
   },
   deps?: OrgServiceDeps & {
+    revokeRefreshTokenFamiliesForUserOrganisation?:
+      typeof revokeRefreshTokenFamiliesForUserOrganisation;
     revokeRefreshTokensForUserDomain?: typeof revokeRefreshTokensForUserDomain;
     afterMembershipStatusWrite?: () => Promise<void>;
   },
@@ -48,7 +53,10 @@ export async function deactivateOrganisationMember(
   const userId = params.userId.trim();
   if (!actorUserId || !userId) throw new AppError('BAD_REQUEST', 400);
 
-  const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
+  // Membership status and cross-product refresh-family revocation must commit together. The
+  // tenant role cannot see refresh rows issued by sibling product domains, so this lifecycle
+  // boundary deliberately uses the BYPASSRLS client and repeats every authorization check.
+  const prisma = deps?.prisma ?? (getAdminPrisma() as unknown as OrgServicePrisma);
   const org = await resolveOrganisationByDomain(prisma, params);
 
   await requireOrgManagerActor(prisma, org.id, actorUserId);
@@ -62,7 +70,6 @@ export async function deactivateOrganisationMember(
   if (!member) throw new AppError('NOT_FOUND', 404);
   if (member.role === 'owner') throw new AppError('BAD_REQUEST', 400);
 
-  const now = new Date();
   await runInTransaction(prisma, async (tx) => {
     await lockWorkspaceMembershipRows({ userId, orgId: org.id }, { prisma: tx });
     const lockedMember = await tx.orgMember.findFirst({
@@ -72,6 +79,7 @@ export async function deactivateOrganisationMember(
     if (!lockedMember) throw new AppError('NOT_FOUND', 404);
     if (lockedMember.role === 'owner') throw new AppError('BAD_REQUEST', 400);
 
+    const now = new Date();
     await tx.orgMember.update({
       where: { id: lockedMember.id },
       data: { status: 'DEACTIVATED', statusChangedAt: now },
@@ -81,19 +89,20 @@ export async function deactivateOrganisationMember(
       data: { status: 'DEACTIVATED', statusChangedAt: now },
     });
     await deps?.afterMembershipStatusWrite?.();
-  });
 
-  // Domain-scoped session revocation runs AFTER the tenant transaction commits, via the admin
-  // client, best-effort — a revoke failure must not undo (or appear to undo) the deactivation
-  // that already succeeded.
-  try {
+    const revokeDeps = { now: () => now, prisma: tx };
+    await (
+      deps?.revokeRefreshTokenFamiliesForUserOrganisation ??
+      revokeRefreshTokenFamiliesForUserOrganisation
+    )(userId, org.id, revokeDeps);
+    // Preserve the historical same-domain contract for legacy unscoped sessions while the exact
+    // organisation revocation above catches scoped sessions issued by every product domain.
     await (deps?.revokeRefreshTokensForUserDomain ?? revokeRefreshTokensForUserDomain)(
       userId,
       org.domain,
+      revokeDeps,
     );
-  } catch {
-    // Best-effort; the deactivation already succeeded.
-  }
+  });
 
   await auditOrg({
     orgId: org.id,
@@ -125,7 +134,7 @@ export async function reactivateOrganisationMember(
   const userId = params.userId.trim();
   if (!actorUserId || !userId) throw new AppError('BAD_REQUEST', 400);
 
-  const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
+  const prisma = deps?.prisma ?? (getAdminPrisma() as unknown as OrgServicePrisma);
   const org = await resolveOrganisationByDomain(prisma, params);
 
   await requireOrgManagerActor(prisma, org.id, actorUserId);

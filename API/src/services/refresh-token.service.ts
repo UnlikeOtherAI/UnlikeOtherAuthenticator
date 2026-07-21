@@ -15,6 +15,8 @@ type RefreshTokenDeps = {
   beforeRotate?: (row: {
     userId: string;
     domain: string;
+    orgId: string | null;
+    teamId: string | null;
   }) => Promise<void>;
   now?: () => Date;
   prisma?: RefreshTokenPrisma;
@@ -198,7 +200,12 @@ export async function exchangeRefreshToken(
   // have been validated but before any replacement row or mutation is written.
   // Callers that need a policy/rotation atomicity guarantee must pass a Prisma
   // transaction as `prisma` and perform the gate through this hook.
-  await deps?.beforeRotate?.({ userId: row.userId, domain: row.domain });
+  await deps?.beforeRotate?.({
+    userId: row.userId,
+    domain: row.domain,
+    orgId: row.orgId,
+    teamId: row.teamId,
+  });
 
   // Inherit the original session's TTL so rotated tokens keep the same lifetime.
   const inheritedTtlSeconds = Math.round(
@@ -310,11 +317,11 @@ export async function bumpUserTokenVersion(
 }
 
 /**
- * Domain-scoped session revocation (design §4.5). Revokes every live refresh token for this user on
- * this domain. Because a user belongs to exactly one org per domain, this is the correct scope for
- * deactivating/removing an org membership. Deliberately does NOT bump the global user token version
- * (that would also invalidate the user's sessions on other domains). Existing short-lived access
- * tokens on this domain expire naturally; they simply cannot be renewed.
+ * Legacy domain-scoped session revocation (design §4.5). Revokes every live refresh token for this
+ * user on this domain, including rows created before workspace scope existed. It is retained as a
+ * compatibility companion to exact organisation revocation and must not be the sole revocation
+ * mechanism for current org lifecycle changes. Deliberately does NOT bump the global user token
+ * version; existing short-lived access tokens expire naturally and cannot be renewed.
  */
 export async function revokeRefreshTokensForUserDomain(
   userId: string,
@@ -325,6 +332,46 @@ export async function revokeRefreshTokensForUserDomain(
   const now = deps?.now ? deps.now() : new Date();
   const result = await prisma.refreshToken.updateMany({
     where: { userId, domain, revokedAt: null },
+    data: { revokedAt: now },
+  });
+  return { revokedCount: result.count };
+}
+
+/**
+ * Revoke every live refresh-token family scoped to one exact user and organisation, regardless
+ * of the product domain that issued it. Rotation preserves `orgId`, and only one row in a family
+ * can be live, so revoking every matching live row terminalizes every affected family.
+ *
+ * Callers changing membership status must inject their current BYPASSRLS transaction. That keeps
+ * cross-product revocation atomic with the ordered membership-row locks and status tombstone.
+ */
+export async function revokeRefreshTokenFamiliesForUserOrganisation(
+  userId: string,
+  orgId: string,
+  deps?: { now?: () => Date; prisma?: RefreshTokenPrisma },
+): Promise<{ revokedCount: number }> {
+  const prisma = deps?.prisma ?? (getAdminPrisma() as unknown as RefreshTokenPrisma);
+  const now = deps?.now ? deps.now() : new Date();
+  const result = await prisma.refreshToken.updateMany({
+    where: { userId, orgId, revokedAt: null },
+    data: { revokedAt: now },
+  });
+  return { revokedCount: result.count };
+}
+
+/**
+ * Revoke every live refresh-token family scoped to one exact user and team across all issuing
+ * product domains. This intentionally leaves the user's other team sessions untouched.
+ */
+export async function revokeRefreshTokenFamiliesForUserTeam(
+  userId: string,
+  teamId: string,
+  deps?: { now?: () => Date; prisma?: RefreshTokenPrisma },
+): Promise<{ revokedCount: number }> {
+  const prisma = deps?.prisma ?? (getAdminPrisma() as unknown as RefreshTokenPrisma);
+  const now = deps?.now ? deps.now() : new Date();
+  const result = await prisma.refreshToken.updateMany({
+    where: { userId, teamId, revokedAt: null },
     data: { revokedAt: now },
   });
   return { revokedCount: result.count };

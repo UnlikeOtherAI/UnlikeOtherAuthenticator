@@ -81,6 +81,14 @@ describe('exchangeRefreshTokenForTokens active-claim re-validation (unit)', () =
           ),
         },
         teamMember: {
+          findFirst: vi.fn(
+            async (args: { where?: { teamId?: string; team?: { org?: unknown } } }) => {
+              if (params.crossDomain && args.where?.team?.org) return null;
+              return args.where?.teamId && params.contextTeamIds.includes(args.where.teamId)
+                ? { id: `membership-${args.where.teamId}` }
+                : null;
+            },
+          ),
           findMany: vi
             .fn()
             .mockResolvedValue(

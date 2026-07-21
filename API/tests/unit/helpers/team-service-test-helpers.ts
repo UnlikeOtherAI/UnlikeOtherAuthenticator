@@ -38,6 +38,9 @@ export function makePrismaMock(): PrismaClient {
     teamInvite: {
       findMany: vi.fn(),
     },
+    refreshToken: {
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+    },
     $queryRaw: vi.fn().mockResolvedValue([{ id: 'locked-row', isDefault: false }]),
     $transaction: vi.fn(),
   } as unknown as PrismaClient;

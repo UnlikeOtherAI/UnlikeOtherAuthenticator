@@ -58,6 +58,9 @@ export function makePrismaMock(): PrismaClient {
     user: {
       findUnique: vi.fn(),
     },
+    refreshToken: {
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+    },
     $queryRaw: vi.fn().mockResolvedValue([]),
     $transaction: vi.fn(),
   } as unknown as PrismaClient;

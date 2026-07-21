@@ -220,6 +220,7 @@ describe('refresh-token.service (unit)', () => {
 
   it('carries orgId/teamId onto the rotated row and returns them (rotation preserves workspace scope)', async () => {
     const currentRefreshToken = 'scoped-refresh-token';
+    const beforeRotate = vi.fn().mockResolvedValue(undefined);
     const prisma = {
       refreshToken: {
         findUnique: vi.fn().mockResolvedValue({
@@ -251,9 +252,16 @@ describe('refresh-token.service (unit)', () => {
         prisma,
         refreshTokenTtlDays: 30,
         sharedSecret,
+        beforeRotate,
       },
     );
 
+    expect(beforeRotate).toHaveBeenCalledWith({
+      userId: 'user-1',
+      domain: context.domain,
+      orgId: 'org-1',
+      teamId: 'team-1',
+    });
     expect(prisma.refreshToken.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ orgId: 'org-1', teamId: 'team-1' }),
       select: { id: true },

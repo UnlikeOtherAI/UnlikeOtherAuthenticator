@@ -17,14 +17,13 @@ import {
   type OrgContext,
 } from './org-context.service.js';
 import { buildFirstLoginBlock, type FirstLoginBlock } from './first-login.service.js';
-import { evaluateSignaturePolicy } from './signature-policy.service.js';
-import { lockSignaturePolicyForDecision } from './signature-continuation.service.js';
 import {
   requiresExactAuthorizationWorkspace,
   resolveRequiredAuthorizationWorkspace,
 } from './required-workspace-placement.service.js';
 import { lockTokenIssuanceProductPolicy } from './product-workspace-policy-lock.service.js';
 import { resolveProductWorkspacePolicy } from './product-workspace-policy.service.js';
+import { createRefreshTokenRotationPolicyGuard } from './refresh-token-rotation-policy.service.js';
 import {
   accessTokenExpiresInSeconds,
   resolveAccessTokenTtl,
@@ -403,18 +402,11 @@ export async function exchangeRefreshTokenForTokens(
         now: deps?.now,
         prisma: tx,
         sharedSecret,
-        beforeRotate: async ({ userId, domain }) => {
-          await lockSignaturePolicyForDecision(tx, domain);
-          const policy = await evaluateSignaturePolicy(
-            { domain, userId, now: deps?.now?.() },
-            { prisma: tx },
-          );
-          if (!policy.complete) {
-            // Keep this indistinguishable from the normal invalid-grant response.
-            // The client must restart interactive authorization, where signing is available.
-            throw new AppError('UNAUTHORIZED', 401, 'INVALID_REFRESH_TOKEN');
-          }
-        },
+        beforeRotate: createRefreshTokenRotationPolicyGuard({
+          prisma: tx,
+          now: deps?.now,
+          afterWorkspaceLock: deps?.afterActiveWorkspaceLock,
+        }),
       },
     );
 

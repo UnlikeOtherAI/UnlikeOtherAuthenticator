@@ -203,6 +203,10 @@ describe('Team service: members', () => {
       where: { id: 'tm-target' },
       data: { status: 'REMOVED', statusChangedAt: expect.any(Date) },
     });
+    expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
+      where: { userId: 'u-target', teamId: 'team-1', revokedAt: null },
+      data: { revokedAt: expect.any(Date) },
+    });
   });
 
   it('reactivates a previously removed team member instead of rejecting as a duplicate', async () => {

@@ -54,6 +54,8 @@ Refresh tokens are stored in the `refresh_tokens` table with:
 - `domain`
 - `client_id`
 - `config_url`
+- `org_id` (nullable exact workspace scope)
+- `team_id` (nullable exact workspace scope)
 - `expires_at`
 - `revoked_at`
 - `last_used_at`
@@ -78,6 +80,26 @@ If an already-rotated refresh token is presented again:
 3. Subsequent refresh attempts from that family also fail
 
 This is the theft-detection path for replayed refresh tokens.
+
+## Workspace Lifecycle Revocation
+
+Workspace-scoped refresh families are terminated when their membership stops being ACTIVE:
+
+- Organisation deactivation or removal revokes every live row for the exact
+  `(user_id, org_id)` across all issuing product domains. The lifecycle transaction also preserves
+  the legacy same-domain revocation contract so older unscoped sessions cannot survive.
+- Team removal revokes every live row for the exact `(user_id, team_id)` across all issuing product
+  domains. Sessions for the user's other teams remain valid.
+- Reactivating or re-adding a membership never clears `revoked_at`; the user must complete a new
+  interactive authorization flow.
+
+The status tombstone and refresh-row updates run in one fail-closed `uoa_admin` transaction after
+the canonical organisation-then-team membership locks. Refresh rotation takes those same ordered
+locks before creating its replacement. Therefore a refresh that commits first is followed and
+revoked by the lifecycle writer, while a lifecycle writer that commits first makes the waiting
+refresh fail without creating a replacement. Lifecycle revocation does not bump the user's global
+token version: already-issued access tokens expire at their normal short TTL, and unrelated
+workspace/product sessions are not globally invalidated.
 
 ---
 
