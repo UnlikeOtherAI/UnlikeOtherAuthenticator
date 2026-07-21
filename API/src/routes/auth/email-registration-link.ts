@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { LOGIN_SESSION_AUDIENCE } from '../../config/constants.js';
 import { requireEnv } from '../../config/env.js';
+import { runInTransaction } from '../../db/tenant-context.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
 import { validateRegistrationEmailLandingToken } from '../../services/auth-registration-email-link.service.js';
 import { parseRequestAccessFlag } from '../../services/access-request-flow.service.js';
@@ -69,6 +70,8 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
       if (!request.config || !request.configUrl) {
         throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
       }
+      const config = request.config;
+      const configUrl = request.configUrl;
 
       let pkce: PkceChallenge | undefined;
       try {
@@ -82,8 +85,8 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
         }
         request.log.info({ err }, 'email link had an invalid PKCE challenge; rendering login');
         const html = await renderAuthEntrypointHtml({
-          config: request.config,
-          configUrl: request.configUrl,
+          config,
+          configUrl,
           requestUrl: buildLoginAuthUrl(
             request.configUrl,
             redirect_url,
@@ -100,8 +103,8 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
         type = await validateRegistrationEmailLandingToken(
           {
             token,
-            config: request.config,
-            configUrl: request.configUrl,
+            config,
+            configUrl,
           },
           { prisma: request.adminDb },
         );
@@ -155,82 +158,93 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
           );
 
           const redirectUrl = selectRedirectUrl({
-            allowedRedirectUrls: request.config.redirect_urls,
+            allowedRedirectUrls: config.redirect_urls,
             requestedRedirectUrl: redirect_url,
           });
-          const rememberMe = request.config.session?.remember_me_default ?? true;
+          const rememberMe = config.session?.remember_me_default ?? true;
           const requestAccess = parseRequestAccessFlag(request_access);
 
-          // An accepted invite is already an explicit workspace choice. Non-invite auto flows select
-          // one team only when unambiguous; a create-workspace action still requires the chooser.
-          let selectedWorkspace: AutoSelectedWorkspace | null = acceptedInvite
-            ? { orgId: acceptedInvite.orgId, teamId: acceptedInvite.teamId }
-            : null;
-          if (!acceptedInvite && request.config.login_flow?.workspace_selection === 'auto') {
-            const choices = await buildWorkspaceChoices(
-              { userId, config: request.config },
-              { prisma: request.adminDb },
+          const authMethod = type === 'VERIFY_EMAIL' ? 'verify_email' : 'login_link';
+          const continuation = await runInTransaction(request.adminDb, async (tx) => {
+            // Hold the per-user first-placement lock through final policy evaluation and code
+            // issuance. This remains an admin/BYPASSRLS transaction because the choice may have
+            // come from an accepted invite or another recognized product's canonical workspace.
+            let selectedWorkspace: AutoSelectedWorkspace | null = acceptedInvite
+              ? { orgId: acceptedInvite.orgId, teamId: acceptedInvite.teamId }
+              : null;
+            if (!acceptedInvite && config.login_flow?.workspace_selection === 'auto') {
+              const choices = await buildWorkspaceChoices(
+                { userId, config },
+                { crossProductPrisma: tx, policyPrisma: tx, prisma: tx },
+              );
+              selectedWorkspace = resolveAutoSelectedWorkspace(choices);
+              if (shouldPresentWorkspaceChooser(choices, selectedWorkspace)) {
+                const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
+                const loginToken = await signLoginSession({
+                  userId,
+                  config,
+                  configUrl,
+                  redirectUrl,
+                  rememberMe,
+                  requestAccess,
+                  codeChallenge: pkce.codeChallenge,
+                  codeChallengeMethod: pkce.codeChallengeMethod,
+                  sharedSecret: SHARED_SECRET,
+                  audience: LOGIN_SESSION_AUDIENCE,
+                });
+                return { kind: 'workspace_chooser' as const, loginToken };
+              }
+            }
+            selectedWorkspace ??= await resolveProductWorkspaceBeforeTwoFa(
+              { userId, config },
+              { prisma: tx, workspacePrisma: tx },
             );
-            selectedWorkspace = resolveAutoSelectedWorkspace(choices);
-            if (shouldPresentWorkspaceChooser(choices, selectedWorkspace)) {
-              const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
-              const loginToken = await signLoginSession({
+
+            const outcome = await finalizeWithTwoFaPolicy(
+              {
                 userId,
-                config: request.config,
-                configUrl: request.configUrl,
+                twoFaEnabled,
+                config,
+                configUrl,
                 redirectUrl,
                 rememberMe,
                 requestAccess,
+                authMethod,
                 codeChallenge: pkce.codeChallenge,
                 codeChallengeMethod: pkce.codeChallengeMethod,
-                sharedSecret: SHARED_SECRET,
-                audience: LOGIN_SESSION_AUDIENCE,
-              });
-              redirectNoStore(
-                reply,
-                buildWorkspaceChooserAuthUrl(
-                  request.configUrl,
-                  redirectUrl,
-                  loginToken,
-                  requestAccess,
-                  pkce,
-                ),
-              );
-              return;
-            }
-          }
-          selectedWorkspace ??= await resolveProductWorkspaceBeforeTwoFa(
-            { userId, config: request.config },
-            { prisma: request.adminDb, workspacePrisma: request.adminDb },
-          );
+                ip: request.ip ?? null,
+                ...(selectedWorkspace ?? {}),
+              },
+              {
+                policyPrisma: tx,
+                prisma: tx,
+                twoFaPolicyPrisma: tx,
+                workspacePrisma: tx,
+              },
+            );
+            return { kind: 'finalized' as const, outcome };
+          });
 
-          const authMethod = type === 'VERIFY_EMAIL' ? 'verify_email' : 'login_link';
-          const outcome = await finalizeWithTwoFaPolicy(
-            {
-              userId,
-              twoFaEnabled,
-              config: request.config,
-              configUrl: request.configUrl,
-              redirectUrl,
-              rememberMe,
-              requestAccess,
-              authMethod,
-              codeChallenge: pkce.codeChallenge,
-              codeChallengeMethod: pkce.codeChallengeMethod,
-              ip: request.ip ?? null,
-              ...(selectedWorkspace ?? {}),
-            },
-            {
-              prisma: request.adminDb,
-              twoFaPolicyPrisma: request.adminDb,
-              workspacePrisma: request.adminDb,
-            },
-          );
+          if (continuation.kind === 'workspace_chooser') {
+            redirectNoStore(
+              reply,
+              buildWorkspaceChooserAuthUrl(
+                configUrl,
+                redirectUrl,
+                continuation.loginToken,
+                requestAccess,
+                pkce,
+              ),
+            );
+            return;
+          }
+
+          const { outcome } = continuation;
 
           if (outcome.kind === 'twofa') {
             redirectNoStore(
               reply,
-              buildTwoFaAuthUrl(request.configUrl, redirectUrl, {
+              buildTwoFaAuthUrl(configUrl, redirectUrl, {
                 requestAccess,
                 kind: 'challenge',
                 token: outcome.twofa_token,
@@ -242,7 +256,7 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
           if (outcome.kind === 'twofa_enroll_required') {
             redirectNoStore(
               reply,
-              buildTwoFaAuthUrl(request.configUrl, redirectUrl, {
+              buildTwoFaAuthUrl(configUrl, redirectUrl, {
                 requestAccess,
                 kind: 'enrollment',
                 token: outcome.setup.setup_token,
@@ -255,7 +269,7 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
             await recordLoginLog(
               {
                 userId,
-                domain: request.config.domain,
+                domain: config.domain,
                 authMethod,
                 ip: request.ip ?? null,
                 userAgent:

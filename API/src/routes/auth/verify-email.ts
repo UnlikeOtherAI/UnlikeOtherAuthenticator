@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { LOGIN_SESSION_AUDIENCE } from '../../config/constants.js';
 import { requireEnv } from '../../config/env.js';
+import { runInTransaction } from '../../db/tenant-context.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
 import { AppError } from '../../utils/errors.js';
 import {
@@ -61,12 +62,14 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
       if (!request.config || !request.configUrl) {
         throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
       }
+      const config = request.config;
+      const configUrl = request.configUrl;
 
       const tokenType = await validateVerifyEmailToken(
         {
           token,
-          config: request.config,
-          configUrl: request.configUrl,
+          config,
+          configUrl,
         },
         { prisma: request.adminDb },
       );
@@ -79,53 +82,18 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
         {
           token,
           password,
-          config: request.config,
-          configUrl: request.configUrl,
+          config,
+          configUrl,
         },
         { prisma: request.adminDb },
       );
 
       const redirectUrl = selectRedirectUrl({
-        allowedRedirectUrls: request.config.redirect_urls,
+        allowedRedirectUrls: config.redirect_urls,
         requestedRedirectUrl: redirect_url,
       });
-      const rememberMe = request.config.session?.remember_me_default ?? true;
+      const rememberMe = config.session?.remember_me_default ?? true;
       const requestAccess = parseRequestAccessFlag(request_access);
-
-      // An accepted email invite is already an explicit workspace selection and always bypasses the
-      // chooser. Otherwise auto mode either selects the sole team or exposes every real action,
-      // including the zero-team "create workspace" entrypoint.
-      let selectedWorkspace: AutoSelectedWorkspace | null = acceptedInvite
-        ? { orgId: acceptedInvite.orgId, teamId: acceptedInvite.teamId }
-        : null;
-      if (!acceptedInvite && request.config.login_flow?.workspace_selection === 'auto') {
-        const choices = await buildWorkspaceChoices(
-          { userId, config: request.config },
-          { prisma: request.adminDb },
-        );
-        selectedWorkspace = resolveAutoSelectedWorkspace(choices);
-        if (shouldPresentWorkspaceChooser(choices, selectedWorkspace)) {
-          const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
-          const loginToken = await signLoginSession({
-            userId,
-            config: request.config,
-            configUrl: request.configUrl,
-            redirectUrl,
-            rememberMe,
-            requestAccess,
-            codeChallenge: pkce.codeChallenge,
-            codeChallengeMethod: pkce.codeChallengeMethod,
-            sharedSecret: SHARED_SECRET,
-            audience: LOGIN_SESSION_AUDIENCE,
-          });
-          reply.status(200).send({ login_token: loginToken, ...choices });
-          return;
-        }
-      }
-      selectedWorkspace ??= await resolveProductWorkspaceBeforeTwoFa(
-        { userId, config: request.config },
-        { prisma: request.adminDb, workspacePrisma: request.adminDb },
-      );
 
       const authMethod =
         type === 'LOGIN_LINK'
@@ -133,27 +101,75 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
           : type === 'VERIFY_EMAIL'
             ? 'verify_email'
             : 'verify_email_set_password';
-      const outcome = await finalizeWithTwoFaPolicy(
-        {
-          userId,
-          twoFaEnabled,
-          config: request.config,
-          configUrl: request.configUrl,
-          redirectUrl,
-          rememberMe,
-          requestAccess,
-          authMethod,
-          codeChallenge: pkce.codeChallenge,
-          codeChallengeMethod: pkce.codeChallengeMethod,
-          ip: request.ip ?? null,
-          ...(selectedWorkspace ?? {}),
-        },
-        {
-          prisma: request.adminDb,
-          twoFaPolicyPrisma: request.adminDb,
-          workspacePrisma: request.adminDb,
-        },
-      );
+      const continuation = await runInTransaction(request.adminDb, async (tx) => {
+        // The first-placement advisory lock must remain held until exact-scope finalization and
+        // authorization-code issuance commit. Using the admin transaction also preserves the
+        // cross-product and accepted-invite reads that intentionally bypass tenant RLS here.
+        let selectedWorkspace: AutoSelectedWorkspace | null = acceptedInvite
+          ? { orgId: acceptedInvite.orgId, teamId: acceptedInvite.teamId }
+          : null;
+        if (!acceptedInvite && config.login_flow?.workspace_selection === 'auto') {
+          const choices = await buildWorkspaceChoices(
+            { userId, config },
+            { crossProductPrisma: tx, policyPrisma: tx, prisma: tx },
+          );
+          selectedWorkspace = resolveAutoSelectedWorkspace(choices);
+          if (shouldPresentWorkspaceChooser(choices, selectedWorkspace)) {
+            const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
+            const loginToken = await signLoginSession({
+              userId,
+              config,
+              configUrl,
+              redirectUrl,
+              rememberMe,
+              requestAccess,
+              codeChallenge: pkce.codeChallenge,
+              codeChallengeMethod: pkce.codeChallengeMethod,
+              sharedSecret: SHARED_SECRET,
+              audience: LOGIN_SESSION_AUDIENCE,
+            });
+            return { kind: 'workspace_chooser' as const, choices, loginToken };
+          }
+        }
+        selectedWorkspace ??= await resolveProductWorkspaceBeforeTwoFa(
+          { userId, config },
+          { prisma: tx, workspacePrisma: tx },
+        );
+
+        const outcome = await finalizeWithTwoFaPolicy(
+          {
+            userId,
+            twoFaEnabled,
+            config,
+            configUrl,
+            redirectUrl,
+            rememberMe,
+            requestAccess,
+            authMethod,
+            codeChallenge: pkce.codeChallenge,
+            codeChallengeMethod: pkce.codeChallengeMethod,
+            ip: request.ip ?? null,
+            ...(selectedWorkspace ?? {}),
+          },
+          {
+            policyPrisma: tx,
+            prisma: tx,
+            twoFaPolicyPrisma: tx,
+            workspacePrisma: tx,
+          },
+        );
+        return { kind: 'finalized' as const, outcome };
+      });
+
+      if (continuation.kind === 'workspace_chooser') {
+        reply.status(200).send({
+          login_token: continuation.loginToken,
+          ...continuation.choices,
+        });
+        return;
+      }
+
+      const { outcome } = continuation;
 
       if (outcome.kind === 'twofa') {
         reply.status(200).send({
@@ -178,7 +194,7 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
         await recordLoginLog(
           {
             userId,
-            domain: request.config.domain,
+            domain: config.domain,
             authMethod,
             ip: request.ip ?? null,
             userAgent:

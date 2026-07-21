@@ -225,6 +225,13 @@ The auth flow is state-driven, not route-driven. A single popup URL loads the ap
     create one workspace and the loser reuses it. Legacy same-domain `workspace_selection: off`
     clients keep historical unscoped sessions when placement is already satisfied (or a lifecycle
     tombstone deliberately prevents healing), and their existing unscoped refreshes remain valid.
+    On both email identity continuations (`GET /auth/email/link` and `POST /auth/verify-email`),
+    chooser reads, recognized-product placement, exact policy/2FA finalization, and immediate
+    authorization-code issuance share one `uoa_admin` transaction. The per-user placement lock
+    therefore survives the cross-product zero-choice read through commit; a later issuance failure
+    rolls back the new workspace and code together. Email-token consumption and invite acceptance
+    retain their existing earlier one-time transaction, so such a failure consumes the link and the
+    user must request another one.
     Authorization codes also persist whether interactive TOTP completed. Exchange re-resolves the
     current exact-workspace policy and user enrollment inside the token transaction; insufficient
     proof rejects generically, rolls code consumption back, and creates no refresh/access family.

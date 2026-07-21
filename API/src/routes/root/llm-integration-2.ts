@@ -83,6 +83,11 @@ can be retried; \`session-choices\` and invite decline validate but do not consu
    reachable. An invite-bound link never sees the chooser: token consumption returns the accepted
    invite's exact \`orgId\`/\`teamId\`, applies the effective 2FA policy, and preserves that scope
    through the authorization code, access token, refresh token, and rotation.
+   Both email continuations perform chooser reads, recognized-product placement, exact policy/2FA
+   finalization, and immediate code issuance in one admin transaction. Its per-user placement lock
+   remains held through commit, so concurrent first use from different products reuses one
+   canonical workspace; an issuance failure rolls the workspace and code back together while the
+   one-time email token remains consumed.
    A \`LOGIN_LINK\` resolves only the existing \`userId\` stored when it was issued; a missing,
    deleted, or identity-mismatched account fails closed and can never become new-user registration.
    At code exchange UOA re-resolves the current exact-workspace policy and enrollment state. The
