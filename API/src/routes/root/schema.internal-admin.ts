@@ -352,13 +352,15 @@ export const internalAdminEndpoints: EndpointSchema[] = [
   {
     method: 'PATCH',
     path: '/internal/admin/organisations/:orgId/teams/:teamId',
-    description: 'Replace team login access whitelist lists',
+    description: 'Update team name, description, and/or login access whitelist lists',
     auth: adminAuth,
     body: {
+      name: 'string (optional, max 100)',
+      description: 'string | null (optional, max 500)',
       allowed_email_domains: 'string[] (optional, max 50)',
       allowed_emails: 'string[] (optional, max 200)',
     },
-    response: { 200: '{ org, team } or null with updated team whitelist', '401/403': authFailures },
+    response: { 200: '{ org, team } or null with updated team fields', '401/403': authFailures },
   },
   {
     method: 'GET',

@@ -67,6 +67,11 @@ type LoginRestrictionInput = {
   allowedEmails?: string[];
 };
 
+type TeamUpdateInput = LoginRestrictionInput & {
+  name?: string;
+  description?: string | null;
+};
+
 export type AgreementInput = {
   title: string;
   description: string | null;
@@ -294,10 +299,12 @@ export const adminService = {
     api.get<{ org: AdminData['organisations'][number]; team: Team | null } | null>(
       `/internal/admin/organisations/${encodeURIComponent(orgId)}/teams/${encodeURIComponent(teamId)}`,
     ),
-  updateTeam: (orgId: string, teamId: string, input: LoginRestrictionInput) =>
+  updateTeam: (orgId: string, teamId: string, input: TeamUpdateInput) =>
     api.patch<{ org: AdminData['organisations'][number]; team: Team | null } | null>(
       `/internal/admin/organisations/${encodeURIComponent(orgId)}/teams/${encodeURIComponent(teamId)}`,
       {
+        ...(input.name !== undefined ? { name: input.name } : {}),
+        ...(input.description !== undefined ? { description: input.description } : {}),
         ...(input.allowedEmailDomains !== undefined
           ? { allowed_email_domains: input.allowedEmailDomains }
           : {}),

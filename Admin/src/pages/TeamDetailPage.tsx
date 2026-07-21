@@ -37,6 +37,11 @@ export function TeamDetailPage() {
       adminService.updateTeam(orgId ?? '', teamId ?? '', input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin'] }),
   });
+  const updateTeamDetails = useMutation({
+    mutationFn: (input: { name: string; description: string }) =>
+      adminService.updateTeam(orgId ?? '', teamId ?? '', input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin'] }),
+  });
   const teamName = data?.team?.name;
   const members = data?.org && teamName ? data.org.members.filter((member) => member.teams.includes(teamName)) : [];
   const { pageItems, pagination } = usePagination(members);
@@ -115,7 +120,12 @@ export function TeamDetailPage() {
         </DataTable>
         <PaginationFooter {...pagination} />
       </Card>
-      <TeamDialog open={dialog?.kind === 'edit-team'} team={team} onClose={closeDialog} />
+      <TeamDialog
+        open={dialog?.kind === 'edit-team'}
+        team={team}
+        onClose={closeDialog}
+        onSave={(values) => updateTeamDetails.mutateAsync(values)}
+      />
       <AddMemberDialog open={dialog?.kind === 'add-member'} organisation={org} team={team} onClose={closeDialog} />
       <ChangeTeamRoleDialog
         open={dialog?.kind === 'change-team-role'}
