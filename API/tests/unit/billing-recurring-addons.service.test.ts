@@ -56,6 +56,7 @@ function addonData(
         featurePolicies: [{ entitlementScope }],
         catalogs: [
           {
+            stripeProductId: 'prod_privacy',
             stripePriceId: 'price_privacy',
             currency: 'USD',
             monthlyAmountMinor: 5000n,
@@ -82,11 +83,15 @@ function addonData(
   };
 }
 
-function dependencies(data: ReturnType<typeof addonData>, billingManager: boolean) {
+function dependencies(
+  data: ReturnType<typeof addonData>,
+  billingManager: boolean,
+  collectionContext = collection,
+) {
   return {
     now: () => now,
     resolveEntitlement: vi.fn().mockResolvedValue({ actor: {}, payload: {} }),
-    resolveCollection: vi.fn().mockResolvedValue(collection),
+    resolveCollection: vi.fn().mockResolvedValue(collectionContext),
     resolveViewer: vi.fn().mockResolvedValue({
       userId: request.userId,
       displayName: 'Viewer',
@@ -101,6 +106,55 @@ function dependencies(data: ReturnType<typeof addonData>, billingManager: boolea
 }
 
 describe('privacy-safe recurring add-on scopes', () => {
+  it('freezes subscribe when the persisted Stripe catalog binding is incomplete', async () => {
+    const data = addonData(
+      BillingRecurringAddonSubscriptionScope.TEAM,
+      BillingRecurringAddonEntitlementScope.TEAM,
+      null,
+    );
+    data.subscriptions = [];
+    data.offers[0]!.catalogs = [
+      { ...data.offers[0]!.catalogs[0]!, stripeProductId: null },
+    ] as never;
+
+    const result = await getBillingRecurringAddons(
+      { request, actorToken: 'signed-actor', credential },
+      dependencies(data, true) as never,
+    );
+
+    expect(result).toMatchObject({
+      capabilities: { can_manage_addons: false },
+      offers: [
+        {
+          available: false,
+          unavailable_reason: 'Checkout is not configured for this offer.',
+          actions: [{ id: 'subscribe', enabled: false }],
+        },
+      ],
+    });
+  });
+
+  it('keeps the read projection available while collection actions are frozen', async () => {
+    const result = await getBillingRecurringAddons(
+      { request, actorToken: 'signed-actor', credential },
+      dependencies(
+        addonData(
+          BillingRecurringAddonSubscriptionScope.TEAM,
+          BillingRecurringAddonEntitlementScope.TEAM,
+          null,
+        ),
+        true,
+        { ...collection, stripeCollectionEnabled: false },
+      ) as never,
+    );
+
+    expect(result).toMatchObject({
+      collection: { stripe_collection_enabled: false, stripe_mode: 'test' },
+      capabilities: { can_manage_addons: false },
+      offers: [{ actions: [{ id: 'cancel', enabled: false }] }],
+    });
+  });
+
   it.each([
     {
       scope: BillingRecurringAddonSubscriptionScope.ORGANISATION,

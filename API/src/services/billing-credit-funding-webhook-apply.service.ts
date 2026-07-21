@@ -176,8 +176,7 @@ async function applyPaymentFailure(
       attempt.creditAccount.customer.stripeCustomerId ||
     (event.paymentMethodId &&
       event.paymentMethodId !== attempt.consentRevision.stripePaymentMethodId) ||
-    (attempt.stripePaymentIntentId &&
-      attempt.stripePaymentIntentId !== event.paymentIntent.id)
+    (attempt.stripePaymentIntentId && attempt.stripePaymentIntentId !== event.paymentIntent.id)
   ) {
     throw new AppError('INTERNAL', 502, 'STRIPE_CREDIT_AUTO_TOP_UP_BINDING_INVALID');
   }
@@ -190,7 +189,7 @@ async function applyPaymentFailure(
   if (
     attempt.status === BillingCreditAutoTopUpAttemptStatus.NEEDS_REVIEW &&
     attempt.stripePaymentIntentId === event.paymentIntent.id &&
-    attempt.stateWebhookEventId
+    attempt.stateWebhookEventId === webhookEventId
   ) {
     return;
   }
@@ -198,14 +197,27 @@ async function applyPaymentFailure(
     if (attempt.stripePaymentIntentId === event.paymentIntent.id) return;
     throw new AppError('INTERNAL', 502, 'STRIPE_CREDIT_AUTO_TOP_UP_REBIND_FORBIDDEN');
   }
+  const terminalFailure = ['requires_payment_method', 'requires_confirmation'].includes(
+    event.paymentIntent.status,
+  );
   await tx.billingCreditAutoTopUpAttempt.update({
     where: { id: attempt.id },
     data: {
       stripePaymentIntentId: event.paymentIntent.id,
       stateWebhookEventId: webhookEventId,
-      status: BillingCreditAutoTopUpAttemptStatus.NEEDS_REVIEW,
+      status: terminalFailure
+        ? BillingCreditAutoTopUpAttemptStatus.FAILED
+        : BillingCreditAutoTopUpAttemptStatus.NEEDS_REVIEW,
       failureCode: event.paymentIntent.last_payment_error?.code ?? 'payment_failed',
+      resolvedAt: terminalFailure ? event.occurredAt : null,
     },
+  });
+  await tx.billingCreditAccount.updateMany({
+    where: {
+      id: attempt.creditAccountId,
+      autoTopUpState: { not: BillingCreditAutoTopUpState.DISABLED },
+    },
+    data: { autoTopUpState: BillingCreditAutoTopUpState.NEEDS_REVIEW },
   });
 }
 
@@ -230,8 +242,7 @@ async function applyPaymentStateChange(
       attempt.creditAccount.customer.stripeCustomerId ||
     (event.paymentMethodId &&
       event.paymentMethodId !== attempt.consentRevision.stripePaymentMethodId) ||
-    (attempt.stripePaymentIntentId &&
-      attempt.stripePaymentIntentId !== event.paymentIntent.id) ||
+    (attempt.stripePaymentIntentId && attempt.stripePaymentIntentId !== event.paymentIntent.id) ||
     BigInt(event.paymentIntent.amount) !== attempt.paymentAmountMinor ||
     event.paymentIntent.currency.toUpperCase() !== 'USD'
   ) {
@@ -261,9 +272,23 @@ async function applyPaymentStateChange(
       status: nextStatus,
       failureCode:
         event.state === 'canceled'
-          ? event.paymentIntent.cancellation_reason ?? 'payment_canceled'
+          ? (event.paymentIntent.cancellation_reason ?? 'payment_canceled')
           : null,
       resolvedAt: event.state === 'canceled' ? event.occurredAt : null,
+    },
+  });
+  await tx.billingCreditAccount.updateMany({
+    where: {
+      id: attempt.creditAccountId,
+      autoTopUpState: { not: BillingCreditAutoTopUpState.DISABLED },
+    },
+    data: {
+      autoTopUpState:
+        event.state === 'requires_action'
+          ? BillingCreditAutoTopUpState.REQUIRES_ACTION
+          : event.state === 'processing'
+            ? BillingCreditAutoTopUpState.PAUSED
+            : BillingCreditAutoTopUpState.NEEDS_REVIEW,
     },
   });
 }
@@ -296,6 +321,39 @@ async function applySetupSucceeded(
     stripeExternalId(event.setupIntent.customer) !== checkout.customer.stripeCustomerId
   ) {
     throw new AppError('INTERNAL', 502, 'STRIPE_CREDIT_SETUP_BINDING_INVALID');
+  }
+  const locked = await tx.$queryRaw<
+    Array<{ autoTopUpGeneration: number; autoTopUpConsentRevisionId: string | null }>
+  >(Prisma.sql`
+    SELECT
+      "auto_top_up_generation" AS "autoTopUpGeneration",
+      "auto_top_up_consent_revision_id" AS "autoTopUpConsentRevisionId"
+    FROM "billing_credit_accounts"
+    WHERE "id" = ${checkout.creditAccountId}
+    FOR UPDATE
+  `);
+  const predecessor = locked[0];
+  if (!predecessor) {
+    throw new AppError('INTERNAL', 502, 'STRIPE_CREDIT_SETUP_BINDING_INVALID');
+  }
+  if (
+    predecessor.autoTopUpGeneration !== checkout.expectedGeneration ||
+    predecessor.autoTopUpConsentRevisionId !== checkout.expectedConsentRevisionId
+  ) {
+    await tx.billingCreditSetupCheckout.updateMany({
+      where: {
+        id: checkout.id,
+        status: {
+          in: [
+            BillingCreditCheckoutStatus.CREATING,
+            BillingCreditCheckoutStatus.OPEN,
+            BillingCreditCheckoutStatus.NEEDS_REVIEW,
+          ],
+        },
+      },
+      data: { status: BillingCreditCheckoutStatus.ABANDONED },
+    });
+    return;
   }
   await tx.billingCreditSetupCheckout.update({
     where: { id: checkout.id },
@@ -332,9 +390,14 @@ async function applySetupSucceeded(
       consentedAt: event.occurredAt,
     },
   });
-  await tx.billingCreditAccount.update({
-    where: { id: checkout.creditAccountId },
+  const activated = await tx.billingCreditAccount.updateMany({
+    where: {
+      id: checkout.creditAccountId,
+      autoTopUpGeneration: checkout.expectedGeneration,
+      autoTopUpConsentRevisionId: checkout.expectedConsentRevisionId,
+    },
     data: {
+      autoTopUpGeneration: { increment: 1 },
       autoTopUpState: BillingCreditAutoTopUpState.ACTIVE,
       autoTopUpPolicyId: checkout.policyId,
       autoTopUpServiceId: checkout.serviceId,
@@ -351,6 +414,9 @@ async function applySetupSucceeded(
       paymentMethodSummary: event.paymentMethodSummary,
     },
   });
+  if (activated.count !== 1) {
+    throw new AppError('INTERNAL', 409, 'BILLING_CREDIT_SETUP_PREDECESSOR_CHANGED');
+  }
 }
 
 async function applyCheckoutExpiry(
@@ -379,13 +445,13 @@ async function applyCheckoutExpiry(
   const where = {
     id: event.localId,
     stripeCheckoutSessionId: event.checkoutSessionId,
-      status: {
-        in: [
-          BillingCreditCheckoutStatus.CREATING,
-          BillingCreditCheckoutStatus.OPEN,
-          BillingCreditCheckoutStatus.NEEDS_REVIEW,
-        ],
-      },
+    status: {
+      in: [
+        BillingCreditCheckoutStatus.CREATING,
+        BillingCreditCheckoutStatus.OPEN,
+        BillingCreditCheckoutStatus.NEEDS_REVIEW,
+      ],
+    },
   };
   const data = { status: BillingCreditCheckoutStatus.EXPIRED, expiresAt: event.expiresAt };
   const result =

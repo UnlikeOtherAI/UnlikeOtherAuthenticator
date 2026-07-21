@@ -24,6 +24,10 @@ import type {
   BillingCreditProjectionData,
 } from './billing-credit-projection-data.service.js';
 import type { CreditCollectionContext } from './billing-credit-account.service.js';
+import {
+  unavailableBillingCreditActions,
+  type BillingCreditActionReadiness,
+} from './billing-credit-action-readiness.service.js';
 import type { BillingFundingViewer } from './billing-funding-viewer.service.js';
 
 function sum(values: bigint[]): bigint {
@@ -108,6 +112,7 @@ export function buildBillingCreditsProjection(params: {
   period: BillingCreditPeriod;
   data: BillingCreditProjectionData;
   now: Date;
+  actionReadiness?: BillingCreditActionReadiness;
 }): BillingCreditsV1 {
   const { data, viewer } = params;
   const pendingCount = data.pending.length;
@@ -173,7 +178,6 @@ export function buildBillingCreditsProjection(params: {
     },
     pending_credits: {
       top_up_count: pendingCount,
-      payment_amount: billingCreditsPaymentMoney(pendingPayment),
       credits_received: billingCreditAmount(pendingCredits),
       label: pendingCount === 1 ? 'One top-up pending' : `${pendingCount} top-ups pending`,
       description:
@@ -190,6 +194,7 @@ export function buildBillingCreditsProjection(params: {
       data,
       requestBody,
       params.collection.stripeCollectionEnabled,
+      params.actionReadiness ?? unavailableBillingCreditActions(),
     );
     const funding = actions.funding_policy;
     const automatic = actions.automatic_top_up;
@@ -207,15 +212,20 @@ export function buildBillingCreditsProjection(params: {
         usage_visibility: 'full_team',
         description: 'This viewer may see the full team breakdown and manage funding.',
       },
+      pending_credits: {
+        ...common.pending_credits,
+        payment_amount: billingCreditsPaymentMoney(pendingPayment),
+      },
       funding_policy: funding,
       automatic_top_up: automatic,
       credit_summary: { ...summary, consumed_breakdown: managerBreakdown(data) },
       recent_entries: buildManagerCreditRecentEntries(data),
     } satisfies BillingCreditsManagerV1;
   }
-  const actions = buildMemberCreditActionsProjection(data, requestBody);
+  const actions = buildMemberCreditActionsProjection(data);
   return {
     ...common,
+    pending_credits: { ...common.pending_credits, payment_amount: null },
     capabilities: {
       can_top_up: false,
       can_manage_automatic_top_up: false,

@@ -12,7 +12,6 @@ import {
   disableBillingCreditAutoTopUp,
   updateBillingCreditAutoTopUp,
 } from '../../src/services/billing-credit-auto-top-up-consent.service.js';
-import { recoverBillingCreditAutoTopUp } from '../../src/services/billing-credit-auto-top-up-recovery.service.js';
 import { createBillingCreditAutoTopUpSetup } from '../../src/services/billing-credit-auto-top-up-setup.service.js';
 import type { CreditFundingActionContext } from '../../src/services/billing-credit-funding-context.service.js';
 import { createBillingCreditTopUpCheckout } from '../../src/services/billing-credit-top-up.service.js';
@@ -57,12 +56,21 @@ const option = {
   monthlyChargeCapMinor: 10_000n,
 };
 
+function fundingMetadata(local: Record<string, string>) {
+  return {
+    uoa_service_id: credential.service.id,
+    uoa_app_key_id: credential.id,
+    uoa_credit_account_id: 'credit_account_1',
+    ...local,
+  };
+}
+
 function baseContext(overrides?: Record<string, unknown>) {
   const sessionsCreate = vi.fn();
   const stripe = {
     checkout: { sessions: { create: sessionsCreate, retrieve: vi.fn(), list: vi.fn() } },
     paymentMethods: { retrieve: vi.fn() },
-    paymentIntents: { retrieve: vi.fn() },
+    paymentIntents: { retrieve: vi.fn(), cancel: vi.fn() },
     prices: { retrieve: vi.fn() },
     accounts: { retrieveCurrent: vi.fn() },
     customers: { create: vi.fn(), retrieve: vi.fn() },
@@ -74,6 +82,7 @@ function baseContext(overrides?: Record<string, unknown>) {
     orgId: request.organisationId,
     teamId: request.teamId,
     autoTopUpState: BillingCreditAutoTopUpState.DISABLED,
+    autoTopUpGeneration: 0,
     autoTopUpOptionId: null,
     autoTopUpConsentRevisionId: null,
     autoTopUpThresholdMicrocredits: null,
@@ -134,6 +143,8 @@ function checkoutRow(kind: 'setup' | 'top_up', actorJti = 'actor_jti_1') {
         ...common,
         policyId: policy.id,
         optionId: option.id,
+        expectedGeneration: 0,
+        expectedConsentRevisionId: null,
         consentVersion: policy.automaticConsentVersion,
         thresholdMicrocredits: option.thresholdMicrocredits,
         refillOfferId: offer.id,
@@ -203,9 +214,9 @@ describe('UOA credit funding mutation services', () => {
       success_url: 'https://app.deepwater.example/?uoa_billing=checkout_complete',
       cancel_url: 'https://app.deepwater.example/?uoa_billing=checkout_cancelled',
       line_items: [{ price: 'price_20k', quantity: 1 }],
-      metadata: { uoa_credit_top_up_checkout_id: 'checkout_topup_1' },
+      metadata: fundingMetadata({ uoa_credit_top_up_checkout_id: 'checkout_topup_1' }),
       payment_intent_data: {
-        metadata: { uoa_credit_top_up_checkout_id: 'checkout_topup_1' },
+        metadata: fundingMetadata({ uoa_credit_top_up_checkout_id: 'checkout_topup_1' }),
       },
     });
     expect(stripeOptions.idempotencyKey).toBe('uoa:acct_uoa:test:credit:top_up:checkout_topup_1');
@@ -225,7 +236,7 @@ describe('UOA credit funding mutation services', () => {
           ...data,
           id: 'checkout_setup_1',
         })),
-        update: vi.fn(),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
     } as unknown as PrismaClient;
     state.sessionsCreate.mockImplementation(async (input) => ({
@@ -256,6 +267,7 @@ describe('UOA credit funding mutation services', () => {
       uoa_credit_setup_checkout_id: 'checkout_setup_1',
       uoa_service_id: credential.service.id,
       uoa_app_key_id: credential.id,
+      uoa_credit_account_id: 'credit_account_1',
     });
     expect(input.setup_intent_data.metadata).toEqual(input.metadata);
     expect(input).not.toHaveProperty('line_items');
@@ -276,7 +288,7 @@ describe('UOA credit funding mutation services', () => {
       url: 'https://checkout.stripe.com/c/pay/cs_existing',
       customer: 'cus_team_1',
       client_reference_id: existing.id,
-      metadata: { uoa_credit_top_up_checkout_id: existing.id },
+      metadata: fundingMetadata({ uoa_credit_top_up_checkout_id: existing.id }),
       expires_at: 1_784_470_800,
     };
     state.stripe.checkout.sessions.retrieve.mockResolvedValue(session);
@@ -319,13 +331,23 @@ describe('UOA credit funding mutation services', () => {
       card: { brand: 'visa', last4: '4242', exp_month: 12, exp_year: 2030 },
     });
     const revisionCreate = vi.fn().mockResolvedValue({ id: 'consent_new' });
-    const accountUpdate = vi.fn();
+    const accountUpdate = vi.fn().mockResolvedValue({ count: 1 });
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([
+        {
+          id: 'credit_account_1',
+          autoTopUpGeneration: 0,
+          autoTopUpConsentRevisionId: 'consent_old',
+          autoTopUpState: BillingCreditAutoTopUpState.ACTIVE,
+          stripePaymentMethodId: 'pm_1',
+        },
+      ]),
       billingCreditAutoTopUpConsentRevision: {
         findUnique: vi.fn().mockResolvedValue(null),
         create: revisionCreate,
       },
-      billingCreditAccount: { update: accountUpdate },
+      billingCreditAccount: { updateMany: accountUpdate },
+      billingCreditSetupCheckout: { updateMany: vi.fn() },
       orgAuditLog: { create: vi.fn() },
     };
     const prisma = {
@@ -354,8 +376,9 @@ describe('UOA credit funding mutation services', () => {
       }),
     });
     expect(accountUpdate).toHaveBeenCalledWith({
-      where: { id: 'credit_account_1' },
+      where: expect.objectContaining({ id: 'credit_account_1', autoTopUpGeneration: 0 }),
       data: expect.objectContaining({
+        autoTopUpGeneration: { increment: 1 },
         autoTopUpConsentRevisionId: 'consent_new',
         autoTopUpState: BillingCreditAutoTopUpState.ACTIVE,
       }),
@@ -371,11 +394,21 @@ describe('UOA credit funding mutation services', () => {
     });
     const accountUpdate = vi.fn();
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([
+        {
+          id: 'credit_account_1',
+          autoTopUpGeneration: 0,
+          autoTopUpConsentRevisionId: 'consent_1',
+          autoTopUpState: BillingCreditAutoTopUpState.ACTIVE,
+          stripePaymentMethodId: 'pm_1',
+        },
+      ]),
       billingCreditAccount: {
-        findUnique: vi.fn().mockResolvedValue(state.context.creditAccount),
         update: accountUpdate,
       },
       billingCreditAutoTopUpAttempt: { findFirst: vi.fn().mockResolvedValue(null) },
+      billingCreditAutoTopUpDisableEvent: { create: vi.fn() },
+      billingCreditSetupCheckout: { updateMany: vi.fn() },
       orgAuditLog: { create: vi.fn() },
     };
     const prisma = { $transaction: vi.fn((callback) => callback(tx)) } as unknown as PrismaClient;
@@ -395,84 +428,37 @@ describe('UOA credit funding mutation services', () => {
     });
   });
 
-  it('returns only the exact bound HTTPS PaymentIntent recovery URL', async () => {
-    const state = baseContext({ autoTopUpState: BillingCreditAutoTopUpState.REQUIRES_ACTION });
-    const intent = {
-      id: 'pi_auto_1',
-      livemode: false,
-      status: 'requires_action',
-      amount: 2_000,
-      currency: 'usd',
-      customer: 'cus_team_1',
-      payment_method: 'pm_1',
-      metadata: { uoa_credit_auto_top_up_attempt_id: 'attempt_1' },
-      next_action: {
-        type: 'redirect_to_url',
-        redirect_to_url: { url: 'https://hooks.stripe.com/redirect/authenticate/pi_auto_1' },
+  it('keeps disable blocked for ambiguous review evidence', async () => {
+    const state = baseContext({
+      autoTopUpState: BillingCreditAutoTopUpState.NEEDS_REVIEW,
+      autoTopUpConsentRevisionId: 'consent_1',
+      autoTopUpOptionId: option.id,
+      stripePaymentMethodId: 'pm_1',
+    });
+    const disableCreate = vi.fn();
+    const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([
+        {
+          id: 'credit_account_1',
+          autoTopUpGeneration: 0,
+          autoTopUpConsentRevisionId: 'consent_1',
+          autoTopUpState: BillingCreditAutoTopUpState.NEEDS_REVIEW,
+          stripePaymentMethodId: 'pm_1',
+        },
+      ]),
+      billingCreditAutoTopUpAttempt: {
+        findFirst: vi.fn().mockResolvedValue({ id: 'attempt_ambiguous' }),
       },
+      billingCreditAutoTopUpDisableEvent: { create: disableCreate },
     };
-    state.stripe.paymentIntents.retrieve.mockResolvedValue(intent);
-    const prisma = {
-      billingCreditAutoTopUpAttempt: {
-        findFirst: vi.fn().mockResolvedValue({
-          id: 'attempt_1',
-          stripePaymentIntentId: 'pi_auto_1',
-          paymentAmountMinor: 2_000n,
-          consentRevision: { stripePaymentMethodId: 'pm_1' },
-        }),
-      },
-    } as unknown as PrismaClient;
+    const prisma = { $transaction: vi.fn((callback) => callback(tx)) } as unknown as PrismaClient;
 
-    const result = await recoverBillingCreditAutoTopUp(
-      { request, actorToken: 'actor', credential },
-      { prisma, resolveContext: vi.fn().mockResolvedValue(state.context) },
-    );
-
-    expect(result).toEqual({
-      redirect_url: 'https://hooks.stripe.com/redirect/authenticate/pi_auto_1',
-    });
-
-    intent.amount = Number.MAX_SAFE_INTEGER + 1;
     await expect(
-      recoverBillingCreditAutoTopUp(
+      disableBillingCreditAutoTopUp(
         { request, actorToken: 'actor', credential },
         { prisma, resolveContext: vi.fn().mockResolvedValue(state.context) },
       ),
-    ).rejects.toThrow('STRIPE_CREDIT_AMOUNT_INVALID');
-  });
-
-  it('rejects recovery when Stripe metadata is rebound to another attempt', async () => {
-    const state = baseContext({ autoTopUpState: BillingCreditAutoTopUpState.REQUIRES_ACTION });
-    state.stripe.paymentIntents.retrieve.mockResolvedValue({
-      id: 'pi_auto_1',
-      livemode: false,
-      status: 'requires_action',
-      amount: 2_000,
-      currency: 'usd',
-      customer: 'cus_team_1',
-      payment_method: 'pm_1',
-      metadata: { uoa_credit_auto_top_up_attempt_id: 'attempt_attacker' },
-      next_action: {
-        type: 'redirect_to_url',
-        redirect_to_url: { url: 'https://attacker.example/recovery' },
-      },
-    });
-    const prisma = {
-      billingCreditAutoTopUpAttempt: {
-        findFirst: vi.fn().mockResolvedValue({
-          id: 'attempt_1',
-          stripePaymentIntentId: 'pi_auto_1',
-          paymentAmountMinor: 2_000n,
-          consentRevision: { stripePaymentMethodId: 'pm_1' },
-        }),
-      },
-    } as unknown as PrismaClient;
-
-    await expect(
-      recoverBillingCreditAutoTopUp(
-        { request, actorToken: 'actor', credential },
-        { prisma, resolveContext: vi.fn().mockResolvedValue(state.context) },
-      ),
-    ).rejects.toThrow('STRIPE_CREDIT_AUTO_TOP_UP_BINDING_INVALID');
+    ).rejects.toThrow('BILLING_CREDIT_AUTO_TOP_UP_PAYMENT_PENDING');
+    expect(disableCreate).not.toHaveBeenCalled();
   });
 });

@@ -26,10 +26,11 @@ import {
   resolveBillingFundingViewer,
   type BillingFundingViewer,
 } from './billing-funding-viewer.service.js';
+import { recurringAddonOfferAvailability } from './billing-recurring-addon-catalog.service.js';
 import {
   canManageRecurringAddonScope,
   recurringAddonScope,
-  uniqueEntitlementScope,
+  type RecurringAddonSubject,
 } from './billing-recurring-addon-scope.service.js';
 
 type Subscription = Awaited<ReturnType<typeof loadAddonData>>['subscriptions'][number];
@@ -218,38 +219,7 @@ async function loadAddonData(
   return { offers, subscriptions, checkouts };
 }
 
-type OfferContext = {
-  product: string;
-  organisationId: string;
-  teamId: string;
-  userId: string;
-  collectionEnabled: boolean;
-};
-
-function offerAvailability(
-  offer: Awaited<ReturnType<typeof loadAddonData>>['offers'][number],
-  context: OfferContext,
-) {
-  const entitlementScope = uniqueEntitlementScope(offer.featurePolicies);
-  const catalog = offer.catalogs[0];
-  const catalogMatches = Boolean(
-    catalog &&
-    catalog.currency === offer.currency &&
-    catalog.monthlyAmountMinor === offer.monthlyAmountMinor,
-  );
-  const available = Boolean(context.collectionEnabled && entitlementScope && catalogMatches);
-  return {
-    entitlementScope,
-    available,
-    unavailableReason: available
-      ? null
-      : !context.collectionEnabled
-        ? 'Stripe collection is not enabled.'
-        : !entitlementScope
-          ? 'This offer does not have one exact active entitlement scope.'
-          : 'Checkout is not configured for this offer.',
-  };
-}
+type OfferContext = RecurringAddonSubject & { collectionEnabled: boolean };
 
 function managerActions(params: {
   offer: Awaited<ReturnType<typeof loadAddonData>>['offers'][number];
@@ -257,7 +227,7 @@ function managerActions(params: {
   data: Awaited<ReturnType<typeof loadAddonData>>;
   viewer: BillingFundingViewer;
   context: OfferContext;
-  availability: ReturnType<typeof offerAvailability>;
+  availability: ReturnType<typeof recurringAddonOfferAvailability>;
 }): Array<BillingRecurringAddonCheckoutAction | BillingRecurringAddonCancelAction> {
   if (!params.availability.entitlementScope) return [];
   const scope = recurringAddonScope(params.availability.entitlementScope, {
@@ -269,6 +239,7 @@ function managerActions(params: {
   if (!canManageRecurringAddonScope(params.viewer, scope.scope)) return [];
   if (params.subscription) {
     const enabled =
+      params.context.collectionEnabled &&
       !params.subscription.cancelAtPeriodEnd &&
       !['canceled', 'incomplete_expired'].includes(params.subscription.status);
     return [
@@ -278,7 +249,11 @@ function managerActions(params: {
         label: 'Cancel add-on',
         description: 'Schedule this add-on to end at its current billing-period boundary.',
         enabled,
-        disabled_reason: enabled ? null : 'Cancellation is already scheduled.',
+        disabled_reason: enabled
+          ? null
+          : !params.context.collectionEnabled
+            ? 'Stripe collection is not enabled.'
+            : 'Cancellation is already scheduled.',
         request: {
           method: 'POST',
           path: BILLING_RECURRING_ADDONS_CANCELLATION_PREVIEW_PATH,
@@ -339,7 +314,7 @@ function offersForManager(
       scopes,
       viewer.userId,
     );
-    const availability = offerAvailability(offer, context);
+    const availability = recurringAddonOfferAvailability(offer, context.collectionEnabled);
     return {
       id: offer.id,
       key: offer.key,
@@ -370,7 +345,7 @@ function offersForMember(
       scopes,
       viewer.userId,
     );
-    const availability = offerAvailability(offer, context);
+    const availability = recurringAddonOfferAvailability(offer, context.collectionEnabled);
     return {
       id: offer.id,
       key: offer.key,
@@ -419,7 +394,13 @@ export async function getBillingRecurringAddons(
     { prisma },
   );
   const [collection, viewer] = await Promise.all([
-    (deps?.resolveCollection ?? resolveCreditCollectionContext)({ prisma }),
+    (deps?.resolveCollection ?? resolveCreditCollectionContext)(
+      {
+        organisationId: params.request.organisationId,
+        teamId: params.request.teamId,
+      },
+      { prisma },
+    ),
     (deps?.resolveViewer ?? resolveBillingFundingViewer)(
       {
         userId: params.request.userId,

@@ -11,6 +11,7 @@ import {
   loadBillingCreditProjectionData,
 } from './billing-credit-projection-data.service.js';
 import { buildBillingCreditsProjection } from './billing-credit-projection.service.js';
+import { resolveBillingCreditActionReadiness } from './billing-credit-action-readiness.service.js';
 import { settleCreditPortfolio } from './billing-credit-settlement.service.js';
 import { resolveEffectiveTariffContext } from './billing-entitlement.service.js';
 import { resolveBillingFundingViewer } from './billing-funding-viewer.service.js';
@@ -35,6 +36,7 @@ type Dependencies = {
   settlePortfolio?: typeof settleCreditPortfolio;
   resolveViewer?: typeof resolveBillingFundingViewer;
   loadProjectionData?: typeof loadBillingCreditProjectionData;
+  resolveActionReadiness?: typeof resolveBillingCreditActionReadiness;
 };
 
 export async function getBillingCredits(
@@ -56,7 +58,13 @@ export async function getBillingCredits(
   );
   const now = deps?.now?.() ?? new Date();
   const period = currentBillingCreditPeriod(now);
-  const collection = await (deps?.resolveCollection ?? resolveCreditCollectionContext)({ prisma });
+  const collection = await (deps?.resolveCollection ?? resolveCreditCollectionContext)(
+    {
+      organisationId: params.request.organisationId,
+      teamId: params.request.teamId,
+    },
+    { prisma },
+  );
   const creditAccount = await (deps?.ensureCreditAccount ?? ensureTeamCreditAccount)(
     {
       account: collection.account,
@@ -109,6 +117,9 @@ export async function getBillingCredits(
       { prisma },
     ),
   ]);
+  const actionReadiness = await (
+    deps?.resolveActionReadiness ?? resolveBillingCreditActionReadiness
+  )({ collection, credential: params.credential, data });
   return buildBillingCreditsProjection({
     credential: params.credential,
     collection,
@@ -116,5 +127,6 @@ export async function getBillingCredits(
     period,
     data,
     now,
+    actionReadiness,
   });
 }

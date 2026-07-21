@@ -39,7 +39,10 @@ const errorResponse = {
 
 function requestBody(selector: 'offer_id' | 'option_id' | null) {
   const schema = selector
-    ? billingSubjectActionBodySchema({ [selector]: { type: 'string', minLength: 1 } }, [selector])
+    ? billingSubjectActionBodySchema(
+        { [selector]: { type: 'string', minLength: 1, maxLength: 256 } },
+        [selector],
+      )
     : billingSubjectRequestJsonSchema;
   return {
     required: true,

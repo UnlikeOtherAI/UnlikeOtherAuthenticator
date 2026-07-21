@@ -215,16 +215,12 @@ export const billingCreditsManagerConsentJsonSchema = {
   },
 } as const;
 
-export const billingCreditsMemberConsentJsonSchema = {
+export const billingCreditsMemberAutomaticTopUpJsonSchema = {
   type: 'object',
   additionalProperties: false,
-  required: ['status', 'version', 'consented_at'],
+  required: ['payment_method'],
   properties: {
-    status: { enum: ['missing', 'current', 'outdated'] },
-    version: { type: ['string', 'null'] },
-    consented_at: {
-      anyOf: [{ type: 'string', format: 'date-time' }, { type: 'null' }],
-    },
+    payment_method: billingCreditsMemberPaymentMethodJsonSchema,
   },
 } as const;
 
@@ -256,6 +252,10 @@ export const billingCreditsVisibilityDiscriminatorJsonSchema = {
           },
         },
         credit_summary: billingCreditsManagerSummaryJsonSchema,
+        pending_credits: {
+          type: 'object',
+          properties: { payment_amount: { type: 'object' } },
+        },
         funding_policy: {
           type: 'object',
           properties: {
@@ -299,25 +299,12 @@ export const billingCreditsVisibilityDiscriminatorJsonSchema = {
           },
         },
         credit_summary: billingCreditsMemberSummaryJsonSchema,
-        funding_policy: {
+        pending_credits: {
           type: 'object',
-          properties: {
-            offers: {
-              type: 'array',
-              items: { type: 'object', properties: { action: { type: 'null' } } },
-            },
-          },
+          properties: { payment_amount: { type: 'null' } },
         },
-        automatic_top_up: {
-          type: 'object',
-          properties: {
-            payment_method: billingCreditsMemberPaymentMethodJsonSchema,
-            consent: billingCreditsMemberConsentJsonSchema,
-            options: optionActionVisibility({ type: 'null' }),
-            disable_action: { type: 'null' },
-            recover_action: { type: 'null' },
-          },
-        },
+        funding_policy: { type: 'null' },
+        automatic_top_up: billingCreditsMemberAutomaticTopUpJsonSchema,
         recent_entries: billingCreditsMemberRecentEntriesJsonSchema,
       },
     },

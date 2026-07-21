@@ -291,6 +291,7 @@ model User {
   billingCreditAutoTopUps              BillingCreditAutoTopUpAttempt[]           @relation("CreditAutoTopUpAttribution")
   billingCreditUsageAllocations        BillingCreditUsageAllocation[]            @relation("CreditUsageAllocationAttribution")
   billingCreditAdminAdjustments        BillingCreditAdminAdjustment[]            @relation("CreditAdminAdjustmentCreator")
+  billingCreditAutoTopUpDisables       BillingCreditAutoTopUpDisableEvent[]      @relation("CreditAutoTopUpDisabler")
   recurringAddonCheckouts              BillingRecurringAddonCheckout[]           @relation("RecurringAddonCheckoutRequester")
   recurringAddonSubscriptionsAsUser    BillingRecurringAddonSubscription[]       @relation("RecurringAddonSubscriptionSubscriber")
   recurringAddonCheckoutsAsUser        BillingRecurringAddonCheckout[]           @relation("RecurringAddonCheckoutSubscriber")
@@ -923,6 +924,7 @@ model Organisation {
   billingCreditAdminAdjustments     BillingCreditAdminAdjustment[]
   billingCreditPortfolioSnapshots   BillingCreditPortfolioSnapshot[]
   billingCreditConsentRevisions     BillingCreditAutoTopUpConsentRevision[]
+  billingCreditAutoTopUpDisables    BillingCreditAutoTopUpDisableEvent[]
   recurringAddonCheckouts           BillingRecurringAddonCheckout[]
   recurringAddonSubscriptions       BillingRecurringAddonSubscription[]
   recurringAddonCancellationIntents BillingRecurringAddonCancellationIntent[]
@@ -1111,6 +1113,7 @@ model Team {
   billingCreditAdminAdjustments            BillingCreditAdminAdjustment[]
   billingCreditPortfolioSnapshots          BillingCreditPortfolioSnapshot[]
   billingCreditConsentRevisions            BillingCreditAutoTopUpConsentRevision[]
+  billingCreditAutoTopUpDisables           BillingCreditAutoTopUpDisableEvent[]
   recurringAddonScopeCheckouts             BillingRecurringAddonCheckout[]           @relation("RecurringAddonCheckoutScopeTeam")
   recurringAddonRequestCheckouts           BillingRecurringAddonCheckout[]           @relation("RecurringAddonCheckoutRequestTeam")
   recurringAddonSubscriptions              BillingRecurringAddonSubscription[]
@@ -1368,6 +1371,7 @@ model BillingService {
   creditSettlementAdjustments       BillingCreditUsageSettlementAdjustment[]
   creditUsageAllocations            BillingCreditUsageAllocation[]
   creditConsentRevisions            BillingCreditAutoTopUpConsentRevision[]
+  creditAutoTopUpDisables           BillingCreditAutoTopUpDisableEvent[]
   creditPortfolioPerspectives       BillingCreditPortfolioSnapshot[]          @relation("CreditPortfolioPerspectiveService")
   recurringAddonOffers              BillingRecurringAddonOffer[]
   recurringAddonCatalogs            BillingRecurringAddonCatalog[]
@@ -1473,6 +1477,7 @@ model BillingAppKey {
   creditSettlementAdjustments       BillingCreditUsageSettlementAdjustment[]
   creditUsageAllocations            BillingCreditUsageAllocation[]
   creditConsentRevisions            BillingCreditAutoTopUpConsentRevision[]
+  creditAutoTopUpDisables           BillingCreditAutoTopUpDisableEvent[]
   recurringAddonCheckouts           BillingRecurringAddonCheckout[]
   recurringAddonCancellationIntents BillingRecurringAddonCancellationIntent[]
 
@@ -1605,6 +1610,7 @@ model BillingStripeAccount {
   creditPortfolioSnapshots          BillingCreditPortfolioSnapshot[]
   creditPaymentAdjustments          BillingCreditPaymentAdjustment[]
   creditConsentRevisions            BillingCreditAutoTopUpConsentRevision[]
+  creditAutoTopUpDisables           BillingCreditAutoTopUpDisableEvent[]
   recurringAddonCatalogs            BillingRecurringAddonCatalog[]
   recurringAddonCheckouts           BillingRecurringAddonCheckout[]
   recurringAddonSubscriptions       BillingRecurringAddonSubscription[]
@@ -2268,6 +2274,7 @@ model BillingCreditAccount {
   teamId                         String                      @map("team_id")
   currency                       String                      @default("USD") @db.Char(3)
   balanceMicrocredits            BigInt                      @default(0) @map("balance_microcredits")
+  autoTopUpGeneration            Int                         @default(0) @map("auto_top_up_generation")
   autoTopUpState                 BillingCreditAutoTopUpState @default(DISABLED) @map("auto_top_up_state")
   autoTopUpPolicyId              String?                     @map("auto_top_up_policy_id")
   autoTopUpServiceId             String?                     @map("auto_top_up_service_id")
@@ -2306,6 +2313,7 @@ model BillingCreditAccount {
   portfolioSnapshots       BillingCreditPortfolioSnapshot[]
   paymentAdjustments       BillingCreditPaymentAdjustment[]
   consentRevisions         BillingCreditAutoTopUpConsentRevision[]  @relation("CreditAccountConsentRevisions")
+  autoTopUpDisableEvents   BillingCreditAutoTopUpDisableEvent[]
 
   @@unique([accountId, teamId, currency])
   @@index([orgId, teamId])
@@ -2526,6 +2534,8 @@ model BillingCreditSetupCheckout {
   optionId                  String                      @map("option_id")
   actorJti                  String                      @map("actor_jti") @db.VarChar(256)
   requestedByUserId         String                      @map("requested_by_user_id")
+  expectedGeneration        Int                         @map("expected_generation")
+  expectedConsentRevisionId String?                     @map("expected_consent_revision_id")
   consentVersion            String                      @map("consent_version") @db.VarChar(120)
   thresholdMicrocredits     BigInt                      @map("threshold_microcredits")
   refillOfferId             String                      @map("refill_offer_id")
@@ -2545,17 +2555,18 @@ model BillingCreditSetupCheckout {
   createdAt                 DateTime                    @default(now()) @map("created_at")
   updatedAt                 DateTime                    @updatedAt @map("updated_at")
 
-  account                BillingStripeAccount                   @relation(fields: [accountId], references: [id], onDelete: Restrict)
-  creditAccount          BillingCreditAccount                   @relation(fields: [creditAccountId], references: [id], onDelete: Restrict)
-  customer               BillingStripeCustomer                  @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  service                BillingService                         @relation(fields: [serviceId], references: [id], onDelete: Restrict)
-  appKey                 BillingAppKey                          @relation(fields: [appKeyId], references: [id], onDelete: Restrict)
-  policy                 BillingCreditFundingPolicy             @relation(fields: [policyId], references: [id], onDelete: Restrict)
-  option                 BillingCreditAutoTopUpOption           @relation(fields: [optionId], references: [id], onDelete: Restrict)
-  refillOffer            BillingCreditTopUpOffer                @relation(fields: [refillOfferId], references: [id], onDelete: Restrict)
-  requestedBy            User                                   @relation("CreditSetupRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
-  consentRevision        BillingCreditAutoTopUpConsentRevision?
-  completionWebhookEvent BillingStripeWebhookEvent?             @relation("CreditSetupCompletionEvent", fields: [completionWebhookEventId], references: [id], onDelete: Restrict)
+  account                 BillingStripeAccount                   @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  creditAccount           BillingCreditAccount                   @relation(fields: [creditAccountId], references: [id], onDelete: Restrict)
+  customer                BillingStripeCustomer                  @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  service                 BillingService                         @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  appKey                  BillingAppKey                          @relation(fields: [appKeyId], references: [id], onDelete: Restrict)
+  policy                  BillingCreditFundingPolicy             @relation(fields: [policyId], references: [id], onDelete: Restrict)
+  option                  BillingCreditAutoTopUpOption           @relation(fields: [optionId], references: [id], onDelete: Restrict)
+  refillOffer             BillingCreditTopUpOffer                @relation(fields: [refillOfferId], references: [id], onDelete: Restrict)
+  requestedBy             User                                   @relation("CreditSetupRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
+  consentRevision         BillingCreditAutoTopUpConsentRevision?
+  completionWebhookEvent  BillingStripeWebhookEvent?             @relation("CreditSetupCompletionEvent", fields: [completionWebhookEventId], references: [id], onDelete: Restrict)
+  expectedConsentRevision BillingCreditAutoTopUpConsentRevision? @relation("CreditSetupExpectedConsent", fields: [expectedConsentRevisionId], references: [id], onDelete: Restrict)
 
   @@unique([accountId, stripeCheckoutSessionId])
   @@unique([accountId, stripeSetupIntentId])
@@ -2591,19 +2602,21 @@ model BillingCreditAutoTopUpConsentRevision {
   consentedAt               DateTime                            @map("consented_at")
   createdAt                 DateTime                            @default(now()) @map("created_at")
 
-  account       BillingStripeAccount            @relation(fields: [accountId], references: [id], onDelete: Restrict)
-  creditAccount BillingCreditAccount            @relation("CreditAccountConsentRevisions", fields: [creditAccountId], references: [id], onDelete: Restrict)
-  activeFor     BillingCreditAccount?           @relation("ActiveCreditAutoTopUpConsent")
-  org           Organisation                    @relation(fields: [orgId], references: [id], onDelete: Restrict)
-  team          Team                            @relation(fields: [teamId], references: [id], onDelete: Restrict)
-  service       BillingService                  @relation(fields: [serviceId], references: [id], onDelete: Restrict)
-  appKey        BillingAppKey                   @relation(fields: [appKeyId], references: [id], onDelete: Restrict)
-  policy        BillingCreditFundingPolicy      @relation(fields: [policyId], references: [id], onDelete: Restrict)
-  option        BillingCreditAutoTopUpOption    @relation(fields: [optionId], references: [id], onDelete: Restrict)
-  refillOffer   BillingCreditTopUpOffer         @relation(fields: [refillOfferId], references: [id], onDelete: Restrict)
-  setupCheckout BillingCreditSetupCheckout?     @relation(fields: [setupCheckoutId], references: [id], onDelete: Restrict)
-  consentedBy   User                            @relation("CreditAutoTopUpRevisionConsenter", fields: [consentedByUserId], references: [id], onDelete: Restrict)
-  attempts      BillingCreditAutoTopUpAttempt[]
+  account                  BillingStripeAccount                 @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  creditAccount            BillingCreditAccount                 @relation("CreditAccountConsentRevisions", fields: [creditAccountId], references: [id], onDelete: Restrict)
+  activeFor                BillingCreditAccount?                @relation("ActiveCreditAutoTopUpConsent")
+  expectedBySetupCheckouts BillingCreditSetupCheckout[]         @relation("CreditSetupExpectedConsent")
+  disableEvents            BillingCreditAutoTopUpDisableEvent[] @relation("CreditDisablePreviousConsent")
+  org                      Organisation                         @relation(fields: [orgId], references: [id], onDelete: Restrict)
+  team                     Team                                 @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  service                  BillingService                       @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  appKey                   BillingAppKey                        @relation(fields: [appKeyId], references: [id], onDelete: Restrict)
+  policy                   BillingCreditFundingPolicy           @relation(fields: [policyId], references: [id], onDelete: Restrict)
+  option                   BillingCreditAutoTopUpOption         @relation(fields: [optionId], references: [id], onDelete: Restrict)
+  refillOffer              BillingCreditTopUpOffer              @relation(fields: [refillOfferId], references: [id], onDelete: Restrict)
+  setupCheckout            BillingCreditSetupCheckout?          @relation(fields: [setupCheckoutId], references: [id], onDelete: Restrict)
+  consentedBy              User                                 @relation("CreditAutoTopUpRevisionConsenter", fields: [consentedByUserId], references: [id], onDelete: Restrict)
+  attempts                 BillingCreditAutoTopUpAttempt[]
 
   @@unique([appKeyId, actorJti])
   @@index([creditAccountId, consentedAt])
@@ -2613,6 +2626,36 @@ model BillingCreditAutoTopUpConsentRevision {
   @@index([refillOfferId])
   @@index([consentedByUserId])
   @@map("billing_credit_auto_top_up_consent_revisions")
+}
+
+model BillingCreditAutoTopUpDisableEvent {
+  id                        String   @id @default(cuid())
+  accountId                 String   @map("account_id")
+  creditAccountId           String   @map("credit_account_id")
+  orgId                     String   @map("org_id")
+  teamId                    String   @map("team_id")
+  serviceId                 String   @map("service_id")
+  appKeyId                  String   @map("app_key_id")
+  previousConsentRevisionId String   @map("previous_consent_revision_id")
+  previousGeneration        Int      @map("previous_generation")
+  actorJti                  String   @map("actor_jti") @db.VarChar(256)
+  requestedByUserId         String   @map("requested_by_user_id")
+  createdAt                 DateTime @default(now()) @map("created_at")
+
+  account                 BillingStripeAccount                  @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  creditAccount           BillingCreditAccount                  @relation(fields: [creditAccountId], references: [id], onDelete: Restrict)
+  org                     Organisation                          @relation(fields: [orgId], references: [id], onDelete: Restrict)
+  team                    Team                                  @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  service                 BillingService                        @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  appKey                  BillingAppKey                         @relation(fields: [appKeyId], references: [id], onDelete: Restrict)
+  previousConsentRevision BillingCreditAutoTopUpConsentRevision @relation("CreditDisablePreviousConsent", fields: [previousConsentRevisionId], references: [id], onDelete: Restrict)
+  requestedBy             User                                  @relation("CreditAutoTopUpDisabler", fields: [requestedByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([appKeyId, actorJti])
+  @@unique([creditAccountId, previousGeneration])
+  @@index([orgId, teamId, createdAt])
+  @@index([requestedByUserId])
+  @@map("billing_credit_auto_top_up_disable_events")
 }
 
 model BillingCreditAutoTopUpAttempt {
