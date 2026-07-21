@@ -6,6 +6,10 @@ const migrationUrl = new URL(
   '../../prisma/migrations/20260721130000_add_contract_invoicing_foundation/migration.sql',
   import.meta.url,
 );
+const creditedVoidGuardMigrationUrl = new URL(
+  '../../prisma/migrations/20260721182000_guard_credited_invoice_void/migration.sql',
+  import.meta.url,
+);
 
 const protectedTables = [
   'billing_organisation_contracts',
@@ -132,6 +136,16 @@ describe('contract invoicing migration', () => {
     expect(sql).toContain('billing_invoice_number_sequences_monotonic');
     expect(sql).toContain('NEW."last_value" <> OLD."last_value" + 1');
     expect(sql).toContain("RAISE EXCEPTION 'settled invoices cannot be voided'");
+  });
+
+  it('treats applied prepaid credits as settlement when guarding voids', async () => {
+    const sql = await readFile(creditedVoidGuardMigrationUrl, 'utf8');
+
+    expect(sql).toContain('FROM "billing_invoice_credit_settlement_references"');
+    expect(sql).not.toContain('OLD."credits_applied_minor" > 0');
+    expect(sql).toContain('FROM "billing_invoice_payment_events"');
+    expect(sql).toContain("RAISE EXCEPTION 'settled invoices cannot be voided'");
+    expect(sql).toContain('BEFORE UPDATE OF "status" ON "billing_invoices"');
   });
 
   it('requires a billing email and preserves credits as a separate settlement value', async () => {

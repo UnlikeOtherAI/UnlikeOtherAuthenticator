@@ -289,6 +289,26 @@ provider cost, token or other units, calls, usage markup, Ledger cursor/hash, or
 internal calculation digest. Credits are never folded into or renamed as service prices.
 The contract-editor routes are the only place the organisation markup is shown.
 
+Contract and version controls are also server-authored. A contract returns
+\`actions.add_version\`, and every version returns
+\`actions.{activation_state,activate}\`. The activation state is exactly \`active\`,
+\`ready\`, \`scheduled\`, \`superseded\`, or \`contract_terminated\`. Admin clients
+render those controls as returned and never decide locally which authored version may be
+activated.
+
+Every customer-safe invoice DTO includes a server-authored \`actions\` projection.
+\`issue\` is \`issue\` only when UOA's database readiness function proves the active
+contract, issuer, exact service/metering/credit evidence, collector exclusivity, and
+active-invoice uniqueness; it is \`resume_issue\` for a recoverable issuing invoice,
+and otherwise null. \`download_pdf\` and \`void\` are exact booleans.
+\`payment_limits\` contains nullable \`payment\`, \`refund\`, and \`write_off\`
+maximum Money values. Admin clients render these values and do not reconstruct lifecycle
+eligibility, settlement limits, or commercial arithmetic. The private PDF object key and
+SHA-256 remain server-only; clients receive only \`download_pdf\` and stream verified bytes
+through the PDF endpoint.
+Any private positive credit-settlement reference blocks voiding even if its converted
+minor-currency display rounds to zero.
+
 Issuance allocates a contiguous contract/month revision and monotonic issuer/year number
 under database advisory locks, stores a
 private create-only Unicode PDF, and verifies its SHA-256 on download. Every calculated

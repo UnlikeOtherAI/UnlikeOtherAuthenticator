@@ -222,8 +222,8 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice canonical credit co
           appKeyId: appKey.id,
           direction: BillingCreditEntryDirection.DEBIT,
           kind: BillingCreditEntryKind.USAGE_SETTLEMENT,
-          amountMicrocredits: 2_500_000_000n,
-          balanceAfterMicrocredits: 2_500_000_000n,
+          amountMicrocredits: 10n,
+          balanceAfterMicrocredits: 4_999_999_990n,
           currency: 'USD',
           idempotencyKey: 'credit-contract-usage',
           sourceType: 'credit_usage_settlement_adjustment',
@@ -242,11 +242,11 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice canonical credit co
           portfolioSnapshotId: snapshot.id,
           sequence: 1,
           deltaRatedUsageAmountMicroMinor: 1_000_000_000n,
-          deltaCreditsConsumedMicrocredits: 2_500_000_000n,
-          deltaRemainingUsageAmountMicroMinor: 750_000_000n,
+          deltaCreditsConsumedMicrocredits: 10n,
+          deltaRemainingUsageAmountMicroMinor: 999_999_999n,
           cumulativeRatedUsageAmountMicroMinor: 1_000_000_000n,
-          cumulativeCreditsConsumedMicrocredits: 2_500_000_000n,
-          cumulativeRemainingUsageAmountMicroMinor: 750_000_000n,
+          cumulativeCreditsConsumedMicrocredits: 10n,
+          cumulativeRemainingUsageAmountMicroMinor: 999_999_999n,
           creditEntryId: usageEntryId,
         },
       });
@@ -258,11 +258,11 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice canonical credit co
           appKeyId: appKey.id,
           attributedUserId: null,
           deltaRatedUsageAmountMicroMinor: 1_000_000_000n,
-          deltaCreditsConsumedMicrocredits: 2_500_000_000n,
-          deltaRemainingUsageAmountMicroMinor: 750_000_000n,
+          deltaCreditsConsumedMicrocredits: 10n,
+          deltaRemainingUsageAmountMicroMinor: 999_999_999n,
           cumulativeRatedUsageAmountMicroMinor: 1_000_000_000n,
-          cumulativeCreditsConsumedMicrocredits: 2_500_000_000n,
-          cumulativeRemainingUsageAmountMicroMinor: 750_000_000n,
+          cumulativeCreditsConsumedMicrocredits: 10n,
+          cumulativeRemainingUsageAmountMicroMinor: 999_999_999n,
         },
       });
     });
@@ -301,7 +301,7 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice canonical credit co
         currency: 'USD',
         subtotalMinor: 1000n,
         totalMinor: 1000n,
-        creditsAppliedMinor: 250n,
+        creditsAppliedMinor: 0n,
         issuerSnapshot: {
           profile_id: issuer.id,
           legal_name: issuer.legalName,
@@ -336,7 +336,7 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice canonical credit co
             serviceId: service.id,
             settlementId: settlement.id,
             adjustmentId: settlementAdjustmentId,
-            creditsAppliedMicrocredits: 2_500_000_000n,
+            creditsAppliedMicrocredits: 10n,
           },
         },
       },
@@ -345,7 +345,11 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice canonical credit co
     const funded = await db.prisma.billingCreditAccount.findUniqueOrThrow({
       where: { id: creditAccount.id },
     });
-    expect(funded.balanceMicrocredits).toBe(2_500_000_000n);
+    expect(funded.balanceMicrocredits).toBe(4_999_999_990n);
+    const readyBeforeIssue = await db.prisma.$queryRaw<Array<{ ready: boolean }>>(
+      Prisma.sql`SELECT uoa_billing_invoice_issue_ready(${invoice.id}) AS "ready"`,
+    );
+    expect(readyBeforeIssue).toEqual([{ ready: true }]);
     const issueDate = new Date('2026-07-02T00:00:00.000Z');
     await db.prisma.billingInvoice.update({
       where: { id: invoice.id },
@@ -366,12 +370,81 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice canonical credit co
         issuedAt: issueDate,
       },
     });
+    await expect(
+      db.prisma.billingInvoice.update({
+        where: { id: invoice.id },
+        data: {
+          status: BillingInvoiceStatus.VOID,
+          voidedAt: issueDate,
+          voidReason: 'Must be rejected despite the rounded $0.00 credit display',
+        },
+      }),
+    ).rejects.toThrow(/settled invoices cannot be voided/);
+    const correction = await db.prisma.billingInvoice.create({
+      data: {
+        orgId: org.id,
+        contractId: contract.id,
+        contractVersionId: version.id,
+        issuerProfileId: issuer.id,
+        buyerProfileId: buyer.id,
+        billingMonth: '2026-06',
+        revision: 2,
+        currency: 'USD',
+        subtotalMinor: 1000n,
+        totalMinor: 1000n,
+        creditsAppliedMinor: 0n,
+        issuerSnapshot: {
+          profile_id: issuer.id,
+          legal_name: issuer.legalName,
+          billing_email: issuer.billingEmail,
+        },
+        buyerSnapshot: {
+          profile_id: buyer.id,
+          legal_name: buyer.legalName,
+          billing_email: buyer.billingEmail,
+        },
+        calculationDigest: 'e'.repeat(64),
+        lines: {
+          create: {
+            serviceId: service.id,
+            serviceIdentifier: service.identifier,
+            serviceName: service.name,
+            amountMinor: 1000n,
+            currency: 'USD',
+            position: 1,
+          },
+        },
+        meteringRefs: {
+          create: {
+            serviceId: service.id,
+            ledgerSnapshotCursor: 'contract-invoice-correction-snapshot',
+            ledgerSnapshotSha256: 'f'.repeat(64),
+            capturedAt: new Date('2026-07-01T00:00:00.000Z'),
+          },
+        },
+      },
+    });
+    const correctionReadiness = await db.prisma.$queryRaw<Array<{ ready: boolean }>>(
+      Prisma.sql`SELECT uoa_billing_invoice_issue_ready(${correction.id}) AS "ready"`,
+    );
+    expect(correctionReadiness).toEqual([{ ready: false }]);
+    await expect(
+      db.prisma.billingInvoice.update({
+        where: { id: correction.id },
+        data: {
+          status: BillingInvoiceStatus.ISSUING,
+          invoiceNumber: 'UOAC-2026-000002',
+          issueDate,
+          dueDate: new Date('2026-08-01T00:00:00.000Z'),
+        },
+      }),
+    ).rejects.toThrow(/invoice is not ready for issuance/);
     await db.prisma.billingInvoicePaymentEvent.create({
       data: {
         invoiceId: invoice.id,
         kind: BillingInvoicePaymentEventKind.PAYMENT,
         source: BillingInvoicePaymentEventSource.MANUAL,
-        amountMinor: 750n,
+        amountMinor: 1000n,
         currency: 'USD',
         idempotencyKey: 'uncovered-remainder',
         occurredAt: issueDate,
@@ -389,8 +462,8 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice canonical credit co
             subscriptionId: 'forbidden_subscription',
             lastAdjustmentId: settlementAdjustmentId,
             stripeInvoiceId: 'in_forbidden_double_collection',
-            cumulativeCreditsConsumedMicrocredits: 2_500_000_000n,
-            stripeQuantity: 250_000_000n,
+            cumulativeCreditsConsumedMicrocredits: 10n,
+            stripeQuantity: 1n,
             idempotencyKey: 'forbidden-double-collection',
           },
         });

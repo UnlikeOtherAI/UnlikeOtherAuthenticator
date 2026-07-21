@@ -292,6 +292,8 @@ export async function calculateBillingContractInvoice(
               lines: { orderBy: { position: 'asc' } },
               addonLines: { orderBy: { position: 'asc' } },
               paymentEvents: true,
+              issuerProfile: { select: { active: true } },
+              _count: { select: { creditSettlementRefs: true } },
             },
           });
           if (existing) return existing;
@@ -367,6 +369,8 @@ export async function calculateBillingContractInvoice(
               lines: { orderBy: { position: 'asc' } },
               addonLines: { orderBy: { position: 'asc' } },
               paymentEvents: true,
+              issuerProfile: { select: { active: true } },
+              _count: { select: { creditSettlementRefs: true } },
             },
           });
           await tx.adminAuditLog.create({

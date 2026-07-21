@@ -26,6 +26,8 @@ function invoice(): CustomerSafeInvoice {
     invoiceNumber: 'UOA-2026-000001',
     issueDate: now,
     dueDate: new Date('2026-07-31T00:00:00.000Z'),
+    pdfObjectKey: 'billing-invoices/org_1/invoice_1.pdf',
+    pdfSha256: 'a'.repeat(64),
     currency: 'USD',
     subtotalMinor: 6250n,
     taxAmountMinor: 0n,
@@ -91,12 +93,63 @@ function invoice(): CustomerSafeInvoice {
       },
     ],
     paymentEvents: [],
+    issuerProfile: { active: true },
+    _count: { creditSettlementRefs: 1 },
   };
 }
 
 describe('customer-safe contract invoice view', () => {
+  it('projects exact server-authored lifecycle action readiness and payment caps', () => {
+    const draft = invoice();
+    draft._count.creditSettlementRefs = 0;
+    draft.status = 'DRAFT';
+    draft.invoiceNumber = null;
+    draft.issueDate = null;
+    draft.dueDate = null;
+    draft.issuedAt = null;
+    draft.pdfObjectKey = null;
+    draft.pdfSha256 = null;
+    expect(serializeCustomerSafeInvoice(draft, 'issue').actions.issue).toBe('issue');
+    expect(serializeCustomerSafeInvoice(draft, null).actions.issue).toBeNull();
+
+    draft.status = 'ISSUING';
+    expect(serializeCustomerSafeInvoice(draft, 'resume_issue').actions.issue).toBe('resume_issue');
+
+    const issued = invoice();
+    issued._count.creditSettlementRefs = 0;
+    issued.paymentEvents = [
+      {
+        id: 'payment_1',
+        kind: 'PAYMENT',
+        source: 'MANUAL',
+        amountMinor: 1000n,
+        currency: 'USD',
+        reference: 'BANK-1',
+        occurredAt: now,
+        createdAt: now,
+      },
+    ];
+    const issuedActions = serializeCustomerSafeInvoice(issued, null).actions;
+    expect(issuedActions.download_pdf).toBe(true);
+    expect(issuedActions.void).toBe(false);
+    expect(issuedActions.payment_limits.payment?.amount_minor).toBe('5000');
+    expect(issuedActions.payment_limits.refund?.amount_minor).toBe('1000');
+    expect(issuedActions.payment_limits.write_off?.amount_minor).toBe('5000');
+
+    const credited = invoice();
+    credited.paymentEvents = [];
+    credited.creditsAppliedMinor = 0n;
+    credited._count.creditSettlementRefs = 1;
+    expect(serializeCustomerSafeInvoice(credited, null).actions.void).toBe(false);
+
+    issued.status = 'VOID';
+    const voidActions = serializeCustomerSafeInvoice(issued, null).actions;
+    expect(voidActions.download_pdf).toBe(true);
+    expect(voidActions.payment_limits).toEqual({ payment: null, refund: null, write_off: null });
+  });
+
   it('contains final service prices only and strips private calculation evidence', () => {
-    const value = serializeCustomerSafeInvoice(invoice());
+    const value = serializeCustomerSafeInvoice(invoice(), null);
     const serialized = JSON.stringify(value);
 
     expect(value.lines).toEqual([
@@ -135,6 +188,10 @@ describe('customer-safe contract invoice view', () => {
       'SECRET_TOKENS',
       'calculation_digest',
       'addonSubscriptionId',
+      'pdfObjectKey',
+      'pdfSha256',
+      'billing-invoices/org_1/invoice_1.pdf',
+      'a'.repeat(64),
     ]) {
       expect(serialized).not.toContain(forbidden);
     }

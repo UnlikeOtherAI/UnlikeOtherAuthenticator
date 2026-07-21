@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../../src/app.js';
 
 const services = vi.hoisted(() => ({
+  listBillingContracts: vi.fn(),
+  resolveBillingInvoiceIssueActions: vi.fn(),
   calculateBillingContractInvoice: vi.fn(),
   getBillingInvoice: vi.fn(),
   issueBillingInvoice: vi.fn(),
@@ -32,7 +34,7 @@ vi.mock('../../src/services/billing-contract.service.js', () => ({
   activateBillingContractVersion: vi.fn(),
   createBillingContract: vi.fn(),
   createBillingContractVersion: vi.fn(),
-  listBillingContracts: vi.fn().mockResolvedValue([]),
+  listBillingContracts: services.listBillingContracts,
 }));
 
 vi.mock('../../src/services/billing-invoice-profile.service.js', () => ({
@@ -44,6 +46,10 @@ vi.mock('../../src/services/billing-invoice-profile.service.js', () => ({
 
 vi.mock('../../src/services/billing-invoice-calculation.service.js', () => ({
   calculateBillingContractInvoice: services.calculateBillingContractInvoice,
+}));
+
+vi.mock('../../src/services/billing-invoice-action-readiness.service.js', () => ({
+  resolveBillingInvoiceIssueActions: services.resolveBillingInvoiceIssueActions,
 }));
 
 vi.mock('../../src/services/billing-invoice-lifecycle.service.js', () => ({
@@ -67,6 +73,8 @@ const invoice = {
   invoiceNumber: null,
   issueDate: null,
   dueDate: null,
+  pdfObjectKey: null,
+  pdfSha256: null,
   currency: 'USD',
   subtotalMinor: 6250n,
   taxAmountMinor: 0n,
@@ -112,6 +120,8 @@ const invoice = {
   ],
   addonLines: [],
   paymentEvents: [],
+  issuerProfile: { active: true },
+  _count: { creditSettlementRefs: 0 },
 };
 
 describe('contract invoice admin routes', () => {
@@ -122,6 +132,16 @@ describe('contract invoice admin routes', () => {
     process.env.SHARED_SECRET = 'test-shared-secret-with-enough-length';
     Reflect.deleteProperty(process.env, 'DATABASE_URL');
     services.calculateBillingContractInvoice.mockResolvedValue(invoice);
+    services.resolveBillingInvoiceIssueActions.mockImplementation(
+      async (invoices: Array<{ id: string; status: BillingInvoiceStatus }>) =>
+        new Map(
+          invoices.map((value) => [
+            value.id,
+            value.status === BillingInvoiceStatus.DRAFT ? 'issue' : null,
+          ]),
+        ),
+    );
+    services.listBillingContracts.mockResolvedValue([]);
     services.listBillingInvoices.mockResolvedValue([invoice]);
     services.readBillingInvoicePdf.mockResolvedValue({
       value: Buffer.from('%PDF-private-invoice'),
@@ -151,6 +171,124 @@ describe('contract invoice admin routes', () => {
     }
   });
 
+  it('projects exact contract and version action readiness from authoritative state', async () => {
+    const baseVersion = {
+      usageMarkupBps: 4000,
+      currency: 'USD',
+      paymentTermsDays: 30,
+      createdAt: now,
+      serviceTerms: [],
+    };
+    services.listBillingContracts.mockResolvedValue([
+      {
+        id: 'contract_1',
+        orgId: 'org_1',
+        reference: 'msa-1',
+        name: 'Active contract',
+        status: 'ACTIVE',
+        activatedAt: now,
+        terminatedAt: null,
+        createdAt: now,
+        updatedAt: now,
+        org: { name: 'Acme' },
+        versions: [
+          {
+            ...baseVersion,
+            id: 'version_future',
+            version: 4,
+            effectiveFromMonth: '9999-12',
+          },
+          {
+            ...baseVersion,
+            id: 'version_ready',
+            version: 3,
+            effectiveFromMonth: '2000-03',
+          },
+          {
+            ...baseVersion,
+            id: 'version_active',
+            version: 2,
+            effectiveFromMonth: '2000-02',
+            serviceTerms: [
+              {
+                serviceId: 'service_1',
+                tariffId: 'tariff_1',
+                monthlyAmountMinor: 5000n,
+                service: { identifier: 'deepwater', name: 'DeepWater' },
+              },
+            ],
+          },
+          {
+            ...baseVersion,
+            id: 'version_old',
+            version: 1,
+            effectiveFromMonth: '2000-01',
+            serviceTerms: [
+              {
+                serviceId: 'service_1',
+                tariffId: 'tariff_old',
+                monthlyAmountMinor: 2500n,
+                service: { identifier: 'deepwater', name: 'DeepWater' },
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: 'contract_terminated',
+        orgId: 'org_2',
+        reference: 'msa-2',
+        name: 'Terminated contract',
+        status: 'TERMINATED',
+        activatedAt: now,
+        terminatedAt: now,
+        createdAt: now,
+        updatedAt: now,
+        org: { name: 'Former customer' },
+        versions: [
+          {
+            ...baseVersion,
+            id: 'version_terminated_draft',
+            version: 1,
+            effectiveFromMonth: '2000-01',
+          },
+        ],
+      },
+    ]);
+
+    const app = await createApp();
+    try {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/internal/admin/billing/contracts',
+        headers: { authorization: 'Bearer admin-token' },
+      });
+      expect(response.statusCode, response.body).toBe(200);
+      const body = response.json();
+      expect(body[0].actions).toEqual({ add_version: true });
+      expect(
+        Object.fromEntries(
+          body[0].versions.map((version: { id: string; actions: unknown }) => [
+            version.id,
+            version.actions,
+          ]),
+        ),
+      ).toEqual({
+        version_future: { activation_state: 'scheduled', activate: false },
+        version_ready: { activation_state: 'ready', activate: true },
+        version_active: { activation_state: 'active', activate: false },
+        version_old: { activation_state: 'superseded', activate: false },
+      });
+      expect(body[1].actions).toEqual({ add_version: false });
+      expect(body[1].versions[0].actions).toEqual({
+        activation_state: 'contract_terminated',
+        activate: false,
+      });
+    } finally {
+      await app.close();
+    }
+  });
+
   it('returns only final per-service prices from the calculator boundary', async () => {
     const app = await createApp();
     try {
@@ -174,6 +312,8 @@ describe('contract invoice admin routes', () => {
           price: { amount_minor: '6250', amount: '62.5', currency: 'USD', display: '$62.5' },
         },
       ]);
+      expect(body.actions.issue).toBe('issue');
+      expect(services.resolveBillingInvoiceIssueActions).toHaveBeenCalledWith([invoice]);
       expect(JSON.stringify(body)).not.toMatch(
         /provider_cost|SECRET_PROVIDER_COST|ledger_cursor|SECRET_CURSOR/,
       );

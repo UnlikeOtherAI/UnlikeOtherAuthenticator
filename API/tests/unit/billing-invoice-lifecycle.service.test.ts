@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   issueBillingInvoice,
   recordBillingInvoicePayment,
+  voidBillingInvoice,
 } from '../../src/services/billing-invoice-lifecycle.service.js';
 
 const now = new Date('2026-07-21T12:00:00.000Z');
@@ -42,6 +43,7 @@ describe('billing invoice lifecycle conflict safety', () => {
       lines: [],
       addonLines: [],
       paymentEvents: [],
+      _count: { creditSettlementRefs: 0 },
     };
     const claimTx = {
       billingInvoice: { findUnique: vi.fn().mockResolvedValue(claimed) },
@@ -101,5 +103,39 @@ describe('billing invoice lifecycle conflict safety', () => {
       message: 'BILLING_INVOICE_PAYMENT_BUSY',
     });
     expect(transaction).toHaveBeenCalledTimes(3);
+  });
+
+  it('forbids voiding an invoice settled with prepaid credits', async () => {
+    const update = vi.fn();
+    const tx = {
+      billingInvoice: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: 'invoice_1',
+          status: BillingInvoiceStatus.ISSUED,
+          creditsAppliedMinor: 0n,
+          paymentEvents: [],
+          _count: { creditSettlementRefs: 1 },
+        }),
+        update,
+      },
+    };
+    const transaction = vi
+      .fn()
+      .mockImplementation(async (operation: (client: typeof tx) => unknown) => operation(tx));
+
+    await expect(
+      voidBillingInvoice(
+        {
+          invoiceId: 'invoice_1',
+          reason: 'Incorrect billing period',
+          actor: { userId: 'admin_1', email: 'admin@example.com' },
+        },
+        { prisma: { $transaction: transaction } as unknown as PrismaClient, now: () => now },
+      ),
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      message: 'BILLING_INVOICE_VOID_FORBIDDEN',
+    });
+    expect(update).not.toHaveBeenCalled();
   });
 });

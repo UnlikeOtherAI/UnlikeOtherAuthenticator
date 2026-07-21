@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createApiClient } from './api-client';
+import { ApiRequestError, createApiClient } from './api-client';
 
 const origin = 'https://admin.example.com';
 const fetchMock = vi.fn();
@@ -33,7 +33,9 @@ describe('Admin API client binary transport', () => {
     const form = new FormData();
     form.set('file', new Blob(['%PDF-test'], { type: 'application/pdf' }), 'terms.pdf');
 
-    await expect(createApiClient(origin).postForm<{ id: string }>('/upload', form)).resolves.toEqual({
+    await expect(
+      createApiClient(origin).postForm<{ id: string }>('/upload', form),
+    ).resolves.toEqual({
       id: 'version-1',
     });
 
@@ -67,5 +69,17 @@ describe('Admin API client binary transport', () => {
       createApiClient('https://attacker.example').get('/internal/admin/session'),
     ).rejects.toThrow('Cross-origin admin API requests are not permitted');
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('preserves the HTTP status for callers that distinguish absence from read failure', async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 404 }));
+
+    await expect(createApiClient(origin).get('/missing')).rejects.toEqual(
+      expect.objectContaining<ApiRequestError>({
+        name: 'ApiRequestError',
+        message: 'Request failed with HTTP 404',
+        status: 404,
+      }),
+    );
   });
 });

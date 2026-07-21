@@ -85,6 +85,7 @@ export const contractVersionResponseSchema: JsonSchema = {
     'payment_terms_days',
     'effective_from_month',
     'services',
+    'actions',
     'created_at',
   ],
   properties: {
@@ -106,6 +107,7 @@ export const contractVersionResponseSchema: JsonSchema = {
           'service_name',
           'tariff_id',
           'monthly_amount_minor',
+          'monthly_price',
         ],
         properties: {
           service_id: { type: 'string' },
@@ -113,7 +115,20 @@ export const contractVersionResponseSchema: JsonSchema = {
           service_name: nullableString,
           tariff_id: { type: 'string' },
           monthly_amount_minor: { type: 'string', pattern: '^(0|[1-9]\\d*)$' },
+          monthly_price: moneySchema,
         },
+      },
+    },
+    actions: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['activation_state', 'activate'],
+      properties: {
+        activation_state: {
+          type: 'string',
+          enum: ['active', 'ready', 'scheduled', 'superseded', 'contract_terminated'],
+        },
+        activate: { type: 'boolean' },
       },
     },
     created_at: { type: 'string', format: 'date-time' },
@@ -133,6 +148,7 @@ export const contractResponseSchema: JsonSchema = {
     'activated_at',
     'terminated_at',
     'versions',
+    'actions',
     'created_at',
     'updated_at',
   ],
@@ -146,6 +162,12 @@ export const contractResponseSchema: JsonSchema = {
     activated_at: nullableDateTime,
     terminated_at: nullableDateTime,
     versions: { type: 'array', items: contractVersionResponseSchema },
+    actions: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['add_version'],
+      properties: { add_version: { type: 'boolean' } },
+    },
     created_at: { type: 'string', format: 'date-time' },
     updated_at: { type: 'string', format: 'date-time' },
   },
@@ -245,6 +267,7 @@ export const invoiceResponseSchema: JsonSchema = {
     'separately_billed_add_ons',
     'totals',
     'payment_status',
+    'actions',
     'payments',
     'created_at',
   ],
@@ -336,6 +359,26 @@ export const invoiceResponseSchema: JsonSchema = {
       },
     },
     payment_status: { type: 'string', enum: ['open', 'partially_paid', 'paid', 'void'] },
+    actions: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['issue', 'download_pdf', 'void', 'payment_limits'],
+      properties: {
+        issue: { type: ['string', 'null'], enum: ['issue', 'resume_issue', null] },
+        download_pdf: { type: 'boolean' },
+        void: { type: 'boolean' },
+        payment_limits: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['payment', 'refund', 'write_off'],
+          properties: {
+            payment: { anyOf: [moneySchema, { type: 'null' }] },
+            refund: { anyOf: [moneySchema, { type: 'null' }] },
+            write_off: { anyOf: [moneySchema, { type: 'null' }] },
+          },
+        },
+      },
+    },
     payments: {
       type: 'array',
       items: {

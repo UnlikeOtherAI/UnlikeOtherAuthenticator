@@ -162,7 +162,9 @@ rechecks the stored bytes. Issued commercial fields, lines, private evidence,
 and PDF identity are immutable. Invoice number, issue date, and due date freeze
 as soon as issuance begins; active/terminated contract timestamps are likewise
 database-frozen. A void retains the number and PDF. A settled invoice cannot be
-voided.
+voided. The private existence of any positive credit-settlement reference
+counts as settlement even when conversion to invoice minor currency displays
+`$0.00`; void eligibility never relies on that rounded display amount.
 
 `BILLING_INVOICE_STORAGE_PROVIDER` defaults to `disabled`; calculation remains
 available but issuance returns a fail-closed error. Filesystem storage is local/
@@ -206,6 +208,30 @@ All responses are `Cache-Control: private, no-store` and require an
 | `GET`      | `/internal/admin/billing/invoices/:invoiceId/pdf`                            | Private verified PDF                       |
 | `POST`     | `/internal/admin/billing/invoices/:invoiceId/void`                           | Void unpaid issued invoice                 |
 | `POST`     | `/internal/admin/billing/invoices/:invoiceId/payments`                       | Append payment/refund/write-off            |
+
+## Admin UI
+
+The authenticated `/admin/billing` page exposes separate **Product billing**
+and **Contracts & invoices** views. The contract view lets platform superusers:
+
+- create an organisation contract and append versioned markup, currency,
+  payment-term, and effective-month terms;
+- activate a version with one exact monthly minor-currency price for every
+  selected service;
+- create issuer profiles and read or update the selected organisation's buyer
+  profile;
+- calculate closed-month drafts, list revisions, and inspect their
+  customer-safe service-price and settlement breakdown;
+- issue an invoice, download its verified PDF, void an eligible issued
+  invoice, and append a manual payment, refund, or write-off event.
+
+The browser is an interface to these superuser APIs, not a billing engine. It
+does not read Ledger directly, apply markup, aggregate usage, calculate service
+prices, or infer action eligibility. UOA projects issuance only after its
+database-backed readiness check proves the active contract, issuer, immutable
+service/metering/credit evidence, collector exclusivity, and active-invoice
+uniqueness. The browser renders that projection and therefore has access only
+to the customer-safe invoice fields described below.
 
 Invoice DTOs use exact schemas with `additionalProperties: false`, including
 the nested issuer and buyer objects. A service line is exactly:

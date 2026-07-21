@@ -126,11 +126,16 @@ Authenticated shell (`AdminSessionGuard` → `AdminUiProvider` → `AdminLayout`
 - `/feature-flags` — feature-flag apps listing (`FeatureFlagsPage`)
 - `/feature-flags/:appId` — feature-flag detail for an app (`FeatureFlagDetailPage`)
 - `/feature-flags/:appId/groups/:groupId` — audience-group detail under a feature flag (`FeatureAudienceGroupPage`)
-- `/billing` — platform billing control plane (`BillingPage`): services,
-  immutable tariff versions/defaults, organisation/team assignments,
-  exact organisation/team add-ons and credits, purpose-bound product app keys
-  with one-time secret reveal, Stripe catalog readiness, and test/live
-  subscription projections
+- `/billing` — platform billing control plane (`BillingPage`) with two views.
+  **Product billing** manages services, immutable tariff versions/defaults,
+  organisation/team assignments, exact organisation/team add-ons and credits,
+  purpose-bound product app keys with one-time secret reveal, Stripe catalog
+  readiness, and test/live subscription projections. **Contracts & invoices**
+  lets platform superusers create organisation contracts and version terms,
+  activate exact monthly prices per service, manage explicit issuer and buyer
+  profiles, calculate and inspect customer-safe invoice revisions, issue or
+  void invoices, download verified PDFs, and append manual payment, refund, or
+  write-off events.
 - `/settings` — system-level settings (`SettingsPage`), including bans and audited confidential delegation mappings. The delegation surface lists policy only (source domain, product, exact HTTPS resource, scope allowlist, enabled state, and audit metadata); it never reads or renders browser tokens, domain credentials, or application secrets. Source domain and product are immutable after creation.
 
 Catch-all:
@@ -155,6 +160,13 @@ When a template demonstrates a section that does not yet have a route here, use 
   `at_cost + collection_mode=none` plan. Commercial add-ons and credits remain
   exact minor-currency strings, are created through the same admin boundary,
   and are deactivated rather than deleted.
+- Contract and invoice responses are parsed by
+  `schemas/billing-contracts.ts`, transported through
+  `services/billing-contract-admin-service.ts`, and orchestrated by
+  `features/admin/billing-contract-queries.ts`. The Admin UI submits operator
+  choices to UOA and renders UOA's customer-safe calculated prices and totals;
+  it never derives invoice prices from Ledger usage, provider cost, markup, or
+  margin data.
 
 ## 6. Forms
 

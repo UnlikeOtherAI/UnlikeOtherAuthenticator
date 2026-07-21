@@ -25,6 +25,8 @@ const invoiceInclude = Prisma.validator<Prisma.BillingInvoiceInclude>()({
   lines: { orderBy: { position: 'asc' } },
   addonLines: { orderBy: { position: 'asc' } },
   paymentEvents: { orderBy: [{ occurredAt: 'asc' }, { id: 'asc' }] },
+  issuerProfile: { select: { active: true } },
+  _count: { select: { creditSettlementRefs: true } },
 });
 
 type Actor = { userId?: string | null; email: string };
@@ -298,7 +300,11 @@ export async function voidBillingInvoice(
     });
     if (!invoice) throw new AppError('NOT_FOUND', 404, 'BILLING_INVOICE_NOT_FOUND');
     if (invoice.status === BillingInvoiceStatus.VOID) return invoice;
-    if (invoice.status !== BillingInvoiceStatus.ISSUED || invoice.paymentEvents.length > 0) {
+    if (
+      invoice.status !== BillingInvoiceStatus.ISSUED ||
+      invoice._count.creditSettlementRefs > 0 ||
+      invoice.paymentEvents.length > 0
+    ) {
       throw new AppError('BAD_REQUEST', 409, 'BILLING_INVOICE_VOID_FORBIDDEN');
     }
     const updated = await tx.billingInvoice.update({

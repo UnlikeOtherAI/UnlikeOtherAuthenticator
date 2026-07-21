@@ -3,14 +3,25 @@ import type { EndpointSchema } from './schema.js';
 const adminAuth =
   'Authorization: Bearer <access_token>; token must be an ADMIN_AUTH_DOMAIN platform superuser and remain backed by a SUPERUSER domain_roles row';
 
+const contractActionProjection =
+  'Server-authored contract.actions.add_version; clients render it and never reconstruct eligibility.';
+const versionActionProjection =
+  'Server-authored version.actions.{activation_state,activate}. activation_state is active | ready | scheduled | superseded | contract_terminated; clients render these values and never reconstruct eligibility.';
+const contractAndVersionActionProjection =
+  contractActionProjection + ' Nested versions use ' + versionActionProjection;
+const invoiceActionProjection =
+  'Server-authored actions: issue is issue only after the database proves active contract/issuer, exact frozen evidence, collector exclusivity, and active-invoice uniqueness; it is resume_issue for recoverable issuance, otherwise null. download_pdf and void are booleans; any private positive credit-settlement reference blocks void even when its display rounds to zero. payment_limits contains nullable payment/refund/write_off maximum Money values. Clients render these values and never reconstruct lifecycle eligibility or payment caps. The private PDF object key and SHA-256 are never serialized.';
+
 export const billingContractInvoiceEndpoints: EndpointSchema[] = [
   {
     method: 'GET',
     path: '/internal/admin/billing/contracts',
     description:
-      'List organisation contracts and immutable versions. This contract-editor response may show the organisation-wide usage markup; invoice responses never do.',
+      'List organisation contracts and immutable versions. This contract-editor response may show the organisation-wide usage markup; invoice responses never do. ' +
+      contractAndVersionActionProjection,
     auth: adminAuth,
     query: { organisation_id: 'optional exact UOA organisation ID' },
+    response: { 200: 'Contract array. ' + contractAndVersionActionProjection },
   },
   {
     method: 'POST',
@@ -22,7 +33,7 @@ export const billingContractInvoiceEndpoints: EndpointSchema[] = [
       reference: 'stable lowercase operator reference',
       name: 'operator-facing contract name',
     },
-    response: { 201: 'Created draft contract' },
+    response: { 201: 'Created draft contract. ' + contractActionProjection },
   },
   {
     method: 'POST',
@@ -36,7 +47,9 @@ export const billingContractInvoiceEndpoints: EndpointSchema[] = [
       payment_terms_days: 'integer 0-365',
       effective_from_month: 'UTC YYYY-MM, later than every existing version',
     },
-    response: { 201: 'Created immutable version without active service terms' },
+    response: {
+      201: 'Created immutable version without active service terms. ' + versionActionProjection,
+    },
   },
   {
     method: 'POST',
@@ -48,7 +61,7 @@ export const billingContractInvoiceEndpoints: EndpointSchema[] = [
       services:
         'non-empty [{ service_id, monthly_amount_minor }]; service set is pinned to the version',
     },
-    response: { 200: 'Activated contract version with service terms' },
+    response: { 200: 'Activated contract version with service terms. ' + versionActionProjection },
   },
   {
     method: 'GET',
@@ -102,14 +115,17 @@ export const billingContractInvoiceEndpoints: EndpointSchema[] = [
       billing_month: 'closed UTC YYYY-MM',
     },
     response: {
-      201: 'Customer-safe draft invoice; never markup, cost, units, calls, cursor/hash, or digest',
+      201:
+        'Customer-safe draft invoice; never markup, cost, units, calls, cursor/hash, digest, or private PDF storage identity. ' +
+        invoiceActionProjection,
     },
   },
   {
     method: 'GET',
     path: '/internal/admin/billing/invoices',
     description:
-      'List customer-safe contract invoice revisions with final per-service prices, separate credit/payment/write-off settlement totals, and payment status.',
+      'List customer-safe contract invoice revisions with final per-service prices, separate credit/payment/write-off settlement totals, and payment status. ' +
+      invoiceActionProjection,
     auth: adminAuth,
     query: {
       organisation_id: 'optional',
@@ -117,13 +133,16 @@ export const billingContractInvoiceEndpoints: EndpointSchema[] = [
       billing_month: 'optional UTC YYYY-MM',
       status: 'optional draft | issuing | issued | void',
     },
+    response: { 200: 'Customer-safe invoice array. ' + invoiceActionProjection },
   },
   {
     method: 'GET',
     path: '/internal/admin/billing/invoices/:invoiceId',
     description:
-      'Read one customer-safe invoice. Private Ledger references and internal calculation inputs are never serialized.',
+      'Read one customer-safe invoice. Private Ledger references, internal calculation inputs, and private PDF storage identity are never serialized. ' +
+      invoiceActionProjection,
     auth: adminAuth,
+    response: { 200: 'Customer-safe invoice. ' + invoiceActionProjection },
   },
   {
     method: 'POST',
@@ -132,6 +151,9 @@ export const billingContractInvoiceEndpoints: EndpointSchema[] = [
       'Idempotently allocate a serial invoice number, generate/store a wrapping-safe Unicode private immutable PDF, and issue the exact frozen draft revision.',
     auth: adminAuth,
     body: {},
+    response: {
+      200: 'Customer-safe issued or recoverable issuing invoice. ' + invoiceActionProjection,
+    },
   },
   {
     method: 'GET',
@@ -147,6 +169,7 @@ export const billingContractInvoiceEndpoints: EndpointSchema[] = [
       'Void an unpaid issued invoice without deleting or reusing its number/PDF. Settled invoices cannot be voided.',
     auth: adminAuth,
     body: { reason: 'required audit reason, max 500' },
+    response: { 200: 'Customer-safe void invoice. ' + invoiceActionProjection },
   },
   {
     method: 'POST',
@@ -162,6 +185,9 @@ export const billingContractInvoiceEndpoints: EndpointSchema[] = [
       reference: 'optional external reference',
       occurred_at: 'ISO timestamp',
     },
-    response: { 201: 'Customer-safe invoice with updated separate settlement totals' },
+    response: {
+      201:
+        'Customer-safe invoice with updated separate settlement totals. ' + invoiceActionProjection,
+    },
   },
 ];

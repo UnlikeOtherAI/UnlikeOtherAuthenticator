@@ -24,7 +24,18 @@ import {
   listBillingInvoiceIssuerProfiles,
   upsertOrganisationInvoiceProfile,
 } from '../../../services/billing-invoice-profile.service.js';
-import { serializeCustomerSafeInvoice } from '../../../services/billing-invoice-view.service.js';
+import { resolveBillingInvoiceIssueActions } from '../../../services/billing-invoice-action-readiness.service.js';
+import {
+  serializeCustomerSafeInvoice,
+  type CustomerSafeInvoice,
+} from '../../../services/billing-invoice-view.service.js';
+import {
+  currentBillingMonth,
+  serializeBillingContract,
+  serializeContractVersion,
+  serializeInvoiceBuyer,
+  serializeInvoiceIssuer,
+} from './billing-contract-invoice-serializers.js';
 import {
   buyerProfileResponseSchema,
   contractArrayResponseSchema,
@@ -70,97 +81,16 @@ function actor(request: FastifyRequest) {
   };
 }
 
-function serializeVersion(version: {
-  id: string;
-  version: number;
-  usageMarkupBps: number;
-  currency: string;
-  paymentTermsDays: number;
-  effectiveFromMonth: string;
-  createdAt: Date;
-  serviceTerms?: Array<{
-    serviceId: string;
-    tariffId: string;
-    monthlyAmountMinor: bigint;
-    service?: { identifier: string; name: string };
-  }>;
-}) {
-  return {
-    id: version.id,
-    version: version.version,
-    usage_markup_bps: version.usageMarkupBps,
-    usage_markup_percent: (version.usageMarkupBps / 100).toFixed(2),
-    currency: version.currency,
-    payment_terms_days: version.paymentTermsDays,
-    effective_from_month: version.effectiveFromMonth,
-    services: (version.serviceTerms ?? []).map((term) => ({
-      service_id: term.serviceId,
-      service_identifier: term.service?.identifier ?? null,
-      service_name: term.service?.name ?? null,
-      tariff_id: term.tariffId,
-      monthly_amount_minor: term.monthlyAmountMinor.toString(),
-    })),
-    created_at: version.createdAt.toISOString(),
-  };
+async function serializeInvoices(invoices: CustomerSafeInvoice[]) {
+  const issueActions = await resolveBillingInvoiceIssueActions(invoices);
+  return invoices.map((invoice) =>
+    serializeCustomerSafeInvoice(invoice, issueActions.get(invoice.id) ?? null),
+  );
 }
 
-function serializeContract(contract: {
-  id: string;
-  orgId: string;
-  reference: string;
-  name: string;
-  status: string;
-  activatedAt: Date | null;
-  terminatedAt: Date | null;
-  createdAt: Date;
-  updatedAt: Date;
-  org?: { name: string };
-  versions?: Parameters<typeof serializeVersion>[0][];
-}) {
-  return {
-    id: contract.id,
-    organisation_id: contract.orgId,
-    organisation_name: contract.org?.name ?? null,
-    reference: contract.reference,
-    name: contract.name,
-    status: contract.status.toLowerCase(),
-    activated_at: contract.activatedAt?.toISOString() ?? null,
-    terminated_at: contract.terminatedAt?.toISOString() ?? null,
-    versions: (contract.versions ?? []).map(serializeVersion),
-    created_at: contract.createdAt.toISOString(),
-    updated_at: contract.updatedAt.toISOString(),
-  };
-}
-
-function serializeIssuer(profile: Awaited<ReturnType<typeof createBillingInvoiceIssuerProfile>>) {
-  return {
-    id: profile.id,
-    key: profile.key,
-    legal_name: profile.legalName,
-    trading_name: profile.tradingName,
-    billing_email: profile.billingEmail,
-    address: profile.address,
-    tax_identifier: profile.taxIdentifier,
-    company_registration_number: profile.companyRegistrationNumber,
-    invoice_number_prefix: profile.invoiceNumberPrefix,
-    active: profile.active,
-    created_at: profile.createdAt.toISOString(),
-    updated_at: profile.updatedAt.toISOString(),
-  };
-}
-
-function serializeBuyer(profile: Awaited<ReturnType<typeof getOrganisationInvoiceProfile>>) {
-  return {
-    id: profile.id,
-    organisation_id: profile.orgId,
-    legal_name: profile.legalName,
-    billing_email: profile.billingEmail,
-    billing_address: profile.billingAddress,
-    tax_identifier: profile.taxIdentifier,
-    purchase_order_reference: profile.purchaseOrderReference,
-    created_at: profile.createdAt.toISOString(),
-    updated_at: profile.updatedAt.toISOString(),
-  };
+async function serializeInvoice(invoice: CustomerSafeInvoice) {
+  const issueActions = await resolveBillingInvoiceIssueActions([invoice]);
+  return serializeCustomerSafeInvoice(invoice, issueActions.get(invoice.id) ?? null);
 }
 
 export function registerInternalAdminBillingContractInvoiceRoutes(app: FastifyInstance): void {
@@ -170,7 +100,7 @@ export function registerInternalAdminBillingContractInvoiceRoutes(app: FastifyIn
     async (request) => {
       const query = z.object({ organisation_id: IdentifierSchema.optional() }).parse(request.query);
       return (await listBillingContracts({ organisationId: query.organisation_id })).map(
-        serializeContract,
+        serializeBillingContract,
       );
     },
   );
@@ -193,7 +123,7 @@ export function registerInternalAdminBillingContractInvoiceRoutes(app: FastifyIn
         name: body.name,
         actor: actor(request),
       });
-      return reply.status(201).send(serializeContract(contract));
+      return reply.status(201).send(serializeBillingContract(contract));
     },
   );
 
@@ -219,7 +149,14 @@ export function registerInternalAdminBillingContractInvoiceRoutes(app: FastifyIn
         effectiveFromMonth: body.effective_from_month,
         actor: actor(request),
       });
-      return reply.status(201).send(serializeVersion(version));
+      return reply
+        .status(201)
+        .send(
+          serializeContractVersion(
+            version,
+            version.effectiveFromMonth > currentBillingMonth() ? 'scheduled' : 'ready',
+          ),
+        );
     },
   );
 
@@ -253,14 +190,14 @@ export function registerInternalAdminBillingContractInvoiceRoutes(app: FastifyIn
         })),
         actor: actor(request),
       });
-      return serializeVersion(version);
+      return serializeContractVersion(version, 'active');
     },
   );
 
   app.get(
     '/internal/admin/billing/invoice-issuer-profiles',
     { ...adminRoute, schema: { response: { 200: issuerProfileArrayResponseSchema } } },
-    async () => (await listBillingInvoiceIssuerProfiles()).map(serializeIssuer),
+    async () => (await listBillingInvoiceIssuerProfiles()).map(serializeInvoiceIssuer),
   );
 
   app.post(
@@ -291,7 +228,7 @@ export function registerInternalAdminBillingContractInvoiceRoutes(app: FastifyIn
         invoiceNumberPrefix: body.invoice_number_prefix,
         actor: actor(request),
       });
-      return reply.status(201).send(serializeIssuer(profile));
+      return reply.status(201).send(serializeInvoiceIssuer(profile));
     },
   );
 
@@ -300,7 +237,7 @@ export function registerInternalAdminBillingContractInvoiceRoutes(app: FastifyIn
     { ...adminRoute, schema: { response: { 200: buyerProfileResponseSchema } } },
     async (request) => {
       const { organisationId } = OrganisationParamsSchema.parse(request.params);
-      return serializeBuyer(await getOrganisationInvoiceProfile(organisationId));
+      return serializeInvoiceBuyer(await getOrganisationInvoiceProfile(organisationId));
     },
   );
 
@@ -319,7 +256,7 @@ export function registerInternalAdminBillingContractInvoiceRoutes(app: FastifyIn
         })
         .strict()
         .parse(request.body);
-      return serializeBuyer(
+      return serializeInvoiceBuyer(
         await upsertOrganisationInvoiceProfile({
           organisationId,
           legalName: body.legal_name,
@@ -351,7 +288,7 @@ export function registerInternalAdminBillingContractInvoiceRoutes(app: FastifyIn
         billingMonth: body.billing_month,
         actor: actor(request),
       });
-      return reply.status(201).send(serializeCustomerSafeInvoice(invoice));
+      return reply.status(201).send(await serializeInvoice(invoice));
     },
   );
 
@@ -368,14 +305,14 @@ export function registerInternalAdminBillingContractInvoiceRoutes(app: FastifyIn
         })
         .strict()
         .parse(request.query);
-      return (
+      return serializeInvoices(
         await listBillingInvoices({
           organisationId: query.organisation_id,
           contractId: query.contract_id,
           billingMonth: query.billing_month,
           status: query.status?.toUpperCase() as BillingInvoiceStatus | undefined,
-        })
-      ).map(serializeCustomerSafeInvoice);
+        }),
+      );
     },
   );
 
@@ -384,7 +321,7 @@ export function registerInternalAdminBillingContractInvoiceRoutes(app: FastifyIn
     { ...adminRoute, schema: { response: { 200: invoiceResponseSchema } } },
     async (request) => {
       const { invoiceId } = InvoiceParamsSchema.parse(request.params);
-      return serializeCustomerSafeInvoice(await getBillingInvoice(invoiceId));
+      return serializeInvoice(await getBillingInvoice(invoiceId));
     },
   );
 
@@ -394,9 +331,7 @@ export function registerInternalAdminBillingContractInvoiceRoutes(app: FastifyIn
     async (request) => {
       const { invoiceId } = InvoiceParamsSchema.parse(request.params);
       ActorBodySchema.parse(request.body ?? {});
-      return serializeCustomerSafeInvoice(
-        await issueBillingInvoice({ invoiceId, actor: actor(request) }),
-      );
+      return serializeInvoice(await issueBillingInvoice({ invoiceId, actor: actor(request) }));
     },
   );
 
@@ -420,7 +355,7 @@ export function registerInternalAdminBillingContractInvoiceRoutes(app: FastifyIn
         .object({ reason: z.string().trim().min(1).max(500) })
         .strict()
         .parse(request.body);
-      return serializeCustomerSafeInvoice(
+      return serializeInvoice(
         await voidBillingInvoice({ invoiceId, reason: body.reason, actor: actor(request) }),
       );
     },
@@ -452,7 +387,7 @@ export function registerInternalAdminBillingContractInvoiceRoutes(app: FastifyIn
         occurredAt: new Date(body.occurred_at),
         actor: actor(request),
       });
-      return reply.status(201).send(serializeCustomerSafeInvoice(invoice));
+      return reply.status(201).send(await serializeInvoice(invoice));
     },
   );
 }

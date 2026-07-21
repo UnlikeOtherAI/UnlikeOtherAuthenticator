@@ -116,6 +116,14 @@ export class GcsBillingInvoicePdfStorage implements BillingInvoicePdfStorage {
   }
 }
 
+export function billingInvoicePdfStorageConfigured(env: Env = getEnv()): boolean {
+  return (
+    (env.BILLING_INVOICE_STORAGE_PROVIDER === 'filesystem' &&
+      Boolean(env.BILLING_INVOICE_FILESYSTEM_ROOT)) ||
+    (env.BILLING_INVOICE_STORAGE_PROVIDER === 'gcs' && Boolean(env.BILLING_INVOICE_GCS_BUCKET))
+  );
+}
+
 export function createBillingInvoicePdfStorage(env: Env = getEnv()): BillingInvoicePdfStorage {
   if (
     env.BILLING_INVOICE_STORAGE_PROVIDER === 'filesystem' &&

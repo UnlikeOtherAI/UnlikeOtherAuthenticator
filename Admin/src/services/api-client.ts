@@ -12,6 +12,13 @@ export type ApiClient = {
   putForm<T>(path: string, body: FormData, init?: RequestInit): Promise<T>;
 };
 
+export class ApiRequestError extends Error {
+  public constructor(public readonly status: number) {
+    super(`Request failed with HTTP ${status}`);
+    this.name = 'ApiRequestError';
+  }
+}
+
 export function createApiClient(baseUrl = adminEnv.apiBaseUrl): ApiClient {
   async function send(
     method: string,
@@ -41,7 +48,7 @@ export function createApiClient(baseUrl = adminEnv.apiBaseUrl): ApiClient {
     });
 
     if (!response.ok) {
-      throw new Error('Request failed');
+      throw new ApiRequestError(response.status);
     }
 
     return response;

@@ -53,6 +53,8 @@ export type CustomerSafeInvoice = {
   invoiceNumber: string | null;
   issueDate: Date | null;
   dueDate: Date | null;
+  pdfObjectKey: string | null;
+  pdfSha256: string | null;
   currency: string;
   subtotalMinor: bigint;
   taxAmountMinor: bigint;
@@ -67,7 +69,11 @@ export type CustomerSafeInvoice = {
   lines: InvoiceLineValue[];
   addonLines: AddonLineValue[];
   paymentEvents: PaymentEventValue[];
+  issuerProfile: { active: boolean };
+  _count: { creditSettlementRefs: number };
 };
+
+export type BillingInvoiceIssueAction = 'issue' | 'resume_issue' | null;
 
 function money(amountMinor: bigint, currency: string) {
   const amount = minorAmountToMajor(amountMinor.toString(), currency);
@@ -125,8 +131,13 @@ export function invoiceSettlement(invoice: CustomerSafeInvoice) {
   };
 }
 
-export function serializeCustomerSafeInvoice(invoice: CustomerSafeInvoice) {
+export function serializeCustomerSafeInvoice(
+  invoice: CustomerSafeInvoice,
+  issueAction: BillingInvoiceIssueAction,
+) {
   const settlement = invoiceSettlement(invoice);
+  const status = invoice.status.toLowerCase();
+  const paymentActivityAllowed = status === 'issued' && invoice.issuedAt !== null;
   return {
     id: invoice.id,
     organisation_id: invoice.orgId,
@@ -134,7 +145,7 @@ export function serializeCustomerSafeInvoice(invoice: CustomerSafeInvoice) {
     contract_version_id: invoice.contractVersionId,
     billing_month: invoice.billingMonth,
     revision: invoice.revision,
-    status: invoice.status.toLowerCase(),
+    status,
     invoice_number: invoice.invoiceNumber,
     issue_date: invoice.issueDate?.toISOString() ?? null,
     due_date: invoice.dueDate?.toISOString() ?? null,
@@ -178,6 +189,30 @@ export function serializeCustomerSafeInvoice(invoice: CustomerSafeInvoice) {
       outstanding: money(settlement.outstanding, invoice.currency),
     },
     payment_status: settlement.status,
+    actions: {
+      issue: issueAction,
+      download_pdf:
+        (status === 'issued' || status === 'void') &&
+        Boolean(invoice.invoiceNumber && invoice.pdfObjectKey && invoice.pdfSha256),
+      void:
+        status === 'issued' &&
+        invoice._count.creditSettlementRefs === 0 &&
+        invoice.paymentEvents.length === 0,
+      payment_limits: {
+        payment:
+          paymentActivityAllowed && settlement.outstanding > 0n
+            ? money(settlement.outstanding, invoice.currency)
+            : null,
+        refund:
+          paymentActivityAllowed && settlement.paid > 0n
+            ? money(settlement.paid, invoice.currency)
+            : null,
+        write_off:
+          paymentActivityAllowed && settlement.outstanding > 0n
+            ? money(settlement.outstanding, invoice.currency)
+            : null,
+      },
+    },
     payments: [...invoice.paymentEvents]
       .sort((left, right) => left.occurredAt.getTime() - right.occurredAt.getTime())
       .map((event) => ({

@@ -1982,6 +1982,15 @@ raw token/API/SERP/research quantities, provider cost, cost-token equivalents,
 markup, or margin calculations. Connected products consume a display-ready UOA
 invoice view model and contain no local invoice-rating logic.
 
+The Admin `/billing` page separates **Product billing** from **Contracts &
+invoices**. In the contract view, platform superusers can create organisation
+contracts and versions, activate exact monthly prices per selected service,
+manage explicit issuer and buyer profiles, calculate and list invoice
+revisions, issue/download/void invoices, and append manual payment, refund, or
+write-off events. The browser only submits those operator choices and renders
+UOA's customer-safe calculated values; UOA remains the commercial source of
+truth and Ledger remains the raw-usage source.
+
 The UOA runtime serves the public `BillingCreditsV1`/recurring-add-on protocol
 artifacts, product-authenticated reads, and the protocol's frozen add-on
 Checkout/cancellation actions. A credit read pins one exact
