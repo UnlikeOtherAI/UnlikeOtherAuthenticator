@@ -172,6 +172,9 @@ describe('organisation contract activation', () => {
     ).rejects.toThrow('BILLING_CONTRACT_STRIPE_CONFLICT');
 
     expect(tx.$queryRaw).toHaveBeenCalledTimes(2);
+    for (const [query] of tx.$queryRaw.mock.calls) {
+      expect(query.sql).toContain('::text AS "locked"');
+    }
     expect(tx.billingStripeCheckoutSession.findFirst).toHaveBeenCalledWith({
       where: expect.objectContaining({
         orgId: 'org_1',

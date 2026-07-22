@@ -45,7 +45,7 @@ async function lockStripeContractScopes(
 ): Promise<void> {
   for (const serviceId of [...serviceIds].sort()) {
     await tx.$queryRaw(
-      Prisma.sql`SELECT uoa_lock_stripe_contract_scope(${serviceId}, ${organisationId})`,
+      Prisma.sql`SELECT uoa_lock_stripe_contract_scope(${serviceId}, ${organisationId})::text AS "locked"`,
     );
   }
 }
