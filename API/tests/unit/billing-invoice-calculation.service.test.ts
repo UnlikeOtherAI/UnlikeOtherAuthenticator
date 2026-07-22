@@ -88,7 +88,7 @@ describe('contract invoice calculator', () => {
     };
     const createInvoice = vi.fn().mockResolvedValue(created);
     const tx = {
-      $queryRaw: vi.fn().mockResolvedValue([{ pg_advisory_xact_lock: null }]),
+      $queryRaw: vi.fn().mockResolvedValue([{ locked: '' }]),
       billingInvoice: {
         findFirst: vi.fn().mockResolvedValueOnce(null).mockResolvedValueOnce({ revision: 3 }),
         create: createInvoice,
@@ -199,6 +199,7 @@ describe('contract invoice calculator', () => {
     expect(data.creditsAppliedMinor).toBe(50n);
     expect(data.revision).toBe(4);
     expect(tx.$queryRaw).toHaveBeenCalledOnce();
+    expect(tx.$queryRaw.mock.calls[0]?.[0]?.sql).toContain('::text AS "locked"');
     expect(tx.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
       tx.billingInvoice.findFirst.mock.invocationCallOrder[0]!,
     );
