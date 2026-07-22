@@ -22,6 +22,7 @@ function makeConfig(overrides?: Partial<ClientConfig>): ClientConfig {
 
 function makePrisma() {
   return {
+    $queryRaw: vi.fn(),
     user: { findUnique: vi.fn() },
     verificationToken: {
       findUnique: vi.fn(),
@@ -30,6 +31,18 @@ function makePrisma() {
       updateMany: vi.fn(),
     },
   } as unknown as import('@prisma/client').PrismaClient;
+}
+
+function validLoginCodeRow(overrides?: Record<string, unknown>) {
+  return {
+    id: 'token-1',
+    tokenHash: 'expected-hash',
+    userId: 'user-1',
+    userKey: 'jane@example.com',
+    tokenVersion: 0,
+    expiresAt: new Date('2099-03-01T00:10:00.000Z'),
+    ...overrides,
+  };
 }
 
 const baseEnv = {
@@ -59,7 +72,11 @@ describe('login-code.service', () => {
       const sendLoginCodeEmail = vi.fn(async () => undefined);
 
       await issueLoginCode(
-        { email: 'nobody@example.com', config: makeConfig(), configUrl: 'https://client.example.com/auth-config' },
+        {
+          email: 'nobody@example.com',
+          config: makeConfig(),
+          configUrl: 'https://client.example.com/auth-config',
+        },
         { env: baseEnv, prisma, sendLoginCodeEmail },
       );
 
@@ -69,13 +86,24 @@ describe('login-code.service', () => {
 
     it('supersedes prior unused codes, creates a new hashed token, and emails the code', async () => {
       const prisma = makePrisma();
-      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({ id: 'user-1' });
-      (prisma.verificationToken.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1 });
-      (prisma.verificationToken.create as ReturnType<typeof vi.fn>).mockResolvedValue({ id: 'token-1' });
+      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: 'user-1',
+        tokenVersion: 7,
+      });
+      (prisma.verificationToken.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({
+        count: 1,
+      });
+      (prisma.verificationToken.create as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: 'token-1',
+      });
       const sendLoginCodeEmail = vi.fn(async () => undefined);
 
       await issueLoginCode(
-        { email: 'jane@example.com', config: makeConfig(), configUrl: 'https://client.example.com/auth-config' },
+        {
+          email: 'jane@example.com',
+          config: makeConfig(),
+          configUrl: 'https://client.example.com/auth-config',
+        },
         {
           env: baseEnv,
           prisma,
@@ -97,6 +125,7 @@ describe('login-code.service', () => {
           userKey: 'jane@example.com',
           attemptCount: 0,
           userId: 'user-1',
+          tokenVersion: 7,
         }),
       });
       expect(sendLoginCodeEmail).toHaveBeenCalledWith(
@@ -108,12 +137,17 @@ describe('login-code.service', () => {
   describe('verifyLoginCode', () => {
     it('succeeds, marks the token used, and returns the userId', async () => {
       const prisma = makePrisma();
-      (prisma.verificationToken.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
-        id: 'token-1',
-        tokenHash: 'expected-hash',
-        userId: 'user-1',
+      (prisma.verificationToken.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(
+        validLoginCodeRow({ expiresAt: new Date('2026-03-01T00:10:00.000Z') }),
+      );
+      (prisma.verificationToken.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({
+        count: 1,
       });
-      (prisma.verificationToken.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1 });
+      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: 'user-1',
+        tokenVersion: 0,
+        userKey: 'jane@example.com',
+      });
 
       const result = await verifyLoginCode(
         { email: 'jane@example.com', config: makeConfig(), code: '123456' },
@@ -126,19 +160,28 @@ describe('login-code.service', () => {
         },
       );
 
-      expect(result).toEqual({ userId: 'user-1' });
+      expect(result).toEqual({ userId: 'user-1', credentialEpoch: 0 });
       expect(prisma.verificationToken.updateMany).toHaveBeenCalledWith({
-        where: { id: 'token-1', usedAt: null, expiresAt: { gt: new Date('2026-03-01T00:05:00.000Z') } },
+        where: {
+          id: 'token-1',
+          tokenVersion: 0,
+          userId: 'user-1',
+          usedAt: null,
+          expiresAt: { gt: new Date('2026-03-01T00:05:00.000Z') },
+        },
         data: { usedAt: new Date('2026-03-01T00:05:00.000Z') },
       });
     });
 
     it('increments attempt_count on a wrong code and throws the generic error', async () => {
       const prisma = makePrisma();
-      (prisma.verificationToken.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
-        id: 'token-1',
-        tokenHash: 'expected-hash',
-        userId: 'user-1',
+      (prisma.verificationToken.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(
+        validLoginCodeRow(),
+      );
+      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: 'user-1',
+        tokenVersion: 0,
+        userKey: 'jane@example.com',
       });
 
       let hashCallCount = 0;
@@ -158,7 +201,13 @@ describe('login-code.service', () => {
 
       expect(hashCallCount).toBe(1);
       expect(prisma.verificationToken.updateMany).toHaveBeenCalledWith({
-        where: { id: 'token-1', usedAt: null },
+        where: {
+          id: 'token-1',
+          tokenVersion: 0,
+          userId: 'user-1',
+          usedAt: null,
+          expiresAt: { gt: expect.any(Date) },
+        },
         data: { attemptCount: { increment: 1 } },
       });
     });
@@ -192,9 +241,9 @@ describe('login-code.service', () => {
     it('gives the same generic error when the token row has no linked user', async () => {
       const prisma = makePrisma();
       (prisma.verificationToken.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
-        id: 'token-1',
-        tokenHash: 'expected-hash',
+        ...validLoginCodeRow(),
         userId: null,
+        tokenVersion: null,
       });
 
       await expect(
@@ -207,12 +256,17 @@ describe('login-code.service', () => {
 
     it('fails generically when the concurrent single-use update loses the race', async () => {
       const prisma = makePrisma();
-      (prisma.verificationToken.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
-        id: 'token-1',
-        tokenHash: 'expected-hash',
-        userId: 'user-1',
+      (prisma.verificationToken.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(
+        validLoginCodeRow(),
+      );
+      (prisma.verificationToken.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({
+        count: 0,
       });
-      (prisma.verificationToken.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 0 });
+      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: 'user-1',
+        tokenVersion: 0,
+        userKey: 'jane@example.com',
+      });
 
       await expect(
         verifyLoginCode(
@@ -220,6 +274,73 @@ describe('login-code.service', () => {
           { env: baseEnv, prisma, hashEmailToken: () => 'expected-hash' },
         ),
       ).rejects.toMatchObject({ statusCode: 401, code: 'UNAUTHORIZED' });
+    });
+
+    it('rejects a login code issued in a superseded credential epoch', async () => {
+      const prisma = makePrisma();
+      (prisma.verificationToken.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(
+        validLoginCodeRow(),
+      );
+      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: 'user-1',
+        tokenVersion: 1,
+        userKey: 'jane@example.com',
+      });
+
+      await expect(
+        verifyLoginCode(
+          { email: 'jane@example.com', config: makeConfig(), code: '123456' },
+          { env: baseEnv, prisma, hashEmailToken: () => 'expected-hash' },
+        ),
+      ).rejects.toMatchObject({ statusCode: 401, code: 'UNAUTHORIZED' });
+
+      expect(prisma.verificationToken.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('fails closed for a legacy existing-user login code without an issue epoch', async () => {
+      const prisma = makePrisma();
+      (prisma.verificationToken.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(
+        validLoginCodeRow({ tokenVersion: null }),
+      );
+
+      await expect(
+        verifyLoginCode(
+          { email: 'jane@example.com', config: makeConfig(), code: '123456' },
+          { env: baseEnv, prisma, hashEmailToken: () => 'expected-hash' },
+        ),
+      ).rejects.toMatchObject({ statusCode: 401, code: 'UNAUTHORIZED' });
+
+      expect(prisma.verificationToken.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('rejects a login code that expires while waiting for the user epoch lock', async () => {
+      const prisma = makePrisma();
+      let currentNow = new Date('2026-03-01T00:00:00.000Z');
+      (prisma.verificationToken.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(
+        validLoginCodeRow({ expiresAt: new Date('2026-03-01T00:00:01.000Z') }),
+      );
+      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: 'user-1',
+        tokenVersion: 0,
+        userKey: 'jane@example.com',
+      });
+
+      await expect(
+        verifyLoginCode(
+          { email: 'jane@example.com', config: makeConfig(), code: '123456' },
+          {
+            env: baseEnv,
+            prisma,
+            now: () => currentNow,
+            hashEmailToken: () => 'expected-hash',
+            afterUserLock: async () => {
+              currentNow = new Date('2026-03-01T00:00:02.000Z');
+            },
+          },
+        ),
+      ).rejects.toMatchObject({ statusCode: 401, code: 'UNAUTHORIZED' });
+
+      expect(prisma.verificationToken.updateMany).not.toHaveBeenCalled();
     });
   });
 });

@@ -17,6 +17,7 @@ vi.mock('../../services/access-token.service.js', () => {
 function buildClaims(overrides: Partial<AccessTokenClaims> = {}): AccessTokenClaims {
   return {
     userId: 'user_1',
+    tokenVersion: 0,
     email: 'user@example.com',
     domain: 'client.example.com',
     clientId: 'client-id',

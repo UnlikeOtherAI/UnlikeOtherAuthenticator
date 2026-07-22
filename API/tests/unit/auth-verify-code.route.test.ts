@@ -60,6 +60,7 @@ const prismaMock = vi.hoisted(() => {
   // can run against this mock the same way it does against a real Prisma client.
   mock.$transaction = vi.fn(async (cb: (tx: unknown) => unknown) => cb(mock));
   mock.$executeRaw = vi.fn(async () => undefined);
+  mock.$queryRaw = vi.fn(async () => []);
   return mock;
 });
 
@@ -175,8 +176,15 @@ describe('POST /auth/verify-code', () => {
 
   it('workspace_selection "auto": returns login_token + chooser payload without finalizing', async () => {
     currentConfig = baseConfig({ login_flow: { email_code_enabled: true, workspace_selection: 'auto' } });
-    verifyLoginCodeMock.mockResolvedValue({ userId: 'user-1' });
-    prismaMock.user.findUnique.mockResolvedValue({ email: 'jane@example.com' });
+    verifyLoginCodeMock.mockResolvedValue({ userId: 'user-1', credentialEpoch: 0 });
+    prismaMock.user.findUnique.mockResolvedValue({
+      email: 'jane@example.com',
+      twoFaEnabled: false,
+      tokenVersion: 0,
+      domainRoles: [],
+      orgMembers: [],
+      teamMembers: [],
+    });
     prismaMock.teamMember.findMany.mockResolvedValue([
       { teamId: 'team-1', teamRole: 'member', team: { name: 'Design', orgId: 'org-1' } },
     ]);
@@ -193,8 +201,15 @@ describe('POST /auth/verify-code', () => {
   });
 
   it('workspace_selection "off" (default): finalizes immediately like /auth/login', async () => {
-    verifyLoginCodeMock.mockResolvedValue({ userId: 'user-1' });
-    prismaMock.user.findUnique.mockResolvedValue({ twoFaEnabled: false });
+    verifyLoginCodeMock.mockResolvedValue({ userId: 'user-1', credentialEpoch: 0 });
+    prismaMock.user.findUnique.mockResolvedValue({
+      email: 'jane@example.com',
+      twoFaEnabled: false,
+      tokenVersion: 0,
+      domainRoles: [],
+      orgMembers: [],
+      teamMembers: [],
+    });
 
     const res = await postVerifyCode({ email: 'jane@example.com', code: '123456' });
 
@@ -211,8 +226,15 @@ describe('POST /auth/verify-code', () => {
 
   it('workspace_selection "off" still enforces 2FA — returns a twofa challenge, not a code', async () => {
     currentConfig = baseConfig({ '2fa_enabled': true, login_flow: { email_code_enabled: true, workspace_selection: 'off' } });
-    verifyLoginCodeMock.mockResolvedValue({ userId: 'user-1' });
-    prismaMock.user.findUnique.mockResolvedValue({ twoFaEnabled: true });
+    verifyLoginCodeMock.mockResolvedValue({ userId: 'user-1', credentialEpoch: 0 });
+    prismaMock.user.findUnique.mockResolvedValue({
+      email: 'jane@example.com',
+      twoFaEnabled: true,
+      tokenVersion: 0,
+      domainRoles: [],
+      orgMembers: [],
+      teamMembers: [],
+    });
     prismaMock.clientDomain.findUnique.mockResolvedValue({ twoFaPolicy: 'REQUIRED' });
     prismaMock.organisation.findMany.mockResolvedValue([]);
 

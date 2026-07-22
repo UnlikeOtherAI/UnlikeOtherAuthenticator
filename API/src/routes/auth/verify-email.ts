@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { LOGIN_SESSION_AUDIENCE } from '../../config/constants.js';
 import { requireEnv } from '../../config/env.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
+import { runWithRequestAdminTransaction } from '../../plugins/tenant-context.plugin.js';
 import { AppError } from '../../utils/errors.js';
 import {
   validateVerifyEmailToken,
@@ -16,12 +17,12 @@ import {
   type AutoSelectedWorkspace,
 } from '../../services/first-login.service.js';
 import { signLoginSession } from '../../services/login-session.service.js';
+import { lockAndAssertAuthenticationEpoch } from '../../services/authentication-epoch.service.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
-import {
-  parseRequestAccessFlag,
-} from '../../services/access-request-flow.service.js';
+import { parseRequestAccessFlag } from '../../services/access-request-flow.service.js';
 import { selectRedirectUrl } from '../../services/authorization-code.service.js';
 import { finalizeWithTwoFaPolicy } from '../../services/workspace-finalize.service.js';
+import { lockProductWorkspacePolicyShared } from '../../services/product-workspace-policy-lock.service.js';
 import { parseRequiredPkceChallenge } from '../../utils/pkce.js';
 import { tokenConsumeRateLimiter } from './rate-limit-keys.js';
 
@@ -59,15 +60,17 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
         codeChallengeMethod: code_challenge_method,
       });
 
-      if (!request.config || !request.configUrl) {
+      const config = request.config;
+      const configUrl = request.configUrl;
+      if (!config || !configUrl) {
         throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
       }
 
       const tokenType = await validateVerifyEmailToken(
         {
           token,
-          config: request.config,
-          configUrl: request.configUrl,
+          config,
+          configUrl,
         },
         { prisma: request.adminDb },
       );
@@ -76,21 +79,22 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
         throw new AppError('BAD_REQUEST', 400, 'MISSING_PASSWORD');
       }
 
-      const { userId, type, twoFaEnabled, acceptedInvite } = await verifyEmailToken(
-        {
-          token,
-          password,
-          config: request.config,
-          configUrl: request.configUrl,
-        },
-        { prisma: request.adminDb },
-      );
+      const { userId, credentialEpoch, type, twoFaEnabled, acceptedInvite } =
+        await verifyEmailToken(
+          {
+            token,
+            password,
+            config,
+            configUrl,
+          },
+          { prisma: request.adminDb },
+        );
 
       const redirectUrl = selectRedirectUrl({
-        allowedRedirectUrls: request.config.redirect_urls,
+        allowedRedirectUrls: config.redirect_urls,
         requestedRedirectUrl: redirect_url,
       });
-      const rememberMe = request.config.session?.remember_me_default ?? true;
+      const rememberMe = config.session?.remember_me_default ?? true;
       const requestAccess = parseRequestAccessFlag(request_access);
 
       // An accepted email invite is already an explicit workspace selection and always bypasses the
@@ -99,18 +103,24 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
       let selectedWorkspace: AutoSelectedWorkspace | null = acceptedInvite
         ? { orgId: acceptedInvite.orgId, teamId: acceptedInvite.teamId }
         : null;
-      if (!acceptedInvite && request.config.login_flow?.workspace_selection === 'auto') {
-        const choices = await buildWorkspaceChoices(
-          { userId, config: request.config },
-          { prisma: request.adminDb },
-        );
-        selectedWorkspace = resolveAutoSelectedWorkspace(choices);
-        if (shouldPresentWorkspaceChooser(choices, selectedWorkspace)) {
+      if (!acceptedInvite && config.login_flow?.workspace_selection === 'auto') {
+        const chooser = await runWithRequestAdminTransaction(request, async (prisma) => {
+          await lockProductWorkspacePolicyShared(prisma);
+          await lockAndAssertAuthenticationEpoch(
+            { userId, domain: config.domain, credentialEpoch },
+            { prisma, fallbackTwoFaEnabled: twoFaEnabled },
+          );
+          const choices = await buildWorkspaceChoices({ userId, config }, { prisma });
+          const selected = resolveAutoSelectedWorkspace(choices);
+          if (!shouldPresentWorkspaceChooser(choices, selected)) {
+            return { choices, selected, loginToken: null };
+          }
           const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
           const loginToken = await signLoginSession({
             userId,
-            config: request.config,
-            configUrl: request.configUrl,
+            credentialEpoch,
+            config,
+            configUrl,
             redirectUrl,
             rememberMe,
             requestAccess,
@@ -119,7 +129,11 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
             sharedSecret: SHARED_SECRET,
             audience: LOGIN_SESSION_AUDIENCE,
           });
-          reply.status(200).send({ login_token: loginToken, ...choices });
+          return { choices, selected, loginToken };
+        });
+        selectedWorkspace = chooser.selected;
+        if (chooser.loginToken) {
+          reply.status(200).send({ login_token: chooser.loginToken, ...chooser.choices });
           return;
         }
       }
@@ -133,9 +147,10 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
       const outcome = await finalizeWithTwoFaPolicy(
         {
           userId,
+          credentialEpoch,
           twoFaEnabled,
-          config: request.config,
-          configUrl: request.configUrl,
+          config,
+          configUrl,
           redirectUrl,
           rememberMe,
           requestAccess,
@@ -171,7 +186,7 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
         await recordLoginLog(
           {
             userId,
-            domain: request.config.domain,
+            domain: config.domain,
             authMethod,
             ip: request.ip ?? null,
             userAgent:

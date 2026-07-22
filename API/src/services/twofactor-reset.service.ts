@@ -6,14 +6,14 @@ import type { ClientConfig } from './config.service.js';
 
 import { EMAIL_TOKEN_TTL_MS } from '../config/constants.js';
 import { getEnv, requireEnv } from '../config/env.js';
-import { getPrisma } from '../db/prisma.js';
+import { getAdminPrisma } from '../db/prisma.js';
 import { runInTransaction } from '../db/tenant-context.js';
 import { AppError } from '../utils/errors.js';
 import { generateEmailToken, hashEmailToken } from '../utils/verification-token.js';
 import { sendTwoFaResetEmail } from './email.service.js';
 import { revokeAllRefreshTokensForUser } from './refresh-token-revocation.service.js';
-import { lockRefreshSessionUser } from './refresh-session-lock.service.js';
 import { buildUserIdentity } from './user-scope.service.js';
+import { lockAndReadVerificationTokenEpoch } from './verification-token-epoch.service.js';
 
 type TwoFaResetRequestPrisma = {
   user: Pick<PrismaClient['user'], 'findUnique'>;
@@ -21,6 +21,7 @@ type TwoFaResetRequestPrisma = {
 };
 
 type TwoFaResetConsumePrisma = Pick<PrismaClient, '$transaction'> & {
+  $queryRaw: PrismaClient['$queryRaw'];
   user: Pick<PrismaClient['user'], 'findUnique' | 'update'>;
   verificationToken: Pick<PrismaClient['verificationToken'], 'findUnique' | 'updateMany'>;
 };
@@ -127,10 +128,12 @@ export async function requestTwoFaReset(
     domain: params.config.domain,
   });
 
-  const prisma = deps?.prisma ?? (getPrisma() as unknown as TwoFaResetRequestPrisma);
+  // This pre-context account-recovery path must use the BYPASSRLS client. A global user can have
+  // refresh families on sibling product domains, and the request path has no tenant transaction.
+  const prisma = deps?.prisma ?? (getAdminPrisma() as unknown as TwoFaResetRequestPrisma);
   const existing = await prisma.user.findUnique({
     where: { userKey },
-    select: { id: true, twoFaEnabled: true },
+    select: { id: true, tokenVersion: true, twoFaEnabled: true },
   });
 
   // No enumeration: if missing or 2FA isn't enabled, do nothing visible — but burn
@@ -159,6 +162,7 @@ export async function requestTwoFaReset(
       tokenHash,
       expiresAt,
       userId: existing.id,
+      tokenVersion: existing.tokenVersion,
     },
   });
 
@@ -185,8 +189,10 @@ export async function resetTwoFaWithToken(
     throw new AppError('INTERNAL', 500, 'DATABASE_DISABLED');
   }
 
-  const prisma = deps?.prisma ?? (getPrisma() as unknown as TwoFaResetConsumePrisma);
-  const now = deps?.now ? deps.now() : new Date();
+  // Fail safe to BYPASSRLS even if a future route forgets explicit dependency injection: reset
+  // revokes every family for the exact user, including rows hidden from uoa_app by domain RLS.
+  const prisma = deps?.prisma ?? (getAdminPrisma() as unknown as TwoFaResetConsumePrisma);
+  const readNow = deps?.now ?? (() => new Date());
   const sharedSecret = deps?.sharedSecret ?? requireEnv('SHARED_SECRET').SHARED_SECRET;
   const tokenHash = (deps?.hashEmailToken ?? hashEmailToken)(params.token, sharedSecret);
 
@@ -197,6 +203,8 @@ export async function resetTwoFaWithToken(
         id: true,
         type: true,
         userKey: true,
+        userId: true,
+        tokenVersion: true,
         configUrl: true,
         expiresAt: true,
         usedAt: true,
@@ -207,23 +215,24 @@ export async function resetTwoFaWithToken(
       throw new AppError('BAD_REQUEST', 400, 'INVALID_TOKEN');
     }
 
-    assertTwoFaResetTokenValid({ token: tokenRow, configUrl: params.configUrl, now });
-
-    const user = await tx.user.findUnique({
-      where: { userKey: tokenRow.userKey },
-      select: { id: true },
+    await deps?.beforeRefreshSessionLock?.();
+    const epoch = await lockAndReadVerificationTokenEpoch(
+      tx,
+      tokenRow,
+      deps?.afterRefreshSessionLock,
+    );
+    if (epoch?.kind !== 'user') {
+      throw new AppError('BAD_REQUEST', 400, 'INVALID_TOKEN');
+    }
+    const decisionNow = readNow();
+    assertTwoFaResetTokenValid({
+      token: tokenRow,
+      configUrl: params.configUrl,
+      now: decisionNow,
     });
 
-    if (!user) {
-      throw new AppError('BAD_REQUEST', 400, 'INVALID_TOKEN_USER');
-    }
-
-    await deps?.beforeRefreshSessionLock?.();
-    await lockRefreshSessionUser(user.id, { prisma: tx });
-    await deps?.afterRefreshSessionLock?.();
-
     await tx.user.update({
-      where: { userKey: tokenRow.userKey },
+      where: { id: epoch.userId },
       data: {
         twoFaEnabled: false,
         twoFaSecret: null,
@@ -235,12 +244,13 @@ export async function resetTwoFaWithToken(
     const updated = await tx.verificationToken.updateMany({
       where: {
         id: tokenRow.id,
+        tokenVersion: epoch.credentialEpoch,
+        userId: epoch.userId,
         usedAt: null,
-        expiresAt: { gt: now },
+        expiresAt: { gt: decisionNow },
       },
       data: {
-        usedAt: now,
-        userId: user.id,
+        usedAt: decisionNow,
       },
     });
 
@@ -248,12 +258,12 @@ export async function resetTwoFaWithToken(
       throw new AppError('BAD_REQUEST', 400, 'TOKEN_ALREADY_USED');
     }
 
-    await (deps?.revokeAllRefreshTokensForUser ?? revokeAllRefreshTokensForUser)(user.id, {
-      now: () => now,
+    await (deps?.revokeAllRefreshTokensForUser ?? revokeAllRefreshTokensForUser)(epoch.userId, {
+      now: () => decisionNow,
       prisma: tx,
     });
 
-    return { userId: user.id };
+    return { userId: epoch.userId };
   });
 
   return result;

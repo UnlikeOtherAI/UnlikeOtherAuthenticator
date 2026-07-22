@@ -2,7 +2,10 @@ import type { PrismaClient } from '@prisma/client';
 
 import type { ClientConfig } from './config.service.js';
 
+import { getAdminPrisma } from '../db/prisma.js';
+import { runInTransaction } from '../db/tenant-context.js';
 import { handlePostAuthenticationAccessRequest } from './access-request.service.js';
+import { lockAndAssertAuthenticationEpoch } from './authentication-epoch.service.js';
 import { assertEmailDomainAllowedForLogin } from './login-domain-policy.service.js';
 import { assertNotBannedAtLogin } from './ban-policy.service.js';
 import {
@@ -11,6 +14,7 @@ import {
 } from './signature-continuation.service.js';
 
 type FinalizeDeps = {
+  authenticationEpochLocked?: boolean;
   prisma?: PrismaClient;
   // Optional BYPASSRLS transaction used by workspace selection so freshly
   // accepted membership is visible to allow-list and ban policy reads before
@@ -46,6 +50,7 @@ export function buildAccessRequestedUrl(params: {
 export async function finalizeAuthenticatedUser(
   params: {
     userId: string;
+    credentialEpoch: number;
     config: ClientConfig;
     configUrl: string;
     redirectUrl: string;
@@ -67,6 +72,28 @@ export async function finalizeAuthenticatedUser(
   | { status: 'signing_required'; redirectTo: string; signingToken: string }
   | { status: 'requested'; redirectTo: string }
 > {
+  if (!deps?.authenticationEpochLocked) {
+    const transactionPrisma = deps?.prisma ?? getAdminPrisma();
+    return runInTransaction(transactionPrisma, (tx) =>
+      finalizeAuthenticatedUser(params, {
+        ...deps,
+        authenticationEpochLocked: true,
+        prisma: tx,
+        policyPrisma: deps?.policyPrisma ?? tx,
+        workspacePrisma: deps?.workspacePrisma ?? tx,
+      }),
+    );
+  }
+
+  await lockAndAssertAuthenticationEpoch(
+    {
+      userId: params.userId,
+      domain: params.config.domain,
+      credentialEpoch: params.credentialEpoch,
+    },
+    { prisma: deps.prisma ?? getAdminPrisma() },
+  );
+
   // Allowed-login-email-domain restrictions (client domain / org / team). SUPERUSER bypasses.
   // Workspace selection injects its BYPASSRLS transaction so just-accepted membership is visible.
   const emailDomainPolicyInput = {

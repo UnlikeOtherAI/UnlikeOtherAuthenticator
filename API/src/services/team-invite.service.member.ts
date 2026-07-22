@@ -137,7 +137,7 @@ export async function createMemberInvite(
   });
   const existingUser = await prisma.user.findUnique({
     where: { userKey: identity.userKey },
-    select: { id: true },
+    select: { id: true, tokenVersion: true },
   });
 
   if (existingUser) {
@@ -168,7 +168,12 @@ export async function createMemberInvite(
     orderBy: { createdAt: 'desc' },
     select: { id: true, acceptedAt: true, declinedAt: true, revokedAt: true },
   });
-  if (existingInvite && !existingInvite.acceptedAt && !existingInvite.declinedAt && !existingInvite.revokedAt) {
+  if (
+    existingInvite &&
+    !existingInvite.acceptedAt &&
+    !existingInvite.declinedAt &&
+    !existingInvite.revokedAt
+  ) {
     await prisma.teamInvite.updateMany({
       where: { teamId: team.id, email, acceptedAt: null, declinedAt: null, revokedAt: null },
       data: { revokedAt: now },
@@ -196,7 +201,7 @@ export async function createMemberInvite(
     const token = await issueInviteToken({
       prisma,
       inviteId: invite.id,
-      existingUserId: existingUser?.id ?? null,
+      existingUser,
       email,
       userKey: identity.userKey,
       domain: identity.domain,
@@ -218,7 +223,10 @@ export async function createMemberInvite(
     await sendInviteEmail({
       to: email,
       link,
-      trackingPixelUrl: buildTeamInviteTrackingPixelUrl({ baseUrl: resolveBaseUrl(env), inviteId: invite.id }),
+      trackingPixelUrl: buildTeamInviteTrackingPixelUrl({
+        baseUrl: resolveBaseUrl(env),
+        inviteId: invite.id,
+      }),
       organisationName: org.name,
       teamName: team.name,
       inviteeName: inviteName ?? undefined,
@@ -266,7 +274,10 @@ export async function listPendingApprovalInvites(
   assertDatabaseEnabled(env);
 
   const prisma = deps?.prisma ?? (getPrisma() as InvitePrisma);
-  const org = await resolveOrganisationByDomain(prisma, { orgId: params.orgId, domain: params.domain });
+  const org = await resolveOrganisationByDomain(prisma, {
+    orgId: params.orgId,
+    domain: params.domain,
+  });
 
   const rows = await prisma.teamInvite.findMany({
     where: { orgId: org.id, approvalStatus: 'PENDING' },
@@ -297,7 +308,10 @@ export async function approveInvite(
   const now = deps?.now ? deps.now() : new Date();
   const sendInviteEmail = deps?.sendTeamInviteEmail ?? sendTeamInviteEmail;
 
-  const org = await resolveOrganisationByDomain(prisma, { orgId: params.orgId, domain: params.domain });
+  const org = await resolveOrganisationByDomain(prisma, {
+    orgId: params.orgId,
+    domain: params.domain,
+  });
   const invite = await findOrgInviteOrThrow({ prisma, orgId: org.id, inviteId: params.inviteId });
 
   if (invite.approvalStatus !== 'PENDING') {
@@ -311,7 +325,7 @@ export async function approveInvite(
   });
   const existingUser = await prisma.user.findUnique({
     where: { userKey: identity.userKey },
-    select: { id: true },
+    select: { id: true, tokenVersion: true },
   });
 
   const updated = await prisma.teamInvite.update({
@@ -323,7 +337,7 @@ export async function approveInvite(
   const token = await issueInviteToken({
     prisma,
     inviteId: updated.id,
-    existingUserId: existingUser?.id ?? null,
+    existingUser,
     email: updated.email,
     userKey: identity.userKey,
     domain: identity.domain,
@@ -345,7 +359,10 @@ export async function approveInvite(
   await sendInviteEmail({
     to: updated.email,
     link,
-    trackingPixelUrl: buildTeamInviteTrackingPixelUrl({ baseUrl: resolveBaseUrl(env), inviteId: updated.id }),
+    trackingPixelUrl: buildTeamInviteTrackingPixelUrl({
+      baseUrl: resolveBaseUrl(env),
+      inviteId: updated.id,
+    }),
     organisationName: invite.org.name,
     teamName: invite.team.name,
     inviteeName: updated.inviteName ?? undefined,
@@ -375,7 +392,10 @@ export async function denyInvite(
   const prisma = deps?.prisma ?? (getPrisma() as InvitePrisma);
   const now = deps?.now ? deps.now() : new Date();
 
-  const org = await resolveOrganisationByDomain(prisma, { orgId: params.orgId, domain: params.domain });
+  const org = await resolveOrganisationByDomain(prisma, {
+    orgId: params.orgId,
+    domain: params.domain,
+  });
   const invite = await findOrgInviteOrThrow({ prisma, orgId: org.id, inviteId: params.inviteId });
 
   if (invite.approvalStatus !== 'PENDING') {

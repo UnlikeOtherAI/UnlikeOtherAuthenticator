@@ -123,6 +123,7 @@ export type ConfidentialActorChain = {
 
 export type ConfidentialAccessTokenClaims = {
   subject: string;
+  credentialEpoch: number;
   email: string;
   sourceDomain: string;
   product: string;
@@ -145,6 +146,7 @@ export async function signConfidentialAccessToken(
 ): Promise<string> {
   const { privateKey, kid } = await load();
   const payload: Record<string, unknown> = {
+    tv: claims.credentialEpoch,
     email: claims.email,
     source_domain: claims.sourceDomain,
     azp: claims.sourceDomain,

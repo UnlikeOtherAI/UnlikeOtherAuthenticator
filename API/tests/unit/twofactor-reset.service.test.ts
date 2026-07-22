@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { Env } from '../../src/config/env.js';
 import type { ClientConfig } from '../../src/services/config.service.js';
-import { requestTwoFaReset, resetTwoFaWithToken } from '../../src/services/twofactor-reset.service.js';
+import {
+  requestTwoFaReset,
+  resetTwoFaWithToken,
+} from '../../src/services/twofactor-reset.service.js';
 import { testUiTheme } from '../helpers/test-config.js';
 
 type PrismaUserFindUniqueArgs = {
@@ -11,7 +14,7 @@ type PrismaUserFindUniqueArgs = {
 };
 
 type PrismaUserUpdateArgs = {
-  where: { userKey: string };
+  where: { id: string };
   data: Record<string, unknown>;
   select: { id: true };
 };
@@ -34,18 +37,21 @@ type PrismaStub = {
   $queryRaw?: (...args: unknown[]) => Promise<unknown>;
   $transaction: <T>(fn: (tx: PrismaStub) => Promise<T>) => Promise<T>;
   user: {
-    findUnique: (
-      args: PrismaUserFindUniqueArgs,
-    ) => Promise<{ id: string; twoFaEnabled?: boolean } | null>;
+    findUnique: (args: PrismaUserFindUniqueArgs) => Promise<{
+      id: string;
+      tokenVersion: number;
+      twoFaEnabled?: boolean;
+      userKey?: string;
+    } | null>;
     update: (args: PrismaUserUpdateArgs) => Promise<{ id: string }>;
   };
   verificationToken: {
-    findUnique: (
-      args: PrismaVerificationTokenFindUniqueArgs,
-    ) => Promise<{
+    findUnique: (args: PrismaVerificationTokenFindUniqueArgs) => Promise<{
       id: string;
       type: 'TWOFA_RESET' | string;
       userKey: string;
+      userId: string | null;
+      tokenVersion: number | null;
       configUrl: string;
       expiresAt: Date;
       usedAt: Date | null;
@@ -92,7 +98,7 @@ describe('requestTwoFaReset', () => {
   it('creates a TWOFA_RESET token and sends email for a user with 2FA enabled', async () => {
     const findUnique = vi
       .fn<PrismaStub['user']['findUnique']>()
-      .mockResolvedValue({ id: 'u1', twoFaEnabled: true });
+      .mockResolvedValue({ id: 'u1', tokenVersion: 7, twoFaEnabled: true });
     const createToken = vi
       .fn<PrismaStub['verificationToken']['create']>()
       .mockResolvedValue({ id: 't1' });
@@ -130,7 +136,7 @@ describe('requestTwoFaReset', () => {
 
     expect(findUnique).toHaveBeenCalledWith({
       where: { userKey: 'existing@example.com' },
-      select: { id: true, twoFaEnabled: true },
+      select: { id: true, tokenVersion: true, twoFaEnabled: true },
     });
 
     expect(createToken).toHaveBeenCalledWith({
@@ -142,6 +148,7 @@ describe('requestTwoFaReset', () => {
         configUrl: 'https://client.example.com/auth-config',
         tokenHash: 'hash123',
         userId: 'u1',
+        tokenVersion: 7,
       }),
     });
 
@@ -184,7 +191,7 @@ describe('requestTwoFaReset', () => {
 
     expect(findUnique).toHaveBeenCalledWith({
       where: { userKey: 'client.example.com|missing@example.com' },
-      select: { id: true, twoFaEnabled: true },
+      select: { id: true, tokenVersion: true, twoFaEnabled: true },
     });
 
     expect(createToken).not.toHaveBeenCalled();
@@ -231,7 +238,11 @@ describe('resetTwoFaWithToken', () => {
       $queryRaw: vi.fn(),
       $transaction: async (fn) => await fn(prisma),
       user: {
-        findUnique: vi.fn().mockResolvedValue({ id: 'u1' }),
+        findUnique: vi.fn().mockResolvedValue({
+          id: 'u1',
+          tokenVersion: 7,
+          userKey: 'user@example.com',
+        }),
         update: vi.fn().mockResolvedValue({ id: 'u1' }),
       },
       verificationToken: {
@@ -239,6 +250,8 @@ describe('resetTwoFaWithToken', () => {
           id: 't1',
           type: 'TWOFA_RESET',
           userKey: 'user@example.com',
+          userId: 'u1',
+          tokenVersion: 7,
           configUrl: 'https://client.example.com/auth-config',
           expiresAt: new Date('2026-02-10T00:30:00.000Z'),
           usedAt: null,
@@ -277,6 +290,8 @@ describe('resetTwoFaWithToken', () => {
         id: true,
         type: true,
         userKey: true,
+        userId: true,
+        tokenVersion: true,
         configUrl: true,
         expiresAt: true,
         usedAt: true,
@@ -284,7 +299,7 @@ describe('resetTwoFaWithToken', () => {
     });
 
     expect(prisma.user.update).toHaveBeenCalledWith({
-      where: { userKey: 'user@example.com' },
+      where: { id: 'u1' },
       data: { twoFaEnabled: false, twoFaSecret: null, twoFaLastAcceptedCounter: null },
       select: { id: true },
     });
@@ -292,11 +307,122 @@ describe('resetTwoFaWithToken', () => {
     expect(prisma.verificationToken.updateMany).toHaveBeenCalledWith({
       where: expect.objectContaining({
         id: 't1',
+        userId: 'u1',
+        tokenVersion: 7,
         usedAt: null,
       }),
-      data: expect.objectContaining({
-        userId: 'u1',
-      }),
+      data: { usedAt: new Date('2026-02-10T00:00:00.000Z') },
     });
+  });
+
+  it('rejects a token that expires while waiting for the user epoch lock', async () => {
+    let currentNow = new Date('2026-02-10T00:00:00.000Z');
+    const updateUser = vi.fn().mockResolvedValue({ id: 'u1' });
+    const updateToken = vi.fn().mockResolvedValue({ count: 1 });
+    const prisma: PrismaStub = {
+      $queryRaw: vi.fn(),
+      $transaction: async (fn) => await fn(prisma),
+      user: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: 'u1',
+          tokenVersion: 7,
+          userKey: 'user@example.com',
+        }),
+        update: updateUser,
+      },
+      verificationToken: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: 't1',
+          type: 'TWOFA_RESET',
+          userKey: 'user@example.com',
+          userId: 'u1',
+          tokenVersion: 7,
+          configUrl: 'https://client.example.com/auth-config',
+          expiresAt: new Date('2026-02-10T00:00:01.000Z'),
+          usedAt: null,
+        }),
+        create: vi.fn() as never,
+        updateMany: updateToken,
+      },
+    };
+    const revokeAllRefreshTokensForUser = vi.fn(async () => undefined);
+
+    await expect(
+      resetTwoFaWithToken(
+        {
+          token: 'raw-token',
+          configUrl: 'https://client.example.com/auth-config',
+          config: baseConfig(),
+        },
+        {
+          env: testEnv(),
+          prisma: prisma as unknown as never,
+          now: () => currentNow,
+          sharedSecret: 'pepper',
+          hashEmailToken: () => 'hash123',
+          afterRefreshSessionLock: async () => {
+            currentNow = new Date('2026-02-10T00:00:02.000Z');
+          },
+          revokeAllRefreshTokensForUser: revokeAllRefreshTokensForUser as never,
+        },
+      ),
+    ).rejects.toMatchObject({ statusCode: 400, message: 'TOKEN_EXPIRED' });
+
+    expect(updateUser).not.toHaveBeenCalled();
+    expect(updateToken).not.toHaveBeenCalled();
+    expect(revokeAllRefreshTokensForUser).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { label: 'a sibling token from a superseded epoch', tokenVersion: 6 },
+    { label: 'a legacy existing-user token without an issue epoch', tokenVersion: null },
+  ])('rejects $label', async ({ tokenVersion }) => {
+    const updateUser = vi.fn().mockResolvedValue({ id: 'u1' });
+    const updateToken = vi.fn().mockResolvedValue({ count: 1 });
+    const prisma: PrismaStub = {
+      $queryRaw: vi.fn(),
+      $transaction: async (fn) => await fn(prisma),
+      user: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: 'u1',
+          tokenVersion: 7,
+          userKey: 'user@example.com',
+        }),
+        update: updateUser,
+      },
+      verificationToken: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: 't1',
+          type: 'TWOFA_RESET',
+          userKey: 'user@example.com',
+          userId: 'u1',
+          tokenVersion,
+          configUrl: 'https://client.example.com/auth-config',
+          expiresAt: new Date('2099-02-10T00:30:00.000Z'),
+          usedAt: null,
+        }),
+        create: vi.fn() as never,
+        updateMany: updateToken,
+      },
+    };
+
+    await expect(
+      resetTwoFaWithToken(
+        {
+          token: 'raw-token',
+          configUrl: 'https://client.example.com/auth-config',
+          config: baseConfig(),
+        },
+        {
+          env: testEnv(),
+          prisma: prisma as unknown as never,
+          sharedSecret: 'pepper',
+          hashEmailToken: () => 'hash123',
+        },
+      ),
+    ).rejects.toMatchObject({ statusCode: 400, message: 'INVALID_TOKEN' });
+
+    expect(updateUser).not.toHaveBeenCalled();
+    expect(updateToken).not.toHaveBeenCalled();
   });
 });

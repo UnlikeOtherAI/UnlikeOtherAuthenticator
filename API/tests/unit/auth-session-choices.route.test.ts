@@ -9,6 +9,14 @@ const LOGIN_SESSION_AUDIENCE = 'uoa:login-session';
 
 let currentConfig: ClientConfig | null = null;
 
+function deferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
 vi.mock('../../src/middleware/config-verifier.js', () => ({
   configVerifier: async (request: {
     query?: { config_url?: string };
@@ -21,6 +29,7 @@ vi.mock('../../src/middleware/config-verifier.js', () => ({
 }));
 
 const prismaMock = vi.hoisted(() => ({
+  $queryRaw: vi.fn(),
   billingAppKey: { findMany: vi.fn() },
   clientDomain: { findUnique: vi.fn() },
   user: { findUnique: vi.fn() },
@@ -82,6 +91,7 @@ async function postSessionChoices(body: Record<string, unknown>) {
 async function mintLoginToken(userId: string, domain = 'client.example.com'): Promise<string> {
   return signLoginSession({
     userId,
+    credentialEpoch: 0,
     config: baseConfig({ domain }),
     configUrl: 'https://client.example.com/auth-config',
     redirectUrl: 'https://client.example.com/oauth/callback',
@@ -108,14 +118,18 @@ describe('POST /auth/session-choices', () => {
     process.env.DATABASE_URL = 'postgres://uoa-session-choices-tests.invalid/db';
 
     for (const model of Object.values(prismaMock)) {
+      if (typeof model !== 'object' || model === null) continue;
       for (const fn of Object.values(model)) {
-        (fn as ReturnType<typeof vi.fn>).mockReset();
+        const maybeMock = fn as { mockReset?: () => void };
+        maybeMock.mockReset?.();
       }
     }
+    prismaMock.$queryRaw.mockReset().mockResolvedValue([]);
     prismaMock.clientDomain.findUnique.mockResolvedValue({ status: 'inactive' });
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
     Reflect.deleteProperty(process.env, 'DATABASE_URL');
   });
@@ -129,6 +143,7 @@ describe('POST /auth/session-choices', () => {
   it('rejects an expired login_token with a generic error', async () => {
     const expired = await signLoginSession({
       userId: 'user-1',
+      credentialEpoch: 0,
       config: currentConfig!,
       configUrl: 'https://client.example.com/auth-config',
       redirectUrl: 'https://client.example.com/oauth/callback',
@@ -155,9 +170,51 @@ describe('POST /auth/session-choices', () => {
     expect(res.json()).toEqual({ error: 'Request failed' });
   });
 
+  it('rejects a login_token that expires while waiting for the policy lock', async () => {
+    const now = new Date('2026-07-22T12:00:00.000Z');
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(now);
+    const loginToken = await signLoginSession({
+      userId: 'user-1',
+      credentialEpoch: 0,
+      config: currentConfig!,
+      configUrl: 'https://client.example.com/auth-config',
+      redirectUrl: 'https://client.example.com/oauth/callback',
+      rememberMe: true,
+      requestAccess: false,
+      sharedSecret: SHARED_SECRET,
+      audience: LOGIN_SESSION_AUDIENCE,
+      now,
+      ttlMs: 1000,
+    });
+    const lockEntered = deferred();
+    const releaseLock = deferred();
+    prismaMock.$queryRaw.mockImplementationOnce(async () => {
+      lockEntered.resolve();
+      await releaseLock.promise;
+      return [];
+    });
+    prismaMock.user.findUnique.mockResolvedValue({ tokenVersion: 0, twoFaEnabled: false });
+
+    const responsePromise = postSessionChoices({ login_token: loginToken });
+    await lockEntered.promise;
+    vi.setSystemTime(new Date(now.getTime() + 2000));
+    releaseLock.resolve();
+    const res = await responsePromise;
+
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toEqual({ error: 'Request failed' });
+    expect(prismaMock.teamMember.findMany).not.toHaveBeenCalled();
+    expect(prismaMock.teamInvite.findMany).not.toHaveBeenCalled();
+  });
+
   it('returns the workspace choices for a valid login_token', async () => {
     const loginToken = await mintLoginToken('user-1');
-    prismaMock.user.findUnique.mockResolvedValue({ email: 'jo@example.com' });
+    prismaMock.user.findUnique.mockResolvedValue({
+      email: 'jo@example.com',
+      twoFaEnabled: false,
+      tokenVersion: 0,
+    });
     prismaMock.teamMember.findMany.mockResolvedValue([
       {
         teamId: 'team-1',

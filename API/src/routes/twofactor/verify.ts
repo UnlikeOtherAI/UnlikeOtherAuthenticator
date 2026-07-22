@@ -2,11 +2,12 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 import { getAuthServiceIdentifier, requireEnv } from '../../config/env.js';
-import { asPrismaClient } from '../../db/tenant-context.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
-import { setTenantContextFromRequest } from '../../plugins/tenant-context.plugin.js';
+import { runWithRequestAdminTransaction } from '../../plugins/tenant-context.plugin.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
 import { finalizeAuthenticatedUser } from '../../services/access-request-flow.service.js';
+import { lockAndAssertAuthenticationEpoch } from '../../services/authentication-epoch.service.js';
+import { lockProductWorkspacePolicyShared } from '../../services/product-workspace-policy-lock.service.js';
 import { verifyTwoFaChallenge } from '../../services/twofactor-challenge.service.js';
 import { verifyTwoFactorForLogin } from '../../services/twofactor-login.service.js';
 import { selectRedirectUrl } from '../../services/authorization-code.service.js';
@@ -54,34 +55,47 @@ export function registerTwoFactorVerifyRoute(app: FastifyInstance): void {
         throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
       }
 
-      // Re-validate redirect URL against current config (config can change between steps).
-      const redirectUrl = selectRedirectUrl({
-        allowedRedirectUrls: config.redirect_urls,
-        requestedRedirectUrl: challenge.redirectUrl,
-      });
-
-      // Post-auth: challenge token is the bridge from primary auth. Tenant context = verified
-      // config domain + userId recovered from the challenge JWT.
-      setTenantContextFromRequest(request, { orgId: null, userId: challenge.userId });
-      const finalResult = await request.withTenantTx(async (tx) => {
-        const prisma = asPrismaClient(tx);
-        await verifyTwoFactorForLogin({ userId: challenge.userId, code }, { prisma });
+      const finalResult = await runWithRequestAdminTransaction(request, async (prisma) => {
+        await lockProductWorkspacePolicyShared(prisma);
+        await lockAndAssertAuthenticationEpoch(
+          {
+            userId: challenge.userId,
+            domain: challenge.domain,
+            credentialEpoch: challenge.credentialEpoch,
+          },
+          { prisma },
+        );
+        const lockedChallenge = await verifyTwoFaChallenge({
+          token: twofa_token,
+          sharedSecret: SHARED_SECRET,
+          audience: getAuthServiceIdentifier(),
+          now: new Date(),
+        });
+        if (lockedChallenge.configUrl !== configUrl || lockedChallenge.domain !== config.domain) {
+          throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
+        }
+        const lockedRedirectUrl = selectRedirectUrl({
+          allowedRedirectUrls: config.redirect_urls,
+          requestedRedirectUrl: lockedChallenge.redirectUrl,
+        });
+        await verifyTwoFactorForLogin({ userId: lockedChallenge.userId, code }, { prisma });
 
         const decision = await finalizeAuthenticatedUser(
           {
-            userId: challenge.userId,
+            userId: lockedChallenge.userId,
+            credentialEpoch: lockedChallenge.credentialEpoch,
             config,
             configUrl,
-            redirectUrl,
-            rememberMe: challenge.rememberMe,
-            requestAccess: challenge.requestAccess,
-            authMethod: challenge.authMethod,
+            redirectUrl: lockedRedirectUrl,
+            rememberMe: lockedChallenge.rememberMe,
+            requestAccess: lockedChallenge.requestAccess,
+            authMethod: lockedChallenge.authMethod,
             twoFaCompleted: true,
-            codeChallenge: challenge.codeChallenge,
-            codeChallengeMethod: challenge.codeChallengeMethod,
+            codeChallenge: lockedChallenge.codeChallenge,
+            codeChallengeMethod: lockedChallenge.codeChallengeMethod,
             ip: request.ip ?? null,
-            orgId: challenge.orgId,
-            teamId: challenge.teamId,
+            orgId: lockedChallenge.orgId,
+            teamId: lockedChallenge.teamId,
           },
           { workspacePrisma: request.adminDb, prisma },
         );
@@ -89,9 +103,9 @@ export function registerTwoFactorVerifyRoute(app: FastifyInstance): void {
         try {
           await recordLoginLog(
             {
-              userId: challenge.userId,
+              userId: lockedChallenge.userId,
               domain: config.domain,
-              authMethod: challenge.authMethod,
+              authMethod: lockedChallenge.authMethod,
               ip: request.ip ?? null,
               userAgent:
                 typeof request.headers['user-agent'] === 'string'

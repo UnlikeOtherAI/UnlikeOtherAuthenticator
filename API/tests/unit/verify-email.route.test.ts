@@ -98,6 +98,7 @@ describe('POST /auth/verify-email — workspace chooser wiring (gap-fix B Task 1
     validateVerifyEmailTokenMock.mockReset().mockResolvedValue('VERIFY_EMAIL_SET_PASSWORD');
     verifyEmailTokenMock.mockReset().mockResolvedValue({
       userId: 'user-1',
+      credentialEpoch: 0,
       type: 'VERIFY_EMAIL_SET_PASSWORD',
       twoFaEnabled: false,
       acceptedInvite: null,
@@ -263,6 +264,7 @@ describe('POST /auth/verify-email — workspace chooser wiring (gap-fix B Task 1
     });
     verifyEmailTokenMock.mockResolvedValue({
       userId: 'user-1',
+      credentialEpoch: 0,
       type: 'VERIFY_EMAIL_SET_PASSWORD',
       twoFaEnabled: true,
       acceptedInvite: null,
@@ -347,6 +349,7 @@ describe('POST /auth/verify-email — workspace chooser wiring (gap-fix B Task 1
     });
     verifyEmailTokenMock.mockResolvedValue({
       userId: 'user-1',
+      credentialEpoch: 0,
       type: 'VERIFY_EMAIL_SET_PASSWORD',
       twoFaEnabled: false,
       acceptedInvite: { inviteId: 'invite-1', orgId: 'org-invite', teamId: 'team-invite' },

@@ -1,13 +1,4 @@
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-} from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createApp } from '../../src/app.js';
 import { createTestDb } from '../helpers/test-db.js';
@@ -28,15 +19,12 @@ describe('POST /auth/reset-password/request', () => {
   });
 
   it('always responds with the same success message (no enumeration)', async () => {
-    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
-    process.env.AUTH_SERVICE_IDENTIFIER =
-      process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
+    process.env.SHARED_SECRET =
+      process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
+    process.env.AUTH_SERVICE_IDENTIFIER = process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
     const jwt = await signTestConfigJwt(baseClientConfigPayload({ user_scope: 'global' }));
 
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(await createTestConfigFetchHandler(jwt)),
-    );
+    vi.stubGlobal('fetch', vi.fn(await createTestConfigFetchHandler(jwt)));
 
     const app = await createApp();
     await app.ready();
@@ -113,15 +101,12 @@ describe.skipIf(!hasDatabase)('Password reset flow', () => {
   });
 
   it('validates the link on GET and resets password on POST (one-time token)', async () => {
-    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
-    process.env.AUTH_SERVICE_IDENTIFIER =
-      process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
+    process.env.SHARED_SECRET =
+      process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
+    process.env.AUTH_SERVICE_IDENTIFIER = process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
 
     const jwt = await signTestConfigJwt(baseClientConfigPayload({ user_scope: 'global' }));
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(await createTestConfigFetchHandler(jwt)),
-    );
+    vi.stubGlobal('fetch', vi.fn(await createTestConfigFetchHandler(jwt)));
 
     const configUrl = 'https://client.example.com/auth-config';
     const rawToken = 'reset-token-value';
@@ -134,7 +119,7 @@ describe.skipIf(!hasDatabase)('Password reset flow', () => {
         domain: null,
         passwordHash: 'old-hash',
       },
-      select: { id: true },
+      select: { id: true, tokenVersion: true },
     });
 
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
@@ -148,6 +133,7 @@ describe.skipIf(!hasDatabase)('Password reset flow', () => {
         tokenHash,
         expiresAt,
         userId: user.id,
+        tokenVersion: user.tokenVersion,
       },
     });
 
@@ -204,15 +190,12 @@ describe.skipIf(!hasDatabase)('Password reset flow', () => {
   });
 
   it('returns generic 400 for invalid tokens', async () => {
-    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
-    process.env.AUTH_SERVICE_IDENTIFIER =
-      process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
+    process.env.SHARED_SECRET =
+      process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
+    process.env.AUTH_SERVICE_IDENTIFIER = process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
 
     const jwt = await signTestConfigJwt(baseClientConfigPayload({ user_scope: 'global' }));
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(await createTestConfigFetchHandler(jwt)),
-    );
+    vi.stubGlobal('fetch', vi.fn(await createTestConfigFetchHandler(jwt)));
 
     const app = await createApp();
     await app.ready();

@@ -22,6 +22,8 @@ import { redeemTeamInviteLink } from '../../services/team-invite-link.service.js
 import { finalizeWithTwoFaPolicy } from '../../services/workspace-finalize.service.js';
 import { lockAndAssertActiveClientWorkspaceScope } from '../../services/workspace-scope.service.js';
 import { AppError } from '../../utils/errors.js';
+import { lockAndAssertAuthenticationEpoch } from '../../services/authentication-epoch.service.js';
+import { lockProductWorkspacePolicyShared } from '../../services/product-workspace-policy-lock.service.js';
 import { parseRequiredPkceChallenge } from '../../utils/pkce.js';
 import { selectTeamRateLimiter } from './rate-limit-keys.js';
 
@@ -122,30 +124,75 @@ export function registerAuthSelectTeamRoute(app: FastifyInstance): void {
         codeChallengeMethod: pkce.codeChallengeMethod,
       });
 
-      const userId = session.userId;
-      const now = new Date();
       const prisma = request.adminDb;
 
       // Decline path: no membership change, no finalize — return the refreshed chooser.
       if (inviteId && action === 'decline') {
-        await runInTransaction(prisma, (tx) =>
-          declineTeamInviteForUser({ prisma: tx, teamInviteId: inviteId, userId, config, now }),
-        );
-        const choices = await buildWorkspaceChoices({ userId, config }, { prisma });
+        const choices = await runInTransaction(prisma, async (tx) => {
+          await lockProductWorkspacePolicyShared(tx);
+          await lockAndAssertAuthenticationEpoch(
+            {
+              userId: session.userId,
+              domain: session.domain,
+              credentialEpoch: session.credentialEpoch,
+            },
+            { prisma: tx },
+          );
+          const lockedSession = await verifyLoginSession({
+            token: login_token,
+            config,
+            configUrl,
+            sharedSecret: SHARED_SECRET,
+            audience: LOGIN_SESSION_AUDIENCE,
+            now: new Date(),
+          });
+          await declineTeamInviteForUser({
+            prisma: tx,
+            teamInviteId: inviteId,
+            userId: lockedSession.userId,
+            config,
+            now: new Date(),
+          });
+          return buildWorkspaceChoices({ userId: lockedSession.userId, config }, { prisma: tx });
+        });
         reply.status(200).send({ login_token, ...choices });
         return;
       }
 
       const outcome = await runInTransaction(prisma, async (tx) => {
+        await lockProductWorkspacePolicyShared(tx);
+        await lockAndAssertAuthenticationEpoch(
+          {
+            userId: session.userId,
+            domain: session.domain,
+            credentialEpoch: session.credentialEpoch,
+          },
+          { prisma: tx },
+        );
+        const lockedSession = await verifyLoginSession({
+          token: login_token,
+          config,
+          configUrl,
+          sharedSecret: SHARED_SECRET,
+          audience: LOGIN_SESSION_AUDIENCE,
+          now: new Date(),
+        });
+        assertLoginSessionContinuation(lockedSession, {
+          redirectUrl,
+          rememberMe: remember_me,
+          requestAccess,
+          codeChallenge: pkce.codeChallenge,
+          codeChallengeMethod: pkce.codeChallengeMethod,
+        });
         // Claim first. A concurrent replay stops at the unique digest before
         // invite audit or access-request email side effects. Any later failure
         // rolls this insert back, so the legitimate user can retry.
         await consumeLoginSession({
-          domain: session.domain,
-          jti: session.jti,
-          expiresAtEpochSeconds: session.expiresAtEpochSeconds,
+          domain: lockedSession.domain,
+          jti: lockedSession.jti,
+          expiresAtEpochSeconds: lockedSession.expiresAtEpochSeconds,
           prisma: tx,
-          now,
+          now: new Date(),
         });
 
         let orgId: string | undefined;
@@ -155,7 +202,12 @@ export function registerAuthSelectTeamRoute(app: FastifyInstance): void {
           // Redemption, finalization, and the one-time capability claim share
           // this transaction; a replay loser cannot retain a membership grant.
           const redeemed = await redeemTeamInviteLink(
-            { token: inviteLinkToken, userId, domain: config.domain, config },
+            {
+              token: inviteLinkToken,
+              userId: lockedSession.userId,
+              domain: config.domain,
+              config,
+            },
             { prisma: tx },
           );
           orgId = redeemed.orgId;
@@ -164,9 +216,9 @@ export function registerAuthSelectTeamRoute(app: FastifyInstance): void {
           const accepted = await acceptTeamInviteWithinTransaction({
             prisma: tx,
             teamInviteId: inviteId,
-            userId,
+            userId: lockedSession.userId,
             config,
-            now,
+            now: new Date(),
           });
           orgId = accepted.orgId;
           resolvedTeamId = accepted.teamId;
@@ -185,50 +237,56 @@ export function registerAuthSelectTeamRoute(app: FastifyInstance): void {
         // Every resolved path, including shareable invite-link redemption,
         // must finish with the exact ACTIVE org + team rows locked.
         await lockAndAssertActiveClientWorkspaceScope(
-          { userId, domain: config.domain, orgId, teamId: resolvedTeamId },
+          {
+            userId: lockedSession.userId,
+            domain: config.domain,
+            orgId,
+            teamId: resolvedTeamId,
+          },
           { crossProductPrisma: tx, policyPrisma: tx, prisma: tx },
         );
 
         const user = await tx.user.findUnique({
-          where: { id: userId },
+          where: { id: lockedSession.userId },
           select: { twoFaEnabled: true },
         });
         if (!user) rejectSelection();
 
         const finalized = await finalizeWithTwoFaPolicy(
           {
-            userId,
+            userId: lockedSession.userId,
+            credentialEpoch: lockedSession.credentialEpoch,
             twoFaEnabled: user.twoFaEnabled,
             config,
-            configUrl: session.configUrl,
-            redirectUrl: session.redirectUrl,
-            rememberMe: session.rememberMe,
-            requestAccess: session.requestAccess,
+            configUrl: lockedSession.configUrl,
+            redirectUrl: lockedSession.redirectUrl,
+            rememberMe: lockedSession.rememberMe,
+            requestAccess: lockedSession.requestAccess,
             authMethod: 'workspace_select',
-            codeChallenge: session.codeChallenge,
-            codeChallengeMethod: session.codeChallengeMethod,
+            codeChallenge: lockedSession.codeChallenge,
+            codeChallengeMethod: lockedSession.codeChallengeMethod,
             ip: request.ip ?? null,
             orgId,
             teamId: resolvedTeamId,
           },
-          { policyPrisma: tx, prisma: tx, workspacePrisma: tx },
+          { policyLockHeld: true, policyPrisma: tx, prisma: tx, workspacePrisma: tx },
         );
-        return finalized;
+        return { finalized, userId: lockedSession.userId };
       });
 
-      if (outcome.kind === 'twofa') {
+      if (outcome.finalized.kind === 'twofa') {
         reply
           .status(200)
-          .send({ ok: true, twofa_required: true, twofa_token: outcome.twofa_token });
+          .send({ ok: true, twofa_required: true, twofa_token: outcome.finalized.twofa_token });
         return;
       }
 
-      if (outcome.kind === 'twofa_enroll_required') {
+      if (outcome.finalized.kind === 'twofa_enroll_required') {
         reply.status(200).send({
           ok: true,
           kind: 'twofa_enroll_required',
           twofa_enroll_required: true,
-          ...outcome.setup,
+          ...outcome.finalized.setup,
         });
         return;
       }
@@ -236,7 +294,7 @@ export function registerAuthSelectTeamRoute(app: FastifyInstance): void {
       try {
         await recordLoginLog(
           {
-            userId,
+            userId: outcome.userId,
             domain: config.domain,
             authMethod: 'workspace_select',
             ip: request.ip ?? null,
@@ -253,9 +311,13 @@ export function registerAuthSelectTeamRoute(app: FastifyInstance): void {
 
       reply.status(200).send({
         ok: true,
-        code: outcome.finalResult.status === 'granted' ? outcome.finalResult.code : undefined,
-        redirect_to: outcome.finalResult.redirectTo,
-        access_request_status: outcome.finalResult.status === 'requested' ? 'pending' : undefined,
+        code:
+          outcome.finalized.finalResult.status === 'granted'
+            ? outcome.finalized.finalResult.code
+            : undefined,
+        redirect_to: outcome.finalized.finalResult.redirectTo,
+        access_request_status:
+          outcome.finalized.finalResult.status === 'requested' ? 'pending' : undefined,
       });
     },
   );

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { LOGIN_SESSION_AUDIENCE } from '../../config/constants.js';
 import { requireEnv } from '../../config/env.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
+import { runWithRequestAdminTransaction } from '../../plugins/tenant-context.plugin.js';
 import { validateRegistrationEmailLandingToken } from '../../services/auth-registration-email-link.service.js';
 import { parseRequestAccessFlag } from '../../services/access-request-flow.service.js';
 import {
@@ -25,6 +26,8 @@ import { recordLoginLog } from '../../services/login-log.service.js';
 import { AppError, isAppError } from '../../utils/errors.js';
 import { parsePkceChallenge, type PkceChallenge } from '../../utils/pkce.js';
 import { finalizeWithTwoFaPolicy } from '../../services/workspace-finalize.service.js';
+import { lockAndAssertAuthenticationEpoch } from '../../services/authentication-epoch.service.js';
+import { lockProductWorkspacePolicyShared } from '../../services/product-workspace-policy-lock.service.js';
 import { tokenConsumeRateLimiter } from './rate-limit-keys.js';
 
 const QuerySchema = z
@@ -65,7 +68,9 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
       const { token, redirect_url, code_challenge, code_challenge_method, request_access } =
         QuerySchema.parse(request.query);
 
-      if (!request.config || !request.configUrl) {
+      const config = request.config;
+      const configUrl = request.configUrl;
+      if (!config || !configUrl) {
         throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
       }
 
@@ -81,10 +86,10 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
         }
         request.log.info({ err }, 'email link had an invalid PKCE challenge; rendering login');
         const html = await renderAuthEntrypointHtml({
-          config: request.config,
-          configUrl: request.configUrl,
+          config,
+          configUrl,
           requestUrl: buildLoginAuthUrl(
-            request.configUrl,
+            configUrl,
             redirect_url,
             parseRequestAccessFlag(request_access),
             undefined,
@@ -99,8 +104,8 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
         type = await validateRegistrationEmailLandingToken(
           {
             token,
-            config: request.config,
-            configUrl: request.configUrl,
+            config,
+            configUrl,
           },
           { prisma: request.adminDb },
         );
@@ -111,10 +116,10 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
 
         request.log.info({ err }, 'email link token could not be used; rendering login');
         const html = await renderAuthEntrypointHtml({
-          config: request.config,
-          configUrl: request.configUrl,
+          config,
+          configUrl,
           requestUrl: buildLoginAuthUrl(
-            request.configUrl,
+            configUrl,
             redirect_url,
             parseRequestAccessFlag(request_access),
             pkce,
@@ -127,10 +132,10 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
       if (!pkce) {
         request.log.info('email link omitted PKCE challenge; rendering login restart');
         const html = await renderAuthEntrypointHtml({
-          config: request.config,
-          configUrl: request.configUrl,
+          config,
+          configUrl,
           requestUrl: buildLoginAuthUrl(
-            request.configUrl,
+            configUrl,
             redirect_url,
             parseRequestAccessFlag(request_access),
             undefined,
@@ -144,20 +149,20 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
       // No password needed — the user is signed in by clicking the link.
       if (type === 'LOGIN_LINK' || type === 'VERIFY_EMAIL') {
         try {
-          const { userId, twoFaEnabled, acceptedInvite } = await verifyEmailToken(
+          const { userId, credentialEpoch, twoFaEnabled, acceptedInvite } = await verifyEmailToken(
             {
               token,
-              config: request.config,
-              configUrl: request.configUrl,
+              config,
+              configUrl,
             },
             { prisma: request.adminDb },
           );
 
           const redirectUrl = selectRedirectUrl({
-            allowedRedirectUrls: request.config.redirect_urls,
+            allowedRedirectUrls: config.redirect_urls,
             requestedRedirectUrl: redirect_url,
           });
-          const rememberMe = request.config.session?.remember_me_default ?? true;
+          const rememberMe = config.session?.remember_me_default ?? true;
           const requestAccess = parseRequestAccessFlag(request_access);
 
           // An accepted invite is already an explicit workspace choice. Non-invite auto flows select
@@ -165,18 +170,24 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
           let selectedWorkspace: AutoSelectedWorkspace | null = acceptedInvite
             ? { orgId: acceptedInvite.orgId, teamId: acceptedInvite.teamId }
             : null;
-          if (!acceptedInvite && request.config.login_flow?.workspace_selection === 'auto') {
-            const choices = await buildWorkspaceChoices(
-              { userId, config: request.config },
-              { prisma: request.adminDb },
-            );
-            selectedWorkspace = resolveAutoSelectedWorkspace(choices);
-            if (shouldPresentWorkspaceChooser(choices, selectedWorkspace)) {
+          if (!acceptedInvite && config.login_flow?.workspace_selection === 'auto') {
+            const chooser = await runWithRequestAdminTransaction(request, async (prisma) => {
+              await lockProductWorkspacePolicyShared(prisma);
+              await lockAndAssertAuthenticationEpoch(
+                { userId, domain: config.domain, credentialEpoch },
+                { prisma, fallbackTwoFaEnabled: twoFaEnabled },
+              );
+              const choices = await buildWorkspaceChoices({ userId, config }, { prisma });
+              const selected = resolveAutoSelectedWorkspace(choices);
+              if (!shouldPresentWorkspaceChooser(choices, selected)) {
+                return { selected, loginToken: null };
+              }
               const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
               const loginToken = await signLoginSession({
                 userId,
-                config: request.config,
-                configUrl: request.configUrl,
+                credentialEpoch,
+                config,
+                configUrl,
                 redirectUrl,
                 rememberMe,
                 requestAccess,
@@ -185,12 +196,16 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
                 sharedSecret: SHARED_SECRET,
                 audience: LOGIN_SESSION_AUDIENCE,
               });
+              return { selected, loginToken };
+            });
+            selectedWorkspace = chooser.selected;
+            if (chooser.loginToken) {
               redirectNoStore(
                 reply,
                 buildWorkspaceChooserAuthUrl(
-                  request.configUrl,
+                  configUrl,
                   redirectUrl,
-                  loginToken,
+                  chooser.loginToken,
                   requestAccess,
                   pkce,
                 ),
@@ -203,9 +218,10 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
           const outcome = await finalizeWithTwoFaPolicy(
             {
               userId,
+              credentialEpoch,
               twoFaEnabled,
-              config: request.config,
-              configUrl: request.configUrl,
+              config,
+              configUrl,
               redirectUrl,
               rememberMe,
               requestAccess,
@@ -221,7 +237,7 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
           if (outcome.kind === 'twofa') {
             redirectNoStore(
               reply,
-              buildTwoFaAuthUrl(request.configUrl, redirectUrl, {
+              buildTwoFaAuthUrl(configUrl, redirectUrl, {
                 requestAccess,
                 kind: 'challenge',
                 token: outcome.twofa_token,
@@ -233,7 +249,7 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
           if (outcome.kind === 'twofa_enroll_required') {
             redirectNoStore(
               reply,
-              buildTwoFaAuthUrl(request.configUrl, redirectUrl, {
+              buildTwoFaAuthUrl(configUrl, redirectUrl, {
                 requestAccess,
                 kind: 'enrollment',
                 token: outcome.setup.setup_token,
@@ -246,7 +262,7 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
             await recordLoginLog(
               {
                 userId,
-                domain: request.config.domain,
+                domain: config.domain,
                 authMethod,
                 ip: request.ip ?? null,
                 userAgent:
@@ -264,8 +280,8 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
           if (finalUrl) {
             if (isCustomSchemeUrl(finalUrl)) {
               await sendDeepLinkHandoff(reply, {
-                config: request.config,
-                configUrl: request.configUrl,
+                config,
+                configUrl,
                 target: finalUrl,
               });
               return;
@@ -283,10 +299,10 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
 
       // VERIFY_EMAIL_SET_PASSWORD: render the Auth UI with the set-password view.
       const html = await renderAuthEntrypointHtml({
-        config: request.config,
-        configUrl: request.configUrl,
+        config,
+        configUrl,
         requestUrl: buildAuthUrl(
-          request.configUrl,
+          configUrl,
           redirect_url,
           token,
           type,

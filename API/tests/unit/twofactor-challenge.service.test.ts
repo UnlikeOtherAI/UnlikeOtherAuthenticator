@@ -15,6 +15,7 @@ describe('twofactor-challenge.service', () => {
     const now = new Date('2026-02-10T00:00:00.000Z');
     const token = await signTwoFaChallenge({
       userId: 'u1',
+      credentialEpoch: 0,
       domain: 'client.example.com',
       configUrl: 'https://client.example.com/auth-config',
       redirectUrl: 'https://client.example.com/oauth/callback',
@@ -34,6 +35,7 @@ describe('twofactor-challenge.service', () => {
 
     expect(decoded).toEqual({
       userId: 'u1',
+      credentialEpoch: 0,
       domain: 'client.example.com',
       configUrl: 'https://client.example.com/auth-config',
       redirectUrl: 'https://client.example.com/oauth/callback',
@@ -47,6 +49,7 @@ describe('twofactor-challenge.service', () => {
     const now = new Date('2026-02-10T00:00:00.000Z');
     const token = await signTwoFaChallenge({
       userId: 'u1',
+      credentialEpoch: 0,
       domain: 'client.example.com',
       configUrl: 'https://client.example.com/auth-config',
       redirectUrl: 'https://client.example.com/oauth/callback',
@@ -76,6 +79,7 @@ describe('twofactor-challenge.service', () => {
     const now = new Date('2026-02-10T00:00:00.000Z');
     const token = await signTwoFaChallenge({
       userId: 'u1',
+      credentialEpoch: 0,
       domain: 'client.example.com',
       configUrl: 'https://client.example.com/auth-config',
       redirectUrl: 'https://client.example.com/oauth/callback',
@@ -127,6 +131,7 @@ describe('twofactor-challenge.service', () => {
     const now = new Date('2026-02-10T00:00:00.000Z');
     const token = await signTwoFaChallenge({
       userId: 'u1',
+      credentialEpoch: 0,
       domain: 'client.example.com',
       configUrl: 'https://client.example.com/auth-config',
       redirectUrl: 'https://client.example.com/oauth/callback',

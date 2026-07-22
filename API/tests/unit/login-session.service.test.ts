@@ -34,6 +34,7 @@ function config(overrides?: Partial<ClientConfig>): ClientConfig {
 function continuation(overrides?: Record<string, unknown>) {
   return {
     userId: 'user-1',
+    credentialEpoch: 0,
     config: config(),
     configUrl: CONFIG_URL,
     redirectUrl: REDIRECT_URL,
@@ -68,6 +69,7 @@ describe('login-session.service', () => {
 
     expect(session).toMatchObject({
       userId: 'user-1',
+      credentialEpoch: 0,
       domain: 'client.example.com',
       configUrl: CONFIG_URL,
       configFingerprint: fingerprintClientConfig(config()),

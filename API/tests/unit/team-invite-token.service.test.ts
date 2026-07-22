@@ -2,7 +2,11 @@ import { expect, it, vi } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
 
 import type { ClientConfig } from '../../src/services/config.service.js';
-import { declineTeamInviteByToken } from '../../src/services/team-invite.service.token.js';
+import { issueInviteToken } from '../../src/services/team-invite.service.base.js';
+import {
+  declineTeamInviteByToken,
+  getTeamInviteLandingData,
+} from '../../src/services/team-invite.service.token.js';
 import { testUiTheme } from '../helpers/test-config.js';
 
 function makeConfig(): ClientConfig {
@@ -20,6 +24,36 @@ function makeConfig(): ClientConfig {
   } as ClientConfig;
 }
 
+it('binds an existing-user invite token to its issue-time credential epoch', async () => {
+  const updateMany = vi.fn().mockResolvedValue({ count: 0 });
+  const create = vi.fn().mockResolvedValue({ id: 'token-row-1' });
+
+  await issueInviteToken({
+    prisma: {
+      verificationToken: { updateMany, create },
+    } as never,
+    inviteId: 'invite-1',
+    existingUser: { id: 'user-1', tokenVersion: 7 },
+    email: 'invitee@example.com',
+    userKey: 'invitee@example.com',
+    domain: null,
+    config: makeConfig(),
+    configUrl: 'https://client.example.com/auth-config',
+    now: new Date('2026-04-01T00:00:00.000Z'),
+    sharedSecret: 'test-shared-secret-with-enough-length',
+    generateEmailTokenFn: () => 'token-123',
+    hashEmailTokenFn: () => 'hash-123',
+  });
+
+  expect(create).toHaveBeenCalledWith({
+    data: expect.objectContaining({
+      type: 'LOGIN_LINK',
+      userId: 'user-1',
+      tokenVersion: 7,
+    }),
+  });
+});
+
 it('declines an invite token and invalidates linked unused tokens', async () => {
   const tx = {
     verificationToken: {
@@ -27,6 +61,9 @@ it('declines an invite token and invalidates linked unused tokens', async () => 
         id: 'token-row-1',
         type: 'VERIFY_EMAIL_SET_PASSWORD',
         configUrl: 'https://client.example.com/auth-config',
+        userId: null,
+        userKey: 'invitee@example.com',
+        tokenVersion: null,
         teamInviteId: 'invite-1',
         expiresAt: new Date('2026-04-01T00:10:00.000Z'),
         usedAt: null,
@@ -45,6 +82,9 @@ it('declines an invite token and invalidates linked unused tokens', async () => 
     },
     teamInvite: {
       update: vi.fn().mockResolvedValue({ id: 'invite-1' }),
+    },
+    user: {
+      findUnique: vi.fn().mockResolvedValue(null),
     },
     $transaction: vi.fn(async (callback: (value: PrismaClient) => Promise<unknown>) =>
       callback(tx as unknown as PrismaClient),
@@ -98,4 +138,65 @@ it('declines an invite token and invalidates linked unused tokens', async () => 
       usedAt: new Date('2026-04-01T00:00:00.000Z'),
     },
   });
+});
+
+it('rejects an existing-user invite link from a superseded credential epoch', async () => {
+  const prisma = {
+    verificationToken: {
+      findUnique: vi.fn().mockResolvedValue({
+        id: 'token-row-1',
+        type: 'LOGIN_LINK',
+        configUrl: 'https://client.example.com/auth-config',
+        userId: 'user-1',
+        userKey: 'invitee@example.com',
+        tokenVersion: 6,
+        teamInviteId: 'invite-1',
+        expiresAt: new Date('2099-04-01T00:10:00.000Z'),
+        usedAt: null,
+        teamInvite: {
+          id: 'invite-1',
+          inviteName: 'Invited User',
+          email: 'invitee@example.com',
+          acceptedAt: null,
+          declinedAt: null,
+          revokedAt: null,
+          team: { name: 'Core Team' },
+          org: { name: 'Acme' },
+        },
+      }),
+    },
+    user: {
+      findUnique: vi.fn().mockResolvedValue({
+        id: 'user-1',
+        userKey: 'invitee@example.com',
+        tokenVersion: 7,
+      }),
+    },
+  } as unknown as PrismaClient;
+
+  await expect(
+    getTeamInviteLandingData(
+      {
+        token: 'token-123',
+        configUrl: 'https://client.example.com/auth-config',
+        config: makeConfig(),
+      },
+      {
+        env: {
+          NODE_ENV: 'test',
+          HOST: '127.0.0.1',
+          PORT: 3000,
+          LOG_LEVEL: 'info',
+          SHARED_SECRET: 'test-shared-secret-with-enough-length',
+          AUTH_SERVICE_IDENTIFIER: 'uoa-auth-service',
+          DATABASE_URL: 'postgres://example.invalid/db',
+          ACCESS_TOKEN_TTL: '30m',
+          LOG_RETENTION_DAYS: 90,
+          AI_TRANSLATION_PROVIDER: 'disabled',
+        },
+        prisma,
+        sharedSecret: 'test-shared-secret-with-enough-length',
+      },
+    ),
+  ).rejects.toMatchObject({ statusCode: 400 });
 });

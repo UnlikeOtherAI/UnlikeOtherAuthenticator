@@ -3,9 +3,9 @@ import { z } from 'zod';
 
 import { requireEnv } from '../../config/env.js';
 import { LOGIN_SESSION_AUDIENCE } from '../../config/constants.js';
-import { asPrismaClient } from '../../db/tenant-context.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
-import { setTenantContextFromRequest } from '../../plugins/tenant-context.plugin.js';
+import { runWithRequestAdminTransaction } from '../../plugins/tenant-context.plugin.js';
+import { lockAndAssertAuthenticationEpoch } from '../../services/authentication-epoch.service.js';
 import { buildWorkspaceChoices } from '../../services/first-login.service.js';
 import { verifyLoginCode } from '../../services/login-code.service.js';
 import { signLoginSession } from '../../services/login-session.service.js';
@@ -13,6 +13,7 @@ import { parseRequestAccessFlag } from '../../services/access-request-flow.servi
 import { recordLoginLog } from '../../services/login-log.service.js';
 import { selectRedirectUrl } from '../../services/authorization-code.service.js';
 import { finalizeWithTwoFaPolicy } from '../../services/workspace-finalize.service.js';
+import { lockProductWorkspacePolicyShared } from '../../services/product-workspace-policy-lock.service.js';
 import { AppError } from '../../utils/errors.js';
 import { parseRequiredPkceChallenge } from '../../utils/pkce.js';
 import { verifyCodeRateLimiter } from './rate-limit-keys.js';
@@ -70,37 +71,40 @@ export function registerAuthVerifyCodeRoute(app: FastifyInstance): void {
       const rememberMe = remember_me ?? config.session?.remember_me_default ?? true;
       const requestAccess = parseRequestAccessFlag(request_access);
 
-      const { userId } = await verifyLoginCode(
+      const { userId, credentialEpoch } = await verifyLoginCode(
         { email, config, code },
         { prisma: request.adminDb },
       );
 
       if (config.login_flow?.workspace_selection === 'auto') {
-        const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
-        const loginToken = await signLoginSession({
-          userId,
-          config,
-          configUrl,
-          redirectUrl,
-          rememberMe,
-          requestAccess,
-          codeChallenge: pkce.codeChallenge,
-          codeChallengeMethod: pkce.codeChallengeMethod,
-          sharedSecret: SHARED_SECRET,
-          audience: LOGIN_SESSION_AUDIENCE,
+        const chooser = await runWithRequestAdminTransaction(request, async (prisma) => {
+          await lockProductWorkspacePolicyShared(prisma);
+          await lockAndAssertAuthenticationEpoch(
+            { userId, domain: config.domain, credentialEpoch },
+            { prisma },
+          );
+          const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
+          const loginToken = await signLoginSession({
+            userId,
+            credentialEpoch,
+            config,
+            configUrl,
+            redirectUrl,
+            rememberMe,
+            requestAccess,
+            codeChallenge: pkce.codeChallenge,
+            codeChallengeMethod: pkce.codeChallengeMethod,
+            sharedSecret: SHARED_SECRET,
+            audience: LOGIN_SESSION_AUDIENCE,
+          });
+          const choices = await buildWorkspaceChoices({ userId, config }, { prisma });
+          return { loginToken, choices };
         });
-        const choices = await buildWorkspaceChoices(
-          { userId, config },
-          { prisma: request.adminDb },
-        );
-        reply.status(200).send({ login_token: loginToken, ...choices });
+        reply.status(200).send({ login_token: chooser.loginToken, ...chooser.choices });
         return;
       }
 
-      setTenantContextFromRequest(request, { orgId: null, userId });
-
-      const outcome = await request.withTenantTx(async (tx) => {
-        const prisma = asPrismaClient(tx);
+      const outcome = await runWithRequestAdminTransaction(request, async (prisma) => {
         const user = await prisma.user.findUnique({
           where: { id: userId },
           select: { twoFaEnabled: true },
@@ -112,6 +116,7 @@ export function registerAuthVerifyCodeRoute(app: FastifyInstance): void {
         const result = await finalizeWithTwoFaPolicy(
           {
             userId,
+            credentialEpoch,
             twoFaEnabled: user.twoFaEnabled,
             config,
             configUrl,

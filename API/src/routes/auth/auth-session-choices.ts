@@ -3,9 +3,12 @@ import { z } from 'zod';
 
 import { LOGIN_SESSION_AUDIENCE } from '../../config/constants.js';
 import { requireEnv } from '../../config/env.js';
+import { runInTransaction } from '../../db/tenant-context.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
+import { lockAndAssertAuthenticationEpoch } from '../../services/authentication-epoch.service.js';
 import { buildWorkspaceChoices } from '../../services/first-login.service.js';
 import { verifyLoginSession } from '../../services/login-session.service.js';
+import { lockProductWorkspacePolicyShared } from '../../services/product-workspace-policy-lock.service.js';
 import { AppError } from '../../utils/errors.js';
 import { sessionChoicesRateLimiter } from './rate-limit-keys.js';
 
@@ -54,10 +57,26 @@ export function registerAuthSessionChoicesRoute(app: FastifyInstance): void {
         audience: LOGIN_SESSION_AUDIENCE,
       });
 
-      const choices = await buildWorkspaceChoices(
-        { userId: session.userId, config },
-        { prisma: request.adminDb },
-      );
+      const choices = await runInTransaction(request.adminDb, async (tx) => {
+        await lockProductWorkspacePolicyShared(tx);
+        await lockAndAssertAuthenticationEpoch(
+          {
+            userId: session.userId,
+            domain: session.domain,
+            credentialEpoch: session.credentialEpoch,
+          },
+          { prisma: tx },
+        );
+        const lockedSession = await verifyLoginSession({
+          token: login_token,
+          config,
+          configUrl,
+          sharedSecret: SHARED_SECRET,
+          audience: LOGIN_SESSION_AUDIENCE,
+          now: new Date(),
+        });
+        return buildWorkspaceChoices({ userId: lockedSession.userId, config }, { prisma: tx });
+      });
 
       reply.status(200).send({ ...choices });
     },

@@ -81,7 +81,7 @@ describe.skipIf(!hasDatabase)('refresh versus logout and credential revocation',
     await handle.prisma.user.deleteMany();
   });
 
-  async function seedUser(): Promise<{ email: string; id: string }> {
+  async function seedUser(): Promise<{ email: string; id: string; tokenVersion: number }> {
     const email = `credential-${randomUUID()}@example.com`;
     return handle.prisma.user.create({
       data: {
@@ -91,7 +91,7 @@ describe.skipIf(!hasDatabase)('refresh versus logout and credential revocation',
         twoFaEnabled: true,
         twoFaSecret: 'encrypted-test-secret',
       },
-      select: { email: true, id: true },
+      select: { email: true, id: true, tokenVersion: true },
     });
   }
 
@@ -108,10 +108,7 @@ describe.skipIf(!hasDatabase)('refresh versus logout and credential revocation',
     return { ...token, refreshToken };
   }
 
-  function refreshLegacy(
-    token: LegacyRefresh,
-    afterRefreshSessionLock?: () => Promise<void>,
-  ) {
+  function refreshLegacy(token: LegacyRefresh, afterRefreshSessionLock?: () => Promise<void>) {
     return exchangeRefreshTokenForTokens(
       {
         clientId: token.clientId,
@@ -161,7 +158,7 @@ describe.skipIf(!hasDatabase)('refresh versus logout and credential revocation',
   }
 
   async function createRecoveryToken(
-    user: { email: string; id: string },
+    user: { email: string; id: string; tokenVersion: number },
     type: 'PASSWORD_RESET' | 'TWOFA_RESET',
   ): Promise<string> {
     const rawToken = `${type.toLowerCase()}-${randomUUID()}`;
@@ -175,6 +172,7 @@ describe.skipIf(!hasDatabase)('refresh versus logout and credential revocation',
         tokenHash: hashEmailToken(rawToken, sharedSecret),
         expiresAt: new Date(Date.now() + 10 * 60 * 1000),
         userId: user.id,
+        tokenVersion: user.tokenVersion,
       },
     });
     return rawToken;

@@ -1,15 +1,18 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 
 import { getAuthServiceIdentifier, requireEnv } from '../../config/env.js';
-import { asPrismaClient } from '../../db/tenant-context.js';
+import { runInTransaction } from '../../db/tenant-context.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
+import { runWithRequestAdminTransaction } from '../../plugins/tenant-context.plugin.js';
 import { parseBearerOrRawToken } from '../../middleware/org-role-guard.js';
-import { setTenantContextFromRequest } from '../../plugins/tenant-context.plugin.js';
 import { finalizeAuthenticatedUser } from '../../services/access-request-flow.service.js';
+import { lockAndAssertAuthenticationEpoch } from '../../services/authentication-epoch.service.js';
 import { verifyAccessToken, type AccessTokenClaims } from '../../services/access-token.service.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
 import { selectRedirectUrl } from '../../services/authorization-code.service.js';
+import { lockProductWorkspacePolicyShared } from '../../services/product-workspace-policy-lock.service.js';
 import { disableTwoFactorForUser } from '../../services/twofactor-disable.service.js';
 import { enrollTwoFactorForUser } from '../../services/twofactor-enroll.service.js';
 import { resolveTwoFaPolicy } from '../../services/twofactor-policy.service.js';
@@ -64,10 +67,15 @@ async function requireAccessTokenClaims(request: FastifyRequest): Promise<Access
 async function assertPolicyAllowsSetup(params: {
   request: FastifyRequest;
   userId: string;
+  orgId?: string;
+  prisma?: PrismaClient;
 }): Promise<void> {
   const config = params.request.config;
   if (!config) throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
-  const policy = await resolveTwoFaPolicy({ config, userId: params.userId });
+  const policy = await resolveTwoFaPolicy(
+    { config, userId: params.userId, orgId: params.orgId },
+    params.prisma ? { prisma: params.prisma } : undefined,
+  );
   if (policy === 'OFF') {
     throw new AppError('NOT_FOUND', 404, 'TWOFA_NOT_AVAILABLE');
   }
@@ -84,35 +92,81 @@ export function registerTwoFactorSelfServiceRoutes(app: FastifyInstance): void {
 
       const body = SetupBodySchema.parse(request.body ?? {});
       if (body.setup_token) {
+        const setupToken = body.setup_token;
         const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
         const setup = await verifyTwoFaSetupToken({
-          token: body.setup_token,
+          token: setupToken,
           sharedSecret: SHARED_SECRET,
           audience: getAuthServiceIdentifier(),
         });
         if (setup.configUrl !== configUrl || setup.domain !== config.domain) {
           throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
         }
-        await assertPolicyAllowsSetup({ request, userId: setup.userId });
-        const totpSecret = decryptTwoFaSecret({
-          encryptedSecret: setup.encryptedSecret,
-          sharedSecret: SHARED_SECRET,
+        const rendered = await runInTransaction(request.adminDb, async (tx) => {
+          await lockProductWorkspacePolicyShared(tx);
+          await lockAndAssertAuthenticationEpoch(
+            {
+              userId: setup.userId,
+              domain: setup.domain,
+              credentialEpoch: setup.credentialEpoch,
+            },
+            { prisma: tx },
+          );
+          const lockedSetup = await verifyTwoFaSetupToken({
+            token: setupToken,
+            sharedSecret: SHARED_SECRET,
+            audience: getAuthServiceIdentifier(),
+            now: new Date(),
+          });
+          if (lockedSetup.configUrl !== configUrl || lockedSetup.domain !== config.domain) {
+            throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
+          }
+          const totpSecret = decryptTwoFaSecret({
+            encryptedSecret: lockedSetup.encryptedSecret,
+            sharedSecret: SHARED_SECRET,
+          });
+          await assertPolicyAllowsSetup({
+            request,
+            userId: lockedSetup.userId,
+            orgId: lockedSetup.orgId,
+            prisma: tx,
+          });
+          return renderTwoFactorSetupFromTokenSecret(
+            { userId: lockedSetup.userId, totpSecret, setupToken, config },
+            { prisma: tx },
+          );
         });
-        const rendered = await renderTwoFactorSetupFromTokenSecret(
-          { userId: setup.userId, totpSecret, setupToken: body.setup_token, config },
-          { prisma: request.adminDb },
-        );
         reply.status(200).send(rendered);
         return;
       }
 
       const claims = await requireAccessTokenClaims(request);
-      await assertPolicyAllowsSetup({ request, userId: claims.userId });
-
-      const setup = await startTwoFactorSetup(
-        { userId: claims.userId, config, configUrl },
-        { prisma: request.adminDb },
-      );
+      const setup = await runInTransaction(request.adminDb, async (tx) => {
+        await lockProductWorkspacePolicyShared(tx);
+        await lockAndAssertAuthenticationEpoch(
+          {
+            userId: claims.userId,
+            domain: claims.domain,
+            credentialEpoch: claims.tokenVersion,
+          },
+          { prisma: tx },
+        );
+        await assertPolicyAllowsSetup({
+          request,
+          userId: claims.userId,
+          orgId: claims.active?.orgId,
+          prisma: tx,
+        });
+        return startTwoFactorSetup(
+          {
+            userId: claims.userId,
+            credentialEpoch: claims.tokenVersion,
+            config,
+            configUrl,
+          },
+          { prisma: tx },
+        );
+      });
       reply.status(200).send(setup);
     },
   );
@@ -146,40 +200,61 @@ export function registerTwoFactorSelfServiceRoutes(app: FastifyInstance): void {
         request.accessTokenClaims = claims;
       }
 
-      await assertPolicyAllowsSetup({ request, userId: setup.userId });
-      const totpSecret = decryptTwoFaSecret({
-        encryptedSecret: setup.encryptedSecret,
-        sharedSecret: SHARED_SECRET,
-      });
+      const finalResult = await runWithRequestAdminTransaction(request, async (prisma) => {
+        await lockProductWorkspacePolicyShared(prisma);
+        await lockAndAssertAuthenticationEpoch(
+          {
+            userId: setup.userId,
+            domain: setup.domain,
+            credentialEpoch: setup.credentialEpoch,
+          },
+          { prisma },
+        );
+        const lockedSetup = await verifyTwoFaSetupToken({
+          token: setup_token,
+          sharedSecret: SHARED_SECRET,
+          audience: getAuthServiceIdentifier(),
+          now: new Date(),
+        });
+        if (lockedSetup.configUrl !== configUrl || lockedSetup.domain !== config.domain) {
+          throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
+        }
+        const totpSecret = decryptTwoFaSecret({
+          encryptedSecret: lockedSetup.encryptedSecret,
+          sharedSecret: SHARED_SECRET,
+        });
+        await assertPolicyAllowsSetup({
+          request,
+          userId: lockedSetup.userId,
+          orgId: lockedSetup.orgId,
+          prisma,
+        });
+        await enrollTwoFactorForUser({ userId: lockedSetup.userId, totpSecret, code }, { prisma });
 
-      setTenantContextFromRequest(request, { orgId: null, userId: setup.userId });
-      const finalResult = await request.withTenantTx(async (tx) => {
-        const prisma = asPrismaClient(tx);
-        await enrollTwoFactorForUser({ userId: setup.userId, totpSecret, code }, { prisma });
-
-        if (!setup.redirectUrl) {
+        if (!lockedSetup.redirectUrl) {
           return null;
         }
 
         const redirectUrl = selectRedirectUrl({
           allowedRedirectUrls: config.redirect_urls,
-          requestedRedirectUrl: setup.redirectUrl,
+          requestedRedirectUrl: lockedSetup.redirectUrl,
         });
         const result = await finalizeAuthenticatedUser(
           {
-            userId: setup.userId,
+            userId: lockedSetup.userId,
+            credentialEpoch: lockedSetup.credentialEpoch,
             config,
             configUrl,
             redirectUrl,
-            rememberMe: setup.rememberMe,
-            requestAccess: setup.requestAccess,
-            authMethod: setup.authMethod ?? 'email_password',
+            rememberMe: lockedSetup.rememberMe,
+            requestAccess: lockedSetup.requestAccess,
+            authMethod: lockedSetup.authMethod ?? 'email_password',
             twoFaCompleted: true,
-            codeChallenge: setup.codeChallenge,
-            codeChallengeMethod: setup.codeChallengeMethod,
+            codeChallenge: lockedSetup.codeChallenge,
+            codeChallengeMethod: lockedSetup.codeChallengeMethod,
             ip: request.ip ?? null,
-            orgId: setup.orgId,
-            teamId: setup.teamId,
+            orgId: lockedSetup.orgId,
+            teamId: lockedSetup.teamId,
           },
           { workspacePrisma: request.adminDb, prisma },
         );
@@ -187,9 +262,9 @@ export function registerTwoFactorSelfServiceRoutes(app: FastifyInstance): void {
         try {
           await recordLoginLog(
             {
-              userId: setup.userId,
+              userId: lockedSetup.userId,
               domain: config.domain,
-              authMethod: setup.authMethod ?? 'email_password',
+              authMethod: lockedSetup.authMethod ?? 'email_password',
               ip: request.ip ?? null,
               userAgent:
                 typeof request.headers['user-agent'] === 'string'
@@ -223,12 +298,14 @@ export function registerTwoFactorSelfServiceRoutes(app: FastifyInstance): void {
 
       const { code } = DisableBodySchema.parse(request.body);
       const claims = await requireAccessTokenClaims(request);
-      const policy = await resolveTwoFaPolicy({ config, userId: claims.userId });
-      if (policy === 'OFF') throw new AppError('NOT_FOUND', 404, 'TWOFA_NOT_AVAILABLE');
-      if (policy === 'REQUIRED') throw new AppError('BAD_REQUEST', 400, 'TWOFA_REQUIRED');
-
       await disableTwoFactorForUser(
-        { userId: claims.userId, code },
+        {
+          userId: claims.userId,
+          code,
+          credentialEpoch: claims.tokenVersion,
+          config,
+          orgId: claims.active?.orgId,
+        },
         { prisma: request.adminDb },
       );
 

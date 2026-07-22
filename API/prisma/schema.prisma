@@ -379,6 +379,9 @@ model VerificationToken {
   attemptCount Int                   @default(0) @map("attempt_count")
   createdAt    DateTime              @default(now()) @map("created_at")
 
+  // Snapshot of User.tokenVersion when an existing-user capability is issued.
+  // Both fields remain null only for a genuine pre-user registration capability.
+  tokenVersion Int?        @map("token_version")
   userId       String?     @map("user_id")
   user         User?       @relation(fields: [userId], references: [id], onDelete: Cascade)
   teamInviteId String?     @map("team_invite_id")

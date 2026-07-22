@@ -1,5 +1,6 @@
 import { Prisma, type PrismaClient } from '@prisma/client';
 
+import { getEnv } from '../config/env.js';
 import { normalizeDomain } from '../utils/domain.js';
 import { AppError } from '../utils/errors.js';
 
@@ -12,6 +13,7 @@ const PRODUCT_WORKSPACE_POLICY_LOCK = 'uoa:product-workspace-policy:v1';
 export async function lockProductWorkspacePolicyShared(
   prisma: ProductPolicyLockPrisma,
 ): Promise<void> {
+  if (typeof prisma.$queryRaw !== 'function' && !getEnv().DATABASE_URL) return;
   await prisma.$queryRaw(
     Prisma.sql`
       SELECT pg_advisory_xact_lock_shared(
@@ -25,6 +27,7 @@ export async function lockProductWorkspacePolicyShared(
 export async function lockProductWorkspacePolicyExclusive(
   prisma: ProductPolicyLockPrisma,
 ): Promise<void> {
+  if (typeof prisma.$queryRaw !== 'function' && !getEnv().DATABASE_URL) return;
   await prisma.$queryRaw(
     Prisma.sql`
       SELECT pg_advisory_xact_lock(

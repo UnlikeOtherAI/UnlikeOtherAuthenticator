@@ -5,10 +5,7 @@ import { EMAIL_TOKEN_TTL_MS } from '../config/constants.js';
 import { getEnv, requireEnv } from '../config/env.js';
 import { AppError } from '../utils/errors.js';
 import { generateEmailToken, hashEmailToken } from '../utils/verification-token.js';
-import {
-  normalizeDomain,
-  resolveOrganisationByDomain,
-} from './organisation.service.base.js';
+import { normalizeDomain, resolveOrganisationByDomain } from './organisation.service.base.js';
 
 export type InvitePrisma = PrismaClient;
 
@@ -140,9 +137,10 @@ function toApprovalStatusValue(value: string | null | undefined): InviteApproval
  */
 export function toInviteRecord(row: PendingInviteRow, now: Date = new Date()): TeamInviteRecord {
   const { approvalStatus, ...rest } = row;
-  const isExpired = !row.acceptedAt && !row.declinedAt && !row.revokedAt
-    ? Boolean(row.expiresAt && row.expiresAt.getTime() <= now.getTime())
-    : false;
+  const isExpired =
+    !row.acceptedAt && !row.declinedAt && !row.revokedAt
+      ? Boolean(row.expiresAt && row.expiresAt.getTime() <= now.getTime())
+      : false;
 
   return {
     ...rest,
@@ -187,20 +185,21 @@ export function resolveBaseUrl(env: ReturnType<typeof getEnv>): string {
     : `http://${env.HOST}:${env.PORT}`;
 }
 
-function inviteTokenType(existingUserId: string | null, config: ClientConfig): 'LOGIN_LINK' | 'VERIFY_EMAIL' | 'VERIFY_EMAIL_SET_PASSWORD' {
-  if (existingUserId) {
+function inviteTokenType(
+  existingUser: { id: string; tokenVersion: number } | null,
+  config: ClientConfig,
+): 'LOGIN_LINK' | 'VERIFY_EMAIL' | 'VERIFY_EMAIL_SET_PASSWORD' {
+  if (existingUser) {
     return 'LOGIN_LINK';
   }
 
-  return config.registration_mode === 'passwordless'
-    ? 'VERIFY_EMAIL'
-    : 'VERIFY_EMAIL_SET_PASSWORD';
+  return config.registration_mode === 'passwordless' ? 'VERIFY_EMAIL' : 'VERIFY_EMAIL_SET_PASSWORD';
 }
 
 export async function issueInviteToken(params: {
   prisma: InvitePrisma;
   inviteId: string;
-  existingUserId: string | null;
+  existingUser: { id: string; tokenVersion: number } | null;
   email: string;
   userKey: string;
   domain: string | null;
@@ -230,14 +229,15 @@ export async function issueInviteToken(params: {
 
   await params.prisma.verificationToken.create({
     data: {
-      type: inviteTokenType(params.existingUserId, params.config),
+      type: inviteTokenType(params.existingUser, params.config),
       email: params.email,
       userKey: params.userKey,
       domain: params.domain,
       configUrl: params.configUrl,
       tokenHash,
       expiresAt,
-      userId: params.existingUserId,
+      userId: params.existingUser?.id ?? null,
+      tokenVersion: params.existingUser?.tokenVersion ?? null,
       teamInviteId: params.inviteId,
     },
   });

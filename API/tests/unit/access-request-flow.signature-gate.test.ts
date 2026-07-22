@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { PrismaClient } from '@prisma/client';
 
 import type { ClientConfig } from '../../src/services/config.service.js';
 
@@ -40,6 +41,7 @@ describe('shared post-authentication signature gate', () => {
   });
 
   it('forwards the exact authenticated flow state and returns the signing continuation', async () => {
+    const prisma = {} as PrismaClient;
     finalizeConfigAuthorizationWithSignaturesMock.mockResolvedValue({
       status: 'signing_required',
       signingToken: 'opaque-capability',
@@ -52,6 +54,7 @@ describe('shared post-authentication signature gate', () => {
 
     const result = await finalizeAuthenticatedUser({
       userId: 'user-1',
+      credentialEpoch: 0,
       config,
       configUrl: 'https://client.example.com/auth-config',
       redirectUrl: 'https://client.example.com/oauth/callback?return=exact',
@@ -64,7 +67,7 @@ describe('shared post-authentication signature gate', () => {
       ip: '203.0.113.9',
       orgId: 'org-1',
       teamId: 'team-1',
-    });
+    }, { authenticationEpochLocked: true, prisma });
 
     expect(assertEmailDomainAllowedForLoginMock).toHaveBeenCalledWith({
       userId: 'user-1',
@@ -100,6 +103,7 @@ describe('shared post-authentication signature gate', () => {
   });
 
   it('does not create a continuation when an access request is still pending', async () => {
+    const prisma = {} as PrismaClient;
     handlePostAuthenticationAccessRequestMock.mockResolvedValue({ status: 'requested' });
     const { finalizeAuthenticatedUser } = await import(
       '../../src/services/access-request-flow.service.js'
@@ -107,6 +111,7 @@ describe('shared post-authentication signature gate', () => {
 
     const result = await finalizeAuthenticatedUser({
       userId: 'user-1',
+      credentialEpoch: 0,
       config,
       configUrl: 'https://client.example.com/auth-config',
       redirectUrl: 'https://client.example.com/oauth/callback',
@@ -116,7 +121,7 @@ describe('shared post-authentication signature gate', () => {
       twoFaCompleted: false,
       codeChallenge: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
       codeChallengeMethod: 'S256',
-    });
+    }, { authenticationEpochLocked: true, prisma });
 
     expect(result.status).toBe('requested');
     expect(finalizeConfigAuthorizationWithSignaturesMock).not.toHaveBeenCalled();

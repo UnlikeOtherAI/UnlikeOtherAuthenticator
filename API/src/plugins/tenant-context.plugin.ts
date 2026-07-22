@@ -5,6 +5,7 @@ import type { Prisma, PrismaClient } from '@prisma/client';
 import { getEnv } from '../config/env.js';
 import { getAdminPrisma, getPrisma } from '../db/prisma.js';
 import {
+  runInTransaction,
   runWithTenantContext as runWithContext,
   type TenantContext,
 } from '../db/tenant-context.js';
@@ -89,4 +90,16 @@ export function setTenantContextFromRequest(
     orgId: extras?.orgId ?? claims?.org?.org_id ?? null,
     userId: extras?.userId ?? claims?.userId ?? null,
   };
+}
+
+/**
+ * Run a pre-authentication decision on the BYPASSRLS client. DB-less unit
+ * tests deliberately receive an inert stand-in, matching `withTenantTx`.
+ */
+export function runWithRequestAdminTransaction<T>(
+  request: Pick<FastifyRequest, 'adminDb'>,
+  handler: (tx: PrismaClient) => Promise<T>,
+): Promise<T> {
+  if (!getEnv().DATABASE_URL) return handler({} as PrismaClient);
+  return runInTransaction(request.adminDb, handler);
 }

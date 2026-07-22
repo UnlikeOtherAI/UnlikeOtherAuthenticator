@@ -98,7 +98,7 @@ export async function createTeamInvites(
 
     const existingUser = await prisma.user.findUnique({
       where: { userKey: identity.userKey },
-      select: { id: true },
+      select: { id: true, tokenVersion: true },
     });
 
     if (existingUser) {
@@ -136,9 +136,9 @@ export async function createTeamInvites(
 
     const hadExistingUnresolvedInvite = Boolean(
       existingInvite &&
-        !existingInvite.acceptedAt &&
-        !existingInvite.declinedAt &&
-        !existingInvite.revokedAt,
+      !existingInvite.acceptedAt &&
+      !existingInvite.declinedAt &&
+      !existingInvite.revokedAt,
     );
     if (hadExistingUnresolvedInvite) {
       await prisma.teamInvite.updateMany({
@@ -175,7 +175,7 @@ export async function createTeamInvites(
     const token = await issueInviteToken({
       prisma,
       inviteId: invite.id,
-      existingUserId: existingUser?.id ?? null,
+      existingUser,
       email,
       userKey: identity.userKey,
       domain: identity.domain,
@@ -217,11 +217,14 @@ export async function createTeamInvites(
   return { results };
 }
 
-export async function listTeamInvites(params: {
-  orgId: string;
-  teamId: string;
-  domain: string;
-}, deps?: InviteDeps): Promise<{ data: TeamInviteRecord[] }> {
+export async function listTeamInvites(
+  params: {
+    orgId: string;
+    teamId: string;
+    domain: string;
+  },
+  deps?: InviteDeps,
+): Promise<{ data: TeamInviteRecord[] }> {
   const env = deps?.env ?? getEnv();
   assertDatabaseEnabled(env);
 
@@ -246,7 +249,10 @@ export async function listTeamInvites(params: {
   return { data: rows.map((row) => toInviteRecord(row, now)) };
 }
 
-export async function trackTeamInviteOpen(params: { inviteId: string }, deps?: InviteDeps): Promise<void> {
+export async function trackTeamInviteOpen(
+  params: { inviteId: string },
+  deps?: InviteDeps,
+): Promise<void> {
   const env = deps?.env ?? getEnv();
   if (!env.DATABASE_URL) {
     return;

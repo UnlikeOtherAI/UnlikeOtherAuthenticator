@@ -27,6 +27,10 @@ import {
 import { getActiveClientOrgContext, type OrgContext } from './org-context.service.js';
 import { CONFIDENTIAL_ASSERTION_CLOCK_TOLERANCE_SECONDS } from './confidential-assertion-use.service.js';
 import { lockTokenIssuanceProductPolicy } from './product-workspace-policy-lock.service.js';
+import {
+  isAuthenticationEpochMismatchError,
+  lockAndAssertAuthenticationEpoch,
+} from './authentication-epoch.service.js';
 
 export const ACCESS_TOKEN_SUBJECT_TOKEN_TYPE = 'urn:ietf:params:oauth:token-type:access_token';
 
@@ -62,6 +66,7 @@ const ChainedSubjectAccessTokenSchema = z
     iss: z.string().trim().min(1),
     aud: z.string().trim().min(1),
     sub: z.string().trim().min(1).max(256),
+    tv: z.number().int().nonnegative(),
     email: z.string().trim().email(),
     source_domain: z.string().trim().min(1),
     azp: z.string().trim().min(1),
@@ -254,6 +259,16 @@ async function exchangeConfidentialChainedAccessTokenInsidePolicyLock(
 
   const prisma = deps.prisma ?? getAdminPrisma();
   const identityDomain = originalIdentityDomain(subject);
+  const credentialEpoch = subject.tv;
+  try {
+    await lockAndAssertAuthenticationEpoch(
+      { userId: subject.sub, domain: identityDomain, credentialEpoch },
+      { prisma },
+    );
+  } catch (error) {
+    if (isAuthenticationEpochMismatchError(error)) throw subjectForbidden();
+    throw error;
+  }
   const [sourceDelegation, user, domainRole, currentOrg] = await Promise.all([
     (deps.resolveSourceDelegation ?? resolveConfidentialDelegationForSource)(
       {
@@ -315,6 +330,7 @@ async function exchangeConfidentialChainedAccessTokenInsidePolicyLock(
   };
   const accessToken = await (deps.signAccessToken ?? signConfidentialAccessToken)({
     subject: subject.sub,
+    credentialEpoch,
     email: user.email,
     sourceDomain: callerDomain,
     product: delegation.product,

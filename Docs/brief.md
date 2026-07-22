@@ -274,6 +274,19 @@ The default remains strict no-enumeration: existing users receive the same gener
 - One-time
 - Time-limited
 - Stored hashed
+- Every capability issued for an existing user (password reset, 2FA reset, login code, login link,
+  existing-user verification/invite link) stores both the exact `userId` and the user's
+  issue-time `tokenVersion`. Consumption takes the canonical user-global lock and requires that
+  immutable pair to match the live user before any credential, invite, or authentication side
+  effect. A credential reset therefore invalidates every sibling capability issued in the prior
+  epoch. Legacy existing-user rows with a null epoch fail closed; the migration deliberately does
+  not backfill them because their true issue epoch cannot be reconstructed.
+- Both `userId` and `tokenVersion` may be null only for a genuine pre-user registration token, and
+  that token remains eligible only while its exact `userKey` is still absent. Mixed/null legacy
+  bindings are invalid.
+- A landing-page check is read-only. Every consuming mutation checks expiry again from a fresh
+  clock after acquiring its serialization locks, so a token that expires while waiting cannot
+  authenticate, mutate credentials, accept/decline an invite, or create a session.
 
 ### Flows
 
@@ -553,6 +566,10 @@ The following tighten ambiguities in the brief to prevent misinterpretation duri
 
 - Access token TTL: **implementation-defined, short-lived** (e.g. 15–60 minutes)
 - Refresh token TTL: **implementation-defined, bounded** (1–90 days; default 30 days)
+- Login-session chooser JWTs and 2FA challenge/setup JWTs are verified once for routing, then
+  verified again with a fresh clock after the product-policy and user-epoch locks that guard their
+  consuming action. Expiry while waiting on a lock must fail before chooser reads, invite changes,
+  secret decryption, TOTP verification/enrollment, or authorization-code issuance.
 - Silent reauth is allowed **server-side only** via the refresh-token grant
 - Refresh tokens must be **opaque, hashed at rest, and rotated on every use**
 - Reuse of an already-rotated refresh token must revoke the entire token family
@@ -702,7 +719,9 @@ already-verified source config JWT. That JWKS URL must use HTTPS, remain on the
 source config domain, pass the public-destination SSRF checks, and contain the
 assertion's RS256 `kid`. The assertion has an exact source-domain `iss` and
 `source_domain`, exact `aud = PUBLIC_BASE_URL + "/auth/token"`, stable UOA `sub`,
-non-empty `jti`, and `iat`/`exp` no more than 60 seconds apart. `active` is
+non-empty `jti`, mandatory nonnegative integer `tv` (including epoch zero), and
+`iat`/`exp` no more than 60 seconds apart. UOA locks the exact user and requires
+`tv` to equal the live credential epoch; omission never defaults to zero. `active` is
 optional so first-time or workspace-less product users can still be delegated.
 When present it must be exactly `{ orgId, teamId }`, with both identifiers
 non-empty; partial, null, or extra-field workspace objects are invalid.
@@ -732,7 +751,9 @@ product mapping and, for a nested chain, checks stable user/source-domain role,
 ACTIVE organisation, and ACTIVE selected team under the ultimate signed origin
 at the tail of `act`. It also resolves the immediate caller's separate mapping.
 The requested scope must be allowed by that caller mapping and be a subset of
-the inbound scope.
+the inbound scope. The inbound token must also carry an explicit nonnegative
+integer `tv`, including zero; UOA compares it with the locked live user epoch
+and propagates that exact epoch into the narrowed token.
 
 Delegation policy is DB-backed, not process configuration. Each mapping binds
 one registered `ClientDomain` plus lowercase product identifier to one exact

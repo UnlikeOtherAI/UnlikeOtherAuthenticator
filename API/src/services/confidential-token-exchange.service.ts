@@ -24,6 +24,10 @@ import { resolveConfidentialDelegation } from './confidential-delegation.service
 import { lockTokenIssuanceProductPolicy } from './product-workspace-policy-lock.service.js';
 import { resolveProductWorkspacePolicy } from './product-workspace-policy.service.js';
 import { requiresExactAuthorizationWorkspace } from './required-workspace-placement.service.js';
+import {
+  isAuthenticationEpochMismatchError,
+  lockAndAssertAuthenticationEpoch,
+} from './authentication-epoch.service.js';
 
 export const TOKEN_EXCHANGE_GRANT_TYPE = 'urn:ietf:params:oauth:grant-type:token-exchange';
 export const JWT_SUBJECT_TOKEN_TYPE = 'urn:ietf:params:oauth:token-type:jwt';
@@ -48,6 +52,7 @@ const SubjectAssertionSchema = z
     iss: z.string().trim().min(1),
     aud: z.string().trim().min(1),
     sub: z.string().trim().min(1).max(256),
+    tv: z.number().int().nonnegative(),
     source_domain: z.string().trim().min(1),
     jti: z.string().trim().min(1).max(256),
     iat: z.number().int().positive(),
@@ -179,8 +184,22 @@ async function exchangeConfidentialSubjectTokenInsidePolicyLock(
     { prisma: deps.prisma },
   );
   const { assertion, issuer, sourceDomain } = verified;
+  const credentialEpoch = assertion.tv;
 
   const prisma = deps.prisma ?? getAdminPrisma();
+  try {
+    await lockAndAssertAuthenticationEpoch(
+      { userId: assertion.sub, domain: sourceDomain, credentialEpoch },
+      { prisma },
+    );
+  } catch (error) {
+    // Keep user existence and current epoch opaque to an authenticated source
+    // product; this is the same failure class as a missing source-domain role.
+    if (isAuthenticationEpochMismatchError(error)) {
+      throw new AppError('FORBIDDEN', 403, 'TOKEN_EXCHANGE_SUBJECT_FORBIDDEN');
+    }
+    throw error;
+  }
   const workspacePolicy = await resolveProductWorkspacePolicy({ domain: sourceDomain }, { prisma });
   if (!assertion.active && requiresExactAuthorizationWorkspace(params.config, workspacePolicy)) {
     throw new AppError('FORBIDDEN', 403, 'TOKEN_EXCHANGE_SUBJECT_FORBIDDEN');
@@ -242,6 +261,7 @@ async function exchangeConfidentialSubjectTokenInsidePolicyLock(
 
   const accessToken = await (deps.signAccessToken ?? signConfidentialAccessToken)({
     subject: assertion.sub,
+    credentialEpoch,
     email: user.email,
     sourceDomain,
     product: delegation.product,

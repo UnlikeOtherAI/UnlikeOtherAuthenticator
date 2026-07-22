@@ -79,7 +79,7 @@ describe.skipIf(!hasDatabase)('invite-bound email workspace token flow', () => {
     );
     const owner = await handle!.prisma.user.create({
       data: { email: 'owner@example.com', userKey: 'owner@example.com' },
-      select: { id: true },
+      select: { id: true, tokenVersion: true },
     });
     const org = await handle!.prisma.organisation.create({
       data: {
@@ -130,7 +130,7 @@ describe.skipIf(!hasDatabase)('invite-bound email workspace token flow', () => {
     const rawToken = 'invite-bound-email-verification-token';
     await handle!.prisma.verificationToken.create({
       data: {
-        type: 'VERIFY_EMAIL',
+        type: 'LOGIN_LINK',
         email: invitedEmail,
         userKey: invitedEmail,
         domain: null,
@@ -138,6 +138,8 @@ describe.skipIf(!hasDatabase)('invite-bound email workspace token flow', () => {
         teamInviteId: invite.id,
         tokenHash: hashEmailToken(rawToken, process.env.SHARED_SECRET!),
         expiresAt: new Date(Date.now() + 10 * 60_000),
+        userId: invitedUser.id,
+        tokenVersion: invitedUser.tokenVersion,
       },
     });
 

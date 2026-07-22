@@ -1,13 +1,4 @@
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-} from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createApp } from '../../src/app.js';
 import { createTestDb } from '../helpers/test-db.js';
@@ -29,17 +20,14 @@ describe('POST /2fa/reset/request', () => {
   });
 
   it('always responds with the same success message (no enumeration)', async () => {
-    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
-    process.env.AUTH_SERVICE_IDENTIFIER =
-      process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
+    process.env.SHARED_SECRET =
+      process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
+    process.env.AUTH_SERVICE_IDENTIFIER = process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
     const jwt = await signTestConfigJwt(
       baseClientConfigPayload({ user_scope: 'global', '2fa_enabled': true }),
     );
 
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(await createTestConfigFetchHandler(jwt)),
-    );
+    vi.stubGlobal('fetch', vi.fn(await createTestConfigFetchHandler(jwt)));
 
     const app = await createApp();
     await app.ready();
@@ -116,17 +104,14 @@ describe.skipIf(!hasDatabase)('2FA reset flow', () => {
   });
 
   it('resets 2FA only after explicit POST confirmation', async () => {
-    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
-    process.env.AUTH_SERVICE_IDENTIFIER =
-      process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
+    process.env.SHARED_SECRET =
+      process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
+    process.env.AUTH_SERVICE_IDENTIFIER = process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
 
     const jwt = await signTestConfigJwt(
       baseClientConfigPayload({ user_scope: 'global', '2fa_enabled': true }),
     );
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(await createTestConfigFetchHandler(jwt)),
-    );
+    vi.stubGlobal('fetch', vi.fn(await createTestConfigFetchHandler(jwt)));
 
     const configUrl = 'https://client.example.com/auth-config';
     const rawToken = 'twofa-reset-token';
@@ -145,7 +130,7 @@ describe.skipIf(!hasDatabase)('2FA reset flow', () => {
         twoFaEnabled: true,
         twoFaSecret: encrypted,
       },
-      select: { id: true },
+      select: { id: true, tokenVersion: true },
     });
 
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
@@ -159,6 +144,7 @@ describe.skipIf(!hasDatabase)('2FA reset flow', () => {
         tokenHash,
         expiresAt,
         userId: user.id,
+        tokenVersion: user.tokenVersion,
       },
     });
 

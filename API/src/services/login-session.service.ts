@@ -15,6 +15,7 @@ const LoginSessionSchema = z
   .object({
     sub: z.string().min(1),
     domain: z.string().min(1),
+    credential_epoch: z.number().int().nonnegative(),
     typ: z.literal(LOGIN_SESSION_TYP),
     config_url: z.string().min(1),
     config_fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
@@ -37,6 +38,7 @@ const LoginSessionSchema = z
 
 export type LoginSession = {
   userId: string;
+  credentialEpoch: number;
   domain: string;
   configUrl: string;
   configFingerprint: string;
@@ -101,6 +103,7 @@ function rejectLoginSession(): never {
 export async function signLoginSession(
   params: LoginContinuation & {
     userId: string;
+    credentialEpoch: number;
     sharedSecret: string;
     audience: string;
     now?: Date;
@@ -124,6 +127,7 @@ export async function signLoginSession(
   try {
     return await new SignJWT({
       domain: params.config.domain,
+      credential_epoch: params.credentialEpoch,
       typ: LOGIN_SESSION_TYP,
       config_url: params.configUrl,
       config_fingerprint: fingerprintClientConfig(params.config),
@@ -191,6 +195,7 @@ export async function verifyLoginSession(
 
   return {
     userId: parsed.sub,
+    credentialEpoch: parsed.credential_epoch,
     domain: parsed.domain,
     configUrl: parsed.config_url,
     configFingerprint: parsed.config_fingerprint,

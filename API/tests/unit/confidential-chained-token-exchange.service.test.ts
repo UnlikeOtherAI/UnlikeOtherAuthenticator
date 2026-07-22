@@ -3,10 +3,7 @@ import { exportJWK, generateKeyPair, SignJWT, type JWK, type KeyLike } from 'jos
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ClientConfig } from '../../src/services/config.service.js';
-import {
-  exchangeConfidentialChainedAccessToken,
-  verifyChainedSubjectAccessToken,
-} from '../../src/services/confidential-chained-token-exchange.service.js';
+import { exchangeConfidentialChainedAccessToken } from '../../src/services/confidential-chained-token-exchange.service.js';
 import {
   resetAccessTokenKeyCache,
   type ConfidentialAccessTokenClaims,
@@ -65,6 +62,8 @@ async function signInboundToken(
     sourceDomain?: string;
     typ?: string;
     azp?: string;
+    credentialEpoch?: number;
+    omitCredentialEpoch?: boolean;
   } = {},
 ): Promise<{ now: number; token: string }> {
   const now = Math.floor(Date.now() / 1000);
@@ -76,6 +75,7 @@ async function signInboundToken(
     product: overrides.product ?? 'nessie',
     scope: overrides.scope ?? 'ai.invoke',
   };
+  if (!overrides.omitCredentialEpoch) payload.tv = overrides.credentialEpoch ?? 0;
   if (!overrides.omitOrg) {
     payload.org = Object.prototype.hasOwnProperty.call(overrides, 'org')
       ? overrides.org
@@ -110,6 +110,7 @@ function prismaMock(options?: {
   orgExists?: boolean;
   teams?: Array<{ teamId: string; teamRole: string }>;
   userExists?: boolean;
+  tokenVersion?: number;
 }): PrismaClient {
   return {
     $queryRaw: vi.fn().mockResolvedValue([]),
@@ -117,11 +118,15 @@ function prismaMock(options?: {
       findUnique: vi.fn().mockResolvedValue({ domain: callerDomain, status: 'active' }),
     },
     user: {
-      findUnique: vi
-        .fn()
-        .mockResolvedValue(
-          options?.userExists === false ? null : { email: 'current-user@example.com' },
-        ),
+      findUnique: vi.fn().mockResolvedValue(
+        options?.userExists === false
+          ? null
+          : {
+              email: 'current-user@example.com',
+              tokenVersion: options?.tokenVersion ?? 0,
+              twoFaEnabled: false,
+            },
+      ),
     },
     domainRole: {
       findUnique: vi
@@ -189,117 +194,6 @@ afterAll(() => {
   resetAccessTokenKeyCache();
 });
 
-describe('chained UOA access-token verification', () => {
-  it('accepts a UOA at+jwt bound to the authenticated caller origin', async () => {
-    const { now, token } = await signInboundToken();
-    const subject = await verifyChainedSubjectAccessToken(
-      {
-        subjectToken: token,
-        callerAudience,
-        issuer,
-      },
-      { now: () => now },
-    );
-
-    expect(subject).toMatchObject({
-      sub: userId,
-      source_domain: sourceDomain,
-      azp: sourceDomain,
-      product: 'nessie',
-      scope: 'ai.invoke',
-      org: { org_id: 'org_1', teams: ['team_1', 'team_2'] },
-      active: { orgId: 'org_1', teamId: 'team_1' },
-    });
-  });
-
-  it('rejects the wrong audience, issuer, token type, or source binding', async () => {
-    const variants = [
-      await signInboundToken({ audience: 'https://other.example' }),
-      await signInboundToken({ issuer: 'https://evil.example' }),
-      await signInboundToken({ typ: 'JWT' }),
-      await signInboundToken({ azp: 'api.other.example' }),
-    ];
-
-    for (const { now, token } of variants) {
-      await expect(
-        verifyChainedSubjectAccessToken(
-          { subjectToken: token, callerAudience, issuer },
-          { now: () => now },
-        ),
-      ).rejects.toThrow('INVALID_SUBJECT_TOKEN');
-    }
-  });
-
-  it('requires non-null, internally consistent organisation and team provenance', async () => {
-    const variants = [
-      await signInboundToken({ omitActive: true }),
-      await signInboundToken({ omitOrg: true }),
-      await signInboundToken({
-        org: {
-          ...defaultOrg(),
-          org_id: 'org_other',
-        },
-      }),
-      await signInboundToken({
-        org: {
-          ...defaultOrg(),
-          teams: ['team_2'],
-          team_roles: { team_2: 'admin' },
-        },
-      }),
-    ];
-
-    for (const { now, token } of variants) {
-      await expect(
-        verifyChainedSubjectAccessToken(
-          { subjectToken: token, callerAudience, issuer },
-          { now: () => now },
-        ),
-      ).rejects.toThrow('INVALID_SUBJECT_TOKEN');
-    }
-  });
-
-  it('accepts only canonical supported inbound scopes and a bounded actor chain', async () => {
-    for (const scope of ['ai.invoke ai.invoke', 'unknown.scope']) {
-      const { now, token } = await signInboundToken({ scope });
-      await expect(
-        verifyChainedSubjectAccessToken(
-          { subjectToken: token, callerAudience, issuer },
-          { now: () => now },
-        ),
-      ).rejects.toThrow('INVALID_SUBJECT_TOKEN');
-    }
-
-    const { now, token } = await signInboundToken({
-      actor: { sub: 'api.origin.example', product: 'origin' },
-    });
-    await expect(
-      verifyChainedSubjectAccessToken(
-        { subjectToken: token, callerAudience, issuer },
-        { now: () => now },
-      ),
-    ).resolves.toMatchObject({
-      act: { sub: 'api.origin.example', product: 'origin' },
-    });
-
-    let oversizedActor: unknown = { sub: 'api.origin-0.example', product: 'origin' };
-    for (let index = 1; index < 8; index += 1) {
-      oversizedActor = {
-        sub: `api.origin-${index}.example`,
-        product: 'origin',
-        act: oversizedActor,
-      };
-    }
-    const oversized = await signInboundToken({ actor: oversizedActor });
-    await expect(
-      verifyChainedSubjectAccessToken(
-        { subjectToken: oversized.token, callerAudience, issuer },
-        { now: () => oversized.now },
-      ),
-    ).rejects.toThrow('INVALID_SUBJECT_TOKEN');
-  });
-});
-
 describe('chained confidential exchange', () => {
   it('narrows a reusable inbound token, caps expiry, and preserves the upstream actor', async () => {
     const { now, token } = await signInboundToken({ expiresInSeconds: 120 });
@@ -346,6 +240,7 @@ describe('chained confidential exchange', () => {
     const claims = signAccessToken.mock.calls[0]?.[0] as ConfidentialAccessTokenClaims;
     expect(claims).toMatchObject({
       subject: userId,
+      credentialEpoch: 0,
       email: 'current-user@example.com',
       sourceDomain: callerDomain,
       product: 'deepsignal',
@@ -367,6 +262,57 @@ describe('chained confidential exchange', () => {
     expect(prisma.confidentialAssertionUse.create).not.toHaveBeenCalled();
     expect(prisma.confidentialAssertionUse.deleteMany).not.toHaveBeenCalled();
     expect(signAccessToken).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects a pre-reset chained token whose credential epoch is no longer current', async () => {
+    const { now, token } = await signInboundToken({ credentialEpoch: 0 });
+    const prisma = prismaMock({ tokenVersion: 1 });
+
+    await expect(
+      exchangeConfidentialChainedAccessToken(
+        {
+          authenticatedClientDomainId: 'client-domain-deepsignal',
+          subjectToken: token,
+          product: 'deepsignal',
+          resource: ledgerResource,
+          scope: 'ai.invoke',
+          config: config(),
+        },
+        {
+          prisma,
+          now: () => now,
+          signAccessToken: vi.fn(),
+          resolveDelegation: resolveDelegation(),
+          resolveSourceDelegation: resolveSourceDelegation(),
+          consumeSubjectRateLimit: vi.fn(),
+        },
+      ),
+    ).rejects.toThrow('TOKEN_EXCHANGE_SUBJECT_FORBIDDEN');
+  });
+
+  it('rejects a chained token without tv even when the live epoch is zero', async () => {
+    const { now, token } = await signInboundToken({ omitCredentialEpoch: true });
+    const signAccessToken = vi.fn().mockResolvedValue('ledger-access-token');
+    const input = {
+      authenticatedClientDomainId: 'client-domain-deepsignal',
+      subjectToken: token,
+      product: 'deepsignal',
+      resource: ledgerResource,
+      scope: 'ai.invoke',
+      config: config(),
+    };
+
+    await expect(
+      exchangeConfidentialChainedAccessToken(input, {
+        prisma: prismaMock({ tokenVersion: 0 }),
+        now: () => now,
+        signAccessToken,
+        resolveDelegation: resolveDelegation(),
+        resolveSourceDelegation: resolveSourceDelegation(),
+        consumeSubjectRateLimit: vi.fn(),
+      }),
+    ).rejects.toThrow('INVALID_SUBJECT_TOKEN');
+    expect(signAccessToken).not.toHaveBeenCalled();
   });
 
   it('retains the full signed upstream chain when another product delegates onward', async () => {

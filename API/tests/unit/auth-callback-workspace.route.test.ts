@@ -156,6 +156,7 @@ describe('GET /auth/callback/:provider workspace selection', () => {
     loginWithSocialProfileMock.mockReset().mockResolvedValue({
       status: 'authenticated',
       userId: 'user-1',
+      credentialEpoch: 0,
       twoFaEnabled: false,
     });
     resolveTwoFaPolicyMock.mockReset().mockResolvedValue('OFF');
@@ -244,6 +245,7 @@ describe('GET /auth/callback/:provider workspace selection', () => {
     loginWithSocialProfileMock.mockResolvedValue({
       status: 'authenticated',
       userId: 'user-1',
+      credentialEpoch: 0,
       twoFaEnabled: true,
     });
     resolveTwoFaPolicyMock.mockResolvedValue('OPTIONAL');

@@ -11,8 +11,12 @@ import { hashPassword } from './password.service.js';
 import { ensureDomainRoleForUser } from './domain-role.service.js';
 import { placeUserInConfiguredOrganisation } from './org-placement.service.js';
 import { revokeAllRefreshTokensForUser } from './refresh-token-revocation.service.js';
-import { lockRefreshSessionUser } from './refresh-session-lock.service.js';
+import { lockProductWorkspacePolicyShared } from './product-workspace-policy-lock.service.js';
 import { acceptTeamInviteWithinTransaction } from './team-invite.service.js';
+import {
+  lockAndReadVerificationTokenEpoch,
+  readVerificationTokenEpoch,
+} from './verification-token-epoch.service.js';
 
 type VerifyEmailPrisma = PrismaClient;
 
@@ -39,6 +43,7 @@ type VerifyEmailTokenRow = Prisma.VerificationTokenGetPayload<{
     domain: true;
     configUrl: true;
     userId: true;
+    tokenVersion: true;
     teamInviteId: true;
     expiresAt: true;
     usedAt: true;
@@ -55,6 +60,7 @@ export type AcceptedEmailInviteWorkspace = {
 
 export type VerifyEmailResult = {
   userId: string;
+  credentialEpoch: number;
   type: VerifyEmailTokenType;
   twoFaEnabled: boolean;
   acceptedInvite: AcceptedEmailInviteWorkspace | null;
@@ -119,6 +125,7 @@ export async function validateVerifyEmailToken(
       domain: true,
       configUrl: true,
       userId: true,
+      tokenVersion: true,
       teamInviteId: true,
       expiresAt: true,
       usedAt: true,
@@ -129,7 +136,11 @@ export async function validateVerifyEmailToken(
     throw new AppError('BAD_REQUEST', 400, 'INVALID_TOKEN');
   }
 
-  return assertTokenValid({ token: row, configUrl: params.configUrl, now: new Date() });
+  const type = assertTokenValid({ token: row, configUrl: params.configUrl, now: new Date() });
+  if (!(await readVerificationTokenEpoch(prisma, row))) {
+    throw new AppError('BAD_REQUEST', 400, 'INVALID_TOKEN');
+  }
+  return type;
 }
 
 export async function verifyEmailToken(
@@ -148,13 +159,14 @@ export async function verifyEmailToken(
   }
 
   const prisma = deps?.prisma ?? (getPrisma() as unknown as VerifyEmailPrisma);
-  const now = deps?.now ? deps.now() : new Date();
+  const readNow = deps?.now ?? (() => new Date());
   const sharedSecret = deps?.sharedSecret ?? requireEnv('SHARED_SECRET').SHARED_SECRET;
   const tokenHash = (deps?.hashEmailToken ?? hashEmailToken)(params.token, sharedSecret);
   const hashPasswordFn = deps?.hashPassword ?? hashPassword;
 
   // Token consumption + user creation/update must be atomic to enforce one-time use.
   const consumed = await runInTransaction(prisma, async (tx) => {
+    await lockProductWorkspacePolicyShared(tx);
     const tokenRow = await tx.verificationToken.findUnique({
       where: { tokenHash },
       select: {
@@ -165,6 +177,7 @@ export async function verifyEmailToken(
         domain: true,
         configUrl: true,
         userId: true,
+        tokenVersion: true,
         teamInviteId: true,
         expiresAt: true,
         usedAt: true,
@@ -175,7 +188,23 @@ export async function verifyEmailToken(
       throw new AppError('BAD_REQUEST', 400, 'INVALID_TOKEN');
     }
 
-    const type = assertTokenValid({ token: tokenRow, configUrl: params.configUrl, now });
+    if (tokenRow.userId) {
+      await deps?.beforeRefreshSessionLock?.();
+    }
+    const epoch = await lockAndReadVerificationTokenEpoch(
+      tx,
+      tokenRow,
+      tokenRow.userId ? deps?.afterRefreshSessionLock : undefined,
+    );
+    if (!epoch) {
+      throw new AppError('BAD_REQUEST', 400, 'INVALID_TOKEN');
+    }
+    const decisionNow = readNow();
+    const type = assertTokenValid({
+      token: tokenRow,
+      configUrl: params.configUrl,
+      now: decisionNow,
+    });
 
     let userId: string;
     let createdUser = false;
@@ -187,11 +216,11 @@ export async function verifyEmailToken(
       // LOGIN_LINK proves possession of an existing account's mailbox; it must never
       // degrade into registration. Resolve only the user bound when the token was
       // minted, and fail closed if that account was deleted or its identity changed.
-      if (!tokenRow.userId) {
+      if (epoch.kind !== 'user') {
         throw new AppError('BAD_REQUEST', 400, 'INVALID_TOKEN');
       }
       const existingUser = await tx.user.findUnique({
-        where: { id: tokenRow.userId },
+        where: { id: epoch.userId },
         select: { id: true, userKey: true, email: true, domain: true },
       });
       if (
@@ -209,31 +238,40 @@ export async function verifyEmailToken(
       }
 
       const passwordHash = await hashPasswordFn(params.password);
-      const existingUser = await tx.user.findUnique({
-        where: { userKey: tokenRow.userKey },
-        select: { id: true, passwordHash: true },
-      });
+      const existingUser =
+        epoch.kind === 'user'
+          ? await tx.user.findUnique({
+              where: { id: epoch.userId },
+              select: { id: true, passwordHash: true, userKey: true },
+            })
+          : null;
 
+      if (epoch.kind === 'user' && (!existingUser || existingUser.userKey !== tokenRow.userKey)) {
+        throw new AppError('BAD_REQUEST', 400, 'INVALID_TOKEN');
+      }
       if (existingUser?.passwordHash) {
         // A verify-email token must never be usable to reset an established account password.
         throw new AppError('BAD_REQUEST', 400, 'USER_ALREADY_HAS_PASSWORD');
       }
 
       if (existingUser) {
-        await deps?.beforeRefreshSessionLock?.();
-        await lockRefreshSessionUser(existingUser.id, { prisma: tx });
-        await deps?.afterRefreshSessionLock?.();
-        const updated = await tx.user.update({
-          where: { userKey: tokenRow.userKey },
+        const updated = await tx.user.updateMany({
+          where: {
+            id: existingUser.id,
+            userKey: tokenRow.userKey,
+            passwordHash: null,
+          },
           data: {
             // Keep identity stable; updating these is safe and makes the record consistent.
             email: tokenRow.email,
             domain: tokenRow.domain,
             passwordHash,
           },
-          select: { id: true },
         });
-        userId = updated.id;
+        if (updated.count !== 1) {
+          throw new AppError('BAD_REQUEST', 400, 'USER_ALREADY_HAS_PASSWORD');
+        }
+        userId = existingUser.id;
         setPasswordOnExistingUser = true;
       } else {
         const created = await tx.user.create({
@@ -249,13 +287,8 @@ export async function verifyEmailToken(
         createdUser = true;
       }
     } else {
-      const existingUser = await tx.user.findUnique({
-        where: { userKey: tokenRow.userKey },
-        select: { id: true },
-      });
-
-      if (existingUser) {
-        userId = existingUser.id;
+      if (epoch.kind === 'user') {
+        userId = epoch.userId;
       } else {
         const created = await tx.user.create({
           data: {
@@ -287,7 +320,7 @@ export async function verifyEmailToken(
         teamInviteId: tokenRow.teamInviteId,
         userId,
         config: params.config,
-        now,
+        now: decisionNow,
       });
       acceptedInvite = {
         inviteId: tokenRow.teamInviteId,
@@ -296,22 +329,16 @@ export async function verifyEmailToken(
       };
     }
 
-    const authenticatedUser = await tx.user.findUnique({
-      where: { id: userId },
-      select: { twoFaEnabled: true },
-    });
-    if (!authenticatedUser) {
-      throw new AppError('BAD_REQUEST', 400, 'INVALID_TOKEN');
-    }
-
     const updated = await tx.verificationToken.updateMany({
       where: {
         id: tokenRow.id,
+        tokenVersion: tokenRow.tokenVersion,
+        userId: tokenRow.userId,
         usedAt: null,
-        expiresAt: { gt: now },
+        expiresAt: { gt: decisionNow },
       },
       data: {
-        usedAt: now,
+        usedAt: decisionNow,
         userId,
       },
     });
@@ -322,13 +349,22 @@ export async function verifyEmailToken(
 
     if (setPasswordOnExistingUser) {
       await (deps?.revokeAllRefreshTokensForUser ?? revokeAllRefreshTokensForUser)(userId, {
-        now: () => now,
+        now: () => decisionNow,
         prisma: tx,
       });
     }
 
+    const authenticatedUser = await tx.user.findUnique({
+      where: { id: userId },
+      select: { twoFaEnabled: true, tokenVersion: true },
+    });
+    if (!authenticatedUser) {
+      throw new AppError('BAD_REQUEST', 400, 'INVALID_TOKEN');
+    }
+
     return {
       userId,
+      credentialEpoch: authenticatedUser.tokenVersion,
       type,
       createdUser,
       setPasswordOnExistingUser,
@@ -361,6 +397,7 @@ export async function verifyEmailToken(
   // the exact accepted scope so callers can enforce its 2FA policy and carry it into the code.
   return {
     userId: consumed.userId,
+    credentialEpoch: consumed.credentialEpoch,
     type: consumed.type,
     twoFaEnabled: consumed.twoFaEnabled,
     acceptedInvite: consumed.acceptedInvite,

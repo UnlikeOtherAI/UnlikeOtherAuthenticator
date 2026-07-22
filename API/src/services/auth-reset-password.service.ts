@@ -14,12 +14,19 @@ import { extractEmailTheme } from './email-theme.service.js';
 import { sendPasswordResetEmail } from './email.service.js';
 import { hashPassword } from './password.service.js';
 import { revokeAllRefreshTokensForUser } from './refresh-token-revocation.service.js';
-import { lockRefreshSessionUser } from './refresh-session-lock.service.js';
 import { buildUserIdentity } from './user-scope.service.js';
+import {
+  lockAndReadVerificationTokenEpoch,
+  readVerificationTokenEpoch,
+} from './verification-token-epoch.service.js';
 
 type ResetPasswordPrisma = Pick<PrismaClient, '$transaction'> & {
+  $queryRaw: PrismaClient['$queryRaw'];
   user: Pick<PrismaClient['user'], 'findUnique' | 'update'>;
-  verificationToken: Pick<PrismaClient['verificationToken'], 'create' | 'findUnique' | 'updateMany'>;
+  verificationToken: Pick<
+    PrismaClient['verificationToken'],
+    'create' | 'findUnique' | 'updateMany'
+  >;
 };
 
 type ResetPasswordDeps = {
@@ -123,7 +130,7 @@ export async function requestPasswordReset(
   const prisma = deps?.prisma ?? (getPrisma() as unknown as ResetPasswordPrisma);
   const existing = await prisma.user.findUnique({
     where: { userKey },
-    select: { id: true },
+    select: { id: true, tokenVersion: true },
   });
 
   // Brief 11: no email enumeration. If the user doesn't exist, do nothing visible —
@@ -154,6 +161,7 @@ export async function requestPasswordReset(
       tokenHash,
       expiresAt,
       userId: existing.id,
+      tokenVersion: existing.tokenVersion,
     },
   });
 
@@ -190,6 +198,8 @@ export async function validatePasswordResetToken(
       id: true,
       type: true,
       userKey: true,
+      userId: true,
+      tokenVersion: true,
       configUrl: true,
       expiresAt: true,
       usedAt: true,
@@ -201,6 +211,10 @@ export async function validatePasswordResetToken(
   }
 
   assertResetTokenValid({ token: row, configUrl: params.configUrl, now: new Date() });
+  const epoch = await readVerificationTokenEpoch(prisma, row);
+  if (epoch?.kind !== 'user') {
+    throw new AppError('BAD_REQUEST', 400, 'INVALID_TOKEN');
+  }
 }
 
 export async function resetPasswordWithToken(
@@ -214,7 +228,7 @@ export async function resetPasswordWithToken(
   }
 
   const prisma = deps?.prisma ?? (getPrisma() as unknown as ResetPasswordPrisma);
-  const now = deps?.now ? deps.now() : new Date();
+  const readNow = deps?.now ?? (() => new Date());
   const sharedSecret = deps?.sharedSecret ?? requireEnv('SHARED_SECRET').SHARED_SECRET;
   const tokenHash = (deps?.hashEmailToken ?? hashEmailToken)(params.token, sharedSecret);
   const passwordHash = await (deps?.hashPassword ?? hashPassword)(params.password);
@@ -226,6 +240,8 @@ export async function resetPasswordWithToken(
         id: true,
         type: true,
         userKey: true,
+        userId: true,
+        tokenVersion: true,
         configUrl: true,
         expiresAt: true,
         usedAt: true,
@@ -236,24 +252,24 @@ export async function resetPasswordWithToken(
       throw new AppError('BAD_REQUEST', 400, 'INVALID_TOKEN');
     }
 
-    assertResetTokenValid({ token: tokenRow, configUrl: params.configUrl, now });
-
-    const user = await tx.user.findUnique({
-      where: { userKey: tokenRow.userKey },
-      select: { id: true },
+    await deps?.beforeRefreshSessionLock?.();
+    const epoch = await lockAndReadVerificationTokenEpoch(
+      tx,
+      tokenRow,
+      deps?.afterRefreshSessionLock,
+    );
+    if (epoch?.kind !== 'user') {
+      throw new AppError('BAD_REQUEST', 400, 'INVALID_TOKEN');
+    }
+    const decisionNow = readNow();
+    assertResetTokenValid({
+      token: tokenRow,
+      configUrl: params.configUrl,
+      now: decisionNow,
     });
 
-    if (!user) {
-      // Never create a new user from a password reset token.
-      throw new AppError('BAD_REQUEST', 400, 'INVALID_TOKEN_USER');
-    }
-
-    await deps?.beforeRefreshSessionLock?.();
-    await lockRefreshSessionUser(user.id, { prisma: tx });
-    await deps?.afterRefreshSessionLock?.();
-
     await tx.user.update({
-      where: { userKey: tokenRow.userKey },
+      where: { id: epoch.userId },
       data: { passwordHash },
       select: { id: true },
     });
@@ -261,12 +277,13 @@ export async function resetPasswordWithToken(
     const updated = await tx.verificationToken.updateMany({
       where: {
         id: tokenRow.id,
+        tokenVersion: epoch.credentialEpoch,
+        userId: epoch.userId,
         usedAt: null,
-        expiresAt: { gt: now },
+        expiresAt: { gt: decisionNow },
       },
       data: {
-        usedAt: now,
-        userId: user.id,
+        usedAt: decisionNow,
       },
     });
 
@@ -274,12 +291,12 @@ export async function resetPasswordWithToken(
       throw new AppError('BAD_REQUEST', 400, 'TOKEN_ALREADY_USED');
     }
 
-    await (deps?.revokeAllRefreshTokensForUser ?? revokeAllRefreshTokensForUser)(user.id, {
-      now: () => now,
+    await (deps?.revokeAllRefreshTokensForUser ?? revokeAllRefreshTokensForUser)(epoch.userId, {
+      now: () => decisionNow,
       prisma: tx,
     });
 
-    return { userId: user.id };
+    return { userId: epoch.userId };
   });
 
   return result;

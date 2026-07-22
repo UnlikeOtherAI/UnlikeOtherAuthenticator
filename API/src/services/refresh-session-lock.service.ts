@@ -1,5 +1,6 @@
 import { Prisma, type PrismaClient } from '@prisma/client';
 
+import { getEnv } from '../config/env.js';
 import { normalizeDomain } from '../utils/domain.js';
 
 type RefreshSessionLockPrisma = Pick<PrismaClient, '$queryRaw'>;
@@ -11,6 +12,7 @@ async function lockRefreshSessionKey(
   lockIdentity: string,
   prisma: RefreshSessionLockPrisma,
 ): Promise<void> {
+  if (typeof prisma.$queryRaw !== 'function' && !getEnv().DATABASE_URL) return;
   await prisma.$queryRaw(
     Prisma.sql`
       SELECT pg_advisory_xact_lock(hashtextextended(${lockIdentity}, 0))::text AS "lockResult"

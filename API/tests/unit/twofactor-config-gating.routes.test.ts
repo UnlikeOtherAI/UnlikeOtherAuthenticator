@@ -19,6 +19,15 @@ const enrollTwoFactorForUserMock = vi.fn();
 const decryptTwoFaSecretMock = vi.fn();
 const resolveTwoFaPolicyMock = vi.fn();
 const finalizeConfigAuthorizationWithSignaturesMock = vi.fn();
+const lockProductWorkspacePolicySharedMock = vi.fn();
+
+function deferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
 
 vi.mock('../../src/middleware/config-verifier.js', () => {
   return {
@@ -100,6 +109,21 @@ vi.mock('../../src/services/twofactor-policy.service.js', () => {
   };
 });
 
+vi.mock('../../src/services/product-workspace-policy-lock.service.js', () => ({
+  lockProductWorkspacePolicyShared: (...args: unknown[]) =>
+    lockProductWorkspacePolicySharedMock(...args),
+}));
+
+vi.mock('../../src/services/login-domain-policy.service.js', () => ({
+  assertEmailDomainAllowedForLogin: vi.fn(async () => undefined),
+  isEmailAdminAllowedForRegistration: vi.fn(async () => false),
+}));
+
+vi.mock('../../src/services/ban-policy.service.js', () => ({
+  assertNotBannedAtLogin: vi.fn(async () => undefined),
+  isPrincipalBannedForRegistration: vi.fn(async () => false),
+}));
+
 vi.mock('../../src/services/signature-continuation.service.js', async () => {
   const actual = await vi.importActual<
     typeof import('../../src/services/signature-continuation.service.js')
@@ -135,6 +159,7 @@ describe('2FA gated by config `2fa_enabled`', () => {
     decryptTwoFaSecretMock.mockReset();
     resolveTwoFaPolicyMock.mockReset();
     finalizeConfigAuthorizationWithSignaturesMock.mockReset();
+    lockProductWorkspacePolicySharedMock.mockReset().mockResolvedValue(undefined);
     resolveTwoFaPolicyMock.mockImplementation(
       ({ config }: { config: Pick<ClientConfig, '2fa_enabled'> }) =>
         config['2fa_enabled'] === true ? 'OPTIONAL' : 'OFF',
@@ -154,11 +179,16 @@ describe('2FA gated by config `2fa_enabled`', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
   it('does not require 2FA when config disables it, even if the user has 2FA enabled', async () => {
-    loginWithEmailPasswordMock.mockResolvedValue({ userId: 'user_1', twoFaEnabled: true });
+    loginWithEmailPasswordMock.mockResolvedValue({
+      userId: 'user_1',
+      twoFaEnabled: true,
+      credentialEpoch: 0,
+    });
     issueAuthorizationCodeMock.mockResolvedValue({ code: 'auth_code_1' });
     buildRedirectToUrlMock.mockReturnValue(
       'https://client.example.com/oauth/callback?code=auth_code_1',
@@ -190,7 +220,11 @@ describe('2FA gated by config `2fa_enabled`', () => {
   it('requires 2FA only when config enables it and the user has 2FA enabled', async () => {
     currentConfig['2fa_enabled'] = true;
 
-    loginWithEmailPasswordMock.mockResolvedValue({ userId: 'user_1', twoFaEnabled: true });
+    loginWithEmailPasswordMock.mockResolvedValue({
+      userId: 'user_1',
+      twoFaEnabled: true,
+      credentialEpoch: 0,
+    });
     signTwoFaChallengeMock.mockResolvedValue('twofa_token_1');
 
     const { createApp } = await import('../../src/app.js');
@@ -236,10 +270,95 @@ describe('2FA gated by config `2fa_enabled`', () => {
     await app.close();
   });
 
+  it.each([
+    ['verification', '/2fa/verify', 'challenge'],
+    ['setup hydration', '/2fa/setup', 'setup'],
+    ['enrollment', '/2fa/enroll', 'setup'],
+  ] as const)(
+    'rejects %s when its continuation expires while waiting for the policy lock',
+    async (_label, path, tokenKind) => {
+      currentConfig!['2fa_enabled'] = true;
+      const now = new Date('2026-07-22T12:00:00.000Z');
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(now);
+      let token: string;
+      if (tokenKind === 'challenge') {
+        const actual = await vi.importActual<
+          typeof import('../../src/services/twofactor-challenge.service.js')
+        >('../../src/services/twofactor-challenge.service.js');
+        verifyTwoFaChallengeMock.mockImplementation(actual.verifyTwoFaChallenge);
+        token = await actual.signTwoFaChallenge({
+          userId: 'user_1',
+          credentialEpoch: 0,
+          configUrl: 'https://client.example.com/auth-config',
+          redirectUrl: 'https://client.example.com/oauth/callback',
+          domain: 'client.example.com',
+          authMethod: 'email_password',
+          sharedSecret: process.env.SHARED_SECRET!,
+          audience: process.env.AUTH_SERVICE_IDENTIFIER!,
+          now,
+          ttlMs: 1000,
+        });
+      } else {
+        const actual = await vi.importActual<
+          typeof import('../../src/services/twofactor-setup-token.service.js')
+        >('../../src/services/twofactor-setup-token.service.js');
+        verifyTwoFaSetupTokenMock.mockImplementation(actual.verifyTwoFaSetupToken);
+        token = await actual.signTwoFaSetupToken({
+          userId: 'user_1',
+          credentialEpoch: 0,
+          encryptedSecret: 'encrypted-secret',
+          configUrl: 'https://client.example.com/auth-config',
+          domain: 'client.example.com',
+          sharedSecret: process.env.SHARED_SECRET!,
+          audience: process.env.AUTH_SERVICE_IDENTIFIER!,
+          now,
+          ttlMs: 1000,
+        });
+      }
+      const lockEntered = deferred();
+      const releaseLock = deferred();
+      lockProductWorkspacePolicySharedMock.mockImplementationOnce(async () => {
+        lockEntered.resolve();
+        await releaseLock.promise;
+      });
+      const { createApp } = await import('../../src/app.js');
+      const app = await createApp();
+      await app.ready();
+      try {
+        const responsePromise = app.inject({
+          method: 'POST',
+          url: `${path}?config_url=https%3A%2F%2Fclient.example.com%2Fauth-config`,
+          payload:
+            tokenKind === 'challenge'
+              ? { twofa_token: token, code: '123456' }
+              : { setup_token: token, ...(path.endsWith('/enroll') ? { code: '123456' } : {}) },
+        });
+        await lockEntered.promise;
+        vi.setSystemTime(new Date(now.getTime() + 2000));
+        releaseLock.resolve();
+        const res = await responsePromise;
+
+        expect(res.statusCode).toBe(401);
+        expect(
+          tokenKind === 'challenge' ? verifyTwoFaChallengeMock : verifyTwoFaSetupTokenMock,
+        ).toHaveBeenCalledTimes(2);
+        expect(verifyTwoFactorForLoginMock).not.toHaveBeenCalled();
+        expect(decryptTwoFaSecretMock).not.toHaveBeenCalled();
+        expect(enrollTwoFactorForUserMock).not.toHaveBeenCalled();
+        expect(finalizeConfigAuthorizationWithSignaturesMock).not.toHaveBeenCalled();
+      } finally {
+        releaseLock.resolve();
+        await app.close();
+      }
+    },
+  );
+
   it('carries an auto-selected workspace from the 2FA challenge into final code issuance', async () => {
     currentConfig['2fa_enabled'] = true;
     verifyTwoFaChallengeMock.mockResolvedValue({
       userId: 'user_1',
+      credentialEpoch: 0,
       configUrl: 'https://client.example.com/auth-config',
       redirectUrl: 'https://client.example.com/oauth/callback',
       domain: 'client.example.com',
@@ -277,7 +396,6 @@ describe('2FA gated by config `2fa_enabled`', () => {
       }),
       expect.objectContaining({ workspacePrisma: expect.anything() }),
     );
-
     await app.close();
   });
 
@@ -286,6 +404,7 @@ describe('2FA gated by config `2fa_enabled`', () => {
     resolveTwoFaPolicyMock.mockResolvedValue('REQUIRED');
     verifyTwoFaSetupTokenMock.mockResolvedValue({
       userId: 'user_1',
+      credentialEpoch: 0,
       encryptedSecret: 'encrypted-secret',
       configUrl: 'https://client.example.com/auth-config',
       domain: 'client.example.com',
@@ -324,6 +443,10 @@ describe('2FA gated by config `2fa_enabled`', () => {
         twoFaCompleted: true,
       }),
       expect.objectContaining({ workspacePrisma: expect.anything() }),
+    );
+    expect(resolveTwoFaPolicyMock).toHaveBeenCalledWith(
+      expect.objectContaining({ orgId: 'org_1', userId: 'user_1' }),
+      expect.objectContaining({ prisma: expect.anything() }),
     );
 
     await app.close();

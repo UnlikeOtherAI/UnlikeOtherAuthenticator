@@ -66,6 +66,7 @@ async function buildSetupResult(params: {
 export async function startTwoFactorSetup(
   params: {
     userId: string;
+    credentialEpoch: number;
     config: ClientConfig;
     configUrl: string;
     finalize?: FinalizeContext;
@@ -86,10 +87,10 @@ export async function startTwoFactorSetup(
   const prisma = prismaClient(deps);
   const user = await prisma.user.findUnique({
     where: { id: params.userId },
-    select: { email: true, twoFaEnabled: true },
+    select: { email: true, twoFaEnabled: true, tokenVersion: true },
   });
 
-  if (!user || user.twoFaEnabled) {
+  if (!user || user.twoFaEnabled || user.tokenVersion !== params.credentialEpoch) {
     throw new AppError('BAD_REQUEST', 400, 'TWOFA_SETUP_FAILED');
   }
 
@@ -101,6 +102,7 @@ export async function startTwoFactorSetup(
   });
   const setupToken = await (deps?.signTwoFaSetupToken ?? signTwoFaSetupToken)({
     userId: params.userId,
+    credentialEpoch: params.credentialEpoch,
     encryptedSecret,
     configUrl: params.configUrl,
     domain: params.config.domain,

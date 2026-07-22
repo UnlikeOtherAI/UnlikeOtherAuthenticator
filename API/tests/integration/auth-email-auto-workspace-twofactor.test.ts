@@ -108,15 +108,21 @@ describe.skipIf(!hasDatabase)('email exact-one workspace 2FA completion', () => 
   }
 
   async function createEmailToken(email: string, rawToken: string): Promise<void> {
+    const existingUser = await handle.prisma.user.findUnique({
+      where: { userKey: email },
+      select: { id: true, tokenVersion: true },
+    });
     await handle.prisma.verificationToken.create({
       data: {
-        type: 'VERIFY_EMAIL',
+        type: existingUser ? 'LOGIN_LINK' : 'VERIFY_EMAIL',
         email,
         userKey: email,
         domain: null,
         configUrl,
         tokenHash: hashEmailToken(rawToken, process.env.SHARED_SECRET!),
         expiresAt: new Date(Date.now() + 10 * 60_000),
+        userId: existingUser?.id ?? null,
+        tokenVersion: existingUser?.tokenVersion ?? null,
       },
     });
   }

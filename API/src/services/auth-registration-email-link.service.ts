@@ -5,8 +5,10 @@ import { getEnv, requireEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import { hashEmailToken } from '../utils/verification-token.js';
+import { readVerificationTokenEpoch } from './verification-token-epoch.service.js';
 
 type RegistrationEmailLinkPrisma = {
+  user: Pick<PrismaClient['user'], 'findUnique'>;
   verificationToken: Pick<PrismaClient['verificationToken'], 'findUnique'>;
 };
 
@@ -16,7 +18,10 @@ function assertRegistrationLandingTokenValid(params: {
       type: true;
       configUrl: true;
       expiresAt: true;
+      tokenVersion: true;
       usedAt: true;
+      userId: true;
+      userKey: true;
     };
   }>;
   configUrl: string;
@@ -61,7 +66,10 @@ export async function validateRegistrationEmailLandingToken(
       type: true,
       configUrl: true,
       expiresAt: true,
+      tokenVersion: true,
       usedAt: true,
+      userId: true,
+      userKey: true,
     },
   });
 
@@ -70,6 +78,10 @@ export async function validateRegistrationEmailLandingToken(
   }
 
   assertRegistrationLandingTokenValid({ token: row, configUrl: params.configUrl, now: new Date() });
+  const epoch = await readVerificationTokenEpoch(prisma, row);
+  if (!epoch) {
+    throw new AppError('BAD_REQUEST', 400, 'INVALID_TOKEN');
+  }
   const type = row.type;
   if (type !== 'LOGIN_LINK' && type !== 'VERIFY_EMAIL_SET_PASSWORD' && type !== 'VERIFY_EMAIL') {
     throw new AppError('BAD_REQUEST', 400, 'INVALID_TOKEN_TYPE');

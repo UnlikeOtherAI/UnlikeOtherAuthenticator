@@ -249,6 +249,7 @@ describe('GET /auth/email/link — workspace chooser wiring (gap-fix B Task 1, d
     finalizeAuthenticatedUserMock.mockReset();
     verifyEmailTokenMock.mockReset().mockResolvedValue({
       userId: 'user-1',
+      credentialEpoch: 0,
       twoFaEnabled: false,
       acceptedInvite: null,
     });
@@ -393,6 +394,7 @@ describe('GET /auth/email/link — workspace chooser wiring (gap-fix B Task 1, d
     });
     verifyEmailTokenMock.mockResolvedValue({
       userId: 'user-1',
+      credentialEpoch: 0,
       twoFaEnabled: false,
       acceptedInvite: { inviteId: 'invite-1', orgId: 'org-invite', teamId: 'team-invite' },
     });

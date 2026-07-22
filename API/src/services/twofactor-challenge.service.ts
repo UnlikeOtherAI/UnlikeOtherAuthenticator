@@ -9,6 +9,7 @@ const TWOFA_CHALLENGE_ISSUER = 'uoa:twofa-challenge';
 
 const TwoFaChallengeSchema = z.object({
   sub: z.string().min(1),
+  credential_epoch: z.number().int().nonnegative(),
   config_url: z.string().min(1),
   redirect_url: z.string().min(1),
   domain: z.string().min(1),
@@ -25,6 +26,7 @@ const TwoFaChallengeSchema = z.object({
 
 export type TwoFaChallenge = {
   userId: string;
+  credentialEpoch: number;
   configUrl: string;
   redirectUrl: string;
   domain: string;
@@ -49,6 +51,7 @@ function sharedSecretKey(sharedSecret: string): Uint8Array {
  */
 export async function signTwoFaChallenge(params: {
   userId: string;
+  credentialEpoch: number;
   configUrl: string;
   redirectUrl: string;
   domain: string;
@@ -71,6 +74,7 @@ export async function signTwoFaChallenge(params: {
   try {
     return await new SignJWT({
       config_url: params.configUrl,
+      credential_epoch: params.credentialEpoch,
       redirect_url: params.redirectUrl,
       domain: params.domain,
       auth_method: params.authMethod,
@@ -122,6 +126,7 @@ export async function verifyTwoFaChallenge(params: {
 
   const challenge: TwoFaChallenge = {
     userId: parsed.sub,
+    credentialEpoch: parsed.credential_epoch,
     configUrl: parsed.config_url,
     redirectUrl: parsed.redirect_url,
     domain: parsed.domain,

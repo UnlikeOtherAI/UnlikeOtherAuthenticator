@@ -81,6 +81,7 @@ describe('mcp access-token (RS256)', () => {
     const resource = 'https://ledger.unlikeotherai.com';
     const token = await signConfidentialAccessToken({
       subject: 'usr_1',
+      credentialEpoch: 0,
       email: 'a@b.com',
       sourceDomain: 'api.nessie.works',
       product: 'nessie',
@@ -109,6 +110,7 @@ describe('mcp access-token (RS256)', () => {
     expect(protectedHeader.typ).toBe('at+jwt');
     expect(payload).toMatchObject({
       sub: 'usr_1',
+      tv: 0,
       email: 'a@b.com',
       source_domain: 'api.nessie.works',
       azp: 'api.nessie.works',
@@ -126,6 +128,7 @@ describe('mcp access-token (RS256)', () => {
     const resource = 'https://ledger.unlikeotherai.com';
     const token = await signConfidentialAccessToken({
       subject: 'usr_without_workspace',
+      credentialEpoch: 0,
       email: 'first-login@example.com',
       sourceDomain: 'api.nessie.works',
       product: 'nessie',
@@ -142,6 +145,7 @@ describe('mcp access-token (RS256)', () => {
     });
     expect(payload).toMatchObject({
       sub: 'usr_without_workspace',
+      tv: 0,
       email: 'first-login@example.com',
       source_domain: 'api.nessie.works',
       azp: 'api.nessie.works',
@@ -157,6 +161,7 @@ describe('mcp access-token (RS256)', () => {
     const expiresAtEpochSeconds = Math.floor(Date.now() / 1000) + 45;
     const token = await signConfidentialAccessToken({
       subject: 'usr_1',
+      credentialEpoch: 0,
       email: 'a@b.com',
       sourceDomain: 'api.deepsignal.live',
       product: 'deepsignal',

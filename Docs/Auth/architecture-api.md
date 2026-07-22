@@ -190,6 +190,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       auth-reset-password.service.ts        — Password reset logic
       auth-ui.service.ts                    — Auth window HTML/asset rendering
       auth-verify-email.service.ts          — Email verification logic
+      verification-token-epoch.service.ts  — Issue-time user/credential-epoch proof and lock enforcement
       auto-onboarding.service.ts            — Auto-onboarding flow
       authorization-code.service.ts         — Scoped code issuance and one-transaction consumption
       billing-actor.service.ts              — Credential-bound short-lived actor JWT verification
@@ -287,6 +288,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       internal-admin.service.users.ts       — User admin operations
       jwks-fetch.service.ts                 — JWKS fetch helper
       login-log.service.ts                  — Login log writes
+      login-code.service.ts                 — Epoch-bound one-time email login-code issue and consumption
       org-context.service.ts                — Resolve user org context for JWT enrichment and /org/me
       org-placement.service.ts              — Org placement decisions during onboarding
       organisation.service.base.ts          — Organisation service building blocks
@@ -429,6 +431,20 @@ user-global, mutate the credential, revoke all refresh rows, bump `tokenVersion`
 concurrent refresh from inserting a live replacement or signing with the newly bumped version.
 Reactivation/re-add never clear revoked state.
 
+Existing-user `VerificationToken` capabilities carry immutable `userId` + issue-time
+`tokenVersion`. Their read paths fail stale or legacy-null bindings closed; their mutation paths
+take user-global, re-read that exact epoch, then evaluate expiry from a fresh post-lock clock before
+any side effect. This covers password/2FA resets, login codes and links, verify-email, and
+invite-bound links, so one credential-epoch bump invalidates every sibling capability. Only a true
+pre-user registration row may carry null/null, and it remains valid only while its `userKey` has no
+user. Migration does not backfill historical null epochs because the issue-time value is unknowable.
+
+Signed login-session and 2FA challenge/setup continuations use the same decision-time rule. Routes
+may verify once to discover the lock identity, but after product-policy and authentication-epoch
+locks they re-verify the original JWT with a fresh `Date` and use only those refreshed claims.
+Tokens that expire in the lock queue therefore cannot drive chooser reads, invitation mutations,
+secret decryption, TOTP verification/enrollment, finalization, or authorization-code issuance.
+
 `POST /auth/token` remains a thin multi-grant route. Its confidential assertion
 branch uses the same config verifier and domain-hash guard as the legacy grants,
 retains the authenticated `ClientDomain.id`, and resolves an enabled
@@ -460,6 +476,11 @@ identifies the immediate caller in `source_domain`/`azp`/`product` and records
 the upstream product chain in `act`. Access-token subjects remain reusable until
 expiry for concurrent multi-process calls; only source-signed JWT assertions use
 the one-time assertion ledger.
+
+Both direct source assertions and chained UOA access-token subjects require an explicit
+nonnegative integer `tv`, including epoch zero. Missing `tv` is invalid rather than being coerced to
+zero. The exchange takes the canonical user lock, compares that claim with the current credential
+epoch, and propagates the exact accepted epoch into the output token.
 
 `confidential-delegation.service.ts` owns both fail-closed runtime resolution
 and the audited superuser CRUD exposed by

@@ -44,9 +44,7 @@ type RegisterDeps = {
   prisma?: RegisterPrisma;
 };
 
-type RegistrationInstructionResult =
-  | { status: 'sent' }
-  | { status: 'existing_user' };
+type RegistrationInstructionResult = { status: 'sent' } | { status: 'existing_user' };
 
 /**
  * Brief 11: equalize CPU/IO between the user-exists and user-missing/blocked branches
@@ -148,11 +146,13 @@ export async function requestRegistrationInstructions(
 
   // Admin ban list (domain scope). A banned email/pattern/IP gets the same silent,
   // timing-equalised response as a blocked registration — never reveal the ban.
-  const banned = await (deps?.isPrincipalBannedForRegistration ?? isPrincipalBannedForRegistration)({
-    domain: params.config.domain,
-    email: params.email,
-    ip: params.ip ?? null,
-  });
+  const banned = await (deps?.isPrincipalBannedForRegistration ?? isPrincipalBannedForRegistration)(
+    {
+      domain: params.config.domain,
+      email: params.email,
+      ip: params.ip ?? null,
+    },
+  );
   if (banned) {
     await (deps?.consumeAccountFlowTimingBudget ?? consumeAccountFlowTimingBudget)();
     return { status: 'sent' };
@@ -161,7 +161,7 @@ export async function requestRegistrationInstructions(
   const prisma = deps?.prisma ?? getPrisma();
   const existing = await prisma.user.findUnique({
     where: { userKey },
-    select: { id: true },
+    select: { id: true, tokenVersion: true },
   });
 
   if (existing && params.config.existing_user_registration_behavior === 'inline_sign_in') {
@@ -205,6 +205,7 @@ export async function requestRegistrationInstructions(
       tokenHash,
       expiresAt,
       userId: existing?.id ?? null,
+      tokenVersion: existing?.tokenVersion ?? null,
     },
   });
 

@@ -10,6 +10,7 @@ describe('twofactor setup token', () => {
   it('round-trips the encrypted setup secret and finalization context', async () => {
     const token = await signTwoFaSetupToken({
       userId: 'user_1',
+      credentialEpoch: 3,
       encryptedSecret: 'v1:iv:cipher:tag',
       configUrl: 'https://app.example.com/config.jwt',
       domain: 'app.example.com',
@@ -28,6 +29,7 @@ describe('twofactor setup token', () => {
 
     await expect(verifyTwoFaSetupToken({ token, sharedSecret, audience, now })).resolves.toEqual({
       userId: 'user_1',
+      credentialEpoch: 3,
       encryptedSecret: 'v1:iv:cipher:tag',
       configUrl: 'https://app.example.com/config.jwt',
       domain: 'app.example.com',
@@ -45,6 +47,7 @@ describe('twofactor setup token', () => {
   it('rejects expired setup tokens generically', async () => {
     const token = await signTwoFaSetupToken({
       userId: 'user_1',
+      credentialEpoch: 3,
       encryptedSecret: 'v1:iv:cipher:tag',
       configUrl: 'https://app.example.com/config.jwt',
       domain: 'app.example.com',

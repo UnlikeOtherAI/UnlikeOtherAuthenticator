@@ -24,16 +24,19 @@ import {
 
 // Split out of team-invite.service.management.ts (which was at the 500-line cap) so Phase 4's
 // expiry-refresh addition (Task 3) has room without pushing either file over the limit.
-export async function resendTeamInvite(params: {
-  orgId: string;
-  teamId: string;
-  inviteId: string;
-  domain: string;
-  config: ClientConfig;
-  configUrl: string;
-}, deps?: InviteDeps & {
-  sendTeamInviteEmail?: typeof sendTeamInviteEmail;
-}): Promise<TeamInviteRecord> {
+export async function resendTeamInvite(
+  params: {
+    orgId: string;
+    teamId: string;
+    inviteId: string;
+    domain: string;
+    config: ClientConfig;
+    configUrl: string;
+  },
+  deps?: InviteDeps & {
+    sendTeamInviteEmail?: typeof sendTeamInviteEmail;
+  },
+): Promise<TeamInviteRecord> {
   const env = deps?.env ?? getEnv();
   assertDatabaseEnabled(env);
 
@@ -70,7 +73,7 @@ export async function resendTeamInvite(params: {
   });
   const existingUser = await prisma.user.findUnique({
     where: { userKey: identity.userKey },
-    select: { id: true },
+    select: { id: true, tokenVersion: true },
   });
   if (existingUser && params.config.existing_user_registration_behavior === 'inline_sign_in') {
     throw new AppError('BAD_REQUEST', 409, 'EMAIL_ALREADY_REGISTERED');
@@ -111,7 +114,7 @@ export async function resendTeamInvite(params: {
   const token = await issueInviteToken({
     prisma,
     inviteId: resentInvite.id,
-    existingUserId: existingUser?.id ?? null,
+    existingUser,
     email: resentInvite.email,
     userKey: identity.userKey,
     domain: identity.domain,

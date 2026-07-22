@@ -97,10 +97,7 @@ describe.skipIf(!hasDatabase)('existing-user registration LOGIN_LINK', () => {
     vi.restoreAllMocks();
   });
 
-  async function requestLink(params: {
-    email: string;
-    rawToken: string;
-  }): Promise<string> {
+  async function requestLink(params: { email: string; rawToken: string }): Promise<string> {
     let capturedLink = '';
     const config = validateConfigFields(payload());
     const result = await requestRegistrationInstructions(
@@ -168,9 +165,9 @@ describe.skipIf(!hasDatabase)('existing-user registration LOGIN_LINK', () => {
     const emailedLink = await requestLink({ email, rawToken: 'existing-login-link-token' });
     const tokenRowBefore = await handle.prisma.verificationToken.findFirstOrThrow({
       where: { type: 'LOGIN_LINK' },
-      select: { userId: true, usedAt: true },
+      select: { userId: true, tokenVersion: true, usedAt: true },
     });
-    expect(tokenRowBefore).toEqual({ userId: user.id, usedAt: null });
+    expect(tokenRowBefore).toEqual({ userId: user.id, tokenVersion: 0, usedAt: null });
 
     const app = await installConfig();
     try {
@@ -243,6 +240,51 @@ describe.skipIf(!hasDatabase)('existing-user registration LOGIN_LINK', () => {
       expect(landing.statusCode, landing.body).toBe(200);
       expect(landing.headers.location).toBeUndefined();
       expect(await handle.prisma.user.count({ where: { userKey: email } })).toBe(0);
+      expect(await handle.prisma.authorizationCode.count()).toBe(0);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('rejects stale-epoch and legacy-null links before authenticating the bound user', async () => {
+    const email = 'stale-link@example.com';
+    const user = await handle.prisma.user.create({
+      data: { email, userKey: email },
+      select: { id: true },
+    });
+    const staleLink = await requestLink({ email, rawToken: 'stale-user-login-link' });
+    await handle.prisma.user.update({
+      where: { id: user.id },
+      data: { tokenVersion: { increment: 1 } },
+    });
+
+    const app = await installConfig();
+    try {
+      const staleUrl = new URL(staleLink);
+      const staleLanding = await app.inject({
+        method: 'GET',
+        url: `${staleUrl.pathname}${staleUrl.search}`,
+      });
+      expect(staleLanding.statusCode, staleLanding.body).toBe(200);
+      expect(staleLanding.headers.location).toBeUndefined();
+
+      const legacyLink = await requestLink({ email, rawToken: 'legacy-null-login-link' });
+      const newest = await handle.prisma.verificationToken.findFirstOrThrow({
+        where: { userId: user.id, usedAt: null },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true },
+      });
+      await handle.prisma.verificationToken.update({
+        where: { id: newest.id },
+        data: { tokenVersion: null },
+      });
+      const legacyUrl = new URL(legacyLink);
+      const legacyLanding = await app.inject({
+        method: 'GET',
+        url: `${legacyUrl.pathname}${legacyUrl.search}`,
+      });
+      expect(legacyLanding.statusCode, legacyLanding.body).toBe(200);
+      expect(legacyLanding.headers.location).toBeUndefined();
       expect(await handle.prisma.authorizationCode.count()).toBe(0);
     } finally {
       await app.close();

@@ -2,8 +2,7 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 
 import { getAuthServiceIdentifier, getEnv, requireEnv } from '../../config/env.js';
-import { asPrismaClient } from '../../db/tenant-context.js';
-import { setTenantContextFromRequest } from '../../plugins/tenant-context.plugin.js';
+import { runWithRequestAdminTransaction } from '../../plugins/tenant-context.plugin.js';
 import { AppError } from '../../utils/errors.js';
 import {
   assertConfigDomainMatchesConfigUrl,
@@ -35,6 +34,9 @@ import {
 } from '../../services/social/social-state-cookie.js';
 import { setSocialCallbackDebugContext } from '../../services/auth-debug-page.service.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
+import {
+  lockProductWorkspacePolicyShared,
+} from '../../services/product-workspace-policy-lock.service.js';
 import { sendDeepLinkHandoff } from '../../services/auth-ui.service.js';
 import { isCustomSchemeUrl } from '../../utils/http-url.js';
 import { finalizeAuthenticatedUser } from '../../services/access-request-flow.service.js';
@@ -43,6 +45,7 @@ import { resolveTwoFaPolicy } from '../../services/twofactor-policy.service.js';
 import { signTwoFaChallenge } from '../../services/twofactor-challenge.service.js';
 import { startTwoFactorSetup } from '../../services/twofactor-setup.service.js';
 import { selectRedirectUrl } from '../../services/authorization-code.service.js';
+import { lockAndAssertAuthenticationEpoch } from '../../services/authentication-epoch.service.js';
 import { socialCallbackRateLimiter } from './rate-limit-keys.js';
 
 const ParamsSchema = z.object({
@@ -150,7 +153,6 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
       // redirect check below enforces the same merged set as the other auth routes.
       const config = await applyDomainRedirectAllowlist(baseConfig);
 
-      // setTenantContextFromRequest reads the verified domain from request.config below.
       request.config = config;
       request.configUrl = configUrl;
 
@@ -234,10 +236,8 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         throw new AppError('BAD_REQUEST', 400);
       }
 
-      setTenantContextFromRequest(request, { orgId: null, userId: null });
-
-      const outcome = await request.withTenantTx(async (tx) => {
-        const prisma = asPrismaClient(tx);
+      const outcome = await runWithRequestAdminTransaction(request, async (prisma) => {
+        await lockProductWorkspacePolicyShared(prisma);
 
         if (!profile.emailVerified) {
           await requestRegistrationInstructions(
@@ -270,6 +270,30 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         }
 
         const { userId, twoFaEnabled } = socialLoginResult;
+        const returnedEpoch = (socialLoginResult as { credentialEpoch?: unknown }).credentialEpoch;
+        if (
+          returnedEpoch !== undefined &&
+          (typeof returnedEpoch !== 'number' ||
+            !Number.isInteger(returnedEpoch) ||
+            returnedEpoch < 0)
+        ) {
+          throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
+        }
+        let credentialEpoch = typeof returnedEpoch === 'number' ? returnedEpoch : 0;
+        if (returnedEpoch === undefined && getEnv().DATABASE_URL) {
+          const currentUser = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { tokenVersion: true },
+          });
+          if (!currentUser) {
+            throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
+          }
+          credentialEpoch = currentUser.tokenVersion;
+        }
+        const authenticationState = await lockAndAssertAuthenticationEpoch(
+          { userId, domain: config.domain, credentialEpoch },
+          { prisma, fallbackTwoFaEnabled: twoFaEnabled },
+        );
         const rememberMe = config.session?.remember_me_default ?? true;
 
         let autoSelectedWorkspace: AutoSelectedWorkspace | null = null;
@@ -286,6 +310,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
           if (shouldPresentWorkspaceChooser(choices, autoSelectedWorkspace)) {
             const loginToken = await signLoginSession({
               userId,
+              credentialEpoch,
               config,
               configUrl,
               redirectUrl,
@@ -300,10 +325,22 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
           }
         }
 
-        const twoFaPolicy = await resolveTwoFaPolicy({ config, userId });
-        if (twoFaPolicy !== 'OFF' && twoFaEnabled) {
+        const twoFaPolicy = await resolveTwoFaPolicy(
+          {
+            config,
+            userId,
+            orgId:
+              autoSelectedWorkspace?.orgId ??
+              (socialState.request_access === true
+                ? config.access_requests?.target_org_id
+                : undefined),
+          },
+          { prisma },
+        );
+        if (twoFaPolicy !== 'OFF' && authenticationState.twoFaEnabled) {
           const twofa_token = await signTwoFaChallenge({
             userId,
+            credentialEpoch,
             domain: config.domain,
             configUrl,
             redirectUrl,
@@ -323,6 +360,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
           const setup = await startTwoFactorSetup(
             {
               userId,
+              credentialEpoch,
               config,
               configUrl,
               finalize: {
@@ -345,6 +383,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         const finalResult = await finalizeAuthenticatedUser(
           {
             userId,
+            credentialEpoch,
             config,
             configUrl,
             redirectUrl,

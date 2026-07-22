@@ -29,6 +29,7 @@ describe('disableTwoFactorForUser', () => {
         }),
       },
       user: {
+        findUnique: vi.fn(async () => ({ tokenVersion: 0, twoFaEnabled: true })),
         updateMany: vi.fn(async () => {
           events.push('twofa-disable');
           return { count: 1 };
@@ -38,6 +39,8 @@ describe('disableTwoFactorForUser', () => {
           return { id: 'user-1' };
         }),
       },
+      clientDomain: { findUnique: vi.fn(async () => null) },
+      organisation: { findMany: vi.fn(async () => []) },
     } as unknown as PrismaClient;
     const prisma = {
       $transaction: vi.fn(async (body: (client: PrismaClient) => Promise<void>) => {
@@ -48,7 +51,13 @@ describe('disableTwoFactorForUser', () => {
     } as unknown as PrismaClient;
 
     await disableTwoFactorForUser(
-      { userId: 'user-1', code: '123456' },
+      {
+        userId: 'user-1',
+        code: '123456',
+        credentialEpoch: 0,
+        config: { domain: 'client.example.com', '2fa_enabled': true },
+        orgId: 'cross-product-org',
+      },
       {
         prisma,
         verifyTwoFactorForLogin: async () => {
@@ -60,6 +69,8 @@ describe('disableTwoFactorForUser', () => {
     expect(events).toEqual([
       'begin',
       'user-lock',
+      'user-lock',
+      'user-lock',
       'totp-verify',
       'twofa-disable',
       'user-lock',
@@ -70,6 +81,18 @@ describe('disableTwoFactorForUser', () => {
     expect(tx.refreshToken.updateMany).toHaveBeenCalledWith({
       where: { userId: 'user-1', revokedAt: null },
       data: { revokedAt: expect.any(Date) },
+    });
+    expect(tx.organisation.findMany).toHaveBeenCalledWith({
+      where: {
+        OR: [
+          {
+            domain: 'client.example.com',
+            members: { some: { userId: 'user-1', status: 'ACTIVE' } },
+          },
+          { id: 'cross-product-org' },
+        ],
+      },
+      select: { twoFaPolicy: true },
     });
   });
 });

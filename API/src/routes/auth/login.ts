@@ -3,10 +3,10 @@ import { z } from 'zod';
 
 import { LOGIN_SESSION_AUDIENCE } from '../../config/constants.js';
 import { getAuthServiceIdentifier, requireEnv } from '../../config/env.js';
-import { asPrismaClient } from '../../db/tenant-context.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
-import { setTenantContextFromRequest } from '../../plugins/tenant-context.plugin.js';
+import { runWithRequestAdminTransaction } from '../../plugins/tenant-context.plugin.js';
 import { loginWithEmailPassword } from '../../services/auth-login.service.js';
+import { lockAndAssertAuthenticationEpoch } from '../../services/authentication-epoch.service.js';
 import {
   finalizeAuthenticatedUser,
   parseRequestAccessFlag,
@@ -14,6 +14,9 @@ import {
 import { buildWorkspaceChoices } from '../../services/first-login.service.js';
 import { signLoginSession } from '../../services/login-session.service.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
+import {
+  lockProductWorkspacePolicyShared,
+} from '../../services/product-workspace-policy-lock.service.js';
 import { resolveTwoFaPolicy } from '../../services/twofactor-policy.service.js';
 import { signTwoFaChallenge } from '../../services/twofactor-challenge.service.js';
 import {
@@ -68,17 +71,17 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
         throw new Error('missing request.configUrl');
       }
 
-      // Whole login runs under the verified domain's tenant context. userId is resolved
-      // by loginWithEmailPassword inside the tx; app.user_id stays unset during the
-      // email→user lookup (users policy only requires app.domain), then downstream
-      // writes (auth code / login log) happen with the same domain scope.
-      setTenantContextFromRequest(request, { orgId: null, userId: null });
-
-      const outcome = await request.withTenantTx(async (tx) => {
-        const prisma = asPrismaClient(tx);
-        const { userId, twoFaEnabled } = await loginWithEmailPassword(
+      // The shared policy fence and its BYPASSRLS policy re-read must use the
+      // same transaction as challenge/setup/code issuance.
+      const outcome = await runWithRequestAdminTransaction(request, async (prisma) => {
+        await lockProductWorkspacePolicyShared(prisma);
+        const { userId, twoFaEnabled, credentialEpoch } = await loginWithEmailPassword(
           { email, password, config },
           { prisma },
+        );
+        const authenticationState = await lockAndAssertAuthenticationEpoch(
+          { userId, domain: config.domain, credentialEpoch },
+          { prisma, fallbackTwoFaEnabled: twoFaEnabled },
         );
 
         const redirectUrl = selectRedirectUrl({
@@ -89,12 +92,20 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
         const rememberMe = remember_me ?? config.session?.remember_me_default ?? true;
         const requestAccess = parseRequestAccessFlag(request_access);
 
-        const twoFaPolicy = await resolveTwoFaPolicy({ config, userId });
-        if (twoFaPolicy !== 'OFF' && twoFaEnabled) {
+        const twoFaPolicy = await resolveTwoFaPolicy(
+          {
+            config,
+            userId,
+            orgId: requestAccess ? config.access_requests?.target_org_id : undefined,
+          },
+          { prisma },
+        );
+        if (twoFaPolicy !== 'OFF' && authenticationState.twoFaEnabled) {
           const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
 
           const twofa_token = await signTwoFaChallenge({
             userId,
+            credentialEpoch,
             domain: config.domain,
             configUrl,
             redirectUrl,
@@ -114,6 +125,7 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
           const setup = await startTwoFactorSetup(
             {
               userId,
+              credentialEpoch,
               config,
               configUrl,
               finalize: {
@@ -138,6 +150,7 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
           const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
           const loginToken = await signLoginSession({
             userId,
+            credentialEpoch,
             config,
             configUrl,
             redirectUrl,
@@ -165,6 +178,7 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
         const finalResult = await finalizeAuthenticatedUser(
           {
             userId,
+            credentialEpoch,
             config,
             configUrl,
             redirectUrl,

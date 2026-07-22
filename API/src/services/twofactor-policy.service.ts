@@ -21,7 +21,7 @@ type PolicyPrisma = {
   };
   organisation: {
     findMany(args: {
-      where: { domain: string; members: { some: { userId: string } } };
+      where: Record<string, unknown>;
       select: { twoFaPolicy: true };
     }): Promise<Array<{ twoFaPolicy: TwoFaPolicyValue | null }>>;
   };
@@ -36,6 +36,16 @@ export function strongestTwoFaPolicy(
   second: TwoFaPolicyValue,
 ): TwoFaPolicyValue {
   return policyRank[second] > policyRank[first] ? second : first;
+}
+
+export function isTwoFaAuthenticationSufficient(params: {
+  policy: TwoFaPolicyValue;
+  twoFaEnabled: boolean;
+  twoFaCompleted: boolean;
+}): boolean {
+  if (params.policy === 'OFF') return true;
+  if (params.twoFaEnabled) return params.twoFaCompleted;
+  return params.policy !== 'REQUIRED';
 }
 
 export function toPublicTwoFaPolicy(policy: TwoFaPolicyValue): TwoFaPolicyInput {
@@ -58,6 +68,8 @@ export async function resolveTwoFaPolicy(
   params: {
     config: Pick<ClientConfig, '2fa_enabled' | 'domain'>;
     userId?: string | null;
+    /** Exact selected or prospective access-target organisation. */
+    orgId?: string | null;
   },
   deps?: { prisma?: PolicyPrisma },
 ): Promise<TwoFaPolicyValue> {
@@ -71,11 +83,22 @@ export async function resolveTwoFaPolicy(
       where: { domain: params.config.domain },
       select: { twoFaPolicy: true },
     }),
-    params.userId
+    params.userId || params.orgId
       ? prisma.organisation.findMany({
           where: {
-            domain: params.config.domain,
-            members: { some: { userId: params.userId } },
+            OR: [
+              ...(params.userId
+                ? [
+                    {
+                      domain: params.config.domain,
+                      // Lifecycle tombstones must not keep enforcing an
+                      // organisation's policy after the user has left it.
+                      members: { some: { userId: params.userId, status: 'ACTIVE' as const } },
+                    },
+                  ]
+                : []),
+              ...(params.orgId ? [{ id: params.orgId }] : []),
+            ],
           },
           select: { twoFaPolicy: true },
         })

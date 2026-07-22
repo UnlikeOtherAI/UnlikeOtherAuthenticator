@@ -116,6 +116,7 @@ describe('GET /auth/email/link exact-one workspace 2FA', () => {
     validateRegistrationEmailLandingTokenMock.mockReset().mockResolvedValue('LOGIN_LINK');
     verifyEmailTokenMock.mockReset().mockResolvedValue({
       userId: 'user-1',
+      credentialEpoch: 0,
       twoFaEnabled: true,
       acceptedInvite: null,
     });
@@ -162,6 +163,7 @@ describe('GET /auth/email/link exact-one workspace 2FA', () => {
   it('redirects required enrollment with the exact workspace in setup finalization', async () => {
     verifyEmailTokenMock.mockResolvedValue({
       userId: 'user-1',
+      credentialEpoch: 0,
       twoFaEnabled: false,
       acceptedInvite: null,
     });

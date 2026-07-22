@@ -9,6 +9,14 @@ const LOGIN_SESSION_AUDIENCE = 'uoa:login-session';
 
 let currentConfig: ClientConfig | null = null;
 
+function deferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
 const recordLoginLogMock = vi.fn(async () => undefined);
 const assertEmailDomainAllowedForLoginMock = vi.fn(async () => undefined);
 const assertNotBannedAtLoginMock = vi.fn(async () => undefined);
@@ -139,6 +147,7 @@ async function postSelectTeam(body: Record<string, unknown>) {
 async function mintLoginToken(userId: string, domain = 'client.example.com'): Promise<string> {
   return signLoginSession({
     userId,
+    credentialEpoch: 0,
     config:
       currentConfig && domain === currentConfig.domain ? currentConfig : baseConfig({ domain }),
     configUrl: 'https://client.example.com/auth-config',
@@ -176,9 +185,16 @@ describe('POST /auth/select-team', () => {
     prismaMock.$executeRaw.mockResolvedValue(1);
     prismaMock.$queryRaw.mockResolvedValue([]);
     prismaMock.domainSignatureSettings.findUnique.mockResolvedValue(null);
+    prismaMock.user.findUnique.mockResolvedValue({
+      id: 'user-1',
+      email: 'jane@example.com',
+      twoFaEnabled: false,
+      tokenVersion: 0,
+    });
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
     Reflect.deleteProperty(process.env, 'DATABASE_URL');
   });
@@ -192,6 +208,7 @@ describe('POST /auth/select-team', () => {
   it('rejects an expired login_token with a generic error', async () => {
     const expired = await signLoginSession({
       userId: 'user-1',
+      credentialEpoch: 0,
       config: currentConfig!,
       configUrl: 'https://client.example.com/auth-config',
       redirectUrl: 'https://client.example.com/oauth/callback',
@@ -208,6 +225,48 @@ describe('POST /auth/select-team', () => {
     const res = await postSelectTeam({ login_token: expired, teamId: 'team-1' });
     expect(res.statusCode).toBe(401);
     expect(res.json()).toEqual({ error: 'Request failed' });
+  });
+
+  it('does not decline an invite when the login_token expires waiting for the lock', async () => {
+    const now = new Date('2026-07-22T12:00:00.000Z');
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(now);
+    const loginToken = await signLoginSession({
+      userId: 'user-1',
+      credentialEpoch: 0,
+      config: currentConfig!,
+      configUrl: 'https://client.example.com/auth-config',
+      redirectUrl: 'https://client.example.com/oauth/callback',
+      codeChallenge: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+      codeChallengeMethod: 'S256',
+      rememberMe: true,
+      requestAccess: false,
+      sharedSecret: SHARED_SECRET,
+      audience: LOGIN_SESSION_AUDIENCE,
+      now,
+      ttlMs: 1000,
+    });
+    const lockEntered = deferred();
+    const releaseLock = deferred();
+    prismaMock.$queryRaw.mockImplementationOnce(async () => {
+      lockEntered.resolve();
+      await releaseLock.promise;
+      return [];
+    });
+
+    const responsePromise = postSelectTeam({
+      login_token: loginToken,
+      inviteId: 'invite-1',
+      action: 'decline',
+    });
+    await lockEntered.promise;
+    vi.setSystemTime(new Date(now.getTime() + 2000));
+    releaseLock.resolve();
+    const res = await responsePromise;
+
+    expect(res.statusCode).toBe(401);
+    expect(prismaMock.teamInvite.findUnique).not.toHaveBeenCalled();
+    expect(prismaMock.teamInvite.update).not.toHaveBeenCalled();
   });
 
   it('rejects a teamId the user is not an ACTIVE member of', async () => {
@@ -268,7 +327,7 @@ describe('POST /auth/select-team', () => {
         service: { identifier: 'deepsignal' },
       },
     ]);
-    prismaMock.user.findUnique.mockResolvedValue({ twoFaEnabled: false });
+    prismaMock.user.findUnique.mockResolvedValue({ twoFaEnabled: false, tokenVersion: 0 });
 
     const res = await postSelectTeam({ login_token: loginToken, teamId: 'team-nessie' });
 
@@ -294,7 +353,7 @@ describe('POST /auth/select-team', () => {
     prismaMock.team.findFirst.mockResolvedValue({ id: 'team-1', orgId: 'org-1' });
     prismaMock.teamMember.findFirst.mockResolvedValue({ id: 'member-1' });
     prismaMock.orgMember.findFirst.mockResolvedValue({ id: 'org-member-1' });
-    prismaMock.user.findUnique.mockResolvedValue({ twoFaEnabled: false });
+    prismaMock.user.findUnique.mockResolvedValue({ twoFaEnabled: false, tokenVersion: 0 });
 
     const res = await postSelectTeam({ login_token: loginToken, teamId: 'team-1' });
 
@@ -312,7 +371,7 @@ describe('POST /auth/select-team', () => {
 
   it('finalizes with no workspace scope when neither teamId nor inviteId is given', async () => {
     const loginToken = await mintLoginToken('user-1');
-    prismaMock.user.findUnique.mockResolvedValue({ twoFaEnabled: false });
+    prismaMock.user.findUnique.mockResolvedValue({ twoFaEnabled: false, tokenVersion: 0 });
 
     const res = await postSelectTeam({ login_token: loginToken });
 
@@ -331,7 +390,7 @@ describe('POST /auth/select-team', () => {
     prismaMock.team.findFirst.mockResolvedValue({ id: 'team-1', orgId: 'org-1' });
     prismaMock.teamMember.findFirst.mockResolvedValue({ id: 'member-1' });
     prismaMock.orgMember.findFirst.mockResolvedValue({ id: 'org-member-1' });
-    prismaMock.user.findUnique.mockResolvedValue({ twoFaEnabled: true });
+    prismaMock.user.findUnique.mockResolvedValue({ twoFaEnabled: true, tokenVersion: 0 });
     prismaMock.clientDomain.findUnique.mockResolvedValue({ twoFaPolicy: 'REQUIRED' });
     prismaMock.organisation.findMany.mockResolvedValue([]);
 
@@ -360,7 +419,13 @@ describe('POST /auth/select-team', () => {
     });
     prismaMock.user.findUnique.mockImplementation(async (args: { where: { id: string } }) => {
       if (args.where.id === 'user-1') {
-        return { id: 'user-1', email: 'jane@example.com', name: null, twoFaEnabled: false };
+        return {
+          id: 'user-1',
+          email: 'jane@example.com',
+          name: null,
+          twoFaEnabled: false,
+          tokenVersion: 0,
+        };
       }
       return null;
     });
@@ -398,7 +463,11 @@ describe('POST /auth/select-team', () => {
       revokedAt: null,
       org: { domain: 'client.example.com' },
     });
-    prismaMock.user.findUnique.mockResolvedValue({ email: 'jane@example.com' });
+    prismaMock.user.findUnique.mockResolvedValue({
+      email: 'jane@example.com',
+      twoFaEnabled: false,
+      tokenVersion: 0,
+    });
     prismaMock.teamInvite.update.mockResolvedValue({ id: 'invite-1' });
     prismaMock.teamMember.findMany.mockResolvedValue([]);
     prismaMock.teamInvite.findMany.mockResolvedValue([]);

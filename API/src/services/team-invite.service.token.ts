@@ -6,6 +6,10 @@ import { getPrisma } from '../db/prisma.js';
 import { runInTransaction } from '../db/tenant-context.js';
 import { AppError } from '../utils/errors.js';
 import { hashEmailToken } from '../utils/verification-token.js';
+import {
+  lockAndReadVerificationTokenEpoch,
+  readVerificationTokenEpoch,
+} from './verification-token-epoch.service.js';
 
 type InviteTokenPrisma = PrismaClient;
 
@@ -15,6 +19,9 @@ type InviteTokenRow = {
   id: string;
   type: string;
   configUrl: string;
+  tokenVersion: number | null;
+  userId: string | null;
+  userKey: string;
   teamInviteId: string | null;
   expiresAt: Date;
   usedAt: Date | null;
@@ -81,6 +88,9 @@ async function findInviteToken(params: {
       id: true,
       type: true,
       configUrl: true,
+      tokenVersion: true,
+      userId: true,
+      userKey: true,
       teamInviteId: true,
       expiresAt: true,
       usedAt: true,
@@ -108,11 +118,14 @@ function requireTeamInvite(row: InviteTokenRow): NonNullable<InviteTokenRow['tea
   return row.teamInvite;
 }
 
-export async function getTeamInviteLandingData(params: {
-  token: string;
-  configUrl: string;
-  config: ClientConfig;
-}, deps?: InviteTokenDeps): Promise<{
+export async function getTeamInviteLandingData(
+  params: {
+    token: string;
+    configUrl: string;
+    config: ClientConfig;
+  },
+  deps?: InviteTokenDeps,
+): Promise<{
   tokenType: InviteTokenType;
   inviteId: string;
   email: string;
@@ -143,6 +156,10 @@ export async function getTeamInviteLandingData(params: {
     configUrl: params.configUrl,
     now,
   });
+  const epoch = await readVerificationTokenEpoch(prisma, row);
+  if (!epoch) {
+    throw new AppError('BAD_REQUEST', 400);
+  }
   const teamInvite = requireTeamInvite(row);
 
   return {
@@ -155,11 +172,14 @@ export async function getTeamInviteLandingData(params: {
   };
 }
 
-export async function declineTeamInviteByToken(params: {
-  token: string;
-  configUrl: string;
-  config: ClientConfig;
-}, deps?: InviteTokenDeps): Promise<{
+export async function declineTeamInviteByToken(
+  params: {
+    token: string;
+    configUrl: string;
+    config: ClientConfig;
+  },
+  deps?: InviteTokenDeps,
+): Promise<{
   email: string;
   inviteName: string | null;
   teamName: string;
@@ -172,7 +192,7 @@ export async function declineTeamInviteByToken(params: {
   }
 
   const prisma = deps?.prisma ?? getPrisma();
-  const now = deps?.now ? deps.now() : new Date();
+  const readNow = deps?.now ?? (() => new Date());
   const sharedSecret = deps?.sharedSecret ?? requireEnv('SHARED_SECRET').SHARED_SECRET;
 
   return await runInTransaction(prisma, async (tx) => {
@@ -185,16 +205,21 @@ export async function declineTeamInviteByToken(params: {
       throw new AppError('BAD_REQUEST', 400);
     }
 
+    const epoch = await lockAndReadVerificationTokenEpoch(tx, row);
+    const decisionNow = readNow();
+    if (!epoch) {
+      throw new AppError('BAD_REQUEST', 400);
+    }
     assertInviteTokenValid({
       row,
       configUrl: params.configUrl,
-      now,
+      now: decisionNow,
     });
     const teamInvite = requireTeamInvite(row);
 
     await tx.teamInvite.update({
       where: { id: teamInvite.id },
-      data: { declinedAt: now },
+      data: { declinedAt: decisionNow },
       select: { id: true },
     });
     await tx.verificationToken.updateMany({
@@ -203,7 +228,7 @@ export async function declineTeamInviteByToken(params: {
         usedAt: null,
       },
       data: {
-        usedAt: now,
+        usedAt: decisionNow,
       },
     });
 

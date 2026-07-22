@@ -5,16 +5,19 @@ import type { PrismaClient } from '@prisma/client';
 import { LOGIN_CODE_MAX_ATTEMPTS, LOGIN_CODE_TTL_MS } from '../config/constants.js';
 import { getEnv, requireEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
+import { runInTransaction } from '../db/tenant-context.js';
 import { AppError } from '../utils/errors.js';
 import { hashEmailToken } from '../utils/verification-token.js';
 import { buildUserIdentity } from './user-scope.service.js';
 import { extractEmailTheme } from './email-theme.service.js';
 import { sendLoginCodeEmail } from './email.service.js';
 import type { ClientConfig } from './config.service.js';
+import { lockAndReadVerificationTokenEpoch } from './verification-token-epoch.service.js';
 
 type LoginCodePrisma = PrismaClient;
 
 type LoginCodeDeps = {
+  afterUserLock?: () => Promise<void>;
   env?: ReturnType<typeof getEnv>;
   now?: () => Date;
   sharedSecret?: string;
@@ -81,7 +84,7 @@ export async function issueLoginCode(
   const prisma = deps?.prisma ?? getPrisma();
   const user = await prisma.user.findUnique({
     where: { userKey },
-    select: { id: true },
+    select: { id: true, tokenVersion: true },
   });
   if (!user) return;
 
@@ -114,6 +117,7 @@ export async function issueLoginCode(
           expiresAt,
           attemptCount: 0,
           userId: user.id,
+          tokenVersion: user.tokenVersion,
         },
       });
       created = true;
@@ -146,7 +150,7 @@ export async function verifyLoginCode(
     code: string;
   },
   deps?: LoginCodeDeps,
-): Promise<{ userId: string }> {
+): Promise<{ userId: string; credentialEpoch: number }> {
   const env = deps?.env ?? getEnv();
   if (!env.DATABASE_URL) {
     throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
@@ -159,44 +163,69 @@ export async function verifyLoginCode(
   });
 
   const prisma = deps?.prisma ?? getPrisma();
-  const now = deps?.now ? deps.now() : new Date();
+  const readNow = deps?.now ?? (() => new Date());
   const sharedSecret = deps?.sharedSecret ?? requireEnv('SHARED_SECRET').SHARED_SECRET;
   const hashFn = deps?.hashEmailToken ?? hashEmailToken;
 
-  const token = await prisma.verificationToken.findFirst({
-    where: {
-      userKey,
-      type: 'LOGIN_CODE',
-      usedAt: null,
-      expiresAt: { gt: now },
-      attemptCount: { lt: LOGIN_CODE_MAX_ATTEMPTS },
-    },
-    orderBy: { createdAt: 'desc' },
-    select: { id: true, tokenHash: true, userId: true },
-  });
-
-  if (!token || !token.userId) {
-    throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
-  }
-
   const candidateHash = hashLoginCode({ code: params.code, userKey, sharedSecret, hashFn });
-  const matches = constantTimeStringEqual(candidateHash, token.tokenHash);
-
-  if (!matches) {
-    await prisma.verificationToken.updateMany({
-      where: { id: token.id, usedAt: null },
-      data: { attemptCount: { increment: 1 } },
+  return runInTransaction(prisma, async (tx) => {
+    const token = await tx.verificationToken.findFirst({
+      where: {
+        userKey,
+        type: 'LOGIN_CODE',
+        usedAt: null,
+        attemptCount: { lt: LOGIN_CODE_MAX_ATTEMPTS },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        tokenHash: true,
+        userId: true,
+        userKey: true,
+        tokenVersion: true,
+        expiresAt: true,
+      },
     });
-    throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
-  }
 
-  const updated = await prisma.verificationToken.updateMany({
-    where: { id: token.id, usedAt: null, expiresAt: { gt: now } },
-    data: { usedAt: now },
+    if (!token) {
+      throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
+    }
+
+    const epoch = await lockAndReadVerificationTokenEpoch(tx, token, deps?.afterUserLock);
+    const decisionNow = readNow();
+    if (epoch?.kind !== 'user' || token.expiresAt.getTime() <= decisionNow.getTime()) {
+      throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
+    }
+
+    const matches = constantTimeStringEqual(candidateHash, token.tokenHash);
+    if (!matches) {
+      await tx.verificationToken.updateMany({
+        where: {
+          id: token.id,
+          tokenVersion: epoch.credentialEpoch,
+          userId: epoch.userId,
+          usedAt: null,
+          expiresAt: { gt: decisionNow },
+        },
+        data: { attemptCount: { increment: 1 } },
+      });
+      throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
+    }
+
+    const updated = await tx.verificationToken.updateMany({
+      where: {
+        id: token.id,
+        tokenVersion: epoch.credentialEpoch,
+        userId: epoch.userId,
+        usedAt: null,
+        expiresAt: { gt: decisionNow },
+      },
+      data: { usedAt: decisionNow },
+    });
+    if (updated.count !== 1) {
+      throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
+    }
+
+    return { userId: epoch.userId, credentialEpoch: epoch.credentialEpoch };
   });
-  if (updated.count !== 1) {
-    throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
-  }
-
-  return { userId: token.userId };
 }

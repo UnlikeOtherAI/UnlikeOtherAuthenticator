@@ -9,6 +9,7 @@ const TWOFA_SETUP_ISSUER = 'uoa:twofa-setup';
 
 const TwoFaSetupSchema = z.object({
   sub: z.string().min(1),
+  credential_epoch: z.number().int().nonnegative(),
   encrypted_secret: z.string().min(1),
   config_url: z.string().min(1),
   domain: z.string().min(1),
@@ -26,6 +27,7 @@ const TwoFaSetupSchema = z.object({
 
 export type TwoFaSetupToken = {
   userId: string;
+  credentialEpoch: number;
   encryptedSecret: string;
   configUrl: string;
   domain: string;
@@ -45,6 +47,7 @@ function sharedSecretKey(sharedSecret: string): Uint8Array {
 
 export async function signTwoFaSetupToken(params: {
   userId: string;
+  credentialEpoch: number;
   encryptedSecret: string;
   configUrl: string;
   domain: string;
@@ -68,6 +71,7 @@ export async function signTwoFaSetupToken(params: {
   try {
     return await new SignJWT({
       encrypted_secret: params.encryptedSecret,
+      credential_epoch: params.credentialEpoch,
       config_url: params.configUrl,
       domain: params.domain,
       auth_method: params.authMethod,
@@ -119,6 +123,7 @@ export async function verifyTwoFaSetupToken(params: {
 
   const token: TwoFaSetupToken = {
     userId: parsed.sub,
+    credentialEpoch: parsed.credential_epoch,
     encryptedSecret: parsed.encrypted_secret,
     configUrl: parsed.config_url,
     domain: parsed.domain,

@@ -106,7 +106,11 @@ describe('POST /auth/login — workspace chooser wiring (Phase 3b Task 7)', () =
   }
 
   it('workspace_selection "off" (default): behaves exactly like before — no login_token, direct finalize', async () => {
-    loginWithEmailPasswordMock.mockResolvedValue({ userId: 'user-1', twoFaEnabled: false });
+    loginWithEmailPasswordMock.mockResolvedValue({
+      userId: 'user-1',
+      twoFaEnabled: false,
+      credentialEpoch: 0,
+    });
     finalizeAuthenticatedUserMock.mockResolvedValue({
       status: 'granted',
       code: 'auth_code_1',
@@ -127,7 +131,11 @@ describe('POST /auth/login — workspace chooser wiring (Phase 3b Task 7)', () =
 
   it('workspace_selection "auto" + 2FA satisfied: returns login_token + chooser instead of finalizing', async () => {
     currentConfig = baseConfig({ login_flow: { email_code_enabled: false, workspace_selection: 'auto' } });
-    loginWithEmailPasswordMock.mockResolvedValue({ userId: 'user-1', twoFaEnabled: false });
+    loginWithEmailPasswordMock.mockResolvedValue({
+      userId: 'user-1',
+      twoFaEnabled: false,
+      credentialEpoch: 0,
+    });
     signLoginSessionMock.mockResolvedValue('login_token_abc');
     buildWorkspaceChoicesMock.mockResolvedValue({
       teams: [{ teamId: 'team-1', orgId: 'org-1', name: 'Design', role: 'member' }],
@@ -160,7 +168,11 @@ describe('POST /auth/login — workspace chooser wiring (Phase 3b Task 7)', () =
       login_flow: { email_code_enabled: false, workspace_selection: 'auto' },
     });
     resolveTwoFaPolicyMock.mockResolvedValue('OPTIONAL');
-    loginWithEmailPasswordMock.mockResolvedValue({ userId: 'user-1', twoFaEnabled: true });
+    loginWithEmailPasswordMock.mockResolvedValue({
+      userId: 'user-1',
+      twoFaEnabled: true,
+      credentialEpoch: 0,
+    });
 
     const res = await postLogin();
 

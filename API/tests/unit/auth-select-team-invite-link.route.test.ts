@@ -139,6 +139,7 @@ async function postSelectTeam(body: Record<string, unknown>) {
 async function mintLoginToken(userId: string): Promise<string> {
   return signLoginSession({
     userId,
+    credentialEpoch: 0,
     config: currentConfig ?? baseConfig(),
     configUrl: 'https://client.example.com/auth-config',
     redirectUrl: 'https://client.example.com/oauth/callback',
@@ -175,6 +176,12 @@ describe('POST /auth/select-team invite-link redemption', () => {
     prismaMock.$executeRaw.mockResolvedValue(1);
     prismaMock.$queryRaw.mockResolvedValue([]);
     prismaMock.domainSignatureSettings.findUnique.mockResolvedValue(null);
+    prismaMock.user.findUnique.mockResolvedValue({
+      id: 'user-1',
+      email: 'jane@example.com',
+      twoFaEnabled: false,
+      tokenVersion: 0,
+    });
   });
 
   afterEach(() => {
@@ -208,7 +215,7 @@ describe('POST /auth/select-team invite-link redemption', () => {
       .mockResolvedValueOnce(null)
       .mockResolvedValue({ id: 'tm-1', status: 'ACTIVE' });
     prismaMock.teamMember.create.mockResolvedValue({ id: 'tm-1' });
-    prismaMock.user.findUnique.mockResolvedValue({ twoFaEnabled: false });
+    prismaMock.user.findUnique.mockResolvedValue({ twoFaEnabled: false, tokenVersion: 0 });
 
     const res = await postSelectTeam({
       login_token: loginToken,
@@ -257,7 +264,7 @@ describe('POST /auth/select-team invite-link redemption', () => {
       status: 'ACTIVE',
     });
     prismaMock.teamMember.findFirst.mockResolvedValue({ id: 'tm-2', status: 'ACTIVE' });
-    prismaMock.user.findUnique.mockResolvedValue({ twoFaEnabled: true });
+    prismaMock.user.findUnique.mockResolvedValue({ twoFaEnabled: true, tokenVersion: 0 });
     prismaMock.clientDomain.findUnique.mockResolvedValue({ twoFaPolicy: 'REQUIRED' });
     prismaMock.organisation.findMany.mockResolvedValue([]);
 

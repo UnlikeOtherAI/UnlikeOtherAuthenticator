@@ -94,6 +94,7 @@ describe('verifyAccessToken', () => {
     const claims = await verifyAccessToken(token, depsWithTokenVersion(0));
     expect(claims).toEqual({
       userId: 'u1',
+      tokenVersion: 0,
       email: 'user@example.com',
       domain: 'client.example.com',
       clientId: 'client-id',
@@ -117,6 +118,7 @@ describe('verifyAccessToken', () => {
     const claims = await verifyAccessToken(token, depsWithTokenVersion(0));
     expect(claims).toEqual({
       userId: 'u2',
+      tokenVersion: 0,
       email: 'user@example.com',
       domain: 'client.example.com',
       clientId: 'client-id',
@@ -141,6 +143,7 @@ describe('verifyAccessToken', () => {
     const claims = await verifyAccessToken(token, depsWithTokenVersion(0));
     expect(claims).toEqual({
       userId: 'u3',
+      tokenVersion: 0,
       email: 'user@example.com',
       domain: 'client.example.com',
       clientId: 'client-id',
@@ -245,7 +248,25 @@ describe('verifyAccessToken', () => {
     });
   });
 
-  it('rejects a token with no tv claim', async () => {
+  it('surfaces an unexpected token-version lookup failure instead of logging the user out', async () => {
+    const token = await signAccessToken({
+      sharedSecret: process.env.SHARED_SECRET!,
+      issuer: process.env.AUTH_SERVICE_IDENTIFIER!,
+      subject: 'u1',
+      tv: 0,
+    });
+    const databaseFailure = new Error('database unavailable');
+
+    await expect(
+      verifyAccessToken(token, {
+        prisma: {
+          user: { findUnique: vi.fn().mockRejectedValue(databaseFailure) },
+        } as never,
+      }),
+    ).rejects.toBe(databaseFailure);
+  });
+
+  it('accepts a legacy token with no tv only while the live epoch is zero', async () => {
     const jwt = new SignJWT({
       email: 'user@example.com',
       domain: 'client.example.com',
@@ -260,7 +281,11 @@ describe('verifyAccessToken', () => {
       .setExpirationTime('30m');
     const token = await jwt.sign(secretKey(process.env.SHARED_SECRET!));
 
-    await expect(verifyAccessToken(token, depsWithTokenVersion(0))).rejects.toMatchObject({
+    await expect(verifyAccessToken(token, depsWithTokenVersion(0))).resolves.toMatchObject({
+      userId: 'u1',
+      tokenVersion: 0,
+    });
+    await expect(verifyAccessToken(token, depsWithTokenVersion(1))).rejects.toMatchObject({
       statusCode: 401,
     });
   });
