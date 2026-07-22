@@ -252,6 +252,8 @@ export const authEndpoints: EndpointSchema[] = [
         'Legacy grants: 10/min per IP. Confidential exchange: 600/min per authenticated source domain plus 60/min per verified source-domain user.',
       '401 refresh policy':
         'If the domain signature policy changed and the refresh-token user is incomplete, or a stored scoped session no longer has its exact active product mapping plus ACTIVE org/team memberships, the valid refresh token is not rotated or consumed. Restart interactive authorization so the user can sign and/or select an eligible workspace; UOA never silently changes the workspace.',
+      'refresh response-loss recovery':
+        'For 120 seconds after rotation, retrying the same predecessor with the same authenticated app credential and exact client context returns the verified current successor without another rotation. Persist successful UOA state atomically; replay a locally committed result instead of calling UOA again when only the product response was lost. Outside the window, predecessor reuse revokes the family and prior access-token version.',
     },
   },
   {

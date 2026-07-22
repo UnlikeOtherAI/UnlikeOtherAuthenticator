@@ -69,16 +69,32 @@ Only the hash is persisted. Raw refresh tokens are never stored.
 
 Every successful refresh-token exchange:
 
-1. Creates a new refresh token in the same family
+1. Derives a deterministic successor and creates its hash in the same family
 2. Marks the previous token as revoked
 3. Links the old token to the replacement with `replaced_by_token_id`
 
-If an already-rotated refresh token is presented again:
+UOA allows one narrowly bounded recovery case for a successful response that
+was lost in transit. For 120 seconds after rotation, the same predecessor may
+be submitted with the same authenticated application credential and exact
+`domain`/`client_id`/`config_url` context. UOA validates every stored
+parent/successor hash and scope link, re-runs current policy, and returns the
+one current live descendant without creating another row. The response reports
+that descendant's actual remaining lifetime. This also makes concurrent
+submissions converge on one successor across UOA replicas.
+
+The 120-second window is an explicit availability/security tradeoff: a stolen
+predecessor plus the product's application credential can recover the current
+successor during that window. Raw tokens remain backend-only and responses are
+`Cache-Control: no-store` / `Pragma: no-cache`.
+
+If an already-rotated refresh token is presented outside that window, or its
+stored successor chain is corrupt:
 
 1. The entire token family is revoked
-2. That revocation transaction commits
-3. Only after commit, the request fails with the same generic unauthorized response used for every invalid refresh
-4. Subsequent refresh attempts from that family also fail
+2. The user's global access-token version is incremented
+3. Both revocations commit in the same transaction
+4. Only after commit, the request fails with the same generic unauthorized response used for every invalid refresh
+5. Subsequent refresh attempts and access tokens from the prior version fail
 
 This is the theft-detection path for replayed refresh tokens. Every production refresh decision
 takes PostgreSQL transaction advisory locks in the canonical order: exact user-global, then exact
@@ -300,6 +316,14 @@ Client backends integrating with the Authenticator must:
 3. Use `grant_type=refresh_token` to renew sessions
 4. Call `POST /auth/revoke` during logout
 5. Clear local cookies/session state if refresh fails
+6. Persist the returned refresh successor and access-token state atomically
+   before acknowledging a local session renewal
+7. If the UOA success response may have been lost, retry the same predecessor
+   promptly with the same application credential and exact client context; do
+   not mint or derive a replacement locally
+8. If a product already persisted the UOA result but lost its own downstream
+   response, replay that committed local result (including the already-issued
+   access-token version) instead of rotating through UOA again
 
 ---
 

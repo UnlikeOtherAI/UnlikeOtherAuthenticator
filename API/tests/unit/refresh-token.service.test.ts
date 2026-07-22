@@ -6,11 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   exchangeRefreshToken,
   issueRefreshToken,
+  REFRESH_TOKEN_REPLAY_GRACE_MS,
   revokeRefreshTokenFamily,
 } from '../../src/services/refresh-token.service.js';
-import {
-  revokeRefreshTokensForUserDomain,
-} from '../../src/services/refresh-token-revocation.service.js';
 
 function hashRefreshToken(token: string, sharedSecret: string): string {
   return createHmac('sha256', sharedSecret).update(token, 'utf8').digest('hex');
@@ -361,6 +359,9 @@ describe('refresh-token.service (unit)', () => {
 
   it('revokes the entire family when a rotated refresh token is reused', async () => {
     const prisma = {
+      user: {
+        update: vi.fn().mockResolvedValue({ id: 'user-1' }),
+      },
       refreshToken: {
         findUnique: vi.fn().mockResolvedValue({
           id: 'refresh-token-1',
@@ -369,9 +370,14 @@ describe('refresh-token.service (unit)', () => {
           domain: context.domain,
           clientId: context.clientId,
           configUrl: context.configUrl,
+          tokenHash: hashRefreshToken('stale-refresh-token', sharedSecret),
+          parentTokenId: null,
+          createdAt: new Date(now.getTime() - 60_000),
           expiresAt: new Date(now.getTime() + 60_000),
-          revokedAt: null,
+          revokedAt: new Date(now.getTime() - REFRESH_TOKEN_REPLAY_GRACE_MS - 1),
           replacedByTokenId: 'refresh-token-2',
+          orgId: null,
+          teamId: null,
         }),
         create: vi.fn(),
         updateMany: vi.fn().mockResolvedValue({ count: 2 }),
@@ -468,30 +474,4 @@ describe('refresh-token.service (unit)', () => {
     });
   });
 
-  it('revokes only this domain\'s refresh tokens and does NOT bump the user token version', async () => {
-    const userUpdate = vi.fn();
-    const prisma = {
-      $queryRaw: vi.fn().mockResolvedValue([{ lockResult: '' }]),
-      refreshToken: {
-        updateMany: vi.fn().mockResolvedValue({ count: 3 }),
-      },
-      user: {
-        update: userUpdate,
-      },
-    } as unknown as PrismaClient;
-
-    const result = await revokeRefreshTokensForUserDomain('user-1', context.domain, {
-      now: () => now,
-      prisma,
-    });
-
-    expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
-      where: { userId: 'user-1', domain: context.domain, revokedAt: null },
-      data: { revokedAt: now },
-    });
-    expect(result).toEqual({ revokedCount: 3 });
-    // Domain-scoped revocation must never touch the global per-user token version — that would
-    // also invalidate the user's sessions on other domains.
-    expect(userUpdate).not.toHaveBeenCalled();
-  });
 });

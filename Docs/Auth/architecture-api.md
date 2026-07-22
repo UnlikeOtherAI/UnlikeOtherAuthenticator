@@ -297,9 +297,10 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       organisation.service.members.ts       — Org membership lifecycle
       password.service.ts                   — Hashing, validation rules, comparison
       refresh-session-lock.service.ts       — Canonical user-global then user/domain serialization
+      refresh-token-replay.service.ts       — Deterministic lost-response successor verification and recovery
       refresh-token-revocation.service.ts   — Domain/workspace/global revocation transactions
       refresh-token-rotation-policy.service.ts — Workspace/signature gates held through refresh rotation
-      refresh-token.service.ts              — Refresh issuance, rotation, reuse detection, family logout
+      refresh-token.service.ts              — Refresh issuance, deterministic replay recovery, reuse detection, family logout
       refresh-token-transaction.service.ts  — Durable reuse revocation commit before opaque rejection
       retention-pruning.service.ts          — Retention pruning jobs
       root-page.service.ts                  — Root holding page rendering

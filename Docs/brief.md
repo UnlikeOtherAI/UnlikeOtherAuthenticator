@@ -572,7 +572,11 @@ The following tighten ambiguities in the brief to prevent misinterpretation duri
   secret decryption, TOTP verification/enrollment, or authorization-code issuance.
 - Silent reauth is allowed **server-side only** via the refresh-token grant
 - Refresh tokens must be **opaque, hashed at rest, and rotated on every use**
-- Reuse of an already-rotated refresh token must revoke the entire token family
+- A just-rotated predecessor may recover the exact deterministic live successor
+  for 120 seconds only when the product re-authenticates and supplies the exact
+  original client context; policy is re-run and no new row is created
+- Reuse after that response-loss window, or a corrupt successor chain, must
+  revoke the entire token family and increment the user's access-token version
 
 ---
 
