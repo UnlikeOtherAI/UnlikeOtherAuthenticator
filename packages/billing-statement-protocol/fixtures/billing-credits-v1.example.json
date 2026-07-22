@@ -24,7 +24,7 @@
   "conversion": {
     "credits_per_usd": "1000",
     "settlement_currency": "USD",
-    "description": "1,000 credits always equal US$1.00; one cent always equals 10 credits."
+    "description": "1,000 credits always equal US$1.00. Usage is accumulated exactly, but only complete credits are deducted."
   },
   "current_period": {
     "starts_at": "2026-07-01T00:00:00.000Z",

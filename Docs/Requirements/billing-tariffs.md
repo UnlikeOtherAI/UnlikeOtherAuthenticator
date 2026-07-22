@@ -782,10 +782,13 @@ service or tariff:
 1 Ledger USD micro-minor = 10 internal microcredits
 ```
 
-Every stored commercial credit amount is divisible by 10 microcredits. Public
-credit values therefore carry at most five decimal places and their exact USD
-equivalents at most eight. Microcredits, raw Ledger token counts, and provider
-cost never appear in the public credit protocol.
+Every new customer balance-changing usage target is an integer credit, or one
+million microcredits. UOA retains sub-credit rated usage in the settlement's
+exact micro-minor remainder until the same service/user bucket reaches another
+whole credit. Public credit values are therefore integers; their exact USD
+equivalents may contain the three decimal places implied by 1,000 credits per
+dollar. Microcredits, raw Ledger token counts, and provider cost never appear in
+the public credit protocol.
 
 There is one exact-team credit account per Stripe account/mode and currency,
 shared across all connected services. A product can present its own versioned,
@@ -817,9 +820,14 @@ or rolling usage backwards. The database stale-snapshot trigger remains the
 independent defense against any writer that bypasses this service decision.
 Corrections release prior credits before deterministic largest-remainder
 reallocation. New usage consumes only the non-negative available balance while
-the full rated-but-unfunded liability is retained; only a verified credit-entry
-reversal can produce debt. Same-cursor replay is idempotent, while content drift
-or a partial cursor application fails closed. Origin-product
+the full rated-but-unfunded liability is retained. Allocation and consumption
+are performed in complete-credit units: a cumulative 1.08365-credit rated
+amount consumes one credit and retains 0.08365 as unbilled remainder. A later
+snapshot crossing the next whole-credit boundary consumes the next credit;
+corrected or historical fractional consumption is released automatically by an
+append-only correction. Only a verified credit-entry reversal can produce debt.
+Same-cursor replay is idempotent, while content drift or a partial cursor
+application fails closed. Origin-product
 transparency remains in `BillingStatementV2`, derived from its separately
 pinned portfolio. Products render UOA's prepared team balance, current-period
 consumption, connected-service totals, and privacy-filtered attribution. They

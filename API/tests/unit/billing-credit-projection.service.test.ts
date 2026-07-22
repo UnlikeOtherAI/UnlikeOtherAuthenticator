@@ -239,6 +239,70 @@ describe('privacy-safe shared credit projection', () => {
     });
   });
 
+  it('projects historical fractional usage as the whole-credit amount and balance', () => {
+    const data = projectionData(49_999_000_000n);
+    data.settlements[0]!.cumulativeCreditsConsumedMicrocredits = 1_000_000n;
+    data.allocations = [
+      {
+        id: 'allocation_viewer',
+        settlementId: 'settlement_1',
+        attributedUserId: 'user_1',
+        cumulativeCreditsConsumedMicrocredits: 1_000_000n,
+        adjustment: { sequence: 2 },
+        attributedUser: { id: 'user_1', name: 'Viewer' },
+      },
+    ] as BillingCreditProjectionData['allocations'];
+    data.entries = [
+      {
+        id: 'whole_credit_normalization',
+        occurredAt: new Date('2026-07-21T12:01:00.000Z'),
+        service,
+        attributedUserId: null,
+        attributedUser: null,
+        kind: BillingCreditEntryKind.USAGE_SETTLEMENT_CORRECTION,
+        direction: BillingCreditEntryDirection.CREDIT,
+        amountMicrocredits: 83_650n,
+        balanceAfterMicrocredits: 49_999_000_000n,
+      },
+      {
+        id: 'legacy_fractional_usage',
+        occurredAt: now,
+        service,
+        attributedUserId: null,
+        attributedUser: null,
+        kind: BillingCreditEntryKind.USAGE_SETTLEMENT_CORRECTION,
+        direction: BillingCreditEntryDirection.DEBIT,
+        amountMicrocredits: 1_083_650n,
+        balanceAfterMicrocredits: 49_998_916_350n,
+      },
+    ] as BillingCreditProjectionData['entries'];
+
+    const result = buildBillingCreditsProjection({
+      credential,
+      collection,
+      viewer: viewer(true),
+      period,
+      data,
+      now,
+    });
+
+    expect(() => assertBillingCreditsContract(result)).not.toThrow();
+    expect(result.credit_balance).toMatchObject({ credits: '49999', display: '49,999 credits' });
+    expect(result.credit_summary.credits_consumed).toMatchObject({
+      credits: '1',
+      display: '1 credit',
+    });
+    expect(result.recent_entries).toEqual([
+      expect.objectContaining({
+        credits: expect.objectContaining({ credits: '1', display: '1 credit' }),
+        credit_balance_after: expect.objectContaining({
+          credits: '49999',
+          display: '49,999 credits',
+        }),
+      }),
+    ]);
+  });
+
   it('collapses other users and strips card and consent identity for members', () => {
     const result = buildBillingCreditsProjection({
       credential,

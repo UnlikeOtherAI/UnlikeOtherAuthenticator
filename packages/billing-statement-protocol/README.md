@@ -84,8 +84,10 @@ subscription state.
 
 `BillingCreditsV1` displays the exact team's one shared cross-service balance
 under the required heading `Remaining credits`. The fixed public conversion is
-1,000 credits = US$1.00 (one cent = 10 credits); the protocol admits at most
-five credit decimals and eight US-dollar decimals, matching UOA persistence.
+1,000 credits = US$1.00. Credit quantities are always whole integers. UOA keeps
+sub-credit usage in its exact internal rated remainder and deducts it only when
+the cumulative service/user amount reaches another complete credit. The USD
+equivalent remains an exact decimal derived from the whole-credit quantity.
 UOA supplies fixed top-up offers and every complete auto-top-up action. The
 consumer relays the frozen action body unchanged and never chooses an offer or
 option by rebuilding its subject.

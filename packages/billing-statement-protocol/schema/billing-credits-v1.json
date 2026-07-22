@@ -50,7 +50,7 @@
               "properties": {
                 "credits": {
                   "type": "string",
-                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,5})?$"
+                  "pattern": "^(0|[1-9][0-9]*)$"
                 },
                 "display": {
                   "type": "string"
@@ -89,7 +89,7 @@
               "properties": {
                 "credits": {
                   "type": "string",
-                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,5})?$"
+                  "pattern": "^(0|[1-9][0-9]*)$"
                 },
                 "display": {
                   "type": "string"
@@ -128,7 +128,7 @@
               "properties": {
                 "credits": {
                   "type": "string",
-                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,5})?$"
+                  "pattern": "^(0|[1-9][0-9]*)$"
                 },
                 "display": {
                   "type": "string"
@@ -202,7 +202,7 @@
                     "properties": {
                       "credits": {
                         "type": "string",
-                        "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,5})?$"
+                        "pattern": "^(0|[1-9][0-9]*)$"
                       },
                       "display": {
                         "type": "string"
@@ -241,7 +241,7 @@
                     "properties": {
                       "credits": {
                         "type": "string",
-                        "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,5})?$"
+                        "pattern": "^(0|[1-9][0-9]*)$"
                       },
                       "display": {
                         "type": "string"
@@ -298,7 +298,7 @@
                           "properties": {
                             "credits": {
                               "type": "string",
-                              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,5})?$"
+                              "pattern": "^(0|[1-9][0-9]*)$"
                             },
                             "display": {
                               "type": "string"
@@ -553,7 +553,7 @@
                 "properties": {
                   "credits": {
                     "type": "string",
-                    "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]{1,5})?|0\\.(?=[0-9]{1,5}$)[0-9]*[1-9][0-9]*)$"
+                    "pattern": "^[1-9][0-9]*$"
                   },
                   "display": {
                     "type": "string"
@@ -592,7 +592,7 @@
                 "properties": {
                   "credits": {
                     "type": "string",
-                    "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,5})?$"
+                    "pattern": "^-?(0|[1-9][0-9]*)$"
                   },
                   "display": {
                     "type": "string"
@@ -726,7 +726,7 @@
               "properties": {
                 "credits": {
                   "type": "string",
-                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,5})?$"
+                  "pattern": "^(0|[1-9][0-9]*)$"
                 },
                 "display": {
                   "type": "string"
@@ -765,7 +765,7 @@
               "properties": {
                 "credits": {
                   "type": "string",
-                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,5})?$"
+                  "pattern": "^(0|[1-9][0-9]*)$"
                 },
                 "display": {
                   "type": "string"
@@ -804,7 +804,7 @@
               "properties": {
                 "credits": {
                   "type": "string",
-                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,5})?$"
+                  "pattern": "^(0|[1-9][0-9]*)$"
                 },
                 "display": {
                   "type": "string"
@@ -879,7 +879,7 @@
                     "properties": {
                       "credits": {
                         "type": "string",
-                        "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,5})?$"
+                        "pattern": "^(0|[1-9][0-9]*)$"
                       },
                       "display": {
                         "type": "string"
@@ -918,7 +918,7 @@
                     "properties": {
                       "credits": {
                         "type": "string",
-                        "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,5})?$"
+                        "pattern": "^(0|[1-9][0-9]*)$"
                       },
                       "display": {
                         "type": "string"
@@ -957,7 +957,7 @@
                     "properties": {
                       "credits": {
                         "type": "string",
-                        "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,5})?$"
+                        "pattern": "^(0|[1-9][0-9]*)$"
                       },
                       "display": {
                         "type": "string"
@@ -996,7 +996,7 @@
                     "properties": {
                       "credits": {
                         "type": "string",
-                        "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,5})?$"
+                        "pattern": "^(0|[1-9][0-9]*)$"
                       },
                       "display": {
                         "type": "string"
@@ -1158,7 +1158,7 @@
                 "properties": {
                   "credits": {
                     "type": "string",
-                    "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]{1,5})?|0\\.(?=[0-9]{1,5}$)[0-9]*[1-9][0-9]*)$"
+                    "pattern": "^[1-9][0-9]*$"
                   },
                   "display": {
                     "type": "string"
@@ -1197,7 +1197,7 @@
                 "properties": {
                   "credits": {
                     "type": "string",
-                    "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,5})?$"
+                    "pattern": "^-?(0|[1-9][0-9]*)$"
                   },
                   "display": {
                     "type": "string"
@@ -1430,7 +1430,7 @@
       "properties": {
         "credits": {
           "type": "string",
-          "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,5})?$"
+          "pattern": "^-?(0|[1-9][0-9]*)$"
         },
         "display": {
           "type": "string"
@@ -1530,7 +1530,7 @@
           "properties": {
             "credits": {
               "type": "string",
-              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,5})?$"
+              "pattern": "^(0|[1-9][0-9]*)$"
             },
             "display": {
               "type": "string"
@@ -1589,7 +1589,7 @@
               "properties": {
                 "credits": {
                   "type": "string",
-                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,5})?$"
+                  "pattern": "^(0|[1-9][0-9]*)$"
                 },
                 "display": {
                   "type": "string"
@@ -1628,7 +1628,7 @@
               "properties": {
                 "credits": {
                   "type": "string",
-                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,5})?$"
+                  "pattern": "^(0|[1-9][0-9]*)$"
                 },
                 "display": {
                   "type": "string"
@@ -1667,7 +1667,7 @@
               "properties": {
                 "credits": {
                   "type": "string",
-                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,5})?$"
+                  "pattern": "^(0|[1-9][0-9]*)$"
                 },
                 "display": {
                   "type": "string"
@@ -1741,7 +1741,7 @@
                     "properties": {
                       "credits": {
                         "type": "string",
-                        "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,5})?$"
+                        "pattern": "^(0|[1-9][0-9]*)$"
                       },
                       "display": {
                         "type": "string"
@@ -1780,7 +1780,7 @@
                     "properties": {
                       "credits": {
                         "type": "string",
-                        "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,5})?$"
+                        "pattern": "^(0|[1-9][0-9]*)$"
                       },
                       "display": {
                         "type": "string"
@@ -1837,7 +1837,7 @@
                           "properties": {
                             "credits": {
                               "type": "string",
-                              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,5})?$"
+                              "pattern": "^(0|[1-9][0-9]*)$"
                             },
                             "display": {
                               "type": "string"
@@ -1894,7 +1894,7 @@
               "properties": {
                 "credits": {
                   "type": "string",
-                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,5})?$"
+                  "pattern": "^(0|[1-9][0-9]*)$"
                 },
                 "display": {
                   "type": "string"
@@ -1933,7 +1933,7 @@
               "properties": {
                 "credits": {
                   "type": "string",
-                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,5})?$"
+                  "pattern": "^(0|[1-9][0-9]*)$"
                 },
                 "display": {
                   "type": "string"
@@ -1972,7 +1972,7 @@
               "properties": {
                 "credits": {
                   "type": "string",
-                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,5})?$"
+                  "pattern": "^(0|[1-9][0-9]*)$"
                 },
                 "display": {
                   "type": "string"
@@ -2047,7 +2047,7 @@
                     "properties": {
                       "credits": {
                         "type": "string",
-                        "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,5})?$"
+                        "pattern": "^(0|[1-9][0-9]*)$"
                       },
                       "display": {
                         "type": "string"
@@ -2086,7 +2086,7 @@
                     "properties": {
                       "credits": {
                         "type": "string",
-                        "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,5})?$"
+                        "pattern": "^(0|[1-9][0-9]*)$"
                       },
                       "display": {
                         "type": "string"
@@ -2125,7 +2125,7 @@
                     "properties": {
                       "credits": {
                         "type": "string",
-                        "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,5})?$"
+                        "pattern": "^(0|[1-9][0-9]*)$"
                       },
                       "display": {
                         "type": "string"
@@ -2164,7 +2164,7 @@
                     "properties": {
                       "credits": {
                         "type": "string",
-                        "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,5})?$"
+                        "pattern": "^(0|[1-9][0-9]*)$"
                       },
                       "display": {
                         "type": "string"
@@ -2292,7 +2292,7 @@
                     "properties": {
                       "credits": {
                         "type": "string",
-                        "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]{1,5})?|0\\.(?=[0-9]{1,5}$)[0-9]*[1-9][0-9]*)$"
+                        "pattern": "^[1-9][0-9]*$"
                       },
                       "display": {
                         "type": "string"
@@ -2512,7 +2512,7 @@
                   "properties": {
                     "credits": {
                       "type": "string",
-                      "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,5})?$"
+                      "pattern": "^(0|[1-9][0-9]*)$"
                     },
                     "display": {
                       "type": "string"
@@ -2786,7 +2786,7 @@
                     "properties": {
                       "credits": {
                         "type": "string",
-                        "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,5})?$"
+                        "pattern": "^(0|[1-9][0-9]*)$"
                       },
                       "display": {
                         "type": "string"
@@ -2855,7 +2855,7 @@
                     "properties": {
                       "credits": {
                         "type": "string",
-                        "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]{1,5})?|0\\.(?=[0-9]{1,5}$)[0-9]*[1-9][0-9]*)$"
+                        "pattern": "^[1-9][0-9]*$"
                       },
                       "display": {
                         "type": "string"
@@ -3390,7 +3390,7 @@
                 "properties": {
                   "credits": {
                     "type": "string",
-                    "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]{1,5})?|0\\.(?=[0-9]{1,5}$)[0-9]*[1-9][0-9]*)$"
+                    "pattern": "^[1-9][0-9]*$"
                   },
                   "display": {
                     "type": "string"
@@ -3429,7 +3429,7 @@
                 "properties": {
                   "credits": {
                     "type": "string",
-                    "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,5})?$"
+                    "pattern": "^-?(0|[1-9][0-9]*)$"
                   },
                   "display": {
                     "type": "string"
@@ -3593,7 +3593,7 @@
                 "properties": {
                   "credits": {
                     "type": "string",
-                    "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]{1,5})?|0\\.(?=[0-9]{1,5}$)[0-9]*[1-9][0-9]*)$"
+                    "pattern": "^[1-9][0-9]*$"
                   },
                   "display": {
                     "type": "string"
@@ -3632,7 +3632,7 @@
                 "properties": {
                   "credits": {
                     "type": "string",
-                    "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,5})?$"
+                    "pattern": "^-?(0|[1-9][0-9]*)$"
                   },
                   "display": {
                     "type": "string"
