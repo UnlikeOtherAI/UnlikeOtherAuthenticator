@@ -1,20 +1,60 @@
-import { createHmac, randomBytes, randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 
 import type { PrismaClient } from '@prisma/client';
 
 import { getEnv, requireEnv } from '../config/env.js';
 import { getAdminPrisma, getPrisma } from '../db/prisma.js';
+import { runInTransaction } from '../db/tenant-context.js';
 import { AppError } from '../utils/errors.js';
+import {
+  deriveRefreshTokenSuccessor,
+  hashRefreshToken,
+  matchesRefreshTokenContext,
+  REFRESH_TOKEN_REPLAY_GRACE_MS,
+  refreshTokenSelect,
+  resolveRefreshTokenReplay,
+  type RefreshTokenContext,
+  type RefreshTokenRow,
+} from './refresh-token-replay.service.js';
+import { lockRefreshSessionUserDomain } from './refresh-session-lock.service.js';
 
 const MIN_INHERITED_REFRESH_TTL_SECONDS = 5 * 60;
+export { REFRESH_TOKEN_REPLAY_GRACE_MS };
 
-type RefreshTokenPrisma = Pick<PrismaClient, 'refreshToken'>;
+class RefreshTokenReuseDetectedError extends AppError {
+  public constructor() {
+    super('UNAUTHORIZED', 401, 'INVALID_REFRESH_TOKEN');
+  }
+}
+
+/** Identify the private commit signal without exposing a distinct public refresh error. */
+export function isRefreshTokenReuseDetectedError(
+  error: unknown,
+): error is RefreshTokenReuseDetectedError {
+  return error instanceof RefreshTokenReuseDetectedError;
+}
+
+type RefreshTokenPrisma = Pick<PrismaClient, 'refreshToken' | 'user'>;
 type UserVersionPrisma = Pick<PrismaClient, 'user'>;
 
 type RefreshTokenDeps = {
+  afterFamilyRevocationLock?: (row: {
+    userId: string;
+    domain: string;
+    familyId: string;
+  }) => Promise<void>;
+  beforeFamilyRevocationLock?: () => Promise<void>;
+  beforeFamilyDecision?: (row: {
+    userId: string;
+    domain: string;
+    orgId: string | null;
+    teamId: string | null;
+  }) => Promise<void>;
   beforeRotate?: (row: {
     userId: string;
     domain: string;
+    orgId: string | null;
+    teamId: string | null;
   }) => Promise<void>;
   now?: () => Date;
   prisma?: RefreshTokenPrisma;
@@ -24,22 +64,12 @@ type RefreshTokenDeps = {
   sharedSecret?: string;
 };
 
-type RefreshTokenContext = {
-  clientId: string;
-  configUrl: string;
-  domain: string;
-};
-
 function generateRefreshTokenValue(): string {
   return randomBytes(48).toString('base64url');
 }
 
 function generateRefreshTokenFamilyId(): string {
   return randomUUID();
-}
-
-function hashRefreshToken(token: string, pepper: string): string {
-  return createHmac('sha256', pepper).update(token, 'utf8').digest('hex');
 }
 
 function nowDate(deps?: RefreshTokenDeps): Date {
@@ -63,27 +93,12 @@ function getRefreshTokenPrisma(deps?: RefreshTokenDeps): RefreshTokenPrisma {
   return deps?.prisma ?? (getPrisma() as unknown as RefreshTokenPrisma);
 }
 
-function matchesRefreshTokenContext(
-  row: {
-    clientId: string;
-    configUrl: string;
-    domain: string;
-  },
-  context: RefreshTokenContext,
-): boolean {
-  return (
-    row.clientId === context.clientId &&
-    row.configUrl === context.configUrl &&
-    row.domain === context.domain
-  );
-}
-
 async function revokeRefreshTokenFamilyInternal(
   prisma: RefreshTokenPrisma,
   familyId: string,
   revokedAt: Date,
-): Promise<void> {
-  await prisma.refreshToken.updateMany({
+): Promise<number> {
+  const result = await prisma.refreshToken.updateMany({
     where: {
       familyId,
       revokedAt: null,
@@ -92,6 +107,67 @@ async function revokeRefreshTokenFamilyInternal(
       revokedAt,
     },
   });
+  return result.count;
+}
+
+async function rejectRefreshTokenReuse(
+  prisma: RefreshTokenPrisma,
+  row: Pick<RefreshTokenRow, 'familyId' | 'userId'>,
+  now: Date,
+): Promise<never> {
+  const revokedCount = await revokeRefreshTokenFamilyInternal(prisma, row.familyId, now);
+  if (revokedCount > 0) {
+    await bumpUserTokenVersion(row.userId, { prisma });
+  }
+  throw new RefreshTokenReuseDetectedError();
+}
+
+async function createRefreshTokenRecord(
+  params: RefreshTokenContext & {
+    familyId?: string;
+    parentTokenId?: string;
+    userId: string;
+    // Workspace scope carried from the authorization code / prior refresh token (design §7 step
+    // 3-4); defaults to null when no workspace was selected.
+    orgId?: string | null;
+    teamId?: string | null;
+  },
+  refreshToken: string,
+  deps?: RefreshTokenDeps,
+): Promise<{
+  expiresInSeconds: number;
+  refreshToken: string;
+  refreshTokenId: string;
+}> {
+  const prisma = getRefreshTokenPrisma(deps);
+  const now = nowDate(deps);
+  const ttlSeconds = getRefreshTokenTtlSeconds(deps);
+  const sharedSecret = getSharedSecret(deps);
+  const expiresAt = new Date(now.getTime() + ttlSeconds * 1000);
+  const row = await prisma.refreshToken.create({
+    data: {
+      tokenHash: hashRefreshToken(refreshToken, sharedSecret),
+      familyId: params.familyId ?? generateRefreshTokenFamilyId(),
+      parentTokenId: params.parentTokenId,
+      userId: params.userId,
+      domain: params.domain,
+      clientId: params.clientId,
+      configUrl: params.configUrl,
+      orgId: params.orgId ?? null,
+      teamId: params.teamId ?? null,
+      expiresAt,
+      createdAt: now,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  return {
+    refreshToken,
+    refreshTokenId: row.id,
+    expiresInSeconds: ttlSeconds,
+  };
 }
 
 export async function issueRefreshToken(
@@ -110,36 +186,7 @@ export async function issueRefreshToken(
   refreshToken: string;
   refreshTokenId: string;
 }> {
-  const prisma = getRefreshTokenPrisma(deps);
-  const now = nowDate(deps);
-  const ttlSeconds = getRefreshTokenTtlSeconds(deps);
-  const sharedSecret = getSharedSecret(deps);
-  const refreshToken = generateRefreshTokenValue();
-  const tokenHash = hashRefreshToken(refreshToken, sharedSecret);
-  const expiresAt = new Date(now.getTime() + ttlSeconds * 1000);
-  const row = await prisma.refreshToken.create({
-    data: {
-      tokenHash,
-      familyId: params.familyId ?? generateRefreshTokenFamilyId(),
-      parentTokenId: params.parentTokenId,
-      userId: params.userId,
-      domain: params.domain,
-      clientId: params.clientId,
-      configUrl: params.configUrl,
-      orgId: params.orgId ?? null,
-      teamId: params.teamId ?? null,
-      expiresAt,
-    },
-    select: {
-      id: true,
-    },
-  });
-
-  return {
-    refreshToken,
-    refreshTokenId: row.id,
-    expiresInSeconds: ttlSeconds,
-  };
+  return createRefreshTokenRecord(params, generateRefreshTokenValue(), deps);
 }
 
 export async function exchangeRefreshToken(
@@ -150,32 +197,21 @@ export async function exchangeRefreshToken(
 ): Promise<{
   expiresInSeconds: number;
   refreshToken: string;
+  replayed: boolean;
   userId: string;
   orgId: string | null;
   teamId: string | null;
 }> {
   const prisma = getRefreshTokenPrisma(deps);
-  const now = nowDate(deps);
   const sharedSecret = getSharedSecret(deps);
   const tokenHash = hashRefreshToken(params.refreshToken, sharedSecret);
 
-  const row = await prisma.refreshToken.findUnique({
-    where: { tokenHash },
-    select: {
-      id: true,
-      familyId: true,
-      userId: true,
-      domain: true,
-      clientId: true,
-      configUrl: true,
-      createdAt: true,
-      expiresAt: true,
-      revokedAt: true,
-      replacedByTokenId: true,
-      orgId: true,
-      teamId: true,
-    },
-  });
+  const findTokenRow = () =>
+    prisma.refreshToken.findUnique({
+      where: { tokenHash },
+      select: refreshTokenSelect,
+    });
+  let row = (await findTokenRow()) as RefreshTokenRow | null;
 
   if (!row) {
     throw new AppError('UNAUTHORIZED', 401, 'INVALID_REFRESH_TOKEN');
@@ -185,12 +221,37 @@ export async function exchangeRefreshToken(
     throw new AppError('UNAUTHORIZED', 401, 'INVALID_REFRESH_TOKEN');
   }
 
-  if (row.replacedByTokenId) {
-    await revokeRefreshTokenFamilyInternal(prisma, row.familyId, now);
-    throw new AppError('UNAUTHORIZED', 401, 'INVALID_REFRESH_TOKEN');
+  // The opaque lookup discovers the lock identity. Production callers acquire
+  // their user+domain transaction lock here, then this second read observes any
+  // rotation that committed while the lock was pending.
+  if (deps?.beforeFamilyDecision) {
+    await deps.beforeFamilyDecision({
+      userId: row.userId,
+      domain: row.domain,
+      orgId: row.orgId,
+      teamId: row.teamId,
+    });
+    row = (await findTokenRow()) as RefreshTokenRow | null;
+    if (!row || !matchesRefreshTokenContext(row, params)) {
+      throw new AppError('UNAUTHORIZED', 401, 'INVALID_REFRESH_TOKEN');
+    }
   }
 
-  if (row.revokedAt || row.expiresAt.getTime() <= now.getTime()) {
+  if (row.replacedByTokenId) {
+    return resolveRefreshTokenReplay(
+      { ...params, row, sharedSecret },
+      {
+        beforeRotate: deps?.beforeRotate,
+        now: () => nowDate(deps),
+        prisma,
+        rejectReuse: (reused, rejectedAt) =>
+          rejectRefreshTokenReuse(prisma, reused, rejectedAt),
+      },
+    );
+  }
+
+  let decisionNow = nowDate(deps);
+  if (row.revokedAt || row.expiresAt.getTime() <= decisionNow.getTime()) {
     throw new AppError('UNAUTHORIZED', 401, 'INVALID_REFRESH_TOKEN');
   }
 
@@ -198,7 +259,16 @@ export async function exchangeRefreshToken(
   // have been validated but before any replacement row or mutation is written.
   // Callers that need a policy/rotation atomicity guarantee must pass a Prisma
   // transaction as `prisma` and perform the gate through this hook.
-  await deps?.beforeRotate?.({ userId: row.userId, domain: row.domain });
+  await deps?.beforeRotate?.({
+    userId: row.userId,
+    domain: row.domain,
+    orgId: row.orgId,
+    teamId: row.teamId,
+  });
+  decisionNow = nowDate(deps);
+  if (row.expiresAt.getTime() <= decisionNow.getTime()) {
+    throw new AppError('UNAUTHORIZED', 401, 'INVALID_REFRESH_TOKEN');
+  }
 
   // Inherit the original session's TTL so rotated tokens keep the same lifetime.
   const inheritedTtlSeconds = Math.round(
@@ -209,7 +279,8 @@ export async function exchangeRefreshToken(
     MIN_INHERITED_REFRESH_TTL_SECONDS,
   );
 
-  const nextRefreshToken = await issueRefreshToken(
+  const successor = deriveRefreshTokenSuccessor(params.refreshToken, sharedSecret);
+  const nextRefreshToken = await createRefreshTokenRecord(
     {
       userId: row.userId,
       familyId: row.familyId,
@@ -221,8 +292,10 @@ export async function exchangeRefreshToken(
       orgId: row.orgId,
       teamId: row.teamId,
     },
+    successor,
     {
       ...deps,
+      now: () => decisionNow,
       refreshTokenTtlSeconds,
     },
   );
@@ -233,25 +306,25 @@ export async function exchangeRefreshToken(
       revokedAt: null,
       replacedByTokenId: null,
       expiresAt: {
-        gt: now,
+        gt: decisionNow,
       },
     },
     data: {
-      lastUsedAt: now,
-      revokedAt: now,
+      lastUsedAt: decisionNow,
+      revokedAt: decisionNow,
       replacedByTokenId: nextRefreshToken.refreshTokenId,
     },
   });
 
   if (rotated.count !== 1) {
-    await revokeRefreshTokenFamilyInternal(prisma, row.familyId, now);
-    throw new AppError('UNAUTHORIZED', 401, 'INVALID_REFRESH_TOKEN');
+    return rejectRefreshTokenReuse(prisma, row, decisionNow);
   }
 
   return {
     userId: row.userId,
     refreshToken: nextRefreshToken.refreshToken,
     expiresInSeconds: nextRefreshToken.expiresInSeconds,
+    replayed: false,
     orgId: row.orgId,
     teamId: row.teamId,
   };
@@ -263,32 +336,43 @@ export async function revokeRefreshTokenFamily(
   },
   deps?: RefreshTokenDeps,
 ): Promise<void> {
-  const prisma = getRefreshTokenPrisma(deps);
-  const now = nowDate(deps);
+  const prisma = getRefreshTokenPrisma(deps) as unknown as PrismaClient;
   const sharedSecret = getSharedSecret(deps);
   const tokenHash = hashRefreshToken(params.refreshToken, sharedSecret);
 
-  const row = await prisma.refreshToken.findUnique({
-    where: { tokenHash },
-    select: {
-      familyId: true,
-      userId: true,
-      domain: true,
-      clientId: true,
-      configUrl: true,
-    },
-  });
+  await runInTransaction(prisma, async (tx) => {
+    const findTokenRow = () =>
+      tx.refreshToken.findUnique({
+        where: { tokenHash },
+        select: {
+          familyId: true,
+          userId: true,
+          domain: true,
+          clientId: true,
+          configUrl: true,
+        },
+      });
+    let row = await findTokenRow();
+    if (!row || !matchesRefreshTokenContext(row, params)) return;
 
-  if (!row || !matchesRefreshTokenContext(row, params)) {
-    return;
-  }
+    await deps?.beforeFamilyRevocationLock?.();
+    await lockRefreshSessionUserDomain(
+      { userId: row.userId, domain: row.domain },
+      { prisma: tx },
+    );
+    await deps?.afterFamilyRevocationLock?.(row);
+    row = await findTokenRow();
+    if (!row || !matchesRefreshTokenContext(row, params)) return;
 
-  await revokeRefreshTokenFamilyInternal(prisma, row.familyId, now);
-  // Logout must also kill already-issued (stateless) access tokens for this
-  // user, not just the refresh family. Bumping the per-user token version
-  // invalidates them on their next verify.
-  await bumpUserTokenVersion(row.userId, {
-    prisma: deps?.prisma as unknown as UserVersionPrisma | undefined,
+    const revokedCount = await revokeRefreshTokenFamilyInternal(
+      tx,
+      row.familyId,
+      nowDate(deps),
+    );
+    if (revokedCount > 0) {
+      // Family revocation and the global access-token version change commit together.
+      await bumpUserTokenVersion(row.userId, { prisma: tx });
+    }
   });
 }
 

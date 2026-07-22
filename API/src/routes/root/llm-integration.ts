@@ -48,6 +48,16 @@ Store the refresh token server-side ONLY; browser clients never receive or persi
 
 If optional agreement signatures are enabled for the domain, a newly published version or revoked signature can make the next refresh return the normal authentication failure. UOA deliberately leaves that still-valid refresh token unconsumed and unrotated; restart the interactive authorization flow so the authenticated user can review/sign the current version. Do not retry refresh in a loop.
 
+If UOA rotated the refresh token but its successful response was lost, retry the
+same predecessor within 120 seconds using the same application credential and
+exact config/client context. UOA returns the one already-created current
+successor (and its actual remaining lifetime) instead of rotating again.
+Concurrent retries converge on that same value. After 120 seconds, predecessor
+reuse is theft detection: UOA revokes the family and increments the user's
+access-token version. Persist a successful UOA successor and access-token state
+atomically. If only your own downstream response was lost after that local
+commit, replay the locally persisted result rather than calling UOA again.
+
 **Field-casing warning.** The outer envelope is snake_case (\`access_token\`, \`refresh_token\`, \`expires_in\`, \`refresh_token_expires_in\`). The key \`firstLogin\` itself and the IDs inside \`memberships.*\` and \`pending_invites[]\` (\`orgId\`, \`teamId\`, \`inviteId\`, \`teamName\`) are camelCase. \`pending_invites\` and \`capabilities.can_*\` are snake_case. Do not assume one style throughout.
 
 ### 4.2 Legacy access-token JWT claims

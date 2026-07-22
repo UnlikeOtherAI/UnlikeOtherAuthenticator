@@ -22,6 +22,7 @@ describe('exchangeRefreshTokenForTokens signature policy gate (unit)', () => {
   }) {
     const tx = {
       $executeRaw: vi.fn().mockResolvedValue(1),
+      $queryRaw: vi.fn().mockResolvedValue([{ lockResult: '' }]),
       domainSignatureSettings: {
         findUnique: vi.fn().mockResolvedValue(params.settings),
       },

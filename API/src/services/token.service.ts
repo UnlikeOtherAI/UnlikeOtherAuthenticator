@@ -14,6 +14,8 @@ import type { ClientConfig } from './config.service.js';
 import { getUserOrgContext, type OrgContext } from './org-context.service.js';
 import { ensureUserHasRequiredTeam } from './user-team-requirement.service.js';
 import { buildFirstLoginBlock, type FirstLoginBlock } from './first-login.service.js';
+import { lockRefreshSessionUserDomain } from './refresh-session-lock.service.js';
+import { runRefreshTokenExchangeTransaction } from './refresh-token-transaction.service.js';
 import { evaluateSignaturePolicy } from './signature-policy.service.js';
 import { lockSignaturePolicyForDecision } from './signature-continuation.service.js';
 
@@ -29,6 +31,7 @@ type TokenDeps = {
   sharedSecret?: string;
   // Deterministic concurrency-test hook. Production callers leave this unset.
   afterActiveWorkspaceLock?: () => Promise<void>;
+  afterRefreshSessionLock?: () => Promise<void>;
 };
 
 function sharedSecretKey(sharedSecret: string): Uint8Array {
@@ -356,6 +359,10 @@ export async function exchangeRefreshTokenForTokens(
         now: deps?.now,
         prisma: tx,
         sharedSecret,
+        beforeFamilyDecision: async ({ userId, domain }) => {
+          await lockRefreshSessionUserDomain({ userId, domain }, { prisma: tx });
+          await deps?.afterRefreshSessionLock?.();
+        },
         beforeRotate: async ({ userId, domain }) => {
           await lockSignaturePolicyForDecision(tx, domain);
           const policy = await evaluateSignaturePolicy(
@@ -413,10 +420,5 @@ export async function exchangeRefreshTokenForTokens(
 
   // Production passes the BYPASSRLS client here. Keeping the complete refresh decision in
   // one transaction makes policy publication/revocation checks atomic with token rotation.
-  if (typeof adminPrisma.$transaction === 'function') {
-    return adminPrisma.$transaction(async (tx) =>
-      exchangeInsideTransaction(tx as unknown as PrismaClient),
-    );
-  }
-  return exchangeInsideTransaction(adminPrisma);
+  return runRefreshTokenExchangeTransaction(adminPrisma, exchangeInsideTransaction);
 }

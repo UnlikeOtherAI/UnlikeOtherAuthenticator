@@ -293,7 +293,10 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       organisation.service.organisation.ts  — Organisation CRUD + slug generation (slice entry point)
       organisation.service.members.ts       — Org membership lifecycle
       password.service.ts                   — Hashing, validation rules, comparison
+      refresh-session-lock.service.ts       — Cross-replica user/domain refresh decision serialization
+      refresh-token-replay.service.ts       — Deterministic lost-response successor verification and recovery
       refresh-token.service.ts              — Refresh token issuance, rotation, reuse detection, revocation
+      refresh-token-transaction.service.ts  — Commit theft revocation before returning opaque unauthorized
       retention-pruning.service.ts          — Retention pruning jobs
       root-page.service.ts                  — Root holding page rendering
       ses-admin.service.ts                  — AWS SES identity admin operations

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   exchangeRefreshToken,
   issueRefreshToken,
+  REFRESH_TOKEN_REPLAY_GRACE_MS,
   revokeRefreshTokenFamily,
   revokeRefreshTokensForUserDomain,
 } from '../../src/services/refresh-token.service.js';
@@ -351,6 +352,9 @@ describe('refresh-token.service (unit)', () => {
 
   it('revokes the entire family when a rotated refresh token is reused', async () => {
     const prisma = {
+      user: {
+        update: vi.fn().mockResolvedValue({ id: 'user-1' }),
+      },
       refreshToken: {
         findUnique: vi.fn().mockResolvedValue({
           id: 'refresh-token-1',
@@ -359,9 +363,14 @@ describe('refresh-token.service (unit)', () => {
           domain: context.domain,
           clientId: context.clientId,
           configUrl: context.configUrl,
+          tokenHash: hashRefreshToken('stale-refresh-token', sharedSecret),
+          parentTokenId: null,
+          createdAt: new Date(now.getTime() - 60_000),
           expiresAt: new Date(now.getTime() + 60_000),
-          revokedAt: null,
+          revokedAt: new Date(now.getTime() - REFRESH_TOKEN_REPLAY_GRACE_MS - 1),
           replacedByTokenId: 'refresh-token-2',
+          orgId: null,
+          teamId: null,
         }),
         create: vi.fn(),
         updateMany: vi.fn().mockResolvedValue({ count: 2 }),
@@ -402,6 +411,7 @@ describe('refresh-token.service (unit)', () => {
   it('revokes the refresh-token family and bumps the user token version on logout', async () => {
     const userUpdate = vi.fn().mockResolvedValue({ id: 'user-1' });
     const prisma = {
+      $queryRaw: vi.fn().mockResolvedValue([{ lockResult: '' }]),
       refreshToken: {
         findUnique: vi.fn().mockResolvedValue({
           familyId: 'family-1',
