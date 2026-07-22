@@ -149,15 +149,27 @@ describe.skipIf(!hasDatabase)('first-placement per-user advisory lock', () => {
     );
   }
 
-  async function expectStillPending(promise: Promise<unknown>): Promise<void> {
-    const state = await Promise.race([
-      promise.then(
-        () => 'settled',
-        () => 'settled',
-      ),
-      new Promise<'pending'>((resolve) => setTimeout(() => resolve('pending'), 40)),
-    ]);
-    expect(state).toBe('pending');
+  async function waitForPlacementLockWaiter(userId: string): Promise<void> {
+    const deadline = Date.now() + 4_000;
+    while (Date.now() < deadline) {
+      const [row] = await handle.prisma.$queryRaw<Array<{ count: number }>>`
+        WITH placement_key AS (
+          SELECT hashtextextended(
+            ${`uoa:required-team-placement:${userId}`}, 0
+          ) AS value
+        )
+        SELECT count(*)::int AS count
+        FROM pg_locks, placement_key
+        WHERE locktype = 'advisory'
+          AND classid::bigint = ((value >> 32) & 4294967295)::bigint
+          AND objid::bigint = (value & 4294967295)::bigint
+          AND objsubid = 1
+          AND NOT granted
+      `;
+      if ((row?.count ?? 0) >= 1) return;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    throw new Error('timed out waiting for the second product placement transaction');
   }
 
   it('creates one workspace when two products place the same new user simultaneously', async () => {
@@ -184,37 +196,42 @@ describe.skipIf(!hasDatabase)('first-placement per-user advisory lock', () => {
         await release.promise;
       },
     });
-    await placed.promise;
-
-    const second = authorize({
-      domain: secondDomain,
-      userId: user.id,
-    });
-    await expectStillPending(second);
-    release.resolve();
-
-    const [firstAuthorization, secondAuthorization] = await Promise.all([first, second]);
-    expect(firstAuthorization.workspace).toEqual(secondAuthorization.workspace);
-
-    const [firstTokens, secondTokens] = await Promise.all([
-      exchange({
-        clientDomainId: firstClientDomainId,
-        code: firstAuthorization.code,
-        domain: firstDomain,
-      }),
-      exchange({
-        clientDomainId: secondClientDomainId,
-        code: secondAuthorization.code,
+    let second: ReturnType<typeof authorize> | undefined;
+    try {
+      await placed.promise;
+      second = authorize({
         domain: secondDomain,
-      }),
-    ]);
-    const firstActive = decodeJwt(firstTokens.accessToken).active;
-    const secondActive = decodeJwt(secondTokens.accessToken).active;
-    expect(firstActive).toEqual(secondActive);
-    expect(firstActive).toMatchObject({ orgId: expect.any(String), teamId: expect.any(String) });
-    expect(await handle.prisma.organisation.count()).toBe(1);
-    expect(await handle.prisma.team.count()).toBe(1);
-    expect(await handle.prisma.orgMember.count({ where: { userId: user.id } })).toBe(1);
-    expect(await handle.prisma.teamMember.count({ where: { userId: user.id } })).toBe(1);
+        userId: user.id,
+      });
+      await waitForPlacementLockWaiter(user.id);
+      release.resolve();
+
+      const [firstAuthorization, secondAuthorization] = await Promise.all([first, second]);
+      expect(firstAuthorization.workspace).toEqual(secondAuthorization.workspace);
+
+      const [firstTokens, secondTokens] = await Promise.all([
+        exchange({
+          clientDomainId: firstClientDomainId,
+          code: firstAuthorization.code,
+          domain: firstDomain,
+        }),
+        exchange({
+          clientDomainId: secondClientDomainId,
+          code: secondAuthorization.code,
+          domain: secondDomain,
+        }),
+      ]);
+      const firstActive = decodeJwt(firstTokens.accessToken).active;
+      const secondActive = decodeJwt(secondTokens.accessToken).active;
+      expect(firstActive).toEqual(secondActive);
+      expect(firstActive).toMatchObject({ orgId: expect.any(String), teamId: expect.any(String) });
+      expect(await handle.prisma.organisation.count()).toBe(1);
+      expect(await handle.prisma.team.count()).toBe(1);
+      expect(await handle.prisma.orgMember.count({ where: { userId: user.id } })).toBe(1);
+      expect(await handle.prisma.teamMember.count({ where: { userId: user.id } })).toBe(1);
+    } finally {
+      release.resolve();
+      await Promise.allSettled(second ? [first, second] : [first]);
+    }
   });
 });
