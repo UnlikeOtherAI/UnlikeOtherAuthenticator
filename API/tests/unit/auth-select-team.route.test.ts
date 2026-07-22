@@ -148,6 +148,7 @@ async function mintLoginToken(userId: string, domain = 'client.example.com'): Pr
   return signLoginSession({
     userId,
     credentialEpoch: 0,
+    authMethod: 'google',
     config:
       currentConfig && domain === currentConfig.domain ? currentConfig : baseConfig({ domain }),
     configUrl: 'https://client.example.com/auth-config',
@@ -209,6 +210,7 @@ describe('POST /auth/select-team', () => {
     const expired = await signLoginSession({
       userId: 'user-1',
       credentialEpoch: 0,
+      authMethod: 'google',
       config: currentConfig!,
       configUrl: 'https://client.example.com/auth-config',
       redirectUrl: 'https://client.example.com/oauth/callback',
@@ -234,6 +236,7 @@ describe('POST /auth/select-team', () => {
     const loginToken = await signLoginSession({
       userId: 'user-1',
       credentialEpoch: 0,
+      authMethod: 'google',
       config: currentConfig!,
       configUrl: 'https://client.example.com/auth-config',
       redirectUrl: 'https://client.example.com/oauth/callback',
@@ -364,8 +367,15 @@ describe('POST /auth/select-team', () => {
     expect(body.redirect_to).toContain('code=');
     expect(prismaMock.authorizationCode.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ orgId: 'org-1', teamId: 'team-1' }),
+        data: expect.objectContaining({
+          orgId: 'org-1',
+          teamId: 'team-1',
+        }),
       }),
+    );
+    expect(recordLoginLogMock).toHaveBeenCalledWith(
+      expect.objectContaining({ authMethod: 'google', userId: 'user-1' }),
+      expect.anything(),
     );
   });
 

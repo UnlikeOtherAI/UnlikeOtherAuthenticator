@@ -220,6 +220,9 @@ describe('GET /auth/callback/:provider workspace selection', () => {
       'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
     );
     expect(location.searchParams.get('code_challenge_method')).toBe('S256');
+    expect(signLoginSessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ authMethod: 'google' }),
+    );
     expect(finalizeAuthenticatedUserMock).not.toHaveBeenCalled();
     expect(resolveTwoFaPolicyMock).not.toHaveBeenCalled();
   });

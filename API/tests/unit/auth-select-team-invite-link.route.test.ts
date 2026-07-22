@@ -140,6 +140,7 @@ async function mintLoginToken(userId: string): Promise<string> {
   return signLoginSession({
     userId,
     credentialEpoch: 0,
+    authMethod: 'email_password',
     config: currentConfig ?? baseConfig(),
     configUrl: 'https://client.example.com/auth-config',
     redirectUrl: 'https://client.example.com/oauth/callback',

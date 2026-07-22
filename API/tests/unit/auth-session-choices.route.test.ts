@@ -92,6 +92,7 @@ async function mintLoginToken(userId: string, domain = 'client.example.com'): Pr
   return signLoginSession({
     userId,
     credentialEpoch: 0,
+    authMethod: 'email_password',
     config: baseConfig({ domain }),
     configUrl: 'https://client.example.com/auth-config',
     redirectUrl: 'https://client.example.com/oauth/callback',
@@ -144,6 +145,7 @@ describe('POST /auth/session-choices', () => {
     const expired = await signLoginSession({
       userId: 'user-1',
       credentialEpoch: 0,
+      authMethod: 'email_password',
       config: currentConfig!,
       configUrl: 'https://client.example.com/auth-config',
       redirectUrl: 'https://client.example.com/oauth/callback',
@@ -177,6 +179,7 @@ describe('POST /auth/session-choices', () => {
     const loginToken = await signLoginSession({
       userId: 'user-1',
       credentialEpoch: 0,
+      authMethod: 'email_password',
       config: currentConfig!,
       configUrl: 'https://client.example.com/auth-config',
       redirectUrl: 'https://client.example.com/oauth/callback',

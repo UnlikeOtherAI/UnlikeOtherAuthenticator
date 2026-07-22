@@ -88,6 +88,7 @@ export function registerAuthVerifyCodeRoute(app: FastifyInstance): void {
           const loginToken = await signLoginSession({
             userId,
             credentialEpoch,
+            authMethod: 'email_code',
             config,
             configUrl,
             redirectUrl,

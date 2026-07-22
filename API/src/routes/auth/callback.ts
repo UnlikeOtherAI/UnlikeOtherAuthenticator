@@ -307,6 +307,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
             const loginToken = await signLoginSession({
               userId,
               credentialEpoch,
+              authMethod: provider,
               config,
               configUrl,
               redirectUrl,
