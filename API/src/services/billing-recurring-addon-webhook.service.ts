@@ -299,6 +299,7 @@ function assertInitialInvoice(
 ): void {
   const line = invoice.lines.data[0];
   const details = line?.parent?.subscription_item_details;
+  const legacyLineSubscriptionId = stripeExternalId(line?.subscription);
   const expected = Number(local.catalog.monthlyAmountMinor);
   if (
     invoice.status !== 'paid' ||
@@ -335,7 +336,7 @@ function assertInitialInvoice(
     details.proration ||
     details.subscription !== remote.id ||
     details.subscription_item !== local.stripeItemId ||
-    stripeExternalId(line.subscription) !== remote.id ||
+    (legacyLineSubscriptionId !== null && legacyLineSubscriptionId !== remote.id) ||
     stripeExternalId(line.pricing?.price_details?.price) !== local.catalog.stripePriceId ||
     line.pricing?.unit_amount_decimal?.toString() !== local.catalog.monthlyAmountMinor.toString()
   ) {

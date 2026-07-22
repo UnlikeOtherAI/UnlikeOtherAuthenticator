@@ -919,7 +919,10 @@ subscription and creates only a pending projection. UOA activates entitlement
 only after `invoice.paid` proves the exact `subscription_create` invoice,
 customer, subscription/item/Price, quantity, amount, currency, and absence of
 discounts, tax, credits, shipping, or proration. Removed, added, or rebound UOA
-metadata fails retryably rather than consuming the webhook event.
+metadata fails retryably rather than consuming the webhook event. For Stripe's
+`2026-06-24.dahlia` contract, the canonical invoice-line subscription proof is
+`parent.subscription_item_details`; the omitted legacy line-level subscription
+alias is tolerated, but when Stripe supplies it the alias must match exactly.
 
 Cancellation preview refreshes Stripe before minting an opaque five-minute
 capability, stores only its digest, and permits one unresolved intent per exact

@@ -164,7 +164,9 @@ function paidInvoice(overrides: Record<string, unknown> = {}) {
     discount_amounts: [],
     pretax_credit_amounts: [],
     taxes: [],
-    subscription: 'sub_privacy',
+    // Stripe 2026-06-24.dahlia omits the legacy line-level subscription alias.
+    // The canonical binding is line.parent.subscription_item_details.subscription.
+    subscription: null,
     parent: {
       type: 'subscription_item_details',
       subscription_item_details: {
@@ -260,7 +262,7 @@ describe('recurring add-on Stripe webhook proof', () => {
     expect(createCall?.data).not.toHaveProperty('entitlementActivatedAt');
   });
 
-  it('activates only after an exact paid initial invoice', async () => {
+  it('activates only after an exact paid initial invoice without the legacy line alias', async () => {
     const invoice = paidInvoice();
     const local = localSubscription();
     const remote = remoteSubscription();
@@ -303,6 +305,32 @@ describe('recurring add-on Stripe webhook proof', () => {
     ['a discount', { discounts: [{ id: 'di_attacker' }] }],
   ])('rejects %s before activation', async (_label, overrides) => {
     const invoice = paidInvoice(overrides);
+    const local = localSubscription();
+    const prisma = {
+      billingRecurringAddonCheckout: { findUnique: vi.fn(), findFirst: vi.fn() },
+      billingRecurringAddonSubscription: { findUnique: vi.fn().mockResolvedValue(local) },
+    };
+    const stripe = {
+      checkout: { sessions: { retrieve: vi.fn() } },
+      subscriptions: { retrieve: vi.fn().mockResolvedValue(remoteSubscription()) },
+      invoices: { retrieve: vi.fn().mockResolvedValue(invoice) },
+    };
+
+    await expect(
+      prepareRecurringAddonWebhook(
+        event('invoice.paid', invoice) as never,
+        stripe as never,
+        account,
+        prisma as never,
+      ),
+    ).rejects.toMatchObject({ message: 'STRIPE_RECURRING_ADDON_INITIAL_INVOICE_INVALID' });
+  });
+
+  it('rejects a mismatched legacy line subscription alias when Stripe supplies one', async () => {
+    const invoice = paidInvoice();
+    const [line] = invoice.lines.data;
+    if (!line) throw new Error('Expected the initial invoice line');
+    line.subscription = 'sub_rebound';
     const local = localSubscription();
     const prisma = {
       billingRecurringAddonCheckout: { findUnique: vi.fn(), findFirst: vi.fn() },
