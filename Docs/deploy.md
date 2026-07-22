@@ -483,6 +483,12 @@ complete migration chain and creates/drops an isolated test database.
 
 The per-domain agreement-signature service remains process-disabled by default and this implementation work does not change the Cloud Run service configuration or enable any production domain. Before production enablement, operators must provision and review all of the following together:
 
+Apply migration \`20260722153000_add_signature_claim_intents\` before deploying a revision
+that accepts signing submissions. The new path requires its durable claim table; the
+nullable link on historical signatures preserves existing append-only evidence. Do not
+work around a missing migration by returning object/PDF/cryptographic work to the policy
+transaction.
+
 | Variable / dependency                                 | Required production configuration                                                                                                                                         |
 | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `SIGNATURE_STORAGE_PROVIDER`                          | `gcs`; local filesystem storage is rejected in production                                                                                                                 |

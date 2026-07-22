@@ -57,6 +57,13 @@ enum SignatureAuthProfile {
   PUBLIC_OAUTH
 }
 
+enum SignatureClaimIntentStatus {
+  CLAIMED
+  EVIDENCE_READY
+  COMPLETED
+  INVALIDATED
+}
+
 // Slack-style membership lifecycle (Docs/plans/2026-07-07-slack-style-login-and-membership.md §4.1).
 // ACTIVE is the only status existing rows carry; DEACTIVATED/REMOVED are set by admin actions and
 // retained as tombstones. Read paths filter to ACTIVE; "invited" is NOT a status (it stays a
@@ -314,6 +321,7 @@ model User {
   reviewedAccessRequests AccessRequest[]           @relation("ReviewedAccessRequests")
   featureFlagOverrides   FeatureFlagUserOverride[]
   signingContinuations   SigningContinuation[]
+  signatureClaimIntents  SignatureClaimIntent[]
   agreementSignatures    AgreementSignature[]
 
   @@index([email])
@@ -569,14 +577,15 @@ model ClientDomain {
   createdAt           DateTime    @default(now()) @map("created_at")
   updatedAt           DateTime    @updatedAt @map("updated_at")
 
-  secrets              ClientDomainSecret[]
-  jwks                 ClientDomainJwk[]
-  claimTokens          IntegrationClaimToken[]
-  emailConfig          DomainEmailConfig?
-  signatureSettings    DomainSignatureSettings?
-  signingContinuations SigningContinuation[]
-  agreementSignatures  AgreementSignature[]
-  delegationMappings   ConfidentialDelegationMapping[]
+  secrets               ClientDomainSecret[]
+  jwks                  ClientDomainJwk[]
+  claimTokens           IntegrationClaimToken[]
+  emailConfig           DomainEmailConfig?
+  signatureSettings     DomainSignatureSettings?
+  signingContinuations  SigningContinuation[]
+  signatureClaimIntents SignatureClaimIntent[]
+  agreementSignatures   AgreementSignature[]
+  delegationMappings    ConfidentialDelegationMapping[]
 
   @@index([status])
   @@map("client_domains")
@@ -675,8 +684,9 @@ model AgreementVersion {
   publishedByEmail    String?                @map("published_by_email") @db.Citext
   createdAt           DateTime               @default(now()) @map("created_at")
 
-  agreement  Agreement            @relation(fields: [agreementId], references: [id], onDelete: Restrict)
-  signatures AgreementSignature[]
+  agreement    Agreement              @relation(fields: [agreementId], references: [id], onDelete: Restrict)
+  signatures   AgreementSignature[]
+  claimIntents SignatureClaimIntent[]
 
   @@unique([agreementId, version])
   @@index([agreementId, status, effectiveAt])
@@ -710,13 +720,64 @@ model SigningContinuation {
   attemptCount        Int                  @default(0) @map("attempt_count")
   createdAt           DateTime             @default(now()) @map("created_at")
 
-  user       User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  domainRef  ClientDomain         @relation(fields: [domain], references: [domain], onDelete: Cascade)
-  signatures AgreementSignature[]
+  user         User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  domainRef    ClientDomain           @relation(fields: [domain], references: [domain], onDelete: Cascade)
+  signatures   AgreementSignature[]
+  claimIntents SignatureClaimIntent[]
 
   @@index([userId, domain])
   @@index([expiresAt])
   @@map("signing_continuations")
+}
+
+model SignatureClaimIntent {
+  id                        String                     @id
+  status                    SignatureClaimIntentStatus @default(CLAIMED)
+  signingContinuationId     String                     @map("signing_continuation_id")
+  userId                    String                     @map("user_id")
+  userEmail                 String                     @map("user_email") @db.Citext
+  signerName                String                     @map("signer_name") @db.VarChar(200)
+  domain                    String
+  agreementId               String                     @map("agreement_id")
+  agreementVersionId        String                     @map("agreement_version_id")
+  agreementVersion          Int                        @map("agreement_version")
+  agreementTitle            String                     @map("agreement_title") @db.VarChar(200)
+  sourceStorageKey          String                     @map("source_storage_key")
+  sourcePdfSha256           String                     @map("source_pdf_sha256") @db.VarChar(64)
+  signingMethod             SignatureMethod            @map("signing_method")
+  typedName                 String?                    @map("typed_name") @db.VarChar(200)
+  acceptanceStatement       String                     @map("acceptance_statement")
+  signedAt                  DateTime                   @map("signed_at")
+  authMethod                String                     @map("auth_method") @db.VarChar(32)
+  twoFaCompleted            Boolean                    @map("two_fa_completed")
+  ipAddress                 String?                    @map("ip_address") @db.VarChar(64)
+  userAgent                 String?                    @map("user_agent") @db.VarChar(1000)
+  policyRevision            Int                        @map("policy_revision")
+  priorSignatureStateSha256 String                     @map("prior_signature_state_sha256") @db.VarChar(64)
+  continuationExpiresAt     DateTime                   @map("continuation_expires_at")
+  verificationReference     String                     @unique @map("verification_reference") @db.VarChar(64)
+  evidenceManifestSha256    String?                    @map("evidence_manifest_sha256") @db.VarChar(64)
+  receiptPdfSha256          String?                    @map("receipt_pdf_sha256") @db.VarChar(64)
+  receiptStorageKey         String?                    @unique @map("receipt_storage_key")
+  evidenceKeyId             String?                    @map("evidence_key_id") @db.VarChar(200)
+  evidenceSignature         String?                    @map("evidence_signature")
+  evidenceReadyAt           DateTime?                  @map("evidence_ready_at")
+  completedAt               DateTime?                  @map("completed_at")
+  invalidatedAt             DateTime?                  @map("invalidated_at")
+  invalidationReason        String?                    @map("invalidation_reason") @db.VarChar(100)
+  createdAt                 DateTime                   @default(now()) @map("created_at")
+  updatedAt                 DateTime                   @updatedAt @map("updated_at")
+
+  continuation SigningContinuation @relation(fields: [signingContinuationId], references: [id], onDelete: Restrict)
+  user         User                @relation(fields: [userId], references: [id], onDelete: Restrict)
+  domainRef    ClientDomain        @relation(fields: [domain], references: [domain], onDelete: Restrict)
+  version      AgreementVersion    @relation(fields: [agreementVersionId], references: [id], onDelete: Restrict)
+  signature    AgreementSignature? @relation("SignatureClaimEvidence")
+
+  @@unique([signingContinuationId, agreementVersionId], map: "signature_claim_intents_continuation_version_key")
+  @@index([domain, status, createdAt])
+  @@index([userId, domain, agreementVersionId])
+  @@map("signature_claim_intents")
 }
 
 model AgreementSignature {
@@ -728,6 +789,7 @@ model AgreementSignature {
   domain                 String
   agreementVersionId     String          @map("agreement_version_id")
   signingContinuationId  String          @map("signing_continuation_id")
+  claimIntentId          String?         @unique @map("claim_intent_id")
   signingMethod          SignatureMethod @map("signing_method")
   typedName              String?         @map("typed_name") @db.VarChar(200)
   acceptanceStatement    String          @map("acceptance_statement")
@@ -743,10 +805,11 @@ model AgreementSignature {
   evidenceSignature      String          @map("evidence_signature")
   signedAt               DateTime        @default(now()) @map("signed_at")
 
-  user         User                 @relation(fields: [userId], references: [id], onDelete: Restrict)
-  domainRef    ClientDomain         @relation(fields: [domain], references: [domain], onDelete: Restrict)
-  version      AgreementVersion     @relation(fields: [agreementVersionId], references: [id], onDelete: Restrict)
-  continuation SigningContinuation  @relation(fields: [signingContinuationId], references: [id], onDelete: Restrict)
+  user         User                  @relation(fields: [userId], references: [id], onDelete: Restrict)
+  domainRef    ClientDomain          @relation(fields: [domain], references: [domain], onDelete: Restrict)
+  version      AgreementVersion      @relation(fields: [agreementVersionId], references: [id], onDelete: Restrict)
+  continuation SigningContinuation   @relation(fields: [signingContinuationId], references: [id], onDelete: Restrict)
+  claimIntent  SignatureClaimIntent? @relation("SignatureClaimEvidence", fields: [claimIntentId], references: [id], onDelete: Restrict)
   revocation   SignatureRevocation?
 
   @@unique([signingContinuationId, agreementVersionId], map: "agreement_signatures_continuation_version_key")

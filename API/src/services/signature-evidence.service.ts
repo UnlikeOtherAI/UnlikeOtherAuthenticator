@@ -267,6 +267,25 @@ function receiptData(
   };
 }
 
+async function putEvidenceIdempotently(
+  storage: SignatureObjectStorage,
+  key: string,
+  receiptPdf: Buffer,
+): Promise<void> {
+  try {
+    await storage.putImmutable(key, receiptPdf, 'application/pdf');
+    return;
+  } catch (err) {
+    if (!(err instanceof AppError) || err.message !== 'SIGNATURE_OBJECT_ALREADY_EXISTS') {
+      throw err;
+    }
+  }
+  const existing = await storage.read(key);
+  if (!existing.equals(receiptPdf)) {
+    throw new AppError('INTERNAL', 500, 'SIGNATURE_EVIDENCE_OBJECT_CONFLICT');
+  }
+}
+
 export async function createSignatureEvidence(input: {
   manifest: SignatureEvidenceManifest;
   sourcePdf: Uint8Array;
@@ -301,7 +320,7 @@ export async function createSignatureEvidence(input: {
   const receiptStorageKey = validateSignatureStorageKey(
     `receipts/${input.manifest.domain}/${input.manifest.signatureId}/receipt.pdf`,
   );
-  await input.storage.putImmutable(receiptStorageKey, receiptPdf, 'application/pdf');
+  await putEvidenceIdempotently(input.storage, receiptStorageKey, receiptPdf);
   return {
     ...signed,
     receiptPdf,

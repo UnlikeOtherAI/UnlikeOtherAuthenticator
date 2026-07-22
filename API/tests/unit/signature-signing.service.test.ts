@@ -1,8 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { parseEnv } from '../../src/config/env.js';
-import { hashSigningContinuationToken } from '../../src/services/signature-continuation.service.js';
-import { hashPdf } from '../../src/services/signature-pdf.service.js';
 import {
   readSigningAgreementSource,
   readSigningReceipt,
@@ -10,171 +7,24 @@ import {
   signAgreementVersion,
 } from '../../src/services/signature-signing.service.js';
 import { evaluateSignaturePolicy } from '../../src/services/signature-policy.service.js';
+import { hashPdf } from '../../src/services/signature-pdf.service.js';
+import {
+  NOW,
+  continuation,
+  dependencies,
+  evidenceFor,
+  fakePrisma,
+  policy,
+  requirement,
+  signatureRow,
+  signingToken,
+  sourcePdf,
+  version,
+} from './signature-signing.test-fixture.js';
 
-vi.mock('../../src/services/signature-policy.service.js', () => ({ evaluateSignaturePolicy: vi.fn() }));
-
-const SHARED_SECRET = 'test-shared-secret-that-is-at-least-thirty-two-bytes';
-const NOW = new Date('2026-07-15T21:00:00.000Z');
-const env = parseEnv({ NODE_ENV: 'test', SHARED_SECRET });
-const signingToken = 'opaque-signing-capability-token';
-const sourcePdf = Buffer.from('%PDF-source');
-
-const requirement = {
-  agreementId: 'agreement-1',
-  agreementVersionId: 'version-2',
-  version: 2,
-  title: 'Service Terms July 2026',
-  agreementTitle: 'Service Terms',
-  description: 'Review the service terms.',
-  originalFilename: 'service-terms.pdf',
-  displayOrder: 0,
-  signingMethod: 'TYPED_NAME' as const,
-  acceptanceStatement: 'I agree to the Service Terms.',
-  sourcePdfSha256: hashPdf(sourcePdf),
-};
-
-function continuation(overrides: Record<string, unknown> = {}) {
-  return {
-    id: 'continuation-1',
-    tokenHash: hashSigningContinuationToken(signingToken, SHARED_SECRET),
-    userId: 'user-1',
-    domain: 'client.example.com',
-    authProfile: 'CONFIG_JWT',
-    configUrl: 'https://client.example.com/config',
-    redirectUrl: 'https://client.example.com/callback',
-    oauthState: null,
-    oauthClientId: null,
-    oauthScope: null,
-    resource: null,
-    codeChallenge: 'challenge',
-    codeChallengeMethod: 'S256',
-    rememberMe: true,
-    requestAccess: false,
-    orgId: null,
-    teamId: null,
-    authMethod: 'email_password',
-    twoFaCompleted: true,
-    policyRevision: 3,
-    expiresAt: new Date(NOW.getTime() + 10 * 60_000),
-    consumedAt: null,
-    attemptCount: 0,
-    createdAt: NOW,
-    ...overrides,
-  };
-}
-
-function version() {
-  return {
-    id: requirement.agreementVersionId,
-    agreementId: requirement.agreementId,
-    version: requirement.version,
-    title: requirement.title,
-    originalFilename: requirement.originalFilename,
-    sourceStorageKey: 'agreements/client.example.com/agreement-1/v2/source.pdf',
-    sourcePdfSha256: requirement.sourcePdfSha256,
-    signingMethod: requirement.signingMethod,
-    acceptanceStatement: requirement.acceptanceStatement,
-    status: 'PUBLISHED',
-    publishedAt: NOW,
-    effectiveAt: NOW,
-    publishedByEmail: 'admin@example.com',
-    createdAt: NOW,
-    agreement: {
-      id: requirement.agreementId,
-      domain: 'client.example.com',
-      title: requirement.agreementTitle,
-    },
-  };
-}
-
-function signatureRow(overrides: Record<string, unknown> = {}) {
-  return {
-    id: 'signature-1',
-    verificationReference: 'verification-reference-1234567890',
-    userId: 'user-1',
-    userEmail: 'person@example.com',
-    signerName: 'Person Example',
-    domain: 'client.example.com',
-    agreementVersionId: requirement.agreementVersionId,
-    signingContinuationId: 'continuation-1',
-    signingMethod: 'TYPED_NAME',
-    typedName: 'Person Example',
-    acceptanceStatement: requirement.acceptanceStatement,
-    sourcePdfSha256: requirement.sourcePdfSha256,
-    authMethod: 'email_password',
-    twoFaCompleted: true,
-    ipAddress: '203.0.113.4',
-    userAgent: 'Test browser',
-    evidenceManifestSha256: 'a'.repeat(64),
-    receiptPdfSha256: 'b'.repeat(64),
-    receiptStorageKey: 'receipts/client.example.com/signature-1/receipt.pdf',
-    evidenceKeyId: 'evidence-key',
-    evidenceSignature: 'compact-jws',
-    signedAt: NOW,
-    version: version(),
-    revocation: null,
-    ...overrides,
-  };
-}
-
-function fakePrisma(params?: { existing?: ReturnType<typeof signatureRow> | null }) {
-  const prisma = {
-    $executeRaw: vi.fn().mockResolvedValue(1),
-    $transaction: vi.fn(),
-    signingContinuation: {
-      findUnique: vi.fn().mockResolvedValue(continuation()),
-      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
-    },
-    agreementSignature: {
-      findFirst: vi.fn().mockResolvedValue(params?.existing ?? null),
-      findMany: vi.fn().mockResolvedValue([]),
-      create: vi.fn(async () => signatureRow()),
-    },
-    user: {
-      findUnique: vi.fn().mockResolvedValue({ email: 'person@example.com', name: 'Profile Name' }),
-    },
-    agreementVersion: {
-      findFirst: vi.fn().mockResolvedValue(version()),
-    },
-    signatureAuditEvent: { create: vi.fn().mockResolvedValue({}) },
-  };
-  prisma.$transaction.mockImplementation(async (callback: (tx: typeof prisma) => unknown) => callback(prisma));
-  return prisma;
-}
-
-function policy(missing = [requirement]) {
-  return {
-    enabled: true,
-    policyRevision: 4,
-    complete: missing.length === 0,
-    required: [requirement],
-    missing,
-  };
-}
-
-function dependencies(prisma: ReturnType<typeof fakePrisma>, receipt = Buffer.from('%PDF-receipt')) {
-  return {
-    env,
-    prisma: prisma as never,
-    sharedSecret: SHARED_SECRET,
-    publicBaseUrl: 'https://auth.example.com',
-    now: () => NOW,
-    storage: {
-      putImmutable: vi.fn(),
-      read: vi.fn(async (key: string) => (key.startsWith('receipts/') ? receipt : sourcePdf)),
-      deleteDraft: vi.fn(),
-    },
-    createEvidence: vi.fn().mockResolvedValue({
-      canonicalManifest: '{}',
-      manifestSha256: 'a'.repeat(64),
-      compactJws: 'compact-jws',
-      keyId: 'evidence-key',
-      receiptPdf: receipt,
-      receiptPdfSha256: hashPdf(receipt),
-      receiptStorageKey: 'receipts/client.example.com/generated/receipt.pdf',
-    }),
-  };
-}
+vi.mock('../../src/services/signature-policy.service.js', () => ({
+  evaluateSignaturePolicy: vi.fn(),
+}));
 
 describe('capability-scoped signing evidence', () => {
   beforeEach(() => vi.mocked(evaluateSignaturePolicy).mockReset());
@@ -196,12 +46,18 @@ describe('capability-scoped signing evidence', () => {
         },
         deps,
       ),
-    ).resolves.toMatchObject({ id: 'signature-1' });
+    ).resolves.toMatchObject({
+      userId: 'user-1',
+      agreementVersionId: 'version-2',
+      claimIntentId: expect.any(String),
+    });
 
     expect(deps.createEvidence).toHaveBeenCalledWith(
       expect.objectContaining({
         sourcePdf,
-        verificationUrl: expect.stringMatching(/^https:\/\/auth\.example\.com\/signatures\/verify\//),
+        verificationUrl: expect.stringMatching(
+          /^https:\/\/auth\.example\.com\/signatures\/verify\//,
+        ),
         manifest: expect.objectContaining({
           userId: 'user-1',
           userEmail: 'person@example.com',
@@ -223,8 +79,8 @@ describe('capability-scoped signing evidence', () => {
         typedName: 'Person Example',
         evidenceManifestSha256: 'a'.repeat(64),
         evidenceSignature: 'compact-jws',
+        claimIntentId: expect.any(String),
       }),
-      include: expect.any(Object),
     });
     expect(prisma.signatureAuditEvent.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ action: 'signature.signed', actorUserId: 'user-1' }),
@@ -249,6 +105,196 @@ describe('capability-scoped signing evidence', () => {
     ).resolves.toBe(existing);
     expect(deps.createEvidence).not.toHaveBeenCalled();
     expect(prisma.agreementSignature.create).not.toHaveBeenCalled();
+  });
+
+  it('converges a lost response on the one committed signature and audit record', async () => {
+    const prisma = fakePrisma();
+    const deps = dependencies(prisma);
+    vi.mocked(evaluateSignaturePolicy).mockResolvedValue(policy());
+    const input = {
+      signingToken,
+      agreementVersionId: requirement.agreementVersionId,
+      accepted: true,
+      typedName: 'Person Example',
+    };
+    const first = await signAgreementVersion(input, deps);
+    const replay = await signAgreementVersion(input, deps);
+    expect(replay.id).toBe(first.id);
+    expect(deps.createEvidence).toHaveBeenCalledTimes(1);
+    expect(prisma.agreementSignature.create).toHaveBeenCalledTimes(1);
+    expect(prisma.signatureAuditEvent.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('converges concurrent duplicate submissions while evidence creation is in flight', async () => {
+    const prisma = fakePrisma();
+    const deps = dependencies(prisma);
+    vi.mocked(evaluateSignaturePolicy).mockResolvedValue(policy());
+    let releaseFirst: (() => void) | undefined;
+    const firstEvidenceMayFinish = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    let evidenceCalls = 0;
+    deps.createEvidence.mockImplementation(async ({ manifest }) => {
+      evidenceCalls += 1;
+      if (evidenceCalls === 1) await firstEvidenceMayFinish;
+      return evidenceFor(manifest);
+    });
+    const input = {
+      signingToken,
+      agreementVersionId: requirement.agreementVersionId,
+      accepted: true,
+      typedName: 'Person Example',
+    };
+    const first = signAgreementVersion(input, deps);
+    await vi.waitFor(() => expect(evidenceCalls).toBe(1));
+    const secondResult = await signAgreementVersion(input, deps);
+    releaseFirst?.();
+    const firstResult = await first;
+    expect(firstResult.id).toBe(secondResult.id);
+    expect(prisma.agreementSignature.create).toHaveBeenCalledTimes(1);
+    expect(prisma.signatureAuditEvent.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('invalidates prepared evidence when the locked policy revision changes', async () => {
+    const prisma = fakePrisma();
+    const deps = dependencies(prisma);
+    vi.mocked(evaluateSignaturePolicy)
+      .mockResolvedValueOnce(policy())
+      .mockResolvedValueOnce({ ...policy(), policyRevision: 5 });
+    await expect(
+      signAgreementVersion(
+        {
+          signingToken,
+          agreementVersionId: requirement.agreementVersionId,
+          accepted: true,
+          typedName: 'Person Example',
+        },
+        deps,
+      ),
+    ).rejects.toThrowError('AUTHENTICATION_FAILED');
+    expect(prisma.agreementSignature.create).not.toHaveBeenCalled();
+    expect(prisma.signatureClaimIntent.update).toHaveBeenLastCalledWith({
+      where: { id: expect.any(String) },
+      data: expect.objectContaining({
+        status: 'INVALIDATED',
+        invalidationReason: 'POLICY_CHANGED',
+      }),
+    });
+  });
+
+  it('invalidates prepared evidence when the exact published version changes', async () => {
+    const prisma = fakePrisma();
+    const deps = dependencies(prisma);
+    vi.mocked(evaluateSignaturePolicy).mockResolvedValue(policy());
+    prisma.agreementVersion.findFirst
+      .mockResolvedValueOnce(version())
+      .mockResolvedValueOnce({ ...version(), sourceStorageKey: 'agreements/drifted/source.pdf' });
+    await expect(
+      signAgreementVersion(
+        {
+          signingToken,
+          agreementVersionId: requirement.agreementVersionId,
+          accepted: true,
+          typedName: 'Person Example',
+        },
+        deps,
+      ),
+    ).rejects.toThrowError('AUTHENTICATION_FAILED');
+    expect(prisma.agreementSignature.create).not.toHaveBeenCalled();
+    expect(prisma.signatureClaimIntent.update).toHaveBeenLastCalledWith({
+      where: { id: expect.any(String) },
+      data: expect.objectContaining({
+        status: 'INVALIDATED',
+        invalidationReason: 'VERSION_CHANGED',
+      }),
+    });
+  });
+
+  it('invalidates prepared evidence when signature or revocation history changes', async () => {
+    const prisma = fakePrisma();
+    const deps = dependencies(prisma);
+    vi.mocked(evaluateSignaturePolicy).mockResolvedValue(policy());
+    prisma.agreementSignature.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { id: 'historical-signature', revocation: { id: 'new-revocation' } },
+      ]);
+    await expect(
+      signAgreementVersion(
+        {
+          signingToken,
+          agreementVersionId: requirement.agreementVersionId,
+          accepted: true,
+          typedName: 'Person Example',
+        },
+        deps,
+      ),
+    ).rejects.toThrowError('AUTHENTICATION_FAILED');
+    expect(prisma.agreementSignature.create).not.toHaveBeenCalled();
+    expect(prisma.signatureClaimIntent.update).toHaveBeenLastCalledWith({
+      where: { id: expect.any(String) },
+      data: expect.objectContaining({
+        status: 'INVALIDATED',
+        invalidationReason: 'SIGNATURE_STATE_CHANGED',
+      }),
+    });
+  });
+
+  it('fails closed if the continuation expires while evidence is created', async () => {
+    const prisma = fakePrisma();
+    const deps = dependencies(prisma);
+    vi.mocked(evaluateSignaturePolicy).mockResolvedValue(policy());
+    deps.createEvidence.mockImplementationOnce(async ({ manifest }) => {
+      prisma.setContinuation(continuation({ expiresAt: NOW }));
+      return evidenceFor(manifest);
+    });
+    await expect(
+      signAgreementVersion(
+        {
+          signingToken,
+          agreementVersionId: requirement.agreementVersionId,
+          accepted: true,
+          typedName: 'Person Example',
+        },
+        deps,
+      ),
+    ).rejects.toThrowError('AUTHENTICATION_FAILED');
+    expect(prisma.agreementSignature.create).not.toHaveBeenCalled();
+    expect(prisma.signatureAuditEvent.create).not.toHaveBeenCalled();
+  });
+
+  it('rechecks expiry immediately before the atomic signature persist', async () => {
+    const prisma = fakePrisma();
+    const deps = dependencies(prisma);
+    const expiresAt = new Date(NOW.getTime() + 10 * 60_000);
+    let clock = NOW;
+    deps.now = () => clock;
+    vi.mocked(evaluateSignaturePolicy).mockResolvedValue(policy());
+    prisma.agreementSignature.findMany
+      .mockResolvedValueOnce([])
+      .mockImplementationOnce(async () => {
+        clock = expiresAt;
+        return [];
+      });
+    await expect(
+      signAgreementVersion(
+        {
+          signingToken,
+          agreementVersionId: requirement.agreementVersionId,
+          accepted: true,
+          typedName: 'Person Example',
+        },
+        deps,
+      ),
+    ).rejects.toThrowError('AUTHENTICATION_FAILED');
+    expect(prisma.agreementSignature.create).not.toHaveBeenCalled();
+    expect(prisma.signatureClaimIntent.update).toHaveBeenLastCalledWith({
+      where: { id: expect.any(String) },
+      data: expect.objectContaining({
+        status: 'INVALIDATED',
+        invalidationReason: 'CONTINUATION_EXPIRED',
+      }),
+    });
   });
 
   it('counts rejected method/version submissions and exposes only a generic failure', async () => {

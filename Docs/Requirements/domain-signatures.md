@@ -193,6 +193,28 @@ successful completion, and be protected from replay and concurrent double-use.
 An expired, invalid, or consumed continuation returns the normal generic public error and
 must never reveal whether a user or signature exists. The user can restart authentication.
 
+Each accepted signing submission is first reserved as one durable
+`SignatureClaimIntent` for the exact continuation and AgreementVersion. The reservation
+transaction locks the continuation and domain policy, freezes the signer/auth context,
+current policy revision, exact published-version inputs, source key/hash, server acceptance
+time, non-guessable verification reference, and a fingerprint of the user's existing
+signature/revocation history, then commits without touching object storage or creating
+cryptographic evidence.
+
+Receipt generation runs only after that transaction has ended. Its manifest, certificate
+timestamps, PDF metadata, and create-only receipt key are derived from the frozen intent,
+so a retry recreates byte-identical receipt bytes. An existing object is accepted only when
+its bytes match exactly. UOA then records `EVIDENCE_READY` in a short database-only
+transaction. Finally it relocks continuation → domain policy → claim intent, rechecks
+continuation validity/expiry, exact policy revision and published version, plus the frozen
+signature/revocation fingerprint, and atomically appends the `AgreementSignature`, audit
+event, and `COMPLETED` transition. A changed policy, version, revocation history, or expiry
+fails closed and cannot append a signature. Claim inputs, ready evidence metadata, and
+terminal states are database-enforced immutable. Concurrent duplicate requests and retries
+after a lost response converge on the same claim/signature; a crash after reservation,
+object creation, evidence readiness, or final commit can be safely resumed by the same
+submission while the continuation remains valid.
+
 ## User Signing Experience
 
 The signing flow is hosted inside the existing Auth application and must reuse the
@@ -312,8 +334,9 @@ ClientDomain
               └── AgreementVersion
 
 User + Domain + AgreementVersion
-  └── AgreementSignature
-        └── SignatureRevocation
+  └── SignatureClaimIntent
+        └── AgreementSignature
+              └── SignatureRevocation
 
 SigningContinuation
 SignatureAuditEvent
@@ -325,7 +348,8 @@ Required implementation rules:
 * Source and receipt PDFs live in durable private object storage, never a public bucket
   and never as large database blobs.
 * Object access uses short-lived, purpose-bound URLs or authenticated streaming.
-* Published files, signatures, revocations, and signature audit events are append-only.
+* Published files, signature-claim inputs/evidence/terminal states, signatures,
+  revocations, and signature audit events are append-only.
 * Draft versions with no signatures may be deleted. Published versions and evidence may
   not be cascade-deleted with a domain or user.
 * Deleting a domain or user must not silently destroy retained legal evidence. The delete
