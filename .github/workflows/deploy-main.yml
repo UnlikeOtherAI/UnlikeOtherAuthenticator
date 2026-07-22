@@ -126,6 +126,7 @@ jobs:
           fi
 
       - name: Deploy to Cloud Run
+        id: deploy
         # Secrets MUST come from GCP Secret Manager via --set-secrets, not the
         # GitHub Actions secret store via --set-env-vars. The deploy service
         # account needs roles/secretmanager.secretAccessor on each secret
@@ -157,6 +158,33 @@ jobs:
             "${scaling_args[@]}" \
             --set-env-vars "$env_vars" \
             --set-secrets "$secret_vars"
+
+          deployed_revision="$(gcloud run services describe "$GCP_CLOUD_RUN_SERVICE" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --format='value(status.latestCreatedRevisionName)')"
+          if [[ -z "$deployed_revision" ]]; then
+            echo "Cloud Run did not report the deployed revision"
+            exit 1
+          fi
+          echo "revision=$deployed_revision" >> "$GITHUB_OUTPUT"
+
+      - name: Promote deployed revision
+        run: |
+          deployed_revision="${{ steps.deploy.outputs.revision }}"
+          gcloud run services update-traffic "$GCP_CLOUD_RUN_SERVICE" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --to-revisions "$deployed_revision=100"
+
+          ready_revision="$(gcloud run services describe "$GCP_CLOUD_RUN_SERVICE" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --format='value(status.latestReadyRevisionName)')"
+          if [[ "$ready_revision" != "$deployed_revision" ]]; then
+            echo "Expected ready revision $deployed_revision, found $ready_revision"
+            exit 1
+          fi
 
       - name: Verify health endpoint
         run: |

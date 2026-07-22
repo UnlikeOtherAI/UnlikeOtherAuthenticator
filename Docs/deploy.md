@@ -40,6 +40,13 @@ Configured as GitHub repository variables:
 
 The workload identity provider is restricted to GitHub repository `UnlikeOtherAI/UnlikeOtherAuthenticator`.
 
+Every main-branch deployment records the exact `latestCreatedRevisionName`,
+explicitly routes 100% of service traffic to that revision, and verifies it is
+the `latestReadyRevisionName` before probing the public health endpoints. This
+explicit promotion is required after a canary or rollback pins traffic to a
+named revision: a successful image upload plus a health response from the old
+revision is not a successful deployment.
+
 ### Manual fallback
 
 ```bash

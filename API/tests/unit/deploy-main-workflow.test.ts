@@ -32,4 +32,15 @@ describe('main deployment workflow billing runtime', () => {
     expect(workflow).toContain('BILLING_INVOICE_GCS_BUCKET=$BILLING_INVOICE_GCS_BUCKET');
     expect(workflow).toContain('BILLING_INVOICE_GCS_PROJECT_ID=$BILLING_INVOICE_GCS_PROJECT_ID');
   });
+
+  it('promotes and verifies the revision created by this exact main deployment', async () => {
+    const workflow = await readFile(workflowUrl, 'utf8');
+
+    expect(workflow).toContain('id: deploy');
+    expect(workflow).toContain("--format='value(status.latestCreatedRevisionName)'");
+    expect(workflow).toContain('echo "revision=$deployed_revision" >> "$GITHUB_OUTPUT"');
+    expect(workflow).toContain('--to-revisions "$deployed_revision=100"');
+    expect(workflow).toContain("--format='value(status.latestReadyRevisionName)'");
+    expect(workflow).toContain('if [[ "$ready_revision" != "$deployed_revision" ]]');
+  });
 });
