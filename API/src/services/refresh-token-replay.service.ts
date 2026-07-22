@@ -91,7 +91,7 @@ function sameRefreshTokenFamily(left: RefreshTokenRow, right: RefreshTokenRow): 
 }
 
 function remainingRefreshTokenTtlSeconds(row: RefreshTokenRow, now: Date): number {
-  return Math.max(0, Math.floor((row.expiresAt.getTime() - now.getTime()) / 1000));
+  return Math.max(1, Math.ceil((row.expiresAt.getTime() - now.getTime()) / 1000));
 }
 
 export async function resolveRefreshTokenReplay(

@@ -148,7 +148,7 @@ describe('refresh response-loss replay recovery', () => {
     expect(replay).toMatchObject({
       refreshToken: rotated.refreshToken,
       replayed: true,
-      expiresInSeconds: 3_589,
+      expiresInSeconds: 3_590,
       userId: 'user-1',
       orgId: 'org-1',
       teamId: 'team-1',
@@ -252,6 +252,17 @@ describe('refresh response-loss replay recovery', () => {
       }),
     ).rejects.toBe(policyFailure);
     expect(store.userUpdate).not.toHaveBeenCalled();
+  });
+
+  it('reports one positive second for a still-live subsecond successor', async () => {
+    const issuedAt = new Date('2026-07-22T10:00:00.000Z');
+    const { initial, store } = await fixture(issuedAt);
+    const rotated = await exchange(store, initial.refreshToken, issuedAt);
+    store.byRawToken(rotated.refreshToken).expiresAt = new Date(issuedAt.getTime() + 500);
+
+    await expect(
+      exchange(store, initial.refreshToken, new Date(issuedAt.getTime() + 1)),
+    ).resolves.toMatchObject({ expiresInSeconds: 1, replayed: true });
   });
 
   it('rejects a different exact client context without revoking the family', async () => {
