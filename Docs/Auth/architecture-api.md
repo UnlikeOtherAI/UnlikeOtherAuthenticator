@@ -203,6 +203,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       billing-credit-rating.service.ts      — Deterministic all-service tariff rating and scarce-credit allocation
       billing-credit-settlement-write.service.ts — Append-only settlement, entry, and allocation persistence
       billing-credit-settlement.service.ts  — Serializable cursor-idempotent team portfolio settlement
+      billing-serializable-transaction.service.ts — Bounded exponential full-jitter retry boundary for credit writes
       billing-credits.service.ts            — Credits read orchestration across entitlement, Ledger, settlement, and projection
       billing-entitlement.service.ts        — Membership validation and team→org→default resolution
       billing-funding-viewer.service.ts      — Exact-scope manager/member visibility resolution
@@ -525,6 +526,10 @@ shared credit-account row lock in a serializable transaction and settles every
 current or previously seen service together. It pins each service's first
 effective tariff, applies corrections before new debits, allocates scarce
 credits deterministically, and writes the full rated-but-unfunded liability.
+Both that settlement and exact-team credit-account creation use the shared
+bounded exponential full-jitter serializable retry boundary. Retry exhaustion
+is a stable 503 credit-domain error, while non-serialization failures preserve
+their original error.
 Usage cannot push an available balance below zero; only verified credit-entry
 reversals can produce debt. Cursor replay is idempotent and a conflicting or
 partially persisted cursor fails closed. `billing-credit-projection.service.ts`

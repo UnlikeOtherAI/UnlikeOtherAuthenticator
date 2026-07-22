@@ -424,12 +424,12 @@ Before enabling it in production:
    pre-boundary safety pass, and authoritative post-period `invoice.created`
    reconciliation against immutable Ledger cursors. Prove usage in the final
    minute reaches the draft invoice during Stripe's configured finalization
-   grace period. For shared credits, race two different product lifecycle keys
-   against the same exact team portfolio cursor and prove one settlement plus
-   one replay, one adjustment per service, a non-negative usage-funded balance,
-   and no partial snapshot. Then apply a lower corrected cursor and verify that
-   credits are released and user attribution is reallocated without rewriting
-   history.
+   grace period. For shared credits, race four independent product clients with
+   distinct current cumulative cursors for the same exact team and prove every
+   read settles, the usage is debited only once, and all snapshots remain
+   complete. Replay one cursor and prove it adds no adjustment or debit. Then
+   apply a lower corrected cursor and verify that credits are released and user
+   attribution is reallocated without rewriting history.
 6. Review the deployed recurring collector interval, safety lead/offset, Cloud
    Run warm-instance/non-throttled CPU settings, the Stripe webhook
    subscriptions for `invoice.created` and `invoice.finalization_failed`, the

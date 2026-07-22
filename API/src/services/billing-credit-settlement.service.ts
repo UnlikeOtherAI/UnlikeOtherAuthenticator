@@ -17,14 +17,7 @@ import {
   type LatestCreditAllocation,
 } from './billing-credit-settlement-write.service.js';
 import type { NormalizedMeteringPortfolio } from './billing-metering.types.js';
-
-function isRetryableTransactionError(error: unknown): boolean {
-  const candidate = error as { code?: unknown; meta?: { code?: unknown } } | null;
-  return (
-    candidate?.code === 'P2034' ||
-    (candidate?.code === 'P2010' && candidate.meta?.code === '40001')
-  );
-}
+import { runBillingSerializableTransaction } from './billing-serializable-transaction.service.js';
 
 function sameInstant(left: Date, right: string): boolean {
   return left.getTime() === Date.parse(right);
@@ -362,14 +355,9 @@ export async function settleCreditPortfolio(
   deps?: { prisma?: PrismaClient },
 ) {
   const prisma = deps?.prisma ?? getAdminPrisma();
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    try {
-      return await prisma.$transaction((tx) => settleInTransaction(tx, params), {
-        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-      });
-    } catch (error) {
-      if (!isRetryableTransactionError(error) || attempt === 2) throw error;
-    }
-  }
-  throw new AppError('INTERNAL', 503, 'BILLING_CREDIT_SETTLEMENT_RETRY_EXHAUSTED');
+  return runBillingSerializableTransaction(
+    prisma,
+    (tx) => settleInTransaction(tx, params),
+    'BILLING_CREDIT_SETTLEMENT_RETRY_EXHAUSTED',
+  );
 }
