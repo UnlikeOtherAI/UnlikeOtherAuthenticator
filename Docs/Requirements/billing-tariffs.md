@@ -801,6 +801,12 @@ serializable shared-account transaction rates and settles every service in that
 exact cursor, including previously settled services that disappear from a
 corrected snapshot. The settlement and its corrections retain exact service,
 user, and explicit unattributed allocations without asking Ledger to rate them.
+Credit-account creation and portfolio settlement share one bounded serializable
+retry policy with exponential full jitter, so concurrent product reads spread
+out instead of retrying as a synchronized herd. Exhausted account creation
+returns `503 BILLING_CREDIT_ACCOUNT_RETRY_EXHAUSTED`; exhausted settlement
+returns `503 BILLING_CREDIT_SETTLEMENT_RETRY_EXHAUSTED` rather than leaking a
+generic database failure.
 Corrections release prior credits before deterministic largest-remainder
 reallocation. New usage consumes only the non-negative available balance while
 the full rated-but-unfunded liability is retained; only a verified credit-entry

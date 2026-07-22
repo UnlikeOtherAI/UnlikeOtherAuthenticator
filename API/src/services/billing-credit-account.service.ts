@@ -1,4 +1,4 @@
-import { BillingAssignmentScope, Prisma, type PrismaClient } from '@prisma/client';
+import { BillingAssignmentScope, type PrismaClient } from '@prisma/client';
 import type Stripe from 'stripe';
 
 import { getEnv } from '../config/env.js';
@@ -9,19 +9,13 @@ import {
   resolveStripeAccountContext,
   type StripeAccountContext,
 } from './billing-stripe-client.service.js';
+import { runBillingSerializableTransaction } from './billing-serializable-transaction.service.js';
 
 export type CreditCollectionContext = {
   account: StripeAccountContext;
   stripeCollectionEnabled: boolean;
   stripe?: Pick<Stripe, 'paymentIntents' | 'paymentMethods' | 'prices' | 'products'> | null;
 };
-
-function isRetryableTransactionError(error: unknown): boolean {
-  const candidate = error as { code?: unknown; meta?: { code?: unknown } } | null;
-  return (
-    candidate?.code === 'P2034' || (candidate?.code === 'P2010' && candidate.meta?.code === '40001')
-  );
-}
 
 const CANONICAL_PORTFOLIO_PRODUCTS = ['deeptest', 'deepsignal', 'deepwater', 'nessie'] as const;
 
@@ -85,67 +79,61 @@ export async function ensureTeamCreditAccount(
 ) {
   const prisma = deps?.prisma ?? getAdminPrisma();
   const scopeKey = `${params.organisationId}:${params.teamId}`;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    try {
-      return await prisma.$transaction(
-        async (tx) => {
-          const customer = await tx.billingStripeCustomer.upsert({
-            where: {
-              accountId_scopeKey: { accountId: params.account.id, scopeKey },
-            },
-            create: {
-              accountId: params.account.id,
-              orgId: params.organisationId,
-              teamId: params.teamId,
-              scope: BillingAssignmentScope.TEAM,
-              scopeKey,
-            },
-            update: {},
-          });
-          if (
-            customer.accountId !== params.account.id ||
-            customer.orgId !== params.organisationId ||
-            customer.teamId !== params.teamId ||
-            customer.scope !== BillingAssignmentScope.TEAM ||
-            customer.scopeKey !== scopeKey
-          ) {
-            throw new AppError('INTERNAL', 409, 'BILLING_CREDIT_CUSTOMER_SCOPE_CONFLICT');
-          }
-          const creditAccount = await tx.billingCreditAccount.upsert({
-            where: {
-              accountId_teamId_currency: {
-                accountId: params.account.id,
-                teamId: params.teamId,
-                currency: 'USD',
-              },
-            },
-            create: {
-              accountId: params.account.id,
-              customerId: customer.id,
-              orgId: params.organisationId,
-              teamId: params.teamId,
-              currency: 'USD',
-            },
-            update: {},
-          });
-          if (
-            creditAccount.accountId !== params.account.id ||
-            creditAccount.customerId !== customer.id ||
-            creditAccount.orgId !== params.organisationId ||
-            creditAccount.teamId !== params.teamId ||
-            creditAccount.currency !== 'USD'
-          ) {
-            throw new AppError('INTERNAL', 409, 'BILLING_CREDIT_ACCOUNT_SCOPE_CONFLICT');
-          }
-          return creditAccount;
+  return runBillingSerializableTransaction(
+    prisma,
+    async (tx) => {
+      const customer = await tx.billingStripeCustomer.upsert({
+        where: {
+          accountId_scopeKey: { accountId: params.account.id, scopeKey },
         },
-        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-      );
-    } catch (error) {
-      if (!isRetryableTransactionError(error) || attempt === 2) throw error;
-    }
-  }
-  throw new AppError('INTERNAL', 503, 'BILLING_CREDIT_ACCOUNT_RETRY_EXHAUSTED');
+        create: {
+          accountId: params.account.id,
+          orgId: params.organisationId,
+          teamId: params.teamId,
+          scope: BillingAssignmentScope.TEAM,
+          scopeKey,
+        },
+        update: {},
+      });
+      if (
+        customer.accountId !== params.account.id ||
+        customer.orgId !== params.organisationId ||
+        customer.teamId !== params.teamId ||
+        customer.scope !== BillingAssignmentScope.TEAM ||
+        customer.scopeKey !== scopeKey
+      ) {
+        throw new AppError('INTERNAL', 409, 'BILLING_CREDIT_CUSTOMER_SCOPE_CONFLICT');
+      }
+      const creditAccount = await tx.billingCreditAccount.upsert({
+        where: {
+          accountId_teamId_currency: {
+            accountId: params.account.id,
+            teamId: params.teamId,
+            currency: 'USD',
+          },
+        },
+        create: {
+          accountId: params.account.id,
+          customerId: customer.id,
+          orgId: params.organisationId,
+          teamId: params.teamId,
+          currency: 'USD',
+        },
+        update: {},
+      });
+      if (
+        creditAccount.accountId !== params.account.id ||
+        creditAccount.customerId !== customer.id ||
+        creditAccount.orgId !== params.organisationId ||
+        creditAccount.teamId !== params.teamId ||
+        creditAccount.currency !== 'USD'
+      ) {
+        throw new AppError('INTERNAL', 409, 'BILLING_CREDIT_ACCOUNT_SCOPE_CONFLICT');
+      }
+      return creditAccount;
+    },
+    'BILLING_CREDIT_ACCOUNT_RETRY_EXHAUSTED',
+  );
 }
 
 export async function resolveCanonicalPortfolioProduct(
