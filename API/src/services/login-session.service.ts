@@ -16,6 +16,7 @@ const LoginSessionSchema = z
     sub: z.string().min(1),
     domain: z.string().min(1),
     credential_epoch: z.number().int().nonnegative(),
+    auth_method: z.string().trim().min(1).max(32),
     typ: z.literal(LOGIN_SESSION_TYP),
     config_url: z.string().min(1),
     config_fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
@@ -39,6 +40,7 @@ const LoginSessionSchema = z
 export type LoginSession = {
   userId: string;
   credentialEpoch: number;
+  authMethod: string;
   domain: string;
   configUrl: string;
   configFingerprint: string;
@@ -52,6 +54,7 @@ export type LoginSession = {
 };
 
 type LoginContinuation = {
+  authMethod: string;
   config: ClientConfig;
   configUrl: string;
   redirectUrl: string;
@@ -128,6 +131,7 @@ export async function signLoginSession(
     return await new SignJWT({
       domain: params.config.domain,
       credential_epoch: params.credentialEpoch,
+      auth_method: params.authMethod,
       typ: LOGIN_SESSION_TYP,
       config_url: params.configUrl,
       config_fingerprint: fingerprintClientConfig(params.config),
@@ -196,6 +200,7 @@ export async function verifyLoginSession(
   return {
     userId: parsed.sub,
     credentialEpoch: parsed.credential_epoch,
+    authMethod: parsed.auth_method,
     domain: parsed.domain,
     configUrl: parsed.config_url,
     configFingerprint: parsed.config_fingerprint,

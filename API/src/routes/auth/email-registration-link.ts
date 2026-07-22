@@ -191,6 +191,7 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
                 const loginToken = await signLoginSession({
                   userId,
                   credentialEpoch,
+                  authMethod,
                   config,
                   configUrl,
                   redirectUrl,

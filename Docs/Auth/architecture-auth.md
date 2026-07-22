@@ -187,7 +187,11 @@ The auth flow is state-driven, not route-driven. A single popup URL loads the ap
     request state. Final selection claims its hashed JTI as the transaction's first write, before
     invite/audit/access-request-email effects; a concurrent replay stops at that unique claim, while
     any later failure rolls the claim and all database effects back so the user may retry. Chooser
-    hydration and invite decline are non-consuming. Legacy clients list only ACTIVE teams belonging
+    hydration and invite decline are non-consuming. The signed chooser capability also preserves
+    the verified identity method. Selecting a workspace is a continuation step, not a new
+    authentication method: finalization, 2FA/signature continuations, AuthIdentity, and login logs
+    continue to identify the original Google/social, password, email-code, or
+    email-link method. Legacy clients list only ACTIVE teams belonging
     to their own config domain. A verified first-party product domain may list all of the user's
     exact ACTIVE organisation + team memberships only when UOA's control plane has (a) an active
     `ClientDomain`, and (b) current `CUSTOMER_LIFECYCLE` app keys whose exact HTTPS `actorIssuer`

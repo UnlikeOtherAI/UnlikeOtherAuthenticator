@@ -141,6 +141,7 @@ describe.skipIf(!hasDatabase)('secure one-time login continuation', () => {
   async function mint(userId: string, config: ClientConfig, jti: string) {
     return await signLoginSession({
       userId,
+      authMethod: 'email_password',
       config,
       configUrl,
       redirectUrl,

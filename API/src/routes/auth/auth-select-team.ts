@@ -262,7 +262,7 @@ export function registerAuthSelectTeamRoute(app: FastifyInstance): void {
             redirectUrl: lockedSession.redirectUrl,
             rememberMe: lockedSession.rememberMe,
             requestAccess: lockedSession.requestAccess,
-            authMethod: 'workspace_select',
+            authMethod: lockedSession.authMethod,
             codeChallenge: lockedSession.codeChallenge,
             codeChallengeMethod: lockedSession.codeChallengeMethod,
             ip: request.ip ?? null,
@@ -271,7 +271,11 @@ export function registerAuthSelectTeamRoute(app: FastifyInstance): void {
           },
           { policyLockHeld: true, policyPrisma: tx, prisma: tx, workspacePrisma: tx },
         );
-        return { finalized, userId: lockedSession.userId };
+        return {
+          finalized,
+          userId: lockedSession.userId,
+          authMethod: lockedSession.authMethod,
+        };
       });
 
       if (outcome.finalized.kind === 'twofa') {
@@ -296,7 +300,7 @@ export function registerAuthSelectTeamRoute(app: FastifyInstance): void {
           {
             userId: outcome.userId,
             domain: config.domain,
-            authMethod: 'workspace_select',
+            authMethod: outcome.authMethod,
             ip: request.ip ?? null,
             userAgent:
               typeof request.headers['user-agent'] === 'string'
