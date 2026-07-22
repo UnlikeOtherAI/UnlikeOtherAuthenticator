@@ -13,7 +13,7 @@ type RefreshRotationRow = {
   teamId: string | null;
 };
 
-/** Acquire the narrow lock shared by refresh decisions and legacy same-domain revocation. */
+/** Acquire the user-global then user/domain hierarchy shared by every refresh revocation path. */
 export function createRefreshTokenFamilyDecisionLock(params: {
   prisma: PrismaClient;
   afterLock?: () => Promise<void>;

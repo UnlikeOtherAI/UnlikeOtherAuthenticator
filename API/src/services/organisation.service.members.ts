@@ -8,7 +8,7 @@ import { AppError } from '../utils/errors.js';
 import {
   revokeRefreshTokenFamiliesForUserOrganisation,
   revokeRefreshTokensForUserDomain,
-} from './refresh-token.service.js';
+} from './refresh-token-revocation.service.js';
 import { lockRefreshSessionUserDomain } from './refresh-session-lock.service.js';
 import { lockWorkspaceMembershipRows } from './workspace-scope.service.js';
 

@@ -3,8 +3,11 @@ import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 
 import { getEnv, requireEnv } from '../config/env.js';
-import { getAdminPrisma, getPrisma } from '../db/prisma.js';
+import { getPrisma } from '../db/prisma.js';
+import { runInTransaction } from '../db/tenant-context.js';
 import { AppError } from '../utils/errors.js';
+import { bumpUserTokenVersion } from './refresh-token-revocation.service.js';
+import { lockRefreshSessionUserDomain } from './refresh-session-lock.service.js';
 
 const MIN_INHERITED_REFRESH_TTL_SECONDS = 5 * 60;
 
@@ -22,9 +25,13 @@ export function isRefreshTokenReuseDetectedError(
 }
 
 type RefreshTokenPrisma = Pick<PrismaClient, 'refreshToken'>;
-type UserVersionPrisma = Pick<PrismaClient, 'user'>;
-
 type RefreshTokenDeps = {
+  afterFamilyRevocationLock?: (row: {
+    userId: string;
+    domain: string;
+    familyId: string;
+  }) => Promise<void>;
+  beforeFamilyRevocationLock?: () => Promise<void>;
   beforeFamilyDecision?: (row: {
     userId: string;
     domain: string;
@@ -307,133 +314,37 @@ export async function revokeRefreshTokenFamily(
   },
   deps?: RefreshTokenDeps,
 ): Promise<void> {
-  const prisma = getRefreshTokenPrisma(deps);
+  const prisma = getRefreshTokenPrisma(deps) as unknown as PrismaClient;
   const now = nowDate(deps);
   const sharedSecret = getSharedSecret(deps);
   const tokenHash = hashRefreshToken(params.refreshToken, sharedSecret);
 
-  const row = await prisma.refreshToken.findUnique({
-    where: { tokenHash },
-    select: {
-      familyId: true,
-      userId: true,
-      domain: true,
-      clientId: true,
-      configUrl: true,
-    },
-  });
+  await runInTransaction(prisma, async (tx) => {
+    const findTokenRow = () =>
+      tx.refreshToken.findUnique({
+        where: { tokenHash },
+        select: {
+          familyId: true,
+          userId: true,
+          domain: true,
+          clientId: true,
+          configUrl: true,
+        },
+      });
+    let row = await findTokenRow();
+    if (!row || !matchesRefreshTokenContext(row, params)) return;
 
-  if (!row || !matchesRefreshTokenContext(row, params)) {
-    return;
-  }
+    await deps?.beforeFamilyRevocationLock?.();
+    await lockRefreshSessionUserDomain(
+      { userId: row.userId, domain: row.domain },
+      { prisma: tx },
+    );
+    await deps?.afterFamilyRevocationLock?.(row);
+    row = await findTokenRow();
+    if (!row || !matchesRefreshTokenContext(row, params)) return;
 
-  await revokeRefreshTokenFamilyInternal(prisma, row.familyId, now);
-  // Logout must also kill already-issued (stateless) access tokens for this
-  // user, not just the refresh family. Bumping the per-user token version
-  // invalidates them on their next verify.
-  await bumpUserTokenVersion(row.userId, {
-    prisma: deps?.prisma as unknown as UserVersionPrisma | undefined,
-  });
-}
-
-/**
- * Increment a user's token version. Stateless access tokens carry a `tv` claim
- * matched against this on verify, so bumping it revokes every already-issued
- * access token for the user. Uses the admin Prisma connection to bypass
- * per-domain RLS — token version is a user-wide property, not per-domain.
- */
-export async function bumpUserTokenVersion(
-  userId: string,
-  deps?: { prisma?: UserVersionPrisma },
-): Promise<void> {
-  const prisma = deps?.prisma ?? (getAdminPrisma() as unknown as UserVersionPrisma);
-  await prisma.user.update({
-    where: { id: userId },
-    data: { tokenVersion: { increment: 1 } },
-  });
-}
-
-/**
- * Legacy domain-scoped session revocation (design §4.5). Revokes every live refresh token for this
- * user on this domain, including rows created before workspace scope existed. It is retained as a
- * compatibility companion to exact organisation revocation and must not be the sole revocation
- * mechanism for current org lifecycle changes. Deliberately does NOT bump the global user token
- * version; existing short-lived access tokens expire naturally and cannot be renewed.
- */
-export async function revokeRefreshTokensForUserDomain(
-  userId: string,
-  domain: string,
-  deps?: { now?: () => Date; prisma?: RefreshTokenPrisma },
-): Promise<{ revokedCount: number }> {
-  const prisma = deps?.prisma ?? (getAdminPrisma() as unknown as RefreshTokenPrisma);
-  const now = deps?.now ? deps.now() : new Date();
-  const result = await prisma.refreshToken.updateMany({
-    where: { userId, domain, revokedAt: null },
-    data: { revokedAt: now },
-  });
-  return { revokedCount: result.count };
-}
-
-/**
- * Revoke every live refresh-token family scoped to one exact user and organisation, regardless
- * of the product domain that issued it. Rotation preserves `orgId`, and only one row in a family
- * can be live, so revoking every matching live row terminalizes every affected family.
- *
- * Callers changing membership status must inject their current BYPASSRLS transaction. That keeps
- * cross-product revocation atomic with the ordered membership-row locks and status tombstone.
- */
-export async function revokeRefreshTokenFamiliesForUserOrganisation(
-  userId: string,
-  orgId: string,
-  deps?: { now?: () => Date; prisma?: RefreshTokenPrisma },
-): Promise<{ revokedCount: number }> {
-  const prisma = deps?.prisma ?? (getAdminPrisma() as unknown as RefreshTokenPrisma);
-  const now = deps?.now ? deps.now() : new Date();
-  const result = await prisma.refreshToken.updateMany({
-    where: { userId, orgId, revokedAt: null },
-    data: { revokedAt: now },
-  });
-  return { revokedCount: result.count };
-}
-
-/**
- * Revoke every live refresh-token family scoped to one exact user and team across all issuing
- * product domains. This intentionally leaves the user's other team sessions untouched.
- */
-export async function revokeRefreshTokenFamiliesForUserTeam(
-  userId: string,
-  teamId: string,
-  deps?: { now?: () => Date; prisma?: RefreshTokenPrisma },
-): Promise<{ revokedCount: number }> {
-  const prisma = deps?.prisma ?? (getAdminPrisma() as unknown as RefreshTokenPrisma);
-  const now = deps?.now ? deps.now() : new Date();
-  const result = await prisma.refreshToken.updateMany({
-    where: { userId, teamId, revokedAt: null },
-    data: { revokedAt: now },
-  });
-  return { revokedCount: result.count };
-}
-
-/**
- * Revoke every active refresh token belonging to a user, across all domains/clients.
- *
- * Used on credential-changing events (password reset, 2FA reset, set-password-on-verify)
- * so that an attacker holding a stolen refresh token cannot survive the user's recovery
- * action. Uses the admin Prisma connection to bypass per-domain RLS — credentials are
- * a user-wide property, not a per-domain one.
- */
-export async function revokeAllRefreshTokensForUser(
-  userId: string,
-  deps?: { now?: () => Date; prisma?: RefreshTokenPrisma },
-): Promise<void> {
-  const prisma = deps?.prisma ?? (getAdminPrisma() as unknown as RefreshTokenPrisma);
-  const now = deps?.now ? deps.now() : new Date();
-  await prisma.refreshToken.updateMany({
-    where: { userId, revokedAt: null },
-    data: { revokedAt: now },
-  });
-  // Also invalidate already-issued access tokens for this user.
-  await bumpUserTokenVersion(userId, {
-    prisma: deps?.prisma as unknown as UserVersionPrisma | undefined,
+    await revokeRefreshTokenFamilyInternal(tx, row.familyId, now);
+    // Family revocation and the global access-token version change commit together.
+    await bumpUserTokenVersion(row.userId, { prisma: tx });
   });
 }

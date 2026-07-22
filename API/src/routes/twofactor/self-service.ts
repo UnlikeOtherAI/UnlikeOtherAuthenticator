@@ -9,7 +9,6 @@ import { setTenantContextFromRequest } from '../../plugins/tenant-context.plugin
 import { finalizeAuthenticatedUser } from '../../services/access-request-flow.service.js';
 import { verifyAccessToken, type AccessTokenClaims } from '../../services/access-token.service.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
-import { revokeAllRefreshTokensForUser } from '../../services/refresh-token.service.js';
 import { selectRedirectUrl } from '../../services/authorization-code.service.js';
 import { disableTwoFactorForUser } from '../../services/twofactor-disable.service.js';
 import { enrollTwoFactorForUser } from '../../services/twofactor-enroll.service.js';
@@ -228,16 +227,10 @@ export function registerTwoFactorSelfServiceRoutes(app: FastifyInstance): void {
       if (policy === 'OFF') throw new AppError('NOT_FOUND', 404, 'TWOFA_NOT_AVAILABLE');
       if (policy === 'REQUIRED') throw new AppError('BAD_REQUEST', 400, 'TWOFA_REQUIRED');
 
-      setTenantContextFromRequest(request, { orgId: null, userId: claims.userId });
-      await request.withTenantTx(async (tx) => {
-        await disableTwoFactorForUser(
-          { userId: claims.userId, code },
-          {
-            prisma: asPrismaClient(tx),
-            revokeAllRefreshTokensForUser,
-          },
-        );
-      });
+      await disableTwoFactorForUser(
+        { userId: claims.userId, code },
+        { prisma: request.adminDb },
+      );
 
       reply.status(200).send({ ok: true });
     },

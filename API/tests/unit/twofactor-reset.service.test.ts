@@ -31,6 +31,7 @@ type PrismaVerificationTokenUpdateManyArgs = {
 };
 
 type PrismaStub = {
+  $queryRaw?: (...args: unknown[]) => Promise<unknown>;
   $transaction: <T>(fn: (tx: PrismaStub) => Promise<T>) => Promise<T>;
   user: {
     findUnique: (
@@ -227,6 +228,7 @@ describe('requestTwoFaReset', () => {
 describe('resetTwoFaWithToken', () => {
   it('consumes token, disables 2FA, and marks the token as used', async () => {
     const prisma: PrismaStub = {
+      $queryRaw: vi.fn(),
       $transaction: async (fn) => await fn(prisma),
       user: {
         findUnique: vi.fn().mockResolvedValue({ id: 'u1' }),

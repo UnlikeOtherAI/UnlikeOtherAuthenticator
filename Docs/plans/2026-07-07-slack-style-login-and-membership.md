@@ -575,11 +575,14 @@ This section was added post-implementation to record what the code survey and ga
    workspace. Org deactivation/removal now revokes exact user+org families across all domains and
    preserves same-domain revocation for legacy unscoped sessions; team removal revokes exact
    user+team families across all domains. Status and revocation commit together through
-   `uoa_admin`. Every refresh takes a narrow user+domain transaction lock, re-reads its row, and
-   scoped rotation then takes the ordered membership locks. Org lifecycle takes the same lock
-   order, closing replacement-after-revoke races for both scoped and legacy unscoped families.
+   `uoa_admin`. Every refresh takes user-global then user+domain, re-reads its row, and scoped
+   rotation then takes the ordered membership locks. Org lifecycle uses the same hierarchy; team
+   lifecycle takes user-global before membership, closing cross-domain and legacy races.
    Reuse-triggered whole-family revocation commits before the generic 401 is raised and shares the
-   session lock with current-token rotation. Reactivation/re-add never resurrects an old family.
+   hierarchy with current-token rotation. Family logout also re-reads under those locks and commits
+   its token-version bump with revocation. Every password/2FA credential reset takes user-global
+   before mutation and commits all-domain refresh revocation plus `tokenVersion` atomically.
+   Reactivation/re-add never resurrects an old family.
 
 ### 12b. Deferred / follow-up backlog
 

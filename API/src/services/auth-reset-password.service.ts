@@ -13,7 +13,8 @@ import { generateEmailToken, hashEmailToken } from '../utils/verification-token.
 import { extractEmailTheme } from './email-theme.service.js';
 import { sendPasswordResetEmail } from './email.service.js';
 import { hashPassword } from './password.service.js';
-import { revokeAllRefreshTokensForUser } from './refresh-token.service.js';
+import { revokeAllRefreshTokensForUser } from './refresh-token-revocation.service.js';
+import { lockRefreshSessionUser } from './refresh-session-lock.service.js';
 import { buildUserIdentity } from './user-scope.service.js';
 
 type ResetPasswordPrisma = Pick<PrismaClient, '$transaction'> & {
@@ -22,6 +23,8 @@ type ResetPasswordPrisma = Pick<PrismaClient, '$transaction'> & {
 };
 
 type ResetPasswordDeps = {
+  afterRefreshSessionLock?: () => Promise<void>;
+  beforeRefreshSessionLock?: () => Promise<void>;
   env?: ReturnType<typeof getEnv>;
   now?: () => Date;
   sharedSecret?: string;
@@ -245,6 +248,10 @@ export async function resetPasswordWithToken(
       throw new AppError('BAD_REQUEST', 400, 'INVALID_TOKEN_USER');
     }
 
+    await deps?.beforeRefreshSessionLock?.();
+    await lockRefreshSessionUser(user.id, { prisma: tx });
+    await deps?.afterRefreshSessionLock?.();
+
     await tx.user.update({
       where: { userKey: tokenRow.userKey },
       data: { passwordHash },
@@ -267,15 +274,13 @@ export async function resetPasswordWithToken(
       throw new AppError('BAD_REQUEST', 400, 'TOKEN_ALREADY_USED');
     }
 
-    return { userId: user.id };
-  });
+    await (deps?.revokeAllRefreshTokensForUser ?? revokeAllRefreshTokensForUser)(user.id, {
+      now: () => now,
+      prisma: tx,
+    });
 
-  // Credential change → any pre-existing refresh token must die. Done after the
-  // transaction commits so a revoke failure cannot roll back the password change.
-  await (deps?.revokeAllRefreshTokensForUser ?? revokeAllRefreshTokensForUser)(result.userId, {
-    now: () => now,
+    return { userId: user.id };
   });
 
   return result;
 }
-

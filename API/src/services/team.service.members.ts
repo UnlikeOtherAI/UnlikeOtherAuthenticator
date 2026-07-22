@@ -5,7 +5,8 @@ import { runInTransaction } from '../db/tenant-context.js';
 import { AppError } from '../utils/errors.js';
 
 import { auditOrg } from './organisation.service.base.js';
-import { revokeRefreshTokenFamiliesForUserTeam } from './refresh-token.service.js';
+import { revokeRefreshTokenFamiliesForUserTeam } from './refresh-token-revocation.service.js';
+import { lockRefreshSessionUser } from './refresh-session-lock.service.js';
 import { lockWorkspaceMembershipRows } from './workspace-scope.service.js';
 import {
   assertDatabaseEnabled,
@@ -264,6 +265,7 @@ export async function removeTeamMember(
   }
 
   return await runInTransaction(prisma, async (tx) => {
+    await lockRefreshSessionUser(userId, { prisma: tx });
     await lockWorkspaceMembershipRows(
       { userId, orgId: org.id },
       { prisma: tx },

@@ -7,8 +7,10 @@ import {
   exchangeRefreshToken,
   issueRefreshToken,
   revokeRefreshTokenFamily,
-  revokeRefreshTokensForUserDomain,
 } from '../../src/services/refresh-token.service.js';
+import {
+  revokeRefreshTokensForUserDomain,
+} from '../../src/services/refresh-token-revocation.service.js';
 
 function hashRefreshToken(token: string, sharedSecret: string): string {
   return createHmac('sha256', sharedSecret).update(token, 'utf8').digest('hex');
@@ -410,6 +412,7 @@ describe('refresh-token.service (unit)', () => {
   it('revokes the refresh-token family and bumps the user token version on logout', async () => {
     const userUpdate = vi.fn().mockResolvedValue({ id: 'user-1' });
     const prisma = {
+      $queryRaw: vi.fn().mockResolvedValue([{ lockResult: '' }]),
       refreshToken: {
         findUnique: vi.fn().mockResolvedValue({
           familyId: 'family-1',
@@ -468,6 +471,7 @@ describe('refresh-token.service (unit)', () => {
   it('revokes only this domain\'s refresh tokens and does NOT bump the user token version', async () => {
     const userUpdate = vi.fn();
     const prisma = {
+      $queryRaw: vi.fn().mockResolvedValue([{ lockResult: '' }]),
       refreshToken: {
         updateMany: vi.fn().mockResolvedValue({ count: 3 }),
       },

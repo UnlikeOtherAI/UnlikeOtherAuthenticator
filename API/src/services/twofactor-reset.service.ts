@@ -11,7 +11,8 @@ import { runInTransaction } from '../db/tenant-context.js';
 import { AppError } from '../utils/errors.js';
 import { generateEmailToken, hashEmailToken } from '../utils/verification-token.js';
 import { sendTwoFaResetEmail } from './email.service.js';
-import { revokeAllRefreshTokensForUser } from './refresh-token.service.js';
+import { revokeAllRefreshTokensForUser } from './refresh-token-revocation.service.js';
+import { lockRefreshSessionUser } from './refresh-session-lock.service.js';
 import { buildUserIdentity } from './user-scope.service.js';
 
 type TwoFaResetRequestPrisma = {
@@ -25,6 +26,8 @@ type TwoFaResetConsumePrisma = Pick<PrismaClient, '$transaction'> & {
 };
 
 type TwoFaResetDeps = {
+  afterRefreshSessionLock?: () => Promise<void>;
+  beforeRefreshSessionLock?: () => Promise<void>;
   env?: ReturnType<typeof getEnv>;
   now?: () => Date;
   sharedSecret?: string;
@@ -215,6 +218,10 @@ export async function resetTwoFaWithToken(
       throw new AppError('BAD_REQUEST', 400, 'INVALID_TOKEN_USER');
     }
 
+    await deps?.beforeRefreshSessionLock?.();
+    await lockRefreshSessionUser(user.id, { prisma: tx });
+    await deps?.afterRefreshSessionLock?.();
+
     await tx.user.update({
       where: { userKey: tokenRow.userKey },
       data: {
@@ -241,13 +248,12 @@ export async function resetTwoFaWithToken(
       throw new AppError('BAD_REQUEST', 400, 'TOKEN_ALREADY_USED');
     }
 
-    return { userId: user.id };
-  });
+    await (deps?.revokeAllRefreshTokensForUser ?? revokeAllRefreshTokensForUser)(user.id, {
+      now: () => now,
+      prisma: tx,
+    });
 
-  // Credential change (2FA disabled) → revoke active refresh tokens so a stolen
-  // session cannot continue past the recovery action.
-  await (deps?.revokeAllRefreshTokensForUser ?? revokeAllRefreshTokensForUser)(result.userId, {
-    now: () => now,
+    return { userId: user.id };
   });
 
   return result;

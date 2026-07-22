@@ -1,25 +1,25 @@
 import type { PrismaClient } from '@prisma/client';
 
 import { getEnv } from '../config/env.js';
-import { getAdminPrisma, getPrisma } from '../db/prisma.js';
+import { getAdminPrisma } from '../db/prisma.js';
+import { runInTransaction } from '../db/tenant-context.js';
 import { AppError } from '../utils/errors.js';
-import { revokeAllRefreshTokensForUser } from './refresh-token.service.js';
+import { revokeAllRefreshTokensForUser } from './refresh-token-revocation.service.js';
+import { lockRefreshSessionUser } from './refresh-session-lock.service.js';
 import { verifyTwoFactorForLogin } from './twofactor-login.service.js';
 
-type DisablePrisma = Pick<PrismaClient, 'user'>;
+type DisablePrisma = PrismaClient;
 
 type DisableDeps = {
+  afterRefreshSessionLock?: () => Promise<void>;
+  beforeRefreshSessionLock?: () => Promise<void>;
   prisma?: DisablePrisma;
   revokeAllRefreshTokensForUser?: typeof revokeAllRefreshTokensForUser;
   verifyTwoFactorForLogin?: typeof verifyTwoFactorForLogin;
 };
 
-function tenantPrisma(deps?: DisableDeps): DisablePrisma {
-  return deps?.prisma ?? (getPrisma() as unknown as DisablePrisma);
-}
-
 function adminPrisma(deps?: { prisma?: DisablePrisma }): DisablePrisma {
-  return deps?.prisma ?? (getAdminPrisma() as unknown as DisablePrisma);
+  return deps?.prisma ?? getAdminPrisma();
 }
 
 async function clearTwoFactor(userId: string, prisma: DisablePrisma): Promise<void> {
@@ -60,24 +60,43 @@ export async function disableTwoFactorForUser(
     throw new AppError('INTERNAL', 500, 'DATABASE_DISABLED');
   }
 
-  const prisma = tenantPrisma(deps);
-  await (deps?.verifyTwoFactorForLogin ?? verifyTwoFactorForLogin)(
-    { userId: params.userId, code: params.code },
-    { prisma },
-  );
-  await clearTwoFactor(params.userId, prisma);
-  await (deps?.revokeAllRefreshTokensForUser ?? revokeAllRefreshTokensForUser)(params.userId);
+  const prisma = adminPrisma(deps);
+  await runInTransaction(prisma, async (tx) => {
+    await deps?.beforeRefreshSessionLock?.();
+    await lockRefreshSessionUser(params.userId, { prisma: tx });
+    await deps?.afterRefreshSessionLock?.();
+    await (deps?.verifyTwoFactorForLogin ?? verifyTwoFactorForLogin)(
+      { userId: params.userId, code: params.code },
+      { prisma: tx },
+    );
+    await clearTwoFactor(params.userId, tx);
+    await (deps?.revokeAllRefreshTokensForUser ?? revokeAllRefreshTokensForUser)(params.userId, {
+      prisma: tx,
+    });
+  });
 }
 
 export async function resetTwoFactorForUser(
   params: { userId: string },
-  deps?: { prisma?: DisablePrisma; revokeAllRefreshTokensForUser?: typeof revokeAllRefreshTokensForUser },
+  deps?: {
+    afterRefreshSessionLock?: () => Promise<void>;
+    beforeRefreshSessionLock?: () => Promise<void>;
+    prisma?: DisablePrisma;
+    revokeAllRefreshTokensForUser?: typeof revokeAllRefreshTokensForUser;
+  },
 ): Promise<void> {
   if (!getEnv().DATABASE_URL) {
     throw new AppError('INTERNAL', 500, 'DATABASE_DISABLED');
   }
 
   const prisma = adminPrisma(deps);
-  await resetTwoFactor(params.userId, prisma);
-  await (deps?.revokeAllRefreshTokensForUser ?? revokeAllRefreshTokensForUser)(params.userId);
+  await runInTransaction(prisma, async (tx) => {
+    await deps?.beforeRefreshSessionLock?.();
+    await lockRefreshSessionUser(params.userId, { prisma: tx });
+    await deps?.afterRefreshSessionLock?.();
+    await resetTwoFactor(params.userId, tx);
+    await (deps?.revokeAllRefreshTokensForUser ?? revokeAllRefreshTokensForUser)(params.userId, {
+      prisma: tx,
+    });
+  });
 }

@@ -10,12 +10,15 @@ import { hashEmailToken } from '../utils/verification-token.js';
 import { hashPassword } from './password.service.js';
 import { ensureDomainRoleForUser } from './domain-role.service.js';
 import { placeUserInConfiguredOrganisation } from './org-placement.service.js';
-import { revokeAllRefreshTokensForUser } from './refresh-token.service.js';
+import { revokeAllRefreshTokensForUser } from './refresh-token-revocation.service.js';
+import { lockRefreshSessionUser } from './refresh-session-lock.service.js';
 import { acceptTeamInviteWithinTransaction } from './team-invite.service.js';
 
 type VerifyEmailPrisma = PrismaClient;
 
 type VerifyEmailDeps = {
+  afterRefreshSessionLock?: () => Promise<void>;
+  beforeRefreshSessionLock?: () => Promise<void>;
   env?: ReturnType<typeof getEnv>;
   now?: () => Date;
   sharedSecret?: string;
@@ -217,6 +220,9 @@ export async function verifyEmailToken(
       }
 
       if (existingUser) {
+        await deps?.beforeRefreshSessionLock?.();
+        await lockRefreshSessionUser(existingUser.id, { prisma: tx });
+        await deps?.afterRefreshSessionLock?.();
         const updated = await tx.user.update({
           where: { userKey: tokenRow.userKey },
           data: {
@@ -314,6 +320,13 @@ export async function verifyEmailToken(
       throw new AppError('BAD_REQUEST', 400, 'TOKEN_ALREADY_USED');
     }
 
+    if (setPasswordOnExistingUser) {
+      await (deps?.revokeAllRefreshTokensForUser ?? revokeAllRefreshTokensForUser)(userId, {
+        now: () => now,
+        prisma: tx,
+      });
+    }
+
     return {
       userId,
       type,
@@ -324,16 +337,6 @@ export async function verifyEmailToken(
       acceptedInvite,
     };
   });
-
-  if (consumed.setPasswordOnExistingUser) {
-    // N-L-1: a social-login / passwordless account that just got a password is a
-    // credential change. Any refresh token issued before the password binding must
-    // die. Done after the transaction commits so a revoke failure cannot roll back
-    // the password write.
-    await (deps?.revokeAllRefreshTokensForUser ?? revokeAllRefreshTokensForUser)(consumed.userId, {
-      now: () => now,
-    });
-  }
 
   if (consumed.createdUser && !consumed.acceptedInvite) {
     try {

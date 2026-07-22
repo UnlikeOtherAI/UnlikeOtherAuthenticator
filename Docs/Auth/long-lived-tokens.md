@@ -81,11 +81,11 @@ If an already-rotated refresh token is presented again:
 4. Subsequent refresh attempts from that family also fail
 
 This is the theft-detection path for replayed refresh tokens. Every production refresh decision
-holds a PostgreSQL transaction advisory lock scoped to exact `(user_id, domain)`. Because the raw
-token is needed to discover that identity, UOA performs an opaque lookup, takes the lock, and then
-re-reads the row before deciding reuse, rejection, or rotation. Reuse and a current-token rotation
-therefore cannot cross: whichever commits first determines the state observed by the waiter, and no
-new live replacement can escape the family revocation.
+takes PostgreSQL transaction advisory locks in the canonical order: exact user-global, then exact
+`(user_id, domain)`. Because the raw token is needed to discover that identity, UOA performs an
+opaque lookup, takes both locks, and then re-reads the row before deciding reuse, rejection, or
+rotation. Reuse and a current-token rotation therefore cannot cross: whichever commits first
+determines the state observed by the waiter, and no new live replacement can escape revocation.
 
 ## Workspace Lifecycle Revocation
 
@@ -100,15 +100,40 @@ Workspace-scoped refresh families are terminated when their membership stops bei
   interactive authorization flow.
 
 The status tombstone and refresh-row updates run in one fail-closed `uoa_admin` transaction. Org
-lifecycle takes the exact user+domain refresh-session lock before the canonical
-organisation-then-team membership locks; refresh takes that same session lock and, when scoped, the
-same membership locks before creating a replacement. This also serializes legacy unscoped rows,
-which have no org/team IDs available to lock. A refresh that commits first is followed and revoked
-by the lifecycle writer, while a lifecycle writer that commits first is observed by the refresh's
-post-lock re-read and no replacement is created. Team-only lifecycle remains serialized by its
-exact membership locks. Lifecycle revocation does not bump the user's global token version:
-already-issued access tokens expire at their normal short TTL, and unrelated workspace/product
-sessions are not globally invalidated.
+lifecycle takes user-global, user+domain, then canonical organisation/team membership locks. Team
+lifecycle takes user-global before its membership locks. Refresh follows the same hierarchy before
+creating a replacement. This also serializes legacy unscoped rows, which have no org/team IDs
+available to lock. Refresh-first is followed and revoked by the lifecycle writer; lifecycle-first
+is observed by refresh's post-lock re-read and creates no replacement. Lifecycle revocation does
+not bump the global token version: already-issued access tokens expire normally, and unrelated
+workspace/product sessions are not globally invalidated.
+
+## Logout and Global Credential Revocation
+
+`POST /auth/revoke` first performs an opaque, context-bound lookup. Only after a valid subject is
+known does it take user-global then user+domain locks and re-read the row. Family revocation and the
+`User.tokenVersion` increment commit in the same transaction. Missing, mismatched, or concurrently
+deleted tokens retain the same successful no-oracle response.
+
+Password reset, password binding during verify-email, email 2FA reset, authenticated 2FA disable,
+and admin 2FA reset use `uoa_admin`. Each takes the user-global lock before changing credentials,
+then atomically revokes every live refresh row and increments `tokenVersion` in that transaction.
+If refresh commits first, the reset revokes its replacement and invalidates its access token. If
+reset commits first, refresh's post-lock re-read sees revocation and cannot mint either token.
+
+The shipped revocation caller audit is:
+
+| Caller | Database boundary | Ordered locks | Atomic effects |
+| --- | --- | --- | --- |
+| Refresh rotation/reuse | `uoa_admin` | product policy → user-global → user/domain → org/team → signature | rotate, or durable family theft revocation |
+| `POST /auth/revoke` | tenant domain transaction | user-global → user/domain | family revoke + `tokenVersion` |
+| Org deactivate/remove | `uoa_admin` | user-global → user/domain → org/team | status + exact-org + legacy-domain revoke |
+| Team-member remove | `uoa_admin` | user-global → org/team | status + exact-team revoke |
+| Password reset | `uoa_admin` | user-global | password + all-refresh revoke + `tokenVersion` |
+| Verify-email password binding | `uoa_admin` | user-global | password/token consume + all-refresh revoke + `tokenVersion` |
+| Email 2FA reset | `uoa_admin` | user-global | 2FA/token consume + all-refresh revoke + `tokenVersion` |
+| Authenticated 2FA disable | `uoa_admin` | user-global | TOTP replay claim + 2FA disable + all-refresh revoke + `tokenVersion` |
+| Admin 2FA reset | `uoa_admin` | user-global | 2FA reset + all-refresh revoke + `tokenVersion` |
 
 ---
 
@@ -177,6 +202,9 @@ Success response:
   "token_type": "Bearer"
 }
 ```
+
+The response is also returned for an unknown or context-mismatched token. Valid logout revokes the
+complete family and invalidates existing access tokens before this response is sent.
 
 The confidential grant instead returns only:
 

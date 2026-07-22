@@ -4,13 +4,14 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   revokeRefreshTokenFamiliesForUserOrganisation,
   revokeRefreshTokenFamiliesForUserTeam,
-} from '../../src/services/refresh-token.service.js';
+} from '../../src/services/refresh-token-revocation.service.js';
 
 describe('refresh-token membership revocation', () => {
   const now = new Date('2026-07-21T12:00:00.000Z');
 
   function makePrisma(count: number): PrismaClient {
     return {
+      $queryRaw: vi.fn().mockResolvedValue([{ lockResult: '' }]),
       refreshToken: {
         updateMany: vi.fn().mockResolvedValue({ count }),
       },

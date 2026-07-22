@@ -294,9 +294,10 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       organisation.service.organisation.ts  — Organisation CRUD + slug generation (slice entry point)
       organisation.service.members.ts       — Org membership lifecycle
       password.service.ts                   — Hashing, validation rules, comparison
-      refresh-session-lock.service.ts       — Narrow user/domain transaction serialization
+      refresh-session-lock.service.ts       — Canonical user-global then user/domain serialization
+      refresh-token-revocation.service.ts   — Domain/workspace/global revocation transactions
       refresh-token-rotation-policy.service.ts — Workspace/signature gates held through refresh rotation
-      refresh-token.service.ts              — Refresh token issuance, rotation, reuse detection, revocation
+      refresh-token.service.ts              — Refresh issuance, rotation, reuse detection, family logout
       refresh-token-transaction.service.ts  — Durable reuse revocation commit before opaque rejection
       retention-pruning.service.ts          — Retention pruning jobs
       root-page.service.ts                  — Root holding page rendering
@@ -413,18 +414,20 @@ Request → Route → Middleware → Service → Database (Prisma)
 - **error-handler** — catches all errors. Returns a generic public body via `utils/error-response.ts` to the caller and logs specifics internally.
 - **rate-limiter** — request rate limiting; keyed helpers for auth routes live in `routes/auth/rate-limit-keys.ts`.
 
-Refresh rotation and destructive membership lifecycle share one concurrency boundary. After the
-opaque lookup discovers the subject, every refresh takes a transaction advisory lock keyed to exact
-user+normalized-domain and re-reads the row. Scoped refresh then takes the exact organisation and
-team membership locks before replacement. Org deactivation/removal takes the same session lock
-before locking the organisation and all of that user's team memberships; team removal continues to
-serialize through the exact membership rows. The lifecycle transaction writes status and revokes
-exact user+org or user+team families across all issuing domains, plus legacy same-domain unscoped
-rows for org lifecycle. These endpoints deliberately use the BYPASSRLS admin client because
-`uoa_app` cannot see sibling-domain refresh rows; services repeat actor/target authorization and
-fail the whole transaction if revocation fails. Reuse detection holds the same session lock, revokes
-the family, returns a private commit signal from the transaction, and only then raises the ordinary
-opaque 401. Reactivation and re-add never clear revoked state.
+Refresh and revocation use one lock hierarchy: product-policy read lock when applicable, exact
+user-global, exact user+normalized-domain when applicable, then organisation/team membership and
+signature-policy locks. Refresh discovers identity by opaque lookup, takes the session locks, and
+re-reads before any decision. Org lifecycle takes user-global + user/domain before membership;
+team lifecycle takes user-global before membership. Their `uoa_admin` transactions atomically write
+status and revoke exact cross-domain workspace families plus legacy same-domain rows as applicable.
+Reuse revokes its family and commits through the private transaction outcome before the opaque 401.
+
+Family logout follows opaque lookup → user-global → user/domain → re-read, and commits family
+revocation with the access-token version bump. Password reset, verify-email password binding, email
+2FA reset, authenticated 2FA disable, and admin 2FA reset use one `uoa_admin` transaction: take
+user-global, mutate the credential, revoke all refresh rows, bump `tokenVersion`. This prevents a
+concurrent refresh from inserting a live replacement or signing with the newly bumped version.
+Reactivation/re-add never clear revoked state.
 
 `POST /auth/token` remains a thin multi-grant route. Its confidential assertion
 branch uses the same config verifier and domain-hash guard as the legacy grants,

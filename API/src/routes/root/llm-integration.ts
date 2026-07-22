@@ -48,6 +48,8 @@ Store the refresh token server-side ONLY; browser clients never receive or persi
 Presenting an already-rotated token is treated as theft/replay: UOA durably revokes the complete
 family before returning the normal authentication failure, so the current replacement cannot be
 used afterward. Replace stored refresh state atomically and never retry an older token.
+Refresh, logout, and global credential recovery are serialized per user. When logout or a password/
+2FA recovery returns, no concurrent refresh replacement or access token can have escaped it.
 
 If optional agreement signatures are enabled for the domain, a newly published version or revoked signature can make the next refresh return the normal authentication failure. UOA deliberately leaves that still-valid refresh token unconsumed and unrotated; restart the interactive authorization flow so the authenticated user can review/sign the current version. Do not retry refresh in a loop.
 
@@ -334,7 +336,10 @@ Content-Type: application/json
 { "refresh_token": "<refresh token to revoke>" }
 \`\`\`
 
-This revokes the refresh-token family AND invalidates the user's already-issued access tokens (their \`tv\` claim no longer matches the bumped per-user token version), so logout takes effect immediately rather than waiting for access-token expiry. The same access-token revocation applies on password reset and 2FA reset.
+This returns the same success for unknown/mismatched tokens (no token oracle). For a valid token it
+re-reads under the user-global and user/domain transaction locks, then atomically revokes the family
+and increments the user's token version. Password reset, password binding, and all 2FA reset/disable
+paths atomically revoke every refresh token and increment the same version.
 
 Domain admin APIs (\`/domain/users\`, \`/domain/logs\`, etc.) and team-invite / access-request review APIs use the same \`Authorization: Bearer <client_hash>\` mechanism. The old global shared-secret bearer is NOT accepted for any customer-facing endpoint.
 
