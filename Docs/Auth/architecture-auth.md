@@ -198,7 +198,10 @@ The auth flow is state-driven, not route-driven. A single popup URL loads the ap
     organisation + team even if its signed config disables org display or omits
     `user_needs_team`; those client-controlled flags cannot remove billing attribution. Exact
     membership is rechecked at selection, after 2FA/signatures immediately before code issuance,
-    and at exchange.
+    and at exchange. Recognized-product scope is resolved before the first 2FA decision on password,
+    social, email-code, and email-link flows even when `workspace_selection: off`; "off" suppresses
+    the chooser, not the server-owned attribution boundary. The exact selected Organisation joins
+    strongest-wins policy resolution across domains.
     The selection and code-exchange transactions lock the organisation membership row first and
     team membership rows second, the same order used by membership
     activation/deactivation/removal, so those transactions and lifecycle changes have one serial
@@ -213,14 +216,25 @@ The auth flow is state-driven, not route-driven. A single popup URL loads the ap
     revalidates the exact policy, org, and team and fails with the
     normal invalid-refresh response if any of them changed; it never drops scope and silently
     selects or creates a different product-domain workspace. Same-domain selections remain valid
-    if an unrelated product binding is later revoked. For an originally unscoped code, an auto flow
-    or recognized product may select only one exact eligible ACTIVE workspace. Multiple choices
+    if an unrelated product binding is later revoked. Recognized products reject an unscoped
+    authorization code at exchange; only legacy clients can retain the late unscoped path. An auto
+    flow or recognized product may select only one exact eligible ACTIVE workspace. Multiple choices
     fail closed. Zero choices create a personal org/team only when the config explicitly enables
     `user_needs_team`; otherwise a recognized product fails closed. First placement is serialized
     by a per-user transaction advisory lock, so simultaneous first logins from different products
     create one workspace and the loser reuses it. Legacy same-domain `workspace_selection: off`
     clients keep historical unscoped sessions when placement is already satisfied (or a lifecycle
     tombstone deliberately prevents healing), and their existing unscoped refreshes remain valid.
+    On both email identity continuations (`GET /auth/email/link` and `POST /auth/verify-email`),
+    chooser reads, recognized-product placement, exact policy/2FA finalization, and immediate
+    authorization-code issuance share one `uoa_admin` transaction. The per-user placement lock
+    therefore survives the cross-product zero-choice read through commit; a later issuance failure
+    rolls back the new workspace and code together. Email-token consumption and invite acceptance
+    retain their existing earlier one-time transaction, so such a failure consumes the link and the
+    user must request another one.
+    Authorization codes also persist whether interactive TOTP completed. Exchange re-resolves the
+    current exact-workspace policy and user enrollment inside the token transaction; insufficient
+    proof rejects generically, rolls code consumption back, and creates no refresh/access family.
     Refresh rotation never performs placement or workspace switching. Confidential subject and
     chained grants perform outbound/JWT verification before opening this transaction, then recheck
     ClientDomain, product policy, exact cross-product membership, delegation, and one-time use under

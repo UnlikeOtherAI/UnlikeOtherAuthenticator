@@ -48,10 +48,11 @@ Add a single Prisma enum (e.g. `TwoFaPolicy`) shared by both. Migration adds the
 ### Resolution
 
 ```
-effective = strongest(domainPolicy, orgPolicy ?? OFF)      // REQUIRED > OPTIONAL > OFF
+effective = strongest(domainPolicy, sameDomainOrgPolicies, selectedOrgPolicy)
+// REQUIRED > OPTIONAL > OFF
 ```
 
-The user's org is resolved through the existing `org_features` / `OrgMember` path that login already uses for tenant context. If the user belongs to multiple orgs on the domain, take the strongest org policy.
+The user's orgs are resolved through the existing `org_features` / `OrgMember` path that login already uses for tenant context. If the user belongs to multiple orgs on the domain, take the strongest org policy. Once a workspace is selected, that exact Organisation is included even when a server-recognized product selected it across domains. Recognized products pre-bind their mandatory exact workspace before this decision on password, social, email-code, and email-link paths; `workspace_selection: "off"` suppresses the chooser only.
 
 ### Interaction with the legacy `2fa_enabled` config flag
 
@@ -97,6 +98,12 @@ In `API/src/routes/auth/login.ts`, `API/src/routes/oauth/login.ts`, `API/src/rou
 3. If `user.twoFaEnabled` → issue `twofa_token` (existing `signTwoFaChallenge`), return `{ kind: 'twofa', twofa_token }`. Client calls `/2fa/verify`.
 4. If `effective === REQUIRED` and **not** enrolled → **do not grant an auth code**. Return `{ kind: 'twofa_enroll_required', setup_token }` (issue the §4.1 setup token here so the Auth UI can route straight into forced setup). Tokens are granted only after `/2fa/enroll` succeeds, which then issues the auth code via the normal `finalizeAuthenticatedUser` path.
 5. If `effective === OPTIONAL` and not enrolled → proceed normally (user's choice).
+
+Authorization-code issuance persists whether this interactive login completed TOTP. Code exchange
+locks/revalidates the exact ACTIVE workspace, resolves the current strongest policy and enrollment,
+and rejects a proof-free code if proof is now required. The rejection rolls code consumption back
+and creates no refresh/access-token family, closing policy and membership changes between the
+interactive step and exchange.
 
 ### 4.6 Admin endpoints (system admin only, `/internal/admin/*`, audited)
 

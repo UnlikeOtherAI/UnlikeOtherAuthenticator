@@ -6,9 +6,7 @@ import { runInTransaction } from '../db/tenant-context.js';
 import type { ClientConfig } from './config.service.js';
 import { finalizeAuthenticatedUser } from './access-request-flow.service.js';
 import { lockAndAssertAuthenticationEpoch } from './authentication-epoch.service.js';
-import {
-  lockProductWorkspacePolicyShared,
-} from './product-workspace-policy-lock.service.js';
+import { lockProductWorkspacePolicyShared } from './product-workspace-policy-lock.service.js';
 import { resolveTwoFaPolicy } from './twofactor-policy.service.js';
 import { signTwoFaChallenge } from './twofactor-challenge.service.js';
 import { startTwoFactorSetup, type TwoFactorSetupResult } from './twofactor-setup.service.js';
@@ -18,6 +16,7 @@ type FinalizeWithPolicyDeps = {
   policyLockHeld?: boolean;
   policyPrisma?: PrismaClient;
   prisma?: PrismaClient;
+  twoFaPolicyPrisma?: PrismaClient;
   workspacePrisma?: PrismaClient;
 };
 
@@ -75,6 +74,7 @@ export async function finalizeWithTwoFaPolicy(
         policyLockHeld: true,
         prisma: tx,
         policyPrisma: deps?.policyPrisma ?? tx,
+        twoFaPolicyPrisma: deps?.twoFaPolicyPrisma ?? deps?.policyPrisma ?? tx,
         workspacePrisma: deps?.workspacePrisma ?? tx,
         currentTwoFaEnabled: authenticationState.twoFaEnabled,
       });
@@ -83,6 +83,11 @@ export async function finalizeWithTwoFaPolicy(
 
   const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
   const audience = getAuthServiceIdentifier();
+  if ((params.orgId === undefined) !== (params.teamId === undefined)) {
+    throw new Error('workspace scope requires both orgId and teamId');
+  }
+  const workspace =
+    params.orgId === undefined ? {} : { orgId: params.orgId, teamId: params.teamId as string };
 
   // When workspace selection is transactional, use that transaction so a
   // freshly accepted invite's organisation policy is visible before commit.
@@ -94,7 +99,9 @@ export async function finalizeWithTwoFaPolicy(
         params.orgId ??
         (params.requestAccess ? params.config.access_requests?.target_org_id : undefined),
     },
-    deps?.prisma ? { prisma: deps.prisma } : undefined,
+    deps?.twoFaPolicyPrisma || deps?.policyPrisma || deps?.prisma
+      ? { prisma: deps.twoFaPolicyPrisma ?? deps.policyPrisma ?? deps.prisma }
+      : undefined,
   );
 
   const twoFaEnabled = deps?.currentTwoFaEnabled ?? params.twoFaEnabled;
@@ -110,8 +117,7 @@ export async function finalizeWithTwoFaPolicy(
       requestAccess: params.requestAccess,
       codeChallenge: params.codeChallenge,
       codeChallengeMethod: params.codeChallengeMethod,
-      orgId: params.orgId,
-      teamId: params.teamId,
+      ...workspace,
       sharedSecret: SHARED_SECRET,
       audience,
     });
@@ -132,8 +138,7 @@ export async function finalizeWithTwoFaPolicy(
           requestAccess: params.requestAccess,
           codeChallenge: params.codeChallenge,
           codeChallengeMethod: params.codeChallengeMethod,
-          orgId: params.orgId,
-          teamId: params.teamId,
+          ...workspace,
         },
       },
       deps?.prisma ? { prisma: deps.prisma } : undefined,
@@ -155,13 +160,12 @@ export async function finalizeWithTwoFaPolicy(
       codeChallenge: params.codeChallenge,
       codeChallengeMethod: params.codeChallengeMethod,
       ip: params.ip,
-      orgId: params.orgId,
-      teamId: params.teamId,
+      ...workspace,
     },
     deps?.prisma
       ? {
           prisma: deps.prisma,
-          policyPrisma: deps.policyPrisma ?? deps.prisma,
+          ...(deps.policyPrisma ? { policyPrisma: deps.policyPrisma } : {}),
           // Keep code/signature-continuation issuance in the caller's workspace
           // selection transaction. A replay collision can then roll back every
           // grant or invite mutation produced by the losing request.

@@ -40,7 +40,10 @@ describe('disableTwoFactorForUser', () => {
         }),
       },
       clientDomain: { findUnique: vi.fn(async () => null) },
-      organisation: { findMany: vi.fn(async () => []) },
+      organisation: {
+        findMany: vi.fn(async () => []),
+        findUnique: vi.fn(async () => null),
+      },
     } as unknown as PrismaClient;
     const prisma = {
       $transaction: vi.fn(async (body: (client: PrismaClient) => Promise<void>) => {
@@ -84,14 +87,13 @@ describe('disableTwoFactorForUser', () => {
     });
     expect(tx.organisation.findMany).toHaveBeenCalledWith({
       where: {
-        OR: [
-          {
-            domain: 'client.example.com',
-            members: { some: { userId: 'user-1', status: 'ACTIVE' } },
-          },
-          { id: 'cross-product-org' },
-        ],
+        domain: 'client.example.com',
+        members: { some: { userId: 'user-1', status: 'ACTIVE' } },
       },
+      select: { twoFaPolicy: true },
+    });
+    expect(tx.organisation.findUnique).toHaveBeenCalledWith({
+      where: { id: 'cross-product-org' },
       select: { twoFaPolicy: true },
     });
   });

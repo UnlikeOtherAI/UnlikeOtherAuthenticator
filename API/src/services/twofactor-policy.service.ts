@@ -20,6 +20,10 @@ type PolicyPrisma = {
     }): Promise<{ twoFaPolicy: TwoFaPolicyValue } | null>;
   };
   organisation: {
+    findUnique(args: {
+      where: { id: string };
+      select: { twoFaPolicy: true };
+    }): Promise<{ twoFaPolicy: TwoFaPolicyValue | null } | null>;
     findMany(args: {
       where: Record<string, unknown>;
       select: { twoFaPolicy: true };
@@ -68,7 +72,7 @@ export async function resolveTwoFaPolicy(
   params: {
     config: Pick<ClientConfig, '2fa_enabled' | 'domain'>;
     userId?: string | null;
-    /** Exact selected or prospective access-target organisation. */
+    /** Exact selected or prospective workspace, including one from another product domain. */
     orgId?: string | null;
   },
   deps?: { prisma?: PolicyPrisma },
@@ -78,36 +82,36 @@ export async function resolveTwoFaPolicy(
   }
 
   const prisma = prismaClient(deps);
-  const [domainPolicy, orgPolicies] = await Promise.all([
+  const [domainPolicy, orgPolicies, selectedOrgPolicy] = await Promise.all([
     prisma.clientDomain.findUnique({
       where: { domain: params.config.domain },
       select: { twoFaPolicy: true },
     }),
-    params.userId || params.orgId
+    params.userId
       ? prisma.organisation.findMany({
           where: {
-            OR: [
-              ...(params.userId
-                ? [
-                    {
-                      domain: params.config.domain,
-                      // Lifecycle tombstones must not keep enforcing an
-                      // organisation's policy after the user has left it.
-                      members: { some: { userId: params.userId, status: 'ACTIVE' as const } },
-                    },
-                  ]
-                : []),
-              ...(params.orgId ? [{ id: params.orgId }] : []),
-            ],
+            domain: params.config.domain,
+            // Lifecycle tombstones must not keep enforcing an organisation's
+            // policy after the user has left it.
+            members: { some: { userId: params.userId, status: 'ACTIVE' as const } },
           },
           select: { twoFaPolicy: true },
         })
       : Promise.resolve([]),
+    params.orgId
+      ? prisma.organisation.findUnique({
+          where: { id: params.orgId },
+          select: { twoFaPolicy: true },
+        })
+      : Promise.resolve(null),
   ]);
 
   let effective: TwoFaPolicyValue = domainPolicy?.twoFaPolicy ?? 'OPTIONAL';
   for (const org of orgPolicies) {
     effective = strongestTwoFaPolicy(effective, org.twoFaPolicy ?? 'OFF');
+  }
+  if (selectedOrgPolicy) {
+    effective = strongestTwoFaPolicy(effective, selectedOrgPolicy.twoFaPolicy ?? 'OFF');
   }
 
   return effective;

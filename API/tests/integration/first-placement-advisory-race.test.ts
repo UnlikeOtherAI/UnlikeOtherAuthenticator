@@ -4,8 +4,10 @@ import { BillingAppKeyPurpose } from '@prisma/client';
 import { decodeJwt } from 'jose';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { runInTransaction } from '../../src/db/tenant-context.js';
 import { issueAuthorizationCode } from '../../src/services/authorization-code.service.js';
 import { validateConfigFields, type ClientConfig } from '../../src/services/config.service.js';
+import { resolveProductWorkspaceBeforeTwoFa } from '../../src/services/required-workspace-placement.service.js';
 import { exchangeAuthorizationCodeForTokens } from '../../src/services/token.service.js';
 import { createClientId } from '../../src/utils/hash.js';
 import { baseClientConfigPayload } from '../helpers/test-config.js';
@@ -88,28 +90,47 @@ describe.skipIf(!hasDatabase)('first-placement per-user advisory lock', () => {
     return clientDomain.id;
   }
 
-  async function issueCode(userId: string, domain: string): Promise<string> {
-    const issued = await issueAuthorizationCode(
-      {
-        userId,
-        domain,
-        configUrl: `https://${domain}/auth-config`,
-        redirectUrl: `https://${domain}/oauth/callback`,
-        codeChallenge: createHash('sha256').update(verifier).digest('base64url'),
-        codeChallengeMethod: 'S256',
-        rememberMe: true,
-      },
-      { prisma: handle.prisma, sharedSecret: process.env.SHARED_SECRET! },
-    );
-    return issued.code;
+  function authorize(params: {
+    afterPlacementLock?: () => Promise<void>;
+    domain: string;
+    userId: string;
+  }) {
+    return runInTransaction(handle.prisma, async (tx) => {
+      const config = productConfig(params.domain);
+      const workspace = await resolveProductWorkspaceBeforeTwoFa(
+        { userId: params.userId, config },
+        {
+          afterWorkspaceLock: params.afterPlacementLock,
+          prisma: tx,
+          workspacePrisma: tx,
+        },
+      );
+      if (!workspace) throw new Error('recognized product did not resolve an exact workspace');
+
+      const issued = await issueAuthorizationCode(
+        {
+          userId: params.userId,
+          domain: params.domain,
+          configUrl: `https://${params.domain}/auth-config`,
+          redirectUrl: `https://${params.domain}/oauth/callback`,
+          codeChallenge: createHash('sha256').update(verifier).digest('base64url'),
+          codeChallengeMethod: 'S256',
+          rememberMe: true,
+          twoFaCompleted: false,
+          ...workspace,
+        },
+        {
+          crossProductPrisma: tx,
+          policyPrisma: tx,
+          prisma: tx,
+          sharedSecret: process.env.SHARED_SECRET!,
+        },
+      );
+      return { code: issued.code, workspace };
+    });
   }
 
-  function exchange(params: {
-    afterPlacementLock?: () => Promise<void>;
-    clientDomainId: string;
-    code: string;
-    domain: string;
-  }) {
+  function exchange(params: { clientDomainId: string; code: string; domain: string }) {
     return exchangeAuthorizationCodeForTokens(
       {
         authenticatedClientDomainId: params.clientDomainId,
@@ -122,22 +143,33 @@ describe.skipIf(!hasDatabase)('first-placement per-user advisory lock', () => {
       },
       {
         adminPrisma: handle.prisma,
-        afterRequiredWorkspaceLock: params.afterPlacementLock,
         prisma: handle.prisma,
         sharedSecret: process.env.SHARED_SECRET!,
       },
     );
   }
 
-  async function expectStillPending(promise: Promise<unknown>): Promise<void> {
-    const state = await Promise.race([
-      promise.then(
-        () => 'settled',
-        () => 'settled',
-      ),
-      new Promise<'pending'>((resolve) => setTimeout(() => resolve('pending'), 40)),
-    ]);
-    expect(state).toBe('pending');
+  async function waitForPlacementLockWaiter(userId: string): Promise<void> {
+    const deadline = Date.now() + 4_000;
+    while (Date.now() < deadline) {
+      const [row] = await handle.prisma.$queryRaw<Array<{ count: number }>>`
+        WITH placement_key AS (
+          SELECT hashtextextended(
+            ${`uoa:required-team-placement:${userId}`}, 0
+          ) AS value
+        )
+        SELECT count(*)::int AS count
+        FROM pg_locks, placement_key
+        WHERE locktype = 'advisory'
+          AND classid::bigint = ((value >> 32) & 4294967295)::bigint
+          AND objid::bigint = (value & 4294967295)::bigint
+          AND objsubid = 1
+          AND NOT granted
+      `;
+      if ((row?.count ?? 0) >= 1) return;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    throw new Error('timed out waiting for the second product placement transaction');
   }
 
   it('creates one workspace when two products place the same new user simultaneously', async () => {
@@ -154,39 +186,52 @@ describe.skipIf(!hasDatabase)('first-placement per-user advisory lock', () => {
       createProduct(firstDomain, 1),
       createProduct(secondDomain, 2),
     ]);
-    const [firstCode, secondCode] = await Promise.all([
-      issueCode(user.id, firstDomain),
-      issueCode(user.id, secondDomain),
-    ]);
     const placed = deferred();
     const release = deferred();
-    const first = exchange({
-      clientDomainId: firstClientDomainId,
-      code: firstCode,
+    const first = authorize({
       domain: firstDomain,
+      userId: user.id,
       afterPlacementLock: async () => {
         placed.resolve();
         await release.promise;
       },
     });
-    await placed.promise;
+    let second: ReturnType<typeof authorize> | undefined;
+    try {
+      await placed.promise;
+      second = authorize({
+        domain: secondDomain,
+        userId: user.id,
+      });
+      await waitForPlacementLockWaiter(user.id);
+      release.resolve();
 
-    const second = exchange({
-      clientDomainId: secondClientDomainId,
-      code: secondCode,
-      domain: secondDomain,
-    });
-    await expectStillPending(second);
-    release.resolve();
+      const [firstAuthorization, secondAuthorization] = await Promise.all([first, second]);
+      expect(firstAuthorization.workspace).toEqual(secondAuthorization.workspace);
 
-    const [firstTokens, secondTokens] = await Promise.all([first, second]);
-    const firstActive = decodeJwt(firstTokens.accessToken).active;
-    const secondActive = decodeJwt(secondTokens.accessToken).active;
-    expect(firstActive).toEqual(secondActive);
-    expect(firstActive).toMatchObject({ orgId: expect.any(String), teamId: expect.any(String) });
-    expect(await handle.prisma.organisation.count()).toBe(1);
-    expect(await handle.prisma.team.count()).toBe(1);
-    expect(await handle.prisma.orgMember.count({ where: { userId: user.id } })).toBe(1);
-    expect(await handle.prisma.teamMember.count({ where: { userId: user.id } })).toBe(1);
+      const [firstTokens, secondTokens] = await Promise.all([
+        exchange({
+          clientDomainId: firstClientDomainId,
+          code: firstAuthorization.code,
+          domain: firstDomain,
+        }),
+        exchange({
+          clientDomainId: secondClientDomainId,
+          code: secondAuthorization.code,
+          domain: secondDomain,
+        }),
+      ]);
+      const firstActive = decodeJwt(firstTokens.accessToken).active;
+      const secondActive = decodeJwt(secondTokens.accessToken).active;
+      expect(firstActive).toEqual(secondActive);
+      expect(firstActive).toMatchObject({ orgId: expect.any(String), teamId: expect.any(String) });
+      expect(await handle.prisma.organisation.count()).toBe(1);
+      expect(await handle.prisma.team.count()).toBe(1);
+      expect(await handle.prisma.orgMember.count({ where: { userId: user.id } })).toBe(1);
+      expect(await handle.prisma.teamMember.count({ where: { userId: user.id } })).toBe(1);
+    } finally {
+      release.resolve();
+      await Promise.allSettled(second ? [first, second] : [first]);
+    }
   });
 });

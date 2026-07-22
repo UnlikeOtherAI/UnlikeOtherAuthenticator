@@ -61,8 +61,8 @@ export async function finalizeAuthenticatedUser(
     codeChallenge?: string;
     codeChallengeMethod?: 'S256';
     ip?: string | null;
-    // Workspace scope resolved by explicit /auth/select-team or an unambiguous one-team
-    // auto-selection. Callers omit both when workspace selection is off or unresolved.
+    // Workspace scope resolved by explicit selection, auto-selection, or
+    // recognized-product placement. Legacy unresolved callers omit both.
     orgId?: string;
     teamId?: string;
   },

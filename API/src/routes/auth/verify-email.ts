@@ -3,8 +3,8 @@ import { z } from 'zod';
 
 import { LOGIN_SESSION_AUDIENCE } from '../../config/constants.js';
 import { requireEnv } from '../../config/env.js';
+import { runInTransaction } from '../../db/tenant-context.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
-import { runWithRequestAdminTransaction } from '../../plugins/tenant-context.plugin.js';
 import { AppError } from '../../utils/errors.js';
 import {
   validateVerifyEmailToken,
@@ -20,6 +20,7 @@ import { signLoginSession } from '../../services/login-session.service.js';
 import { lockAndAssertAuthenticationEpoch } from '../../services/authentication-epoch.service.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
 import { parseRequestAccessFlag } from '../../services/access-request-flow.service.js';
+import { resolveProductWorkspaceBeforeTwoFa } from '../../services/required-workspace-placement.service.js';
 import { selectRedirectUrl } from '../../services/authorization-code.service.js';
 import { finalizeWithTwoFaPolicy } from '../../services/workspace-finalize.service.js';
 import { lockProductWorkspacePolicyShared } from '../../services/product-workspace-policy-lock.service.js';
@@ -97,71 +98,90 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
       const rememberMe = config.session?.remember_me_default ?? true;
       const requestAccess = parseRequestAccessFlag(request_access);
 
-      // An accepted email invite is already an explicit workspace selection and always bypasses the
-      // chooser. Otherwise auto mode either selects the sole team or exposes every real action,
-      // including the zero-team "create workspace" entrypoint.
-      let selectedWorkspace: AutoSelectedWorkspace | null = acceptedInvite
-        ? { orgId: acceptedInvite.orgId, teamId: acceptedInvite.teamId }
-        : null;
-      if (!acceptedInvite && config.login_flow?.workspace_selection === 'auto') {
-        const chooser = await runWithRequestAdminTransaction(request, async (prisma) => {
-          await lockProductWorkspacePolicyShared(prisma);
-          await lockAndAssertAuthenticationEpoch(
-            { userId, domain: config.domain, credentialEpoch },
-            { prisma, fallbackTwoFaEnabled: twoFaEnabled },
-          );
-          const choices = await buildWorkspaceChoices({ userId, config }, { prisma });
-          const selected = resolveAutoSelectedWorkspace(choices);
-          if (!shouldPresentWorkspaceChooser(choices, selected)) {
-            return { choices, selected, loginToken: null };
-          }
-          const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
-          const loginToken = await signLoginSession({
-            userId,
-            credentialEpoch,
-            config,
-            configUrl,
-            redirectUrl,
-            rememberMe,
-            requestAccess,
-            codeChallenge: pkce.codeChallenge,
-            codeChallengeMethod: pkce.codeChallengeMethod,
-            sharedSecret: SHARED_SECRET,
-            audience: LOGIN_SESSION_AUDIENCE,
-          });
-          return { choices, selected, loginToken };
-        });
-        selectedWorkspace = chooser.selected;
-        if (chooser.loginToken) {
-          reply.status(200).send({ login_token: chooser.loginToken, ...chooser.choices });
-          return;
-        }
-      }
-
       const authMethod =
         type === 'LOGIN_LINK'
           ? 'login_link'
           : type === 'VERIFY_EMAIL'
             ? 'verify_email'
             : 'verify_email_set_password';
-      const outcome = await finalizeWithTwoFaPolicy(
-        {
-          userId,
-          credentialEpoch,
-          twoFaEnabled,
-          config,
-          configUrl,
-          redirectUrl,
-          rememberMe,
-          requestAccess,
-          authMethod,
-          codeChallenge: pkce.codeChallenge,
-          codeChallengeMethod: pkce.codeChallengeMethod,
-          ip: request.ip ?? null,
-          ...(selectedWorkspace ?? {}),
-        },
-        { prisma: request.adminDb },
-      );
+      const continuation = await runInTransaction(request.adminDb, async (tx) => {
+        await lockProductWorkspacePolicyShared(tx);
+        const authenticationState = await lockAndAssertAuthenticationEpoch(
+          { userId, domain: config.domain, credentialEpoch },
+          { prisma: tx, fallbackTwoFaEnabled: twoFaEnabled },
+        );
+
+        // Hold first-placement selection through exact-scope policy evaluation and code issuance.
+        // The admin transaction preserves intentional cross-product and accepted-invite reads.
+        let selectedWorkspace: AutoSelectedWorkspace | null = acceptedInvite
+          ? { orgId: acceptedInvite.orgId, teamId: acceptedInvite.teamId }
+          : null;
+        if (!acceptedInvite && config.login_flow?.workspace_selection === 'auto') {
+          const choices = await buildWorkspaceChoices(
+            { userId, config },
+            { crossProductPrisma: tx, policyPrisma: tx, prisma: tx },
+          );
+          selectedWorkspace = resolveAutoSelectedWorkspace(choices);
+          if (shouldPresentWorkspaceChooser(choices, selectedWorkspace)) {
+            const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
+            const loginToken = await signLoginSession({
+              userId,
+              credentialEpoch,
+              config,
+              configUrl,
+              redirectUrl,
+              rememberMe,
+              requestAccess,
+              codeChallenge: pkce.codeChallenge,
+              codeChallengeMethod: pkce.codeChallengeMethod,
+              sharedSecret: SHARED_SECRET,
+              audience: LOGIN_SESSION_AUDIENCE,
+            });
+            return { kind: 'workspace_chooser' as const, choices, loginToken };
+          }
+        }
+        selectedWorkspace ??= await resolveProductWorkspaceBeforeTwoFa(
+          { userId, config },
+          { prisma: tx, workspacePrisma: tx },
+        );
+
+        const outcome = await finalizeWithTwoFaPolicy(
+          {
+            userId,
+            credentialEpoch,
+            twoFaEnabled,
+            config,
+            configUrl,
+            redirectUrl,
+            rememberMe,
+            requestAccess,
+            authMethod,
+            codeChallenge: pkce.codeChallenge,
+            codeChallengeMethod: pkce.codeChallengeMethod,
+            ip: request.ip ?? null,
+            ...(selectedWorkspace ?? {}),
+          },
+          {
+            currentTwoFaEnabled: authenticationState.twoFaEnabled,
+            policyLockHeld: true,
+            policyPrisma: tx,
+            prisma: tx,
+            twoFaPolicyPrisma: tx,
+            workspacePrisma: tx,
+          },
+        );
+        return { kind: 'finalized' as const, outcome };
+      });
+
+      if (continuation.kind === 'workspace_chooser') {
+        reply.status(200).send({
+          login_token: continuation.loginToken,
+          ...continuation.choices,
+        });
+        return;
+      }
+
+      const { outcome } = continuation;
 
       if (outcome.kind === 'twofa') {
         reply.status(200).send({

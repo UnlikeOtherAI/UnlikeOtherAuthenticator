@@ -256,7 +256,7 @@ export function registerTwoFactorSelfServiceRoutes(app: FastifyInstance): void {
             orgId: lockedSetup.orgId,
             teamId: lockedSetup.teamId,
           },
-          { workspacePrisma: request.adminDb, prisma },
+          { workspacePrisma: prisma, prisma },
         );
 
         try {

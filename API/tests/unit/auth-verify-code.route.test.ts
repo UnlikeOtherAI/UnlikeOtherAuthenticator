@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ClientConfig } from '../../src/services/config.service.js';
+import { verifyTwoFaChallenge } from '../../src/services/twofactor-challenge.service.js';
 import { testUiTheme } from '../helpers/test-config.js';
 
 let currentConfig: ClientConfig | null = null;
@@ -9,6 +10,7 @@ const verifyLoginCodeMock = vi.fn();
 const recordLoginLogMock = vi.fn(async () => undefined);
 const assertEmailDomainAllowedForLoginMock = vi.fn(async () => undefined);
 const assertNotBannedAtLoginMock = vi.fn(async () => undefined);
+const resolveProductWorkspaceBeforeTwoFaMock = vi.fn();
 
 vi.mock('@unlikeotherai/qr-art', () => ({
   renderSVG: () => '<svg />',
@@ -44,6 +46,17 @@ vi.mock('../../src/services/ban-policy.service.js', () => ({
   isPrincipalBannedForRegistration: vi.fn(async () => false),
 }));
 
+vi.mock('../../src/services/required-workspace-placement.service.js', async () => {
+  const actual = await vi.importActual<
+    typeof import('../../src/services/required-workspace-placement.service.js')
+  >('../../src/services/required-workspace-placement.service.js');
+  return {
+    ...actual,
+    resolveProductWorkspaceBeforeTwoFa: (...args: unknown[]) =>
+      resolveProductWorkspaceBeforeTwoFaMock(...args),
+  };
+});
+
 const prismaMock = vi.hoisted(() => {
   const mock: Record<string, unknown> = {
     user: { findUnique: vi.fn() },
@@ -52,7 +65,7 @@ const prismaMock = vi.hoisted(() => {
     authorizationCode: { create: vi.fn() },
     domainSignatureSettings: { findUnique: vi.fn() },
     clientDomain: { findUnique: vi.fn() },
-    organisation: { findMany: vi.fn() },
+    organisation: { findMany: vi.fn(), findUnique: vi.fn() },
   };
   // The "off" branch runs inside request.withTenantTx, which opens a real
   // prisma.$transaction(...) and issues a `SELECT set_config(...)` via $executeRaw before
@@ -154,6 +167,7 @@ describe('POST /auth/verify-code', () => {
     recordLoginLogMock.mockReset().mockResolvedValue(undefined);
     assertEmailDomainAllowedForLoginMock.mockReset().mockResolvedValue(undefined);
     assertNotBannedAtLoginMock.mockReset().mockResolvedValue(undefined);
+    resolveProductWorkspaceBeforeTwoFaMock.mockReset().mockResolvedValue(null);
     prismaMock.authorizationCode.create.mockResolvedValue({ id: 'code-row-1' });
     prismaMock.$executeRaw.mockResolvedValue(1);
     prismaMock.domainSignatureSettings.findUnique.mockResolvedValue(null);
@@ -166,7 +180,9 @@ describe('POST /auth/verify-code', () => {
 
   it('returns the same generic error for a wrong/expired/unknown code', async () => {
     const { AppError } = await import('../../src/utils/errors.js');
-    verifyLoginCodeMock.mockRejectedValue(new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED'));
+    verifyLoginCodeMock.mockRejectedValue(
+      new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED'),
+    );
 
     const res = await postVerifyCode({ email: 'jane@example.com', code: '000000' });
 
@@ -175,7 +191,9 @@ describe('POST /auth/verify-code', () => {
   });
 
   it('workspace_selection "auto": returns login_token + chooser payload without finalizing', async () => {
-    currentConfig = baseConfig({ login_flow: { email_code_enabled: true, workspace_selection: 'auto' } });
+    currentConfig = baseConfig({
+      login_flow: { email_code_enabled: true, workspace_selection: 'auto' },
+    });
     verifyLoginCodeMock.mockResolvedValue({ userId: 'user-1', credentialEpoch: 0 });
     prismaMock.user.findUnique.mockResolvedValue({
       email: 'jane@example.com',
@@ -195,7 +213,9 @@ describe('POST /auth/verify-code', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(typeof body.login_token).toBe('string');
-    expect(body.teams).toEqual([{ teamId: 'team-1', orgId: 'org-1', name: 'Design', role: 'member' }]);
+    expect(body.teams).toEqual([
+      { teamId: 'team-1', orgId: 'org-1', name: 'Design', role: 'member' },
+    ]);
     expect(body.pending_invites).toEqual([]);
     expect(prismaMock.authorizationCode.create).not.toHaveBeenCalled();
   });
@@ -225,7 +245,10 @@ describe('POST /auth/verify-code', () => {
   });
 
   it('workspace_selection "off" still enforces 2FA — returns a twofa challenge, not a code', async () => {
-    currentConfig = baseConfig({ '2fa_enabled': true, login_flow: { email_code_enabled: true, workspace_selection: 'off' } });
+    currentConfig = baseConfig({
+      '2fa_enabled': true,
+      login_flow: { email_code_enabled: true, workspace_selection: 'off' },
+    });
     verifyLoginCodeMock.mockResolvedValue({ userId: 'user-1', credentialEpoch: 0 });
     prismaMock.user.findUnique.mockResolvedValue({
       email: 'jane@example.com',
@@ -244,6 +267,41 @@ describe('POST /auth/verify-code', () => {
     const body = res.json();
     expect(body).toMatchObject({ ok: true, twofa_required: true });
     expect(typeof body.twofa_token).toBe('string');
+    expect(prismaMock.authorizationCode.create).not.toHaveBeenCalled();
+  });
+
+  it('binds a recognized product workspace before resolving email-code 2FA', async () => {
+    currentConfig = baseConfig({
+      '2fa_enabled': true,
+      login_flow: { email_code_enabled: true, workspace_selection: 'off' },
+    });
+    verifyLoginCodeMock.mockResolvedValue({ userId: 'user-1', credentialEpoch: 0 });
+    prismaMock.user.findUnique.mockResolvedValue({
+      email: 'jane@example.com',
+      twoFaEnabled: true,
+      tokenVersion: 0,
+      domainRoles: [],
+      orgMembers: [],
+      teamMembers: [],
+    });
+    prismaMock.clientDomain.findUnique.mockResolvedValue({ twoFaPolicy: 'OFF' });
+    prismaMock.organisation.findMany.mockResolvedValue([]);
+    prismaMock.organisation.findUnique.mockResolvedValue({ twoFaPolicy: 'REQUIRED' });
+    resolveProductWorkspaceBeforeTwoFaMock.mockResolvedValue({
+      orgId: 'org-cross',
+      teamId: 'team-cross',
+    });
+
+    const res = await postVerifyCode({ email: 'jane@example.com', code: '123456' });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { twofa_token: string };
+    const challenge = await verifyTwoFaChallenge({
+      token: body.twofa_token,
+      sharedSecret: process.env.SHARED_SECRET as string,
+      audience: process.env.AUTH_SERVICE_IDENTIFIER as string,
+    });
+    expect(challenge).toMatchObject({ orgId: 'org-cross', teamId: 'team-cross' });
     expect(prismaMock.authorizationCode.create).not.toHaveBeenCalled();
   });
 });

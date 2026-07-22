@@ -18,8 +18,8 @@ const TwoFaChallengeSchema = z.object({
   request_access: z.boolean().optional(),
   code_challenge: z.string().min(1).optional(),
   code_challenge_method: z.literal('S256').optional(),
-  // Workspace scope carried through from /auth/select-team or an unambiguous one-team auto-skip
-  // (Phase 3b, design §4.4). Absent when workspace selection is off or no workspace was selected.
+  // Exact scope selected explicitly, auto-selected, or pre-bound for a recognized product.
+  // Legacy clients without a resolved workspace omit both values.
   org_id: z.string().min(1).optional(),
   team_id: z.string().min(1).optional(),
 });

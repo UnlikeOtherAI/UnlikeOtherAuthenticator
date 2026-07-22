@@ -480,7 +480,7 @@ Same body/response shape for \`PUT /org/organisations/:orgId\`. Rules, identical
 
 ### 4.7 Two-factor login branches
 
-When config \`2fa_enabled\` is false or absent, no 2FA branch runs. When it is true, UOA resolves DB policy from the Service/domain plus the user's Organisations using strongest-wins (\`off < optional < required\`).
+When config \`2fa_enabled\` is false or absent, no 2FA branch runs. When it is true, UOA resolves DB policy from the Service/domain, same-domain Organisations, and the exact selected Organisation using strongest-wins (\`off < optional < required\`). A recognized product resolves that exact workspace before 2FA even when its chooser is off. Authorization-code exchange rechecks current policy and enrollment against persisted interactive proof, so a newly stricter policy fails closed before token issuance.
 
 - Enrolled users get \`{ ok: true, twofa_required: true, twofa_token }\`; submit \`{ twofa_token, code }\` to \`POST /2fa/verify?config_url=...\` and follow \`redirect_to\`.
 - Required but unenrolled users get \`{ ok: true, kind: "twofa_enroll_required", twofa_enroll_required: true, setup_token, otpauth_uri?, qr_svg?, manual_secret? }\`; the Auth UI completes \`POST /2fa/enroll\` with the setup token and initial code before any authorization code is granted.

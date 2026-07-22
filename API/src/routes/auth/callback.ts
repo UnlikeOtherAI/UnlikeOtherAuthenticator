@@ -34,16 +34,12 @@ import {
 } from '../../services/social/social-state-cookie.js';
 import { setSocialCallbackDebugContext } from '../../services/auth-debug-page.service.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
-import {
-  lockProductWorkspacePolicyShared,
-} from '../../services/product-workspace-policy-lock.service.js';
+import { lockProductWorkspacePolicyShared } from '../../services/product-workspace-policy-lock.service.js';
 import { sendDeepLinkHandoff } from '../../services/auth-ui.service.js';
 import { isCustomSchemeUrl } from '../../utils/http-url.js';
-import { finalizeAuthenticatedUser } from '../../services/access-request-flow.service.js';
 import { requestRegistrationInstructions } from '../../services/auth-register.service.js';
-import { resolveTwoFaPolicy } from '../../services/twofactor-policy.service.js';
-import { signTwoFaChallenge } from '../../services/twofactor-challenge.service.js';
-import { startTwoFactorSetup } from '../../services/twofactor-setup.service.js';
+import { resolveProductWorkspaceBeforeTwoFa } from '../../services/required-workspace-placement.service.js';
+import { finalizeWithTwoFaPolicy } from '../../services/workspace-finalize.service.js';
 import { selectRedirectUrl } from '../../services/authorization-code.service.js';
 import { lockAndAssertAuthenticationEpoch } from '../../services/authentication-epoch.service.js';
 import { socialCallbackRateLimiter } from './rate-limit-keys.js';
@@ -301,8 +297,8 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
           const choices = await buildWorkspaceChoices(
             { userId, config },
             {
-              crossProductPrisma: request.adminDb,
-              policyPrisma: request.adminDb,
+              crossProductPrisma: prisma,
+              policyPrisma: prisma,
               prisma,
             },
           );
@@ -325,79 +321,47 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
           }
         }
 
-        const twoFaPolicy = await resolveTwoFaPolicy(
-          {
-            config,
-            userId,
-            orgId:
-              autoSelectedWorkspace?.orgId ??
-              (socialState.request_access === true
-                ? config.access_requests?.target_org_id
-                : undefined),
-          },
-          { prisma },
+        autoSelectedWorkspace ??= await resolveProductWorkspaceBeforeTwoFa(
+          { userId, config },
+          { prisma, workspacePrisma: prisma },
         );
-        if (twoFaPolicy !== 'OFF' && authenticationState.twoFaEnabled) {
-          const twofa_token = await signTwoFaChallenge({
-            userId,
-            credentialEpoch,
-            domain: config.domain,
-            configUrl,
-            redirectUrl,
-            authMethod: provider,
-            rememberMe,
-            requestAccess: socialState.request_access === true,
-            codeChallenge: socialState.code_challenge,
-            codeChallengeMethod: socialState.code_challenge_method,
-            ...(autoSelectedWorkspace ?? {}),
-            sharedSecret: SHARED_SECRET,
-            audience: authServiceIdentifier,
-          });
-          return { kind: 'twofa' as const, twofa_token };
-        }
-
-        if (twoFaPolicy === 'REQUIRED') {
-          const setup = await startTwoFactorSetup(
-            {
-              userId,
-              credentialEpoch,
-              config,
-              configUrl,
-              finalize: {
-                authMethod: provider,
-                redirectUrl,
-                rememberMe,
-                requestAccess: socialState.request_access === true,
-                codeChallenge: socialState.code_challenge,
-                codeChallengeMethod: socialState.code_challenge_method,
-                ...(autoSelectedWorkspace ?? {}),
-              },
-            },
-            { prisma },
-          );
-          return { kind: 'twofa_enroll_required' as const, setupToken: setup.setup_token };
-        }
 
         // The workspace decision happens before 2FA: an explicit chooser returns above, while an
         // unambiguous auto-skip is carried through any 2FA bridge and bound to the final code.
-        const finalResult = await finalizeAuthenticatedUser(
+        const finalized = await finalizeWithTwoFaPolicy(
           {
             userId,
             credentialEpoch,
+            twoFaEnabled,
             config,
             configUrl,
             redirectUrl,
             rememberMe,
             requestAccess: socialState.request_access === true,
             authMethod: provider,
-            twoFaCompleted: false,
             codeChallenge: socialState.code_challenge,
             codeChallengeMethod: socialState.code_challenge_method,
             ip: request.ip ?? null,
             ...(autoSelectedWorkspace ?? {}),
           },
-          { workspacePrisma: request.adminDb, prisma },
+          {
+            currentTwoFaEnabled: authenticationState.twoFaEnabled,
+            policyLockHeld: true,
+            policyPrisma: prisma,
+            prisma,
+            twoFaPolicyPrisma: prisma,
+            workspacePrisma: prisma,
+          },
         );
+
+        if (finalized.kind !== 'granted') {
+          return finalized.kind === 'twofa_enroll_required'
+            ? {
+                kind: 'twofa_enroll_required' as const,
+                setupToken: finalized.setup.setup_token,
+              }
+            : finalized;
+        }
 
         try {
           await recordLoginLog(
@@ -418,7 +382,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
           request.log.error({ err }, 'failed to record login log');
         }
 
-        return { kind: 'granted' as const, finalResult };
+        return finalized;
       });
 
       if (outcome.kind === 'auth_failed') {
