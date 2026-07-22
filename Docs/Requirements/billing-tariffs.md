@@ -803,10 +803,18 @@ corrected snapshot. The settlement and its corrections retain exact service,
 user, and explicit unattributed allocations without asking Ledger to rate them.
 Credit-account creation and portfolio settlement share one bounded serializable
 retry policy with exponential full jitter, so concurrent product reads spread
-out instead of retrying as a synchronized herd. Exhausted account creation
-returns `503 BILLING_CREDIT_ACCOUNT_RETRY_EXHAUSTED`; exhausted settlement
-returns `503 BILLING_CREDIT_SETTLEMENT_RETRY_EXHAUSTED` rather than leaking a
-generic database failure.
+out instead of retrying as a synchronized herd. Exhausted account creation and
+settlement raise the internal codes `BILLING_CREDIT_ACCOUNT_RETRY_EXHAUSTED`
+and `BILLING_CREDIT_SETTLEMENT_RETRY_EXHAUSTED`, respectively. The public error
+handler returns a generic HTTP 503 without exposing either internal code or a
+database failure.
+Concurrent Ledger fetches can finish out of capture order. After taking the
+shared account lock, UOA compares a new cursor with the latest committed
+snapshot for that team and month. An authenticated snapshot captured at or
+before that latest snapshot is superseded and becomes a successful no-op, so
+the product reads the newest projection instead of receiving a database error
+or rolling usage backwards. The database stale-snapshot trigger remains the
+independent defense against any writer that bypasses this service decision.
 Corrections release prior credits before deterministic largest-remainder
 reallocation. New usage consumes only the non-negative available balance while
 the full rated-but-unfunded liability is retained; only a verified credit-entry

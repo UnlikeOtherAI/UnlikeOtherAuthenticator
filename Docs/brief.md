@@ -2090,8 +2090,12 @@ Checkout/cancellation actions. A credit read pins one exact
 team-wide Ledger cursor and settles every service atomically against the shared
 balance; it is concurrency-safe and cursor-idempotent, releases corrections
 before allocating new usage, stops ordinary usage at zero, and retains the full
-unfunded liability. Only verified reversals may create debt. The display model
-then enforces manager/member visibility, while every add-on read or mutation
+unfunded liability. Only verified reversals may create debt. When parallel
+Ledger fetches arrive out of capture order, the newest committed capture stays
+authoritative; an equal-or-older unseen cursor is a successful superseded no-op
+and cannot roll the team projection backwards. The database independently
+rejects stale snapshot writes as defense in depth. The display model then
+enforces manager/member visibility, while every add-on read or mutation
 applies the same exact subject boundary. Read/schema availability alone does not
 enable a money action: each Checkout/top-up/auto-top-up/add-on action requires
 its dedicated verified Stripe runtime and UOA policy/catalog evidence.

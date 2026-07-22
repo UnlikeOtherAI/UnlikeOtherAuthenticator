@@ -1,8 +1,4 @@
-import {
-  BillingAssignmentScope,
-  Prisma,
-  type PrismaClient,
-} from '@prisma/client';
+import { BillingAssignmentScope, Prisma, type PrismaClient } from '@prisma/client';
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
@@ -82,9 +78,7 @@ function latestAllocationMap(
 
 function assignmentTariffs(
   services: Array<{ id: string }>,
-  assignments: Array<
-    Prisma.BillingTariffAssignmentGetPayload<{ include: { tariff: true } }>
-  >,
+  assignments: Array<Prisma.BillingTariffAssignmentGetPayload<{ include: { tariff: true } }>>,
   defaults: Prisma.BillingTariffGetPayload<Record<string, never>>[],
 ): Map<string, Prisma.BillingTariffGetPayload<Record<string, never>>> {
   const selected = new Map<string, Prisma.BillingTariffGetPayload<Record<string, never>>>();
@@ -98,9 +92,10 @@ function assignmentTariffs(
         assignment.serviceId === service.id &&
         assignment.scope === BillingAssignmentScope.ORGANISATION,
     );
-    const tariff = team?.tariff ?? organisation?.tariff ?? defaults.find(
-      (candidate) => candidate.serviceId === service.id,
-    );
+    const tariff =
+      team?.tariff ??
+      organisation?.tariff ??
+      defaults.find((candidate) => candidate.serviceId === service.id);
     if (!tariff) throw new AppError('INTERNAL', 500, 'BILLING_DEFAULT_TARIFF_MISSING');
     selected.set(service.id, tariff);
   }
@@ -157,6 +152,21 @@ async function settleInTransaction(
       portfolio: params.portfolio,
     });
   } else {
+    const capturedAt = new Date(params.portfolio.snapshot.capturedAt);
+    const latestSnapshot = await tx.billingCreditPortfolioSnapshot.findFirst({
+      where: {
+        creditAccountId: account.id,
+        billingMonth: params.portfolio.scope.month,
+      },
+      orderBy: [{ capturedAt: 'desc' }, { ledgerSnapshotCursor: 'desc' }],
+    });
+    if (latestSnapshot && capturedAt.getTime() <= latestSnapshot.capturedAt.getTime()) {
+      return {
+        snapshotId: latestSnapshot.id,
+        replayed: false,
+        superseded: true,
+      };
+    }
     snapshot = await tx.billingCreditPortfolioSnapshot.create({
       data: {
         accountId: account.accountId,
@@ -170,7 +180,7 @@ async function settleInTransaction(
         groupBy: 'user',
         ledgerSnapshotId: params.portfolio.snapshot.id,
         ledgerSnapshotCursor: params.portfolio.snapshot.cursor,
-        capturedAt: new Date(params.portfolio.snapshot.capturedAt),
+        capturedAt,
         sha256: params.portfolio.snapshot.sha256,
       },
     });
@@ -193,9 +203,13 @@ async function settleInTransaction(
       ],
     },
   });
-  if (services.length !== new Set([...portfolioProducts, ...existingSettlements.map(
-    (settlement) => settlement.service.identifier,
-  )]).size) {
+  if (
+    services.length !==
+    new Set([
+      ...portfolioProducts,
+      ...existingSettlements.map((settlement) => settlement.service.identifier),
+    ]).size
+  ) {
     throw new AppError('INTERNAL', 502, 'LEDGER_CREDIT_SERVICE_UNKNOWN');
   }
   for (const service of services) {
@@ -313,7 +327,7 @@ async function settleInTransaction(
         throw new AppError('INTERNAL', 502, 'LEDGER_CREDIT_SNAPSHOT_MUTATED');
       }
     }
-    return { snapshotId: snapshot.id, replayed: true };
+    return { snapshotId: snapshot.id, replayed: true, superseded: false };
   }
 
   const work = rated.map((target) => {
@@ -326,7 +340,7 @@ async function settleInTransaction(
       left.target.consumedMicrocredits - left.settlement.cumulativeCreditsConsumedMicrocredits;
     const rightDelta =
       right.target.consumedMicrocredits - right.settlement.cumulativeCreditsConsumedMicrocredits;
-    if ((leftDelta < 0n) !== (rightDelta < 0n)) return leftDelta < 0n ? -1 : 1;
+    if (leftDelta < 0n !== rightDelta < 0n) return leftDelta < 0n ? -1 : 1;
     return left.target.service.identifier.localeCompare(right.target.service.identifier);
   });
   let balance = account.balanceMicrocredits;
@@ -343,7 +357,7 @@ async function settleInTransaction(
       balanceMicrocredits: balance,
     });
   }
-  return { snapshotId: snapshot.id, replayed: false };
+  return { snapshotId: snapshot.id, replayed: false, superseded: false };
 }
 
 export async function settleCreditPortfolio(

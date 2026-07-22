@@ -1,8 +1,4 @@
-import {
-  BillingAppKeyPurpose,
-  Prisma,
-  PrismaClient,
-} from '@prisma/client';
+import { BillingAppKeyPurpose, Prisma, PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { settleCreditPortfolio } from '../../src/services/billing-credit-settlement.service.js';
@@ -28,10 +24,7 @@ const ids = {
   creditAccount: 'bca_credit_settlement',
 } as const;
 
-function credential(
-  id: string,
-  service: { id: string; identifier: string; name: string },
-) {
+function credential(id: string, service: { id: string; identifier: string; name: string }) {
   return {
     id,
     purpose: BillingAppKeyPurpose.CUSTOMER_LIFECYCLE,
@@ -195,6 +188,87 @@ function portfolio(
   };
 }
 
+async function settleConcurrently(
+  databaseUrl: string,
+  requests: Array<{
+    portfolio: NormalizedMeteringPortfolio;
+    credential: typeof deepwaterCredential;
+  }>,
+) {
+  const clients = requests.map(
+    () => new PrismaClient({ datasources: { db: { url: databaseUrl } } }),
+  );
+  await Promise.all(clients.map((client) => client.$connect()));
+  const deferred = () => {
+    let resolve!: () => void;
+    const promise = new Promise<void>((done) => {
+      resolve = done;
+    });
+    return { promise, resolve };
+  };
+  const waves = requests.map((_, wave) => {
+    const allArrived = deferred();
+    const winnerCommitted = deferred();
+    let arrivals = 0;
+    return {
+      allArrived: allArrived.promise,
+      winnerCommitted: winnerCommitted.promise,
+      arrive() {
+        arrivals += 1;
+        if (arrivals === requests.length - wave) allArrived.resolve();
+      },
+      commit: winnerCommitted.resolve,
+    };
+  });
+  const attempts = requests.map(() => 0);
+  const concurrentClients = clients.map((client, index) => {
+    return {
+      async $transaction<T>(
+        callback: (tx: Prisma.TransactionClient) => Promise<T>,
+        options: { isolationLevel: Prisma.TransactionIsolationLevel },
+      ): Promise<T> {
+        const waveIndex = attempts[index] ?? 0;
+        attempts[index] = waveIndex + 1;
+        const wave = waves[waveIndex];
+        if (!wave) throw new Error('unexpected credit settlement retry wave');
+        try {
+          return await client.$transaction(async (tx) => {
+            await tx.billingCreditAccount.findUniqueOrThrow({
+              where: { id: ids.creditAccount },
+            });
+            wave.arrive();
+            await wave.allArrived;
+            if (index !== waveIndex) await wave.winnerCommitted;
+            return callback(tx);
+          }, options);
+        } finally {
+          if (index === waveIndex) wave.commit();
+        }
+      },
+    } as unknown as PrismaClient;
+  });
+
+  try {
+    const results = await Promise.allSettled(
+      concurrentClients.map((client, index) => {
+        const request = requests[index];
+        if (!request) throw new Error('concurrency fixture missing');
+        return settleCreditPortfolio(
+          {
+            creditAccountId: ids.creditAccount,
+            portfolio: request.portfolio,
+            credential: request.credential,
+          },
+          { prisma: client },
+        );
+      }),
+    );
+    return { attempts, results };
+  } finally {
+    await Promise.all(clients.map((client) => client.$disconnect()));
+  }
+}
+
 describe.skipIf(!databaseTestsEnabled)('credit settlement persistence', () => {
   let handle: Awaited<ReturnType<typeof createTestDb>>;
 
@@ -210,59 +284,6 @@ describe.skipIf(!databaseTestsEnabled)('credit settlement persistence', () => {
 
   it('settles four independent storefront cursors without duplicate debits', async () => {
     if (!handle) throw new Error('db handle missing');
-    const clients = Array.from(
-      { length: 4 },
-      () => new PrismaClient({ datasources: { db: { url: handle.databaseUrl } } }),
-    );
-    await Promise.all(clients.map((client) => client.$connect()));
-    const deferred = () => {
-      let resolve!: () => void;
-      const promise = new Promise<void>((done) => {
-        resolve = done;
-      });
-      return { promise, resolve };
-    };
-    const waves = Array.from({ length: 4 }, (_, wave) => {
-      const allArrived = deferred();
-      const winnerCommitted = deferred();
-      let arrivals = 0;
-      return {
-        allArrived: allArrived.promise,
-        winnerCommitted: winnerCommitted.promise,
-        arrive() {
-          arrivals += 1;
-          if (arrivals === 4 - wave) allArrived.resolve();
-        },
-        commit: winnerCommitted.resolve,
-      };
-    });
-    const attempts = [0, 0, 0, 0];
-    const concurrentClients = clients.map((client, index) => {
-      return {
-        async $transaction<T>(
-          callback: (tx: Prisma.TransactionClient) => Promise<T>,
-          options: { isolationLevel: Prisma.TransactionIsolationLevel },
-        ): Promise<T> {
-          const waveIndex = attempts[index] ?? 0;
-          attempts[index] = waveIndex + 1;
-          const wave = waves[waveIndex];
-          if (!wave) throw new Error('unexpected credit settlement retry wave');
-          try {
-            return await client.$transaction(async (tx) => {
-              await tx.billingCreditAccount.findUniqueOrThrow({
-                where: { id: ids.creditAccount },
-              });
-              wave.arrive();
-              await wave.allArrived;
-              if (index !== waveIndex) await wave.winnerCommitted;
-              return callback(tx);
-            }, options);
-          } finally {
-            if (index === waveIndex) wave.commit();
-          }
-        },
-      } as unknown as PrismaClient;
-    });
     const cursors = [
       ['mup_cursor_001', '2026-07-21T12:00:00.000Z'],
       ['mup_cursor_001_nessie', '2026-07-21T12:00:01.000Z'],
@@ -276,33 +297,28 @@ describe.skipIf(!databaseTestsEnabled)('credit settlement persistence', () => {
       nessieCredential,
     ];
 
-    try {
-      const results = await Promise.allSettled(
-        concurrentClients.map((client, index) => {
-          const cursor = cursors[index];
-          const storefrontCredential = credentials[index];
-          if (!cursor || !storefrontCredential) throw new Error('concurrency fixture missing');
-          return settleCreditPortfolio(
-            {
-              creditAccountId: ids.creditAccount,
-              portfolio: portfolio(cursor[0], cursor[1], [
-                line('deepwater', ids.owner, '1'),
-                line('nessie', null, '1'),
-              ]),
-              credential: storefrontCredential,
-            },
-            { prisma: client },
-          );
-        }),
-      );
-      expect(results.filter((result) => result.status === 'rejected')).toEqual([]);
-      expect(
-        results.every((result) => result.status === 'fulfilled' && !result.value.replayed),
-      ).toBe(true);
-      expect(attempts).toEqual([1, 2, 3, 4]);
-    } finally {
-      await Promise.all(clients.map((client) => client.$disconnect()));
-    }
+    const { attempts, results } = await settleConcurrently(
+      handle.databaseUrl,
+      cursors.map((cursor, index) => {
+        const storefrontCredential = credentials[index];
+        if (!storefrontCredential) throw new Error('concurrency fixture missing');
+        return {
+          portfolio: portfolio(cursor[0], cursor[1], [
+            line('deepwater', ids.owner, '1'),
+            line('nessie', null, '1'),
+          ]),
+          credential: storefrontCredential,
+        };
+      }),
+    );
+    expect(results.filter((result) => result.status === 'rejected')).toEqual([]);
+    expect(
+      results.every(
+        (result) =>
+          result.status === 'fulfilled' && !result.value.replayed && !result.value.superseded,
+      ),
+    ).toBe(true);
+    expect(attempts).toEqual([1, 2, 3, 4]);
 
     const account = await handle.prisma.billingCreditAccount.findUniqueOrThrow({
       where: { id: ids.creditAccount },
@@ -335,6 +351,89 @@ describe.skipIf(!databaseTestsEnabled)('credit settlement persistence', () => {
     ]);
   }, 30_000);
 
+  it('supersedes older and equal captures that arrive after the newest cursor', async () => {
+    if (!handle) throw new Error('db handle missing');
+    const cursors = [
+      ['mup_cursor_newest_first', '2026-07-21T12:00:07.000Z'],
+      ['mup_cursor_older_second', '2026-07-21T12:00:06.000Z'],
+      ['mup_cursor_older_third', '2026-07-21T12:00:05.000Z'],
+      ['mup_cursor_equal_fourth', '2026-07-21T12:00:07.000Z'],
+    ] as const;
+    const credentials = [
+      deepwaterCredential,
+      nessieCredential,
+      deepwaterCredential,
+      nessieCredential,
+    ];
+    const beforeSnapshots = await handle.prisma.billingCreditPortfolioSnapshot.count();
+    const beforeAdjustments = await handle.prisma.billingCreditUsageSettlementAdjustment.count();
+
+    const { attempts, results } = await settleConcurrently(
+      handle.databaseUrl,
+      cursors.map((cursor, index) => {
+        const storefrontCredential = credentials[index];
+        if (!storefrontCredential) throw new Error('concurrency fixture missing');
+        return {
+          portfolio: portfolio(cursor[0], cursor[1], [
+            line('deepwater', ids.owner, index === 0 ? '1' : '9'),
+            line('nessie', null, index === 0 ? '1' : '9'),
+          ]),
+          credential: storefrontCredential,
+        };
+      }),
+    );
+
+    expect(results.filter((result) => result.status === 'rejected')).toEqual([]);
+    const outcomes = results.map((result) => {
+      if (result.status !== 'fulfilled') throw result.reason;
+      return result.value;
+    });
+    expect(outcomes.map(({ replayed, superseded }) => ({ replayed, superseded }))).toEqual([
+      { replayed: false, superseded: false },
+      { replayed: false, superseded: true },
+      { replayed: false, superseded: true },
+      { replayed: false, superseded: true },
+    ]);
+    expect(new Set(outcomes.map((outcome) => outcome.snapshotId)).size).toBe(1);
+    expect(attempts).toEqual([1, 2, 2, 2]);
+
+    const replay = await settleCreditPortfolio(
+      {
+        creditAccountId: ids.creditAccount,
+        portfolio: portfolio('mup_cursor_newest_first', '2026-07-21T12:00:07.000Z', [
+          line('deepwater', ids.owner, '1'),
+          line('nessie', null, '1'),
+        ]),
+        credential: nessieCredential,
+      },
+      { prisma: handle.prisma },
+    );
+    expect(replay).toMatchObject({
+      snapshotId: outcomes[0]?.snapshotId,
+      replayed: true,
+      superseded: false,
+    });
+    expect(await handle.prisma.billingCreditPortfolioSnapshot.count()).toBe(beforeSnapshots + 1);
+    expect(await handle.prisma.billingCreditUsageSettlementAdjustment.count()).toBe(
+      beforeAdjustments + 2,
+    );
+    expect(
+      await handle.prisma.billingCreditPortfolioSnapshot.findFirstOrThrow({
+        where: { creditAccountId: ids.creditAccount },
+        orderBy: [{ capturedAt: 'desc' }, { ledgerSnapshotCursor: 'desc' }],
+        select: { ledgerSnapshotCursor: true },
+      }),
+    ).toEqual({ ledgerSnapshotCursor: 'mup_cursor_newest_first' });
+    const settlements = await handle.prisma.billingCreditUsageSettlement.findMany({
+      where: { creditAccountId: ids.creditAccount },
+      orderBy: { serviceId: 'asc' },
+    });
+    expect(settlements.map((row) => row.cumulativeRatedUsageAmountMicroMinor)).toEqual([
+      100_000_000n,
+      100_000_000n,
+    ]);
+  }, 30_000);
+
   it('replays the same cursor across storefront keys without another debit', async () => {
     if (!handle) throw new Error('db handle missing');
     const replay = await settleCreditPortfolio(
@@ -350,8 +449,9 @@ describe.skipIf(!databaseTestsEnabled)('credit settlement persistence', () => {
     );
 
     expect(replay.replayed).toBe(true);
+    expect(replay.superseded).toBe(false);
     expect(await handle.prisma.billingCreditEntry.count()).toBe(2);
-    expect(await handle.prisma.billingCreditUsageSettlementAdjustment.count()).toBe(8);
+    expect(await handle.prisma.billingCreditUsageSettlementAdjustment.count()).toBe(10);
   });
 
   it('rejects changed evidence for an already pinned cursor', async () => {
