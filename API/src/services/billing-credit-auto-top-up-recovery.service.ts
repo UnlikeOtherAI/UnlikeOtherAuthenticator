@@ -152,6 +152,12 @@ export async function recoverBillingCreditAutoTopUp(
   ) {
     throw new AppError('BAD_REQUEST', 409, 'BILLING_CREDIT_AUTO_TOP_UP_RECOVERY_UNAVAILABLE');
   }
+  let actionAuthorized = false;
+  const authorizeMutation = async (): Promise<void> => {
+    if (actionAuthorized) return;
+    await context.authorizeAction();
+    actionAuthorized = true;
+  };
   const unresolved = await prisma.billingCreditAutoTopUpAttempt.findFirst({
     where: {
       creditAccountId: context.creditAccount.id,
@@ -178,6 +184,7 @@ export async function recoverBillingCreditAutoTopUp(
       return { redirect_url: redirectUrl };
     }
     if (intent.status === 'canceled') {
+      await authorizeMutation();
       await terminalizeCurrentAttempt(
         intent,
         unresolved,
@@ -190,6 +197,7 @@ export async function recoverBillingCreditAutoTopUp(
       unresolved.status === BillingCreditAutoTopUpAttemptStatus.NEEDS_REVIEW &&
       unresolved.stateWebhookEvent?.type === 'payment_intent.payment_failed'
     ) {
+      await authorizeMutation();
       await cancelAndTerminalize(
         intent,
         unresolved,
@@ -202,6 +210,7 @@ export async function recoverBillingCreditAutoTopUp(
       intent.status === 'requires_action' &&
       unresolved.status === BillingCreditAutoTopUpAttemptStatus.REQUIRES_ACTION
     ) {
+      await authorizeMutation();
       await cancelAndTerminalize(
         intent,
         unresolved,

@@ -25,6 +25,11 @@ describe('customer billing action intent migration', () => {
     expect(migration).toContain('team_row."org_id" IS DISTINCT FROM NEW."org_id"');
     expect(migration).toContain('org_member_row."status" IS DISTINCT FROM \'ACTIVE\'');
     expect(migration).toContain('team_member_row."status" IS DISTINCT FROM \'ACTIVE\'');
+    expect(migration).toContain(
+      'user_row."token_version" IS DISTINCT FROM NEW."actor_token_version"',
+    );
+    expect(migration).toContain('NEW."actor_expires_at" <= clock_timestamp()');
+    expect(migration).toContain('app_key_row."expires_at" <= clock_timestamp()');
     expect(migration).toContain('NEW."authority_scope" = \'TEAM\'');
   });
 

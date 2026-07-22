@@ -146,22 +146,32 @@ used as product request API keys (or vice versa).
 ## Durable customer-action authorization
 
 Every customer-triggered commercial mutation crosses one UOA-owned durable
-authorization boundary before UOA creates, changes, or cancels a Stripe object
-or applies a local monetary transition. `BillingCustomerActionIntent` stores
-only the exact product/app, user, organisation, team, required manager scope,
-operation, actor `jti`, and a canonical request digest. It never stores an
+authorization boundary at the first real effect, after frozen-action and
+domain-state validation but before UOA creates, changes, or cancels a Stripe
+object or applies a local monetary transition. Invalid requests, already-
+satisfied no-ops, and idempotent completed/processing replays do not append
+unbounded authorization evidence. `BillingCustomerActionIntent` stores only
+the exact product/app, user, organisation, team, required manager scope,
+operation, actor `jti`, actor credential epoch and expiry, and a canonical
+request digest. It never stores an
 actor bearer, return URL, preview token, Stripe secret, amount supplied by a
 product, or raw Ledger fact.
 
 The insert trigger is the linearization point. In a deterministic order it
 locks the lifecycle app key, billing service, user, organisation, requested
 team, organisation membership, and team membership, then independently
-requires an active `customer_lifecycle` key, active service, exact team/org
-binding, active memberships, and current owner/admin authority for the
+requires an active, wall-clock-unexpired `customer_lifecycle` key, active
+service, an unexpired actor whose stored credential epoch still equals the
+locked user's `token_version`, exact team/org binding, active memberships, and
+current owner/admin authority for the
 operation's organisation or team scope. Concurrent app-key revocation,
 membership removal, deactivation, or role downgrade therefore commits either
 before the intent and rejects it, or after an already-authorized action. The
 row is append-only, forced-RLS commercial evidence unavailable to `uoa_app`.
+Cancellation and recurring-add-on cancellation insert it in the same
+transaction as the first `AVAILABLE` to `PROCESSING` claim; automatic top-up
+update/disable insert it only after the locked predecessor checks and
+immediately before their domain effect.
 
 The product must reuse the same actor assertion and `jti` when retrying one
 logical HTTP action after a transport failure. UOA then returns the existing
@@ -209,6 +219,8 @@ The actor JWT is credential-bound and must use:
 - exact configured `iss` and `aud`;
 - `sub = user_id`;
 - claims `product`, `organisation_id`, and `team_id` exactly matching the body;
+- non-negative integer `tv` equal to the UOA access-token credential epoch from
+  which the product established this exact SSO session;
 - non-empty `jti`;
 - integer `iat` and `exp`, with a maximum lifetime of 60 seconds.
 

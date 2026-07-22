@@ -19,14 +19,18 @@ vi.mock('../../src/middleware/admin-superuser.js', () => ({
   requireAdminSuperuser: async (
     request: {
       headers: { authorization?: string };
-      adminAccessTokenClaims?: { userId: string; email: string };
+      adminAccessTokenClaims?: { userId: string; email: string; tokenVersion: number };
     },
     reply: { code: (statusCode: number) => { send: (body: unknown) => unknown } },
   ) => {
     if (request.headers.authorization !== 'Bearer admin-token') {
       return reply.code(401).send({ error: 'UNAUTHORIZED' });
     }
-    request.adminAccessTokenClaims = { userId: 'admin_1', email: 'admin@example.com' };
+    request.adminAccessTokenClaims = {
+      userId: 'admin_1',
+      email: 'admin@example.com',
+      tokenVersion: 3,
+    };
   },
 }));
 
@@ -321,7 +325,7 @@ describe('contract invoice admin routes', () => {
         contractId: 'contract_1',
         issuerProfileId: 'issuer_1',
         billingMonth: '2026-06',
-        actor: { userId: 'admin_1', email: 'admin@example.com' },
+        actor: { userId: 'admin_1', tokenVersion: 3, email: 'admin@example.com' },
       });
     } finally {
       await app.close();

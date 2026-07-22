@@ -133,6 +133,9 @@ export async function updateBillingCreditAutoTopUp(
   ) {
     throw new AppError('BAD_REQUEST', 409, 'BILLING_CREDIT_AUTO_TOP_UP_UPDATE_UNAVAILABLE');
   }
+  if (!context.customer.stripeCustomerId) {
+    throw new AppError('BAD_REQUEST', 409, 'BILLING_CREDIT_PAYMENT_METHOD_UNAVAILABLE');
+  }
   const selection = await (deps?.resolveOption ?? resolveCreditAutoTopUpOption)(
     {
       serviceId: params.credential.service.id,
@@ -196,6 +199,7 @@ export async function updateBillingCreditAutoTopUp(
           assertConsentReplay(replay, expected);
           return;
         }
+        await context.authorizeAction(tx);
         const revision = await tx.billingCreditAutoTopUpConsentRevision.create({
           data: {
             accountId: context.account.id,
@@ -320,6 +324,26 @@ export async function disableBillingCreditAutoTopUp(
     { prisma },
   );
   if (context.creditAccount.autoTopUpState === BillingCreditAutoTopUpState.DISABLED) return;
+  const unresolvedBeforeAuthorization = await prisma.billingCreditAutoTopUpAttempt.findFirst({
+    where: {
+      creditAccountId: context.creditAccount.id,
+      status: {
+        in: [
+          BillingCreditAutoTopUpAttemptStatus.PENDING,
+          BillingCreditAutoTopUpAttemptStatus.PROCESSING,
+          BillingCreditAutoTopUpAttemptStatus.REQUIRES_ACTION,
+          BillingCreditAutoTopUpAttemptStatus.NEEDS_REVIEW,
+        ],
+      },
+    },
+    select: { id: true },
+  });
+  if (unresolvedBeforeAuthorization) {
+    throw new AppError('BAD_REQUEST', 409, 'BILLING_CREDIT_AUTO_TOP_UP_PAYMENT_PENDING');
+  }
+  if (!context.creditAccount.autoTopUpConsentRevisionId) {
+    throw new AppError('BAD_REQUEST', 409, 'BILLING_CREDIT_CONSENT_PREDECESSOR_MISSING');
+  }
   await prisma.$transaction(
     async (tx) => {
       const account = await lockConsentSnapshot(tx, context.creditAccount.id);
@@ -344,6 +368,7 @@ export async function disableBillingCreditAutoTopUp(
       if (!account.autoTopUpConsentRevisionId) {
         throw new AppError('BAD_REQUEST', 409, 'BILLING_CREDIT_CONSENT_PREDECESSOR_MISSING');
       }
+      await context.authorizeAction(tx);
       await tx.billingCreditAutoTopUpDisableEvent.create({
         data: {
           accountId: context.account.id,

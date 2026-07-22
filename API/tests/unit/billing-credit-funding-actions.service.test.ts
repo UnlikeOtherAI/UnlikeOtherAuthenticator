@@ -95,13 +95,16 @@ function baseContext(overrides?: Record<string, unknown>) {
     paymentMethodSummary: null,
     ...overrides,
   };
+  const customer = { id: 'customer_1', stripeCustomerId: 'cus_team_1' };
   const context = {
-    actor: { jti: 'actor_jti_1' },
+    actor: { jti: 'actor_jti_1', tv: 0, exp: 2_000_000_000 },
     viewer: { billingManager: true },
     account,
     creditAccount,
-    customer: { id: 'customer_1', stripeCustomerId: 'cus_team_1' },
+    customer,
     stripe,
+    authorizeAction: vi.fn(),
+    ensureCustomer: vi.fn().mockResolvedValue(customer),
   } as unknown as CreditFundingActionContext;
   return { context, stripe, sessionsCreate };
 }
@@ -158,6 +161,9 @@ describe('UOA credit funding mutation services', () => {
   it('persists fixed top-up intent before creating exact-price Stripe Checkout', async () => {
     const state = baseContext();
     const order: string[] = [];
+    state.context.authorizeAction = vi.fn(async () => {
+      order.push('authorize');
+    });
     const create = vi.fn(async ({ data }) => {
       order.push('local');
       return { ...checkoutRow('top_up'), ...data, id: 'checkout_topup_1' };
@@ -197,7 +203,7 @@ describe('UOA credit funding mutation services', () => {
       },
     );
 
-    expect(order).toEqual(['local', 'stripe']);
+    expect(order).toEqual(['authorize', 'local', 'stripe']);
     expect(result.redirect_url).toContain('checkout.stripe.com');
     expect(create).toHaveBeenCalledWith({
       data: expect.objectContaining({
@@ -314,6 +320,21 @@ describe('UOA credit funding mutation services', () => {
 
     expect(result).toEqual({ redirect_url: session.url });
     expect(state.sessionsCreate).not.toHaveBeenCalled();
+    expect(state.context.authorizeAction).not.toHaveBeenCalled();
+  });
+
+  it('does not append action evidence when automatic top-up is already disabled', async () => {
+    const state = baseContext();
+
+    await disableBillingCreditAutoTopUp(
+      { request, actorToken: 'actor', credential },
+      {
+        prisma: {} as PrismaClient,
+        resolveContext: vi.fn().mockResolvedValue(state.context),
+      },
+    );
+
+    expect(state.context.authorizeAction).not.toHaveBeenCalled();
   });
 
   it('updates immutable consent from the verified customer card and exact option', async () => {
@@ -411,7 +432,10 @@ describe('UOA credit funding mutation services', () => {
       billingCreditSetupCheckout: { updateMany: vi.fn() },
       orgAuditLog: { create: vi.fn() },
     };
-    const prisma = { $transaction: vi.fn((callback) => callback(tx)) } as unknown as PrismaClient;
+    const prisma = {
+      billingCreditAutoTopUpAttempt: { findFirst: vi.fn().mockResolvedValue(null) },
+      $transaction: vi.fn((callback) => callback(tx)),
+    } as unknown as PrismaClient;
 
     await disableBillingCreditAutoTopUp(
       { request, actorToken: 'actor', credential },
@@ -451,7 +475,12 @@ describe('UOA credit funding mutation services', () => {
       },
       billingCreditAutoTopUpDisableEvent: { create: disableCreate },
     };
-    const prisma = { $transaction: vi.fn((callback) => callback(tx)) } as unknown as PrismaClient;
+    const prisma = {
+      billingCreditAutoTopUpAttempt: {
+        findFirst: vi.fn().mockResolvedValue({ id: 'attempt_ambiguous' }),
+      },
+      $transaction: vi.fn((callback) => callback(tx)),
+    } as unknown as PrismaClient;
 
     await expect(
       disableBillingCreditAutoTopUp(

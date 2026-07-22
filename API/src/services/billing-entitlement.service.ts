@@ -194,7 +194,7 @@ export async function resolveEffectiveTariffContext(
           }),
           tx.user.findUnique({
             where: { id: request.userId },
-            select: { id: true },
+            select: { id: true, tokenVersion: true },
           }),
           tx.orgMember.findUnique({
             where: {
@@ -263,6 +263,7 @@ export async function resolveEffectiveTariffContext(
   if (
     !resolution.service ||
     !resolution.user ||
+    resolution.user.tokenVersion !== actor.tv ||
     resolution.orgMember?.status !== MembershipStatus.ACTIVE ||
     !resolution.team
   ) {

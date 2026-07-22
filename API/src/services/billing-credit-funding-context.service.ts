@@ -1,9 +1,15 @@
-import { BillingAssignmentScope, type PrismaClient } from '@prisma/client';
+import {
+  BillingAssignmentScope,
+  type BillingStripeCustomer,
+  type Prisma,
+  type PrismaClient,
+} from '@prisma/client';
 import type Stripe from 'stripe';
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
+import type { BillingActor } from './billing-actor.service.js';
 import {
   authorizeBillingCustomerAction,
   type BillingCustomerAction,
@@ -41,12 +47,14 @@ export type CreditFundingStripeClient = Pick<
 >;
 
 export type CreditFundingActionContext = {
-  actor: { jti: string };
+  actor: BillingActor;
   viewer: BillingFundingViewer;
   account: StripeAccountContext;
   creditAccount: Awaited<ReturnType<typeof ensureTeamCreditAccount>>;
-  customer: Awaited<ReturnType<typeof ensureStripeCustomer>>;
+  customer: BillingStripeCustomer;
   stripe: CreditFundingStripeClient;
+  authorizeAction: (tx?: Prisma.TransactionClient) => Promise<void>;
+  ensureCustomer: () => Promise<BillingStripeCustomer>;
 };
 
 type ContextDependencies = {
@@ -88,20 +96,6 @@ export async function resolveCreditFundingActionContext(
   if (!viewer.billingManager) {
     throw new AppError('FORBIDDEN', 403, 'BILLING_MANAGER_REQUIRED');
   }
-  await (deps?.authorizeAction ?? authorizeBillingCustomerAction)(
-    {
-      credential: params.credential,
-      organisationId: params.request.organisationId,
-      teamId: params.request.teamId,
-      userId: params.request.userId,
-      authorityScope: BillingAssignmentScope.TEAM,
-      operation: params.action.operation,
-      actorJti: actor.jti,
-      request: params.action.request,
-    },
-    { prisma },
-  );
-
   const configured = deps?.stripe ? null : requireStripeBillingEnabled();
   const stripe = deps?.stripe ?? configured?.client;
   if (!stripe) throw new AppError('INTERNAL', 503, 'STRIPE_BILLING_DISABLED');
@@ -137,23 +131,51 @@ export async function resolveCreditFundingActionContext(
   if (!localCustomer || !user || !organisation || !team) {
     throw new AppError('FORBIDDEN', 403, 'BILLING_SUBJECT_NOT_ENTITLED');
   }
-  const customer = await (deps?.ensureCustomer ?? ensureStripeCustomer)(
-    {
-      customer: localCustomer,
-      account,
-      email: user.email,
-      name: team.name || organisation.name,
-      orgId: organisation.id,
-      teamId: team.id,
-      scope: localCustomer.scope,
-      scopeKey: localCustomer.scopeKey,
-    },
-    { prisma, stripe },
-  );
-  if (!customer.stripeCustomerId) {
-    throw new AppError('INTERNAL', 502, 'STRIPE_CUSTOMER_INCOMPLETE');
-  }
-  return { actor, viewer, account, creditAccount, customer, stripe };
+  const authorizeAction = async (tx?: Prisma.TransactionClient): Promise<void> => {
+    await (deps?.authorizeAction ?? authorizeBillingCustomerAction)(
+      {
+        credential: params.credential,
+        organisationId: params.request.organisationId,
+        teamId: params.request.teamId,
+        userId: params.request.userId,
+        authorityScope: BillingAssignmentScope.TEAM,
+        operation: params.action.operation,
+        actor,
+        request: params.action.request,
+      },
+      { prisma: tx ?? prisma },
+    );
+  };
+  const ensureCustomer = async (): Promise<BillingStripeCustomer> => {
+    if (localCustomer.stripeCustomerId) return localCustomer;
+    const customer = await (deps?.ensureCustomer ?? ensureStripeCustomer)(
+      {
+        customer: localCustomer,
+        account,
+        email: user.email,
+        name: team.name || organisation.name,
+        orgId: organisation.id,
+        teamId: team.id,
+        scope: localCustomer.scope,
+        scopeKey: localCustomer.scopeKey,
+      },
+      { prisma, stripe },
+    );
+    if (!customer.stripeCustomerId) {
+      throw new AppError('INTERNAL', 502, 'STRIPE_CUSTOMER_INCOMPLETE');
+    }
+    return customer;
+  };
+  return {
+    actor,
+    viewer,
+    account,
+    creditAccount,
+    customer: localCustomer,
+    stripe,
+    authorizeAction,
+    ensureCustomer,
+  };
 }
 
 export async function resolveCreditTopUpOffer(

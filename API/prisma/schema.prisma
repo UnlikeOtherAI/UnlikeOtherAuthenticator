@@ -1607,6 +1607,8 @@ model BillingCustomerActionIntent {
   authorityScope    BillingAssignmentScope @map("authority_scope")
   operation         String                 @db.VarChar(100)
   actorJti          String                 @map("actor_jti") @db.VarChar(256)
+  actorTokenVersion Int                    @map("actor_token_version")
+  actorExpiresAt    DateTime               @map("actor_expires_at")
   requestDigest     String                 @map("request_digest") @db.Char(64)
   createdAt         DateTime               @default(now()) @map("created_at")
 
