@@ -166,6 +166,24 @@ export async function createRecurringAddonCheckout(
   const selectedScope = recurringAddonScope(entitlementScope, params.request);
   assertCanManageRecurringAddonScope(viewer, selectedScope.scope);
   const urls = returnUrls(params.credential);
+  let catalog = offer.catalogs[0];
+  if (!catalog) {
+    throw new AppError('BAD_REQUEST', 409, 'BILLING_RECURRING_ADDON_CATALOG_UNAVAILABLE');
+  }
+  const existingSubscription = await prisma.billingRecurringAddonSubscription.findFirst({
+    where: {
+      accountId: account.id,
+      serviceId: offer.serviceId,
+      offerKey: offer.key,
+      scope: selectedScope.scope,
+      scopeKey: selectedScope.scopeKey,
+      status: { notIn: ['canceled', 'incomplete_expired'] },
+    },
+    select: { id: true },
+  });
+  if (existingSubscription) {
+    throw new AppError('BAD_REQUEST', 409, 'BILLING_RECURRING_ADDON_SUBSCRIPTION_EXISTS');
+  }
   await (deps?.authorizeAction ?? authorizeBillingCustomerAction)(
     {
       credential: params.credential,
@@ -174,7 +192,7 @@ export async function createRecurringAddonCheckout(
       userId: params.request.userId,
       authorityScope: selectedScope.customerScope,
       operation: BILLING_CUSTOMER_ACTION.RECURRING_ADDON_CHECKOUT,
-      actorJti: actor.jti,
+      actor,
       request: {
         product: params.request.product,
         organisation_id: params.request.organisationId,
@@ -189,10 +207,6 @@ export async function createRecurringAddonCheckout(
     },
     { prisma },
   );
-  let catalog = offer.catalogs[0];
-  if (!catalog) {
-    throw new AppError('BAD_REQUEST', 409, 'BILLING_RECURRING_ADDON_CATALOG_UNAVAILABLE');
-  }
   catalog = await ensureRecurringAddonStripeCatalog(
     {
       catalog,

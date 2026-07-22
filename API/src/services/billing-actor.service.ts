@@ -16,6 +16,7 @@ const BillingActorSchema = z
     product: z.string().trim().min(1).max(100),
     organisation_id: z.string().trim().min(1).max(256),
     team_id: z.string().trim().min(1).max(256),
+    tv: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
     jti: z.string().trim().min(1).max(256),
     iat: z.number().int().positive(),
     exp: z.number().int().positive(),

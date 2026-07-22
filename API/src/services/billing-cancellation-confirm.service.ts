@@ -121,6 +121,7 @@ async function claimCancellation(
     selection: BillingCancellationSelection | null;
     currentSubscriptionId: string;
     now: Date;
+    authorizeAction: (tx: Prisma.TransactionClient) => Promise<void>;
   },
   prisma: PrismaClient,
   loadState: typeof loadBillingCancellationState,
@@ -224,6 +225,7 @@ async function claimCancellation(
         return target;
       });
       if (intent.state === BillingCancellationIntentState.AVAILABLE) {
+        await params.authorizeAction(tx);
         await tx.billingCancellationIntent.update({
           where: { id: intent.id },
           data: {
@@ -348,39 +350,42 @@ export async function confirmBillingCancellation(
   if (!summary.can_manage || !summary.subscription) {
     throw new AppError('FORBIDDEN', 403, 'BILLING_CANCELLATION_NOT_AVAILABLE');
   }
+  const subscription = summary.subscription;
   const { actor } = await (deps?.resolveTariff ?? resolveEffectiveTariffContext)(params, {
     prisma,
   });
-  await (deps?.authorizeAction ?? authorizeBillingCustomerAction)(
-    {
-      credential: params.credential,
-      organisationId: params.request.organisationId,
-      teamId: params.request.teamId,
-      userId: params.request.userId,
-      authorityScope:
-        summary.subscription.scope === 'organisation'
-          ? BillingAssignmentScope.ORGANISATION
-          : BillingAssignmentScope.TEAM,
-      operation: BILLING_CUSTOMER_ACTION.SUBSCRIPTION_CANCEL,
-      actorJti: actor.jti,
-      request: {
-        product: params.request.product,
-        organisation_id: params.request.organisationId,
-        team_id: params.request.teamId,
-        user_id: params.request.userId,
-        subscription_id: summary.subscription.id,
-        preview_token_digest: digest(params.token),
-        idempotency_key_digest: digest(params.idempotencyKey),
-        selection: params.selection,
-      },
-    },
-    { prisma },
-  );
   const claimed = await claimCancellation(
     {
       ...params,
-      currentSubscriptionId: summary.subscription.id,
+      currentSubscriptionId: subscription.id,
       now: deps?.now?.() ?? new Date(),
+      authorizeAction: async (tx) => {
+        await (deps?.authorizeAction ?? authorizeBillingCustomerAction)(
+          {
+            credential: params.credential,
+            organisationId: params.request.organisationId,
+            teamId: params.request.teamId,
+            userId: params.request.userId,
+            authorityScope:
+              subscription.scope === 'organisation'
+                ? BillingAssignmentScope.ORGANISATION
+                : BillingAssignmentScope.TEAM,
+            operation: BILLING_CUSTOMER_ACTION.SUBSCRIPTION_CANCEL,
+            actor,
+            request: {
+              product: params.request.product,
+              organisation_id: params.request.organisationId,
+              team_id: params.request.teamId,
+              user_id: params.request.userId,
+              subscription_id: subscription.id,
+              preview_token_digest: digest(params.token),
+              idempotency_key_digest: digest(params.idempotencyKey),
+              selection: params.selection,
+            },
+          },
+          { prisma: tx },
+        );
+      },
     },
     prisma,
     deps?.loadState ?? loadBillingCancellationState,

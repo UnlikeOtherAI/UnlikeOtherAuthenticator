@@ -25,7 +25,7 @@ const request = {
   userId: 'user_1',
   authorityScope: BillingAssignmentScope.TEAM,
   operation: BILLING_CUSTOMER_ACTION.CREDIT_TOP_UP,
-  actorJti: 'actor_1',
+  actor: { jti: 'actor_1', tv: 3, exp: 1_784_742_460 },
   request: { offer_id: 'offer_1', nested: { b: 'two', a: 'one' } },
 };
 
@@ -39,7 +39,9 @@ function row() {
     requestedByUserId: request.userId,
     authorityScope: request.authorityScope,
     operation: request.operation,
-    actorJti: request.actorJti,
+    actorJti: request.actor.jti,
+    actorTokenVersion: request.actor.tv,
+    actorExpiresAt: new Date(request.actor.exp * 1000),
     requestDigest: billingCustomerActionDigest(request.request),
     createdAt: new Date('2026-07-22T12:00:00.000Z'),
   };

@@ -77,6 +77,7 @@ const adminRoute: RouteShorthandOptions = {
 function actor(request: FastifyRequest) {
   return {
     userId: request.adminAccessTokenClaims?.userId ?? null,
+    tokenVersion: request.adminAccessTokenClaims?.tokenVersion ?? null,
     email: request.adminAccessTokenClaims?.email ?? 'unknown',
   };
 }

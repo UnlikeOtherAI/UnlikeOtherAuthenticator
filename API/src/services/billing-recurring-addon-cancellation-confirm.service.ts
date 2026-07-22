@@ -122,6 +122,7 @@ async function claimCancellation(
     credential: VerifiedBillingAppKey;
     subjectFingerprint: string;
     now: Date;
+    authorizeAction: (tx: Prisma.TransactionClient) => Promise<void>;
   },
   prisma: PrismaClient,
 ): Promise<Claim> {
@@ -173,6 +174,7 @@ async function claimCancellation(
         return { kind: 'expired' };
       }
       if (intent.state === BillingRecurringAddonCancellationIntentState.AVAILABLE) {
+        await params.authorizeAction(tx);
         await tx.billingRecurringAddonCancellationIntent.update({
           where: { id: intent.id },
           data: {
@@ -243,28 +245,6 @@ export async function confirmRecurringAddonCancellation(
   });
   assertCanManageRecurringAddonScope(viewer, initialIntent.subscription.scope);
   const requestDigest = confirmationRequestDigest(params.request);
-  await (deps?.authorizeAction ?? authorizeBillingCustomerAction)(
-    {
-      credential: params.credential,
-      organisationId: params.request.organisationId,
-      teamId: params.request.teamId,
-      userId: params.request.userId,
-      authorityScope: scope.customerScope,
-      operation: BILLING_CUSTOMER_ACTION.RECURRING_ADDON_CANCEL,
-      actorJti: actor.jti,
-      request: {
-        product: params.request.product,
-        organisation_id: params.request.organisationId,
-        team_id: params.request.teamId,
-        user_id: params.request.userId,
-        subscription_id: initialIntent.subscription.id,
-        preview_token_digest: tokenDigest,
-        idempotency_key_digest: recurringAddonCancellationDigest(params.request.idempotencyKey),
-        choice: params.request.choice,
-      },
-    },
-    { prisma },
-  );
   const claimed = await claimCancellation(
     {
       tokenDigest,
@@ -273,6 +253,32 @@ export async function confirmRecurringAddonCancellation(
       credential: params.credential,
       subjectFingerprint,
       now: deps?.now?.() ?? new Date(),
+      authorizeAction: async (tx) => {
+        await (deps?.authorizeAction ?? authorizeBillingCustomerAction)(
+          {
+            credential: params.credential,
+            organisationId: params.request.organisationId,
+            teamId: params.request.teamId,
+            userId: params.request.userId,
+            authorityScope: scope.customerScope,
+            operation: BILLING_CUSTOMER_ACTION.RECURRING_ADDON_CANCEL,
+            actor,
+            request: {
+              product: params.request.product,
+              organisation_id: params.request.organisationId,
+              team_id: params.request.teamId,
+              user_id: params.request.userId,
+              subscription_id: initialIntent.subscription.id,
+              preview_token_digest: tokenDigest,
+              idempotency_key_digest: recurringAddonCancellationDigest(
+                params.request.idempotencyKey,
+              ),
+              choice: params.request.choice,
+            },
+          },
+          { prisma: tx },
+        );
+      },
     },
     prisma,
   );

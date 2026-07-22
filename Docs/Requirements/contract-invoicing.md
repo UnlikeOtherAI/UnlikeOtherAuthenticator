@@ -175,10 +175,12 @@ with public access prevention and create/read permissions restricted to the UOA
 runtime identity. The application never deletes issued invoice objects.
 
 The middleware check is not the issuance linearization point. The transaction
-locks the exact user and domain-role rows before `ISSUING` is written, so a
-concurrent role removal either wins and prevents PDF storage or follows the
-already-authorized durable claim. The same in-transaction lock/recheck occurs
-before a void or payment/refund/write-off event. Those append-only,
+locks the exact user and domain-role rows and compares the presented admin
+access token's `tokenVersion` with the locked user's current `token_version`
+before `ISSUING` is written. A concurrent credential-epoch increment or role
+removal therefore either wins and prevents PDF storage or follows the already-
+authorized durable claim. The same in-transaction lock/recheck occurs before a
+void or payment/refund/write-off event. Those append-only,
 invoice-scoped idempotent event rows are the durable local monetary effects;
 there is no second product-side invoice or settlement engine.
 
@@ -282,8 +284,8 @@ The guarded migration independently enforces:
 - immutable paid recurring add-on snapshots excluded from manual totals;
 - immutable issued fields, lines, private evidence, and PDF identity;
 - append-only bounded settlement events and no settled void;
-- exact current platform-SUPERUSER locking before issue, void, or settlement
-  effects;
+- exact current platform-SUPERUSER and access-token credential-epoch locking
+  before issue, void, or settlement effects;
 - monotonic issuer/year numbering and advisory contract/version locks;
 - forced RLS with deny-all `uoa_app` policy and `uoa_admin` access only.
 

@@ -217,7 +217,7 @@ export async function createStripeCheckoutSession(
       userId: params.request.userId,
       authorityScope: selectedScope.scope,
       operation: BILLING_CUSTOMER_ACTION.STRIPE_CHECKOUT,
-      actorJti: actor.jti,
+      actor,
       request: {
         product: params.request.product,
         organisation_id: params.request.organisationId,

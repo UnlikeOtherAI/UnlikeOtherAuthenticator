@@ -5,6 +5,7 @@ import { AppError } from '../utils/errors.js';
 
 export type BillingAdminEffectActor = {
   userId?: string | null;
+  tokenVersion?: number | null;
   email: string;
   domain?: string | null;
 };
@@ -16,15 +17,25 @@ export async function lockBillingAdminEffectAuthority(
   actor: BillingAdminEffectActor,
 ): Promise<void> {
   const userId = actor.userId?.trim();
+  const tokenVersion = actor.tokenVersion;
   const email = actor.email.trim().toLowerCase();
   const domain = getAdminAuthDomain();
   const assertedDomain = actor.domain?.trim().toLowerCase();
-  if (!userId || !email || (assertedDomain && assertedDomain !== domain)) {
+  if (
+    !userId ||
+    !Number.isSafeInteger(tokenVersion) ||
+    (tokenVersion as number) < 0 ||
+    !email ||
+    (assertedDomain && assertedDomain !== domain)
+  ) {
     throw new AppError('FORBIDDEN', 403, 'BILLING_ADMIN_AUTHORITY_REQUIRED');
   }
-  const rows = await tx.$queryRaw<Array<{ id: string; email: string; role: UserRole }>>(
+  const rows = await tx.$queryRaw<
+    Array<{ id: string; email: string; role: UserRole; tokenVersion: number }>
+  >(
     Prisma.sql`
-      SELECT user_row."id", user_row."email", role_row."role"
+      SELECT user_row."id", user_row."email", user_row."token_version" AS "tokenVersion",
+             role_row."role"
       FROM "users" user_row
       JOIN "domain_roles" role_row
         ON role_row."user_id" = user_row."id"
@@ -37,6 +48,7 @@ export async function lockBillingAdminEffectAuthority(
   if (
     !current ||
     current.role !== UserRole.SUPERUSER ||
+    current.tokenVersion !== tokenVersion ||
     current.email.trim().toLowerCase() !== email
   ) {
     throw new AppError('FORBIDDEN', 403, 'BILLING_ADMIN_AUTHORITY_REQUIRED');

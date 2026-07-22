@@ -1836,14 +1836,19 @@ keys are separate endpoint classes; lifecycle keys require exact HTTPS return
 origins, while entitlement keys cannot carry them. Shared cross-product or
 cross-purpose API keys are forbidden.
 
-Every customer billing mutation first writes an append-only UOA action intent.
-Its database trigger locks the exact lifecycle app key, service, user,
-organisation, requested team, and both membership rows and rechecks the current
-scope-appropriate billing-manager role. A concurrent key revocation,
-membership removal, or role downgrade therefore serializes before or after one
-durable authorization point, never in the gap before a Stripe or local monetary
-effect. Logical transport retries reuse the product-signed actor `jti` and
-exact request digest. Existing Checkout, cancellation, credit/add-on, and
+Every valid customer billing mutation writes an append-only UOA action intent
+at its first real effect; invalid, already-satisfied, processing, and completed
+requests do not accumulate permanent intent rows. Its database trigger locks
+the exact lifecycle app key, service, user, organisation, requested team, and
+both membership rows and rechecks the current scope-appropriate billing-manager
+role, the app key's wall-clock expiry, the actor expiry, and the actor's stored
+credential epoch against the locked user's current `token_version`. A
+concurrent key revocation, credential revocation, membership removal, or role
+downgrade therefore serializes before or after one durable authorization point,
+never in the gap before a Stripe or local monetary effect. Cancellation claims
+and automatic-top-up update/disable transitions insert that evidence inside
+their locked effect transaction. Logical transport retries reuse the product-
+signed actor `jti` and exact request digest. Existing Checkout, cancellation, credit/add-on, and
 invoice rows remain the durable effect state machines and supply stable
 idempotency identities; products still perform no billing calculation.
 
@@ -2052,6 +2057,9 @@ separately and excluded from the manual amount due. They never expose
 raw token/API/SERP/research quantities, provider cost, cost-token equivalents,
 markup, or margin calculations. Connected products consume a display-ready UOA
 invoice view model and contain no local invoice-rating logic.
+Invoice issue, void, and manual settlement effects lock the exact admin user and
+domain-role rows and reject when the presented access token's credential epoch
+no longer matches the locked user's current `token_version`.
 
 The Admin `/billing` page separates **Product billing** from **Contracts &
 invoices**. In the contract view, platform superusers can create organisation

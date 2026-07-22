@@ -217,6 +217,9 @@ export async function createBillingCreditAutoTopUpSetup(
   });
   if (replay) {
     assertLocalBinding(replay, expected);
+    if (!context.customer.stripeCustomerId) {
+      throw new AppError('INTERNAL', 502, 'STRIPE_CUSTOMER_INCOMPLETE');
+    }
     const recovered = await reconcileCreditCheckout(
       {
         checkout: replay,
@@ -244,6 +247,9 @@ export async function createBillingCreditAutoTopUpSetup(
     },
   });
   if (unresolved) {
+    if (!context.customer.stripeCustomerId) {
+      throw new AppError('INTERNAL', 502, 'STRIPE_CUSTOMER_INCOMPLETE');
+    }
     const recovered = await reconcileCreditCheckout(
       {
         checkout: unresolved,
@@ -261,6 +267,9 @@ export async function createBillingCreditAutoTopUpSetup(
       throw new AppError('BAD_REQUEST', 409, 'BILLING_CREDIT_SETUP_PENDING');
     }
   }
+
+  await context.authorizeAction();
+  context.customer = await context.ensureCustomer();
 
   let checkout;
   try {

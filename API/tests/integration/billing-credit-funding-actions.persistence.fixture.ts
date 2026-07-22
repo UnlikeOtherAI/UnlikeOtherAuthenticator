@@ -304,12 +304,13 @@ export async function seedFundingRace(prisma: PrismaClient): Promise<void> {
 }
 
 export function fundingActionContext(creditAccount: BillingCreditAccount) {
+  const customer = { id: ids.customer, stripeCustomerId: 'cus_funding_race' };
   return {
-    actor: { jti: 'actor-current-action' },
+    actor: { jti: 'actor-current-action', tv: 0, exp: 2_000_000_000 },
     viewer: { billingManager: true },
     account: stripeAccount,
     creditAccount,
-    customer: { id: ids.customer, stripeCustomerId: 'cus_funding_race' },
+    customer,
     stripe: {
       paymentMethods: {
         retrieve: vi.fn().mockResolvedValue({
@@ -321,5 +322,7 @@ export function fundingActionContext(creditAccount: BillingCreditAccount) {
         }),
       },
     },
+    authorizeAction: vi.fn(),
+    ensureCustomer: vi.fn().mockResolvedValue(customer),
   } as unknown as CreditFundingActionContext;
 }

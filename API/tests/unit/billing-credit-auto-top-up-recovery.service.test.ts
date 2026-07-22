@@ -41,7 +41,7 @@ function recoveryContext(
   return {
     stripe,
     context: {
-      actor: { jti: 'actor_jti_1' },
+      actor: { jti: 'actor_jti_1', tv: 0, exp: 2_000_000_000 },
       viewer: { billingManager: true },
       account: { id: 'account_1', stripeAccountId: 'acct_uoa', livemode: false },
       creditAccount: {
@@ -51,6 +51,8 @@ function recoveryContext(
       },
       customer: { id: 'customer_1', stripeCustomerId: 'cus_team_1' },
       stripe,
+      authorizeAction: vi.fn(),
+      ensureCustomer: vi.fn(),
     } as unknown as CreditFundingActionContext,
   };
 }

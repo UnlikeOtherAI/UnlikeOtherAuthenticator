@@ -22,8 +22,9 @@ describe('automatic top-up Setup Checkout finalization', () => {
       metadata: input.metadata,
       expires_at: 1_784_470_800,
     }));
+    const customer = { id: 'customer_1', stripeCustomerId: 'cus_1' };
     const context = {
-      actor: { jti: 'actor_setup_race' },
+      actor: { jti: 'actor_setup_race', tv: 0, exp: 2_000_000_000 },
       account: { id: 'account_1', stripeAccountId: 'acct_1', livemode: false },
       creditAccount: {
         id: 'credit_account_1',
@@ -32,8 +33,10 @@ describe('automatic top-up Setup Checkout finalization', () => {
         autoTopUpConsentRevisionId: null,
         stripePaymentMethodId: null,
       },
-      customer: { id: 'customer_1', stripeCustomerId: 'cus_1' },
+      customer,
       stripe: { checkout: { sessions: { create: sessionCreate } } },
+      authorizeAction: vi.fn(),
+      ensureCustomer: vi.fn().mockResolvedValue(customer),
     };
     const selection = {
       policy: { id: 'policy_1', automaticConsentVersion: 'consent-v1' },

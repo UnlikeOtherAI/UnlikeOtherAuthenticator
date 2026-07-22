@@ -204,6 +204,7 @@ describe('billing cancellation confirmation', () => {
     expect(intent.state).toBe(BillingCancellationIntentState.COMPLETED);
     expect(intent.result).toEqual(first);
     expect(auditCreate).toHaveBeenCalledOnce();
+    expect(dependencies.authorizeAction).toHaveBeenCalledOnce();
   });
 
   it('requires an explicit choice when the preview pinned related direct services', async () => {
@@ -247,6 +248,7 @@ describe('billing cancellation confirmation', () => {
       $transaction: vi.fn(async (run: (client: typeof tx) => Promise<unknown>) => run(tx)),
     };
 
+    const authorizeAction = vi.fn().mockResolvedValue({ id: 'action_1' });
     await expect(
       confirmBillingCancellation(
         {
@@ -271,9 +273,10 @@ describe('billing cancellation confirmation', () => {
             subscriptionFingerprint: 'b'.repeat(64),
           }) as never,
           resolveTariff: vi.fn().mockResolvedValue({ actor: { jti: 'actor_1' } }) as never,
-          authorizeAction: vi.fn().mockResolvedValue({ id: 'action_1' }) as never,
+          authorizeAction: authorizeAction as never,
         },
       ),
     ).rejects.toThrow('BILLING_CANCELLATION_CHOICE_REQUIRED');
+    expect(authorizeAction).not.toHaveBeenCalled();
   });
 });

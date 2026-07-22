@@ -49,6 +49,7 @@ function fakePrisma(params: {
   orgAssignment?: unknown;
   fallback?: typeof defaultTariff | null;
   active?: boolean;
+  tokenVersion?: number;
 }): PrismaClient {
   const active = params.active ?? true;
   const prisma = {
@@ -56,7 +57,9 @@ function fakePrisma(params: {
       findFirst: vi.fn().mockResolvedValue(active ? { id: 'service_1' } : null),
     },
     user: {
-      findUnique: vi.fn().mockResolvedValue(active ? { id: 'usr_1' } : null),
+      findUnique: vi
+        .fn()
+        .mockResolvedValue(active ? { id: 'usr_1', tokenVersion: params.tokenVersion ?? 0 } : null),
     },
     orgMember: {
       findUnique: vi.fn().mockResolvedValue(active ? { status: MembershipStatus.ACTIVE } : null),
@@ -81,7 +84,7 @@ function fakePrisma(params: {
   return prisma as unknown as PrismaClient;
 }
 
-const verifyActor = vi.fn().mockResolvedValue({});
+const verifyActor = vi.fn().mockResolvedValue({ tv: 0 });
 const signSnapshot = vi.fn().mockResolvedValue('signed-snapshot');
 
 describe('effective billing tariff resolution', () => {
@@ -198,6 +201,22 @@ describe('effective billing tariff resolution', () => {
       message: 'BILLING_SUBJECT_NOT_ENTITLED',
     });
     expect(signSnapshot).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when the billing actor credential epoch is stale', async () => {
+    await expect(
+      getEffectiveTariffSnapshot(
+        { request, actorToken: 'actor', credential },
+        {
+          prisma: fakePrisma({ tokenVersion: 1 }),
+          verifyActor,
+          signSnapshot,
+        },
+      ),
+    ).rejects.toMatchObject({
+      statusCode: 403,
+      message: 'BILLING_SUBJECT_NOT_ENTITLED',
+    });
   });
 
   it('rejects a product identifier that does not match the individual app key', async () => {

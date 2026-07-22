@@ -61,10 +61,21 @@ describe('credit funding Stripe catalog verification', () => {
     ).rejects.toThrow('STRIPE_CREDIT_CATALOG_BINDING_INVALID');
   });
 
-  it('stops before local or Stripe customer effects when locked authority was revoked', async () => {
-    const ensureCreditAccount = vi.fn();
+  it('defers authority evidence and remote customer effects until domain validation succeeds', async () => {
+    const authorizeAction = vi.fn().mockRejectedValue(new Error('authority revoked'));
     const ensureCustomer = vi.fn();
-    const resolveAccount = vi.fn();
+    const customer = {
+      id: 'customer_1',
+      scope: 'TEAM',
+      scopeKey: 'team_1',
+      stripeCustomerId: null,
+    };
+    const prisma = {
+      billingStripeCustomer: { findUnique: vi.fn().mockResolvedValue(customer) },
+      user: { findUnique: vi.fn().mockResolvedValue({ id: 'user_1', email: 'a@example.com' }) },
+      organisation: { findUnique: vi.fn().mockResolvedValue({ id: 'org_1', name: 'Org' }) },
+      team: { findFirst: vi.fn().mockResolvedValue({ id: 'team_1', name: 'Team' }) },
+    };
     const credential = {
       id: 'app_key_1',
       purpose: BillingAppKeyPurpose.CUSTOMER_LIFECYCLE,
@@ -76,36 +87,41 @@ describe('credit funding Stripe catalog verification', () => {
       service: { id: 'service_1', identifier: 'deepwater', name: 'DeepWater' },
     };
 
-    await expect(
-      resolveCreditFundingActionContext(
-        {
-          request: {
-            product: 'deepwater',
-            organisationId: 'org_1',
-            teamId: 'team_1',
-            userId: 'user_1',
-          },
-          actorToken: 'actor',
-          credential,
-          action: {
-            operation: BILLING_CUSTOMER_ACTION.CREDIT_TOP_UP,
-            request: { offer_id: 'offer_1' },
-          },
+    const context = await resolveCreditFundingActionContext(
+      {
+        request: {
+          product: 'deepwater',
+          organisationId: 'org_1',
+          teamId: 'team_1',
+          userId: 'user_1',
         },
-        {
-          prisma: {} as never,
-          stripe: {} as never,
-          resolveTariff: vi.fn().mockResolvedValue({ actor: { jti: 'actor_1' } }) as never,
-          resolveViewer: vi.fn().mockResolvedValue({ billingManager: true }) as never,
-          authorizeAction: vi.fn().mockRejectedValue(new Error('authority revoked')) as never,
-          resolveAccount: resolveAccount as never,
-          ensureCreditAccount: ensureCreditAccount as never,
-          ensureCustomer: ensureCustomer as never,
+        actorToken: 'actor',
+        credential,
+        action: {
+          operation: BILLING_CUSTOMER_ACTION.CREDIT_TOP_UP,
+          request: { offer_id: 'offer_1' },
         },
-      ),
-    ).rejects.toThrow('authority revoked');
-    expect(resolveAccount).not.toHaveBeenCalled();
-    expect(ensureCreditAccount).not.toHaveBeenCalled();
+      },
+      {
+        prisma: prisma as never,
+        stripe: {} as never,
+        resolveTariff: vi
+          .fn()
+          .mockResolvedValue({ actor: { jti: 'actor_1', tv: 2, exp: 2_000_000_000 } }) as never,
+        resolveViewer: vi.fn().mockResolvedValue({ billingManager: true }) as never,
+        authorizeAction: authorizeAction as never,
+        resolveAccount: vi.fn().mockResolvedValue(account) as never,
+        ensureCreditAccount: vi.fn().mockResolvedValue({
+          id: 'credit_1',
+          customerId: customer.id,
+        }) as never,
+        ensureCustomer: ensureCustomer as never,
+      },
+    );
+    expect(authorizeAction).not.toHaveBeenCalled();
+    expect(ensureCustomer).not.toHaveBeenCalled();
+
+    await expect(context.authorizeAction()).rejects.toThrow('authority revoked');
     expect(ensureCustomer).not.toHaveBeenCalled();
   });
 });

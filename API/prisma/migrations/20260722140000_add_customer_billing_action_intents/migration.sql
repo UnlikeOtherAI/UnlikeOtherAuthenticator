@@ -11,6 +11,8 @@ CREATE TABLE "billing_customer_action_intents" (
   "authority_scope" "BillingAssignmentScope" NOT NULL,
   "operation" VARCHAR(100) NOT NULL,
   "actor_jti" VARCHAR(256) NOT NULL,
+  "actor_token_version" INTEGER NOT NULL,
+  "actor_expires_at" TIMESTAMP(3) NOT NULL,
   "request_digest" CHAR(64) NOT NULL,
   "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "billing_customer_action_intents_pkey" PRIMARY KEY ("id"),
@@ -18,6 +20,8 @@ CREATE TABLE "billing_customer_action_intents" (
     CHECK (btrim("operation") <> ''),
   CONSTRAINT "billing_customer_action_intents_actor_jti_check"
     CHECK (btrim("actor_jti") <> ''),
+  CONSTRAINT "billing_customer_action_intents_actor_epoch_check"
+    CHECK ("actor_token_version" >= 0),
   CONSTRAINT "billing_customer_action_intents_digest_check"
     CHECK ("request_digest" ~ '^[a-f0-9]{64}$')
 );
@@ -106,10 +110,12 @@ BEGIN
      OR app_key_row."purpose" IS DISTINCT FROM 'CUSTOMER_LIFECYCLE'
      OR app_key_row."revoked_at" IS NOT NULL
      OR (app_key_row."expires_at" IS NOT NULL
-         AND app_key_row."expires_at" <= CURRENT_TIMESTAMP)
+         AND app_key_row."expires_at" <= clock_timestamp())
      OR service_row."id" IS NULL
      OR service_row."active" IS DISTINCT FROM TRUE
      OR user_row."id" IS NULL
+     OR user_row."token_version" IS DISTINCT FROM NEW."actor_token_version"
+     OR NEW."actor_expires_at" <= clock_timestamp()
      OR organisation_row."id" IS NULL
      OR team_row."org_id" IS DISTINCT FROM NEW."org_id"
      OR org_member_row."status" IS DISTINCT FROM 'ACTIVE'

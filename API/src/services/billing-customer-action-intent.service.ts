@@ -1,6 +1,7 @@
 import {
   BillingAssignmentScope,
   type BillingCustomerActionIntent,
+  type Prisma,
   type PrismaClient,
 } from '@prisma/client';
 import { createHash } from 'node:crypto';
@@ -8,6 +9,7 @@ import { createHash } from 'node:crypto';
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
+import type { BillingActor } from './billing-actor.service.js';
 
 export const BILLING_CUSTOMER_ACTION = {
   STRIPE_CHECKOUT: 'stripe_checkout',
@@ -31,6 +33,11 @@ export type BillingCustomerActionRequest =
   | BillingCustomerActionRequest[]
   | { [key: string]: BillingCustomerActionRequest };
 
+type ActionIntentClient = Pick<
+  PrismaClient | Prisma.TransactionClient,
+  'billingCustomerActionIntent'
+>;
+
 function canonicalJson(value: BillingCustomerActionRequest): string {
   if (value === null || typeof value !== 'object') return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
@@ -53,7 +60,7 @@ function assertBinding(
     userId: string;
     authorityScope: BillingAssignmentScope;
     operation: BillingCustomerAction;
-    actorJti: string;
+    actor: Pick<BillingActor, 'jti' | 'tv' | 'exp'>;
     requestDigest: string;
   },
 ): void {
@@ -65,7 +72,9 @@ function assertBinding(
     intent.requestedByUserId !== expected.userId ||
     intent.authorityScope !== expected.authorityScope ||
     intent.operation !== expected.operation ||
-    intent.actorJti !== expected.actorJti ||
+    intent.actorJti !== expected.actor.jti ||
+    intent.actorTokenVersion !== expected.actor.tv ||
+    intent.actorExpiresAt.getTime() !== expected.actor.exp * 1000 ||
     intent.requestDigest !== expected.requestDigest
   ) {
     throw new AppError('BAD_REQUEST', 409, 'BILLING_CUSTOMER_ACTION_REPLAY_CONFLICT');
@@ -84,16 +93,16 @@ export async function authorizeBillingCustomerAction(
     userId: string;
     authorityScope: BillingAssignmentScope;
     operation: BillingCustomerAction;
-    actorJti: string;
+    actor: Pick<BillingActor, 'jti' | 'tv' | 'exp'>;
     request: BillingCustomerActionRequest;
   },
-  deps?: { prisma?: PrismaClient },
+  deps?: { prisma?: ActionIntentClient },
 ): Promise<BillingCustomerActionIntent> {
   const prisma = deps?.prisma ?? getAdminPrisma();
   const requestDigest = billingCustomerActionDigest(params.request);
   const key = {
     appKeyId: params.credential.id,
-    actorJti: params.actorJti,
+    actorJti: params.actor.jti,
     operation: params.operation,
   };
   const expected = { ...params, requestDigest };
@@ -115,7 +124,9 @@ export async function authorizeBillingCustomerAction(
         requestedByUserId: params.userId,
         authorityScope: params.authorityScope,
         operation: params.operation,
-        actorJti: params.actorJti,
+        actorJti: params.actor.jti,
+        actorTokenVersion: params.actor.tv,
+        actorExpiresAt: new Date(params.actor.exp * 1000),
         requestDigest,
       },
     });

@@ -11,6 +11,7 @@ import { getEnv } from '../config/env.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
+import type { BillingActor } from './billing-actor.service.js';
 import {
   authorizeBillingCustomerAction,
   BILLING_CUSTOMER_ACTION,
@@ -65,7 +66,7 @@ type LifecycleContext = {
   stripe: StripeSubscriptionClient | null;
   account: StripeAccountContext | null;
   stripeCollectionEnabled: boolean;
-  actorJti: string;
+  actor: BillingActor;
   payload: EffectiveTariffPayload;
   subscription: SubscriptionWithCustomer | null;
   canManage: boolean;
@@ -179,7 +180,7 @@ async function lifecycleContext(
       stripe: null,
       account: null,
       stripeCollectionEnabled: false,
-      actorJti: actor.jti,
+      actor,
       payload,
       subscription,
       canManage: isBillingManager({
@@ -222,7 +223,7 @@ async function lifecycleContext(
     stripe,
     account,
     stripeCollectionEnabled: true,
-    actorJti: actor.jti,
+    actor,
     payload,
     subscription,
     canManage: isBillingManager({
@@ -334,7 +335,7 @@ export async function createStripePortalSession(
       userId: params.request.userId,
       authorityScope: subscription.scope,
       operation: BILLING_CUSTOMER_ACTION.STRIPE_PORTAL,
-      actorJti: context.actorJti,
+      actor: context.actor,
       request: {
         product: params.request.product,
         organisation_id: params.request.organisationId,

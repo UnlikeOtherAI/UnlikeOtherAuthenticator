@@ -53,6 +53,7 @@ async function actorToken(
     product: request.product,
     organisation_id: request.organisationId,
     team_id: request.teamId,
+    tv: 4,
     ...overrides,
   })
     .setProtectedHeader({
@@ -80,6 +81,7 @@ describe('billing actor verification', () => {
       product: 'deepwater',
       organisation_id: 'org_1',
       team_id: 'team_1',
+      tv: 4,
       jti: 'actor-jti-1',
     });
   });
@@ -106,6 +108,7 @@ describe('billing actor verification', () => {
       product: request.product,
       organisation_id: request.organisationId,
       team_id: request.teamId,
+      tv: 4,
     })
       .setProtectedHeader({ alg: 'RS256', kid: 'ledger-actor-1' })
       .setIssuer(credential.actorIssuer)
@@ -119,6 +122,21 @@ describe('billing actor verification', () => {
     await expect(
       verifyBillingActor({ token, credential, request }, { now: () => now }),
     ).rejects.toMatchObject({ statusCode: 401 });
+  });
+
+  it('rejects a missing or invalid credential epoch', async () => {
+    await expect(
+      verifyBillingActor(
+        { token: await actorToken({ tv: undefined }), credential, request },
+        { now: () => 1_800_000_000 },
+      ),
+    ).rejects.toMatchObject({ statusCode: 401, message: 'INVALID_BILLING_ACTOR' });
+    await expect(
+      verifyBillingActor(
+        { token: await actorToken({ tv: -1 }), credential, request },
+        { now: () => 1_800_000_000 },
+      ),
+    ).rejects.toMatchObject({ statusCode: 401, message: 'INVALID_BILLING_ACTOR' });
   });
 
   it('rejects every credential or UOA identity binding mismatch', async () => {
