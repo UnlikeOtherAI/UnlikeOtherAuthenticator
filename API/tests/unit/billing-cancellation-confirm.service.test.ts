@@ -163,6 +163,8 @@ describe('billing cancellation confirmation', () => {
       loadState: vi.fn().mockResolvedValue(state) as never,
       resolveAccount: vi.fn().mockResolvedValue(account) as never,
       syncSubscription,
+      resolveTariff: vi.fn().mockResolvedValue({ actor: { jti: 'actor_1' } }) as never,
+      authorizeAction: vi.fn().mockResolvedValue({ id: 'action_1' }) as never,
     };
 
     const params = {
@@ -268,6 +270,8 @@ describe('billing cancellation confirmation', () => {
             entitlementFingerprint: 'a'.repeat(64),
             subscriptionFingerprint: 'b'.repeat(64),
           }) as never,
+          resolveTariff: vi.fn().mockResolvedValue({ actor: { jti: 'actor_1' } }) as never,
+          authorizeAction: vi.fn().mockResolvedValue({ id: 'action_1' }) as never,
         },
       ),
     ).rejects.toThrow('BILLING_CANCELLATION_CHOICE_REQUIRED');

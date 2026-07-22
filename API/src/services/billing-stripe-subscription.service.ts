@@ -12,6 +12,11 @@ import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import {
+  authorizeBillingCustomerAction,
+  BILLING_CUSTOMER_ACTION,
+  billingCustomerActionDigest,
+} from './billing-customer-action-intent.service.js';
+import {
   resolveEffectiveTariffContext,
   type EffectiveTariffPayload,
 } from './billing-entitlement.service.js';
@@ -42,6 +47,7 @@ type Dependencies = {
   stripeLivemode?: boolean;
   resolveTariff?: typeof resolveEffectiveTariffContext;
   refreshSubscription?: typeof refreshStripeSubscriptionProjection;
+  authorizeAction?: typeof authorizeBillingCustomerAction;
 };
 
 type SubscriptionWithCustomer = BillingStripeSubscription & {
@@ -59,6 +65,7 @@ type LifecycleContext = {
   stripe: StripeSubscriptionClient | null;
   account: StripeAccountContext | null;
   stripeCollectionEnabled: boolean;
+  actorJti: string;
   payload: EffectiveTariffPayload;
   subscription: SubscriptionWithCustomer | null;
   canManage: boolean;
@@ -115,10 +122,10 @@ async function lifecycleContext(
     credential: VerifiedBillingAppKey;
   },
   deps?: Dependencies,
-  options: { requireStripe: boolean } = { requireStripe: true },
+  options: { requireStripe: boolean; refreshSubscription?: boolean } = { requireStripe: true },
 ): Promise<LifecycleContext> {
   const prisma = deps?.prisma ?? getAdminPrisma();
-  const { payload } = await (deps?.resolveTariff ?? resolveEffectiveTariffContext)(params, {
+  const { actor, payload } = await (deps?.resolveTariff ?? resolveEffectiveTariffContext)(params, {
     prisma,
   });
   const [orgMember, teamMember] = await Promise.all([
@@ -172,6 +179,7 @@ async function lifecycleContext(
       stripe: null,
       account: null,
       stripeCollectionEnabled: false,
+      actorJti: actor.jti,
       payload,
       subscription,
       canManage: isBillingManager({
@@ -193,7 +201,7 @@ async function lifecycleContext(
     params.credential.service.id,
     payload,
   );
-  if (subscription) {
+  if (subscription && options.refreshSubscription !== false) {
     await (deps?.refreshSubscription ?? refreshStripeSubscriptionProjection)(
       {
         subscriptionId: subscription.stripeSubscriptionId,
@@ -214,6 +222,7 @@ async function lifecycleContext(
     stripe,
     account,
     stripeCollectionEnabled: true,
+    actorJti: actor.jti,
     payload,
     subscription,
     canManage: isBillingManager({
@@ -312,12 +321,53 @@ export async function createStripePortalSession(
     params.request.returnUrl,
     params.credential.checkoutReturnOrigins,
   );
-  const context = await lifecycleContext(params, deps);
-  const { account, stripe, subscription } = requireManageableSubscription(context);
-  const session = await stripe.billingPortal.sessions.create({
-    customer: subscription.customer.stripeCustomerId,
-    return_url: returnUrl,
+  const context = await lifecycleContext(params, deps, {
+    requireStripe: true,
+    refreshSubscription: false,
   });
+  let { account, stripe, subscription } = requireManageableSubscription(context);
+  const action = await (deps?.authorizeAction ?? authorizeBillingCustomerAction)(
+    {
+      credential: params.credential,
+      organisationId: params.request.organisationId,
+      teamId: params.request.teamId,
+      userId: params.request.userId,
+      authorityScope: subscription.scope,
+      operation: BILLING_CUSTOMER_ACTION.STRIPE_PORTAL,
+      actorJti: context.actorJti,
+      request: {
+        product: params.request.product,
+        organisation_id: params.request.organisationId,
+        team_id: params.request.teamId,
+        user_id: params.request.userId,
+        subscription_id: subscription.id,
+        return_url_digest: billingCustomerActionDigest(returnUrl),
+      },
+    },
+    { prisma: context.prisma },
+  );
+  await (deps?.refreshSubscription ?? refreshStripeSubscriptionProjection)(
+    { subscriptionId: subscription.stripeSubscriptionId, account },
+    { prisma: context.prisma, stripe },
+  );
+  context.subscription = await currentSubscription(
+    context.prisma,
+    account,
+    params.credential.service.id,
+    context.payload,
+  );
+  const refreshed = requireManageableSubscription(context);
+  if (refreshed.subscription.id !== subscription.id) {
+    throw new AppError('BAD_REQUEST', 409, 'STRIPE_SUBSCRIPTION_CHANGED');
+  }
+  ({ account, stripe, subscription } = refreshed);
+  const session = await stripe.billingPortal.sessions.create(
+    {
+      customer: subscription.customer.stripeCustomerId,
+      return_url: returnUrl,
+    },
+    { idempotencyKey: `uoa:billing-portal:${action.id}` },
+  );
   assertStripeObjectLivemode(session, account.livemode);
   if (!session.url.startsWith('https://')) {
     throw new AppError('INTERNAL', 502, 'STRIPE_PORTAL_URL_INVALID');

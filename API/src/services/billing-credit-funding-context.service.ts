@@ -1,9 +1,14 @@
-import type { PrismaClient } from '@prisma/client';
+import { BillingAssignmentScope, type PrismaClient } from '@prisma/client';
 import type Stripe from 'stripe';
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
+import {
+  authorizeBillingCustomerAction,
+  type BillingCustomerAction,
+  type BillingCustomerActionRequest,
+} from './billing-customer-action-intent.service.js';
 import { ensureTeamCreditAccount } from './billing-credit-account.service.js';
 import { resolveEffectiveTariffContext } from './billing-entitlement.service.js';
 import {
@@ -53,6 +58,7 @@ type ContextDependencies = {
   resolveAccount?: typeof resolveStripeAccountContext;
   ensureCreditAccount?: typeof ensureTeamCreditAccount;
   ensureCustomer?: typeof ensureStripeCustomer;
+  authorizeAction?: typeof authorizeBillingCustomerAction;
 };
 
 export async function resolveCreditFundingActionContext(
@@ -60,6 +66,10 @@ export async function resolveCreditFundingActionContext(
     request: CreditFundingActionRequest;
     actorToken: string;
     credential: VerifiedBillingAppKey;
+    action: {
+      operation: BillingCustomerAction;
+      request: BillingCustomerActionRequest;
+    };
   },
   deps?: ContextDependencies,
 ): Promise<CreditFundingActionContext> {
@@ -78,6 +88,19 @@ export async function resolveCreditFundingActionContext(
   if (!viewer.billingManager) {
     throw new AppError('FORBIDDEN', 403, 'BILLING_MANAGER_REQUIRED');
   }
+  await (deps?.authorizeAction ?? authorizeBillingCustomerAction)(
+    {
+      credential: params.credential,
+      organisationId: params.request.organisationId,
+      teamId: params.request.teamId,
+      userId: params.request.userId,
+      authorityScope: BillingAssignmentScope.TEAM,
+      operation: params.action.operation,
+      actorJti: actor.jti,
+      request: params.action.request,
+    },
+    { prisma },
+  );
 
   const configured = deps?.stripe ? null : requireStripeBillingEnabled();
   const stripe = deps?.stripe ?? configured?.client;

@@ -11,6 +11,10 @@ import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import {
+  authorizeBillingCustomerAction,
+  BILLING_CUSTOMER_ACTION,
+} from './billing-customer-action-intent.service.js';
+import {
   resolveEffectiveTariffContext,
   type EffectiveTariffPayload,
 } from './billing-entitlement.service.js';
@@ -87,6 +91,7 @@ export async function createStripeCheckoutSession(
     stripe?: StripeCheckoutClient;
     stripeLivemode?: boolean;
     resolveTariff?: typeof resolveEffectiveTariffContext;
+    authorizeAction?: typeof authorizeBillingCustomerAction;
     now?: () => Date;
     afterStripeSessionCreated?: () => void | Promise<void>;
   },
@@ -204,6 +209,29 @@ export async function createStripeCheckoutSession(
   ) {
     throw new AppError('INTERNAL', 500, 'STRIPE_TARIFF_MISMATCH');
   }
+  await (deps?.authorizeAction ?? authorizeBillingCustomerAction)(
+    {
+      credential: params.credential,
+      organisationId: params.request.organisationId,
+      teamId: params.request.teamId,
+      userId: params.request.userId,
+      authorityScope: selectedScope.scope,
+      operation: BILLING_CUSTOMER_ACTION.STRIPE_CHECKOUT,
+      actorJti: actor.jti,
+      request: {
+        product: params.request.product,
+        organisation_id: params.request.organisationId,
+        team_id: params.request.teamId,
+        user_id: params.request.userId,
+        tariff_id: details.tariff.id,
+        scope: selectedScope.scope,
+        scope_key: selectedScope.scopeKey,
+        success_url_digest: successUrlDigest,
+        cancel_url_digest: cancelUrlDigest,
+      },
+    },
+    { prisma },
+  );
 
   let customer = await prisma.billingStripeCustomer.upsert({
     where: {

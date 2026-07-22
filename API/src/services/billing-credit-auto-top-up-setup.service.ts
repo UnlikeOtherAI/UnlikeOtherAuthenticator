@@ -9,6 +9,7 @@ import type Stripe from 'stripe';
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
+import { BILLING_CUSTOMER_ACTION } from './billing-customer-action-intent.service.js';
 import {
   creditCheckoutIdempotencyKey,
   reconcileCreditCheckout,
@@ -139,9 +140,23 @@ export async function createBillingCreditAutoTopUpSetup(
   deps?: Dependencies,
 ): Promise<{ redirect_url: string }> {
   const prisma = deps?.prisma ?? getAdminPrisma();
-  const context = await (deps?.resolveContext ?? resolveCreditFundingActionContext)(params, {
-    prisma,
-  });
+  const context = await (deps?.resolveContext ?? resolveCreditFundingActionContext)(
+    {
+      ...params,
+      action: {
+        operation: BILLING_CUSTOMER_ACTION.CREDIT_AUTO_TOP_UP_SETUP,
+        request: {
+          product: params.request.product,
+          organisation_id: params.request.organisationId,
+          team_id: params.request.teamId,
+          user_id: params.request.userId,
+          option_id: params.request.optionId,
+          recovery: params.recovery === true,
+        },
+      },
+    },
+    { prisma },
+  );
   const state = context.creditAccount.autoTopUpState;
   const recoveryState =
     state === BillingCreditAutoTopUpState.REQUIRES_ACTION ||

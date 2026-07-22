@@ -8,6 +8,7 @@ import type Stripe from 'stripe';
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
+import { BILLING_CUSTOMER_ACTION } from './billing-customer-action-intent.service.js';
 import { assertCreditFundingMetadata } from './billing-credit-funding-binding.service.js';
 import { exactMinor, requireUsd } from './billing-credit-funding-webhook-validation.service.js';
 import {
@@ -107,7 +108,11 @@ async function cancelAndTerminalize(
   status: BillingCreditAutoTopUpAttemptStatus,
   failureCode: string,
 ): Promise<void> {
-  const canceled = await context.stripe.paymentIntents.cancel(intent.id);
+  const canceled = await context.stripe.paymentIntents.cancel(
+    intent.id,
+    {},
+    { idempotencyKey: `uoa:auto-top-up-recovery-cancel:${attempt.id}` },
+  );
   assertRecoveryIntent(canceled, attempt, context, 'STRIPE_CREDIT_AUTO_TOP_UP_CANCEL_INVALID');
   if (canceled.status !== 'canceled') {
     throw new AppError('INTERNAL', 502, 'STRIPE_CREDIT_AUTO_TOP_UP_CANCEL_INVALID');
@@ -124,9 +129,21 @@ export async function recoverBillingCreditAutoTopUp(
   deps?: Dependencies,
 ): Promise<{ redirect_url: string }> {
   const prisma = deps?.prisma ?? getAdminPrisma();
-  const context = await (deps?.resolveContext ?? resolveCreditFundingActionContext)(params, {
-    prisma,
-  });
+  const context = await (deps?.resolveContext ?? resolveCreditFundingActionContext)(
+    {
+      ...params,
+      action: {
+        operation: BILLING_CUSTOMER_ACTION.CREDIT_AUTO_TOP_UP_RECOVER,
+        request: {
+          product: params.request.product,
+          organisation_id: params.request.organisationId,
+          team_id: params.request.teamId,
+          user_id: params.request.userId,
+        },
+      },
+    },
+    { prisma },
+  );
   const state = context.creditAccount.autoTopUpState;
   if (
     state !== BillingCreditAutoTopUpState.REQUIRES_ACTION &&

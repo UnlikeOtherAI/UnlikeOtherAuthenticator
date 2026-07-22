@@ -183,7 +183,11 @@ describe('automatic credit top-up recovery', () => {
       },
     );
 
-    expect(state.stripe.paymentIntents.cancel).toHaveBeenCalledWith(intent.id);
+    expect(state.stripe.paymentIntents.cancel).toHaveBeenCalledWith(
+      intent.id,
+      {},
+      { idempotencyKey: 'uoa:auto-top-up-recovery-cancel:attempt_failed_1' },
+    );
     expect(terminalize).toHaveBeenCalledWith({
       where: {
         id: 'attempt_failed_1',

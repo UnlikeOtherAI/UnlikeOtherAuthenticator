@@ -271,6 +271,7 @@ function deps(
       actor: { jti: actorJti },
       payload,
     }) as never,
+    authorizeAction: vi.fn().mockResolvedValue({ id: `action_${actorJti}` }) as never,
     now: () => now,
     ...extra,
   };

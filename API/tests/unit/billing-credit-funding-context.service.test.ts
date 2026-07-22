@@ -1,6 +1,11 @@
+import { BillingAppKeyPurpose } from '@prisma/client';
 import { describe, expect, it, vi } from 'vitest';
 
-import { assertCreditCatalogPrice } from '../../src/services/billing-credit-funding-context.service.js';
+import { BILLING_CUSTOMER_ACTION } from '../../src/services/billing-customer-action-intent.service.js';
+import {
+  assertCreditCatalogPrice,
+  resolveCreditFundingActionContext,
+} from '../../src/services/billing-credit-funding-context.service.js';
 
 const account = { id: 'account_1', stripeAccountId: 'acct_uoa', livemode: false };
 const catalog = {
@@ -54,5 +59,53 @@ describe('credit funding Stripe catalog verification', () => {
         catalog,
       ),
     ).rejects.toThrow('STRIPE_CREDIT_CATALOG_BINDING_INVALID');
+  });
+
+  it('stops before local or Stripe customer effects when locked authority was revoked', async () => {
+    const ensureCreditAccount = vi.fn();
+    const ensureCustomer = vi.fn();
+    const resolveAccount = vi.fn();
+    const credential = {
+      id: 'app_key_1',
+      purpose: BillingAppKeyPurpose.CUSTOMER_LIFECYCLE,
+      actorIssuer: 'https://app.example',
+      actorAudience: 'https://authentication.example/billing',
+      actorKeyId: 'key_1',
+      actorPublicJwk: {},
+      checkoutReturnOrigins: ['https://app.example'],
+      service: { id: 'service_1', identifier: 'deepwater', name: 'DeepWater' },
+    };
+
+    await expect(
+      resolveCreditFundingActionContext(
+        {
+          request: {
+            product: 'deepwater',
+            organisationId: 'org_1',
+            teamId: 'team_1',
+            userId: 'user_1',
+          },
+          actorToken: 'actor',
+          credential,
+          action: {
+            operation: BILLING_CUSTOMER_ACTION.CREDIT_TOP_UP,
+            request: { offer_id: 'offer_1' },
+          },
+        },
+        {
+          prisma: {} as never,
+          stripe: {} as never,
+          resolveTariff: vi.fn().mockResolvedValue({ actor: { jti: 'actor_1' } }) as never,
+          resolveViewer: vi.fn().mockResolvedValue({ billingManager: true }) as never,
+          authorizeAction: vi.fn().mockRejectedValue(new Error('authority revoked')) as never,
+          resolveAccount: resolveAccount as never,
+          ensureCreditAccount: ensureCreditAccount as never,
+          ensureCustomer: ensureCustomer as never,
+        },
+      ),
+    ).rejects.toThrow('authority revoked');
+    expect(resolveAccount).not.toHaveBeenCalled();
+    expect(ensureCreditAccount).not.toHaveBeenCalled();
+    expect(ensureCustomer).not.toHaveBeenCalled();
   });
 });

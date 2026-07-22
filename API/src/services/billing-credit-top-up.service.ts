@@ -5,6 +5,7 @@ import type Stripe from 'stripe';
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
+import { BILLING_CUSTOMER_ACTION } from './billing-customer-action-intent.service.js';
 import {
   creditCheckoutIdempotencyKey,
   reconcileCreditCheckout,
@@ -113,9 +114,22 @@ export async function createBillingCreditTopUpCheckout(
   deps?: Dependencies,
 ): Promise<{ redirect_url: string }> {
   const prisma = deps?.prisma ?? getAdminPrisma();
-  const context = await (deps?.resolveContext ?? resolveCreditFundingActionContext)(params, {
-    prisma,
-  });
+  const context = await (deps?.resolveContext ?? resolveCreditFundingActionContext)(
+    {
+      ...params,
+      action: {
+        operation: BILLING_CUSTOMER_ACTION.CREDIT_TOP_UP,
+        request: {
+          product: params.request.product,
+          organisation_id: params.request.organisationId,
+          team_id: params.request.teamId,
+          user_id: params.request.userId,
+          offer_id: params.request.offerId,
+        },
+      },
+    },
+    { prisma },
+  );
   const selection = await (deps?.resolveOffer ?? resolveCreditTopUpOffer)(
     {
       serviceId: params.credential.service.id,

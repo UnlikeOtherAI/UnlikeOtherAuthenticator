@@ -13,6 +13,10 @@ import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import {
+  authorizeBillingCustomerAction,
+  BILLING_CUSTOMER_ACTION,
+} from './billing-customer-action-intent.service.js';
+import {
   assertCurrentSubscriptionPolicy,
   recurringAddonCancellationDigest,
   scopeForSubscription,
@@ -207,10 +211,11 @@ export async function confirmRecurringAddonCancellation(
     stripe?: RecurringAddonSubscriptionClient & Pick<Stripe, 'accounts'>;
     stripeLivemode?: boolean;
     now?: () => Date;
+    authorizeAction?: typeof authorizeBillingCustomerAction;
   },
 ): Promise<BillingRecurringAddonCancellationConfirmationV1> {
   const prisma = deps?.prisma ?? getAdminPrisma();
-  await resolveEffectiveTariffContext(
+  const { actor } = await resolveEffectiveTariffContext(
     { request: params.request, actorToken: params.actorToken, credential: params.credential },
     { prisma },
   );
@@ -238,6 +243,28 @@ export async function confirmRecurringAddonCancellation(
   });
   assertCanManageRecurringAddonScope(viewer, initialIntent.subscription.scope);
   const requestDigest = confirmationRequestDigest(params.request);
+  await (deps?.authorizeAction ?? authorizeBillingCustomerAction)(
+    {
+      credential: params.credential,
+      organisationId: params.request.organisationId,
+      teamId: params.request.teamId,
+      userId: params.request.userId,
+      authorityScope: scope.customerScope,
+      operation: BILLING_CUSTOMER_ACTION.RECURRING_ADDON_CANCEL,
+      actorJti: actor.jti,
+      request: {
+        product: params.request.product,
+        organisation_id: params.request.organisationId,
+        team_id: params.request.teamId,
+        user_id: params.request.userId,
+        subscription_id: initialIntent.subscription.id,
+        preview_token_digest: tokenDigest,
+        idempotency_key_digest: recurringAddonCancellationDigest(params.request.idempotencyKey),
+        choice: params.request.choice,
+      },
+    },
+    { prisma },
+  );
   const claimed = await claimCancellation(
     {
       tokenDigest,
