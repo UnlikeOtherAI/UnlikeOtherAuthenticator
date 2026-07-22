@@ -528,8 +528,12 @@ effective tariff, applies corrections before new debits, allocates scarce
 credits deterministically, and writes the full rated-but-unfunded liability.
 Both that settlement and exact-team credit-account creation use the shared
 bounded exponential full-jitter serializable retry boundary. Retry exhaustion
-is a stable 503 credit-domain error, while non-serialization failures preserve
-their original error.
+is an internal credit-domain error mapped to a generic public HTTP 503, while
+non-serialization failures preserve their original error. Because parallel Ledger requests can return in a
+different order from their capture timestamps, the locked settlement compares
+each unseen cursor with the latest committed team/month snapshot and treats an
+equal-or-older capture as a successful superseded no-op. The database trigger
+continues to reject stale writes as a defense-in-depth invariant.
 Usage cannot push an available balance below zero; only verified credit-entry
 reversals can produce debt. Cursor replay is idempotent and a conflicting or
 partially persisted cursor fails closed. `billing-credit-projection.service.ts`
