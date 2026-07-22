@@ -37,9 +37,7 @@ const FORBIDDEN_PDF_NAMES = [
   '/URI',
   '/XFA',
 ] as const;
-const FORBIDDEN_PARSED_PDF_NAMES = new Set(
-  FORBIDDEN_PDF_NAMES.map((name) => name.slice(1)),
-);
+const FORBIDDEN_PARSED_PDF_NAMES = new Set(FORBIDDEN_PDF_NAMES.map((name) => name.slice(1)));
 
 export interface ValidatedSourcePdf {
   byteLength: number;
@@ -127,7 +125,10 @@ export async function validateSourcePdf(
   if (value.byteLength > env.SIGNATURE_MAX_PDF_BYTES) {
     throw new AppError('BAD_REQUEST', 400, 'PDF_TOO_LARGE');
   }
-  if (value.byteLength < PDF_HEADER.length || !Buffer.from(value).subarray(0, 5).equals(PDF_HEADER)) {
+  if (
+    value.byteLength < PDF_HEADER.length ||
+    !Buffer.from(value).subarray(0, 5).equals(PDF_HEADER)
+  ) {
     throw new AppError('BAD_REQUEST', 400, 'INVALID_PDF');
   }
   const eofWindow = Buffer.from(value).subarray(Math.max(0, value.byteLength - 2048));
@@ -225,7 +226,13 @@ interface CertificateWriter {
 function drawLines(
   writer: CertificateWriter,
   value: string,
-  options: { x: number; width: number; size?: number; bold?: boolean; color?: ReturnType<typeof rgb> },
+  options: {
+    x: number;
+    width: number;
+    size?: number;
+    bold?: boolean;
+    color?: ReturnType<typeof rgb>;
+  },
 ): void {
   const size = options.size ?? 8.5;
   const font = options.bold ? writer.bold : writer.regular;
@@ -289,10 +296,18 @@ function drawCertificatePage(
   drawField(writer, 'Domain', data.domain);
   drawField(writer, 'Signer', data.signerName);
   drawField(writer, 'Signer email', data.signerEmail);
-  drawField(writer, 'Signing method', data.signingMethod === 'TYPED_NAME' ? 'Typed name' : 'Click-wrap');
+  drawField(
+    writer,
+    'Signing method',
+    data.signingMethod === 'TYPED_NAME' ? 'Typed name' : 'Click-wrap',
+  );
   if (data.typedName) drawField(writer, 'Typed name', data.typedName);
   drawField(writer, 'Signed at (UTC)', data.signedAt.toISOString());
-  drawField(writer, 'Authentication', `${data.authMethod}; 2FA completed: ${data.twoFaCompleted ? 'yes' : 'no'}`);
+  drawField(
+    writer,
+    'Authentication',
+    `${data.authMethod}; 2FA completed: ${data.twoFaCompleted ? 'yes' : 'no'}`,
+  );
   drawField(writer, 'Source PDF SHA-256', data.sourcePdfSha256);
   drawField(writer, 'Evidence SHA-256', data.evidenceManifestSha256);
   drawField(writer, 'Verification reference', data.verificationReference);
@@ -322,6 +337,11 @@ export async function buildSignatureReceiptPdf(
   receipt.setSubject('Authenticated agreement evidence receipt');
   receipt.setProducer('UnlikeOtherAI Authenticator');
   receipt.setCreator('UnlikeOtherAI Authenticator');
+  // pdf-lib otherwise stamps wall-clock creation/modification times. Pin both to
+  // the immutable server acceptance time so a crash retry recreates byte-identical
+  // evidence for the claimed intent and can safely converge on its create-only key.
+  receipt.setCreationDate(data.signedAt);
+  receipt.setModificationDate(data.signedAt);
   const copiedPages = await receipt.copyPages(source, source.getPageIndices());
   for (const page of copiedPages) receipt.addPage(page);
 

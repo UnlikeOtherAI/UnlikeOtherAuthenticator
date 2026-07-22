@@ -1815,6 +1815,13 @@ non-goals, delivery phases, and unresolved decisions are defined in
 That document is incorporated into this build brief by reference and is authoritative for
 the signature module.
 
+Signing evidence uses a durable claimed-intent handoff: exact inputs are reserved under the
+continuation/domain-policy locks, all object reads/writes, PDF generation, and cryptographic
+signing occur only after that transaction commits, and a final locked revalidation appends
+the signature and audit atomically. Deterministic receipt bytes and immutable intent states
+make concurrent duplicates, crash recovery, and lost-response retries converge without
+holding database locks across external work.
+
 ## 2026-07 Billing Tariff Control Plane
 
 Tariffs and all commercial billing for UOA-backed products live in UOA. Ledger

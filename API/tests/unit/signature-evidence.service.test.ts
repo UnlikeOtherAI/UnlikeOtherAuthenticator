@@ -5,7 +5,7 @@ import path from 'node:path';
 
 import { exportJWK, generateKeyPair, type JWK } from 'jose';
 import { PDFDocument, PDFName, StandardFonts } from 'pdf-lib';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { parseEnv } from '../../src/config/env.js';
 import {
@@ -19,6 +19,7 @@ import {
   buildSignatureReceiptPdf,
   hashPdf,
   validateSourcePdf,
+  type ReceiptCertificateData,
 } from '../../src/services/signature-pdf.service.js';
 import { FilesystemSignatureObjectStorage } from '../../src/services/signature-storage.service.js';
 
@@ -69,6 +70,30 @@ function manifest(sourceSha256: string): SignatureEvidenceManifest {
   };
 }
 
+function receiptCertificate(sourceSha256: string): ReceiptCertificateData {
+  const data = manifest(sourceSha256);
+  return {
+    signatureId: data.signatureId,
+    verificationReference: data.verificationReference,
+    verificationUrl: `https://auth.example/signatures/verify/${data.verificationReference}`,
+    domain: data.domain,
+    agreementId: data.agreementId,
+    agreementVersionId: data.agreementVersionId,
+    version: data.agreementVersion,
+    agreementTitle: data.agreementTitle,
+    signerName: data.signerName,
+    signerEmail: data.userEmail,
+    signingMethod: data.signingMethod,
+    typedName: data.typedName ?? undefined,
+    acceptanceStatement: data.acceptanceStatement,
+    signedAt: new Date(data.signedAt),
+    authMethod: data.authMethod,
+    twoFaCompleted: data.twoFaCompleted,
+    sourcePdfSha256: data.sourcePdfSha256,
+    evidenceManifestSha256: 'a'.repeat(64),
+  };
+}
+
 beforeAll(async () => {
   const { privateKey, publicKey } = await generateKeyPair('RS256', { modulusLength: 2048 });
   const privateJwk = await exportJWK(privateKey);
@@ -101,7 +126,9 @@ describe('signature PDF safety and receipt generation', () => {
       validateSourcePdf(Buffer.concat([source.subarray(0, -5), Buffer.from('/JavaScript\n%%EOF')])),
     ).rejects.toThrowError('PDF_ACTIVE_CONTENT_NOT_ALLOWED');
     await expect(
-      validateSourcePdf(Buffer.concat([source.subarray(0, -5), Buffer.from('/Java#53cript\n%%EOF')])),
+      validateSourcePdf(
+        Buffer.concat([source.subarray(0, -5), Buffer.from('/Java#53cript\n%%EOF')]),
+      ),
     ).rejects.toThrowError('PDF_ACTIVE_CONTENT_NOT_ALLOWED');
 
     const smallEnv = parseEnv({
@@ -109,9 +136,9 @@ describe('signature PDF safety and receipt generation', () => {
       SHARED_SECRET,
       SIGNATURE_MAX_PDF_BYTES: '1024',
     });
-    await expect(validateSourcePdf(Buffer.concat([source, Buffer.alloc(1024)]), smallEnv)).rejects.toThrowError(
-      'PDF_TOO_LARGE',
-    );
+    await expect(
+      validateSourcePdf(Buffer.concat([source, Buffer.alloc(1024)]), smallEnv),
+    ).rejects.toThrowError('PDF_TOO_LARGE');
 
     const onePageEnv = parseEnv({
       NODE_ENV: 'test',
@@ -163,6 +190,22 @@ describe('signature PDF safety and receipt generation', () => {
     const loaded = await PDFDocument.load(receipt);
     expect(loaded.getPageCount()).toBe(3);
     expect(receipt.subarray(0, 5).toString('ascii')).toBe('%PDF-');
+  });
+
+  it('recreates byte-identical receipt bytes from the same claimed inputs', async () => {
+    const source = await sourcePdf(2);
+    const data = receiptCertificate(hashPdf(source));
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-07-15T20:31:00.000Z'));
+      const first = await buildSignatureReceiptPdf(source, data);
+      vi.setSystemTime(new Date('2031-01-02T03:04:05.000Z'));
+      const retried = await buildSignatureReceiptPdf(source, data);
+      expect(retried).toEqual(first);
+      expect(hashPdf(retried)).toBe(hashPdf(first));
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
@@ -234,7 +277,36 @@ describe('signed signature evidence', () => {
     );
     expect(created.receiptPdfSha256).toBe(hashPdf(created.receiptPdf));
     await expect(storage.read(created.receiptStorageKey)).resolves.toEqual(created.receiptPdf);
-    await expect(verifyEvidenceManifest(created.compactJws, publicJwksJson)).resolves.toEqual(value);
+    await expect(verifyEvidenceManifest(created.compactJws, publicJwksJson)).resolves.toEqual(
+      value,
+    );
+    const retried = await createSignatureEvidence({
+      manifest: value,
+      sourcePdf: source,
+      verificationUrl: `https://auth.example/signatures/verify/${value.verificationReference}`,
+      storage,
+      env,
+    });
+    expect(retried.receiptPdf).toEqual(created.receiptPdf);
+    expect(retried.receiptPdfSha256).toBe(created.receiptPdfSha256);
+    expect(retried.manifestSha256).toBe(created.manifestSha256);
+  });
+
+  it('fails closed when a claimed immutable key contains different bytes', async () => {
+    const source = await sourcePdf();
+    const value = manifest(hashPdf(source));
+    value.signatureId = 'sig_01JZCONFLICTINGOBJECT';
+    value.verificationReference = 'verify_01JZCONFLICTINGREFERENCE';
+    const storage = new FilesystemSignatureObjectStorage(tempRoot);
+    const env = parseEnv({
+      NODE_ENV: 'test',
+      SHARED_SECRET,
+      SIGNATURE_STORAGE_PROVIDER: 'filesystem',
+      SIGNATURE_FILESYSTEM_ROOT: tempRoot,
+      SIGNATURE_EVIDENCE_PRIVATE_JWK: privateJwkJson,
+    });
+    const key = `receipts/${value.domain}/${value.signatureId}/receipt.pdf`;
+    await storage.putImmutable(key, Buffer.from('%PDF-conflicting'), 'application/pdf');
     await expect(
       createSignatureEvidence({
         manifest: value,
@@ -243,7 +315,7 @@ describe('signed signature evidence', () => {
         storage,
         env,
       }),
-    ).rejects.toThrowError('SIGNATURE_OBJECT_ALREADY_EXISTS');
+    ).rejects.toThrowError('SIGNATURE_EVIDENCE_OBJECT_CONFLICT');
   });
 
   it('refuses to create evidence when the immutable source hash does not match', async () => {

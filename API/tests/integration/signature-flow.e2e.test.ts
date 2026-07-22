@@ -191,6 +191,21 @@ describe.skipIf(!hasDatabase)('domain signature lifecycle — real PostgreSQL', 
     );
     expect(retry.id).toBe(signature.id);
     expect(await handle!.prisma.agreementSignature.count()).toBe(1);
+    const claim = await handle!.prisma.signatureClaimIntent.findUniqueOrThrow({
+      where: {
+        signingContinuationId_agreementVersionId: {
+          signingContinuationId: continuation.id,
+          agreementVersionId: versionId,
+        },
+      },
+    });
+    expect(claim).toMatchObject({ status: 'COMPLETED', id: signature.claimIntentId });
+    await expect(
+      handle!.prisma.signatureClaimIntent.update({
+        where: { id: claim.id },
+        data: { signerName: 'Tampered claim' },
+      }),
+    ).rejects.toThrow();
 
     const receipt = await readSigningReceipt(
       { signingToken: gate.signingToken, signatureId: signature.id },
@@ -221,7 +236,9 @@ describe.skipIf(!hasDatabase)('domain signature lifecycle — real PostgreSQL', 
     await expect(
       verifyPublicSignatureReference(signature.verificationReference, deps),
     ).resolves.toMatchObject({ state: 'valid', integrityVerified: true });
-    await expect(getCurrentSignatureStatus({ domain: DOMAIN, userId }, deps)).resolves.toMatchObject({
+    await expect(
+      getCurrentSignatureStatus({ domain: DOMAIN, userId }, deps),
+    ).resolves.toMatchObject({
       enabled: true,
       complete: true,
     });
@@ -238,7 +255,9 @@ describe.skipIf(!hasDatabase)('domain signature lifecycle — real PostgreSQL', 
     await expect(
       verifyPublicSignatureReference(signature.verificationReference, deps),
     ).resolves.toMatchObject({ state: 'revoked', integrityVerified: true });
-    expect((await getCurrentSignatureStatus({ domain: DOMAIN, userId }, deps)).complete).toBe(false);
+    expect((await getCurrentSignatureStatus({ domain: DOMAIN, userId }, deps)).complete).toBe(
+      false,
+    );
 
     await expect(
       handle!.prisma.agreementSignature.update({
