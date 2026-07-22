@@ -276,7 +276,7 @@ export async function calculateBillingContractInvoice(
       return await prisma.$transaction(
         async (tx) => {
           await tx.$queryRaw(
-            Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${`uoa-invoice-revision:${contract.id}:${params.billingMonth}`}, 0))`,
+            Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${`uoa-invoice-revision:${contract.id}:${params.billingMonth}`}, 0))::text AS "locked"`,
           );
           const existing = await tx.billingInvoice.findFirst({
             where: {
