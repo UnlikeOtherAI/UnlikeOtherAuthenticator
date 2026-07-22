@@ -223,9 +223,10 @@ reallocate shared credits locally.
 Platform superusers can inspect and repair an exact team balance through the Admin
 **Team credits** view. \`GET /internal/admin/billing/credit-accounts\` returns only
 display-ready remaining credits, organisation/team identity, explicit test/live mode,
-stable copyable account/org/team IDs, and recent immutable adjustments. It uses
-\`(updated_at DESC, id DESC)\` cursor pagination plus exact ID/name search; the UI says
-how many rows are loaded while another page exists, never a false total.
+stable copyable account/org/team IDs, and recent immutable adjustments. It uses an
+opaque immutable \`(created_at DESC, id DESC)\` cursor bound to the complete
+organisation/team/search filter set plus exact ID/name search; the UI says how many
+rows are loaded while another page exists, never a false total.
 
 \`POST /internal/admin/billing/credit-accounts/:creditAccountId/adjustment-preview\`
 accepts a non-zero signed credit decimal (at most five decimal places), required reason,
@@ -236,11 +237,13 @@ confirmation binds the exact account/org/team/mode, actor/domain, balances, reas
 idempotency key, and automatic-top-up generation/state/threshold/refill consequence.
 
 The final \`POST /internal/admin/billing/credit-accounts/:creditAccountId/adjustments\`
-accepts only that confirmation token. It takes the same ordered locks, rejects an
-unresolved attempt, and transactionally revalidates every frozen value before inserting
-the immutable adjustment, exact linked credit entry, and one audit event. An exact retry
-returns the original adjustment plus the **current** account projection without another
-entry or audit; changed intent under the same key fails with 409. Administrative debits
+accepts only that confirmation token. It takes the same ordered locks, first validates
+and returns an existing exact idempotent adjustment, then rejects an unresolved attempt
+before any new mutation, and transactionally revalidates every frozen value before
+inserting the immutable adjustment, exact linked credit entry, and one audit event. An
+exact retry returns the original adjustment plus the **current** account projection
+without another entry or audit even if a later automatic top-up is unresolved; changed
+intent under the same key fails with 409. Administrative debits
 cannot create or worsen debt. Editing any reviewed field invalidates the browser review,
 and live mode requires a separate acknowledgement. These endpoints return no internal
 credit storage units, raw usage, provider cost, token counts, or Stripe identifiers.

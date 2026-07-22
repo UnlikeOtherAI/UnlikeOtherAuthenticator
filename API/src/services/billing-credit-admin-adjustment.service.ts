@@ -315,7 +315,6 @@ export async function createAdminCreditAdjustment(
         teamId: verified.team_id,
         mode: verified.mode,
       });
-      await rejectUnresolvedAutoTopUp(tx, creditAccountId);
       const existing = await tx.billingCreditAdminAdjustment.findUnique({
         where: {
           creditAccountId_idempotencyKey: {
@@ -346,6 +345,7 @@ export async function createAdminCreditAdjustment(
           replayed: true,
         };
       }
+      await rejectUnresolvedAutoTopUp(tx, creditAccountId);
       const resulting = adminCreditResultingBalance(locked.balance, delta);
       const automaticTopUp = autoTopUpPreview(locked.account, locked.balance, resulting);
       const expectedAutomaticTopUp = tokenAutoTopUp(automaticTopUp);

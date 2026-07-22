@@ -244,7 +244,7 @@ export const billingFundingEndpoints: EndpointSchema[] = [
       '401/403': 'Missing, invalid, wrong-domain, or no-longer-authorized superuser',
     },
     notes:
-      'Private no-store operator response. Uses stable (updated_at DESC, id DESC) cursor pagination and exact account/org/team ID or case-insensitive exact organisation/team name search. A partial page is never labeled as a total. The fixed conversion is 1,000 credits = US$1.',
+      'Private no-store operator response. Uses immutable (created_at DESC, id DESC) cursor pagination bound to the complete organisation/team/search filter set, plus exact account/org/team ID or case-insensitive exact organisation/team name search. A partial page is never labeled as a total. The fixed conversion is 1,000 credits = US$1.',
   },
   {
     method: 'POST',
@@ -283,6 +283,6 @@ export const billingFundingEndpoints: EndpointSchema[] = [
       '401/403': 'Missing, invalid, wrong-domain, or no-longer-authorized superuser',
     },
     notes:
-      'UOA takes the same per-account advisory lock as the automatic-top-up scheduler before the credit-account row lock, then uses READ COMMITTED so a waiter sees the lock winner’s durable attempt. It rejects unresolved attempts, revalidates every frozen value, and writes the immutable adjustment and exact linked entry atomically. The API never exposes internal credit storage units, raw usage, provider cost, or Stripe IDs.',
+      'UOA takes the same per-account advisory lock as the automatic-top-up scheduler before the credit-account row lock, then uses READ COMMITTED so a waiter sees the lock winner’s durable attempt. Under those locks it returns a validated exact replay before applying the unresolved-attempt gate to new mutations, revalidates every frozen value, and writes the immutable adjustment and exact linked entry atomically. The API never exposes internal credit storage units, raw usage, provider cost, or Stripe IDs.',
   },
 ];

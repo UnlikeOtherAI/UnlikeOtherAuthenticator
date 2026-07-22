@@ -153,6 +153,7 @@ async function seed(prisma: PrismaClient): Promise<void> {
     `);
     await seedCreditAccount(tx, 'scheduler_first');
     await seedCreditAccount(tx, 'adjustment_first');
+    await seedCreditAccount(tx, 'replay_after_attempt');
   });
 }
 
@@ -171,13 +172,13 @@ function lockGate() {
   };
 }
 
-function intent(suffix: string) {
+function intent(suffix: string, signedCredits = '150') {
   const row = scoped(suffix);
   return {
     creditAccountId: row.creditAccount,
     organisationId: ids.org,
     teamId: row.team,
-    signedCredits: '150',
+    signedCredits,
     reason: `Concurrency ordering ${suffix}`,
     idempotencyKey: `credit-concurrency:${suffix}`,
     actor: { userId: ids.user, email: 'credit-concurrency@example.com' },
@@ -272,5 +273,76 @@ describe.skipIf(!enabled)('admin adjustment and automatic top-up lock ordering',
         })
       ).balanceMicrocredits,
     ).toBe(250_000_000n);
+  }, 20_000);
+
+  it('replays a committed adjustment after the scheduler opens an attempt and rejects changed intent', async () => {
+    const input = intent('replay_after_attempt', '25');
+    const changedIntent = { ...input, reason: 'A different adjustment under the occupied key' };
+    const auditCountBefore = await handle!.prisma.adminAuditLog.count({
+      where: { action: 'billing.credit_adjustment_created' },
+    });
+    const [preview, changedPreview] = await Promise.all([
+      previewAdminCreditAdjustment(input, {
+        ...serviceDeps,
+        prisma: handle!.prisma,
+      }),
+      previewAdminCreditAdjustment(changedIntent, {
+        ...serviceDeps,
+        prisma: handle!.prisma,
+      }),
+    ]);
+    const confirmation = {
+      creditAccountId: input.creditAccountId,
+      confirmationToken: preview.confirmation_token,
+      actor: input.actor,
+    };
+
+    const created = await createAdminCreditAdjustment(confirmation, {
+      ...serviceDeps,
+      prisma: handle!.prisma,
+    });
+    const scheduler = await claimCreditAutoTopUpAttempt(
+      { accountId: ids.account, creditAccountId: input.creditAccountId },
+      { prisma: handle!.prisma },
+    );
+    const replayed = await createAdminCreditAdjustment(confirmation, {
+      ...serviceDeps,
+      prisma: handle!.prisma,
+    });
+
+    expect(scheduler).toMatchObject({ kind: 'dispatch', created: true });
+    expect(replayed).toMatchObject({
+      replayed: true,
+      adjustment: { id: created.adjustment.id },
+      account: { remaining_credits: { credits: '125' } },
+    });
+    await expect(
+      createAdminCreditAdjustment(
+        {
+          creditAccountId: input.creditAccountId,
+          confirmationToken: changedPreview.confirmation_token,
+          actor: input.actor,
+        },
+        { ...serviceDeps, prisma: handle!.prisma },
+      ),
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      message: 'BILLING_CREDIT_ADJUSTMENT_IDEMPOTENCY_CONFLICT',
+    });
+    expect(
+      await handle!.prisma.billingCreditAdminAdjustment.count({
+        where: { creditAccountId: input.creditAccountId },
+      }),
+    ).toBe(1);
+    expect(
+      await handle!.prisma.billingCreditEntry.count({
+        where: { creditAccountId: input.creditAccountId, kind: 'ADJUSTMENT' },
+      }),
+    ).toBe(1);
+    expect(
+      await handle!.prisma.adminAuditLog.count({
+        where: { action: 'billing.credit_adjustment_created' },
+      }),
+    ).toBe(auditCountBefore + 1);
   }, 20_000);
 });

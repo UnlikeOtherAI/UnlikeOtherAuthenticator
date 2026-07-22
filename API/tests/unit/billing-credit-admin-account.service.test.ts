@@ -14,6 +14,7 @@ function row(id: string, updatedAt: string) {
     autoTopUpGeneration: 0,
     autoTopUpState: BillingCreditAutoTopUpState.DISABLED,
     autoTopUpThresholdMicrocredits: null,
+    createdAt: new Date(updatedAt),
     updatedAt: new Date(updatedAt),
     account: { livemode: false },
     org: { id: `org_${id}`, name: 'Exact Org' },
@@ -24,7 +25,7 @@ function row(id: string, updatedAt: string) {
 }
 
 describe('admin credit account pagination', () => {
-  it('uses a stable updatedAt/id cursor and reports loaded pages without inventing a total', async () => {
+  it('uses an immutable createdAt/id cursor and reports loaded pages without inventing a total', async () => {
     const findMany = vi
       .fn()
       .mockResolvedValueOnce([
@@ -43,7 +44,7 @@ describe('admin credit account pagination', () => {
     expect(first.next_cursor).toEqual(expect.any(String));
     expect(findMany.mock.calls[0][0]).toMatchObject({
       take: 3,
-      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       where: {
         currency: 'USD',
         AND: [
@@ -69,9 +70,9 @@ describe('admin credit account pagination', () => {
     });
     expect(findMany.mock.calls[1][0].where.AND[1]).toEqual({
       OR: [
-        { updatedAt: { lt: new Date('2026-07-21T12:02:00.000Z') } },
+        { createdAt: { lt: new Date('2026-07-21T12:02:00.000Z') } },
         {
-          updatedAt: new Date('2026-07-21T12:02:00.000Z'),
+          createdAt: new Date('2026-07-21T12:02:00.000Z'),
           id: { lt: 'credit_2' },
         },
       ],
@@ -94,5 +95,50 @@ describe('admin credit account pagination', () => {
         { prisma },
       ),
     ).rejects.toThrowError('BILLING_CREDIT_ACCOUNT_CURSOR_INVALID');
+  });
+
+  it('rejects a cursor reused with different organisation or team filters', async () => {
+    const findMany = vi
+      .fn()
+      .mockResolvedValue([
+        row('credit_2', '2026-07-21T12:02:00.000Z'),
+        row('credit_1', '2026-07-21T12:01:00.000Z'),
+      ]);
+    const prisma = { billingCreditAccount: { findMany } } as never;
+    const first = await listAdminCreditAccounts(
+      {
+        organisationId: 'org_exact',
+        teamId: 'team_exact',
+        search: 'Exact Team',
+        limit: 1,
+      },
+      { prisma },
+    );
+
+    await expect(
+      listAdminCreditAccounts(
+        {
+          organisationId: 'org_other',
+          teamId: 'team_exact',
+          search: 'Exact Team',
+          cursor: first.next_cursor!,
+          limit: 1,
+        },
+        { prisma },
+      ),
+    ).rejects.toThrowError('BILLING_CREDIT_ACCOUNT_CURSOR_INVALID');
+    await expect(
+      listAdminCreditAccounts(
+        {
+          organisationId: 'org_exact',
+          teamId: 'team_other',
+          search: 'Exact Team',
+          cursor: first.next_cursor!,
+          limit: 1,
+        },
+        { prisma },
+      ),
+    ).rejects.toThrowError('BILLING_CREDIT_ACCOUNT_CURSOR_INVALID');
+    expect(findMany).toHaveBeenCalledTimes(1);
   });
 });

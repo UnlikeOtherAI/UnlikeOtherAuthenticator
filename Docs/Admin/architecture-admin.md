@@ -131,7 +131,7 @@ Authenticated shell (`AdminSessionGuard` → `AdminUiProvider` → `AdminLayout`
   organisation/team assignments, exact organisation/team add-ons and credits,
   purpose-bound product app keys with one-time secret reveal, Stripe catalog
   readiness, and test/live subscription projections. **Team credits** shows
-  cursor-paged/searchable display-ready exact-team remaining credits, copyable
+  immutable-cursor-paged/searchable display-ready exact-team remaining credits, copyable
   stable account/org/team IDs, explicit test/live mode, and recent immutable
   superuser adjustments. Its signed grant/debit form requires a reason and
   preserves one idempotency reference across retries, but cannot post directly:

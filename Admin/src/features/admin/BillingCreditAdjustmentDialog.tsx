@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 
 import { Badge } from '../../components/ui/Badge';
@@ -41,6 +41,7 @@ export function BillingCreditAdjustmentDialog({
 }) {
   const previewMutation = usePreviewBillingCreditAdjustmentMutation(account);
   const createMutation = useCreateBillingCreditAdjustmentMutation(account.id);
+  const formRevision = useRef(0);
   const [reviewed, setReviewed] = useState<{
     key: string;
     preview: BillingCreditAdjustmentPreview;
@@ -66,9 +67,21 @@ export function BillingCreditAdjustmentDialog({
     form.reset({ signedCredits: '', reason: '', idempotencyKey: newIdempotencyKey() });
   }, [account.id, form, open, resetCreate, resetPreview]);
 
+  useEffect(() => {
+    const subscription = form.watch(() => {
+      formRevision.current += 1;
+      setReviewed(null);
+      setConfirmedToken(null);
+      resetCreate();
+    });
+    return () => subscription.unsubscribe();
+  }, [form, resetCreate]);
+
   async function review(values: BillingCreditAdjustmentFormValues): Promise<void> {
+    const revision = formRevision.current;
     try {
       const result = await previewMutation.mutateAsync(values);
+      if (formRevision.current !== revision) return;
       setReviewed({ key: valuesKey(values), preview: result });
       setConfirmedToken(null);
     } catch {
@@ -78,7 +91,7 @@ export function BillingCreditAdjustmentDialog({
   }
 
   async function post(): Promise<void> {
-    if (!preview) return;
+    if (!preview || (account.mode === 'live' && !liveConfirmed)) return;
     try {
       await createMutation.mutateAsync(preview.confirmation_token);
       onClose();

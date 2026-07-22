@@ -178,9 +178,13 @@ describe('superuser credit adjustment confirmation', () => {
     expect(test.tx.adminAuditLog.create).toHaveBeenCalledTimes(1);
   });
 
-  it('returns the original adjustment plus the current account projection on replay', async () => {
+  it('returns the original adjustment before considering a newer unresolved top-up attempt', async () => {
     const existing = { ...adjustment, creditEntry: { balanceAfterMicrocredits: 3_250_000n } };
-    const test = harness({ accounts: [accountRow(4_000_000n), accountRow(4_000_000n)], existing });
+    const test = harness({
+      accounts: [accountRow(4_000_000n), accountRow(4_000_000n)],
+      existing,
+      unresolved: true,
+    });
     const result = await createAdminCreditAdjustment(
       { creditAccountId: 'credit_account', confirmationToken: await confirmationToken(), actor },
       {
@@ -195,6 +199,30 @@ describe('superuser credit adjustment confirmation', () => {
       adjustment: { id: adjustment.id },
       account: { remaining_credits: { credits: '4' } },
     });
+    expect(test.tx.billingCreditAutoTopUpAttempt.findFirst).not.toHaveBeenCalled();
+    expect(test.tx.billingCreditEntry.create).not.toHaveBeenCalled();
+    expect(test.tx.adminAuditLog.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects changed intent for an existing key before considering an unresolved attempt', async () => {
+    const existing = { ...adjustment, creditEntry: { balanceAfterMicrocredits: 3_250_000n } };
+    const test = harness({ accounts: [accountRow(4_000_000n)], existing, unresolved: true });
+
+    await expect(
+      createAdminCreditAdjustment(
+        {
+          creditAccountId: 'credit_account',
+          confirmationToken: await confirmationToken({ reason: 'Different operator intent' }),
+          actor,
+        },
+        {
+          ...deps,
+          prisma: test.prisma as never,
+          lockAccount: vi.fn().mockResolvedValue(4_000_000n),
+        },
+      ),
+    ).rejects.toThrowError('BILLING_CREDIT_ADJUSTMENT_IDEMPOTENCY_CONFLICT');
+    expect(test.tx.billingCreditAutoTopUpAttempt.findFirst).not.toHaveBeenCalled();
     expect(test.tx.billingCreditEntry.create).not.toHaveBeenCalled();
     expect(test.tx.adminAuditLog.create).not.toHaveBeenCalled();
   });

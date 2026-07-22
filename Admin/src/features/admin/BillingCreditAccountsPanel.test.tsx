@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -209,5 +209,43 @@ describe('BillingCreditAccountsPanel', () => {
     });
     expect(state.create).toHaveBeenNthCalledWith(1, 'server-confirmation-token');
     expect(state.create).toHaveBeenNthCalledWith(2, 'server-confirmation-token');
+  });
+
+  it('guards form submission and invalidates live acknowledgement after edit and revert', async () => {
+    const user = userEvent.setup();
+    render(<BillingCreditAccountsPanel />);
+
+    await user.click(screen.getByRole('button', { name: 'Adjust' }));
+    const dialog = screen.getByRole('dialog', { name: 'Adjust team credits' });
+    const signedCredits = within(dialog).getByLabelText('Signed credit amount');
+    const reason = within(dialog).getByLabelText('Reason');
+    await user.type(signedCredits, '-2500');
+    await user.type(reason, 'Reverse duplicate support grant');
+    await user.click(within(dialog).getByRole('button', { name: 'Review adjustment' }));
+    await waitFor(() => expect(state.preview).toHaveBeenCalledTimes(1));
+
+    const form = dialog.querySelector('form');
+    if (!form) throw new Error('Adjustment form was not rendered');
+    await act(async () => {
+      fireEvent.submit(form);
+    });
+    expect(state.create).not.toHaveBeenCalled();
+
+    await user.click(within(dialog).getByLabelText('Confirm live adjustment for Research Lab'));
+    expect(
+      (
+        within(dialog).getByRole('button', {
+          name: 'Post reviewed adjustment',
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(false);
+
+    await user.type(reason, '!');
+    await user.keyboard('{Backspace}');
+
+    expect(within(dialog).queryByText('Server-confirmed adjustment')).toBeNull();
+    expect(within(dialog).queryByLabelText('Confirm live adjustment for Research Lab')).toBeNull();
+    expect(within(dialog).getByRole('button', { name: 'Review adjustment' })).toBeTruthy();
+    expect(state.create).not.toHaveBeenCalled();
   });
 });

@@ -26,6 +26,7 @@ export const adminCreditAccountSelection = {
   autoTopUpGeneration: true,
   autoTopUpState: true,
   autoTopUpThresholdMicrocredits: true,
+  createdAt: true,
   updatedAt: true,
   account: { select: { livemode: true } },
   org: { select: { id: true, name: true } },
@@ -72,11 +73,23 @@ export type AdminCreditAccountPage = {
 
 const CursorSchema = z
   .object({
-    updated_at: z.string().datetime(),
+    created_at: z.string().datetime(),
     id: z.string().min(1).max(256),
-    search: z.string().max(256).nullable(),
+    filters: z
+      .object({
+        organisation_id: z.string().max(256).nullable(),
+        team_id: z.string().max(256).nullable(),
+        search: z.string().max(256).nullable(),
+      })
+      .strict(),
   })
   .strict();
+
+type AdminCreditAccountFilters = {
+  organisationId?: string;
+  teamId?: string;
+  search?: string;
+};
 
 export function adminCreditAdjustmentView(
   row: AdminCreditAdjustmentRow,
@@ -107,23 +120,38 @@ export function adminCreditAccountView(row: AdminCreditAccountRow): AdminCreditA
   };
 }
 
-function encodeCursor(row: AdminCreditAccountRow, search: string | undefined): string {
+function cursorFilters(filters: AdminCreditAccountFilters) {
+  return {
+    organisation_id: filters.organisationId ?? null,
+    team_id: filters.teamId ?? null,
+    search: filters.search ?? null,
+  };
+}
+
+function encodeCursor(row: AdminCreditAccountRow, filters: AdminCreditAccountFilters): string {
   return Buffer.from(
     JSON.stringify({
-      updated_at: row.updatedAt.toISOString(),
+      created_at: row.createdAt.toISOString(),
       id: row.id,
-      search: search ?? null,
+      filters: cursorFilters(filters),
     }),
   ).toString('base64url');
 }
 
-function decodeCursor(cursor: string, search: string | undefined) {
+function decodeCursor(cursor: string, filters: AdminCreditAccountFilters) {
   try {
     const parsed = CursorSchema.parse(
       JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')),
     );
-    if (parsed.search !== (search ?? null)) throw new Error('search mismatch');
-    return { updatedAt: new Date(parsed.updated_at), id: parsed.id };
+    const expectedFilters = cursorFilters(filters);
+    if (
+      parsed.filters.organisation_id !== expectedFilters.organisation_id ||
+      parsed.filters.team_id !== expectedFilters.team_id ||
+      parsed.filters.search !== expectedFilters.search
+    ) {
+      throw new Error('filter mismatch');
+    }
+    return { createdAt: new Date(parsed.created_at), id: parsed.id };
   } catch {
     throw new AppError('BAD_REQUEST', 400, 'BILLING_CREDIT_ACCOUNT_CURSOR_INVALID');
   }
@@ -158,7 +186,9 @@ export async function listAdminCreditAccounts(
   const limit = params.limit ?? 50;
   if (
     (params.organisationId !== undefined && !organisationId) ||
+    (organisationId !== undefined && organisationId.length > 256) ||
     (params.teamId !== undefined && !teamId) ||
+    (teamId !== undefined && teamId.length > 256) ||
     (params.search !== undefined && (!search || search.length > 256)) ||
     (params.cursor !== undefined && (!cursorValue || cursorValue.length > 1024)) ||
     !Number.isInteger(limit) ||
@@ -167,7 +197,8 @@ export async function listAdminCreditAccounts(
   ) {
     throw new AppError('BAD_REQUEST', 400, 'BILLING_CREDIT_ACCOUNT_QUERY_INVALID');
   }
-  const cursor = cursorValue ? decodeCursor(cursorValue, search) : undefined;
+  const filters = { organisationId, teamId, search };
+  const cursor = cursorValue ? decodeCursor(cursorValue, filters) : undefined;
   const exactSearch: Prisma.BillingCreditAccountWhereInput | undefined = search
     ? {
         OR: [
@@ -182,8 +213,8 @@ export async function listAdminCreditAccounts(
   const afterCursor: Prisma.BillingCreditAccountWhereInput | undefined = cursor
     ? {
         OR: [
-          { updatedAt: { lt: cursor.updatedAt } },
-          { updatedAt: cursor.updatedAt, id: { lt: cursor.id } },
+          { createdAt: { lt: cursor.createdAt } },
+          { createdAt: cursor.createdAt, id: { lt: cursor.id } },
         ],
       }
     : undefined;
@@ -196,7 +227,7 @@ export async function listAdminCreditAccounts(
         (value): value is Prisma.BillingCreditAccountWhereInput => value !== undefined,
       ),
     },
-    orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     take: limit + 1,
     select: adminCreditAccountSelection,
   });
@@ -204,7 +235,7 @@ export async function listAdminCreditAccounts(
   const pageRows = hasMore ? rows.slice(0, limit) : rows;
   return {
     accounts: pageRows.map(adminCreditAccountView),
-    next_cursor: hasMore ? encodeCursor(pageRows[pageRows.length - 1], search) : null,
+    next_cursor: hasMore ? encodeCursor(pageRows[pageRows.length - 1], filters) : null,
     has_more: hasMore,
   };
 }

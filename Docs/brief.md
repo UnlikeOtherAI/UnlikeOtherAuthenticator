@@ -1986,15 +1986,18 @@ The Admin `/billing` page separates **Product billing**, **Team credits**, and
 **Contracts & invoices**. Team credits shows each exact organisation/team's
 display-ready remaining credits, copyable stable account/org/team IDs, and recent
 immutable adjustments with test/live mode prominent before confirmation. The
-account list uses exact ID/name search and stable cursor pagination, reports rows
+account list uses exact ID/name search and immutable `(created_at, id)` cursor
+pagination bound to the complete organisation/team/search filter set, reports rows
 loaded rather than a false total while more pages exist, and can enumerate every
-match. A superuser may append a signed credit delta only with an exact scope,
-required reason, and stable idempotency key. UOA first takes the same ordered
+match while balances change. A superuser may append a signed credit delta only with
+an exact scope, required reason, and stable idempotency key. UOA first takes the same ordered
 automatic-top-up/account locks used by the scheduler, rejects unresolved payment
 attempts, and signs a two-minute display-safe review of the current, delta, and
 resulting credits plus the exact automatic-top-up generation/state/threshold/refill
 consequence. Confirmation repeats those locks and transactionally revalidates the
-entire review. Identical retries return the original adjustment and current account
+entire review. Under those locks, an existing exact idempotent adjustment is validated
+and returned before unresolved automatic-top-up attempts can reject a new mutation.
+Identical retries therefore return the original adjustment and current account
 projection without duplicating the credit entry or audit, administrative debits
 cannot create debt, and internal credit storage units/raw metering/provider cost
 remain server-only. In the contract view, platform superusers can create organisation
