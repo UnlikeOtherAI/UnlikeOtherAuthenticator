@@ -201,24 +201,25 @@ export function startStripeUsageExportScheduler(params: {
         safetyTimer.unref();
         safetyTimers.set(timerKey, safetyTimer);
       }
-      const log = result.failed > 0 ? params.log.error : params.log.info;
-      log(
-        {
-          attempted: result.attempted,
-          succeeded: result.succeeded,
-          failed: result.failed,
-          skippedAlignmentPeriods: result.skippedAlignmentPeriods,
-          preBoundarySafetyPasses: result.preBoundarySafetyPasses,
-          failures: result.results
-            .filter((item) => item.error)
-            .map((item) => ({
-              subscriptionId: item.subscriptionId,
-              billingMonth: item.billingMonth,
-              error: item.error,
-            })),
-        },
-        'Stripe usage export cycle completed',
-      );
+      const details = {
+        attempted: result.attempted,
+        succeeded: result.succeeded,
+        failed: result.failed,
+        skippedAlignmentPeriods: result.skippedAlignmentPeriods,
+        preBoundarySafetyPasses: result.preBoundarySafetyPasses,
+        failures: result.results
+          .filter((item) => item.error)
+          .map((item) => ({
+            subscriptionId: item.subscriptionId,
+            billingMonth: item.billingMonth,
+            error: item.error,
+          })),
+      };
+      if (result.failed > 0) {
+        params.log.error(details, 'Stripe usage export cycle completed');
+      } else {
+        params.log.info(details, 'Stripe usage export cycle completed');
+      }
     } catch (error) {
       params.log.error({ err: error }, 'Stripe usage export cycle failed');
     } finally {

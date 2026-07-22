@@ -430,19 +430,20 @@ export function startCreditAutoTopUpScheduler(params: {
     running = true;
     try {
       const result = await (params.runCycle ?? runCreditAutoTopUpCycle)();
-      const log = result.failed > 0 ? params.log.error : params.log.info;
-      log(
-        {
-          attempted: result.attempted,
-          submitted: result.submitted,
-          awaitingWebhook: result.awaitingWebhook,
-          terminal: result.terminal,
-          skipped: result.skipped,
-          failed: result.failed,
-          failures: result.results.filter((item) => item.outcome === 'failed'),
-        },
-        'Stripe credit auto-top-up cycle completed',
-      );
+      const details = {
+        attempted: result.attempted,
+        submitted: result.submitted,
+        awaitingWebhook: result.awaitingWebhook,
+        terminal: result.terminal,
+        skipped: result.skipped,
+        failed: result.failed,
+        failures: result.results.filter((item) => item.outcome === 'failed'),
+      };
+      if (result.failed > 0) {
+        params.log.error(details, 'Stripe credit auto-top-up cycle completed');
+      } else {
+        params.log.info(details, 'Stripe credit auto-top-up cycle completed');
+      }
     } catch (error) {
       params.log.error({ err: error }, 'Stripe credit auto-top-up cycle failed');
     } finally {

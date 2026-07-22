@@ -55,10 +55,7 @@ describe('credit automatic top-up runtime', () => {
       batchSize: 25,
     });
 
-    expect(listCandidates).toHaveBeenCalledWith(
-      { accountId: account.id, limit: 25 },
-      { prisma },
-    );
+    expect(listCandidates).toHaveBeenCalledWith({ accountId: account.id, limit: 25 }, { prisma });
     expect(runAccount).toHaveBeenCalledTimes(3);
     expect(runAccount).toHaveBeenNthCalledWith(
       1,
@@ -116,6 +113,45 @@ describe('credit automatic top-up runtime', () => {
     finishFirst?.(emptyResult as never);
     await vi.advanceTimersByTimeAsync(0);
     expect(runCycle).toHaveBeenCalledTimes(2);
+    scheduler.stop();
+  });
+
+  it('preserves the logger receiver when a cycle reports failures', async () => {
+    vi.useFakeTimers();
+    const receivers: unknown[] = [];
+    const log = {
+      info: vi.fn(function (this: unknown) {
+        receivers.push(this);
+      }),
+      error: vi.fn(function (this: unknown) {
+        receivers.push(this);
+      }),
+    };
+    const scheduler = startCreditAutoTopUpScheduler({
+      log,
+      runCycle: vi.fn().mockResolvedValue({
+        accountId: account.id,
+        attempted: 1,
+        submitted: 0,
+        awaitingWebhook: 0,
+        terminal: 0,
+        skipped: 0,
+        failed: 1,
+        results: [
+          {
+            creditAccountId: 'credit_failed',
+            outcome: 'failed',
+            error: 'STRIPE_CONNECTION_ERROR',
+          },
+        ],
+      }),
+    });
+
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(log.error).toHaveBeenCalledOnce();
+    expect(log.info).not.toHaveBeenCalled();
+    expect(receivers).toEqual([log]);
     scheduler.stop();
   });
 });

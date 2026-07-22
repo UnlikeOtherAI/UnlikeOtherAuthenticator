@@ -275,4 +275,43 @@ describe('recurring Stripe usage export scheduler', () => {
     expect(runCycle).toHaveBeenCalledTimes(2);
     scheduler.stop();
   });
+
+  it('preserves the logger receiver when a usage export cycle reports failures', async () => {
+    vi.useFakeTimers();
+    const receivers: unknown[] = [];
+    const log = {
+      info: vi.fn(function (this: unknown) {
+        receivers.push(this);
+      }),
+      error: vi.fn(function (this: unknown) {
+        receivers.push(this);
+      }),
+    };
+    const scheduler = startStripeUsageExportScheduler({
+      log,
+      runCycle: vi.fn().mockResolvedValue({
+        accountId: account.id,
+        attempted: 1,
+        succeeded: 0,
+        failed: 1,
+        skippedAlignmentPeriods: 0,
+        preBoundarySafetyPasses: 0,
+        results: [
+          {
+            subscriptionId: 'subscription_failed',
+            billingMonth: '2026-07',
+            preBoundarySafetyPass: false,
+            error: 'LEDGER_TEMPORARILY_UNAVAILABLE',
+          },
+        ],
+      }),
+    });
+
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(log.error).toHaveBeenCalledOnce();
+    expect(log.info).not.toHaveBeenCalled();
+    expect(receivers).toEqual([log]);
+    scheduler.stop();
+  });
 });
