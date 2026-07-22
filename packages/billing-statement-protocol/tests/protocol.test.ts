@@ -213,7 +213,8 @@ describe('public BillingCreditsV1 consumer protocol', () => {
     expect(billingCreditsV1ConformanceFixture.conversion).toEqual({
       credits_per_usd: '1000',
       settlement_currency: 'USD',
-      description: '1,000 credits always equal US$1.00; one cent always equals 10 credits.',
+      description:
+        '1,000 credits always equal US$1.00. Usage is accumulated exactly, but only complete credits are deducted.',
     });
     expect(
       billingCreditsV1ConformanceFixture.recent_entries.some(
@@ -245,7 +246,7 @@ describe('public BillingCreditsV1 consumer protocol', () => {
     );
   });
 
-  it('rejects zero positive prices, excess precision, and caller-controlled billing context', () => {
+  it('rejects zero positive prices, fractional credits, excess precision, and caller-controlled billing context', () => {
     const ajv = new Ajv2020({ allErrors: true, strict: true });
     addFormats(ajv);
     const validate = ajv.compile(billingCreditsV1JsonSchema);
@@ -254,14 +255,13 @@ describe('public BillingCreditsV1 consumer protocol', () => {
     zeroPrice.funding_policy.offers[0]!.payment_amount.amount = '0';
     expect(validate(zeroPrice)).toBe(false);
 
+    const fractionalCredits = structuredClone(billingCreditsV1ConformanceFixture);
+    fractionalCredits.credit_balance.credits = '34125.1';
+    expect(validate(fractionalCredits)).toBe(false);
+
     const precisionBoundary = structuredClone(billingCreditsV1ConformanceFixture);
-    precisionBoundary.credit_balance.credits = '34125.00001';
     precisionBoundary.credit_balance.usd_equivalent.amount = '34.12500001';
     expect(validate(precisionBoundary), JSON.stringify(validate.errors)).toBe(true);
-
-    const excessCreditPrecision = structuredClone(precisionBoundary);
-    excessCreditPrecision.credit_balance.credits = '34125.000001';
-    expect(validate(excessCreditPrecision)).toBe(false);
 
     const excessUsdPrecision = structuredClone(precisionBoundary);
     excessUsdPrecision.credit_balance.usd_equivalent.amount = '34.125000001';

@@ -2027,7 +2027,10 @@ choice.
 
 UOA owns one exact-team credit balance shared across every connected product in
 the same Stripe account/mode. The fixed customer conversion is 1,000 credits =
-US$1.00 and the required product heading is `Remaining credits`. Individual
+US$1.00 and the required product heading is `Remaining credits`. Customer credit
+quantities are always whole integers: UOA floors each cumulative service/user
+rated amount to complete credits and carries the sub-credit remainder internally
+until it crosses the next credit boundary. Individual
 products may advertise different fixed top-up offers, but every successful
 payment funds the shared account. Manual and bounded automatic top-up are
 available to all services only through UOA-authored frozen actions; products

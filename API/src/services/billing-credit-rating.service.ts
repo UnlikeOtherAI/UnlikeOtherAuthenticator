@@ -2,10 +2,7 @@ import { BillingTariffMode } from '@prisma/client';
 
 import { AppError } from '../utils/errors.js';
 import type { NormalizedMeteringPortfolio } from './billing-metering.types.js';
-import {
-  addBillingDecimals,
-  multiplyBillingDecimalByBps,
-} from './billing-money.service.js';
+import { addBillingDecimals, multiplyBillingDecimalByBps } from './billing-money.service.js';
 import { stripeMeterQuantityFromMajorAmount } from './billing-stripe-usage-validation.service.js';
 
 export type CreditRatingService = {
@@ -45,11 +42,12 @@ type Bucket = {
   service: CreditRatingService;
   userId: string | null;
   ratedMicroMinor: bigint;
-  previousConsumedUnits: bigint;
-  targetConsumedUnits: bigint;
+  previousConsumedMicrocredits: bigint;
+  targetConsumedCredits: bigint;
 };
 
-const MICROCREDITS_PER_MICRO_MINOR = 10n;
+const MICROCREDITS_PER_CREDIT = 1_000_000n;
+const MICRO_MINOR_PER_CREDIT = 100_000n;
 const NULL_USER_KEY = '\uffff';
 
 function bucketKey(serviceId: string, userId: string | null): string {
@@ -82,33 +80,40 @@ function ratedMicroMinor(baseCost: string, service: CreditRatingService): bigint
   return stripeMeterQuantityFromMajorAmount(rated, 'USD');
 }
 
-function allocateAdditionalUnits(buckets: Bucket[], requestedUnits: bigint): void {
-  if (requestedUnits <= 0n) return;
+function billableCreditCapacity(bucket: Bucket): bigint {
+  return bucket.ratedMicroMinor / MICRO_MINOR_PER_CREDIT;
+}
+
+function allocateAdditionalCredits(buckets: Bucket[], requestedCredits: bigint): void {
+  if (requestedCredits <= 0n) return;
   const candidates = buckets
-    .map((bucket) => ({ bucket, capacity: bucket.ratedMicroMinor - bucket.targetConsumedUnits }))
+    .map((bucket) => ({
+      bucket,
+      capacity: billableCreditCapacity(bucket) - bucket.targetConsumedCredits,
+    }))
     .filter((candidate) => candidate.capacity > 0n);
   const totalCapacity = candidates.reduce((sum, candidate) => sum + candidate.capacity, 0n);
-  if (requestedUnits > totalCapacity || totalCapacity === 0n) {
+  if (requestedCredits > totalCapacity || totalCapacity === 0n) {
     throw new AppError('INTERNAL', 500, 'BILLING_CREDIT_ALLOCATION_INVALID');
   }
 
   let allocated = 0n;
   const remainders = candidates.map((candidate) => {
-    const numerator = candidate.capacity * requestedUnits;
-    const units = numerator / totalCapacity;
-    candidate.bucket.targetConsumedUnits += units;
-    allocated += units;
+    const numerator = candidate.capacity * requestedCredits;
+    const credits = numerator / totalCapacity;
+    candidate.bucket.targetConsumedCredits += credits;
+    allocated += credits;
     return { ...candidate, remainder: numerator % totalCapacity };
   });
   remainders.sort((left, right) => {
     if (left.remainder !== right.remainder) return left.remainder > right.remainder ? -1 : 1;
     return compareBuckets(left.bucket, right.bucket);
   });
-  let outstanding = requestedUnits - allocated;
+  let outstanding = requestedCredits - allocated;
   for (const candidate of remainders) {
     if (outstanding === 0n) break;
-    if (candidate.bucket.targetConsumedUnits < candidate.bucket.ratedMicroMinor) {
-      candidate.bucket.targetConsumedUnits += 1n;
+    if (candidate.bucket.targetConsumedCredits < billableCreditCapacity(candidate.bucket)) {
+      candidate.bucket.targetConsumedCredits += 1n;
       outstanding -= 1n;
     }
   }
@@ -128,7 +133,10 @@ export function rateCreditPortfolio(params: {
     params.services.map((service) => [service.identifier, service]),
   );
   const servicesById = new Map(params.services.map((service) => [service.id, service]));
-  const baseCosts = new Map<string, { service: CreditRatingService; userId: string | null; amount: string }>();
+  const baseCosts = new Map<
+    string,
+    { service: CreditRatingService; userId: string | null; amount: string }
+  >();
 
   for (const line of params.portfolio.lines) {
     const service = servicesByIdentifier.get(line.billingProduct);
@@ -164,32 +172,37 @@ export function rateCreditPortfolio(params: {
     const service = cost?.service ?? servicesById.get(old?.serviceId ?? '');
     if (!service) throw new AppError('INTERNAL', 500, 'BILLING_CREDIT_SERVICE_MISSING');
     const rated = cost ? ratedMicroMinor(cost.amount, service) : 0n;
-    const previousConsumedUnits = (old?.consumedMicrocredits ?? 0n) / 10n;
+    const previousConsumedMicrocredits = old?.consumedMicrocredits ?? 0n;
+    const previousConsumedCredits = previousConsumedMicrocredits / MICROCREDITS_PER_CREDIT;
+    const capacityCredits = rated / MICRO_MINOR_PER_CREDIT;
     return {
       service,
       userId: cost?.userId ?? old?.userId ?? null,
       ratedMicroMinor: rated,
-      previousConsumedUnits,
-      targetConsumedUnits:
-        previousConsumedUnits < rated ? previousConsumedUnits : rated,
+      previousConsumedMicrocredits,
+      targetConsumedCredits:
+        previousConsumedCredits < capacityCredits ? previousConsumedCredits : capacityCredits,
     } satisfies Bucket;
   });
   buckets.sort(compareBuckets);
 
-  const releasedUnits = buckets.reduce(
-    (sum, bucket) => sum + (bucket.previousConsumedUnits - bucket.targetConsumedUnits),
+  const releasedMicrocredits = buckets.reduce(
+    (sum, bucket) =>
+      sum +
+      (bucket.previousConsumedMicrocredits -
+        bucket.targetConsumedCredits * MICROCREDITS_PER_CREDIT),
     0n,
   );
-  const balanceAfterRelease =
-    params.balanceMicrocredits + releasedUnits * MICROCREDITS_PER_MICRO_MINOR;
-  const availableUnits = balanceAfterRelease > 0n ? balanceAfterRelease / 10n : 0n;
+  const balanceAfterRelease = params.balanceMicrocredits + releasedMicrocredits;
+  const availableCredits =
+    balanceAfterRelease > 0n ? balanceAfterRelease / MICROCREDITS_PER_CREDIT : 0n;
   const remainingCapacity = buckets.reduce(
-    (sum, bucket) => sum + bucket.ratedMicroMinor - bucket.targetConsumedUnits,
+    (sum, bucket) => sum + billableCreditCapacity(bucket) - bucket.targetConsumedCredits,
     0n,
   );
-  allocateAdditionalUnits(
+  allocateAdditionalCredits(
     buckets,
-    availableUnits < remainingCapacity ? availableUnits : remainingCapacity,
+    availableCredits < remainingCapacity ? availableCredits : remainingCapacity,
   );
 
   const byService = new Map<string, RatedCreditService>();
@@ -205,8 +218,9 @@ export function rateCreditPortfolio(params: {
   for (const bucket of buckets) {
     const target = byService.get(bucket.service.id);
     if (!target) throw new AppError('INTERNAL', 500, 'BILLING_CREDIT_SERVICE_MISSING');
-    const consumedMicrocredits = bucket.targetConsumedUnits * 10n;
-    const remainingMicroMinor = bucket.ratedMicroMinor - bucket.targetConsumedUnits;
+    const consumedMicrocredits = bucket.targetConsumedCredits * MICROCREDITS_PER_CREDIT;
+    const remainingMicroMinor =
+      bucket.ratedMicroMinor - bucket.targetConsumedCredits * MICRO_MINOR_PER_CREDIT;
     target.ratedMicroMinor += bucket.ratedMicroMinor;
     target.consumedMicrocredits += consumedMicrocredits;
     target.remainingMicroMinor += remainingMicroMinor;

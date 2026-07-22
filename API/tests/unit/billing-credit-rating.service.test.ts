@@ -122,6 +122,66 @@ describe('canonical all-service credit rating', () => {
     });
   });
 
+  it('floors rated usage to whole credits and carries the fractional remainder forward', () => {
+    const [result] = rateCreditPortfolio({
+      portfolio: portfolio([line('deepwater', 'user_1', '0.00108365')]),
+      services: [deepwater],
+      previousAllocations: [],
+      balanceMicrocredits: 50_000_000_000n,
+      validTeamUserIds: new Set(['user_1']),
+    });
+
+    expect(result).toMatchObject({
+      ratedMicroMinor: 108_365n,
+      consumedMicrocredits: 1_000_000n,
+      remainingMicroMinor: 8_365n,
+    });
+    expect(result.allocations).toEqual([
+      expect.objectContaining({
+        userId: 'user_1',
+        consumedMicrocredits: 1_000_000n,
+        remainingMicroMinor: 8_365n,
+      }),
+    ]);
+  });
+
+  it('does not debit a fractional credit before that user and service reach one full credit', () => {
+    const [result] = rateCreditPortfolio({
+      portfolio: portfolio([line('deepwater', 'user_1', '0.00099999')]),
+      services: [deepwater],
+      previousAllocations: [],
+      balanceMicrocredits: 50_000_000_000n,
+      validTeamUserIds: new Set(['user_1']),
+    });
+
+    expect(result).toMatchObject({
+      ratedMicroMinor: 99_999n,
+      consumedMicrocredits: 0n,
+      remainingMicroMinor: 99_999n,
+    });
+  });
+
+  it('normalizes a historical fractional debit to the whole-credit rule', () => {
+    const [result] = rateCreditPortfolio({
+      portfolio: portfolio([line('deepwater', 'user_1', '0.00108365')]),
+      services: [deepwater],
+      previousAllocations: [
+        {
+          serviceId: deepwater.id,
+          userId: 'user_1',
+          consumedMicrocredits: 1_083_650n,
+        },
+      ],
+      balanceMicrocredits: 49_998_916_350n,
+      validTeamUserIds: new Set(['user_1']),
+    });
+
+    expect(result).toMatchObject({
+      consumedMicrocredits: 1_000_000n,
+      remainingMicroMinor: 8_365n,
+    });
+  });
+
   it('releases credits deterministically when a corrected snapshot is lower', () => {
     const [result] = rateCreditPortfolio({
       portfolio: portfolio([line('deepwater', 'user_1', '0.2')]),

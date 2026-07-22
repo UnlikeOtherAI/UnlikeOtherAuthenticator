@@ -5,6 +5,8 @@ import type {
 } from '../contracts/billing-statement-v1.js';
 import { AppError } from '../utils/errors.js';
 
+const MICROCREDITS_PER_CREDIT = 1_000_000n;
+
 function scaledDecimal(value: bigint, scale: number): string {
   if (value === 0n) return '0';
   const negative = value < 0n;
@@ -25,19 +27,35 @@ function usdDisplay(value: string): string {
   const negative = value.startsWith('-');
   const unsigned = negative ? value.slice(1) : value;
   const [whole, fraction = ''] = unsigned.split('.');
-  const decimals = fraction.length >= 2 ? fraction : fraction.padEnd(2, '0');
-  return `${negative ? '-' : ''}US$${grouped(`${whole}.${decimals}`)}`;
+  const padded = fraction.padEnd(3, '0');
+  let amountMinor = BigInt(whole) * 100n + BigInt(padded.slice(0, 2));
+  if (padded[2] >= '5') amountMinor += 1n;
+  if (negative) amountMinor = -amountMinor;
+  const rounded = scaledDecimal(amountMinor, 2);
+  const roundedNegative = rounded.startsWith('-');
+  const [roundedWhole, roundedFraction = ''] = (roundedNegative ? rounded.slice(1) : rounded).split(
+    '.',
+  );
+  const fixed = `${roundedWhole}.${roundedFraction.padEnd(2, '0')}`;
+  return `${roundedNegative ? '-' : ''}US$${grouped(fixed)}`;
+}
+
+export function billingWholeCredits(microcredits: bigint): bigint {
+  let credits = microcredits / MICROCREDITS_PER_CREDIT;
+  if (microcredits < 0n && microcredits % MICROCREDITS_PER_CREDIT !== 0n) credits -= 1n;
+  return credits;
 }
 
 export function billingCreditAmount(microcredits: bigint): BillingCreditAmount {
   if (microcredits % 10n !== 0n) {
     throw new AppError('INTERNAL', 500, 'BILLING_CREDIT_PRECISION_INVALID');
   }
-  const credits = scaledDecimal(microcredits, 6);
-  const usd = scaledDecimal(microcredits, 9);
+  const wholeCredits = billingWholeCredits(microcredits);
+  const credits = wholeCredits.toString();
+  const usd = scaledDecimal(wholeCredits, 3);
   return {
     credits,
-    display: `${grouped(credits)} credits`,
+    display: `${grouped(credits)} ${wholeCredits === 1n || wholeCredits === -1n ? 'credit' : 'credits'}`,
     usd_equivalent: {
       amount: usd,
       currency: 'USD',
