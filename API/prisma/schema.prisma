@@ -283,6 +283,7 @@ model User {
   billingStripeCheckouts               BillingStripeCheckoutSession[]
   billingServiceAccesses               BillingServiceAccess[]
   billingCancellationIntents           BillingCancellationIntent[]
+  billingCustomerActionIntents         BillingCustomerActionIntent[]
   billingCreditConsents                BillingCreditAccount[]                    @relation("CreditAutoTopUpConsent")
   billingCreditConsentRevisions        BillingCreditAutoTopUpConsentRevision[]   @relation("CreditAutoTopUpRevisionConsenter")
   billingCreditEntries                 BillingCreditEntry[]                      @relation("CreditEntryAttribution")
@@ -926,6 +927,7 @@ model Organisation {
   billingServiceAccesses            BillingServiceAccess[]
   billingAdjustments                BillingCommercialAdjustment[]
   billingCancellationIntents        BillingCancellationIntent[]
+  billingCustomerActionIntents      BillingCustomerActionIntent[]
   billingCredits                    BillingCreditAccount[]
   billingCreditAdminAdjustments     BillingCreditAdminAdjustment[]
   billingCreditPortfolioSnapshots   BillingCreditPortfolioSnapshot[]
@@ -1115,6 +1117,7 @@ model Team {
   billingServiceAccesses                   BillingServiceAccess[]
   billingAdjustments                       BillingCommercialAdjustment[]
   billingCancellationIntents               BillingCancellationIntent[]
+  billingCustomerActionIntents             BillingCustomerActionIntent[]
   billingCredits                           BillingCreditAccount[]
   billingCreditAdminAdjustments            BillingCreditAdminAdjustment[]
   billingCreditPortfolioSnapshots          BillingCreditPortfolioSnapshot[]
@@ -1364,6 +1367,7 @@ model BillingService {
   accesses                          BillingServiceAccess[]
   adjustments                       BillingCommercialAdjustment[]
   cancellationIntents               BillingCancellationIntent[]
+  customerActionIntents             BillingCustomerActionIntent[]
   creditFundingPolicies             BillingCreditFundingPolicy[]
   creditTopUpOffers                 BillingCreditTopUpOffer[]
   creditAutoTopUpOptions            BillingCreditAutoTopUpOption[]
@@ -1473,6 +1477,7 @@ model BillingAppKey {
   stripeCheckouts                   BillingStripeCheckoutSession[]
   serviceAccesses                   BillingServiceAccess[]
   cancellationIntents               BillingCancellationIntent[]
+  customerActionIntents             BillingCustomerActionIntent[]
   creditAccountAutoTopUps           BillingCreditAccount[]                    @relation("CreditAccountAutoTopUpAppKey")
   creditEntries                     BillingCreditEntry[]
   creditPaymentAdjustments          BillingCreditPaymentAdjustment[]
@@ -1586,6 +1591,36 @@ model BillingCancellationIntent {
   @@index([orgId, teamId, expiresAt])
   @@index([requestedByUserId])
   @@map("billing_cancellation_intents")
+}
+
+// Every customer-triggered commercial mutation first creates this append-only
+// authorization point. Its insert guard locks the exact app, user, org, team,
+// and memberships before accepting the intent; downstream domain rows remain
+// the authoritative state machines for Checkout, cancellation, and funding.
+model BillingCustomerActionIntent {
+  id                String                 @id @default(cuid())
+  appKeyId          String                 @map("app_key_id")
+  serviceId         String                 @map("service_id")
+  orgId             String                 @map("org_id")
+  teamId            String                 @map("team_id")
+  requestedByUserId String                 @map("requested_by_user_id")
+  authorityScope    BillingAssignmentScope @map("authority_scope")
+  operation         String                 @db.VarChar(100)
+  actorJti          String                 @map("actor_jti") @db.VarChar(256)
+  requestDigest     String                 @map("request_digest") @db.Char(64)
+  createdAt         DateTime               @default(now()) @map("created_at")
+
+  appKey      BillingAppKey  @relation(fields: [appKeyId], references: [id], onDelete: Restrict)
+  service     BillingService @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  org         Organisation   @relation(fields: [orgId], references: [id], onDelete: Restrict)
+  team        Team           @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  requestedBy User           @relation(fields: [requestedByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([appKeyId, actorJti, operation], map: "billing_customer_action_intents_actor_action_key")
+  @@index([serviceId], map: "billing_customer_action_intents_service_idx")
+  @@index([orgId, teamId, createdAt], map: "billing_customer_action_intents_scope_created_idx")
+  @@index([requestedByUserId, createdAt], map: "billing_customer_action_intents_actor_created_idx")
+  @@map("billing_customer_action_intents")
 }
 
 // Stripe is a payment processor only. These rows map UOA's immutable tariff and

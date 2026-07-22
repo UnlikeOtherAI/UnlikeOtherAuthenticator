@@ -10,6 +10,7 @@ import {
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
+import { BILLING_CUSTOMER_ACTION } from './billing-customer-action-intent.service.js';
 import {
   assertCreditCatalogPrice,
   resolveCreditAutoTopUpOption,
@@ -108,9 +109,22 @@ export async function updateBillingCreditAutoTopUp(
   deps?: Dependencies,
 ): Promise<void> {
   const prisma = deps?.prisma ?? getAdminPrisma();
-  const context = await (deps?.resolveContext ?? resolveCreditFundingActionContext)(params, {
-    prisma,
-  });
+  const context = await (deps?.resolveContext ?? resolveCreditFundingActionContext)(
+    {
+      ...params,
+      action: {
+        operation: BILLING_CUSTOMER_ACTION.CREDIT_AUTO_TOP_UP_UPDATE,
+        request: {
+          product: params.request.product,
+          organisation_id: params.request.organisationId,
+          team_id: params.request.teamId,
+          user_id: params.request.userId,
+          option_id: params.request.optionId,
+        },
+      },
+    },
+    { prisma },
+  );
   const state = context.creditAccount.autoTopUpState;
   if (
     !context.creditAccount.stripePaymentMethodId ||
@@ -290,9 +304,21 @@ export async function disableBillingCreditAutoTopUp(
   deps?: Pick<Dependencies, 'prisma' | 'resolveContext'>,
 ): Promise<void> {
   const prisma = deps?.prisma ?? getAdminPrisma();
-  const context = await (deps?.resolveContext ?? resolveCreditFundingActionContext)(params, {
-    prisma,
-  });
+  const context = await (deps?.resolveContext ?? resolveCreditFundingActionContext)(
+    {
+      ...params,
+      action: {
+        operation: BILLING_CUSTOMER_ACTION.CREDIT_AUTO_TOP_UP_DISABLE,
+        request: {
+          product: params.request.product,
+          organisation_id: params.request.organisationId,
+          team_id: params.request.teamId,
+          user_id: params.request.userId,
+        },
+      },
+    },
+    { prisma },
+  );
   if (context.creditAccount.autoTopUpState === BillingCreditAutoTopUpState.DISABLED) return;
   await prisma.$transaction(
     async (tx) => {

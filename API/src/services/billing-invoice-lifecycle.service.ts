@@ -11,6 +11,10 @@ import {
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import {
+  lockBillingAdminEffectAuthority,
+  type BillingAdminEffectActor,
+} from './billing-admin-effect-authority.service.js';
+import {
   billingInvoicePdfTemplateVersion,
   generateBillingInvoicePdf,
 } from './billing-invoice-pdf.service.js';
@@ -29,12 +33,13 @@ const invoiceInclude = Prisma.validator<Prisma.BillingInvoiceInclude>()({
   _count: { select: { creditSettlementRefs: true } },
 });
 
-type Actor = { userId?: string | null; email: string };
+type Actor = BillingAdminEffectActor;
 type LifecycleDeps = {
   prisma?: PrismaClient;
   storage?: BillingInvoicePdfStorage;
   now?: () => Date;
   generatePdf?: typeof generateBillingInvoicePdf;
+  authorizeAdminEffect?: typeof lockBillingAdminEffectAuthority;
 };
 
 function client(deps?: LifecycleDeps): PrismaClient {
@@ -103,9 +108,16 @@ function dueDate(issue: Date, days: number): Date {
   return new Date(issue.getTime() + days * 24 * 60 * 60 * 1000);
 }
 
-async function claimForIssue(invoiceId: string, actor: Actor, now: Date, prisma: PrismaClient) {
+async function claimForIssue(
+  invoiceId: string,
+  actor: Actor,
+  now: Date,
+  prisma: PrismaClient,
+  authorizeAdminEffect: typeof lockBillingAdminEffectAuthority,
+) {
   return prisma.$transaction(
     async (tx) => {
+      await authorizeAdminEffect(tx, actor);
       const invoice = await tx.billingInvoice.findUnique({
         where: { id: invoiceId },
         include: {
@@ -194,7 +206,14 @@ export async function issueBillingInvoice(
   const prisma = client(deps);
   const now = deps?.now?.() ?? new Date();
   const claimed = await withConflictRetries(
-    () => claimForIssue(params.invoiceId, params.actor, now, prisma),
+    () =>
+      claimForIssue(
+        params.invoiceId,
+        params.actor,
+        now,
+        prisma,
+        deps?.authorizeAdminEffect ?? lockBillingAdminEffectAuthority,
+      ),
     'BILLING_INVOICE_ISSUE_BUSY',
   );
   if (claimed.status === BillingInvoiceStatus.ISSUED) return claimed;
@@ -286,7 +305,7 @@ export async function readBillingInvoicePdf(
 
 export async function voidBillingInvoice(
   params: { invoiceId: string; reason: string; actor: Actor },
-  deps?: Pick<LifecycleDeps, 'prisma' | 'now'>,
+  deps?: Pick<LifecycleDeps, 'prisma' | 'now' | 'authorizeAdminEffect'>,
 ) {
   const reason = params.reason.trim();
   if (!reason || reason.length > 500) {
@@ -294,6 +313,7 @@ export async function voidBillingInvoice(
   }
   const prisma = deps?.prisma ?? getAdminPrisma();
   return prisma.$transaction(async (tx) => {
+    await (deps?.authorizeAdminEffect ?? lockBillingAdminEffectAuthority)(tx, params.actor);
     const invoice = await tx.billingInvoice.findUnique({
       where: { id: params.invoiceId },
       include: invoiceInclude,
@@ -358,7 +378,7 @@ export async function recordBillingInvoicePayment(
     occurredAt: Date;
     actor: Actor;
   },
-  deps?: Pick<LifecycleDeps, 'prisma' | 'now'>,
+  deps?: Pick<LifecycleDeps, 'prisma' | 'now' | 'authorizeAdminEffect'>,
 ) {
   let amount: bigint;
   try {
@@ -388,6 +408,7 @@ export async function recordBillingInvoicePayment(
     () =>
       prisma.$transaction(
         async (tx) => {
+          await (deps?.authorizeAdminEffect ?? lockBillingAdminEffectAuthority)(tx, params.actor);
           const invoice = await tx.billingInvoice.findUnique({
             where: { id: params.invoiceId },
             include: invoiceInclude,

@@ -149,8 +149,10 @@ balance due, preventing a second collector for the Stripe-paid subscription.
 
 Issuance is a recoverable two-phase operation:
 
-1. a serializable transaction claims the draft, atomically increments the exact
-   issuer/year sequence, and sets issue/due dates;
+1. a serializable transaction locks and rechecks the exact current
+   `ADMIN_AUTH_DOMAIN` user and `SUPERUSER` role, then claims the draft,
+   atomically increments the exact issuer/year sequence, and sets issue/due
+   dates;
 2. UOA generates a deterministic, wrapping-safe PDF from the customer-safe
    invoice model using vendored DejaVu Unicode fonts, then writes it with
    create-only semantics to private storage;
@@ -171,6 +173,14 @@ available but issuance returns a fail-closed error. Filesystem storage is local/
 test only and rejected in production. Production uses a dedicated GCS bucket
 with public access prevention and create/read permissions restricted to the UOA
 runtime identity. The application never deletes issued invoice objects.
+
+The middleware check is not the issuance linearization point. The transaction
+locks the exact user and domain-role rows before `ISSUING` is written, so a
+concurrent role removal either wins and prevents PDF storage or follows the
+already-authorized durable claim. The same in-transaction lock/recheck occurs
+before a void or payment/refund/write-off event. Those append-only,
+invoice-scoped idempotent event rows are the durable local monetary effects;
+there is no second product-side invoice or settlement engine.
 
 ## Settlement events
 
@@ -272,6 +282,8 @@ The guarded migration independently enforces:
 - immutable paid recurring add-on snapshots excluded from manual totals;
 - immutable issued fields, lines, private evidence, and PDF identity;
 - append-only bounded settlement events and no settled void;
+- exact current platform-SUPERUSER locking before issue, void, or settlement
+  effects;
 - monotonic issuer/year numbering and advisory contract/version locks;
 - forced RLS with deny-all `uoa_app` policy and `uoa_admin` access only.
 

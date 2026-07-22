@@ -1,4 +1,9 @@
-import { BillingCancellationIntentState, Prisma, type PrismaClient } from '@prisma/client';
+import {
+  BillingAssignmentScope,
+  BillingCancellationIntentState,
+  Prisma,
+  type PrismaClient,
+} from '@prisma/client';
 import { createHash } from 'node:crypto';
 import type Stripe from 'stripe';
 
@@ -9,6 +14,11 @@ import type {
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
+import {
+  authorizeBillingCustomerAction,
+  BILLING_CUSTOMER_ACTION,
+} from './billing-customer-action-intent.service.js';
+import { resolveEffectiveTariffContext } from './billing-entitlement.service.js';
 import {
   loadBillingCancellationState,
   type CancellationSubscription,
@@ -321,6 +331,8 @@ export async function confirmBillingCancellation(
     loadState?: typeof loadBillingCancellationState;
     resolveAccount?: typeof resolveStripeAccountContext;
     syncSubscription?: typeof syncStripeSubscriptionProjection;
+    resolveTariff?: typeof resolveEffectiveTariffContext;
+    authorizeAction?: typeof authorizeBillingCustomerAction;
     resolveSummary?: (
       params: Pick<
         Parameters<typeof getStripeSubscriptionSummary>[0],
@@ -336,6 +348,34 @@ export async function confirmBillingCancellation(
   if (!summary.can_manage || !summary.subscription) {
     throw new AppError('FORBIDDEN', 403, 'BILLING_CANCELLATION_NOT_AVAILABLE');
   }
+  const { actor } = await (deps?.resolveTariff ?? resolveEffectiveTariffContext)(params, {
+    prisma,
+  });
+  await (deps?.authorizeAction ?? authorizeBillingCustomerAction)(
+    {
+      credential: params.credential,
+      organisationId: params.request.organisationId,
+      teamId: params.request.teamId,
+      userId: params.request.userId,
+      authorityScope:
+        summary.subscription.scope === 'organisation'
+          ? BillingAssignmentScope.ORGANISATION
+          : BillingAssignmentScope.TEAM,
+      operation: BILLING_CUSTOMER_ACTION.SUBSCRIPTION_CANCEL,
+      actorJti: actor.jti,
+      request: {
+        product: params.request.product,
+        organisation_id: params.request.organisationId,
+        team_id: params.request.teamId,
+        user_id: params.request.userId,
+        subscription_id: summary.subscription.id,
+        preview_token_digest: digest(params.token),
+        idempotency_key_digest: digest(params.idempotencyKey),
+        selection: params.selection,
+      },
+    },
+    { prisma },
+  );
   const claimed = await claimCancellation(
     {
       ...params,

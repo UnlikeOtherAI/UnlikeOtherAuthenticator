@@ -143,6 +143,38 @@ Each lookup therefore also carries an independently signed actor assertion.
 Webhook signing secrets remain a separate credential class and must never be
 used as product request API keys (or vice versa).
 
+## Durable customer-action authorization
+
+Every customer-triggered commercial mutation crosses one UOA-owned durable
+authorization boundary before UOA creates, changes, or cancels a Stripe object
+or applies a local monetary transition. `BillingCustomerActionIntent` stores
+only the exact product/app, user, organisation, team, required manager scope,
+operation, actor `jti`, and a canonical request digest. It never stores an
+actor bearer, return URL, preview token, Stripe secret, amount supplied by a
+product, or raw Ledger fact.
+
+The insert trigger is the linearization point. In a deterministic order it
+locks the lifecycle app key, billing service, user, organisation, requested
+team, organisation membership, and team membership, then independently
+requires an active `customer_lifecycle` key, active service, exact team/org
+binding, active memberships, and current owner/admin authority for the
+operation's organisation or team scope. Concurrent app-key revocation,
+membership removal, deactivation, or role downgrade therefore commits either
+before the intent and rejects it, or after an already-authorized action. The
+row is append-only, forced-RLS commercial evidence unavailable to `uoa_app`.
+
+The product must reuse the same actor assertion and `jti` when retrying one
+logical HTTP action after a transport failure. UOA then returns the existing
+intent only when its complete digest and scope binding match; rebinding the
+same action conflicts. The generic row is the pre-effect authorization proof,
+not a replacement for stronger domain state machines. Checkout, Setup
+Checkout, recurring-add-on cancellation, base cancellation, auto-top-up
+attempt, and invoice-event rows remain the durable effect intents. Stripe
+mutation idempotency is derived from the relevant durable domain intent (or,
+for Portal, the customer-action intent); stable customer/catalog creation is
+derived from its durable local resource row. Lost responses therefore replay
+the same Stripe request instead of creating another charge or subscription.
+
 ## Effective-tariff API
 
 ### Request
@@ -783,7 +815,8 @@ rechecks the locked predecessor on every actionable transition; `COMPLETE`,
 exact debit entries and move an enabled auto-top-up account to review. Recovery
 requires current Stripe PaymentIntent evidence for the exact attempt. A
 replaceable failed intent is safely canceled and terminalized before UOA offers
-a replacement Setup Checkout. A requires-action intent with an unsafe redirect
+a replacement Setup Checkout. Cancellation of that PaymentIntent uses the
+durable attempt ID as its Stripe idempotency key. A requires-action intent with an unsafe redirect
 is likewise canceled only after the returned object passes the complete binding
 check, then CAS-terminalized before replacement. An executable action URL is
 relayed only while it still matches the current intent. An ordinary active member cannot initiate a
@@ -924,7 +957,8 @@ subject body plus the UOA `offer_id` or `option_id` supplied by the latest
 projection. Amount, currency, quantity, Stripe Product/Price/customer/intent,
 metadata, and return or recovery URLs are never caller inputs. UOA validates
 the active policy and account/mode catalog against current Stripe objects,
-writes an immutable exact binding before making a Stripe call, and recovers
+writes the locked customer-action authorization and immutable exact effect
+binding before making a Stripe mutation, and recovers
 open sessions through a server-derived idempotency key. Setup and payment
 webhooks must match the local customer, immutable terms, and reserved metadata
 before funding or consent is committed. A policy, catalog, payment method,

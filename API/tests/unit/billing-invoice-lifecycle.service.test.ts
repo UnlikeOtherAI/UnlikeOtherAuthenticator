@@ -14,6 +14,29 @@ function conflict(code: 'P2002' | 'P2034') {
 }
 
 describe('billing invoice lifecycle conflict safety', () => {
+  it('stops invoice issuance before its durable claim and PDF effect when admin authority changed', async () => {
+    const findUnique = vi.fn();
+    const tx = { billingInvoice: { findUnique } };
+    const prisma = {
+      $transaction: vi.fn(async (operation: (client: typeof tx) => unknown) => operation(tx)),
+    } as unknown as PrismaClient;
+    const storage = { putImmutable: vi.fn(), read: vi.fn() };
+
+    await expect(
+      issueBillingInvoice(
+        { invoiceId: 'invoice_1', actor: { userId: 'admin_1', email: 'admin@example.com' } },
+        {
+          prisma,
+          storage,
+          now: () => now,
+          authorizeAdminEffect: vi.fn().mockRejectedValue(new Error('admin role revoked')),
+        },
+      ),
+    ).rejects.toThrow('admin role revoked');
+    expect(findUnique).not.toHaveBeenCalled();
+    expect(storage.putImmutable).not.toHaveBeenCalled();
+  });
+
   it('surfaces exhausted issue-claim serialization conflicts as a stable 409', async () => {
     const transaction = vi.fn().mockRejectedValue(conflict('P2034'));
     const prisma = { $transaction: transaction } as unknown as PrismaClient;
@@ -67,6 +90,7 @@ describe('billing invoice lifecycle conflict safety', () => {
           storage,
           now: () => now,
           generatePdf: vi.fn().mockResolvedValue(Uint8Array.from([37, 80, 68, 70])),
+          authorizeAdminEffect: vi.fn().mockResolvedValue(undefined),
         },
       ),
     ).rejects.toMatchObject({
@@ -130,7 +154,11 @@ describe('billing invoice lifecycle conflict safety', () => {
           reason: 'Incorrect billing period',
           actor: { userId: 'admin_1', email: 'admin@example.com' },
         },
-        { prisma: { $transaction: transaction } as unknown as PrismaClient, now: () => now },
+        {
+          prisma: { $transaction: transaction } as unknown as PrismaClient,
+          now: () => now,
+          authorizeAdminEffect: vi.fn().mockResolvedValue(undefined),
+        },
       ),
     ).rejects.toMatchObject({
       statusCode: 409,

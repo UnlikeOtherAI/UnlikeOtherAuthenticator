@@ -1836,6 +1836,17 @@ keys are separate endpoint classes; lifecycle keys require exact HTTPS return
 origins, while entitlement keys cannot carry them. Shared cross-product or
 cross-purpose API keys are forbidden.
 
+Every customer billing mutation first writes an append-only UOA action intent.
+Its database trigger locks the exact lifecycle app key, service, user,
+organisation, requested team, and both membership rows and rechecks the current
+scope-appropriate billing-manager role. A concurrent key revocation,
+membership removal, or role downgrade therefore serializes before or after one
+durable authorization point, never in the gap before a Stripe or local monetary
+effect. Logical transport retries reuse the product-signed actor `jti` and
+exact request digest. Existing Checkout, cancellation, credit/add-on, and
+invoice rows remain the durable effect state machines and supply stable
+idempotency identities; products still perform no billing calculation.
+
 Payment collection is independent from pricing and usage rating. Every
 immutable tariff version declares `collection_mode = stripe | manual | none`.
 `none` preserves non-free cost visibility and billable-unit calculation while

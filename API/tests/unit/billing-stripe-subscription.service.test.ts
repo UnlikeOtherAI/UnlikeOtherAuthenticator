@@ -145,6 +145,7 @@ function deps(state: ReturnType<typeof setup>) {
     stripeLivemode: false,
     resolveTariff: vi.fn().mockResolvedValue({ actor: { jti: 'actor_1' }, payload }) as never,
     refreshSubscription: state.refreshSubscription as never,
+    authorizeAction: vi.fn().mockResolvedValue({ id: 'action_1' }) as never,
   };
 }
 
@@ -249,9 +250,64 @@ describe('Stripe customer subscription lifecycle', () => {
     ).resolves.toEqual({
       portal_url: 'https://billing.stripe.com/p/session/test',
     });
-    expect(state.stripe.billingPortal.sessions.create).toHaveBeenCalledWith({
-      customer: 'cus_123',
-      return_url: 'https://app.nessie.works/billing',
+    expect(state.stripe.billingPortal.sessions.create).toHaveBeenCalledWith(
+      {
+        customer: 'cus_123',
+        return_url: 'https://app.nessie.works/billing',
+      },
+      { idempotencyKey: 'uoa:billing-portal:action_1' },
+    );
+  });
+
+  it('does not call Stripe when authority is revoked after the readable preflight', async () => {
+    const state = setup({ teamRole: 'admin' });
+    const dependencies = deps(state);
+    dependencies.authorizeAction = vi
+      .fn()
+      .mockRejectedValue(new Error('customer billing authority revoked')) as never;
+
+    await expect(
+      createStripePortalSession(
+        {
+          request: { ...request, returnUrl: 'https://app.nessie.works/billing' },
+          actorToken: 'signed-actor',
+          credential,
+        },
+        dependencies,
+      ),
+    ).rejects.toThrow('customer billing authority revoked');
+    expect(state.refreshSubscription).not.toHaveBeenCalled();
+    expect(state.stripe.billingPortal.sessions.create).not.toHaveBeenCalled();
+  });
+
+  it('reuses the claimed intent idempotency key after a lost Stripe response', async () => {
+    const state = setup({ teamRole: 'admin' });
+    const dependencies = deps(state);
+    state.stripe.billingPortal.sessions.create
+      .mockRejectedValueOnce(new Error('transport response lost'))
+      .mockResolvedValue({
+        id: 'bps_123',
+        livemode: false,
+        url: 'https://billing.stripe.com/p/session/test',
+      });
+    const params = {
+      request: { ...request, returnUrl: 'https://app.nessie.works/billing' },
+      actorToken: 'signed-actor',
+      credential,
+    };
+
+    await expect(createStripePortalSession(params, dependencies)).rejects.toThrow(
+      'transport response lost',
+    );
+    await expect(createStripePortalSession(params, dependencies)).resolves.toEqual({
+      portal_url: 'https://billing.stripe.com/p/session/test',
+    });
+    expect(state.stripe.billingPortal.sessions.create).toHaveBeenCalledTimes(2);
+    expect(state.stripe.billingPortal.sessions.create.mock.calls[0]?.[1]).toEqual({
+      idempotencyKey: 'uoa:billing-portal:action_1',
+    });
+    expect(state.stripe.billingPortal.sessions.create.mock.calls[1]?.[1]).toEqual({
+      idempotencyKey: 'uoa:billing-portal:action_1',
     });
   });
 

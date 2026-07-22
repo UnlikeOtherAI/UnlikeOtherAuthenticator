@@ -11,6 +11,10 @@ import type { BillingHostedRedirectResponse } from '../contracts/billing-stateme
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
+import {
+  authorizeBillingCustomerAction,
+  BILLING_CUSTOMER_ACTION,
+} from './billing-customer-action-intent.service.js';
 import { resolveEffectiveTariffContext } from './billing-entitlement.service.js';
 import { resolveBillingFundingViewer } from './billing-funding-viewer.service.js';
 import { ensureRecurringAddonStripeCatalog } from './billing-recurring-addon-catalog.service.js';
@@ -134,6 +138,7 @@ export async function createRecurringAddonCheckout(
     stripe?: StripeCheckoutClient;
     stripeLivemode?: boolean;
     now?: () => Date;
+    authorizeAction?: typeof authorizeBillingCustomerAction;
   },
 ): Promise<BillingHostedRedirectResponse> {
   const prisma = deps?.prisma ?? getAdminPrisma();
@@ -160,6 +165,30 @@ export async function createRecurringAddonCheckout(
   }
   const selectedScope = recurringAddonScope(entitlementScope, params.request);
   assertCanManageRecurringAddonScope(viewer, selectedScope.scope);
+  const urls = returnUrls(params.credential);
+  await (deps?.authorizeAction ?? authorizeBillingCustomerAction)(
+    {
+      credential: params.credential,
+      organisationId: params.request.organisationId,
+      teamId: params.request.teamId,
+      userId: params.request.userId,
+      authorityScope: selectedScope.customerScope,
+      operation: BILLING_CUSTOMER_ACTION.RECURRING_ADDON_CHECKOUT,
+      actorJti: actor.jti,
+      request: {
+        product: params.request.product,
+        organisation_id: params.request.organisationId,
+        team_id: params.request.teamId,
+        user_id: params.request.userId,
+        offer_id: offer.id,
+        scope: selectedScope.scope,
+        scope_key: selectedScope.scopeKey,
+        success_url_digest: digest(urls.success),
+        cancel_url_digest: digest(urls.cancel),
+      },
+    },
+    { prisma },
+  );
   let catalog = offer.catalogs[0];
   if (!catalog) {
     throw new AppError('BAD_REQUEST', 409, 'BILLING_RECURRING_ADDON_CATALOG_UNAVAILABLE');
@@ -272,7 +301,6 @@ export async function createRecurringAddonCheckout(
     throw new AppError('INTERNAL', 503, 'STRIPE_CUSTOMER_INCOMPLETE');
   }
 
-  const urls = returnUrls(params.credential);
   const identity = {
     accountId: account.id,
     appKeyId: params.credential.id,
