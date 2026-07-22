@@ -35,6 +35,14 @@ Three Postgres roles. All created by the first migration.
 | `uoa_app`      | **no**    | Request handlers that run **after** tenant context is established | `DATABASE_URL`         |
 | `uoa_admin`    | yes       | Every DB access path that runs without tenant context             | `DATABASE_ADMIN_URL`   |
 
+`DATABASE_MIGRATE_URL` remains the target for a future dedicated migrator
+login. Until that cutover, production container startup runs only the Prisma
+migration subprocess with a command-scoped
+`DATABASE_URL=$DATABASE_ADMIN_URL`; it then executes the API with the original
+`DATABASE_URL=uoa_app`. Missing `DATABASE_ADMIN_URL` fails production startup.
+The explicit development/test single-DSN fallback is deliberate and must never be used
+as a production compatibility path.
+
 `uoa_admin` is a **bootstrap / maintenance** role, not just an admin-routes role. It is used by:
 
 - Superuser admin routes (`/internal/admin/*`) and the writes they issue (including `admin_audit_log`).

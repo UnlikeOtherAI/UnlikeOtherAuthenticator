@@ -236,7 +236,7 @@ All secrets and configuration live in environment variables. Nothing is hardcode
 - `CONFIG_JWKS_URL` — trusted JWKS endpoint for RS256 config JWT verification by `kid`; required by config-backed auth routes, not process boot
 - `CONFIG_JWKS_JSON` — public JWKS JSON served from `/.well-known/jwks.json`; must contain public keys only
 - `DATABASE_URL` — database connection string for post-context tenant paths; production must connect as `uoa_app` without `BYPASSRLS` (see `Docs/Requirements/row-level-security.md` and the rotation/canary runbook in `Docs/deploy.md`)
-- `DATABASE_ADMIN_URL` — bootstrap/admin connection string used for domain-hash auth, admin routes, auto-onboarding, claim flow, retention pruning, audit log, and `/.well-known/jwks.json`; must connect as a `BYPASSRLS` role (`uoa_admin`). Falls back to `DATABASE_URL` when unset, so local/dev without RLS keeps working unchanged
+- `DATABASE_ADMIN_URL` — bootstrap/admin connection string used by the production Prisma migration subprocess, domain-hash auth, admin routes, auto-onboarding, claim flow, retention pruning, audit log, and `/.well-known/jwks.json`; must connect as a `BYPASSRLS` role (`uoa_admin`). The application client and startup migration may fall back to `DATABASE_URL` only in explicit development/test environments; production container startup requires this value and keeps its migration-only `DATABASE_URL` assignment out of the Node process
 - Social provider credentials (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, etc.)
 - Email service credentials:
   - `EMAIL_PROVIDER` — `disabled` (default behavior) or `smtp`

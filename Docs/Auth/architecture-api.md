@@ -683,6 +683,14 @@ visibly.
 - All queries go through services, never directly from routes
 - Transactions used where atomicity matters (e.g. user creation + superuser assignment)
 - Connection pooling handled by Prisma
+- Production container startup keeps schema authority and request authority
+  separate. `docker/start-production.sh` supplies `DATABASE_ADMIN_URL` as a
+  command-scoped `DATABASE_URL` only to `prisma migrate deploy`, then starts
+  Node with the original non-`BYPASSRLS` `DATABASE_URL`. Production fails
+  before migration if the admin URL is absent; only explicit development/test
+  databases may deliberately use the runtime URL for both jobs. The script
+  must never export, log, or assign the admin URL over the API process's
+  runtime URL.
 
 ---
 

@@ -61,6 +61,7 @@ COPY --from=build --chown=node:node /app/packages/billing-statement-protocol/ope
 COPY --from=build --chown=node:node /app/Auth/dist/ Auth/dist/
 COPY --from=build --chown=node:node /app/Auth/dist-ssr/ Auth/dist-ssr/
 COPY --from=build --chown=node:node /app/Admin/dist/ Admin/dist/
+COPY --chown=node:node docker/start-production.sh docker/start-production.sh
 
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0
@@ -68,4 +69,4 @@ ENV PORT=3000
 
 EXPOSE 3000
 
-CMD ["sh", "-c", "pnpm --filter @uoa/api exec prisma migrate deploy --schema prisma/schema.prisma && node API/dist/server.js"]
+CMD ["sh", "/app/docker/start-production.sh"]

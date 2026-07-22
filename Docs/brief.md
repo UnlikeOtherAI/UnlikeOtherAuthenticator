@@ -1882,6 +1882,13 @@ the authoritative just-ended-month export before webhook commit, preserving
 retry/finalization-grace semantics and capturing usage after the safety pass.
 Finalization failures are recorded and logged. The machinery remains inert
 while the Stripe gate is false.
+Production database startup preserves the RLS boundary before that gate can be
+enabled. The Prisma migration subprocess uses the separately configured
+`uoa_admin` connection through a command-scoped environment override; the API
+process keeps `DATABASE_URL` bound to non-`BYPASSRLS` `uoa_app`. Production
+startup fails if the admin connection is absent, neither DSN is logged, and
+only explicit development/test databases may deliberately use one connection for
+both migration and runtime.
 All Stripe projections and idempotency identities are scoped to the exact Stripe
 account and test/live mode. A subscription remains pinned to its Checkout's
 immutable tariff version, precedence source, assignment, and organisation/team

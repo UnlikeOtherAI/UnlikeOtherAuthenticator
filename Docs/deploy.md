@@ -18,7 +18,9 @@
 - The workflow:
   - authenticates to Google Cloud via GitHub OIDC workload identity
   - builds the API, Auth UI, and Admin UI into one container image and pushes it to Artifact Registry
-  - deploys the new image to Cloud Run service `uoa-auth`
+  - deploys the new image to Cloud Run service `uoa-auth`; revision startup
+    applies Prisma migrations through the separate `DATABASE_ADMIN_URL`, then
+    runs the API with the original `DATABASE_URL`
   - checks `https://authentication.unlikeotherai.com/health`
 
 The production root `https://authentication.unlikeotherai.com/` is a Tailwind holding page with links to Admin, `/llm`, and `/api`. The Admin UI is served by the same Cloud Run API service at `https://authentication.unlikeotherai.com/admin`.
@@ -73,7 +75,7 @@ Set via Cloud Run service config:
 | `CONFIG_JWKS_JSON`                          | Secret Manager: `uoa-auth-config-jwks-json`; public JWKS JSON served from `/.well-known/jwks.json`; must contain public keys only                                                                                                                                                                     |
 | `PUBLIC_BASE_URL`                           | Plain value: `https://authentication.unlikeotherai.com`                                                                                                                                                                                                                                               |
 | `DATABASE_URL`                              | Secret Manager: `uoa-auth-database-url`; runtime connection used for post-context tenant DB paths; production must connect as `uoa_app` and must not have `BYPASSRLS`                                                                                                                                 |
-| `DATABASE_ADMIN_URL`                        | Secret Manager: `uoa-auth-database-admin-url`; bootstrap/admin connection used for domain-hash auth, admin routes, auto-onboarding, claim flow, retention pruning, audit log, and `/.well-known/jwks.json`; must connect as a `BYPASSRLS` role (`uoa_admin`). Falls back to `DATABASE_URL` when unset |
+| `DATABASE_ADMIN_URL`                        | Secret Manager: `uoa-auth-database-admin-url`; bootstrap/admin connection used for the production migration subprocess, domain-hash auth, admin routes, auto-onboarding, claim flow, retention pruning, audit log, and `/.well-known/jwks.json`; must connect as a `BYPASSRLS` role (`uoa_admin`). Application-client fallback to `DATABASE_URL` is for explicit development/test environments only; production container startup fails when this value is absent |
 | `SHARED_SECRET`                             | Secret Manager: `uoa-auth-shared-secret`                                                                                                                                                                                                                                                              |
 | `GOOGLE_CLIENT_ID`                          | Secret Manager: `uoa-auth-google-client-id`                                                                                                                                                                                                                                                           |
 | `GOOGLE_CLIENT_SECRET`                      | Secret Manager: `uoa-auth-google-client-secret`                                                                                                                                                                                                                                                       |
@@ -100,6 +102,15 @@ Set via Cloud Run service config:
 `/llm` is a Markdown integration guide for LLMs and human readers. `/api` is the machine-readable JSON schema and config contract.
 
 ### Database role verification and rollback-safe rotation
+
+`docker/start-production.sh` enforces the process boundary. In production it
+requires both database URLs, gives only the `prisma migrate deploy` subprocess a
+command-scoped `DATABASE_URL=$DATABASE_ADMIN_URL`, and then `exec`s Node with
+the original `DATABASE_URL` untouched. It never prints either URL. Explicit
+development and test databases may deliberately omit
+`DATABASE_ADMIN_URL`, in which case migrations use `DATABASE_URL`. Do not move
+the admin assignment into the parent shell or export it: that would silently
+run the API as the RLS-bypassing principal.
 
 Production requires two genuinely distinct principals. `DATABASE_URL` must
 report `current_user = 'uoa_app'`; `DATABASE_ADMIN_URL` must report
@@ -128,27 +139,48 @@ because they can bypass issuance linearization; any future service-disable or
 mapping mutator must take the same exclusive lock before its first policy read
 or write. App-key secret rotation does not change this mapping rule.
 
-Never print either DSN or place it in shell history. To repair a drifted
+Never print either DSN or place it in shell history. Keep
+`STRIPE_BILLING_ENABLED=false` throughout this repair. To repair a drifted
 runtime credential without an all-at-once cutover:
 
-1. Keep the current deployed Secret Manager version enabled for rollback.
-2. Generate a new random `uoa_app` password and set it through an audited Cloud
+1. Keep the current deployed Secret Manager version enabled for rollback and
+   confirm the pre-release on-demand backup is successful.
+2. Deploy and verify the command-scoped migration startup boundary above while
+   the current revision still uses its existing credentials. This is the
+   bootstrap prerequisite for a later `uoa_app` runtime revision; without it,
+   Prisma tries to migrate as `uoa_app` and the container correctly cannot
+   start because that role has neither migration-table nor schema-create
+   privileges.
+3. Generate a new random `uoa_app` password and set it through an audited Cloud
    SQL administrator or credential-management path (for example, the Cloud SQL
    users set-password operation). Do not assume the runtime `uoa_admin` role has
    `CREATEROLE`. Construct the candidate DSN entirely in a protected local
    environment.
-3. Run `SELECT current_user`, the canary above, API typecheck, and focused auth
-   tests against the candidate before adding it as a secret version.
-4. Add the validated candidate as a new version of
-   `uoa-auth-database-url`. Do not change `uoa-auth-database-admin-url`.
-5. Deploy a no-traffic Cloud Run revision pinned to the candidate's explicit
-   Secret Manager version (never `latest`), verify startup/health and one
-   same-domain plus one product-domain login, then move traffic gradually.
-   Existing database sessions continue on the prior revision during the shift.
-6. If any check fails, move traffic back, repoint the runtime secret to the
-   prior version, and redeploy. Do not weaken RLS grants as a workaround.
-7. After the observation window, disable the superseded runtime-secret version
-   and record the rotation evidence. Keep the admin credential separately
+4. Run `SELECT current_user`, the canary above, API typecheck, and focused auth
+   tests against the candidate before storing it.
+5. Put the validated DSN in a separate temporary Secret Manager secret with an
+   explicit numeric version, not in `uoa-auth-database-url`. Deploy a no-traffic
+   revision pinned to that temporary secret version, verify startup/health and
+   one same-domain plus one product-domain login, then move traffic gradually.
+   The currently serving revision's `latest` reference cannot discover this
+   separate secret. Keep one startup-boundary revision pinned to the old
+   numeric `uoa-auth-database-url` version as the admin-runtime rollback target.
+6. After the candidate revision holds 100% traffic and its post-cutover canaries
+   pass, add the exact already-tested DSN as the next version of
+   `uoa-auth-database-url`. Do not change `uoa-auth-database-admin-url`. Trigger
+   the normal deployment workflow and verify that its new `latest` binding
+   resolves to `uoa_app`; every subsequent workflow deployment then inherits
+   the corrected runtime principal. Keep the temporary-secret revision as the
+   immediate rollback while this canonical deployment is observed.
+7. If a check fails before canonical promotion, move traffic back to the old
+   startup-boundary revision; the canonical secret is still unchanged. If it
+   fails after promotion, move traffic to the known-good temporary-secret
+   revision. To restore the old admin runtime, disable the new canonical secret
+   version, deploy the explicitly pinned old version, and verify health. Do not
+   weaken RLS grants as a workaround.
+8. After the observation window, disable superseded canonical runtime-secret
+   versions, retire the temporary candidate secret only after no revision uses
+   it, and record the rotation evidence. Keep the admin credential separately
    scoped and independently rotatable.
 
 On 2026-07-21 the production-role canary found both configured DSNs connecting
@@ -156,6 +188,15 @@ as `uoa_admin`; no valid historical `uoa_app` secret version was available.
 That credential repair is intentionally a separate, approved production
 operation. Code deployment must not be represented as restoring RLS until the
 canary passes with distinct roles.
+
+The 2026-07-22 read-only release audit confirmed that `uoa_app` is a LOGIN role
+without `BYPASSRLS`, `uoa_admin` is a LOGIN role with `BYPASSRLS`, 93 of 96
+tables have RLS enabled, 92 force it, and 148 policies are installed. Runtime
+secret versions 1 and 2 were obsolete PostgreSQL-superuser credentials and are
+now disabled after rotating that superuser password. Version 3 is the only
+enabled runtime-secret version and still authenticates as `uoa_admin`; no
+stored credential authenticates as `uoa_app`. The candidate therefore requires
+an audited `uoa_app` password reset and the staged cutover above.
 
 The deploy workflow also reads two GitHub repository variables that are not
 runtime application config:
