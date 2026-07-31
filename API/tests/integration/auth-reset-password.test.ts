@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createApp } from '../../src/app.js';
+import { hashPassword } from '../../src/services/password.service.js';
 import { createTestDb } from '../helpers/test-db.js';
 import { expectJsonError } from '../helpers/error-response.js';
 import { hashEmailToken } from '../../src/utils/verification-token.js';
@@ -11,6 +12,8 @@ import {
 } from '../helpers/test-config.js';
 
 const hasDatabase = Boolean(process.env.DATABASE_URL);
+const pkceQuery =
+  '&code_challenge=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ&code_challenge_method=S256';
 
 describe('POST /auth/reset-password/request', () => {
   afterEach(() => {
@@ -112,12 +115,13 @@ describe.skipIf(!hasDatabase)('Password reset flow', () => {
     const rawToken = 'reset-token-value';
     const tokenHash = hashEmailToken(rawToken, process.env.SHARED_SECRET);
 
+    const oldPasswordHash = await hashPassword('OldPassw0rd');
     const user = await handle!.prisma.user.create({
       data: {
         email: 'existing@example.com',
         userKey: 'existing@example.com',
         domain: null,
-        passwordHash: 'old-hash',
+        passwordHash: oldPasswordHash,
       },
       select: { id: true, tokenVersion: true },
     });
@@ -154,7 +158,7 @@ describe.skipIf(!hasDatabase)('Password reset flow', () => {
     const reset = await app.inject({
       method: 'POST',
       url: `/auth/reset-password?${baseQuery}`,
-      payload: { token: rawToken, password: 'Abcdef1!' },
+      payload: { token: rawToken, password: 'NewPassw0rd' },
     });
 
     expect(reset.statusCode).toBe(200);
@@ -167,7 +171,7 @@ describe.skipIf(!hasDatabase)('Password reset flow', () => {
     expect(updatedUser).not.toBeNull();
     expect(updatedUser!.id).toBe(user.id);
     expect(updatedUser!.passwordHash).toBeTruthy();
-    expect(updatedUser!.passwordHash).not.toBe('old-hash');
+    expect(updatedUser!.passwordHash).not.toBe(oldPasswordHash);
     expect(updatedUser!.passwordHash!.startsWith('$argon2id$')).toBe(true);
 
     const tokenRow = await handle!.prisma.verificationToken.findUnique({
@@ -178,11 +182,23 @@ describe.skipIf(!hasDatabase)('Password reset flow', () => {
     expect(tokenRow!.usedAt).not.toBeNull();
     expect(tokenRow!.userId).toBe(user.id);
 
+    const login = await app.inject({
+      method: 'POST',
+      url: `/auth/login?${baseQuery}${pkceQuery}`,
+      payload: { email: 'existing@example.com', password: 'NewPassw0rd' },
+    });
+
+    expect(login.statusCode).toBe(200);
+    const loginBody = login.json() as { ok: boolean; code?: string; redirect_to?: string };
+    expect(loginBody.ok).toBe(true);
+    expect(typeof loginBody.code).toBe('string');
+    expect(loginBody.redirect_to).toContain(loginBody.code);
+
     // Second use should fail (one-time token).
     const reuse = await app.inject({
       method: 'POST',
       url: `/auth/reset-password?${baseQuery}`,
-      payload: { token: rawToken, password: 'Abcdef1!' },
+      payload: { token: rawToken, password: 'NewPassw0rd' },
     });
     expect(reuse.statusCode).toBe(400);
     expectJsonError(reuse.json());
