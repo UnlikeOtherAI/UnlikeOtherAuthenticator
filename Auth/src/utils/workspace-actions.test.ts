@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import * as api from './api.js';
 import {
   requestSignInCode,
+  submitWorkspaceCreation,
   submitSessionChoices,
   submitTeamSelection,
   submitVerifyCode,
@@ -117,7 +118,7 @@ describe('submitTeamSelection', () => {
     expect(outcome.kind).toBe('chooser');
   });
 
-  it('calls selectTeam with an empty selection for create-workspace', async () => {
+  it('keeps the legacy empty workspace selection wrapper available', async () => {
     const spy = vi.spyOn(api, 'selectTeam').mockResolvedValue({
       ok: true,
       status: 200,
@@ -130,6 +131,25 @@ describe('submitTeamSelection', () => {
       { login_token: 'bridge.jwt', teamId: undefined, inviteId: undefined, action: undefined },
       QUERY,
     );
+  });
+});
+
+describe('submitWorkspaceCreation', () => {
+  it('creates a workspace through the dedicated SSO endpoint', async () => {
+    const spy = vi.spyOn(api, 'createWorkspace').mockResolvedValue({
+      ok: true,
+      status: 200,
+      data: { ok: true, redirect_to: 'https://client.example.com/cb' },
+    });
+
+    const outcome = await submitWorkspaceCreation({
+      loginToken: 'bridge.jwt',
+      name: 'Acme Space',
+      ...QUERY,
+    });
+
+    expect(spy).toHaveBeenCalledWith({ login_token: 'bridge.jwt', name: 'Acme Space' }, QUERY);
+    expect(outcome).toEqual({ kind: 'redirect', url: 'https://client.example.com/cb' });
   });
 });
 

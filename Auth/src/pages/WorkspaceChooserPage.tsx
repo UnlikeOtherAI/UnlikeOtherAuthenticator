@@ -139,6 +139,10 @@ export function WorkspaceChooserPage(): React.JSX.Element {
 
   const hasInvites = workspaceChoices.pending_invites.length > 0;
   const hasTeams = workspaceChoices.teams.length > 0;
+  // Organisation membership is intentionally one-per-domain. `can_create_org`
+  // permits a verified first-workspace flow; it does not turn an existing
+  // workspace chooser into a misleading second-organisation creation path.
+  const canCreateFirstWorkspace = workspaceChoices.can_create_org && !hasTeams && !hasInvites;
 
   return (
     <div className="flex flex-col gap-4">
@@ -176,7 +180,7 @@ export function WorkspaceChooserPage(): React.JSX.Element {
         />
       ) : null}
 
-      {workspaceChoices.can_create_org ? (
+      {canCreateFirstWorkspace ? (
         <CreateWorkspaceCard loginToken={loginToken} query={query} onOutcome={handleOutcome} />
       ) : null}
     </div>

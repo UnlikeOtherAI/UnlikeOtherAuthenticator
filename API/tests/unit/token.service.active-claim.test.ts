@@ -81,6 +81,7 @@ describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
       id: 'org-member-active',
       orgId: 'org-active',
       role: 'member',
+      org: { slug: 'acme' },
     });
     prisma.teamMember.findFirst.mockResolvedValue({ id: 'team-member-active' });
     prisma.teamMember.findMany.mockResolvedValue([{ teamId: 'team-active', teamRole: 'member' }]);
@@ -115,7 +116,11 @@ describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
       prisma,
     });
 
-    expect(claims.active).toEqual({ orgId: 'org-active', teamId: 'team-active' });
+    expect(claims.active).toEqual({
+      orgId: 'org-active',
+      teamId: 'team-active',
+      tenantSlug: 'acme',
+    });
   });
 
   it('rejects a recognized-product code that deferred workspace binding until exchange', async () => {

@@ -21,6 +21,7 @@ const AccessTokenClaimsSchema = z
     org: z
       .object({
         org_id: z.string().trim().min(1),
+        tenant_slug: z.string().trim().min(1).optional(),
         org_role: z.string().trim().min(1),
         teams: z.array(z.string().trim().min(1)),
         team_roles: z.record(z.string().trim().min(1), z.string().trim().min(1)),
@@ -35,6 +36,9 @@ const AccessTokenClaimsSchema = z
       .object({
         orgId: z.string().trim().min(1),
         teamId: z.string().trim().min(1),
+        // Added for tenant-aware clients. Older, already-issued tokens do not
+        // carry it and remain valid until expiry.
+        tenantSlug: z.string().trim().min(1).optional(),
       })
       .passthrough()
       .optional(),
@@ -50,6 +54,7 @@ export type AccessTokenClaims = {
   role: 'superuser' | 'user';
   org?: {
     org_id: string;
+    tenant_slug?: string;
     org_role: string;
     teams: string[];
     team_roles: Record<string, string>;
@@ -59,6 +64,7 @@ export type AccessTokenClaims = {
   active?: {
     orgId: string;
     teamId: string;
+    tenantSlug?: string;
   };
 };
 

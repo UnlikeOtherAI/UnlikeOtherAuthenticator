@@ -67,6 +67,9 @@ export const en = {
   'workspace.invite.decline': 'Decline',
   'workspace.createOrg.title': 'Create a new workspace',
   'workspace.createOrg.subtitle': 'Start a brand new workspace',
+  'workspace.createOrg.nameLabel': 'Workspace name',
+  'workspace.createOrg.submit': 'Create workspace',
+  'workspace.createOrg.cancel': 'Cancel',
 
   'twoFactor.setup.instructions':
     'Scan this QR code with an authenticator app, then enter the 6-digit code to verify setup.',

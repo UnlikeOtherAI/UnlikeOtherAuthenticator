@@ -21,6 +21,12 @@ type OrgContextDeps = {
 
 export type OrgContext = {
   org_id: string;
+  /**
+   * The DNS-safe tenant label. It is derived from Organisation.slug, which is
+   * unique for the authenticated product domain; Team.slug is only local to an
+   * organisation and must not be used as a host label.
+   */
+  tenant_slug: string;
   org_role: string;
   teams: string[];
   team_roles: Record<string, string>;
@@ -70,6 +76,7 @@ export async function getActiveUserOrgContext(
     select: {
       orgId: true,
       role: true,
+      org: { select: { slug: true } },
     },
   });
 
@@ -98,6 +105,7 @@ export async function getActiveUserOrgContext(
 
   const context: OrgContext = {
     org_id: orgMembership.orgId,
+    tenant_slug: orgMembership.org.slug,
     org_role: orgMembership.role,
     teams,
     team_roles: teamRoles,

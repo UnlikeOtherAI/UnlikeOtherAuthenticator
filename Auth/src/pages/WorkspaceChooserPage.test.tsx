@@ -111,24 +111,18 @@ describe('WorkspaceChooserPage SSR rendering', () => {
     expect(html).toContain('Decline');
   });
 
-  it('renders the create-workspace card only when can_create_org is true', () => {
+  it('renders the create-workspace card only for an org-less user with can_create_org', () => {
     const withCreate = renderChooser({
-      teams: [
-        { teamId: 't1', orgId: 'o1', name: 'Backend Team', role: 'member' },
-        { teamId: 't2', orgId: 'o1', name: 'Frontend Team', role: 'owner' },
-      ],
+      teams: [],
       pending_invites: [],
       can_create_org: true,
     });
     expect(withCreate).toContain('Create a new workspace');
 
     const withoutCreate = renderChooser({
-      teams: [
-        { teamId: 't1', orgId: 'o1', name: 'Backend Team', role: 'member' },
-        { teamId: 't2', orgId: 'o1', name: 'Frontend Team', role: 'owner' },
-      ],
+      teams: [{ teamId: 't1', orgId: 'o1', name: 'Backend Team', role: 'member' }],
       pending_invites: [],
-      can_create_org: false,
+      can_create_org: true,
     });
     expect(withoutCreate).not.toContain('Create a new workspace');
   });
@@ -187,7 +181,7 @@ describe('WorkspaceChooserPage SSR rendering', () => {
       expect(html).toContain('Signing you in');
     });
 
-    it('renders the chooser normally when the hint matches no team in this user\'s own choices', () => {
+    it("renders the chooser normally when the hint matches no team in this user's own choices", () => {
       const html = renderChooser(twoTeams, 'jo@example.com', 'not-a-real-team');
 
       expect(html).toContain('Choose a workspace');

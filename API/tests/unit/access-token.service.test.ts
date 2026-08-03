@@ -30,6 +30,7 @@ async function signAccessToken(params: {
   tv?: number;
   org?: {
     org_id: string;
+    tenant_slug?: string;
     org_role: string;
     teams: string[];
     team_roles: Record<string, string>;
@@ -39,6 +40,7 @@ async function signAccessToken(params: {
   active?: {
     orgId: string;
     teamId: string;
+    tenantSlug?: string;
   };
 }): Promise<string> {
   const alg = params.alg ?? 'HS256';
@@ -109,6 +111,7 @@ describe('verifyAccessToken', () => {
       subject: 'u2',
       org: {
         org_id: 'org_1',
+        tenant_slug: 'acme',
         org_role: 'member',
         teams: ['team_a', 'team_b'],
         team_roles: { team_a: 'lead', team_b: 'member' },
@@ -125,6 +128,7 @@ describe('verifyAccessToken', () => {
       role: 'superuser',
       org: {
         org_id: 'org_1',
+        tenant_slug: 'acme',
         org_role: 'member',
         teams: ['team_a', 'team_b'],
         team_roles: { team_a: 'lead', team_b: 'member' },
@@ -137,7 +141,7 @@ describe('verifyAccessToken', () => {
       sharedSecret: process.env.SHARED_SECRET!,
       issuer: process.env.AUTH_SERVICE_IDENTIFIER!,
       subject: 'u3',
-      active: { orgId: 'org_1', teamId: 'team_a' },
+      active: { orgId: 'org_1', teamId: 'team_a', tenantSlug: 'acme' },
     });
 
     const claims = await verifyAccessToken(token, depsWithTokenVersion(0));
@@ -148,7 +152,7 @@ describe('verifyAccessToken', () => {
       domain: 'client.example.com',
       clientId: 'client-id',
       role: 'superuser',
-      active: { orgId: 'org_1', teamId: 'team_a' },
+      active: { orgId: 'org_1', teamId: 'team_a', tenantSlug: 'acme' },
     });
   });
 

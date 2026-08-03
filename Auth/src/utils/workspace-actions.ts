@@ -1,5 +1,12 @@
 import type { WorkspaceChoices } from '../hooks/use-popup.js';
-import { authStart, fetchSessionChoices, selectTeam, verifyLoginCode, type AuthFlowQuery } from './api.js';
+import {
+  authStart,
+  createWorkspace,
+  fetchSessionChoices,
+  selectTeam,
+  verifyLoginCode,
+  type AuthFlowQuery,
+} from './api.js';
 import {
   interpretWorkspaceResponse,
   toWorkspaceChoices,
@@ -30,6 +37,15 @@ export async function submitTeamSelection(
 ): Promise<WorkspaceResponseOutcome> {
   const { loginToken, teamId, inviteId, action, ...query } = params;
   const result = await selectTeam({ login_token: loginToken, teamId, inviteId, action }, query);
+  return interpretWorkspaceResponse(result.ok ? result.data : null);
+}
+
+/** Creates and selects a workspace with the same authenticated login capability as the chooser. */
+export async function submitWorkspaceCreation(
+  params: { loginToken: string; name: string } & AuthFlowQuery,
+): Promise<WorkspaceResponseOutcome> {
+  const { loginToken, name, ...query } = params;
+  const result = await createWorkspace({ login_token: loginToken, name }, query);
   return interpretWorkspaceResponse(result.ok ? result.data : null);
 }
 

@@ -77,7 +77,11 @@ describe('exchangeRefreshTokenForTokens active-claim re-validation (unit)', () =
           findFirst: vi.fn(async (args: { where?: { org?: unknown } }) =>
             params.crossDomain && args.where?.org
               ? null
-              : { orgId: params.storedOrgId ?? 'org-existing', role: 'member' },
+              : {
+                  orgId: params.storedOrgId ?? 'org-existing',
+                  role: 'member',
+                  org: { slug: 'existing' },
+                },
           ),
         },
         teamMember: {
@@ -128,7 +132,7 @@ describe('exchangeRefreshTokenForTokens active-claim re-validation (unit)', () =
       prisma,
     });
 
-    expect(claims.active).toEqual({ orgId: 'org-1', teamId: 'team-1' });
+    expect(claims.active).toEqual({ orgId: 'org-1', teamId: 'team-1', tenantSlug: 'existing' });
     expect(prisma.refreshToken.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ orgId: 'org-1', teamId: 'team-1' }),
@@ -189,7 +193,7 @@ describe('exchangeRefreshTokenForTokens active-claim re-validation (unit)', () =
       prisma,
     });
 
-    expect(claims.active).toEqual({ orgId: 'org-1', teamId: 'team-1' });
+    expect(claims.active).toEqual({ orgId: 'org-1', teamId: 'team-1', tenantSlug: 'existing' });
     expect(prisma.orgMember.findFirst).toHaveBeenCalled();
   });
 
@@ -229,7 +233,11 @@ describe('exchangeRefreshTokenForTokens active-claim re-validation (unit)', () =
       issuer: process.env.AUTH_SERVICE_IDENTIFIER,
       prisma,
     });
-    expect(claims.active).toEqual({ orgId: 'org-nessie', teamId: 'team-nessie' });
+    expect(claims.active).toEqual({
+      orgId: 'org-nessie',
+      teamId: 'team-nessie',
+      tenantSlug: 'existing',
+    });
     expect(prisma.billingAppKey.findMany).toHaveBeenCalled();
   });
 

@@ -54,7 +54,7 @@ For the full product spec, see [brief.md](./brief.md). For tech stack, see [tech
         WorkspaceList.tsx        — Vertical stack of WorkspaceCards, server order preserved (Phase 3c)
         WorkspaceCard.tsx        — One ACTIVE workspace: icon + name + role (owner/admin only) (Phase 3c)
         InviteCard.tsx           — Pending team invite: accept / decline (Phase 3c)
-        CreateWorkspaceCard.tsx  — "Create a new workspace" entry, shown when can_create_org (Phase 3c)
+        CreateWorkspaceCard.tsx  — "Create a new workspace" entry + name form, shown for an org-less can_create_org user (Phase 3c)
     /pages
       LoginPage.tsx           — Login page (email/password + social buttons)
       RegisterPage.tsx        — Registration page
@@ -90,7 +90,7 @@ For the full product spec, see [brief.md](./brief.md). For tech stack, see [tech
       code-input.ts           — Pure numeric-code sanitization behind ui/CodeInput.tsx (Phase 3c)
       workspace-response.ts   — Decodes /auth/verify-code, /auth/select-team, and a
                                  chooser-producing /auth/login into one client outcome (Phase 3c)
-      workspace-actions.ts    — Typed wrappers over the flow API calls used by the chooser (Phase 3c)
+      workspace-actions.ts    — Typed wrappers over chooser selection and SSO workspace creation calls (Phase 3c)
       workspace-icon.ts       — Deterministic initials-on-color fallback avatar (design §11.3, Phase 3c)
   /public
     index.html                — Entry point HTML
@@ -246,6 +246,11 @@ The auth flow is state-driven, not route-driven. A single popup URL loads the ap
     assertion, so Ledger/AI attribution cannot become unscoped.
     Existing-account `LOGIN_LINK` tokens resolve only their issue-time `userId`; deletion or identity
     mismatch fails closed and never falls through to registration.
+    When the chooser reports `can_create_org`, the hosted SSO can create the verified user's first
+    workspace through `/auth/create-workspace`; it creates the organisation and default team in the
+    same continuation transaction. A newly issued scoped access token carries the organisation slug
+    in `active.tenantSlug`, the DNS-safe tenant label unique for that client domain. `Team.slug` is
+    only unique inside its organisation and is never a subdomain key.
 11. **Required agreements** (optional per-domain service) — after identity, workspace selection,
     and required 2FA, the shared API gate redirects to `SigningPage` instead of issuing a code.
     The page renders the hash-verified source PDF, exact acceptance statement, click-wrap or

@@ -61,6 +61,7 @@ const SubjectAssertionSchema = z
       .object({
         orgId: z.string().trim().min(1).max(256),
         teamId: z.string().trim().min(1).max(256),
+        tenantSlug: z.string().trim().min(1).max(120).optional(),
       })
       .strict()
       .optional(),
@@ -257,7 +258,10 @@ async function exchangeConfidentialSubjectTokenInsidePolicyLock(
     },
   );
 
-  const workspaceClaims = assertion.active && org ? { org, active: assertion.active } : {};
+  const workspaceClaims =
+    assertion.active && org
+      ? { org, active: { ...assertion.active, tenantSlug: org.tenant_slug } }
+      : {};
 
   const accessToken = await (deps.signAccessToken ?? signConfidentialAccessToken)({
     subject: assertion.sub,
