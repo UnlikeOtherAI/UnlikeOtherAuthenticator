@@ -65,6 +65,9 @@ export const es = {
   'workspace.invite.decline': 'Rechazar',
   'workspace.createOrg.title': 'Crear un nuevo espacio de trabajo',
   'workspace.createOrg.subtitle': 'Comienza un espacio de trabajo nuevo',
+  'workspace.createOrg.nameLabel': 'Nombre del espacio de trabajo',
+  'workspace.createOrg.submit': 'Crear espacio de trabajo',
+  'workspace.createOrg.cancel': 'Cancelar',
 
   'twoFactor.setup.instructions':
     'Escanea este codigo QR con una app autenticadora y luego ingresa el codigo de 6 digitos para verificar la configuracion.',

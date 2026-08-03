@@ -108,6 +108,8 @@ type ConfidentialWorkspaceClaims =
       active: {
         orgId: string;
         teamId: string;
+        /** Added by the signer from org.tenant_slug for tenant routing. */
+        tenantSlug?: string;
       };
     }
   | {
@@ -155,7 +157,10 @@ export async function signConfidentialAccessToken(
   };
   if (claims.org && claims.active) {
     payload.org = claims.org;
-    payload.active = claims.active;
+    payload.active = {
+      ...claims.active,
+      tenantSlug: claims.org.tenant_slug,
+    };
   }
   if (claims.actor) payload.act = claims.actor;
 

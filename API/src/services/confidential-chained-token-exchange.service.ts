@@ -48,12 +48,17 @@ const ActiveWorkspaceSchema = z
   .object({
     orgId: z.string().trim().min(1).max(256),
     teamId: z.string().trim().min(1).max(256),
+    tenantSlug: z.string().trim().min(1).max(120).optional(),
   })
   .strict();
 
 const OrgContextSchema = z
   .object({
     org_id: z.string().trim().min(1).max(256),
+    // Compatibility with confidential tokens issued before tenant subdomains.
+    // The chained exchange re-resolves the live context and never trusts this
+    // embedded label for routing.
+    tenant_slug: z.string().trim().min(1).max(120).optional(),
     org_role: z.string().trim().min(1).max(100),
     teams: z.array(z.string().trim().min(1).max(256)).min(1),
     team_roles: z.record(z.string().trim().min(1).max(100)),
@@ -215,12 +220,16 @@ function originalIdentityDomain(subject: VerifiedChainedSubjectAccessToken): str
   return domain;
 }
 
-function narrowOrgContext(current: OrgContext, inbound: OrgContext): OrgContext {
+function narrowOrgContext(
+  current: OrgContext,
+  inbound: z.infer<typeof OrgContextSchema>,
+): OrgContext {
   const inboundTeams = new Set(inbound.teams);
   const teams = current.teams.filter((teamId) => inboundTeams.has(teamId));
   const teamRoles = Object.fromEntries(teams.map((teamId) => [teamId, current.team_roles[teamId]]));
   return {
     org_id: current.org_id,
+    tenant_slug: current.tenant_slug,
     org_role: current.org_role,
     teams,
     team_roles: teamRoles,
@@ -344,7 +353,7 @@ async function exchangeConfidentialChainedAccessTokenInsidePolicyLock(
     expiresAtEpochSeconds: now + expiresInSeconds,
     scope: delegation.scope,
     org,
-    active: subject.active,
+    active: { ...subject.active, tenantSlug: org.tenant_slug },
     actor,
   });
 

@@ -873,7 +873,7 @@ The claim is optional and defaults to disabled. The object shape and defaults ar
 | `groups_enabled`                          | boolean                     | `false`                        | Whether groups are enabled (requires `enabled: true`)                                                                                                                                                                                  |
 | `user_needs_team`                         | boolean                     | `false`                        | On successful auth, ensure the user ends up in a team. Existing org members with zero teams get a personal team; users with no org get a new personal org plus default team.                                                           |
 | `auto_create_personal_org_on_first_login` | boolean                     | `false`                        | On **first** verified login only, if the user ends up without an org after invite/mapping resolution, create a personal org with them as owner (plus default team per 24.3). One-shot, not a self-heal. See 24.14.                     |
-| `allow_user_create_org`                   | boolean                     | `false`                        | Whether end-users may call `POST /org/organisations` with their own access token. `false` means org creation is admin-only (via Internal API or domain-hash). See 24.14.                                                               |
+| `allow_user_create_org`                   | boolean                     | `false`                        | Whether end-users may create an organisation with their own access token or through eligible hosted SSO. `false` means org creation is admin-only (via Internal API or domain-hash). See 24.14.                                       |
 | `backend_org_management`                  | boolean                     | `false`                        | Whether this domain's product backend may call `/org/*` with **no** `X-UOA-Access-Token`, authorised by the domain pairing alone (24.8). There is no acting user in that mode, so per-user org-role checks do not apply; every mutation is attributed to the backend in the org audit log. Leave `false` unless a backend genuinely needs it.                        |
 | `pending_invites_block_auto_create`       | boolean                     | `true`                         | When `true`, a pending invite matching the user's email suppresses `auto_create_personal_org_on_first_login` so the user is offered the invite choice instead of being force-placed into a fresh org.                                  |
 | `max_teams_per_org`                       | integer                     | `100`                          | Maximum teams per organisation (max 1000)                                                                                                                                                                                              |
@@ -1174,6 +1174,21 @@ Organisation slugs are derived from the `name` field:
 - **Reserved slugs** that must be rejected: `admin`, `api`, `internal`, `me`, `system`, `settings`, `new`, `default`
 - **Collision resolution:** append a random 4-character alphanumeric suffix (e.g., `my-org-a7f3`). Try up to 10 times, then fail. Do NOT use incrementing numeric suffixes (avoids leaking org count).
 - Slugs are **regenerated** when the org name is updated via `PUT /org/organisations/:orgId`.
+
+#### Tenant Subdomain Contract (2026-08)
+
+The organisation slug is the canonical tenant subdomain label. It is unique per
+client domain, so a product may route a selected tenant to
+`<organisation.slug>.<its-tenant-base-domain>`. A team also has a slug for
+workspace navigation, but it is only unique within its parent organisation and
+must never be used as a DNS tenant key.
+
+For a hosted SSO flow with `login_flow.workspace_selection: "auto"` and
+`org_features.allow_user_create_org: true`, the workspace chooser may create
+the user's first organisation directly. Creation includes the default team and
+the selection/code continuation in one transaction. The scoped access token
+then carries `active.tenantSlug`, sourced from the organisation slug; consumers
+must tolerate its absence on a legacy token issued before this addition.
 
 ---
 
@@ -1629,7 +1644,7 @@ If `org_roles` changes and existing members have roles no longer in the list, th
 
 1. **Completely generic.** No product-specific concepts.
 2. **Backwards compatible.** Existing flows unchanged when `org_features` is absent.
-3. **No admin dashboard.** API-only. No UI changes.
+3. **No admin dashboard.** The hosted SSO may create a user's first workspace when explicitly enabled; it is not an admin dashboard.
 4. **Refresh tokens are backend-only.** Never expose them to browser JavaScript or local storage.
 5. **Existing security rules apply.** Generic errors, no enumeration, no leakage.
 6. **File size limit: 500 lines.**
@@ -1711,6 +1726,11 @@ The authorization-code exchange response (`POST /auth/token`) gains an optional 
 - Caller is an end-user (bearer access token) → allowed iff `org_features.allow_user_create_org: true` for the caller's domain config. Otherwise returns the standard generic error.
 
 This lets pre-provisioned B2B tenants disable self-service org creation while still allowing admin-driven onboarding via `/internal/org/`.
+
+Hosted SSO uses the same gate through `POST /auth/create-workspace`, but only
+after a verified login bridge and only with `login_flow.workspace_selection:
+"auto"`. It creates and selects the user's first workspace atomically, rather
+than issuing an unscoped code for a client-side creation flow.
 
 #### Examples
 

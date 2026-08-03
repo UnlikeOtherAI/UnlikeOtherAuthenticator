@@ -67,7 +67,9 @@ describe('required workspace placement during token exchange', () => {
       orgMember: {
         create: vi.fn().mockResolvedValue({ id: 'org-member-new' }),
         findFirst: vi.fn(async () =>
-          placed ? { id: 'org-member-new', orgId: 'org-new', role: 'owner' } : null,
+          placed
+            ? { id: 'org-member-new', orgId: 'org-new', role: 'owner', org: { slug: 'new-user' } }
+            : null,
         ),
         findMany: vi.fn(async () => (placed ? [{ orgId: 'org-new', role: 'owner' }] : [])),
       },
@@ -135,7 +137,11 @@ describe('required workspace placement during token exchange', () => {
       prisma,
       sharedSecret,
     });
-    expect(claims.active).toEqual({ orgId: 'org-new', teamId: 'team-new' });
+    expect(claims.active).toEqual({
+      orgId: 'org-new',
+      teamId: 'team-new',
+      tenantSlug: 'new-user',
+    });
     expect(result.firstLogin?.memberships.teams).toContainEqual({
       iconUrl: null,
       orgId: 'org-new',

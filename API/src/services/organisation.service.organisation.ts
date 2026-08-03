@@ -209,7 +209,7 @@ export async function createOrganisation(
     targetType: 'organisation',
     targetId: created.id,
     metadata: { name: created.name, slug: created.slug, ownerId },
-  });
+  }, { prisma: deps?.auditPrisma });
 
   return created;
 }

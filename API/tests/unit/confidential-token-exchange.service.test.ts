@@ -127,7 +127,11 @@ function prismaMock(options?: {
       create: vi.fn().mockResolvedValue({ id: 'assertion-use-1' }),
     },
     orgMember: {
-      findFirst: vi.fn().mockResolvedValue({ orgId: 'org_1', role: 'member' }),
+      findFirst: vi.fn().mockResolvedValue({
+        orgId: 'org_1',
+        role: 'member',
+        org: { slug: 'nessie' },
+      }),
     },
     teamMember: {
       findMany: vi
@@ -254,9 +258,10 @@ describe('confidential token exchange', () => {
       issuer: 'https://authentication.unlikeotherai.com',
       ttlSeconds: 300,
       scope: 'ai.invoke',
-      active: { orgId: 'org_1', teamId: 'team_1' },
+      active: { orgId: 'org_1', teamId: 'team_1', tenantSlug: 'nessie' },
       org: {
         org_id: 'org_1',
+        tenant_slug: 'nessie',
         org_role: 'member',
         teams: ['team_1'],
         team_roles: { team_1: 'member' },

@@ -76,7 +76,8 @@ The \`access_token\` is a JWT (compact JWS, three base64url segments). Decode th
 | \`role\` | custom | **Platform-side UOA role** — \`"user"\` or \`"superuser"\`. Do NOT use this for tenant/org authorization. See 4.4. |
 | \`domain\` | custom | The integration domain from your config JWT. Confirms which integration minted this token. |
 | \`client_id\` | custom | \`SHA256(domain + clientSecret)\` hex. Identifies the exact client credential used. |
-| \`org\` | custom (optional) | Present only when \`org_features.enabled\` and the user has an org on this domain. Shape: \`{ org_id, org_role, teams[], team_roles{}, groups?[], group_admin?[] }\`. |
+| \`org\` | custom (optional) | Present only when \`org_features.enabled\` and the user has an org on this domain. Shape: \`{ org_id, tenant_slug, org_role, teams[], team_roles{}, groups?[], group_admin?[] }\`. |
+| \`active.tenantSlug\` | custom (optional) | Canonical DNS-safe subdomain label for the selected workspace. It is sourced from the organisation slug and unique within this client domain. Treat its absence as a legacy-token compatibility case; never use \`Team.slug\` as a tenant host key. |
 | \`iss\` | standard | UOA host, e.g. \`authentication.unlikeotherai.com\`. |
 | \`aud\` | standard | Always \`"uoa:access-token"\`. |
 | \`iat\`, \`exp\` | standard | Epoch seconds. Respect \`exp\`. |
@@ -89,6 +90,7 @@ const claims = decodeJwt(response.access_token);
 const userId = claims.sub;                 // stable
 const email = claims.email as string;      // advisory
 const platformRole = claims.role as 'user' | 'superuser';
+const tenantSlug = (claims.active as { tenantSlug?: string } | undefined)?.tenantSlug;
 \`\`\`
 
 ### 4.3 Legacy trust model — authorization-code / refresh tokens are HS256-signed
@@ -173,6 +175,10 @@ if (!firstOrg) {
 }
 const tenantId = firstOrg.orgId;
 const tenantRole = firstOrg.role;                  // use THIS for authz, not claims.role
+const tenantSlug = (claims.active as { tenantSlug?: string } | undefined)?.tenantSlug;
+// Route a scoped, newly-issued token to \`\${tenantSlug}.your-tenant-domain\`.
+// Re-authenticate or resolve the workspace through UOA before routing a legacy
+// token that has no tenantSlug.
 
 await storeRefreshTokenServerSide(body.refresh_token, body.refresh_token_expires_in);
 await issueRpSession({ externalUserId, email, tenantId, tenantRole });
@@ -183,6 +189,21 @@ Server-side behaviour on first verified login is controlled by \`org_features\`:
 - \`registration_domain_mapping\` (top-level config) places the user into a configured org + team when the email domain matches.
 - \`auto_create_personal_org_on_first_login\` (default \`false\`) creates a personal org with the user as \`owner\` plus a default team when no mapping matches. Skipped when \`pending_invites_block_auto_create\` is \`true\` and a pending invite exists for the email.
 - \`allow_user_create_org\` (default \`false\`) gates \`POST /org/organisations\` for end-users. Superusers bypass. Keep \`false\` for admin-provisioned tenants.
+
+When \`login_flow.workspace_selection\` is \`"auto"\` and the chooser returns
+\`can_create_org: true\`, the hosted SSO UI lets the verified user create their
+first workspace itself. It sends only the chosen name to
+\`POST /auth/create-workspace\` with the short-lived \`login_token\`; the endpoint
+creates the organisation and its default team atomically with the remaining
+login continuation. Do not mint a tenant locally or use an empty
+\`/auth/select-team\` selection for this path.
+
+After exchanging the resulting authorization code, use
+\`access_token.active.tenantSlug\` as the tenant's DNS label. It is the
+organisation slug and is unique within the client domain. \`Team.slug\` is only
+unique inside its organisation, so it must not be used as a subdomain. Existing
+tokens may omit \`tenantSlug\` until they expire; re-authenticate or resolve the
+workspace through UOA before redirecting a legacy session to a tenant host.
 
 ### 4.6a Per-product confidential assertion exchange
 

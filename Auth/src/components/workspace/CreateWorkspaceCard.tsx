@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
 
+import { Button } from '../ui/Button.js';
+import { Input } from '../ui/Input.js';
 import { useTranslation } from '../../i18n/use-translation.js';
 import type { AuthFlowQuery } from '../../utils/api.js';
-import { submitTeamSelection } from '../../utils/workspace-actions.js';
+import { submitWorkspaceCreation } from '../../utils/workspace-actions.js';
 import type { WorkspaceResponseOutcome } from '../../utils/workspace-response.js';
 
 /**
- * Phase 3c (design §11.2): rendered only when `can_create_org`. Posts an empty selection —
- * `/auth/select-team` with neither `teamId` nor `inviteId` — so an org-less user still completes
- * login with a plain code; the consuming product renders its own create-org flow from there. Do
- * NOT build an org-creation form here (out of scope for this step).
+ * The chooser's self-service entrypoint. The server derives the tenant slug
+ * from this name and creates its default team before finalizing the SSO flow.
  */
 export function CreateWorkspaceCard(props: {
   loginToken: string;
@@ -18,19 +18,70 @@ export function CreateWorkspaceCard(props: {
   disabled?: boolean;
 }): React.JSX.Element {
   const { t } = useTranslation();
+  const [creating, setCreating] = useState(false);
+  const [name, setName] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  async function handleClick() {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const workspaceName = name.trim();
+    if (!workspaceName) return;
     setSubmitting(true);
-    const outcome = await submitTeamSelection({ loginToken: props.loginToken, ...props.query });
+    setError(null);
+    const outcome = await submitWorkspaceCreation({
+      loginToken: props.loginToken,
+      name: workspaceName,
+      ...props.query,
+    });
     setSubmitting(false);
+    if (outcome.kind === 'error') {
+      setError(t('form.error.generic'));
+      return;
+    }
     props.onOutcome(outcome);
+  }
+
+  if (creating) {
+    return (
+      <form
+        onSubmit={(event) => void handleSubmit(event)}
+        className="flex flex-col gap-3 rounded-[var(--uoa-radius-card)] border border-[var(--uoa-color-border)] bg-[var(--uoa-color-surface)] p-3"
+      >
+        <Input
+          label={t('workspace.createOrg.nameLabel')}
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          disabled={props.disabled || submitting}
+          maxLength={100}
+          autoFocus
+          required
+        />
+        {error ? <p className="text-sm text-[var(--uoa-color-danger)]">{error}</p> : null}
+        <div className="flex items-center gap-3">
+          <Button type="submit" disabled={props.disabled || submitting || !name.trim()}>
+            {submitting ? '...' : t('workspace.createOrg.submit')}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={props.disabled || submitting}
+            onClick={() => {
+              setCreating(false);
+              setError(null);
+            }}
+          >
+            {t('workspace.createOrg.cancel')}
+          </Button>
+        </div>
+      </form>
+    );
   }
 
   return (
     <button
       type="button"
-      onClick={() => void handleClick()}
+      onClick={() => setCreating(true)}
       disabled={props.disabled || submitting}
       className={[
         'flex w-full items-center gap-3 rounded-[var(--uoa-radius-card)] border border-dashed border-[var(--uoa-color-border)]',

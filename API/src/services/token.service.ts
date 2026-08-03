@@ -57,6 +57,7 @@ function sharedSecretKey(sharedSecret: string): Uint8Array {
 }
 
 type ActiveWorkspace = { orgId: string; teamId: string };
+type ActiveWorkspaceClaim = ActiveWorkspace & { tenantSlug: string };
 
 async function signAccessToken(params: {
   userId: string;
@@ -69,7 +70,7 @@ async function signAccessToken(params: {
   issuer: string;
   tokenVersion: number;
   org?: OrgContext | null;
-  active?: ActiveWorkspace | null;
+  active?: ActiveWorkspaceClaim | null;
 }): Promise<string> {
   const payload = {
     email: params.email,
@@ -84,7 +85,7 @@ async function signAccessToken(params: {
     role: 'superuser' | 'user';
     tv: number;
     org?: OrgContext;
-    active?: ActiveWorkspace;
+    active?: ActiveWorkspaceClaim;
   };
 
   if (params.org) {
@@ -229,6 +230,11 @@ async function issueTokenPairForUser(
         )
       : null);
 
+  const active =
+    params.active && activeOrgContext
+      ? { ...params.active, tenantSlug: activeOrgContext.tenant_slug }
+      : null;
+
   const accessToken = await signAccessToken({
     userId: params.userId,
     email: user.email,
@@ -240,7 +246,7 @@ async function issueTokenPairForUser(
     issuer,
     tokenVersion: user.tokenVersion,
     org,
-    active: params.active,
+    active,
   });
 
   const firstLogin = params.includeFirstLogin

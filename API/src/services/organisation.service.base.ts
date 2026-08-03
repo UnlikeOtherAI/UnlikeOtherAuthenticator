@@ -29,6 +29,11 @@ type OrgServicePrisma = PrismaClient & {
 type OrgServiceDeps = {
   env?: ReturnType<typeof getEnv>;
   prisma?: OrgServicePrisma;
+  /**
+   * Lets an authenticated continuation keep its organisation audit row inside
+   * the same transaction as workspace creation and code issuance.
+   */
+  auditPrisma?: OrgAuditLogPrisma;
 };
 
 export type CursorList<T> = {

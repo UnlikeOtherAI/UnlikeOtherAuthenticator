@@ -137,6 +137,36 @@ export const authEndpoints: EndpointSchema[] = [
   },
   {
     method: 'POST',
+    path: '/auth/create-workspace',
+    description:
+      "Create and immediately select a verified user's first workspace from the hosted SSO chooser. The login_token bridge and all supplied continuation fields must match the signed identity-verification continuation. Within one transaction, UOA claims the bridge token, creates the organisation and its default team, validates the exact ACTIVE client workspace scope, and completes required 2FA/code issuance. The organisation slug is the canonical tenant DNS label: it is exposed in the resulting access token as active.tenantSlug and is unique for the client domain. Team slugs remain local to their organisation and must not be used as tenant subdomains.",
+    auth: 'config_url query param + login_token body field',
+    query: {
+      redirect_url: 'string (optional, redirect_uri also accepted)',
+      code_challenge: 'string (required) — exactly 43-char PKCE S256 challenge',
+      code_challenge_method: '"S256" (required)',
+      request_access:
+        'string (optional) — when truthy, auto-grant or create a pending access request',
+    },
+    body: {
+      login_token: 'string (required) — bridge token from /auth/verify-code or /auth/login',
+      name: 'string (required, 1–100 characters after trimming) — workspace name; UOA derives the organisation/tenant slug',
+      remember_me:
+        'boolean (optional) — when present must equal the value signed at identity verification; omission uses that signed value',
+    },
+    response: {
+      ok: 'true',
+      code: 'authorization code carrying the new selected workspace scope when issuance completes',
+      redirect_to: 'full redirect URL with code',
+      twofa_required: 'true when the new selected org requires enrolled 2FA',
+      twofa_token: 'challenge token (only if 2FA needed)',
+      twofa_enroll_required:
+        'true when the new selected org requires 2FA and the user is not enrolled',
+      access_request_status: '"pending" when request_access created a pending access request',
+    },
+  },
+  {
+    method: 'POST',
     path: '/auth/session-choices',
     description:
       'Hydrate the workspace-chooser payload for a login_token bridge seeded via a redirect, since a GET redirect cannot inline chooser JSON. Verifies signature, expiry, exact config URL, and the canonical fingerprint of the currently verified parsed config. This read is deliberately non-consuming; only final selection claims the hashed JTI. Introduces no enumeration because it answers only for an already-verified capability.',
@@ -235,6 +265,8 @@ export const authEndpoints: EndpointSchema[] = [
     response: {
       access_token:
         'Authorization-code/refresh grants: legacy HS256 JWT with aud="uoa:access-token". Confidential token-exchange grant: at-most-5-minute RS256 JWT bound to resource, verifiable at GET /oauth/jwks.json, with product, exact requested scope, stable sub, validated provenance, and no domain bearer credential. A chained result never outlives its inbound token.',
+      'access_token.active.tenantSlug?':
+        'canonical organisation slug for the selected workspace and safe DNS tenant label, unique within the authenticated client domain. It is present on newly issued scoped tokens; consumers must tolerate its absence on a legacy token until that token expires. Team.slug is not a tenant DNS key because it is only unique within its organisation.',
       expires_in: 'number — seconds until access_token expiry',
       'refresh_token?':
         'string — opaque, server-side only; authorization-code/refresh grants only, never hand to the browser',

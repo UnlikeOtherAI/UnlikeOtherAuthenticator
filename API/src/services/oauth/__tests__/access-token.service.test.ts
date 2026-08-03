@@ -91,11 +91,12 @@ describe('mcp access-token (RS256)', () => {
       scope: 'ai.invoke',
       org: {
         org_id: 'org_1',
+        tenant_slug: 'acme',
         org_role: 'member',
         teams: ['team_1'],
         team_roles: { team_1: 'member' },
       },
-      active: { orgId: 'org_1', teamId: 'team_1' },
+      active: { orgId: 'org_1', teamId: 'team_1', tenantSlug: 'acme' },
       actor: {
         sub: 'api.nessie.works',
         product: 'nessie',
@@ -172,6 +173,7 @@ describe('mcp access-token (RS256)', () => {
       scope: 'ai.invoke',
       org: {
         org_id: 'org_1',
+        tenant_slug: 'acme',
         org_role: 'member',
         teams: ['team_1'],
         team_roles: { team_1: 'member' },

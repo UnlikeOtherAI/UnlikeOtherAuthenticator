@@ -52,6 +52,7 @@ describe('org-context service', () => {
     prisma.orgMember.findFirst.mockResolvedValue({
       orgId: 'org_1',
       role: 'admin',
+      org: { slug: 'acme' },
     });
     prisma.teamMember.findMany.mockResolvedValue([
       { teamId: 'team_1', teamRole: 'lead' },
@@ -73,6 +74,7 @@ describe('org-context service', () => {
 
     expect(context).toMatchObject({
       org_id: 'org_1',
+      tenant_slug: 'acme',
       org_role: 'admin',
       teams: ['team_1', 'team_2'],
       team_roles: {
@@ -89,6 +91,7 @@ describe('org-context service', () => {
     prisma.orgMember.findFirst.mockResolvedValue({
       orgId: 'org_1',
       role: 'member',
+      org: { slug: 'acme' },
     });
     prisma.teamMember.findMany.mockResolvedValue([{ teamId: 'team_1', teamRole: 'lead' }]);
 
@@ -103,6 +106,7 @@ describe('org-context service', () => {
 
     expect(context).toMatchObject({
       org_id: 'org_1',
+      tenant_slug: 'acme',
       org_role: 'member',
       teams: ['team_1'],
       team_roles: { team_1: 'lead' },
@@ -135,6 +139,7 @@ describe('org-context service', () => {
     prisma.orgMember.findFirst.mockResolvedValue({
       orgId: 'org_selected',
       role: 'member',
+      org: { slug: 'selected' },
     });
     prisma.teamMember.findMany.mockResolvedValue([]);
 

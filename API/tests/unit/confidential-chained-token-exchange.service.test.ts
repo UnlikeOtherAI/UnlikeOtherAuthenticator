@@ -42,6 +42,7 @@ function config(): ClientConfig {
 function defaultOrg() {
   return {
     org_id: 'org_1',
+    tenant_slug: 'nessie',
     org_role: 'member',
     teams: ['team_1', 'team_2'],
     team_roles: { team_1: 'member', team_2: 'admin' },
@@ -136,7 +137,11 @@ function prismaMock(options?: {
     orgMember: {
       findFirst: vi
         .fn()
-        .mockResolvedValue(options?.orgExists === false ? null : { orgId: 'org_1', role: 'admin' }),
+        .mockResolvedValue(
+          options?.orgExists === false
+            ? null
+            : { orgId: 'org_1', role: 'admin', org: { slug: 'nessie' } },
+        ),
     },
     teamMember: {
       findMany: vi.fn().mockResolvedValue(
@@ -251,11 +256,12 @@ describe('chained confidential exchange', () => {
       scope: 'ai.invoke',
       org: {
         org_id: 'org_1',
+        tenant_slug: 'nessie',
         org_role: 'admin',
         teams: ['team_1'],
         team_roles: { team_1: 'admin' },
       },
-      active: { orgId: 'org_1', teamId: 'team_1' },
+      active: { orgId: 'org_1', teamId: 'team_1', tenantSlug: 'nessie' },
       actor: { sub: sourceDomain, product: 'nessie' },
     });
     expect(claims).not.toHaveProperty('clientId');

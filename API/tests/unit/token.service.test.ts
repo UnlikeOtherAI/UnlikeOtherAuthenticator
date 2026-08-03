@@ -93,6 +93,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
     prisma.orgMember.findFirst.mockResolvedValue({
       orgId: 'org-1',
       role: 'admin',
+      org: { slug: 'acme' },
     });
     prisma.orgMember.findMany.mockResolvedValue([{ orgId: 'org-1', role: 'admin' }]);
     prisma.teamMember.findMany.mockResolvedValue([
@@ -131,6 +132,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
       role: 'user',
       org: {
         org_id: 'org-1',
+        tenant_slug: 'acme',
         org_role: 'admin',
         teams: ['team-1', 'team-2'],
         team_roles: {

@@ -271,6 +271,12 @@ export type SelectTeamRequest = {
   remember_me?: boolean;
 };
 
+export type CreateWorkspaceRequest = {
+  login_token: string;
+  name: string;
+  remember_me?: boolean;
+};
+
 /** POST /auth/select-team — choose a workspace or accept/decline an invite (Phase 3b). */
 export function selectTeam(
   body: SelectTeamRequest,
@@ -278,6 +284,18 @@ export function selectTeam(
 ): Promise<ApiResult<AuthFlowResponse>> {
   return postJson<SelectTeamRequest, AuthFlowResponse>(
     '/auth/select-team',
+    body,
+    buildAuthFlowQuery(query),
+  );
+}
+
+/** POST /auth/create-workspace — create and immediately select a new tenant workspace. */
+export function createWorkspace(
+  body: CreateWorkspaceRequest,
+  query: AuthFlowQuery,
+): Promise<ApiResult<AuthFlowResponse>> {
+  return postJson<CreateWorkspaceRequest, AuthFlowResponse>(
+    '/auth/create-workspace',
     body,
     buildAuthFlowQuery(query),
   );
