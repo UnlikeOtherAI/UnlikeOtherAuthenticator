@@ -189,6 +189,7 @@ Server-side behaviour on first verified login is controlled by \`org_features\`:
 - \`registration_domain_mapping\` (top-level config) places the user into a configured org + team when the email domain matches.
 - \`auto_create_personal_org_on_first_login\` (default \`false\`) creates a personal org with the user as \`owner\` plus a default team when no mapping matches. Skipped when \`pending_invites_block_auto_create\` is \`true\` and a pending invite exists for the email.
 - \`allow_user_create_org\` (default \`false\`) gates \`POST /org/organisations\` for end-users. Superusers bypass. Keep \`false\` for admin-provisioned tenants.
+- \`allow_user_create_team\` (default \`false\`) gates \`POST /auth/create-team\`: whether a user may add a **further workspace** to an organisation they already run, from the SSO chooser. Separate from \`allow_user_create_org\` because it writes into an existing tenant rather than creating a first one, and the org owner/admin role check still applies on top.
 
 When \`login_flow.workspace_selection\` is \`"auto"\` and the chooser returns
 \`can_create_org: true\`, the hosted SSO UI lets the verified user create their
@@ -197,6 +198,16 @@ first workspace itself. It sends only the chosen name to
 creates the organisation and its default team atomically with the remaining
 login continuation. Do not mint a tenant locally or use an empty
 \`/auth/select-team\` selection for this path.
+
+An **organisation is the level above a workspace**, and the two creation paths differ accordingly.
+\`can_create_org\` is about a user's *first organisation*; the chooser's \`creatable_orgs\`
+(\`[{ orgId, orgName }]\`) lists organisations the user may add a *further workspace* to — they are
+an ACTIVE owner/admin there and the domain set \`org_features.allow_user_create_team\`. The UI offers
+creation per organisation and posts \`{ login_token, org_id, name }\` to \`POST /auth/create-team\`,
+which re-checks that role and the org's \`max_teams_per_org\` cap, adds the creator to the new
+workspace, and finalizes the login in the same transaction. A user with exactly one workspace and no
+pending invites still auto-skips the chooser, so that user reaches creation through your product, not
+the sign-in popup.
 
 After exchanging the resulting authorization code, use
 \`access_token.active.tenantSlug\` as the tenant's DNS label. It is the

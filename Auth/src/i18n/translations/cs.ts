@@ -69,6 +69,12 @@ export const cs = {
   'workspace.createOrg.submit': 'Vytvořit pracovní prostor',
   'workspace.createOrg.cancel': 'Zrušit',
 
+  'workspace.createTeam.title': 'Vytvořit nový pracovní prostor',
+  'workspace.createTeam.subtitle': 'Přidat pracovní prostor do {org}',
+  'workspace.createTeam.nameLabel': 'Název pracovního prostoru',
+  'workspace.createTeam.submit': 'Vytvořit pracovní prostor',
+  'workspace.createTeam.cancel': 'Zrušit',
+
   'twoFactor.setup.instructions':
     'Naskenujte tento QR kód v ověřovací aplikaci a potom zadejte 6místný kód pro dokončení nastavení.',
   'twoFactor.setup.loading': 'Načítá se QR kód...',

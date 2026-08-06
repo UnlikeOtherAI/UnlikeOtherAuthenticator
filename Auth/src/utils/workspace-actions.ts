@@ -1,6 +1,7 @@
 import type { WorkspaceChoices } from '../hooks/use-popup.js';
 import {
   authStart,
+  createTeam,
   createWorkspace,
   fetchSessionChoices,
   selectTeam,
@@ -46,6 +47,19 @@ export async function submitWorkspaceCreation(
 ): Promise<WorkspaceResponseOutcome> {
   const { loginToken, name, ...query } = params;
   const result = await createWorkspace({ login_token: loginToken, name }, query);
+  return interpretWorkspaceResponse(result.ok ? result.data : null);
+}
+
+/**
+ * Creates and selects a further workspace inside an org the user already belongs to. Distinct from
+ * `submitWorkspaceCreation`, which creates the user's first organisation: here the org exists and
+ * the server re-checks that this user is an ACTIVE owner/admin of it.
+ */
+export async function submitTeamCreation(
+  params: { loginToken: string; orgId: string; name: string } & AuthFlowQuery,
+): Promise<WorkspaceResponseOutcome> {
+  const { loginToken, orgId, name, ...query } = params;
+  const result = await createTeam({ login_token: loginToken, org_id: orgId, name }, query);
   return interpretWorkspaceResponse(result.ok ? result.data : null);
 }
 

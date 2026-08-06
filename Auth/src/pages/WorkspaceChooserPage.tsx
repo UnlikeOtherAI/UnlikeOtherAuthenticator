@@ -139,6 +139,10 @@ export function WorkspaceChooserPage(): React.JSX.Element {
 
   const hasInvites = workspaceChoices.pending_invites.length > 0;
   const hasTeams = workspaceChoices.teams.length > 0;
+  // Orgs this user may add a workspace to (server-decided: ACTIVE owner/admin + the domain's
+  // `allow_user_create_team`). Unlike `can_create_org` below this is NOT limited to users with no
+  // workspace yet — creating a workspace inside an org you already run is an ordinary action.
+  const creatableOrgs = workspaceChoices.creatable_orgs;
   // Organisation membership is intentionally one-per-domain. `can_create_org`
   // permits a verified first-workspace flow; it does not turn an existing
   // workspace chooser into a misleading second-organisation creation path.
@@ -171,9 +175,10 @@ export function WorkspaceChooserPage(): React.JSX.Element {
         </div>
       ) : null}
 
-      {hasTeams ? (
+      {hasTeams || creatableOrgs.length > 0 ? (
         <WorkspaceList
           teams={workspaceChoices.teams}
+          creatableOrgs={creatableOrgs}
           loginToken={loginToken}
           query={query}
           onOutcome={handleOutcome}

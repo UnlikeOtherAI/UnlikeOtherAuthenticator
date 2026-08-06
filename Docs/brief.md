@@ -1732,6 +1732,31 @@ after a verified login bridge and only with `login_flow.workspace_selection:
 "auto"`. It creates and selects the user's first workspace atomically, rather
 than issuing an unscoped code for a client-side creation flow.
 
+##### Creating a further workspace inside an existing organisation
+
+An organisation is the level above a workspace, and adding a workspace to an org
+you already run is a different action from creating your first org. It has its
+own gate, `org_features.allow_user_create_team` (default `false`), and its own
+hosted-SSO route, `POST /auth/create-team` — the sibling of
+`/auth/create-workspace`, with the same verified-bridge and
+`workspace_selection: "auto"` preconditions.
+
+- The chooser payload carries `creatable_orgs: [{ orgId, orgName }]` — the
+  organisations the caller may add a workspace to. As with `can_create_org`, the
+  client MUST treat this as authoritative and not re-derive it.
+- An org appears there iff the domain set `allow_user_create_team` **and** the
+  caller is an ACTIVE `owner`/`admin` of it — the same standing
+  `POST /org/organisations/:orgId/teams` requires. `/auth/create-team` re-checks
+  both, plus `max_teams_per_org`, so the list only decides what to offer.
+- The creator is added to the new workspace as team `admin`; the workspace is
+  then selected and the login finalized in the same transaction that claims the
+  bridge token.
+- Unlike the first-workspace entrypoint, this is **not** limited to users with no
+  memberships: a user who already belongs to workspaces is exactly who needs it.
+  It is still bounded by the chooser being shown at all — a user with exactly one
+  ACTIVE team and no pending invites auto-skips the chooser (§11.2) and creates
+  workspaces through the product instead.
+
 #### Examples
 
 - **Restaurant SaaS (self-service).** `auto_create_personal_org_on_first_login: true`, `allow_user_create_org: true`. New user signs up → immediately owns an org → can invite staff. No client-side "create org" screen needed.

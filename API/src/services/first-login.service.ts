@@ -2,6 +2,8 @@ import type { Prisma, PrismaClient } from '@prisma/client';
 
 import type { ClientConfig } from './config.service.js';
 import { getAdminPrisma, getPrisma } from '../db/prisma.js';
+import { avatarImageBaseUrl, publicTeamAvatarImageUrl } from '../utils/avatar-url.js';
+import { isTeamManager } from './team.service.base.js';
 import {
   resolveProductWorkspacePolicy,
   type ProductWorkspacePolicy,
@@ -240,6 +242,19 @@ export type WorkspaceChoiceTeam = {
   role: string;
   // Design §11.3 (gap-fix A Task 3) — matches `Auth/src/hooks/use-popup.tsx`'s `TeamChoice.iconUrl`.
   iconUrl: string | null;
+  /**
+   * Always-resolving workspace image (Docs/Auth/avatars.md §11.4), in the credential-free
+   * `/teams/:teamId/avatar` form — the chooser renders in a popup that holds no bearer, so this is
+   * the only avatar URL form it can put in an `<img src>`. Never null: uploaded → proxied
+   * `iconUrl` → generated.
+   */
+  avatarImageUrl: string;
+  /**
+   * The owning organisation's name — two workspaces can share a name across different orgs (a
+   * "General" in each), so the chooser needs the level above to tell them apart. Null only when a
+   * caller supplied a team row without the org join; the query here always selects it.
+   */
+  orgName: string | null;
   // Gap-fix B Task 2 (design §11.4): lets the client match a `team_hint` deep-link param by slug as
   // well as by id — matches `Auth/src/hooks/use-popup.tsx`'s `TeamChoice.slug`.
   slug: string;
@@ -251,10 +266,25 @@ export type WorkspaceChoicePendingInvite = {
   invitedBy: string | null;
 };
 
+/**
+ * An organisation this user may add a further workspace (team) to from the chooser: they are an
+ * ACTIVE owner/admin of it and the domain has opted in with `org_features.allow_user_create_team`.
+ *
+ * Deliberately distinct from `can_create_org`, which is about a user's *first* organisation
+ * (brief §1718). An org is a level above a workspace: this list says "you may create a workspace
+ * **here**", so the client can offer creation per organisation rather than as one ambiguous button
+ * when the user belongs to several.
+ */
+export type WorkspaceChoiceCreatableOrg = {
+  orgId: string;
+  orgName: string;
+};
+
 export type WorkspaceChoices = {
   teams: WorkspaceChoiceTeam[];
   pending_invites: WorkspaceChoicePendingInvite[];
   can_create_org: boolean;
+  creatable_orgs: WorkspaceChoiceCreatableOrg[];
 };
 
 export type AutoSelectedWorkspace = {
@@ -297,6 +327,7 @@ export function shouldPresentWorkspaceChooser(
 
 type WorkspaceChooserPrisma = {
   user: Pick<PrismaClient['user'], 'findUnique'>;
+  orgMember: Pick<PrismaClient['orgMember'], 'findMany'>;
   teamMember: Pick<PrismaClient['teamMember'], 'findMany'>;
   teamInvite: Pick<PrismaClient['teamInvite'], 'findMany'>;
 };
@@ -329,7 +360,7 @@ export async function buildWorkspaceChoices(
     select: { email: true },
   });
   if (!user) {
-    return { teams: [], pending_invites: [], can_create_org: false };
+    return { teams: [], pending_invites: [], can_create_org: false, creatable_orgs: [] };
   }
 
   const domain = params.config.domain.trim().toLowerCase().replace(/\.$/, '');
@@ -343,7 +374,14 @@ export async function buildWorkspaceChoices(
       },
     ));
 
-  const [sameDomainTeamRows, inviteRows] = await Promise.all([
+  // An org is the level above a workspace: this decides which organisations the user may add a
+  // workspace TO. Only queried when the domain has opted in — otherwise the chooser offers no
+  // creation and the read would be dead weight on every login.
+  const canCreateTeams = Boolean(
+    params.config.org_features?.enabled && params.config.org_features.allow_user_create_team,
+  );
+
+  const [sameDomainTeamRows, inviteRows, orgRows] = await Promise.all([
     prisma.teamMember.findMany({
       where: {
         userId: params.userId,
@@ -353,7 +391,7 @@ export async function buildWorkspaceChoices(
       select: {
         teamId: true,
         teamRole: true,
-        team: { select: { name: true, slug: true, orgId: true, iconUrl: true } },
+        team: { select: { name: true, slug: true, orgId: true, iconUrl: true, org: { select: { name: true } } } },
       },
     }),
     prisma.teamInvite.findMany({
@@ -371,6 +409,12 @@ export async function buildWorkspaceChoices(
         invitedByEmail: true,
       },
     }),
+    canCreateTeams
+      ? prisma.orgMember.findMany({
+          where: { userId: params.userId, status: 'ACTIVE', org: { domain } },
+          select: { orgId: true, role: true, org: { select: { name: true } } },
+        })
+      : Promise.resolve([]),
   ]);
 
   let productTeamRows: typeof sameDomainTeamRows = [];
@@ -392,7 +436,7 @@ export async function buildWorkspaceChoices(
       select: {
         teamId: true,
         teamRole: true,
-        team: { select: { name: true, slug: true, orgId: true, iconUrl: true } },
+        team: { select: { name: true, slug: true, orgId: true, iconUrl: true, org: { select: { name: true } } } },
       },
     });
   }
@@ -403,12 +447,15 @@ export async function buildWorkspaceChoices(
     ).values(),
   ];
 
+  const avatarBaseUrl = avatarImageBaseUrl();
   const teams: WorkspaceChoiceTeam[] = teamRows.map((row) => ({
     teamId: row.teamId,
     orgId: row.team.orgId,
     name: row.team.name,
     role: row.teamRole,
     iconUrl: row.team.iconUrl,
+    avatarImageUrl: publicTeamAvatarImageUrl({ baseUrl: avatarBaseUrl, teamId: row.teamId }),
+    orgName: row.team.org?.name ?? null,
     slug: row.team.slug,
   }));
 
@@ -418,9 +465,18 @@ export async function buildWorkspaceChoices(
     invitedBy: row.invitedByName ?? row.invitedByEmail ?? null,
   }));
 
+  // Creating a workspace inside an org is an org owner/admin action (`requireTeamManager`), so the
+  // chooser only offers it where the user actually holds that standing — the same rule
+  // `POST /org/organisations/:orgId/teams` enforces, mirrored here so the UI cannot invite a call
+  // that would 403. The org's team cap is NOT pre-checked; `/auth/create-team` enforces it.
+  const creatableOrgs: WorkspaceChoiceCreatableOrg[] = orgRows
+    .filter((row) => isTeamManager(row.role))
+    .map((row) => ({ orgId: row.orgId, orgName: row.org.name }));
+
   return {
     teams,
     pending_invites: pendingInvites,
     can_create_org: Boolean(params.config.org_features?.allow_user_create_org),
+    creatable_orgs: creatableOrgs,
   };
 }

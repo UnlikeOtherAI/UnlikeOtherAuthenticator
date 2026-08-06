@@ -9,8 +9,9 @@ import { workspaceAvatarColor, workspaceInitials } from '../../utils/workspace-i
 
 /**
  * Phase 3c (design §11.2/§11.3): one ACTIVE workspace in the chooser. The whole card is the
- * button — clicking it selects that team. Icon falls back to a deterministic initials-on-color
- * badge (`utils/workspace-icon.ts`) when the team has no `iconUrl`.
+ * button — clicking it selects that team. The image is the workspace avatar
+ * (`/teams/:teamId/avatar`, Docs/Auth/avatars.md §11.3), with the deterministic initials-on-color
+ * badge (`utils/workspace-icon.ts`) as the offline fallback.
  */
 export function WorkspaceCard(props: {
   team: TeamChoice;
@@ -21,6 +22,12 @@ export function WorkspaceCard(props: {
 }): React.JSX.Element {
   const { t } = useTranslation();
   const [submitting, setSubmitting] = useState(false);
+  const [imageFailed, setImageFailed] = useState(false);
+
+  // `avatarImageUrl` already resolves the whole precedence server-side (uploaded → proxied
+  // `iconUrl` → generated), so it wins; `iconUrl` remains the fallback for a payload minted before
+  // the field existed, and the initials badge covers both being absent or the fetch failing.
+  const imageUrl = imageFailed ? null : (props.team.avatarImageUrl ?? props.team.iconUrl ?? null);
 
   async function handleClick() {
     setSubmitting(true);
@@ -48,10 +55,11 @@ export function WorkspaceCard(props: {
         'hover:border-[var(--uoa-color-primary)] disabled:cursor-not-allowed disabled:opacity-60',
       ].join(' ')}
     >
-      {props.team.iconUrl ? (
+      {imageUrl ? (
         <img
-          src={props.team.iconUrl}
+          src={imageUrl}
           alt=""
+          onError={() => setImageFailed(true)}
           className="h-10 w-10 shrink-0 rounded-[var(--uoa-radius-button)] object-cover"
         />
       ) : (

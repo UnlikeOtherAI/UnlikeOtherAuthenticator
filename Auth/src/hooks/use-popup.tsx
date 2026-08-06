@@ -25,8 +25,27 @@ export type TeamChoice = {
   name: string;
   role: string;
   iconUrl?: string | null;
+  /**
+   * Always-resolving workspace image (Docs/Auth/avatars.md §11.4): the credential-free
+   * `/teams/:teamId/avatar` form, the only one this popup can put in an `<img src>`. Optional so a
+   * payload minted before the field existed still parses; the card falls back accordingly.
+   */
+  avatarImageUrl?: string | null;
+  /** The owning organisation's name — two orgs can each have a workspace called "General". */
+  orgName?: string;
   /** Gap-fix B (design §11.4): lets a `team_hint` deep-link match by slug as well as by id. */
   slug?: string;
+};
+
+/**
+ * An organisation this user may add a workspace to (`creatable_orgs`): they are an ACTIVE
+ * owner/admin of it and the domain enabled `org_features.allow_user_create_team`. An org is the
+ * level above a workspace, so creation is offered per organisation rather than as one ambiguous
+ * button.
+ */
+export type CreatableOrgChoice = {
+  orgId: string;
+  orgName: string;
 };
 
 /** Phase 3c (design §11.2): a pending team invite offered alongside the chooser. */
@@ -41,6 +60,7 @@ export type WorkspaceChoices = {
   teams: TeamChoice[];
   pending_invites: InviteChoice[];
   can_create_org: boolean;
+  creatable_orgs: CreatableOrgChoice[];
 };
 
 /** True for a native deep-link target (custom scheme, not http/https). */

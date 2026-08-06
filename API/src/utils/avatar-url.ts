@@ -63,6 +63,21 @@ export function domainTeamAvatarImageUrl(params: {
   return `${base}${path}?domain=${encodeURIComponent(params.domain)}`;
 }
 
+/**
+ * `<base>/teams/<teamId>/avatar` — the credential-free form, and the only one a browser can put in
+ * a plain `<img src>` (Docs/Auth/avatars.md §11.3). Used by the auth-popup chooser payloads, which
+ * are rendered by a page holding no bearer of any class. Carries no `?domain=`: the route resolves
+ * the team by id alone and answers every id with an image, so the URL leaks no domain and no
+ * existence signal.
+ */
+export function publicTeamAvatarImageUrl(params: {
+  baseUrl?: string | null;
+  teamId: string;
+}): string {
+  const base = normalizeBaseUrl(params.baseUrl);
+  return `${base}/teams/${encodeURIComponent(params.teamId)}/avatar`;
+}
+
 /** `<base>/internal/admin/teams/<teamId>/avatar` — fetchable with the admin superuser bearer. */
 export function adminTeamAvatarImageUrl(params: {
   baseUrl?: string | null;

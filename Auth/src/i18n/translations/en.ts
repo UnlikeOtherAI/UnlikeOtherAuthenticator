@@ -71,6 +71,12 @@ export const en = {
   'workspace.createOrg.submit': 'Create workspace',
   'workspace.createOrg.cancel': 'Cancel',
 
+  'workspace.createTeam.title': 'Create a new workspace',
+  'workspace.createTeam.subtitle': 'Add a workspace to {org}',
+  'workspace.createTeam.nameLabel': 'Workspace name',
+  'workspace.createTeam.submit': 'Create workspace',
+  'workspace.createTeam.cancel': 'Cancel',
+
   'twoFactor.setup.instructions':
     'Scan this QR code with an authenticator app, then enter the 6-digit code to verify setup.',
   'twoFactor.setup.loading': 'Loading QR code...',

@@ -214,7 +214,15 @@ describe('POST /auth/verify-code', () => {
     const body = res.json();
     expect(typeof body.login_token).toBe('string');
     expect(body.teams).toEqual([
-      { teamId: 'team-1', orgId: 'org-1', name: 'Design', role: 'member' },
+      {
+        teamId: 'team-1',
+        orgId: 'org-1',
+        name: 'Design',
+        role: 'member',
+        // Docs/Auth/avatars.md §11.4 — public avatar form, the only one this popup can fetch.
+        avatarImageUrl: '/teams/team-1/avatar',
+        orgName: null,
+      },
     ]);
     expect(body.pending_invites).toEqual([]);
     expect(prismaMock.authorizationCode.create).not.toHaveBeenCalled();

@@ -1,5 +1,6 @@
 import type {
   AuthView,
+  CreatableOrgChoice,
   InviteChoice,
   TeamChoice,
   TwoFactorSetupState,
@@ -35,6 +36,14 @@ function toTeamChoices(value: unknown): TeamChoice[] {
   );
 }
 
+function toCreatableOrgs(value: unknown): CreatableOrgChoice[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(
+    (v): v is CreatableOrgChoice =>
+      isRecord(v) && typeof v.orgId === 'string' && typeof v.orgName === 'string',
+  );
+}
+
 function toInviteChoices(value: unknown): InviteChoice[] {
   if (!Array.isArray(value)) return [];
   return value.filter(
@@ -56,6 +65,7 @@ export function interpretWorkspaceResponse(data: unknown): WorkspaceResponseOutc
         teams: toTeamChoices(data.teams),
         pending_invites: toInviteChoices(data.pending_invites),
         can_create_org: Boolean(data.can_create_org),
+        creatable_orgs: toCreatableOrgs(data.creatable_orgs),
       },
     };
   }
@@ -95,6 +105,7 @@ export function toWorkspaceChoices(data: unknown): WorkspaceChoices | null {
     teams: toTeamChoices(data.teams),
     pending_invites: toInviteChoices(data.pending_invites),
     can_create_org: Boolean(data.can_create_org),
+    creatable_orgs: toCreatableOrgs(data.creatable_orgs),
   };
 }
 

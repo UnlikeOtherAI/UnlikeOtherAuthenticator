@@ -69,6 +69,12 @@ export const es = {
   'workspace.createOrg.submit': 'Crear espacio de trabajo',
   'workspace.createOrg.cancel': 'Cancelar',
 
+  'workspace.createTeam.title': 'Crear un nuevo espacio de trabajo',
+  'workspace.createTeam.subtitle': 'Añadir un espacio de trabajo a {org}',
+  'workspace.createTeam.nameLabel': 'Nombre del espacio de trabajo',
+  'workspace.createTeam.submit': 'Crear espacio de trabajo',
+  'workspace.createTeam.cancel': 'Cancelar',
+
   'twoFactor.setup.instructions':
     'Escanea este codigo QR con una app autenticadora y luego ingresa el codigo de 6 digitos para verificar la configuracion.',
   'twoFactor.setup.loading': 'Cargando codigo QR...',

@@ -166,6 +166,8 @@ export const configJwtDocumentation = {
         'boolean (default false) — create a personal org + default team on first verified login when no mapping matches',
       allow_user_create_org:
         'boolean (default false) — permit end-users to call POST /org/organisations with their own access token (superusers bypass)',
+      allow_user_create_team:
+        'boolean (default false) — permit an ACTIVE org owner/admin to create a FURTHER workspace (team) in that organisation from the SSO chooser via POST /auth/create-team. Separate from allow_user_create_org (a first organisation): this writes into an existing tenant, so the domain opts in and the owner/admin role check still applies',
       backend_org_management:
         'boolean (default false) — permit this domain\'s product backend to call /org/* with NO X-UOA-Access-Token, authorised by the domain pairing (domain-hash bearer + this signed config) alone. There is then no acting user, so per-user org-role checks do not apply and every mutation is attributed to the backend in the org audit log',
       pending_invites_block_auto_create:

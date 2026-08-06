@@ -277,6 +277,9 @@ export type CreateWorkspaceRequest = {
   remember_me?: boolean;
 };
 
+/** `/auth/create-team` adds the org the workspace belongs to — that's the level above. */
+export type CreateTeamRequest = CreateWorkspaceRequest & { org_id: string };
+
 /** POST /auth/select-team — choose a workspace or accept/decline an invite (Phase 3b). */
 export function selectTeam(
   body: SelectTeamRequest,
@@ -301,6 +304,21 @@ export function createWorkspace(
   );
 }
 
+/**
+ * POST /auth/create-team — create a further workspace inside an organisation the user already
+ * belongs to, then select it. The sibling of `createWorkspace`, which creates a first *org*.
+ */
+export function createTeam(
+  body: CreateTeamRequest,
+  query: AuthFlowQuery,
+): Promise<ApiResult<AuthFlowResponse>> {
+  return postJson<CreateTeamRequest, AuthFlowResponse>(
+    '/auth/create-team',
+    body,
+    buildAuthFlowQuery(query),
+  );
+}
+
 export type SessionChoicesRequest = { login_token: string };
 
 /**
@@ -311,6 +329,7 @@ export type SessionChoicesResponse = {
   teams: unknown[];
   pending_invites: unknown[];
   can_create_org: boolean;
+  creatable_orgs?: unknown[];
 };
 
 /**

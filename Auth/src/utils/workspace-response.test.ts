@@ -41,6 +41,8 @@ describe('interpretWorkspaceResponse', () => {
         teams: [TEAM_A],
         pending_invites: [INVITE_A],
         can_create_org: true,
+        // Absent from the payload → decoded as empty, never undefined.
+        creatable_orgs: [],
       },
     });
   });
@@ -107,6 +109,7 @@ describe('toWorkspaceChoices', () => {
       teams: [TEAM_A],
       pending_invites: [INVITE_A],
       can_create_org: true,
+      creatable_orgs: [],
     });
   });
 
@@ -130,7 +133,12 @@ describe('toWorkspaceChoices', () => {
 
 describe('pickAutoSkipTeam', () => {
   it('picks the sole team when there is exactly one team and no invites', () => {
-    const choices: WorkspaceChoices = { teams: [TEAM_A], pending_invites: [], can_create_org: false };
+    const choices: WorkspaceChoices = {
+      teams: [TEAM_A],
+      pending_invites: [],
+      can_create_org: false,
+      creatable_orgs: [],
+    };
     expect(pickAutoSkipTeam(choices)).toEqual(TEAM_A);
   });
 
@@ -139,17 +147,19 @@ describe('pickAutoSkipTeam', () => {
       teams: [TEAM_A],
       pending_invites: [INVITE_A],
       can_create_org: false,
+      creatable_orgs: [],
     };
     expect(pickAutoSkipTeam(choices)).toBeNull();
   });
 
   it('does not skip with zero or multiple teams', () => {
-    expect(pickAutoSkipTeam({ teams: [], pending_invites: [], can_create_org: true })).toBeNull();
+    expect(pickAutoSkipTeam({ teams: [], pending_invites: [], can_create_org: true, creatable_orgs: [] })).toBeNull();
     expect(
       pickAutoSkipTeam({
         teams: [TEAM_A, { ...TEAM_A, teamId: 'team-b' }],
         pending_invites: [],
         can_create_org: false,
+        creatable_orgs: [],
       }),
     ).toBeNull();
   });
@@ -161,6 +171,7 @@ describe('pickHintTeam', () => {
     teams: [TEAM_A, TEAM_B],
     pending_invites: [],
     can_create_org: false,
+    creatable_orgs: [],
   };
 
   it('matches a team by teamId', () => {
@@ -184,7 +195,7 @@ describe('pickHintTeam', () => {
   it('never matches a team outside the caller\'s own choices, even by name', () => {
     // Guards against widening: a hint can only ever select something already IN `choices.teams` —
     // there is no separate lookup path that could reach a team this user doesn't already have.
-    expect(pickHintTeam({ teams: [], pending_invites: [], can_create_org: false }, 'team-a')).toBeNull();
+    expect(pickHintTeam({ teams: [], pending_invites: [], can_create_org: false, creatable_orgs: [] }, 'team-a')).toBeNull();
   });
 });
 
@@ -202,7 +213,12 @@ describe('applyWorkspaceOutcome', () => {
 
   it('stores the chooser payload and navigates to workspace-chooser', () => {
     const actions = makeActions();
-    const choices: WorkspaceChoices = { teams: [TEAM_A], pending_invites: [], can_create_org: false };
+    const choices: WorkspaceChoices = {
+      teams: [TEAM_A],
+      pending_invites: [],
+      can_create_org: false,
+      creatable_orgs: [],
+    };
     const applied = applyWorkspaceOutcome(
       { kind: 'chooser', loginToken: 'bridge.jwt', choices },
       actions,

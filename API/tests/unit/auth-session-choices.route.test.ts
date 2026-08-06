@@ -237,11 +237,30 @@ describe('POST /auth/session-choices', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({
       teams: [
-        { teamId: 'team-1', orgId: 'org-1', name: 'Backend Team', role: 'member' },
-        { teamId: 'team-2', orgId: 'org-1', name: 'Design Team', role: 'owner' },
+        {
+          teamId: 'team-1',
+          orgId: 'org-1',
+          name: 'Backend Team',
+          role: 'member',
+          // Docs/Auth/avatars.md §11.4 — the public, credential-free form, because the chooser
+          // renders in a popup that holds no bearer. Root-relative with PUBLIC_BASE_URL unset.
+          avatarImageUrl: '/teams/team-1/avatar',
+          // This mock's team rows carry no org join, so the grouping name comes back null.
+          orgName: null,
+        },
+        {
+          teamId: 'team-2',
+          orgId: 'org-1',
+          name: 'Design Team',
+          role: 'owner',
+          avatarImageUrl: '/teams/team-2/avatar',
+          orgName: null,
+        },
       ],
       pending_invites: [],
       can_create_org: true,
+      // No `allow_user_create_team` on this config, so no org is offered for workspace creation.
+      creatable_orgs: [],
     });
     // No login_token echoed back — the caller already holds one; only the choices are new.
     expect(res.json().login_token).toBeUndefined();

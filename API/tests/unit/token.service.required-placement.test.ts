@@ -98,6 +98,7 @@ describe('required workspace placement during token exchange', () => {
                     name: "New User's team",
                     orgId: 'org-new',
                     slug: 'new-user-s-team',
+                    org: { name: "New User's org" },
                   },
                 },
               ]
@@ -176,12 +177,12 @@ describe('required workspace placement during token exchange', () => {
           {
             teamId: 'team-a',
             teamRole: 'member',
-            team: { iconUrl: null, name: 'A', orgId: 'org-a', slug: 'a' },
+            team: { iconUrl: null, name: 'A', orgId: 'org-a', slug: 'a', org: { name: 'org-a' } },
           },
           {
             teamId: 'team-b',
             teamRole: 'member',
-            team: { iconUrl: null, name: 'B', orgId: 'org-b', slug: 'b' },
+            team: { iconUrl: null, name: 'B', orgId: 'org-b', slug: 'b', org: { name: 'org-b' } },
           },
         ]),
       },
@@ -318,7 +319,13 @@ describe('required workspace placement during token exchange', () => {
       const choiceRow = (): Array<{
         teamId: string;
         teamRole: string;
-        team: { iconUrl: null; name: string; orgId: string; slug: string };
+        team: {
+          iconUrl: null;
+          name: string;
+          orgId: string;
+          slug: string;
+          org: { name: string };
+        };
       }> =>
         workspace
           ? [
@@ -330,6 +337,7 @@ describe('required workspace placement during token exchange', () => {
                   name: 'Personal team',
                   orgId: workspace.orgId,
                   slug: 'personal-team',
+                  org: { name: 'Personal org' },
                 },
               },
             ]

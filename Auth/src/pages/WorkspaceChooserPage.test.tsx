@@ -30,11 +30,18 @@ const TEST_CONFIG = {
   language_config: 'en',
 };
 
+/** `creatable_orgs` defaults to empty so the existing cases keep reading as the payloads they are. */
+type ChooserFixture = Omit<WorkspaceChoices, 'creatable_orgs'> &
+  Partial<Pick<WorkspaceChoices, 'creatable_orgs'>>;
+
 function renderChooser(
-  choices: WorkspaceChoices | null,
+  fixture: ChooserFixture | null,
   pendingEmail: string | null = 'jo@example.com',
   teamHint?: string,
 ): string {
+  const choices: WorkspaceChoices | null = fixture
+    ? { creatable_orgs: [], ...fixture }
+    : null;
   const search = teamHint
     ? `?config_url=https%3A%2F%2Fclient.example.com%2Fauth-config&team_hint=${encodeURIComponent(teamHint)}`
     : '?config_url=https%3A%2F%2Fclient.example.com%2Fauth-config';
@@ -165,6 +172,7 @@ describe('WorkspaceChooserPage SSR rendering', () => {
       ],
       pending_invites: [],
       can_create_org: false,
+      creatable_orgs: [],
     };
 
     it('auto-selects the hinted team when it matches by teamId', () => {
@@ -188,5 +196,61 @@ describe('WorkspaceChooserPage SSR rendering', () => {
       expect(html).toContain('Backend Team');
       expect(html).toContain('Design');
     });
+  });
+
+  // "org and team should be different — org is a level above": the chooser offers creation per
+  // organisation the server marked creatable, and names the org so two same-named workspaces in
+  // different orgs are distinguishable.
+  it('offers a create-workspace card inside each org the server marked creatable', () => {
+    const html = renderChooser({
+      teams: [
+        { teamId: 't1', orgId: 'o1', name: 'General', role: 'admin', orgName: 'Acme' },
+        { teamId: 't2', orgId: 'o2', name: 'General', role: 'member', orgName: 'Globex' },
+      ],
+      pending_invites: [],
+      can_create_org: false,
+      creatable_orgs: [{ orgId: 'o1', orgName: 'Acme' }],
+    });
+
+    expect(html).toContain('Acme');
+    expect(html).toContain('Globex');
+    expect(html).toContain('Add a workspace to Acme');
+    // Not an owner/admin of Globex — no creation offered there.
+    expect(html).not.toContain('Add a workspace to Globex');
+  });
+
+  // Two teams, because a single-team/no-invite payload auto-selects and never renders the chooser
+  // (design §11.2) — creation is offered to users who actually land on this screen.
+  it('offers creation for an org the user has no workspace in yet', () => {
+    const html = renderChooser({
+      teams: [
+        { teamId: 't1', orgId: 'o1', name: 'General', role: 'admin', orgName: 'Acme' },
+        { teamId: 't2', orgId: 'o1', name: 'Support', role: 'admin', orgName: 'Acme' },
+      ],
+      pending_invites: [],
+      can_create_org: false,
+      creatable_orgs: [{ orgId: 'o2', orgName: 'Initech' }],
+    });
+
+    expect(html).toContain('Add a workspace to Initech');
+  });
+
+  it('renders the workspace avatar image rather than the initials badge', () => {
+    const html = renderChooser({
+      teams: [
+        {
+          teamId: 't1',
+          orgId: 'o1',
+          name: 'Backend Team',
+          role: 'member',
+          avatarImageUrl: '/teams/t1/avatar',
+        },
+        { teamId: 't2', orgId: 'o1', name: 'Frontend Team', role: 'member' },
+      ],
+      pending_invites: [],
+      can_create_org: false,
+    });
+
+    expect(html).toContain('src="/teams/t1/avatar"');
   });
 });

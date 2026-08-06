@@ -206,6 +206,16 @@ export const avatarEndpoints: EndpointSchema[] = [
   },
   {
     method: 'GET',
+    path: '/teams/:teamId/avatar',
+    description:
+      "Image bytes for a workspace (team) avatar with no credential at all — the only unauthenticated avatar route, so a browser can render it from a plain <img src>. This is what the auth-window workspace chooser uses (its page holds no bearer of any class). Not an existence oracle: an unknown or deleted team id renders the same deterministic generated SVG a real team with no image gets, so every id answers 200 with an image. Rate-limited per IP (300/hour).",
+    auth: 'none (public)',
+    query: IMAGE_QUERY,
+    response: IMAGE_RESPONSE,
+    notes: `${TEAM_RESOLUTION_NOTE} No config_url is accepted here, so the generated style is always the platform default rather than a domain's avatars.default_style — an anonymous caller must not be able to aim the config fetcher.`,
+  },
+  {
+    method: 'GET',
     path: '/domain/teams/:teamId/avatar',
     description:
       "Image bytes for a team's (company) avatar with no end-user context — for backend rendering. The team's organisation must belong to the authenticated domain; anything else is the standard generic 404.",

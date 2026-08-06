@@ -352,10 +352,13 @@ These payloads deliberately carry no avatar URL:
 - **The frozen billing-statement protocol package payloads.** Their schemas reject unknown
   properties; a change there is a protocol version bump, not an additive field.
 - **Admin login-logs**, whose shape drops `userId` entirely.
-- **Auth-popup chooser payloads** — `/auth/session-choices`, `/auth/verify-code`,
-  `/auth/select-team`, the `/auth/login` chooser, and `/org/me` `pending_invites.invitedBy`. These
-  render in the browser popup: there is no credentialed fetch available there, and the inviter
-  entry carries no user id.
+- **The user identities in auth-popup chooser payloads** — `/auth/session-choices`,
+  `/auth/verify-code`, `/auth/select-team`, the `/auth/login` chooser, and `/org/me`
+  `pending_invites.invitedBy`. These render in the browser popup: there is no credentialed fetch
+  available there, and the inviter entry carries no user id. The **teams** in those same payloads
+  are the exception and do carry `avatarImageUrl`, in the credential-free `/teams/:teamId/avatar`
+  form of §11.3 — that route exists precisely so the chooser can draw real workspace logos. No
+  equivalent public user-avatar route exists, so the user exclusion stands.
 - **Invite rows for invitees who have no user account yet.** There is no user to render, and
   minting a URL for a non-existent id would be a lie.
 
@@ -431,6 +434,20 @@ multipart field `file`, generic errors.
 | GET | `/org/organisations/:orgId/teams/:teamId/avatar` | domain hash bearer + `X-UOA-Access-Token` + verified config (`?domain=`, `?config_url=`) | any ACTIVE member of the org — the same chain and visibility as `GET .../teams/:teamId` |
 | PUT / DELETE | `/org/organisations/:orgId/teams/:teamId/avatar` | same chain | org **owner/admin** only — the same authorization as `PUT .../teams/:teamId` |
 | GET / PUT / DELETE | `/internal/admin/teams/:teamId/avatar` | admin superuser bearer | operators, any team |
+| GET | `/teams/:teamId/avatar` | **none — public** | the auth-window chooser, and anything else rendering a workspace logo in a browser |
+
+**The public read.** Every other row needs a bearer, which a plain `<img src>` cannot send — that
+is why §9 originally excluded the chooser payloads from carrying any image URL at all. This route
+closes that gap: no credential, no `?domain=`, resolved by team id alone, so the auth popup can
+render the real workspace logo instead of an initials badge.
+
+It is deliberately **not an existence oracle**: an unknown or deleted team id renders the same
+deterministic generated SVG a real team with no image gets, so every id answers 200 with an image
+and none can be probed. What it does expose, to anyone holding a team id (an unguessable cuid), is
+that workspace's logo — accepted knowingly as the cost of logos in the chooser. Reads are
+rate-limited 300/hour per IP, the only avatar GET with a budget of its own, and no `config_url` is
+accepted (an anonymous caller must not be able to aim the config fetcher's DNS/HTTPS/JWKS work), so
+the generated style is always the platform default rather than a domain's `avatars.default_style`.
 
 **Which management path to use.** Reach for `/domain/teams/:teamId/avatar` from a product
 backend, and for the `/org/*` routes only when the caller actually holds a live end-user access
@@ -479,6 +496,10 @@ URL that always resolves to an image, fetchable with the same credential class t
 The field is derived, never null, and `PUBLIC_BASE_URL`-relative exactly like the user forms.
 `iconUrl` is untouched and keeps its own meaning: the external URL an owner set, or `null`.
 
-The §9 exclusions hold unchanged — the auth-popup chooser payloads (`/auth/session-choices`,
-`/auth/verify-code`, `/auth/select-team`, the `/auth/login` chooser, `/org/me`) and the frozen
-billing-statement protocol packages carry no team avatar URL either.
+The auth-popup chooser's `teams[]` (`/auth/session-choices`, `/auth/verify-code`,
+`/auth/select-team`, the `/auth/login` chooser) carry `avatarImageUrl` too, but in the **public**
+`<PUBLIC_BASE_URL>/teams/<teamId>/avatar` form of §11.3 rather than a credential-matched one — the
+chooser's reader holds no credential at all, which is the whole reason that route exists. Their
+*user* identities keep the §9 exclusion, and the frozen billing-statement protocol packages still
+carry no team avatar URL: their schemas reject unknown properties, so a change there is a version
+bump.

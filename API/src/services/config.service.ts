@@ -248,6 +248,12 @@ const ClientConfigSchema = RequiredConfigSchema.extend({
       user_needs_team: z.boolean().default(false),
       auto_create_personal_org_on_first_login: z.boolean().default(false),
       allow_user_create_org: z.boolean().default(false),
+      // Opt-in for creating a further workspace (team) inside an org the user is already an
+      // ACTIVE owner/admin of, straight from the SSO workspace chooser. Separate from
+      // `allow_user_create_org`, which is about a user's *first* org: this one adds a write path
+      // to an existing tenant, so a domain opts into it explicitly and the role check still
+      // applies on top. Default false — no domain gains the popup write path silently.
+      allow_user_create_team: z.boolean().default(false),
       // Opt-in for backend mode on `/org/*` (brief §24.8): when true, this
       // domain's product backend may call `/org/*` with NO `X-UOA-Access-Token`
       // and be authorised by the domain pairing alone. Default false, so no
@@ -281,6 +287,7 @@ const ClientConfigSchema = RequiredConfigSchema.extend({
       user_needs_team: false,
       auto_create_personal_org_on_first_login: false,
       allow_user_create_org: false,
+      allow_user_create_team: false,
       backend_org_management: false,
       pending_invites_block_auto_create: true,
       max_teams_per_org: 100,

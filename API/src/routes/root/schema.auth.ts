@@ -89,10 +89,12 @@ export const authEndpoints: EndpointSchema[] = [
       'login_token?':
         'short-lived, one-time chooser capability (only when config.login_flow.workspace_selection="auto") — binds this verified user/domain to the exact config URL + parsed-config fingerprint, redirect, PKCE, remember-me, request-access, expiry, and JTI; authorizes no other continuation',
       'teams?':
-        "array of { teamId, orgId, name, slug, role, iconUrl } — this user's ACTIVE team memberships on this domain (only with login_token)",
+        "array of { teamId, orgId, name, slug, role, iconUrl, avatarImageUrl } — this user's ACTIVE team memberships on this domain (only with login_token). avatarImageUrl is the public /teams/:teamId/avatar form (never null, no credential needed) — the chooser renders in a popup that holds no bearer",
       'pending_invites?':
         'array of { inviteId, teamName, invitedBy } — pending invites for this email on this domain (only with login_token)',
       'can_create_org?': 'boolean (only with login_token)',
+      'creatable_orgs?':
+        'array of { orgId, orgName } — organisations this user may add a workspace to via POST /auth/create-team (ACTIVE owner/admin there + org_features.allow_user_create_team). Empty unless the domain opted in. Distinct from can_create_org, which is about creating a first organisation',
       ok: 'true (when workspace_selection is "off" — finalizes immediately like /auth/login)',
       code: 'authorization code (workspace_selection "off" branch only)',
       redirect_to: 'full redirect URL with code (workspace_selection "off" branch only)',
@@ -167,6 +169,37 @@ export const authEndpoints: EndpointSchema[] = [
   },
   {
     method: 'POST',
+    path: '/auth/create-team',
+    description:
+      "Create and immediately select a FURTHER workspace (team) inside an organisation the verified user already belongs to, from the hosted SSO chooser. The sibling of /auth/create-workspace, which creates a user's first organisation: an organisation is the level above a workspace, so this route writes into an existing tenant and is authorized accordingly — the acting user must be an ACTIVE owner/admin of org_id (the same rule POST /org/organisations/:orgId/teams enforces), the organisation must belong to this config's domain, and the domain must set org_features.allow_user_create_team. The org's max_teams_per_org cap still applies. Same transaction envelope as /auth/create-workspace: the bridge token is claimed alongside the new team, the creator's ACTIVE team membership, the workspace-scope validation, and required 2FA/code issuance. The chooser's creatable_orgs lists exactly the organisations this will accept.",
+    auth: 'config_url query param + login_token body field',
+    query: {
+      redirect_url: 'string (optional, redirect_uri also accepted)',
+      code_challenge: 'string (required) — exactly 43-char PKCE S256 challenge',
+      code_challenge_method: '"S256" (required)',
+      request_access:
+        'string (optional) — when truthy, auto-grant or create a pending access request',
+    },
+    body: {
+      login_token: 'string (required) — bridge token from /auth/verify-code or /auth/login',
+      org_id:
+        'string (required) — an organisation from the chooser\'s creatable_orgs; anything else is the generic auth failure',
+      name: 'string (required, 1–100 characters after trimming) — workspace name; UOA derives the team slug, local to the organisation',
+      remember_me:
+        'boolean (optional) — when present must equal the value signed at identity verification; omission uses that signed value',
+    },
+    response: {
+      ok: 'true',
+      code: 'authorization code carrying the new selected workspace scope when issuance completes',
+      redirect_to: 'full redirect URL with code',
+      twofa_required: 'true when the org requires enrolled 2FA',
+      twofa_token: 'challenge token (only if 2FA needed)',
+      twofa_enroll_required: 'true when the org requires 2FA and the user is not enrolled',
+      access_request_status: '"pending" when request_access created a pending access request',
+    },
+  },
+  {
+    method: 'POST',
     path: '/auth/session-choices',
     description:
       'Hydrate the workspace-chooser payload for a login_token bridge seeded via a redirect, since a GET redirect cannot inline chooser JSON. Verifies signature, expiry, exact config URL, and the canonical fingerprint of the currently verified parsed config. This read is deliberately non-consuming; only final selection claims the hashed JTI. Introduces no enumeration because it answers only for an already-verified capability.',
@@ -178,10 +211,12 @@ export const authEndpoints: EndpointSchema[] = [
     },
     response: {
       teams:
-        "array of { teamId, orgId, name, slug, role, iconUrl } — this user's ACTIVE team memberships on this domain",
+        "array of { teamId, orgId, name, slug, role, iconUrl, avatarImageUrl } — this user's ACTIVE team memberships on this domain. avatarImageUrl is the public /teams/:teamId/avatar form (never null, no credential needed)",
       pending_invites:
         'array of { inviteId, teamName, invitedBy } — pending invites for this email on this domain',
       can_create_org: 'boolean',
+      creatable_orgs:
+        'array of { orgId, orgName } — organisations this user may add a workspace to via POST /auth/create-team',
     },
   },
   {
@@ -236,6 +271,8 @@ export const authEndpoints: EndpointSchema[] = [
       'teams?': 'array of { teamId, orgId, name, slug, role, iconUrl } (only with login_token)',
       'pending_invites?': 'array of { inviteId, teamName, invitedBy } (only with login_token)',
       'can_create_org?': 'boolean (only with login_token)',
+      'creatable_orgs?':
+        'array of { orgId, orgName } — organisations this user may add a workspace to via POST /auth/create-team (ACTIVE owner/admin there + org_features.allow_user_create_team). Empty unless the domain opted in. Distinct from can_create_org, which is about creating a first organisation',
     },
   },
   {

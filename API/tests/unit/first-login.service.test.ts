@@ -263,7 +263,12 @@ describe('buildWorkspaceChoices', () => {
       { policy: CLIENT_DOMAIN_WORKSPACE_POLICY, prisma },
     );
 
-    expect(result).toEqual({ teams: [], pending_invites: [], can_create_org: false });
+    expect(result).toEqual({
+      teams: [],
+      pending_invites: [],
+      can_create_org: false,
+      creatable_orgs: [],
+    });
     expect(prisma.teamMember.findMany).not.toHaveBeenCalled();
   });
 
@@ -280,6 +285,7 @@ describe('buildWorkspaceChoices', () => {
               slug: 'backend-team',
               orgId: 'org-1',
               iconUrl: 'https://cdn.example.com/a.png',
+              org: { name: 'Acme' },
             },
           },
         ]),
@@ -300,11 +306,19 @@ describe('buildWorkspaceChoices', () => {
           name: 'Backend Team',
           role: 'owner',
           iconUrl: 'https://cdn.example.com/a.png',
+          // Docs/Auth/avatars.md §11.4: the public, credential-free avatar form the chooser can
+          // actually fetch. Always present, and independent of whether iconUrl is set — the route
+          // resolves uploaded → proxied iconUrl → generated behind this one URL.
+          avatarImageUrl: '/teams/team-1/avatar',
+          orgName: 'Acme',
           slug: 'backend-team',
         },
       ],
       pending_invites: [],
       can_create_org: true,
+      // The domain has not set `allow_user_create_team`, so no org is offered for creation and
+      // the org-membership read never runs.
+      creatable_orgs: [],
     });
     expect(prisma.teamMember.findMany).toHaveBeenCalledWith({
       where: {
@@ -315,7 +329,9 @@ describe('buildWorkspaceChoices', () => {
       select: {
         teamId: true,
         teamRole: true,
-        team: { select: { name: true, slug: true, orgId: true, iconUrl: true } },
+        team: {
+          select: { name: true, slug: true, orgId: true, iconUrl: true, org: { select: { name: true } } },
+        },
       },
     });
   });
@@ -388,6 +404,7 @@ describe('buildWorkspaceChoices', () => {
               slug: 'nessie-works',
               orgId: 'org-nessie',
               iconUrl: null,
+              org: { name: 'Nessie' },
             },
           },
           {
@@ -398,6 +415,7 @@ describe('buildWorkspaceChoices', () => {
               slug: 'second-team',
               orgId: 'org-second',
               iconUrl: null,
+              org: { name: 'Second Co' },
             },
           },
         ]),
@@ -434,7 +452,9 @@ describe('buildWorkspaceChoices', () => {
       select: {
         teamId: true,
         teamRole: true,
-        team: { select: { name: true, slug: true, orgId: true, iconUrl: true } },
+        team: {
+          select: { name: true, slug: true, orgId: true, iconUrl: true, org: { select: { name: true } } },
+        },
       },
     });
     expect(shouldPresentWorkspaceChooser(result)).toBe(true);

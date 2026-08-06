@@ -584,6 +584,71 @@ describe.skipIf(!hasDatabase)('team avatar routes', () => {
     });
   });
 
+  describe('GET /teams/:teamId/avatar (public)', () => {
+    it('serves the workspace image with no credential at all', async () => {
+      const { domainHash, team, query } = await seedWorkspace();
+
+      const generated = await app!.inject({ method: 'GET', url: `/teams/${team.id}/avatar` });
+      expect(generated.statusCode).toBe(200);
+      expect(generated.headers['x-uoa-avatar-source']).toBe('generated');
+      expect(generated.headers['content-type']).toBe('image/svg+xml; charset=utf-8');
+      expect(generated.headers['x-content-type-options']).toBe('nosniff');
+      expect(generated.headers['content-security-policy']).toBe(SVG_CSP);
+
+      const bytes = png(0x5a);
+      const upload = multipartFile(bytes);
+      const put = await app!.inject({
+        method: 'PUT',
+        url: `/domain/teams/${team.id}/avatar?domain=${encodeURIComponent(DOMAIN)}`,
+        headers: { authorization: `Bearer ${domainHash}`, 'content-type': upload.contentType },
+        payload: upload.body,
+      });
+      expect(put.statusCode).toBe(200);
+
+      // The uploaded image is now readable by anyone holding the team id — the accepted trade
+      // (Docs/Auth/avatars.md §11.3) that lets the chooser render a real logo.
+      const uploaded = await app!.inject({ method: 'GET', url: `/teams/${team.id}/avatar` });
+      expect(uploaded.statusCode).toBe(200);
+      expect(uploaded.headers['x-uoa-avatar-source']).toBe('uploaded');
+      expect(uploaded.rawPayload.equals(bytes)).toBe(true);
+
+      expect(query).toBeTruthy();
+    });
+
+    it('is not an existence oracle — an unknown team id renders the same generated image', async () => {
+      const unknown = await app!.inject({ method: 'GET', url: '/teams/team_does_not_exist/avatar' });
+      expect(unknown.statusCode).toBe(200);
+      expect(unknown.headers['x-uoa-avatar-source']).toBe('generated');
+      expect(unknown.body).toContain('<svg');
+
+      // Deterministic per id, exactly like a real team's generated image: same id, same bytes.
+      const again = await app!.inject({ method: 'GET', url: '/teams/team_does_not_exist/avatar' });
+      expect(again.body).toBe(unknown.body);
+
+      const other = await app!.inject({ method: 'GET', url: '/teams/team_other_unknown/avatar' });
+      expect(other.statusCode).toBe(200);
+      expect(other.body).not.toBe(unknown.body);
+    });
+
+    it('honours ?style= and ?size= but takes no config_url', async () => {
+      const { team } = await seedWorkspace();
+
+      const styled = await app!.inject({
+        method: 'GET',
+        url: `/teams/${team.id}/avatar?style=rings&size=128`,
+      });
+      expect(styled.statusCode).toBe(200);
+      expect(styled.body).toContain('width="128"');
+
+      // A public caller must not be able to aim the config fetcher at a URL of its choosing.
+      const withConfig = await app!.inject({
+        method: 'GET',
+        url: `/teams/${team.id}/avatar?config_url=${encodeURIComponent(CONFIG_URL)}`,
+      });
+      expect(withConfig.statusCode).toBe(400);
+    });
+  });
+
   describe('GET/PUT/DELETE /internal/admin/teams/:teamId/avatar', () => {
     it('serves, replaces and clears any team avatar, writing audit entries', async () => {
       const { team } = await seedWorkspace();

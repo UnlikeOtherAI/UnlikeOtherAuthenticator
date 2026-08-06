@@ -1,29 +1,103 @@
 import React from 'react';
 
+import { CreateTeamCard } from './CreateTeamCard.js';
 import { WorkspaceCard } from './WorkspaceCard.js';
-import type { TeamChoice } from '../../hooks/use-popup.js';
+import type { CreatableOrgChoice, TeamChoice } from '../../hooks/use-popup.js';
 import type { AuthFlowQuery } from '../../utils/api.js';
 import type { WorkspaceResponseOutcome } from '../../utils/workspace-response.js';
 
-/** Phase 3c (design §11.2): vertical stack of `WorkspaceCard`s, server order preserved. */
+type OrgSection = {
+  orgId: string;
+  orgName: string | null;
+  teams: TeamChoice[];
+  creatable: boolean;
+};
+
+/**
+ * Groups the chooser by organisation, preserving the server's team order within each.
+ *
+ * An org is the level above a workspace, and two orgs can each have a workspace called "General" —
+ * without the grouping those rows are indistinguishable. Orgs appear in the order their first
+ * workspace does; an org the user may create in but has no workspace in yet comes last.
+ */
+function buildSections(
+  teams: TeamChoice[],
+  creatableOrgs: CreatableOrgChoice[],
+): OrgSection[] {
+  const creatableById = new Map(creatableOrgs.map((org) => [org.orgId, org]));
+  const sections = new Map<string, OrgSection>();
+
+  for (const team of teams) {
+    const existing = sections.get(team.orgId);
+    if (existing) {
+      existing.teams.push(team);
+      continue;
+    }
+    sections.set(team.orgId, {
+      orgId: team.orgId,
+      orgName: team.orgName ?? creatableById.get(team.orgId)?.orgName ?? null,
+      teams: [team],
+      creatable: creatableById.has(team.orgId),
+    });
+  }
+
+  for (const org of creatableOrgs) {
+    if (sections.has(org.orgId)) continue;
+    sections.set(org.orgId, {
+      orgId: org.orgId,
+      orgName: org.orgName,
+      teams: [],
+      creatable: true,
+    });
+  }
+
+  return [...sections.values()];
+}
+
+/** Phase 3c (design §11.2): the chooser's workspace stack, grouped by owning organisation. */
 export function WorkspaceList(props: {
   teams: TeamChoice[];
+  creatableOrgs?: CreatableOrgChoice[];
   loginToken: string;
   query: AuthFlowQuery;
   onOutcome: (outcome: WorkspaceResponseOutcome) => void;
   disabled?: boolean;
 }): React.JSX.Element {
+  const creatableOrgs = props.creatableOrgs ?? [];
+  const sections = buildSections(props.teams, creatableOrgs);
+  // One org needs no heading — the grouping only earns its space when it disambiguates.
+  const showOrgNames = sections.length > 1;
+
   return (
-    <div className="flex flex-col gap-3">
-      {props.teams.map((team) => (
-        <WorkspaceCard
-          key={team.teamId}
-          team={team}
-          loginToken={props.loginToken}
-          query={props.query}
-          onOutcome={props.onOutcome}
-          disabled={props.disabled}
-        />
+    <div className="flex flex-col gap-5">
+      {sections.map((section) => (
+        <div key={section.orgId} className="flex flex-col gap-3">
+          {showOrgNames && section.orgName ? (
+            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--uoa-color-muted)]">
+              {section.orgName}
+            </p>
+          ) : null}
+          {section.teams.map((team) => (
+            <WorkspaceCard
+              key={team.teamId}
+              team={team}
+              loginToken={props.loginToken}
+              query={props.query}
+              onOutcome={props.onOutcome}
+              disabled={props.disabled}
+            />
+          ))}
+          {section.creatable ? (
+            <CreateTeamCard
+              orgId={section.orgId}
+              orgName={section.orgName ?? ''}
+              loginToken={props.loginToken}
+              query={props.query}
+              onOutcome={props.onOutcome}
+              disabled={props.disabled}
+            />
+          ) : null}
+        </div>
       ))}
     </div>
   );

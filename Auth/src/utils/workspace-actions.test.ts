@@ -184,6 +184,8 @@ describe('submitSessionChoices', () => {
       teams: [{ teamId: 't1', orgId: 'o1', name: 'Team One', role: 'member' }],
       pending_invites: [],
       can_create_org: true,
+      // A server that hasn't shipped `creatable_orgs` yet decodes to empty, not undefined.
+      creatable_orgs: [],
     });
   });
 
