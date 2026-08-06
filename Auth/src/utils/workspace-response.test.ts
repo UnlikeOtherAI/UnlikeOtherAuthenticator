@@ -273,6 +273,10 @@ describe('applyWorkspaceOutcome', () => {
     expect(actions.setWorkspaceChoices).toHaveBeenCalledWith(null);
     expect(actions.setNotice).toHaveBeenCalledWith('notice.sessionExpired');
     expect(actions.setView).toHaveBeenCalledWith('login');
+    // setView clears notices, so the reason must be set after the move or it never survives.
+    expect(actions.setView.mock.invocationCallOrder[0]).toBeLessThan(
+      actions.setNotice.mock.invocationCallOrder[0]!,
+    );
     // Not a redirect out of the popup: config_url, redirect_url and PKCE are still in the URL, so
     // signing in again resumes this authorization request instead of restarting it.
     expect(actions.redirectTo).not.toHaveBeenCalled();

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 
 import { LoginForm } from '../components/form/LoginForm.js';
 import { SocialButtons } from '../components/form/SocialButtons.js';
@@ -10,12 +10,8 @@ import { isEmailPasswordEnabled } from '../utils/auth-config.js';
 export function LoginPage(): React.JSX.Element {
   const { classNames } = useTheme();
   const { t } = useTranslation();
-  const { config, notice, setNotice } = usePopup();
+  const { config, notice } = usePopup();
   const showEmailPassword = isEmailPasswordEnabled(config);
-
-  // One-shot: landing here after an expired chooser bridge should say why, but the reason must not
-  // outlive the visit — clearing on unmount keeps it off a later pass through this view.
-  useEffect(() => () => setNotice(null), [setNotice]);
 
   return (
     <div>

@@ -322,7 +322,13 @@ export function PopupProvider(props: {
     window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
   }, [parsed.signingToken]);
 
-  const setView = useCallback((v: AuthView) => setViewState(v), []);
+  // Navigating clears any notice, so a reason for landing somewhere cannot leak into a later step
+  // the user walked to themselves. The expired-bridge path therefore sets its notice AFTER the
+  // view change, not before.
+  const setView = useCallback((v: AuthView) => {
+    setNotice(null);
+    setViewState(v);
+  }, []);
   const setPendingEmail = useCallback((email: string | null) => setPendingEmailState(email), []);
   const setLoginToken = useCallback((token: string | null) => setLoginTokenState(token), []);
   const setWorkspaceChoices = useCallback(

@@ -186,8 +186,9 @@ export function applyWorkspaceOutcome(
       // PKCE, so signing in again resumes this same authorization request.
       actions.setWorkspaceChoices(null);
       actions.setLoginToken(null);
-      actions.setNotice('notice.sessionExpired');
+      // Order matters: `setView` clears any pending notice, so the reason is set after the move.
       actions.setView('login');
+      actions.setNotice('notice.sessionExpired');
       return true;
     case 'twofa':
       actions.startTwoFactorVerify(outcome.token);
