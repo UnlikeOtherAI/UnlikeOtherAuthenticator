@@ -33,14 +33,25 @@ export function sendAvatar(
   request: FastifyRequest,
   reply: FastifyReply,
   avatar: ResolvedAvatar,
+  options?: {
+    /**
+     * Omit `X-UOA-Avatar-Source`. Set on the public route: the header would tell an anonymous
+     * caller whether a workspace uploaded a custom logo, and let them watch it change. Every
+     * other avatar route has already authenticated the caller before answering.
+     */
+    hideSource?: boolean;
+  },
 ): FastifyReply {
   reply
     .header('Content-Type', avatar.contentType)
-    .header('X-UOA-Avatar-Source', avatar.source)
     .header('Cache-Control', avatar.cacheControl)
     .header('ETag', avatar.etag)
     .header('X-Content-Type-Options', 'nosniff')
     .header('Content-Disposition', `inline; filename="${avatar.filename}"`);
+
+  if (!options?.hideSource) {
+    reply.header('X-UOA-Avatar-Source', avatar.source);
+  }
 
   if (avatar.isSvg) {
     reply.header('Content-Security-Policy', SVG_CSP);

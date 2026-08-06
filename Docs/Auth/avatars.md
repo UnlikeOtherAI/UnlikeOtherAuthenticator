@@ -443,7 +443,11 @@ render the real workspace logo instead of an initials badge.
 
 It is deliberately **not an existence oracle**: an unknown or deleted team id renders the same
 deterministic generated SVG a real team with no image gets, so every id answers 200 with an image
-and none can be probed. What it does expose, to anyone holding a team id (an unguessable cuid), is
+and existence cannot be probed. `X-UOA-Avatar-Source` is omitted here for the same reason — on the
+credentialed routes it is useful metadata, but to an anonymous caller it would disclose whether a
+workspace uploaded a custom logo and let them watch it change. A team whose owning domain is no
+longer an active `ClientDomain` serves the generated image too: a torn-down tenant stops publishing
+its logo, and still looks like one that never set one. What it does expose, to anyone holding a team id (an unguessable cuid), is
 that workspace's logo — accepted knowingly as the cost of logos in the chooser. Reads are
 rate-limited 300/hour per IP, the only avatar GET with a budget of its own, and no `config_url` is
 accepted (an anonymous caller must not be able to aim the config fetcher's DNS/HTTPS/JWKS work), so

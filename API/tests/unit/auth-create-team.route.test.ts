@@ -28,6 +28,7 @@ const finalizeWithTwoFaPolicyMock = vi.hoisted(() => vi.fn());
 const lockAuthenticationEpochMock = vi.hoisted(() => vi.fn());
 const lockProductWorkspacePolicyMock = vi.hoisted(() => vi.fn());
 const lockWorkspaceScopeMock = vi.hoisted(() => vi.fn());
+const lockOrganisationRowMock = vi.hoisted(() => vi.fn());
 const recordLoginLogMock = vi.hoisted(() => vi.fn());
 
 vi.mock('../../src/middleware/config-verifier.js', () => ({
@@ -61,6 +62,7 @@ vi.mock('../../src/services/product-workspace-policy-lock.service.js', () => ({
 }));
 vi.mock('../../src/services/workspace-scope.service.js', () => ({
   lockAndAssertActiveClientWorkspaceScope: (...args: unknown[]) => lockWorkspaceScopeMock(...args),
+  lockWorkspaceOrganisationRow: (...args: unknown[]) => lockOrganisationRowMock(...args),
 }));
 vi.mock('../../src/services/login-log.service.js', () => ({
   recordLoginLog: (...args: unknown[]) => recordLoginLogMock(...args),
@@ -161,6 +163,7 @@ describe('POST /auth/create-team', () => {
       lockAuthenticationEpochMock,
       lockProductWorkspacePolicyMock,
       lockWorkspaceScopeMock,
+      lockOrganisationRowMock,
       recordLoginLogMock,
     ]) {
       mock.mockReset();
@@ -168,6 +171,8 @@ describe('POST /auth/create-team', () => {
 
     prismaMock.team.findFirst.mockResolvedValue({ id: 'team-new' });
     prismaMock.$queryRaw.mockResolvedValue([]);
+    // The org row lock this route takes before writing (see the route's comment on lock order).
+    lockOrganisationRowMock.mockResolvedValue(true);
     prismaMock.user.findUnique.mockResolvedValue({ twoFaEnabled: false });
     consumeLoginSessionMock.mockResolvedValue(undefined);
     createTeamMock.mockResolvedValue({ id: 'team-new', slug: 'support' });
@@ -283,6 +288,16 @@ describe('POST /auth/create-team', () => {
     const res = await postCreateTeam({ login_token: loginToken, name: 'Support' });
 
     expect(res.statusCode).toBe(400);
+    expect(createTeamMock).not.toHaveBeenCalled();
+  });
+
+  it('refuses when the org row is gone, folded into the same generic failure', async () => {
+    lockOrganisationRowMock.mockResolvedValue(false);
+    const loginToken = await mintLoginToken();
+    const res = await postCreateTeam({ login_token: loginToken, org_id: 'org-1', name: 'Support' });
+
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toEqual({ error: 'Request failed' });
     expect(createTeamMock).not.toHaveBeenCalled();
   });
 });

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { createRateLimiter } from '../../middleware/rate-limiter.js';
 import { resolveSubjectAvatar } from '../../services/avatar-subject.service.js';
 import { resolveTeamAvatar } from '../../services/team-avatar.service.js';
+import type { AvatarStyle } from '../../utils/avatar-svg.js';
 import { AppError } from '../../utils/errors.js';
 import { AvatarImageQueryFields, sendAvatar } from './shared.js';
 
@@ -39,6 +40,14 @@ const publicAvatarRateLimit = createRateLimiter({
   windowMs: 60 * 60 * 1000,
 });
 
+/** The deterministic per-id image, i.e. what a real team with no logo of its own resolves to. */
+function generatedFallback(teamId: string, style: AvatarStyle | null, size: number | null) {
+  return resolveSubjectAvatar(
+    { id: teamId, uploaded: null, externalUrl: null },
+    { style, configDefaultStyle: null, size },
+  );
+}
+
 export function registerPublicTeamAvatarRoute(app: FastifyInstance): void {
   app.get(
     '/teams/:teamId/avatar',
@@ -46,6 +55,29 @@ export function registerPublicTeamAvatarRoute(app: FastifyInstance): void {
     async (request, reply) => {
       const { teamId } = ParamsSchema.parse(request.params);
       const query = QuerySchema.parse(request.query);
+
+      // A disabled tenant must stop serving its logo. Org rows have no status of their own, but
+      // the owning ClientDomain does, and it is the lifecycle switch every other surface honours.
+      // Falling back to the generated image rather than 404 keeps the non-oracle property: a
+      // torn-down workspace looks exactly like one that never set a logo.
+      const team = await request.adminDb.team.findFirst({
+        where: { id: teamId },
+        select: { org: { select: { domain: true } } },
+      });
+      const clientDomain = team
+        ? await request.adminDb.clientDomain.findUnique({
+            where: { domain: team.org.domain },
+            select: { status: true },
+          })
+        : null;
+      if (clientDomain?.status !== 'active') {
+        return sendAvatar(
+          request,
+          reply,
+          await generatedFallback(teamId, query.style ?? null, query.size ?? null),
+          { hideSource: true },
+        );
+      }
 
       const avatar = await resolveTeamAvatar({
         teamId,
@@ -56,15 +88,12 @@ export function registerPublicTeamAvatarRoute(app: FastifyInstance): void {
         // Same generated image an existing team with no upload and no icon would serve, so an
         // unknown id is indistinguishable from a real workspace that never set a logo.
         if (err instanceof AppError && err.message === 'TEAM_NOT_FOUND') {
-          return await resolveSubjectAvatar(
-            { id: teamId, uploaded: null, externalUrl: null },
-            { style: query.style ?? null, configDefaultStyle: null, size: query.size ?? null },
-          );
+          return await generatedFallback(teamId, query.style ?? null, query.size ?? null);
         }
         throw err;
       });
 
-      return sendAvatar(request, reply, avatar);
+      return sendAvatar(request, reply, avatar, { hideSource: true });
     },
   );
 }

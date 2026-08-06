@@ -590,10 +590,11 @@ describe.skipIf(!hasDatabase)('team avatar routes', () => {
 
       const generated = await app!.inject({ method: 'GET', url: `/teams/${team.id}/avatar` });
       expect(generated.statusCode).toBe(200);
-      expect(generated.headers['x-uoa-avatar-source']).toBe('generated');
       expect(generated.headers['content-type']).toBe('image/svg+xml; charset=utf-8');
       expect(generated.headers['x-content-type-options']).toBe('nosniff');
       expect(generated.headers['content-security-policy']).toBe(SVG_CSP);
+      // Anonymous callers do not get to learn whether this workspace uploaded a logo.
+      expect(generated.headers['x-uoa-avatar-source']).toBeUndefined();
 
       const bytes = png(0x5a);
       const upload = multipartFile(bytes);
@@ -609,16 +610,45 @@ describe.skipIf(!hasDatabase)('team avatar routes', () => {
       // (Docs/Auth/avatars.md §11.3) that lets the chooser render a real logo.
       const uploaded = await app!.inject({ method: 'GET', url: `/teams/${team.id}/avatar` });
       expect(uploaded.statusCode).toBe(200);
-      expect(uploaded.headers['x-uoa-avatar-source']).toBe('uploaded');
+      expect(uploaded.headers['x-uoa-avatar-source']).toBeUndefined();
       expect(uploaded.rawPayload.equals(bytes)).toBe(true);
 
       expect(query).toBeTruthy();
     });
 
+    it('stops serving a real logo once the owning domain is no longer active', async () => {
+      const { domainHash, team } = await seedWorkspace();
+
+      const bytes = png(0x3c);
+      const upload = multipartFile(bytes);
+      const put = await app!.inject({
+        method: 'PUT',
+        url: `/domain/teams/${team.id}/avatar?domain=${encodeURIComponent(DOMAIN)}`,
+        headers: { authorization: `Bearer ${domainHash}`, 'content-type': upload.contentType },
+        payload: upload.body,
+      });
+      expect(put.statusCode).toBe(200);
+
+      await handle!.prisma.clientDomain.update({
+        where: { domain: DOMAIN },
+        data: { status: 'disabled' },
+      });
+
+      // Not a 404 — a torn-down tenant must look like a workspace that never set a logo, or the
+      // route becomes the existence oracle it is designed not to be.
+      const after = await app!.inject({ method: 'GET', url: `/teams/${team.id}/avatar` });
+      expect(after.statusCode).toBe(200);
+      expect(after.headers['content-type']).toBe('image/svg+xml; charset=utf-8');
+      expect(after.rawPayload.equals(bytes)).toBe(false);
+
+      const unknown = await app!.inject({ method: 'GET', url: `/teams/${team.id}-nope/avatar` });
+      expect(unknown.statusCode).toBe(200);
+    });
+
     it('is not an existence oracle — an unknown team id renders the same generated image', async () => {
       const unknown = await app!.inject({ method: 'GET', url: '/teams/team_does_not_exist/avatar' });
       expect(unknown.statusCode).toBe(200);
-      expect(unknown.headers['x-uoa-avatar-source']).toBe('generated');
+      expect(unknown.headers['x-uoa-avatar-source']).toBeUndefined();
       expect(unknown.body).toContain('<svg');
 
       // Deterministic per id, exactly like a real team's generated image: same id, same bytes.

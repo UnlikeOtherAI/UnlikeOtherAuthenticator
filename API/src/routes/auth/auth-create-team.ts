@@ -18,7 +18,10 @@ import { addTeamMember } from '../../services/team.service.members.js';
 import { createTeam } from '../../services/team.service.teams.js';
 import { lockRequiredTeamPlacementUser } from '../../services/user-team-requirement.service.js';
 import { finalizeWithTwoFaPolicy } from '../../services/workspace-finalize.service.js';
-import { lockAndAssertActiveClientWorkspaceScope } from '../../services/workspace-scope.service.js';
+import {
+  lockAndAssertActiveClientWorkspaceScope,
+  lockWorkspaceOrganisationRow,
+} from '../../services/workspace-scope.service.js';
 import { selectRedirectUrl } from '../../services/authorization-code.service.js';
 import { parseRequiredPkceChallenge } from '../../utils/pkce.js';
 import { AppError } from '../../utils/errors.js';
@@ -153,6 +156,17 @@ export function registerAuthCreateTeamRoute(app: FastifyInstance): void {
           prisma: tx,
           now: new Date(),
         });
+
+        // Take the org row before writing into it, which does two things. It puts this route on
+        // the same org → team → membership lock order `deleteTeam` uses, so a concurrent delete
+        // and create on one org queue instead of risking a cycle. And it serializes the
+        // `max_teams_per_org` count-then-insert inside `createTeam`, which is otherwise a
+        // read-outside-any-lock: two admins of the same org could each read `count = cap - 1` and
+        // both insert. A missing row means the org is gone; fold it into the generic failure
+        // rather than leaking which of "no such org" or "not yours" it was.
+        if (!(await lockWorkspaceOrganisationRow(org_id, { prisma: tx }))) {
+          rejectTeamCreation();
+        }
 
         // `createTeam` is the authorization boundary: it resolves the org against THIS config's
         // domain and runs `requireTeamManager` on the acting user, so a login token for one domain
