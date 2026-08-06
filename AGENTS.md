@@ -21,6 +21,11 @@ Before doing any work, you **must** read the following file:
 
 Do not skip these. Do not skim. Read them in full before writing any code or making any decisions.
 
+Read **`Docs/deployment.md`** as well before touching anything that has to reach production, or
+before concluding that a change "did not work". UOA is one half of an estate: a capability added
+here only takes effect once the consuming product redeploys and serves a new config JWT, and
+several of those pipelines have sat broken for weeks without anyone noticing.
+
 ---
 
 ## Rules for Agents

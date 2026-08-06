@@ -20,6 +20,7 @@ These documents define **what** we're building and **how**:
 - **[`Docs/Admin/README.md`](./Docs/Admin/README.md)** — Admin template baseline. Identifies the existing HTML templates that the React admin app must translate rather than redesign.
 - **[`Docs/Requirements/roles-and-acl.md`](./Docs/Requirements/roles-and-acl.md)** — Role and admin-auth requirements. Defines `system_admin`, `/internal/admin/*` auth boundaries, and org/team role semantics.
 - **[`Docs/deploy.md`](./Docs/deploy.md)** — Deployment to Google Cloud Run (build, deploy, env vars, service config).
+- **[`Docs/deployment.md`](./Docs/deployment.md)** — How the whole product estate deploys: UOA on Cloud Run, every consuming product on the shared Hetzner host, and how to tell when a change is on `main` but not live. Read this before concluding a UOA change "does not work" — a capability only takes effect once the *product* redeploys and serves a new config JWT.
 - **[`Docs/api-2.0-implementation-plan.md`](./Docs/api-2.0-implementation-plan.md)** — Branch-specific implementation plan for `api-2.0`. Read this as the execution guide when working on that branch.
 
 Before making any architectural, design, or implementation decisions, read all documents above in full.
