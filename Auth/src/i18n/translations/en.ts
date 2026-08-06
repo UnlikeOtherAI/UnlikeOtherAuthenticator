@@ -71,8 +71,7 @@ export const en = {
   'workspace.createOrg.submit': 'Create workspace',
   'workspace.createOrg.cancel': 'Cancel',
 
-  'workspace.createTeam.title': 'Create a new workspace',
-  'workspace.createTeam.subtitle': 'Add a workspace to {org}',
+  'workspace.orgSection.addWorkspace': 'Add a workspace to {org}',
   'workspace.createTeam.nameLabel': 'Workspace name',
   'workspace.createTeam.submit': 'Create workspace',
   'workspace.createTeam.cancel': 'Cancel',

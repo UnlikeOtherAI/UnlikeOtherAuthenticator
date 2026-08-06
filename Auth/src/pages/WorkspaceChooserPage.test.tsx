@@ -214,7 +214,13 @@ describe('WorkspaceChooserPage SSR rendering', () => {
 
     expect(html).toContain('Acme');
     expect(html).toContain('Globex');
-    expect(html).toContain('Add a workspace to Acme');
+    // The org heading anchors the "+" and is an <h2> so screen readers can jump between groups.
+    expect(html).toMatch(/<h2[^>]*>Acme<\/h2>/);
+    expect(html).toContain('aria-label="Add a workspace to Acme"');
+    expect(html).toContain('aria-controls="create-team-o1"');
+    // Collapsed on the server, so hydration matches and no keyboard opens on arrival.
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).not.toContain('<form id="create-team-o1"');
     // Not an owner/admin of Globex — no creation offered there.
     expect(html).not.toContain('Add a workspace to Globex');
   });

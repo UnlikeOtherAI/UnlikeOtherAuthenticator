@@ -69,8 +69,7 @@ export const es = {
   'workspace.createOrg.submit': 'Crear espacio de trabajo',
   'workspace.createOrg.cancel': 'Cancelar',
 
-  'workspace.createTeam.title': 'Crear un nuevo espacio de trabajo',
-  'workspace.createTeam.subtitle': 'Añadir un espacio de trabajo a {org}',
+  'workspace.orgSection.addWorkspace': 'Añadir un espacio de trabajo a {org}',
   'workspace.createTeam.nameLabel': 'Nombre del espacio de trabajo',
   'workspace.createTeam.submit': 'Crear espacio de trabajo',
   'workspace.createTeam.cancel': 'Cancelar',
