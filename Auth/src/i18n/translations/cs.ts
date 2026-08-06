@@ -69,6 +69,7 @@ export const cs = {
   'workspace.createOrg.submit': 'Vytvořit pracovní prostor',
   'workspace.createOrg.cancel': 'Zrušit',
 
+  'notice.sessionExpired': 'Přihlášení trvalo příliš dlouho a vypršelo. Přihlaste se prosím znovu.',
   'workspace.orgSection.addWorkspace': 'Přidat pracovní prostor do {org}',
   'workspace.createTeam.nameLabel': 'Název pracovního prostoru',
   'workspace.createTeam.submit': 'Vytvořit',

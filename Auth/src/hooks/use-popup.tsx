@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react';
 
+import type { TranslationKey } from '../i18n/translations/en.js';
+
 export type AuthView =
   | 'login'
   | 'register'
@@ -135,6 +137,13 @@ export type PopupContextValue = PopupQueryParams & {
    * `PopupQueryParams` above so it can be parsed from the URL like `twoFaToken`).
    */
   setLoginToken: (token: string | null) => void;
+  /**
+   * A one-shot i18n key explaining why the popup moved the user somewhere they did not click to —
+   * currently only an expired login bridge sending them back to sign in. The view that renders it
+   * clears it, so it never survives into a later step.
+   */
+  notice: TranslationKey | null;
+  setNotice: (key: TranslationKey | null) => void;
   /** The workspace chooser payload for the current `loginToken`. */
   workspaceChoices: WorkspaceChoices | null;
   setWorkspaceChoices: (choices: WorkspaceChoices | null) => void;
@@ -302,6 +311,7 @@ export function PopupProvider(props: {
   const [workspaceChoices, setWorkspaceChoicesState] = useState<WorkspaceChoices | null>(
     () => props.initialWorkspaceChoices ?? null,
   );
+  const [notice, setNotice] = useState<TranslationKey | null>(null);
 
   useEffect(() => {
     if (!parsed.signingToken || typeof window === 'undefined') return;
@@ -357,6 +367,8 @@ export function PopupProvider(props: {
       setPendingEmail,
       loginToken,
       setLoginToken,
+      notice,
+      setNotice,
       workspaceChoices,
       setWorkspaceChoices,
       redirectTo: (url: string) => {
@@ -398,6 +410,7 @@ export function PopupProvider(props: {
     setPendingEmail,
     loginToken,
     setLoginToken,
+    notice,
     workspaceChoices,
     setWorkspaceChoices,
     props.configUrl,

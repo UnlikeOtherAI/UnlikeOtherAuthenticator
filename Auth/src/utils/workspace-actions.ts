@@ -10,6 +10,7 @@ import {
 } from './api.js';
 import {
   interpretWorkspaceResponse,
+  isExpiredBridge,
   toWorkspaceChoices,
   type WorkspaceResponseOutcome,
 } from './workspace-response.js';
@@ -20,6 +21,8 @@ export async function submitVerifyCode(
 ): Promise<WorkspaceResponseOutcome> {
   const { email, code, ...query } = params;
   const result = await verifyLoginCode({ email, code }, query);
+  // Not folded into `expired` here: on /auth/verify-code a 401 is a wrong or dead CODE, which the
+  // user retypes on the same screen — there is no bridge yet to have expired.
   return interpretWorkspaceResponse(result.ok ? result.data : null);
 }
 
@@ -38,6 +41,7 @@ export async function submitTeamSelection(
 ): Promise<WorkspaceResponseOutcome> {
   const { loginToken, teamId, inviteId, action, ...query } = params;
   const result = await selectTeam({ login_token: loginToken, teamId, inviteId, action }, query);
+  if (!result.ok && isExpiredBridge(result.status)) return { kind: 'expired' };
   return interpretWorkspaceResponse(result.ok ? result.data : null);
 }
 
@@ -47,6 +51,7 @@ export async function submitWorkspaceCreation(
 ): Promise<WorkspaceResponseOutcome> {
   const { loginToken, name, ...query } = params;
   const result = await createWorkspace({ login_token: loginToken, name }, query);
+  if (!result.ok && isExpiredBridge(result.status)) return { kind: 'expired' };
   return interpretWorkspaceResponse(result.ok ? result.data : null);
 }
 
@@ -60,6 +65,7 @@ export async function submitTeamCreation(
 ): Promise<WorkspaceResponseOutcome> {
   const { loginToken, orgId, name, ...query } = params;
   const result = await createTeam({ login_token: loginToken, org_id: orgId, name }, query);
+  if (!result.ok && isExpiredBridge(result.status)) return { kind: 'expired' };
   return interpretWorkspaceResponse(result.ok ? result.data : null);
 }
 
@@ -81,8 +87,9 @@ export async function requestSignInCode(params: { email: string } & AuthFlowQuer
  */
 export async function submitSessionChoices(
   params: { loginToken: string } & AuthFlowQuery,
-): Promise<WorkspaceChoices | null> {
+): Promise<WorkspaceChoices | 'expired' | null> {
   const { loginToken, ...query } = params;
   const result = await fetchSessionChoices({ login_token: loginToken }, query);
-  return result.ok ? toWorkspaceChoices(result.data) : null;
+  if (result.ok) return toWorkspaceChoices(result.data);
+  return isExpiredBridge(result.status) ? 'expired' : null;
 }

@@ -26,6 +26,7 @@ export function SetPasswordForm(): React.JSX.Element {
     setWorkspaceChoices,
     startTwoFactorVerify,
     startTwoFactorSetup,
+    setNotice,
     requestAccess,
   } = usePopup();
 
@@ -140,6 +141,7 @@ export function SetPasswordForm(): React.JSX.Element {
       redirectTo,
       startTwoFactorVerify,
       startTwoFactorSetup,
+      setNotice,
     });
     if (!applied) setError(t('form.setPassword.error'));
   }

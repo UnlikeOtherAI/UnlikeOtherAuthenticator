@@ -69,6 +69,7 @@ export const es = {
   'workspace.createOrg.submit': 'Crear espacio de trabajo',
   'workspace.createOrg.cancel': 'Cancelar',
 
+  'notice.sessionExpired': 'Tu inicio de sesión tardó demasiado y caducó. Inicia sesión de nuevo.',
   'workspace.orgSection.addWorkspace': 'Añadir un espacio de trabajo a {org}',
   'workspace.createTeam.nameLabel': 'Nombre del espacio de trabajo',
   'workspace.createTeam.submit': 'Crear',

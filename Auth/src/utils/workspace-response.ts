@@ -1,3 +1,4 @@
+import type { TranslationKey } from '../i18n/translations/en.js';
 import type {
   AuthView,
   CreatableOrgChoice,
@@ -18,6 +19,13 @@ export type WorkspaceResponseOutcome =
   | { kind: 'redirect'; url: string }
   | { kind: 'twofa'; token: string }
   | { kind: 'twofa_enroll'; setup: TwoFactorSetupState }
+  /**
+   * The login bridge is gone — expired, already spent, or minted for another continuation. The
+   * chooser cannot recover from this: `login_token` is one-time and short-lived, so every card on
+   * the screen would fail the same way. Distinct from `error` precisely so the caller sends the
+   * user back to sign in instead of offering a retry that cannot succeed.
+   */
+  | { kind: 'expired' }
   | { kind: 'error' };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -50,6 +58,15 @@ function toInviteChoices(value: unknown): InviteChoice[] {
     (v): v is InviteChoice =>
       isRecord(v) && typeof v.inviteId === 'string' && typeof v.teamName === 'string',
   );
+}
+
+/**
+ * The API folds every login-session rejection into one generic 401 (no enumeration), so the status
+ * is all the client gets — and all it needs: on these routes a 401 can only mean the bridge this
+ * page holds is no longer good for anything.
+ */
+export function isExpiredBridge(status: number): boolean {
+  return status === 401;
 }
 
 /** Reads a raw `/auth/*` flow response and decides which client step comes next. */
@@ -141,6 +158,8 @@ export type WorkspaceOutcomeActions = {
   redirectTo: (url: string) => void;
   startTwoFactorVerify: (token: string) => void;
   startTwoFactorSetup: (setup: TwoFactorSetupState) => void;
+  /** i18n key shown once on the view we land on; null clears it. */
+  setNotice: (key: TranslationKey | null) => void;
 };
 
 /**
@@ -160,6 +179,15 @@ export function applyWorkspaceOutcome(
       return true;
     case 'redirect':
       actions.redirectTo(outcome.url);
+      return true;
+    case 'expired':
+      // Tear the dead bridge down before leaving, so the chooser cannot be re-entered with it and
+      // the login view is reached with clean state. The URL still carries config_url, redirect and
+      // PKCE, so signing in again resumes this same authorization request.
+      actions.setWorkspaceChoices(null);
+      actions.setLoginToken(null);
+      actions.setNotice('notice.sessionExpired');
+      actions.setView('login');
       return true;
     case 'twofa':
       actions.startTwoFactorVerify(outcome.token);

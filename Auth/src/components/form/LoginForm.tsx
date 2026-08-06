@@ -66,6 +66,7 @@ export function LoginForm(): React.JSX.Element {
     setView,
     startTwoFactorVerify,
     startTwoFactorSetup,
+    setNotice,
     requestAccess,
     clientId,
     state,
@@ -139,6 +140,7 @@ export function LoginForm(): React.JSX.Element {
       redirectTo,
       startTwoFactorVerify,
       startTwoFactorSetup,
+      setNotice,
     });
     if (!applied) setError(t('form.login.error'));
   }

@@ -71,6 +71,7 @@ export const en = {
   'workspace.createOrg.submit': 'Create workspace',
   'workspace.createOrg.cancel': 'Cancel',
 
+  'notice.sessionExpired': 'Your sign-in took too long and expired. Please sign in again.',
   'workspace.orgSection.addWorkspace': 'Add a workspace to {org}',
   'workspace.createTeam.nameLabel': 'Workspace name',
   'workspace.createTeam.submit': 'Create',

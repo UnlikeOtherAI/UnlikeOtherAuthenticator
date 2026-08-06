@@ -33,6 +33,7 @@ export function CodeEntryPage(): React.JSX.Element {
     redirectTo,
     startTwoFactorVerify,
     startTwoFactorSetup,
+    setNotice,
   } = usePopup();
 
   const [code, setCode] = useState('');
@@ -70,6 +71,7 @@ export function CodeEntryPage(): React.JSX.Element {
       redirectTo,
       startTwoFactorVerify,
       startTwoFactorSetup,
+      setNotice,
     });
     if (!applied) setError(t('codeEntry.error'));
   }

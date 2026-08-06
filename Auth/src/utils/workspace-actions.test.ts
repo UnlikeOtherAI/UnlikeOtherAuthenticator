@@ -189,10 +189,24 @@ describe('submitSessionChoices', () => {
     });
   });
 
-  it('returns null on an API failure', async () => {
+  // A 401 on this route can only mean the bridge itself is dead — the caller must send the user
+  // back to sign in rather than offer a retry that cannot succeed.
+  it('reports an expired bridge on 401', async () => {
     vi.spyOn(api, 'fetchSessionChoices').mockResolvedValue({
       ok: false,
       status: 401,
+      error: null,
+      code: null,
+    });
+
+    const choices = await submitSessionChoices({ loginToken: 'bridge.jwt', ...QUERY });
+    expect(choices).toBe('expired');
+  });
+
+  it('returns null on a failure that is not the bridge — those stay retryable', async () => {
+    vi.spyOn(api, 'fetchSessionChoices').mockResolvedValue({
+      ok: false,
+      status: 500,
       error: null,
       code: null,
     });

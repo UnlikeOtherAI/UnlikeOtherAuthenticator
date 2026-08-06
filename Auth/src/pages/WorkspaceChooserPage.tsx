@@ -44,6 +44,7 @@ export function WorkspaceChooserPage(): React.JSX.Element {
     redirectTo,
     startTwoFactorVerify,
     startTwoFactorSetup,
+    setNotice,
   } = usePopup();
 
   const [error, setError] = useState<string | null>(null);
@@ -66,11 +67,21 @@ export function WorkspaceChooserPage(): React.JSX.Element {
         redirectTo,
         startTwoFactorVerify,
         startTwoFactorSetup,
+        setNotice,
       });
       if (!applied) setError(t('form.error.generic'));
       return applied;
     },
-    [setLoginToken, setWorkspaceChoices, setView, redirectTo, startTwoFactorVerify, startTwoFactorSetup, t],
+    [
+      setLoginToken,
+      setWorkspaceChoices,
+      setView,
+      redirectTo,
+      startTwoFactorVerify,
+      startTwoFactorSetup,
+      setNotice,
+      t,
+    ],
   );
 
   // Not reachable directly (no login_token at all) — bounce back to login. A login_token with no
@@ -87,6 +98,12 @@ export function WorkspaceChooserPage(): React.JSX.Element {
     hydrateStarted.current = true;
     void (async () => {
       const choices = await submitSessionChoices({ loginToken, ...query });
+      if (choices === 'expired') {
+        // Nothing on this screen can succeed with a dead bridge, so don't strand the user on an
+        // error they cannot act on — send them back to sign in, which resumes this same request.
+        handleOutcome({ kind: 'expired' });
+        return;
+      }
       if (choices) {
         setWorkspaceChoices(choices);
       } else {
@@ -94,7 +111,7 @@ export function WorkspaceChooserPage(): React.JSX.Element {
         setError(t('form.error.generic'));
       }
     })();
-  }, [loginToken, workspaceChoices, query, setWorkspaceChoices, t]);
+  }, [loginToken, workspaceChoices, query, setWorkspaceChoices, handleOutcome, t]);
 
   // Design §11.2: a user with exactly one ACTIVE team and no pending invites never sees a
   // one-item chooser — select it for them as soon as the payload lands. Gap-fix B Task 2 (design

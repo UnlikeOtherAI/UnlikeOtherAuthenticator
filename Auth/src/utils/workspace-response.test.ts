@@ -208,6 +208,7 @@ describe('applyWorkspaceOutcome', () => {
       redirectTo: vi.fn(),
       startTwoFactorVerify: vi.fn(),
       startTwoFactorSetup: vi.fn(),
+      setNotice: vi.fn(),
     };
   }
 
@@ -257,6 +258,23 @@ describe('applyWorkspaceOutcome', () => {
     const applied = applyWorkspaceOutcome({ kind: 'error' }, actions);
     expect(applied).toBe(false);
     expect(actions.setLoginToken).not.toHaveBeenCalled();
+    expect(actions.redirectTo).not.toHaveBeenCalled();
+  });
+
+  // The chooser's login bridge is one-time and short-lived. Once it dies every card on the screen
+  // fails the same way, so the only useful move is back to sign-in — with the dead token cleared
+  // so the chooser cannot be re-entered holding it.
+  it('sends an expired bridge back to login with clean state and a reason', () => {
+    const actions = makeActions();
+    const applied = applyWorkspaceOutcome({ kind: 'expired' }, actions);
+
+    expect(applied).toBe(true);
+    expect(actions.setLoginToken).toHaveBeenCalledWith(null);
+    expect(actions.setWorkspaceChoices).toHaveBeenCalledWith(null);
+    expect(actions.setNotice).toHaveBeenCalledWith('notice.sessionExpired');
+    expect(actions.setView).toHaveBeenCalledWith('login');
+    // Not a redirect out of the popup: config_url, redirect_url and PKCE are still in the URL, so
+    // signing in again resumes this authorization request instead of restarting it.
     expect(actions.redirectTo).not.toHaveBeenCalled();
   });
 });
