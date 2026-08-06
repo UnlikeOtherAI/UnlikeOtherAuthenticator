@@ -4,6 +4,7 @@ import { Button } from '../ui/Button.js';
 import { Input } from '../ui/Input.js';
 import { PasswordInput } from '../ui/PasswordInput.js';
 import { Switch } from '../ui/Switch.js';
+import { useNoUnrequestedFocus } from '../../hooks/use-no-unrequested-focus.js';
 import { usePopup } from '../../hooks/use-popup.js';
 import { useTranslation } from '../../i18n/use-translation.js';
 import { postJson } from '../../utils/api.js';
@@ -52,6 +53,8 @@ function readSessionConfig(config: unknown): {
 
 export function LoginForm(): React.JSX.Element {
   const rememberMeId = useId();
+  // The login screen must open with the keyboard down so the social buttons stay in view.
+  const formRef = useNoUnrequestedFocus<HTMLFormElement>();
   const { t } = useTranslation();
   const {
     configUrl,
@@ -157,7 +160,7 @@ export function LoginForm(): React.JSX.Element {
   }
 
   return (
-    <form className="mt-6 flex flex-col gap-4" onSubmit={handleSubmit}>
+    <form ref={formRef} className="mt-6 flex flex-col gap-4" onSubmit={handleSubmit}>
       <Input
         name="email"
         type="email"
