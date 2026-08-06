@@ -2,7 +2,7 @@
 import React, { act } from 'react';
 import { createRoot, hydrateRoot, type Root } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useNoUnrequestedFocus } from './use-no-unrequested-focus.js';
 
@@ -11,12 +11,19 @@ function Harness(): React.JSX.Element {
   return (
     <form ref={ref}>
       <input name="email" type="email" />
+      <button type="submit">Sign in</button>
     </form>
   );
 }
 
 let container: HTMLDivElement;
 let root: Root | null;
+
+function submitButton(): HTMLButtonElement {
+  const button = container.querySelector('button[type="submit"]');
+  if (!button) throw new Error('missing submit button');
+  return button as HTMLButtonElement;
+}
 
 function emailInput(): HTMLInputElement {
   const input = container.querySelector('input[name="email"]');
@@ -79,5 +86,29 @@ describe('useNoUnrequestedFocus', () => {
     emailInput().focus();
 
     expect(document.activeElement).toBe(emailInput());
+  });
+
+  // Assistive tech moves focus with no preceding pointer or key event, so "no gesture yet"
+  // cannot mean "nobody asked for this" forever. After the arrival window the focus is theirs.
+  it('leaves focus alone once the arrival window has passed', () => {
+    vi.useFakeTimers();
+    try {
+      mount();
+      vi.advanceTimersByTime(1001);
+
+      emailInput().focus();
+
+      expect(document.activeElement).toBe(emailInput());
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('never blurs a control that raises no keyboard', () => {
+    mount();
+
+    submitButton().focus();
+
+    expect(document.activeElement).toBe(submitButton());
   });
 });
