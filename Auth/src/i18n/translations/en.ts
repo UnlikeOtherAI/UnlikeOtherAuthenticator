@@ -73,7 +73,7 @@ export const en = {
 
   'workspace.orgSection.addWorkspace': 'Add a workspace to {org}',
   'workspace.createTeam.nameLabel': 'Workspace name',
-  'workspace.createTeam.submit': 'Create workspace',
+  'workspace.createTeam.submit': 'Create',
   'workspace.createTeam.cancel': 'Cancel',
 
   'twoFactor.setup.instructions':

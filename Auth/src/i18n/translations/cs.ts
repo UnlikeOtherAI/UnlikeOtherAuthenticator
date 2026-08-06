@@ -71,7 +71,7 @@ export const cs = {
 
   'workspace.orgSection.addWorkspace': 'Přidat pracovní prostor do {org}',
   'workspace.createTeam.nameLabel': 'Název pracovního prostoru',
-  'workspace.createTeam.submit': 'Vytvořit pracovní prostor',
+  'workspace.createTeam.submit': 'Vytvořit',
   'workspace.createTeam.cancel': 'Zrušit',
 
   'twoFactor.setup.instructions':
