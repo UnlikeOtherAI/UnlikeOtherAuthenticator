@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@prisma/client';
 
 import { getAdminPrisma, getPrisma } from '../db/prisma.js';
+import { avatarImageBaseUrl, publicTeamAvatarImageUrl } from '../utils/avatar-url.js';
 import { pendingInviteStatusWhere } from './first-login.service.js';
 import {
   type ProductWorkspacePolicy,
@@ -19,6 +20,8 @@ export type WorkspaceEntry = {
   slug: string;
   orgName: string;
   iconUrl: string | null;
+  /** Public, always-resolving team image: uploaded → proxied iconUrl → generated. */
+  avatarImageUrl: string;
   role: string;
   // Most recent session opened for this workspace (max(createdAt) of the caller's scoped refresh
   // tokens); null when no scoped session was ever opened (e.g. pre-chooser sessions, which carry a
@@ -154,6 +157,7 @@ export async function buildSidebarWorkspaces(
     }
   }
 
+  const avatarBaseUrl = avatarImageBaseUrl();
   const entries: WorkspaceEntry[] = directoryMemberships.map((membership) => ({
     teamId: membership.teamId,
     orgId: membership.team.orgId,
@@ -161,6 +165,10 @@ export async function buildSidebarWorkspaces(
     slug: membership.team.slug,
     orgName: membership.team.org.name,
     iconUrl: membership.team.iconUrl,
+    avatarImageUrl: publicTeamAvatarImageUrl({
+      baseUrl: avatarBaseUrl,
+      teamId: membership.teamId,
+    }),
     role: membership.teamRole,
     lastLoginAt: lastLoginByTeam.get(membership.teamId) ?? null,
   }));

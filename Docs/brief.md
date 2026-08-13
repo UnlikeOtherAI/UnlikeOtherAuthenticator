@@ -1547,9 +1547,17 @@ The additive `org.workspaces[]` directory follows the same server-owned product 
 the hosted chooser. It is domain-scoped by default. A verified product mapped to
 `all_active_memberships` receives every ACTIVE workspace the caller may enter, so a product sidebar
 never silently shows a smaller switcher than UOA's chooser. Cross-product entries expose no other
-product's login-recency data (`lastLoginAt` remains `null`).
+product's login-recency data (`lastLoginAt` remains `null`). Every entry carries the owning
+`orgId`/`orgName` for organisation grouping and a non-null public `avatarImageUrl` resolving the
+team's uploaded image, proxied `iconUrl`, or generated fallback without client credentials. If the
+caller has no same-domain organisation, a recognized product's exact workspace-scoped access token
+anchors the complete legacy `org_id`/role/team block to its selected `active.orgId` after a live
+policy and membership recheck; `workspaces[]` still contains every authorized membership and each
+row's own `orgId`/`orgName` is authoritative for grouping. An unscoped token never selects an
+arbitrary cross-domain organisation.
 
-Returns same structure as JWT `org` claim but always reflects current database state.
+The legacy fields return the same structure as the JWT `org` claim but always reflect current
+database state.
 
 ---
 

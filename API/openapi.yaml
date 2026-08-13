@@ -3877,8 +3877,13 @@ paths:
       summary: Current user org context
       operationId: getMyOrgContext
       description: |
-        Returns the authenticated user's organisation memberships and capabilities
-        within the domain. Requires domain hash auth AND a user access token.
+        Returns the authenticated user's live legacy organisation context and
+        authorized workspace directory. The directory is domain-scoped by default.
+        For a server-recognized all_active_memberships product it contains every
+        active workspace, including cross-domain workspaces; when there is no
+        same-domain context, the complete legacy org block is anchored to the
+        token's exact selected active.orgId after live policy and membership checks.
+        Requires domain hash auth AND a user access token.
       security:
         - domainHashBearer: []
           accessToken: []
@@ -3900,7 +3905,11 @@ paths:
                   org:
                     type: object
                     additionalProperties: true
-                    description: Present when the user has org context on this domain.
+                    description: >-
+                      Present when the user has a live same-domain org context or a
+                      live selected cross-domain context allowed by the product's
+                      all_active_memberships policy. An unscoped token never causes
+                      an arbitrary cross-domain org to be synthesized.
         '401':
           description: Missing access token or config.
           content:

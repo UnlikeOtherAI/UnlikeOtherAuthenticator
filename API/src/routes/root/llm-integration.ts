@@ -535,7 +535,10 @@ Owner/admin review the pending queue with \`GET /org/organisations/:orgId/invita
 ### 4.7b Sidebar workspace stack, "Invited" tab, and workspace icons (gap-fix A, design §11.3–§11.5)
 
 \`GET /org/me\` now returns two additive fields inside \`org\` alongside the existing \`org_id\`,
-\`org_role\`, \`teams\`, \`team_roles\`, \`groups\` (unchanged — this is purely additive):
+\`org_role\`, \`teams\`, \`team_roles\`, \`groups\` (unchanged — this is purely additive). For a
+recognized \`all_active_memberships\` product with no same-domain organisation, the complete legacy
+block is anchored to the access token's exact selected \`active.orgId\` after UOA revalidates that
+organisation and the product policy live:
 
 \`\`\`json
 {
@@ -552,6 +555,7 @@ Owner/admin review the pending queue with \`GET /org/organisations/:orgId/invita
         "slug": "backend-team",
         "orgName": "Acme Inc",
         "iconUrl": "https://cdn.example.com/backend.png",
+        "avatarImageUrl": "https://authentication.unlikeotherai.com/teams/team_1/avatar",
         "role": "owner",
         "lastLoginAt": "2026-07-01T12:00:00.000Z"
       },
@@ -562,6 +566,7 @@ Owner/admin review the pending queue with \`GET /org/organisations/:orgId/invita
         "slug": "design",
         "orgName": "Acme Inc",
         "iconUrl": null,
+        "avatarImageUrl": "https://authentication.unlikeotherai.com/teams/team_2/avatar",
         "role": "member",
         "lastLoginAt": null
       }
@@ -578,7 +583,12 @@ Owner/admin review the pending queue with \`GET /org/organisations/:orgId/invita
   workspace directory as the hosted chooser. It is ordered \`lastLoginAt\` DESC with nulls last,
   then \`name\` ASC (this IS the sidebar order — render it as-is). \`lastLoginAt\` is \`null\` when
   the caller never opened a session scoped to that workspace; cross-product entries intentionally
-  remain \`null\` because another product's session history is not exposed.
+  remain \`null\` because another product's session history is not exposed. Group by each entry's
+  own \`orgId\`/\`orgName\`; the directory may span organisations and is not implicitly scoped by the
+  singular legacy \`org_id\` field.
+- \`avatarImageUrl\` — the public, credential-free \`<PUBLIC_BASE_URL>/teams/<teamId>/avatar\` form.
+  It is never null and resolves uploaded image → proxied \`iconUrl\` → deterministic generated image,
+  so a native or browser client renders this field directly instead of fetching \`iconUrl\` itself.
 - \`pending_invites[]\` — the caller's own pending invites on this domain (same eligibility as the
   workspace chooser: unaccepted/undeclined/unrevoked, not expired, and not still awaiting
   member-invite approval).

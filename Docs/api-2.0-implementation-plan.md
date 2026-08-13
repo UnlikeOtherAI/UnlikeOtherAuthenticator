@@ -698,7 +698,11 @@ Current response shape:
 }
 ```
 
-Note: the `org` key is **absent** (not `null`) when the user has no org membership. The response is just `{ "ok": true }` in that case.
+Note: the `org` key is **absent** (not `null`) when the user has no live org context. A
+server-recognized `all_active_memberships` product may use the token's exact selected `active.orgId`
+as a cross-domain context after live policy and membership checks; an unscoped token never selects
+an arbitrary cross-domain organisation. The response is just `{ "ok": true }` when neither context
+exists.
 
 2.0 change:
 

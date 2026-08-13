@@ -50,7 +50,9 @@ export const IDENTITY_AVATAR_URL_NOTE =
   'Team records carry the same thing for the team itself: avatarImageUrl, ' +
   '<PUBLIC_BASE_URL>/domain/teams/<teamId>/avatar?domain=<domain> in domain-hash and dual-auth ' +
   'contexts, <PUBLIC_BASE_URL>/internal/admin/teams/<teamId>/avatar in admin-bearer contexts ' +
-  '(Docs/Auth/avatars.md §11). It is derived and never null — unlike iconUrl, which keeps its ' +
+  '(except GET /org/me workspaces[], which use the public <PUBLIC_BASE_URL>/teams/<teamId>/avatar ' +
+  'form so product-authorized cross-domain entries remain renderable; see Docs/Auth/avatars.md ' +
+  '§11). It is derived and never null — unlike iconUrl, which keeps its ' +
   'existing "externally hosted icon, may be null" meaning.';
 
 const RESOLUTION_NOTE =
@@ -208,7 +210,7 @@ export const avatarEndpoints: EndpointSchema[] = [
     method: 'GET',
     path: '/teams/:teamId/avatar',
     description:
-      "Image bytes for a workspace (team) avatar with no credential at all — the only unauthenticated avatar route, so a browser can render it from a plain <img src>. This is what the auth-window workspace chooser uses (its page holds no bearer of any class). Not an existence oracle: an unknown or deleted team id renders the same deterministic generated SVG a real team with no image gets, so every id answers 200 with an image. Rate-limited per IP (300/hour).",
+      "Image bytes for a workspace (team) avatar with no credential at all — the only unauthenticated avatar route, so a browser or native client can render it directly. This is what the auth-window workspace chooser and GET /org/me workspace directory use. Not an existence oracle: an unknown or deleted team id renders the same deterministic generated SVG a real team with no image gets, so every id answers 200 with an image. Rate-limited per IP (300/hour).",
     auth: 'none (public)',
     query: IMAGE_QUERY,
     response: IMAGE_RESPONSE,

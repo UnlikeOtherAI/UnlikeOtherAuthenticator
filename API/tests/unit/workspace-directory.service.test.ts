@@ -68,6 +68,7 @@ describe('workspace-directory service: buildSidebarWorkspaces', () => {
         slug: 'backend',
         orgName: 'Acme Inc',
         iconUrl: 'https://cdn.example.com/backend.png',
+        avatarImageUrl: '/teams/team-1/avatar',
         role: 'owner',
         lastLoginAt: null,
       },
@@ -189,6 +190,10 @@ describe('workspace-directory service: buildSidebarWorkspaces', () => {
     );
 
     expect(result.map((workspace) => workspace.teamId)).toEqual(['team-local', 'team-other']);
+    expect(result.map((workspace) => workspace.avatarImageUrl)).toEqual([
+      '/teams/team-local/avatar',
+      '/teams/team-other/avatar',
+    ]);
     expect(result[1]?.lastLoginAt).toBeNull();
     expect(crossProductPrisma.teamMember.findMany).toHaveBeenCalledWith(
       expect.objectContaining({

@@ -6,7 +6,10 @@ import { requireDomainHashAuthForDomainQuery } from '../../middleware/domain-has
 import { requireOrgFeaturesEnabled } from '../../middleware/org-features.js';
 import { resolveActingUserClaims } from '../../middleware/org-role-guard.js';
 import { setTenantContextFromRequest } from '../../plugins/tenant-context.plugin.js';
-import { getUserOrgContext } from '../../services/org-context.service.js';
+import {
+  getActiveClientOrgContext,
+  getUserOrgContext,
+} from '../../services/org-context.service.js';
 import {
   buildSidebarPendingInvites,
   buildSidebarWorkspaces,
@@ -70,15 +73,32 @@ export function registerOrgMeRoute(app: FastifyInstance): void {
 
       const org = await request.withTenantTx(async (tx) => {
         const prisma = asPrismaClient(tx);
-        const context = await getUserOrgContext(
+        let context = await getUserOrgContext(
           { userId: claims.userId, domain: normalizedDomain, config },
           { prisma },
         );
+
+        // A recognized product can issue an exact workspace-scoped token for an organisation
+        // owned by another product domain. Keep the legacy singular org block complete by
+        // resolving that selected organisation live through the same server-owned product-policy
+        // gate used at token issuance; never synthesize an org from an arbitrary directory row.
+        if (!context && claims.active) {
+          context = await getActiveClientOrgContext(
+            {
+              userId: claims.userId,
+              domain: normalizedDomain,
+              orgId: claims.active.orgId,
+              groupsEnabled: config.org_features?.groups_enabled,
+            },
+            { prisma },
+          );
+        }
         if (!context) return context;
 
         // Gap-fix A Task 1 (design §11.4 sidebar contract): appended, additive top-level fields —
-        // org_id/org_role/teams/team_roles/groups above are unchanged. Both reads share this
-        // transaction so they observe the same snapshot as the org context above.
+        // org_id/org_role/teams/team_roles/groups above are unchanged. Domain-scoped reads share
+        // this tenant transaction; policy-authorized cross-domain reads use their existing guarded
+        // admin-client path.
         const workspacePolicy = await resolveProductWorkspacePolicy({ domain: normalizedDomain });
         const [workspaces, pendingInvites] = await Promise.all([
           buildSidebarWorkspaces(

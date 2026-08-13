@@ -496,6 +496,7 @@ URL that always resolves to an image, fetchable with the same credential class t
 | Team records (`GET`/`POST`/`PUT` on `/org/organisations/:orgId/teams[/:teamId]`) | `avatarImageUrl` |
 | Group detail `teams[]` and the `/internal/org` team↔group assignment response | `avatarImageUrl` |
 | Admin org-block `teams[]` and `GET /internal/admin/teams` | `avatarImageUrl` (admin URL form) |
+| `GET /org/me` `workspaces[]` | `avatarImageUrl` (public URL form) |
 
 The field is derived, never null, and `PUBLIC_BASE_URL`-relative exactly like the user forms.
 `iconUrl` is untouched and keeps its own meaning: the external URL an owner set, or `null`.
@@ -507,3 +508,8 @@ chooser's reader holds no credential at all, which is the whole reason that rout
 *user* identities keep the §9 exclusion, and the frozen billing-statement protocol packages still
 carry no team avatar URL: their schemas reject unknown properties, so a change there is a version
 bump.
+
+`GET /org/me` uses that same public form for every `workspaces[]` entry. A product authorized for
+`all_active_memberships` may receive teams owned by several domains, so one domain-bound avatar URL
+cannot represent the whole directory; the public endpoint remains non-null and renderable for each
+authorized entry without exposing a domain credential.

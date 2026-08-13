@@ -23,12 +23,14 @@ const orgEndpoints: EndpointSchema[] = [
   {
     method: 'GET',
     path: '/org/me',
-    description: 'Current user org context',
+    description: 'Current user org context and complete authorized workspace directory',
     auth: 'access token (X-UOA-Access-Token header)',
     query: { config_url: 'string (required)' },
     response: {
+      org:
+        'object | absent — live legacy org context plus the directory fields below. Normally anchored to the active same-domain organisation. For an `all_active_memberships` product whose selected workspace belongs to another domain, it is anchored to the token’s exact `active.orgId` after that organisation and the product policy are revalidated live. It remains absent when neither live context exists; an unscoped token never causes an arbitrary cross-domain org to be synthesized.',
       'org.workspaces':
-        'array — one entry per ACTIVE team membership on this domain, or every active membership when this product is explicitly mapped to `all_active_memberships`: { teamId, orgId, name, slug, orgName, iconUrl, role, lastLoginAt }; ordered lastLoginAt DESC with nulls last, then name ASC (the sidebar order). Cross-product entries have null `lastLoginAt`.',
+        'array — one entry per ACTIVE team membership on this domain, or every active membership when this product is explicitly mapped to `all_active_memberships`: { teamId, orgId, name, slug, orgName, iconUrl, avatarImageUrl, role, lastLoginAt }. Each entry carries its own orgId/orgName; do not assume it belongs to the singular legacy org.org_id. avatarImageUrl is the public /teams/:teamId/avatar form (never null, no credential needed). Entries are ordered lastLoginAt DESC with nulls last, then name ASC (the sidebar order). Cross-product entries have null `lastLoginAt`.',
       'org.pending_invites':
         "array — the caller's pending invites on this domain: { inviteId, teamId, teamName, invitedBy, expiresAt }",
     },
