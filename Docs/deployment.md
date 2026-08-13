@@ -47,6 +47,32 @@ the old config and correctly behaves as though the flag does not exist.
 `buildme.live` has no deployment: it is docs and an iOS prototype, with no API. The product behind
 the BuildMe name is `docgen`.
 
+### DocGen control-plane registration
+
+Before enabling DocGen paid inference or its Billing screen, a UOA superuser
+must register the canonical product identifier `docgen` as an active Billing
+Service through `/internal/admin/billing/services`, with its initial immutable
+tariff, **before** the next Stripe-catalog provisioner invocation. The
+provisioner intentionally fails closed while the service is absent, then
+requires it beside Nessie, DeepWater, DeepSignal, and DeepTest; this does not
+alter runtime billing merely by deploying UOA. It does not create a service,
+tariff, Stripe product, or Price on an operator's behalf.
+
+After the `buildme.live` client domain is active, create exactly one enabled
+confidential-delegation mapping with `source_domain=buildme.live`,
+`product=docgen`, `resource=https://ledger.unlikeotherai.com`, and only
+`scopes=["ai.invoke"]`. UOA rejects a DocGen mapping that points at a different
+resource, domain, or scope. The deployment also needs its own
+`customer_lifecycle` UOA app key, bound to DocGen's independently generated
+RS256 actor public JWK and its exact HTTPS return origin(s). Store that key and
+private signer only in DocGen's backend secret store; it is distinct from the
+Ledger runtime `lk_…` key, the UOA-to-Ledger collector key, all provider keys,
+and every other product's app key.
+
+The UOA Billing Service, delegation mapping, and app key are operator state,
+not seed data. They must be provisioned before a DocGen deployment serves the
+new configuration; UOA being deployed alone cannot make the product live.
+
 ### The two hardened receivers
 
 DeepTest and DocGen do not take a general root shell. Their CI keys are pinned in

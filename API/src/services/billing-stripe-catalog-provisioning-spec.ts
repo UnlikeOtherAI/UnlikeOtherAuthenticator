@@ -3,6 +3,7 @@ export const PROVISIONED_BILLING_SERVICE_IDENTIFIERS = [
   'deepwater',
   'deepsignal',
   'deeptest',
+  'docgen',
 ] as const;
 
 export type ProvisionedBillingServiceIdentifier =

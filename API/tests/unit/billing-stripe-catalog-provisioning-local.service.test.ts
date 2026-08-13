@@ -6,9 +6,10 @@ import {
   CREDIT_FUNDING_POLICY_SPEC,
   CREDIT_TOP_UP_SPECS,
   DEEPWATER_PRIVACY_SPEC,
+  PROVISIONED_BILLING_SERVICE_IDENTIFIERS,
 } from '../../src/services/billing-stripe-catalog-provisioning-spec.js';
 
-const services = ['nessie', 'deepwater', 'deepsignal', 'deeptest'].map((identifier) => ({
+const services = [...PROVISIONED_BILLING_SERVICE_IDENTIFIERS].map((identifier) => ({
   id: `service_${identifier}`,
   identifier,
   name: identifier,
@@ -245,7 +246,7 @@ function completeLocalCatalog() {
 }
 
 describe('local Stripe commercial catalog reconciliation', () => {
-  it('plans the complete four-service catalog without writing in dry-run mode', async () => {
+  it('plans the complete five-service catalog without writing in dry-run mode', async () => {
     const db = emptyLocalCatalog();
     const actions = await reconcileLocalStripeCommercialCatalog({
       db: db as never,
@@ -253,11 +254,16 @@ describe('local Stripe commercial catalog reconciliation', () => {
       write: false,
     });
 
-    expect(actions).toHaveLength(33);
+    expect(actions).toHaveLength(39);
     expect(actions.every((action) => action.outcome === 'created')).toBe(true);
     expect(actions).toContainEqual({
       resource: 'credit_auto_top_up_option',
       key: 'nessie/default/v1',
+      outcome: 'created',
+    });
+    expect(actions).toContainEqual({
+      resource: 'credit_auto_top_up_option',
+      key: 'docgen/default/v1',
       outcome: 'created',
     });
     expect(actions).toContainEqual({
@@ -280,6 +286,14 @@ describe('local Stripe commercial catalog reconciliation', () => {
     ).rejects.toThrow('BILLING_COMMERCIAL_CATALOG_LOCAL_DRIFT');
   });
 
+  it('blocks provisioning until the operator registers DocGen', async () => {
+    const db = emptyLocalCatalog(services.filter((service) => service.identifier !== 'docgen'));
+
+    await expect(
+      reconcileLocalStripeCommercialCatalog({ db: db as never, catalog, write: false }),
+    ).rejects.toThrow('BILLING_COMMERCIAL_CATALOG_LOCAL_DRIFT');
+  });
+
   it('is a complete no-op when every immutable row is already exact', async () => {
     const db = completeLocalCatalog();
     const actions = await reconcileLocalStripeCommercialCatalog({
@@ -288,7 +302,7 @@ describe('local Stripe commercial catalog reconciliation', () => {
       write: true,
     });
 
-    expect(actions).toHaveLength(33);
+    expect(actions).toHaveLength(39);
     expect(actions.every((action) => action.outcome === 'no-op')).toBe(true);
     expect(db.featureFlagDefinition.create).not.toHaveBeenCalled();
     expect(db.billingCreditTopUpCatalog.update).not.toHaveBeenCalled();
