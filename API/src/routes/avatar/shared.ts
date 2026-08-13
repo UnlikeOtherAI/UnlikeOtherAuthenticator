@@ -34,6 +34,8 @@ export function sendAvatar(
   reply: FastifyReply,
   avatar: ResolvedAvatar,
   options?: {
+    /** Allow the credential-free team-avatar response to be embedded by product origins. */
+    crossOrigin?: boolean;
     /**
      * Omit `X-UOA-Avatar-Source`. Set on the public route: the header would tell an anonymous
      * caller whether a workspace uploaded a custom logo, and let them watch it change. Every
@@ -48,6 +50,10 @@ export function sendAvatar(
     .header('ETag', avatar.etag)
     .header('X-Content-Type-Options', 'nosniff')
     .header('Content-Disposition', `inline; filename="${avatar.filename}"`);
+
+  if (options?.crossOrigin) {
+    reply.header('Cross-Origin-Resource-Policy', 'cross-origin');
+  }
 
   if (!options?.hideSource) {
     reply.header('X-UOA-Avatar-Source', avatar.source);

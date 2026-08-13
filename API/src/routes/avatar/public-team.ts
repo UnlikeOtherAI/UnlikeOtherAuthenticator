@@ -75,7 +75,7 @@ export function registerPublicTeamAvatarRoute(app: FastifyInstance): void {
           request,
           reply,
           await generatedFallback(teamId, query.style ?? null, query.size ?? null),
-          { hideSource: true },
+          { crossOrigin: true, hideSource: true },
         );
       }
 
@@ -93,7 +93,7 @@ export function registerPublicTeamAvatarRoute(app: FastifyInstance): void {
         throw err;
       });
 
-      return sendAvatar(request, reply, avatar, { hideSource: true });
+      return sendAvatar(request, reply, avatar, { crossOrigin: true, hideSource: true });
     },
   );
 }

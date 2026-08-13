@@ -180,6 +180,10 @@ Every successful avatar GET returns:
 - SVG responses additionally send
   `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'`.
 
+The credential-free team route additionally sends
+`Cross-Origin-Resource-Policy: cross-origin`, allowing its image bytes to render from product
+origins. Credentialed avatar routes retain the default same-origin resource policy.
+
 ### Provider proxying
 
 When resolution lands on the provider URL, UOA fetches it server-side and streams the

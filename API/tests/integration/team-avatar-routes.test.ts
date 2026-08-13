@@ -593,6 +593,7 @@ describe.skipIf(!hasDatabase)('team avatar routes', () => {
       expect(generated.headers['content-type']).toBe('image/svg+xml; charset=utf-8');
       expect(generated.headers['x-content-type-options']).toBe('nosniff');
       expect(generated.headers['content-security-policy']).toBe(SVG_CSP);
+      expect(generated.headers['cross-origin-resource-policy']).toBe('cross-origin');
       // Anonymous callers do not get to learn whether this workspace uploaded a logo.
       expect(generated.headers['x-uoa-avatar-source']).toBeUndefined();
 
@@ -610,6 +611,7 @@ describe.skipIf(!hasDatabase)('team avatar routes', () => {
       // (Docs/Auth/avatars.md §11.3) that lets the chooser render a real logo.
       const uploaded = await app!.inject({ method: 'GET', url: `/teams/${team.id}/avatar` });
       expect(uploaded.statusCode).toBe(200);
+      expect(uploaded.headers['cross-origin-resource-policy']).toBe('cross-origin');
       expect(uploaded.headers['x-uoa-avatar-source']).toBeUndefined();
       expect(uploaded.rawPayload.equals(bytes)).toBe(true);
 

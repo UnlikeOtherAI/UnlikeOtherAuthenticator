@@ -210,7 +210,7 @@ export const avatarEndpoints: EndpointSchema[] = [
     method: 'GET',
     path: '/teams/:teamId/avatar',
     description:
-      "Image bytes for a workspace (team) avatar with no credential at all — the only unauthenticated avatar route, so a browser or native client can render it directly. This is what the auth-window workspace chooser and GET /org/me workspace directory use. Not an existence oracle: an unknown or deleted team id renders the same deterministic generated SVG a real team with no image gets, so every id answers 200 with an image. Rate-limited per IP (300/hour).",
+      "Image bytes for a workspace (team) avatar with no credential at all — the only unauthenticated avatar route, so a browser or native client can render it directly. Responses carry Cross-Origin-Resource-Policy: cross-origin; credentialed avatar routes keep the default same-origin policy. This is what the auth-window workspace chooser and GET /org/me workspace directory use. Not an existence oracle: an unknown or deleted team id renders the same deterministic generated SVG a real team with no image gets, so every id answers 200 with an image. Rate-limited per IP (300/hour).",
     auth: 'none (public)',
     query: IMAGE_QUERY,
     response: IMAGE_RESPONSE,
