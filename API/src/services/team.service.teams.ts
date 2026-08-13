@@ -121,6 +121,8 @@ export async function createTeam(
     name: string;
     slug?: string;
     description?: string;
+    /** Optional creation-time visibility; defaults to the Prisma INVITE_ONLY default. */
+    joinPolicy?: string;
     config: ClientConfig;
   },
   deps?: OrgServiceDeps,
@@ -131,6 +133,8 @@ export async function createTeam(
   const actorUserId = resolveOrgActor(params);
   const name = normalizeTeamName(params.name);
   const description = normalizeTeamDescription(params.description);
+  const joinPolicy =
+    params.joinPolicy === undefined ? undefined : normalizeTeamJoinPolicy(params.joinPolicy);
   const maxTeams = parseMaxTeamsPerOrg(params.config);
 
   const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
@@ -167,6 +171,7 @@ export async function createTeam(
           name,
           slug,
           ...(description === undefined ? {} : { description }),
+          ...(joinPolicy === undefined ? {} : { joinPolicy }),
         },
         select: TEAM_SELECT,
       });
@@ -187,7 +192,11 @@ export async function createTeam(
     action: 'team.created',
     targetType: 'team',
     targetId: createdTeam.id,
-    metadata: { name: createdTeam.name, slug: createdTeam.slug },
+    metadata: {
+      name: createdTeam.name,
+      slug: createdTeam.slug,
+      joinPolicy: createdTeam.joinPolicy,
+    },
   });
 
   return createdTeam;

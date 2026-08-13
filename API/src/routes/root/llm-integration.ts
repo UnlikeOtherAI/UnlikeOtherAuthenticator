@@ -191,23 +191,31 @@ Server-side behaviour on first verified login is controlled by \`org_features\`:
 - \`allow_user_create_org\` (default \`false\`) gates \`POST /org/organisations\` for end-users. Superusers bypass. Keep \`false\` for admin-provisioned tenants.
 - \`allow_user_create_team\` (default \`false\`) gates \`POST /auth/create-team\`: whether a user may add a **further workspace** to an organisation they already run, from the SSO chooser. Separate from \`allow_user_create_org\` because it writes into an existing tenant rather than creating a first one, and the org owner/admin role check still applies on top.
 
-When \`login_flow.workspace_selection\` is \`"auto"\` and the chooser returns
-\`can_create_org: true\`, the hosted SSO UI lets the verified user create their
-first workspace itself. It sends only the chosen name to
-\`POST /auth/create-workspace\` with the short-lived \`login_token\`; the endpoint
-creates the organisation and its default team atomically with the remaining
-login continuation. Do not mint a tenant locally or use an empty
-\`/auth/select-team\` selection for this path.
+When \`login_flow.workspace_selection\` is \`"auto"\`, the hosted chooser has one
+card-corner creation control that opens a dialog. It offers **Create a new
+organisation** only for the existing first-workspace capability
+\`can_create_org: true\`; it sends \`{ login_token, name, join_policy? }\` to
+\`POST /auth/create-workspace\`. That endpoint creates the organisation and its
+default team atomically with the remaining login continuation. Do not mint a
+tenant locally or use an empty \`/auth/select-team\` selection for this path.
 
 An **organisation is the level above a workspace**, and the two creation paths differ accordingly.
 \`can_create_org\` is about a user's *first organisation*; the chooser's \`creatable_orgs\`
 (\`[{ orgId, orgName }]\`) lists organisations the user may add a *further workspace* to — they are
-an ACTIVE owner/admin there and the domain set \`org_features.allow_user_create_team\`. The UI offers
-creation per organisation and posts \`{ login_token, org_id, name }\` to \`POST /auth/create-team\`,
-which re-checks that role and the org's \`max_teams_per_org\` cap, adds the creator to the new
-workspace, and finalizes the login in the same transaction. A user with exactly one workspace and no
-pending invites still auto-skips the chooser, so that user reaches creation through your product, not
-the sign-in popup.
+an ACTIVE owner/admin there and the domain set \`org_features.allow_user_create_team\`. When there
+is more than one permitted destination, the dialog presents these exact values in an organisation
+dropdown; never infer, add, or substitute an \`org_id\`. It posts
+\`{ login_token, org_id, name, join_policy? }\` to \`POST /auth/create-team\`, which re-checks that
+role and the org's \`max_teams_per_org\` cap, adds the creator to the new workspace, and finalizes
+the login in the same transaction.
+
+Both hosted chooser creation routes accept the optional \`join_policy\` values
+\`"HIDDEN"\`, \`"INVITE_ONLY"\` (the default), and \`"OPEN_TO_ORG"\`. The UI labels
+\`HIDDEN\` as **Private**: it is not discoverable and only people who are invited can find it.
+\`INVITE_ONLY\` requires an invite to join, while \`OPEN_TO_ORG\` lets active members of the selected
+organisation join themselves. Other team policies are managed through the organisation API, not this
+hosted creation continuation. A user with exactly one workspace and no pending invites still auto-skips
+the chooser, so that user reaches creation through the product rather than the sign-in popup.
 
 After exchanging the resulting authorization code, use
 \`access_token.active.tenantSlug\` as the tenant's DNS label. It is the

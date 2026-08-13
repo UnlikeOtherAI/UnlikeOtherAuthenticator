@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { CreateWorkspaceCard } from '../components/workspace/CreateWorkspaceCard.js';
+import { CreateWorkspaceDialog } from '../components/workspace/CreateWorkspaceDialog.js';
 import { InviteCard } from '../components/workspace/InviteCard.js';
 import { WorkspaceList } from '../components/workspace/WorkspaceList.js';
 import { usePopup } from '../hooks/use-popup.js';
@@ -48,6 +48,7 @@ export function WorkspaceChooserPage(): React.JSX.Element {
   } = usePopup();
 
   const [error, setError] = useState<string | null>(null);
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [autoSkipFailed, setAutoSkipFailed] = useState(false);
   const [hydrateFailed, setHydrateFailed] = useState(false);
   const autoSkipStarted = useRef(false);
@@ -138,7 +139,9 @@ export function WorkspaceChooserPage(): React.JSX.Element {
     if (hydrateFailed) {
       return (
         <div>
-          <p className="text-sm text-[var(--uoa-color-danger)]">{error ?? t('form.error.generic')}</p>
+          <p className="text-sm text-[var(--uoa-color-danger)]">
+            {error ?? t('form.error.generic')}
+          </p>
         </div>
       );
     }
@@ -164,9 +167,33 @@ export function WorkspaceChooserPage(): React.JSX.Element {
   // permits a verified first-workspace flow; it does not turn an existing
   // workspace chooser into a misleading second-organisation creation path.
   const canCreateFirstWorkspace = workspaceChoices.can_create_org && !hasTeams && !hasInvites;
+  const canCreateWorkspace = canCreateFirstWorkspace || creatableOrgs.length > 0;
 
   return (
     <div className="flex flex-col gap-4">
+      {canCreateWorkspace ? (
+        <button
+          type="button"
+          onClick={() => setIsCreateDialogOpen(true)}
+          aria-label={t('workspace.createDialog.open')}
+          title={t('workspace.createDialog.open')}
+          aria-haspopup="dialog"
+          aria-expanded={isCreateDialogOpen}
+          // The 28px visual circle straddles the outer chooser card: 9px inside (one third) and
+          // 19px outside. The 44px button preserves a reliable touch target around that circle.
+          className="absolute -right-[27px] -top-[27px] z-10 flex h-11 w-11 items-center justify-center text-[var(--uoa-color-primary)]"
+        >
+          <span
+            aria-hidden="true"
+            // This surface is intentionally opaque: the workspace rows must never show through
+            // the floating control when the card scrolls underneath it.
+            className="flex h-7 w-7 items-center justify-center rounded-full border border-[var(--uoa-color-border)] bg-[var(--uoa-color-surface)] text-lg leading-none shadow-sm transition-colors hover:border-[var(--uoa-color-primary)]"
+          >
+            +
+          </span>
+        </button>
+      ) : null}
+
       <div>
         <h1 className={`text-balance ${classNames.title}`}>{t('auth.workspaceChooser.title')}</h1>
         {pendingEmail ? (
@@ -192,18 +219,24 @@ export function WorkspaceChooserPage(): React.JSX.Element {
         </div>
       ) : null}
 
-      {hasTeams || creatableOrgs.length > 0 ? (
+      {hasTeams ? (
         <WorkspaceList
           teams={workspaceChoices.teams}
-          creatableOrgs={creatableOrgs}
           loginToken={loginToken}
           query={query}
           onOutcome={handleOutcome}
         />
       ) : null}
 
-      {canCreateFirstWorkspace ? (
-        <CreateWorkspaceCard loginToken={loginToken} query={query} onOutcome={handleOutcome} />
+      {isCreateDialogOpen ? (
+        <CreateWorkspaceDialog
+          loginToken={loginToken}
+          query={query}
+          creatableOrgs={creatableOrgs}
+          canCreateNewOrganisation={canCreateFirstWorkspace}
+          onOutcome={handleOutcome}
+          onClose={() => setIsCreateDialogOpen(false)}
+        />
       ) : null}
     </div>
   );

@@ -21,7 +21,9 @@ export function AuthLayout(props: { children: React.ReactNode }): React.JSX.Elem
           <Logo />
         </div>
         <LanguageSelector />
-        <Card>{props.children}</Card>
+        <Card className={view === 'workspace-chooser' ? 'relative' : undefined}>
+          {props.children}
+        </Card>
       </main>
     </div>
   );

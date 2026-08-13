@@ -141,7 +141,7 @@ export const authEndpoints: EndpointSchema[] = [
     method: 'POST',
     path: '/auth/create-workspace',
     description:
-      "Create and immediately select a verified user's first workspace from the hosted SSO chooser. The login_token bridge and all supplied continuation fields must match the signed identity-verification continuation. Within one transaction, UOA claims the bridge token, creates the organisation and its default team, validates the exact ACTIVE client workspace scope, and completes required 2FA/code issuance. The organisation slug is the canonical tenant DNS label: it is exposed in the resulting access token as active.tenantSlug and is unique for the client domain. Team slugs remain local to their organisation and must not be used as tenant subdomains.",
+      "Create and immediately select a verified user's first workspace from the hosted SSO chooser. The login_token bridge and all supplied continuation fields must match the signed identity-verification continuation. Within one transaction, UOA claims the bridge token, creates the organisation and its default team with the requested hosted-chooser visibility, validates the exact ACTIVE client workspace scope, and completes required 2FA/code issuance. The organisation slug is the canonical tenant DNS label: it is exposed in the resulting access token as active.tenantSlug and is unique for the client domain. Team slugs remain local to their organisation and must not be used as tenant subdomains.",
     auth: 'config_url query param + login_token body field',
     query: {
       redirect_url: 'string (optional, redirect_uri also accepted)',
@@ -153,6 +153,8 @@ export const authEndpoints: EndpointSchema[] = [
     body: {
       login_token: 'string (required) — bridge token from /auth/verify-code or /auth/login',
       name: 'string (required, 1–100 characters after trimming) — workspace name; UOA derives the organisation/tenant slug',
+      join_policy:
+        '"HIDDEN" | "INVITE_ONLY" | "OPEN_TO_ORG" (optional; defaults to INVITE_ONLY) — default-team visibility. HIDDEN is private/discoverable only by invitees; OPEN_TO_ORG lets active organisation members join themselves',
       remember_me:
         'boolean (optional) — when present must equal the value signed at identity verification; omission uses that signed value',
     },
@@ -171,7 +173,7 @@ export const authEndpoints: EndpointSchema[] = [
     method: 'POST',
     path: '/auth/create-team',
     description:
-      "Create and immediately select a FURTHER workspace (team) inside an organisation the verified user already belongs to, from the hosted SSO chooser. The sibling of /auth/create-workspace, which creates a user's first organisation: an organisation is the level above a workspace, so this route writes into an existing tenant and is authorized accordingly — the acting user must be an ACTIVE owner/admin of org_id (the same rule POST /org/organisations/:orgId/teams enforces), the organisation must belong to this config's domain, and the domain must set org_features.allow_user_create_team. The org's max_teams_per_org cap still applies. Same transaction envelope as /auth/create-workspace: the bridge token is claimed alongside the new team, the creator's ACTIVE team membership, the workspace-scope validation, and required 2FA/code issuance. The chooser's creatable_orgs lists exactly the organisations this will accept.",
+      "Create and immediately select a FURTHER workspace (team) inside an organisation the verified user already belongs to, from the hosted SSO chooser. The sibling of /auth/create-workspace, which creates a user's first organisation: an organisation is the level above a workspace, so this route writes into an existing tenant and is authorized accordingly — the acting user must be an ACTIVE owner/admin of org_id (the same rule POST /org/organisations/:orgId/teams enforces), the organisation must belong to this config's domain, and the domain must set org_features.allow_user_create_team. The org's max_teams_per_org cap still applies. Same transaction envelope as /auth/create-workspace: the bridge token is claimed alongside the new team with its requested hosted-chooser visibility, the creator's ACTIVE team membership, the workspace-scope validation, and required 2FA/code issuance. The chooser's creatable_orgs lists exactly the organisations this will accept.",
     auth: 'config_url query param + login_token body field',
     query: {
       redirect_url: 'string (optional, redirect_uri also accepted)',
@@ -183,8 +185,10 @@ export const authEndpoints: EndpointSchema[] = [
     body: {
       login_token: 'string (required) — bridge token from /auth/verify-code or /auth/login',
       org_id:
-        'string (required) — an organisation from the chooser\'s creatable_orgs; anything else is the generic auth failure',
+        "string (required) — an organisation from the chooser's creatable_orgs; anything else is the generic auth failure",
       name: 'string (required, 1–100 characters after trimming) — workspace name; UOA derives the team slug, local to the organisation',
+      join_policy:
+        '"HIDDEN" | "INVITE_ONLY" | "OPEN_TO_ORG" (optional; defaults to INVITE_ONLY) — workspace visibility. HIDDEN is private/discoverable only by invitees; OPEN_TO_ORG lets active organisation members join themselves',
       remember_me:
         'boolean (optional) — when present must equal the value signed at identity verification; omission uses that signed value',
     },

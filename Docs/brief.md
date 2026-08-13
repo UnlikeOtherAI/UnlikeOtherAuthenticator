@@ -1757,6 +1757,18 @@ hosted-SSO route, `POST /auth/create-team` — the sibling of
 - The creator is added to the new workspace as team `admin`; the workspace is
   then selected and the login finalized in the same transaction that claims the
   bridge token.
+- The hosted chooser uses one card-corner creation control and a popup rather
+  than an inline form on a workspace row. When more than one server-authorized
+  destination is available, it presents the exact `creatable_orgs` values in an
+  organisation selector. It may offer the separate “new organisation” target
+  only for the existing `can_create_org` first-workspace capability; the client
+  must never invent an org id.
+- Both hosted chooser creation routes may receive optional `join_policy` of
+  `HIDDEN`, `INVITE_ONLY` (the default), or `OPEN_TO_ORG`. `HIDDEN` is the
+  private choice: it is not discoverable and only invitees can find it. The
+  other policies retain their ordinary team-policy behaviour. These are a
+  deliberately limited hosted-chooser subset; other policies remain managed by
+  the organisation API.
 - Unlike the first-workspace entrypoint, this is **not** limited to users with no
   memberships: a user who already belongs to workspaces is exactly who needs it.
   It is still bounded by the chooser being shown at all — a user with exactly one

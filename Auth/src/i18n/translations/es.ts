@@ -68,6 +68,27 @@ export const es = {
   'workspace.createOrg.nameLabel': 'Nombre del espacio de trabajo',
   'workspace.createOrg.submit': 'Crear espacio de trabajo',
   'workspace.createOrg.cancel': 'Cancelar',
+  'workspace.createDialog.open': 'Crear espacio de trabajo',
+  'workspace.createDialog.title': 'Crear un espacio de trabajo',
+  'workspace.createDialog.subtitle': 'Elige dónde pertenece y quién puede encontrarlo.',
+  'workspace.createDialog.destinationLabel': 'Organización',
+  'workspace.createDialog.newOrganisation': 'Crear una nueva organización',
+  'workspace.createDialog.newOrganisationDescription':
+    'Esto crea una organización y su primer espacio de trabajo.',
+  'workspace.createDialog.existingOrganisationDescription':
+    'Esto añade un espacio de trabajo a la organización seleccionada.',
+  'workspace.createDialog.visibilityLabel': 'Visibilidad',
+  'workspace.createDialog.visibility.private': 'Privado',
+  'workspace.createDialog.visibility.privateDescription':
+    'Solo las personas a las que invites pueden encontrar este espacio de trabajo.',
+  'workspace.createDialog.visibility.inviteOnly': 'Solo con invitación',
+  'workspace.createDialog.visibility.inviteOnlyDescription':
+    'Las personas necesitan una invitación para unirse a este espacio de trabajo.',
+  'workspace.createDialog.visibility.openToOrganisation': 'Abierto a la organización',
+  'workspace.createDialog.visibility.openToOrganisationDescription':
+    'Los miembros activos de la organización pueden unirse a este espacio de trabajo.',
+  'workspace.createDialog.submit': 'Crear espacio de trabajo',
+  'workspace.createDialog.cancel': 'Cancelar',
 
   'notice.sessionExpired': 'Tu inicio de sesión tardó demasiado y caducó. Inicia sesión de nuevo.',
   'workspace.orgSection.addWorkspace': 'Añadir un espacio de trabajo a {org}',

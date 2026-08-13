@@ -133,10 +133,7 @@ export type ApiBinarySuccess = {
 export type ApiBinaryResult = ApiBinarySuccess | ApiFailure;
 
 /** POST a JSON capability request and return the exact binary response bytes. */
-export async function postBinary<TReq>(
-  path: string,
-  body: TReq,
-): Promise<ApiBinaryResult> {
+export async function postBinary<TReq>(path: string, body: TReq): Promise<ApiBinaryResult> {
   const url = buildUrl(path);
   let response: Response;
   try {
@@ -271,9 +268,14 @@ export type SelectTeamRequest = {
   remember_me?: boolean;
 };
 
+/** The hosted chooser deliberately offers only policies it can describe safely. */
+export type WorkspaceJoinPolicy = 'HIDDEN' | 'INVITE_ONLY' | 'OPEN_TO_ORG';
+
 export type CreateWorkspaceRequest = {
   login_token: string;
   name: string;
+  /** Optional for compatibility; the server defaults to INVITE_ONLY when omitted. */
+  join_policy?: WorkspaceJoinPolicy;
   remember_me?: boolean;
 };
 

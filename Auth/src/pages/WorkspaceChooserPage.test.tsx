@@ -2,6 +2,7 @@ import { renderToString } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import { WorkspaceChooserPage } from './WorkspaceChooserPage.js';
+import { AuthLayout } from '../components/layout/AuthLayout.js';
 import { PopupProvider } from '../hooks/use-popup.js';
 import type { WorkspaceChoices } from '../hooks/use-popup.js';
 import { I18nProvider } from '../i18n/I18nProvider.js';
@@ -57,7 +58,9 @@ function renderChooser(
           initialLoginToken={choices ? 'bridge.jwt' : null}
           initialWorkspaceChoices={choices}
         >
-          <WorkspaceChooserPage />
+          <AuthLayout>
+            <WorkspaceChooserPage />
+          </AuthLayout>
         </PopupProvider>
       </I18nProvider>
     </ThemeProvider>,
@@ -118,25 +121,28 @@ describe('WorkspaceChooserPage SSR rendering', () => {
     expect(html).toContain('Decline');
   });
 
-  it('renders the create-workspace card only for an org-less user with can_create_org', () => {
+  it('renders the corner create control only for an org-less user with can_create_org', () => {
     const withCreate = renderChooser({
       teams: [],
       pending_invites: [],
       can_create_org: true,
     });
-    expect(withCreate).toContain('Create a new workspace');
+    expect(withCreate).toContain('aria-label="Create workspace"');
+    expect(withCreate).toContain('absolute -right-[27px] -top-[27px] z-10 flex h-11 w-11');
+    expect(withCreate).toContain('bg-[var(--uoa-color-surface)]');
 
     const withoutCreate = renderChooser({
       teams: [{ teamId: 't1', orgId: 'o1', name: 'Backend Team', role: 'member' }],
       pending_invites: [],
       can_create_org: true,
     });
-    expect(withoutCreate).not.toContain('Create a new workspace');
+    expect(withoutCreate).not.toContain('aria-label="Create workspace"');
   });
 
-  it('shows only the create-workspace entry when there are no teams or invites', () => {
+  it('shows only the create control when there are no teams or invites', () => {
     const html = renderChooser({ teams: [], pending_invites: [], can_create_org: true });
-    expect(html).toContain('Create a new workspace');
+    expect(html).toContain('aria-label="Create workspace"');
+    expect(html).not.toContain('role="dialog"');
   });
 
   it('auto-skips a single team with no pending invites (never shows a one-item chooser)', () => {
@@ -198,10 +204,9 @@ describe('WorkspaceChooserPage SSR rendering', () => {
     });
   });
 
-  // "org and team should be different — org is a level above": the chooser offers creation per
-  // organisation the server marked creatable, and names the org so two same-named workspaces in
-  // different orgs are distinguishable.
-  it('offers a create-workspace card inside each org the server marked creatable', () => {
+  // “Org and team should be different — org is a level above”: the page lists workspace groups,
+  // while one card-corner action opens a destination picker backed only by creatable_orgs.
+  it('renders one opaque, card-corner create control for server-marked organisations', () => {
     const html = renderChooser({
       teams: [
         { teamId: 't1', orgId: 'o1', name: 'General', role: 'admin', orgName: 'Acme' },
@@ -214,18 +219,16 @@ describe('WorkspaceChooserPage SSR rendering', () => {
 
     expect(html).toContain('Acme');
     expect(html).toContain('Globex');
-    // The org heading anchors the "+" and is an <h2> so screen readers can jump between groups.
+    // The org headings remain <h2>s so screen readers can jump between workspace groups.
     expect(html).toMatch(/<h2[^>]*>Acme<\/h2>/);
-    expect(html).toContain('aria-label="Add a workspace to Acme"');
-    expect(html).toContain('aria-controls="create-team-o1"');
-    // The create control is anchored over the first workspace card, not left in the heading row.
-    expect(html).toContain('relative flex flex-col gap-3');
-    expect(html).toContain('absolute -right-[22px] top-px z-10 flex h-11 w-11');
-    // Collapsed on the server, so hydration matches and no keyboard opens on arrival.
+    expect(html).toMatch(/<h2[^>]*>Globex<\/h2>/);
+    expect(html).toContain('aria-label="Create workspace"');
+    // It overlaps the outer chooser card, never the first workspace row.
+    expect(html).toContain('absolute -right-[27px] -top-[27px] z-10 flex h-11 w-11');
+    expect(html).toContain('bg-[var(--uoa-color-surface)]');
+    // The popup stays closed on the server, so hydration matches and no keyboard opens on arrival.
     expect(html).toContain('aria-expanded="false"');
-    expect(html).not.toContain('<form id="create-team-o1"');
-    // Not an owner/admin of Globex — no creation offered there.
-    expect(html).not.toContain('Add a workspace to Globex');
+    expect(html).not.toContain('role="dialog"');
   });
 
   // Two teams, because a single-team/no-invite payload auto-selects and never renders the chooser
@@ -241,7 +244,9 @@ describe('WorkspaceChooserPage SSR rendering', () => {
       creatable_orgs: [{ orgId: 'o2', orgName: 'Initech' }],
     });
 
-    expect(html).toContain('Add a workspace to Initech');
+    expect(html).toContain('aria-label="Create workspace"');
+    // Initech is a valid popup destination, not an empty workspace-list section.
+    expect(html).not.toMatch(/<h2[^>]*>Initech<\/h2>/);
   });
 
   it('renders the workspace avatar image rather than the initials badge', () => {

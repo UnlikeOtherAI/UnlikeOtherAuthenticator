@@ -26,7 +26,7 @@ import {
   type OrgServicePrisma,
   type OrganisationRecord,
 } from './organisation.service.base.js';
-import { deriveUniqueTeamSlug } from './team.service.base.js';
+import { deriveUniqueTeamSlug, normalizeTeamJoinPolicy } from './team.service.base.js';
 import {
   lockWorkspaceMembershipRows,
   lockWorkspaceOrganisationRow,
@@ -82,6 +82,8 @@ export async function createOrganisation(
   params: {
     domain: string;
     name: string;
+    /** Optional default-team visibility for the hosted first-workspace continuation. */
+    defaultTeamJoinPolicy?: string;
     ownerId: string;
     config: ClientConfig;
     actorUserId?: string;
@@ -96,6 +98,10 @@ export async function createOrganisation(
   const domain = normalizeDomain(params.domain);
   const ownerId = params.ownerId.trim();
   const name = ensureOrgName(params.name);
+  const defaultTeamJoinPolicy =
+    params.defaultTeamJoinPolicy === undefined
+      ? undefined
+      : normalizeTeamJoinPolicy(params.defaultTeamJoinPolicy);
   if (!ownerId || !domain) throw new AppError('BAD_REQUEST', 400);
   parseOrgFeatureRoles(params.config); // validates array is usable for later writes.
 
@@ -172,6 +178,7 @@ export async function createOrganisation(
           name: 'General',
         }),
         isDefault: true,
+        ...(defaultTeamJoinPolicy === undefined ? {} : { joinPolicy: defaultTeamJoinPolicy }),
       },
       select: { id: true },
     });

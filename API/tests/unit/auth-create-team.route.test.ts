@@ -128,8 +128,7 @@ async function mintLoginToken(): Promise<string> {
 }
 
 async function postCreateTeam(body: Record<string, unknown>) {
-  const { registerAuthCreateTeamRoute } =
-    await import('../../src/routes/auth/auth-create-team.js');
+  const { registerAuthCreateTeamRoute } = await import('../../src/routes/auth/auth-create-team.js');
   const app = fastify();
   app.decorateRequest('adminDb', { getter: () => prismaMock as never });
   registerErrorHandler(app);
@@ -196,9 +195,14 @@ describe('POST /auth/create-team', () => {
     vi.restoreAllMocks();
   });
 
-  it('creates the workspace in the named org, adds the creator, and finalizes the same continuation', async () => {
+  it('creates the workspace with the chosen visibility in the named org, adds the creator, and finalizes the same continuation', async () => {
     const loginToken = await mintLoginToken();
-    const res = await postCreateTeam({ login_token: loginToken, org_id: 'org-1', name: 'Support' });
+    const res = await postCreateTeam({
+      login_token: loginToken,
+      org_id: 'org-1',
+      name: 'Support',
+      join_policy: 'OPEN_TO_ORG',
+    });
 
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({
@@ -213,6 +217,7 @@ describe('POST /auth/create-team', () => {
         orgId: 'org-1',
         domain: 'client.example.com',
         name: 'Support',
+        joinPolicy: 'OPEN_TO_ORG',
         actorUserId: 'user-1',
       }),
       { prisma: prismaMock, auditPrisma: prismaMock },
@@ -272,7 +277,22 @@ describe('POST /auth/create-team', () => {
     expect(createTeamMock).not.toHaveBeenCalled();
   });
 
-  it('surfaces the org role check: a non-manager gets createTeam\'s 403, and nothing is finalized', async () => {
+  it('rejects a join policy the hosted chooser does not support', async () => {
+    const loginToken = await mintLoginToken();
+    const res = await postCreateTeam({
+      login_token: loginToken,
+      org_id: 'org-1',
+      name: 'Support',
+      join_policy: 'APPROVED_DOMAIN',
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: 'Request failed' });
+    expect(consumeLoginSessionMock).not.toHaveBeenCalled();
+    expect(createTeamMock).not.toHaveBeenCalled();
+  });
+
+  it("surfaces the org role check: a non-manager gets createTeam's 403, and nothing is finalized", async () => {
     const { AppError } = await import('../../src/utils/errors.js');
     createTeamMock.mockRejectedValue(new AppError('FORBIDDEN', 403));
     const loginToken = await mintLoginToken();

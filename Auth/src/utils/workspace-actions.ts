@@ -7,6 +7,7 @@ import {
   selectTeam,
   verifyLoginCode,
   type AuthFlowQuery,
+  type WorkspaceJoinPolicy,
 } from './api.js';
 import {
   interpretWorkspaceResponse,
@@ -28,7 +29,7 @@ export async function submitVerifyCode(
 
 /**
  * POST /auth/select-team, decoded into the next client step. Shared by `WorkspaceCard`,
- * `InviteCard` (accept/decline), and `CreateWorkspaceCard` — all three are the same call with a
+ * `InviteCard` (accept/decline), and `CreateWorkspaceDialog` — all three are the same call with a
  * different combination of `teamId`/`inviteId`/`action`.
  */
 export async function submitTeamSelection(
@@ -47,10 +48,13 @@ export async function submitTeamSelection(
 
 /** Creates and selects a workspace with the same authenticated login capability as the chooser. */
 export async function submitWorkspaceCreation(
-  params: { loginToken: string; name: string } & AuthFlowQuery,
+  params: { loginToken: string; name: string; joinPolicy?: WorkspaceJoinPolicy } & AuthFlowQuery,
 ): Promise<WorkspaceResponseOutcome> {
-  const { loginToken, name, ...query } = params;
-  const result = await createWorkspace({ login_token: loginToken, name }, query);
+  const { loginToken, name, joinPolicy, ...query } = params;
+  const result = await createWorkspace(
+    { login_token: loginToken, name, join_policy: joinPolicy },
+    query,
+  );
   if (!result.ok && isExpiredBridge(result.status)) return { kind: 'expired' };
   return interpretWorkspaceResponse(result.ok ? result.data : null);
 }
@@ -61,10 +65,18 @@ export async function submitWorkspaceCreation(
  * the server re-checks that this user is an ACTIVE owner/admin of it.
  */
 export async function submitTeamCreation(
-  params: { loginToken: string; orgId: string; name: string } & AuthFlowQuery,
+  params: {
+    loginToken: string;
+    orgId: string;
+    name: string;
+    joinPolicy?: WorkspaceJoinPolicy;
+  } & AuthFlowQuery,
 ): Promise<WorkspaceResponseOutcome> {
-  const { loginToken, orgId, name, ...query } = params;
-  const result = await createTeam({ login_token: loginToken, org_id: orgId, name }, query);
+  const { loginToken, orgId, name, joinPolicy, ...query } = params;
+  const result = await createTeam(
+    { login_token: loginToken, org_id: orgId, name, join_policy: joinPolicy },
+    query,
+  );
   if (!result.ok && isExpiredBridge(result.status)) return { kind: 'expired' };
   return interpretWorkspaceResponse(result.ok ? result.data : null);
 }

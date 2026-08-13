@@ -70,6 +70,27 @@ export const en = {
   'workspace.createOrg.nameLabel': 'Workspace name',
   'workspace.createOrg.submit': 'Create workspace',
   'workspace.createOrg.cancel': 'Cancel',
+  'workspace.createDialog.open': 'Create workspace',
+  'workspace.createDialog.title': 'Create a workspace',
+  'workspace.createDialog.subtitle': 'Choose where it belongs and who can find it.',
+  'workspace.createDialog.destinationLabel': 'Organisation',
+  'workspace.createDialog.newOrganisation': 'Create a new organisation',
+  'workspace.createDialog.newOrganisationDescription':
+    'This creates an organisation and its first workspace.',
+  'workspace.createDialog.existingOrganisationDescription':
+    'This adds a workspace to the selected organisation.',
+  'workspace.createDialog.visibilityLabel': 'Visibility',
+  'workspace.createDialog.visibility.private': 'Private',
+  'workspace.createDialog.visibility.privateDescription':
+    'Only people you invite can discover this workspace.',
+  'workspace.createDialog.visibility.inviteOnly': 'Invite only',
+  'workspace.createDialog.visibility.inviteOnlyDescription':
+    'People need an invite before they can join this workspace.',
+  'workspace.createDialog.visibility.openToOrganisation': 'Open to organisation',
+  'workspace.createDialog.visibility.openToOrganisationDescription':
+    'Active members of the organisation can join this workspace themselves.',
+  'workspace.createDialog.submit': 'Create workspace',
+  'workspace.createDialog.cancel': 'Cancel',
 
   'notice.sessionExpired': 'Your sign-in took too long and expired. Please sign in again.',
   'workspace.orgSection.addWorkspace': 'Add a workspace to {org}',

@@ -68,6 +68,27 @@ export const cs = {
   'workspace.createOrg.nameLabel': 'Název pracovního prostoru',
   'workspace.createOrg.submit': 'Vytvořit pracovní prostor',
   'workspace.createOrg.cancel': 'Zrušit',
+  'workspace.createDialog.open': 'Vytvořit pracovní prostor',
+  'workspace.createDialog.title': 'Vytvořit pracovní prostor',
+  'workspace.createDialog.subtitle': 'Zvolte, kam patří a kdo jej může najít.',
+  'workspace.createDialog.destinationLabel': 'Organizace',
+  'workspace.createDialog.newOrganisation': 'Vytvořit novou organizaci',
+  'workspace.createDialog.newOrganisationDescription':
+    'Tím vznikne organizace a její první pracovní prostor.',
+  'workspace.createDialog.existingOrganisationDescription':
+    'Tím přidáte pracovní prostor do vybrané organizace.',
+  'workspace.createDialog.visibilityLabel': 'Viditelnost',
+  'workspace.createDialog.visibility.private': 'Soukromý',
+  'workspace.createDialog.visibility.privateDescription':
+    'Tento pracovní prostor mohou najít jen lidé, které pozvete.',
+  'workspace.createDialog.visibility.inviteOnly': 'Pouze na pozvání',
+  'workspace.createDialog.visibility.inviteOnlyDescription':
+    'Lidé potřebují pozvání, aby se mohli k pracovnímu prostoru připojit.',
+  'workspace.createDialog.visibility.openToOrganisation': 'Otevřený pro organizaci',
+  'workspace.createDialog.visibility.openToOrganisationDescription':
+    'Aktivní členové organizace se mohou k pracovnímu prostoru připojit sami.',
+  'workspace.createDialog.submit': 'Vytvořit pracovní prostor',
+  'workspace.createDialog.cancel': 'Zrušit',
 
   'notice.sessionExpired': 'Přihlášení trvalo příliš dlouho a vypršelo. Přihlaste se prosím znovu.',
   'workspace.orgSection.addWorkspace': 'Přidat pracovní prostor do {org}',

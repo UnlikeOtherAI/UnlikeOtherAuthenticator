@@ -41,9 +41,8 @@ export type TeamChoice = {
 
 /**
  * An organisation this user may add a workspace to (`creatable_orgs`): they are an ACTIVE
- * owner/admin of it and the domain enabled `org_features.allow_user_create_team`. An org is the
- * level above a workspace, so creation is offered per organisation rather than as one ambiguous
- * button.
+ * owner/admin of it and the domain enabled `org_features.allow_user_create_team`. The chooser
+ * presents these server-authorized targets in its creation-dialog destination selector.
  */
 export type CreatableOrgChoice = {
   orgId: string;

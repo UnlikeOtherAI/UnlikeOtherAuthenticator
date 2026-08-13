@@ -184,9 +184,13 @@ describe('POST /auth/create-workspace', () => {
     vi.restoreAllMocks();
   });
 
-  it('creates the organisation/default team and finalizes the same SSO continuation', async () => {
+  it('creates the organisation/default team with the chosen visibility and finalizes the same SSO continuation', async () => {
     const loginToken = await mintLoginToken();
-    const res = await postCreateWorkspace({ login_token: loginToken, name: 'Acme Space' });
+    const res = await postCreateWorkspace({
+      login_token: loginToken,
+      name: 'Acme Space',
+      join_policy: 'HIDDEN',
+    });
 
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({
@@ -198,6 +202,7 @@ describe('POST /auth/create-workspace', () => {
       expect.objectContaining({
         domain: 'client.example.com',
         name: 'Acme Space',
+        defaultTeamJoinPolicy: 'HIDDEN',
         ownerId: 'user-1',
         actorUserId: 'user-1',
       }),
@@ -242,6 +247,20 @@ describe('POST /auth/create-workspace', () => {
     const res = await postCreateWorkspace({ login_token: loginToken, name: 'Acme Space' });
 
     expect(res.statusCode).toBe(401);
+    expect(res.json()).toEqual({ error: 'Request failed' });
+    expect(consumeLoginSessionMock).not.toHaveBeenCalled();
+    expect(createOrganisationMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects a join policy the hosted chooser does not support', async () => {
+    const loginToken = await mintLoginToken();
+    const res = await postCreateWorkspace({
+      login_token: loginToken,
+      name: 'Acme Space',
+      join_policy: 'REQUEST_TO_JOIN',
+    });
+
+    expect(res.statusCode).toBe(400);
     expect(res.json()).toEqual({ error: 'Request failed' });
     expect(consumeLoginSessionMock).not.toHaveBeenCalled();
     expect(createOrganisationMock).not.toHaveBeenCalled();
