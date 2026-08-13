@@ -1,7 +1,10 @@
 import type { PrismaClient } from '@prisma/client';
 
-import { getPrisma } from '../db/prisma.js';
+import { getAdminPrisma, getPrisma } from '../db/prisma.js';
 import { pendingInviteStatusWhere } from './first-login.service.js';
+import {
+  type ProductWorkspacePolicy,
+} from './product-workspace-policy.service.js';
 
 // Gap-fix A Task 1 (design §11.4 "sidebar workspace stack" + §11.3 icons): the `GET /org/me`
 // sidebar enrichment. Split out of `org-context.service.ts` (per the gap-fix spec) rather than
@@ -39,6 +42,8 @@ type WorkspaceDirectoryPrisma = {
 };
 
 type WorkspaceDirectoryDeps = {
+  crossProductPrisma?: Pick<PrismaClient, 'teamMember'>;
+  policy?: ProductWorkspacePolicy;
   prisma?: WorkspaceDirectoryPrisma;
   now?: () => Date;
 };
@@ -58,8 +63,9 @@ function compareWorkspaceEntries(a: WorkspaceEntry, b: WorkspaceEntry): number {
 }
 
 /**
- * The sidebar workspace stack (design §11.4): one entry per ACTIVE team membership of the caller
- * on this domain, ordered `lastLoginAt` DESC with nulls last, then `name` ASC.
+ * The sidebar workspace stack (design §11.4): one entry per ACTIVE team membership the caller may
+ * enter. A product with the server-owned `all_active_memberships` policy receives the same
+ * cross-product directory as its authenticated chooser; otherwise this remains domain-scoped.
  *
  * `lastLoginAt` is derived from the caller's own `refresh_tokens` rows (`max(createdAt)` scoped by
  * `userId` + `domain` + `teamId`). `refresh_tokens` is RLS-classified as a *domain*-scoped table
@@ -98,10 +104,40 @@ export async function buildSidebarWorkspaces(
     },
   });
 
-  if (memberships.length === 0) return [];
+  const policy = deps?.policy ?? { scope: 'client_domain' as const };
+  const crossProductMemberships = policy.scope === 'all_active_memberships'
+    ? await (deps?.crossProductPrisma ?? getAdminPrisma()).teamMember.findMany({
+        where: {
+          userId: params.userId,
+          status: 'ACTIVE',
+          team: { org: { members: { some: { userId: params.userId, status: 'ACTIVE' } } } },
+        },
+        select: {
+          teamId: true,
+          teamRole: true,
+          team: {
+            select: {
+              orgId: true,
+              name: true,
+              slug: true,
+              iconUrl: true,
+              org: { select: { name: true } },
+            },
+          },
+        },
+      })
+    : [];
+  const directoryMemberships = [
+    ...new Map(
+      [...memberships, ...crossProductMemberships].map((membership) => [membership.teamId, membership]),
+    ).values(),
+  ];
+  if (directoryMemberships.length === 0) return [];
 
+  // Login recency remains limited to this product's domain. Cross-product access grants a
+  // workspace directory, not another product's session history.
   const teamIds = memberships.map((membership) => membership.teamId);
-  const loginRows = await prisma.refreshToken.groupBy({
+  const loginRows = teamIds.length > 0 ? await prisma.refreshToken.groupBy({
     by: ['teamId'],
     where: {
       userId: params.userId,
@@ -109,7 +145,7 @@ export async function buildSidebarWorkspaces(
       teamId: { in: teamIds },
     },
     _max: { createdAt: true },
-  });
+  }) : [];
 
   const lastLoginByTeam = new Map<string, Date>();
   for (const row of loginRows) {
@@ -118,7 +154,7 @@ export async function buildSidebarWorkspaces(
     }
   }
 
-  const entries: WorkspaceEntry[] = memberships.map((membership) => ({
+  const entries: WorkspaceEntry[] = directoryMemberships.map((membership) => ({
     teamId: membership.teamId,
     orgId: membership.team.orgId,
     name: membership.team.name,

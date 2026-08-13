@@ -11,6 +11,7 @@ import {
   buildSidebarPendingInvites,
   buildSidebarWorkspaces,
 } from '../../services/workspace-directory.service.js';
+import { resolveProductWorkspacePolicy } from '../../services/product-workspace-policy.service.js';
 import { AppError } from '../../utils/errors.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
 import { assertVerifiedDomainMatchesQuery, normalizeDomain } from './domain-context.js';
@@ -78,8 +79,12 @@ export function registerOrgMeRoute(app: FastifyInstance): void {
         // Gap-fix A Task 1 (design §11.4 sidebar contract): appended, additive top-level fields —
         // org_id/org_role/teams/team_roles/groups above are unchanged. Both reads share this
         // transaction so they observe the same snapshot as the org context above.
+        const workspacePolicy = await resolveProductWorkspacePolicy({ domain: normalizedDomain });
         const [workspaces, pendingInvites] = await Promise.all([
-          buildSidebarWorkspaces({ userId: claims.userId, domain: normalizedDomain }, { prisma }),
+          buildSidebarWorkspaces(
+            { userId: claims.userId, domain: normalizedDomain },
+            { prisma, policy: workspacePolicy },
+          ),
           buildSidebarPendingInvites({ userId: claims.userId, domain: normalizedDomain }, { prisma }),
         ]);
 
