@@ -40,9 +40,7 @@ function renderChooser(
   pendingEmail: string | null = 'jo@example.com',
   teamHint?: string,
 ): string {
-  const choices: WorkspaceChoices | null = fixture
-    ? { creatable_orgs: [], ...fixture }
-    : null;
+  const choices: WorkspaceChoices | null = fixture ? { creatable_orgs: [], ...fixture } : null;
   const search = teamHint
     ? `?config_url=https%3A%2F%2Fclient.example.com%2Fauth-config&team_hint=${encodeURIComponent(teamHint)}`
     : '?config_url=https%3A%2F%2Fclient.example.com%2Fauth-config';
@@ -128,7 +126,8 @@ describe('WorkspaceChooserPage SSR rendering', () => {
       can_create_org: true,
     });
     expect(withCreate).toContain('aria-label="Create workspace"');
-    expect(withCreate).toContain('absolute -right-[27px] -top-[27px] z-10 flex h-11 w-11');
+    expect(withCreate).toContain('absolute -right-[31px] -top-[14px] z-10 flex h-12 w-12');
+    expect(withCreate).toContain('flex h-10 w-10 items-center justify-center rounded-full');
     expect(withCreate).toContain('bg-[var(--uoa-color-surface)]');
 
     const withoutCreate = renderChooser({
@@ -224,7 +223,8 @@ describe('WorkspaceChooserPage SSR rendering', () => {
     expect(html).toMatch(/<h2[^>]*>Globex<\/h2>/);
     expect(html).toContain('aria-label="Create workspace"');
     // It overlaps the outer chooser card, never the first workspace row.
-    expect(html).toContain('absolute -right-[27px] -top-[27px] z-10 flex h-11 w-11');
+    expect(html).toContain('absolute -right-[31px] -top-[14px] z-10 flex h-12 w-12');
+    expect(html).toContain('flex h-10 w-10 items-center justify-center rounded-full');
     expect(html).toContain('bg-[var(--uoa-color-surface)]');
     // The popup stays closed on the server, so hydration matches and no keyboard opens on arrival.
     expect(html).toContain('aria-expanded="false"');

@@ -179,15 +179,16 @@ export function WorkspaceChooserPage(): React.JSX.Element {
           title={t('workspace.createDialog.open')}
           aria-haspopup="dialog"
           aria-expanded={isCreateDialogOpen}
-          // The 28px visual circle straddles the outer chooser card: 9px inside (one third) and
-          // 19px outside. The 44px button preserves a reliable touch target around that circle.
-          className="absolute -right-[27px] -top-[27px] z-10 flex h-11 w-11 items-center justify-center text-[var(--uoa-color-primary)]"
+          // The 40px visible circle sits exactly 10px above the chooser card — one quarter of its
+          // diameter — leaving three quarters inside. The 48px button keeps the touch target
+          // generous around that larger visual control.
+          className="absolute -right-[31px] -top-[14px] z-10 flex h-12 w-12 items-center justify-center text-[var(--uoa-color-primary)]"
         >
           <span
             aria-hidden="true"
             // This surface is intentionally opaque: the workspace rows must never show through
             // the floating control when the card scrolls underneath it.
-            className="flex h-7 w-7 items-center justify-center rounded-full border border-[var(--uoa-color-border)] bg-[var(--uoa-color-surface)] text-lg leading-none shadow-sm transition-colors hover:border-[var(--uoa-color-primary)]"
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--uoa-color-border)] bg-[var(--uoa-color-surface)] text-xl leading-none shadow-sm transition-colors hover:border-[var(--uoa-color-primary)]"
           >
             +
           </span>
