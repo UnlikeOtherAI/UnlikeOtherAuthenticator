@@ -218,6 +218,9 @@ describe('WorkspaceChooserPage SSR rendering', () => {
     expect(html).toMatch(/<h2[^>]*>Acme<\/h2>/);
     expect(html).toContain('aria-label="Add a workspace to Acme"');
     expect(html).toContain('aria-controls="create-team-o1"');
+    // The create control is anchored over the first workspace card, not left in the heading row.
+    expect(html).toContain('relative flex flex-col gap-3');
+    expect(html).toContain('absolute -right-[22px] top-px z-10 flex h-11 w-11');
     // Collapsed on the server, so hydration matches and no keyboard opens on arrival.
     expect(html).toContain('aria-expanded="false"');
     expect(html).not.toContain('<form id="create-team-o1"');

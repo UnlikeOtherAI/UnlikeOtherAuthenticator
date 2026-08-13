@@ -81,13 +81,14 @@ export function WorkspaceList(props: {
         const canCreate = section.creatable && section.orgName !== null;
 
         return (
-          <div key={section.orgId} className="flex flex-col gap-3">
+          <div key={section.orgId} className="relative flex flex-col gap-3">
             {(showOrgNames || canCreate) && section.orgName ? (
               <OrgSectionHeader
                 orgName={section.orgName}
                 formId={formId}
                 expanded={expanded}
                 disabled={props.disabled}
+                overlapCreateControl={section.teams.length > 0 || expanded}
                 onToggleCreate={
                   canCreate
                     ? () => setCreatingOrgId(expanded ? null : section.orgId)
