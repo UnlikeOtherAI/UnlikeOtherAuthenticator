@@ -103,6 +103,61 @@ can be retried; \`session-choices\` and invite decline validate but do not consu
 
 ---
 
+## Phase 4.8.1 — Seamless backend workspace switch
+
+Once the user has a renewable session, the product backend can switch that session to a team from
+the authorized directory without reopening the hosted chooser:
+
+\`\`\`http
+POST /auth/token?config_url=<your_config_endpoint_url>
+Authorization: Bearer <domain-hash credential>
+Content-Type: application/json
+
+{
+  "grant_type": "urn:unlikeotherai:params:oauth:grant-type:workspace-switch",
+  "refresh_token": "<opaque server-side refresh token>",
+  "organization_id": "<exact target org id>",
+  "team_id": "<exact target team id>"
+}
+\`\`\`
+
+There is deliberately no \`operation_id\`. UOA binds intent to the presented predecessor plus the exact
+target and creates a deterministic successor. Before rotation it rechecks both ACTIVE memberships,
+the server-owned cross-product policy, the target Organisation's current 2FA policy, user enrollment,
+and signature policy. The refresh family carries the authorization code's completed-TOTP assurance
+as an immutable bit across every descendant; old rows default to no assurance. If the target now needs
+stronger proof, restart interactive authorization and complete 2FA.
+
+Success is the normal token-pair envelope with \`access_token.active\` scoped exactly to the requested
+\`organization_id\`/\`team_id\`; \`firstLogin\` is absent. Atomically commit both returned tokens and the
+selected workspace before acknowledging the UI switch. A plain \`grant_type=refresh_token\` always
+preserves its current org/team and can never be used as an implicit switch.
+
+Response-loss recovery is strict: for 120 seconds, retry the same predecessor only with the same grant
+and target. UOA returns the deterministic current successor only while every descendant retains that
+exact target. If another refresh or switch won, or a later switch moved the family again, UOA returns
+\`409 WORKSPACE_SWITCH_CONFLICT\` and does not consume or revoke the valid family. After the 120-second
+window, every predecessor use is treated as theft and revokes the family, regardless of supplied intent.
+Same-scope switch requests are also non-consuming \`WORKSPACE_SWITCH_CONFLICT\` no-ops.
+If an exact retry proves the switch edge already committed but the target membership, 2FA, or
+signature policy no longer passes, UOA retires that refresh family and returns authenticated
+\`401 INVALID_REFRESH_TOKEN\`. This is definitive: clear the pending switch and require login. It
+does not revoke sibling refresh families or increment the global access-token epoch.
+
+Production-safe semantic errors:
+
+- \`403 WORKSPACE_NOT_AVAILABLE\` — the exact org/team pair is unavailable or server policy denies it;
+  this intentionally does not reveal which check failed. Refresh the directory or reauthorize.
+- \`403 INTERACTION_REQUIRED\` — current family assurance is insufficient for the target. Start a new
+  interactive authorization flow.
+- \`409 WORKSPACE_SWITCH_CONFLICT\` — same-scope no-op or a valid successor belongs to another
+  grant/target. Reconcile with the latest locally committed session; do not loop on the predecessor.
+- After domain-client authentication succeeds, invalid, expired, revoked, structurally corrupt, or
+  post-grace reused sources return the stable \`401 INVALID_REFRESH_TOKEN\` code without revealing
+  which condition failed. Client-authentication failures remain generic 401 responses.
+
+---
+
 ## Phase 4.9 — Shareable team invite links (opt-in)
 
 Additive on top of the invite system in 4.7a — a link that can be shared outside of email (Slack's
@@ -226,6 +281,9 @@ In a non-production deployment with \`DEBUG_ENABLED=true\` you can additionally 
 | \`INTEGRATION_DECLINED\` | Auto-discovery | A UOA superuser declined your integration request for this domain. Contact support. |
 | \`CONFIG_DOMAIN_MISMATCH\` | Post-decode | \`payload.domain\` does not exactly match the hostname of the \`config_url\` UOA fetched. Hostnames are compared case-insensitively but must otherwise be identical (no trailing dot, no port mismatch). |
 | \`REDIRECT_URL_NOT_ALLOWED\` | \`/auth\` + \`/auth/token\` | \`redirect_url\` is not in \`config.redirect_urls\`. **Common cause:** the bare URL is allowlisted but a per-request \`?state=…\` (or any query parameter) was appended — matching is byte-for-byte including the query string. Carry state out-of-band (see Phase 3.1), do not mutate the URL. |
+| \`WORKSPACE_NOT_AVAILABLE\` | workspace-switch grant | The exact requested org/team is no longer available or server-owned product policy denies it. Refresh the authorized workspace directory; UOA intentionally does not reveal which condition failed. |
+| \`INTERACTION_REQUIRED\` | workspace-switch grant | The renewable family does not carry enough completed-2FA assurance for the target's current policy. Restart interactive authorization. |
+| \`WORKSPACE_SWITCH_CONFLICT\` | workspace-switch grant | The request is same-scope or the deterministic family already advanced under another grant/target. Reconcile the latest committed session; do not retry a stale predecessor forever. |
 | Schema validation failures | Schema stage | A required field is missing or malformed. \`/config/validate\` returns the exact JSON path and reason in \`issues\`. |
 | \`auth_failed\` (final redirect) | Post-callback | Intentionally generic. With \`allow_registration: false\`, social login does not create users — the user must already exist for that domain. Check \`/internal/admin/handshake-errors\`. |
 | Google \`redirect_uri_mismatch\` | Provider | Your Google OAuth client does not list the exact callback URL UOA generated from \`PUBLIC_BASE_URL\` + \`/auth/callback/google\`. |
@@ -246,7 +304,7 @@ For deep diagnostics of failed \`/auth\` requests, a UOA superuser can open **/a
 - Do NOT skip \`/config/validate\` before pointing real users at UOA.
 - Do NOT append \`?state=…\` (or any per-request query) to \`redirect_url\`. The allowlist match is byte-for-byte; your \`/start\` endpoint must return the state token **separately** so the caller can stash it in \`sessionStorage\` or a first-party cookie. See Phase 3.1.
 - Do NOT assume \`POST /auth/token\` returns a top-level \`user\` object. It does not. See 4.1.
-- Do NOT attempt to verify a legacy authorization-code/refresh \`access_token\` against the config JWKS. It is HS256 and not RP-verifiable. A confidential assertion token is verified against \`/oauth/jwks.json\`, never the config JWKS. See 4.3 and 4.6a.
+- Do NOT attempt to verify a legacy authorization-code/refresh/workspace-switch \`access_token\` against the config JWKS. It is HS256 and not RP-verifiable. A confidential assertion token is verified against \`/oauth/jwks.json\`, never the config JWKS. See 4.3 and 4.6a.
 - Do NOT fall back to a synthetic tenant ID (\`"default"\`, email domain, etc.) when \`firstLogin.memberships.orgs\` is empty. See 4.5.
 - Do NOT use \`claims.role\` for RP authorization. It is the UOA platform role, not your tenant role. See 4.4.
 

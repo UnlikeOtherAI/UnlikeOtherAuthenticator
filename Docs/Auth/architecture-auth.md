@@ -211,10 +211,10 @@ The auth flow is state-driven, not route-driven. A single popup URL loads the ap
     activation/deactivation/removal, so those transactions and lifecycle changes have one serial
     outcome rather than a time-of-check/time-of-use gap. Post-2FA/signature code issuance performs
     the immediate revalidation only; exchange is the final locked authority before token creation.
-    Auth-code, refresh, and confidential token issuance hold one global shared product-policy
+    Auth-code, refresh, explicit workspace-switch, and confidential token issuance hold one global shared product-policy
     advisory lock through commit. The supported ClientDomain, lifecycle app-key, integration
-    acceptance, and BillingService mutators take its exclusive form before reading or writing
-    policy. Token issuance also re-reads the exact authenticated ClientDomain id/domain/status
+    acceptance, BillingService, and Organisation 2FA-policy mutators take its exclusive form before
+    reading or writing policy. Token issuance also re-reads the exact authenticated ClientDomain id/domain/status
     under the shared lock, closing the pre-handler/disable gap. `firstLogin.memberships` uses the
     same product policy, so it cannot contradict the signed `active` claim. A scoped refresh
     revalidates the exact policy, org, and team and fails with the
@@ -239,7 +239,14 @@ The auth flow is state-driven, not route-driven. A single popup URL loads the ap
     Authorization codes also persist whether interactive TOTP completed. Exchange re-resolves the
     current exact-workspace policy and user enrollment inside the token transaction; insufficient
     proof rejects generically, rolls code consumption back, and creates no refresh/access family.
-    Refresh rotation never performs placement or workspace switching. Confidential subject and
+    Ordinary refresh rotation never performs placement or workspace switching. A backend may use
+    only the explicit \`urn:unlikeotherai:params:oauth:grant-type:workspace-switch\` grant with an
+    exact \`organization_id\`/\`team_id\` from the authorized directory. UOA locks/revalidates source
+    and target, product policy, target 2FA assurance, and signature policy before creating the
+    deterministic target-scoped successor. The family carries its original completed-TOTP proof
+    unchanged; insufficient proof requires a new interactive authorization. Response-loss recovery
+    never crosses a later scope change, and competing valid transitions conflict without revocation.
+    Confidential subject and
     chained grants perform outbound/JWT verification before opening this transaction, then recheck
     ClientDomain, product policy, exact cross-product membership, delegation, and one-time use under
     the shared lock before signing. Recognized products may not omit `active` from a subject

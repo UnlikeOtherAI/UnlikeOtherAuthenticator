@@ -36,6 +36,9 @@ const PRODUCTION_PUBLIC_ERROR_CODES = new Set([
   'INVALID_TOKEN_USER',
   'TOKEN_EXPIRED',
   'TOKEN_ALREADY_USED',
+  'WORKSPACE_NOT_AVAILABLE',
+  'INTERACTION_REQUIRED',
+  'WORKSPACE_SWITCH_CONFLICT',
 ]);
 
 function defaultExplanation(code: string, statusCode: number): PublicExplanation {
@@ -242,6 +245,25 @@ function explainKnownCode(
           'The supplied refresh token is invalid, expired, revoked, or belongs to a different token family.',
         hints: ['Authenticate again to obtain a fresh refresh token.'],
       };
+    case 'WORKSPACE_NOT_AVAILABLE':
+      return {
+        summary: 'The requested workspace is not available to this session.',
+        hints: ['Refresh the workspace directory or complete interactive authorization again.'],
+      };
+    case 'INTERACTION_REQUIRED':
+      return {
+        summary: 'Interactive authentication is required before this workspace can be selected.',
+        hints: [
+          'Start a fresh authorization flow and complete every required authentication step.',
+        ],
+      };
+    case 'WORKSPACE_SWITCH_CONFLICT':
+      return {
+        summary: 'The refresh-token family has already advanced under a different operation.',
+        hints: [
+          'Use the latest locally committed token state or reload the authenticated session.',
+        ],
+      };
     case 'INVALID_TOKEN':
       return {
         summary: 'The supplied token is invalid for this request.',
@@ -427,13 +449,19 @@ export function buildPublicErrorBody(params: {
   error?: unknown;
   statusCode: number;
   code?: string;
+  exposeInvalidRefreshToken?: boolean; // Only after /auth/token client authentication.
   summary?: string;
   details?: string[];
   hints?: string[];
 }): PublicErrorBody {
   if (!getEnv().DEBUG_ENABLED) {
     const code = deriveErrorCode(params.error, params.statusCode, params.code);
-    if (PRODUCTION_PUBLIC_ERROR_CODES.has(code)) {
+    if (
+      PRODUCTION_PUBLIC_ERROR_CODES.has(code) ||
+      (params.exposeInvalidRefreshToken &&
+        params.statusCode === 401 &&
+        code === 'INVALID_REFRESH_TOKEN')
+    ) {
       return { error: PUBLIC_ERROR_MESSAGE, code };
     }
 

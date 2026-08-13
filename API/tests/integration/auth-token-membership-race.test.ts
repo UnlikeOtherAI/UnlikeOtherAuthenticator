@@ -141,6 +141,7 @@ describe.skipIf(!hasDatabase)('authorization-code and membership lifecycle race'
         codeChallengeMethod: 'S256',
         rememberMe: true,
         twoFaCompleted: false,
+        credentialEpoch: 0,
         orgId: workspace.orgId,
         teamId: workspace.teamId,
       },
@@ -164,6 +165,7 @@ describe.skipIf(!hasDatabase)('authorization-code and membership lifecycle race'
         codeChallengeMethod: 'S256',
         rememberMe: true,
         twoFaCompleted: false,
+        credentialEpoch: 0,
       },
       { prisma: handle.prisma, sharedSecret: process.env.SHARED_SECRET! },
     );

@@ -109,7 +109,7 @@ describe.skipIf(!hasDatabase)('refresh response-loss PostgreSQL serialization', 
     const clientId = createClientId(issuingDomain, sharedSecret);
     const configUrl = `https://${issuingDomain}/auth-config/${randomUUID()}`;
     const token = await issueRefreshToken(
-      { userId, domain: issuingDomain, clientId, configUrl },
+      { userId, domain: issuingDomain, clientId, configUrl, twoFaCompleted: false },
       { prisma: handle.prisma, refreshTokenTtlSeconds: 3_600, sharedSecret },
     );
     return { ...token, clientId, configUrl, domain: issuingDomain, userId };
@@ -236,6 +236,144 @@ describe.skipIf(!hasDatabase)('refresh response-loss PostgreSQL serialization', 
         select: { tokenVersion: true },
       }),
     ).toEqual({ tokenVersion: 1 });
+  });
+
+  it('bumps the epoch once when theft follows an earlier policy retirement', async () => {
+    const original = await issue();
+    await refresh(original);
+    const predecessor = await handle.prisma.refreshToken.findUniqueOrThrow({
+      where: { id: original.refreshTokenId },
+      select: { familyId: true, userId: true },
+    });
+    await handle.prisma.refreshToken.updateMany({
+      where: { familyId: predecessor.familyId },
+      data: { revokedAt: new Date() },
+    });
+    await handle.prisma.refreshToken.update({
+      where: { id: original.refreshTokenId },
+      data: { revokedAt: new Date(Date.now() - REFRESH_TOKEN_REPLAY_GRACE_MS - 1) },
+    });
+
+    await expect(refresh(original)).rejects.toMatchObject({
+      statusCode: 401,
+      message: 'INVALID_REFRESH_TOKEN',
+    });
+    await expect(refresh(original)).rejects.toMatchObject({ statusCode: 401 });
+    expect(
+      await handle.prisma.refreshToken.count({
+        where: { familyId: predecessor.familyId, securityRevokedAt: null },
+      }),
+    ).toBe(0);
+    expect(
+      await handle.prisma.user.findUniqueOrThrow({
+        where: { id: predecessor.userId },
+        select: { tokenVersion: true },
+      }),
+    ).toEqual({ tokenVersion: 1 });
+  });
+
+  it('revokes all user refresh state when a post-grace successor is detached', async () => {
+    const original = await issue();
+    const rotated = await refresh(original);
+    const sibling = await issueForUser(original.userId, 'refresh-corrupt-sibling.example');
+    const predecessor = await handle.prisma.refreshToken.findUniqueOrThrow({
+      where: { id: original.refreshTokenId },
+      select: { replacedByTokenId: true },
+    });
+    await handle.prisma.refreshToken.update({
+      where: { id: predecessor.replacedByTokenId! },
+      data: { familyId: randomUUID() },
+    });
+    await handle.prisma.refreshToken.update({
+      where: { id: original.refreshTokenId },
+      data: { revokedAt: new Date(Date.now() - REFRESH_TOKEN_REPLAY_GRACE_MS - 1) },
+    });
+
+    await expect(refresh(original)).rejects.toMatchObject({
+      statusCode: 401,
+      message: 'INVALID_REFRESH_TOKEN',
+    });
+    expect(
+      await handle.prisma.refreshToken.findMany({
+        where: { userId: original.userId },
+        select: { revokedAt: true },
+      }),
+    ).toEqual(expect.arrayContaining([{ revokedAt: expect.any(Date) }]));
+    expect(
+      await handle.prisma.refreshToken.count({
+        where: { userId: original.userId, revokedAt: null },
+      }),
+    ).toBe(0);
+    await expect(refresh(original, rotated.refreshToken)).rejects.toMatchObject({
+      statusCode: 401,
+    });
+    await expect(refresh(sibling)).rejects.toMatchObject({ statusCode: 401 });
+    expect(
+      await handle.prisma.user.findUniqueOrThrow({
+        where: { id: original.userId },
+        select: { tokenVersion: true },
+      }),
+    ).toEqual({ tokenVersion: 1 });
+  });
+
+  it('does not let the same corrupt capability revoke a subsequently issued family', async () => {
+    const original = await issue();
+    await refresh(original);
+    const predecessor = await handle.prisma.refreshToken.findUniqueOrThrow({
+      where: { id: original.refreshTokenId },
+      select: { replacedByTokenId: true },
+    });
+    await handle.prisma.refreshToken.update({
+      where: { id: predecessor.replacedByTokenId! },
+      data: { familyId: randomUUID() },
+    });
+
+    await expect(refresh(original)).rejects.toMatchObject({ statusCode: 401 });
+    const replacement = await issueForUser(original.userId, 'refresh-after-corruption.example');
+    await expect(refresh(original)).rejects.toMatchObject({ statusCode: 401 });
+
+    expect(
+      await handle.prisma.refreshToken.findUniqueOrThrow({
+        where: { id: replacement.refreshTokenId },
+        select: { revokedAt: true, securityRevokedAt: true },
+      }),
+    ).toEqual({ revokedAt: null, securityRevokedAt: null });
+    expect(
+      await handle.prisma.user.findUniqueOrThrow({
+        where: { id: original.userId },
+        select: { tokenVersion: true },
+      }),
+    ).toEqual({ tokenVersion: 1 });
+  });
+
+  it('retires only a valid family whose rotation chain exceeds the traversal bound', async () => {
+    const original = await issue();
+    const sibling = await issueForUser(original.userId, 'refresh-deep-chain-sibling.example');
+    const originalFamily = await handle.prisma.refreshToken.findUniqueOrThrow({
+      where: { id: original.refreshTokenId },
+      select: { familyId: true },
+    });
+    let current = original.refreshToken;
+    for (let rotation = 0; rotation < 33; rotation += 1) {
+      current = (await refresh(original, current)).refreshToken;
+    }
+
+    await expect(refresh(original)).rejects.toMatchObject({
+      statusCode: 401,
+      message: 'INVALID_REFRESH_TOKEN',
+    });
+    expect(
+      await handle.prisma.refreshToken.count({
+        where: { familyId: originalFamily.familyId, revokedAt: null },
+      }),
+    ).toBe(0);
+    expect(
+      await handle.prisma.refreshToken.findUniqueOrThrow({
+        where: { id: sibling.refreshTokenId },
+        select: { revokedAt: true },
+      }),
+    ).toEqual({ revokedAt: null });
+    await expect(refresh(sibling)).resolves.toMatchObject({ refreshToken: expect.any(String) });
   });
 
   it('makes sequential logout retries idempotent and lets a sibling domain heal', async () => {

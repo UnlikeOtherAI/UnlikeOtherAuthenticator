@@ -321,6 +321,10 @@ The default remains strict no-enumeration: existing users receive the same gener
 - `2fa_enabled` in the signed config JWT is the master gate. If it is false or absent, effective 2FA is off regardless of Admin policy.
 - When `2fa_enabled` is true, the effective login policy is resolved from the Service/domain policy, the user's same-domain Organisation policies, and the exact selected Organisation even when a recognized product selected it across domains. The strongest policy wins: `off < optional < required`.
 - Recognized products resolve their server-owned exact workspace before 2FA on password, social, email-code, and email-link paths even when `workspace_selection: "off"`; off suppresses only the chooser. Authorization codes persist whether TOTP completed, and exchange rechecks current exact-workspace policy/enrollment transactionally before creating a token family.
+- Authorization codes and signature continuations also persist the originating locked
+  `User.tokenVersion`. Code redemption and continuation completion require exact equality under the
+  canonical user-global lock, so password/2FA reset cannot turn pre-reset TOTP or signature proof
+  into a renewable post-reset session. Historical null epoch rows fail closed and are not backfilled.
 - A workspace chooser is an authorization continuation, never an authentication method. Its signed login-session capability preserves the verified identity method through workspace selection, 2FA/signature continuations, AuthIdentity updates, and login logging; Google/social sign-ins must not be relabelled as email merely because the user selected a team.
 - Email-link and verify-email continuations run workspace choices/placement, exact policy finalization, and immediate code issuance in one admin transaction. Its per-user first-placement lock remains held through commit, so concurrent first use from two products binds one canonical workspace; code-issuance failure rolls placement and code back while the already-consumed one-time email token stays consumed.
 - Service/domain policy supports Off, Optional, and Required. Organisation policy supports Inherit, Optional, and Required in Admin; inherited policy does not weaken the domain policy.
@@ -578,8 +582,9 @@ The following tighten ambiguities in the brief to prevent misinterpretation duri
 - A just-rotated predecessor may recover the exact deterministic live successor
   for 120 seconds only when the product re-authenticates and supplies the exact
   original client context; policy is re-run and no new row is created
-- Reuse after that response-loss window, or a corrupt successor chain, must
-  revoke the entire token family and increment the user's access-token version
+- Reuse after that response-loss window must revoke the entire token family and increment the
+  user's access-token version. A corrupt successor chain whose family boundary cannot be trusted
+  must fail closed by revoking all refresh state for that user and incrementing the same version.
 
 ---
 
@@ -867,25 +872,25 @@ The claim is optional and defaults to disabled. The object shape and defaults ar
 }
 ```
 
-| Field                                     | Type                        | Default                        | Description                                                                                                                                                                                                                            |
-| ----------------------------------------- | --------------------------- | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `enabled`                                 | boolean                     | `false`                        | Whether org/team features are enabled for this domain                                                                                                                                                                                  |
-| `groups_enabled`                          | boolean                     | `false`                        | Whether groups are enabled (requires `enabled: true`)                                                                                                                                                                                  |
-| `user_needs_team`                         | boolean                     | `false`                        | On successful auth, ensure the user ends up in a team. Existing org members with zero teams get a personal team; users with no org get a new personal org plus default team.                                                           |
-| `auto_create_personal_org_on_first_login` | boolean                     | `false`                        | On **first** verified login only, if the user ends up without an org after invite/mapping resolution, create a personal org with them as owner (plus default team per 24.3). One-shot, not a self-heal. See 24.14.                     |
-| `allow_user_create_org`                   | boolean                     | `false`                        | Whether end-users may create an organisation with their own access token or through eligible hosted SSO. `false` means org creation is admin-only (via Internal API or domain-hash). See 24.14.                                       |
-| `backend_org_management`                  | boolean                     | `false`                        | Whether this domain's product backend may call `/org/*` with **no** `X-UOA-Access-Token`, authorised by the domain pairing alone (24.8). There is no acting user in that mode, so per-user org-role checks do not apply; every mutation is attributed to the backend in the org audit log. Leave `false` unless a backend genuinely needs it.                        |
-| `pending_invites_block_auto_create`       | boolean                     | `true`                         | When `true`, a pending invite matching the user's email suppresses `auto_create_personal_org_on_first_login` so the user is offered the invite choice instead of being force-placed into a fresh org.                                  |
-| `max_teams_per_org`                       | integer                     | `100`                          | Maximum teams per organisation (max 1000)                                                                                                                                                                                              |
-| `max_groups_per_org`                      | integer                     | `20`                           | Maximum groups per organisation (max 200)                                                                                                                                                                                              |
-| `max_members_per_org`                     | integer                     | `1000`                         | Maximum members per organisation (max 10000)                                                                                                                                                                                           |
-| `max_members_per_team`                    | integer                     | `200`                          | Maximum members per team (max 5000)                                                                                                                                                                                                    |
-| `max_members_per_group`                   | integer                     | `500`                          | Maximum members per group (max 5000)                                                                                                                                                                                                   |
-| `max_team_memberships_per_user`           | integer                     | `50`                           | Maximum teams a single user can belong to — also caps JWT size (max 200)                                                                                                                                                               |
-| `org_roles`                               | string[]                    | `["owner", "admin", "member"]` | Allowed org-level roles. Must always contain `"owner"`.                                                                                                                                                                                |
-| `max_flags_per_app`                       | integer                     | `100`                          | Maximum feature flag definitions per App (max 500). Enforced at creation; existing flags unaffected if cap is lowered.                                                                                                                 |
-| `scim_override_retention`                 | `"retain"` \| `"clear"`     | `"retain"`                     | Controls per-user flag override retention on SCIM hard-delete (`DELETE /scim/v2/Users/:id?hardDelete=true`). `"retain"` keeps overrides; `"clear"` deletes them. Soft-deprovision always retains overrides regardless of this setting. |
-| `global_missing_flag_default`             | `"enabled"` \| `"disabled"` | `"disabled"`                   | Default response when a flag key is queried but not defined in the App at all. Consuming apps always get a boolean — never an error.                                                                                                   |
+| Field                                     | Type                        | Default                        | Description                                                                                                                                                                                                                                                                                                                                   |
+| ----------------------------------------- | --------------------------- | ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `enabled`                                 | boolean                     | `false`                        | Whether org/team features are enabled for this domain                                                                                                                                                                                                                                                                                         |
+| `groups_enabled`                          | boolean                     | `false`                        | Whether groups are enabled (requires `enabled: true`)                                                                                                                                                                                                                                                                                         |
+| `user_needs_team`                         | boolean                     | `false`                        | On successful auth, ensure the user ends up in a team. Existing org members with zero teams get a personal team; users with no org get a new personal org plus default team.                                                                                                                                                                  |
+| `auto_create_personal_org_on_first_login` | boolean                     | `false`                        | On **first** verified login only, if the user ends up without an org after invite/mapping resolution, create a personal org with them as owner (plus default team per 24.3). One-shot, not a self-heal. See 24.14.                                                                                                                            |
+| `allow_user_create_org`                   | boolean                     | `false`                        | Whether end-users may create an organisation with their own access token or through eligible hosted SSO. `false` means org creation is admin-only (via Internal API or domain-hash). See 24.14.                                                                                                                                               |
+| `backend_org_management`                  | boolean                     | `false`                        | Whether this domain's product backend may call `/org/*` with **no** `X-UOA-Access-Token`, authorised by the domain pairing alone (24.8). There is no acting user in that mode, so per-user org-role checks do not apply; every mutation is attributed to the backend in the org audit log. Leave `false` unless a backend genuinely needs it. |
+| `pending_invites_block_auto_create`       | boolean                     | `true`                         | When `true`, a pending invite matching the user's email suppresses `auto_create_personal_org_on_first_login` so the user is offered the invite choice instead of being force-placed into a fresh org.                                                                                                                                         |
+| `max_teams_per_org`                       | integer                     | `100`                          | Maximum teams per organisation (max 1000)                                                                                                                                                                                                                                                                                                     |
+| `max_groups_per_org`                      | integer                     | `20`                           | Maximum groups per organisation (max 200)                                                                                                                                                                                                                                                                                                     |
+| `max_members_per_org`                     | integer                     | `1000`                         | Maximum members per organisation (max 10000)                                                                                                                                                                                                                                                                                                  |
+| `max_members_per_team`                    | integer                     | `200`                          | Maximum members per team (max 5000)                                                                                                                                                                                                                                                                                                           |
+| `max_members_per_group`                   | integer                     | `500`                          | Maximum members per group (max 5000)                                                                                                                                                                                                                                                                                                          |
+| `max_team_memberships_per_user`           | integer                     | `50`                           | Maximum teams a single user can belong to — also caps JWT size (max 200)                                                                                                                                                                                                                                                                      |
+| `org_roles`                               | string[]                    | `["owner", "admin", "member"]` | Allowed org-level roles. Must always contain `"owner"`.                                                                                                                                                                                                                                                                                       |
+| `max_flags_per_app`                       | integer                     | `100`                          | Maximum feature flag definitions per App (max 500). Enforced at creation; existing flags unaffected if cap is lowered.                                                                                                                                                                                                                        |
+| `scim_override_retention`                 | `"retain"` \| `"clear"`     | `"retain"`                     | Controls per-user flag override retention on SCIM hard-delete (`DELETE /scim/v2/Users/:id?hardDelete=true`). `"retain"` keeps overrides; `"clear"` deletes them. Soft-deprovision always retains overrides regardless of this setting.                                                                                                        |
+| `global_missing_flag_default`             | `"enabled"` \| `"disabled"` | `"disabled"`                   | Default response when a flag key is queried but not defined in the App at all. Consuming apps always get a boolean — never an error.                                                                                                                                                                                                          |
 
 - `enabled = false` (or omitted): all `/org/*` and `/internal/org/*` endpoints return `404`, access tokens omit `org` claims.
 - `groups_enabled = false`: group read/write paths return `404`.
@@ -1209,7 +1214,7 @@ must tolerate its absence on a legacy token issued before this addition.
   - If the user does not belong to any org on the domain, create a new personal org for them, create a default personal team named `"{user name}'s team"`, and place them there.
   - Resolve this during authorization-code exchange, before refresh-token creation. If placement
     creates a workspace, validate and persist its exact org/team IDs and emit them as `active`;
-    never create or switch workspaces during refresh rotation. A recognized product reuses one
+    never create or switch workspaces during ordinary refresh rotation. A recognized product reuses one
     exact eligible cross-product workspace and fails closed on an ambiguous set rather than
     creating a product-domain duplicate.
 
@@ -1365,7 +1370,7 @@ inside the guard rather than inferred from the order of the preValidation array:
 3. that verified config sets `org_features.backend_org_management: true`.
 
 The header is optional only in the sense that it may be **absent**. A header that
-is *present but blank* — `""`, spaces, a tab, a newline — is a malformed
+is _present but blank_ — `""`, spaces, a tab, a newline — is a malformed
 credential, not an omitted one, and is `401 MISSING_ACCESS_TOKEN`. This matters
 because the realistic integration is a product BFF that attaches the domain-hash
 bearer server-side and forwards the end user's session token: for an anonymous
@@ -1378,7 +1383,7 @@ dual-mode branch predates backend mode, follows the identical rule.
 **There is no acting user in backend mode.** Checks that are about the acting
 user (org owner/admin, team manager, "must be an ACTIVE member") therefore do not
 apply — the pairing already proves authority over the whole tenant, which
-outranks any one member's role. Checks that are *not* about the acting user are
+outranks any one member's role. Checks that are _not_ about the acting user are
 unchanged and apply to both modes: org-belongs-to-domain, the last-owner guard,
 membership and team caps, one-org-per-domain, and "cannot leave your last team".
 
@@ -1389,10 +1394,10 @@ org-level checks that **do not run** in backend mode are listed here rather than
 left to be discovered by reading the diff. Each is intentional under "the domain
 backend is the tenant authority", and each is pinned by a test:
 
-| Check (user mode) | Backend mode | Why |
-| --- | --- | --- |
-| Only the **owner** may change a member's role | not enforced | The rule protects members from each other. The backend is not a member. |
-| Only the **owner** may delete the organisation | not enforced | Same. The last-owner guard, which is not an actor check, still applies to member removal. |
+| Check (user mode)                                       | Backend mode | Why                                                                                                                           |
+| ------------------------------------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| Only the **owner** may change a member's role           | not enforced | The rule protects members from each other. The backend is not a member.                                                       |
+| Only the **owner** may delete the organisation          | not enforced | Same. The last-owner guard, which is not an actor check, still applies to member removal.                                     |
 | `org_features.allow_user_create_org` gates org creation | not enforced | The flag governs whether **end users** may self-serve a workspace. It says nothing about the domain asking on its own behalf. |
 
 Everything else in the "not about the acting user" list above genuinely does
@@ -1406,9 +1411,9 @@ check**. `user_scope` defaults to `global`, so in a default deployment every
 `users` row has `domain: null` and is visible on every domain — platform
 superusers included. `owner_user_id` therefore requires the named user to hold a
 `DomainRole` on the calling domain, which is the row login itself writes. On the
-user path the owner *is* the acting user, whose access token was already proven
+user path the owner _is_ the acting user, whose access token was already proven
 to belong to this domain, so nothing extra is required there.
-`GET /org/me` and `POST /org/organisations/:orgId/teams/:teamId/join` are *about*
+`GET /org/me` and `POST /org/organisations/:orgId/teams/:teamId/join` are _about_
 the acting user, so they remain user-mode only and still return
 `401 MISSING_ACCESS_TOKEN`.
 
@@ -1539,8 +1544,8 @@ Returns `404` if `groups_enabled` is `false`.
 
 #### User Context
 
-| Method | Endpoint  | Description                | Who can call           |
-| ------ | --------- | -------------------------- | ---------------------- |
+| Method | Endpoint  | Description                                        | Who can call           |
+| ------ | --------- | -------------------------------------------------- | ---------------------- |
 | GET    | `/org/me` | Current user's org context and workspace directory | Any authenticated user |
 
 The additive `org.workspaces[]` directory follows the same server-owned product workspace policy as
@@ -1558,6 +1563,34 @@ arbitrary cross-domain organisation.
 
 The legacy fields return the same structure as the JWT `org` claim but always reflect current
 database state.
+
+#### Seamless Workspace Switching (2026-08)
+
+A product backend switches an existing renewable session only through
+`POST /auth/token` with the exact custom grant
+`urn:unlikeotherai:params:oauth:grant-type:workspace-switch` and body
+`{ refresh_token, organization_id, team_id }`; `operation_id` is not accepted.
+The target must be an exact ACTIVE org/team pair from the same server-owned
+workspace policy used by the directory. UOA holds the product-policy and refresh
+session locks, validates source then target memberships, resolves target 2FA and
+signature policy, and writes one deterministic target-scoped successor. The
+refresh family carries the original authorization code's completed-TOTP proof
+unchanged; legacy families default to no proof. Ordinary refresh always preserves
+scope and same-scope switch is a non-consuming no-op conflict.
+
+For 120 seconds an exact retry may recover only a successor chain that retains
+the requested target. Any competing grant/target or later scope change returns
+non-consuming/non-revoking `409 WORKSPACE_SWITCH_CONFLICT`; post-grace predecessor
+use always takes the existing theft-revocation path. Production also exposes
+non-oracular `403 WORKSPACE_NOT_AVAILABLE` and `403 INTERACTION_REQUIRED` so the
+product can refresh its directory or restart interactive authorization without
+learning which membership/policy check failed. After domain-client authentication succeeds,
+invalid sources return the stable `401 INVALID_REFRESH_TOKEN` code without distinguishing the
+underlying reason; client-authentication failures remain generic 401 responses.
+Those 403 outcomes apply before a switch edge commits. If an exact response-loss retry proves the
+edge already committed but its target membership, 2FA, or signature policy no longer passes, UOA
+retires only that family and returns authenticated `401 INVALID_REFRESH_TOKEN`; it returns no target
+access token, does not revoke sibling families, and does not increment the global user epoch.
 
 ---
 
@@ -2384,7 +2417,7 @@ Summary of what changes and what does not:
   Postgres `team_avatars` table wins, otherwise the team's existing `iconUrl` is proxied
   server-side under the same SSRF/size/time rules, otherwise the deterministic generated
   SVG seeded from the team id. Managed through `GET`/`PUT`/`DELETE
-  /domain/teams/:teamId/avatar` — domain hash bearer only, the machine-to-machine path a
+/domain/teams/:teamId/avatar` — domain hash bearer only, the machine-to-machine path a
   product backend uses, since products retain the bound refresh credential rather than a
   spendable end-user access token; per §24.10 that token is full system trust for the domain,
   so the backend applies its own owner/admin gating before relaying. The dual-auth

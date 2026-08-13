@@ -45,6 +45,7 @@ export function continuation(overrides: Record<string, unknown> = {}) {
     teamId: null,
     authMethod: 'email_password',
     twoFaCompleted: true,
+    tokenVersion: 0,
     policyRevision: 3,
     expiresAt: new Date(NOW.getTime() + 10 * 60_000),
     consumedAt: null,
@@ -115,6 +116,7 @@ export function fakePrisma(params?: { existing?: ReturnType<typeof signatureRow>
   let transactionDepth = 0;
   const prisma = {
     $executeRaw: vi.fn().mockResolvedValue(1),
+    $queryRaw: vi.fn().mockResolvedValue([]),
     $transaction: vi.fn(),
     signingContinuation: {
       findUnique: vi.fn(async () => continuationRow),
@@ -155,7 +157,12 @@ export function fakePrisma(params?: { existing?: ReturnType<typeof signatureRow>
       }),
     },
     user: {
-      findUnique: vi.fn().mockResolvedValue({ email: 'person@example.com', name: 'Profile Name' }),
+      findUnique: vi.fn().mockResolvedValue({
+        email: 'person@example.com',
+        name: 'Profile Name',
+        tokenVersion: 0,
+        twoFaEnabled: true,
+      }),
     },
     agreementVersion: {
       findFirst: vi.fn().mockResolvedValue(version()),

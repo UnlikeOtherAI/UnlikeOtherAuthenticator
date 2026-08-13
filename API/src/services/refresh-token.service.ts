@@ -37,6 +37,14 @@ export function isRefreshTokenReuseDetectedError(
 
 type RefreshTokenPrisma = Pick<PrismaClient, 'refreshToken' | 'user'>;
 
+type RefreshPolicyHook = (row: {
+  userId: string;
+  domain: string;
+  orgId: string | null;
+  teamId: string | null;
+  twoFaCompleted: boolean;
+}) => Promise<void>;
+
 type RefreshTokenDeps = {
   afterFamilyRevocationLock?: (row: {
     userId: string;
@@ -49,13 +57,10 @@ type RefreshTokenDeps = {
     domain: string;
     orgId: string | null;
     teamId: string | null;
+    twoFaCompleted: boolean;
   }) => Promise<void>;
-  beforeRotate?: (row: {
-    userId: string;
-    domain: string;
-    orgId: string | null;
-    teamId: string | null;
-  }) => Promise<void>;
+  beforeRotate?: RefreshPolicyHook;
+  beforeReplay?: RefreshPolicyHook;
   now?: () => Date;
   prisma?: RefreshTokenPrisma;
   refreshTokenTtlDays?: number;
@@ -110,13 +115,59 @@ async function revokeRefreshTokenFamilyInternal(
   return result.count;
 }
 
+async function invalidateRefreshTokenFamilySecurityEpoch(
+  prisma: RefreshTokenPrisma,
+  row: Pick<RefreshTokenRow, 'id' | 'familyId' | 'userId'>,
+  now: Date,
+): Promise<void> {
+  const classified = await prisma.refreshToken.updateMany({
+    where: { id: row.id, securityRevokedAt: null },
+    data: { revokedAt: now, securityRevokedAt: now },
+  });
+  if (classified.count !== 1) return;
+  await prisma.refreshToken.updateMany({
+    where: { familyId: row.familyId, securityRevokedAt: null },
+    data: { revokedAt: now, securityRevokedAt: now },
+  });
+  await bumpUserTokenVersion(row.userId, { prisma });
+}
+
 async function rejectRefreshTokenReuse(
   prisma: RefreshTokenPrisma,
-  row: Pick<RefreshTokenRow, 'familyId' | 'userId'>,
+  row: Pick<RefreshTokenRow, 'id' | 'familyId' | 'userId'>,
   now: Date,
 ): Promise<never> {
-  const revokedCount = await revokeRefreshTokenFamilyInternal(prisma, row.familyId, now);
-  if (revokedCount > 0) {
+  await invalidateRefreshTokenFamilySecurityEpoch(prisma, row, now);
+  throw new RefreshTokenReuseDetectedError();
+}
+
+/** Retire one verified family after its already-committed switch target becomes unusable. */
+async function retireRefreshTokenFamily(
+  prisma: RefreshTokenPrisma,
+  row: Pick<RefreshTokenRow, 'familyId'>,
+  now: Date,
+): Promise<never> {
+  await revokeRefreshTokenFamilyInternal(prisma, row.familyId, now);
+  // This is policy invalidation, not theft or structural corruption. Do not revoke sibling
+  // devices or increment the global access-token epoch.
+  throw new RefreshTokenReuseDetectedError();
+}
+
+/** A corrupt successor link cannot safely identify one family, so fail closed for the user. */
+async function rejectRefreshTokenCorruption(
+  prisma: RefreshTokenPrisma,
+  row: Pick<RefreshTokenRow, 'id' | 'userId'>,
+  now: Date,
+): Promise<never> {
+  const classified = await prisma.refreshToken.updateMany({
+    where: { id: row.id, securityRevokedAt: null },
+    data: { revokedAt: now, securityRevokedAt: now },
+  });
+  if (classified.count === 1) {
+    await prisma.refreshToken.updateMany({
+      where: { userId: row.userId, securityRevokedAt: null },
+      data: { revokedAt: now, securityRevokedAt: now },
+    });
     await bumpUserTokenVersion(row.userId, { prisma });
   }
   throw new RefreshTokenReuseDetectedError();
@@ -131,6 +182,7 @@ async function createRefreshTokenRecord(
     // 3-4); defaults to null when no workspace was selected.
     orgId?: string | null;
     teamId?: string | null;
+    twoFaCompleted: boolean;
   },
   refreshToken: string,
   deps?: RefreshTokenDeps,
@@ -155,6 +207,7 @@ async function createRefreshTokenRecord(
       configUrl: params.configUrl,
       orgId: params.orgId ?? null,
       teamId: params.teamId ?? null,
+      twoFaCompleted: params.twoFaCompleted,
       expiresAt,
       createdAt: now,
     },
@@ -179,6 +232,7 @@ export async function issueRefreshToken(
     // 3-4); defaults to null when no workspace was selected.
     orgId?: string | null;
     teamId?: string | null;
+    twoFaCompleted: boolean;
   },
   deps?: RefreshTokenDeps,
 ): Promise<{
@@ -192,6 +246,8 @@ export async function issueRefreshToken(
 export async function exchangeRefreshToken(
   params: RefreshTokenContext & {
     refreshToken: string;
+    /** Present only for the explicit workspace-switch grant. */
+    workspace?: { orgId: string; teamId: string };
   },
   deps?: RefreshTokenDeps,
 ): Promise<{
@@ -201,6 +257,7 @@ export async function exchangeRefreshToken(
   userId: string;
   orgId: string | null;
   teamId: string | null;
+  twoFaCompleted: boolean;
 }> {
   const prisma = getRefreshTokenPrisma(deps);
   const sharedSecret = getSharedSecret(deps);
@@ -230,6 +287,7 @@ export async function exchangeRefreshToken(
       domain: row.domain,
       orgId: row.orgId,
       teamId: row.teamId,
+      twoFaCompleted: row.twoFaCompleted === true,
     });
     row = (await findTokenRow()) as RefreshTokenRow | null;
     if (!row || !matchesRefreshTokenContext(row, params)) {
@@ -237,15 +295,26 @@ export async function exchangeRefreshToken(
     }
   }
 
+  const expectedWorkspace = params.workspace ?? { orgId: row.orgId, teamId: row.teamId };
+
   if (row.replacedByTokenId) {
     return resolveRefreshTokenReplay(
-      { ...params, row, sharedSecret },
       {
-        beforeRotate: deps?.beforeRotate,
+        ...params,
+        row,
+        sharedSecret,
+        expectedWorkspace,
+        workspaceSwitch: Boolean(params.workspace),
+      },
+      {
+        beforeRotate: deps?.beforeReplay ?? deps?.beforeRotate,
         now: () => nowDate(deps),
         prisma,
-        rejectReuse: (reused, rejectedAt) =>
-          rejectRefreshTokenReuse(prisma, reused, rejectedAt),
+        rejectCorruption: (corrupt, rejectedAt) =>
+          rejectRefreshTokenCorruption(prisma, corrupt, rejectedAt),
+        retireFamily: (invalidated, rejectedAt) =>
+          retireRefreshTokenFamily(prisma, invalidated, rejectedAt),
+        rejectReuse: (reused, rejectedAt) => rejectRefreshTokenReuse(prisma, reused, rejectedAt),
       },
     );
   }
@@ -253,6 +322,13 @@ export async function exchangeRefreshToken(
   let decisionNow = nowDate(deps);
   if (row.revokedAt || row.expiresAt.getTime() <= decisionNow.getTime()) {
     throw new AppError('UNAUTHORIZED', 401, 'INVALID_REFRESH_TOKEN');
+  }
+  if (
+    params.workspace &&
+    row.orgId === params.workspace.orgId &&
+    row.teamId === params.workspace.teamId
+  ) {
+    throw new AppError('BAD_REQUEST', 409, 'WORKSPACE_SWITCH_CONFLICT');
   }
 
   // Policy gates run here, after the opaque token and its exact client context
@@ -264,6 +340,7 @@ export async function exchangeRefreshToken(
     domain: row.domain,
     orgId: row.orgId,
     teamId: row.teamId,
+    twoFaCompleted: row.twoFaCompleted === true,
   });
   decisionNow = nowDate(deps);
   if (row.expiresAt.getTime() <= decisionNow.getTime()) {
@@ -274,10 +351,7 @@ export async function exchangeRefreshToken(
   const inheritedTtlSeconds = Math.round(
     (row.expiresAt.getTime() - row.createdAt.getTime()) / 1000,
   );
-  const refreshTokenTtlSeconds = Math.max(
-    inheritedTtlSeconds,
-    MIN_INHERITED_REFRESH_TTL_SECONDS,
-  );
+  const refreshTokenTtlSeconds = Math.max(inheritedTtlSeconds, MIN_INHERITED_REFRESH_TTL_SECONDS);
 
   const successor = deriveRefreshTokenSuccessor(params.refreshToken, sharedSecret);
   const nextRefreshToken = await createRefreshTokenRecord(
@@ -288,9 +362,11 @@ export async function exchangeRefreshToken(
       domain: row.domain,
       clientId: row.clientId,
       configUrl: row.configUrl,
-      // Rotation preserves the session's workspace scope (design §7 step 4).
-      orgId: row.orgId,
-      teamId: row.teamId,
+      // An ordinary rotation preserves scope. The explicit switch grant instead
+      // records its exact target on this deterministic first successor.
+      orgId: expectedWorkspace.orgId,
+      teamId: expectedWorkspace.teamId,
+      twoFaCompleted: row.twoFaCompleted === true,
     },
     successor,
     {
@@ -325,8 +401,9 @@ export async function exchangeRefreshToken(
     refreshToken: nextRefreshToken.refreshToken,
     expiresInSeconds: nextRefreshToken.expiresInSeconds,
     replayed: false,
-    orgId: row.orgId,
-    teamId: row.teamId,
+    orgId: expectedWorkspace.orgId,
+    teamId: expectedWorkspace.teamId,
+    twoFaCompleted: row.twoFaCompleted === true,
   };
 }
 
@@ -345,6 +422,7 @@ export async function revokeRefreshTokenFamily(
       tx.refreshToken.findUnique({
         where: { tokenHash },
         select: {
+          id: true,
           familyId: true,
           userId: true,
           domain: true,
@@ -356,22 +434,13 @@ export async function revokeRefreshTokenFamily(
     if (!row || !matchesRefreshTokenContext(row, params)) return;
 
     await deps?.beforeFamilyRevocationLock?.();
-    await lockRefreshSessionUserDomain(
-      { userId: row.userId, domain: row.domain },
-      { prisma: tx },
-    );
+    await lockRefreshSessionUserDomain({ userId: row.userId, domain: row.domain }, { prisma: tx });
     await deps?.afterFamilyRevocationLock?.(row);
     row = await findTokenRow();
     if (!row || !matchesRefreshTokenContext(row, params)) return;
 
-    const revokedCount = await revokeRefreshTokenFamilyInternal(
-      tx,
-      row.familyId,
-      nowDate(deps),
-    );
-    if (revokedCount > 0) {
-      // Family revocation and the global access-token version change commit together.
-      await bumpUserTokenVersion(row.userId, { prisma: tx });
-    }
+    // Claim the exact presented capability once, then mark the whole family. Logout retries and
+    // later presentation of the same predecessor cannot repeatedly bump the global epoch.
+    await invalidateRefreshTokenFamilySecurityEpoch(tx, row, nowDate(deps));
   });
 }

@@ -1,136 +1,17 @@
-import type { PrismaClient } from '@prisma/client';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import {
   exchangeRefreshToken,
-  issueRefreshToken,
   REFRESH_TOKEN_REPLAY_GRACE_MS,
 } from '../../src/services/refresh-token.service.js';
-import { hashRefreshToken } from '../../src/services/refresh-token-replay.service.js';
 import { AppError } from '../../src/utils/errors.js';
-
-const sharedSecret = 'test-shared-secret-with-enough-length';
-const context = {
-  clientId: 'client-id',
-  configUrl: 'https://client.example.com/auth-config',
-  domain: 'client.example.com',
-};
-
-type Row = {
-  id: string;
-  tokenHash: string;
-  familyId: string;
-  parentTokenId: string | null;
-  replacedByTokenId: string | null;
-  userId: string;
-  domain: string;
-  clientId: string;
-  configUrl: string;
-  orgId: string | null;
-  teamId: string | null;
-  createdAt: Date;
-  expiresAt: Date;
-  revokedAt: Date | null;
-  lastUsedAt: Date | null;
-};
-
-class FakeRefreshStore {
-  readonly rows = new Map<string, Row>();
-  readonly userUpdate = vi.fn(async () => ({ id: 'user-1' }));
-  private nextId = 1;
-
-  readonly client = {
-    refreshToken: {
-      create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
-        const id = `refresh-${this.nextId++}`;
-        this.rows.set(id, {
-          id,
-          tokenHash: data.tokenHash as string,
-          familyId: data.familyId as string,
-          parentTokenId: (data.parentTokenId as string | undefined) ?? null,
-          replacedByTokenId: null,
-          userId: data.userId as string,
-          domain: data.domain as string,
-          clientId: data.clientId as string,
-          configUrl: data.configUrl as string,
-          orgId: (data.orgId as string | null) ?? null,
-          teamId: (data.teamId as string | null) ?? null,
-          createdAt: data.createdAt as Date,
-          expiresAt: data.expiresAt as Date,
-          revokedAt: null,
-          lastUsedAt: null,
-        });
-        return { id };
-      }),
-      findUnique: vi.fn(async ({ where }: { where: { id?: string; tokenHash?: string } }) => {
-        if (where.id) return this.rows.get(where.id) ?? null;
-        return [...this.rows.values()].find((row) => row.tokenHash === where.tokenHash) ?? null;
-      }),
-      updateMany: vi.fn(
-        async ({
-          where,
-          data,
-        }: {
-          where: { id?: string; familyId?: string; revokedAt?: null };
-          data: Partial<Row>;
-        }) => {
-          let count = 0;
-          for (const row of this.rows.values()) {
-            const matchesId = where.id === undefined || row.id === where.id;
-            const matchesFamily = where.familyId === undefined || row.familyId === where.familyId;
-            const matchesLive = where.revokedAt !== null || row.revokedAt === null;
-            const matchesUnreplaced =
-              !('replacedByTokenId' in where) || row.replacedByTokenId === null;
-            if (!matchesId || !matchesFamily || !matchesLive || !matchesUnreplaced) continue;
-            Object.assign(row, data);
-            count += 1;
-          }
-          return { count };
-        },
-      ),
-    },
-    user: { update: this.userUpdate },
-  } as unknown as PrismaClient;
-
-  byRawToken(rawToken: string): Row {
-    const hash = hashRefreshToken(rawToken, sharedSecret);
-    const row = [...this.rows.values()].find((candidate) => candidate.tokenHash === hash);
-    if (!row) throw new Error('missing token row');
-    return row;
-  }
-}
-
-async function fixture(now: Date) {
-  const store = new FakeRefreshStore();
-  const initial = await issueRefreshToken(
-    { ...context, userId: 'user-1', orgId: 'org-1', teamId: 'team-1' },
-    {
-      now: () => now,
-      prisma: store.client,
-      refreshTokenTtlSeconds: 3_600,
-      sharedSecret,
-    },
-  );
-  return { initial, store };
-}
-
-function exchange(
-  store: FakeRefreshStore,
-  refreshToken: string,
-  now: Date,
-  beforeRotate?: () => Promise<void>,
-) {
-  return exchangeRefreshToken(
-    { ...context, refreshToken },
-    {
-      beforeRotate: beforeRotate ? async () => beforeRotate() : undefined,
-      now: () => now,
-      prisma: store.client,
-      refreshTokenTtlSeconds: 3_600,
-      sharedSecret,
-    },
-  );
-}
+import {
+  createRefreshFixture as fixture,
+  exchangeTestRefreshToken as exchange,
+  switchTestWorkspace as switchWorkspace,
+  TEST_REFRESH_CONTEXT as context,
+  TEST_REFRESH_SHARED_SECRET as sharedSecret,
+} from '../helpers/fake-refresh-token-store.js';
 
 describe('refresh response-loss replay recovery', () => {
   it('returns the exact deterministic successor and its remaining lifetime', async () => {
@@ -216,7 +97,11 @@ describe('refresh response-loss replay recovery', () => {
   it('rejects a revoked or expired current descendant', async () => {
     const issuedAt = new Date('2026-07-22T10:00:00.000Z');
     const revokedFixture = await fixture(issuedAt);
-    const revoked = await exchange(revokedFixture.store, revokedFixture.initial.refreshToken, issuedAt);
+    const revoked = await exchange(
+      revokedFixture.store,
+      revokedFixture.initial.refreshToken,
+      issuedAt,
+    );
     revokedFixture.store.byRawToken(revoked.refreshToken).revokedAt = issuedAt;
     await expect(
       exchange(
@@ -227,7 +112,11 @@ describe('refresh response-loss replay recovery', () => {
     ).rejects.toMatchObject({ statusCode: 401 });
 
     const expiredFixture = await fixture(issuedAt);
-    const expired = await exchange(expiredFixture.store, expiredFixture.initial.refreshToken, issuedAt);
+    const expired = await exchange(
+      expiredFixture.store,
+      expiredFixture.initial.refreshToken,
+      issuedAt,
+    );
     expiredFixture.store.byRawToken(expired.refreshToken).expiresAt = new Date(
       issuedAt.getTime() + 500,
     );
@@ -278,5 +167,298 @@ describe('refresh response-loss replay recovery', () => {
     ).rejects.toMatchObject({ statusCode: 401 });
     expect(store.userUpdate).not.toHaveBeenCalled();
     expect([...store.rows.values()].some((row) => row.revokedAt === null)).toBe(true);
+  });
+});
+
+describe('refresh workspace-transition replay', () => {
+  const issuedAt = new Date('2026-07-22T11:00:00.000Z');
+  const workspaceB = { orgId: 'org-2', teamId: 'team-2' };
+  const workspaceC = { orgId: 'org-3', teamId: 'team-3' };
+
+  it('rejects a same-scope switch without consuming the live source', async () => {
+    const { initial, store } = await fixture(issuedAt);
+
+    await expect(
+      switchWorkspace(store, initial.refreshToken, issuedAt, {
+        orgId: 'org-1',
+        teamId: 'team-1',
+      }),
+    ).rejects.toMatchObject({ statusCode: 409, message: 'WORKSPACE_SWITCH_CONFLICT' });
+    expect(store.rows).toHaveLength(1);
+    expect(store.byRawToken(initial.refreshToken).revokedAt).toBeNull();
+    expect(store.userUpdate).not.toHaveBeenCalled();
+  });
+
+  it('does not let same-scope intent hide a corrupt replay chain', async () => {
+    const { initial, store } = await fixture(issuedAt);
+    const rotated = await exchange(store, initial.refreshToken, issuedAt);
+    store.byRawToken(rotated.refreshToken).familyId = 'corrupt-family';
+
+    await expect(
+      switchWorkspace(store, initial.refreshToken, new Date(issuedAt.getTime() + 1_000), {
+        orgId: 'org-1',
+        teamId: 'team-1',
+      }),
+    ).rejects.toMatchObject({ statusCode: 401, message: 'INVALID_REFRESH_TOKEN' });
+    expect([...store.rows.values()].every((row) => row.revokedAt !== null)).toBe(true);
+    expect(store.userUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it('revokes a replay predecessor with a partial stored workspace scope', async () => {
+    const { initial, store } = await fixture(issuedAt);
+    await exchange(store, initial.refreshToken, issuedAt);
+    store.byRawToken(initial.refreshToken).teamId = null;
+
+    await expect(
+      switchWorkspace(
+        store,
+        initial.refreshToken,
+        new Date(issuedAt.getTime() + 1_000),
+        workspaceB,
+      ),
+    ).rejects.toMatchObject({ statusCode: 401, message: 'INVALID_REFRESH_TOKEN' });
+    expect([...store.rows.values()].every((row) => row.revokedAt !== null)).toBe(true);
+  });
+
+  it('creates one deterministic target-scoped successor and replays it for the same intent', async () => {
+    const { initial, store } = await fixture(issuedAt);
+    const switched = await switchWorkspace(store, initial.refreshToken, issuedAt, workspaceB);
+    const replay = await switchWorkspace(
+      store,
+      initial.refreshToken,
+      new Date(issuedAt.getTime() + 1_000),
+      workspaceB,
+    );
+
+    expect(switched).toMatchObject({ ...workspaceB, twoFaCompleted: true, replayed: false });
+    expect(replay).toMatchObject({
+      ...workspaceB,
+      refreshToken: switched.refreshToken,
+      twoFaCompleted: true,
+      replayed: true,
+    });
+    expect(store.rows).toHaveLength(2);
+    expect(store.byRawToken(switched.refreshToken)).toMatchObject({
+      ...workspaceB,
+      twoFaCompleted: true,
+    });
+  });
+
+  it('retires a committed switch family when replay target policy is no longer satisfied', async () => {
+    const { initial, store } = await fixture(issuedAt);
+    const switched = await switchWorkspace(store, initial.refreshToken, issuedAt, workspaceB);
+    const targetFailure = new AppError('FORBIDDEN', 403, 'INTERACTION_REQUIRED');
+
+    await expect(
+      switchWorkspace(
+        store,
+        initial.refreshToken,
+        new Date(issuedAt.getTime() + 1_000),
+        workspaceB,
+        async () => {
+          throw targetFailure;
+        },
+      ),
+    ).rejects.toMatchObject({ statusCode: 401, message: 'INVALID_REFRESH_TOKEN' });
+    expect(store.byRawToken(switched.refreshToken).revokedAt).not.toBeNull();
+    expect(store.userUpdate).not.toHaveBeenCalled();
+  });
+
+  it('returns a non-revoking conflict when another grant won the first edge', async () => {
+    const switchedFirst = await fixture(issuedAt);
+    const switched = await switchWorkspace(
+      switchedFirst.store,
+      switchedFirst.initial.refreshToken,
+      issuedAt,
+      workspaceB,
+    );
+    await expect(
+      exchange(
+        switchedFirst.store,
+        switchedFirst.initial.refreshToken,
+        new Date(issuedAt.getTime() + 1_000),
+      ),
+    ).rejects.toMatchObject({ statusCode: 409, message: 'WORKSPACE_SWITCH_CONFLICT' });
+    await expect(
+      switchWorkspace(
+        switchedFirst.store,
+        switchedFirst.initial.refreshToken,
+        new Date(issuedAt.getTime() + 1_000),
+        workspaceC,
+      ),
+    ).rejects.toMatchObject({ statusCode: 409, message: 'WORKSPACE_SWITCH_CONFLICT' });
+    expect(switchedFirst.store.byRawToken(switched.refreshToken).revokedAt).toBeNull();
+    expect(switchedFirst.store.userUpdate).not.toHaveBeenCalled();
+
+    const refreshedFirst = await fixture(issuedAt);
+    const refreshed = await exchange(
+      refreshedFirst.store,
+      refreshedFirst.initial.refreshToken,
+      issuedAt,
+    );
+    await expect(
+      switchWorkspace(
+        refreshedFirst.store,
+        refreshedFirst.initial.refreshToken,
+        new Date(issuedAt.getTime() + 1_000),
+        workspaceB,
+      ),
+    ).rejects.toMatchObject({ statusCode: 409, message: 'WORKSPACE_SWITCH_CONFLICT' });
+    expect(refreshedFirst.store.byRawToken(refreshed.refreshToken).revokedAt).toBeNull();
+    expect(refreshedFirst.store.userUpdate).not.toHaveBeenCalled();
+  });
+
+  it('conflicts rather than returning a later descendant from a different switch', async () => {
+    const { initial, store } = await fixture(issuedAt);
+    const switchedB = await switchWorkspace(store, initial.refreshToken, issuedAt, workspaceB);
+    const switchedC = await switchWorkspace(
+      store,
+      switchedB.refreshToken,
+      new Date(issuedAt.getTime() + 1_000),
+      workspaceC,
+    );
+
+    await expect(
+      switchWorkspace(
+        store,
+        initial.refreshToken,
+        new Date(issuedAt.getTime() + 2_000),
+        workspaceB,
+      ),
+    ).rejects.toMatchObject({ statusCode: 409, message: 'WORKSPACE_SWITCH_CONFLICT' });
+    expect(store.byRawToken(switchedC.refreshToken).revokedAt).toBeNull();
+    expect(store.userUpdate).not.toHaveBeenCalled();
+  });
+
+  it('classifies every post-grace predecessor use as theft before intent conflicts', async () => {
+    const { initial, store } = await fixture(issuedAt);
+    await switchWorkspace(store, initial.refreshToken, issuedAt, workspaceB);
+
+    await expect(
+      switchWorkspace(
+        store,
+        initial.refreshToken,
+        new Date(issuedAt.getTime() + REFRESH_TOKEN_REPLAY_GRACE_MS + 1),
+        workspaceC,
+      ),
+    ).rejects.toMatchObject({ statusCode: 401, message: 'INVALID_REFRESH_TOKEN' });
+    expect([...store.rows.values()].every((row) => row.revokedAt !== null)).toBe(true);
+    expect(store.userUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it('classifies a same-target switch retry after grace as theft', async () => {
+    const { initial, store } = await fixture(issuedAt);
+    await switchWorkspace(store, initial.refreshToken, issuedAt, workspaceB);
+
+    await expect(
+      switchWorkspace(
+        store,
+        initial.refreshToken,
+        new Date(issuedAt.getTime() + REFRESH_TOKEN_REPLAY_GRACE_MS + 1),
+        workspaceB,
+      ),
+    ).rejects.toMatchObject({ statusCode: 401, message: 'INVALID_REFRESH_TOKEN' });
+    expect([...store.rows.values()].every((row) => row.revokedAt !== null)).toBe(true);
+    expect(store.userUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it('detects a detached corrupt successor before post-grace family revocation', async () => {
+    const { initial, store } = await fixture(issuedAt);
+    const switched = await switchWorkspace(store, initial.refreshToken, issuedAt, workspaceB);
+    store.byRawToken(switched.refreshToken).familyId = 'detached-family';
+
+    await expect(
+      switchWorkspace(
+        store,
+        initial.refreshToken,
+        new Date(issuedAt.getTime() + REFRESH_TOKEN_REPLAY_GRACE_MS + 1),
+        workspaceB,
+      ),
+    ).rejects.toMatchObject({ statusCode: 401, message: 'INVALID_REFRESH_TOKEN' });
+    expect([...store.rows.values()].every((row) => row.revokedAt !== null)).toBe(true);
+    expect(store.userUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it('bumps the access-token epoch for corruption even when all refresh rows are revoked', async () => {
+    const { initial, store } = await fixture(issuedAt);
+    const switched = await switchWorkspace(store, initial.refreshToken, issuedAt, workspaceB);
+    const successor = store.byRawToken(switched.refreshToken);
+    successor.familyId = 'detached-family';
+    successor.revokedAt = issuedAt;
+
+    await expect(
+      switchWorkspace(
+        store,
+        initial.refreshToken,
+        new Date(issuedAt.getTime() + 1_000),
+        workspaceB,
+      ),
+    ).rejects.toMatchObject({ statusCode: 401, message: 'INVALID_REFRESH_TOKEN' });
+    expect([...store.rows.values()].every((row) => row.revokedAt !== null)).toBe(true);
+    expect(store.userUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it('rechecks grace after replay policy before returning the successor', async () => {
+    const { initial, store } = await fixture(issuedAt);
+    await switchWorkspace(store, initial.refreshToken, issuedAt, workspaceB);
+    let now = new Date(issuedAt.getTime() + REFRESH_TOKEN_REPLAY_GRACE_MS);
+
+    await expect(
+      exchangeRefreshToken(
+        { ...context, refreshToken: initial.refreshToken, workspace: workspaceB },
+        {
+          beforeReplay: async () => {
+            now = new Date(now.getTime() + 1);
+          },
+          now: () => now,
+          prisma: store.client,
+          refreshTokenTtlSeconds: 3_600,
+          sharedSecret,
+        },
+      ),
+    ).rejects.toMatchObject({ statusCode: 401, message: 'INVALID_REFRESH_TOKEN' });
+    expect([...store.rows.values()].every((row) => row.revokedAt !== null)).toBe(true);
+    expect(store.userUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses theft revocation when failed replay policy finishes after grace', async () => {
+    const { initial, store } = await fixture(issuedAt);
+    await switchWorkspace(store, initial.refreshToken, issuedAt, workspaceB);
+    let now = new Date(issuedAt.getTime() + REFRESH_TOKEN_REPLAY_GRACE_MS);
+
+    await expect(
+      exchangeRefreshToken(
+        { ...context, refreshToken: initial.refreshToken, workspace: workspaceB },
+        {
+          beforeReplay: async () => {
+            now = new Date(now.getTime() + 1);
+            throw new AppError('FORBIDDEN', 403, 'INTERACTION_REQUIRED');
+          },
+          now: () => now,
+          prisma: store.client,
+          refreshTokenTtlSeconds: 3_600,
+          sharedSecret,
+        },
+      ),
+    ).rejects.toMatchObject({ statusCode: 401, message: 'INVALID_REFRESH_TOKEN' });
+    expect([...store.rows.values()].every((row) => row.revokedAt !== null)).toBe(true);
+    expect(store.userUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it('revokes a family whose deterministic successor changes immutable assurance', async () => {
+    const { initial, store } = await fixture(issuedAt);
+    const switched = await switchWorkspace(store, initial.refreshToken, issuedAt, workspaceB);
+    store.byRawToken(switched.refreshToken).twoFaCompleted = false;
+
+    await expect(
+      switchWorkspace(
+        store,
+        initial.refreshToken,
+        new Date(issuedAt.getTime() + 1_000),
+        workspaceB,
+      ),
+    ).rejects.toMatchObject({ statusCode: 401, message: 'INVALID_REFRESH_TOKEN' });
+    expect([...store.rows.values()].every((row) => row.revokedAt !== null)).toBe(true);
+    expect(store.userUpdate).toHaveBeenCalledTimes(1);
   });
 });

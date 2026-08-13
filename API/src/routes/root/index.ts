@@ -10,6 +10,7 @@ import {
   configJwtDocumentation,
   configValidationEndpointDocumentation,
   configVerificationEndpointDocumentation,
+  workspaceSwitchDocumentation,
 } from './config-docs.js';
 import { registerConfigValidateRoute } from './config-validate.js';
 import { registerConfigVerifyRoute } from './config-verify.js';
@@ -22,9 +23,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 let version = 'unknown';
 try {
-  const pkg = JSON.parse(
-    readFileSync(resolve(__dirname, '../../../package.json'), 'utf-8'),
-  ) as { version: string };
+  const pkg = JSON.parse(readFileSync(resolve(__dirname, '../../../package.json'), 'utf-8')) as {
+    version: string;
+  };
   version = pkg.version;
 } catch {
   // Fallback if package.json is not co-located (e.g. Docker image without it).
@@ -54,6 +55,7 @@ export function registerRootRoute(app: FastifyInstance): void {
       api: '/api',
       config_jwt: configJwtDocumentation,
       access_token: accessTokenDocumentation,
+      workspace_switch: workspaceSwitchDocumentation,
       confidential_token_exchange: confidentialTokenExchangeDocumentation,
       config_validation: configValidationEndpointDocumentation,
       config_verification: configVerificationEndpointDocumentation,

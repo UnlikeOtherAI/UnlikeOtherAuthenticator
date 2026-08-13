@@ -7,7 +7,7 @@ Status: **build spec** for the next 2FA iteration. This is the execution guide. 
 Make 2FA actually usable end-to-end:
 
 1. **Per-domain** policy — an admin toggle that turns 2FA off / optional / required for a Service (domain).
-2. **Per-org** policy — an org-level toggle that can *force* 2FA for its members, overriding a looser domain policy.
+2. **Per-org** policy — an org-level toggle that can _force_ 2FA for its members, overriding a looser domain policy.
 3. **User self-service enrollment via API** — a logged-in user can enable 2FA for themselves: get a QR code, scan it in Google Authenticator (or any TOTP app), confirm a code, done. They can also disable it (unless policy forces it on).
 4. **Logo'd QR** — the QR returned for enrollment embeds the Service's company logo (from the config `ui_theme.logo.url`), generated with the sibling `@unlikeotherai/qr-art` package.
 5. **Two call surfaces** — the same enroll/verify/disable API is reachable both from the **client website / Auth window** (end users) and from the **Admin panel** (system admins managing policy + resetting a user's 2FA).
@@ -105,6 +105,18 @@ and rejects a proof-free code if proof is now required. The rejection rolls code
 and creates no refresh/access-token family, closing policy and membership changes between the
 interactive step and exchange.
 
+The resulting refresh family stores that `twoFaCompleted` decision as immutable
+assurance; every ordinary rotation and explicit workspace-switch successor copies
+it exactly. Legacy rows migrate to `false`. The custom workspace-switch grant
+re-resolves the prospective Organisation policy and current enrollment under the
+same product-policy/refresh/membership lock hierarchy. If that target requires
+proof the family does not carry, it returns the production-safe, non-consuming
+`403 INTERACTION_REQUIRED`; the product must restart interactive authorization.
+It must never infer recent proof from `twoFaLastAcceptedCounter`, because that
+counter is anti-replay state rather than a session- or target-bound capability.
+Admin Organisation policy changes take the exclusive product-policy fence, so a
+concurrent switch observes either the complete old or complete new policy.
+
 ### 4.6 Admin endpoints (system admin only, `/internal/admin/*`, audited)
 
 - `PATCH /internal/admin/domains/:domain` — accept `twoFaPolicy` (extend existing domain-update path).
@@ -149,6 +161,9 @@ When endpoints/config change, update **both**:
 - Secrets encrypted at rest (existing AES-256-GCM util); never returned in plaintext after enrollment; never exposed to admins.
 - All user-facing 2FA errors generic; no enumeration of account / enrollment state.
 - Counter replay protection preserved (`twoFaLastAcceptedCounter`).
+- Authorization codes and signing continuations bind `twoFaCompleted` to the originating
+  `User.tokenVersion`; redemption/completion rechecks that epoch under the user-global lock. A
+  password or 2FA reset invalidates pre-reset proof, and legacy null-epoch rows fail closed.
 - Rate-limit setup/enroll/disable/verify.
 - Forced (`REQUIRED`) users cannot self-disable.
 - Admin disable/reset writes `AdminAuditLog`.

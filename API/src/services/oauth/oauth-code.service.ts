@@ -10,6 +10,10 @@ import { AUTHORIZATION_CODE_TTL_MS } from '../../config/constants.js';
 import { requireEnv } from '../../config/env.js';
 import { AppError } from '../../utils/errors.js';
 import { verifyPkceCodeVerifier } from '../../utils/pkce.js';
+import {
+  isAuthenticationEpochMismatchError,
+  lockAndAssertAuthenticationEpoch,
+} from '../authentication-epoch.service.js';
 
 type Db = Prisma.TransactionClient;
 
@@ -33,6 +37,7 @@ export interface IssueOAuthCodeInput {
   state?: string;
   codeChallenge: string;
   rememberMe?: boolean;
+  credentialEpoch: number;
 }
 
 export async function issueOAuthCode(
@@ -41,6 +46,14 @@ export async function issueOAuthCode(
   now: Date = new Date(),
 ): Promise<{ code: string }> {
   const sharedSecret = requireEnv('SHARED_SECRET').SHARED_SECRET;
+  await lockAndAssertAuthenticationEpoch(
+    {
+      userId: input.userId,
+      domain: input.domain,
+      credentialEpoch: input.credentialEpoch,
+    },
+    { prisma },
+  );
   for (let attempt = 0; attempt < 3; attempt++) {
     const code = generateCode();
     try {
@@ -58,6 +71,7 @@ export async function issueOAuthCode(
           codeChallenge: input.codeChallenge,
           codeChallengeMethod: 'S256',
           rememberMe: input.rememberMe ?? false,
+          tokenVersion: input.credentialEpoch,
           expiresAt: new Date(now.getTime() + AUTHORIZATION_CODE_TTL_MS),
         },
         select: { id: true },
@@ -89,6 +103,7 @@ export async function consumeOAuthCode(
     select: {
       id: true,
       userId: true,
+      domain: true,
       oauthClientId: true,
       redirectUrl: true,
       resource: true,
@@ -96,6 +111,7 @@ export async function consumeOAuthCode(
       codeChallenge: true,
       codeChallengeMethod: true,
       rememberMe: true,
+      tokenVersion: true,
       expiresAt: true,
       usedAt: true,
     },
@@ -113,12 +129,33 @@ export async function consumeOAuthCode(
   if (code.redirectUrl !== params.redirectUrl) reject();
   if (!code.codeChallenge || code.codeChallengeMethod !== 'S256') reject();
   try {
-    verifyPkceCodeVerifier({ codeVerifier: params.codeVerifier, codeChallenge: code.codeChallenge ?? '' });
+    verifyPkceCodeVerifier({
+      codeVerifier: params.codeVerifier,
+      codeChallenge: code.codeChallenge ?? '',
+    });
   } catch {
     reject();
   }
   if (code.usedAt) reject();
   if (code.expiresAt.getTime() <= now.getTime()) reject();
+  const credentialEpoch = code.tokenVersion ?? reject();
+  if (!Number.isSafeInteger(credentialEpoch) || credentialEpoch < 0) {
+    reject();
+  }
+
+  try {
+    await lockAndAssertAuthenticationEpoch(
+      {
+        userId: code.userId,
+        domain: code.domain,
+        credentialEpoch,
+      },
+      { prisma },
+    );
+  } catch (error) {
+    if (isAuthenticationEpochMismatchError(error)) reject();
+    throw error;
+  }
 
   // One-time use: atomic compare-and-set guards against code replay / races.
   const updated = await prisma.authorizationCode.updateMany({

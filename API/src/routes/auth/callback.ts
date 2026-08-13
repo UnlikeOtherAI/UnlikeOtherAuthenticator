@@ -42,6 +42,7 @@ import { resolveProductWorkspaceBeforeTwoFa } from '../../services/required-work
 import { finalizeWithTwoFaPolicy } from '../../services/workspace-finalize.service.js';
 import { selectRedirectUrl } from '../../services/authorization-code.service.js';
 import { lockAndAssertAuthenticationEpoch } from '../../services/authentication-epoch.service.js';
+import { lockRefreshSessionUserDomain } from '../../services/refresh-session-lock.service.js';
 import { socialCallbackRateLimiter } from './rate-limit-keys.js';
 
 const ParamsSchema = z.object({
@@ -258,7 +259,11 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
             requestAccess: socialState.request_access === true,
             ip: request.ip ?? null,
           },
-          { prisma },
+          {
+            prisma,
+            beforeExistingUserUpdate: async (userId) =>
+              lockRefreshSessionUserDomain({ userId, domain: config.domain }, { prisma }),
+          },
         );
 
         if (socialLoginResult.status === 'blocked') {

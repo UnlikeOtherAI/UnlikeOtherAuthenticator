@@ -15,11 +15,13 @@ The Authenticator now issues a **token pair** from `POST /auth/token`:
 - `expires_in`
 - `refresh_token_expires_in`
 
-`POST /auth/token` supports three grants:
+`POST /auth/token` supports four grants:
 
 1. Authorization-code exchange
 2. Refresh-token exchange with `grant_type=refresh_token`
-3. Confidential JWT assertion exchange with
+3. Explicit workspace switch with
+   `grant_type=urn:unlikeotherai:params:oauth:grant-type:workspace-switch`
+4. Confidential JWT assertion exchange with
    `grant_type=urn:ietf:params:oauth:grant-type:token-exchange`
 
 `POST /auth/revoke` revokes the refresh-token family used by the caller during logout.
@@ -28,11 +30,11 @@ The Authenticator now issues a **token pair** from `POST /auth/token`:
 
 ## Token Model
 
-| Token | Format | Lifetime | Client Storage | Server Storage |
-|-------|--------|----------|----------------|----------------|
-| Access token | HS256 JWT | 15-60 minutes | Memory / short-lived session | Stateless |
-| Refresh token | Opaque random base64url string | 1-90 days, default 30 | Backend-only, never browser JS | SHA-256 hash in `refresh_tokens` |
-| Confidential resource token | RS256 JWT | 5 minutes | Calling backend only | Stateless |
+| Token                       | Format                         | Lifetime              | Client Storage                 | Server Storage                   |
+| --------------------------- | ------------------------------ | --------------------- | ------------------------------ | -------------------------------- |
+| Access token                | HS256 JWT                      | 15-60 minutes         | Memory / short-lived session   | Stateless                        |
+| Refresh token               | Opaque random base64url string | 1-90 days, default 30 | Backend-only, never browser JS | SHA-256 hash in `refresh_tokens` |
+| Confidential resource token | RS256 JWT                      | 5 minutes             | Calling backend only           | Stateless                        |
 
 ### Important Constraints
 
@@ -56,6 +58,8 @@ Refresh tokens are stored in the `refresh_tokens` table with:
 - `config_url`
 - `org_id` (nullable exact workspace scope)
 - `team_id` (nullable exact workspace scope)
+- `two_fa_completed` (immutable authorization-code assurance; legacy rows default `false`)
+- `security_revoked_at` (nullable one-time theft/corruption epoch-invalidation marker)
 - `expires_at`
 - `revoked_at`
 - `last_used_at`
@@ -77,10 +81,21 @@ UOA allows one narrowly bounded recovery case for a successful response that
 was lost in transit. For 120 seconds after rotation, the same predecessor may
 be submitted with the same authenticated application credential and exact
 `domain`/`client_id`/`config_url` context. UOA validates every stored
-parent/successor hash and scope link, re-runs current policy, and returns the
-one current live descendant without creating another row. The response reports
+parent/successor hash and immutable assurance link, re-runs current policy, and
+returns the one current live descendant without creating another row. For an
+ordinary refresh, every descendant must preserve the predecessor workspace. For
+an explicit switch, every descendant must preserve the exact requested target.
+A different valid transition returns the non-revoking
+`WORKSPACE_SWITCH_CONFLICT` instead of returning a token with changed scope. The response reports
 that descendant's actual remaining lifetime. This also makes concurrent
 submissions converge on one successor across UOA replicas.
+
+Target policy is rechecked before any replay response is returned. If the exact switch edge is
+already committed but its target membership, 2FA assurance, or signature policy no longer passes,
+UOA retires that verified family and returns authenticated `401 INVALID_REFRESH_TOKEN`. This differs
+from a pre-edge 403: the predecessor is already consumed, so preserving it would strand a caller
+that lost the successful response. Policy retirement does not bump `User.tokenVersion` or revoke
+sibling families; it returns no access token for the invalid target.
 
 The 120-second window is an explicit availability/security tradeoff: a stolen
 predecessor plus the product's application credential can recover the current
@@ -90,11 +105,19 @@ successor during that window. Raw tokens remain backend-only and responses are
 If an already-rotated refresh token is presented outside that window, or its
 stored successor chain is corrupt:
 
-1. The entire token family is revoked
+1. The entire token family is revoked; if the stored chain is corrupt and its family boundary
+   cannot be trusted, all refresh state for that user is revoked
 2. The user's global access-token version is incremented
 3. Both revocations commit in the same transaction
-4. Only after commit, the request fails with the same generic unauthorized response used for every invalid refresh
+4. Only after commit, the authenticated workspace-switch request fails with the stable
+   `INVALID_REFRESH_TOKEN` code; the response never distinguishes invalidity, expiry, revocation,
+   corruption, or replay (and client-authentication failures remain generic)
 5. Subsequent refresh attempts and access tokens from the prior version fail
+
+The security marker is claimed first on the exact presented capability, then fanned out to the
+verified family or user refresh state. This makes epoch invalidation exactly-once even if policy
+retirement had already set every family row's `revoked_at`; replaying the same classified
+capability cannot revoke families created later or keep incrementing the global epoch.
 
 This is the theft-detection path for replayed refresh tokens. Every production refresh decision
 takes PostgreSQL transaction advisory locks in the canonical order: exact user-global, then exact
@@ -102,6 +125,29 @@ takes PostgreSQL transaction advisory locks in the canonical order: exact user-g
 opaque lookup, takes both locks, and then re-reads the row before deciding reuse, rejection, or
 rotation. Reuse and a current-token rotation therefore cannot cross: whichever commits first
 determines the state observed by the waiter, and no new live replacement can escape revocation.
+
+## Explicit Workspace Switch
+
+Only the custom workspace-switch grant may change `org_id`/`team_id`. Before it
+writes the deterministic successor, UOA holds the product-policy and refresh
+family locks, validates the old source scope, locks and validates the exact
+target ACTIVE organisation/team memberships, evaluates the target's current
+strongest-wins 2FA policy against the family's immutable `two_fa_completed`
+proof and current enrollment, then evaluates signature policy. An ordinary
+refresh always copies its current scope.
+
+The grant has no caller-supplied operation ID. The presented predecessor, grant
+intent, and exact target define the transition. Same-scope requests and valid
+competing transitions are non-consuming `409 WORKSPACE_SWITCH_CONFLICT`
+outcomes. Target membership or product-policy denial is the deliberately
+non-oracular `403 WORKSPACE_NOT_AVAILABLE`; insufficient family assurance is
+`403 INTERACTION_REQUIRED`. Those three safe semantic outcomes do not revoke a
+valid family before an edge commits. On replay of an already-committed matching edge, target-policy
+failure instead retires that family and returns authenticated `INVALID_REFRESH_TOKEN`. Invalid
+sources and any predecessor used after the 120-second grace return the stable
+`401 INVALID_REFRESH_TOKEN` code after domain-client authentication, without distinguishing the
+underlying reason, and retain the existing theft-revocation semantics. Missing or invalid
+domain-client authentication remains a generic 401 with no refresh-token code.
 
 ## Workspace Lifecycle Revocation
 
@@ -127,9 +173,10 @@ workspace/product sessions are not globally invalidated.
 ## Logout and Global Credential Revocation
 
 `POST /auth/revoke` first performs an opaque, context-bound lookup. Only after a valid subject is
-known does it take user-global then user+domain locks and re-read the row. Family revocation and the
-`User.tokenVersion` increment commit in the same transaction. Missing, mismatched, or concurrently
-deleted tokens retain the same successful no-oracle response.
+known does it take user-global then user+domain locks and re-read the row. It claims the presented
+row's security marker once; family revocation and the `User.tokenVersion` increment then commit in
+the same transaction. Missing, mismatched, concurrently deleted, or repeated tokens retain the
+same successful no-oracle response without another epoch increment.
 
 Password reset, password binding during verify-email, email 2FA reset, authenticated 2FA disable,
 and admin 2FA reset use `uoa_admin`. Each takes the user-global lock before changing credentials,
@@ -139,17 +186,25 @@ reset commits first, refresh's post-lock re-read sees revocation and cannot mint
 
 The shipped revocation caller audit is:
 
-| Caller | Database boundary | Ordered locks | Atomic effects |
-| --- | --- | --- | --- |
-| Refresh rotation/reuse | `uoa_admin` | product policy → user-global → user/domain → org/team → signature | rotate, or durable family theft revocation |
-| `POST /auth/revoke` | tenant domain transaction | user-global → user/domain | family revoke + `tokenVersion` |
-| Org deactivate/remove | `uoa_admin` | user-global → user/domain → org/team | status + exact-org + legacy-domain revoke |
-| Team-member remove | `uoa_admin` | user-global → org/team | status + exact-team revoke |
-| Password reset | `uoa_admin` | user-global | password + all-refresh revoke + `tokenVersion` |
-| Verify-email password binding | `uoa_admin` | user-global | password/token consume + all-refresh revoke + `tokenVersion` |
-| Email 2FA reset | `uoa_admin` | user-global | 2FA/token consume + all-refresh revoke + `tokenVersion` |
-| Authenticated 2FA disable | `uoa_admin` | user-global | TOTP replay claim + 2FA disable + all-refresh revoke + `tokenVersion` |
-| Admin 2FA reset | `uoa_admin` | user-global | 2FA reset + all-refresh revoke + `tokenVersion` |
+| Caller                        | Database boundary         | Ordered locks                                                                    | Atomic effects                                                        |
+| ----------------------------- | ------------------------- | -------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| Authorization-code exchange   | `uoa_admin`               | product policy → user-global → user/domain → org/team                            | epoch check + code consume + refresh issue                            |
+| Signing continuation complete | `uoa_admin`               | product policy → user-global → user/domain → org/team → signature → continuation | epoch/policy check + continuation consume + code issue                |
+| Refresh rotation/reuse        | `uoa_admin`               | product policy → user-global → user/domain → org/team → signature                | rotate, or durable family theft revocation                            |
+| `POST /auth/revoke`           | tenant domain transaction | user-global → user/domain                                                        | family revoke + `tokenVersion`                                        |
+| Org deactivate/remove         | `uoa_admin`               | user-global → user/domain → org/team                                             | status + exact-org + legacy-domain revoke                             |
+| Team-member remove            | `uoa_admin`               | user-global → org/team                                                           | status + exact-team revoke                                            |
+| Password reset                | `uoa_admin`               | user-global                                                                      | password + all-refresh revoke + `tokenVersion`                        |
+| Verify-email password binding | `uoa_admin`               | user-global                                                                      | password/token consume + all-refresh revoke + `tokenVersion`          |
+| Email 2FA reset               | `uoa_admin`               | user-global                                                                      | 2FA/token consume + all-refresh revoke + `tokenVersion`               |
+| Authenticated 2FA disable     | `uoa_admin`               | user-global                                                                      | TOTP replay claim + 2FA disable + all-refresh revoke + `tokenVersion` |
+| Admin 2FA reset               | `uoa_admin`               | user-global                                                                      | 2FA reset + all-refresh revoke + `tokenVersion`                       |
+
+Every newly issued authorization code and signing continuation stores the exact locked
+`User.tokenVersion` from its originating login. Redemption/completion requires exact equality
+under the same user-global lock used by credential reset. The additive migration leaves historical
+rows null and both consumers reject those rows: reconstructing or defaulting an unknown epoch would
+let pre-reset 2FA/signature proof create a renewable post-reset session.
 
 ---
 
@@ -173,6 +228,24 @@ Refresh-token request:
   "refresh_token": "opaque_refresh_token"
 }
 ```
+
+Workspace-switch request (all four properties are required; additional
+properties such as `operation_id` are rejected):
+
+```json
+{
+  "grant_type": "urn:unlikeotherai:params:oauth:grant-type:workspace-switch",
+  "refresh_token": "opaque_refresh_token",
+  "organization_id": "exact_target_org_id",
+  "team_id": "exact_target_team_id"
+}
+```
+
+Success uses the standard token-pair envelope below, carries
+`access_token.active` for exactly the requested pair, and never includes
+`firstLogin`. Persist the complete returned pair and selected workspace
+atomically. A retry inside the response-loss window must use the same
+predecessor and target; it can never recover across a later scope change.
 
 Confidential assertion request:
 
@@ -298,12 +371,12 @@ Success response:
 
 ## Environment
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `ACCESS_TOKEN_TTL` | `30m` | Short-lived JWT lifetime, bounded to 15-60 minutes |
-| `REFRESH_TOKEN_TTL_DAYS` | `30` | Refresh-token lifetime in days, bounded to 1-90 |
-| `MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK` | unset | RS256 signing key whose public half is served at `/oauth/jwks.json`; key presence does not enable public OAuth routes |
-| `MCP_OAUTH_PUBLIC_PROFILE_ENABLED` | `false` | Explicit gate for discovery, registration, authorize, login, and public PKCE token routes |
+| Variable                             | Default | Description                                                                                                           |
+| ------------------------------------ | ------- | --------------------------------------------------------------------------------------------------------------------- |
+| `ACCESS_TOKEN_TTL`                   | `30m`   | Short-lived JWT lifetime, bounded to 15-60 minutes                                                                    |
+| `REFRESH_TOKEN_TTL_DAYS`             | `30`    | Refresh-token lifetime in days, bounded to 1-90                                                                       |
+| `MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK` | unset   | RS256 signing key whose public half is served at `/oauth/jwks.json`; key presence does not enable public OAuth routes |
+| `MCP_OAUTH_PUBLIC_PROFILE_ENABLED`   | `false` | Explicit gate for discovery, registration, authorize, login, and public PKCE token routes                             |
 
 ---
 
@@ -314,14 +387,17 @@ Client backends integrating with the Authenticator must:
 1. Exchange the authorization code on the backend only
 2. Store the returned refresh token in a server-only location
 3. Use `grant_type=refresh_token` to renew sessions
-4. Call `POST /auth/revoke` during logout
-5. Clear local cookies/session state if refresh fails
-6. Persist the returned refresh successor and access-token state atomically
+4. Use only the explicit custom grant to switch to an exact pair from the live
+   authorized workspace directory; never infer switching from ordinary refresh
+5. Call `POST /auth/revoke` during logout
+6. Clear local cookies/session state if refresh fails
+7. Persist the returned refresh successor, access-token state, and selected
+   workspace atomically
    before acknowledging a local session renewal
-7. If the UOA success response may have been lost, retry the same predecessor
-   promptly with the same application credential and exact client context; do
-   not mint or derive a replacement locally
-8. If a product already persisted the UOA result but lost its own downstream
+8. If the UOA success response may have been lost, retry the same predecessor
+   promptly with the same application credential, grant intent, exact target,
+   and client context; do not mint or derive a replacement locally
+9. If a product already persisted the UOA result but lost its own downstream
    response, replay that committed local result (including the already-issued
    access-token version) instead of rotating through UOA again
 
@@ -330,6 +406,9 @@ Client backends integrating with the Authenticator must:
 ## Deployment Notes
 
 - The refresh-token feature requires the `refresh_tokens` Prisma migration to be deployed before the new application revision starts serving traffic.
+- Workspace switching requires `20260813120000_bind_refresh_twofa_proof` before
+  the new application revision serves the custom grant. Existing families are
+  intentionally treated as lacking completed interactive 2FA proof.
 - Confidential assertion replay protection requires the `confidential_assertion_uses` migration to be deployed before confidential exchange traffic reaches the new revision.
 - Per-product exchange requires `20260719020000_add_confidential_delegation_mappings`, an active registered ClientDomain/credential for each product, and an audited mapping provisioned before that product sends traffic. Unknown/disabled mappings fail closed.
 - For G Cloud / Cloud Run deployments, apply `prisma migrate deploy` as part of the rollout before or alongside the new container revision.

@@ -21,21 +21,21 @@ forms, and multi-party contract orchestration are not part of this module.
 
 ## Domain-Level Feature Gate
 
-* The signature service is **disabled by default** for every registered `ClientDomain`.
-* An existing platform superuser enables it for one domain from that domain's Admin
+- The signature service is **disabled by default** for every registered `ClientDomain`.
+- An existing platform superuser enables it for one domain from that domain's Admin
   detail screen. Enabling it on one domain has no effect on any other domain, including
   another domain used by the same organisation or App.
-* The persisted `ClientDomain` record is the authoritative feature gate. Phase 1 does
+- The persisted `ClientDomain` record is the authoritative feature gate. Phase 1 does
   not add a client-controlled config-JWT claim that can turn signature enforcement on
   or off.
-* A domain cannot be enabled until it has at least one published, active, required
+- A domain cannot be enabled until it has at least one published, active, required
   agreement version. The Admin API must reject an invalid enable operation. If storage
   becomes inconsistent and an enabled domain has no valid requirement set, auth fails
   closed and logs the internal reason.
-* Disabling the service immediately removes the signature gate from new authorization
+- Disabling the service immediately removes the signature gate from new authorization
   and refresh flows. It does not delete agreements, signatures, receipts, or audit
   records. Re-enabling restores enforcement against the then-active versions.
-* Development, staging, and production are separate only when they use separate
+- Development, staging, and production are separate only when they use separate
   registered domains. There is no environment-name override that silently weakens a
   production domain's setting.
 
@@ -56,13 +56,13 @@ Example persisted domain setting:
 Phase 1 must use the existing UOA concepts rather than introducing parallel `Tenant`,
 `Application`, or `Policy` identities:
 
-* **Domain:** the verified `ClientDomain.domain` is the enforcement boundary.
-* **User:** the signer is the existing UOA `User` identified by stable `userId`.
-* **Organisation, Team, and App:** these remain unchanged. They do not own or override
+- **Domain:** the verified `ClientDomain.domain` is the enforcement boundary.
+- **User:** the signer is the existing UOA `User` identified by stable `userId`.
+- **Organisation, Team, and App:** these remain unchanged. They do not own or override
   signature requirements in Phase 1.
-* **Global users:** a global user signs independently per domain. A signature made for
+- **Global users:** a global user signs independently per domain. A signature made for
   domain A never satisfies domain B, even when both domains resolve to the same UOA user.
-* **Per-domain users:** the signature naturally follows the domain-scoped user row.
+- **Per-domain users:** the signature naturally follows the domain-scoped user row.
 
 This domain-only scope intentionally avoids the repository's unresolved transition
 between the legacy `Organisation.domain` model and the ReBAC domain-pool model.
@@ -73,18 +73,18 @@ future extensions and must not be inferred into Phase 1.
 
 An enabled domain supports:
 
-* one or more required PDF agreements;
-* draft, published, superseded, and withdrawn agreement-version states;
-* an immutable SHA-256 hash for every uploaded source PDF;
-* click-wrap acceptance;
-* typed-name electronic signature;
-* an exact, versioned acceptance statement displayed at signing time;
-* mandatory re-signing when a new version becomes active;
-* a UOA-hosted, themed and localized signing flow;
-* an append-only signature and audit record;
-* a downloadable evidence receipt for the signer and Admin operators;
-* domain-backend status lookup;
-* explicit signature revocation without deleting the historical record.
+- one or more required PDF agreements;
+- draft, published, superseded, and withdrawn agreement-version states;
+- an immutable SHA-256 hash for every uploaded source PDF;
+- click-wrap acceptance;
+- typed-name electronic signature;
+- an exact, versioned acceptance statement displayed at signing time;
+- mandatory re-signing when a new version becomes active;
+- a UOA-hosted, themed and localized signing flow;
+- an append-only signature and audit record;
+- a downloadable evidence receipt for the signer and Admin operators;
+- domain-backend status lookup;
+- explicit signature revocation without deleting the historical record.
 
 Drawn signatures, signature-field placement inside arbitrary PDFs, document-template
 editing, multi-party signing, signing order, and transaction-generated contracts are
@@ -97,25 +97,25 @@ An **Agreement** is a stable domain-owned record such as "Service Terms" or "NDA
 
 Each Agreement contains:
 
-* ID;
-* owning domain;
-* title and optional description;
-* display order;
-* whether it is currently required for access;
-* created and updated timestamps.
+- ID;
+- owning domain;
+- title and optional description;
+- display order;
+- whether it is currently required for access;
+- created and updated timestamps.
 
 Each AgreementVersion contains:
 
-* ID and parent agreement ID;
-* monotonically increasing integer version;
-* original filename and private object-storage key;
-* source PDF SHA-256 hash;
-* signing method: `clickwrap` or `typed_name`;
-* exact acceptance statement;
-* status: `draft`, `published`, `superseded`, or `withdrawn`;
-* publication and effective timestamps;
-* publishing Admin identity;
-* created timestamp.
+- ID and parent agreement ID;
+- monotonically increasing integer version;
+- original filename and private object-storage key;
+- source PDF SHA-256 hash;
+- signing method: `clickwrap` or `typed_name`;
+- exact acceptance statement;
+- status: `draft`, `published`, `superseded`, or `withdrawn`;
+- publication and effective timestamps;
+- publishing Admin identity;
+- created timestamp.
 
 Rules:
 
@@ -176,26 +176,31 @@ instead of issuing an authorization code.
 
 The server-side continuation must preserve all state needed to resume the exact flow:
 
-* user ID and verified domain;
-* auth profile (`/auth/*` config-JWT or `/oauth/*` public client);
-* config URL when the profile uses one;
-* validated redirect URL and OAuth state;
-* PKCE code challenge and method;
-* remember-me choice;
-* selected organisation/team scope, where present;
-* authentication method and whether 2FA was completed for the current login;
-* expiry, consumed timestamp, and failed-attempt counter.
+- user ID and verified domain;
+- auth profile (`/auth/*` config-JWT or `/oauth/*` public client);
+- config URL when the profile uses one;
+- validated redirect URL and OAuth state;
+- PKCE code challenge and method;
+- remember-me choice;
+- selected organisation/team scope, where present;
+- authentication method and whether 2FA was completed for the current login;
+- the exact locked `User.tokenVersion` of that authentication;
+- expiry, consumed timestamp, and failed-attempt counter.
 
 The browser receives only a random opaque capability token. UOA stores only its keyed
 hash. The continuation must expire after a short bounded interval, be invalid after one
 successful completion, and be protected from replay and concurrent double-use.
 
-An expired, invalid, or consumed continuation returns the normal generic public error and
-must never reveal whether a user or signature exists. The user can restart authentication.
+An expired, invalid, consumed, legacy null-epoch, or credential-stale continuation returns the normal
+generic public error and must never reveal whether a user or signature exists. This epoch check applies
+to session state, source-PDF reads, receipt reads, signing writes, and completion. Private reads take the
+same canonical user lock and validate the live epoch before resolving any private database or object
+metadata. The user can restart authentication.
 
 Each accepted signing submission is first reserved as one durable
 `SignatureClaimIntent` for the exact continuation and AgreementVersion. The reservation
-transaction locks the continuation and domain policy, freezes the signer/auth context,
+transaction locks product policy → user epoch → exact workspace → domain signature policy →
+continuation, freezes the signer/auth context,
 current policy revision, exact published-version inputs, source key/hash, server acceptance
 time, non-guessable verification reference, and a fingerprint of the user's existing
 signature/revocation history, then commits without touching object storage or creating
@@ -205,8 +210,8 @@ Receipt generation runs only after that transaction has ended. Its manifest, cer
 timestamps, PDF metadata, and create-only receipt key are derived from the frozen intent,
 so a retry recreates byte-identical receipt bytes. An existing object is accepted only when
 its bytes match exactly. UOA then records `EVIDENCE_READY` in a short database-only
-transaction. Finally it relocks continuation → domain policy → claim intent, rechecks
-continuation validity/expiry, exact policy revision and published version, plus the frozen
+transaction. Finally it reacquires that canonical hierarchy before the claim intent, rechecks
+continuation validity/expiry, the immutable credential epoch, exact policy revision and published version, plus the frozen
 signature/revocation fingerprint, and atomically appends the `AgreementSignature`, audit
 event, and `COMPLETED` transition. A changed policy, version, revocation history, or expiry
 fails closed and cannot append a signature. Claim inputs, ready evidence metadata, and
@@ -244,21 +249,21 @@ submission and presents any newly required version before issuing the code.
 
 Every successful signature creates an immutable `AgreementSignature` record containing:
 
-* signature ID and non-guessable public verification reference;
-* user ID, user email, and captured display/legal name;
-* domain;
-* agreement ID, AgreementVersion ID, and integer version;
-* source PDF hash;
-* exact acceptance statement;
-* signing method and typed name, where applicable;
-* UTC server timestamp;
-* authentication method;
-* 2FA-completed state for that login;
-* IP address and user agent, subject to the configured retention policy;
-* signing-continuation ID;
-* evidence-manifest hash;
-* generated receipt PDF hash and private storage key;
-* evidence-signing key ID and cryptographic signature.
+- signature ID and non-guessable public verification reference;
+- user ID, user email, and captured display/legal name;
+- domain;
+- agreement ID, AgreementVersion ID, and integer version;
+- source PDF hash;
+- exact acceptance statement;
+- signing method and typed name, where applicable;
+- UTC server timestamp;
+- authentication method;
+- 2FA-completed state for that login;
+- IP address and user agent, subject to the configured retention policy;
+- signing-continuation ID;
+- evidence-manifest hash;
+- generated receipt PDF hash and private storage key;
+- evidence-signing key ID and cryptographic signature.
 
 The receipt PDF consists of the immutable source PDF followed by a UOA-generated
 certificate page. UOA must not rewrite the source PDF bytes or attempt arbitrary signature
@@ -284,14 +289,14 @@ every active required AgreementVersion on that domain.
 
 Evaluation rules:
 
-* Always read current domain settings and current published versions server-side.
-* Match on `userId + domain + agreementVersionId`; never accept a client-supplied
+- Always read current domain settings and current published versions server-side.
+- Match on `userId + domain + agreementVersionId`; never accept a client-supplied
   `complete` flag.
-* A superseded version does not satisfy its replacement.
-* A revoked signature remains visible as history but does not satisfy the requirement.
-* A new valid signature after revocation creates a new record; it never overwrites the
+- A superseded version does not satisfy its replacement.
+- A revoked signature remains visible as history but does not satisfy the requirement.
+- A new valid signature after revocation creates a new record; it never overwrites the
   revoked record.
-* The final completion check and authorization-code issuance must be protected against a
+- The final completion check and authorization-code issuance must be protected against a
   policy-change race. If the policy revision changed, re-evaluate before issuing.
 
 Phase 1 adds no signature list or personal evidence to access-token claims. Successful
@@ -302,16 +307,16 @@ applications that need detail use the protected status API.
 
 The signature gate applies to refresh-token rotation as well as interactive authorization:
 
-* Before issuing a refreshed access token, re-evaluate the domain's current signature
+- Before issuing a refreshed access token, re-evaluate the domain's current signature
   requirements for the refresh-token user.
-* If a required signature is missing or revoked, do not rotate or consume the valid
+- If a required signature is missing or revoked, do not rotate or consume the valid
   refresh token. Return the normal OAuth failure that tells the client to restart an
   interactive authorization flow, where signing can occur.
-* Publishing a new required version therefore blocks the next refresh and forces
+- Publishing a new required version therefore blocks the next refresh and forces
   interactive reauthentication/signing.
-* Already-issued stateless access tokens remain valid until their normal short expiry.
+- Already-issued stateless access tokens remain valid until their normal short expiry.
   Phase 1 does not add immediate mid-token revocation for policy publication.
-* When the signature service is disabled, refresh behaviour is unchanged.
+- When the signature service is disabled, refresh behaviour is unchanged.
 
 ## Revocation
 
@@ -344,19 +349,19 @@ SignatureAuditEvent
 
 Required implementation rules:
 
-* PostgreSQL/Prisma stores metadata, state, hashes, and audit records.
-* Source and receipt PDFs live in durable private object storage, never a public bucket
+- PostgreSQL/Prisma stores metadata, state, hashes, and audit records.
+- Source and receipt PDFs live in durable private object storage, never a public bucket
   and never as large database blobs.
-* Object access uses short-lived, purpose-bound URLs or authenticated streaming.
-* Published files, signature-claim inputs/evidence/terminal states, signatures,
+- Object access uses short-lived, purpose-bound URLs or authenticated streaming.
+- Published files, signature-claim inputs/evidence/terminal states, signatures,
   revocations, and signature audit events are append-only.
-* Draft versions with no signatures may be deleted. Published versions and evidence may
+- Draft versions with no signatures may be deleted. Published versions and evidence may
   not be cascade-deleted with a domain or user.
-* Deleting a domain or user must not silently destroy retained legal evidence. The delete
+- Deleting a domain or user must not silently destroy retained legal evidence. The delete
   operation is blocked while retained signature evidence exists unless a separately
   approved retention/deletion workflow has handled it.
-* All queries are scoped by verified domain and, for user reads, authenticated user ID.
-* Admin-only tables use the same deny-by-default/BYPASSRLS pattern as other Admin-owned
+- All queries are scoped by verified domain and, for user reads, authenticated user ID.
+- Admin-only tables use the same deny-by-default/BYPASSRLS pattern as other Admin-owned
   domain settings until a narrower tenant-admin boundary is specified.
 
 ## Admin Experience
@@ -366,16 +371,16 @@ platform superusers; it does not invent a separate customer-admin identity or po
 
 The tab must support:
 
-* current enabled/disabled state;
-* active requirement summary and policy revision;
-* agreement list and display order;
-* PDF upload, preview, source hash, and draft editing;
-* signing-method and acceptance-statement configuration;
-* publish, supersede, and withdraw actions with explicit confirmation;
-* signature search by user, agreement, version, and date;
-* receipt download and verification details;
-* signature revocation with a required reason;
-* audit history for settings, publication, withdrawal, and revocation.
+- current enabled/disabled state;
+- active requirement summary and policy revision;
+- agreement list and display order;
+- PDF upload, preview, source hash, and draft editing;
+- signing-method and acceptance-statement configuration;
+- publish, supersede, and withdraw actions with explicit confirmation;
+- signature search by user, agreement, version, and date;
+- receipt download and verification details;
+- signature revocation with a required reason;
+- audit history for settings, publication, withdrawal, and revocation.
 
 The enable toggle remains unavailable until at least one valid published required version
 exists. Destructive or access-changing actions must use confirmation dialogs and create
@@ -386,13 +391,13 @@ Admin audit events.
 Exact request/response schemas are defined during implementation, but the route families
 and authorization boundaries are fixed:
 
-* `/signatures/session/*` — capability-token access used only by the hosted signing flow;
-* `/signatures/me/*` — authenticated signer status and receipt access, restricted to the
+- `/signatures/session/*` — capability-token access used only by the hosted signing flow;
+- `/signatures/me/*` — authenticated signer status and receipt access, restricted to the
   access-token subject and domain;
-* `/signatures/verify/:reference` — public, PII-minimised receipt integrity check;
-* `/domain/signatures/*` — domain-backend status reads using the established domain-hash
+- `/signatures/verify/:reference` — public, PII-minimised receipt integrity check;
+- `/domain/signatures/*` — domain-backend status reads using the established domain-hash
   auth and verified config boundary;
-* `/internal/admin/domains/:domain/signatures/*` — platform-superuser settings,
+- `/internal/admin/domains/:domain/signatures/*` — platform-superuser settings,
   agreement/version management, signature search, receipt download, and revocation.
 
 The public verification response exposes only the reference state, agreement/version
@@ -405,58 +410,58 @@ the `/llm` integration guide in the same implementation change.
 
 ## Security and Privacy Requirements
 
-* Verify the domain and redirect using the existing config/public-client trust boundary
+- Verify the domain and redirect using the existing config/public-client trust boundary
   before creating a signing continuation.
-* Enforce CSRF protection on browser mutations and replay protection on continuation and
+- Enforce CSRF protection on browser mutations and replay protection on continuation and
   submission tokens.
-* Treat all client-submitted agreement IDs, version IDs, hashes, names, and completion
+- Treat all client-submitted agreement IDs, version IDs, hashes, names, and completion
   flags as untrusted.
-* Validate uploaded files as PDFs, enforce a bounded documented size limit, malware-scan
+- Validate uploaded files as PDFs, enforce a bounded documented size limit, malware-scan
   them, and render them without executing embedded scripts, actions, or external content.
-* Use a restrictive CSP and do not expose private object-storage URLs permanently.
-* Never log PDFs, typed names, capability tokens, raw evidence manifests, or signed URLs.
-* Redact continuation and signature tokens using the same logging discipline as existing
+- Use a restrictive CSP and do not expose private object-storage URLs permanently.
+- Never log PDFs, typed names, capability tokens, raw evidence manifests, or signed URLs.
+- Redact continuation and signature tokens using the same logging discipline as existing
   auth tokens.
-* Make signing submissions idempotent so browser retries cannot create contradictory
+- Make signing submissions idempotent so browser retries cannot create contradictory
   evidence or issue multiple authorization codes.
-* Rate-limit session reads, signing submissions, public verification, Admin search, and
+- Rate-limit session reads, signing submissions, public verification, Admin search, and
   uploads separately.
-* Record privileged Admin changes and receipt access.
-* IP address, user agent, signer name, and email are personal data. They must be covered by
+- Record privileged Admin changes and receipt access.
+- IP address, user agent, signer name, and email are personal data. They must be covered by
   an explicit domain retention period and access policy before the service is enabled.
-* Customer contract wording and the legal sufficiency of click-wrap or typed-name
+- Customer contract wording and the legal sufficiency of click-wrap or typed-name
   signatures remain the customer's responsibility.
 
 ## Error and Enumeration Rules
 
-* Before authentication, preserve the existing generic auth and anti-enumeration rules.
-* An invalid, expired, or consumed signing continuation returns one generic restart
+- Before authentication, preserve the existing generic auth and anti-enumeration rules.
+- An invalid, expired, or consumed signing continuation returns one generic restart
   message and never reveals which agreement, user, or signature exists.
-* Once the user is authenticated inside a valid signing continuation, the UI may explain
+- Once the user is authenticated inside a valid signing continuation, the UI may explain
   exactly which document and confirmation remain incomplete. This is required workflow
   guidance, not an account-existence disclosure.
-* Admin validation errors may be specific because the caller is an authenticated platform
+- Admin validation errors may be specific because the caller is an authenticated platform
   superuser.
 
 ## Explicit Non-Goals
 
 Phase 1 does not include:
 
-* KYC or external identity-verification providers;
-* proof of address, age, liveness, biometrics, sanctions, or PEP screening;
-* business verification;
-* phone verification;
-* manual access approval or risk scoring;
-* generic forms, evidence uploads, training, quizzes, or certificates;
-* role-, group-, organisation-, App-, plan-, invitation-, feature-, or transaction-specific
+- KYC or external identity-verification providers;
+- proof of address, age, liveness, biometrics, sanctions, or PEP screening;
+- business verification;
+- phone verification;
+- manual access approval or risk scoring;
+- generic forms, evidence uploads, training, quizzes, or certificates;
+- role-, group-, organisation-, App-, plan-, invitation-, feature-, or transaction-specific
   policies;
-* step-up signing for an individual product feature;
-* drawn signatures;
-* multi-party, sequential, or countersignature workflows;
-* document authoring, templates, merge fields, or generated commercial contracts;
-* qualified signatures, PAdES, trusted timestamp authorities, or notarisation;
-* webhooks or an SDK-level policy engine;
-* a customer self-service administration portal.
+- step-up signing for an individual product feature;
+- drawn signatures;
+- multi-party, sequential, or countersignature workflows;
+- document authoring, templates, merge fields, or generated commercial contracts;
+- qualified signatures, PAdES, trusted timestamp authorities, or notarisation;
+- webhooks or an SDK-level policy engine;
+- a customer self-service administration portal.
 
 These capabilities require separate briefs. They must not be introduced as hidden
 abstractions while implementing this module.
@@ -465,29 +470,29 @@ abstractions while implementing this module.
 
 ### Phase 1A — Domain and Agreement Foundation
 
-* Prisma models and migration;
-* private file-storage adapter and evidence-signing key configuration;
-* Domain Admin Agreements tab and settings endpoints;
-* draft upload, PDF safety checks, hashing, publication, superseding, and withdrawal;
-* Admin audit events.
+- Prisma models and migration;
+- private file-storage adapter and evidence-signing key configuration;
+- Domain Admin Agreements tab and settings endpoints;
+- draft upload, PDF safety checks, hashing, publication, superseding, and withdrawal;
+- Admin audit events.
 
 ### Phase 1B — Auth Gate and Signing UI
 
-* shared signature evaluation service;
-* signing continuations;
-* Auth UI document viewer, click-wrap, and typed-name flows;
-* integration with every authorization-code issuance path;
-* refresh-token enforcement;
-* re-evaluation on concurrent policy change.
+- shared signature evaluation service;
+- signing continuations;
+- Auth UI document viewer, click-wrap, and typed-name flows;
+- integration with every authorization-code issuance path;
+- refresh-token enforcement;
+- re-evaluation on concurrent policy change.
 
 ### Phase 1C — Evidence and Operations
 
-* immutable signatures, revocations, and signature audit events;
-* canonical evidence manifest, dedicated cryptographic signature, and receipt PDF;
-* signer receipt access, domain status API, Admin search/download, and public
+- immutable signatures, revocations, and signature audit events;
+- canonical evidence manifest, dedicated cryptographic signature, and receipt PDF;
+- signer receipt access, domain status API, Admin search/download, and public
   PII-minimised verification;
-* retention/pruning implementation after the retention decisions below are resolved;
-* complete `/api` and `/llm` documentation.
+- retention/pruning implementation after the retention decisions below are resolved;
+- complete `/api` and `/llm` documentation.
 
 ## Success Criteria
 

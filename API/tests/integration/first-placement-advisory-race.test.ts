@@ -117,6 +117,7 @@ describe.skipIf(!hasDatabase)('first-placement per-user advisory lock', () => {
           codeChallengeMethod: 'S256',
           rememberMe: true,
           twoFaCompleted: false,
+          credentialEpoch: 0,
           ...workspace,
         },
         {

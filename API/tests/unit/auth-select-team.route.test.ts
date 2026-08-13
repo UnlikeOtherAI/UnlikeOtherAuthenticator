@@ -313,16 +313,12 @@ describe('POST /auth/select-team', () => {
     currentConfig = baseConfig({ domain: 'api.deepsignal.live' });
     const loginToken = await mintLoginToken('user-1', 'api.deepsignal.live');
     prismaMock.team.findFirst.mockResolvedValue({ id: 'team-nessie', orgId: 'org-nessie' });
-    prismaMock.orgMember.findFirst
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({ id: 'org-member-nessie' })
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({ id: 'org-member-nessie' });
-    prismaMock.teamMember.findFirst
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({ id: 'team-member-nessie' })
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({ id: 'team-member-nessie' });
+    prismaMock.orgMember.findFirst.mockImplementation(async ({ where }) =>
+      where.org?.domain ? null : { id: 'org-member-nessie' },
+    );
+    prismaMock.teamMember.findFirst.mockImplementation(async ({ where }) =>
+      where.team?.org?.domain ? null : { id: 'team-member-nessie' },
+    );
     prismaMock.clientDomain.findUnique.mockResolvedValue({ status: 'active' });
     prismaMock.billingAppKey.findMany.mockResolvedValue([
       {

@@ -49,6 +49,7 @@ describe('required workspace placement during token exchange', () => {
           codeChallengeMethod: 'S256',
           expiresAt: new Date(now.getTime() + 60_000),
           usedAt: null,
+          tokenVersion: 0,
           orgId: null,
           teamId: null,
           rememberMe: true,

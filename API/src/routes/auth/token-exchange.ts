@@ -18,6 +18,10 @@ import {
   exchangeConfidentialChainedAccessToken,
 } from '../../services/confidential-chained-token-exchange.service.js';
 import {
+  exchangeWorkspaceSwitchForTokens,
+  WORKSPACE_SWITCH_GRANT_TYPE,
+} from '../../services/workspace-switch-token.service.js';
+import {
   confidentialTokenExchangeDomainRateLimiter,
   tokenExchangePreAuthRateLimiter,
 } from './rate-limit-keys.js';
@@ -35,6 +39,15 @@ const RefreshTokenGrantSchema = z
   .object({
     grant_type: z.literal('refresh_token'),
     refresh_token: z.string().min(1).max(4096),
+  })
+  .strict();
+
+const WorkspaceSwitchGrantSchema = z
+  .object({
+    grant_type: z.literal(WORKSPACE_SWITCH_GRANT_TYPE),
+    refresh_token: z.string().min(1).max(4096),
+    organization_id: z.string().min(1).max(256),
+    team_id: z.string().min(1).max(256),
   })
   .strict();
 
@@ -63,7 +76,14 @@ type TokenExchangeBody =
       code_verifier?: string;
     }
   | { grant_type: 'refresh_token'; refresh_token: string }
+  | z.infer<typeof WorkspaceSwitchGrantSchema>
   | z.infer<typeof ConfidentialTokenExchangeGrantSchema>;
+
+declare module 'fastify' {
+  interface FastifyRequest {
+    authenticatedTokenGrantErrorProfile?: 'workspace-switch';
+  }
+}
 
 function parseTokenExchangeBody(body: unknown): TokenExchangeBody {
   const confidentialGrant = ConfidentialTokenExchangeGrantSchema.safeParse(body);
@@ -76,12 +96,22 @@ function parseTokenExchangeBody(body: unknown): TokenExchangeBody {
     return refreshGrant.data;
   }
 
+  const workspaceSwitchGrant = WorkspaceSwitchGrantSchema.safeParse(body);
+  if (workspaceSwitchGrant.success) {
+    return workspaceSwitchGrant.data;
+  }
+
   const authorizationCodeGrant = AuthorizationCodeGrantSchema.safeParse(body);
   if (authorizationCodeGrant.success) {
     return authorizationCodeGrant.data;
   }
 
   throw new AppError('BAD_REQUEST', 400, 'INVALID_TOKEN_REQUEST');
+}
+
+function requireAuthenticatedClientId(clientId?: string): string {
+  if (!clientId) throw new AppError('UNAUTHORIZED', 401);
+  return clientId;
 }
 
 export function registerAuthTokenExchangeRoute(app: FastifyInstance): void {
@@ -152,30 +182,52 @@ export function registerAuthTokenExchangeRoute(app: FastifyInstance): void {
         return;
       }
 
-      const tokenPair =
-        body.grant_type === 'refresh_token'
-          ? await exchangeRefreshTokenForTokens(
-              {
-                refreshToken: body.refresh_token,
-                config,
-                configUrl,
-                clientId: request.domainAuthClientId,
-                authenticatedClientDomainId: request.domainAuthClientDomainId,
-              },
-              { prisma: request.adminDb, adminPrisma: request.adminDb },
-            )
-          : await exchangeAuthorizationCodeForTokens(
-              {
-                code: body.code,
-                config,
-                configUrl,
-                redirectUrl: body.redirect_url,
-                codeVerifier: body.code_verifier,
-                clientId: request.domainAuthClientId,
-                authenticatedClientDomainId: request.domainAuthClientDomainId,
-              },
-              { prisma: request.adminDb, adminPrisma: request.adminDb },
-            );
+      let tokenPair;
+      if (body.grant_type === WORKSPACE_SWITCH_GRANT_TYPE) {
+        const clientId = requireAuthenticatedClientId(request.domainAuthClientId);
+        const authenticatedClientDomainId = requireAuthenticatedClientId(
+          request.domainAuthClientDomainId,
+        );
+        // This marker is set only after both client-auth identities exist. The central error
+        // handler may then expose INVALID_REFRESH_TOKEN without exposing pre-handler failures.
+        request.authenticatedTokenGrantErrorProfile = 'workspace-switch';
+        tokenPair = await exchangeWorkspaceSwitchForTokens(
+          {
+            refreshToken: body.refresh_token,
+            organizationId: body.organization_id,
+            teamId: body.team_id,
+            config,
+            configUrl,
+            clientId,
+            authenticatedClientDomainId,
+          },
+          { prisma: request.adminDb, adminPrisma: request.adminDb },
+        );
+      } else if (body.grant_type === 'refresh_token') {
+        tokenPair = await exchangeRefreshTokenForTokens(
+          {
+            refreshToken: body.refresh_token,
+            config,
+            configUrl,
+            clientId: request.domainAuthClientId,
+            authenticatedClientDomainId: request.domainAuthClientDomainId,
+          },
+          { prisma: request.adminDb, adminPrisma: request.adminDb },
+        );
+      } else {
+        tokenPair = await exchangeAuthorizationCodeForTokens(
+          {
+            code: body.code,
+            config,
+            configUrl,
+            redirectUrl: body.redirect_url,
+            codeVerifier: body.code_verifier,
+            clientId: request.domainAuthClientId,
+            authenticatedClientDomainId: request.domainAuthClientDomainId,
+          },
+          { prisma: request.adminDb, adminPrisma: request.adminDb },
+        );
+      }
 
       // Keep response OAuth-ish without being overly strict about fields.
       const responseBody: Record<string, unknown> = {

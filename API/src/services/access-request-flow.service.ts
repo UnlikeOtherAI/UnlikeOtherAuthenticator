@@ -8,6 +8,7 @@ import { handlePostAuthenticationAccessRequest } from './access-request.service.
 import { lockAndAssertAuthenticationEpoch } from './authentication-epoch.service.js';
 import { assertEmailDomainAllowedForLogin } from './login-domain-policy.service.js';
 import { assertNotBannedAtLogin } from './ban-policy.service.js';
+import { lockProductWorkspacePolicyShared } from './product-workspace-policy-lock.service.js';
 import {
   finalizeConfigAuthorizationWithSignatures,
   type SignatureContinuationDeps,
@@ -74,15 +75,19 @@ export async function finalizeAuthenticatedUser(
 > {
   if (!deps?.authenticationEpochLocked) {
     const transactionPrisma = deps?.prisma ?? getAdminPrisma();
-    return runInTransaction(transactionPrisma, (tx) =>
-      finalizeAuthenticatedUser(params, {
+    return runInTransaction(transactionPrisma, async (tx) => {
+      // Authentication finalization may be called as a standalone service. Establish the same
+      // product → user prefix used by workspace selection before the recursive path takes the
+      // authentication-epoch lock; callers already inside that hierarchy re-enter this lock.
+      await lockProductWorkspacePolicyShared(tx);
+      return finalizeAuthenticatedUser(params, {
         ...deps,
         authenticationEpochLocked: true,
         prisma: tx,
         policyPrisma: deps?.policyPrisma ?? tx,
         workspacePrisma: deps?.workspacePrisma ?? tx,
-      }),
-    );
+      });
+    });
   }
 
   await lockAndAssertAuthenticationEpoch(
@@ -144,10 +149,15 @@ export async function finalizeAuthenticatedUser(
   }
 
   const signatureDeps =
-    deps?.signatureDeps || deps?.workspacePrisma
+    deps?.signatureDeps || deps?.prisma || deps?.workspacePrisma
       ? {
           ...deps?.signatureDeps,
-          workspacePrisma: deps?.signatureDeps?.workspacePrisma ?? deps?.workspacePrisma,
+          // The outer authentication transaction is authoritative. Allowing nested signature
+          // deps to replace it can split the lock hierarchy across two transactions and make the
+          // inner product/user locks wait on their own caller.
+          prisma: deps?.prisma ?? deps?.signatureDeps?.prisma,
+          workspacePrisma:
+            deps?.prisma ?? deps?.workspacePrisma ?? deps?.signatureDeps?.workspacePrisma,
         }
       : undefined;
 
@@ -165,6 +175,7 @@ export async function finalizeAuthenticatedUser(
       teamId: params.teamId,
       authMethod: params.authMethod,
       twoFaCompleted: params.twoFaCompleted,
+      credentialEpoch: params.credentialEpoch,
     },
     signatureDeps,
   );

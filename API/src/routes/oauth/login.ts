@@ -69,7 +69,7 @@ export function registerOAuthLoginRoute(app: FastifyInstance): void {
 
       const outcome = await request.withTenantTx(async (tx) => {
         const prisma = asPrismaClient(tx);
-        const { userId, twoFaEnabled } = await loginWithEmailPassword(
+        const { userId, twoFaEnabled, credentialEpoch } = await loginWithEmailPassword(
           { email, password, config },
           { prisma },
         );
@@ -89,20 +89,23 @@ export function registerOAuthLoginRoute(app: FastifyInstance): void {
           requestedRedirectUrl: q.redirect_uri,
         });
         const rememberMe = remember_me ?? config.session?.remember_me_default ?? true;
-        const gate = await finalizePublicOAuthAuthorizationWithSignatures({
-          userId,
-          domain: config.domain,
-          oauthClientId: client.clientId,
-          redirectUrl,
-          resource,
-          state: q.state,
-          scope: q.scope,
-          codeChallenge: pkce.codeChallenge,
-          rememberMe,
-          authMethod: 'email_password',
-          twoFaCompleted: false,
-        });
-        return { kind: 'granted' as const, redirectTo: gate.redirectTo };
+        return {
+          kind: 'ready' as const,
+          input: {
+            userId,
+            domain: config.domain,
+            oauthClientId: client.clientId,
+            redirectUrl,
+            resource,
+            state: q.state,
+            scope: q.scope,
+            codeChallenge: pkce.codeChallenge,
+            rememberMe,
+            authMethod: 'email_password',
+            twoFaCompleted: false,
+            credentialEpoch,
+          },
+        };
       });
 
       if (outcome.kind === 'twofa') {
@@ -115,7 +118,10 @@ export function registerOAuthLoginRoute(app: FastifyInstance): void {
           .send({ ok: true, kind: 'twofa_enroll_required', twofa_enroll_required: true });
         return;
       }
-      reply.status(200).send({ ok: true, redirect_to: outcome.redirectTo });
+      const gate = await finalizePublicOAuthAuthorizationWithSignatures(outcome.input, {
+        prisma: request.adminDb,
+      });
+      reply.status(200).send({ ok: true, redirect_to: gate.redirectTo });
     },
   );
 }

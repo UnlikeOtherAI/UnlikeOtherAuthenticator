@@ -150,7 +150,15 @@ describe.skipIf(!hasDatabase)('refresh session serialization and reuse revocatio
     const clientId = createClientId(domain, sharedSecret);
     const configUrl = `https://${domain}/auth-config/${label}`;
     const token = await issueRefreshToken(
-      { userId, domain, clientId, configUrl, orgId: null, teamId: null },
+      {
+        userId,
+        domain,
+        clientId,
+        configUrl,
+        orgId: null,
+        teamId: null,
+        twoFaCompleted: false,
+      },
       { prisma: handle.prisma, refreshTokenTtlSeconds: 3600, sharedSecret },
     );
     return { ...token, clientId, configUrl, domain };

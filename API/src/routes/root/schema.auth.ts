@@ -1,4 +1,5 @@
 import type { EndpointSchema } from './schema.js';
+import { authTokenEndpoint } from './schema.auth-token.js';
 
 export const authEndpoints: EndpointSchema[] = [
   {
@@ -280,57 +281,7 @@ export const authEndpoints: EndpointSchema[] = [
         'array of { orgId, orgName } — organisations this user may add a workspace to via POST /auth/create-team (ACTIVE owner/admin there + org_features.allow_user_create_team). Empty unless the domain opted in. Distinct from can_create_org, which is about creating a first organisation',
     },
   },
-  {
-    method: 'POST',
-    path: '/auth/token',
-    description:
-      'Exchange an authorization code or refresh token for the legacy access + refresh pair, or exchange a source-signed JWT assertion / UOA-issued audience-bound access token for a resource-bound confidential access token. Authorization-code exchange re-resolves current exact-workspace 2FA policy and user enrollment and rejects a code lacking required interactive TOTP proof before token-family creation.',
-    auth: 'config_url query param + domain hash bearer token',
-    body: {
-      'grant_type?':
-        '"authorization_code" (default), "refresh_token", or "urn:ietf:params:oauth:grant-type:token-exchange"',
-      'code?': 'authorization code (for authorization_code grant)',
-      'redirect_url?': 'required for authorization_code grant; must match issued URL',
-      'code_verifier?': 'required for authorization_code grant; must match the S256 challenge',
-      'refresh_token?': 'refresh token (for refresh_token grant)',
-      'subject_token?':
-        'For a first hop: one-time RS256 JWT with exp-iat <= 60 seconds, signed by the source config JWKS. For a chained hop: UOA-issued RS256 at+jwt access token with aud exactly https://<authenticated caller config domain>, non-null org/active, and remaining lifetime.',
-      'subject_token_type?':
-        '"urn:ietf:params:oauth:token-type:jwt" for a first-hop assertion, or "urn:ietf:params:oauth:token-type:access_token" for a chained UOA token',
-      'product?':
-        'lowercase product identifier (required for token-exchange grant); must match the DB mapping bound to the authenticated app domain credential',
-      'resource?':
-        'exact DB-allowlisted HTTPS resource URI (required for token-exchange grant; becomes access-token aud)',
-      'scope?':
-        'space-delimited exact requested scopes (required for token-exchange grant); supported values are ai.invoke, billing.read, and token.provision, and every requested scope must be allowed by the product mapping',
-    },
-    response: {
-      access_token:
-        'Authorization-code/refresh grants: legacy HS256 JWT with aud="uoa:access-token". Confidential token-exchange grant: at-most-5-minute RS256 JWT bound to resource, verifiable at GET /oauth/jwks.json, with product, exact requested scope, stable sub, validated provenance, and no domain bearer credential. A chained result never outlives its inbound token.',
-      'access_token.active.tenantSlug?':
-        'canonical organisation slug for the selected workspace and safe DNS tenant label, unique within the authenticated client domain. It is present on newly issued scoped tokens; consumers must tolerate its absence on a legacy token until that token expires. Team.slug is not a tenant DNS key because it is only unique within its organisation.',
-      expires_in: 'number — seconds until access_token expiry',
-      'refresh_token?':
-        'string — opaque, server-side only; authorization-code/refresh grants only, never hand to the browser',
-      'refresh_token_expires_in?':
-        'number — seconds until refresh_token expiry; authorization-code/refresh grants only',
-      'issued_token_type?':
-        '"urn:ietf:params:oauth:token-type:access_token"; confidential token-exchange grant only',
-      'scope?':
-        'exact granted request subset of "ai.invoke", "billing.read", and/or "token.provision"; token.provision is never implied by ai.invoke; confidential token-exchange grant only',
-      token_type: '"Bearer"',
-      'firstLogin?':
-        'object { memberships: { orgs, teams }, pending_invites, capabilities { can_create_org, can_accept_invite } } — included on authorization_code exchange when org_features.enabled is true. memberships.orgs[] = { orgId, role } camelCase; memberships.teams[] = { teamId, orgId, role } camelCase; pending_invites[] = { inviteId, type, orgId, teamId, teamName } camelCase. Legacy clients receive same-domain ACTIVE memberships. A UOA-recognized product domain receives all exact ACTIVE memberships under the same server-owned app-key policy that validated active; pending invites stay same-domain. Not included on refresh_token grants.',
-      '[note]':
-        'There is NO top-level `user` field. User identity lives inside access_token claims (read claims.sub). Every immediate caller uses its own app credential and enabled DB mapping; no shared/cross-app/fallback key or webhook secret is accepted. First-hop JWT assertions are atomically consumed once. Chained access-token subjects remain reusable until exp, but must be UOA-signed, audience-bound exactly to the authenticated caller, scope-narrowed by both hops, and carry a current ACTIVE original org/team. The output source_domain/azp/product identify the immediate caller, while act preserves the signed upstream source/product chain. It never copies the 64-character domain bearer into client_id.',
-      '[rate limit]':
-        'Legacy grants: 10/min per IP. Confidential exchange: 600/min per authenticated source domain plus 60/min per verified source-domain user.',
-      '401 refresh policy':
-        'If the domain signature policy changed and the refresh-token user is incomplete, or a stored scoped session no longer has its exact active product mapping plus ACTIVE org/team memberships, the valid refresh token is not rotated or consumed. Restart interactive authorization so the user can sign and/or select an eligible workspace; UOA never silently changes the workspace.',
-      'refresh response-loss recovery':
-        'For 120 seconds after rotation, retrying the same predecessor with the same authenticated app credential and exact client context returns the verified current successor without another rotation. Persist successful UOA state atomically; replay a locally committed result instead of calling UOA again when only the product response was lost. Outside the window, predecessor reuse revokes the family and prior access-token version.',
-    },
-  },
+  authTokenEndpoint,
   {
     method: 'POST',
     path: '/auth/revoke',

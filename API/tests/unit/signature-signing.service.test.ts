@@ -368,4 +368,42 @@ describe('capability-scoped signing evidence', () => {
       readSigningReceipt({ signingToken, signatureId: valid.id }, deps),
     ).rejects.toThrowError('SIGNATURE_RECEIPT_HASH_MISMATCH');
   });
+
+  it.each([
+    ['legacy null epoch', 'session'],
+    ['legacy null epoch', 'source'],
+    ['legacy null epoch', 'receipt'],
+    ['stale epoch', 'session'],
+    ['stale epoch', 'source'],
+    ['stale epoch', 'receipt'],
+  ] as const)('rejects a %s capability on the private %s read', async (epochState, surface) => {
+    const existing = signatureRow({ receiptPdfSha256: hashPdf(Buffer.from('%PDF-receipt')) });
+    const prisma = fakePrisma({ existing });
+    const deps = dependencies(prisma);
+    if (epochState === 'legacy null epoch') {
+      prisma.setContinuation(continuation({ tokenVersion: null }));
+    } else {
+      prisma.user.findUnique.mockResolvedValueOnce({
+        email: 'person@example.com',
+        name: 'Profile Name',
+        tokenVersion: 1,
+        twoFaEnabled: true,
+      });
+    }
+
+    const read =
+      surface === 'session'
+        ? readSigningSession(signingToken, deps)
+        : surface === 'source'
+          ? readSigningAgreementSource(
+              { signingToken, agreementVersionId: requirement.agreementVersionId },
+              deps,
+            )
+          : readSigningReceipt({ signingToken, signatureId: existing.id }, deps);
+    await expect(read).rejects.toMatchObject({
+      statusCode: 401,
+      message: 'AUTHENTICATION_FAILED',
+    });
+    expect(deps.storage.read).not.toHaveBeenCalled();
+  });
 });

@@ -9,9 +9,8 @@ const resolveTwoFaPolicyMock = vi.fn();
 const finalizePublicOAuthAuthorizationWithSignaturesMock = vi.fn();
 
 vi.mock('../../src/config/env.js', async () => {
-  const actual = await vi.importActual<typeof import('../../src/config/env.js')>(
-    '../../src/config/env.js',
-  );
+  const actual =
+    await vi.importActual<typeof import('../../src/config/env.js')>('../../src/config/env.js');
   return { ...actual, isMcpOAuthPublicProfileEnabled: () => true };
 });
 
@@ -45,6 +44,7 @@ describe('POST /oauth/login signature gate', () => {
     loginWithEmailPasswordMock.mockReset().mockResolvedValue({
       userId: 'user-1',
       twoFaEnabled: false,
+      credentialEpoch: 0,
     });
     getOAuthClientMock.mockReset().mockResolvedValue({
       clientId: 'public-client',
@@ -93,19 +93,23 @@ describe('POST /oauth/login signature gate', () => {
       ok: true,
       redirect_to: 'https://auth.example.com/auth?flow=signatures',
     });
-    expect(finalizePublicOAuthAuthorizationWithSignaturesMock).toHaveBeenCalledWith({
-      userId: 'user-1',
-      domain: 'client.example.com',
-      oauthClientId: 'public-client',
-      redirectUrl: 'https://client.example.com/callback',
-      resource: 'https://api.example.com',
-      state: 'exact-state',
-      scope: 'openid profile email',
-      codeChallenge: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
-      rememberMe: false,
-      authMethod: 'email_password',
-      twoFaCompleted: false,
-    });
+    expect(finalizePublicOAuthAuthorizationWithSignaturesMock).toHaveBeenCalledWith(
+      {
+        userId: 'user-1',
+        domain: 'client.example.com',
+        oauthClientId: 'public-client',
+        redirectUrl: 'https://client.example.com/callback',
+        resource: 'https://api.example.com',
+        state: 'exact-state',
+        scope: 'openid profile email',
+        codeChallenge: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+        rememberMe: false,
+        authMethod: 'email_password',
+        twoFaCompleted: false,
+        credentialEpoch: 0,
+      },
+      { prisma: undefined },
+    );
 
     await app.close();
   });

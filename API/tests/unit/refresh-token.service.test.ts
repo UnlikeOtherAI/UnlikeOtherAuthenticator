@@ -9,6 +9,7 @@ import {
   REFRESH_TOKEN_REPLAY_GRACE_MS,
   revokeRefreshTokenFamily,
 } from '../../src/services/refresh-token.service.js';
+import { deriveRefreshTokenSuccessor } from '../../src/services/refresh-token-replay.service.js';
 
 function hashRefreshToken(token: string, sharedSecret: string): string {
   return createHmac('sha256', sharedSecret).update(token, 'utf8').digest('hex');
@@ -59,6 +60,7 @@ describe('refresh-token.service (unit)', () => {
       {
         ...context,
         userId: 'user-1',
+        twoFaCompleted: false,
       },
       {
         now: () => now,
@@ -80,11 +82,10 @@ describe('refresh-token.service (unit)', () => {
         domain: context.domain,
         clientId: context.clientId,
         configUrl: context.configUrl,
+        twoFaCompleted: false,
         expiresAt: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
       }),
-      select: {
-        id: true,
-      },
+      select: { id: true },
     });
   });
 
@@ -101,6 +102,7 @@ describe('refresh-token.service (unit)', () => {
         userId: 'user-1',
         orgId: 'org-1',
         teamId: 'team-1',
+        twoFaCompleted: true,
       },
       {
         now: () => now,
@@ -111,7 +113,11 @@ describe('refresh-token.service (unit)', () => {
     );
 
     expect(prisma.refreshToken.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ orgId: 'org-1', teamId: 'team-1' }),
+      data: expect.objectContaining({
+        orgId: 'org-1',
+        teamId: 'team-1',
+        twoFaCompleted: true,
+      }),
       select: { id: true },
     });
   });
@@ -127,6 +133,7 @@ describe('refresh-token.service (unit)', () => {
       {
         ...context,
         userId: 'user-1',
+        twoFaCompleted: false,
       },
       {
         now: () => now,
@@ -191,9 +198,7 @@ describe('refresh-token.service (unit)', () => {
         clientId: context.clientId,
         configUrl: context.configUrl,
       }),
-      select: {
-        id: true,
-      },
+      select: { id: true },
     });
     expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
       where: {
@@ -236,6 +241,7 @@ describe('refresh-token.service (unit)', () => {
           replacedByTokenId: null,
           orgId: 'org-1',
           teamId: 'team-1',
+          twoFaCompleted: true,
         }),
         create: vi.fn().mockResolvedValue({ id: 'refresh-token-2' }),
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
@@ -261,13 +267,19 @@ describe('refresh-token.service (unit)', () => {
       domain: context.domain,
       orgId: 'org-1',
       teamId: 'team-1',
+      twoFaCompleted: true,
     });
     expect(prisma.refreshToken.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ orgId: 'org-1', teamId: 'team-1' }),
+      data: expect.objectContaining({
+        orgId: 'org-1',
+        teamId: 'team-1',
+        twoFaCompleted: true,
+      }),
       select: { id: true },
     });
     expect(rotated.orgId).toBe('org-1');
     expect(rotated.teamId).toBe('team-1');
+    expect(rotated.twoFaCompleted).toBe(true);
   });
 
   it('clamps the inherited TTL when it is below the floor', async () => {
@@ -308,9 +320,7 @@ describe('refresh-token.service (unit)', () => {
       data: expect.objectContaining({
         expiresAt: new Date(now.getTime() + 5 * 60 * 1000),
       }),
-      select: {
-        id: true,
-      },
+      select: { id: true },
     });
     expect(rotated.expiresInSeconds).toBe(5 * 60);
   });
@@ -358,29 +368,42 @@ describe('refresh-token.service (unit)', () => {
   });
 
   it('revokes the entire family when a rotated refresh token is reused', async () => {
+    const successorRaw = deriveRefreshTokenSuccessor('stale-refresh-token', sharedSecret);
+    const predecessor = {
+      id: 'refresh-token-1',
+      familyId: 'family-1',
+      userId: 'user-1',
+      domain: context.domain,
+      clientId: context.clientId,
+      configUrl: context.configUrl,
+      tokenHash: hashRefreshToken('stale-refresh-token', sharedSecret),
+      parentTokenId: null,
+      createdAt: new Date(now.getTime() - 60_000),
+      expiresAt: new Date(now.getTime() + 60_000),
+      revokedAt: new Date(now.getTime() - REFRESH_TOKEN_REPLAY_GRACE_MS - 1),
+      replacedByTokenId: 'refresh-token-2',
+      orgId: null,
+      teamId: null,
+      twoFaCompleted: false,
+      securityRevokedAt: null,
+    };
+    const successor = {
+      ...predecessor,
+      id: 'refresh-token-2',
+      tokenHash: hashRefreshToken(successorRaw, sharedSecret),
+      parentTokenId: predecessor.id,
+      revokedAt: null,
+      replacedByTokenId: null,
+    };
     const prisma = {
-      user: {
-        update: vi.fn().mockResolvedValue({ id: 'user-1' }),
-      },
+      user: { update: vi.fn().mockResolvedValue({ id: 'user-1' }) },
       refreshToken: {
-        findUnique: vi.fn().mockResolvedValue({
-          id: 'refresh-token-1',
-          familyId: 'family-1',
-          userId: 'user-1',
-          domain: context.domain,
-          clientId: context.clientId,
-          configUrl: context.configUrl,
-          tokenHash: hashRefreshToken('stale-refresh-token', sharedSecret),
-          parentTokenId: null,
-          createdAt: new Date(now.getTime() - 60_000),
-          expiresAt: new Date(now.getTime() + 60_000),
-          revokedAt: new Date(now.getTime() - REFRESH_TOKEN_REPLAY_GRACE_MS - 1),
-          replacedByTokenId: 'refresh-token-2',
-          orgId: null,
-          teamId: null,
-        }),
-        create: vi.fn(),
-        updateMany: vi.fn().mockResolvedValue({ count: 2 }),
+        findUnique: vi
+          .fn()
+          .mockImplementation(({ where }: { where: { id?: string } }) =>
+            where.id === successor.id ? successor : predecessor,
+          ),
+        updateMany: vi.fn().mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 1 }),
       },
     } as unknown as PrismaClient;
 
@@ -403,15 +426,13 @@ describe('refresh-token.service (unit)', () => {
       message: 'INVALID_REFRESH_TOKEN',
     });
 
-    expect(prisma.refreshToken.create).not.toHaveBeenCalled();
-    expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
-      where: {
-        familyId: 'family-1',
-        revokedAt: null,
-      },
-      data: {
-        revokedAt: now,
-      },
+    expect(prisma.refreshToken.updateMany).toHaveBeenNthCalledWith(1, {
+      where: { id: 'refresh-token-1', securityRevokedAt: null },
+      data: { revokedAt: now, securityRevokedAt: now },
+    });
+    expect(prisma.refreshToken.updateMany).toHaveBeenNthCalledWith(2, {
+      where: { familyId: 'family-1', securityRevokedAt: null },
+      data: { revokedAt: now, securityRevokedAt: now },
     });
   });
 
@@ -421,13 +442,14 @@ describe('refresh-token.service (unit)', () => {
       $queryRaw: vi.fn().mockResolvedValue([{ lockResult: '' }]),
       refreshToken: {
         findUnique: vi.fn().mockResolvedValue({
+          id: 'refresh-token-1',
           familyId: 'family-1',
           userId: 'user-1',
           domain: context.domain,
           clientId: context.clientId,
           configUrl: context.configUrl,
         }),
-        updateMany: vi.fn().mockResolvedValue({ count: 2 }),
+        updateMany: vi.fn().mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 1 }),
       },
       user: {
         update: userUpdate,
@@ -451,6 +473,7 @@ describe('refresh-token.service (unit)', () => {
         tokenHash: hashRefreshToken('active-refresh-token', sharedSecret),
       },
       select: {
+        id: true,
         familyId: true,
         userId: true,
         domain: true,
@@ -458,14 +481,13 @@ describe('refresh-token.service (unit)', () => {
         configUrl: true,
       },
     });
-    expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
-      where: {
-        familyId: 'family-1',
-        revokedAt: null,
-      },
-      data: {
-        revokedAt: now,
-      },
+    expect(prisma.refreshToken.updateMany).toHaveBeenNthCalledWith(1, {
+      where: { id: 'refresh-token-1', securityRevokedAt: null },
+      data: { revokedAt: now, securityRevokedAt: now },
+    });
+    expect(prisma.refreshToken.updateMany).toHaveBeenNthCalledWith(2, {
+      where: { familyId: 'family-1', securityRevokedAt: null },
+      data: { revokedAt: now, securityRevokedAt: now },
     });
     // Logout must also revoke already-issued access tokens via a tokenVersion bump.
     expect(userUpdate).toHaveBeenCalledWith({
@@ -473,5 +495,4 @@ describe('refresh-token.service (unit)', () => {
       data: { tokenVersion: { increment: 1 } },
     });
   });
-
 });

@@ -230,7 +230,12 @@ components:
           description: Generic public error message.
         code:
           type: string
-          description: Machine-readable error code (only when DEBUG_ENABLED).
+          description: |
+            Machine-readable error code. Most codes are exposed only when DEBUG_ENABLED;
+            production-safe workspace-switch outcomes WORKSPACE_NOT_AVAILABLE,
+            INTERACTION_REQUIRED, and WORKSPACE_SWITCH_CONFLICT are always exposed. After
+            domain-client authentication succeeds, an invalid workspace-switch source also
+            exposes INVALID_REFRESH_TOKEN; client-authentication failures remain generic.
         summary:
           type: string
         details:
@@ -1330,7 +1335,7 @@ components:
           enum: [Bearer]
         firstLogin:
           type: object
-          description: Present only on first-ever login for this user on this domain.
+          description: Present only on authorization-code exchange; omitted by refresh and workspace-switch grants.
           properties:
             memberships:
               type: object
@@ -2311,11 +2316,21 @@ paths:
   /auth/token:
     post:
       tags: [Auth]
-      summary: Token exchange (authorization code, refresh token, or confidential subject token)
+      summary: Token exchange, workspace switch, or confidential subject-token exchange
       operationId: exchangeToken
       description: |
         Exchanges an authorization code or refresh token for the legacy access-token
-        pair. A confidential backend may instead use the RFC 8693 token-exchange grant
+        pair. The explicit workspace-switch grant rotates that same family onto one
+        exact target organisation/team after rechecking current memberships, product
+        policy, target 2FA policy, and the family's immutable interactive assurance.
+        Ordinary refresh never changes scope. Same-scope or competing transition intent
+        is rejected without consuming a valid family. Response-loss replay is permitted
+        for 120 seconds only when the complete deterministic successor chain retains the
+        grant's exact expected scope; post-grace predecessor use revokes the family.
+        If that matching edge already committed but its target policy is no longer satisfied
+        when a lost response is retried, UOA retires only that family and returns the definitive
+        authenticated 401 INVALID_REFRESH_TOKEN instead of a pre-edge semantic 403.
+        A confidential backend may instead use the RFC 8693 token-exchange grant
         with its own per-domain app credential plus either a short-lived source-signed
         JWT assertion or an already UOA-issued access token whose audience is exactly
         that authenticated next-hop app. An enabled DB mapping
@@ -2370,6 +2385,29 @@ paths:
                     refresh_token:
                       type: string
                       minLength: 1
+                      maxLength: 4096
+                - title: Workspace Switch Grant
+                  type: object
+                  required: [grant_type, refresh_token, organization_id, team_id]
+                  additionalProperties: false
+                  properties:
+                    grant_type:
+                      type: string
+                      enum: ['urn:unlikeotherai:params:oauth:grant-type:workspace-switch']
+                    refresh_token:
+                      type: string
+                      minLength: 1
+                      maxLength: 4096
+                    organization_id:
+                      type: string
+                      minLength: 1
+                      maxLength: 256
+                      description: Exact target organisation id.
+                    team_id:
+                      type: string
+                      minLength: 1
+                      maxLength: 256
+                      description: Exact target team id belonging to organization_id.
                 - title: Confidential Token Exchange
                   type: object
                   required:
@@ -2422,7 +2460,7 @@ paths:
                         or widening scopes are rejected.
       responses:
         '200':
-          description: Legacy token pair or confidential resource access token issued.
+          description: Legacy token pair, exact target-scoped switched pair, or confidential resource access token issued.
           content:
             application/json:
               schema:
@@ -2436,15 +2474,33 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '401':
-          description: Missing or invalid domain hash auth.
+          description: |
+            Missing/invalid domain hash authentication remains generic. After client
+            authentication succeeds, an invalid, expired, revoked, corrupt, or post-grace reused
+            workspace-switch source returns the stable code INVALID_REFRESH_TOKEN without
+            revealing which condition failed.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
           description: |
-            Confidential grant mapping, target, requested scopes, source-domain
-            role, or optional workspace membership is not allowed.
+            Workspace switch: WORKSPACE_NOT_AVAILABLE means the exact target pair is
+            unavailable or denied without distinguishing why; INTERACTION_REQUIRED
+            means the family lacks the target's current interactive assurance. Before a switch
+            edge exists, both are non-consuming and non-revoking. A matching replay whose
+            committed target no longer satisfies either condition retires that family and returns
+            authenticated 401 INVALID_REFRESH_TOKEN. Confidential exchange also uses 403
+            for denied mapping, target, scope, role, or workspace membership.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: |
+            WORKSPACE_SWITCH_CONFLICT: the same-scope request is a no-op or this valid
+            deterministic family already advanced under another grant or exact target.
+            The conflict does not consume or revoke the valid family.
           content:
             application/json:
               schema:

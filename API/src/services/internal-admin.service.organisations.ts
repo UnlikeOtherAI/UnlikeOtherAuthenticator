@@ -16,8 +16,17 @@ import {
   listLimit,
   normalizeDomain,
 } from './internal-admin.service.base.js';
-import { deriveSlugWithValidation, isP2002Error, isP2003Error } from './organisation.service.base.js';
-import { deriveUniqueTeamSlug, normalizeTeamDescription, normalizeTeamName } from './team.service.base.js';
+import {
+  deriveSlugWithValidation,
+  isP2002Error,
+  isP2003Error,
+} from './organisation.service.base.js';
+import {
+  deriveUniqueTeamSlug,
+  normalizeTeamDescription,
+  normalizeTeamName,
+} from './team.service.base.js';
+import { lockProductWorkspacePolicyExclusive } from './product-workspace-policy-lock.service.js';
 import type { TwoFaPolicyValue } from './twofactor-policy.service.js';
 
 export async function getAdminOrganisations(limit?: number) {
@@ -44,7 +53,10 @@ export async function getAdminOrganisation(orgId: string) {
   if (!isDatabaseEnabled()) return null;
 
   const prisma = getAdminPrisma();
-  const org = await prisma.organisation.findUnique({ where: { id: orgId }, ...adminOrganisationArgs });
+  const org = await prisma.organisation.findUnique({
+    where: { id: orgId },
+    ...adminOrganisationArgs,
+  });
   if (!org) return null;
 
   const memberIds = org.members.map((member) => member.userId);
@@ -118,7 +130,9 @@ export async function createAdminOrganisation(input: {
 
     try {
       await tx.orgMember.create({ data: { orgId: org.id, userId: owner.id, role: 'owner' } });
-      await tx.teamMember.create({ data: { teamId: team.id, userId: owner.id, teamRole: 'owner' } });
+      await tx.teamMember.create({
+        data: { teamId: team.id, userId: owner.id, teamRole: 'owner' },
+      });
     } catch (err) {
       if (isP2002Error(err) || isP2003Error(err)) throw new AppError('BAD_REQUEST', 400);
       throw err;
@@ -143,47 +157,52 @@ export async function updateAdminOrganisation(
   },
 ) {
   const prisma = getAdminPrisma();
-  const existing = await prisma.organisation.findUnique({
-    where: { id: orgId },
-    select: { id: true, domain: true, twoFaPolicy: true },
-  });
-  if (!existing) throw new AppError('NOT_FOUND', 404, 'ORGANISATION_NOT_FOUND');
+  await runInTransaction(prisma, async (tx) => {
+    if (input.twoFaPolicy !== undefined) {
+      // Token issuance holds the shared side of this fence through commit. Taking
+      // the exclusive side before the policy read makes a switch see either the
+      // complete old policy or the complete new policy, never a stale decision.
+      await lockProductWorkspacePolicyExclusive(tx);
+    }
+    const existing = await tx.organisation.findUnique({
+      where: { id: orgId },
+      select: { id: true, domain: true, twoFaPolicy: true },
+    });
+    if (!existing) throw new AppError('NOT_FOUND', 404, 'ORGANISATION_NOT_FOUND');
 
-  const data: {
-    allowedEmailDomains?: string[];
-    allowedEmails?: string[];
-    twoFaPolicy?: TwoFaPolicyValue | null;
-  } = {};
-  if (input.allowedEmailDomains !== undefined) {
-    data.allowedEmailDomains = normalizeAllowedEmailDomains(input.allowedEmailDomains);
-  }
-  if (input.allowedEmails !== undefined) {
-    data.allowedEmails = normalizeAllowedEmails(input.allowedEmails);
-  }
-  if (input.twoFaPolicy !== undefined) {
-    data.twoFaPolicy = input.twoFaPolicy;
-  }
+    const data: {
+      allowedEmailDomains?: string[];
+      allowedEmails?: string[];
+      twoFaPolicy?: TwoFaPolicyValue | null;
+    } = {};
+    if (input.allowedEmailDomains !== undefined) {
+      data.allowedEmailDomains = normalizeAllowedEmailDomains(input.allowedEmailDomains);
+    }
+    if (input.allowedEmails !== undefined) {
+      data.allowedEmails = normalizeAllowedEmails(input.allowedEmails);
+    }
+    if (input.twoFaPolicy !== undefined) data.twoFaPolicy = input.twoFaPolicy;
+    if (Object.keys(data).length > 0) {
+      await tx.organisation.update({ where: { id: orgId }, data });
+    }
 
-  if (Object.keys(data).length > 0) {
-    await prisma.organisation.update({ where: { id: orgId }, data });
-  }
-
-  if (input.twoFaPolicy !== undefined && input.twoFaPolicy !== existing.twoFaPolicy) {
-    if (!input.actorEmail) throw new AppError('INTERNAL', 500, 'MISSING_ADMIN_CLAIMS');
-    await writeAuditLog(
-      {
-        actorEmail: input.actorEmail,
-        action: 'organisation.twofa_policy_updated',
-        targetDomain: existing.domain,
-        metadata: {
-          orgId,
-          priorPolicy: existing.twoFaPolicy ?? null,
-          nextPolicy: input.twoFaPolicy,
+    if (input.twoFaPolicy !== undefined && input.twoFaPolicy !== existing.twoFaPolicy) {
+      if (!input.actorEmail) throw new AppError('INTERNAL', 500, 'MISSING_ADMIN_CLAIMS');
+      await writeAuditLog(
+        {
+          actorEmail: input.actorEmail,
+          action: 'organisation.twofa_policy_updated',
+          targetDomain: existing.domain,
+          metadata: {
+            orgId,
+            priorPolicy: existing.twoFaPolicy ?? null,
+            nextPolicy: input.twoFaPolicy,
+          },
         },
-      },
-      { prisma: prisma as unknown as AuditLogPrisma },
-    );
-  }
+        { prisma: tx as unknown as AuditLogPrisma },
+      );
+    }
+  });
 
   return getAdminOrganisation(orgId);
 }

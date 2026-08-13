@@ -444,6 +444,9 @@ model AuthorizationCode {
   // Proof state captured at interactive code issuance and rechecked against
   // the current exact-workspace 2FA policy during confidential code exchange.
   twoFaCompleted      Boolean   @default(false) @map("two_fa_completed")
+  // Snapshot of User.tokenVersion for the interactive authentication that minted this code.
+  // Legacy null rows fail closed because their issue-time credential epoch is unknowable.
+  tokenVersion        Int?      @map("token_version")
   // Workspace scope captured by explicit selection or an unambiguous one-team auto-selection;
   // consumeAuthorizationCode threads it into the issued session's `active` claim.
   orgId               String?   @map("org_id")
@@ -520,6 +523,12 @@ model RefreshToken {
   // 3-4); rotation preserves it onto the new row.
   orgId             String?   @map("org_id")
   teamId            String?   @map("team_id")
+  // Interactive 2FA assurance from the authorization code that created this family. Rotation and
+  // workspace switching copy it unchanged; legacy families fail closed with false.
+  twoFaCompleted    Boolean   @default(false) @map("two_fa_completed")
+  // One-time durable marker for theft/corruption epoch invalidation. Policy retirement sets only
+  // revokedAt, so a later post-grace predecessor use can still trigger exactly one epoch bump.
+  securityRevokedAt DateTime? @map("security_revoked_at")
   expiresAt         DateTime  @map("expires_at")
   revokedAt         DateTime? @map("revoked_at")
   lastUsedAt        DateTime? @map("last_used_at")
@@ -734,6 +743,9 @@ model SigningContinuation {
   teamId              String?              @map("team_id")
   authMethod          String               @map("auth_method") @db.VarChar(32)
   twoFaCompleted      Boolean              @default(false) @map("two_fa_completed")
+  // Origin authentication epoch carried through signing before code issuance. Historical null
+  // continuations cannot safely resume because their 2FA proof predates a known credential epoch.
+  tokenVersion        Int?                 @map("token_version")
   policyRevision      Int                  @map("policy_revision")
   expiresAt           DateTime             @map("expires_at")
   consumedAt          DateTime?            @map("consumed_at")

@@ -4,8 +4,8 @@ import { getEnv, getPublicBaseUrl, type Env } from '../config/env.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import {
-  requireActiveSigningContinuation,
   type SignatureContinuationDeps,
+  withEpochValidSigningContinuationRead,
 } from './signature-continuation.service.js';
 import { createSignatureEvidence } from './signature-evidence.service.js';
 import { hashPdf } from './signature-pdf.service.js';
@@ -81,83 +81,85 @@ export async function readSigningSession(
   signingToken: string,
   deps?: SignatureSigningDeps,
 ): Promise<SigningSessionState> {
-  const prisma = signingPrisma(deps);
-  const continuation = await requireActiveSigningContinuation(
-    { signingToken },
-    { ...deps, prisma },
+  return withEpochValidSigningContinuationRead(
+    signingToken,
+    async (continuation, prisma) => {
+      const [policy, signatures] = await Promise.all([
+        evaluateSignaturePolicy(
+          { domain: continuation.domain, userId: continuation.userId, now: now(deps) },
+          { prisma },
+        ),
+        prisma.agreementSignature.findMany({
+          where: { signingContinuationId: continuation.id },
+          orderBy: { signedAt: 'asc' },
+          include: { version: { include: { agreement: true } }, revocation: true },
+        }),
+      ]);
+      return {
+        domain: continuation.domain,
+        expiresAt: continuation.expiresAt,
+        initialPolicyRevision: continuation.policyRevision,
+        policyRevision: policy.policyRevision,
+        complete: policy.complete,
+        agreements: policy.missing.map((item) => ({
+          agreementId: item.agreementId,
+          agreementVersionId: item.agreementVersionId,
+          agreementTitle: item.agreementTitle,
+          title: item.title,
+          description: item.description,
+          version: item.version,
+          originalFilename: item.originalFilename,
+          signingMethod: item.signingMethod,
+          acceptanceStatement: item.acceptanceStatement,
+          sourcePdfSha256: item.sourcePdfSha256,
+        })),
+        receipts: signatures.map((signature) => ({
+          signatureId: signature.id,
+          agreementTitle: signature.version.agreement.title,
+          version: signature.version.version,
+          verificationReference: signature.verificationReference,
+          receiptPdfSha256: signature.receiptPdfSha256,
+          signedAt: signature.signedAt,
+          revoked: Boolean(signature.revocation),
+        })),
+      };
+    },
+    deps,
   );
-  const [policy, signatures] = await Promise.all([
-    evaluateSignaturePolicy(
-      { domain: continuation.domain, userId: continuation.userId, now: now(deps) },
-      { prisma },
-    ),
-    prisma.agreementSignature.findMany({
-      where: { signingContinuationId: continuation.id },
-      orderBy: { signedAt: 'asc' },
-      include: { version: { include: { agreement: true } }, revocation: true },
-    }),
-  ]);
-  return {
-    domain: continuation.domain,
-    expiresAt: continuation.expiresAt,
-    initialPolicyRevision: continuation.policyRevision,
-    policyRevision: policy.policyRevision,
-    complete: policy.complete,
-    agreements: policy.missing.map((item) => ({
-      agreementId: item.agreementId,
-      agreementVersionId: item.agreementVersionId,
-      agreementTitle: item.agreementTitle,
-      title: item.title,
-      description: item.description,
-      version: item.version,
-      originalFilename: item.originalFilename,
-      signingMethod: item.signingMethod,
-      acceptanceStatement: item.acceptanceStatement,
-      sourcePdfSha256: item.sourcePdfSha256,
-    })),
-    receipts: signatures.map((signature) => ({
-      signatureId: signature.id,
-      agreementTitle: signature.version.agreement.title,
-      version: signature.version.version,
-      verificationReference: signature.verificationReference,
-      receiptPdfSha256: signature.receiptPdfSha256,
-      signedAt: signature.signedAt,
-      revoked: Boolean(signature.revocation),
-    })),
-  };
 }
 
 export async function readSigningAgreementSource(
   params: { signingToken: string; agreementVersionId: string },
   deps?: SignatureSigningDeps,
 ): Promise<{ filename: string; value: Buffer; sha256: string }> {
-  const prisma = signingPrisma(deps);
-  const continuation = await requireActiveSigningContinuation(
-    { signingToken: params.signingToken },
-    { ...deps, prisma },
-  );
-  const policy = await evaluateSignaturePolicy(
-    { domain: continuation.domain, userId: continuation.userId, now: now(deps) },
-    { prisma },
-  );
-  const required = policy.required.find(
-    (item) => item.agreementVersionId === params.agreementVersionId,
-  );
-  if (!required) return rejectSigning();
-  const version = await prisma.agreementVersion.findFirst({
-    where: {
-      id: required.agreementVersionId,
-      agreementId: required.agreementId,
-      agreement: { domain: continuation.domain },
+  const metadata = await withEpochValidSigningContinuationRead(
+    params.signingToken,
+    async (continuation, prisma) => {
+      const policy = await evaluateSignaturePolicy(
+        { domain: continuation.domain, userId: continuation.userId, now: now(deps) },
+        { prisma },
+      );
+      const required = policy.required.find(
+        (item) => item.agreementVersionId === params.agreementVersionId,
+      );
+      if (!required) return rejectSigning();
+      const version = await prisma.agreementVersion.findFirst({
+        where: {
+          id: required.agreementVersionId,
+          agreementId: required.agreementId,
+          agreement: { domain: continuation.domain },
+        },
+        select: { originalFilename: true, sourceStorageKey: true, sourcePdfSha256: true },
+      });
+      return version ?? rejectSigning();
     },
-    select: { originalFilename: true, sourceStorageKey: true, sourcePdfSha256: true },
-  });
-  if (!version) return rejectSigning();
-  const value = await storageClient(deps).read(version.sourceStorageKey);
-  if (hashPdf(value) !== version.sourcePdfSha256) {
+    deps,
+  );
+  const value = await storageClient(deps).read(metadata.sourceStorageKey);
+  if (hashPdf(value) !== metadata.sourcePdfSha256) {
     throw new AppError('INTERNAL', 500, 'SIGNATURE_SOURCE_HASH_MISMATCH');
   }
-  return { filename: version.originalFilename, value, sha256: version.sourcePdfSha256 };
+  return { filename: metadata.originalFilename, value, sha256: metadata.sourcePdfSha256 };
 }
 
 export async function signAgreementVersion(
@@ -206,21 +208,20 @@ export async function readSigningReceipt(
   params: { signingToken: string; signatureId: string },
   deps?: SignatureSigningDeps,
 ): Promise<{ filename: string; value: Buffer; sha256: string }> {
-  const prisma = signingPrisma(deps);
-  const continuation = await requireActiveSigningContinuation(
-    { signingToken: params.signingToken },
-    { ...deps, prisma },
+  const signature = await withEpochValidSigningContinuationRead(
+    params.signingToken,
+    async (continuation, prisma) =>
+      (await prisma.agreementSignature.findFirst({
+        where: {
+          id: params.signatureId,
+          signingContinuationId: continuation.id,
+          userId: continuation.userId,
+          domain: continuation.domain,
+        },
+        include: { version: { include: { agreement: true } } },
+      })) ?? rejectSigning(),
+    deps,
   );
-  const signature = await prisma.agreementSignature.findFirst({
-    where: {
-      id: params.signatureId,
-      signingContinuationId: continuation.id,
-      userId: continuation.userId,
-      domain: continuation.domain,
-    },
-    include: { version: { include: { agreement: true } } },
-  });
-  if (!signature) return rejectSigning();
   const value = await storageClient(deps).read(signature.receiptStorageKey);
   if (hashPdf(value) !== signature.receiptPdfSha256) {
     throw new AppError('INTERNAL', 500, 'SIGNATURE_RECEIPT_HASH_MISMATCH');

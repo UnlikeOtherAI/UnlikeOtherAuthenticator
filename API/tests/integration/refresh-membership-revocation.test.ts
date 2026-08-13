@@ -208,7 +208,7 @@ describe.skipIf(!hasDatabase)('workspace refresh-family revocation', () => {
     const clientId = createClientId(domain, sharedSecret);
     const configUrl = `https://${domain}/auth-config/${label}`;
     const token = await issueRefreshToken(
-      { userId, domain, clientId, configUrl, orgId, teamId },
+      { userId, domain, clientId, configUrl, orgId, teamId, twoFaCompleted: false },
       { prisma: handle.prisma, refreshTokenTtlSeconds: 3600, sharedSecret },
     );
     return { ...token, clientId, configUrl, domain };
@@ -288,7 +288,9 @@ describe.skipIf(!hasDatabase)('workspace refresh-family revocation', () => {
   it('deactivation revokes exact-org families across every product plus legacy same-domain state', async () => {
     const workspace = await seedWorkspace();
     const productTokens = await Promise.all(
-      productDomains.map((domain) => issue(workspace.userId, domain, workspace.orgId, workspace.teamId)),
+      productDomains.map((domain) =>
+        issue(workspace.userId, domain, workspace.orgId, workspace.teamId),
+      ),
     );
     const legacy = await issue(workspace.userId, workspaceDomain, null, null, 'legacy');
     const unrelated = await issue(
@@ -309,7 +311,9 @@ describe.skipIf(!hasDatabase)('workspace refresh-family revocation', () => {
       { prisma: handle.prisma },
     );
     const revoked = await handle.prisma.refreshToken.findMany({
-      where: { id: { in: [...productTokens.map((token) => token.refreshTokenId), legacy.refreshTokenId] } },
+      where: {
+        id: { in: [...productTokens.map((token) => token.refreshTokenId), legacy.refreshTokenId] },
+      },
       select: { revokedAt: true },
     });
     expect(revoked.every((row) => row.revokedAt !== null)).toBe(true);
@@ -367,7 +371,9 @@ describe.skipIf(!hasDatabase)('workspace refresh-family revocation', () => {
   it('team removal revokes only exact-team families across all product domains and re-add stays dead', async () => {
     const workspace = await seedWorkspace();
     const targetTokens = await Promise.all(
-      productDomains.map((domain) => issue(workspace.userId, domain, workspace.orgId, workspace.teamId)),
+      productDomains.map((domain) =>
+        issue(workspace.userId, domain, workspace.orgId, workspace.teamId),
+      ),
     );
     const otherTeam = await issue(
       workspace.userId,

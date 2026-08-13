@@ -150,6 +150,7 @@ describe.skipIf(!hasDatabase)('product workspace policy token races', () => {
         codeChallengeMethod: 'S256',
         rememberMe: true,
         twoFaCompleted,
+        credentialEpoch: 0,
         orgId: org.id,
         teamId: team.id,
       },
@@ -302,6 +303,12 @@ describe.skipIf(!hasDatabase)('product workspace policy token races', () => {
     await expect(exchangeCode(seeded, undefined, true)).resolves.toMatchObject({
       refreshToken: expect.any(String),
     });
+    expect(
+      await handle.prisma.refreshToken.findFirstOrThrow({
+        where: { userId: seeded.userId },
+        select: { twoFaCompleted: true },
+      }),
+    ).toEqual({ twoFaCompleted: true });
   });
 
   it('lets refresh rotation commit before a waiting app-key revocation', async () => {

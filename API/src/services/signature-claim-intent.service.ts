@@ -10,7 +10,7 @@ import {
 import { runInTransaction } from '../db/tenant-context.js';
 import { AppError } from '../utils/errors.js';
 import {
-  lockSignaturePolicyForDecision,
+  lockAndRequireSigningContinuationForDecision,
   recordSigningContinuationFailure,
   requireActiveSigningContinuation,
   type SignatureContinuationDeps,
@@ -99,11 +99,10 @@ export async function reserveSignatureClaimIntent(
   deps: SignatureContinuationDeps & { prisma: PrismaClient },
 ): Promise<SignatureClaimOutcome> {
   return runInTransaction(deps.prisma, async (tx) => {
-    const continuation = await requireActiveSigningContinuation(
-      { signingToken: params.signingToken, lock: true },
-      { ...deps, prisma: tx },
-    );
-    await lockSignaturePolicyForDecision(tx, continuation.domain);
+    const continuation = await lockAndRequireSigningContinuationForDecision(params.signingToken, {
+      ...deps,
+      prisma: tx,
+    });
 
     const existingSignature = await tx.agreementSignature.findFirst({
       where: {
@@ -359,11 +358,10 @@ export async function finalizeSignatureClaimIntent(
   deps: SignatureContinuationDeps & { prisma: PrismaClient },
 ): Promise<SignatureClaimOutcome> {
   return runInTransaction(deps.prisma, async (tx) => {
-    const continuation = await requireActiveSigningContinuation(
-      { signingToken: params.signingToken, lock: true },
-      { ...deps, prisma: tx },
-    );
-    await lockSignaturePolicyForDecision(tx, continuation.domain);
+    const continuation = await lockAndRequireSigningContinuationForDecision(params.signingToken, {
+      ...deps,
+      prisma: tx,
+    });
     await lockClaimIntent(tx, params.intentId);
     const intent = await tx.signatureClaimIntent.findFirst({
       where: { id: params.intentId, signingContinuationId: continuation.id },

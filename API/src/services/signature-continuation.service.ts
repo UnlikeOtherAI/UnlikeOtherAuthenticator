@@ -1,6 +1,6 @@
-import { createHmac, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 
-import { Prisma, type PrismaClient } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
 
 import { getEnv, getPublicBaseUrl, requireEnv, type Env } from '../config/env.js';
 import { getAdminPrisma } from '../db/prisma.js';
@@ -8,22 +8,29 @@ import { runInTransaction } from '../db/tenant-context.js';
 import { normalizeDomain } from '../utils/domain.js';
 import { AppError } from '../utils/errors.js';
 import { buildRedirectToUrl, issueAuthorizationCode } from './authorization-code.service.js';
+import { lockAuthorizationOriginForDecision } from './authorization-origin-lock.service.js';
 import { issueOAuthCode, type IssueOAuthCodeInput } from './oauth/oauth-code.service.js';
 import { evaluateSignaturePolicy } from './signature-policy.service.js';
+import {
+  hashSigningContinuationToken,
+  lockAndRequireSigningContinuationForDecision,
+  type SigningContinuationCapabilityDeps,
+} from './signing-continuation-capability.service.js';
+
+export {
+  hashSigningContinuationToken,
+  lockAndRequireSigningContinuationForDecision,
+  recordSigningContinuationFailure,
+  requireActiveSigningContinuation,
+  withEpochValidSigningContinuationRead,
+} from './signing-continuation-capability.service.js';
 
 type ConfigCodeIssuer = typeof issueAuthorizationCode;
 type PublicCodeIssuer = typeof issueOAuthCode;
 
-export type SignatureContinuationDeps = {
-  env?: Env;
+export type SignatureContinuationDeps = SigningContinuationCapabilityDeps & {
   issueConfigCode?: ConfigCodeIssuer;
   issuePublicCode?: PublicCodeIssuer;
-  now?: () => Date;
-  prisma?: PrismaClient;
-  /** BYPASSRLS client for centrally bound product workspace policy/membership reads. */
-  workspacePrisma?: PrismaClient;
-  publicBaseUrl?: string;
-  sharedSecret?: string;
 };
 
 export type SignatureGateOutcome =
@@ -48,6 +55,7 @@ type ConfigGateInput = {
   teamId?: string;
   authMethod: string;
   twoFaCompleted: boolean;
+  credentialEpoch: number;
 };
 
 export type PublicOAuthGateInput = {
@@ -62,6 +70,7 @@ export type PublicOAuthGateInput = {
   rememberMe: boolean;
   authMethod: string;
   twoFaCompleted: boolean;
+  credentialEpoch: number;
 };
 
 function continuationPrisma(deps?: SignatureContinuationDeps): PrismaClient {
@@ -94,62 +103,8 @@ function requirePkce(params: { codeChallenge?: string; codeChallengeMethod?: str
   return { codeChallenge: params.codeChallenge, codeChallengeMethod: 'S256' };
 }
 
-export function hashSigningContinuationToken(token: string, pepper: string): string {
-  return createHmac('sha256', pepper)
-    .update('uoa-signing-continuation\0', 'utf8')
-    .update(token, 'utf8')
-    .digest('hex');
-}
-
 function newSigningToken(): string {
   return randomBytes(32).toString('base64url');
-}
-
-export async function lockSignaturePolicyForDecision(
-  prisma: PrismaClient,
-  domain: string,
-): Promise<void> {
-  await prisma.$executeRaw(
-    Prisma.sql`SELECT 1 FROM "domain_signature_settings" WHERE "domain" = ${domain} FOR UPDATE`,
-  );
-}
-
-async function lockContinuation(prisma: PrismaClient, tokenHash: string): Promise<void> {
-  await prisma.$executeRaw(
-    Prisma.sql`SELECT 1 FROM "signing_continuations" WHERE "token_hash" = ${tokenHash} FOR UPDATE`,
-  );
-}
-
-export async function requireActiveSigningContinuation(
-  params: { signingToken: string; lock?: boolean },
-  deps?: SignatureContinuationDeps & { prisma: PrismaClient },
-) {
-  const prisma = deps?.prisma ?? continuationPrisma(deps);
-  const env = continuationEnv(deps);
-  const now = currentTime(deps);
-  const tokenHash = hashSigningContinuationToken(params.signingToken, sharedSecret(deps));
-  if (params.lock) await lockContinuation(prisma, tokenHash);
-  const continuation = await prisma.signingContinuation.findUnique({ where: { tokenHash } });
-  if (
-    !continuation ||
-    continuation.consumedAt ||
-    continuation.expiresAt.getTime() <= now.getTime() ||
-    continuation.attemptCount >= env.SIGNATURE_MAX_SIGN_ATTEMPTS
-  ) {
-    return rejectContinuation();
-  }
-  return continuation;
-}
-
-export async function recordSigningContinuationFailure(
-  continuationId: string,
-  deps?: SignatureContinuationDeps & { prisma: PrismaClient },
-): Promise<void> {
-  const prisma = deps?.prisma ?? continuationPrisma(deps);
-  await prisma.signingContinuation.updateMany({
-    where: { id: continuationId, consumedAt: null },
-    data: { attemptCount: { increment: 1 } },
-  });
 }
 
 function configSigningUrl(
@@ -218,6 +173,7 @@ async function createContinuation(
       teamId: configInput?.teamId ?? null,
       authMethod: params.authMethod,
       twoFaCompleted: params.twoFaCompleted,
+      tokenVersion: params.credentialEpoch,
       policyRevision,
       expiresAt: new Date(now.getTime() + env.SIGNATURE_CONTINUATION_TTL_MINUTES * 60_000),
       createdAt: now,
@@ -239,7 +195,22 @@ export async function finalizeConfigAuthorizationWithSignatures(
   const domain = normalizeDomain(input.domain);
   const prisma = continuationPrisma(deps);
   return runInTransaction(prisma, async (tx) => {
-    await lockSignaturePolicyForDecision(tx, domain);
+    await lockAuthorizationOriginForDecision(
+      {
+        userId: input.userId,
+        domain,
+        credentialEpoch: input.credentialEpoch,
+        profile: 'CONFIG_JWT',
+        orgId: input.orgId,
+        teamId: input.teamId,
+      },
+      {
+        prisma: tx,
+        afterAuthenticationEpochLock: deps?.afterAuthenticationEpochLock,
+        crossProductPrisma: deps?.workspacePrisma ?? tx,
+        policyPrisma: deps?.workspacePrisma ?? tx,
+      },
+    );
     const policy = await evaluateSignaturePolicy(
       { domain, userId: input.userId, now: currentTime(deps) },
       { prisma: tx },
@@ -251,6 +222,7 @@ export async function finalizeConfigAuthorizationWithSignatures(
           ...pkce,
           domain,
           twoFaCompleted: input.twoFaCompleted,
+          credentialEpoch: input.credentialEpoch,
         },
         {
           crossProductPrisma: deps?.workspacePrisma ?? tx,
@@ -290,7 +262,18 @@ export async function finalizePublicOAuthAuthorizationWithSignatures(
   const domain = normalizeDomain(input.domain);
   const prisma = continuationPrisma(deps);
   return runInTransaction(prisma, async (tx) => {
-    await lockSignaturePolicyForDecision(tx, domain);
+    await lockAuthorizationOriginForDecision(
+      {
+        userId: input.userId,
+        domain,
+        credentialEpoch: input.credentialEpoch,
+        profile: 'PUBLIC_OAUTH',
+      },
+      {
+        prisma: tx,
+        afterAuthenticationEpochLock: deps?.afterAuthenticationEpochLock,
+      },
+    );
     const policy = await evaluateSignaturePolicy(
       { domain, userId: input.userId, now: currentTime(deps) },
       { prisma: tx },
@@ -306,6 +289,7 @@ export async function finalizePublicOAuthAuthorizationWithSignatures(
         state: input.state,
         codeChallenge: pkce.codeChallenge,
         rememberMe: input.rememberMe,
+        credentialEpoch: input.credentialEpoch,
       };
       const issued = await (deps?.issuePublicCode ?? issueOAuthCode)(
         issueInput,
@@ -350,11 +334,10 @@ export async function completeSigningContinuation(
 ): Promise<SignatureGateOutcome> {
   const prisma = continuationPrisma(deps);
   return runInTransaction(prisma, async (tx) => {
-    const continuation = await requireActiveSigningContinuation(
-      { signingToken, lock: true },
-      { ...deps, prisma: tx },
-    );
-    await lockSignaturePolicyForDecision(tx, continuation.domain);
+    const continuation = await lockAndRequireSigningContinuationForDecision(signingToken, {
+      ...deps,
+      prisma: tx,
+    });
     const policy = await evaluateSignaturePolicy(
       { domain: continuation.domain, userId: continuation.userId, now: currentTime(deps) },
       { prisma: tx },
@@ -389,6 +372,7 @@ export async function completeSigningContinuation(
           codeChallengeMethod: 'S256',
           rememberMe: continuation.rememberMe,
           twoFaCompleted: continuation.twoFaCompleted,
+          credentialEpoch: continuation.tokenVersion ?? rejectContinuation(),
           orgId: continuation.orgId ?? undefined,
           teamId: continuation.teamId ?? undefined,
         },
@@ -422,6 +406,7 @@ export async function completeSigningContinuation(
         state: publicInput.state,
         codeChallenge: continuation.codeChallenge,
         rememberMe: continuation.rememberMe,
+        credentialEpoch: publicInput.credentialEpoch,
       },
       tx as unknown as Prisma.TransactionClient,
       consumedAt,
@@ -446,8 +431,11 @@ function continuationToPublicInput(continuation: {
   rememberMe: boolean;
   authMethod: string;
   twoFaCompleted: boolean;
+  tokenVersion: number | null;
 }): PublicOAuthGateInput {
-  if (!continuation.oauthClientId) return rejectContinuation();
+  if (!continuation.oauthClientId || continuation.tokenVersion === null) {
+    return rejectContinuation();
+  }
   return {
     userId: continuation.userId,
     domain: continuation.domain,
@@ -460,5 +448,6 @@ function continuationToPublicInput(continuation: {
     rememberMe: continuation.rememberMe,
     authMethod: continuation.authMethod,
     twoFaCompleted: continuation.twoFaCompleted,
+    credentialEpoch: continuation.tokenVersion,
   };
 }

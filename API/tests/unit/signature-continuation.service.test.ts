@@ -38,6 +38,7 @@ function continuation(overrides: Record<string, unknown> = {}) {
     teamId: 'team-1',
     authMethod: 'email_password',
     twoFaCompleted: true,
+    tokenVersion: 0,
     policyRevision: 3,
     expiresAt: new Date(NOW.getTime() + 10 * 60_000),
     consumedAt: null,
@@ -51,7 +52,13 @@ function fakePrisma(existing: ReturnType<typeof continuation> | null = null) {
   let row = existing;
   const prisma = {
     $executeRaw: vi.fn().mockResolvedValue(1),
+    $queryRaw: vi.fn().mockResolvedValue([]),
     $transaction: vi.fn(),
+    user: {
+      findUnique: vi.fn().mockResolvedValue({ tokenVersion: 0, twoFaEnabled: true }),
+    },
+    orgMember: { findFirst: vi.fn().mockResolvedValue({ id: 'org-member-1' }) },
+    teamMember: { findFirst: vi.fn().mockResolvedValue({ id: 'team-member-1' }) },
     signingContinuation: {
       create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
         row = continuation({ id: 'created-continuation', ...data });
@@ -60,14 +67,18 @@ function fakePrisma(existing: ReturnType<typeof continuation> | null = null) {
       findUnique: vi.fn(async ({ where }: { where: { tokenHash: string } }) =>
         row?.tokenHash === where.tokenHash ? row : null,
       ),
-      updateMany: vi.fn(async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
-        if (!row || row.id !== where.id || row.consumedAt) return { count: 0 };
-        if ('consumedAt' in data) row.consumedAt = data.consumedAt as Date;
-        return { count: 1 };
-      }),
+      updateMany: vi.fn(
+        async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+          if (!row || row.id !== where.id || row.consumedAt) return { count: 0 };
+          if ('consumedAt' in data) row.consumedAt = data.consumedAt as Date;
+          return { count: 1 };
+        },
+      ),
     },
   };
-  prisma.$transaction.mockImplementation(async (callback: (tx: typeof prisma) => unknown) => callback(prisma));
+  prisma.$transaction.mockImplementation(async (callback: (tx: typeof prisma) => unknown) =>
+    callback(prisma),
+  );
   return prisma;
 }
 
@@ -84,6 +95,7 @@ const configInput = {
   teamId: 'team-1',
   authMethod: 'email_password',
   twoFaCompleted: true,
+  credentialEpoch: 0,
 };
 
 describe('signature authorization gate', () => {
@@ -155,6 +167,7 @@ describe('signature authorization gate', () => {
       teamId: 'team-1',
       authMethod: 'email_password',
       twoFaCompleted: true,
+      tokenVersion: 0,
       policyRevision: 7,
     });
     expect(data.tokenHash).toBe(hashSigningContinuationToken(result.signingToken, SHARED_SECRET));
@@ -183,6 +196,7 @@ describe('signature authorization gate', () => {
         rememberMe: false,
         authMethod: 'email_password',
         twoFaCompleted: false,
+        credentialEpoch: 0,
       },
       {
         env,
@@ -208,6 +222,7 @@ describe('signature authorization gate', () => {
         oauthState: 'opaque-state',
         oauthScope: 'openid profile',
         configUrl: null,
+        tokenVersion: 0,
       }),
     });
   });
@@ -277,9 +292,28 @@ describe('signing continuation completion', () => {
     expect(issueConfigCode).toHaveBeenCalledOnce();
   });
 
+  it('rejects a stale continuation before consumption or authorization-code issuance', async () => {
+    const prisma = fakePrisma(continuation());
+    prisma.user.findUnique.mockResolvedValue({ tokenVersion: 1, twoFaEnabled: true });
+    const issueConfigCode = vi.fn();
+
+    await expect(
+      completeSigningContinuation('signing-token', {
+        env,
+        prisma: prisma as never,
+        sharedSecret: SHARED_SECRET,
+        now: () => NOW,
+        issueConfigCode,
+      }),
+    ).rejects.toMatchObject({ statusCode: 401, message: 'AUTHENTICATION_FAILED' });
+    expect(prisma.signingContinuation.updateMany).not.toHaveBeenCalled();
+    expect(issueConfigCode).not.toHaveBeenCalled();
+  });
+
   it('rejects invalid, expired, consumed, and attempt-exhausted capabilities identically', async () => {
     for (const row of [
       null,
+      continuation({ tokenVersion: null }),
       continuation({ expiresAt: NOW }),
       continuation({ consumedAt: NOW }),
       continuation({ attemptCount: env.SIGNATURE_MAX_SIGN_ATTEMPTS }),

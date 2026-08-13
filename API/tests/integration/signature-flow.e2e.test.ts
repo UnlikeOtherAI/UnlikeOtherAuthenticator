@@ -154,6 +154,7 @@ describe.skipIf(!hasDatabase)('domain signature lifecycle — real PostgreSQL', 
       requestAccess: false,
       authMethod: 'email_password',
       twoFaCompleted: true,
+      credentialEpoch: 0,
     };
 
     const gate = await finalizeConfigAuthorizationWithSignatures(gateInput, deps);

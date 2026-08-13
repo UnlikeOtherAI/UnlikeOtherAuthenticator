@@ -80,6 +80,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
       codeChallengeMethod: 'S256',
       expiresAt: new Date(now.getTime() + 60_000),
       usedAt: null,
+      tokenVersion: 0,
       codeHash: hashAuthorizationCode(code, sharedSecret),
     });
     prisma.authorizationCode.updateMany.mockResolvedValue({ count: 1 });
@@ -193,6 +194,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
       codeChallengeMethod: 'S256',
       expiresAt: new Date(now.getTime() + 60_000),
       usedAt: null,
+      tokenVersion: 0,
       codeHash: hashAuthorizationCode(code, sharedSecret),
     });
     prisma.authorizationCode.updateMany.mockResolvedValue({ count: 1 });
@@ -293,6 +295,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
       codeChallengeMethod: 'S256',
       expiresAt: new Date(now.getTime() + 60_000),
       usedAt: null,
+      tokenVersion: 0,
       codeHash: hashAuthorizationCode(code, sharedSecret),
     });
     prisma.authorizationCode.updateMany.mockResolvedValue({ count: 1 });
@@ -386,6 +389,7 @@ describe('exchangeAuthorizationCodeForTokens (unit)', () => {
       codeChallengeMethod: 'S256',
       expiresAt: new Date(now.getTime() + 60_000),
       usedAt: null,
+      tokenVersion: 0,
       codeHash: hashAuthorizationCode(code, sharedSecret),
     });
     prisma.authorizationCode.updateMany.mockResolvedValue({ count: 1 });

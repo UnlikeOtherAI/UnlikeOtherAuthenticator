@@ -66,6 +66,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
         config-verify.ts    — POST /config/verify (verify a signed config JWT)
         schema.ts           — Aggregates the endpoint schema returned by /api
         schema.auth.ts      — /api schema slice: auth endpoints
+        schema.auth-token.ts — /api contract for the multi-grant POST /auth/token endpoint
         schema.billing.ts   — /api schema slice: tariffs, contract invoices, app keys, and snapshots
         schema.billing-funding.ts — /api schema slice: shared-credit and recurring-add-on reads/artifacts
         schema.config-debug.ts — /api schema slice: config debug endpoints
@@ -208,7 +209,8 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       avatar-provider.service.ts            — SSRF-guarded, size/time-capped provider avatar proxy (fails soft)
       verification-token-epoch.service.ts  — Issue-time user/credential-epoch proof and lock enforcement
       auto-onboarding.service.ts            — Auto-onboarding flow
-      authorization-code.service.ts         — Scoped code issuance and one-transaction consumption
+      authorization-code.service.ts         — Epoch-bound scoped code issuance and one-transaction consumption
+      authorization-origin-lock.service.ts  — Product → user → workspace → signature authorization lock order
       billing-actor.service.ts              — Credential-bound short-lived actor JWT verification
       billing-app-key.service.ts            — Product app-key minting, lookup, revocation, and audit
       billing-credit-account.service.ts     — Exact Stripe account/mode shared-team credit account and portfolio perspective
@@ -316,8 +318,8 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       refresh-session-lock.service.ts       — Canonical user-global then user/domain serialization
       refresh-token-replay.service.ts       — Deterministic lost-response successor verification and recovery
       refresh-token-revocation.service.ts   — Domain/workspace/global revocation transactions
-      refresh-token-rotation-policy.service.ts — Workspace/signature gates held through refresh rotation
-      refresh-token.service.ts              — Refresh issuance, deterministic replay recovery, reuse detection, family logout
+      refresh-token-rotation-policy.service.ts — Source/target workspace, 2FA, and signature gates held through rotation
+      refresh-token.service.ts              — Refresh issuance, scope-stable deterministic replay, reuse detection, family logout
       refresh-token-transaction.service.ts  — Durable reuse revocation commit before opaque rejection
       retention-pruning.service.ts          — Retention pruning jobs
       root-page.service.ts                  — Root holding page rendering
@@ -332,7 +334,9 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       signature-malware.service.ts          — Fail-closed ClamAV scanning through private temporary files
       signature-pdf.service.ts              — Source-PDF safety validation, hashing, and certificate-page receipt generation
       signature-policy.service.ts           — Per-domain required-agreement evaluation and fail-closed completion checks
+      signature-policy-lock.service.ts      — Shared signature-policy row lock primitive
       signature-continuation.service.ts     — Hashed one-use signing continuations and atomic authorization-code gates
+      signing-continuation-capability.service.ts — Epoch-bound capability validation and canonical continuation locking
       signature-signing.service.ts          — Capability-scoped orchestration with storage/PDF/crypto outside database transactions
       signature-access.service.ts           — Signer/domain status, subject receipts, and public integrity verification
       signature-storage.service.ts          — Private immutable signature-object storage adapters (filesystem/GCS)
@@ -360,6 +364,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       user-scope.service.ts                 — User scope handling (global vs per-domain)
       user-team-requirement.service.ts      — Per-domain team-requirement enforcement
       workspace-scope.service.ts            — Ordered membership locks and exact ACTIVE-scope checks
+      workspace-switch-token.service.ts     — Explicit exact-target refresh-family transition and token issue
       /social
         apple.service.ts                    — Apple OAuth flow
         facebook.service.ts                 — Facebook OAuth flow
@@ -492,6 +497,7 @@ Request → Route → Middleware → Service → Database (Prisma)
   `OrgAuditLog.metadata` (`{ via: 'domain_backend', source_domain }`), alongside
   `actorUserId: null`. It is `undefined` for every user-initiated request, so
   those rows are unchanged.
+
 - **error-handler** — catches all errors. Returns a generic public body via `utils/error-response.ts` to the caller and logs specifics internally.
 - **rate-limiter** — request rate limiting; keyed helpers for auth routes live in `routes/auth/rate-limit-keys.ts`.
 
@@ -502,6 +508,20 @@ re-reads before any decision. Org lifecycle takes user-global + user/domain befo
 team lifecycle takes user-global before membership. Their `uoa_admin` transactions atomically write
 status and revoke exact cross-domain workspace families plus legacy same-domain rows as applicable.
 Reuse revokes its family and commits through the private transaction outcome before the opaque 401.
+
+The custom workspace-switch grant is the only refresh-family transition allowed to
+change scope. It locks and validates the current source and exact target memberships
+before target 2FA/signature policy, then records `{org_id, team_id}` on the one
+deterministic successor. `RefreshToken.twoFaCompleted` originates at authorization-code
+exchange and is copied unchanged across all descendants. Ordinary refresh sets its
+expected scope to the presented row; switch sets it to the requested target. During the
+120-second recovery window, every verified descendant must match that operation's
+expected scope or the request fails with a non-revoking semantic conflict. Post-grace
+predecessor use reaches theft revocation before intent classification.
+An in-grace matching replay rechecks the committed target before returning tokens. If current
+membership, 2FA, or signature policy rejects it, the transaction retires only that verified family
+and commits before returning authenticated `INVALID_REFRESH_TOKEN`; sibling families and the user
+access-token epoch are unchanged.
 
 Family logout follows opaque lookup → user-global → user/domain → re-read, and commits family
 revocation with the access-token version bump. Password reset, verify-email password binding, email
@@ -523,6 +543,17 @@ may verify once to discover the lock identity, but after product-policy and auth
 locks they re-verify the original JWT with a fresh `Date` and use only those refreshed claims.
 Tokens that expire in the lock queue therefore cannot drive chooser reads, invitation mutations,
 secret decryption, TOTP verification/enrollment, finalization, or authorization-code issuance.
+
+Authorization codes and signing continuations persist the exact `User.tokenVersion` accepted by
+the originating authentication. Code redemption requires equality again while holding the
+user-global lock through code consumption and refresh issuance. Signing creation/completion and
+claim writes use product → user → workspace → signature → continuation order in one transaction;
+completion rechecks the immutable epoch before consuming the continuation or minting a code. A
+password or 2FA reset therefore wins before redemption/completion and rejects the stale capability,
+or waits behind issuance and then invalidates the newly created family/code. Historical null epoch
+rows are deliberately not backfilled and fail closed because their issue-time epoch is unknowable.
+Capability-authenticated signing session, source-PDF, and receipt reads use that same canonical lock
+and live epoch check before resolving private metadata; reset capabilities cannot retain read access.
 
 `POST /auth/token` remains a thin multi-grant route. Its confidential assertion
 branch uses the same config verifier and domain-hash guard as the legacy grants,

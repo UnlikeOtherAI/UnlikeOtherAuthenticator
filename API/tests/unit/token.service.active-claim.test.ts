@@ -72,7 +72,9 @@ describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
       codeChallengeMethod: 'S256',
       expiresAt: new Date(now.getTime() + 60_000),
       usedAt: null,
+      tokenVersion: 0,
       codeHash: hashAuthorizationCode(code, sharedSecret),
+      twoFaCompleted: true,
       orgId: 'org-active',
       teamId: 'team-active',
     });
@@ -106,7 +108,11 @@ describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
 
     expect(prisma.refreshToken.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ orgId: 'org-active', teamId: 'team-active' }),
+        data: expect.objectContaining({
+          orgId: 'org-active',
+          teamId: 'team-active',
+          twoFaCompleted: true,
+        }),
       }),
     );
 
@@ -147,6 +153,7 @@ describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
       codeChallengeMethod: 'S256',
       expiresAt: new Date(now.getTime() + 60_000),
       usedAt: null,
+      tokenVersion: 0,
     });
     prisma.authorizationCode.updateMany.mockResolvedValue({ count: 1 });
     prisma.orgMember.findFirst.mockImplementation(async (args: { where: { org?: unknown } }) =>
@@ -235,6 +242,7 @@ describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
       codeChallengeMethod: 'S256',
       expiresAt: new Date(now.getTime() + 60_000),
       usedAt: null,
+      tokenVersion: 0,
       orgId: 'org-nessie',
       teamId: 'team-nessie',
     });
@@ -281,6 +289,45 @@ describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
     ).rejects.toMatchObject({ statusCode: 401, message: 'AUTHENTICATION_FAILED' });
   });
 
+  it('rejects a legacy authorization code whose issue-time credential epoch is unknown', async () => {
+    const now = new Date('2026-07-07T00:00:00.900Z');
+    const sharedSecret = process.env.SHARED_SECRET!;
+    const config = makeConfig({ enabled: false });
+    const configUrl = 'https://client.example.com/auth-config';
+    const redirectUrl = 'https://client.example.com/oauth/callback';
+    const prisma = makePrisma();
+    prisma.authorizationCode.findUnique.mockResolvedValue({
+      id: 'legacy-auth-code',
+      userId: 'legacy-user',
+      domain: config.domain,
+      configUrl,
+      redirectUrl,
+      codeChallenge: TEST_CODE_CHALLENGE,
+      codeChallengeMethod: 'S256',
+      expiresAt: new Date(now.getTime() + 60_000),
+      usedAt: null,
+      tokenVersion: null,
+      orgId: null,
+      teamId: null,
+    });
+
+    await expect(
+      exchangeAuthorizationCodeForTokens(
+        {
+          code: 'legacy-code',
+          config,
+          configUrl,
+          redirectUrl,
+          clientId: createClientId(config.domain, sharedSecret),
+          codeVerifier: TEST_CODE_VERIFIER,
+        },
+        { now: () => now, sharedSecret, prisma },
+      ),
+    ).rejects.toMatchObject({ statusCode: 401, message: 'INVALID_AUTH_CODE' });
+    expect(prisma.authorizationCode.updateMany).not.toHaveBeenCalled();
+    expect(prisma.refreshToken.create).not.toHaveBeenCalled();
+  });
+
   it('rejects a malformed authorization code carrying only part of a workspace scope', async () => {
     const now = new Date('2026-07-07T00:00:01.000Z');
     const sharedSecret = process.env.SHARED_SECRET!;
@@ -301,6 +348,7 @@ describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
       codeChallengeMethod: 'S256',
       expiresAt: new Date(now.getTime() + 60_000),
       usedAt: null,
+      tokenVersion: 0,
       codeHash: hashAuthorizationCode(code, sharedSecret),
       orgId: 'org-only',
       teamId: null,
@@ -349,6 +397,7 @@ describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
       codeChallengeMethod: 'S256',
       expiresAt: new Date(now.getTime() + 60_000),
       usedAt: null,
+      tokenVersion: 0,
       orgId: 'org-inactive',
       teamId: 'team-inactive',
     });
@@ -385,6 +434,7 @@ describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
       codeChallengeMethod: 'S256',
       expiresAt: new Date(now.getTime() + 60_000),
       usedAt: null,
+      tokenVersion: 0,
       codeHash: hashAuthorizationCode(code, sharedSecret),
     });
     prisma.authorizationCode.updateMany.mockResolvedValue({ count: 1 });

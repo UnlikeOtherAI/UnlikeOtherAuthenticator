@@ -5,14 +5,17 @@ import type { PrismaClient } from '@prisma/client';
 import { AUTHORIZATION_CODE_TTL_MS } from '../config/constants.js';
 import { getEnv, requireEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
+import { runInTransaction } from '../db/tenant-context.js';
 import { AppError } from '../utils/errors.js';
 import { getAppLogger } from '../utils/app-logger.js';
 import { tryParseRedirectUrl } from '../utils/http-url.js';
 import { verifyPkceCodeVerifier } from '../utils/pkce.js';
 import {
-  assertActiveClientWorkspaceScope,
-  lockAndAssertActiveClientWorkspaceScope,
-} from './workspace-scope.service.js';
+  isAuthenticationEpochMismatchError,
+  lockAndAssertAuthenticationEpoch,
+} from './authentication-epoch.service.js';
+import { lockProductWorkspacePolicyShared } from './product-workspace-policy-lock.service.js';
+import { lockAndAssertActiveClientWorkspaceScope } from './workspace-scope.service.js';
 import type { ProductWorkspacePolicyPrisma } from './product-workspace-policy.service.js';
 
 type AuthorizationCodePrisma = PrismaClient;
@@ -23,6 +26,7 @@ type AuthorizationCodeDeps = {
   prisma?: AuthorizationCodePrisma;
   now?: () => Date;
   sharedSecret?: string;
+  afterAuthenticationEpochLock?: () => Promise<void>;
 };
 
 function generateAuthorizationCode(): string {
@@ -77,6 +81,7 @@ export async function issueAuthorizationCode(
     codeChallengeMethod?: 'S256';
     rememberMe?: boolean;
     twoFaCompleted: boolean;
+    credentialEpoch: number;
     // Workspace scope resolved by explicit selection, auto-selection, or the
     // server-owned recognized-product placement performed before 2FA.
     orgId?: string;
@@ -90,7 +95,6 @@ export async function issueAuthorizationCode(
   }
 
   const prisma = deps?.prisma ?? (getPrisma() as unknown as AuthorizationCodePrisma);
-  const now = deps?.now ? deps.now() : new Date();
   const sharedSecret = deps?.sharedSecret ?? requireEnv('SHARED_SECRET').SHARED_SECRET;
 
   parseRedirectUrl(params.redirectUrl);
@@ -99,55 +103,71 @@ export async function issueAuthorizationCode(
     throw new AppError('BAD_REQUEST', 400, 'PKCE_REQUIRED');
   }
 
-  // Revalidate immediately before the issuance write. This is the final
-  // boundary reached after chooser, 2FA, forced enrollment, or signatures.
-  await assertActiveClientWorkspaceScope(
-    {
-      userId: params.userId,
-      domain: params.domain,
-      orgId: params.orgId,
-      teamId: params.teamId,
-    },
-    {
-      crossProductPrisma: deps?.crossProductPrisma,
-      policyPrisma: deps?.policyPrisma,
-      prisma,
-    },
-  );
+  return runInTransaction(prisma, async (tx) => {
+    // Preserve the estate-wide order used by token exchange and credential writers. A caller
+    // already inside this hierarchy simply re-enters the transaction-scoped advisory locks.
+    await lockProductWorkspacePolicyShared(tx);
+    await lockAndAssertAuthenticationEpoch(
+      {
+        userId: params.userId,
+        domain: params.domain,
+        credentialEpoch: params.credentialEpoch,
+      },
+      { prisma: tx, afterLock: deps?.afterAuthenticationEpochLock },
+    );
 
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const code = generateAuthorizationCode();
-    const codeHash = hashAuthorizationCode(code, sharedSecret);
-    const expiresAt = new Date(now.getTime() + AUTHORIZATION_CODE_TTL_MS);
+    // Revalidate immediately before the issuance write. This is the final boundary reached after
+    // chooser, 2FA, forced enrollment, or signatures, and it follows the user lock hierarchy.
+    await lockAndAssertActiveClientWorkspaceScope(
+      {
+        userId: params.userId,
+        domain: params.domain,
+        orgId: params.orgId,
+        teamId: params.teamId,
+      },
+      {
+        crossProductPrisma: deps?.crossProductPrisma ?? tx,
+        policyPrisma: deps?.policyPrisma ?? tx,
+        prisma: tx,
+      },
+    );
 
-    try {
-      await prisma.authorizationCode.create({
-        data: {
-          codeHash,
-          userId: params.userId,
-          domain: params.domain,
-          configUrl: params.configUrl,
-          redirectUrl: params.redirectUrl,
-          codeChallenge: params.codeChallenge,
-          codeChallengeMethod: params.codeChallengeMethod,
-          rememberMe: params.rememberMe ?? false,
-          twoFaCompleted: params.twoFaCompleted,
-          orgId: params.orgId ?? null,
-          teamId: params.teamId ?? null,
-          expiresAt,
-        },
-        select: { id: true },
-      });
+    const now = deps?.now ? deps.now() : new Date();
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const code = generateAuthorizationCode();
+      const codeHash = hashAuthorizationCode(code, sharedSecret);
+      const expiresAt = new Date(now.getTime() + AUTHORIZATION_CODE_TTL_MS);
 
-      return { code };
-    } catch (err) {
-      const codeValue = (err as { code?: unknown } | null)?.code;
-      if (codeValue === 'P2002') continue;
-      throw err;
+      try {
+        await tx.authorizationCode.create({
+          data: {
+            codeHash,
+            userId: params.userId,
+            domain: params.domain,
+            configUrl: params.configUrl,
+            redirectUrl: params.redirectUrl,
+            codeChallenge: params.codeChallenge,
+            codeChallengeMethod: params.codeChallengeMethod,
+            rememberMe: params.rememberMe ?? false,
+            twoFaCompleted: params.twoFaCompleted,
+            tokenVersion: params.credentialEpoch,
+            orgId: params.orgId ?? null,
+            teamId: params.teamId ?? null,
+            expiresAt,
+          },
+          select: { id: true },
+        });
+
+        return { code };
+      } catch (err) {
+        const codeValue = (err as { code?: unknown } | null)?.code;
+        if (codeValue === 'P2002') continue;
+        throw err;
+      }
     }
-  }
 
-  throw new AppError('INTERNAL', 500, 'AUTH_CODE_COLLISION');
+    throw new AppError('INTERNAL', 500, 'AUTH_CODE_COLLISION');
+  });
 }
 
 export async function consumeAuthorizationCode(params: {
@@ -161,6 +181,7 @@ export async function consumeAuthorizationCode(params: {
   prisma: AuthorizationCodePrisma;
   crossProductPrisma?: AuthorizationCodePrisma;
   policyPrisma?: ProductWorkspacePolicyPrisma;
+  afterAuthenticationEpochLock?: () => Promise<void>;
   afterActiveScopeLock?: () => Promise<void>;
 }): Promise<{
   userId: string;
@@ -182,6 +203,7 @@ export async function consumeAuthorizationCode(params: {
       codeChallengeMethod: true,
       rememberMe: true,
       twoFaCompleted: true,
+      tokenVersion: true,
       expiresAt: true,
       usedAt: true,
       orgId: true,
@@ -237,6 +259,26 @@ export async function consumeAuthorizationCode(params: {
   }
   if (row.usedAt) rejectAuthCode('already_used', { usedAt: row.usedAt.toISOString() });
   if (row.expiresAt.getTime() <= params.now.getTime()) rejectAuthCode('expired');
+  const credentialEpoch = row.tokenVersion ?? rejectAuthCode('credential_epoch_missing');
+  if (!Number.isSafeInteger(credentialEpoch) || credentialEpoch < 0) {
+    rejectAuthCode('credential_epoch_missing');
+  }
+
+  try {
+    await lockAndAssertAuthenticationEpoch(
+      {
+        userId: row.userId,
+        domain: row.domain,
+        credentialEpoch,
+      },
+      { prisma: params.prisma, afterLock: params.afterAuthenticationEpochLock },
+    );
+  } catch (error) {
+    if (isAuthenticationEpochMismatchError(error)) {
+      rejectAuthCode('credential_epoch_mismatch');
+    }
+    throw error;
+  }
 
   try {
     // A code must not create a scoped session after the selected membership was

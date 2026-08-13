@@ -48,26 +48,28 @@ describe('shared post-authentication signature gate', () => {
       redirectTo: 'https://auth.example.com/auth?flow=signatures',
       policyRevision: 7,
     });
-    const { finalizeAuthenticatedUser } = await import(
-      '../../src/services/access-request-flow.service.js'
-    );
+    const { finalizeAuthenticatedUser } =
+      await import('../../src/services/access-request-flow.service.js');
 
-    const result = await finalizeAuthenticatedUser({
-      userId: 'user-1',
-      credentialEpoch: 0,
-      config,
-      configUrl: 'https://client.example.com/auth-config',
-      redirectUrl: 'https://client.example.com/oauth/callback?return=exact',
-      rememberMe: false,
-      requestAccess: false,
-      authMethod: 'github',
-      twoFaCompleted: true,
-      codeChallenge: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
-      codeChallengeMethod: 'S256',
-      ip: '203.0.113.9',
-      orgId: 'org-1',
-      teamId: 'team-1',
-    }, { authenticationEpochLocked: true, prisma });
+    const result = await finalizeAuthenticatedUser(
+      {
+        userId: 'user-1',
+        credentialEpoch: 0,
+        config,
+        configUrl: 'https://client.example.com/auth-config',
+        redirectUrl: 'https://client.example.com/oauth/callback?return=exact',
+        rememberMe: false,
+        requestAccess: false,
+        authMethod: 'github',
+        twoFaCompleted: true,
+        codeChallenge: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+        codeChallengeMethod: 'S256',
+        ip: '203.0.113.9',
+        orgId: 'org-1',
+        teamId: 'team-1',
+      },
+      { authenticationEpochLocked: true, prisma },
+    );
 
     expect(assertEmailDomainAllowedForLoginMock).toHaveBeenCalledWith({
       userId: 'user-1',
@@ -92,8 +94,9 @@ describe('shared post-authentication signature gate', () => {
         teamId: 'team-1',
         authMethod: 'github',
         twoFaCompleted: true,
+        credentialEpoch: 0,
       },
-      undefined,
+      { prisma, workspacePrisma: prisma },
     );
     expect(result).toEqual({
       status: 'signing_required',
@@ -105,25 +108,67 @@ describe('shared post-authentication signature gate', () => {
   it('does not create a continuation when an access request is still pending', async () => {
     const prisma = {} as PrismaClient;
     handlePostAuthenticationAccessRequestMock.mockResolvedValue({ status: 'requested' });
-    const { finalizeAuthenticatedUser } = await import(
-      '../../src/services/access-request-flow.service.js'
-    );
+    const { finalizeAuthenticatedUser } =
+      await import('../../src/services/access-request-flow.service.js');
 
-    const result = await finalizeAuthenticatedUser({
-      userId: 'user-1',
-      credentialEpoch: 0,
-      config,
-      configUrl: 'https://client.example.com/auth-config',
-      redirectUrl: 'https://client.example.com/oauth/callback',
-      rememberMe: true,
-      requestAccess: true,
-      authMethod: 'email_code',
-      twoFaCompleted: false,
-      codeChallenge: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
-      codeChallengeMethod: 'S256',
-    }, { authenticationEpochLocked: true, prisma });
+    const result = await finalizeAuthenticatedUser(
+      {
+        userId: 'user-1',
+        credentialEpoch: 0,
+        config,
+        configUrl: 'https://client.example.com/auth-config',
+        redirectUrl: 'https://client.example.com/oauth/callback',
+        rememberMe: true,
+        requestAccess: true,
+        authMethod: 'email_code',
+        twoFaCompleted: false,
+        codeChallenge: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+        codeChallengeMethod: 'S256',
+      },
+      { authenticationEpochLocked: true, prisma },
+    );
 
     expect(result.status).toBe('requested');
     expect(finalizeConfigAuthorizationWithSignaturesMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps signature workspace decisions on the authoritative outer transaction', async () => {
+    const outerPrisma = {} as PrismaClient;
+    const detachedWorkspacePrisma = { detached: true } as unknown as PrismaClient;
+    finalizeConfigAuthorizationWithSignaturesMock.mockResolvedValue({
+      status: 'granted',
+      code: 'code-1',
+      redirectTo: 'https://client.example.com/oauth/callback?code=code-1',
+    });
+    const { finalizeAuthenticatedUser } =
+      await import('../../src/services/access-request-flow.service.js');
+
+    await finalizeAuthenticatedUser(
+      {
+        userId: 'user-1',
+        credentialEpoch: 0,
+        config,
+        configUrl: 'https://client.example.com/auth-config',
+        redirectUrl: 'https://client.example.com/oauth/callback',
+        rememberMe: true,
+        requestAccess: false,
+        authMethod: 'email_password',
+        twoFaCompleted: true,
+        codeChallenge: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+        codeChallengeMethod: 'S256',
+        orgId: 'org-1',
+        teamId: 'team-1',
+      },
+      {
+        authenticationEpochLocked: true,
+        prisma: outerPrisma,
+        workspacePrisma: detachedWorkspacePrisma,
+      },
+    );
+
+    expect(finalizeConfigAuthorizationWithSignaturesMock).toHaveBeenCalledWith(expect.any(Object), {
+      prisma: outerPrisma,
+      workspacePrisma: outerPrisma,
+    });
   });
 });

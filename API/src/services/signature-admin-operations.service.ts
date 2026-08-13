@@ -5,7 +5,7 @@ import { runInTransaction } from '../db/tenant-context.js';
 import { normalizeDomain } from '../utils/domain.js';
 import { AppError } from '../utils/errors.js';
 import { writeSignatureAdminAudit } from './signature-admin-audit.service.js';
-import { lockSignaturePolicyForDecision } from './signature-continuation.service.js';
+import { lockSignaturePolicyForDecision } from './signature-policy-lock.service.js';
 import { hashPdf } from './signature-pdf.service.js';
 import {
   createSignatureObjectStorage,
@@ -95,7 +95,7 @@ export async function searchAgreementSignatures(
   });
   return {
     data: rows,
-    nextCursor: rows.length === params.limit ? rows.at(-1)?.id ?? null : null,
+    nextCursor: rows.length === params.limit ? (rows.at(-1)?.id ?? null) : null,
   };
 }
 

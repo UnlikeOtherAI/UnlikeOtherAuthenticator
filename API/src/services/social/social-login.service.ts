@@ -27,10 +27,12 @@ type SocialLoginDeps = {
   placeUserInConfiguredOrganisation?: typeof placeUserInConfiguredOrganisation;
   isEmailAdminAllowedForRegistration?: typeof isEmailAdminAllowedForRegistration;
   isPrincipalBannedForRegistration?: typeof isPrincipalBannedForRegistration;
+  /** Callback-owned user lock taken after identity discovery but before an existing row update. */
+  beforeExistingUserUpdate?: (userId: string) => Promise<void>;
 };
 
 type SocialLoginResult =
-  | { status: 'authenticated'; userId: string; twoFaEnabled: boolean }
+  | { status: 'authenticated'; userId: string; twoFaEnabled: boolean; credentialEpoch?: number }
   | { status: 'blocked' };
 
 function isAllowedByRegistrationDomainPolicy(params: {
@@ -122,8 +124,13 @@ export async function loginWithSocialProfile(
 
   let userId: string;
   let twoFaEnabled: boolean;
+  let credentialEpoch: number | undefined;
   let createdUser = false;
   if (existing) {
+    // The callback holds product-policy first and supplies its transaction's canonical user lock.
+    // Take it before updating the row: credential reset also takes user-global before its write,
+    // so neither side can hold the User row while waiting for the other's advisory lock.
+    await deps?.beforeExistingUserUpdate?.(existing.id);
     const updated = await prisma.user.update({
       where: { userKey },
       data: {
@@ -134,15 +141,18 @@ export async function loginWithSocialProfile(
         // Brief 22.7: overwrite avatar URL on every login.
         avatarUrl: params.profile.avatarUrl,
       },
-      select: { id: true, twoFaEnabled: true },
+      select: { id: true, twoFaEnabled: true, tokenVersion: true },
     });
     userId = updated.id;
     twoFaEnabled = updated.twoFaEnabled;
+    credentialEpoch = updated.tokenVersion;
   } else {
     // Admin ban list (domain scope) blocks a banned email/pattern/IP before any user row is
     // created. A ban overrides every allow path, including the admin-superuser bootstrap. An
     // existing banned user is instead caught at finalizeAuthenticatedUser (login enforcement).
-    const banned = await (deps?.isPrincipalBannedForRegistration ?? isPrincipalBannedForRegistration)({
+    const banned = await (
+      deps?.isPrincipalBannedForRegistration ?? isPrincipalBannedForRegistration
+    )({
       domain: params.config.domain,
       email,
       ip: params.ip ?? null,
@@ -182,10 +192,11 @@ export async function loginWithSocialProfile(
         avatarUrl: params.profile.avatarUrl,
         passwordHash: null,
       },
-      select: { id: true, twoFaEnabled: true },
+      select: { id: true, twoFaEnabled: true, tokenVersion: true },
     });
     userId = created.id;
     twoFaEnabled = created.twoFaEnabled;
+    credentialEpoch = created.tokenVersion;
     createdUser = true;
   }
 
@@ -215,5 +226,14 @@ export async function loginWithSocialProfile(
     }
   }
 
-  return { status: 'authenticated', userId, twoFaEnabled };
+  return {
+    status: 'authenticated',
+    userId,
+    twoFaEnabled,
+    ...(credentialEpoch !== undefined &&
+    Number.isSafeInteger(credentialEpoch) &&
+    credentialEpoch >= 0
+      ? { credentialEpoch }
+      : {}),
+  };
 }

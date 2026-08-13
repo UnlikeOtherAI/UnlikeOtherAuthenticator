@@ -3,10 +3,7 @@ import { createHash } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  consumeOAuthCode,
-  issueOAuthCode,
-} from '../../src/services/oauth/oauth-code.service.js';
+import { consumeOAuthCode, issueOAuthCode } from '../../src/services/oauth/oauth-code.service.js';
 
 describe('public OAuth code scope binding', () => {
   const originalSecret = process.env.SHARED_SECRET;
@@ -34,6 +31,7 @@ describe('public OAuth code scope binding', () => {
         redirectUrl: 'https://tool.example/callback',
         scope: 'openid profile',
         codeChallenge: challenge,
+        credentialEpoch: 0,
       },
       prisma,
       new Date('2026-07-15T20:00:00.000Z'),
@@ -52,6 +50,7 @@ describe('public OAuth code scope binding', () => {
         findUnique: vi.fn().mockResolvedValue({
           id: 'code-1',
           userId: 'user-1',
+          domain: 'mcp.example.com',
           oauthClientId: 'client-1',
           redirectUrl: 'https://tool.example/callback',
           resource: 'https://resource.example',
@@ -59,6 +58,7 @@ describe('public OAuth code scope binding', () => {
           codeChallenge: challenge,
           codeChallengeMethod: 'S256',
           rememberMe: false,
+          tokenVersion: 0,
           expiresAt: new Date(now.getTime() + 60_000),
           usedAt: null,
         }),

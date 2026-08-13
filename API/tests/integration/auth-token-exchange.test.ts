@@ -72,9 +72,9 @@ describe.skipIf(!hasDatabase)('POST /auth/token', () => {
   });
 
   beforeEach(async () => {
-    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
-    process.env.AUTH_SERVICE_IDENTIFIER =
-      process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
+    process.env.SHARED_SECRET =
+      process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
+    process.env.AUTH_SERVICE_IDENTIFIER = process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
     process.env.ACCESS_TOKEN_TTL = '15m';
     process.env.REFRESH_TOKEN_TTL_DAYS = '30';
 
@@ -236,12 +236,14 @@ describe.skipIf(!hasDatabase)('POST /auth/token', () => {
         tokenHash: true,
         revokedAt: true,
         replacedByTokenId: true,
+        twoFaCompleted: true,
       },
     });
     expect(refreshTokens).toHaveLength(1);
     expect(refreshTokens[0]?.tokenHash).not.toBe(tokenBody.refresh_token);
     expect(refreshTokens[0]?.revokedAt).toBeNull();
     expect(refreshTokens[0]?.replacedByTokenId).toBeNull();
+    expect(refreshTokens[0]?.twoFaCompleted).toBe(false);
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
 

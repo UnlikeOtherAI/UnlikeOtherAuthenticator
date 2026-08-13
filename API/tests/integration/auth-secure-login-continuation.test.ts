@@ -411,6 +411,7 @@ describe.skipIf(!hasDatabase)('secure one-time login continuation', () => {
         codeChallengeMethod: 'S256',
         rememberMe: true,
         twoFaCompleted: false,
+        credentialEpoch: 0,
         orgId: workspace.orgId,
         teamId: workspace.teamId,
       },

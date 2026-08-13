@@ -172,7 +172,7 @@ export const configJwtDocumentation = {
       allow_user_create_team:
         'boolean (default false) — permit an ACTIVE org owner/admin to create a FURTHER workspace (team) in that organisation from the SSO chooser via POST /auth/create-team. Separate from allow_user_create_org (a first organisation): this writes into an existing tenant, so the domain opts in and the owner/admin role check still applies',
       backend_org_management:
-        'boolean (default false) — permit this domain\'s product backend to call /org/* with NO X-UOA-Access-Token, authorised by the domain pairing (domain-hash bearer + this signed config) alone. There is then no acting user, so per-user org-role checks do not apply and every mutation is attributed to the backend in the org audit log',
+        "boolean (default false) — permit this domain's product backend to call /org/* with NO X-UOA-Access-Token, authorised by the domain pairing (domain-hash bearer + this signed config) alone. There is then no acting user, so per-user org-role checks do not apply and every mutation is attributed to the backend in the org audit log",
       pending_invites_block_auto_create:
         'boolean (default true) — a pending invite for the user email suppresses auto_create_personal_org_on_first_login',
       max_teams_per_org: 'number (default 100, max 1000)',
@@ -231,9 +231,9 @@ export const configValidationEndpointDocumentation = {
 
 export const accessTokenDocumentation = {
   description:
-    'Authorization-code and refresh grants at POST /auth/token return the legacy HS256 JWT signed with SHARED_SECRET. The confidential RFC 8693 token-exchange grant is separate: it returns a 5-minute, resource-bound RS256 token verified with GET /oauth/jwks.json. Never apply one profile’s verification rules to the other.',
+    'Authorization-code, refresh, and explicit workspace-switch grants at POST /auth/token return the legacy HS256 JWT signed with SHARED_SECRET. The confidential RFC 8693 token-exchange grant is separate: it returns a 5-minute, resource-bound RS256 token verified with GET /oauth/jwks.json. Never apply one profile’s verification rules to the other.',
   signing: {
-    profile: 'legacy authorization-code and refresh-token grants only',
+    profile: 'legacy authorization-code, refresh-token, and workspace-switch grants only',
     algorithm: 'HS256',
     key: 'deployment-wide SHARED_SECRET (not exposed, no UOA-side public JWKS)',
     audience: 'uoa:access-token',
@@ -262,6 +262,36 @@ export const accessTokenDocumentation = {
   ],
   response_envelope_casing:
     'The /auth/token response envelope is snake_case (access_token, refresh_token, expires_in, refresh_token_expires_in, token_type). The key firstLogin is camelCase; memberships.orgs[].orgId, memberships.teams[].teamId, memberships.teams[].orgId, and pending_invites[].inviteId/orgId/teamId/teamName are camelCase. pending_invites and capabilities.can_* remain snake_case.',
+};
+
+export const workspaceSwitchDocumentation = {
+  endpoint: 'POST /auth/token?config_url=<verified config URL>',
+  description:
+    'Backend-only explicit rotation of one renewable legacy session to one exact currently authorized organisation/team. It is the only token grant that may change workspace scope; ordinary refresh is strictly scope-preserving.',
+  request: {
+    grant_type: 'urn:unlikeotherai:params:oauth:grant-type:workspace-switch',
+    refresh_token: 'opaque current or in-grace predecessor refresh token',
+    organization_id: 'exact target organisation id',
+    team_id: 'exact target team id within organization_id',
+  },
+  operation_id:
+    'Not accepted — deterministic predecessor/target binding is the operation identity.',
+  assurance:
+    'UOA rechecks the exact target ACTIVE organisation and team memberships, server-owned product scope policy, target effective 2FA policy, user enrollment, and signature policy before any rotation. RefreshToken.twoFaCompleted is copied from the one-time authorization code and remains immutable for the complete family; legacy rows default false.',
+  response:
+    'The normal access_token + refresh_token envelope, scoped exactly to organization_id/team_id, with no firstLogin block. Persist the pair atomically before using it.',
+  replay:
+    'For 120 seconds, an exact retry may recover the deterministic successor only while every descendant retains the requested target and its current policy still passes. A different grant/target or any later scope transition returns WORKSPACE_SWITCH_CONFLICT without consuming or revoking a valid family. If the matching edge committed but its target policy is now unavailable or needs stronger assurance, UOA retires only that family and returns authenticated INVALID_REFRESH_TOKEN so a lost-response caller can clear its intent safely. Post-grace predecessor reuse always takes theft revocation. An ordinary refresh never returns a changed scope.',
+  errors: {
+    WORKSPACE_NOT_AVAILABLE:
+      '403 — the exact pair is unavailable or product policy denies it; intentionally does not distinguish why',
+    INTERACTION_REQUIRED:
+      '403 — the family lacks the target policy’s current interactive assurance; restart authorization',
+    WORKSPACE_SWITCH_CONFLICT:
+      '409 — same-scope no-op or a valid deterministic successor belongs to another grant/target',
+    INVALID_REFRESH_TOKEN:
+      '401 — after domain-client authentication succeeds, invalid, expired, revoked, structurally corrupt, or post-grace reused source; the stable code is exposed but the underlying reason remains opaque',
+  },
 };
 
 export const confidentialTokenExchangeDocumentation = {

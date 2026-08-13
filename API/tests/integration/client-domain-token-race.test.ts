@@ -119,6 +119,7 @@ describe.skipIf(!hasDatabase)('ClientDomain disable versus token issuance', () =
         codeChallengeMethod: 'S256',
         rememberMe: true,
         twoFaCompleted: false,
+        credentialEpoch: 0,
         orgId: org.id,
         teamId: team.id,
       },

@@ -172,6 +172,9 @@ describe('GET /auth/callback/:provider', () => {
       'https://auth.example.com/.well-known/jwks.json',
     );
     expect(loginWithSocialProfileMock).toHaveBeenCalledTimes(1);
+    expect(loginWithSocialProfileMock.mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({ beforeExistingUserUpdate: expect.any(Function) }),
+    );
     expect(issueAuthorizationCodeMock).not.toHaveBeenCalled();
     // Single-use: the state cookie is cleared after consumption.
     expect(res.headers['set-cookie']).toBeDefined();

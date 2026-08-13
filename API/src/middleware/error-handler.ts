@@ -36,10 +36,7 @@ function shouldRenderAuthDebug(request: {
   return requestUrl.startsWith('/auth');
 }
 
-function maybeRenderIntegrationStatusPage(
-  request: FastifyRequest,
-  error: AppError,
-): string | null {
+function maybeRenderIntegrationStatusPage(request: FastifyRequest, error: AppError): string | null {
   const outcome = request.integrationOutcome;
   if (!outcome) return null;
   const code = error.message || error.code;
@@ -91,10 +88,7 @@ export function registerErrorHandler(app: FastifyInstance): void {
       if (wantsHtml(request)) {
         const integrationHtml = maybeRenderIntegrationStatusPage(request, error);
         if (integrationHtml) {
-          reply
-            .type('text/html; charset=utf-8')
-            .status(error.statusCode)
-            .send(integrationHtml);
+          reply.type('text/html; charset=utf-8').status(error.statusCode).send(integrationHtml);
           return;
         }
       }
@@ -120,9 +114,15 @@ export function registerErrorHandler(app: FastifyInstance): void {
           .send(renderGenericErrorHtml());
         return;
       }
-      reply
-        .status(error.statusCode)
-        .send(buildPublicErrorBody({ request, error, statusCode: error.statusCode }));
+      reply.status(error.statusCode).send(
+        buildPublicErrorBody({
+          request,
+          error,
+          statusCode: error.statusCode,
+          exposeInvalidRefreshToken:
+            request.authenticatedTokenGrantErrorProfile === 'workspace-switch',
+        }),
+      );
       return;
     }
 

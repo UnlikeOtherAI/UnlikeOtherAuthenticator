@@ -47,6 +47,7 @@ type TokenDeps = {
   sharedSecret?: string;
   // Deterministic concurrency-test hook. Production callers leave this unset.
   afterProductWorkspacePolicyLock?: () => Promise<void>;
+  afterAuthorizationCodeAuthenticationLock?: () => Promise<void>;
   afterRefreshSessionLock?: () => Promise<void>;
   afterActiveWorkspaceLock?: () => Promise<void>;
   afterRequiredWorkspaceLock?: () => Promise<void>;
@@ -135,12 +136,12 @@ function resolveAccessTokenContext(params: {
   };
 }
 
-type TokenIssuerDeps = TokenDeps & {
+export type TokenIssuerDeps = TokenDeps & {
   accessTokenTtl?: string;
   authServiceIdentifier?: string;
 };
 
-type IssuedTokenPair = {
+export type IssuedTokenPair = {
   accessToken: string;
   expiresInSeconds: number;
   refreshToken: string;
@@ -148,7 +149,7 @@ type IssuedTokenPair = {
   firstLogin?: FirstLoginBlock;
 };
 
-async function issueTokenPairForUser(
+export async function issueTokenPairForUser(
   params: {
     config: ClientConfig;
     configUrl: string;
@@ -314,6 +315,7 @@ export async function exchangeAuthorizationCodeForTokens(
       prisma: tx,
       crossProductPrisma: tx,
       policyPrisma: tx,
+      afterAuthenticationEpochLock: deps?.afterAuthorizationCodeAuthenticationLock,
       afterActiveScopeLock: deps?.afterActiveWorkspaceLock,
     });
 
@@ -345,6 +347,7 @@ export async function exchangeAuthorizationCodeForTokens(
         configUrl: params.configUrl,
         orgId: active?.orgId,
         teamId: active?.teamId,
+        twoFaCompleted,
       },
       {
         now: deps?.now,
