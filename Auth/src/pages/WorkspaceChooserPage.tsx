@@ -179,10 +179,9 @@ export function WorkspaceChooserPage(): React.JSX.Element {
           title={t('workspace.createDialog.open')}
           aria-haspopup="dialog"
           aria-expanded={isCreateDialogOpen}
-          // The 40px visible circle sits exactly 10px above the chooser card — one quarter of its
-          // diameter — leaving three quarters inside. The 48px button keeps the touch target
-          // generous around that larger visual control.
-          className="absolute -right-[31px] -top-[14px] z-10 flex h-12 w-12 items-center justify-center text-[var(--uoa-color-primary)]"
+          // The user requested a further 12px upward adjustment after testing the quarter-overlap
+          // placement. The 48px button keeps the touch target generous around the 40px control.
+          className="absolute -right-[31px] -top-[26px] z-10 flex h-12 w-12 items-center justify-center text-[var(--uoa-color-primary)]"
         >
           <span
             aria-hidden="true"
