@@ -2324,7 +2324,7 @@ account-and-mode-bound confirmation for `--apply`. Before any database write it
 retrieves and validates the existing immutable Stripe Products and Prices for
 the four shared-credit offers and DeepWater privacy add-on. Apply then creates
 or binds, in one serializable transaction, the credit policy, offers, default
-automatic-top-up option for `nessie`, `deepwater`, `deepsignal`, and `deeptest`,
+automatic-top-up option for `nessie`, `deepwater`, `deepsignal`, `deeptest`, and `docgen`,
 plus DeepWater's team feature policy and recurring add-on catalog. Stripe
 metadata contains stable public contract identifiers only, never UOA database
 IDs. Any local or remote drift aborts instead of mutating or replacing an

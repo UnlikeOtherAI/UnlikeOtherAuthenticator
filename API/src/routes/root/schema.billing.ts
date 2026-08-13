@@ -210,7 +210,7 @@ export const billingEndpoints: EndpointSchema[] = [
       '401/403': 'Invalid key purpose, actor, product, subject, or active membership',
     },
     notes:
-      'Canonical identifiers are nessie, deepwater, deepsignal, and deeptest. Product/repository slugs such as deep-water or deep-test are mapped before this call. The browser receives neither credential.',
+      'Canonical identifiers are nessie, deepwater, deepsignal, deeptest, and docgen. Product/repository slugs such as deep-water or deep-test are mapped before this call. The browser receives neither credential.',
   },
   ...billingContractInvoiceEndpoints,
   {

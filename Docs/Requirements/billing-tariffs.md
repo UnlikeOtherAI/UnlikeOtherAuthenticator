@@ -682,7 +682,7 @@ user, organisation, and team exactly match the body. The actor lifetime is at
 most 60 seconds and its audience is the exact audience stored on the app key.
 Product backends inject both credentials; browsers receive neither.
 The canonical UOA and Ledger product identifiers are `nessie`, `deepwater`,
-`deepsignal`, and `deeptest`. Hyphenated repository or application slugs are
+`deepsignal`, `deeptest`, and `docgen`. Hyphenated repository or application slugs are
 mapped at the product boundary and are never sent in billing subjects.
 
 Products render `BillingStatementV1` or `BillingStatementV2` unchanged. New
@@ -1039,7 +1039,7 @@ The version-1 shared-credit Product has four one-time Prices:
 | `uoa_credits_usd_100_v1` | US$100 | 100,000 |
 
 The same offers are projected for the exact active services `nessie`,
-`deepwater`, `deepsignal`, and `deeptest`. Each receives top-up and
+`deepwater`, `deepsignal`, `deeptest`, and `docgen`. Each receives top-up and
 automatic-top-up policy plus the default automatic option: refill 25,000
 credits below 5,000, with a US$100 monthly cap and consent version
 `credits-auto-top-up-v1`.

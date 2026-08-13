@@ -7,6 +7,17 @@ import { AppError } from '../utils/errors.js';
 const PRODUCT_PATTERN = /^[a-z0-9][a-z0-9._-]{0,99}$/;
 const MAX_RESOURCE_LENGTH = 2048;
 
+// Product configuration is still operator-owned, but first-party products
+// that cross a privileged boundary have a server-owned immutable destination.
+// A DocGen config JWT can never widen this to another Ledger origin or scope.
+export const FIRST_PARTY_CONFIDENTIAL_DELEGATIONS = {
+  docgen: {
+    sourceDomain: 'buildme.live',
+    resource: 'https://ledger.unlikeotherai.com',
+    scopes: ['ai.invoke'],
+  },
+} as const;
+
 export const CONFIDENTIAL_DELEGATION_SCOPES = [
   'ai.invoke',
   'billing.read',
@@ -123,6 +134,28 @@ function scopeValuesForDatabase(scopes: readonly string[]): ConfidentialDelegati
   return normalizeScopeNames(scopes).map((scope) => databaseScope[scope]);
 }
 
+function assertFirstPartyDelegationBinding(params: {
+  sourceDomain: string;
+  product: string;
+  resource: string;
+  scopes: readonly ConfidentialDelegationScope[];
+}) {
+  const binding =
+    FIRST_PARTY_CONFIDENTIAL_DELEGATIONS[
+      params.product as keyof typeof FIRST_PARTY_CONFIDENTIAL_DELEGATIONS
+    ];
+  if (!binding) return;
+  const scopes = scopeNamesFromDatabase(params.scopes);
+  if (
+    params.sourceDomain !== binding.sourceDomain ||
+    params.resource !== binding.resource ||
+    scopes.length !== binding.scopes.length ||
+    scopes.some((scope, index) => scope !== binding.scopes[index])
+  ) {
+    throw new AppError('BAD_REQUEST', 400, 'FIRST_PARTY_CONFIDENTIAL_DELEGATION_MISMATCH');
+  }
+}
+
 function actorCreateData(actor: MutationActor) {
   return {
     createdByUserId: actor.userId ?? null,
@@ -201,6 +234,7 @@ export async function createConfidentialDelegationMapping(
   if (!sourceDomain) {
     throw new AppError('BAD_REQUEST', 400, 'INVALID_CONFIDENTIAL_DELEGATION_DOMAIN');
   }
+  assertFirstPartyDelegationBinding({ sourceDomain, product, resource, scopes });
 
   try {
     return await client(deps).$transaction(async (tx) => {
@@ -272,6 +306,12 @@ export async function updateConfidentialDelegationMapping(
     if (!existing) {
       throw new AppError('NOT_FOUND', 404, 'CONFIDENTIAL_DELEGATION_NOT_FOUND');
     }
+    assertFirstPartyDelegationBinding({
+      sourceDomain: existing.clientDomain.domain,
+      product: existing.product,
+      resource: data.resource ?? existing.resource,
+      scopes: data.scopes ?? existing.scopes,
+    });
     const updated = await tx.confidentialDelegationMapping.update({
       where: { id: existing.id },
       data,

@@ -17,7 +17,13 @@ export type CreditCollectionContext = {
   stripe?: Pick<Stripe, 'paymentIntents' | 'paymentMethods' | 'prices' | 'products'> | null;
 };
 
-const CANONICAL_PORTFOLIO_PRODUCTS = ['deeptest', 'deepsignal', 'deepwater', 'nessie'] as const;
+const CANONICAL_PORTFOLIO_PRODUCTS = [
+  'deeptest',
+  'deepsignal',
+  'deepwater',
+  'docgen',
+  'nessie',
+] as const;
 
 async function resolvePersistedCreditAccount(
   params: { organisationId: string; teamId: string },

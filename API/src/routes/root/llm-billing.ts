@@ -45,7 +45,7 @@ and cancellation preview/confirm endpoints and requires at least one exact HTTPS
 return origin.
 The plaintext key is returned once; UOA stores only a peppered HMAC digest. The same
 Ledger signing JWK may be bound to multiple credentials, but Nessie, DeepWater,
-DeepSignal, and DeepTest must keep distinct app secrets so every connection is
+DeepSignal, DeepTest, and DocGen must keep distinct app secrets so every connection is
 independently revocable and attributable.
 
 ### Resolve an effective tariff
