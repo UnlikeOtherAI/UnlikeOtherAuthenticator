@@ -26,6 +26,7 @@ export type Theme = {
   logo: {
     url: string;
     alt: string;
+    rounded: boolean;
     text?: string;
     fontSize?: string;
     color?: string;
@@ -42,4 +43,3 @@ export type ThemeClassNames = {
   buttonPrimary: string;
   buttonSecondary: string;
 };
-

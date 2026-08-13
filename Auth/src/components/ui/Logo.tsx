@@ -10,7 +10,10 @@ export function Logo(): React.JSX.Element | null {
       <img
         src={theme.logo.url}
         alt={theme.logo.alt}
-        className="h-10 w-auto"
+        className={[
+          'h-10 w-auto',
+          theme.logo.rounded ? 'rounded-[var(--uoa-radius-button)]' : '',
+        ].join(' ')}
         loading="eager"
         decoding="async"
       />

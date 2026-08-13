@@ -33,6 +33,7 @@ export const configExample = {
     logo: {
       url: '',
       alt: 'Client logo',
+      rounded: true,
       text: 'Client',
       font_size: '24px',
       color: '#0f172a',
@@ -109,6 +110,8 @@ export const configJwtDocumentation = {
           required_keys: ['url', 'alt'],
           url: 'HTTPS URL on the same host as config.domain, or empty string',
           alt: 'required non-empty string',
+          rounded:
+            'optional boolean (default true) — gives an image logo gently rounded corners using ui_theme.radii.button; set false to preserve square corners. Ignored for text logos.',
           text: 'optional text logo, max 100 chars, used when url is empty',
           font_size: 'optional CSS length string',
           color: 'optional hex color',

@@ -55,6 +55,9 @@ describe('GET /api', () => {
     expect(
       body.config_jwt.required_fields.ui_theme.required_sections.colors.required_keys,
     ).toContain('primary');
+    expect(body.config_jwt.required_fields.ui_theme.required_sections.logo.rounded).toContain(
+      'default true',
+    );
     expect(body.config_validation.path).toBe('/config/validate');
     expect(body.config_verification.path).toBe('/config/verify');
     expect(body.confidential_token_exchange.issued_access_token.algorithm).toBe('RS256');
@@ -384,6 +387,7 @@ describe('GET /llm', () => {
     expect(res.body).toContain('Auto-onboard with one');
     expect(res.body).toContain('jwks_url');
     expect(res.body).toContain('contact_email');
+    expect(res.body).toContain('ui_theme.logo.rounded: false');
     expect(res.body).toContain('INTEGRATION_JWKS_HOST_MISMATCH');
     expect(res.body).toContain('Optional per-domain agreement signatures');
     expect(res.body).toContain('SIGNATURE_EVIDENCE_PUBLIC_JWKS_JSON');

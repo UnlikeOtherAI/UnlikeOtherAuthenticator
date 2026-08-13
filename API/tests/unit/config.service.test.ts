@@ -21,6 +21,19 @@ describe('validateConfigFields', () => {
     expect(cfg.allowed_registration_domains).toBeUndefined();
     expect(cfg.registration_domain_mapping).toBeUndefined();
     expect(cfg.login_flow).toEqual({ email_code_enabled: false, workspace_selection: 'off' });
+    expect(cfg.ui_theme.logo.rounded).toBe(true);
+  });
+
+  it('accepts a client opt-out for rounded image logos', () => {
+    const cfg = validateConfigFields({
+      ...basePayload(),
+      ui_theme: {
+        ...basePayload().ui_theme,
+        logo: { url: 'https://client.example.com/logo.png', alt: 'Client logo', rounded: false },
+      },
+    });
+
+    expect(cfg.ui_theme.logo.rounded).toBe(false);
   });
 
   it('parses login_flow when provided', () => {

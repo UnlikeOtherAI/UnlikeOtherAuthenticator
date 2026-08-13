@@ -258,6 +258,11 @@ export function buildThemeFromConfig(config: unknown): Theme {
   const logoUrl = rawLogoUrl ? sanitizeHttpUrl(rawLogoUrl) : '';
   if (rawLogoUrl && !logoUrl) throw new Error('Invalid theme config');
   const logoAlt = rawLogoAlt;
+  const rawLogoRounded = logo?.rounded;
+  if (rawLogoRounded !== undefined && typeof rawLogoRounded !== 'boolean') {
+    throw new Error('Invalid theme config');
+  }
+  const logoRounded = rawLogoRounded ?? true;
 
   const rawLogoText = logo ? readString(logo, 'text').trim() : '';
   const rawLogoFontSize = logo ? readString(logo, 'font_size').trim() : '';
@@ -278,6 +283,7 @@ export function buildThemeFromConfig(config: unknown): Theme {
     logo: {
       url: logoUrl,
       alt: logoAlt,
+      rounded: logoRounded,
       ...(rawLogoText ? { text: rawLogoText } : {}),
       ...(logoFontSize ? { fontSize: logoFontSize } : {}),
       ...(logoColor ? { color: logoColor } : {}),

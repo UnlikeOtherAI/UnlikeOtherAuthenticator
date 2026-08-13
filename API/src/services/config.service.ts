@@ -100,6 +100,7 @@ const UiThemeSchema = z
       .object({
         url: HttpUrlOrEmptySchema,
         alt: z.string().trim().min(1),
+        rounded: z.boolean().optional().default(true),
         text: z.string().trim().max(100).optional(),
         font_size: CssLengthSchema.optional(),
         color: HexColorSchema.optional(),
