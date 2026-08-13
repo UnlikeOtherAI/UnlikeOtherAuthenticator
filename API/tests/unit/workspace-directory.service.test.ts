@@ -151,6 +151,55 @@ describe('workspace-directory service: buildSidebarWorkspaces', () => {
     expect(result).toEqual([]);
     expect(prisma.refreshToken.groupBy).not.toHaveBeenCalled();
   });
+
+  it('uses the complete active workspace directory only for an all-memberships product policy', async () => {
+    const prisma = makeWorkspacesPrisma({
+      teamMemberFindMany: [
+        {
+          teamId: 'team-local',
+          teamRole: 'member',
+          team: { orgId: 'org-local', name: 'Local', slug: 'local', iconUrl: null, org: { name: 'Local org' } },
+        },
+      ],
+    });
+    const crossProductPrisma = {
+      teamMember: {
+        findMany: vi.fn(async () => [
+          {
+            teamId: 'team-local',
+            teamRole: 'member',
+            team: { orgId: 'org-local', name: 'Local', slug: 'local', iconUrl: null, org: { name: 'Local org' } },
+          },
+          {
+            teamId: 'team-other',
+            teamRole: 'owner',
+            team: { orgId: 'org-other', name: 'Other', slug: 'other', iconUrl: null, org: { name: 'Other org' } },
+          },
+        ]),
+      },
+    };
+
+    const result = await buildSidebarWorkspaces(
+      { userId: 'user-1', domain: 'acme.example.com' },
+      {
+        prisma,
+        crossProductPrisma,
+        policy: { scope: 'all_active_memberships', serviceId: 'service-1', product: 'nessie' },
+      },
+    );
+
+    expect(result.map((workspace) => workspace.teamId)).toEqual(['team-local', 'team-other']);
+    expect(result[1]?.lastLoginAt).toBeNull();
+    expect(crossProductPrisma.teamMember.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          userId: 'user-1',
+          status: 'ACTIVE',
+          team: { org: { members: { some: { userId: 'user-1', status: 'ACTIVE' } } } },
+        }),
+      }),
+    );
+  });
 });
 
 describe('workspace-directory service: buildSidebarPendingInvites', () => {

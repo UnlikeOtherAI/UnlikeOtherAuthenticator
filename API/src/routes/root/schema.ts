@@ -28,7 +28,7 @@ const orgEndpoints: EndpointSchema[] = [
     query: { config_url: 'string (required)' },
     response: {
       'org.workspaces':
-        'array — one entry per ACTIVE team membership on this domain: { teamId, orgId, name, slug, orgName, iconUrl, role, lastLoginAt }; ordered lastLoginAt DESC with nulls last, then name ASC (the sidebar order)',
+        'array — one entry per ACTIVE team membership on this domain, or every active membership when this product is explicitly mapped to `all_active_memberships`: { teamId, orgId, name, slug, orgName, iconUrl, role, lastLoginAt }; ordered lastLoginAt DESC with nulls last, then name ASC (the sidebar order). Cross-product entries have null `lastLoginAt`.',
       'org.pending_invites':
         "array — the caller's pending invites on this domain: { inviteId, teamId, teamName, invitedBy, expiresAt }",
     },

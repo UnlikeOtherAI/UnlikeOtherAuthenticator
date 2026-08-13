@@ -565,10 +565,12 @@ Owner/admin review the pending queue with \`GET /org/organisations/:orgId/invita
 }
 \`\`\`
 
-- \`workspaces[]\` — one entry per ACTIVE team membership on this domain, ordered \`lastLoginAt\` DESC
-  with nulls last, then \`name\` ASC (this IS the sidebar order — render it as-is). \`lastLoginAt\` is
-  \`null\` when the caller never opened a session scoped to that specific workspace (e.g. a
-  pre-chooser session, or a workspace never actually signed into).
+- \`workspaces[]\` — one entry per ACTIVE team membership on this domain. When UOA's server-owned
+  product policy is \`all_active_memberships\`, it instead contains the same complete active
+  workspace directory as the hosted chooser. It is ordered \`lastLoginAt\` DESC with nulls last,
+  then \`name\` ASC (this IS the sidebar order — render it as-is). \`lastLoginAt\` is \`null\` when
+  the caller never opened a session scoped to that workspace; cross-product entries intentionally
+  remain \`null\` because another product's session history is not exposed.
 - \`pending_invites[]\` — the caller's own pending invites on this domain (same eligibility as the
   workspace chooser: unaccepted/undeclined/unrevoked, not expired, and not still awaiting
   member-invite approval).

@@ -1541,7 +1541,13 @@ Returns `404` if `groups_enabled` is `false`.
 
 | Method | Endpoint  | Description                | Who can call           |
 | ------ | --------- | -------------------------- | ---------------------- |
-| GET    | `/org/me` | Current user's org context | Any authenticated user |
+| GET    | `/org/me` | Current user's org context and workspace directory | Any authenticated user |
+
+The additive `org.workspaces[]` directory follows the same server-owned product workspace policy as
+the hosted chooser. It is domain-scoped by default. A verified product mapped to
+`all_active_memberships` receives every ACTIVE workspace the caller may enter, so a product sidebar
+never silently shows a smaller switcher than UOA's chooser. Cross-product entries expose no other
+product's login-recency data (`lastLoginAt` remains `null`).
 
 Returns same structure as JWT `org` claim but always reflects current database state.
 
