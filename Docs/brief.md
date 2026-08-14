@@ -773,6 +773,18 @@ HTTPS resource and a non-empty allowlist containing only `ai.invoke`,
 `billing.read`, and/or `token.provision`. Token provisioning is a distinct,
 explicit app capability and is never implied by `ai.invoke`.
 
+Phase A1 (2026-08 addition) extends that allowlist with `identity.read`,
+`membership.invite`, and `membership.manage` for SSO-owned team directory and
+invites. These scopes are likewise distinct explicit capabilities, never
+implied by `ai.invoke`. The first-party Nessie mapping is server-owned policy:
+UOA pins the exact source domain `api.nessie.works`, product `nessie`, resource
+`https://authentication.unlikeotherai.com` (the UOA identity-membership API
+audience), and that exact three-scope allowlist, and refuses any DB mapping
+for product `nessie` that widens or alters any of them. Any issued resource
+token whose scope contains `identity.read`, `membership.invite`, or
+`membership.manage` omits the advisory `email` claim; tokens limited to the
+existing scopes keep the current `email` behaviour unchanged.
+
 `token.provision` authorises token provisioning against the product's own
 HTTPS `resource`. It does not reach UOA's own `/org/*` surface; that surface
 authenticates the domain pairing directly (§24.8) and accepts no resource
@@ -818,7 +830,9 @@ it, and neither scope nor lifetime can widen.
 
 The result is an at-most-five-minute RS256 access token using the §22.14 access-token
 signing key and `GET /oauth/jwks.json`. It contains `iss`, resource `aud`, stable
-`sub`, advisory `email`, `source_domain`, non-secret `azp` (immediate caller domain),
+`sub`, advisory `email` (omitted whenever the token scope contains `identity.read`,
+`membership.invite`, or `membership.manage`), `source_domain`, non-secret `azp`
+(immediate caller domain),
 `product`, the exact requested `scope`, `jti`, `iat`, and `exp`. The issued scope
 is never widened to the mapping's full allowlist. When a workspace was selected
 it also contains the current `org` and selected `active`; both claims are

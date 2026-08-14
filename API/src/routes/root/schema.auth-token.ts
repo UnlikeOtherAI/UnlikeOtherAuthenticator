@@ -26,11 +26,11 @@ export const authTokenEndpoint: EndpointSchema = {
     'resource?':
       'exact DB-allowlisted HTTPS resource URI (required for token-exchange grant; becomes access-token aud)',
     'scope?':
-      'space-delimited exact requested scopes (required for token-exchange grant); supported values are ai.invoke, billing.read, and token.provision, and every requested scope must be allowed by the product mapping',
+      'space-delimited exact requested scopes (required for token-exchange grant); supported values are ai.invoke, billing.read, token.provision, identity.read, membership.invite, and membership.manage, and every requested scope must be allowed by the product mapping',
   },
   response: {
     access_token:
-      'Authorization-code/refresh/workspace-switch grants: legacy HS256 JWT with aud="uoa:access-token". Confidential token-exchange grant: at-most-5-minute RS256 JWT bound to resource, verifiable at GET /oauth/jwks.json, with product, exact requested scope, stable sub, validated provenance, and no domain bearer credential. A chained result never outlives its inbound token.',
+      'Authorization-code/refresh/workspace-switch grants: legacy HS256 JWT with aud="uoa:access-token". Confidential token-exchange grant: at-most-5-minute RS256 JWT bound to resource, verifiable at GET /oauth/jwks.json, with product, exact requested scope, stable sub, validated provenance, and no domain bearer credential. The advisory email claim is omitted whenever the token scope contains identity.read, membership.invite, or membership.manage. A chained result never outlives its inbound token.',
     'access_token.active.tenantSlug?':
       'canonical organisation slug for the selected workspace and safe DNS tenant label. Team.slug is not a tenant DNS key because it is only unique within its organisation.',
     expires_in: 'number — seconds until access_token expiry',
@@ -41,7 +41,7 @@ export const authTokenEndpoint: EndpointSchema = {
     'issued_token_type?':
       '"urn:ietf:params:oauth:token-type:access_token"; confidential token-exchange grant only',
     'scope?':
-      'exact granted request subset of "ai.invoke", "billing.read", and/or "token.provision"; token.provision is never implied by ai.invoke; confidential token-exchange grant only',
+      'exact granted request subset of "ai.invoke", "billing.read", "token.provision", "identity.read", "membership.invite", and/or "membership.manage"; token.provision and the identity/membership scopes are never implied by ai.invoke; confidential token-exchange grant only',
     token_type: '"Bearer"',
     'firstLogin?':
       'object { memberships: { orgs, teams }, pending_invites, capabilities { can_create_org, can_accept_invite } } — included only on authorization_code exchange when org_features.enabled is true. Never included on refresh_token or workspace-switch grants.',

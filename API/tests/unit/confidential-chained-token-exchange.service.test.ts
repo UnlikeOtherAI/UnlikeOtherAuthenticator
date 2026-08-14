@@ -270,6 +270,50 @@ describe('chained confidential exchange', () => {
     expect(signAccessToken).toHaveBeenCalledTimes(2);
   });
 
+  it('omits the advisory email claim when the narrowed scope contains identity/membership scopes', async () => {
+    const { now, token } = await signInboundToken({
+      expiresInSeconds: 120,
+      scope: 'identity.read membership.invite membership.manage',
+    });
+    const signAccessToken = vi.fn().mockResolvedValue('identity-api-token');
+    const deps = {
+      prisma: prismaMock(),
+      now: () => now,
+      signAccessToken,
+      resolveDelegation: resolveDelegation('identity.read membership.manage'),
+      resolveSourceDelegation: vi.fn().mockResolvedValue({
+        product: 'nessie',
+        resource: callerAudience,
+        scope: 'identity.read membership.invite membership.manage',
+      }),
+      consumeSubjectRateLimit: vi.fn(),
+    };
+
+    await expect(
+      exchangeConfidentialChainedAccessToken(
+        {
+          authenticatedClientDomainId: 'client-domain-deepsignal',
+          subjectToken: token,
+          product: 'deepsignal',
+          resource: 'https://authentication.unlikeotherai.com',
+          scope: 'identity.read membership.manage',
+          config: config(),
+        },
+        deps,
+      ),
+    ).resolves.toMatchObject({ scope: 'identity.read membership.manage' });
+
+    const claims = signAccessToken.mock.calls[0]?.[0] as ConfidentialAccessTokenClaims;
+    expect(claims).not.toHaveProperty('email');
+    expect(claims).toMatchObject({
+      subject: userId,
+      sourceDomain: callerDomain,
+      product: 'deepsignal',
+      scope: 'identity.read membership.manage',
+      actor: { sub: sourceDomain, product: 'nessie' },
+    });
+  });
+
   it('rejects a pre-reset chained token whose credential epoch is no longer current', async () => {
     const { now, token } = await signInboundToken({ credentialEpoch: 0 });
     const prisma = prismaMock({ tokenVersion: 1 });

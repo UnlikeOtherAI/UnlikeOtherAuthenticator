@@ -12,6 +12,7 @@ import { findJwkByKid, importClientJwkKey, type PublicRsaJwks } from './client-j
 import type { ClientConfig } from './config.service.js';
 import { fetchPartnerJwks } from './jwks-fetch.service.js';
 import {
+  confidentialScopeOmitsEmail,
   signConfidentialAccessToken,
   type ConfidentialAccessTokenClaims,
 } from './oauth/access-token.service.js';
@@ -266,7 +267,8 @@ async function exchangeConfidentialSubjectTokenInsidePolicyLock(
   const accessToken = await (deps.signAccessToken ?? signConfidentialAccessToken)({
     subject: assertion.sub,
     credentialEpoch,
-    email: user.email,
+    // Identity/membership scopes never carry the advisory email claim.
+    ...(confidentialScopeOmitsEmail(delegation.scope) ? {} : { email: user.email }),
     sourceDomain,
     product: delegation.product,
     resource: delegation.resource,

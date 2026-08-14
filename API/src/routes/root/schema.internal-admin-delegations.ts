@@ -30,7 +30,7 @@ export function buildInternalAdminConfidentialDelegationEndpoints(params: {
         product: 'lowercase identifier (required, [a-z0-9][a-z0-9._-]{0,99})',
         resource: 'exact HTTPS resource URI (required; userinfo and fragments forbidden)',
         scopes:
-          'non-empty unique array containing only "ai.invoke", "billing.read", and/or "token.provision"; token provisioning is never implied by an AI grant',
+          'non-empty unique array containing only "ai.invoke", "billing.read", "token.provision", "identity.read", "membership.invite", and/or "membership.manage"; token provisioning and the identity/membership scopes are never implied by an AI grant',
         enabled: 'boolean (optional; defaults true)',
       },
       response: {
@@ -47,7 +47,7 @@ export function buildInternalAdminConfidentialDelegationEndpoints(params: {
       body: {
         resource: 'exact HTTPS resource URI (optional)',
         scopes:
-          'non-empty unique array containing only "ai.invoke", "billing.read", and/or "token.provision" (optional)',
+          'non-empty unique array containing only "ai.invoke", "billing.read", "token.provision", "identity.read", "membership.invite", and/or "membership.manage" (optional)',
         enabled: 'boolean (optional)',
       },
       response: {

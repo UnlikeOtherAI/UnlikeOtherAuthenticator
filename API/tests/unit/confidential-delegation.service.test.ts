@@ -10,9 +10,11 @@ import {
   updateConfidentialDelegationMapping,
 } from '../../src/services/confidential-delegation.service.js';
 
-const sourceDomain = 'api.nessie.works';
-const clientDomainId = 'client-domain-nessie';
-const product = 'nessie';
+// Use a non-pinned product/domain for the generic fixtures: nessie on
+// api.nessie.works is server-pinned and rejects any other resource/scope set.
+const sourceDomain = 'api.deepsignal.live';
+const clientDomainId = 'client-domain-deepsignal';
+const product = 'deepsignal';
 const resource = 'https://ledger.unlikeotherai.com/v1/mcp/deepwater';
 const now = new Date('2026-07-19T10:00:00.000Z');
 
@@ -146,7 +148,7 @@ describe('confidential delegation resolution', () => {
   it.each([
     ['another app credential', { authenticatedClientDomainId: 'client-domain-deepwater' }],
     ['another product', { product: 'deepwater' }],
-    ['a non-canonical product', { product: 'Nessie' }],
+    ['a non-canonical product', { product: 'DeepSignal' }],
     ['another source domain', { sourceDomain: 'api.deepwater.works' }],
     ['another resource', { resource: `${resource}/other` }],
     ['an unsupported scope', { scope: 'admin' }],
@@ -216,8 +218,8 @@ describe('confidential delegation admin mutations', () => {
     const { prisma, tx, created } = mutationPrisma();
     const result = await createConfidentialDelegationMapping(
       {
-        sourceDomain: 'API.NESSIE.WORKS',
-        product: 'Nessie',
+        sourceDomain: 'API.DEEPSIGNAL.LIVE',
+        product: 'DeepSignal',
         resource,
         scopes: ['billing.read', 'ai.invoke'],
         actor,
@@ -230,7 +232,7 @@ describe('confidential delegation admin mutations', () => {
       expect.objectContaining({
         data: expect.objectContaining({
           clientDomainId,
-          product: 'nessie',
+          product: 'deepsignal',
           resource,
           scopes: [ConfidentialDelegationScope.AI_INVOKE, ConfidentialDelegationScope.BILLING_READ],
         }),
@@ -290,6 +292,151 @@ describe('confidential delegation admin mutations', () => {
           action: 'confidential_delegation.deleted',
         }),
       }),
+    );
+  });
+
+  it('accepts the exact server-pinned Nessie identity/membership mapping', async () => {
+    const pinned = mapping({
+      product: 'nessie',
+      clientDomain: { domain: 'api.nessie.works', status: 'active' },
+      resource: 'https://authentication.unlikeotherai.com',
+      scopes: [
+        ConfidentialDelegationScope.IDENTITY_READ,
+        ConfidentialDelegationScope.MEMBERSHIP_INVITE,
+        ConfidentialDelegationScope.MEMBERSHIP_MANAGE,
+      ],
+    });
+    const { prisma, tx } = mutationPrisma();
+    tx.confidentialDelegationMapping.create.mockResolvedValue(pinned);
+
+    await expect(
+      createConfidentialDelegationMapping(
+        {
+          sourceDomain: 'api.nessie.works',
+          product: 'nessie',
+          resource: 'https://authentication.unlikeotherai.com',
+          scopes: ['identity.read', 'membership.invite', 'membership.manage'],
+          actor,
+        },
+        { prisma },
+      ),
+    ).resolves.toBe(pinned);
+    expect(tx.confidentialDelegationMapping.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          product: 'nessie',
+          resource: 'https://authentication.unlikeotherai.com',
+          scopes: [
+            ConfidentialDelegationScope.IDENTITY_READ,
+            ConfidentialDelegationScope.MEMBERSHIP_INVITE,
+            ConfidentialDelegationScope.MEMBERSHIP_MANAGE,
+          ],
+        }),
+      }),
+    );
+  });
+
+  it.each([
+    {
+      name: 'a widened scope allowlist',
+      scopes: ['identity.read', 'membership.invite', 'membership.manage', 'ai.invoke'],
+      resource: 'https://authentication.unlikeotherai.com',
+    },
+    {
+      name: 'a narrowed scope allowlist',
+      scopes: ['identity.read'],
+      resource: 'https://authentication.unlikeotherai.com',
+    },
+    {
+      name: 'a different resource',
+      scopes: ['identity.read', 'membership.invite', 'membership.manage'],
+      resource: 'https://ledger.unlikeotherai.com',
+    },
+    {
+      name: 'a different source domain',
+      scopes: ['identity.read', 'membership.invite', 'membership.manage'],
+      resource: 'https://authentication.unlikeotherai.com',
+      sourceDomain: 'api.deepwater.live',
+    },
+  ])('refuses to create the Nessie pin with $name', async (input) => {
+    const { prisma, tx } = mutationPrisma();
+    await expect(
+      createConfidentialDelegationMapping(
+        {
+          sourceDomain: input.sourceDomain ?? 'api.nessie.works',
+          product: 'nessie',
+          resource: input.resource,
+          scopes: input.scopes,
+          actor,
+        },
+        { prisma },
+      ),
+    ).rejects.toThrow('FIRST_PARTY_CONFIDENTIAL_DELEGATION_MISMATCH');
+    expect(tx.confidentialDelegationMapping.create).not.toHaveBeenCalled();
+  });
+
+  it('refuses to widen an existing Nessie mapping beyond the pin', async () => {
+    const pinned = mapping({
+      product: 'nessie',
+      clientDomain: { domain: 'api.nessie.works', status: 'active' },
+      resource: 'https://authentication.unlikeotherai.com',
+      scopes: [
+        ConfidentialDelegationScope.IDENTITY_READ,
+        ConfidentialDelegationScope.MEMBERSHIP_INVITE,
+        ConfidentialDelegationScope.MEMBERSHIP_MANAGE,
+      ],
+    });
+    const { prisma, tx } = mutationPrisma();
+    tx.confidentialDelegationMapping.findUnique.mockResolvedValue(pinned);
+
+    await expect(
+      updateConfidentialDelegationMapping(
+        {
+          mappingId: 'delegation-1',
+          scopes: ['identity.read', 'membership.invite', 'membership.manage', 'billing.read'],
+          actor,
+        },
+        { prisma },
+      ),
+    ).rejects.toThrow('FIRST_PARTY_CONFIDENTIAL_DELEGATION_MISMATCH');
+    expect(tx.confidentialDelegationMapping.update).not.toHaveBeenCalled();
+
+    await expect(
+      updateConfidentialDelegationMapping(
+        {
+          mappingId: 'delegation-1',
+          resource: 'https://ledger.unlikeotherai.com',
+          actor,
+        },
+        { prisma },
+      ),
+    ).rejects.toThrow('FIRST_PARTY_CONFIDENTIAL_DELEGATION_MISMATCH');
+    expect(tx.confidentialDelegationMapping.update).not.toHaveBeenCalled();
+  });
+
+  it('still allows disabling the pinned Nessie mapping', async () => {
+    const pinned = mapping({
+      product: 'nessie',
+      clientDomain: { domain: 'api.nessie.works', status: 'active' },
+      resource: 'https://authentication.unlikeotherai.com',
+      scopes: [
+        ConfidentialDelegationScope.IDENTITY_READ,
+        ConfidentialDelegationScope.MEMBERSHIP_INVITE,
+        ConfidentialDelegationScope.MEMBERSHIP_MANAGE,
+      ],
+    });
+    const { prisma, tx } = mutationPrisma();
+    tx.confidentialDelegationMapping.findUnique.mockResolvedValue(pinned);
+    tx.confidentialDelegationMapping.update.mockResolvedValue({ ...pinned, enabled: false });
+
+    await expect(
+      updateConfidentialDelegationMapping(
+        { mappingId: 'delegation-1', enabled: false, actor },
+        { prisma },
+      ),
+    ).resolves.toMatchObject({ enabled: false });
+    expect(tx.confidentialDelegationMapping.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ enabled: false }) }),
     );
   });
 

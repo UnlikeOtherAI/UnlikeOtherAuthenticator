@@ -16,12 +16,23 @@ export const FIRST_PARTY_CONFIDENTIAL_DELEGATIONS = {
     resource: 'https://ledger.unlikeotherai.com',
     scopes: ['ai.invoke'],
   },
+  // Phase A1: Nessie's identity/membership delegation is server-owned. The
+  // exact source domain, product, identity-membership API audience, and scope
+  // allowlist are pinned here so a mutable DB mapping can never widen them.
+  nessie: {
+    sourceDomain: 'api.nessie.works',
+    resource: 'https://authentication.unlikeotherai.com',
+    scopes: ['identity.read', 'membership.invite', 'membership.manage'],
+  },
 } as const;
 
 export const CONFIDENTIAL_DELEGATION_SCOPES = [
   'ai.invoke',
   'billing.read',
   'token.provision',
+  'identity.read',
+  'membership.invite',
+  'membership.manage',
 ] as const;
 export type ConfidentialDelegationScopeName = (typeof CONFIDENTIAL_DELEGATION_SCOPES)[number];
 
@@ -29,12 +40,18 @@ const databaseScope = {
   'ai.invoke': ConfidentialDelegationScope.AI_INVOKE,
   'billing.read': ConfidentialDelegationScope.BILLING_READ,
   'token.provision': ConfidentialDelegationScope.TOKEN_PROVISION,
+  'identity.read': ConfidentialDelegationScope.IDENTITY_READ,
+  'membership.invite': ConfidentialDelegationScope.MEMBERSHIP_INVITE,
+  'membership.manage': ConfidentialDelegationScope.MEMBERSHIP_MANAGE,
 } satisfies Record<ConfidentialDelegationScopeName, ConfidentialDelegationScope>;
 
 const publicScope = {
   [ConfidentialDelegationScope.AI_INVOKE]: 'ai.invoke',
   [ConfidentialDelegationScope.BILLING_READ]: 'billing.read',
   [ConfidentialDelegationScope.TOKEN_PROVISION]: 'token.provision',
+  [ConfidentialDelegationScope.IDENTITY_READ]: 'identity.read',
+  [ConfidentialDelegationScope.MEMBERSHIP_INVITE]: 'membership.invite',
+  [ConfidentialDelegationScope.MEMBERSHIP_MANAGE]: 'membership.manage',
 } satisfies Record<ConfidentialDelegationScope, ConfidentialDelegationScopeName>;
 
 type MutationActor = {

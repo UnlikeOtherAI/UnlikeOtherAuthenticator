@@ -5,6 +5,10 @@ import { exportJWK, generateKeyPair, SignJWT, type JWK, type KeyLike } from 'jos
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { revokeBillingAppKey } from '../../src/services/billing-app-key.service.js';
+import {
+  createConfidentialDelegationMapping,
+  updateConfidentialDelegationMapping,
+} from '../../src/services/confidential-delegation.service.js';
 import { exchangeConfidentialChainedAccessToken } from '../../src/services/confidential-chained-token-exchange.service.js';
 import { exchangeConfidentialSubjectToken } from '../../src/services/confidential-token-exchange.service.js';
 import type { ClientConfig } from '../../src/services/config.service.js';
@@ -66,6 +70,7 @@ describe.skipIf(!hasDatabase)('confidential cross-product workspace attribution'
 
   beforeEach(async () => {
     await handle.prisma.adminAuditLog.deleteMany();
+    await handle.prisma.confidentialDelegationMapping.deleteMany();
     await handle.prisma.confidentialAssertionUse.deleteMany();
     await handle.prisma.domainRole.deleteMany();
     await handle.prisma.billingAppKey.deleteMany();
@@ -314,5 +319,59 @@ describe.skipIf(!hasDatabase)('confidential cross-product workspace attribution'
       statusCode: 403,
       message: 'TOKEN_EXCHANGE_SUBJECT_FORBIDDEN',
     });
+  });
+
+  it('persists the exact pinned Nessie mapping and refuses any widening', async () => {
+    const nessieDomain = 'api.nessie.works';
+    const seeded = await seed(nessieDomain);
+    const actor = { userId: null, email: 'admin@example.com' };
+    const pinnedScopes = ['identity.read', 'membership.invite', 'membership.manage'];
+
+    const created = await createConfidentialDelegationMapping(
+      {
+        sourceDomain: nessieDomain,
+        product: 'nessie',
+        resource: issuer,
+        scopes: pinnedScopes,
+        actor,
+      },
+      { prisma: handle.prisma },
+    );
+    expect(created.clientDomain.domain).toBe(nessieDomain);
+    expect(created.resource).toBe(issuer);
+
+    // A mutable mapping can never widen or move the server-owned pin.
+    await expect(
+      createConfidentialDelegationMapping(
+        {
+          sourceDomain: nessieDomain,
+          product: 'nessie',
+          resource: issuer,
+          scopes: [...pinnedScopes, 'ai.invoke'],
+          actor,
+        },
+        { prisma: handle.prisma },
+      ),
+    ).rejects.toThrow('FIRST_PARTY_CONFIDENTIAL_DELEGATION_MISMATCH');
+    await expect(
+      updateConfidentialDelegationMapping(
+        { mappingId: created.id, scopes: [...pinnedScopes, 'billing.read'], actor },
+        { prisma: handle.prisma },
+      ),
+    ).rejects.toThrow('FIRST_PARTY_CONFIDENTIAL_DELEGATION_MISMATCH');
+    await expect(
+      updateConfidentialDelegationMapping(
+        { mappingId: created.id, resource: ledgerResource, actor },
+        { prisma: handle.prisma },
+      ),
+    ).rejects.toThrow('FIRST_PARTY_CONFIDENTIAL_DELEGATION_MISMATCH');
+
+    // Disabling the mapping remains valid mutable policy and fails closed.
+    const disabled = await updateConfidentialDelegationMapping(
+      { mappingId: created.id, enabled: false, actor },
+      { prisma: handle.prisma },
+    );
+    expect(disabled.enabled).toBe(false);
+    expect(seeded.clientDomainId).toBe(created.clientDomainId);
   });
 });

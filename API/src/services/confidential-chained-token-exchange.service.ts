@@ -20,6 +20,7 @@ import {
   type ConfidentialTokenExchangeResult,
 } from './confidential-token-exchange.service.js';
 import {
+  confidentialScopeOmitsEmail,
   getAccessTokenPublicJwks,
   signConfidentialAccessToken,
   type ConfidentialAccessTokenClaims,
@@ -344,7 +345,8 @@ async function exchangeConfidentialChainedAccessTokenInsidePolicyLock(
   const accessToken = await (deps.signAccessToken ?? signConfidentialAccessToken)({
     subject: subject.sub,
     credentialEpoch,
-    email: user.email,
+    // Identity/membership scopes never carry the advisory email claim.
+    ...(confidentialScopeOmitsEmail(delegation.scope) ? {} : { email: user.email }),
     sourceDomain: callerDomain,
     product: delegation.product,
     resource: delegation.resource,

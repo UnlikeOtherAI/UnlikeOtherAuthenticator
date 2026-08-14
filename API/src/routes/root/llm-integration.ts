@@ -313,8 +313,10 @@ domain roles, and removed/deactivated or cross-org/team selections are rejected.
 \`\`\`
 
 The issued token is verified with \`GET /oauth/jwks.json\` and contains
-\`iss\`, resource \`aud\`, stable \`sub\`, advisory \`email\`,
-\`source_domain\`, non-secret \`azp\` (the source domain), \`product\`, the exact
+\`iss\`, resource \`aud\`, stable \`sub\`,
+advisory \`email\` (omitted whenever the scope contains \`identity.read\`,
+\`membership.invite\`, or \`membership.manage\`), \`source_domain\`,
+non-secret \`azp\` (the source domain), \`product\`, the exact
 requested \`scope\` subset, \`jti\`, \`iat\`, and \`exp\`. A validated workspace
 adds current \`org\` and selected
 \`active\`; an identity-only exchange omits both. It contains no
@@ -355,8 +357,10 @@ Unknown or disabled mappings, a product selected with another app credential,
 an inexact resource (including path/trailing-slash differences), duplicate or
 unsupported scopes, and scope widening all fail closed before assertion
 verification. Supported delegation scopes are \`ai.invoke\`, \`billing.read\`,
-and \`token.provision\`; the last is a separate high-privilege app capability
-and is never implied by \`ai.invoke\`. The response and token contain only what that request asked
+\`token.provision\`, \`identity.read\`, \`membership.invite\`, and
+\`membership.manage\`; \`token.provision\` is a separate high-privilege app
+capability and the identity/membership scopes are server-pinned for Nessie;
+none are ever implied by \`ai.invoke\`. The response and token contain only what that request asked
 for, never the full mapping allowlist.
 
 The confidential grant is rate-limited per authenticated source domain

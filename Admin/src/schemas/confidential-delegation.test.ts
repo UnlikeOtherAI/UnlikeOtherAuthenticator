@@ -74,6 +74,22 @@ describe('confidential delegation schemas', () => {
     expect(ConfidentialDelegationFormSchema.safeParse(input).success).toBe(false);
   });
 
+  it('accepts the Phase A1 identity/membership scopes', () => {
+    const parsed = ConfidentialDelegationMappingSchema.parse({
+      id: 'mapping-1',
+      source_domain: 'api.nessie.works',
+      product: 'nessie',
+      resource: 'https://authentication.unlikeotherai.com',
+      scopes: ['identity.read', 'membership.invite', 'membership.manage'],
+      enabled: true,
+      created_by_email: null,
+      updated_by_email: null,
+      created_at: '2026-08-14T00:00:00.000Z',
+      updated_at: '2026-08-14T00:00:00.000Z',
+    });
+    expect(parsed.scopes).toEqual(['identity.read', 'membership.invite', 'membership.manage']);
+  });
+
   it('rejects an untrusted API response shape', () => {
     expect(
       ConfidentialDelegationMappingSchema.safeParse({

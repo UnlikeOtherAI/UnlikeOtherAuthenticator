@@ -123,10 +123,29 @@ export type ConfidentialActorChain = {
   act?: ConfidentialActorChain;
 };
 
+/** Scopes that delegate identity/membership authority; their tokens never
+ *  carry the advisory `email` claim (Phase A1 data minimisation). */
+export const EMAIL_SUPPRESSING_CONFIDENTIAL_SCOPES = [
+  'identity.read',
+  'membership.invite',
+  'membership.manage',
+] as const;
+
+export function confidentialScopeOmitsEmail(scope: string): boolean {
+  return scope
+    .trim()
+    .split(/\s+/)
+    .some((name) =>
+      (EMAIL_SUPPRESSING_CONFIDENTIAL_SCOPES as readonly string[]).includes(name),
+    );
+}
+
 export type ConfidentialAccessTokenClaims = {
   subject: string;
   credentialEpoch: number;
-  email: string;
+  /** Advisory email; omitted whenever the scope contains an identity or
+   *  membership delegation scope. */
+  email?: string;
   sourceDomain: string;
   product: string;
   resource: string;
@@ -149,12 +168,12 @@ export async function signConfidentialAccessToken(
   const { privateKey, kid } = await load();
   const payload: Record<string, unknown> = {
     tv: claims.credentialEpoch,
-    email: claims.email,
     source_domain: claims.sourceDomain,
     azp: claims.sourceDomain,
     product: claims.product,
     scope: claims.scope,
   };
+  if (claims.email !== undefined) payload.email = claims.email;
   if (claims.org && claims.active) {
     payload.org = claims.org;
     payload.active = {

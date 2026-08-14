@@ -1385,7 +1385,7 @@ components:
           enum: [300]
         scope:
           type: string
-          description: Exact granted subset of ai.invoke, billing.read, and/or separately authorized token.provision.
+          description: Exact granted subset of ai.invoke, billing.read, token.provision, identity.read, membership.invite, and/or membership.manage. Tokens containing an identity/membership scope omit the advisory email claim.
 
     ConfidentialDelegationMapping:
       type: object
@@ -1413,11 +1413,11 @@ components:
         scopes:
           type: array
           minItems: 1
-          maxItems: 3
+          maxItems: 6
           uniqueItems: true
           items:
             type: string
-            enum: [ai.invoke, billing.read, token.provision]
+            enum: [ai.invoke, billing.read, token.provision, identity.read, membership.invite, membership.manage]
         enabled:
           type: boolean
         created_by_email:
@@ -2455,8 +2455,10 @@ paths:
                       maxLength: 256
                       description: |
                         Space-delimited exact requested subset of ai.invoke,
-                        billing.read, and/or token.provision. Token provisioning
-                        is never implied by ai.invoke. Unsupported, duplicate,
+                        billing.read, token.provision, identity.read,
+                        membership.invite, and/or membership.manage. Token
+                        provisioning and the identity/membership scopes are
+                        never implied by ai.invoke. Unsupported, duplicate,
                         or widening scopes are rejected.
       responses:
         '200':
@@ -6965,11 +6967,11 @@ paths:
                 scopes:
                   type: array
                   minItems: 1
-                  maxItems: 3
+                  maxItems: 6
                   uniqueItems: true
                   items:
                     type: string
-                    enum: [ai.invoke, billing.read, token.provision]
+                    enum: [ai.invoke, billing.read, token.provision, identity.read, membership.invite, membership.manage]
                 enabled:
                   type: boolean
                   default: true
@@ -7031,11 +7033,11 @@ paths:
                 scopes:
                   type: array
                   minItems: 1
-                  maxItems: 3
+                  maxItems: 6
                   uniqueItems: true
                   items:
                     type: string
-                    enum: [ai.invoke, billing.read, token.provision]
+                    enum: [ai.invoke, billing.read, token.provision, identity.read, membership.invite, membership.manage]
                 enabled:
                   type: boolean
       responses:

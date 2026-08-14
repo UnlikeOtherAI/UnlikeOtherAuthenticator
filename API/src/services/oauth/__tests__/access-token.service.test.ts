@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { createLocalJWKSet, exportJWK, generateKeyPair, jwtVerify } from 'jose';
 
 import {
+  confidentialScopeOmitsEmail,
   getAccessTokenPublicJwks,
   resetAccessTokenKeyCache,
   signConfidentialAccessToken,
@@ -155,6 +156,44 @@ describe('mcp access-token (RS256)', () => {
     });
     expect(payload.org).toBeUndefined();
     expect(payload.active).toBeUndefined();
+  });
+
+  it('signs an identity/membership token without any email claim', async () => {
+    const resource = 'https://authentication.unlikeotherai.com';
+    const token = await signConfidentialAccessToken({
+      subject: 'usr_1',
+      credentialEpoch: 0,
+      sourceDomain: 'api.nessie.works',
+      product: 'nessie',
+      resource,
+      issuer: 'https://authentication.unlikeotherai.com',
+      ttlSeconds: 300,
+      scope: 'identity.read membership.manage',
+    });
+
+    const jwks = createLocalJWKSet(await getAccessTokenPublicJwks());
+    const { payload } = await jwtVerify(token, jwks, {
+      issuer: 'https://authentication.unlikeotherai.com',
+      audience: resource,
+    });
+    expect(payload.email).toBeUndefined();
+    expect(payload).toMatchObject({
+      sub: 'usr_1',
+      tv: 0,
+      source_domain: 'api.nessie.works',
+      azp: 'api.nessie.works',
+      product: 'nessie',
+      scope: 'identity.read membership.manage',
+    });
+    expect(payload.jti).toBeTruthy();
+  });
+
+  it('classifies scopes that suppress the advisory email claim', () => {
+    expect(confidentialScopeOmitsEmail('identity.read')).toBe(true);
+    expect(confidentialScopeOmitsEmail('ai.invoke membership.invite')).toBe(true);
+    expect(confidentialScopeOmitsEmail('membership.manage')).toBe(true);
+    expect(confidentialScopeOmitsEmail('ai.invoke')).toBe(false);
+    expect(confidentialScopeOmitsEmail('ai.invoke billing.read token.provision')).toBe(false);
   });
 
   it('uses an absolute expiry cap for a chained confidential token', async () => {

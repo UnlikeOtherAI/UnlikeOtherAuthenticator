@@ -69,6 +69,14 @@ private signer only in DocGen's backend secret store; it is distinct from the
 Ledger runtime `lk_…` key, the UOA-to-Ledger collector key, all provider keys,
 and every other product's app key.
 
+For Phase A1, the Nessie identity/membership delegation is likewise operator
+state with a server-owned pin: create exactly one enabled mapping with
+`source_domain=api.nessie.works`, `product=nessie`,
+`resource=https://authentication.unlikeotherai.com`, and only
+`scopes=["identity.read","membership.invite","membership.manage"]`. UOA
+rejects a Nessie mapping that points at a different source domain, resource,
+or scope set, so a mutable mapping can never widen the pin.
+
 The UOA Billing Service, delegation mapping, and app key are operator state,
 not seed data. They must be provisioned before a DocGen deployment serves the
 new configuration; UOA being deployed alone cannot make the product live.

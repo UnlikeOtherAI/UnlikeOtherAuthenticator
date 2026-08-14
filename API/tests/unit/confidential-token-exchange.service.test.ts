@@ -271,6 +271,76 @@ describe('confidential token exchange', () => {
     expect(consumeSubjectRateLimit).toHaveBeenCalledWith(`${sourceDomain}:usr_1`);
   });
 
+  it('omits the advisory email claim when the scope contains identity/membership scopes', async () => {
+    const signAccessToken = vi.fn().mockResolvedValue('identity-api-token');
+    const resolveDelegation = vi.fn().mockResolvedValue({
+      product,
+      resource: 'https://authentication.unlikeotherai.com',
+      scope: 'identity.read membership.manage',
+    });
+
+    const result = await exchangeConfidentialSubjectToken(
+      {
+        authenticatedClientDomainId: clientDomainId,
+        subjectToken: await signSubjectToken({ omitActive: true }),
+        product,
+        resource: 'https://authentication.unlikeotherai.com',
+        scope: 'identity.read membership.manage',
+        config: config(),
+        configJwt,
+      },
+      {
+        prisma: prismaMock(),
+        fetchJwks: fetchJwks(),
+        signAccessToken,
+        consumeSubjectRateLimit: vi.fn(),
+        resolveDelegation,
+      },
+    );
+
+    expect(result).toMatchObject({ scope: 'identity.read membership.manage' });
+    const claims = signAccessToken.mock.calls[0]?.[0] as ConfidentialAccessTokenClaims;
+    expect(claims).not.toHaveProperty('email');
+    expect(claims).toMatchObject({
+      subject: 'usr_1',
+      credentialEpoch: 0,
+      sourceDomain,
+      scope: 'identity.read membership.manage',
+    });
+  });
+
+  it('keeps the advisory email claim for ai.invoke and billing.read scopes', async () => {
+    const signAccessToken = vi.fn().mockResolvedValue('ledger-access-token');
+    const resolveDelegation = vi
+      .fn()
+      .mockResolvedValue({ product, resource, scope: 'ai.invoke billing.read' });
+
+    await expect(
+      exchangeConfidentialSubjectToken(
+        {
+          authenticatedClientDomainId: clientDomainId,
+          subjectToken: await signSubjectToken({ omitActive: true }),
+          product,
+          resource,
+          scope: 'ai.invoke billing.read',
+          config: config(),
+          configJwt,
+        },
+        {
+          prisma: prismaMock(),
+          fetchJwks: fetchJwks(),
+          signAccessToken,
+          consumeSubjectRateLimit: vi.fn(),
+          resolveDelegation,
+        },
+      ),
+    ).resolves.toMatchObject({ accessToken: 'ledger-access-token' });
+
+    expect(signAccessToken).toHaveBeenCalledWith(
+      expect.objectContaining({ email: 'nessie-user@example.com' }),
+    );
+  });
+
   it('rejects an assertion when its selected team membership is no longer active', async () => {
     const prisma = prismaMock({ activeTeam: false });
     await expect(

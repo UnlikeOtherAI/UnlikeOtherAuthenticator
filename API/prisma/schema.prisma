@@ -267,9 +267,12 @@ enum BillingRecurringAddonCancellationIntentState {
 }
 
 enum ConfidentialDelegationScope {
-  AI_INVOKE       @map("ai.invoke")
-  BILLING_READ    @map("billing.read")
-  TOKEN_PROVISION @map("token.provision")
+  AI_INVOKE         @map("ai.invoke")
+  BILLING_READ      @map("billing.read")
+  TOKEN_PROVISION   @map("token.provision")
+  IDENTITY_READ     @map("identity.read")
+  MEMBERSHIP_INVITE @map("membership.invite")
+  MEMBERSHIP_MANAGE @map("membership.manage")
 }
 
 model User {

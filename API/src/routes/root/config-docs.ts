@@ -307,7 +307,7 @@ export const confidentialTokenExchangeDocumentation = {
       'lowercase product identifier; must match the mapping bound to the authenticated ClientDomain',
     resource: 'exact HTTPS resource URI stored in that product mapping',
     scope:
-      'space-delimited exact requested subset of ai.invoke, billing.read, and/or token.provision; token provisioning is never implied by ai.invoke and UOA rejects any scope outside the mapping allowlist',
+      'space-delimited exact requested subset of ai.invoke, billing.read, token.provision, identity.read, membership.invite, and/or membership.manage; token provisioning and the identity/membership scopes are never implied by ai.invoke and UOA rejects any scope outside the mapping allowlist',
   },
   application_binding: {
     authentication:
@@ -341,7 +341,7 @@ export const confidentialTokenExchangeDocumentation = {
     lifetime: 'maximum 300 seconds; a chained result never outlives its inbound access token',
     jwks: 'GET /oauth/jwks.json',
     claims:
-      'iss, aud, sub, email (advisory), source_domain, azp (immediate caller domain only), product, exact requested scope, jti, iat, exp; org and active are present together for a validated workspace and preserve the revalidated original tenancy. Chained tokens add an RFC 8693 act chain containing upstream source/product provenance.',
+      'iss, aud, sub, source_domain, azp (immediate caller domain only), product, exact requested scope, jti, iat, exp; email (advisory) is present only when the scope contains none of identity.read, membership.invite, or membership.manage; org and active are present together for a validated workspace and preserve the revalidated original tenancy. Chained tokens add an RFC 8693 act chain containing upstream source/product provenance.',
     forbidden_claims:
       'client_id and the 64-character domain-hash bearer credential are never copied into this token',
   },

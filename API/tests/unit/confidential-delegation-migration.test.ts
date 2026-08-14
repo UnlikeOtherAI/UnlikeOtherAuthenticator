@@ -10,6 +10,10 @@ const tokenProvisionMigrationUrl = new URL(
   '../../prisma/migrations/20260719050000_add_token_provision_delegation_scope/migration.sql',
   import.meta.url,
 );
+const identityMembershipMigrationUrl = new URL(
+  '../../prisma/migrations/20260814120000_add_identity_membership_delegation_scopes/migration.sql',
+  import.meta.url,
+);
 
 describe('confidential delegation mapping migration', () => {
   it('constrains exact domain/product mappings, HTTPS resources, and supported scopes', async () => {
@@ -37,6 +41,29 @@ describe('confidential delegation mapping migration', () => {
     );
     expect(sql).toContain('CREATE POLICY confidential_delegation_mappings_deny_app');
     expect(sql).toContain('FOR ALL TO uoa_app USING (false) WITH CHECK (false)');
+  });
+
+  it('adds identity/membership scopes without weakening exact non-duplicate scope bounds', async () => {
+    const sql = await readFile(identityMembershipMigrationUrl, 'utf8');
+
+    expect(sql).toContain(
+      `ALTER TYPE "ConfidentialDelegationScope" ADD VALUE IF NOT EXISTS 'identity.read'`,
+    );
+    expect(sql).toContain(
+      `ALTER TYPE "ConfidentialDelegationScope" ADD VALUE IF NOT EXISTS 'membership.invite'`,
+    );
+    expect(sql).toContain(
+      `ALTER TYPE "ConfidentialDelegationScope" ADD VALUE IF NOT EXISTS 'membership.manage'`,
+    );
+    expect(sql).toContain('DROP CONSTRAINT "confidential_delegation_mappings_scopes_check"');
+    expect(sql).toContain('CHECK (public.confidential_delegation_scopes_unique("scopes"))');
+    expect(sql).toContain('IMMUTABLE');
+    expect(sql).toContain('STRICT');
+    expect(sql).toContain('cardinality(scopes) BETWEEN 1 AND 6');
+    expect(sql).toContain('array_position(scopes, NULL) IS NULL');
+    expect(sql).toContain('ARRAY(SELECT DISTINCT unnest(scopes))');
+    expect(sql).toContain('REVOKE ALL ON FUNCTION public.confidential_delegation_scopes_unique');
+    expect(sql).toContain('GRANT EXECUTE ON FUNCTION public.confidential_delegation_scopes_unique');
   });
 
   it('adds token.provision without weakening exact non-duplicate scope bounds', async () => {
