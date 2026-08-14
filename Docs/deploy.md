@@ -45,6 +45,13 @@ are easy to miss:
   so it aborts instead of parking the service behind a lock queue. See
   `API/prisma/migrations/20260730180000_org_member_active_org_domain_constraint/migration.sql`.
 
+  The A2.1a invite-foundation migration
+  (`20260814130000_team_invite_delivery_foundation`) follows that pattern:
+  bounded timeouts first, deterministic revocation of duplicate actionable
+  `team_invites` rows (stable `created_at, id` order) before the partial
+  unique index, and a `NOT VALID` team-role check so accepted historical
+  `owner` invite rows are never rewritten by the deploy.
+
 - **A half-applied migration crash-loops the service.** See below.
 
 ### Recovering from a failed migration

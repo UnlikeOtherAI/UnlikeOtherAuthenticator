@@ -96,6 +96,12 @@ enum InviteApprovalStatus {
   DENIED
 }
 
+enum TeamInviteDeliveryStatus {
+  PENDING
+  PROCESSING
+  SENT
+}
+
 enum BillingTariffMode {
   STANDARD
   FREE
@@ -1334,16 +1340,45 @@ model TeamInvite {
   createdAt         DateTime             @default(now()) @map("created_at")
   updatedAt         DateTime             @updatedAt @map("updated_at")
 
-  org          Organisation        @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  team         Team                @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  acceptedUser User?               @relation("AcceptedTeamInvites", fields: [acceptedUserId], references: [id], onDelete: SetNull)
+  org          Organisation         @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  team         Team                 @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  acceptedUser User?                @relation("AcceptedTeamInvites", fields: [acceptedUserId], references: [id], onDelete: SetNull)
   tokens       VerificationToken[]
+  deliveries   TeamInviteDelivery[]
 
   @@index([orgId])
   @@index([teamId, email])
   @@index([acceptedAt])
   @@index([revokedAt])
   @@map("team_invites")
+}
+
+// Phase A2.1a durable email-delivery outbox (design §4.7). One row per (invite, generation);
+// each resend bumps the invite's generation. `payload` is a NON-SECRET JSON envelope (recipient
+// email, display names, accept URL template) — the table never stores a plaintext or recoverable
+// invite token; the actual token hash stays on VerificationToken. A later checkpoint's
+// dispatcher/scheduler drains PENDING rows (claimed via claimedAt/leaseExpiresAt lease); this
+// checkpoint ships the schema + RLS posture only. Admin/BYPASSRLS-only table: deny-all for the
+// runtime role, matching confidential_delegation_mappings / auth_identities.
+model TeamInviteDelivery {
+  id             String                   @id @default(cuid())
+  inviteId       String                   @map("invite_id")
+  generation     Int                      @default(0)
+  status         TeamInviteDeliveryStatus @default(PENDING)
+  payload        Json                     @default("{}") @db.JsonB
+  attempts       Int                      @default(0)
+  availableAt    DateTime                 @default(now()) @map("available_at")
+  claimedAt      DateTime?                @map("claimed_at")
+  leaseExpiresAt DateTime?                @map("lease_expires_at")
+  sentAt         DateTime?                @map("sent_at")
+  lastErrorCode  String?                  @map("last_error_code")
+  createdAt      DateTime                 @default(now()) @map("created_at")
+  updatedAt      DateTime                 @updatedAt @map("updated_at")
+
+  invite TeamInvite @relation(fields: [inviteId], references: [id], onDelete: Cascade)
+
+  @@unique([inviteId, generation])
+  @@map("team_invite_deliveries")
 }
 
 // Shareable team invite links (design §4.7, Phase 5). Slack-style: a non-personal link that

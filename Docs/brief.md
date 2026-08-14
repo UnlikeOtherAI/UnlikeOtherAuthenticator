@@ -804,6 +804,20 @@ token whose scope contains `identity.read`, `membership.invite`, or
 `membership.manage` omits the advisory `email` claim; tokens limited to the
 existing scopes keep the current `email` behaviour unchanged.
 
+Phase A2.1a (2026-08 addition) lays the database foundation for those
+invites. At most one actionable invite — unaccepted, undeclined, unrevoked,
+and approval not DENIED — exists per `(team, lower(email))`, enforced by a
+partial unique index. Invitations may grant `member` or `admin` only; owner is
+never invitable, and accepted historical owner invite rows are preserved under
+a NOT VALID constraint. Accepted, declined, and revoked are mutually exclusive
+terminal states, and acceptance pairs `accepted_at` with `accepted_user_id`.
+A non-secret `team_invite_deliveries` outbox (one row per invite + generation,
+leased PENDING/PROCESSING/SENT, admin/BYPASSRLS-only) will carry email
+delivery; it never stores a plaintext or recoverable invite token. The pure
+`team-invite-state-machine.ts` module encodes the matching role-grant rail and
+transition decisions for the transactional services that a later checkpoint
+wires up; existing invite routes are unchanged.
+
 `token.provision` authorises token provisioning against the product's own
 HTTPS `resource`. It does not reach UOA's own `/org/*` surface; that surface
 authenticates the domain pairing directly (§24.8) and accepts no resource

@@ -345,6 +345,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       team-invite.service.acceptance.ts     — Team invite acceptance flow
       team-invite.service.management.ts     — Team invite create/list/revoke
       team-invite.service.token.ts          — Team invite token issuance/verification
+      team-invite-state-machine.ts          — Pure invite actionable/terminal predicates, role-grant rail, and transition decisions (A2.1a)
       team.service.ts                       — Team orchestration API
       team.service.base.ts                  — Team service building blocks
       team.service.teams.ts                 — Team CRUD
@@ -409,6 +410,8 @@ Notes on layout:
 - `/db` and `/plugins` are first-class peers of `/middleware` and `/services` because RLS tenant context is wired via a Fastify plugin and shared helpers in `/db`.
 - `/routes/root` contains the documentation and config-debug endpoints. The `schema.*.ts` files are slice modules that compose into `schema.ts`, which is what `GET /api` ultimately returns.
 - Service families that exceed the 500-line cap are split with the `<domain>.service.<slice>.ts` pattern (see `team.*`, `group.*`, `team-invite.*`, `access-request.*`, `internal-admin.*`, `organisation.*`). Most families keep an unsuffixed `<domain>.service.ts` orchestration entry point that re-exports the public API; the `organisation.*` family currently has no such entry and callers import the slice files directly.
+
+Team-invite DB invariants (migration `20260814130000_team_invite_delivery_foundation`): at most one actionable (unaccepted, undeclined, unrevoked, non-DENIED) invite per `(team, lower(email))`, enforced by the partial unique index `team_invites_one_actionable_per_team_email`; new invite writes may grant `member`/`admin` only (`team_invites_team_role_check`, NOT VALID so accepted historical owner rows survive but are rechecked on update); accepted/declined/revoked are mutually exclusive and `accepted_at`/`accepted_user_id` must be paired. `team_invite_deliveries` is the non-secret durable email-delivery outbox (one row per invite + generation, leased PENDING/PROCESSING/SENT states, no token material); it is admin/BYPASSRLS-only behind forced RLS like `confidential_delegation_mappings`. The pure decision module `services/team-invite-state-machine.ts` mirrors these invariants; the existing invite services/routes are not yet rewired to either, and no dispatcher/scheduler exists yet.
 - SCIM is not present in the tree. The full SCIM spec remains in `Docs/Requirements/roles-and-acl.md` and is deferred. When implementation lands, add a `/routes/scim` subtree and a `scim-auth` middleware and update this document.
 
 ---
