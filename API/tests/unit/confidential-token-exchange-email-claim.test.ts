@@ -8,8 +8,12 @@ import type { ConfidentialAccessTokenClaims } from '../../src/services/oauth/acc
 
 const sourceDomain = 'api.nessie.works';
 const clientDomainId = 'client-domain-nessie';
-const product = 'nessie';
-const resource = 'https://ledger.unlikeotherai.com';
+const ordinaryProduct = 'nessie';
+const ledgerResource = 'https://ledger.unlikeotherai.com';
+// Exact production privileged binding: the pinned `nessie-identity` product on
+// the identity/membership API audience (see PRIVILEGED_IDENTITY_MEMBERSHIP_PIN).
+const privilegedProduct = 'nessie-identity';
+const identityMembershipResource = 'https://authentication.unlikeotherai.com';
 const audience = 'https://authentication.unlikeotherai.com/auth/token';
 const jwksUrl = `https://${sourceDomain}/.well-known/jwks.json`;
 
@@ -121,11 +125,11 @@ afterAll(() => {
 });
 
 describe('confidential token exchange email claim scoping', () => {
-  it('omits the advisory email claim when the scope contains identity/membership scopes', async () => {
+  it('omits the advisory email claim for the pinned nessie-identity privileged binding', async () => {
     const signAccessToken = vi.fn().mockResolvedValue('identity-api-token');
     const resolveDelegation = vi.fn().mockResolvedValue({
-      product,
-      resource: 'https://authentication.unlikeotherai.com',
+      product: privilegedProduct,
+      resource: identityMembershipResource,
       scope: 'identity.read membership.manage',
     });
 
@@ -133,8 +137,8 @@ describe('confidential token exchange email claim scoping', () => {
       {
         authenticatedClientDomainId: clientDomainId,
         subjectToken: await signSubjectToken(),
-        product,
-        resource: 'https://authentication.unlikeotherai.com',
+        product: privilegedProduct,
+        resource: identityMembershipResource,
         scope: 'identity.read membership.manage',
         config: config(),
         configJwt,
@@ -155,23 +159,27 @@ describe('confidential token exchange email claim scoping', () => {
       subject: 'usr_1',
       credentialEpoch: 0,
       sourceDomain,
+      product: privilegedProduct,
+      resource: identityMembershipResource,
       scope: 'identity.read membership.manage',
     });
   });
 
   it('keeps the advisory email claim for ai.invoke and billing.read scopes', async () => {
     const signAccessToken = vi.fn().mockResolvedValue('ledger-access-token');
-    const resolveDelegation = vi
-      .fn()
-      .mockResolvedValue({ product, resource, scope: 'ai.invoke billing.read' });
+    const resolveDelegation = vi.fn().mockResolvedValue({
+      product: ordinaryProduct,
+      resource: ledgerResource,
+      scope: 'ai.invoke billing.read',
+    });
 
     await expect(
       exchangeConfidentialSubjectToken(
         {
           authenticatedClientDomainId: clientDomainId,
           subjectToken: await signSubjectToken(),
-          product,
-          resource,
+          product: ordinaryProduct,
+          resource: ledgerResource,
           scope: 'ai.invoke billing.read',
           config: config(),
           configJwt,
@@ -187,7 +195,11 @@ describe('confidential token exchange email claim scoping', () => {
     ).resolves.toMatchObject({ accessToken: 'ledger-access-token' });
 
     expect(signAccessToken).toHaveBeenCalledWith(
-      expect.objectContaining({ email: 'nessie-user@example.com' }),
+      expect.objectContaining({
+        email: 'nessie-user@example.com',
+        product: ordinaryProduct,
+        resource: ledgerResource,
+      }),
     );
   });
 });
