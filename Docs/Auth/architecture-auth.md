@@ -55,6 +55,7 @@ For the full product spec, see [brief.md](./brief.md). For tech stack, see [tech
         WorkspaceCard.tsx        — One ACTIVE workspace: icon + name + role (owner/admin only) (Phase 3c)
         InviteCard.tsx           — Pending team invite: accept / decline (Phase 3c)
         CreateWorkspaceDialog.tsx — Modal workspace creation form: server-authorized organisation destination + visibility (Phase 3c)
+        CreateFirstWorkspaceForm.tsx — Inline first-workspace form when the chooser has no active workspace or invite (Phase 3c)
     /pages
       LoginPage.tsx           — Login page (email/password + social buttons)
       RegisterPage.tsx        — Registration page

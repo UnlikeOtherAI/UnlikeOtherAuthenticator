@@ -119,29 +119,29 @@ describe('WorkspaceChooserPage SSR rendering', () => {
     expect(html).toContain('Decline');
   });
 
-  it('renders the corner create control only for an org-less user with can_create_org', () => {
+  it('renders an inline first-workspace form when there is no workspace destination yet', () => {
     const withCreate = renderChooser({
       teams: [],
       pending_invites: [],
       can_create_org: true,
     });
-    expect(withCreate).toContain('aria-label="Create workspace"');
-    expect(withCreate).toContain('absolute -right-[31px] -top-[26px] z-10 flex h-12 w-12');
-    expect(withCreate).toContain('flex h-10 w-10 items-center justify-center rounded-full');
-    expect(withCreate).toContain('bg-[var(--uoa-color-surface)]');
+    expect(withCreate).toContain('Workspace name');
+    expect(withCreate).toContain('This creates an organisation and its first workspace.');
+    expect(withCreate).toContain('Visibility');
+    expect(withCreate).toContain('Create workspace');
+    expect(withCreate).not.toContain('aria-label="Create workspace"');
+    expect(withCreate).not.toContain('role="dialog"');
 
     const withoutCreate = renderChooser({
-      teams: [{ teamId: 't1', orgId: 'o1', name: 'Backend Team', role: 'member' }],
+      teams: [
+        { teamId: 't1', orgId: 'o1', name: 'Backend Team', role: 'member' },
+        { teamId: 't2', orgId: 'o1', name: 'Frontend Team', role: 'member' },
+      ],
       pending_invites: [],
       can_create_org: true,
     });
+    expect(withoutCreate).not.toContain('Workspace name');
     expect(withoutCreate).not.toContain('aria-label="Create workspace"');
-  });
-
-  it('shows only the create control when there are no teams or invites', () => {
-    const html = renderChooser({ teams: [], pending_invites: [], can_create_org: true });
-    expect(html).toContain('aria-label="Create workspace"');
-    expect(html).not.toContain('role="dialog"');
   });
 
   it('auto-skips a single team with no pending invites (never shows a one-item chooser)', () => {

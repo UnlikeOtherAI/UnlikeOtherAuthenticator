@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { CreateFirstWorkspaceForm } from '../components/workspace/CreateFirstWorkspaceForm.js';
 import { CreateWorkspaceDialog } from '../components/workspace/CreateWorkspaceDialog.js';
 import { InviteCard } from '../components/workspace/InviteCard.js';
 import { WorkspaceList } from '../components/workspace/WorkspaceList.js';
@@ -167,11 +168,14 @@ export function WorkspaceChooserPage(): React.JSX.Element {
   // permits a verified first-workspace flow; it does not turn an existing
   // workspace chooser into a misleading second-organisation creation path.
   const canCreateFirstWorkspace = workspaceChoices.can_create_org && !hasTeams && !hasInvites;
-  const canCreateWorkspace = canCreateFirstWorkspace || creatableOrgs.length > 0;
+  // With no usable workspace or invitation there is no organisation destination to pick. Put the
+  // first-workspace form directly in the chooser rather than stranding it behind a floating modal.
+  const showInlineFirstWorkspaceForm = canCreateFirstWorkspace && creatableOrgs.length === 0;
+  const canOpenCreateDialog = creatableOrgs.length > 0;
 
   return (
     <div className="flex flex-col gap-4">
-      {canCreateWorkspace ? (
+      {canOpenCreateDialog ? (
         <button
           type="button"
           onClick={() => setIsCreateDialogOpen(true)}
@@ -204,6 +208,10 @@ export function WorkspaceChooserPage(): React.JSX.Element {
       </div>
 
       {error ? <p className="text-sm text-[var(--uoa-color-danger)]">{error}</p> : null}
+
+      {showInlineFirstWorkspaceForm ? (
+        <CreateFirstWorkspaceForm loginToken={loginToken} query={query} onOutcome={handleOutcome} />
+      ) : null}
 
       {hasInvites ? (
         <div className="flex flex-col gap-3">
