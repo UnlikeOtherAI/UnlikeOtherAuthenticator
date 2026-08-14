@@ -103,6 +103,39 @@ export type TeamInviteCreateResult =
   | { email: string; status: 'existing_user' }
   | { email: string; status: 'conflict' };
 
+/**
+ * Actionable-invite predicate — exactly the partial-unique predicate of the
+ * A2.1a `team_invites_one_actionable_per_team_email` index: not accepted,
+ * not declined, not revoked, and approval_status not DENIED. Any read/write
+ * that must only ever see an actionable invite filters through this so
+ * terminal rows left behind by the contract-alignment cleanup (e.g. a
+ * revoked legacy owner invite still stamped approvalStatus PENDING) can never
+ * surface or be actioned.
+ */
+export const ACTIONABLE_TEAM_INVITE_WHERE = {
+  acceptedAt: null,
+  declinedAt: null,
+  revokedAt: null,
+  approvalStatus: { not: 'DENIED' },
+} as const;
+
+/**
+ * A2.1a role-grant rail (design §4.7; DB `team_invites_team_role_check`): an
+ * invitation may grant `member` or `admin` only — `owner` is never invitable
+ * (it can only come from direct membership management). Every create/resend
+ * path that involves an invited role must run through this before touching
+ * the database, so owner attempts fail with the generic BAD_REQUEST instead
+ * of a raw constraint violation. Deliberately separate from
+ * `normalizeTeamRole` (membership roles, where owner IS valid).
+ */
+export function normalizeInviteGrantRole(value: string | undefined): 'member' | 'admin' {
+  const role = value?.trim().toLowerCase() ?? 'member';
+  if (role !== 'member' && role !== 'admin') {
+    throw new AppError('BAD_REQUEST', 400);
+  }
+  return role;
+}
+
 export function normalizeInviteName(value?: string): string | null {
   const trimmed = value?.trim();
   if (!trimmed) return null;

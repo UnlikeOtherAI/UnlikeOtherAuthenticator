@@ -813,7 +813,15 @@ a NOT VALID constraint. Accepted, declined, and revoked are mutually exclusive
 terminal states, and acceptance pairs `accepted_at` with `accepted_user_id`.
 A non-secret `team_invite_deliveries` outbox (one row per invite + generation,
 leased PENDING/PROCESSING/SENT, admin/BYPASSRLS-only) will carry email
-delivery; it never stores a plaintext or recoverable invite token. The pure
+delivery; it never stores a plaintext or recoverable invite token. Its
+`generation` and timestamps carry real database defaults (0 /
+CURRENT_TIMESTAMP) matching the Prisma contract. A forward follow-up migration
+revoked every legacy actionable owner-role invitation (unaccepted, undeclined,
+unrevoked, approval not DENIED) so the member/admin rail never leaves an
+un-actionable row behind; accepted historical owner records remain untouched.
+The invite create/resend services reject any owner grant deterministically
+with the generic validation error before any database write, allowing only
+member/admin. The pure
 `team-invite-state-machine.ts` module encodes the matching role-grant rail and
 transition decisions for the transactional services that a later checkpoint
 wires up; existing invite routes are unchanged.

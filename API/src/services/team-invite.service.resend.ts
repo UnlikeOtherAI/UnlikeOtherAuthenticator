@@ -9,6 +9,7 @@ import { sendTeamInviteEmail } from './email.service.js';
 import {
   TEAM_INVITE_SELECT,
   computeInviteExpiresAt,
+  normalizeInviteGrantRole,
   type InviteDeps,
   type TeamInviteRecord,
   buildTeamInviteLink,
@@ -65,6 +66,11 @@ export async function resendTeamInvite(
   if (invite.acceptedAt) {
     throw new AppError('BAD_REQUEST', 400);
   }
+  // A2.1a: the stored role is revalidated against the invite role rail before it
+  // is written to the replacement row, so any legacy owner-role invite fails with
+  // the generic BAD_REQUEST instead of a raw DB constraint violation. (The
+  // contract-alignment migration also revokes every actionable owner invite.)
+  const teamRole = normalizeInviteGrantRole(invite.teamRole);
 
   const identity = buildUserIdentity({
     userScope: params.config.user_scope,
@@ -98,7 +104,7 @@ export async function resendTeamInvite(
       teamId: invite.teamId,
       email: invite.email,
       inviteName: invite.inviteName,
-      teamRole: invite.teamRole,
+      teamRole,
       redirectUrl: invite.redirectUrl,
       invitedByUserId: invite.invitedByUserId,
       invitedByName: invite.invitedByName,

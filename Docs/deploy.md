@@ -50,7 +50,11 @@ are easy to miss:
   bounded timeouts first, deterministic revocation of duplicate actionable
   `team_invites` rows (stable `created_at, id` order) before the partial
   unique index, and a `NOT VALID` team-role check so accepted historical
-  `owner` invite rows are never rewritten by the deploy.
+  `owner` invite rows are never rewritten by the deploy. Its follow-up
+  (`20260814140000_team_invite_contract_alignment`) revokes legacy actionable
+  `owner`-role invites — because that check fires on any UPDATE of an owner
+  row, the rail is dropped, the cleanup runs, and the identical NOT VALID
+  check is re-added (metadata-only); accepted owner history stays untouched.
 
 - **A half-applied migration crash-loops the service.** See below.
 

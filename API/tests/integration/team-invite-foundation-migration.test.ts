@@ -11,6 +11,10 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 const hasDatabase = Boolean(process.env.DATABASE_URL);
 
 const MIGRATION_NAME = '20260814130000_team_invite_delivery_foundation';
+// Also excluded from staging: the follow-up depends on this migration's table
+// and is proven separately by the dedicated contiguous-upgrade suite
+// (team-invite-contract-alignment-migration.test.ts).
+const FOLLOWUP_MIGRATION_NAME = '20260814140000_team_invite_contract_alignment';
 
 function apiRootDir(): string {
   const here = path.dirname(fileURLToPath(import.meta.url));
@@ -92,7 +96,7 @@ describe.skipIf(!hasDatabase)('team invite delivery foundation migration — rea
     const stagedMigrations = path.join(stagedPrisma, 'migrations');
     fs.mkdirSync(stagedMigrations);
     for (const entry of fs.readdirSync(srcMigrations)) {
-      if (entry === MIGRATION_NAME) continue;
+      if (entry === MIGRATION_NAME || entry === FOLLOWUP_MIGRATION_NAME) continue;
       const src = path.join(srcMigrations, entry);
       const dest = path.join(stagedMigrations, entry);
       if (fs.statSync(src).isDirectory()) fs.cpSync(src, dest, { recursive: true });
@@ -102,7 +106,6 @@ describe.skipIf(!hasDatabase)('team invite delivery foundation migration — rea
       path.join(srcMigrations, MIGRATION_NAME, 'migration.sql'),
       'utf8',
     );
-
     // citext lives database-wide in public; expose a schema-local domain like
     // tests/helpers/test-db.ts does before applying migrations.
     runSql(
@@ -205,7 +208,6 @@ describe.skipIf(!hasDatabase)('team invite delivery foundation migration — rea
       acceptedAt: true,
       acceptedUserId: true,
     });
-
     runSql(testUrl, path.join(tmpDir, 'prisma'), migrationSql);
 
     const rows = await prisma.$queryRawUnsafe<
@@ -303,7 +305,14 @@ describe.skipIf(!hasDatabase)('team invite delivery foundation migration — rea
     expect(defs).toContain('team_invite_deliveries_invite_id_generation_key');
   });
 
-  it('locks the outbox to the BYPASSRLS admin posture', async () => {
+  it('locks the outbox to the BYPASSRLS admin posture', async (ctx) => {
+    const roleCount = await prisma.$queryRawUnsafe<Array<{ n: bigint }>>(
+      `SELECT COUNT(*) AS n FROM pg_roles WHERE rolname IN ('uoa_app', 'uoa_admin')`,
+    );
+    if (Number(roleCount[0]?.n ?? 0) < 2) {
+      ctx.skip('uoa_app/uoa_admin roles do not exist in this database');
+      return;
+    }
     const flags = await prisma.$queryRawUnsafe<
       Array<{ relrowsecurity: boolean; relforcerowsecurity: boolean }>
     >(

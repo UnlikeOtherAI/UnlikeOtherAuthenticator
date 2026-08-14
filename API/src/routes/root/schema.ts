@@ -249,10 +249,11 @@ const orgEndpoints: EndpointSchema[] = [
       'invitedBy?':
         'object — backend-only variant: optional inviter metadata { userId?, name?, email? }',
       'invites?':
-        'array (backend-only variant, required, 1-200) — [{ email: string, name?: string, teamRole?: string }]',
+        'array (backend-only variant, required, 1-200) — [{ email: string, name?: string, teamRole?: "member" | "admin" }]',
       'email?': 'string — member-initiated variant (required instead of invites)',
       'name?': 'string — member-initiated variant',
-      'teamRole?': 'string — member-initiated variant',
+      'teamRole?':
+        '"member" | "admin" — member-initiated variant; owner is never invitable (generic 400)',
     },
     response: {
       results:

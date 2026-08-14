@@ -1373,7 +1373,8 @@ model TeamInviteDelivery {
   sentAt         DateTime?                @map("sent_at")
   lastErrorCode  String?                  @map("last_error_code")
   createdAt      DateTime                 @default(now()) @map("created_at")
-  updatedAt      DateTime                 @updatedAt @map("updated_at")
+  // @default(now()) mirrors the DB DEFAULT CURRENT_TIMESTAMP; @updatedAt alone is Prisma-side only.
+  updatedAt      DateTime                 @default(now()) @updatedAt @map("updated_at")
 
   invite TeamInvite @relation(fields: [inviteId], references: [id], onDelete: Cascade)
 

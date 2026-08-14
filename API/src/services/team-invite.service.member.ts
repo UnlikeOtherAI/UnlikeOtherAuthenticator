@@ -13,11 +13,12 @@ import {
   resolveOrgActor,
   resolveOrganisationByDomain,
 } from './organisation.service.base.js';
-import { normalizeTeamRole } from './team.service.base.js';
 import { buildUserIdentity } from './user-scope.service.js';
 import {
+  ACTIONABLE_TEAM_INVITE_WHERE,
   TEAM_INVITE_SELECT,
   computeInviteExpiresAt,
+  normalizeInviteGrantRole,
   type InviteDeps,
   type TeamInviteRecord,
   buildTeamInviteLink,
@@ -131,7 +132,7 @@ export async function createMemberInvite(
 
   const email = normalizeEmail(params.invite.email);
   const inviteName = normalizeInviteName(params.invite.name);
-  const teamRole = normalizeTeamRole(params.invite.teamRole);
+  const teamRole = normalizeInviteGrantRole(params.invite.teamRole);
 
   const identity = buildUserIdentity({
     userScope: params.config.user_scope,
@@ -283,13 +284,24 @@ export async function listPendingApprovalInvites(
     domain: params.domain,
   });
 
+  // ACTIONABLE_TEAM_INVITE_WHERE is the exact partial-index predicate and
+  // deliberately says nothing about expiry, so the PENDING-only list narrows
+  // it further: spread it FIRST so approvalStatus PENDING is not overwritten,
+  // then pin PENDING and an explicit current-time expiry filter. approvalStatus
+  // PENDING alone is not actionable: the contract-alignment cleanup leaves
+  // legacy revoked/declined owner invites stamped PENDING.
+  const now = deps?.now ? deps.now() : new Date();
   const rows = await prisma.teamInvite.findMany({
-    where: { orgId: org.id, approvalStatus: 'PENDING' },
+    where: {
+      ...ACTIONABLE_TEAM_INVITE_WHERE,
+      orgId: org.id,
+      approvalStatus: 'PENDING',
+      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+    },
     orderBy: { createdAt: 'desc' },
     select: TEAM_INVITE_SELECT,
   });
 
-  const now = deps?.now ? deps.now() : new Date();
   return { data: rows.map((row) => toInviteRecord(row, now, org.domain)) };
 }
 
@@ -326,6 +338,18 @@ export async function approveInvite(
   if (invite.approvalStatus !== 'PENDING') {
     throw new AppError('BAD_REQUEST', 400);
   }
+  if (invite.acceptedAt || invite.declinedAt || invite.revokedAt) {
+    // Terminal (typically a legacy owner invite revoked by the alignment
+    // migration) — never action it; an UPDATE would recheck the NOT VALID
+    // role rail and surface a raw Prisma error.
+    throw new AppError('BAD_REQUEST', 400);
+  }
+  if (invite.expiresAt && invite.expiresAt.getTime() <= now.getTime()) {
+    throw new AppError('BAD_REQUEST', 400);
+  }
+  // The stored grant role must satisfy the invite rail before the UPDATE
+  // rechecks the DB constraint, so legacy owner rows fail generically.
+  normalizeInviteGrantRole(invite.teamRole);
 
   const identity = buildUserIdentity({
     userScope: params.config.user_scope,
@@ -419,6 +443,13 @@ export async function denyInvite(
   if (invite.approvalStatus !== 'PENDING') {
     throw new AppError('BAD_REQUEST', 400);
   }
+  if (invite.acceptedAt || invite.declinedAt || invite.revokedAt) {
+    throw new AppError('BAD_REQUEST', 400);
+  }
+  // No expiry gate: the state machine (team-invite-state-machine.ts) allows
+  // denying an expired unresolved PENDING invite — expiry blocks approval and
+  // acceptance, never the terminal cleanup decision.
+  normalizeInviteGrantRole(invite.teamRole);
 
   const updated = await prisma.teamInvite.update({
     where: { id: invite.id },

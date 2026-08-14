@@ -6,10 +6,10 @@ import { buildUserIdentity } from './user-scope.service.js';
 import { extractEmailTheme } from './email-theme.service.js';
 import { sendTeamInviteEmail } from './email.service.js';
 import { selectRedirectUrl } from './authorization-code.service.js';
-import { normalizeTeamRole } from './team.service.base.js';
 import {
   TEAM_INVITE_SELECT,
   computeInviteExpiresAt,
+  normalizeInviteGrantRole,
   type InviteDeps,
   type TeamInviteRecord,
   type TeamInviteCreateResult,
@@ -80,7 +80,7 @@ export async function createTeamInvites(
   for (const input of params.invites) {
     const email = normalizeEmail(input.email);
     const inviteName = normalizeInviteName(input.name);
-    const teamRole = normalizeTeamRole(input.teamRole);
+    const teamRole = normalizeInviteGrantRole(input.teamRole);
     const existingInvite = await prisma.teamInvite.findFirst({
       where: {
         teamId: team.id,
