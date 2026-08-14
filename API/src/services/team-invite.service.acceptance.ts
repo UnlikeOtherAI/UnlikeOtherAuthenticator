@@ -9,10 +9,10 @@ import {
   parseOrgLimit,
 } from './organisation.service.base.js';
 import {
-  normalizeTeamRole,
   parseMaxMembersPerTeam,
   parseMaxTeamMembershipsPerUser,
 } from './team.service.base.js';
+import { normalizeInviteGrantRole } from './team-invite.service.base.js';
 import {
   assertActiveWorkspaceScope,
   lockAndAssertActiveWorkspaceScope,
@@ -37,6 +37,7 @@ export async function acceptTeamInviteWithinTransaction(params: {
       teamRole: true,
       acceptedUserId: true,
       acceptedAt: true,
+      declinedAt: true,
       revokedAt: true,
       expiresAt: true,
       approvalStatus: true,
@@ -72,6 +73,9 @@ export async function acceptTeamInviteWithinTransaction(params: {
     }
     throw new AppError('BAD_REQUEST', 400);
   }
+  if (invite.declinedAt) {
+    throw new AppError('BAD_REQUEST', 400);
+  }
 
   // Task 3/4 (design §4.7): a PENDING/DENIED (member-invite approval not yet granted) or expired
   // invite is not acceptable — generic error, same as any other invalid-invite case (no oracle).
@@ -81,6 +85,8 @@ export async function acceptTeamInviteWithinTransaction(params: {
   if (invite.expiresAt && invite.expiresAt.getTime() <= params.now.getTime()) {
     throw new AppError('BAD_REQUEST', 400);
   }
+
+  const inviteTeamRole = normalizeInviteGrantRole(invite.teamRole);
 
   const user = await params.prisma.user.findUnique({
     where: { id: params.userId },
@@ -178,7 +184,7 @@ export async function acceptTeamInviteWithinTransaction(params: {
       data: {
         teamId: invite.teamId,
         userId: params.userId,
-        teamRole: normalizeTeamRole(invite.teamRole),
+        teamRole: inviteTeamRole,
       },
       select: { id: true },
     });
@@ -227,9 +233,11 @@ export async function declineTeamInviteForUser(params: {
     select: {
       id: true,
       email: true,
+      teamRole: true,
       acceptedAt: true,
       declinedAt: true,
       revokedAt: true,
+      approvalStatus: true,
       org: { select: { domain: true } },
     },
   });
@@ -251,8 +259,17 @@ export async function declineTeamInviteForUser(params: {
   }
 
   if (invite.declinedAt) {
+    if (invite.approvalStatus === 'DENIED') {
+      throw new AppError('BAD_REQUEST', 400);
+    }
+    normalizeInviteGrantRole(invite.teamRole);
     return;
   }
+
+  if (invite.approvalStatus === 'DENIED') {
+    throw new AppError('BAD_REQUEST', 400);
+  }
+  normalizeInviteGrantRole(invite.teamRole);
 
   await params.prisma.teamInvite.update({
     where: { id: invite.id },

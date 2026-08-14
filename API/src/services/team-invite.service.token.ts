@@ -10,6 +10,7 @@ import {
   lockAndReadVerificationTokenEpoch,
   readVerificationTokenEpoch,
 } from './verification-token-epoch.service.js';
+import { normalizeInviteGrantRole } from './team-invite.service.base.js';
 
 type InviteTokenPrisma = PrismaClient;
 
@@ -32,6 +33,8 @@ type InviteTokenRow = {
     acceptedAt: Date | null;
     declinedAt: Date | null;
     revokedAt: Date | null;
+    teamRole: string;
+    approvalStatus: string;
     team: { name: string };
     org: { name: string };
   };
@@ -71,6 +74,9 @@ function assertInviteTokenValid(params: {
   ) {
     throw new AppError('BAD_REQUEST', 400);
   }
+  if (params.row.teamInvite.approvalStatus === 'DENIED') {
+    throw new AppError('BAD_REQUEST', 400);
+  }
 
   assertInviteTokenType(params.row.type);
   return params.row.type;
@@ -102,6 +108,8 @@ async function findInviteToken(params: {
           acceptedAt: true,
           declinedAt: true,
           revokedAt: true,
+          teamRole: true,
+          approvalStatus: true,
           team: { select: { name: true } },
           org: { select: { name: true } },
         },
@@ -216,6 +224,7 @@ export async function declineTeamInviteByToken(
       now: decisionNow,
     });
     const teamInvite = requireTeamInvite(row);
+    normalizeInviteGrantRole(teamInvite.teamRole);
 
     await tx.teamInvite.update({
       where: { id: teamInvite.id },
