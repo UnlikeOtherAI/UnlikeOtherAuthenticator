@@ -168,7 +168,7 @@ export async function createMemberInvite(
   }
 
   const existingInvite = await prisma.teamInvite.findFirst({
-    where: { teamId: team.id, email },
+    where: { ...ACTIONABLE_TEAM_INVITE_WHERE, teamId: team.id, email },
     orderBy: { createdAt: 'desc' },
     select: { id: true, acceptedAt: true, declinedAt: true, revokedAt: true },
   });
@@ -179,7 +179,7 @@ export async function createMemberInvite(
     !existingInvite.revokedAt
   ) {
     await prisma.teamInvite.updateMany({
-      where: { teamId: team.id, email, acceptedAt: null, declinedAt: null, revokedAt: null },
+      where: { ...ACTIONABLE_TEAM_INVITE_WHERE, teamId: team.id, email },
       data: { revokedAt: now },
     });
   }

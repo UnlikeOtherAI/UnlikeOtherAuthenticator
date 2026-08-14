@@ -7,6 +7,7 @@ import { buildUserIdentity } from './user-scope.service.js';
 import { extractEmailTheme } from './email-theme.service.js';
 import { sendTeamInviteEmail } from './email.service.js';
 import {
+  ACTIONABLE_TEAM_INVITE_WHERE,
   TEAM_INVITE_SELECT,
   computeInviteExpiresAt,
   normalizeInviteGrantRole,
@@ -87,11 +88,9 @@ export async function resendTeamInvite(
 
   await prisma.teamInvite.updateMany({
     where: {
+      ...ACTIONABLE_TEAM_INVITE_WHERE,
       teamId: team.id,
       email: invite.email,
-      acceptedAt: null,
-      declinedAt: null,
-      revokedAt: null,
     },
     data: {
       revokedAt: now,

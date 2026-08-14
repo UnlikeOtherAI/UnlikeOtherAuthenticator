@@ -7,6 +7,7 @@ import { extractEmailTheme } from './email-theme.service.js';
 import { sendTeamInviteEmail } from './email.service.js';
 import { selectRedirectUrl } from './authorization-code.service.js';
 import {
+  ACTIONABLE_TEAM_INVITE_WHERE,
   TEAM_INVITE_SELECT,
   computeInviteExpiresAt,
   normalizeInviteGrantRole,
@@ -83,6 +84,7 @@ export async function createTeamInvites(
     const teamRole = normalizeInviteGrantRole(input.teamRole);
     const existingInvite = await prisma.teamInvite.findFirst({
       where: {
+        ...ACTIONABLE_TEAM_INVITE_WHERE,
         teamId: team.id,
         email,
       },
@@ -143,11 +145,9 @@ export async function createTeamInvites(
     if (hadExistingUnresolvedInvite) {
       await prisma.teamInvite.updateMany({
         where: {
+          ...ACTIONABLE_TEAM_INVITE_WHERE,
           teamId: team.id,
           email,
-          acceptedAt: null,
-          declinedAt: null,
-          revokedAt: null,
         },
         data: {
           revokedAt: now,
@@ -263,6 +263,7 @@ export async function trackTeamInviteOpen(
 
   await prisma.teamInvite.updateMany({
     where: {
+      ...ACTIONABLE_TEAM_INVITE_WHERE,
       id: params.inviteId,
       openedAt: null,
     },
@@ -272,6 +273,7 @@ export async function trackTeamInviteOpen(
   });
   await prisma.teamInvite.updateMany({
     where: {
+      ...ACTIONABLE_TEAM_INVITE_WHERE,
       id: params.inviteId,
     },
     data: {
