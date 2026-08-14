@@ -756,7 +756,12 @@ DeepSignal's own config and per-domain app credential and sends:
 
 For this chained profile, UOA verifies its own RS256 `at+jwt` signature, exact
 UOA issuer and expiry, and exact `aud = https://<authenticated DeepSignal config
-domain>`. The inbound `source_domain` and `azp` must agree. `org` and `active`
+domain>`. The inbound `source_domain` and `azp` must agree. The advisory `email`
+claim is optional inbound: identity/membership-scoped tokens omit it, and
+verification depends only on the stable `sub`, the mandatory credential epoch
+`tv`, and the re-resolved workspace — never on the inbound email. The narrowed
+token's email (when its own scope allows one) always comes from the live user
+record. `org` and `active`
 are mandatory, must select the same organisation and team, and are never
 replaced with DeepSignal-local tenancy. UOA revalidates the inbound source
 product mapping and, for a nested chain, checks stable user/source-domain role,
@@ -776,11 +781,25 @@ explicit app capability and is never implied by `ai.invoke`.
 Phase A1 (2026-08 addition) extends that allowlist with `identity.read`,
 `membership.invite`, and `membership.manage` for SSO-owned team directory and
 invites. These scopes are likewise distinct explicit capabilities, never
-implied by `ai.invoke`. The first-party Nessie mapping is server-owned policy:
-UOA pins the exact source domain `api.nessie.works`, product `nessie`, resource
+implied by `ai.invoke`. These three scopes are privileged first-party
+capabilities globally: any resolve/create/update attempt that contains any of
+them must be the exact server-pinned `nessie-identity` binding — exact source
+domain `api.nessie.works`, product `nessie-identity`, resource
 `https://authentication.unlikeotherai.com` (the UOA identity-membership API
-audience), and that exact three-scope allowlist, and refuses any DB mapping
-for product `nessie` that widens or alters any of them. Any issued resource
+audience), and that exact three-scope set. Any other product, source,
+resource, or a widened/drifted set is refused, on create and update
+at the admin surface and again on every runtime resolve before any token is
+issued. The stored mapping for the privileged binding is exactly all three
+privileged scopes; each token request against it may carry any non-empty
+subset of those scopes, and the issued token keeps that exact subset — a
+narrowed request is the normal case, never a refusal. The privileged scopes
+are terminal: a token carrying any of them can never be the subject of an
+onward chained exchange (there is no downstream chain), and no mapping other
+than the exact privileged binding may ever store them. The
+privileged binding coexists with the already-used
+`(source, product='nessie')` mappings, which never carry privileged scopes;
+product `nessie` is deliberately not the privileged owner. Disabling the
+exact mapping stays allowed. Any issued resource
 token whose scope contains `identity.read`, `membership.invite`, or
 `membership.manage` omits the advisory `email` claim; tokens limited to the
 existing scopes keep the current `email` behaviour unchanged.

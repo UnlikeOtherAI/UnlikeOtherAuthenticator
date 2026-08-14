@@ -26,7 +26,7 @@ export const authTokenEndpoint: EndpointSchema = {
     'resource?':
       'exact DB-allowlisted HTTPS resource URI (required for token-exchange grant; becomes access-token aud)',
     'scope?':
-      'space-delimited exact requested scopes (required for token-exchange grant); supported values are ai.invoke, billing.read, token.provision, identity.read, membership.invite, and membership.manage, and every requested scope must be allowed by the product mapping',
+      'space-delimited exact requested scopes (required for token-exchange grant); supported values are ai.invoke, billing.read, token.provision, identity.read, membership.invite, and membership.manage, and every requested scope must be allowed by the product mapping; identity.read/membership.* are globally exclusive to the exact server-pinned nessie-identity binding',
   },
   response: {
     access_token:

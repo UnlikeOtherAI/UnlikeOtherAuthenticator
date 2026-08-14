@@ -71,11 +71,15 @@ and every other product's app key.
 
 For Phase A1, the Nessie identity/membership delegation is likewise operator
 state with a server-owned pin: create exactly one enabled mapping with
-`source_domain=api.nessie.works`, `product=nessie`,
+`source_domain=api.nessie.works`, `product=nessie-identity`,
 `resource=https://authentication.unlikeotherai.com`, and only
 `scopes=["identity.read","membership.invite","membership.manage"]`. UOA
-rejects a Nessie mapping that points at a different source domain, resource,
-or scope set, so a mutable mapping can never widen the pin.
+rejects any mapping — on create, update, or runtime resolve — where a
+non-`nessie-identity` product (including `nessie`) carries one of these
+privileged scopes or where the `nessie-identity` binding points at a
+different source domain, resource, or scope set, so a mutable mapping can
+never widen the pin. The existing `(api.nessie.works, product=nessie)`
+mappings for ordinary delegation remain valid and coexist with the pin.
 
 The UOA Billing Service, delegation mapping, and app key are operator state,
 not seed data. They must be provisioned before a DocGen deployment serves the

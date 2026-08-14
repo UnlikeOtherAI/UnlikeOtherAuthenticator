@@ -74,7 +74,12 @@ const ChainedSubjectAccessTokenSchema = z
     aud: z.string().trim().min(1),
     sub: z.string().trim().min(1).max(256),
     tv: z.number().int().nonnegative(),
-    email: z.string().trim().email(),
+    // Optional: UOA-issued tokens omit the advisory email claim whenever the
+    // scope contains an identity/membership scope. Verification never depends
+    // on it; stable sub + credential epoch + re-resolved workspace are the
+    // authority, and the narrowed token's email (when its own scope allows
+    // one) comes from the live user record, never from this claim.
+    email: z.string().trim().email().optional(),
     source_domain: z.string().trim().min(1),
     azp: z.string().trim().min(1),
     product: z.string().trim().regex(PRODUCT_PATTERN),

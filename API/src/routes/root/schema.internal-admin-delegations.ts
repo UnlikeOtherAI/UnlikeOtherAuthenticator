@@ -30,7 +30,7 @@ export function buildInternalAdminConfidentialDelegationEndpoints(params: {
         product: 'lowercase identifier (required, [a-z0-9][a-z0-9._-]{0,99})',
         resource: 'exact HTTPS resource URI (required; userinfo and fragments forbidden)',
         scopes:
-          'non-empty unique array containing only "ai.invoke", "billing.read", "token.provision", "identity.read", "membership.invite", and/or "membership.manage"; token provisioning and the identity/membership scopes are never implied by an AI grant',
+          'non-empty unique array containing only "ai.invoke", "billing.read", "token.provision", "identity.read", "membership.invite", and/or "membership.manage"; token provisioning and the identity/membership scopes are never implied by an AI grant; the identity/membership scopes are globally exclusive to the exact server-pinned nessie-identity binding (source api.nessie.works, resource https://authentication.unlikeotherai.com, exact three-scope set)',
         enabled: 'boolean (optional; defaults true)',
       },
       response: {
@@ -47,7 +47,7 @@ export function buildInternalAdminConfidentialDelegationEndpoints(params: {
       body: {
         resource: 'exact HTTPS resource URI (optional)',
         scopes:
-          'non-empty unique array containing only "ai.invoke", "billing.read", "token.provision", "identity.read", "membership.invite", and/or "membership.manage" (optional)',
+          'non-empty unique array containing only "ai.invoke", "billing.read", "token.provision", "identity.read", "membership.invite", and/or "membership.manage" (optional; identity/membership scopes remain exclusive to the pinned nessie-identity binding)',
         enabled: 'boolean (optional)',
       },
       response: {

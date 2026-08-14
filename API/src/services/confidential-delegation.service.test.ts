@@ -11,8 +11,8 @@ describe('first-party confidential delegation registry', () => {
     });
   });
 
-  it('pins Nessie to its exact source and identity-membership API audience', () => {
-    expect(FIRST_PARTY_CONFIDENTIAL_DELEGATIONS.nessie).toEqual({
+  it('pins nessie-identity to its exact source and identity-membership API audience', () => {
+    expect(FIRST_PARTY_CONFIDENTIAL_DELEGATIONS['nessie-identity']).toEqual({
       sourceDomain: 'api.nessie.works',
       resource: 'https://authentication.unlikeotherai.com',
       scopes: ['identity.read', 'membership.invite', 'membership.manage'],

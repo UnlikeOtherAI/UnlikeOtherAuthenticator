@@ -1,20 +1,23 @@
-import type { PrismaClient } from '@prisma/client';
-import { exportJWK, generateKeyPair, SignJWT, type JWK, type KeyLike } from 'jose';
+import { decodeJwt, exportJWK, generateKeyPair, SignJWT, type JWK, type KeyLike } from 'jose';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ClientConfig } from '../../src/services/config.service.js';
 import { exchangeConfidentialChainedAccessToken } from '../../src/services/confidential-chained-token-exchange.service.js';
 import {
   resetAccessTokenKeyCache,
+  signConfidentialAccessToken,
   type ConfidentialAccessTokenClaims,
 } from '../../src/services/oauth/access-token.service.js';
-
-const issuer = 'https://authentication.unlikeotherai.com';
-const sourceDomain = 'api.nessie.works';
-const callerDomain = 'api.deepsignal.live';
-const callerAudience = `https://${callerDomain}`;
-const ledgerResource = 'https://ledger.unlikeotherai.com';
-const userId = 'usr_1';
+import {
+  chainedCallerAudience as callerAudience,
+  chainedCallerDomain as callerDomain,
+  chainedConfig as config,
+  chainedDefaultOrg as defaultOrg,
+  chainedIssuer as issuer,
+  chainedLedgerResource as ledgerResource,
+  chainedPrismaMock as prismaMock,
+  chainedSourceDomain as sourceDomain,
+  chainedUserId as userId,
+} from './confidential-chained-token-fixtures.js';
 
 let privateKey: KeyLike;
 let privateJwk: JWK;
@@ -30,23 +33,6 @@ function restoreEnv(name: keyof typeof originalEnv): void {
   const value = originalEnv[name];
   if (value === undefined) Reflect.deleteProperty(process.env, name);
   else process.env[name] = value;
-}
-
-function config(): ClientConfig {
-  return {
-    domain: callerDomain,
-    org_features: { enabled: true, groups_enabled: false },
-  } as unknown as ClientConfig;
-}
-
-function defaultOrg() {
-  return {
-    org_id: 'org_1',
-    tenant_slug: 'nessie',
-    org_role: 'member',
-    teams: ['team_1', 'team_2'],
-    team_roles: { team_1: 'member', team_2: 'admin' },
-  };
 }
 
 async function signInboundToken(
@@ -65,17 +51,18 @@ async function signInboundToken(
     azp?: string;
     credentialEpoch?: number;
     omitCredentialEpoch?: boolean;
+    omitEmail?: boolean;
   } = {},
 ): Promise<{ now: number; token: string }> {
   const now = Math.floor(Date.now() / 1000);
   const inboundSource = overrides.sourceDomain ?? sourceDomain;
   const payload: Record<string, unknown> = {
-    email: 'nessie-user@example.com',
     source_domain: inboundSource,
     azp: overrides.azp ?? inboundSource,
     product: overrides.product ?? 'nessie',
     scope: overrides.scope ?? 'ai.invoke',
   };
+  if (!overrides.omitEmail) payload.email = 'nessie-user@example.com';
   if (!overrides.omitCredentialEpoch) payload.tv = overrides.credentialEpoch ?? 0;
   if (!overrides.omitOrg) {
     payload.org = Object.prototype.hasOwnProperty.call(overrides, 'org')
@@ -104,61 +91,6 @@ async function signInboundToken(
     .sign(privateKey);
 
   return { now, token };
-}
-
-function prismaMock(options?: {
-  domainRoleExists?: boolean;
-  orgExists?: boolean;
-  teams?: Array<{ teamId: string; teamRole: string }>;
-  userExists?: boolean;
-  tokenVersion?: number;
-}): PrismaClient {
-  return {
-    $queryRaw: vi.fn().mockResolvedValue([]),
-    clientDomain: {
-      findUnique: vi.fn().mockResolvedValue({ domain: callerDomain, status: 'active' }),
-    },
-    user: {
-      findUnique: vi.fn().mockResolvedValue(
-        options?.userExists === false
-          ? null
-          : {
-              email: 'current-user@example.com',
-              tokenVersion: options?.tokenVersion ?? 0,
-              twoFaEnabled: false,
-            },
-      ),
-    },
-    domainRole: {
-      findUnique: vi
-        .fn()
-        .mockResolvedValue(options?.domainRoleExists === false ? null : { role: 'USER' }),
-    },
-    orgMember: {
-      findFirst: vi
-        .fn()
-        .mockResolvedValue(
-          options?.orgExists === false
-            ? null
-            : { orgId: 'org_1', role: 'admin', org: { slug: 'nessie' } },
-        ),
-    },
-    teamMember: {
-      findMany: vi.fn().mockResolvedValue(
-        options?.teams ?? [
-          { teamId: 'team_1', teamRole: 'admin' },
-          { teamId: 'team_3', teamRole: 'member' },
-        ],
-      ),
-    },
-    groupMember: {
-      findMany: vi.fn(),
-    },
-    confidentialAssertionUse: {
-      deleteMany: vi.fn(),
-      create: vi.fn(),
-    },
-  } as unknown as PrismaClient;
 }
 
 function resolveDelegation(scope = 'ai.invoke') {
@@ -265,16 +197,39 @@ describe('chained confidential exchange', () => {
       actor: { sub: sourceDomain, product: 'nessie' },
     });
     expect(claims).not.toHaveProperty('clientId');
-    expect(prisma.confidentialAssertionUse.create).not.toHaveBeenCalled();
-    expect(prisma.confidentialAssertionUse.deleteMany).not.toHaveBeenCalled();
+    const assertionUse = (
+      prisma as unknown as {
+        confidentialAssertionUse: {
+          create: ReturnType<typeof vi.fn>;
+          deleteMany: ReturnType<typeof vi.fn>;
+        };
+      }
+    ).confidentialAssertionUse;
+    expect(assertionUse.create).not.toHaveBeenCalled();
+    expect(assertionUse.deleteMany).not.toHaveBeenCalled();
     expect(signAccessToken).toHaveBeenCalledTimes(2);
   });
 
-  it('omits the advisory email claim when the narrowed scope contains identity/membership scopes', async () => {
-    const { now, token } = await signInboundToken({
-      expiresInSeconds: 120,
+  it('chains a real UOA-issued no-email token through the actual signer/resolver path', async () => {
+    // The inbound token is minted by the production signer (the same key and
+    // profile the exchange verifies against via JWKS), not a hand-signed
+    // fixture: UOA issues identity/membership tokens without the advisory
+    // email claim, so the resolver must accept exactly that token shape.
+    const inbound = await signConfidentialAccessToken({
+      subject: userId,
+      credentialEpoch: 0,
+      sourceDomain,
+      product: 'nessie',
+      resource: callerAudience,
+      issuer,
+      ttlSeconds: 120,
       scope: 'identity.read membership.invite membership.manage',
+      org: defaultOrg(),
+      active: { orgId: 'org_1', teamId: 'team_1' },
     });
+    expect(decodeJwt(inbound)).not.toHaveProperty('email');
+
+    const now = Math.floor(Date.now() / 1000);
     const signAccessToken = vi.fn().mockResolvedValue('identity-api-token');
     const deps = {
       prisma: prismaMock(),
@@ -293,7 +248,7 @@ describe('chained confidential exchange', () => {
       exchangeConfidentialChainedAccessToken(
         {
           authenticatedClientDomainId: 'client-domain-deepsignal',
-          subjectToken: token,
+          subjectToken: inbound,
           product: 'deepsignal',
           resource: 'https://authentication.unlikeotherai.com',
           scope: 'identity.read membership.manage',

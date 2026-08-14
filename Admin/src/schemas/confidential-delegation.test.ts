@@ -78,7 +78,7 @@ describe('confidential delegation schemas', () => {
     const parsed = ConfidentialDelegationMappingSchema.parse({
       id: 'mapping-1',
       source_domain: 'api.nessie.works',
-      product: 'nessie',
+      product: 'nessie-identity',
       resource: 'https://authentication.unlikeotherai.com',
       scopes: ['identity.read', 'membership.invite', 'membership.manage'],
       enabled: true,

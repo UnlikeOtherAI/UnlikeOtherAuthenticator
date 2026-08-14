@@ -42,19 +42,19 @@ const scopeOptions: Array<{
     value: 'identity.read',
     label: 'Identity read',
     description:
-      'First-party Nessie only. Reads delegated identity through the UOA identity-membership API; tokens carrying it never include an email claim.',
+      'First-party nessie-identity only. Reads delegated identity through the UOA identity-membership API; tokens carrying it never include an email claim.',
   },
   {
     value: 'membership.invite',
     label: 'Membership invite',
     description:
-      'First-party Nessie only. Invites members through the UOA identity-membership API; tokens carrying it never include an email claim.',
+      'First-party nessie-identity only. Invites members through the UOA identity-membership API; tokens carrying it never include an email claim.',
   },
   {
     value: 'membership.manage',
     label: 'Membership manage',
     description:
-      'First-party Nessie only. Manages team membership through the UOA identity-membership API; tokens carrying it never include an email claim.',
+      'First-party nessie-identity only. Manages team membership through the UOA identity-membership API; tokens carrying it never include an email claim.',
   },
 ];
 

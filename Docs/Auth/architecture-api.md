@@ -562,7 +562,9 @@ ClientDomain + product mapping before assertion work. The mapping contains one
 exact HTTPS resource and an allowlist limited to `ai.invoke`, `billing.read`,
 the separately granted `token.provision`, and the Phase A1
 `identity.read` / `membership.invite` / `membership.manage` scopes
-(server-pinned for first-party Nessie);
+(globally exclusive to the server-pinned first-party `nessie-identity`
+binding on source `api.nessie.works` and resource
+`https://authentication.unlikeotherai.com`);
 the issued scope is the exact requested subset. This separates app provenance
 (the individual product's domain credential) from user/org/team provenance (the
 source-signed assertion), with no shared key, user-token substitution, or env

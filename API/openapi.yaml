@@ -2458,7 +2458,12 @@ paths:
                         billing.read, token.provision, identity.read,
                         membership.invite, and/or membership.manage. Token
                         provisioning and the identity/membership scopes are
-                        never implied by ai.invoke. Unsupported, duplicate,
+                        never implied by ai.invoke; the identity/membership
+                        scopes are globally exclusive to the exact
+                        server-pinned nessie-identity binding (source
+                        api.nessie.works, resource
+                        https://authentication.unlikeotherai.com, exact
+                        three-scope set). Unsupported, duplicate,
                         or widening scopes are rejected.
       responses:
         '200':
@@ -6941,7 +6946,11 @@ paths:
       description: |
         Binds an active registered source domain and product to one exact HTTPS
         resource and scope allowlist. The source app authenticates exchanges with
-        that domain's own existing rotatable credential.
+        that domain's own existing rotatable credential. The
+        identity.read/membership.invite/membership.manage scopes are globally
+        exclusive to the exact server-pinned nessie-identity binding (source
+        api.nessie.works, resource https://authentication.unlikeotherai.com,
+        exact three-scope set); any other mapping carrying one is refused.
       security:
         - adminBearer: []
       requestBody:
@@ -7015,7 +7024,9 @@ paths:
       operationId: adminUpdateConfidentialDelegation
       description: |
         Updates resource, scope allowlist, or enabled state and audits before/after
-        policy. Source domain and product are immutable.
+        policy. Source domain and product are immutable. Mutations touching the
+        privileged identity/membership scopes must converge on the exact
+        server-pinned nessie-identity binding; disabling stays allowed.
       security:
         - adminBearer: []
       requestBody:

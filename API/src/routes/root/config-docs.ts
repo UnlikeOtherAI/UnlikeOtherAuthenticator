@@ -313,7 +313,7 @@ export const confidentialTokenExchangeDocumentation = {
     authentication:
       'the normal domain-hash bearer for the immediate caller config domain; credential rotation preserves the ClientDomain-bound mapping',
     mapping:
-      'DB-backed exact ClientDomain + product -> HTTPS resource + supported-scope allowlist; unknown, disabled, cross-domain, cross-product, wrong-resource, and widening requests fail closed',
+      'DB-backed exact ClientDomain + product -> HTTPS resource + supported-scope allowlist; unknown, disabled, cross-domain, cross-product, wrong-resource, and widening requests fail closed; identity.read/membership.invite/membership.manage are globally exclusive to the exact server-pinned nessie-identity binding (source api.nessie.works, resource https://authentication.unlikeotherai.com, exact three-scope set) on create, update, and resolve',
     administration:
       'audited superuser CRUD at /internal/admin/confidential-delegations; responses never expose credential material',
   },

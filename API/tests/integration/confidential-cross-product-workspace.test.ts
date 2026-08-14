@@ -321,7 +321,7 @@ describe.skipIf(!hasDatabase)('confidential cross-product workspace attribution'
     });
   });
 
-  it('persists the exact pinned Nessie mapping and refuses any widening', async () => {
+  it('persists the exact pinned nessie-identity mapping and refuses any widening', async () => {
     const nessieDomain = 'api.nessie.works';
     const seeded = await seed(nessieDomain);
     const actor = { userId: null, email: 'admin@example.com' };
@@ -330,7 +330,7 @@ describe.skipIf(!hasDatabase)('confidential cross-product workspace attribution'
     const created = await createConfidentialDelegationMapping(
       {
         sourceDomain: nessieDomain,
-        product: 'nessie',
+        product: 'nessie-identity',
         resource: issuer,
         scopes: pinnedScopes,
         actor,
@@ -340,31 +340,61 @@ describe.skipIf(!hasDatabase)('confidential cross-product workspace attribution'
     expect(created.clientDomain.domain).toBe(nessieDomain);
     expect(created.resource).toBe(issuer);
 
+    // The already-used (clientDomainId, product='nessie') mapping coexists
+    // under the same uniqueness schema as long as it never carries a
+    // privileged scope.
+    const coexisting = await createConfidentialDelegationMapping(
+      {
+        sourceDomain: nessieDomain,
+        product: 'nessie',
+        resource: ledgerResource,
+        scopes: ['ai.invoke'],
+        actor,
+      },
+      { prisma: handle.prisma },
+    );
+    expect(coexisting.clientDomainId).toBe(created.clientDomainId);
+
     // A mutable mapping can never widen or move the server-owned pin.
     await expect(
       createConfidentialDelegationMapping(
         {
           sourceDomain: nessieDomain,
-          product: 'nessie',
+          product: 'nessie-identity',
           resource: issuer,
           scopes: [...pinnedScopes, 'ai.invoke'],
           actor,
         },
         { prisma: handle.prisma },
       ),
-    ).rejects.toThrow('FIRST_PARTY_CONFIDENTIAL_DELEGATION_MISMATCH');
+    ).rejects.toThrow('PRIVILEGED_CONFIDENTIAL_DELEGATION_SCOPE_FORBIDDEN');
     await expect(
       updateConfidentialDelegationMapping(
         { mappingId: created.id, scopes: [...pinnedScopes, 'billing.read'], actor },
         { prisma: handle.prisma },
       ),
-    ).rejects.toThrow('FIRST_PARTY_CONFIDENTIAL_DELEGATION_MISMATCH');
+    ).rejects.toThrow('PRIVILEGED_CONFIDENTIAL_DELEGATION_SCOPE_FORBIDDEN');
     await expect(
       updateConfidentialDelegationMapping(
         { mappingId: created.id, resource: ledgerResource, actor },
         { prisma: handle.prisma },
       ),
-    ).rejects.toThrow('FIRST_PARTY_CONFIDENTIAL_DELEGATION_MISMATCH');
+    ).rejects.toThrow('PRIVILEGED_CONFIDENTIAL_DELEGATION_SCOPE_FORBIDDEN');
+
+    // Privileged scopes are globally exclusive: product 'nessie' (or any
+    // other product) can never carry one, even on the pinned source domain.
+    await expect(
+      createConfidentialDelegationMapping(
+        {
+          sourceDomain: nessieDomain,
+          product: 'nessie-ledger',
+          resource: issuer,
+          scopes: ['identity.read'],
+          actor,
+        },
+        { prisma: handle.prisma },
+      ),
+    ).rejects.toThrow('PRIVILEGED_CONFIDENTIAL_DELEGATION_SCOPE_FORBIDDEN');
 
     // Disabling the mapping remains valid mutable policy and fails closed.
     const disabled = await updateConfidentialDelegationMapping(

@@ -1,80 +1,47 @@
-import { ConfidentialDelegationScope, type Prisma, type PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { normalizeDomain } from '../utils/domain.js';
 import { AppError } from '../utils/errors.js';
+import {
+  assertPrivilegedRuntimeBinding,
+  confidentialDelegationMappingInclude,
+  normalizeConfidentialDelegationProduct,
+  normalizeConfidentialDelegationScopeNames,
+  scopeNamesFromDatabase,
+  type ConfidentialDelegationScopeName,
+} from './confidential-delegation-contract.js';
 
-const PRODUCT_PATTERN = /^[a-z0-9][a-z0-9._-]{0,99}$/;
-const MAX_RESOURCE_LENGTH = 2048;
-
-// Product configuration is still operator-owned, but first-party products
-// that cross a privileged boundary have a server-owned immutable destination.
-// A DocGen config JWT can never widen this to another Ledger origin or scope.
-export const FIRST_PARTY_CONFIDENTIAL_DELEGATIONS = {
-  docgen: {
-    sourceDomain: 'buildme.live',
-    resource: 'https://ledger.unlikeotherai.com',
-    scopes: ['ai.invoke'],
-  },
-  // Phase A1: Nessie's identity/membership delegation is server-owned. The
-  // exact source domain, product, identity-membership API audience, and scope
-  // allowlist are pinned here so a mutable DB mapping can never widen them.
-  nessie: {
-    sourceDomain: 'api.nessie.works',
-    resource: 'https://authentication.unlikeotherai.com',
-    scopes: ['identity.read', 'membership.invite', 'membership.manage'],
-  },
-} as const;
-
-export const CONFIDENTIAL_DELEGATION_SCOPES = [
-  'ai.invoke',
-  'billing.read',
-  'token.provision',
-  'identity.read',
-  'membership.invite',
-  'membership.manage',
-] as const;
-export type ConfidentialDelegationScopeName = (typeof CONFIDENTIAL_DELEGATION_SCOPES)[number];
-
-const databaseScope = {
-  'ai.invoke': ConfidentialDelegationScope.AI_INVOKE,
-  'billing.read': ConfidentialDelegationScope.BILLING_READ,
-  'token.provision': ConfidentialDelegationScope.TOKEN_PROVISION,
-  'identity.read': ConfidentialDelegationScope.IDENTITY_READ,
-  'membership.invite': ConfidentialDelegationScope.MEMBERSHIP_INVITE,
-  'membership.manage': ConfidentialDelegationScope.MEMBERSHIP_MANAGE,
-} satisfies Record<ConfidentialDelegationScopeName, ConfidentialDelegationScope>;
-
-const publicScope = {
-  [ConfidentialDelegationScope.AI_INVOKE]: 'ai.invoke',
-  [ConfidentialDelegationScope.BILLING_READ]: 'billing.read',
-  [ConfidentialDelegationScope.TOKEN_PROVISION]: 'token.provision',
-  [ConfidentialDelegationScope.IDENTITY_READ]: 'identity.read',
-  [ConfidentialDelegationScope.MEMBERSHIP_INVITE]: 'membership.invite',
-  [ConfidentialDelegationScope.MEMBERSHIP_MANAGE]: 'membership.manage',
-} satisfies Record<ConfidentialDelegationScope, ConfidentialDelegationScopeName>;
-
-type MutationActor = {
-  userId?: string | null;
-  email: string;
-};
-
-export type ConfidentialDelegationMappingView = {
-  id: string;
-  clientDomainId: string;
-  product: string;
-  resource: string;
-  scopes: ConfidentialDelegationScope[];
-  enabled: boolean;
-  createdByEmail: string | null;
-  updatedByEmail: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-  clientDomain: {
-    domain: string;
-    status: string;
-  };
-};
+// The delegation contract (scope literals/types, enum maps, first-party pins,
+// and privileged-scope policy) lives in confidential-delegation-contract.ts;
+// this resolver and the admin module both depend one-way on it. Everything
+// below is re-exported so existing route/test imports keep their established
+// entry point.
+export {
+  assertFirstPartyDelegationBinding,
+  assertPrivilegedDelegationPolicy,
+  assertPrivilegedRuntimeBinding,
+  CONFIDENTIAL_DELEGATION_SCOPES,
+  FIRST_PARTY_CONFIDENTIAL_DELEGATIONS,
+  PRIVILEGED_IDENTITY_MEMBERSHIP_PIN,
+  PRIVILEGED_IDENTITY_MEMBERSHIP_SCOPES,
+  confidentialDelegationMappingInclude,
+  databaseScopesFromNames,
+  normalizeConfidentialDelegationProduct,
+  normalizeConfidentialDelegationResource,
+  normalizeConfidentialDelegationScopeNames,
+  scopeNamesFromDatabase,
+  type ConfidentialDelegationMappingView,
+  type ConfidentialDelegationScopeName,
+  type MutationActor,
+} from './confidential-delegation-contract.js';
+export {
+  createConfidentialDelegationMapping,
+  deleteConfidentialDelegationMapping,
+  listConfidentialDelegationMappings,
+  serializeConfidentialDelegationMapping,
+  updateConfidentialDelegationMapping,
+} from './confidential-delegation-admin.service.js';
 
 type DelegationPrisma = Pick<
   PrismaClient,
@@ -89,291 +56,13 @@ function invalidDelegation(): AppError {
   return new AppError('FORBIDDEN', 403, 'TOKEN_EXCHANGE_DELEGATION_NOT_ALLOWED');
 }
 
-function normalizeProduct(value: string): string {
-  const product = value.trim().toLowerCase();
-  if (!PRODUCT_PATTERN.test(product)) {
-    throw new AppError('BAD_REQUEST', 400, 'INVALID_CONFIDENTIAL_DELEGATION_PRODUCT');
-  }
-  return product;
-}
-
-function normalizeResource(value: string): string {
-  const resource = value.trim();
-  if (!resource || resource.length > MAX_RESOURCE_LENGTH) {
-    throw new AppError('BAD_REQUEST', 400, 'INVALID_CONFIDENTIAL_DELEGATION_RESOURCE');
-  }
-
-  let url: URL;
-  try {
-    url = new URL(resource);
-  } catch {
-    throw new AppError('BAD_REQUEST', 400, 'INVALID_CONFIDENTIAL_DELEGATION_RESOURCE');
-  }
-  if (url.protocol !== 'https:' || url.username || url.password || url.hash) {
-    throw new AppError('BAD_REQUEST', 400, 'INVALID_CONFIDENTIAL_DELEGATION_RESOURCE');
-  }
-  return resource;
-}
-
-function normalizeScopeNames(scopes: readonly string[]): ConfidentialDelegationScopeName[] {
-  const normalized = scopes.map((scope) => scope.trim());
-  const unique = new Set(normalized);
-  if (
-    normalized.length === 0 ||
-    normalized.length > CONFIDENTIAL_DELEGATION_SCOPES.length ||
-    unique.size !== normalized.length ||
-    normalized.some(
-      (scope): boolean =>
-        !CONFIDENTIAL_DELEGATION_SCOPES.includes(scope as ConfidentialDelegationScopeName),
-    )
-  ) {
-    throw new AppError('BAD_REQUEST', 400, 'INVALID_CONFIDENTIAL_DELEGATION_SCOPES');
-  }
-  return CONFIDENTIAL_DELEGATION_SCOPES.filter((scope) => unique.has(scope));
-}
-
 export function parseConfidentialDelegationScope(scope: string): ConfidentialDelegationScopeName[] {
   const requested = scope.trim().split(/\s+/);
   try {
-    return normalizeScopeNames(requested);
+    return normalizeConfidentialDelegationScopeNames(requested);
   } catch {
     throw invalidDelegation();
   }
-}
-
-function scopeNamesFromDatabase(
-  scopes: readonly ConfidentialDelegationScope[],
-): ConfidentialDelegationScopeName[] {
-  return scopes.map((scope) => publicScope[scope]);
-}
-
-function scopeValuesForDatabase(scopes: readonly string[]): ConfidentialDelegationScope[] {
-  return normalizeScopeNames(scopes).map((scope) => databaseScope[scope]);
-}
-
-function assertFirstPartyDelegationBinding(params: {
-  sourceDomain: string;
-  product: string;
-  resource: string;
-  scopes: readonly ConfidentialDelegationScope[];
-}) {
-  const binding =
-    FIRST_PARTY_CONFIDENTIAL_DELEGATIONS[
-      params.product as keyof typeof FIRST_PARTY_CONFIDENTIAL_DELEGATIONS
-    ];
-  if (!binding) return;
-  const scopes = scopeNamesFromDatabase(params.scopes);
-  if (
-    params.sourceDomain !== binding.sourceDomain ||
-    params.resource !== binding.resource ||
-    scopes.length !== binding.scopes.length ||
-    scopes.some((scope, index) => scope !== binding.scopes[index])
-  ) {
-    throw new AppError('BAD_REQUEST', 400, 'FIRST_PARTY_CONFIDENTIAL_DELEGATION_MISMATCH');
-  }
-}
-
-function actorCreateData(actor: MutationActor) {
-  return {
-    createdByUserId: actor.userId ?? null,
-    createdByEmail: actor.email,
-    updatedByUserId: actor.userId ?? null,
-    updatedByEmail: actor.email,
-  };
-}
-
-function actorUpdateData(actor: MutationActor) {
-  return {
-    updatedByUserId: actor.userId ?? null,
-    updatedByEmail: actor.email,
-  };
-}
-
-const mappingInclude = {
-  clientDomain: {
-    select: {
-      domain: true,
-      status: true,
-    },
-  },
-} satisfies Prisma.ConfidentialDelegationMappingInclude;
-
-function auditMetadata(mapping: ConfidentialDelegationMappingView) {
-  return {
-    mapping_id: mapping.id,
-    source_domain: mapping.clientDomain.domain,
-    product: mapping.product,
-    resource: mapping.resource,
-    scopes: scopeNamesFromDatabase(mapping.scopes),
-    enabled: mapping.enabled,
-  };
-}
-
-export function serializeConfidentialDelegationMapping(mapping: ConfidentialDelegationMappingView) {
-  return {
-    id: mapping.id,
-    source_domain: mapping.clientDomain.domain,
-    product: mapping.product,
-    resource: mapping.resource,
-    scopes: scopeNamesFromDatabase(mapping.scopes),
-    enabled: mapping.enabled,
-    created_by_email: mapping.createdByEmail,
-    updated_by_email: mapping.updatedByEmail,
-    created_at: mapping.createdAt.toISOString(),
-    updated_at: mapping.updatedAt.toISOString(),
-  };
-}
-
-export async function listConfidentialDelegationMappings(deps?: {
-  prisma?: PrismaClient;
-}): Promise<ConfidentialDelegationMappingView[]> {
-  return client(deps).confidentialDelegationMapping.findMany({
-    orderBy: [{ product: 'asc' }, { clientDomainId: 'asc' }],
-    include: mappingInclude,
-  });
-}
-
-export async function createConfidentialDelegationMapping(
-  params: {
-    sourceDomain: string;
-    product: string;
-    resource: string;
-    scopes: string[];
-    enabled?: boolean;
-    actor: MutationActor;
-  },
-  deps?: { prisma?: PrismaClient },
-): Promise<ConfidentialDelegationMappingView> {
-  const sourceDomain = normalizeDomain(params.sourceDomain);
-  const product = normalizeProduct(params.product);
-  const resource = normalizeResource(params.resource);
-  const scopes = scopeValuesForDatabase(params.scopes);
-  if (!sourceDomain) {
-    throw new AppError('BAD_REQUEST', 400, 'INVALID_CONFIDENTIAL_DELEGATION_DOMAIN');
-  }
-  assertFirstPartyDelegationBinding({ sourceDomain, product, resource, scopes });
-
-  try {
-    return await client(deps).$transaction(async (tx) => {
-      const source = await tx.clientDomain.findUnique({
-        where: { domain: sourceDomain },
-        select: { id: true, status: true },
-      });
-      if (!source || source.status !== 'active') {
-        throw new AppError('BAD_REQUEST', 400, 'CONFIDENTIAL_DELEGATION_DOMAIN_UNAVAILABLE');
-      }
-      const created = await tx.confidentialDelegationMapping.create({
-        data: {
-          clientDomainId: source.id,
-          product,
-          resource,
-          scopes,
-          enabled: params.enabled ?? true,
-          ...actorCreateData(params.actor),
-        },
-        include: mappingInclude,
-      });
-      await tx.adminAuditLog.create({
-        data: {
-          actorEmail: params.actor.email,
-          action: 'confidential_delegation.created',
-          targetDomain: sourceDomain,
-          metadata: auditMetadata(created),
-        },
-      });
-      return created;
-    });
-  } catch (error) {
-    if ((error as { code?: unknown } | null)?.code === 'P2002') {
-      throw new AppError('BAD_REQUEST', 400, 'CONFIDENTIAL_DELEGATION_EXISTS');
-    }
-    throw error;
-  }
-}
-
-export async function updateConfidentialDelegationMapping(
-  params: {
-    mappingId: string;
-    resource?: string;
-    scopes?: string[];
-    enabled?: boolean;
-    actor: MutationActor;
-  },
-  deps?: { prisma?: PrismaClient },
-): Promise<ConfidentialDelegationMappingView> {
-  if (
-    params.resource === undefined &&
-    params.scopes === undefined &&
-    params.enabled === undefined
-  ) {
-    throw new AppError('BAD_REQUEST', 400, 'CONFIDENTIAL_DELEGATION_UPDATE_EMPTY');
-  }
-  const data = {
-    ...(params.resource === undefined ? {} : { resource: normalizeResource(params.resource) }),
-    ...(params.scopes === undefined ? {} : { scopes: scopeValuesForDatabase(params.scopes) }),
-    ...(params.enabled === undefined ? {} : { enabled: params.enabled }),
-    ...actorUpdateData(params.actor),
-  };
-
-  return client(deps).$transaction(async (tx) => {
-    const existing = await tx.confidentialDelegationMapping.findUnique({
-      where: { id: params.mappingId },
-      include: mappingInclude,
-    });
-    if (!existing) {
-      throw new AppError('NOT_FOUND', 404, 'CONFIDENTIAL_DELEGATION_NOT_FOUND');
-    }
-    assertFirstPartyDelegationBinding({
-      sourceDomain: existing.clientDomain.domain,
-      product: existing.product,
-      resource: data.resource ?? existing.resource,
-      scopes: data.scopes ?? existing.scopes,
-    });
-    const updated = await tx.confidentialDelegationMapping.update({
-      where: { id: existing.id },
-      data,
-      include: mappingInclude,
-    });
-    await tx.adminAuditLog.create({
-      data: {
-        actorEmail: params.actor.email,
-        action: 'confidential_delegation.updated',
-        targetDomain: existing.clientDomain.domain,
-        metadata: {
-          before: auditMetadata(existing),
-          after: auditMetadata(updated),
-        },
-      },
-    });
-    return updated;
-  });
-}
-
-export async function deleteConfidentialDelegationMapping(
-  params: {
-    mappingId: string;
-    actor: MutationActor;
-  },
-  deps?: { prisma?: PrismaClient },
-): Promise<void> {
-  await client(deps).$transaction(async (tx) => {
-    const existing = await tx.confidentialDelegationMapping.findUnique({
-      where: { id: params.mappingId },
-      include: mappingInclude,
-    });
-    if (!existing) {
-      throw new AppError('NOT_FOUND', 404, 'CONFIDENTIAL_DELEGATION_NOT_FOUND');
-    }
-    await tx.confidentialDelegationMapping.delete({ where: { id: existing.id } });
-    await tx.adminAuditLog.create({
-      data: {
-        actorEmail: params.actor.email,
-        action: 'confidential_delegation.deleted',
-        targetDomain: existing.clientDomain.domain,
-        metadata: auditMetadata(existing),
-      },
-    });
-  });
 }
 
 export async function resolveConfidentialDelegation(
@@ -393,7 +82,7 @@ export async function resolveConfidentialDelegation(
   let product: string;
   let requestedScopes: ConfidentialDelegationScopeName[];
   try {
-    product = normalizeProduct(params.product);
+    product = normalizeConfidentialDelegationProduct(params.product);
     requestedScopes = parseConfidentialDelegationScope(params.scope);
   } catch {
     throw invalidDelegation();
@@ -401,7 +90,6 @@ export async function resolveConfidentialDelegation(
   if (params.product !== product) {
     throw invalidDelegation();
   }
-
   const mapping = await client(deps).confidentialDelegationMapping.findUnique({
     where: {
       clientDomainId_product: {
@@ -409,7 +97,7 @@ export async function resolveConfidentialDelegation(
         product,
       },
     },
-    include: mappingInclude,
+    include: confidentialDelegationMappingInclude,
   });
   const sourceDomain = normalizeDomain(params.sourceDomain);
   if (
@@ -419,6 +107,24 @@ export async function resolveConfidentialDelegation(
     mapping.clientDomain.domain !== sourceDomain ||
     mapping.resource !== params.resource
   ) {
+    throw invalidDelegation();
+  }
+
+  // Privileged identity/membership scopes are globally exclusive to the
+  // `nessie-identity` binding: the request, and the stored mapping itself,
+  // must both match the server-owned pin exactly. The guard triggers whenever
+  // the product is `nessie-identity` or either side carries a privileged
+  // scope, so a mapping that drifted since creation (even to a bare
+  // [ai.invoke]) fails closed here before any token is issued.
+  try {
+    assertPrivilegedRuntimeBinding({
+      sourceDomain: mapping.clientDomain.domain,
+      product: mapping.product,
+      resource: mapping.resource,
+      mappingScopes: mapping.scopes,
+      requestedScopes,
+    });
+  } catch {
     throw invalidDelegation();
   }
 

@@ -325,8 +325,12 @@ uses its own existing per-domain app credential; the credential's authenticated
 exact requested HTTPS resource and an allowlist of `ai.invoke`, `billing.read`,
 `token.provision`, `identity.read`, `membership.invite`, and/or
 `membership.manage`. `token.provision` is an explicit app capability used
-only by a token provisioner; the identity/membership scopes are server-pinned
-for first-party Nessie; `ai.invoke` never implies any of them. A resource token
+only by a token provisioner; the identity/membership scopes are globally pinned
+for the first-party `nessie-identity` product key (exact source
+`api.nessie.works`, exact resource
+`https://authentication.unlikeotherai.com`, exact three-scope set; any drift on
+create, update, or runtime resolve fails closed); `ai.invoke` never implies
+any of them. A resource token
 whose scope contains an identity/membership scope omits the advisory `email`
 claim. The signed assertion carries the stable user and optional
 organisation/team. A user token is never accepted as the application
