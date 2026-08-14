@@ -46,6 +46,22 @@ describe('confidential delegation mapping migration', () => {
   it('adds identity/membership scopes without weakening exact non-duplicate scope bounds', async () => {
     const sql = await readFile(identityMembershipMigrationUrl, 'utf8');
 
+    // Docs/deploy.md: every live-table migration must abort fast instead of
+    // queueing behind a lock — both timeouts open the file, before any
+    // statement touches the live table.
+    expect(
+      sql
+        .trimStart()
+        .startsWith(
+          "-- Abort fast behind live traffic (Docs/deploy.md): never queue behind a lock.\nSET lock_timeout = '5s';\nSET statement_timeout = '120s';",
+        ),
+    ).toBe(true);
+    expect(sql.indexOf(`SET lock_timeout = '5s';`)).toBeLessThan(
+      sql.indexOf('ALTER TYPE "ConfidentialDelegationScope"'),
+    );
+    expect(sql.indexOf(`SET statement_timeout = '120s';`)).toBeLessThan(
+      sql.indexOf('ALTER TYPE "ConfidentialDelegationScope"'),
+    );
     expect(sql).toContain(
       `ALTER TYPE "ConfidentialDelegationScope" ADD VALUE IF NOT EXISTS 'identity.read'`,
     );

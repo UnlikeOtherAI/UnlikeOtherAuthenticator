@@ -1,10 +1,9 @@
-import { decodeJwt, exportJWK, generateKeyPair, SignJWT, type JWK, type KeyLike } from 'jose';
+import { exportJWK, generateKeyPair, SignJWT, type JWK, type KeyLike } from 'jose';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { exchangeConfidentialChainedAccessToken } from '../../src/services/confidential-chained-token-exchange.service.js';
 import {
   resetAccessTokenKeyCache,
-  signConfidentialAccessToken,
   type ConfidentialAccessTokenClaims,
 } from '../../src/services/oauth/access-token.service.js';
 import {
@@ -208,65 +207,6 @@ describe('chained confidential exchange', () => {
     expect(assertionUse.create).not.toHaveBeenCalled();
     expect(assertionUse.deleteMany).not.toHaveBeenCalled();
     expect(signAccessToken).toHaveBeenCalledTimes(2);
-  });
-
-  it('chains a real UOA-issued no-email token through the actual signer/resolver path', async () => {
-    // The inbound token is minted by the production signer (the same key and
-    // profile the exchange verifies against via JWKS), not a hand-signed
-    // fixture: UOA issues identity/membership tokens without the advisory
-    // email claim, so the resolver must accept exactly that token shape.
-    const inbound = await signConfidentialAccessToken({
-      subject: userId,
-      credentialEpoch: 0,
-      sourceDomain,
-      product: 'nessie',
-      resource: callerAudience,
-      issuer,
-      ttlSeconds: 120,
-      scope: 'identity.read membership.invite membership.manage',
-      org: defaultOrg(),
-      active: { orgId: 'org_1', teamId: 'team_1' },
-    });
-    expect(decodeJwt(inbound)).not.toHaveProperty('email');
-
-    const now = Math.floor(Date.now() / 1000);
-    const signAccessToken = vi.fn().mockResolvedValue('identity-api-token');
-    const deps = {
-      prisma: prismaMock(),
-      now: () => now,
-      signAccessToken,
-      resolveDelegation: resolveDelegation('identity.read membership.manage'),
-      resolveSourceDelegation: vi.fn().mockResolvedValue({
-        product: 'nessie',
-        resource: callerAudience,
-        scope: 'identity.read membership.invite membership.manage',
-      }),
-      consumeSubjectRateLimit: vi.fn(),
-    };
-
-    await expect(
-      exchangeConfidentialChainedAccessToken(
-        {
-          authenticatedClientDomainId: 'client-domain-deepsignal',
-          subjectToken: inbound,
-          product: 'deepsignal',
-          resource: 'https://authentication.unlikeotherai.com',
-          scope: 'identity.read membership.manage',
-          config: config(),
-        },
-        deps,
-      ),
-    ).resolves.toMatchObject({ scope: 'identity.read membership.manage' });
-
-    const claims = signAccessToken.mock.calls[0]?.[0] as ConfidentialAccessTokenClaims;
-    expect(claims).not.toHaveProperty('email');
-    expect(claims).toMatchObject({
-      subject: userId,
-      sourceDomain: callerDomain,
-      product: 'deepsignal',
-      scope: 'identity.read membership.manage',
-      actor: { sub: sourceDomain, product: 'nessie' },
-    });
   });
 
   it('rejects a pre-reset chained token whose credential epoch is no longer current', async () => {

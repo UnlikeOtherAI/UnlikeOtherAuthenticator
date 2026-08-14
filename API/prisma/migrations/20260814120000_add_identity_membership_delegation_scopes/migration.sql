@@ -1,4 +1,8 @@
 
+-- Abort fast behind live traffic (Docs/deploy.md): never queue behind a lock.
+SET lock_timeout = '5s';
+SET statement_timeout = '120s';
+
 -- Phase A1 (SSO-owned team directory & invites): UOA becomes the only durable
 -- authority for human identity, team membership, and invitations. A product
 -- backend (the first-party `nessie-identity` mapping) can read identity and
