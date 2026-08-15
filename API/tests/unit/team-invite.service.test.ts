@@ -186,6 +186,9 @@ describe('team invite services', () => {
       email: 'new-user@example.com',
       status: 'invited',
     });
+    // The per-row result carries the created invitation's id, so a caller can read, resend, or
+    // revoke that exact invitation by id without listing the team's whole invite history.
+    expect(result.results[0]).toHaveProperty('invite.id', 'invite-1');
     expect(prisma.verificationToken.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         type: 'VERIFY_EMAIL_SET_PASSWORD',
@@ -377,6 +380,9 @@ describe('team invite services', () => {
       email: 'invitee@example.com',
       status: 'resent_existing',
     });
+    // A resend supersedes the previous row, so the id returned is the fresh invitation's — the one
+    // a by-id read/resend/revoke has to target.
+    expect(result.results[0]).toHaveProperty('invite.id', 'invite-new');
     expect(prisma.teamInvite.updateMany).toHaveBeenCalledWith({
       where: {
         teamId: 'team-1',

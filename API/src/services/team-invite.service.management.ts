@@ -1,6 +1,7 @@
 import type { ClientConfig } from './config.service.js';
 
 import { getPrisma } from '../db/prisma.js';
+import { AppError } from '../utils/errors.js';
 import { assertDatabaseEnabled } from './organisation.service.base.js';
 import { buildUserIdentity } from './user-scope.service.js';
 import { extractEmailTheme } from './email-theme.service.js';
@@ -248,6 +249,54 @@ export async function listTeamInvites(
 
   const now = deps?.now ? deps.now() : new Date();
   return { data: rows.map((row) => toInviteRecord(row, now, org.domain)) };
+}
+
+/**
+ * `GET /org/organisations/:orgId/teams/:teamId/invitations/:inviteId` — read one invitation by id.
+ *
+ * The by-id companion to `listTeamInvites`: same resolution, same authorization surface, same
+ * `toInviteRecord` shape, so a consumer that holds an id (from the bulk-invite result, the list, or
+ * a resend) can re-read that one row instead of paging the whole team's invite history. Read-only —
+ * nothing is written and no audit row is produced.
+ *
+ * An unknown id, an invitation belonging to another org/team, and a cross-domain org all answer the
+ * same generic 404 (`resolveInviteTarget` for the org/team leg, the `findFirst` guard for the
+ * invitation itself), so the endpoint is never an existence oracle.
+ */
+export async function getTeamInvite(
+  params: {
+    orgId: string;
+    teamId: string;
+    inviteId: string;
+    domain: string;
+  },
+  deps?: InviteDeps,
+): Promise<TeamInviteRecord> {
+  const env = deps?.env ?? getEnv();
+  assertDatabaseEnabled(env);
+
+  const prisma = deps?.prisma ?? (getPrisma() as InvitePrisma);
+  const { org, team } = await resolveInviteTarget({
+    prisma,
+    orgId: params.orgId,
+    teamId: params.teamId,
+    domain: params.domain,
+  });
+
+  const row = await prisma.teamInvite.findFirst({
+    where: {
+      id: params.inviteId,
+      orgId: org.id,
+      teamId: team.id,
+    },
+    select: TEAM_INVITE_SELECT,
+  });
+  if (!row) {
+    throw new AppError('NOT_FOUND', 404);
+  }
+
+  const now = deps?.now ? deps.now() : new Date();
+  return toInviteRecord(row, now, org.domain);
 }
 
 export async function trackTeamInviteOpen(

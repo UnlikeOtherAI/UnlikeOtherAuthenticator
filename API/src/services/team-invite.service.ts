@@ -6,7 +6,12 @@ export type {
   TeamInviteStatus,
 } from './team-invite.service.base.js';
 
-export { createTeamInvites, listTeamInvites, trackTeamInviteOpen } from './team-invite.service.management.js';
+export {
+  createTeamInvites,
+  getTeamInvite,
+  listTeamInvites,
+  trackTeamInviteOpen,
+} from './team-invite.service.management.js';
 export { resendTeamInvite } from './team-invite.service.resend.js';
 export { revokeTeamInvite } from './team-invite.service.revoke.js';
 export {
