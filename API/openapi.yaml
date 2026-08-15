@@ -1497,9 +1497,31 @@ components:
       type: object
       additionalProperties: true
 
+    TeamInviteObject:
+      type: object
+      description: |
+        One team invitation as `toInviteRecord` serializes it: `id`, `email`, `teamRole`, derived
+        `status` (`pending|accepted|declined|replaced|revoked|expired`), `approvalStatus`
+        (`not_required|pending|approved|denied`), `expiresAt`, inviter fields, send/open counters,
+        accepted/declined/revoked state, and the avatar URLs.
+      additionalProperties: true
+
     InviteResult:
-      type: string
-      enum: [invited, resent_existing, already_member, conflict]
+      type: object
+      description: |
+        One result per submitted email. `invite` — and with it the new invitation's `id` — is
+        present only on `invited` and `resent_existing`; the other three outcomes create no
+        invitation.
+      required: [email, status]
+      properties:
+        email:
+          type: string
+          format: email
+        status:
+          type: string
+          enum: [invited, resent_existing, already_member, existing_user, conflict]
+        invite:
+          $ref: '#/components/schemas/TeamInviteObject'
 
     AccessRequestObject:
       type: object
@@ -6549,6 +6571,51 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
 
   /org/organisations/{orgId}/teams/{teamId}/invitations/{inviteId}:
+    get:
+      tags: [Organizations]
+      summary: Read a team invitation by id
+      operationId: getTeamInvitation
+      description: |
+        Returns one invitation in exactly the record shape each entry of the invitation list
+        carries. The by-id companion to the list, for a caller holding an id from a bulk-invite
+        result (`results[i].invite.id`), the list, or a resend. Authorization is the list's —
+        domain-hash plus verified config and `org_features` — so it is backend-mode capable in the
+        same way. Read-only: nothing is written and no audit row is produced. An unknown id, an
+        invitation belonging to a foreign org/team, and a cross-domain org all answer the same
+        generic `404`.
+      security:
+        - domainHashBearer: []
+          accessToken: []
+      parameters:
+        - $ref: '#/components/parameters/orgIdPath'
+        - $ref: '#/components/parameters/teamIdPath'
+        - name: inviteId
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/domainQuery'
+        - $ref: '#/components/parameters/configUrl'
+      responses:
+        '200':
+          description: The invitation record.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamInviteObject'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Unknown invitation id, foreign org/team, or cross-domain (generic).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
     delete:
       tags: [Organizations]
       summary: Revoke a pending team invitation

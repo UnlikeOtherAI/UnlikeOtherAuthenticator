@@ -14,6 +14,7 @@ import { setTenantContextFromRequest } from '../../plugins/tenant-context.plugin
 import {
   createMemberInvite,
   createTeamInvites,
+  getTeamInvite,
   listTeamInvites,
   resendTeamInvite,
   revokeTeamInvite,
@@ -148,6 +149,38 @@ export function registerTeamInvitationRoutes(app: FastifyInstance): void {
       );
 
       reply.status(200).send(invites);
+    },
+  );
+
+  // Read one invitation by id — the by-id companion to the list above, for a consumer holding an
+  // id from a bulk-invite result, the list, or a resend. Same preValidation stack as the list
+  // (domain-hash + verified config + org features), so it is backend-mode capable in exactly the
+  // same way, and returns exactly the record shape the list's entries carry.
+  app.get(
+    '/org/organisations/:orgId/teams/:teamId/invitations/:inviteId',
+    {
+      preValidation: [
+        requireDomainHashAuthForDomainQuery(),
+        configVerifier,
+        parseDomainContextHook,
+        requireOrgFeatures,
+      ],
+    },
+    async (request, reply) => {
+      const { domain } = parseDomainContext(request);
+      const orgId = getOrgIdFromParams(request.params);
+      const teamId = getTeamIdFromParams(request.params);
+      const inviteId = getInviteIdFromParams(request.params);
+
+      setTenantContextFromRequest(request, { orgId });
+      const invite = await request.withTenantTx((tx) =>
+        getTeamInvite(
+          { orgId, teamId, inviteId, domain },
+          { prisma: asPrismaClient(tx) },
+        ),
+      );
+
+      reply.status(200).send(invite);
     },
   );
 

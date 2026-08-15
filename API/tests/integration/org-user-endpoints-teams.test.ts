@@ -223,6 +223,44 @@ describe.skipIf(!hasDatabase)('user-facing /org team CRUD and membership', () =>
     expect(pendingList.data).toHaveLength(2);
     expect(pendingList.data.some((invite) => invite.invitedByName === 'Team Owner')).toBe(true);
 
+    // The bulk result hands back each new invitation's id; the by-id read resolves that same id
+    // through the list's own authorization (domain hash only — backend mode) and returns the
+    // identical record, so a consumer holding an id never has to page the whole history.
+    const bulkInviteId = inviteResponse.results[0].invite?.id;
+    expect(bulkInviteId).toBeTruthy();
+    const listedInvite = pendingList.data.find((invite) => invite.id === bulkInviteId);
+    expect(listedInvite).toBeDefined();
+
+    const readInvite = await app.inject({
+      method: 'GET',
+      url: `/org/organisations/${org.id}/teams/${createdTeamIds[0]}/invitations/${bulkInviteId}?domain=${encodeURIComponent(domain)}&config_url=${encodeURIComponent(orgConfigUrl)}`,
+      headers: {
+        authorization: `Bearer ${domainHash}`,
+      },
+    });
+    expect(readInvite.statusCode).toBe(200);
+    expect(readInvite.json()).toEqual(listedInvite);
+
+    const readUnknownInvite = await app.inject({
+      method: 'GET',
+      url: `/org/organisations/${org.id}/teams/${createdTeamIds[0]}/invitations/no-such-invite?domain=${encodeURIComponent(domain)}&config_url=${encodeURIComponent(orgConfigUrl)}`,
+      headers: {
+        authorization: `Bearer ${domainHash}`,
+      },
+    });
+    expect(readUnknownInvite.statusCode).toBe(404);
+
+    // An invitation of this org but another team is the same generic 404 — the id alone is not a
+    // key to the org's invite history.
+    const readForeignTeamInvite = await app.inject({
+      method: 'GET',
+      url: `/org/organisations/${org.id}/teams/${createdTeamIds[1]}/invitations/${bulkInviteId}?domain=${encodeURIComponent(domain)}&config_url=${encodeURIComponent(orgConfigUrl)}`,
+      headers: {
+        authorization: `Bearer ${domainHash}`,
+      },
+    });
+    expect(readForeignTeamInvite.statusCode).toBe(404);
+
     const resendInvite = await app.inject({
       method: 'POST',
       url: `/org/organisations/${org.id}/teams/${createdTeamIds[0]}/invitations/${pendingList.data[0].id}/resend?domain=${encodeURIComponent(domain)}&config_url=${encodeURIComponent(orgConfigUrl)}`,

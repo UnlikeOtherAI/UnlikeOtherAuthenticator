@@ -109,4 +109,34 @@ describe('/api invite response contract', () => {
     );
     expect(llmIntegrationMarkdown).toContain('INVITATION_ALREADY_ACCEPTED');
   });
+
+  it('documents the by-id invitation read on both contract surfaces', () => {
+    const byId = endpoints.filter(
+      (endpoint) =>
+        endpoint.method === 'GET' &&
+        endpoint.path === '/org/organisations/:orgId/teams/:teamId/invitations/:inviteId',
+    );
+    expect(byId).toHaveLength(1);
+
+    const documented = [
+      byId[0].description,
+      ...Object.values(byId[0].response ?? {}),
+    ].join('\n');
+    // The record shape and the generic 404 are the two things an integrator has to know before
+    // calling it — the shape to parse, the 404 so an unknown id is not read as a bug.
+    expect(documented).toContain('approvalStatus');
+    expect(documented).toContain('generic');
+    expect(llmIntegrationMarkdown).toContain(
+      'GET /org/organisations/:orgId/teams/:teamId/invitations/:inviteId',
+    );
+  });
+
+  it('documents that a bulk-invite result carries the new invitation id', () => {
+    // The id in the bulk result is what makes the by-id read, resend, and revoke reachable at all,
+    // so `/api` must name the key an integrator reads it off.
+    const bulk = endpointText('/org/organisations/:orgId/teams/:teamId/invitations');
+    expect(bulk).toContain('invite?');
+    expect(bulk).toContain('including its id');
+    expect(llmIntegrationMarkdown).toContain('results[i].invite.id');
+  });
 });

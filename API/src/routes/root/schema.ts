@@ -256,7 +256,7 @@ const orgEndpoints: EndpointSchema[] = [
     },
     response: {
       results:
-        'array (backend-only variant) — per-email status: invited | resent_existing | already_member | existing_user | conflict',
+        'array (backend-only variant) — one object per submitted email: { email, status: invited | resent_existing | already_member | existing_user | conflict, invite? }. The invite key carries the full invitation record — including its id, for a later GET/resend/DELETE by id — on invited and resent_existing rows only; the three no-invitation outcomes carry email + status alone',
       status:
         '"ok" (member-initiated variant) — always the same shape regardless of outcome (no enumeration)',
     },
@@ -268,6 +268,17 @@ const orgEndpoints: EndpointSchema[] = [
     auth: 'domain hash bearer token',
     response: {
       data: 'array — invite records with status (pending|accepted|declined|replaced|revoked|expired), approvalStatus (not_required|pending|approved|denied), expiresAt, inviter, send/open, accepted/declined/revoked state, plus invitedByAvatarImageUrl and acceptedAvatarImageUrl (null until the matching user id exists; the invitee email never gets one)',
+    },
+  },
+  {
+    method: 'GET',
+    path: '/org/organisations/:orgId/teams/:teamId/invitations/:inviteId',
+    description:
+      'Read one team invitation by id — the by-id companion to the invitation list, for a caller holding an id from a bulk-invite result, the list, or a resend. Read-only: nothing is written and no audit row is produced.',
+    auth: 'domain hash bearer token',
+    response: {
+      200: 'invite record — exactly the shape the list returns per entry, including status (pending|accepted|declined|replaced|revoked|expired), approvalStatus (not_required|pending|approved|denied), expiresAt, inviter, send/open, accepted/declined/revoked state, invitedByAvatarImageUrl and acceptedAvatarImageUrl',
+      404: 'generic — unknown invite id, an invitation belonging to a foreign org/team, or cross-domain (no existence leak)',
     },
   },
   {
