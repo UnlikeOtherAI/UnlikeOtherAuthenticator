@@ -200,3 +200,57 @@ it('rejects an existing-user invite link from a superseded credential epoch', as
     ),
   ).rejects.toMatchObject({ statusCode: 400 });
 });
+
+it('refuses a revoked invitation token with the distinct INVITE_REVOKED code', async () => {
+  const prisma = {
+    verificationToken: {
+      findUnique: vi.fn().mockResolvedValue({
+        id: 'token-row-1',
+        type: 'VERIFY_EMAIL_SET_PASSWORD',
+        configUrl: 'https://client.example.com/auth-config',
+        userId: null,
+        userKey: 'invitee@example.com',
+        tokenVersion: null,
+        teamInviteId: 'invite-1',
+        expiresAt: new Date('2099-04-01T00:10:00.000Z'),
+        usedAt: null,
+        teamInvite: {
+          id: 'invite-1',
+          inviteName: 'Invited User',
+          email: 'invitee@example.com',
+          acceptedAt: null,
+          declinedAt: null,
+          revokedAt: new Date('2026-08-15T12:00:00.000Z'),
+          team: { name: 'Core Team' },
+          org: { name: 'Acme' },
+        },
+      }),
+    },
+  } as unknown as PrismaClient;
+
+  await expect(
+    getTeamInviteLandingData(
+      {
+        token: 'token-123',
+        configUrl: 'https://client.example.com/auth-config',
+        config: makeConfig(),
+      },
+      {
+        env: {
+          NODE_ENV: 'test',
+          HOST: '127.0.0.1',
+          PORT: 3000,
+          LOG_LEVEL: 'info',
+          SHARED_SECRET: 'test-shared-secret-with-enough-length',
+          AUTH_SERVICE_IDENTIFIER: 'uoa-auth-service',
+          DATABASE_URL: 'postgres://example.invalid/db',
+          ACCESS_TOKEN_TTL: '30m',
+          LOG_RETENTION_DAYS: 90,
+          AI_TRANSLATION_PROVIDER: 'disabled',
+        },
+        prisma,
+        sharedSecret: 'test-shared-secret-with-enough-length',
+      },
+    ),
+  ).rejects.toMatchObject({ statusCode: 400, message: 'INVITE_REVOKED' });
+});

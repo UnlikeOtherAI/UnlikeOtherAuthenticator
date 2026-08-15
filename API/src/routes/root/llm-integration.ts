@@ -452,6 +452,7 @@ plain \`404\`. A backend for domain X cannot see or touch domain Y.
 | \`GET|PUT|DELETE .../teams/:teamId/avatar\` | Yes. |
 | \`POST .../teams/:teamId/join\` | **No** — 401. Self-join's subject IS the acting user. |
 | \`POST|GET .../teams/:teamId/invitations\`, \`.../resend\` | Yes (already was — this is the bulk-invite contract). |
+| \`DELETE .../teams/:teamId/invitations/:inviteId\` | Yes — revokes any pending invitation, including one still awaiting member-invite approval. |
 | \`POST|GET|DELETE .../teams/:teamId/invite-links\` | Yes. A link created this way has \`created_by_user_id: null\`. |
 | \`GET .../invitations?approval=pending\` | Yes. |
 | \`POST .../invitations/:inviteId/approve|deny\` | Yes. No reviewer is recorded. |
@@ -521,7 +522,9 @@ Every \`Team\` has a \`joinPolicy\`: \`INVITE_ONLY\` (default) | \`APPROVED_DOMA
 - **HIDDEN** teams are excluded from \`GET /org/organisations/:orgId/teams\` for callers who are not already an ACTIVE member of that team.
 - Set the policy with \`PUT /org/organisations/:orgId/teams/:teamId\` (\`{ "joinPolicy": "OPEN_TO_ORG" }\`, owner/admin only).
 
-Team invites now carry an \`expiresAt\` (30 days from send/resend — resending refreshes it) and an \`approvalStatus\`: \`not_required\` | \`pending\` | \`approved\` | \`denied\`. The derived invite \`status\` gains \`expired\` alongside \`pending | accepted | declined | replaced\`; an expired or not-yet-approved invite cannot be accepted and is excluded from the workspace chooser / \`firstLogin.pending_invites\`.
+Team invites now carry an \`expiresAt\` (30 days from send/resend — resending refreshes it) and an \`approvalStatus\`: \`not_required\` | \`pending\` | \`approved\` | \`denied\`. The derived invite \`status\` gains \`expired\` and \`revoked\` alongside \`pending | accepted | declined | replaced\` (\`replaced\` = superseded by a newer invite for the same email; \`revoked\` = explicitly cancelled); an expired, revoked, or not-yet-approved invite cannot be accepted and is excluded from the workspace chooser / \`firstLogin.pending_invites\`.
+
+Revoking an invitation: \`DELETE /org/organisations/:orgId/teams/:teamId/invitations/:inviteId\` cancels a pending invitation in either state — already emailed, or still awaiting member-invite approval. The row is kept (invite history is audit history) with \`status: "revoked"\`, outstanding emailed tokens are consumed, and the invite link's hosted landing page tells the recipient the invitation was revoked. In user mode the caller must be an org/team \`owner\`/\`admin\` or the invite's original inviter; backend mode follows the table above. Responses: \`200 { "ok": true }\` (idempotent — an already-revoked or declined invitation also answers \`200\`), \`409\` with code \`INVITATION_ALREADY_ACCEPTED\` once the invite has been accepted (remove the member instead), generic \`404\` for an unknown id or a foreign org/team/domain.
 
 Member-initiated invites: \`POST /org/organisations/:orgId/teams/:teamId/invitations\` accepts the same path used by the trusted backend bulk-invite call, but when called WITH an \`X-UOA-Access-Token\` header it becomes a single-invite, permission-gated call instead:
 

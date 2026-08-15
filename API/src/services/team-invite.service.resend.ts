@@ -89,6 +89,7 @@ export async function resendTeamInvite(
     },
     data: {
       revokedAt: now,
+      revokedReason: 'REPLACED',
     },
   });
 
