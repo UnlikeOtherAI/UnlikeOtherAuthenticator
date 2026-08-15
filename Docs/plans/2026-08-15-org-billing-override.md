@@ -184,10 +184,68 @@ proves they are on the same contract.
   period — proved against one pinned Ledger portfolio snapshot, with no
   product-side arithmetic anywhere in the path.
 
-## Audit constraints
+## Audit constraints (six product audits, 2026-08-15)
 
-*(To be completed when the six per-product billing audits land: any product
-found computing commercial values locally, holding statement/credit state, or
-scoping billing by anything other than the exact active UOA team must be fixed
-before it can render this — a product that already gets team billing wrong will
-get org billing wrong.)*
+Per-product billing audits landed today
+(`docs/plans/2026-08-15-billing-sso-audit.md` in each repo). Readiness to
+render an org override, worst first:
+
+| Product | Billing today | Blocks org override? |
+|---|---|---|
+| **DeepTest** | Conformant "in every material respect audited" | No |
+| **DeepSignal** | Conformant; SHA gate not run in the deploy pipeline; action set hardcoded | No — fix the deploy gate |
+| **water** | Substantially conformant; **G1**: the statement is manager-gated *locally* from the session role claim | No, but G1 must go — see below |
+| **Nessie** | Conformant reads/actions; **P1** assertion audience wrong; **P2** hand-written checkout/portal schemas; owner-only local cost estimates | No, with P1 fixed |
+| **docgen** | **G1** no protocol package at all (hand-rolled validators); **G2** browser supplies the cancellation-confirm body; **G3** billing tracks the last-login team, no switcher | **Yes** |
+| **AdGoes.live** | None — "trivially compliant by absence"; a permanently disabled Billing menu entry | No, but org billing would be its first billing surface |
+
+Four findings change this design rather than merely sitting beside it:
+
+1. **The actor-assertion audience is wrong estate-wide, and this design
+   multiplies it.** Nessie pins `aud` to `…/billing/v1/effective-tariff` on
+   every billing call including statement, credits, Stripe and cancellation
+   (`api/src/services/uoa-billing-client.ts:199,224`); DeepSignal reports the
+   same shape. Either UOA does not verify `aud` per endpoint — in which case
+   the assertion is unscoped and replayable across the whole billing API for
+   its TTL — or it does, and these calls only work by accident. **UOA must
+   decide and state the audience contract before org-scope endpoints are
+   added**, because the override introduces a new, higher-privilege action
+   surface (org funding for every team) that must not inherit an
+   audience nobody is checking. Treat as P1, ahead of this feature.
+2. **The protocol package does not cover the actions this design adds.**
+   Checkout-session and portal-session envelopes are absent from
+   `@unlikeotherai/billing-statement-protocol`, so Nessie hand-writes them
+   (`packages/schemas/src/uoa-billing-actions.ts:6-41`) and docgen hand-rolls
+   everything. Publishing `controlledBy` alone is not enough: **1.3.0 must
+   also publish the checkout/portal envelopes**, or each product will
+   hand-roll the org variants too and the parallel-contract problem doubles.
+3. **"Controlled org-wide" must be a server verdict, not a client role
+   check.** water currently decides manager-vs-member in the browser from the
+   session role claim (`Billing.tsx:13-14`). Under an org override the
+   question changes from "is this person a team billing manager" to "is this
+   person an *org* billing manager" — a claim the session does not carry.
+   `controlledBy.canManage` being UOA-computed is therefore load-bearing, and
+   water's local gate must be replaced by it rather than extended.
+4. **A product that cannot name its active team cannot render this.**
+   docgen's billing follows the last-login team with no switcher (G3), so
+   "billing for this workspace" has no reliable referent there. Its identity
+   work package (WP-3 switcher) is a hard prerequisite; likewise its G1/G2 —
+   a product whose browser supplies the cancellation-confirm body must not be
+   handed org-wide funding actions.
+
+Sequencing consequence: **UOA-side work (§1–§3, §5, §6) can start now.**
+Product rollout order becomes DeepTest and DeepSignal first (already
+conformant), then water and Nessie once G1/P1 land, then docgen after its
+identity and protocol work, with AdGoes.live building its first billing
+surface directly against 1.3.0 — the one product that gets to skip the
+migration entirely.
+
+One open question for UOA, surfaced by Nessie's audit and worth answering in
+writing while this is designed: Nessie persists per-million pricing rates and
+computes owner-only *operational* cost estimates (`ModelPricingProfile`,
+`estimatedCostAmount`), held strictly apart from customer billing and never
+shown to members. Is that "an estimate of provider cost for ops" (allowed) or
+"computing a tariff" (barred)? The org override makes the answer more
+pressing, because an org-wide view is exactly where an operational estimate
+and a customer statement would be tempting to render side by side — and the
+`/tokens` vs `/ops/usage` split exists precisely to stop that.
