@@ -49,8 +49,13 @@ export async function acceptTeamInviteWithinTransaction(params: {
     },
   });
 
-  if (!invite || invite.revokedAt) {
+  if (!invite) {
     throw new AppError('BAD_REQUEST', 400);
+  }
+  // Same placement as the expiry/approval gates below; the distinct internal code lets hosted
+  // surfaces explain a revoked link to the token holder (who already knows the invite existed).
+  if (invite.revokedAt) {
+    throw new AppError('BAD_REQUEST', 400, 'INVITE_REVOKED');
   }
 
   if (normalizeDomain(invite.org.domain) !== normalizeDomain(params.config.domain)) {

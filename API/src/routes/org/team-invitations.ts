@@ -4,7 +4,11 @@ import { asPrismaClient } from '../../db/tenant-context.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
 import requireDomainHashAuthForDomainQuery from '../../middleware/domain-hash-auth.js';
 import { requireOrgFeatures } from '../../middleware/org-features.js';
-import { resolveActingUserClaims, resolveOrgAccessTokenHeader } from '../../middleware/org-role-guard.js';
+import {
+  requireOrgRole,
+  resolveActingUserClaims,
+  resolveOrgAccessTokenHeader,
+} from '../../middleware/org-role-guard.js';
 import { createRateLimiter } from '../../middleware/rate-limiter.js';
 import { setTenantContextFromRequest } from '../../plugins/tenant-context.plugin.js';
 import {
@@ -12,6 +16,7 @@ import {
   createTeamInvites,
   listTeamInvites,
   resendTeamInvite,
+  revokeTeamInvite,
 } from '../../services/team-invite.service.js';
 import { normalizeDomain } from '../../utils/domain.js';
 import { AppError } from '../../utils/errors.js';
@@ -23,8 +28,10 @@ import {
   getOrgIdFromParams,
   getTeamIdFromParams,
   keyInviteTeamRateLimit,
+  orgCaller,
   parseDomainContext,
   parseDomainContextHook,
+  tenantUserId,
 } from './team-route.shared.js';
 
 export function registerTeamInvitationRoutes(app: FastifyInstance): void {
@@ -180,6 +187,40 @@ export function registerTeamInvitationRoutes(app: FastifyInstance): void {
       );
 
       reply.status(200).send(invite);
+    },
+  );
+
+  // Revoke a pending invitation (sent or awaiting approval). Dual-mode via `requireOrgRole()` —
+  // the same absent-vs-blank access-token rule as every other `/org/*` guard: a user token makes
+  // it a permission-gated user call (org/team owner/admin or the original inviter, enforced in the
+  // service), a genuinely absent header selects backend mode (requires the config's
+  // `org_features.backend_org_management` opt-in; audited with `actorUserId: null` + `uoa_actor`).
+  app.delete(
+    '/org/organisations/:orgId/teams/:teamId/invitations/:inviteId',
+    {
+      preValidation: [
+        requireDomainHashAuthForDomainQuery(),
+        configVerifier,
+        parseDomainContextHook,
+        requireOrgFeatures,
+        requireOrgRole(),
+      ],
+    },
+    async (request, reply) => {
+      const { domain } = parseDomainContext(request);
+      const orgId = getOrgIdFromParams(request.params);
+      const teamId = getTeamIdFromParams(request.params);
+      const inviteId = getInviteIdFromParams(request.params);
+
+      setTenantContextFromRequest(request, { orgId, userId: tenantUserId(request) });
+      const result = await request.withTenantTx((tx) =>
+        revokeTeamInvite(
+          { orgId, teamId, inviteId, domain, ...orgCaller(request) },
+          { prisma: asPrismaClient(tx) },
+        ),
+      );
+
+      reply.status(200).send(result);
     },
   );
 }

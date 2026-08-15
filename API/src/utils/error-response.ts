@@ -39,6 +39,10 @@ const PRODUCTION_PUBLIC_ERROR_CODES = new Set([
   'WORKSPACE_NOT_AVAILABLE',
   'INTERACTION_REQUIRED',
   'WORKSPACE_SWITCH_CONFLICT',
+  // Invitation revoke (DELETE .../invitations/:inviteId): products branch on the 409's code, so it
+  // must survive the production generic-body squash. Not an oracle — the caller was already
+  // authorized for the exact invite.
+  'INVITATION_ALREADY_ACCEPTED',
 ]);
 
 function defaultExplanation(code: string, statusCode: number): PublicExplanation {

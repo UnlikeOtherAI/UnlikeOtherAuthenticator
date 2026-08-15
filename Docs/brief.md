@@ -1378,7 +1378,11 @@ visitor that token is the empty string, and treating it as "omitted" would
 promote an anonymous visitor to the tenant's backend. A repeated
 `X-UOA-Access-Token` header is refused for the same reason. Only a genuinely
 missing header selects backend mode. `POST .../teams/:teamId/invitations`, whose
-dual-mode branch predates backend mode, follows the identical rule.
+dual-mode branch predates backend mode, follows the identical rule, as does
+`DELETE .../teams/:teamId/invitations/:inviteId` (invitation revocation — user
+mode allows an org/team owner/admin or the invite's original inviter; backend
+mode requires the `backend_org_management` opt-in like every other tokenless
+`/org/*` mutation).
 
 **There is no acting user in backend mode.** Checks that are about the acting
 user (org owner/admin, team manager, "must be an ACTIVE member") therefore do not

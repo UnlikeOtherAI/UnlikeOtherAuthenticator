@@ -37,6 +37,7 @@ type PendingInviteRow = {
   acceptedAt: Date | null;
   declinedAt: Date | null;
   revokedAt: Date | null;
+  revokedReason: string | null;
   openedAt: Date | null;
   openCount: number;
   lastSentAt: Date;
@@ -65,6 +66,7 @@ export const TEAM_INVITE_SELECT = {
   acceptedAt: true,
   declinedAt: true,
   revokedAt: true,
+  revokedReason: true,
   openedAt: true,
   openCount: true,
   lastSentAt: true,
@@ -84,7 +86,13 @@ export function computeInviteExpiresAt(now: Date): Date {
   return new Date(now.getTime() + INVITE_EXPIRY_MS);
 }
 
-export type TeamInviteStatus = 'pending' | 'accepted' | 'declined' | 'replaced' | 'expired';
+export type TeamInviteStatus =
+  | 'pending'
+  | 'accepted'
+  | 'declined'
+  | 'replaced'
+  | 'revoked'
+  | 'expired';
 export type InviteApprovalStatusValue = 'not_required' | 'pending' | 'approved' | 'denied';
 
 export type TeamInviteRecord = Omit<PendingInviteRow, 'approvalStatus'> & {
@@ -169,7 +177,9 @@ export function toInviteRecord(
       : row.declinedAt
         ? 'declined'
         : row.revokedAt
-          ? 'replaced'
+          ? // Explicit cancellation reads `revoked`; a null reason is a pre-migration row, and
+            // every one of those was revoked by being replaced with a newer invite.
+            (row.revokedReason === 'REVOKED' ? 'revoked' : 'replaced')
           : isExpired
             ? 'expired'
             : 'pending',

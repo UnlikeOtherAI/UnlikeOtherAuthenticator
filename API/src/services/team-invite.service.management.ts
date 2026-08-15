@@ -151,6 +151,7 @@ export async function createTeamInvites(
         },
         data: {
           revokedAt: now,
+          revokedReason: 'REPLACED',
         },
       });
     }

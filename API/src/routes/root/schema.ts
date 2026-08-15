@@ -267,7 +267,7 @@ const orgEndpoints: EndpointSchema[] = [
     description: 'List invitation history for a team',
     auth: 'domain hash bearer token',
     response: {
-      data: 'array — invite records with status (pending|accepted|declined|replaced|expired), approvalStatus (not_required|pending|approved|denied), expiresAt, inviter, send/open, accepted/declined state, plus invitedByAvatarImageUrl and acceptedAvatarImageUrl (null until the matching user id exists; the invitee email never gets one)',
+      data: 'array — invite records with status (pending|accepted|declined|replaced|revoked|expired), approvalStatus (not_required|pending|approved|denied), expiresAt, inviter, send/open, accepted/declined/revoked state, plus invitedByAvatarImageUrl and acceptedAvatarImageUrl (null until the matching user id exists; the invitee email never gets one)',
     },
   },
   {
@@ -276,6 +276,19 @@ const orgEndpoints: EndpointSchema[] = [
     description:
       "Resend a pending team invitation email; refreshes the invite's expiry to now + 30 days",
     auth: 'domain hash bearer token',
+  },
+  {
+    method: 'DELETE',
+    path: '/org/organisations/:orgId/teams/:teamId/invitations/:inviteId',
+    description:
+      'Revoke a pending invitation (sent or still awaiting member-invite approval): the invite row is kept with status "revoked", outstanding emailed tokens are consumed, and the invite link refuses acceptance. Idempotent — revoking an already-revoked (or declined) invitation succeeds. User mode: org/team owner/admin or the original inviter. Backend mode (header omitted): requires org_features.backend_org_management; audited with actor_user_id null + uoa_actor { via: "domain_backend" }.',
+    auth: 'domain hash bearer token; access token (X-UOA-Access-Token header) optional — omit for backend mode',
+    response: {
+      200: '{ ok: true } (also for an already-revoked invitation)',
+      403: 'plain member who is neither an org/team manager nor the original inviter',
+      404: 'generic — unknown invite id, foreign org/team, or cross-domain (no existence leak)',
+      409: 'code INVITATION_ALREADY_ACCEPTED — the invitation was already accepted; remove the member instead',
+    },
   },
   {
     method: 'GET',

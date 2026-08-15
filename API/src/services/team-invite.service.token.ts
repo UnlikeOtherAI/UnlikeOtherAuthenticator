@@ -64,11 +64,14 @@ function assertInviteTokenValid(params: {
   if (!params.row.teamInviteId || !params.row.teamInvite) {
     throw new AppError('BAD_REQUEST', 400);
   }
-  if (
-    params.row.teamInvite.acceptedAt ||
-    params.row.teamInvite.declinedAt ||
-    params.row.teamInvite.revokedAt
-  ) {
+  // Revoked sits beside the used/expired checks above, but carries a distinct internal code so the
+  // hosted landing page can say WHY the link is dead. This is not an oracle: only the holder of the
+  // emailed token can reach it, and that person already knows the invite existed. Every other
+  // failure stays the same generic error.
+  if (params.row.teamInvite.revokedAt) {
+    throw new AppError('BAD_REQUEST', 400, 'INVITE_REVOKED');
+  }
+  if (params.row.teamInvite.acceptedAt || params.row.teamInvite.declinedAt) {
     throw new AppError('BAD_REQUEST', 400);
   }
 

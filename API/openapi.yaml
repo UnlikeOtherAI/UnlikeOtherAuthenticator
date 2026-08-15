@@ -6548,6 +6548,70 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /org/organisations/{orgId}/teams/{teamId}/invitations/{inviteId}:
+    delete:
+      tags: [Organizations]
+      summary: Revoke a pending team invitation
+      operationId: revokeTeamInvitation
+      description: |
+        Revokes a pending invitation in either state — already emailed, or still awaiting
+        member-invite approval. The invite row is kept with derived status `revoked`; outstanding
+        emailed tokens are consumed and the invitation link refuses acceptance. Idempotent:
+        revoking an already-revoked (or declined) invitation succeeds. With `X-UOA-Access-Token`,
+        the caller must be an org/team owner/admin or the invitation's original inviter; with the
+        header omitted (backend mode), the verified config must set
+        `org_features.backend_org_management` and the audit row records
+        `actor_user_id: null` plus `uoa_actor: { "via": "domain_backend" }`.
+      security:
+        - domainHashBearer: []
+          accessToken: []
+      parameters:
+        - $ref: '#/components/parameters/orgIdPath'
+        - $ref: '#/components/parameters/teamIdPath'
+        - name: inviteId
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/domainQuery'
+        - $ref: '#/components/parameters/configUrl'
+      responses:
+        '200':
+          description: Invitation revoked (or was already revoked/declined — idempotent).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+                    enum: [true]
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Caller is neither an org/team manager nor the original inviter.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Unknown invitation id, foreign org/team, or cross-domain (generic).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Invitation already accepted (`code INVITATION_ALREADY_ACCEPTED`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /org/organisations/{orgId}/teams/{teamId}/invitations/{inviteId}/resend:
     post:
       tags: [Organizations]

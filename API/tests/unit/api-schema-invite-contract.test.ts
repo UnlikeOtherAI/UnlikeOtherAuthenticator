@@ -30,6 +30,7 @@ const INVITE_ROW = {
   acceptedAt: null,
   declinedAt: null,
   revokedAt: null,
+  revokedReason: null,
   openedAt: null,
   openCount: 0,
   lastSentAt: NOW,
@@ -43,6 +44,7 @@ const INVITE_ROW = {
 const INVITE_ENDPOINT_PATHS = [
   '/org/organisations/:orgId/teams/:teamId',
   '/org/organisations/:orgId/teams/:teamId/invitations',
+  '/org/organisations/:orgId/teams/:teamId/invitations/:inviteId',
   '/org/organisations/:orgId/invitations',
   '/org/organisations/:orgId/invitations/:inviteId/approve',
   '/org/organisations/:orgId/invitations/:inviteId/deny',
@@ -86,5 +88,25 @@ describe('/api invite response contract', () => {
   it('keeps /llm consistent with /api on the field name', () => {
     expect(llmIntegrationMarkdown).toContain('approvalStatus');
     expect(llmIntegrationMarkdown).not.toContain('approval_status');
+  });
+
+  it('documents the revoked status and the revoke endpoint on both contract surfaces', () => {
+    const record = toInviteRecord(
+      { ...INVITE_ROW, revokedAt: NOW, revokedReason: 'REVOKED' },
+      NOW,
+      'acme.com',
+    );
+    expect(record.status).toBe('revoked');
+
+    expect(
+      endpointText('/org/organisations/:orgId/teams/:teamId/invitations/:inviteId'),
+    ).toContain('INVITATION_ALREADY_ACCEPTED');
+    expect(endpointText('/org/organisations/:orgId/teams/:teamId/invitations')).toContain(
+      'revoked',
+    );
+    expect(llmIntegrationMarkdown).toContain(
+      'DELETE /org/organisations/:orgId/teams/:teamId/invitations/:inviteId',
+    );
+    expect(llmIntegrationMarkdown).toContain('INVITATION_ALREADY_ACCEPTED');
   });
 });

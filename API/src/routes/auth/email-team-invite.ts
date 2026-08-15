@@ -6,6 +6,7 @@ import {
   declineTeamInviteByToken,
   getTeamInviteLandingData,
 } from '../../services/team-invite.service.js';
+import { isAppError } from '../../utils/errors.js';
 import { tokenConsumeRateLimiter } from './rate-limit-keys.js';
 
 const QuerySchema = z
@@ -37,6 +38,25 @@ function buildAcceptUrl(params: {
     query.set('redirect_url', params.redirectUrl);
   }
   return `/auth/email/link?${query.toString()}`;
+}
+
+/**
+ * The one differentiated failure on this page: an explicitly revoked invitation says so, because
+ * the token holder legitimately received the link and deserves to know it was withdrawn rather
+ * than being told to retry. Everything else (unknown/expired/used/declined/accepted) stays the
+ * generic "no longer available" — no oracle on which condition failed.
+ */
+function renderUnavailableHtml(err: unknown): string {
+  if (isAppError(err) && err.message === 'INVITE_REVOKED') {
+    return renderInviteHtml({
+      title: 'Invitation revoked',
+      body: 'This invitation has been revoked by the team that sent it. If you think this is a mistake, ask them to send you a new invitation.',
+    });
+  }
+  return renderInviteHtml({
+    title: 'Invitation unavailable',
+    body: 'This invitation is no longer available.',
+  });
 }
 
 function buildDeclineUrl(params: { token: string; configUrl: string }): string {
@@ -128,16 +148,8 @@ export function registerAuthEmailTeamInviteRoute(app: FastifyInstance): void {
               }),
             }),
           );
-      } catch {
-        reply
-          .status(400)
-          .type('text/html; charset=utf-8')
-          .send(
-            renderInviteHtml({
-              title: 'Invitation unavailable',
-              body: 'This invitation is no longer available.',
-            }),
-          );
+      } catch (err) {
+        reply.status(400).type('text/html; charset=utf-8').send(renderUnavailableHtml(err));
       }
     },
   );
@@ -182,16 +194,8 @@ export function registerAuthEmailTeamInviteRoute(app: FastifyInstance): void {
               body: `${invite.inviteName ?? invite.email} declined the invitation to join ${invite.teamName} on ${invite.organisationName}.`,
             }),
           );
-      } catch {
-        reply
-          .status(400)
-          .type('text/html; charset=utf-8')
-          .send(
-            renderInviteHtml({
-              title: 'Invitation unavailable',
-              body: 'This invitation is no longer available.',
-            }),
-          );
+      } catch (err) {
+        reply.status(400).type('text/html; charset=utf-8').send(renderUnavailableHtml(err));
       }
     },
   );

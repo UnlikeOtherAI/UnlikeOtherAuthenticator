@@ -179,7 +179,7 @@ export async function createMemberInvite(
   ) {
     await prisma.teamInvite.updateMany({
       where: { teamId: team.id, email, acceptedAt: null, declinedAt: null, revokedAt: null },
-      data: { revokedAt: now },
+      data: { revokedAt: now, revokedReason: 'REPLACED' },
     });
   }
 
@@ -323,7 +323,9 @@ export async function approveInvite(
   });
   const invite = await findOrgInviteOrThrow({ prisma, orgId: org.id, inviteId: params.inviteId });
 
-  if (invite.approvalStatus !== 'PENDING') {
+  // A revoked invite is no longer approvable — approving would email a link that acceptance
+  // refuses (`revokedAt` gate). Same generic error as the not-pending case below.
+  if (invite.revokedAt || invite.approvalStatus !== 'PENDING') {
     throw new AppError('BAD_REQUEST', 400);
   }
 
@@ -416,7 +418,9 @@ export async function denyInvite(
   });
   const invite = await findOrgInviteOrThrow({ prisma, orgId: org.id, inviteId: params.inviteId });
 
-  if (invite.approvalStatus !== 'PENDING') {
+  // A revoked invite already carries its terminal state; denying it after the fact would overwrite
+  // the honest record. Same generic error as the not-pending case.
+  if (invite.revokedAt || invite.approvalStatus !== 'PENDING') {
     throw new AppError('BAD_REQUEST', 400);
   }
 

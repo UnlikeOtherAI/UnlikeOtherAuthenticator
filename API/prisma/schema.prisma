@@ -96,6 +96,12 @@ enum InviteApprovalStatus {
   DENIED
 }
 
+// Why a TeamInvite's `revokedAt` was set (invitation revocation; extends design §4.7).
+enum InviteRevokedReason {
+  REPLACED // superseded by a newer invite for the same email (create/resend paths)
+  REVOKED // explicitly cancelled via DELETE .../teams/:teamId/invitations/:inviteId
+}
+
 enum BillingTariffMode {
   STANDARD
   FREE
@@ -1317,6 +1323,11 @@ model TeamInvite {
   acceptedAt        DateTime?            @map("accepted_at")
   declinedAt        DateTime?            @map("declined_at")
   revokedAt         DateTime?            @map("revoked_at")
+  // Why `revokedAt` was set. REPLACED = superseded by a newer invite for the same email (the
+  // historical, implicit meaning — the migration backfills it onto every pre-existing revoked
+  // row); REVOKED = explicitly cancelled via DELETE .../invitations/:inviteId. Nullable only
+  // because unresolved invites have no reason yet; a set `revokedAt` always carries one.
+  revokedReason     InviteRevokedReason? @map("revoked_reason")
   openedAt          DateTime?            @map("opened_at")
   openCount         Int                  @default(0) @map("open_count")
   lastSentAt        DateTime             @map("last_sent_at")

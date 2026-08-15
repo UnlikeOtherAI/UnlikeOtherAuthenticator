@@ -8,6 +8,7 @@ export type {
 
 export { createTeamInvites, listTeamInvites, trackTeamInviteOpen } from './team-invite.service.management.js';
 export { resendTeamInvite } from './team-invite.service.resend.js';
+export { revokeTeamInvite } from './team-invite.service.revoke.js';
 export {
   acceptTeamInviteWithinTransaction,
   declineTeamInviteForUser,

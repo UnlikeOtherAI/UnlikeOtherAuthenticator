@@ -387,6 +387,9 @@ describe('team invite services', () => {
       },
       data: {
         revokedAt: new Date('2026-03-03T00:00:00.000Z'),
+        // Superseding is labelled REPLACED so an explicit revocation (REVOKED) stays
+        // distinguishable in the derived status.
+        revokedReason: 'REPLACED',
       },
     });
   });
