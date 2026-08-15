@@ -314,10 +314,13 @@ describe.skipIf(!hasDatabase)('email exact-one workspace 2FA completion', () => 
         payload: { login_token: loginToken },
       });
       expect(choices.statusCode, choices.body).toBe(200);
+      // brief 24.14 (create-team addendum, 2026-08): the chooser payload always carries
+      // creatable_orgs; a brand-new zero-team user has no orgs, so it is an empty array.
       expect(choices.json()).toEqual({
         teams: [],
         pending_invites: [],
         can_create_org: true,
+        creatable_orgs: [],
       });
       expect(await handle.prisma.authorizationCode.count()).toBe(0);
     } finally {

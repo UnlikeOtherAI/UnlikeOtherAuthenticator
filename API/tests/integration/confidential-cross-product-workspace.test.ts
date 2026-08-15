@@ -20,6 +20,7 @@ type Seed = {
   appKeyId: string;
   clientDomainId: string;
   orgId: string;
+  orgSlug: string;
   serviceId: string;
   teamId: string;
   userId: string;
@@ -118,7 +119,7 @@ describe.skipIf(!hasDatabase)('confidential cross-product workspace attribution'
         slug: `canonical-${randomUUID()}`,
         ownerId: user.id,
       },
-      select: { id: true },
+      select: { id: true, slug: true },
     });
     await handle.prisma.orgMember.create({
       data: { orgId: org.id, userId: user.id, role: 'owner' },
@@ -137,6 +138,7 @@ describe.skipIf(!hasDatabase)('confidential cross-product workspace attribution'
       appKeyId: appKey.id,
       clientDomainId: sourceClient.id,
       orgId: org.id,
+      orgSlug: org.slug,
       serviceId: service.id,
       teamId: team.id,
       userId: user.id,
@@ -217,9 +219,11 @@ describe.skipIf(!hasDatabase)('confidential cross-product workspace attribution'
         await signSubject({ domain: sourceDomain, jti: 'active', seed: seeded, withActive: true }),
       ),
     ).resolves.toMatchObject({ accessToken: 'delegated-access-token' });
+    // brief 22.15 + 24.4 (2026-08): the confidential access token carries
+    // active.tenantSlug, re-resolved from the organisation's current slug at issue.
     expect(signAccessToken).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        active: { orgId: seeded.orgId, teamId: seeded.teamId },
+        active: { orgId: seeded.orgId, teamId: seeded.teamId, tenantSlug: seeded.orgSlug },
         org: expect.objectContaining({ org_id: seeded.orgId, teams: [seeded.teamId] }),
       }),
     );
@@ -306,7 +310,13 @@ describe.skipIf(!hasDatabase)('confidential cross-product workspace attribution'
 
     await expect(exchange()).resolves.toMatchObject({ accessToken: 'chained-access-token' });
     const claims = signAccessToken.mock.calls[0]?.[0] as ConfidentialAccessTokenClaims;
-    expect(claims.active).toEqual({ orgId: seeded.orgId, teamId: seeded.teamId });
+    // brief 22.15 + 24.4 (2026-08): chained exchanges also carry active.tenantSlug,
+    // re-resolved from the organisation's current slug at issue.
+    expect(claims.active).toEqual({
+      orgId: seeded.orgId,
+      teamId: seeded.teamId,
+      tenantSlug: seeded.orgSlug,
+    });
     expect(claims.org).toMatchObject({ org_id: seeded.orgId, teams: [seeded.teamId] });
 
     await revoke(seeded);

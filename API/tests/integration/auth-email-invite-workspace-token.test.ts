@@ -89,7 +89,7 @@ describe.skipIf(!hasDatabase)('invite-bound email workspace token flow', () => {
         ownerId: owner.id,
         twoFaPolicy: 'REQUIRED',
       },
-      select: { id: true },
+      select: { id: true, slug: true },
     });
     await handle!.prisma.orgMember.create({
       data: { orgId: org.id, userId: owner.id, role: 'owner' },
@@ -176,7 +176,11 @@ describe.skipIf(!hasDatabase)('invite-bound email workspace token flow', () => {
         sharedSecret: process.env.SHARED_SECRET!,
         audience: process.env.AUTH_SERVICE_IDENTIFIER!,
       });
+      // brief 24.4 (Tenant Subdomain Contract, 2026-08): issued access tokens carry
+      // active.tenantSlug sourced from the organisation slug, so only the persisted
+      // code/refresh rows and the challenge claims stay on the bare { orgId, teamId } pair.
       const exactActive = { orgId: org.id, teamId: team.id };
+      const exactActiveClaim = { ...exactActive, tenantSlug: org.slug };
       expect(challengeClaims).toMatchObject(exactActive);
 
       const completed = await app.inject({
@@ -215,7 +219,7 @@ describe.skipIf(!hasDatabase)('invite-bound email workspace token flow', () => {
         access_token: string;
         refresh_token: string;
       };
-      expect(await activeClaim(firstPair.access_token)).toEqual(exactActive);
+      expect(await activeClaim(firstPair.access_token)).toEqual(exactActiveClaim);
 
       const firstRefresh = await handle!.prisma.refreshToken.findFirstOrThrow({
         where: { userId: invitedUser.id, revokedAt: null },
@@ -232,7 +236,7 @@ describe.skipIf(!hasDatabase)('invite-bound email workspace token flow', () => {
       expect(refreshed.statusCode, refreshed.body).toBe(200);
       expect(
         await activeClaim((refreshed.json() as { access_token: string }).access_token),
-      ).toEqual(exactActive);
+      ).toEqual(exactActiveClaim);
 
       const refreshRows = await handle!.prisma.refreshToken.findMany({
         where: { userId: invitedUser.id },
