@@ -149,7 +149,7 @@ describe.skipIf(!hasDatabase)('existing-user registration LOGIN_LINK', () => {
     });
     const org = await handle.prisma.organisation.create({
       data: { domain, name: 'Existing Org', slug: 'existing-org', ownerId: user.id },
-      select: { id: true },
+      select: { id: true, slug: true },
     });
     await handle.prisma.orgMember.create({
       data: { orgId: org.id, userId: user.id, role: 'owner' },
@@ -215,7 +215,9 @@ describe.skipIf(!hasDatabase)('existing-user registration LOGIN_LINK', () => {
         prisma: handle.prisma,
       });
       expect(claims.userId).toBe(user.id);
-      expect(claims.active).toEqual({ orgId: org.id, teamId: team.id });
+      // brief 24.4 (Tenant Subdomain Contract, 2026-08): active carries tenantSlug,
+      // sourced from the organisation slug, alongside the exact org/team pair.
+      expect(claims.active).toEqual({ orgId: org.id, teamId: team.id, tenantSlug: org.slug });
     } finally {
       await app.close();
     }

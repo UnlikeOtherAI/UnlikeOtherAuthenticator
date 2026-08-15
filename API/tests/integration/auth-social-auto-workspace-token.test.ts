@@ -97,7 +97,7 @@ describe.skipIf(!hasDatabase)('social auto-selected workspace token flow', () =>
         slug: 'single-workspace-org',
         ownerId: user.id,
       },
-      select: { id: true },
+      select: { id: true, slug: true },
     });
     await handle!.prisma.orgMember.create({
       data: { orgId: organisation.id, userId: user.id, role: 'owner' },
@@ -201,8 +201,12 @@ describe.skipIf(!hasDatabase)('social auto-selected workspace token flow', () =>
         access_token: string;
         refresh_token: string;
       };
+      // brief 24.4 (Tenant Subdomain Contract, 2026-08): issued access tokens carry
+      // active.tenantSlug sourced from the organisation slug; the stored refresh row
+      // keeps only the bare { orgId, teamId } scope.
       const exactActive = { orgId: organisation.id, teamId: team.id };
-      expect(await activeClaim(firstPair.access_token)).toEqual(exactActive);
+      const exactActiveClaim = { ...exactActive, tenantSlug: organisation.slug };
+      expect(await activeClaim(firstPair.access_token)).toEqual(exactActiveClaim);
 
       const firstRefreshRow = await handle!.prisma.refreshToken.findFirstOrThrow({
         where: { userId: user.id, revokedAt: null },
@@ -221,7 +225,7 @@ describe.skipIf(!hasDatabase)('social auto-selected workspace token flow', () =>
       });
       expect(refreshResponse.statusCode, refreshResponse.body).toBe(200);
       const rotatedPair = refreshResponse.json() as { access_token: string };
-      expect(await activeClaim(rotatedPair.access_token)).toEqual(exactActive);
+      expect(await activeClaim(rotatedPair.access_token)).toEqual(exactActiveClaim);
 
       const refreshRows = await handle!.prisma.refreshToken.findMany({
         where: { userId: user.id },
