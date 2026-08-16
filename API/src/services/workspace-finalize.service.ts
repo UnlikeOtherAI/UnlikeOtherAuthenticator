@@ -43,6 +43,9 @@ export async function finalizeWithTwoFaPolicy(
     config: ClientConfig;
     configUrl: string;
     redirectUrl: string;
+    /** Opaque relying-party `state` carried from the authorize request on a
+     *  signed continuation artifact, echoed on the final redirect. */
+    state?: string;
     rememberMe: boolean;
     requestAccess: boolean;
     authMethod: string;
@@ -112,6 +115,7 @@ export async function finalizeWithTwoFaPolicy(
       domain: params.config.domain,
       configUrl: params.configUrl,
       redirectUrl: params.redirectUrl,
+      state: params.state,
       authMethod: params.authMethod,
       rememberMe: params.rememberMe,
       requestAccess: params.requestAccess,
@@ -134,6 +138,7 @@ export async function finalizeWithTwoFaPolicy(
         finalize: {
           authMethod: params.authMethod,
           redirectUrl: params.redirectUrl,
+          state: params.state,
           rememberMe: params.rememberMe,
           requestAccess: params.requestAccess,
           codeChallenge: params.codeChallenge,
@@ -153,6 +158,7 @@ export async function finalizeWithTwoFaPolicy(
       config: params.config,
       configUrl: params.configUrl,
       redirectUrl: params.redirectUrl,
+      state: params.state,
       rememberMe: params.rememberMe,
       requestAccess: params.requestAccess,
       authMethod: params.authMethod,

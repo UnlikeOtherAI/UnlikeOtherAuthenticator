@@ -7,18 +7,20 @@ import type { SocialProviderKey } from './provider.base.js';
 
 const SOCIAL_STATE_ALLOWED_ALGS = ['HS256'] as const;
 
-const SocialStateSchema = z
-  .object({
-    provider: z.enum(['google', 'apple', 'facebook', 'github', 'linkedin']),
-    config_url: z.string().min(1),
-    redirect_url: z.string().min(1),
-    request_access: z.boolean().optional(),
-    code_challenge: z.string().min(1).optional(),
-    code_challenge_method: z.literal('S256').optional(),
-    // CSRF binding: random nonce mirrored in an HttpOnly cookie set on the
-    // initiating browser. The callback rejects unless the two match.
-    nonce: z.string().min(1),
-  });
+const SocialStateSchema = z.object({
+  provider: z.enum(['google', 'apple', 'facebook', 'github', 'linkedin']),
+  config_url: z.string().min(1),
+  redirect_url: z.string().min(1),
+  // Relying-party opaque `state`, bound here so a bridge hop cannot swap the
+  // value the final callback echoes.
+  state: z.string().min(1).max(2048).optional(),
+  request_access: z.boolean().optional(),
+  code_challenge: z.string().min(1).optional(),
+  code_challenge_method: z.literal('S256').optional(),
+  // CSRF binding: random nonce mirrored in an HttpOnly cookie set on the
+  // initiating browser. The callback rejects unless the two match.
+  nonce: z.string().min(1),
+});
 
 export type SocialState = z.infer<typeof SocialStateSchema>;
 
@@ -34,6 +36,7 @@ export async function signSocialState(params: {
   provider: SocialProviderKey;
   configUrl: string;
   redirectUrl: string;
+  state?: string;
   requestAccess?: boolean;
   codeChallenge?: string;
   codeChallengeMethod?: 'S256';
@@ -53,6 +56,7 @@ export async function signSocialState(params: {
       provider: params.provider,
       config_url: params.configUrl,
       redirect_url: params.redirectUrl,
+      state: params.state,
       request_access: params.requestAccess ?? false,
       code_challenge: params.codeChallenge,
       code_challenge_method: params.codeChallengeMethod,

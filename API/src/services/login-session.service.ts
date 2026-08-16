@@ -21,6 +21,11 @@ const LoginSessionSchema = z
     config_url: z.string().min(1),
     config_fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
     redirect_url: z.string().min(1),
+    // The relying party's opaque `state` from the authorize request. Signed here
+    // for the same reason `redirect_url` and the PKCE challenge are: the chooser
+    // must not be able to retarget a verified login, and an attacker must not be
+    // able to swap the value the callback will echo.
+    state: z.string().min(1).max(2048).optional(),
     code_challenge: z.string().min(1).optional(),
     code_challenge_method: z.literal('S256').optional(),
     remember_me: z.boolean(),
@@ -45,6 +50,7 @@ export type LoginSession = {
   configUrl: string;
   configFingerprint: string;
   redirectUrl: string;
+  state?: string;
   codeChallenge?: string;
   codeChallengeMethod?: 'S256';
   rememberMe: boolean;
@@ -58,6 +64,7 @@ type LoginContinuation = {
   config: ClientConfig;
   configUrl: string;
   redirectUrl: string;
+  state?: string;
   codeChallenge?: string;
   codeChallengeMethod?: 'S256';
   rememberMe: boolean;
@@ -91,7 +98,9 @@ function canonicalJson(value: unknown): string | undefined {
  * and the database-backed redirect allow-list are included.
  */
 export function fingerprintClientConfig(config: ClientConfig): string {
-  return createHash('sha256').update(canonicalJson(config) ?? '', 'utf8').digest('hex');
+  return createHash('sha256')
+    .update(canonicalJson(config) ?? '', 'utf8')
+    .digest('hex');
 }
 
 function rejectLoginSession(): never {
@@ -136,6 +145,7 @@ export async function signLoginSession(
       config_url: params.configUrl,
       config_fingerprint: fingerprintClientConfig(params.config),
       redirect_url: params.redirectUrl,
+      state: params.state,
       code_challenge: params.codeChallenge,
       code_challenge_method: params.codeChallengeMethod,
       remember_me: params.rememberMe,
@@ -159,16 +169,14 @@ export async function signLoginSession(
  * semantics. Request-specific continuation fields are returned from the token
  * and must be used at finalization.
  */
-export async function verifyLoginSession(
-  params: {
-    token: string;
-    config: ClientConfig;
-    configUrl: string;
-    sharedSecret: string;
-    audience: string;
-    now?: Date;
-  },
-): Promise<LoginSession> {
+export async function verifyLoginSession(params: {
+  token: string;
+  config: ClientConfig;
+  configUrl: string;
+  sharedSecret: string;
+  audience: string;
+  now?: Date;
+}): Promise<LoginSession> {
   let payload: JWTPayload;
   try {
     const res = await jwtVerify(params.token, sharedSecretKey(params.sharedSecret), {
@@ -205,6 +213,7 @@ export async function verifyLoginSession(
     configUrl: parsed.config_url,
     configFingerprint: parsed.config_fingerprint,
     redirectUrl: parsed.redirect_url,
+    state: parsed.state,
     codeChallenge: parsed.code_challenge,
     codeChallengeMethod: parsed.code_challenge_method,
     rememberMe: parsed.remember_me,
@@ -219,6 +228,7 @@ export function assertLoginSessionContinuation(
   session: LoginSession,
   requested: {
     redirectUrl: string;
+    state?: string;
     codeChallenge?: string;
     codeChallengeMethod?: 'S256';
     rememberMe?: boolean;
@@ -230,6 +240,9 @@ export function assertLoginSessionContinuation(
     session.codeChallenge !== requested.codeChallenge ||
     session.codeChallengeMethod !== requested.codeChallengeMethod ||
     session.requestAccess !== requested.requestAccess ||
+    // A later hop may omit `state` — the signed value is authoritative and is
+    // what gets echoed — but it may never present a different one.
+    (requested.state !== undefined && session.state !== requested.state) ||
     (requested.rememberMe !== undefined && session.rememberMe !== requested.rememberMe)
   ) {
     rejectLoginSession();

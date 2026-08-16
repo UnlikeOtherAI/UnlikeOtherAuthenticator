@@ -21,6 +21,7 @@ export type TwoFactorSetupResult = {
 type FinalizeContext = {
   authMethod: string;
   redirectUrl: string;
+  state?: string;
   rememberMe: boolean;
   requestAccess: boolean;
   codeChallenge?: string;
@@ -108,6 +109,7 @@ export async function startTwoFactorSetup(
     domain: params.config.domain,
     authMethod: params.finalize?.authMethod,
     redirectUrl: params.finalize?.redirectUrl,
+    state: params.finalize?.state,
     rememberMe: params.finalize?.rememberMe,
     requestAccess: params.finalize?.requestAccess,
     codeChallenge: params.finalize?.codeChallenge,

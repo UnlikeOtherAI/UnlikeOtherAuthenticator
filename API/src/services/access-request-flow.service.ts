@@ -55,6 +55,9 @@ export async function finalizeAuthenticatedUser(
     config: ClientConfig;
     configUrl: string;
     redirectUrl: string;
+    /** Opaque relying-party `state`, sourced from the bound continuation
+     *  artifact this login is carrying — never from the current query. */
+    state?: string;
     rememberMe: boolean;
     requestAccess: boolean;
     authMethod: string;
@@ -167,6 +170,7 @@ export async function finalizeAuthenticatedUser(
       domain: params.config.domain,
       configUrl: params.configUrl,
       redirectUrl: params.redirectUrl,
+      state: params.state,
       codeChallenge: params.codeChallenge,
       codeChallengeMethod: params.codeChallengeMethod,
       rememberMe: params.rememberMe,

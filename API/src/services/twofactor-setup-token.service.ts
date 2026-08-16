@@ -15,6 +15,9 @@ const TwoFaSetupSchema = z.object({
   domain: z.string().min(1),
   auth_method: z.string().min(1).optional(),
   redirect_url: z.string().min(1).optional(),
+  // Relying-party opaque `state`, bound here so a bridge hop cannot swap the
+  // value the final callback echoes.
+  state: z.string().min(1).max(2048).optional(),
   remember_me: z.boolean().optional(),
   request_access: z.boolean().optional(),
   code_challenge: z.string().min(1).optional(),
@@ -33,6 +36,7 @@ export type TwoFaSetupToken = {
   domain: string;
   authMethod?: string;
   redirectUrl?: string;
+  state?: string;
   rememberMe: boolean;
   requestAccess: boolean;
   codeChallenge?: string;
@@ -53,6 +57,7 @@ export async function signTwoFaSetupToken(params: {
   domain: string;
   authMethod?: string;
   redirectUrl?: string;
+  state?: string;
   rememberMe?: boolean;
   requestAccess?: boolean;
   codeChallenge?: string;
@@ -76,6 +81,7 @@ export async function signTwoFaSetupToken(params: {
       domain: params.domain,
       auth_method: params.authMethod,
       redirect_url: params.redirectUrl,
+      state: params.state,
       remember_me: params.rememberMe ?? false,
       request_access: params.requestAccess ?? false,
       code_challenge: params.codeChallenge,
@@ -132,6 +138,7 @@ export async function verifyTwoFaSetupToken(params: {
   };
   if (parsed.auth_method) token.authMethod = parsed.auth_method;
   if (parsed.redirect_url) token.redirectUrl = parsed.redirect_url;
+  if (parsed.state) token.state = parsed.state;
   if (parsed.code_challenge) {
     token.codeChallenge = parsed.code_challenge;
     token.codeChallengeMethod = parsed.code_challenge_method;

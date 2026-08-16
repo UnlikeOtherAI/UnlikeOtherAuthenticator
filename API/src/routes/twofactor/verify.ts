@@ -89,6 +89,7 @@ export function registerTwoFactorVerifyRoute(app: FastifyInstance): void {
             redirectUrl: lockedRedirectUrl,
             rememberMe: lockedChallenge.rememberMe,
             requestAccess: lockedChallenge.requestAccess,
+            state: lockedChallenge.state,
             authMethod: lockedChallenge.authMethod,
             twoFaCompleted: true,
             codeChallenge: lockedChallenge.codeChallenge,

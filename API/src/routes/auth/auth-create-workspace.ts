@@ -187,6 +187,7 @@ export function registerAuthCreateWorkspaceRoute(app: FastifyInstance): void {
             redirectUrl: lockedSession.redirectUrl,
             rememberMe: lockedSession.rememberMe,
             requestAccess: lockedSession.requestAccess,
+            state: lockedSession.state,
             authMethod: lockedSession.authMethod,
             codeChallenge: lockedSession.codeChallenge,
             codeChallengeMethod: lockedSession.codeChallengeMethod,

@@ -248,6 +248,7 @@ export function registerTwoFactorSelfServiceRoutes(app: FastifyInstance): void {
             redirectUrl,
             rememberMe: lockedSetup.rememberMe,
             requestAccess: lockedSetup.requestAccess,
+            state: lockedSetup.state,
             authMethod: lockedSetup.authMethod ?? 'email_password',
             twoFaCompleted: true,
             codeChallenge: lockedSetup.codeChallenge,

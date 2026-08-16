@@ -72,9 +72,12 @@ function socialStateIssuer(baseUrl: string): string {
   return `${normalizeBaseUrl(baseUrl)}/social-state`;
 }
 
-function buildAuthFailedRedirectUrl(redirectUrl: string): string {
+function buildAuthFailedRedirectUrl(redirectUrl: string, state?: string): string {
   const u = new URL(redirectUrl);
   u.searchParams.set('error', 'auth_failed');
+  // Echoed on failure as well as success so the relying party can match the
+  // outcome to its pending record instead of leaving it to time out.
+  if (state) u.searchParams.set('state', state);
   return u.toString();
 }
 
@@ -243,6 +246,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
               config,
               configUrl,
               redirectUrl,
+              state: socialState.state,
               requestAccess: socialState.request_access === true,
               codeChallenge: socialState.code_challenge,
               codeChallengeMethod: socialState.code_challenge_method,
@@ -318,6 +322,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
               redirectUrl,
               rememberMe,
               requestAccess: socialState.request_access === true,
+              state: socialState.state,
               codeChallenge: socialState.code_challenge,
               codeChallengeMethod: socialState.code_challenge_method,
               sharedSecret: SHARED_SECRET,
@@ -343,6 +348,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
             configUrl,
             redirectUrl,
             rememberMe,
+            state: socialState.state,
             requestAccess: socialState.request_access === true,
             authMethod: provider,
             codeChallenge: socialState.code_challenge,
@@ -392,7 +398,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
       });
 
       if (outcome.kind === 'auth_failed') {
-        redirectNoStore(reply, buildAuthFailedRedirectUrl(redirectUrl));
+        redirectNoStore(reply, buildAuthFailedRedirectUrl(redirectUrl, socialState.state));
         return;
       }
 
