@@ -61,6 +61,8 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
         llm.ts              — GET /llm (Markdown config documentation for LLM consumers)
         llm-intro.ts        — /llm content: introduction section
         llm-integration.ts  — /llm content: integration section
+        llm-integration-backend-mode.ts — /llm content: §4.6b backend-mode /org/* route and error tables
+        llm-integration-teams.ts — /llm content: §4.7a–§4.7b team join policies, invitations, workspace stack
         config-docs.ts      — Shared documentation blocks for /api (config JWT, access token, etc.)
         config-validate.ts  — POST /config/validate (lint a candidate config JWT)
         config-verify.ts    — POST /config/verify (verify a signed config JWT)
@@ -77,6 +79,9 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
         schema.platform.ts  — /api schema slice: root, health, app, email, and domain endpoints
         schema.signatures.ts       — /api schema slice: signing session, signer, domain-status, and public verification endpoints
         schema.internal-admin.ts — /api schema slice: internal admin endpoints
+        schema.org.ts       — /api schema slice: organisation, org members, teams, team members, and groups
+        schema.org-invitations.ts — /api schema slice: team invitations, invite links, and access requests
+        schema.org-contract.ts — Shared /org/* domain query and calling-mode note applied to every org slice
         schema.avatars.ts     — /api schema slice: user and team avatar image, upload, and delete endpoints
         llm-billing.ts        — /llm content: product billing integration and raw-usage rules
         llm-signatures.ts     — /llm content: optional signature operator workflow and security constraints
