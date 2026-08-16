@@ -122,6 +122,22 @@ components:
       description: Stripe endpoint signature verified over the exact raw request body with a separate webhook secret.
 
   parameters:
+    relyingPartyState:
+      name: state
+      in: query
+      required: false
+      description: >-
+        Opaque relying-party CSRF value, echoed verbatim beside `code` on the final
+        redirect (and beside `error` on a failed social callback). UOA never
+        interprets it. Bound to the login for its whole lifetime — chooser, 2FA
+        bridges, social round-trip, signature continuation — so no mid-flow hop can
+        substitute a different one. Send it only on the call that begins a flow;
+        later hops must not re-supply it. Omitting it leaves the redirect exactly as
+        it was before the parameter existed. PKCE protects the code exchange; `state`
+        protects the redirect binding, and neither substitutes for the other.
+      schema:
+        type: string
+        maxLength: 2048
     configUrl:
       name: config_url
       in: query
@@ -2141,6 +2157,7 @@ paths:
           in: query
           schema:
             type: string
+        - $ref: '#/components/parameters/relyingPartyState'
       responses:
         '200':
           description: Auth UI HTML.
@@ -2182,6 +2199,7 @@ paths:
           in: query
           schema:
             type: string
+        - $ref: '#/components/parameters/relyingPartyState'
       requestBody:
         required: true
         content:
@@ -2252,6 +2270,7 @@ paths:
           in: query
           schema:
             type: string
+        - $ref: '#/components/parameters/relyingPartyState'
       requestBody:
         required: true
         content:
@@ -2307,6 +2326,7 @@ paths:
           in: query
           schema:
             type: string
+        - $ref: '#/components/parameters/relyingPartyState'
       requestBody:
         required: true
         content:
@@ -2704,6 +2724,7 @@ paths:
           in: query
           schema:
             type: string
+        - $ref: '#/components/parameters/relyingPartyState'
       responses:
         '302':
           description: Redirect to social provider.
@@ -2828,6 +2849,7 @@ paths:
           in: query
           schema:
             type: string
+        - $ref: '#/components/parameters/relyingPartyState'
       responses:
         '302':
           description: Redirect to auth UI with authorization code.

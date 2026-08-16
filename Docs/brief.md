@@ -628,6 +628,17 @@ The following tighten ambiguities in the brief to prevent misinterpretation duri
 - The token is **never** returned directly to the frontend via the popup
 - Clients must have a backend callback endpoint to complete the exchange
 - The code exchange endpoint must require backend-only authorization (derived from the shared secret)
+- The flow accepts an optional opaque **`state`** on the call that begins it and
+  echoes it verbatim beside `code` on the final redirect, and beside `error` on a
+  failed social callback. UOA never interprets the value. It is bound to the login
+  for the whole flow — the `login_token` chooser capability, the 2FA challenge and
+  enrolment bridges, the signed social state, and the signing continuation all
+  carry it — and a later hop that presents a *different* value is refused, so no
+  mid-flow step can retarget which `state` the callback will echo. `state` is
+  optional and a request without it behaves exactly as before. **PKCE and `state`
+  are not substitutes**: PKCE protects the code exchange, `state` protects the
+  redirect binding against login-CSRF. Integrator instructions live in the `/llm`
+  guide, §3.1 "Carrying CSRF state across the callback".
 
 ---
 

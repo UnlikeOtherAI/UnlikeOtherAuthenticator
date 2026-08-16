@@ -7,6 +7,8 @@ export const authEndpoints: EndpointSchema[] = [
     path: '/auth',
     description: 'OAuth entrypoint — renders the auth UI',
     query: {
+      state:
+        'string (optional, ≤2048) — opaque relying-party CSRF value, forwarded to the auth UI and replayed on the call that begins the flow. Bound to that login and echoed beside `code` on the final redirect. PKCE protects the code exchange; `state` protects the redirect binding, and neither substitutes for the other.',
       config_url: 'string (required) — HTTPS URL to fetch signed config JWT',
       redirect_url: 'string (optional) — OAuth redirect URL override (redirect_uri also accepted)',
       code_challenge: 'string (required for sign-in actions) — exactly 43-char PKCE S256 challenge',
@@ -22,6 +24,8 @@ export const authEndpoints: EndpointSchema[] = [
       'Email/password login. workspace_selection="auto" may return the chooser; "off" suppresses it. A server-recognized product still resolves its mandatory exact workspace before 2FA, applies that Organisation policy strongest-wins, and fails closed on ambiguous placement.',
     auth: 'config_url query param',
     query: {
+      state:
+        'string (optional, ≤2048) — opaque relying-party CSRF value. UOA does not interpret it; it is bound to this login (login_token, 2FA bridge, social state) and echoed verbatim beside `code` on the final redirect, and beside `error` on a failed social callback. Later hops must not re-supply it: a hop presenting a different value is refused.',
       redirect_url: 'string (optional, redirect_uri also accepted)',
       code_challenge: 'string (required) — exactly 43-char PKCE S256 challenge',
       code_challenge_method: '"S256" (required)',
@@ -56,6 +60,8 @@ export const authEndpoints: EndpointSchema[] = [
       'Slack-style email-first entry point — superset of /auth/register. Always sends the existing magic-link instructions; additionally issues a 6-digit sign-in code when config.login_flow.email_code_enabled is true. Response is always the same generic message (no enumeration).',
     auth: 'config_url query param',
     query: {
+      state:
+        'string (optional, ≤2048) — opaque relying-party CSRF value. UOA does not interpret it; it is bound to this login (login_token, 2FA bridge, social state) and echoed verbatim beside `code` on the final redirect, and beside `error` on a failed social callback. Later hops must not re-supply it: a hop presenting a different value is refused.',
       redirect_url: 'string (optional, redirect_uri also accepted)',
       code_challenge: 'string (required) — exactly 43-char PKCE S256 challenge',
       code_challenge_method: '"S256" (required)',
@@ -75,6 +81,8 @@ export const authEndpoints: EndpointSchema[] = [
       'Verify a 6-digit sign-in code issued by /auth/start (requires config.login_flow.email_code_enabled). 5 wrong attempts kill the code; every failure mode (no code, wrong code, expired, dead) returns the same generic auth error. IP + email rate-limited. With workspace_selection="off", recognized products suppress the chooser but resolve and bind their exact workspace before 2FA.',
     auth: 'config_url query param',
     query: {
+      state:
+        'string (optional, ≤2048) — opaque relying-party CSRF value. UOA does not interpret it; it is bound to this login (login_token, 2FA bridge, social state) and echoed verbatim beside `code` on the final redirect, and beside `error` on a failed social callback. Later hops must not re-supply it: a hop presenting a different value is refused.',
       redirect_url: 'string (optional, redirect_uri also accepted)',
       code_challenge: 'string (required) — exactly 43-char PKCE S256 challenge',
       code_challenge_method: '"S256" (required)',
@@ -231,6 +239,8 @@ export const authEndpoints: EndpointSchema[] = [
       'User registration — sends verification email, or an inline already-registered response when the signed config opts in',
     auth: 'config_url query param',
     query: {
+      state:
+        'string (optional, ≤2048) — opaque relying-party CSRF value. UOA does not interpret it; it is bound to this login (login_token, 2FA bridge, social state) and echoed verbatim beside `code` on the final redirect, and beside `error` on a failed social callback. Later hops must not re-supply it: a hop presenting a different value is refused.',
       redirect_url: 'string (optional)',
       request_access: 'string (optional) — bypass gating and request configured-team access',
       code_challenge:
@@ -250,6 +260,8 @@ export const authEndpoints: EndpointSchema[] = [
       'Complete email verification (registration). For a non-invite token with config.login_flow.workspace_selection="auto", 2+ ACTIVE teams, a pending invite, or zero teams with can_create_org return the workspace chooser. Exactly one ACTIVE team/no invite is selected server-side and carried through applicable 2FA into the authorization code and active claim. An invite-bound token is already an explicit selection: its accepted orgId/teamId bypasses the chooser, still enforces 2FA, and is preserved through code/access/refresh rotation. workspace_selection="off" leaves legacy clients unscoped, but a recognized product pre-binds one exact workspace before 2FA without showing the chooser.',
     auth: 'config_url query param',
     query: {
+      state:
+        'string (optional, ≤2048) — opaque relying-party CSRF value. UOA does not interpret it; it is bound to this login (login_token, 2FA bridge, social state) and echoed verbatim beside `code` on the final redirect, and beside `error` on a failed social callback. Later hops must not re-supply it: a hop presenting a different value is refused.',
       redirect_url: 'string (optional)',
       code_challenge: 'string (required) — exactly 43-char PKCE S256 challenge',
       code_challenge_method: '"S256" (required)',
@@ -331,6 +343,8 @@ export const authEndpoints: EndpointSchema[] = [
     description:
       'Email registration/login link landing. For a non-invite link with config.login_flow.workspace_selection="auto", 2+ ACTIVE teams, a pending invite, or zero teams with can_create_org redirect to the workspace chooser; exactly one ACTIVE team/no invite is selected server-side and carried through applicable 2FA into the code. Invite-bound links carry the accepted invite orgId/teamId through the same 2FA/code/token pipeline without showing the chooser. workspace_selection="off" leaves legacy clients unscoped, but a recognized product pre-binds one exact workspace before 2FA without showing the chooser.',
     query: {
+      state:
+        'string (optional, ≤2048) — opaque relying-party CSRF value. UOA does not interpret it; it is bound to this login (login_token, 2FA bridge, social state) and echoed verbatim beside `code` on the final redirect, and beside `error` on a failed social callback. Later hops must not re-supply it: a hop presenting a different value is refused.',
       token: 'string (required)',
       config_url: 'string (required)',
       redirect_url: 'string (optional)',
@@ -377,6 +391,8 @@ export const authEndpoints: EndpointSchema[] = [
     description:
       'Initiate social OAuth flow (google, facebook, github, linkedin, apple). Sets a signed, HttpOnly `uoa_social_state` cookie (SameSite=Lax, Path=/auth) that binds the OAuth `state` to the browser; the cookie must be returned to /auth/callback.',
     query: {
+      state:
+        'string (optional, ≤2048) — opaque relying-party CSRF value. UOA does not interpret it; it is bound to this login (login_token, 2FA bridge, social state) and echoed verbatim beside `code` on the final redirect, and beside `error` on a failed social callback. Later hops must not re-supply it: a hop presenting a different value is refused.',
       config_url: 'string (required)',
       redirect_url: 'string (optional)',
       code_challenge: 'string (required) — exactly 43-char PKCE S256 challenge',
