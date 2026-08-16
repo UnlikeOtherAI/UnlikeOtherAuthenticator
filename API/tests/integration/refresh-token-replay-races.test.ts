@@ -1,9 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
-import { jwtVerify } from 'jose';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
-import { ACCESS_TOKEN_AUDIENCE } from '../../src/config/constants.js';
 import { validateConfigFields, type ClientConfig } from '../../src/services/config.service.js';
 import {
   issueRefreshToken,
@@ -14,6 +12,7 @@ import { exchangeRefreshTokenForTokens } from '../../src/services/token.service.
 import { createClientId } from '../../src/utils/hash.js';
 import { baseClientConfigPayload } from '../helpers/test-config.js';
 import { createTestDb } from '../helpers/test-db.js';
+import { verifyIssuedAccessToken } from '../helpers/access-token.js';
 
 const hasDatabase = Boolean(process.env.DATABASE_URL);
 const domain = 'refresh-replay-race.example';
@@ -391,11 +390,10 @@ describe.skipIf(!hasDatabase)('refresh response-loss PostgreSQL serialization', 
       }),
     ).toEqual({ tokenVersion: 1 });
     const healed = await refresh(sibling);
-    const { payload } = await jwtVerify(
-      healed.accessToken,
-      new TextEncoder().encode(sharedSecret),
-      { issuer: 'uoa-auth-service', audience: ACCESS_TOKEN_AUDIENCE },
-    );
+    const payload = await verifyIssuedAccessToken(healed.accessToken, {
+      issuer: 'uoa-auth-service',
+      sharedSecret,
+    });
     expect(payload.tv).toBe(1);
   });
 

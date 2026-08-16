@@ -33,6 +33,9 @@ const QuerySchema = z
     code_challenge: z.string().min(1).max(256).optional(),
     code_challenge_method: z.string().min(1).max(32).optional(),
     request_access: z.string().max(16).optional(),
+    // Opaque relying-party CSRF value. UOA does not interpret it; it is bound to
+    // this login and echoed verbatim on the final redirect.
+    state: z.string().min(1).max(2048).optional(),
   })
   .strict();
 
@@ -42,7 +45,9 @@ function normalizeBaseUrl(value: string): string {
 
 function resolvePublicBaseUrl(): string {
   const env = getEnv();
-  return env.PUBLIC_BASE_URL ? normalizeBaseUrl(env.PUBLIC_BASE_URL) : `http://${env.HOST}:${env.PORT}`;
+  return env.PUBLIC_BASE_URL
+    ? normalizeBaseUrl(env.PUBLIC_BASE_URL)
+    : `http://${env.HOST}:${env.PORT}`;
 }
 
 function redirectNoStore(reply: FastifyReply, url: string): void {
@@ -59,8 +64,14 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
     },
     async (request, reply) => {
       const { provider } = ParamsSchema.parse(request.params);
-      const { redirect_url, redirect_uri, code_challenge, code_challenge_method, request_access } =
-        QuerySchema.parse(request.query);
+      const {
+        redirect_url,
+        redirect_uri,
+        code_challenge,
+        code_challenge_method,
+        request_access,
+        state: relyingPartyState,
+      } = QuerySchema.parse(request.query);
 
       const config = request.config;
       if (!config || !request.configUrl) throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
@@ -88,15 +99,14 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
       const authServiceIdentifier = getAuthServiceIdentifier(env);
       const requestConfigUrl = request.configUrl;
 
-      const signStateForProvider = async (
-        providerKey: SocialProviderKey,
-      ): Promise<string> => {
+      const signStateForProvider = async (providerKey: SocialProviderKey): Promise<string> => {
         const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
         const state = await signSocialState({
           provider: providerKey,
           configUrl: requestConfigUrl,
           redirectUrl,
           requestAccess: parseRequestAccessFlag(request_access),
+          state: relyingPartyState,
           codeChallenge: pkce.codeChallenge,
           codeChallengeMethod: pkce.codeChallengeMethod,
           nonce,

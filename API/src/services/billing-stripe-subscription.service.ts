@@ -10,6 +10,7 @@ import type Stripe from 'stripe';
 import { getEnv } from '../config/env.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
+import type { BillingActorEndpoint } from './billing-actor-audience.service.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import type { BillingActor } from './billing-actor.service.js';
 import {
@@ -121,6 +122,7 @@ async function lifecycleContext(
     request: BillingSubscriptionRequest;
     actorToken: string;
     credential: VerifiedBillingAppKey;
+    endpoint: BillingActorEndpoint;
   },
   deps?: Dependencies,
   options: { requireStripe: boolean; refreshSubscription?: boolean } = { requireStripe: true },
@@ -304,6 +306,7 @@ export async function getStripeSubscriptionSummary(
     request: BillingSubscriptionRequest;
     actorToken: string;
     credential: VerifiedBillingAppKey;
+    endpoint: BillingActorEndpoint;
   },
   deps?: Dependencies,
 ) {
@@ -315,6 +318,7 @@ export async function createStripePortalSession(
     request: BillingSubscriptionRequest & { returnUrl: string };
     actorToken: string;
     credential: VerifiedBillingAppKey;
+    endpoint: BillingActorEndpoint;
   },
   deps?: Dependencies,
 ): Promise<{ portal_url: string }> {

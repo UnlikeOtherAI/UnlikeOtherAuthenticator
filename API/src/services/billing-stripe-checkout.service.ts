@@ -9,6 +9,7 @@ import type Stripe from 'stripe';
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
+import type { BillingActorEndpoint } from './billing-actor-audience.service.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import {
   authorizeBillingCustomerAction,
@@ -85,6 +86,7 @@ export async function createStripeCheckoutSession(
     request: CheckoutRequest;
     actorToken: string;
     credential: VerifiedBillingAppKey;
+    endpoint: BillingActorEndpoint;
   },
   deps?: {
     prisma?: PrismaClient;
@@ -118,6 +120,7 @@ export async function createStripeCheckoutSession(
     request: params.request,
     actorToken: params.actorToken,
     credential: params.credential,
+    endpoint: params.endpoint,
   });
   if (
     payload.tariff.collection_mode !== 'stripe' ||

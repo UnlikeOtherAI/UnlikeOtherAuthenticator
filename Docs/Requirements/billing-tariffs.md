@@ -216,7 +216,14 @@ Body:
 The actor JWT is credential-bound and must use:
 
 - protected header `alg=RS256` and the app key's configured `kid`;
-- exact configured `iss` and `aud`;
+- exact configured `iss`;
+- `aud` equal to the exact endpoint being called —
+  `${PUBLIC_BASE_URL}${request path}`, so `.../billing/v1/effective-tariff` here
+  and a different value at every other billing endpoint. One constant audience
+  reused across endpoints is the legacy shape: accepted only while the
+  deployment runs `BILLING_ACTOR_AUDIENCE_MODE=warn`, logged on every use, and
+  refused under `enforce` with `BILLING_ACTOR_AUDIENCE_MISMATCH`. See
+  [`Docs/Auth/billing-actor-assertions.md`](../Auth/billing-actor-assertions.md);
 - `sub = user_id`;
 - claims `product`, `organisation_id`, and `team_id` exactly matching the body;
 - non-negative integer `tv` equal to the UOA access-token credential epoch from

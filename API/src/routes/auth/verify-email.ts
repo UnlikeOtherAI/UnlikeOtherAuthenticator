@@ -41,6 +41,9 @@ const QuerySchema = z
     code_challenge: z.string().min(1).max(256).optional(),
     code_challenge_method: z.string().min(1).max(32).optional(),
     request_access: z.string().max(16).optional(),
+    // Opaque relying-party CSRF value. UOA does not interpret it; it is bound to
+    // this login and echoed verbatim on the final redirect.
+    state: z.string().min(1).max(2048).optional(),
   })
   .strict();
 
@@ -54,7 +57,7 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
     },
     async (request, reply) => {
       const { token, password } = BodySchema.parse(request.body);
-      const { redirect_url, code_challenge, code_challenge_method, request_access } =
+      const { redirect_url, code_challenge, code_challenge_method, request_access, state } =
         QuerySchema.parse(request.query);
       const pkce = parseRequiredPkceChallenge({
         codeChallenge: code_challenge,
@@ -133,6 +136,7 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
               redirectUrl,
               rememberMe,
               requestAccess,
+              state,
               codeChallenge: pkce.codeChallenge,
               codeChallengeMethod: pkce.codeChallengeMethod,
               sharedSecret: SHARED_SECRET,
@@ -154,6 +158,7 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
             config,
             configUrl,
             redirectUrl,
+            state,
             rememberMe,
             requestAccess,
             authMethod,

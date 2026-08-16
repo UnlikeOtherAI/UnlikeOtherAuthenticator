@@ -174,6 +174,10 @@ export type AuthFlowQuery = {
   codeChallenge?: string | null;
   codeChallengeMethod?: 'S256' | null;
   requestAccess?: boolean;
+  /** The relying party's opaque `state`. Sent only on the calls that begin a
+   *  flow; once UOA has minted a login_token the signed value is authoritative
+   *  and later hops must not re-supply it. */
+  state?: string | null;
 };
 
 function buildAuthFlowQuery(params: AuthFlowQuery): Record<string, QueryValue> {
@@ -184,6 +188,7 @@ function buildAuthFlowQuery(params: AuthFlowQuery): Record<string, QueryValue> {
     query.code_challenge_method = params.codeChallengeMethod;
   }
   if (params.requestAccess) query.request_access = true;
+  if (params.state) query.state = params.state;
   return query;
 }
 

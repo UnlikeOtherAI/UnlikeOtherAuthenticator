@@ -3,6 +3,11 @@ import { z } from 'zod';
 
 import { AppError } from '../utils/errors.js';
 import { importClientJwkKey, jwkToPublic } from './client-jwk.service.js';
+import {
+  assertBillingActorAudience,
+  logLegacyBillingActorAudience,
+  type BillingActorEndpoint,
+} from './billing-actor-audience.service.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 
 export const BILLING_ACTOR_MAX_TTL_SECONDS = 60;
@@ -29,6 +34,42 @@ export async function verifyBillingActor(
   params: {
     token: string;
     credential: VerifiedBillingAppKey;
+    /** The exact billing endpoint this assertion was presented to. Its audience must
+     *  name it; see billing-actor-audience.service.ts. */
+    endpoint: BillingActorEndpoint;
+    request: {
+      product: string;
+      organisationId: string;
+      teamId: string;
+      userId: string;
+    };
+  },
+  deps?: { now?: () => number },
+): Promise<BillingActor> {
+  const actor = await verifyBillingActorSignature(params, deps);
+
+  // Audience is checked after the signature so an unauthenticated caller learns
+  // nothing, and outside the catch-all below so a mismatch keeps its own code.
+  const outcome = assertBillingActorAudience({
+    presented: actor.aud,
+    endpoint: params.endpoint,
+    legacyAudience: params.credential.actorAudience,
+  });
+  if (outcome === 'legacy') {
+    logLegacyBillingActorAudience({
+      endpoint: params.endpoint,
+      presented: actor.aud,
+      product: actor.product,
+      appKeyId: params.credential.id,
+    });
+  }
+  return actor;
+}
+
+async function verifyBillingActorSignature(
+  params: {
+    token: string;
+    credential: VerifiedBillingAppKey;
     request: {
       product: string;
       organisationId: string;
@@ -45,10 +86,11 @@ export async function verifyBillingActor(
     }
 
     const publicKey = await importClientJwkKey(jwkToPublic(params.credential.actorPublicJwk));
+    // `audience` is deliberately not delegated to jose: the acceptable audience is
+    // per-endpoint and mode-dependent, and a mismatch must be distinguishable.
     const { payload } = await jwtVerify(params.token, publicKey, {
       algorithms: ['RS256'],
       issuer: params.credential.actorIssuer,
-      audience: params.credential.actorAudience,
       clockTolerance: BILLING_ACTOR_CLOCK_TOLERANCE_SECONDS,
     });
     const actor = BillingActorSchema.parse(payload);

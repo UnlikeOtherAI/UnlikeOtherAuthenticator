@@ -13,6 +13,7 @@ import type {
 } from '../contracts/billing-statement-v1.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
+import type { BillingActorEndpoint } from './billing-actor-audience.service.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import {
   authorizeBillingCustomerAction,
@@ -321,6 +322,7 @@ export async function confirmBillingCancellation(
     request: BillingSubscriptionRequest;
     actorToken: string;
     credential: VerifiedBillingAppKey;
+    endpoint: BillingActorEndpoint;
     token: string;
     idempotencyKey: string;
     selection: BillingCancellationSelection | null;
@@ -338,7 +340,7 @@ export async function confirmBillingCancellation(
     resolveSummary?: (
       params: Pick<
         Parameters<typeof getStripeSubscriptionSummary>[0],
-        'request' | 'actorToken' | 'credential'
+        'request' | 'actorToken' | 'credential' | 'endpoint'
       >,
     ) => Promise<SubscriptionSummary>;
   },

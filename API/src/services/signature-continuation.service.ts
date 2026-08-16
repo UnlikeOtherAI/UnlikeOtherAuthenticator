@@ -47,6 +47,10 @@ type ConfigGateInput = {
   domain: string;
   configUrl: string;
   redirectUrl: string;
+  /** Opaque relying-party `state` from the authorize request, already bound to
+   *  this login by the continuation artifact it arrived on. Never read from a
+   *  raw query parameter at this depth. */
+  state?: string;
   codeChallenge?: string;
   codeChallengeMethod?: 'S256';
   rememberMe: boolean;
@@ -161,7 +165,8 @@ async function createContinuation(
       authProfile: profile,
       configUrl: configInput?.configUrl ?? null,
       redirectUrl: params.redirectUrl,
-      oauthState: publicInput?.state ?? null,
+      // One column holds the relying party's opaque state for both profiles.
+      oauthState: publicInput?.state ?? configInput?.state ?? null,
       oauthClientId: publicInput?.oauthClientId ?? null,
       oauthScope: publicInput?.scope ?? null,
       resource: publicInput?.resource ?? null,
@@ -235,7 +240,11 @@ export async function finalizeConfigAuthorizationWithSignatures(
       return {
         status: 'granted',
         code: issued.code,
-        redirectTo: buildRedirectToUrl({ redirectUrl: input.redirectUrl, code: issued.code }),
+        redirectTo: buildRedirectToUrl({
+          redirectUrl: input.redirectUrl,
+          code: issued.code,
+          state: input.state,
+        }),
       };
     }
     const continuation = await createContinuation(
@@ -390,6 +399,7 @@ export async function completeSigningContinuation(
         redirectTo: buildRedirectToUrl({
           redirectUrl: continuation.redirectUrl,
           code: issued.code,
+          state: continuation.oauthState,
         }),
       };
     }

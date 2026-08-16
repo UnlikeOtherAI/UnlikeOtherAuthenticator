@@ -10,7 +10,10 @@ import { useTranslation } from '../../i18n/use-translation.js';
 import { postJson } from '../../utils/api.js';
 import { isEmailCodeEnabled, isRegistrationAllowed } from '../../utils/auth-config.js';
 import { requestSignInCode } from '../../utils/workspace-actions.js';
-import { applyWorkspaceOutcome, interpretWorkspaceResponse } from '../../utils/workspace-response.js';
+import {
+  applyWorkspaceOutcome,
+  interpretWorkspaceResponse,
+} from '../../utils/workspace-response.js';
 
 type LoginRequest = {
   email: string;
@@ -109,8 +112,11 @@ export function LoginForm(): React.JSX.Element {
       if (state) query.state = state;
       if (resource) query.resource = resource;
       if (scope) query.scope = scope;
-    } else if (requestAccess) {
-      query.request_access = true;
+    } else {
+      if (requestAccess) query.request_access = true;
+      // The config profile carries the relying party's `state` too; UOA binds it
+      // to this login and echoes it on the final redirect.
+      if (state) query.state = state;
     }
 
     const result = await postJson<LoginRequest, LoginResponse>(

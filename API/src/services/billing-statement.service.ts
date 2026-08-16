@@ -9,6 +9,7 @@ import {
 } from '../contracts/billing-statement-v1.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
+import type { BillingActorEndpoint } from './billing-actor-audience.service.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import { listApplicableCommercialAdjustments } from './billing-commercial-adjustment.service.js';
 import {
@@ -43,6 +44,7 @@ type StatementContext = {
   request: BillingSubscriptionRequest;
   actorToken: string;
   credential: VerifiedBillingAppKey;
+  endpoint: BillingActorEndpoint;
   billingMonth?: string;
 };
 

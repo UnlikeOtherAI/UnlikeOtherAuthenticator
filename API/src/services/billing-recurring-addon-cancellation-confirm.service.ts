@@ -11,6 +11,7 @@ import {
 } from '../contracts/billing-statement-v1.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
+import type { BillingActorEndpoint } from './billing-actor-audience.service.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import {
   authorizeBillingCustomerAction,
@@ -207,6 +208,7 @@ export async function confirmRecurringAddonCancellation(
     request: ConfirmationRequest;
     actorToken: string;
     credential: VerifiedBillingAppKey;
+    endpoint: BillingActorEndpoint;
   },
   deps?: {
     prisma?: PrismaClient;
@@ -218,7 +220,12 @@ export async function confirmRecurringAddonCancellation(
 ): Promise<BillingRecurringAddonCancellationConfirmationV1> {
   const prisma = deps?.prisma ?? getAdminPrisma();
   const { actor } = await resolveEffectiveTariffContext(
-    { request: params.request, actorToken: params.actorToken, credential: params.credential },
+    {
+      request: params.request,
+      actorToken: params.actorToken,
+      credential: params.credential,
+      endpoint: params.endpoint,
+    },
     { prisma },
   );
   const viewer = await resolveBillingFundingViewer(params.request, { prisma });

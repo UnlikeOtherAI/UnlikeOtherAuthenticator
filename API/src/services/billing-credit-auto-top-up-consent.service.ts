@@ -9,6 +9,7 @@ import {
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
+import type { BillingActorEndpoint } from './billing-actor-audience.service.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import { BILLING_CUSTOMER_ACTION } from './billing-customer-action-intent.service.js';
 import {
@@ -105,6 +106,7 @@ export async function updateBillingCreditAutoTopUp(
     request: CreditFundingActionRequest & { optionId: string };
     actorToken: string;
     credential: VerifiedBillingAppKey;
+    endpoint: BillingActorEndpoint;
   },
   deps?: Dependencies,
 ): Promise<void> {
@@ -304,6 +306,7 @@ export async function disableBillingCreditAutoTopUp(
     request: CreditFundingActionRequest;
     actorToken: string;
     credential: VerifiedBillingAppKey;
+    endpoint: BillingActorEndpoint;
   },
   deps?: Pick<Dependencies, 'prisma' | 'resolveContext'>,
 ): Promise<void> {

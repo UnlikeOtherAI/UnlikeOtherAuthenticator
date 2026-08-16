@@ -1,8 +1,6 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
-import { jwtVerify } from 'jose';
 
-import { ACCESS_TOKEN_AUDIENCE } from '../../src/config/constants.js';
 import { createApp } from '../../src/app.js';
 import { hashPassword } from '../../src/services/password.service.js';
 import { seedDomainSecret } from '../helpers/domain-secret.js';
@@ -14,6 +12,7 @@ import {
   hasDatabase,
   signAccessToken,
 } from '../helpers/org-user-endpoints-helper.js';
+import { verifyIssuedAccessToken } from '../helpers/access-token.js';
 
 const sampleDomain = 'client.example.com';
 const sampleConfigUrl = 'https://client.example.com/auth-config';
@@ -56,7 +55,8 @@ describe.skipIf(!hasDatabase)('org features disabled behaviour', () => {
   });
 
   beforeEach(async () => {
-    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
+    process.env.SHARED_SECRET =
+      process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER = process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
     process.env.ADMIN_AUTH_DOMAIN = adminDomain;
     process.env.ADMIN_ACCESS_TOKEN_SECRET = adminTokenSecret;
@@ -78,7 +78,10 @@ describe.skipIf(!hasDatabase)('org features disabled behaviour', () => {
     const configJwt = await createSignedConfigJwt(process.env.SHARED_SECRET!, { enabled: false });
     // A fresh Response per call: Response bodies are single-use, and multiple
     // requests (plus app startup) fetch the config through this stub.
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(configJwt, { status: 200 })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(configJwt, { status: 200 })),
+    );
 
     const user = await createTestUser(handle!, 'no-org-features@example.com');
     const actorToken = await signAccessToken({
@@ -120,13 +123,29 @@ describe.skipIf(!hasDatabase)('org features disabled behaviour', () => {
 
     const userFacingOrgEndpoints = [
       { method: 'GET', url: `/org/organisations?${configQuery}` },
-      { method: 'POST', url: `/org/organisations?${configQuery}`, payload: { name: 'Ignored org' } },
+      {
+        method: 'POST',
+        url: `/org/organisations?${configQuery}`,
+        payload: { name: 'Ignored org' },
+      },
       { method: 'GET', url: `/org/organisations/${orgId}?${configQuery}` },
-      { method: 'PUT', url: `/org/organisations/${orgId}?${configQuery}`, payload: { name: 'Ignored update' } },
+      {
+        method: 'PUT',
+        url: `/org/organisations/${orgId}?${configQuery}`,
+        payload: { name: 'Ignored update' },
+      },
       { method: 'DELETE', url: `/org/organisations/${orgId}?${configQuery}` },
       { method: 'GET', url: `/org/organisations/${orgId}/members?${configQuery}` },
-      { method: 'POST', url: `/org/organisations/${orgId}/members?${configQuery}`, payload: { userId: user.id } },
-      { method: 'PUT', url: `/org/organisations/${orgId}/members/${user.id}?${configQuery}`, payload: { role: 'admin' } },
+      {
+        method: 'POST',
+        url: `/org/organisations/${orgId}/members?${configQuery}`,
+        payload: { userId: user.id },
+      },
+      {
+        method: 'PUT',
+        url: `/org/organisations/${orgId}/members/${user.id}?${configQuery}`,
+        payload: { role: 'admin' },
+      },
       { method: 'DELETE', url: `/org/organisations/${orgId}/members/${user.id}?${configQuery}` },
       {
         method: 'POST',
@@ -139,9 +158,17 @@ describe.skipIf(!hasDatabase)('org features disabled behaviour', () => {
         payload: { newOwnerId: user.id },
       },
       { method: 'GET', url: `/org/organisations/${orgId}/teams?${configQuery}` },
-      { method: 'POST', url: `/org/organisations/${orgId}/teams?${configQuery}`, payload: { name: 'Ignored team' } },
+      {
+        method: 'POST',
+        url: `/org/organisations/${orgId}/teams?${configQuery}`,
+        payload: { name: 'Ignored team' },
+      },
       { method: 'GET', url: `/org/organisations/${orgId}/teams/${teamId}?${configQuery}` },
-      { method: 'PUT', url: `/org/organisations/${orgId}/teams/${teamId}?${configQuery}`, payload: { name: 'Ignored team update' } },
+      {
+        method: 'PUT',
+        url: `/org/organisations/${orgId}/teams/${teamId}?${configQuery}`,
+        payload: { name: 'Ignored team update' },
+      },
       { method: 'DELETE', url: `/org/organisations/${orgId}/teams/${teamId}?${configQuery}` },
       {
         method: 'GET',
@@ -157,20 +184,30 @@ describe.skipIf(!hasDatabase)('org features disabled behaviour', () => {
         url: `/org/organisations/${orgId}/teams/${teamId}/members/${user.id}?${configQuery}`,
         payload: { teamRole: 'lead' },
       },
-      { method: 'DELETE', url: `/org/organisations/${orgId}/teams/${teamId}/members/${user.id}?${configQuery}` },
+      {
+        method: 'DELETE',
+        url: `/org/organisations/${orgId}/teams/${teamId}/members/${user.id}?${configQuery}`,
+      },
       { method: 'GET', url: `/org/organisations/${orgId}/groups?${configQuery}` },
       { method: 'GET', url: `/org/organisations/${orgId}/groups/${groupId}?${configQuery}` },
       { method: 'GET', url: `/org/me?${configQuery}` },
     ];
 
     const internalOrgEndpoints = [
-      { method: 'POST', url: `/internal/org/organisations/${orgId}/groups?${configQuery}`, payload: { name: 'Ignored group' } },
+      {
+        method: 'POST',
+        url: `/internal/org/organisations/${orgId}/groups?${configQuery}`,
+        payload: { name: 'Ignored group' },
+      },
       {
         method: 'PUT',
         url: `/internal/org/organisations/${orgId}/groups/${groupId}?${configQuery}`,
         payload: { name: 'Ignored group update' },
       },
-      { method: 'DELETE', url: `/internal/org/organisations/${orgId}/groups/${groupId}?${configQuery}` },
+      {
+        method: 'DELETE',
+        url: `/internal/org/organisations/${orgId}/groups/${groupId}?${configQuery}`,
+      },
       {
         method: 'POST',
         url: `/internal/org/organisations/${orgId}/groups/${groupId}/members?${configQuery}`,
@@ -241,7 +278,10 @@ describe.skipIf(!hasDatabase)('org features disabled behaviour', () => {
     const configJwt = await createSignedConfigJwt(process.env.SHARED_SECRET!, { enabled: false });
     // A fresh Response per call: Response bodies are single-use, and multiple
     // requests (plus app startup) fetch the config through this stub.
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(configJwt, { status: 200 })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(configJwt, { status: 200 })),
+    );
 
     const app = await createApp();
     await app.ready();
@@ -275,10 +315,7 @@ describe.skipIf(!hasDatabase)('org features disabled behaviour', () => {
     const tokenBody = tokenRes.json() as { access_token: string; token_type: string };
     expect(tokenBody.token_type).toBe('Bearer');
 
-    const { payload } = await jwtVerify(tokenBody.access_token, new TextEncoder().encode(process.env.SHARED_SECRET!), {
-      issuer: process.env.AUTH_SERVICE_IDENTIFIER,
-      audience: ACCESS_TOKEN_AUDIENCE,
-    });
+    const payload = await verifyIssuedAccessToken(tokenBody.access_token);
 
     expect(payload.org).toBeUndefined();
     expect(payload.sub).toBe(user.id);

@@ -11,6 +11,7 @@ import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import { loadBillingCancellationState } from './billing-cancellation-state.service.js';
 import { getCanonicalBillingStatement } from './billing-statement.service.js';
 import type { BillingSubscriptionRequest } from './billing-stripe-subscription.service.js';
+import type { BillingActorEndpoint } from './billing-actor-audience.service.js';
 
 export const BILLING_CANCELLATION_SCHEMA_VERSION = BILLING_CONSUMER_ACTION_SCHEMA_VERSION;
 export const BILLING_CANCELLATION_PREVIEW_TTL_MS = 5 * 60 * 1000;
@@ -28,6 +29,7 @@ export async function createBillingCancellationPreview(
     request: BillingSubscriptionRequest;
     actorToken: string;
     credential: VerifiedBillingAppKey;
+    endpoint: BillingActorEndpoint;
   },
   deps?: {
     prisma?: PrismaClient;

@@ -192,6 +192,7 @@ describe('billing app API routes', () => {
           userId: 'user-1',
         },
         actorToken: 'signed-actor',
+        endpoint: '/billing/v1/effective-tariff',
         credential,
       });
     });

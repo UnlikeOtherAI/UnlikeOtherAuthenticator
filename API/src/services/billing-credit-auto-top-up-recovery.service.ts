@@ -7,6 +7,7 @@ import type Stripe from 'stripe';
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
+import type { BillingActorEndpoint } from './billing-actor-audience.service.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import { BILLING_CUSTOMER_ACTION } from './billing-customer-action-intent.service.js';
 import { assertCreditFundingMetadata } from './billing-credit-funding-binding.service.js';
@@ -125,6 +126,7 @@ export async function recoverBillingCreditAutoTopUp(
     request: CreditFundingActionRequest;
     actorToken: string;
     credential: VerifiedBillingAppKey;
+    endpoint: BillingActorEndpoint;
   },
   deps?: Dependencies,
 ): Promise<{ redirect_url: string }> {
@@ -234,6 +236,9 @@ export async function recoverBillingCreditAutoTopUp(
       },
       actorToken: params.actorToken,
       credential: params.credential,
+      // The assertion the caller presented to the recover endpoint, re-verified
+      // against that endpoint — never against the setup endpoint it delegates to.
+      endpoint: params.endpoint,
       recovery: true,
     },
     { prisma },

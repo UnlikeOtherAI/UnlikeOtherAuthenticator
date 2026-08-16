@@ -68,6 +68,7 @@ export function registerBillingRecurringAddonsRoute(app: FastifyInstance): void 
       const addons = await getBillingRecurringAddons({
         credential,
         actorToken: readBillingActorHeader(request.headers['x-uoa-actor']),
+        endpoint: BILLING_RECURRING_ADDONS_READ_PATH,
         request: {
           product: body.product,
           organisationId: body.organisation_id,
@@ -94,6 +95,7 @@ export function registerBillingRecurringAddonsRoute(app: FastifyInstance): void 
       const result = await createRecurringAddonCheckout({
         credential,
         actorToken: readBillingActorHeader(request.headers['x-uoa-actor']),
+        endpoint: BILLING_RECURRING_ADDONS_CHECKOUT_PATH,
         request: {
           product: body.product,
           organisationId: body.organisation_id,
@@ -121,6 +123,7 @@ export function registerBillingRecurringAddonsRoute(app: FastifyInstance): void 
       const result = await createRecurringAddonCancellationPreview({
         credential,
         actorToken: readBillingActorHeader(request.headers['x-uoa-actor']),
+        endpoint: BILLING_RECURRING_ADDONS_CANCELLATION_PREVIEW_PATH,
         request: {
           product: body.product,
           organisationId: body.organisation_id,
@@ -148,6 +151,7 @@ export function registerBillingRecurringAddonsRoute(app: FastifyInstance): void 
       const result = await confirmRecurringAddonCancellation({
         credential,
         actorToken: readBillingActorHeader(request.headers['x-uoa-actor']),
+        endpoint: BILLING_RECURRING_ADDONS_CANCELLATION_CONFIRM_PATH,
         request: {
           product: body.product,
           organisationId: body.organisation_id,

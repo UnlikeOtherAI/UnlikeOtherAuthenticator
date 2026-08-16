@@ -173,6 +173,7 @@ describe('shared credits and recurring add-on read routes', () => {
       expect(creditsService.getBillingCredits).toHaveBeenCalledWith({
         credential,
         actorToken: 'signed-actor',
+        endpoint: '/billing/v1/credits',
         request: {
           product: 'deepwater',
           organisationId: 'org_example',
@@ -199,7 +200,11 @@ describe('shared credits and recurring add-on read routes', () => {
         offers: [{ key: 'privacy', monthly_price: { amount_minor: '5000' } }],
       });
       expect(addonsService.getBillingRecurringAddons).toHaveBeenCalledWith(
-        expect.objectContaining({ actorToken: 'signed-actor', credential }),
+        expect.objectContaining({
+          actorToken: 'signed-actor',
+          endpoint: '/billing/v1/recurring-addons',
+          credential,
+        }),
       );
     });
   });
@@ -221,6 +226,7 @@ describe('shared credits and recurring add-on read routes', () => {
       expect(addonCheckoutService.createRecurringAddonCheckout).toHaveBeenCalledWith({
         credential,
         actorToken: 'signed-actor',
+        endpoint: '/billing/v1/recurring-addons/checkout',
         request: {
           product: 'deepwater',
           organisationId: 'org_example',
@@ -260,6 +266,7 @@ describe('shared credits and recurring add-on read routes', () => {
       expect(addonPreviewService.createRecurringAddonCancellationPreview).toHaveBeenCalledWith({
         credential,
         actorToken: 'signed-actor',
+        endpoint: '/billing/v1/recurring-addons/cancellation/preview',
         request: {
           product: 'deepwater',
           organisationId: 'org_example',
@@ -271,6 +278,7 @@ describe('shared credits and recurring add-on read routes', () => {
       expect(addonConfirmService.confirmRecurringAddonCancellation).toHaveBeenCalledWith({
         credential,
         actorToken: 'signed-actor',
+        endpoint: '/billing/v1/recurring-addons/cancellation/confirm',
         request: {
           product: confirmationRequest.product,
           organisationId: confirmationRequest.organisation_id,

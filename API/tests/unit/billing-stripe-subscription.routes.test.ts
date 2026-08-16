@@ -113,6 +113,7 @@ describe('Stripe customer subscription routes', () => {
           userId: 'user-1',
         },
         actorToken: 'signed-actor',
+        endpoint: '/billing/v1/stripe/subscription-summary',
         credential,
       });
     });
@@ -169,6 +170,7 @@ describe('Stripe customer subscription routes', () => {
           returnUrl: 'https://app.nessie.works/billing',
         },
         actorToken: 'signed-actor',
+        endpoint: '/billing/v1/stripe/portal-session',
         credential,
       });
     });

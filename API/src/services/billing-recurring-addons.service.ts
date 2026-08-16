@@ -18,6 +18,7 @@ import {
   BILLING_RECURRING_ADDONS_CHECKOUT_PATH,
 } from '../contracts/billing-statement-v1.js';
 import { getAdminPrisma } from '../db/prisma.js';
+import type { BillingActorEndpoint } from './billing-actor-audience.service.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import { resolveCreditCollectionContext } from './billing-credit-account.service.js';
 import { billingRecurringAddonMoney } from './billing-credit-display.service.js';
@@ -374,6 +375,7 @@ export async function getBillingRecurringAddons(
     };
     actorToken: string;
     credential: VerifiedBillingAppKey;
+    endpoint: BillingActorEndpoint;
   },
   deps?: {
     prisma?: PrismaClient;
@@ -390,6 +392,7 @@ export async function getBillingRecurringAddons(
       request: params.request,
       actorToken: params.actorToken,
       credential: params.credential,
+      endpoint: params.endpoint,
     },
     { prisma },
   );

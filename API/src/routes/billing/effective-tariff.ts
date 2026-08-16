@@ -32,6 +32,7 @@ export function registerEffectiveTariffRoute(app: FastifyInstance): void {
           userId: body.user_id,
         },
         actorToken: readBillingActorHeader(request.headers['x-uoa-actor']),
+        endpoint: '/billing/v1/effective-tariff',
         credential,
       });
       reply.header('Cache-Control', 'private, no-store');

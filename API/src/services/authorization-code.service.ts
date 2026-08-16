@@ -65,9 +65,17 @@ export function selectRedirectUrl(params: {
   return candidate;
 }
 
-export function buildRedirectToUrl(params: { redirectUrl: string; code: string }): string {
+export function buildRedirectToUrl(params: {
+  redirectUrl: string;
+  code: string;
+  /** The relying party's opaque `state`, echoed verbatim so it can match the
+   *  callback to its own pending record. Absent when the caller sent none, which
+   *  keeps the redirect byte-identical to the pre-`state` behaviour. */
+  state?: string | null;
+}): string {
   const u = parseRedirectUrl(params.redirectUrl);
   u.searchParams.set('code', params.code);
+  if (params.state) u.searchParams.set('state', params.state);
   return u.toString();
 }
 

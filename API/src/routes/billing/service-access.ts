@@ -23,6 +23,7 @@ export function registerBillingServiceAccessRoutes(app: FastifyInstance): void {
       await confirmAuthenticatedDirectBillingServiceAccess({
         credential,
         actorToken: readBillingActorHeader(request.headers['x-uoa-actor']),
+        endpoint: '/billing/v1/service-access/confirm',
         request: {
           product: body.product,
           organisationId: body.organisation_id,

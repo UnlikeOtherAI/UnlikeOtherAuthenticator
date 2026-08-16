@@ -76,6 +76,10 @@ function buildRegistrationEmailLandingLink(params: {
   token: string;
   configUrl: string;
   redirectUrl?: string;
+  /** Relying-party opaque `state`. Carried in the emailed link exactly like the
+   *  redirect URL and PKCE challenge already are — none of the three is secret,
+   *  and all three must survive to the final redirect. */
+  state?: string;
   requestAccess?: boolean;
   codeChallenge?: string;
   codeChallengeMethod?: 'S256';
@@ -88,6 +92,9 @@ function buildRegistrationEmailLandingLink(params: {
   url.searchParams.set('config_url', params.configUrl);
   if (params.redirectUrl) {
     url.searchParams.set('redirect_url', params.redirectUrl);
+  }
+  if (params.state) {
+    url.searchParams.set('state', params.state);
   }
   if (params.requestAccess) {
     url.searchParams.set('request_access', 'true');
@@ -126,6 +133,7 @@ export async function requestRegistrationInstructions(
     config: ClientConfig;
     configUrl: string;
     redirectUrl?: string;
+    state?: string;
     requestAccess?: boolean;
     codeChallenge?: string;
     codeChallengeMethod?: 'S256';
@@ -221,6 +229,7 @@ export async function requestRegistrationInstructions(
       token,
       configUrl: params.configUrl,
       redirectUrl: params.redirectUrl,
+      state: params.state,
       requestAccess: params.requestAccess,
       codeChallenge: params.codeChallenge,
       codeChallengeMethod: params.codeChallengeMethod,
@@ -234,6 +243,7 @@ export async function requestRegistrationInstructions(
     token,
     configUrl: params.configUrl,
     redirectUrl: params.redirectUrl,
+    state: params.state,
     requestAccess: params.requestAccess,
     codeChallenge: params.codeChallenge,
     codeChallengeMethod: params.codeChallengeMethod,

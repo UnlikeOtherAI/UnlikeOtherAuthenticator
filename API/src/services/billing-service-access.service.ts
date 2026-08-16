@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import { verifyBillingActor } from './billing-actor.service.js';
+import type { BillingActorEndpoint } from './billing-actor-audience.service.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import { normalizeBillingServiceIdentifier } from './billing-tariff.service.js';
 
@@ -56,6 +57,7 @@ export async function confirmAuthenticatedDirectBillingServiceAccess(
   params: {
     credential: VerifiedBillingAppKey;
     actorToken: string;
+    endpoint: BillingActorEndpoint;
     request: {
       product: string;
       organisationId: string;
@@ -80,6 +82,7 @@ export async function confirmAuthenticatedDirectBillingServiceAccess(
   await (deps?.verifyActor ?? verifyBillingActor)({
     token: params.actorToken,
     credential: params.credential,
+    endpoint: params.endpoint,
     request,
   });
 

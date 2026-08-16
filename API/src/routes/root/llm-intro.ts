@@ -280,40 +280,73 @@ GET /auth?config_url=<your_config_endpoint_url>
 
 After the user authenticates, UOA redirects to \`<redirect_url>?code=<authorization_code>\`. The code is single-use and short-lived; treat it as sensitive.
 
-### 3.1 Carrying CSRF / PKCE state across the callback
+### 3.1 Carrying CSRF state across the callback — use \`state\`
 
-\`redirect_url\` is matched byte-for-byte against \`config.redirect_urls\`, **including the query string**. If you normally round-trip OAuth state as a query parameter (\`?state=…\`), UOA will reject the request with \`REDIRECT_URL_NOT_ALLOWED\`.
+Send an opaque \`state\` on the call that begins the flow and UOA echoes it back
+verbatim beside \`code\`:
 
-Pick one of these transports instead:
+\`\`\`text
+GET /auth?config_url=<…>&redirect_url=<…>&code_challenge=<S256>&code_challenge_method=S256&state=<opaque>
+\`\`\`
 
-- **\`sessionStorage\` (recommended).** On \`/start\`, return the opaque state token alongside the redirect URL. Stash it in \`sessionStorage\` under a provider-scoped key, then read-and-delete on the callback page before POSTing to your token-exchange endpoint. Binds the token to the originating tab and avoids URL mutation.
-- **First-party cookie.** Set a \`__Host-sso_state\` cookie with \`SameSite=Lax; Secure; HttpOnly; Path=/auth/callback\`. Works across full page reloads; requires a same-origin callback.
-- **Fragment (\`#state=…\`).** Only viable if the callback is a SPA; the browser strips fragments before the request hits UOA, so UOA won't see it. Fragile and easy to misuse — prefer \`sessionStorage\`.
+\`\`\`text
+<redirect_url>?code=<authorization_code>&state=<opaque>
+\`\`\`
 
-Do NOT append \`state\` (or any per-request query parameter) to \`redirect_url\`. The allowlist match is exact, and every added byte will be rejected.
+\`state\` is optional and UOA never interprets it — generate an unguessable
+per-request value, store it against the pending request on your side, and refuse
+any callback whose echoed \`state\` does not match. **PKCE and \`state\` are not
+substitutes**: PKCE proves the party redeeming the code is the party that started
+the flow, while \`state\` binds *this* callback to *your* pending record, which is
+what defeats login-CSRF (an attacker feeding you their own code).
 
-**Worked example — sessionStorage round-trip.**
+UOA binds the value to the login for its whole lifetime — through the workspace
+chooser, the 2FA challenge and enrolment bridges, the social provider round-trip,
+and the signature continuation — so no mid-flow hop can substitute a different
+one. It is echoed on failure too: a failed social callback redirects to
+\`<redirect_url>?error=auth_failed&state=<opaque>\`, so a pending record can be
+retired instead of left to time out. Omit \`state\` and the redirect is exactly as
+it was before the parameter existed.
+
+Send it on whichever call begins the flow: \`GET /auth\`, \`POST /auth/login\`,
+\`POST /auth/start\`, \`POST /auth/register\`, \`POST /auth/verify-code\`,
+\`POST /auth/verify-email\`, \`GET /auth/email/link\`, or
+\`GET /auth/social/:provider\`. Do **not** re-send it on later hops such as
+\`POST /auth/select-team\` — the value signed into the \`login_token\` is
+authoritative, and a hop that presents a different one is refused.
+
+**Do not append \`state\` to \`redirect_url\`.** \`redirect_url\` is matched
+byte-for-byte against \`config.redirect_urls\` **including the query string**, so
+any per-request parameter added there is rejected with
+\`REDIRECT_URL_NOT_ALLOWED\`. That is what the \`state\` parameter is for.
+
+**Worked example.**
 
 \`\`\`ts
-// /start — backend returns the redirect URL and an opaque state token separately.
-// GET https://app.example.com/sso/start -> { redirectUrl, stateToken }
-
 // Caller (Admin UI):
-const { redirectUrl, stateToken } = await fetch('/sso/start').then((r) => r.json());
-sessionStorage.setItem('sso:state:google', stateToken);
-window.location.assign(redirectUrl); // redirectUrl == one of config.redirect_urls, verbatim
+const state = crypto.randomUUID();
+sessionStorage.setItem('sso:state:google', state);
+const url = new URL('https://authentication.unlikeotherai.com/auth');
+url.searchParams.set('config_url', CONFIG_URL);
+url.searchParams.set('redirect_url', REDIRECT_URL); // verbatim from config.redirect_urls
+url.searchParams.set('code_challenge', challenge);
+url.searchParams.set('code_challenge_method', 'S256');
+url.searchParams.set('state', state);
+window.location.assign(url.toString());
 
-// /auth/callback — UOA has appended ?code=… to the exact allowlisted URL.
-const code = new URLSearchParams(window.location.search).get('code');
-const stateToken = sessionStorage.getItem('sso:state:google');
+// /auth/callback — UOA has appended ?code=…&state=… to the exact allowlisted URL.
+const params = new URLSearchParams(window.location.search);
+const expected = sessionStorage.getItem('sso:state:google');
 sessionStorage.removeItem('sso:state:google'); // read-and-delete: single use
+if (!expected || params.get('state') !== expected) throw new Error('state mismatch');
 
 await fetch('/sso/exchange', {
   method: 'POST',
   headers: { 'content-type': 'application/json' },
-  body: JSON.stringify({ code, stateToken }), // backend validates stateToken, then calls POST /auth/token
+  body: JSON.stringify({ code: params.get('code') }), // backend calls POST /auth/token
 });
 \`\`\`
 
-The backend validates \`stateToken\` against whatever it issued in \`/start\` (short TTL, single use, bound to session) before calling \`POST /auth/token\`. The state token never touches \`redirect_url\`.
+Keep the PKCE \`code_verifier\` in the same \`sessionStorage\` record: the two
+protect different steps and both are needed.
 `;

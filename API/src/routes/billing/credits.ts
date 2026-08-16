@@ -35,6 +35,7 @@ export function registerBillingCreditsRoute(app: FastifyInstance): void {
       const credits = await getBillingCredits({
         credential,
         actorToken: readBillingActorHeader(request.headers['x-uoa-actor']),
+        endpoint: BILLING_CREDITS_READ_PATH,
         request: {
           product: body.product,
           organisationId: body.organisation_id,

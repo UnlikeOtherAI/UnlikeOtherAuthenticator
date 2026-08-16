@@ -316,6 +316,7 @@ describe('canonical customer billing routes', () => {
       expect(statementService.getCanonicalBillingStatement).toHaveBeenCalledWith({
         credential,
         actorToken: 'signed-actor',
+        endpoint: '/billing/v1/customer-statement',
         billingMonth: '2026-07',
         request: {
           product: 'deepwater',
@@ -345,6 +346,7 @@ describe('canonical customer billing routes', () => {
       expect(statementService.getCanonicalBillingStatementV2).toHaveBeenCalledWith({
         credential,
         actorToken: 'signed-actor',
+        endpoint: '/billing/v2/customer-statement',
         billingMonth: '2026-07',
         request: {
           product: 'deepwater',
@@ -401,6 +403,7 @@ describe('canonical customer billing routes', () => {
       expect(accessService.confirmAuthenticatedDirectBillingServiceAccess).toHaveBeenCalledWith({
         credential,
         actorToken: 'signed-actor',
+        endpoint: '/billing/v1/service-access/confirm',
         request: {
           product: 'deepwater',
           organisationId: 'org_1',
@@ -426,6 +429,7 @@ describe('canonical customer billing routes', () => {
       expect(previewService.createBillingCancellationPreview).toHaveBeenCalledWith({
         credential,
         actorToken: 'signed-actor',
+        endpoint: '/billing/v1/cancellation/preview',
         request: {
           product: 'deepwater',
           organisationId: 'org_1',
@@ -452,6 +456,7 @@ describe('canonical customer billing routes', () => {
       expect(confirmService.confirmBillingCancellation).toHaveBeenCalledWith({
         credential,
         actorToken: 'signed-actor',
+        endpoint: '/billing/v1/cancellation/confirm',
         request: {
           product: 'deepwater',
           organisationId: 'org_1',

@@ -12,6 +12,9 @@ const TwoFaChallengeSchema = z.object({
   credential_epoch: z.number().int().nonnegative(),
   config_url: z.string().min(1),
   redirect_url: z.string().min(1),
+  // Relying-party opaque `state`, bound here so a bridge hop cannot swap the
+  // value the final callback echoes.
+  state: z.string().min(1).max(2048).optional(),
   domain: z.string().min(1),
   auth_method: z.string().min(1),
   remember_me: z.boolean().optional(),
@@ -29,6 +32,7 @@ export type TwoFaChallenge = {
   credentialEpoch: number;
   configUrl: string;
   redirectUrl: string;
+  state?: string;
   domain: string;
   authMethod: string;
   rememberMe: boolean;
@@ -54,6 +58,7 @@ export async function signTwoFaChallenge(params: {
   credentialEpoch: number;
   configUrl: string;
   redirectUrl: string;
+  state?: string;
   domain: string;
   authMethod: string;
   rememberMe?: boolean;
@@ -76,6 +81,7 @@ export async function signTwoFaChallenge(params: {
       config_url: params.configUrl,
       credential_epoch: params.credentialEpoch,
       redirect_url: params.redirectUrl,
+      state: params.state,
       domain: params.domain,
       auth_method: params.authMethod,
       remember_me: params.rememberMe ?? false,
@@ -138,6 +144,7 @@ export async function verifyTwoFaChallenge(params: {
     challenge.codeChallenge = parsed.code_challenge;
     challenge.codeChallengeMethod = parsed.code_challenge_method;
   }
+  if (parsed.state) challenge.state = parsed.state;
   if (parsed.org_id) challenge.orgId = parsed.org_id;
   if (parsed.team_id) challenge.teamId = parsed.team_id;
   return challenge;
