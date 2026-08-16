@@ -1,5 +1,53 @@
 # The role model — three tiers, one authority
 
+> # ⛔ DO NOT IMPLEMENT — REFUTED BY REVIEW, 2026-08-16
+>
+> Three independent adversarial reviews (two Fable, one Codex Sol) refuted
+> four of this document's six factual claims and both of its security-bearing
+> work items. **Do not build from it.** A corrected version will replace it.
+>
+> **Verified wrong — the dangerous one first:**
+> - **Work item 1 ("mirror `SUPERUSER` from the verified claims") would spread a
+>   live privilege escalation.** `claims.role: 'superuser'` is *also* the
+>   per-domain SUPERUSER, which is won by **whoever logs into a domain first**
+>   (`domain-role.service.ts`, "first SUPERUSER row per domain wins"). UOA's own
+>   integration docs forbid this use in capitals: "Do NOT use this for
+>   tenant/org authorization" (`routes/root/llm-integration.ts:76,177`).
+>   AdGoes.live already implements the mirror (`server/lib/ssoSession.ts:140` →
+>   `requireSuperuser`) and gates cross-tenant lead and interest lists on it.
+>   Mirroring would also **downgrade Nessie from per-request revocation to
+>   refresh-lagged** on the estate's highest-privilege role.
+> - **Work item 2's premise is false.** Nessie already implements
+>   org-managers-overrule-team (`services/channels.ts` `canManageChannel`;
+>   `routes/teams.ts`), as do DeepTest and AdGoes. And UOA's real roster gate is
+>   `requireTeamManager`, which checks **only** the org role — so a team owner
+>   cannot manage their own team's roster. The cited "precedent" is an
+>   undecided asymmetry, not a policy.
+> - **Claim 1 is mis-located.** `UserRole` lives on the per-domain `DomainRole`
+>   table, not the user row, so the "platform" tier is domain-scoped. UOA also
+>   has a **fourth** role-bearing tier this document says does not exist:
+>   Groups / `GroupMember.isAdmin`, projected as `group_admin[]` — a multi-team
+>   manager at exactly the altitude claimed empty. `org_roles` is
+>   config-extensible per domain, not a fixed three values.
+> - **Claim 6 is wrong in both directions.** `viewer` *is* an org and team
+>   membership role in Nessie — offered in the Settings → Members dropdown
+>   today — while water, DeepTest and DeepSignal have no `viewer` at all
+>   (DeepSignal's fourth role is `guest`). docgen has a five-role ladder, not
+>   "only admin".
+> - **The elevated-access inventory missed five paths**, including DeepSignal's
+>   `ADMIN_TOKEN` (default `'dev-admin-token'`, non-constant-time compare, on
+>   session-exempt routes) and water's superuser gate, which is structurally
+>   unreachable because the session mint drops the claim.
+> - **Missing entirely:** groups, guests (`isGuest` exists, dormant), service
+>   accounts and machine actors, delegated identity (`X-UOA-Delegation`),
+>   deactivated-member semantics, break-glass, and role-change audit — UOA's
+>   superuser grant/revoke writes **no audit row**.
+>
+> **What survives:** the headline the owner asked about. There is no
+> team-scoped super-admin anywhere in the estate, under any name. All three
+> reviews confirmed it independently.
+
+
 > **Status:** proposal, 2026-08-16. Written after auditing the roles that
 > actually exist in UOA and in all six consuming products.
 > **Short answer to the question that prompted it:** there is no team-level
