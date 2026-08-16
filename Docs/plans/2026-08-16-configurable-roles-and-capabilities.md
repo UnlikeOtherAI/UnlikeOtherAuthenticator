@@ -1,6 +1,7 @@
 # Configurable roles and capabilities — the domain defines the words, the product defines the deeds
 
-> **Status:** wave 1 landed 2026-08-16 (UOA); waves 2–3 still proposal. Replaces the refuted
+> **Status:** wave 1 landed 2026-08-16 (UOA), including the org-scope gates it had deferred;
+> waves 2–3 still proposal. Replaces the refuted
 > three-tier proposal
 > (`2026-08-16-estate-role-model.md`, stamped ⛔ do not implement); every claim
 > below was re-verified in source rather than inherited from it.
@@ -432,7 +433,7 @@ first domain does. This is a security fix with its own justification; it does
 not wait for the capability model. (Nessie keeps `lead → admin`: that is a
 known legacy spelling, not an unknown.)
 
-**Wave 1 — UOA. ✅ LANDED (2026-08-16).** `team_roles` config key (mirror of `org_roles`, `owner`
+**Wave 1 — UOA. ✅ LANDED (2026-08-16), org-scope gates included.** `team_roles` config key (mirror of `org_roles`, `owner`
 mandatory; `ALLOWED_TEAM_ROLES` becomes the default rather than the law);
 `role_grants` + `capabilities` schema with validation; the implied **legacy
 default table** when `role_grants` is absent — reproducing today's effective
@@ -473,14 +474,15 @@ a coordinated multi-product deploy.
 
 Where the design above and the shipped code differ, this section is the code.
 
-**UOA's own capability catalogue is two names**, declared in
+**UOA's own capability catalogue is three names**, declared in
 `API/src/services/role-grants.ts` and always legal in a grant table without the domain declaring
 them:
 
-| Capability | Gates |
-| --- | --- |
-| `members.manage` | Team roster mutation (add/remove/re-role), invitations, invite links, the PII-bearing invited list. |
-| `teams.manage` | The team object: create, rename, re-slug, join policy, icon, avatar, delete. |
+| Capability | Scope | Gates |
+| --- | --- | --- |
+| `members.manage` | org + team | Roster mutation. Org: add/remove a member, deactivate/reactivate a membership. Team: add/remove/re-role, invitations, invite links, the PII-bearing invited list. |
+| `teams.manage` | org + team | The team object: create, rename, re-slug, join policy, icon, avatar, delete. |
+| `organisation.manage` | **org only** | The organisation object: rename (and slug), member-invites policy, icon. Its gates never read a `TeamMember` row — administering a team must not confer authority over the tenant containing it — so a `role_grants.team` entry naming it is inert. |
 
 A domain's `org_features.capabilities` declares its *product's* catalogue on top; validation accepts
 the union.
@@ -488,21 +490,27 @@ the union.
 **The legacy default table** (`LEGACY_DEFAULT_ROLE_GRANTS`), used whenever `role_grants` is absent:
 
 ```json
-{ "org": { "admin": ["members.manage", "teams.manage"] },
+{ "org": { "admin": ["members.manage", "teams.manage", "organisation.manage"] },
   "team": { "admin": ["members.manage", "teams.manage"] } }
 ```
 
-`owner` is absent because it is structural, per §1. Legacy-default equivalence is pinned
-exhaustively — every role × scope × capability against the pre-change predicates — in
-`API/tests/unit/role-grants.test.ts`.
+`owner` is absent because it is structural, per §1. The two scopes differ by the one org-scope
+capability, deliberately: a team `admin` never had authority to rename the organisation containing
+their team. Legacy-default equivalence is pinned exhaustively — every role × scope × capability
+against the pre-change predicates in `API/tests/unit/role-grants.test.ts`, and every role × gate
+against them in `API/tests/unit/organisation.service.capabilities.test.ts`.
 
 **Files.** Resolver `API/src/services/role-grants.ts`; config schema
 `API/src/services/config-org-features.schema.ts` (the whole `org_features` block moved out of
 `config.service.ts`, which was already over the 500-line cap); gates
 `hasWorkspaceCapability` / `requireWorkspaceCapability` in `API/src/services/team.service.base.ts`,
 replacing `isTeamManager` / `requireTeamManager` / `isOrgOrTeamManager`. `normalizeTeamRole` now
-takes the config and validates against `team_roles`. No database migration: the grant table lives
-in the config JWT and `team_role` was already a free string column.
+takes the config and validates against `team_roles`. Org-scope gate
+`requireOrgCapability` in `API/src/services/organisation.service.base.ts` (pure — the caller passes
+the role it already loaded), used by `organisation.service.lifecycle.ts`,
+`organisation.service.members.ts` and `organisation.service.organisation.ts`. No database
+migration: the grant table lives in the config JWT and `team_role` was already a free string
+column.
 
 **Release note — one observable change for untouched domains.** The roster/team-mutation gate used
 to read the **org** membership alone, so a team `owner`/`admin` could not add, remove or re-role
@@ -510,16 +518,47 @@ members of the team they administered, nor rename, re-icon or delete it. It now 
 capability over the union of org- and team-scope standing, so they can. Everything else is
 byte-identical: org owner/admin reach-down, plain members refused, backend mode holding every
 capability, and team *creation* staying org-scoped because there is no team to stand in yet.
-Documented in `Docs/brief.md` §24.1b.
+Documented in `Docs/brief.md` §24.1b. The org-scope follow-up below adds **no** further observable
+change — it is inert for every domain, with or without a table (`Docs/brief.md` §24.1c).
 
-**Deliberately not in wave 1**, and still hard-coding `owner|admin` on the **org** scope:
-`organisation.service.lifecycle.ts` `requireOrgManagerActor` (member deactivate/reactivate),
-`organisation.service.organisation.ts` (org rename / member-invites policy),
-`organisation.service.members.ts` (org member add/remove), and
-`billing-stripe-manager.service.ts` `BILLING_MANAGER_ROLES`. The first three are org-scope roster
-and settings gates whose answers are unchanged under the default table; moving them needs `config`
-plumbed through two more services that do not take it today, and belongs in its own change. The
-billing one is a §4 **verdict**, computed by UOA on state only UOA holds, and stays a verdict.
+### The org-scope gates (follow-up, landed 2026-08-16)
+
+Wave 1 deferred three org-scope services that still hard-coded `owner|admin`, because they did not
+receive the domain `config` at all. They are on the table now:
+
+| Service | Gate | Capability |
+| --- | --- | --- |
+| `organisation.service.lifecycle.ts` (was `requireOrgManagerActor`) | member deactivate / reactivate | `members.manage` |
+| `organisation.service.members.ts` | org member add / remove | `members.manage` |
+| `organisation.service.organisation.ts` `updateOrganisation` | org rename, member-invites policy, icon | `organisation.manage` (new) |
+
+Four things worth stating:
+
+- **The plumbing is real, not a global.** `config` is threaded from the routes into
+  `removeOrganisationMember`, `deactivateOrganisationMember` and `reactivateOrganisationMember`
+  exactly as the team services receive it; `requireVerifiedConfig` moved to
+  `organisation-route.shared.ts` (`team-route.shared.ts` re-exports it) so there is one accessor,
+  and the inline `request.config` checks in the org routes now use it.
+- **No extra query.** Every one of these gates had already loaded the actor's ACTIVE `OrgMember`
+  row for its own reasons, so `requireOrgCapability` (`organisation.service.base.ts`) is *pure* —
+  it takes the role rather than re-resolving it. That also removes any chance of the gate reading a
+  different row from the one the service then acts on.
+- **Org scope only, deliberately.** §3 rule 4 is a reach *down* — an org grant of a team-scope
+  capability covers every team. The reverse is refused structurally: these gates read no
+  `TeamMember` row, so administering one team confers nothing over the organisation.
+- **Deactivate/reactivate is `members.manage`, not `organisation.manage`.** It is roster mutation,
+  the same family as add and remove — splitting it would have left a domain granting a custom role
+  "the roster" three of the four verbs, with the *less* destructive one requiring the *broader*
+  capability.
+
+**Still deliberately outside the table**, because they are structural rather than configured:
+`deleteOrganisation` and `transferOrganisationOwnership` (the actor must BE `Organisation.ownerId`),
+`changeOrganisationMemberRole` (same), the "only an owner may grant or remove `owner`" guards in
+`organisation.service.members.ts` (`owner` is the one fixed role, so no grant can reach it), and
+`billing-stripe-manager.service.ts` `BILLING_MANAGER_ROLES` — a §4 **verdict**, computed by UOA on
+state only UOA holds, and staying a verdict. `API/tests/unit/organisation.service.capabilities.test.ts`
+asserts the last one directly: a custom role holding every capability in the table is still not a
+billing manager.
 
 ## The matrix — Nessie, action by action
 

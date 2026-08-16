@@ -64,14 +64,15 @@ const orgEndpoints: EndpointSchema[] = [
   {
     method: 'PUT',
     path: '/org/organisations/:orgId',
-    description: 'Update organisation',
+    description:
+      'Update organisation. User mode requires the organisation.manage capability at ORG scope (org_features.role_grants); team standing never authorises it, because administering a team confers nothing over the organisation containing it. Under the default grant table that is org owner/admin, unchanged.',
     auth: 'domain hash bearer token',
     body: {
       name: 'string (optional)',
       'member_invites?':
-        'string — "allowed" (default) | "admin_approval" | "disabled"; owner/admin only, omitted leaves it unchanged; gates the member-initiated invite endpoint',
+        'string — "allowed" (default) | "admin_approval" | "disabled"; same organisation.manage gate, omitted leaves it unchanged; gates the member-initiated invite endpoint',
       'icon_url?':
-        'string | null — external HTTPS URL only, max 2048 chars; owner/admin only; omitted leaves the current icon unchanged, null clears it; non-https/oversized/invalid rejected with a generic error',
+        'string | null — external HTTPS URL only, max 2048 chars; same organisation.manage gate; omitted leaves the current icon unchanged, null clears it; non-https/oversized/invalid rejected with a generic error',
     },
     response: {
       iconUrl: 'string | null — echoed on every organisation read/write',
@@ -80,7 +81,8 @@ const orgEndpoints: EndpointSchema[] = [
   {
     method: 'DELETE',
     path: '/org/organisations/:orgId',
-    description: 'Delete organisation',
+    description:
+      'Delete organisation. Deliberately NOT a capability: the acting user must BE Organisation.ownerId, a structural invariant no grant table can reach.',
     auth: 'domain hash bearer token',
   },
   {
@@ -103,9 +105,13 @@ const orgEndpoints: EndpointSchema[] = [
   {
     method: 'POST',
     path: '/org/organisations/:orgId/members',
-    description: 'Add organisation member',
+    description:
+      'Add organisation member. User mode requires the members.manage capability at ORG scope (org_features.role_grants) — org owner/admin under the default table. Granting the "owner" role additionally requires the actor to BE an owner: owner is the one fixed role, so no grant reaches it.',
     auth: 'domain hash bearer token',
-    body: { user_id: 'string (required)', role: 'string (optional)' },
+    body: {
+      user_id: 'string (required)',
+      role: 'string (optional, default "member") — validated against org_features.org_roles',
+    },
     response: {
       avatarImageUrl:
         "string — the member's avatar image URL, fetchable with the same domain hash bearer",
@@ -114,7 +120,8 @@ const orgEndpoints: EndpointSchema[] = [
   {
     method: 'PUT',
     path: '/org/organisations/:orgId/members/:userId',
-    description: 'Change member role',
+    description:
+      'Change member role. Deliberately NOT a capability: the acting user must BE Organisation.ownerId. The new role is validated against org_features.org_roles.',
     auth: 'domain hash bearer token',
     body: { role: 'string (required)' },
     response: {
@@ -126,14 +133,14 @@ const orgEndpoints: EndpointSchema[] = [
     method: 'DELETE',
     path: '/org/organisations/:orgId/members/:userId',
     description:
-      "Remove organisation member (soft-remove: status becomes REMOVED; atomically revokes exact user+org refresh families across product domains plus legacy sessions on this domain)",
+      "Remove organisation member (soft-remove: status becomes REMOVED; atomically revokes exact user+org refresh families across product domains plus legacy sessions on this domain). User mode requires the members.manage capability at ORG scope; removing an owner additionally requires the actor to BE an owner.",
     auth: 'domain hash bearer token',
   },
   {
     method: 'POST',
     path: '/org/organisations/:orgId/members/:userId/deactivate',
     description:
-      'Deactivate an organisation member: suspends access and atomically revokes exact user+org refresh families across product domains plus legacy sessions on this domain; cannot deactivate an owner',
+      'Deactivate an organisation member: suspends access and atomically revokes exact user+org refresh families across product domains plus legacy sessions on this domain; cannot deactivate an owner. Same members.manage gate as add/remove — deactivation is roster mutation, not a separate authority.',
     auth: 'domain hash bearer token',
     response: { ok: 'true' },
   },
@@ -141,14 +148,15 @@ const orgEndpoints: EndpointSchema[] = [
     method: 'POST',
     path: '/org/organisations/:orgId/members/:userId/reactivate',
     description:
-      'Reactivate a DEACTIVATED organisation member (org + team rows return to ACTIVE); does not restore sessions — the user signs in again',
+      'Reactivate a DEACTIVATED organisation member (org + team rows return to ACTIVE); does not restore sessions — the user signs in again. Same members.manage gate as add/remove.',
     auth: 'domain hash bearer token',
     response: { ok: 'true' },
   },
   {
     method: 'POST',
     path: '/org/organisations/:orgId/transfer-ownership',
-    description: 'Transfer organisation ownership',
+    description:
+      'Transfer organisation ownership. Deliberately NOT a capability: the acting user must BE Organisation.ownerId.',
     auth: 'domain hash bearer token',
     body: { new_owner_id: 'string (required)' },
   },

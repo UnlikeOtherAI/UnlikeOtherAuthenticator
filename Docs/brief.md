@@ -901,7 +901,7 @@ The claim is optional and defaults to disabled. The object shape and defaults ar
 | `max_team_memberships_per_user`           | integer                     | `50`                           | Maximum teams a single user can belong to — also caps JWT size (max 200)                                                                                                                                                                                                                                                                      |
 | `org_roles`                               | string[]                    | `["owner", "admin", "member"]` | Allowed org-level roles. Must always contain `"owner"`.                                                                                                                                                                                                                                                                                       |
 | `team_roles`                              | string[]                    | `["owner", "admin", "member"]` | Allowed team-level roles — the mirror of `org_roles`, must always contain `"owner"`. Before this existed the three canonical roles were fixed in code; they are now only the default.                                                                                                                                                          |
-| `capabilities`                            | string[]                    | absent                         | The consuming product's declared capability catalogue, mirrored here so `role_grants` can be validated against it. UOA's own names (`members.manage`, `teams.manage`) are always valid on top of this list.                                                                                                                                    |
+| `capabilities`                            | string[]                    | absent                         | The consuming product's declared capability catalogue, mirrored here so `role_grants` can be validated against it. UOA's own names (`members.manage`, `teams.manage`, `organisation.manage`) are always valid on top of this list.                                                                                                                                    |
 | `role_grants`                             | object                      | absent                         | `{ "org": { role: capability[] }, "team": { role: capability[] } }` — which roles hold which capabilities. Absent means the legacy default table (see below), which reproduces the pre-`role_grants` behaviour exactly.                                                                                                                        |
 | `max_flags_per_app`                       | integer                     | `100`                          | Maximum feature flag definitions per App (max 500). Enforced at creation; existing flags unaffected if cap is lowered.                                                                                                                                                                                                                        |
 | `scim_override_retention`                 | `"retain"` \| `"clear"`     | `"retain"`                     | Controls per-user flag override retention on SCIM hard-delete (`DELETE /scim/v2/Users/:id?hardDelete=true`). `"retain"` keeps overrides; `"clear"` deletes them. Soft-deprovision always retains overrides regardless of this setting.                                                                                                        |
@@ -995,10 +995,18 @@ The `"owner"` role has system-level semantics: only owners can delete organisati
 UOA gates its own team surfaces on **capability names**, not role strings. Its catalogue is closed
 and compiled in (`API/src/services/role-grants.ts`):
 
-| Capability | What it gates |
-| --- | --- |
-| `members.manage` | Team roster mutation: add/remove members, change a member's team role, create/revoke invitations and invite links, read the PII-bearing invited list. |
-| `teams.manage` | The team object itself: create, rename, re-slug, change join policy or icon, upload/remove the team avatar, delete. |
+| Capability | Scope | What it gates |
+| --- | --- | --- |
+| `members.manage` | org + team | Roster mutation. **Org:** add a member, remove one, deactivate and reactivate a membership. **Team:** add/remove members, change a member's team role, create/revoke invitations and invite links, read the PII-bearing invited list. |
+| `teams.manage` | org + team | The team object itself: create, rename, re-slug, change join policy or icon, upload/remove the team avatar, delete. |
+| `organisation.manage` | **org only** | The organisation object itself: rename (and with it the slug), the member-invites policy, the workspace icon. The gates that check it never read a `TeamMember` row, because administering a team must not confer authority over the tenant containing it — a `role_grants.team` entry naming it is inert, never an escalation. |
+
+**What is deliberately not a capability.** A short list stays structural, so no configured table can
+reach it: deleting an organisation, transferring its ownership and changing an org member's role
+require the acting user to **be** `Organisation.ownerId`; granting or removing the `"owner"` role
+requires the actor to hold it (`owner` is the one fixed role); and billing management is an
+*authority verdict* UOA computes from state only UOA holds — `BillingOrgResponsibility` and the
+assignment scope — never a grant. See §4 of the plan document for the verdict/grant split.
 
 Resolution, in full:
 
@@ -1015,9 +1023,12 @@ Resolution, in full:
 not opted in):
 
 ```json
-{ "org": { "admin": ["members.manage", "teams.manage"] },
+{ "org": { "admin": ["members.manage", "teams.manage", "organisation.manage"] },
   "team": { "admin": ["members.manage", "teams.manage"] } }
 ```
+
+The two scopes differ by one entry on purpose: `organisation.manage` is org-scope only, and a team
+`admin` never had — and must not gain — authority to rename the organisation containing their team.
 
 That reproduces the effective behaviour of the predicates it replaced. The one deliberate
 difference is stated in 24.1b.
@@ -1034,6 +1045,25 @@ For a domain with no `role_grants`, this is the **only** observable change. Ever
 org owner/admin reach-down, plain members refused, backend mode (`X-UOA-Access-Token` omitted)
 holding every capability — answers exactly as before. Team creation stays org-scoped, because
 there is no team to stand in yet.
+
+#### 24.1c The org-scope gates (follow-up, no behaviour change)
+
+Wave 1 moved the **team** gates onto the table and left three org-scope services still comparing
+`role === 'owner' || role === 'admin'`, because they did not receive the domain config at all. They
+now resolve capabilities too: `members.manage` for the org roster
+(`POST/DELETE /org/organisations/{orgId}/members/{userId}` and the `deactivate`/`reactivate`
+lifecycle) and `organisation.manage` for `PUT /org/organisations/{orgId}`.
+
+`config` is threaded from the routes into `removeOrganisationMember`,
+`deactivateOrganisationMember` and `reactivateOrganisationMember`, which did not take it. Every one
+of these gates reuses the ACTIVE membership row it had already loaded for its own reasons, so the
+new resolution costs no extra query and cannot disagree with the row the service then acts on.
+
+**Nothing observable changes for any domain**, with or without a `role_grants` table: the legacy
+default gives org `admin` all three capabilities, and the owner-only invariants listed in 24.1a
+(delete, ownership transfer, member-role change, granting/removing `owner`) never moved. Equivalence
+is pinned exhaustively — every role × scope × capability in `API/tests/unit/role-grants.test.ts`, and
+every role × gate in `API/tests/unit/organisation.service.capabilities.test.ts`.
 
 ---
 

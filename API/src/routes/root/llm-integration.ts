@@ -134,9 +134,17 @@ The org and team role **vocabularies are per-domain configuration**
   of the org-role and team-role grants. UOA validates that table against the domain's vocabularies
   and declared \`capabilities\` at config load, so anything you read there is coherent.
 
-UOA gates its own team surfaces on exactly this table, using two capability names
-(\`members.manage\`, \`teams.manage\`) — see \`org_features.role_grants\` at \`/api\`. Products
+UOA gates its own org and team surfaces on exactly this table, using three capability names —
+\`members.manage\` (roster mutation at either scope), \`teams.manage\` (the team object), and
+\`organisation.manage\` (the organisation object: rename, member-invites policy, icon; **org scope
+only**, so a team role never reaches it). See \`org_features.role_grants\` at \`/api\`. Products
 declare their own catalogue in \`org_features.capabilities\` and gate on their own verbs.
+
+A short list stays deliberately outside the table because it is structural rather than configured:
+deleting an organisation, transferring its ownership and changing an org member's role require the
+acting user to **be** \`Organisation.ownerId\`; granting or removing the \`"owner"\` role requires
+the actor to hold it; and billing management is a verdict UOA computes from state only UOA holds,
+never a grant. No \`role_grants\` entry can reach any of them.
 
 ### 4.5 First-login tenant bootstrapping — empty memberships
 

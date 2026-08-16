@@ -5985,6 +5985,12 @@ paths:
       tags: [Organizations]
       summary: Update organisation
       operationId: updateOrg
+      description: |
+        Renames the organisation (deriving a new slug) and optionally sets its member-invites
+        policy and icon. In user mode the caller needs the `organisation.manage` capability at
+        **org** scope — team standing never authorises it, because administering a team confers
+        nothing over the organisation containing it. Under the default grant table that is an org
+        owner/admin. Capability resolution is `org_features.role_grants`; see `/api`.
       security:
         - domainHashBearer: []
           accessToken: []
@@ -6019,6 +6025,9 @@ paths:
       tags: [Organizations]
       summary: Delete organisation
       operationId: deleteOrg
+      description: |
+        Deliberately **not** a capability: in user mode the caller must BE `Organisation.ownerId`,
+        a structural invariant no `role_grants` table can reach.
       security:
         - domainHashBearer: []
           accessToken: []
@@ -6042,7 +6051,8 @@ paths:
       summary: Transfer organisation ownership
       operationId: transferOrgOwnership
       description: |
-        Transfers ownership to another org member. Caller must be the current owner.
+        Transfers ownership to another org member. Caller must be the current owner — deliberately
+        not a capability, for the same reason as organisation delete.
         Provide exactly one of `newOwnerId` or `newOwnerUserId`.
       security:
         - domainHashBearer: []
@@ -6120,7 +6130,11 @@ paths:
       summary: Add organisation member
       operationId: addOrgMember
       description: |
-        Adds a user (by userId) to the organisation.
+        Adds a user (by userId) to the organisation. In user mode the caller needs the
+        `members.manage` capability at **org** scope (`org_features.role_grants`) — an org
+        owner/admin under the default grant table. Assigning the `owner` role additionally
+        requires the caller to hold it: `owner` is the one fixed role, so no grant reaches it.
+        `role` is validated against `org_features.org_roles`.
         Rate limited: 100/hour per domain+actor.
       security:
         - domainHashBearer: []
@@ -6165,6 +6179,9 @@ paths:
       tags: [Organizations]
       summary: Update org member role
       operationId: updateOrgMemberRole
+      description: |
+        Deliberately **not** a capability: in user mode the caller must BE `Organisation.ownerId`.
+        `role` is validated against `org_features.org_roles`.
       security:
         - domainHashBearer: []
           accessToken: []
@@ -6197,6 +6214,10 @@ paths:
       tags: [Organizations]
       summary: Remove org member
       operationId: removeOrgMember
+      description: |
+        Soft-remove: the membership is tombstoned `REMOVED` and the exact user+org refresh
+        families are revoked across product domains. Same `members.manage` gate as adding a
+        member; removing an `owner` additionally requires the caller to be one.
       security:
         - domainHashBearer: []
           accessToken: []
@@ -6209,6 +6230,102 @@ paths:
                 $ref: '#/components/schemas/OkTrue'
         '401':
           description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /org/organisations/{orgId}/members/{userId}/deactivate:
+    parameters:
+      - $ref: '#/components/parameters/orgIdPath'
+      - $ref: '#/components/parameters/userIdPath'
+      - $ref: '#/components/parameters/domainQuery'
+      - $ref: '#/components/parameters/configUrl'
+
+    post:
+      tags: [Organizations]
+      summary: Deactivate org member
+      operationId: deactivateOrgMember
+      description: |
+        Suspends the membership (org and team rows become `DEACTIVATED`) and atomically revokes
+        the exact user+org refresh families across product domains plus legacy sessions on this
+        domain. An `owner` cannot be deactivated — transfer ownership first. Same `members.manage`
+        gate as adding and removing a member: deactivation is roster mutation, not a separate
+        authority.
+      security:
+        - domainHashBearer: []
+          accessToken: []
+      responses:
+        '200':
+          description: Member deactivated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkTrue'
+        '400':
+          description: The target is the organisation owner.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Caller does not hold the `members.manage` capability.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No ACTIVE membership for this user in this organisation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /org/organisations/{orgId}/members/{userId}/reactivate:
+    parameters:
+      - $ref: '#/components/parameters/orgIdPath'
+      - $ref: '#/components/parameters/userIdPath'
+      - $ref: '#/components/parameters/domainQuery'
+      - $ref: '#/components/parameters/configUrl'
+
+    post:
+      tags: [Organizations]
+      summary: Reactivate org member
+      operationId: reactivateOrgMember
+      description: |
+        Returns a `DEACTIVATED` membership (and its team rows) to `ACTIVE`. Sessions are not
+        restored — the user signs in again. A `REMOVED` member re-joins through
+        `POST /org/organisations/{orgId}/members` instead. Same `members.manage` gate.
+      security:
+        - domainHashBearer: []
+          accessToken: []
+      responses:
+        '200':
+          description: Member reactivated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkTrue'
+        '401':
+          description: Missing auth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Caller does not hold the `members.manage` capability.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No DEACTIVATED membership for this user in this organisation.
           content:
             application/json:
               schema:
