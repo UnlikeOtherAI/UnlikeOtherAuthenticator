@@ -4,7 +4,10 @@
 >
 > Three independent adversarial reviews (two Fable, one Codex Sol) refuted
 > four of this document's six factual claims and both of its security-bearing
-> work items. **Do not build from it.** A corrected version will replace it.
+> work items. **Do not build from it.** Superseded by
+> [`2026-08-16-configurable-roles-and-capabilities.md`](./2026-08-16-configurable-roles-and-capabilities.md),
+> which replaces the fixed tier ladder with per-domain role vocabularies bound
+> to product-owned capabilities.
 >
 > **Verified wrong — the dangerous one first:**
 > - **Work item 1 ("mirror `SUPERUSER` from the verified claims") would spread a
