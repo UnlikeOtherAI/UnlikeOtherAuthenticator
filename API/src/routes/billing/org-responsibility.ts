@@ -107,7 +107,10 @@ export function registerBillingOrgResponsibilityRoutes(app: FastifyInstance): vo
       schema: { response: { 200: responseSchema } },
     },
     async (request, reply) => {
-      const state = await readOrgBillingResponsibility(parse(request));
+      const state = await readOrgBillingResponsibility({
+        ...parse(request),
+        endpoint: BILLING_ORG_RESPONSIBILITY_READ_PATH,
+      });
       reply.header('Cache-Control', 'private, no-store');
       return reply.send(state);
     },
@@ -121,7 +124,10 @@ export function registerBillingOrgResponsibilityRoutes(app: FastifyInstance): vo
     },
     async (request, reply) => {
       try {
-        const state = await assumeOrgBillingResponsibility(parse(request));
+        const state = await assumeOrgBillingResponsibility({
+          ...parse(request),
+          endpoint: BILLING_ORG_RESPONSIBILITY_ASSUME_PATH,
+        });
         reply.header('Cache-Control', 'private, no-store');
         return reply.send(state);
       } catch (error) {
@@ -141,7 +147,10 @@ export function registerBillingOrgResponsibilityRoutes(app: FastifyInstance): vo
       schema: { response: { 200: responseSchema } },
     },
     async (request, reply) => {
-      const state = await releaseOrgBillingResponsibility(parse(request));
+      const state = await releaseOrgBillingResponsibility({
+        ...parse(request),
+        endpoint: BILLING_ORG_RESPONSIBILITY_RELEASE_PATH,
+      });
       reply.header('Cache-Control', 'private, no-store');
       return reply.send(state);
     },

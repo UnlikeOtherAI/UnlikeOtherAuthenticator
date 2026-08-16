@@ -7,6 +7,7 @@ import {
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
+import type { BillingActorEndpoint } from './billing-actor-audience.service.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import {
   authorizeBillingCustomerAction,
@@ -65,6 +66,7 @@ async function requireOrganisationBillingManager(
     request: BillingOrgResponsibilityRequest;
     actorToken: string;
     credential: VerifiedBillingAppKey;
+    endpoint: BillingActorEndpoint;
   },
   deps: Dependencies & { prisma: PrismaClient },
 ) {
@@ -196,6 +198,7 @@ export async function assumeOrgBillingResponsibility(
     request: BillingOrgResponsibilityRequest;
     actorToken: string;
     credential: VerifiedBillingAppKey;
+    endpoint: BillingActorEndpoint;
   },
   deps?: Dependencies,
 ): Promise<BillingOrgResponsibilityView> {
@@ -301,6 +304,7 @@ export async function releaseOrgBillingResponsibility(
     request: BillingOrgResponsibilityRequest;
     actorToken: string;
     credential: VerifiedBillingAppKey;
+    endpoint: BillingActorEndpoint;
   },
   deps?: Dependencies,
 ): Promise<BillingOrgResponsibilityView> {
@@ -380,6 +384,7 @@ export async function readOrgBillingResponsibility(
     request: BillingOrgResponsibilityRequest;
     actorToken: string;
     credential: VerifiedBillingAppKey;
+    endpoint: BillingActorEndpoint;
   },
   deps?: Dependencies,
 ): Promise<BillingOrgResponsibilityView & { can_manage: boolean }> {

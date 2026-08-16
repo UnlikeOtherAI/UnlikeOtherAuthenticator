@@ -34,6 +34,9 @@ export const BILLING_ACTOR_ENDPOINTS = [
   '/billing/v1/stripe/checkout-session',
   '/billing/v1/stripe/subscription-summary',
   '/billing/v1/stripe/portal-session',
+  '/billing/v1/organisation-billing',
+  '/billing/v1/organisation-billing/assume',
+  '/billing/v1/organisation-billing/release',
 ] as const;
 
 export type BillingActorEndpoint = (typeof BILLING_ACTOR_ENDPOINTS)[number];
