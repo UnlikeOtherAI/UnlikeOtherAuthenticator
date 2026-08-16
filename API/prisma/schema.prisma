@@ -306,6 +306,8 @@ model User {
   billingCreditUsageAllocations        BillingCreditUsageAllocation[]            @relation("CreditUsageAllocationAttribution")
   billingCreditAdminAdjustments        BillingCreditAdminAdjustment[]            @relation("CreditAdminAdjustmentCreator")
   billingCreditAutoTopUpDisables       BillingCreditAutoTopUpDisableEvent[]      @relation("CreditAutoTopUpDisabler")
+  billingOrgResponsibilitiesAssumed    BillingOrgResponsibility[]                @relation("BillingOrgResponsibilityAssumer")
+  billingOrgResponsibilitiesReleased   BillingOrgResponsibility[]                @relation("BillingOrgResponsibilityReleaser")
   recurringAddonCheckouts              BillingRecurringAddonCheckout[]           @relation("RecurringAddonCheckoutRequester")
   recurringAddonSubscriptionsAsUser    BillingRecurringAddonSubscription[]       @relation("RecurringAddonSubscriptionSubscriber")
   recurringAddonCheckoutsAsUser        BillingRecurringAddonCheckout[]           @relation("RecurringAddonCheckoutSubscriber")
@@ -1040,6 +1042,7 @@ model Organisation {
   billingContracts                  BillingOrganisationContract[]
   billingInvoiceProfiles            BillingOrganisationInvoiceProfile[]
   billingInvoices                   BillingInvoice[]
+  billingOrgResponsibility          BillingOrgResponsibility?
 
   @@unique([domain, slug])
   @@index([domain])
@@ -1583,6 +1586,36 @@ model BillingTariffAssignment {
   @@index([orgId])
   @@index([teamId])
   @@map("billing_tariff_assignments")
+}
+
+// One row per organisation. While `active` is true the organisation has taken
+// over billing for every one of its teams, across every service: credit
+// resolution moves to the ORGANISATION-scoped account, team surfaces stop
+// offering funding controls, and the statement answers at the organisation.
+// Deliberately org-wide rather than per-service — the ask is one bill for the
+// whole organisation, and the existing `(scope, scope_key)` convention leaves
+// room to add a service dimension later without a breaking change.
+// Releasing sets `active = false` and reverses the resolver only; historical
+// organisation-scoped ledger rows stay where the spend was actually incurred.
+model BillingOrgResponsibility {
+  id               String    @id @default(cuid())
+  orgId            String    @unique @map("org_id")
+  active           Boolean   @default(true)
+  assumedAt        DateTime  @map("assumed_at")
+  assumedByUserId  String    @map("assumed_by_user_id")
+  releasedAt       DateTime? @map("released_at")
+  releasedByUserId String?   @map("released_by_user_id")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  org        Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  assumedBy  User         @relation("BillingOrgResponsibilityAssumer", fields: [assumedByUserId], references: [id], onDelete: Restrict)
+  releasedBy User?        @relation("BillingOrgResponsibilityReleaser", fields: [releasedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([active])
+  @@index([assumedByUserId])
+  @@index([releasedByUserId])
+  @@map("billing_org_responsibilities")
 }
 
 model BillingAppKey {
@@ -2441,12 +2474,20 @@ model BillingCreditTopUpCatalog {
   @@map("billing_credit_top_up_catalogs")
 }
 
+// The credit account carries the same `(scope, scope_key)` pair its neighbours
+// (tariff assignments, commercial adjustments, Stripe customers/subscriptions)
+// already carry: `scope_key` is `org_id` for ORGANISATION and
+// `org_id || ':' || team_id` for TEAM. `team_id` is therefore NULL exactly when
+// the scope is ORGANISATION. Existing rows are TEAM-scoped and unchanged.
+// `resolveCreditAccount` picks between the two; every debit crosses it.
 model BillingCreditAccount {
   id                             String                      @id @default(cuid())
   accountId                      String                      @map("account_id")
   customerId                     String                      @map("customer_id")
   orgId                          String                      @map("org_id")
-  teamId                         String                      @map("team_id")
+  teamId                         String?                     @map("team_id")
+  scope                          BillingAssignmentScope      @default(TEAM)
+  scopeKey                       String                      @map("scope_key") @db.VarChar(520)
   currency                       String                      @default("USD") @db.Char(3)
   balanceMicrocredits            BigInt                      @default(0) @map("balance_microcredits")
   autoTopUpGeneration            Int                         @default(0) @map("auto_top_up_generation")
@@ -2470,7 +2511,7 @@ model BillingCreditAccount {
   account                  BillingStripeAccount                     @relation(fields: [accountId], references: [id], onDelete: Restrict)
   customer                 BillingStripeCustomer                    @relation(fields: [customerId], references: [id], onDelete: Restrict)
   org                      Organisation                             @relation(fields: [orgId], references: [id], onDelete: Restrict)
-  team                     Team                                     @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  team                     Team?                                    @relation(fields: [teamId], references: [id], onDelete: Restrict)
   autoTopUpPolicy          BillingCreditFundingPolicy?              @relation(fields: [autoTopUpPolicyId], references: [id], onDelete: Restrict)
   autoTopUpService         BillingService?                          @relation("CreditAccountAutoTopUpService", fields: [autoTopUpServiceId], references: [id], onDelete: Restrict)
   autoTopUpAppKey          BillingAppKey?                           @relation("CreditAccountAutoTopUpAppKey", fields: [autoTopUpAppKeyId], references: [id], onDelete: Restrict)
@@ -2490,8 +2531,9 @@ model BillingCreditAccount {
   consentRevisions         BillingCreditAutoTopUpConsentRevision[]  @relation("CreditAccountConsentRevisions")
   autoTopUpDisableEvents   BillingCreditAutoTopUpDisableEvent[]
 
-  @@unique([accountId, teamId, currency])
+  @@unique([accountId, scopeKey, currency])
   @@index([orgId, teamId])
+  @@index([orgId, scope])
   @@index([customerId])
   @@index([autoTopUpPolicyId])
   @@index([autoTopUpServiceId])

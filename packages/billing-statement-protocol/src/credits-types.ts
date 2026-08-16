@@ -1,5 +1,6 @@
 import type { ExactMoney } from './types.js';
 import type { BillingSubjectRequest } from './funding-schema-primitives.js';
+import type { BillingControlledByV1 } from './org-billing-types.js';
 
 export const BILLING_CREDITS_SCHEMA_VERSION = 1 as const;
 // BillingCreditsV1 has not been released yet. This remains the coordinated V1
@@ -122,6 +123,14 @@ type BillingCreditsCommonV1<PendingPayment> = {
     label: string;
     description: string;
   };
+  /**
+   * Present only while the organisation has taken billing over from its teams
+   * (protocol 1.3.0). While it is present this team offers no funding action —
+   * both capabilities are false, `funding_policy` is null and automatic top-up
+   * exposes no action — so a consumer that predates the field renders a
+   * read-only balance rather than controls that would 403.
+   */
+  controlled_by?: BillingControlledByV1;
 };
 
 type BillingCreditsFundingOfferBase = {

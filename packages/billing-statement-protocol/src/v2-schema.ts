@@ -175,6 +175,64 @@ const connectedServiceSchema = {
   },
 } as const;
 
+const connectedServicePortfolioSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['title', 'description', 'statement_product', 'services'],
+  properties: {
+    title: { type: 'string' },
+    description: { type: 'string' },
+    statement_product: { type: 'string' },
+    services: { type: 'array', items: connectedServiceSchema },
+  },
+} as const;
+
+const organisationTeamUsageSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: [
+    'team_id',
+    'team_name',
+    'display_name',
+    'pinned_ledger_snapshot',
+    'connected_service_usage',
+    'commercial_lines',
+    'totals',
+  ],
+  properties: {
+    team_id: { type: 'string', minLength: 1 },
+    team_name: { type: 'string' },
+    display_name: { type: 'string' },
+    pinned_ledger_snapshot: portfolioSnapshotSchema('user'),
+    connected_service_usage: connectedServicePortfolioSchema,
+    commercial_lines: billingStatementV1JsonSchema.properties.commercial_lines,
+    totals: billingStatementV1JsonSchema.properties.totals,
+  },
+} as const;
+
+const organisationScopeSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: [
+    'organisation_id',
+    'organisation_name',
+    'title',
+    'description',
+    'teams',
+    'commercial_lines',
+    'totals',
+  ],
+  properties: {
+    organisation_id: { type: 'string', minLength: 1, maxLength: 256 },
+    organisation_name: { type: 'string', minLength: 1 },
+    title: { type: 'string' },
+    description: { type: 'string' },
+    teams: { type: 'array', items: organisationTeamUsageSchema },
+    commercial_lines: billingStatementV1JsonSchema.properties.commercial_lines,
+    totals: billingStatementV1JsonSchema.properties.totals,
+  },
+} as const;
+
 export const billingStatementV2JsonSchema = {
   ...billingStatementV1JsonSchema,
   $id: BILLING_STATEMENT_V2_SCHEMA_PATH,
@@ -198,16 +256,10 @@ export const billingStatementV2JsonSchema = {
         tariff: billingStatementV1JsonSchema.properties.pinned_inputs.properties.tariff,
       },
     },
-    connected_service_usage: {
-      type: 'object',
-      additionalProperties: false,
-      required: ['title', 'description', 'statement_product', 'services'],
-      properties: {
-        title: { type: 'string' },
-        description: { type: 'string' },
-        statement_product: { type: 'string' },
-        services: { type: 'array', items: connectedServiceSchema },
-      },
-    },
+    connected_service_usage: connectedServicePortfolioSchema,
+    // Optional and absent from `required`: present only for an organisation
+    // billing manager while the override is active. Everything else in the
+    // document stays the requested team's own truthful statement.
+    organisation_scope: organisationScopeSchema,
   },
 } as const;

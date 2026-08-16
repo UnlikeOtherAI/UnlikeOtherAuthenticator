@@ -7,6 +7,7 @@ import {
   nullableBillingCreditsAction,
 } from './credits-action-schema.js';
 import { creditAmountSchema, moneySchema } from './funding-schema-primitives.js';
+import { billingControlledByJsonSchema } from './org-billing-schema.js';
 import {
   billingCreditsManagerRecentEntriesJsonSchema,
   billingCreditsManagerSummaryJsonSchema,
@@ -292,5 +293,8 @@ export const billingCreditsV1JsonSchema = {
         billingCreditsMemberRecentEntriesJsonSchema,
       ],
     },
+    // Optional and absent from `required`: a credits view without it means the
+    // organisation has not taken billing over, which is every deployment today.
+    controlled_by: billingControlledByJsonSchema,
   },
 } as const;

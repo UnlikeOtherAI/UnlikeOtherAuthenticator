@@ -1233,6 +1233,49 @@
               }
             }
           },
+          "controlled_by": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "scope",
+              "organisation_id",
+              "organisation_name",
+              "message",
+              "can_manage",
+              "manage_action_id"
+            ],
+            "properties": {
+              "scope": {
+                "const": "organisation"
+              },
+              "organisation_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "organisation_name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "message": {
+                "type": "string",
+                "minLength": 1
+              },
+              "can_manage": {
+                "type": "boolean"
+              },
+              "manage_action_id": {
+                "oneOf": [
+                  {
+                    "const": "org-billing-open"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
           "connected_service_usage": {
             "type": "object",
             "additionalProperties": false,
@@ -1753,6 +1796,1008 @@
                               }
                             }
                           }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "organisation_scope": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "organisation_id",
+              "organisation_name",
+              "title",
+              "description",
+              "teams",
+              "commercial_lines",
+              "totals"
+            ],
+            "properties": {
+              "organisation_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "organisation_name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "title": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "teams": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "team_id",
+                    "team_name",
+                    "display_name",
+                    "pinned_ledger_snapshot",
+                    "connected_service_usage",
+                    "commercial_lines",
+                    "totals"
+                  ],
+                  "properties": {
+                    "team_id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "team_name": {
+                      "type": "string"
+                    },
+                    "display_name": {
+                      "type": "string"
+                    },
+                    "pinned_ledger_snapshot": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "contract",
+                        "group_by",
+                        "cursor",
+                        "id",
+                        "captured_at",
+                        "sha256"
+                      ],
+                      "properties": {
+                        "contract": {
+                          "const": "metering-portfolio-v1"
+                        },
+                        "group_by": {
+                          "const": "user"
+                        },
+                        "cursor": {
+                          "type": "string",
+                          "pattern": "^mup_[A-Za-z0-9_-]{32}$"
+                        },
+                        "id": {
+                          "type": "string",
+                          "pattern": "^mup_[A-Za-z0-9_-]{32}$"
+                        },
+                        "captured_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "sha256": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        }
+                      }
+                    },
+                    "connected_service_usage": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "title",
+                        "description",
+                        "statement_product",
+                        "services"
+                      ],
+                      "properties": {
+                        "title": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "statement_product": {
+                          "type": "string"
+                        },
+                        "services": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "billing_product",
+                              "name",
+                              "display_name",
+                              "access",
+                              "direct_user_count",
+                              "title",
+                              "description",
+                              "totals",
+                              "origins",
+                              "users"
+                            ],
+                            "properties": {
+                              "billing_product": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "display_name": {
+                                "type": "string"
+                              },
+                              "access": {
+                                "type": "string",
+                                "enum": [
+                                  "direct",
+                                  "indirect"
+                                ]
+                              },
+                              "direct_user_count": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "description": {
+                                "type": "string"
+                              },
+                              "totals": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "calls",
+                                  "usage",
+                                  "provider_costs"
+                                ],
+                                "properties": {
+                                  "calls": {
+                                    "type": "string",
+                                    "pattern": "^(0|[1-9][0-9]*)$"
+                                  },
+                                  "usage": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "additionalProperties": false,
+                                      "required": [
+                                        "usage_unit",
+                                        "raw_units",
+                                        "display"
+                                      ],
+                                      "properties": {
+                                        "usage_unit": {
+                                          "type": "string"
+                                        },
+                                        "raw_units": {
+                                          "type": "string",
+                                          "pattern": "^(0|[1-9][0-9]*)$"
+                                        },
+                                        "display": {
+                                          "type": "string"
+                                        }
+                                      }
+                                    }
+                                  },
+                                  "provider_costs": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "additionalProperties": false,
+                                      "required": [
+                                        "currency",
+                                        "provider_cost",
+                                        "display"
+                                      ],
+                                      "properties": {
+                                        "currency": {
+                                          "type": "string",
+                                          "pattern": "^[A-Z]{3}$"
+                                        },
+                                        "provider_cost": {
+                                          "type": "object",
+                                          "additionalProperties": false,
+                                          "required": [
+                                            "amount",
+                                            "currency",
+                                            "display"
+                                          ],
+                                          "properties": {
+                                            "amount": {
+                                              "type": "string",
+                                              "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                                            },
+                                            "currency": {
+                                              "type": "string",
+                                              "pattern": "^[A-Z]{3}$"
+                                            },
+                                            "display": {
+                                              "type": "string"
+                                            }
+                                          }
+                                        },
+                                        "display": {
+                                          "type": "string"
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              "origins": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "required": [
+                                    "product",
+                                    "name",
+                                    "display_name",
+                                    "is_statement_product",
+                                    "calls",
+                                    "call_share",
+                                    "usage",
+                                    "provider_costs"
+                                  ],
+                                  "properties": {
+                                    "product": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "name": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "display_name": {
+                                      "type": "string"
+                                    },
+                                    "is_statement_product": {
+                                      "type": "boolean"
+                                    },
+                                    "calls": {
+                                      "type": "string",
+                                      "pattern": "^(0|[1-9][0-9]*)$"
+                                    },
+                                    "call_share": {
+                                      "type": "object",
+                                      "additionalProperties": false,
+                                      "required": [
+                                        "basis_points",
+                                        "percent",
+                                        "display"
+                                      ],
+                                      "properties": {
+                                        "basis_points": {
+                                          "type": "integer",
+                                          "minimum": 0,
+                                          "maximum": 10000
+                                        },
+                                        "percent": {
+                                          "type": "string",
+                                          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                                        },
+                                        "display": {
+                                          "type": "string"
+                                        }
+                                      }
+                                    },
+                                    "usage": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "additionalProperties": false,
+                                        "required": [
+                                          "usage_unit",
+                                          "raw_units",
+                                          "display",
+                                          "share"
+                                        ],
+                                        "properties": {
+                                          "usage_unit": {
+                                            "type": "string"
+                                          },
+                                          "raw_units": {
+                                            "type": "string",
+                                            "pattern": "^(0|[1-9][0-9]*)$"
+                                          },
+                                          "display": {
+                                            "type": "string"
+                                          },
+                                          "share": {
+                                            "type": "object",
+                                            "additionalProperties": false,
+                                            "required": [
+                                              "basis_points",
+                                              "percent",
+                                              "display"
+                                            ],
+                                            "properties": {
+                                              "basis_points": {
+                                                "type": "integer",
+                                                "minimum": 0,
+                                                "maximum": 10000
+                                              },
+                                              "percent": {
+                                                "type": "string",
+                                                "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                                              },
+                                              "display": {
+                                                "type": "string"
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    },
+                                    "provider_costs": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "additionalProperties": false,
+                                        "required": [
+                                          "currency",
+                                          "provider_cost",
+                                          "display",
+                                          "share"
+                                        ],
+                                        "properties": {
+                                          "currency": {
+                                            "type": "string",
+                                            "pattern": "^[A-Z]{3}$"
+                                          },
+                                          "provider_cost": {
+                                            "type": "object",
+                                            "additionalProperties": false,
+                                            "required": [
+                                              "amount",
+                                              "currency",
+                                              "display"
+                                            ],
+                                            "properties": {
+                                              "amount": {
+                                                "type": "string",
+                                                "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                                              },
+                                              "currency": {
+                                                "type": "string",
+                                                "pattern": "^[A-Z]{3}$"
+                                              },
+                                              "display": {
+                                                "type": "string"
+                                              }
+                                            }
+                                          },
+                                          "display": {
+                                            "type": "string"
+                                          },
+                                          "share": {
+                                            "anyOf": [
+                                              {
+                                                "type": "object",
+                                                "additionalProperties": false,
+                                                "required": [
+                                                  "basis_points",
+                                                  "percent",
+                                                  "display"
+                                                ],
+                                                "properties": {
+                                                  "basis_points": {
+                                                    "type": "integer",
+                                                    "minimum": 0,
+                                                    "maximum": 10000
+                                                  },
+                                                  "percent": {
+                                                    "type": "string",
+                                                    "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                                                  },
+                                                  "display": {
+                                                    "type": "string"
+                                                  }
+                                                }
+                                              },
+                                              {
+                                                "type": "null"
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              "users": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "required": [
+                                    "user_id",
+                                    "name",
+                                    "email",
+                                    "display_name",
+                                    "calls",
+                                    "call_share",
+                                    "usage",
+                                    "provider_costs"
+                                  ],
+                                  "properties": {
+                                    "user_id": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "name": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "email": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "display_name": {
+                                      "type": "string"
+                                    },
+                                    "calls": {
+                                      "type": "string",
+                                      "pattern": "^(0|[1-9][0-9]*)$"
+                                    },
+                                    "call_share": {
+                                      "type": "object",
+                                      "additionalProperties": false,
+                                      "required": [
+                                        "basis_points",
+                                        "percent",
+                                        "display"
+                                      ],
+                                      "properties": {
+                                        "basis_points": {
+                                          "type": "integer",
+                                          "minimum": 0,
+                                          "maximum": 10000
+                                        },
+                                        "percent": {
+                                          "type": "string",
+                                          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                                        },
+                                        "display": {
+                                          "type": "string"
+                                        }
+                                      }
+                                    },
+                                    "usage": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "additionalProperties": false,
+                                        "required": [
+                                          "usage_unit",
+                                          "raw_units",
+                                          "display",
+                                          "share"
+                                        ],
+                                        "properties": {
+                                          "usage_unit": {
+                                            "type": "string"
+                                          },
+                                          "raw_units": {
+                                            "type": "string",
+                                            "pattern": "^(0|[1-9][0-9]*)$"
+                                          },
+                                          "display": {
+                                            "type": "string"
+                                          },
+                                          "share": {
+                                            "type": "object",
+                                            "additionalProperties": false,
+                                            "required": [
+                                              "basis_points",
+                                              "percent",
+                                              "display"
+                                            ],
+                                            "properties": {
+                                              "basis_points": {
+                                                "type": "integer",
+                                                "minimum": 0,
+                                                "maximum": 10000
+                                              },
+                                              "percent": {
+                                                "type": "string",
+                                                "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                                              },
+                                              "display": {
+                                                "type": "string"
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    },
+                                    "provider_costs": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "additionalProperties": false,
+                                        "required": [
+                                          "currency",
+                                          "provider_cost",
+                                          "display",
+                                          "share"
+                                        ],
+                                        "properties": {
+                                          "currency": {
+                                            "type": "string",
+                                            "pattern": "^[A-Z]{3}$"
+                                          },
+                                          "provider_cost": {
+                                            "type": "object",
+                                            "additionalProperties": false,
+                                            "required": [
+                                              "amount",
+                                              "currency",
+                                              "display"
+                                            ],
+                                            "properties": {
+                                              "amount": {
+                                                "type": "string",
+                                                "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                                              },
+                                              "currency": {
+                                                "type": "string",
+                                                "pattern": "^[A-Z]{3}$"
+                                              },
+                                              "display": {
+                                                "type": "string"
+                                              }
+                                            }
+                                          },
+                                          "display": {
+                                            "type": "string"
+                                          },
+                                          "share": {
+                                            "anyOf": [
+                                              {
+                                                "type": "object",
+                                                "additionalProperties": false,
+                                                "required": [
+                                                  "basis_points",
+                                                  "percent",
+                                                  "display"
+                                                ],
+                                                "properties": {
+                                                  "basis_points": {
+                                                    "type": "integer",
+                                                    "minimum": 0,
+                                                    "maximum": 10000
+                                                  },
+                                                  "percent": {
+                                                    "type": "string",
+                                                    "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                                                  },
+                                                  "display": {
+                                                    "type": "string"
+                                                  }
+                                                }
+                                              },
+                                              {
+                                                "type": "null"
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "commercial_lines": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "id",
+                          "kind",
+                          "product",
+                          "label",
+                          "detail",
+                          "amount"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "monthly_subscription",
+                              "usage",
+                              "add_on",
+                              "credit"
+                            ]
+                          },
+                          "product": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "detail": {
+                            "type": "string"
+                          },
+                          "amount": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "amount",
+                              "currency",
+                              "display"
+                            ],
+                            "properties": {
+                              "amount": {
+                                "type": "string",
+                                "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                              },
+                              "currency": {
+                                "type": "string",
+                                "pattern": "^[A-Z]{3}$"
+                              },
+                              "display": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "totals": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "currency",
+                          "monthly",
+                          "usage",
+                          "add_ons",
+                          "credits",
+                          "total_due"
+                        ],
+                        "properties": {
+                          "currency": {
+                            "type": "string"
+                          },
+                          "monthly": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "amount",
+                              "currency",
+                              "display"
+                            ],
+                            "properties": {
+                              "amount": {
+                                "type": "string",
+                                "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                              },
+                              "currency": {
+                                "type": "string",
+                                "pattern": "^[A-Z]{3}$"
+                              },
+                              "display": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "usage": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "amount",
+                              "currency",
+                              "display"
+                            ],
+                            "properties": {
+                              "amount": {
+                                "type": "string",
+                                "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                              },
+                              "currency": {
+                                "type": "string",
+                                "pattern": "^[A-Z]{3}$"
+                              },
+                              "display": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "add_ons": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "amount",
+                              "currency",
+                              "display"
+                            ],
+                            "properties": {
+                              "amount": {
+                                "type": "string",
+                                "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                              },
+                              "currency": {
+                                "type": "string",
+                                "pattern": "^[A-Z]{3}$"
+                              },
+                              "display": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "credits": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "amount",
+                              "currency",
+                              "display"
+                            ],
+                            "properties": {
+                              "amount": {
+                                "type": "string",
+                                "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                              },
+                              "currency": {
+                                "type": "string",
+                                "pattern": "^[A-Z]{3}$"
+                              },
+                              "display": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "total_due": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "amount",
+                              "currency",
+                              "display"
+                            ],
+                            "properties": {
+                              "amount": {
+                                "type": "string",
+                                "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                              },
+                              "currency": {
+                                "type": "string",
+                                "pattern": "^[A-Z]{3}$"
+                              },
+                              "display": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "commercial_lines": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id",
+                    "kind",
+                    "product",
+                    "label",
+                    "detail",
+                    "amount"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "monthly_subscription",
+                        "usage",
+                        "add_on",
+                        "credit"
+                      ]
+                    },
+                    "product": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "amount": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "amount",
+                        "currency",
+                        "display"
+                      ],
+                      "properties": {
+                        "amount": {
+                          "type": "string",
+                          "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                        },
+                        "currency": {
+                          "type": "string",
+                          "pattern": "^[A-Z]{3}$"
+                        },
+                        "display": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "totals": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "currency",
+                    "monthly",
+                    "usage",
+                    "add_ons",
+                    "credits",
+                    "total_due"
+                  ],
+                  "properties": {
+                    "currency": {
+                      "type": "string"
+                    },
+                    "monthly": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "amount",
+                        "currency",
+                        "display"
+                      ],
+                      "properties": {
+                        "amount": {
+                          "type": "string",
+                          "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                        },
+                        "currency": {
+                          "type": "string",
+                          "pattern": "^[A-Z]{3}$"
+                        },
+                        "display": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "usage": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "amount",
+                        "currency",
+                        "display"
+                      ],
+                      "properties": {
+                        "amount": {
+                          "type": "string",
+                          "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                        },
+                        "currency": {
+                          "type": "string",
+                          "pattern": "^[A-Z]{3}$"
+                        },
+                        "display": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "add_ons": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "amount",
+                        "currency",
+                        "display"
+                      ],
+                      "properties": {
+                        "amount": {
+                          "type": "string",
+                          "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                        },
+                        "currency": {
+                          "type": "string",
+                          "pattern": "^[A-Z]{3}$"
+                        },
+                        "display": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "credits": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "amount",
+                        "currency",
+                        "display"
+                      ],
+                      "properties": {
+                        "amount": {
+                          "type": "string",
+                          "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                        },
+                        "currency": {
+                          "type": "string",
+                          "pattern": "^[A-Z]{3}$"
+                        },
+                        "display": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "total_due": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "amount",
+                        "currency",
+                        "display"
+                      ],
+                      "properties": {
+                        "amount": {
+                          "type": "string",
+                          "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                        },
+                        "currency": {
+                          "type": "string",
+                          "pattern": "^[A-Z]{3}$"
+                        },
+                        "display": {
+                          "type": "string"
                         }
                       }
                     }

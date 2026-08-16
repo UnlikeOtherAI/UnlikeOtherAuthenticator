@@ -3673,6 +3673,49 @@
           }
         }
       ]
+    },
+    "controlled_by": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope",
+        "organisation_id",
+        "organisation_name",
+        "message",
+        "can_manage",
+        "manage_action_id"
+      ],
+      "properties": {
+        "scope": {
+          "const": "organisation"
+        },
+        "organisation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "organisation_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "can_manage": {
+          "type": "boolean"
+        },
+        "manage_action_id": {
+          "oneOf": [
+            {
+              "const": "org-billing-open"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
     }
   }
 }
