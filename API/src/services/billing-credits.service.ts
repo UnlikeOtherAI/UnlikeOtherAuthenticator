@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@prisma/client';
 
+import type { BillingActorEndpoint } from './billing-actor-audience.service.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import {
   ensureTeamCreditAccount,
@@ -44,6 +45,7 @@ export async function getBillingCredits(
     request: BillingCreditsRequest;
     actorToken: string;
     credential: VerifiedBillingAppKey;
+    endpoint: BillingActorEndpoint;
   },
   deps?: Dependencies,
 ) {
@@ -53,6 +55,7 @@ export async function getBillingCredits(
       request: params.request,
       actorToken: params.actorToken,
       credential: params.credential,
+      endpoint: params.endpoint,
     },
     { prisma },
   );

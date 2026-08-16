@@ -218,6 +218,12 @@ const EnvSchema = z
         message: 'UOA_BILLING_ASSERTION_PUBLIC_JWKS_JSON must contain public-only RS256 RSA keys',
       })
       .optional(),
+    // Relying-party actor assertions (`X-UOA-Actor`) must name the exact billing
+    // endpoint they are presented to in `aud`. Products that still pin one legacy
+    // audience for every endpoint are accepted under "warn" (the transition default)
+    // and logged; "enforce" refuses them with BILLING_ACTOR_AUDIENCE_MISMATCH.
+    // See Docs/Auth/billing-actor-assertions.md.
+    BILLING_ACTOR_AUDIENCE_MODE: z.enum(['warn', 'enforce']).default('warn'),
     // Private immutable PDFs for manually issued contract invoices. Contract
     // calculation remains available when disabled, but issuance fails closed.
     BILLING_INVOICE_STORAGE_PROVIDER: z.enum(['disabled', 'filesystem', 'gcs']).default('disabled'),
@@ -416,6 +422,14 @@ export function isBillingAssertionJwksEnabled(env: Env = getEnv()): boolean {
   return Boolean(
     env.UOA_BILLING_ASSERTION_SIGNING_PRIVATE_JWK && env.UOA_BILLING_ASSERTION_PUBLIC_JWKS_JSON,
   );
+}
+
+/** Whether a relying-party actor assertion naming only the legacy audience is refused
+ *  ("enforce") or accepted and logged ("warn", the transition default). An assertion
+ *  naming the exact endpoint is always accepted; an assertion naming neither is always
+ *  refused, in both modes. */
+export function getBillingActorAudienceMode(env: Env = getEnv()): 'warn' | 'enforce' {
+  return env.BILLING_ACTOR_AUDIENCE_MODE;
 }
 
 /** Whether the public-client / MCP OAuth profile (brief §22.14) is enabled.

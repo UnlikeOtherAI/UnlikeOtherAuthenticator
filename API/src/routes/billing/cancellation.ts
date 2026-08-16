@@ -11,6 +11,7 @@ import { createBillingCancellationPreview } from '../../services/billing-cancell
 import type { BillingSubscriptionRequest } from '../../services/billing-stripe-subscription.service.js';
 import { AppError } from '../../utils/errors.js';
 import { BillingSubjectRequestSchema, readBillingActorHeader } from './billing-request.js';
+import type { BillingActorEndpoint } from '../../services/billing-actor-audience.service.js';
 
 const ConfirmCancellationRequestSchema = BillingSubjectRequestSchema.extend({
   preview_token: z.string().trim().min(32).max(256),
@@ -24,15 +25,18 @@ const ConfirmCancellationRequestSchema = BillingSubjectRequestSchema.extend({
 function context(
   request: FastifyRequest,
   body: z.infer<typeof BillingSubjectRequestSchema>,
+  endpoint: BillingActorEndpoint,
 ): {
   request: BillingSubscriptionRequest;
   actorToken: string;
+  endpoint: BillingActorEndpoint;
   credential: NonNullable<FastifyRequest['billingAppKey']>;
 } {
   const credential = request.billingAppKey;
   if (!credential) throw new AppError('UNAUTHORIZED', 401);
   return {
     credential,
+    endpoint,
     actorToken: readBillingActorHeader(request.headers['x-uoa-actor']),
     request: {
       product: body.product,
@@ -54,7 +58,9 @@ export function registerBillingCancellationRoutes(app: FastifyInstance): void {
     },
     async (request, reply) => {
       const body = BillingSubjectRequestSchema.parse(request.body);
-      const preview = await createBillingCancellationPreview(context(request, body));
+      const preview = await createBillingCancellationPreview(
+        context(request, body, '/billing/v1/cancellation/preview'),
+      );
       reply.header('Cache-Control', 'private, no-store');
       return reply.status(201).send(preview);
     },
@@ -71,7 +77,7 @@ export function registerBillingCancellationRoutes(app: FastifyInstance): void {
     async (request, reply) => {
       const body = ConfirmCancellationRequestSchema.parse(request.body);
       const result = await confirmBillingCancellation({
-        ...context(request, body),
+        ...context(request, body, '/billing/v1/cancellation/confirm'),
         token: body.preview_token,
         idempotencyKey: body.idempotency_key,
         selection: body.selection ?? null,

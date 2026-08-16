@@ -8,6 +8,7 @@ import type Stripe from 'stripe';
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
+import type { BillingActorEndpoint } from './billing-actor-audience.service.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import { BILLING_CUSTOMER_ACTION } from './billing-customer-action-intent.service.js';
 import {
@@ -135,6 +136,7 @@ export async function createBillingCreditAutoTopUpSetup(
     request: CreditFundingActionRequest & { optionId: string };
     actorToken: string;
     credential: VerifiedBillingAppKey;
+    endpoint: BillingActorEndpoint;
     recovery?: boolean;
   },
   deps?: Dependencies,

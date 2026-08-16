@@ -8,6 +8,7 @@ import type Stripe from 'stripe';
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
+import type { BillingActorEndpoint } from './billing-actor-audience.service.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import type { BillingActor } from './billing-actor.service.js';
 import {
@@ -74,6 +75,7 @@ export async function resolveCreditFundingActionContext(
     request: CreditFundingActionRequest;
     actorToken: string;
     credential: VerifiedBillingAppKey;
+    endpoint: BillingActorEndpoint;
     action: {
       operation: BillingCustomerAction;
       request: BillingCustomerActionRequest;

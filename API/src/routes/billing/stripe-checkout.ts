@@ -43,6 +43,7 @@ export function registerStripeCheckoutRoute(app: FastifyInstance): void {
           cancelUrl: body.cancel_url,
         },
         actorToken: readBillingActorHeader(request.headers['x-uoa-actor']),
+        endpoint: '/billing/v1/stripe/checkout-session',
         credential,
       });
       reply.header('Cache-Control', 'private, no-store');

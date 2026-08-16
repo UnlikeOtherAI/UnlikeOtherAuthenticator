@@ -11,6 +11,7 @@ import { randomUUID } from 'node:crypto';
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import { verifyBillingActor, type BillingActor } from './billing-actor.service.js';
+import type { BillingActorEndpoint } from './billing-actor-audience.service.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import {
   billingCollectionModeToPublic,
@@ -160,6 +161,7 @@ export async function resolveEffectiveTariffContext(
     request: EffectiveTariffRequest;
     actorToken: string;
     credential: VerifiedBillingAppKey;
+    endpoint: BillingActorEndpoint;
   },
   deps?: {
     prisma?: PrismaClient;
@@ -175,6 +177,7 @@ export async function resolveEffectiveTariffContext(
   const actor = await (deps?.verifyActor ?? verifyBillingActor)({
     token: params.actorToken,
     credential: params.credential,
+    endpoint: params.endpoint,
     request,
   });
 
@@ -303,6 +306,7 @@ export async function getEffectiveTariffSnapshot(
     request: EffectiveTariffRequest;
     actorToken: string;
     credential: VerifiedBillingAppKey;
+    endpoint: BillingActorEndpoint;
   },
   deps?: {
     prisma?: PrismaClient;

@@ -120,6 +120,7 @@ describe('billing credit funding action routes', () => {
       expect(topUpService.createBillingCreditTopUpCheckout).toHaveBeenCalledWith({
         credential,
         actorToken: 'signed-actor',
+        endpoint: '/billing/v1/credits/top-up-checkout',
         request: { ...requestSubject, offerId: 'offer_20k' },
       });
     });
@@ -158,21 +159,25 @@ describe('billing credit funding action routes', () => {
       expect(setupService.createBillingCreditAutoTopUpSetup).toHaveBeenCalledWith({
         credential,
         actorToken: 'signed-actor',
+        endpoint: '/billing/v1/credits/auto-top-up/setup',
         request: { ...requestSubject, optionId: 'option_safe' },
       });
       expect(consentService.updateBillingCreditAutoTopUp).toHaveBeenCalledWith({
         credential,
         actorToken: 'signed-actor',
+        endpoint: '/billing/v1/credits/auto-top-up/update',
         request: { ...requestSubject, optionId: 'option_safe' },
       });
       expect(consentService.disableBillingCreditAutoTopUp).toHaveBeenCalledWith({
         credential,
         actorToken: 'signed-actor',
+        endpoint: '/billing/v1/credits/auto-top-up/disable',
         request: requestSubject,
       });
       expect(recoveryService.recoverBillingCreditAutoTopUp).toHaveBeenCalledWith({
         credential,
         actorToken: 'signed-actor',
+        endpoint: '/billing/v1/credits/auto-top-up/recover',
         request: requestSubject,
       });
     });

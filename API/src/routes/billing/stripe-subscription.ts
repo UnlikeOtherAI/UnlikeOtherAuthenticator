@@ -9,6 +9,7 @@ import {
 } from '../../services/billing-stripe-subscription.service.js';
 import { AppError } from '../../utils/errors.js';
 import { BillingSubjectRequestSchema, readBillingActorHeader } from './billing-request.js';
+import type { BillingActorEndpoint } from '../../services/billing-actor-audience.service.js';
 
 const PortalRequestSchema = BillingSubjectRequestSchema.extend({
   return_url: z.string().trim().url().max(2048),
@@ -91,9 +92,11 @@ const summarySchema = {
 function requestContext(
   request: FastifyRequest,
   body: z.infer<typeof BillingSubjectRequestSchema>,
+  endpoint: BillingActorEndpoint,
 ): {
   request: BillingSubscriptionRequest;
   actorToken: string;
+  endpoint: BillingActorEndpoint;
   credential: NonNullable<FastifyRequest['billingAppKey']>;
 } {
   const credential = request.billingAppKey;
@@ -106,6 +109,7 @@ function requestContext(
       userId: body.user_id,
     },
     actorToken: readBillingActorHeader(request.headers['x-uoa-actor']),
+    endpoint,
     credential,
   };
 }
@@ -119,7 +123,9 @@ export function registerStripeSubscriptionRoutes(app: FastifyInstance): void {
     },
     async (request, reply) => {
       const body = BillingSubjectRequestSchema.parse(request.body);
-      const result = await getStripeSubscriptionSummary(requestContext(request, body));
+      const result = await getStripeSubscriptionSummary(
+        requestContext(request, body, '/billing/v1/stripe/subscription-summary'),
+      );
       reply.header('Cache-Control', 'private, no-store');
       return reply.send(result);
     },
@@ -141,7 +147,7 @@ export function registerStripeSubscriptionRoutes(app: FastifyInstance): void {
     },
     async (request, reply) => {
       const body = PortalRequestSchema.parse(request.body);
-      const context = requestContext(request, body);
+      const context = requestContext(request, body, '/billing/v1/stripe/portal-session');
       const result = await createStripePortalSession({
         ...context,
         request: { ...context.request, returnUrl: body.return_url },

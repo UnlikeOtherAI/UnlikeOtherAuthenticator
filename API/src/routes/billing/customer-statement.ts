@@ -104,6 +104,7 @@ export function registerCustomerStatementRoutes(app: FastifyInstance): void {
         credential,
         actorToken: readBillingActorHeader(request.headers['x-uoa-actor']),
         billingMonth: body.billing_month,
+        endpoint: '/billing/v1/customer-statement',
         request: {
           product: body.product,
           organisationId: body.organisation_id,
@@ -133,6 +134,7 @@ export function registerCustomerStatementRoutes(app: FastifyInstance): void {
         credential,
         actorToken: readBillingActorHeader(request.headers['x-uoa-actor']),
         billingMonth: body.billing_month,
+        endpoint: '/billing/v2/customer-statement',
         request: {
           product: body.product,
           organisationId: body.organisation_id,

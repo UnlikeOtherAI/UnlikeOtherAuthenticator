@@ -19,6 +19,7 @@ import type { CreditFundingActionRequest } from '../../services/billing-credit-f
 import { createBillingCreditTopUpCheckout } from '../../services/billing-credit-top-up.service.js';
 import { AppError } from '../../utils/errors.js';
 import { BillingSubjectRequestSchema, readBillingActorHeader } from './billing-request.js';
+import type { BillingActorEndpoint } from '../../services/billing-actor-audience.service.js';
 
 const OfferRequestSchema = BillingSubjectRequestSchema.extend({
   offer_id: z.string().trim().min(1).max(256),
@@ -38,15 +39,18 @@ const HostedRedirectResponseSchema = {
 function actionContext(
   request: FastifyRequest,
   body: z.infer<typeof BillingSubjectRequestSchema>,
+  endpoint: BillingActorEndpoint,
 ): {
   request: CreditFundingActionRequest;
   actorToken: string;
+  endpoint: BillingActorEndpoint;
   credential: NonNullable<FastifyRequest['billingAppKey']>;
 } {
   const credential = request.billingAppKey;
   if (!credential) throw new AppError('UNAUTHORIZED', 401);
   return {
     credential,
+    endpoint,
     actorToken: readBillingActorHeader(request.headers['x-uoa-actor']),
     request: {
       product: body.product,
@@ -66,7 +70,7 @@ export function registerBillingCreditFundingActionRoutes(app: FastifyInstance): 
     },
     async (request, reply) => {
       const body = OfferRequestSchema.parse(request.body);
-      const context = actionContext(request, body);
+      const context = actionContext(request, body, BILLING_CREDITS_TOP_UP_PATH);
       const result = await createBillingCreditTopUpCheckout({
         ...context,
         request: { ...context.request, offerId: body.offer_id },
@@ -84,7 +88,7 @@ export function registerBillingCreditFundingActionRoutes(app: FastifyInstance): 
     },
     async (request, reply) => {
       const body = OptionRequestSchema.parse(request.body);
-      const context = actionContext(request, body);
+      const context = actionContext(request, body, BILLING_CREDITS_AUTO_TOP_UP_SETUP_PATH);
       const result = await createBillingCreditAutoTopUpSetup({
         ...context,
         request: { ...context.request, optionId: body.option_id },
@@ -99,7 +103,7 @@ export function registerBillingCreditFundingActionRoutes(app: FastifyInstance): 
     { preHandler: [requireBillingLifecycleAppKey] },
     async (request, reply) => {
       const body = OptionRequestSchema.parse(request.body);
-      const context = actionContext(request, body);
+      const context = actionContext(request, body, BILLING_CREDITS_AUTO_TOP_UP_UPDATE_PATH);
       await updateBillingCreditAutoTopUp({
         ...context,
         request: { ...context.request, optionId: body.option_id },
@@ -114,7 +118,9 @@ export function registerBillingCreditFundingActionRoutes(app: FastifyInstance): 
     { preHandler: [requireBillingLifecycleAppKey] },
     async (request, reply) => {
       const body = BillingSubjectRequestSchema.parse(request.body);
-      await disableBillingCreditAutoTopUp(actionContext(request, body));
+      await disableBillingCreditAutoTopUp(
+        actionContext(request, body, BILLING_CREDITS_AUTO_TOP_UP_DISABLE_PATH),
+      );
       reply.header('Cache-Control', 'private, no-store');
       return reply.status(204).send();
     },
@@ -128,7 +134,9 @@ export function registerBillingCreditFundingActionRoutes(app: FastifyInstance): 
     },
     async (request, reply) => {
       const body = BillingSubjectRequestSchema.parse(request.body);
-      const result = await recoverBillingCreditAutoTopUp(actionContext(request, body));
+      const result = await recoverBillingCreditAutoTopUp(
+        actionContext(request, body, BILLING_CREDITS_AUTO_TOP_UP_RECOVER_PATH),
+      );
       reply.header('Cache-Control', 'private, no-store');
       return reply.send(result);
     },
