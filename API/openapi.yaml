@@ -106,7 +106,15 @@ components:
       type: apiKey
       in: header
       name: X-UOA-Actor
-      description: Short-lived RS256 actor assertion bound to the exact product app key and UOA user/org/team.
+      description: >-
+        Short-lived RS256 actor assertion bound to the exact product app key and UOA
+        user/org/team. Its `aud` must be the exact endpoint being called, as
+        `${PUBLIC_BASE_URL}` joined with the request path (for example
+        `https://authentication.unlikeotherai.com/billing/v2/customer-statement`), so an
+        assertion cannot be replayed against a different billing endpoint inside its
+        60-second life. A mismatch is 401 `BILLING_ACTOR_AUDIENCE_MISMATCH`. Deployments
+        running `BILLING_ACTOR_AUDIENCE_MODE=warn` (the transition default) still accept
+        the registered legacy constant audience and log each use; `enforce` refuses it.
     stripeSignature:
       type: apiKey
       in: header

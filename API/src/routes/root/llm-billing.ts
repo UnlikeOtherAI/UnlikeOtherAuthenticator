@@ -68,10 +68,22 @@ Body:
 }
 \`\`\`
 
-The actor JWT has \`iss\`/\`aud\` exactly equal to the credential binding,
-\`sub=user_id\`, and matching \`product\`, \`organisation_id\`, and \`team_id\`, plus
-non-empty \`jti\` and \`iat\`/\`exp\` no more than 60 seconds apart. UOA verifies the
-signature and re-resolves the ACTIVE org and team memberships before returning anything.
+The actor JWT has \`iss\` exactly equal to the credential binding, \`sub=user_id\`, and
+matching \`product\`, \`organisation_id\`, and \`team_id\`, plus non-empty \`jti\` and
+\`iat\`/\`exp\` no more than 60 seconds apart. UOA verifies the signature and re-resolves
+the ACTIVE org and team memberships before returning anything.
+
+**\`aud\` must name the endpoint you are calling.** Mint it per request as
+\`\${PUBLIC_BASE_URL}\` joined with the exact request path — \`.../billing/v1/effective-tariff\`
+here, \`.../billing/v2/customer-statement\` there, and so on for every endpoint below.
+Do not pin one audience and reuse it: an assertion whose audience names another
+endpoint is refused with 401 \`BILLING_ACTOR_AUDIENCE_MISMATCH\`, which is what stops a
+captured read assertion being spent at a funding or cancellation endpoint inside its
+60-second window. Deployments in the \`BILLING_ACTOR_AUDIENCE_MODE=warn\` transition
+still accept the single legacy audience
+\`\${PUBLIC_BASE_URL}/billing/v1/effective-tariff\` everywhere and log each use;
+\`enforce\` refuses it. Move to per-endpoint audiences now — they are accepted in both
+modes.
 
 The response is \`{ snapshot, payload }\`. \`snapshot\` is an RS256 JWT with
 \`typ=uoa-tariff+jwt\`, \`iss=PUBLIC_BASE_URL\`, \`aud=actor_issuer\`, and a five-minute

@@ -1,7 +1,7 @@
 import type { EndpointSchema } from './schema.js';
 
 const lifecycleAuth =
-  'The requested product’s customer_lifecycle X-UOA-App-Key plus a fresh credential-bound X-UOA-Actor assertion; both remain backend-only';
+  'The requested product’s customer_lifecycle X-UOA-App-Key plus a fresh credential-bound X-UOA-Actor assertion whose aud is this exact endpoint URL; both remain backend-only';
 
 const fundingSubject = {
   product: 'exact product identifier bound to the app key',

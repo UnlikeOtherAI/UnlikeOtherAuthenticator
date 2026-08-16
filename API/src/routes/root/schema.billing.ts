@@ -134,7 +134,7 @@ export const billingEndpoints: EndpointSchema[] = [
     path: '/billing/v1/effective-tariff',
     description:
       'Resolve team > organisation > service-default tariff precedence, re-check active UOA membership, and return a signed content-free snapshot. Raw metered quantities remain immutable; the signed multiplier rates money and separately labeled customer billable units.',
-    auth: 'X-UOA-App-Key: uoa_app_… credential dedicated to the requested product, plus X-UOA-Actor: short-lived RS256 actor JWT bound to that credential',
+    auth: 'X-UOA-App-Key: uoa_app_… credential dedicated to the requested product, plus X-UOA-Actor: short-lived RS256 actor JWT bound to that credential, aud = this exact endpoint URL',
     body: {
       product: 'string (required) — exact global billing service identifier bound to the app key',
       organisation_id: 'string (required)',
@@ -154,7 +154,7 @@ export const billingEndpoints: EndpointSchema[] = [
     path: '/billing/v1/customer-statement',
     description:
       'Return UOA’s display-ready canonical plan, subscription, raw and centrally rated usage, cross-service and per-user attribution, exact commercial lines/totals, capabilities, and server-pinned actions. The statement pins immutable Ledger service/user snapshots and the exact UOA tariff version.',
-    auth: 'The requested product’s customer_lifecycle X-UOA-App-Key plus a fresh credential-bound X-UOA-Actor assertion; both remain backend-only',
+    auth: 'The requested product’s customer_lifecycle X-UOA-App-Key plus a fresh credential-bound X-UOA-Actor assertion whose aud is this exact endpoint URL; both remain backend-only',
     body: {
       product: 'exact product identifier bound to the app key',
       organisation_id: 'UOA organisation ID',
@@ -176,7 +176,7 @@ export const billingEndpoints: EndpointSchema[] = [
     path: '/billing/v2/customer-statement',
     description:
       'Return BillingStatementV2: the complete v1 commercial statement plus a display-ready, team-wide raw connected-service portfolio grouped by billing service, origin product, and user. UOA rates only the requested product; other-service totals are explanatory and never become charges on this statement.',
-    auth: 'The requested product’s customer_lifecycle X-UOA-App-Key plus a fresh credential-bound X-UOA-Actor assertion; both remain backend-only',
+    auth: 'The requested product’s customer_lifecycle X-UOA-App-Key plus a fresh credential-bound X-UOA-Actor assertion whose aud is this exact endpoint URL; both remain backend-only',
     body: {
       product: 'exact product identifier bound to the app key and portfolio perspective',
       organisation_id: 'UOA organisation ID',
@@ -198,7 +198,7 @@ export const billingEndpoints: EndpointSchema[] = [
     path: '/billing/v1/service-access/confirm',
     description:
       'Confirm UOA-owned direct product-access evidence immediately after that product’s successful UOA SSO exchange or session establishment. UOA rechecks exact product binding plus active organisation/team membership. Proxy or agent use of another product is indirect and must never invoke this endpoint for the other product.',
-    auth: 'The directly accessed product’s customer_lifecycle X-UOA-App-Key plus a fresh credential-bound X-UOA-Actor assertion; both remain backend-only',
+    auth: 'The directly accessed product’s customer_lifecycle X-UOA-App-Key plus a fresh credential-bound X-UOA-Actor assertion whose aud is this exact endpoint URL; both remain backend-only',
     body: {
       product: 'exact unhyphenated product identifier bound to the app key',
       organisation_id: 'UOA organisation ID',
@@ -334,7 +334,7 @@ export const billingEndpoints: EndpointSchema[] = [
     path: '/billing/v1/stripe/checkout-session',
     description:
       'Create or recover one account/mode-scoped Stripe-hosted subscription Checkout lease for the effective immutable tariff. Org/default tariffs bill at organisation scope and exclude team subscriptions; independent team scopes may coexist. Only active org/team billing managers may start Checkout.',
-    auth: 'The requested product’s own X-UOA-App-Key plus a fresh credential-bound X-UOA-Actor assertion; never a shared product key',
+    auth: 'The requested product’s own X-UOA-App-Key plus a fresh credential-bound X-UOA-Actor assertion whose aud is this exact endpoint URL; never a shared product key',
     body: {
       product: 'exact product identifier bound to the app key',
       organisation_id: 'UOA organisation ID',
@@ -357,7 +357,7 @@ export const billingEndpoints: EndpointSchema[] = [
     path: '/billing/v1/stripe/subscription-summary',
     description:
       'Return the effective tariff, caller management permission, and local current subscription projection without exposing Stripe identifiers. When collection is enabled, current Stripe state is refreshed first; when disabled, the last unambiguous projection is returned with stripe_collection_enabled=false.',
-    auth: 'The requested product’s customer_lifecycle X-UOA-App-Key plus a fresh credential-bound X-UOA-Actor assertion',
+    auth: 'The requested product’s customer_lifecycle X-UOA-App-Key plus a fresh credential-bound X-UOA-Actor assertion whose aud is this exact endpoint URL',
     body: {
       product: 'exact product identifier bound to the app key',
       organisation_id: 'UOA organisation ID',
@@ -377,7 +377,7 @@ export const billingEndpoints: EndpointSchema[] = [
     path: '/billing/v1/stripe/portal-session',
     description:
       'Create a Stripe-hosted customer portal session for the exact current billing scope. The actor must be an organisation owner/admin or the selected team’s admin.',
-    auth: 'The requested product’s customer_lifecycle X-UOA-App-Key plus a fresh credential-bound X-UOA-Actor assertion',
+    auth: 'The requested product’s customer_lifecycle X-UOA-App-Key plus a fresh credential-bound X-UOA-Actor assertion whose aud is this exact endpoint URL',
     body: {
       product: 'exact product identifier bound to the app key',
       organisation_id: 'UOA organisation ID',
@@ -396,7 +396,7 @@ export const billingEndpoints: EndpointSchema[] = [
     path: '/billing/v1/cancellation/preview',
     description:
       'Return the complete cancellation confirmation model and a five-minute opaque single-use preview capability. Related direct subscriptions are offered only when UOA has direct team-user entitlement evidence; Ledger-only indirect services never become a choice.',
-    auth: 'The requested product’s customer_lifecycle X-UOA-App-Key plus a fresh credential-bound X-UOA-Actor assertion',
+    auth: 'The requested product’s customer_lifecycle X-UOA-App-Key plus a fresh credential-bound X-UOA-Actor assertion whose aud is this exact endpoint URL',
     body: {
       product: 'exact product identifier bound to the app key',
       organisation_id: 'UOA organisation ID',
@@ -414,7 +414,7 @@ export const billingEndpoints: EndpointSchema[] = [
     path: '/billing/v1/cancellation/confirm',
     description:
       'Under a serializable row lock, bind and revalidate the preview’s exact entitlement/subscription state, schedule the selected pinned direct subscriptions to cancel at period end, and persist one idempotently replayable result.',
-    auth: 'The same requested product customer_lifecycle X-UOA-App-Key and a fresh bound X-UOA-Actor assertion',
+    auth: 'The same requested product customer_lifecycle X-UOA-App-Key and a fresh bound X-UOA-Actor assertion whose aud is this exact endpoint URL',
     body: {
       product: 'exact product identifier bound to the app key',
       organisation_id: 'exact preview organisation',
