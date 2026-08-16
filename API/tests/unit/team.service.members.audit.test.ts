@@ -232,6 +232,7 @@ describe('Team service: members audit trail', () => {
           actorUserId: 'u-owner',
           userId: 'u-target',
           teamRole: 'admin',
+          config: makeConfig(),
         },
         { prisma },
       );
@@ -264,6 +265,7 @@ describe('Team service: members audit trail', () => {
           actor,
           userId: 'u-target',
           teamRole: 'admin',
+          config: makeConfig(),
         },
         { prisma },
       );
@@ -289,6 +291,7 @@ describe('Team service: members audit trail', () => {
           actorUserId: 'u-owner',
           userId: 'u-target',
           teamRole: 'admin',
+          config: makeConfig(),
         },
         { prisma },
       );
@@ -318,6 +321,7 @@ describe('Team service: members audit trail', () => {
           domain: 'acme.example.com',
           actorUserId: 'u-owner',
           userId: 'u-target',
+          config: makeConfig(),
         },
         { prisma },
       );
@@ -348,6 +352,7 @@ describe('Team service: members audit trail', () => {
           domain: 'acme.example.com',
           actor,
           userId: 'u-target',
+          config: makeConfig(),
         },
         { prisma },
       );
@@ -373,6 +378,7 @@ describe('Team service: members audit trail', () => {
           domain: 'acme.example.com',
           actorUserId: 'u-owner',
           userId: 'u-target',
+          config: makeConfig(),
         },
         { prisma },
       );

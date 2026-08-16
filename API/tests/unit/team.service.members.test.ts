@@ -139,6 +139,7 @@ describe('Team service: members', () => {
         domain: 'acme.example.com',
         actorUserId: 'u-owner',
         userId: 'u-target',
+        config: makeConfig(),
       },
       { prisma },
     );
@@ -190,6 +191,7 @@ describe('Team service: members', () => {
         domain: 'acme.example.com',
         actorUserId: 'u-owner',
         userId: 'u-target',
+        config: makeConfig(),
       },
       { prisma },
     );

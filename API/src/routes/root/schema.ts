@@ -169,7 +169,8 @@ const orgEndpoints: EndpointSchema[] = [
   {
     method: 'POST',
     path: '/org/organisations/:orgId/teams',
-    description: 'Create team',
+    description:
+      'Create team. User mode requires the teams.manage capability at ORG scope — there is no team to stand in yet, so team-scope standing never authorises this. Under the default grant table that is org owner/admin, unchanged.',
     auth: 'domain hash bearer token',
     body: {
       name: 'string (required)',
@@ -197,13 +198,14 @@ const orgEndpoints: EndpointSchema[] = [
       members:
         'array — current team members; each carries avatarImageUrl, fetchable with the same domain hash bearer',
       'invited?':
-        'array — present only when include=invited: pending invites for this team, { inviteId, email, inviteName, teamRole, invitedByName, invitedByEmail, invitedByAvatarImageUrl, lastSentAt, expiresAt, approvalStatus, openCount }; gated to org/team owner/admin (invite emails are PII) — a plain member gets [] here, never a 403; absent entirely when ?include=invited is not passed',
+        'array — present only when include=invited: pending invites for this team, { inviteId, email, inviteName, teamRole, invitedByName, invitedByEmail, invitedByAvatarImageUrl, lastSentAt, expiresAt, approvalStatus, openCount }; gated to holders of the members.manage capability (invite emails are PII) — anyone else gets [] here, never a 403; absent entirely when ?include=invited is not passed',
     },
   },
   {
     method: 'PUT',
     path: '/org/organisations/:orgId/teams/:teamId',
-    description: 'Update team',
+    description:
+      'Update team. User mode requires the teams.manage capability, resolved over the union of the org-role and team-role grants (org_features.role_grants); under the default table that is an org OR team owner/admin.',
     auth: 'domain hash bearer token',
     body: {
       name: 'string (optional)',
@@ -224,7 +226,8 @@ const orgEndpoints: EndpointSchema[] = [
   {
     method: 'DELETE',
     path: '/org/organisations/:orgId/teams/:teamId',
-    description: 'Delete team',
+    description:
+      'Delete team. Same teams.manage gate as the PUT. The organisation default team cannot be deleted.',
     auth: 'domain hash bearer token',
   },
   {
@@ -242,7 +245,7 @@ const orgEndpoints: EndpointSchema[] = [
     method: 'POST',
     path: '/org/organisations/:orgId/teams/:teamId/invitations',
     description:
-      "Dual-mode: with an X-UOA-Access-Token header, a single member-initiated invite gated by the org's member_invites setting (owner/admin always allowed; plain member per setting; no email enumeration in the response). Without that header, the original trusted-backend bulk invite (unchanged).",
+      "Dual-mode: with an X-UOA-Access-Token header, a single member-initiated invite gated by the org's member_invites setting (a members.manage holder — org/team owner/admin by default — always allowed; anyone else per setting; no email enumeration in the response). Without that header, the original trusted-backend bulk invite (unchanged).",
     auth: 'domain hash bearer token; add access token (X-UOA-Access-Token header) for the member-initiated variant',
     body: {
       'redirectUrl?': 'string — optional final OAuth redirect URL',
@@ -292,11 +295,11 @@ const orgEndpoints: EndpointSchema[] = [
     method: 'DELETE',
     path: '/org/organisations/:orgId/teams/:teamId/invitations/:inviteId',
     description:
-      'Revoke a pending invitation (sent or still awaiting member-invite approval): the invite row is kept with status "revoked", outstanding emailed tokens are consumed, and the invite link refuses acceptance. Idempotent — revoking an already-revoked (or declined) invitation succeeds. User mode: org/team owner/admin or the original inviter. Backend mode (header omitted): requires org_features.backend_org_management; audited with actor_user_id null + uoa_actor { via: "domain_backend" }.',
+      'Revoke a pending invitation (sent or still awaiting member-invite approval): the invite row is kept with status "revoked", outstanding emailed tokens are consumed, and the invite link refuses acceptance. Idempotent — revoking an already-revoked (or declined) invitation succeeds. User mode: a holder of the members.manage capability (org/team owner/admin under the default grant table) or the original inviter. Backend mode (header omitted): requires org_features.backend_org_management; audited with actor_user_id null + uoa_actor { via: "domain_backend" }.',
     auth: 'domain hash bearer token; access token (X-UOA-Access-Token header) optional — omit for backend mode',
     response: {
       200: '{ ok: true } (also for an already-revoked invitation)',
-      403: 'plain member who is neither an org/team manager nor the original inviter',
+      403: 'caller holds neither members.manage in this workspace nor authorship of the invitation',
       404: 'generic — unknown invite id, foreign org/team, or cross-domain (no existence leak)',
       409: 'code INVITATION_ALREADY_ACCEPTED — the invitation was already accepted; remove the member instead',
     },
@@ -330,10 +333,11 @@ const orgEndpoints: EndpointSchema[] = [
     method: 'POST',
     path: '/org/organisations/:orgId/teams/:teamId/invite-links',
     description:
-      'Create a shareable team invite link (Slack-style). Owner/admin (org or team) only; refused (generic error) when the team\'s joinPolicy is HIDDEN. roleToAssign may be "member" (default) or "admin" — never "owner". Returns the plaintext token ONCE; only its hash is stored.',
+      'Create a shareable team invite link (Slack-style). Requires the members.manage capability (org/team owner/admin under the default grant table); refused (generic error) when the team\'s joinPolicy is HIDDEN. roleToAssign may be any role in org_features.team_roles except "owner", defaulting to "member". Returns the plaintext token ONCE; only its hash is stored.',
     auth: 'domain hash bearer token + access token (X-UOA-Access-Token header)',
     body: {
-      'roleToAssign?': 'string — "member" (default) | "admin"',
+      'roleToAssign?':
+        'string — any role in org_features.team_roles except "owner"; defaults to "member"',
       'maxUses?': 'number — capped at 400 (default 400)',
       'expiresInDays?': 'number — capped at 30 (default 30)',
     },
@@ -345,7 +349,8 @@ const orgEndpoints: EndpointSchema[] = [
   {
     method: 'GET',
     path: '/org/organisations/:orgId/teams/:teamId/invite-links',
-    description: 'List invite links for a team (never includes the token itself)',
+    description:
+      'List invite links for a team (never includes the token itself). Requires the members.manage capability.',
     auth: 'domain hash bearer token + access token (X-UOA-Access-Token header)',
     response: {
       data: 'array — { id, roleToAssign, expiresAt, maxUses, useCount, revokedAt, createdAt }',
@@ -355,7 +360,7 @@ const orgEndpoints: EndpointSchema[] = [
     method: 'DELETE',
     path: '/org/organisations/:orgId/teams/:teamId/invite-links/:linkId',
     description:
-      'Revoke a team invite link; idempotent (revoking an already-revoked link succeeds)',
+      'Revoke a team invite link; idempotent (revoking an already-revoked link succeeds). Requires the members.manage capability.',
     auth: 'domain hash bearer token + access token (X-UOA-Access-Token header)',
     response: { revoked: 'true' },
   },
@@ -404,9 +409,14 @@ const orgEndpoints: EndpointSchema[] = [
   {
     method: 'POST',
     path: '/org/organisations/:orgId/teams/:teamId/members',
-    description: 'Add team member',
+    description:
+      'Add team member. User mode requires the members.manage capability, resolved over the union of the org-role and team-role grants (org_features.role_grants); under the default table that is an org OR team owner/admin — a team admin can administer their own roster without org standing.',
     auth: 'domain hash bearer token',
-    body: { user_id: 'string (required)', team_role: 'string (optional)' },
+    body: {
+      user_id: 'string (required)',
+      team_role:
+        'string (optional, default "member") — validated against org_features.team_roles, this domain\'s configured team-role vocabulary',
+    },
     response: {
       avatarImageUrl:
         "string — the member's avatar image URL, fetchable with the same domain hash bearer",
@@ -415,9 +425,13 @@ const orgEndpoints: EndpointSchema[] = [
   {
     method: 'PUT',
     path: '/org/organisations/:orgId/teams/:teamId/members/:userId',
-    description: 'Change team member role',
+    description:
+      'Change team member role. Same members.manage gate as adding a member.',
     auth: 'domain hash bearer token',
-    body: { team_role: 'string (required)' },
+    body: {
+      team_role:
+        "string (required) — validated against org_features.team_roles, this domain's configured team-role vocabulary",
+    },
     response: {
       avatarImageUrl:
         "string — the member's avatar image URL, fetchable with the same domain hash bearer",
@@ -427,7 +441,7 @@ const orgEndpoints: EndpointSchema[] = [
     method: 'DELETE',
     path: '/org/organisations/:orgId/teams/:teamId/members/:userId',
     description:
-      'Remove team member (soft-remove; atomically revokes exact user+team refresh families across product domains without affecting other-team sessions)',
+      'Remove team member (soft-remove; atomically revokes exact user+team refresh families across product domains without affecting other-team sessions). Same members.manage gate as adding a member.',
     auth: 'domain hash bearer token',
   },
   {

@@ -1,6 +1,7 @@
+import type { ClientConfig } from './config.service.js';
 import { getEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
-import { isOrgOrTeamManager } from './team.service.base.js';
+import { hasWorkspaceCapability } from './team.service.base.js';
 import { pendingInviteStatusWhere } from './first-login.service.js';
 import {
   TEAM_INVITE_SELECT,
@@ -28,22 +29,28 @@ export type TeamInvitedEntry = {
 
 /**
  * Gap-fix A Task 2 (design §11.4 "Invited" tab): pending invites for a single team, for the
- * `?include=invited` addendum on `GET /org/organisations/:orgId/teams/:teamId`. Gated to org/team
- * owner/admin — invite emails are PII — a plain member gets `[]` back (never a 403; the rest of the
+ * `?include=invited` addendum on `GET /org/organisations/:orgId/teams/:teamId`. Gated to `members.manage`
+ * holders — invite emails are PII — a plain member gets `[]` back (never a 403; the rest of the
  * team read must stay unaffected). Unlike the sidebar/chooser eligibility filter (Task 1's
  * `pendingInviteStatusWhere({ includePendingApproval: false })`), this INCLUDES
  * `approvalStatus: 'pending'` entries: an admin reviewing the Invited tab must see invites still
  * awaiting member-invite approval, distinguished by that same field.
  */
 export async function getTeamInvitedEntries(
-  params: { orgId: string; teamId: string; domain: string; actorUserId: string | undefined },
+  params: {
+    orgId: string;
+    teamId: string;
+    domain: string;
+    actorUserId: string | undefined;
+    config: ClientConfig;
+  },
   deps?: InviteDeps,
 ): Promise<TeamInvitedEntry[]> {
   const env = deps?.env ?? getEnv();
   if (!env.DATABASE_URL) return [];
 
   const prisma = deps?.prisma ?? (getPrisma() as InvitePrisma);
-  const isManager = await isOrgOrTeamManager(prisma, params);
+  const isManager = await hasWorkspaceCapability(prisma, 'members.manage', params);
   if (!isManager) return [];
 
   const now = deps?.now ? deps.now() : new Date();

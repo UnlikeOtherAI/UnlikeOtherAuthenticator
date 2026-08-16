@@ -303,6 +303,7 @@ describe('Team service', () => {
         teamId: 'team-1',
         domain: 'acme.example.com',
         actorUserId: 'u-owner',
+        config: makeConfig(),
       },
       { prisma },
     );
@@ -363,6 +364,7 @@ describe('Team service', () => {
         actorUserId: 'u-owner',
         name: 'Platform',
         description: 'Core infra',
+        config: makeConfig(),
       },
       { prisma },
     );
@@ -432,6 +434,7 @@ describe('Team service', () => {
         teamId: 'team-1',
         domain: 'acme.example.com',
         actorUserId: 'u-owner',
+        config: makeConfig(),
       },
       { prisma },
     );
@@ -478,6 +481,7 @@ describe('Team service', () => {
         teamId: 'team-default',
         domain: 'acme.example.com',
         actorUserId: 'u-owner',
+        config: makeConfig(),
       },
       { prisma },
     );

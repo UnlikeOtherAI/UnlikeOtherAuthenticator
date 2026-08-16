@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@prisma/client';
 
+import type { ClientConfig } from './config.service.js';
 import { getEnv } from '../config/env.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import type { AvatarStyle } from '../utils/avatar-svg.js';
@@ -14,7 +15,7 @@ import {
   type ResolvedAvatar,
 } from './avatar-subject.service.js';
 import {
-  requireTeamManager,
+  requireWorkspaceCapability,
   resolveAndAuthorizeTeamOrg,
   resolveOrgActor,
   type OrgServicePrisma,
@@ -80,7 +81,7 @@ export async function requireDomainTeamId(
  * Resolve a team through the full `/org/*` ownership chain — domain → organisation → team — exactly
  * as the sibling team routes do. `resolveAndAuthorizeTeamOrg` rejects an org that is not on the
  * authenticated domain (404) and an actor who is not an ACTIVE member of it (403); `requireManager`
- * additionally demands org owner/admin, the same gate `updateTeam` applies.
+ * additionally demands the `teams.manage` capability, the same gate `updateTeam` applies.
  */
 export async function requireOrgTeamId(
   params: {
@@ -91,6 +92,7 @@ export async function requireOrgTeamId(
     actorUserId?: string;
     actor?: OrgActorProvenance;
     requireManager?: boolean;
+    config: ClientConfig;
   },
   deps: { prisma: OrgServicePrisma },
 ): Promise<string> {
@@ -103,7 +105,12 @@ export async function requireOrgTeamId(
   });
 
   if (params.requireManager) {
-    await requireTeamManager(deps.prisma, org.id, actorUserId);
+    await requireWorkspaceCapability(deps.prisma, 'teams.manage', {
+      orgId: org.id,
+      teamId: params.teamId,
+      actorUserId,
+      config: params.config,
+    });
   }
 
   const team = await deps.prisma.team.findFirst({

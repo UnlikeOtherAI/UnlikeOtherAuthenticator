@@ -13,7 +13,7 @@ import {
   normalizeTeamJoinPolicy,
   normalizeTeamName,
   parseMaxTeamsPerOrg,
-  requireTeamManager,
+  requireWorkspaceCapability,
   resolveAndAuthorizeTeamOrg,
   resolveOrgActor,
   toListLimit,
@@ -144,7 +144,13 @@ export async function createTeam(
     actorUserId,
   });
 
-  await requireTeamManager(prisma, org.id, actorUserId);
+  // No `teamId`: the team does not exist yet, so only an ORG-scope grant of `teams.manage` can
+  // authorise this — which is exactly the org owner/admin rule this route always had.
+  await requireWorkspaceCapability(prisma, 'teams.manage', {
+    orgId: org.id,
+    actorUserId,
+    config: params.config,
+  });
 
   const createdTeam = await runInTransaction(prisma, async (tx) => {
     const teamCount = await tx.team.count({ where: { orgId: org.id } });
@@ -212,6 +218,7 @@ export async function getTeam(
     // Task 2 (gapfix-a, design §11.4 "Invited" tab): `?include=invited` on the route. Undefined/false
     // leaves the response byte-identical to before this change (no `invited` key at all).
     includeInvited?: boolean;
+    config: ClientConfig;
   },
   deps?: OrgServiceDeps,
 ): Promise<TeamWithMembersRecord & { invited?: TeamInvitedEntry[] }> {
@@ -259,11 +266,11 @@ export async function getTeam(
   };
 
   if (params.includeInvited) {
-    // Gated inside getTeamInvitedEntries to org/team owner/admin only — invite emails are PII, so a
-    // plain member gets `invited: []` rather than the whole read failing with 403 (design gapfix-a
-    // Task 2).
+    // Gated inside getTeamInvitedEntries to `members.manage` holders only — invite emails are PII,
+    // so a caller without it gets `invited: []` rather than the whole read failing with 403 (design
+    // gapfix-a Task 2).
     result.invited = await getTeamInvitedEntries(
-      { orgId: org.id, teamId: row.id, domain: org.domain, actorUserId },
+      { orgId: org.id, teamId: row.id, domain: org.domain, actorUserId, config: params.config },
       { prisma },
     );
   }
@@ -283,6 +290,7 @@ export async function updateTeam(
     description?: string | null;
     joinPolicy?: string;
     iconUrl?: string | null;
+    config: ClientConfig;
   },
   deps?: OrgServiceDeps,
 ): Promise<TeamRecord> {
@@ -330,7 +338,12 @@ export async function updateTeam(
     domain: params.domain,
     actorUserId,
   });
-  await requireTeamManager(prisma, org.id, actorUserId);
+  await requireWorkspaceCapability(prisma, 'teams.manage', {
+    orgId: org.id,
+    teamId: params.teamId,
+    actorUserId,
+    config: params.config,
+  });
 
   const existing = await prisma.team.findFirst({
     where: { id: params.teamId, orgId: org.id },
@@ -382,6 +395,7 @@ export async function deleteTeam(
     domain: string;
     actorUserId?: string;
     actor?: OrgActorProvenance;
+    config: ClientConfig;
   },
   deps?: OrgServiceDeps & {
     afterTargetTeamLock?: () => Promise<void>;
@@ -399,7 +413,12 @@ export async function deleteTeam(
     domain: params.domain,
     actorUserId,
   });
-  await requireTeamManager(prisma, org.id, actorUserId);
+  await requireWorkspaceCapability(prisma, 'teams.manage', {
+    orgId: org.id,
+    teamId: params.teamId,
+    actorUserId,
+    config: params.config,
+  });
 
   await runInTransaction(prisma, async (tx) => {
     if (!(await lockWorkspaceOrganisationRow(org.id, { prisma: tx }))) {

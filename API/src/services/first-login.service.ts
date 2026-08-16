@@ -3,7 +3,7 @@ import type { Prisma, PrismaClient } from '@prisma/client';
 import type { ClientConfig } from './config.service.js';
 import { getAdminPrisma, getPrisma } from '../db/prisma.js';
 import { avatarImageBaseUrl, publicTeamAvatarImageUrl } from '../utils/avatar-url.js';
-import { isTeamManager } from './team.service.base.js';
+import { configRoleHoldsCapability } from './role-grants.js';
 import {
   resolveProductWorkspacePolicy,
   type ProductWorkspacePolicy,
@@ -465,12 +465,13 @@ export async function buildWorkspaceChoices(
     invitedBy: row.invitedByName ?? row.invitedByEmail ?? null,
   }));
 
-  // Creating a workspace inside an org is an org owner/admin action (`requireTeamManager`), so the
-  // chooser only offers it where the user actually holds that standing — the same rule
-  // `POST /org/organisations/:orgId/teams` enforces, mirrored here so the UI cannot invite a call
-  // that would 403. The org's team cap is NOT pre-checked; `/auth/create-team` enforces it.
+  // Creating a workspace inside an org needs `teams.manage` at ORG scope (there is no team to
+  // stand in yet), so the chooser only offers it where the user's org role actually grants it —
+  // the same rule `POST /org/organisations/:orgId/teams` enforces, mirrored here so the UI cannot
+  // invite a call that would 403. The org's team cap is NOT pre-checked; `/auth/create-team`
+  // enforces it.
   const creatableOrgs: WorkspaceChoiceCreatableOrg[] = orgRows
-    .filter((row) => isTeamManager(row.role))
+    .filter((row) => configRoleHoldsCapability(params.config, 'org', row.role, 'teams.manage'))
     .map((row) => ({ orgId: row.orgId, orgName: row.org.name }));
 
   return {

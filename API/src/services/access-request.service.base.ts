@@ -264,7 +264,7 @@ export async function ensureUserAssignedToConfiguredAccessTarget(params: {
     data: {
       teamId: team.id,
       userId: params.userId,
-      teamRole: normalizeTeamRole(undefined),
+      teamRole: normalizeTeamRole(undefined, params.config),
     },
     select: { id: true },
   });

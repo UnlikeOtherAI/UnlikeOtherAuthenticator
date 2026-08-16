@@ -16,7 +16,7 @@ import {
   resolveOrganisationByDomain,
   type OrgActorProvenance,
 } from './organisation.service.base.js';
-import { isOrgOrTeamManager } from './team.service.base.js';
+import { hasWorkspaceCapability, normalizeTeamRole } from './team.service.base.js';
 import {
   assertActiveWorkspaceScope,
   lockWorkspaceMembershipRows,
@@ -77,10 +77,12 @@ function generateInviteLinkToken(): string {
   return randomBytes(32).toString('base64url');
 }
 
-// Invite links may only assign "member" or "admin" — never "owner" (design §4.7 Task 2).
-function normalizeInviteLinkRole(value?: string): string {
-  const role = value?.trim() || 'member';
-  if (role !== 'member' && role !== 'admin') {
+// Invite links may assign any role in the domain's configured team vocabulary — never "owner"
+// (design §4.7 Task 2). Before `team_roles` was configurable this read `member | admin`, which is
+// the same answer for the default vocabulary and the wrong one for a domain that named its own.
+function normalizeInviteLinkRole(value: string | undefined, config: ClientConfig): string {
+  const role = normalizeTeamRole(value?.trim() || undefined, config);
+  if (role === 'owner') {
     throw new AppError('BAD_REQUEST', 400);
   }
   return role;
@@ -103,15 +105,20 @@ function clampMaxUses(value?: number): number {
 }
 
 /**
- * Actor must be an ACTIVE org owner/admin OR an ACTIVE team owner/admin (design §4.9/Phase 2).
- * Delegates to the shared `isOrgOrTeamManager` boolean check (`team.service.base.ts`) — single
+ * Actor must hold `members.manage` in this workspace (design §4.9/Phase 2).
+ * Delegates to the shared `hasWorkspaceCapability` boolean check (`team.service.base.ts`) — single
  * source of truth, also used by the gap-fix A "Invited" tab gate.
  */
 async function requireLinkManager(
   prisma: InviteLinkPrisma,
-  params: { orgId: string; teamId: string; actorUserId: string | undefined },
+  params: {
+    orgId: string;
+    teamId: string;
+    actorUserId: string | undefined;
+    config: ClientConfig;
+  },
 ): Promise<void> {
-  const isManager = await isOrgOrTeamManager(prisma, params);
+  const isManager = await hasWorkspaceCapability(prisma, 'members.manage', params);
   if (!isManager) {
     throw new AppError('FORBIDDEN', 403);
   }
@@ -135,7 +142,6 @@ export async function createTeamInviteLink(
   },
   deps?: InviteLinkDeps,
 ): Promise<{ token: string; link: TeamInviteLinkRecord }> {
-  void params.config;
   const env = deps?.env ?? getEnv();
   assertDatabaseEnabled(env);
 
@@ -153,13 +159,18 @@ export async function createTeamInviteLink(
     throw new AppError('NOT_FOUND', 404);
   }
 
-  await requireLinkManager(prisma, { orgId: org.id, teamId: team.id, actorUserId });
+  await requireLinkManager(prisma, {
+    orgId: org.id,
+    teamId: team.id,
+    actorUserId,
+    config: params.config,
+  });
 
   if (team.joinPolicy === 'HIDDEN') {
     throw new AppError('BAD_REQUEST', 400);
   }
 
-  const roleToAssign = normalizeInviteLinkRole(params.roleToAssign);
+  const roleToAssign = normalizeInviteLinkRole(params.roleToAssign, params.config);
   const maxUses = clampMaxUses(params.maxUses);
   const expiresInDays = clampExpiresInDays(params.expiresInDays);
   const expiresAt = new Date(now.getTime() + expiresInDays * DAY_MS);
@@ -207,6 +218,7 @@ export async function listTeamInviteLinks(
     domain: string;
     actorUserId?: string;
     actor?: OrgActorProvenance;
+    config: ClientConfig;
   },
   deps?: InviteLinkDeps,
 ): Promise<{ data: TeamInviteLinkRecord[] }> {
@@ -225,7 +237,12 @@ export async function listTeamInviteLinks(
     throw new AppError('NOT_FOUND', 404);
   }
 
-  await requireLinkManager(prisma, { orgId: org.id, teamId: team.id, actorUserId });
+  await requireLinkManager(prisma, {
+    orgId: org.id,
+    teamId: team.id,
+    actorUserId,
+    config: params.config,
+  });
 
   const rows = await prisma.teamInviteLink.findMany({
     where: { orgId: org.id, teamId: team.id },
@@ -245,6 +262,7 @@ export async function revokeTeamInviteLink(
     domain: string;
     actorUserId?: string;
     actor?: OrgActorProvenance;
+    config: ClientConfig;
   },
   deps?: InviteLinkDeps,
 ): Promise<{ revoked: boolean }> {
@@ -264,7 +282,12 @@ export async function revokeTeamInviteLink(
     throw new AppError('NOT_FOUND', 404);
   }
 
-  await requireLinkManager(prisma, { orgId: org.id, teamId: team.id, actorUserId });
+  await requireLinkManager(prisma, {
+    orgId: org.id,
+    teamId: team.id,
+    actorUserId,
+    config: params.config,
+  });
 
   const link = await prisma.teamInviteLink.findFirst({
     where: { id: params.linkId, orgId: org.id, teamId: team.id },

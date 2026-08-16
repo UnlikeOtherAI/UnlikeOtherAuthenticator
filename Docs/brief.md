@@ -877,6 +877,7 @@ The claim is optional and defaults to disabled. The object shape and defaults ar
   "max_members_per_group": 500,
   "max_team_memberships_per_user": 50,
   "org_roles": ["owner", "admin", "member"],
+  "team_roles": ["owner", "admin", "member"],
   "max_flags_per_app": 100,
   "scim_override_retention": "retain",
   "global_missing_flag_default": "disabled"
@@ -899,14 +900,21 @@ The claim is optional and defaults to disabled. The object shape and defaults ar
 | `max_members_per_group`                   | integer                     | `500`                          | Maximum members per group (max 5000)                                                                                                                                                                                                                                                                                                          |
 | `max_team_memberships_per_user`           | integer                     | `50`                           | Maximum teams a single user can belong to — also caps JWT size (max 200)                                                                                                                                                                                                                                                                      |
 | `org_roles`                               | string[]                    | `["owner", "admin", "member"]` | Allowed org-level roles. Must always contain `"owner"`.                                                                                                                                                                                                                                                                                       |
+| `team_roles`                              | string[]                    | `["owner", "admin", "member"]` | Allowed team-level roles — the mirror of `org_roles`, must always contain `"owner"`. Before this existed the three canonical roles were fixed in code; they are now only the default.                                                                                                                                                          |
+| `capabilities`                            | string[]                    | absent                         | The consuming product's declared capability catalogue, mirrored here so `role_grants` can be validated against it. UOA's own names (`members.manage`, `teams.manage`) are always valid on top of this list.                                                                                                                                    |
+| `role_grants`                             | object                      | absent                         | `{ "org": { role: capability[] }, "team": { role: capability[] } }` — which roles hold which capabilities. Absent means the legacy default table (see below), which reproduces the pre-`role_grants` behaviour exactly.                                                                                                                        |
 | `max_flags_per_app`                       | integer                     | `100`                          | Maximum feature flag definitions per App (max 500). Enforced at creation; existing flags unaffected if cap is lowered.                                                                                                                                                                                                                        |
 | `scim_override_retention`                 | `"retain"` \| `"clear"`     | `"retain"`                     | Controls per-user flag override retention on SCIM hard-delete (`DELETE /scim/v2/Users/:id?hardDelete=true`). `"retain"` keeps overrides; `"clear"` deletes them. Soft-deprovision always retains overrides regardless of this setting.                                                                                                        |
 | `global_missing_flag_default`             | `"enabled"` \| `"disabled"` | `"disabled"`                   | Default response when a flag key is queried but not defined in the App at all. Consuming apps always get a boolean — never an error.                                                                                                                                                                                                          |
 
 - `enabled = false` (or omitted): all `/org/*` and `/internal/org/*` endpoints return `404`, access tokens omit `org` claims.
 - `groups_enabled = false`: group read/write paths return `404`.
-- `org_roles` **must include `"owner"`** — Zod validation rejects configs without it.
+- `org_roles` and `team_roles` **must include `"owner"`** — Zod validation rejects configs without it.
 - `max_*` values are enforced on write paths; invalid values reject the config.
+- `role_grants` is validated at config load and fails loud: every role key must be in the matching
+  vocabulary (`org_roles` / `team_roles`), every capability name must be in `capabilities` or in
+  UOA's own catalogue, `"owner"` may not appear at all, and an unrecognised scope key is rejected.
+  Nothing is partially applied — an invalid table rejects the whole config.
 
 Follow the same Zod pattern as `2fa_enabled` and `user_scope` in `ClientConfigSchema` — an optional field with defaults:
 
@@ -929,6 +937,18 @@ org_features: z.object({
     .array(z.string().min(1).max(50))
     .refine((roles) => roles.includes('owner'), { message: 'org_roles must include "owner"' })
     .default(['owner', 'admin', 'member']),
+  team_roles: z
+    .array(z.string().min(1).max(50))
+    .refine((roles) => roles.includes('owner'), { message: 'team_roles must include "owner"' })
+    .default(['owner', 'admin', 'member']),
+  capabilities: z.array(z.string().trim().min(1).max(100)).optional(),
+  role_grants: z
+    .object({
+      org: z.record(z.string().min(1).max(50), z.array(z.string().trim().min(1).max(100))).optional(),
+      team: z.record(z.string().min(1).max(50), z.array(z.string().trim().min(1).max(100))).optional(),
+    })
+    .strict()
+    .optional(),
   max_flags_per_app: z.number().int().positive().max(500).default(100),
   scim_override_retention: z.enum(['retain', 'clear']).default('retain'),
   global_missing_flag_default: z.enum(['enabled', 'disabled']).default('disabled'),
@@ -949,6 +969,7 @@ org_features: z.object({
     max_members_per_group: 500,
     max_team_memberships_per_user: 50,
     org_roles: ['owner', 'admin', 'member'],
+    team_roles: ['owner', 'admin', 'member'],
     max_flags_per_app: 100,
     scim_override_retention: 'retain',
     global_missing_flag_default: 'disabled',
@@ -960,6 +981,59 @@ org_features: z.object({
 The `"owner"` role has system-level semantics: only owners can delete organisations, transfer ownership, and change member roles. The `org_roles` array must always include `"owner"`.
 
 `"owner"` and `"admin"` are the only system-interpreted roles for service-level permissions. All other role strings in `org_roles` are product-defined — stored and included in JWTs but carry no system-level permissions.
+
+> **Superseded for UOA's own gates by `role_grants` (24.1a).** Since wave 1 of
+> `Docs/plans/2026-08-16-configurable-roles-and-capabilities.md`, `"admin"` is not hard-coded
+> anywhere in UOA's team/roster gates: it is simply the one non-owner role the *default* grant
+> table happens to name. A domain that grants a custom role `members.manage` gives it real
+> authority inside UOA; a domain that grants `"admin"` nothing takes it away. `"owner"` remains
+> genuinely reserved — mandatory in both vocabularies, structurally holding every capability, and
+> barred from the grant table so a config can never lock its own recovery role out.
+
+#### 24.1a Capabilities and the grant table
+
+UOA gates its own team surfaces on **capability names**, not role strings. Its catalogue is closed
+and compiled in (`API/src/services/role-grants.ts`):
+
+| Capability | What it gates |
+| --- | --- |
+| `members.manage` | Team roster mutation: add/remove members, change a member's team role, create/revoke invitations and invite links, read the PII-bearing invited list. |
+| `teams.manage` | The team object itself: create, rename, re-slug, change join policy or icon, upload/remove the team avatar, delete. |
+
+Resolution, in full:
+
+1. `"owner"` — org or team — holds every capability at the scope it stands in. Structural, not
+   configured.
+2. Any other role is looked up in `role_grants[scope]`. Missing role, missing table, unknown
+   string: **the empty set**. There is no default role and no coercion to `member`.
+3. A workspace answer is the **union** of the org-role grants and the team-role grants. An
+   org-scope grant of a team-scope capability therefore reaches down into every team of the org.
+4. An action with no team to stand in — creating one — can only be authorised by an org-scope
+   grant.
+
+**The legacy default table**, used whenever `role_grants` is absent (i.e. every domain that has
+not opted in):
+
+```json
+{ "org": { "admin": ["members.manage", "teams.manage"] },
+  "team": { "admin": ["members.manage", "teams.manage"] } }
+```
+
+That reproduces the effective behaviour of the predicates it replaced. The one deliberate
+difference is stated in 24.1b.
+
+#### 24.1b Behaviour change: a team admin administers their own team
+
+Before wave 1, the roster/team-mutation gate read the **org** membership and nothing else, so a
+team `owner` or `admin` could not add, remove or re-role members of the very team they
+administered, nor rename or delete it — only an org owner/admin could. That contradicted the
+design intent that a team admin is self-sufficient for its own members, and it is now corrected:
+these gates resolve the capability over the union of org- and team-scope standing.
+
+For a domain with no `role_grants`, this is the **only** observable change. Everything else —
+org owner/admin reach-down, plain members refused, backend mode (`X-UOA-Access-Token` omitted)
+holding every capability — answers exactly as before. Team creation stays org-scoped, because
+there is no team to stand in yet.
 
 ---
 

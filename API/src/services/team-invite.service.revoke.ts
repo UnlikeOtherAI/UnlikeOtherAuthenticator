@@ -1,3 +1,4 @@
+import type { ClientConfig } from './config.service.js';
 import { getPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import {
@@ -7,7 +8,7 @@ import {
   getOrganisationMember,
   resolveOrgActor,
 } from './organisation.service.base.js';
-import { isOrgOrTeamManager } from './team.service.base.js';
+import { hasWorkspaceCapability } from './team.service.base.js';
 import {
   TEAM_INVITE_SELECT,
   type InviteDeps,
@@ -22,7 +23,7 @@ import {
 
 /**
  * Permission: backend mode (no acting user — the domain pairing outranks any member role) or, in
- * user mode, an org/team owner/admin (shared `isOrgOrTeamManager` check) or the invite's original
+ * user mode, a holder of `members.manage` (shared `hasWorkspaceCapability` check) or the invite's original
  * inviter. The inviter branch still requires a live ACTIVE org membership (the Phase 2 `activeOnly`
  * actor rule); a deactivated/removed inviter keeps no power over their old invites.
  */
@@ -33,10 +34,11 @@ async function canRevokeInvite(
     teamId: string;
     actorUserId: string | undefined;
     invitedByUserId: string | null;
+    config: ClientConfig;
   },
 ): Promise<boolean> {
   if (!params.actorUserId) return true;
-  if (await isOrgOrTeamManager(prisma, params)) return true;
+  if (await hasWorkspaceCapability(prisma, 'members.manage', params)) return true;
 
   if (params.invitedByUserId && params.invitedByUserId === params.actorUserId) {
     const membership = await getOrganisationMember(
@@ -72,6 +74,7 @@ export async function revokeTeamInvite(
     domain: string;
     actorUserId?: string;
     actor?: OrgActorProvenance;
+    config: ClientConfig;
   },
   deps?: InviteDeps,
 ): Promise<{ ok: true }> {
@@ -102,6 +105,7 @@ export async function revokeTeamInvite(
     teamId: team.id,
     actorUserId,
     invitedByUserId: invite.invitedByUserId,
+    config: params.config,
   });
   if (!allowed) {
     // Generic, matching the member-invite permission failures — no role oracle.

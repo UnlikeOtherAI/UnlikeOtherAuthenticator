@@ -4,6 +4,8 @@ import { removeTeamMember } from '../../src/services/team.service.members.js';
 import { deleteTeam } from '../../src/services/team.service.teams.js';
 import { lockWorkspaceMembershipRows } from '../../src/services/workspace-scope.service.js';
 import { createTestDb } from '../helpers/test-db.js';
+import { baseClientConfigPayload } from '../helpers/test-config.js';
+import { validateConfigFields, type ClientConfig } from '../../src/services/config.service.js';
 
 const hasDatabase = Boolean(process.env.DATABASE_URL);
 const domain = 'team-delete-race.example.com';
@@ -16,6 +18,15 @@ type SeededWorkspace = {
   targetTeamId: string;
   backupTeamId: string;
 };
+
+/**
+ * The verified client config the team services now take: their capability gate resolves the
+ * domain's `role_grants` out of it. No `org_features.role_grants` here, so the legacy default
+ * table applies — the behaviour these race tests were written against.
+ */
+function teamConfig(): ClientConfig {
+  return validateConfigFields(baseClientConfigPayload({ domain }));
+}
 
 function deferred(): {
   promise: Promise<void>;
@@ -147,6 +158,7 @@ describe.skipIf(!hasDatabase)('team deletion and membership removal race', () =>
         domain,
         actorUserId: workspace.ownerId,
         userId: workspace.userId,
+        config: teamConfig(),
       },
       {
         prisma: handle.prisma,
@@ -165,6 +177,7 @@ describe.skipIf(!hasDatabase)('team deletion and membership removal race', () =>
         teamId: workspace.targetTeamId,
         domain,
         actorUserId: workspace.ownerId,
+        config: teamConfig(),
       },
       {
         prisma: handle.prisma,
@@ -335,6 +348,7 @@ describe.skipIf(!hasDatabase)('team deletion and membership removal race', () =>
         teamId: workspace.targetTeamId,
         domain,
         actorUserId: workspace.ownerId,
+        config: teamConfig(),
       },
       {
         prisma: handle.prisma,

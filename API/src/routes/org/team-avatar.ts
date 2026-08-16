@@ -1,5 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 
+import type { ClientConfig } from '../../services/config.service.js';
+
 import { configVerifier } from '../../middleware/config-verifier.js';
 import requireDomainHashAuthForDomainQuery from '../../middleware/domain-hash-auth.js';
 import { requireOrgFeatures } from '../../middleware/org-features.js';
@@ -27,6 +29,7 @@ import {
   orgCaller,
   parseDomainContext,
   parseDomainContextHook,
+  requireVerifiedConfig,
 } from './team-route.shared.js';
 
 /**
@@ -35,7 +38,7 @@ import {
  * The auth chain is the sibling team routes', unchanged: domain-hash bearer → verified signed
  * config → domain-context match → org features → access token bound to this org. Reads are open to
  * any ACTIVE org member (the same gate as `GET .../teams/:teamId`); mutations additionally require
- * org owner/admin, the same gate as `PUT .../teams/:teamId`.
+ * the `teams.manage` capability, the same gate as `PUT .../teams/:teamId`.
  *
  * Table access runs on `request.adminDb`: `team_avatars` denies `uoa_app`, so avatar rows are never
  * touched inside a tenant transaction (the same classification as `user_avatars`).
@@ -72,6 +75,7 @@ type TeamAvatarContext = {
   orgId: string;
   teamId: string;
   caller: ReturnType<typeof orgCaller>;
+  config: ClientConfig;
 };
 
 function mutationContext(request: FastifyRequest): TeamAvatarContext {
@@ -81,6 +85,7 @@ function mutationContext(request: FastifyRequest): TeamAvatarContext {
     orgId: getOrgIdFromParams(request.params),
     teamId: getTeamIdFromParams(request.params),
     caller: orgCaller(request),
+    config: requireVerifiedConfig(request),
   };
 }
 
@@ -96,7 +101,13 @@ export function registerTeamAvatarRoutes(app: FastifyInstance): void {
       const teamId = getTeamIdFromParams(request.params);
 
       const resolvedTeamId = await requireOrgTeamId(
-        { orgId, teamId, domain: query.domain, ...orgCaller(request) },
+        {
+          orgId,
+          teamId,
+          domain: query.domain,
+          ...orgCaller(request),
+          config: requireVerifiedConfig(request),
+        },
         { prisma: request.adminDb },
       );
       const avatar = await resolveTeamAvatar({
@@ -118,10 +129,10 @@ export function registerTeamAvatarRoutes(app: FastifyInstance): void {
       schema: { response: { 200: uploadResponseSchema } },
     },
     async (request) => {
-      const { domain, orgId, teamId, caller } = mutationContext(request);
+      const { domain, orgId, teamId, caller, config } = mutationContext(request);
 
       const resolvedTeamId = await requireOrgTeamId(
-        { orgId, teamId, domain, ...caller, requireManager: true },
+        { orgId, teamId, domain, ...caller, requireManager: true, config },
         { prisma: request.adminDb },
       );
       const data = await readAvatarUpload(request);
@@ -137,10 +148,10 @@ export function registerTeamAvatarRoutes(app: FastifyInstance): void {
       schema: { response: { 200: uploadResponseSchema } },
     },
     async (request) => {
-      const { domain, orgId, teamId, caller } = mutationContext(request);
+      const { domain, orgId, teamId, caller, config } = mutationContext(request);
 
       const resolvedTeamId = await requireOrgTeamId(
-        { orgId, teamId, domain, ...caller, requireManager: true },
+        { orgId, teamId, domain, ...caller, requireManager: true, config },
         { prisma: request.adminDb },
       );
       await deleteTeamAvatar({ teamId: resolvedTeamId });

@@ -183,7 +183,7 @@ export async function acceptTeamInviteWithinTransaction(params: {
       data: {
         teamId: invite.teamId,
         userId: params.userId,
-        teamRole: normalizeTeamRole(invite.teamRole),
+        teamRole: normalizeTeamRole(invite.teamRole, params.config),
       },
       select: { id: true },
     });

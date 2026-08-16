@@ -233,7 +233,10 @@ Anything else (HTML, error JSON, empty body) fails with \`CONFIG_FETCH_FAILED\`.
 
 The payload MUST NOT contain \`SHARED_SECRET\`, the \`client_secret\` from Phase 1, the \`client_hash\`, refresh tokens, OAuth codes, or any other secret. UOA scans for known secret patterns and refuses the config if it sees one.
 
-Optional fields are documented at \`/api\` under \`config_jwt_documentation.optional_fields\`, including \`2fa_enabled\`, \`debug_enabled\`, \`user_scope\`, \`allow_registration\`, \`existing_user_registration_behavior\`, \`registration_mode\`, \`allowed_registration_domains\`, \`registration_domain_mapping\`, \`session.*\`, \`org_features.*\`, and \`access_requests.*\`.
+Optional fields are documented at \`/api\` under \`config_jwt_documentation.optional_fields\`, including \`2fa_enabled\`, \`debug_enabled\`, \`user_scope\`, \`allow_registration\`, \`existing_user_registration_behavior\`, \`registration_mode\`, \`allowed_registration_domains\`, \`registration_domain_mapping\`, \`session.*\`, \`org_features.*\`, and \`access_requests.*\`. \`org_features.org_roles\` /
+\`org_features.team_roles\` name this domain's role vocabularies and
+\`org_features.role_grants\` binds those roles to capability names — the only place authority is
+configured. Never gate on a role string; see \`/llm\` §4.4a.
 
 ### 2.5 Two-factor policy model
 

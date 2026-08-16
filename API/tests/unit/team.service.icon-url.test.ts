@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { updateTeam } from '../../src/services/team.service.js';
-import { makePrismaMock, now, useTeamServiceTestEnv } from './helpers/team-service-test-helpers.js';
+import { makeConfig, makePrismaMock, now, useTeamServiceTestEnv } from './helpers/team-service-test-helpers.js';
 
 // CLAUDE.md 500-line split: gap-fix A Task 3's `icon_url` write/validation on
 // `PUT /org/organisations/:orgId/teams/:teamId`, split out of team.service.test.ts to keep that
@@ -50,6 +50,7 @@ describe('Team service: updateTeam icon_url', () => {
         domain: 'acme.example.com',
         actorUserId: 'u-owner',
         iconUrl: 'https://cdn.example.com/team.png',
+        config: makeConfig(),
       },
       { prisma },
     );
@@ -103,6 +104,7 @@ describe('Team service: updateTeam icon_url', () => {
         domain: 'acme.example.com',
         actorUserId: 'u-owner',
         iconUrl: null,
+        config: makeConfig(),
       },
       { prisma },
     );
@@ -142,6 +144,7 @@ describe('Team service: updateTeam icon_url', () => {
         domain: 'acme.example.com',
         actorUserId: 'u-owner',
         iconUrl: 'not-a-url',
+        config: makeConfig(),
       },
       { prisma },
     );

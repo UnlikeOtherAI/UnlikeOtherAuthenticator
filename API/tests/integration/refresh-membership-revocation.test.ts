@@ -307,6 +307,7 @@ describe.skipIf(!hasDatabase)('workspace refresh-family revocation', () => {
         domain: workspaceDomain,
         actorUserId: workspace.ownerId,
         userId: workspace.userId,
+        config: workspaceConfig(),
       },
       { prisma: handle.prisma },
     );
@@ -330,6 +331,7 @@ describe.skipIf(!hasDatabase)('workspace refresh-family revocation', () => {
         domain: workspaceDomain,
         actorUserId: workspace.ownerId,
         userId: workspace.userId,
+        config: workspaceConfig(),
       },
       { prisma: handle.prisma },
     );
@@ -351,6 +353,7 @@ describe.skipIf(!hasDatabase)('workspace refresh-family revocation', () => {
         domain: workspaceDomain,
         actorUserId: workspace.ownerId,
         userId: workspace.userId,
+        config: workspaceConfig(),
       },
       { prisma: handle.prisma },
     );
@@ -391,6 +394,7 @@ describe.skipIf(!hasDatabase)('workspace refresh-family revocation', () => {
         domain: workspaceDomain,
         actorUserId: workspace.ownerId,
         userId: workspace.userId,
+        config: workspaceConfig(),
       },
       { prisma: handle.prisma },
     );
@@ -443,6 +447,7 @@ describe.skipIf(!hasDatabase)('workspace refresh-family revocation', () => {
         domain: workspaceDomain,
         actorUserId: workspace.ownerId,
         userId: workspace.userId,
+        config: workspaceConfig(),
       },
       { prisma: handle.prisma },
     );
@@ -474,6 +479,7 @@ describe.skipIf(!hasDatabase)('workspace refresh-family revocation', () => {
         domain: workspaceDomain,
         actorUserId: workspace.ownerId,
         userId: workspace.userId,
+        config: workspaceConfig(),
       },
       {
         prisma: handle.prisma,

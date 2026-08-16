@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { getTeam } from '../../src/services/team.service.js';
-import { makePrismaMock, now, useTeamServiceTestEnv } from './helpers/team-service-test-helpers.js';
+import { makeConfig, makePrismaMock, now, useTeamServiceTestEnv } from './helpers/team-service-test-helpers.js';
 
 // CLAUDE.md 500-line split: gap-fix A Task 2's `?include=invited` addendum on
 // `GET /org/organisations/:orgId/teams/:teamId` (getTeam), split out of team.service.test.ts to
@@ -99,6 +99,7 @@ describe('Team service: getTeam include=invited', () => {
         domain: 'acme.example.com',
         actorUserId: 'u-owner',
         includeInvited: true,
+        config: makeConfig(),
       },
       { prisma },
     );
@@ -186,6 +187,7 @@ describe('Team service: getTeam include=invited', () => {
         domain: 'acme.example.com',
         actorUserId: 'u-member',
         includeInvited: true,
+        config: makeConfig(),
       },
       { prisma },
     );

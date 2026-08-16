@@ -2,6 +2,12 @@ import type { ClientConfig } from './config.service.js';
 import { getEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
+import {
+  resolveRoleGrants,
+  resolveTeamRoleVocabulary,
+  roleHoldsCapability,
+  type UoaCapability,
+} from './role-grants.js';
 
 import {
   assertDatabaseEnabled,
@@ -75,9 +81,6 @@ export type TeamWithMembersRecord = TeamRecord & {
   members: TeamMemberRecord[];
 };
 
-// Canonical team roles (api-changes-rebac.md §1, design §4.9). The pre-ReBAC `lead` value is
-// removed and migrated to `admin` in 20260707104937_slack_membership_foundation.
-const ALLOWED_TEAM_ROLES = new Set(['owner', 'admin', 'member']);
 const TEAM_SLUG_ALLOWED_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 const TEAM_SLUG_FALLBACK = 'team';
 const MAX_TEAM_SLUG_LENGTH = 120;
@@ -195,14 +198,19 @@ export async function ensureAvailableTeamSlug(params: {
   return candidate;
 }
 
-export function normalizeTeamRole(value: string | undefined): string {
+/**
+ * Validate a team role against THIS domain's configured vocabulary (`org_features.team_roles`).
+ *
+ * Before `team_roles` existed the canonical three (`owner|admin|member`) were the law; they are now
+ * only the default, so a domain that names its own team roles gets them enforced on every write the
+ * same way `org_roles` has always been enforced. An omitted role still means `member` — and, like
+ * `ensureOrgRole('member', …)` on the org side, a domain whose vocabulary omits `member` must pass
+ * one explicitly rather than have UOA invent a substitute.
+ */
+export function normalizeTeamRole(value: string | undefined, config: ClientConfig): string {
   const role = value?.trim() ?? 'member';
-  if (!ALLOWED_TEAM_ROLES.has(role)) throw new AppError('BAD_REQUEST', 400);
+  if (!resolveTeamRoleVocabulary(config).includes(role)) throw new AppError('BAD_REQUEST', 400);
   return role;
-}
-
-export function isTeamManager(role: string): boolean {
-  return role === 'owner' || role === 'admin';
 }
 
 export function parseMaxTeamsPerOrg(config: ClientConfig): number {
@@ -272,52 +280,70 @@ export function toTeamMemberRecord(
 }
 
 /**
- * Require org owner/admin standing OF THE ACTING USER.
+ * What the acting user must be standing in for a capability check to be answerable.
  *
- * `undefined` means the domain pairing authorised the call and there is no
- * acting user (backend mode); there is then no membership to check. Only
- * `resolveOrgActor` may produce that `undefined` — this helper never invents it.
+ * `actorUserId: undefined` means the domain pairing authorised the call and there is no acting user
+ * (backend mode) — the pairing outranks any member role, so every capability is held. Only
+ * `resolveOrgActor` may produce that `undefined`; these helpers never invent it.
+ *
+ * `teamId` is omitted only where there is genuinely no team to stand in — creating one. Then only
+ * org-scope grants can authorise, which is exactly what `requireTeamManager` used to do everywhere.
  */
-export async function requireTeamManager(
-  prisma: OrgServicePrisma,
-  orgId: string,
-  userId: string | undefined,
-): Promise<void> {
-  if (!userId) return;
-  const actorMembership = await getOrganisationMember(prisma, { orgId, userId }, { activeOnly: true });
-  if (!actorMembership || !isTeamManager(actorMembership.role)) {
-    throw new AppError('FORBIDDEN', 403);
-  }
-}
+export type WorkspaceCapabilityCheck = {
+  orgId: string;
+  teamId?: string;
+  actorUserId: string | undefined;
+  config: ClientConfig;
+};
 
 /**
- * True when the actor is an ACTIVE org owner/admin OR an ACTIVE team owner/admin for this specific
- * team (design §4.9/Phase 2's "team manager" definition — mirrors `team-invite-link.service.ts`'s
- * `requireLinkManager`, extracted here as the single non-throwing source of truth for call sites
- * that need a boolean gate — e.g. hiding a PII-bearing field — rather than a 403 that would fail
- * the whole read).
+ * Does the acting user hold `capability` in this workspace?
+ *
+ * The single non-throwing source of truth for UOA's own gates, replacing the hard-coded
+ * `role === 'owner' || role === 'admin'` predicates (`isTeamManager` / `isOrgOrTeamManager`). It
+ * resolves the domain's grant table rather than comparing role strings, so a role a domain invented
+ * can hold real authority — and answers §3's union: org-role grants ∪ team-role grants, with
+ * `owner` structurally holding everything at the scope it stands in.
+ *
+ * The org lookup runs first and short-circuits, so the common manager path costs the same one query
+ * it always did.
  */
-export async function isOrgOrTeamManager(
+export async function hasWorkspaceCapability(
   prisma: OrgServicePrisma,
-  params: { orgId: string; teamId: string; actorUserId: string | undefined },
+  capability: UoaCapability,
+  params: WorkspaceCapabilityCheck,
 ): Promise<boolean> {
-  // No acting user = backend mode. The domain pairing outranks any team role, so
-  // the manager-only surfaces this gate protects are open to it.
   if (!params.actorUserId) return true;
+
+  const grants = resolveRoleGrants(params.config);
+
   const actorOrgMembership = await getOrganisationMember(
     prisma,
     { orgId: params.orgId, userId: params.actorUserId },
     { activeOnly: true },
   );
-  if (actorOrgMembership && isTeamManager(actorOrgMembership.role)) {
+  if (roleHoldsCapability(grants, 'org', actorOrgMembership?.role, capability)) {
     return true;
   }
+
+  if (!params.teamId) return false;
 
   const actorTeamMembership = await prisma.teamMember.findFirst({
     where: { teamId: params.teamId, userId: params.actorUserId, status: 'ACTIVE' },
     select: { teamRole: true },
   });
-  return Boolean(actorTeamMembership && isTeamManager(actorTeamMembership.teamRole));
+  return roleHoldsCapability(grants, 'team', actorTeamMembership?.teamRole, capability);
+}
+
+/** `hasWorkspaceCapability` as a 403. The refusal names no role — under a custom vocabulary it could not. */
+export async function requireWorkspaceCapability(
+  prisma: OrgServicePrisma,
+  capability: UoaCapability,
+  params: WorkspaceCapabilityCheck,
+): Promise<void> {
+  if (!(await hasWorkspaceCapability(prisma, capability, params))) {
+    throw new AppError('FORBIDDEN', 403);
+  }
 }
 
 export async function resolveAndAuthorizeTeamOrg(

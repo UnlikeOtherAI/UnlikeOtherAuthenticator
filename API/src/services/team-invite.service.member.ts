@@ -13,7 +13,7 @@ import {
   resolveOrgActor,
   resolveOrganisationByDomain,
 } from './organisation.service.base.js';
-import { normalizeTeamRole } from './team.service.base.js';
+import { hasWorkspaceCapability, normalizeTeamRole } from './team.service.base.js';
 import { buildUserIdentity } from './user-scope.service.js';
 import {
   TEAM_INVITE_SELECT,
@@ -103,35 +103,38 @@ export async function createMemberInvite(
   }
 
   let approvalStatus: 'NOT_REQUIRED' | 'PENDING' = 'NOT_REQUIRED';
-  const isOrgManager = actorOrgMembership.role === 'owner' || actorOrgMembership.role === 'admin';
+  // A manager invites outright; everyone else goes through the org's member-invite policy. This
+  // used to inline its own `owner|admin` comparison at both scopes — the same predicate
+  // `hasWorkspaceCapability` now owns, so a domain's configured roles decide it here too.
+  const isManager = await hasWorkspaceCapability(prisma, 'members.manage', {
+    orgId: org.id,
+    teamId: team.id,
+    actorUserId: params.actorUserId,
+    config: params.config,
+  });
 
-  if (!isOrgManager) {
+  if (!isManager) {
     const actorTeamMembership = await prisma.teamMember.findFirst({
       where: { teamId: team.id, userId: params.actorUserId, status: 'ACTIVE' },
       select: { teamRole: true },
     });
-    const isTeamManager =
-      actorTeamMembership?.teamRole === 'owner' || actorTeamMembership?.teamRole === 'admin';
+    if (!actorTeamMembership) {
+      throw new AppError('FORBIDDEN', 403);
+    }
 
-    if (!isTeamManager) {
-      if (!actorTeamMembership) {
-        throw new AppError('FORBIDDEN', 403);
-      }
+    const setting = normalizeMemberInvitesSetting(org.memberInvites);
 
-      const setting = normalizeMemberInvitesSetting(org.memberInvites);
-
-      if (setting === 'disabled') {
-        throw new AppError('FORBIDDEN', 403);
-      }
-      if (setting === 'admin_approval') {
-        approvalStatus = 'PENDING';
-      }
+    if (setting === 'disabled') {
+      throw new AppError('FORBIDDEN', 403);
+    }
+    if (setting === 'admin_approval') {
+      approvalStatus = 'PENDING';
     }
   }
 
   const email = normalizeEmail(params.invite.email);
   const inviteName = normalizeInviteName(params.invite.name);
-  const teamRole = normalizeTeamRole(params.invite.teamRole);
+  const teamRole = normalizeTeamRole(params.invite.teamRole, params.config);
 
   const identity = buildUserIdentity({
     userScope: params.config.user_scope,

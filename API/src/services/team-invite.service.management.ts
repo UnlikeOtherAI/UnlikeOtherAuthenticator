@@ -81,7 +81,7 @@ export async function createTeamInvites(
   for (const input of params.invites) {
     const email = normalizeEmail(input.email);
     const inviteName = normalizeInviteName(input.name);
-    const teamRole = normalizeTeamRole(input.teamRole);
+    const teamRole = normalizeTeamRole(input.teamRole, params.config);
     const existingInvite = await prisma.teamInvite.findFirst({
       where: {
         teamId: team.id,

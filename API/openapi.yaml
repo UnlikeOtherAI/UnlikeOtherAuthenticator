@@ -6265,7 +6265,11 @@ paths:
       tags: [Organizations]
       summary: Create team
       operationId: createTeam
-      description: Rate limited 50/hour per domain+actor.
+      description: |
+        Rate limited 50/hour per domain+actor. In user mode the caller needs the `teams.manage`
+        capability at **org** scope — there is no team to stand in yet, so team-scope standing
+        never authorises this. Under the default grant table that is an org owner/admin.
+        Capability resolution is `org_features.role_grants`; see `/api`.
       security:
         - domainHashBearer: []
           accessToken: []
@@ -6337,7 +6341,10 @@ paths:
       tags: [Organizations]
       summary: Update team
       operationId: updateTeam
-      description: At least one field must be provided.
+      description: |
+        At least one field must be provided. In user mode the caller needs the `teams.manage`
+        capability, resolved over the union of the org-role and team-role grants
+        (`org_features.role_grants`) — an org **or** team owner/admin under the default table.
       security:
         - domainHashBearer: []
           accessToken: []
@@ -6385,6 +6392,8 @@ paths:
       tags: [Organizations]
       summary: Delete team
       operationId: deleteTeam
+      description: |
+        Same `teams.manage` gate as the PUT. The organisation's default team cannot be deleted.
       security:
         - domainHashBearer: []
           accessToken: []
@@ -6493,9 +6502,10 @@ paths:
       summary: Set a team's uploaded avatar
       operationId: putOrgTeamAvatar
       description: |
-        Replaces the team's uploaded avatar. Organisation owner/admin only — the same
-        authorization as `PUT /org/organisations/{orgId}/teams/{teamId}`. Rate-limited per
-        organisation + team. The team `iconUrl` column is untouched.
+        Replaces the team's uploaded avatar. Requires the `teams.manage` capability — the same
+        authorization as `PUT /org/organisations/{orgId}/teams/{teamId}`, i.e. an org **or** team
+        owner/admin under the default grant table. Rate-limited per organisation + team. The team
+        `iconUrl` column is untouched.
       security:
         - domainHashBearer: []
           accessToken: []
@@ -6525,7 +6535,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: Caller is not an organisation owner or admin.
+          description: Caller does not hold the `teams.manage` capability.
           content:
             application/json:
               schema:
@@ -6541,8 +6551,9 @@ paths:
       summary: Remove a team's uploaded avatar
       operationId: deleteOrgTeamAvatar
       description: |
-        Idempotent. Resolution falls back to the team `iconUrl` or the generated image.
-        Organisation owner/admin only. Rate-limited per organisation + team.
+        Idempotent. Resolution falls back to the team `iconUrl` or the generated image. Requires
+        the `teams.manage` capability, the same gate as the PUT. Rate-limited per organisation +
+        team.
       security:
         - domainHashBearer: []
           accessToken: []
@@ -6560,7 +6571,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: Caller is not an organisation owner or admin.
+          description: Caller does not hold the `teams.manage` capability.
           content:
             application/json:
               schema:
@@ -6577,6 +6588,12 @@ paths:
       tags: [Organizations]
       summary: Add team member
       operationId: addTeamMember
+      description: |
+        In user mode the caller needs the `members.manage` capability, resolved over the union of
+        the org-role and team-role grants (`org_features.role_grants`) — an org **or** team
+        owner/admin under the default table, so a team admin can administer their own roster
+        without org standing. `teamRole` is validated against `org_features.team_roles`, this
+        domain's configured team-role vocabulary (default `["owner","admin","member"]`).
       security:
         - domainHashBearer: []
           accessToken: []
@@ -6620,6 +6637,9 @@ paths:
       tags: [Organizations]
       summary: Update team member role
       operationId: updateTeamMemberRole
+      description: |
+        Same `members.manage` gate as adding a member. `teamRole` is validated against
+        `org_features.team_roles`.
       security:
         - domainHashBearer: []
           accessToken: []
@@ -6652,6 +6672,9 @@ paths:
       tags: [Organizations]
       summary: Remove team member
       operationId: removeTeamMember
+      description: |
+        Same `members.manage` gate as adding a member. Soft-remove: the membership is tombstoned
+        and the exact user+team refresh families are revoked.
       security:
         - domainHashBearer: []
           accessToken: []
@@ -6833,7 +6856,8 @@ paths:
         member-invite approval. The invite row is kept with derived status `revoked`; outstanding
         emailed tokens are consumed and the invitation link refuses acceptance. Idempotent:
         revoking an already-revoked (or declined) invitation succeeds. With `X-UOA-Access-Token`,
-        the caller must be an org/team owner/admin or the invitation's original inviter; with the
+        the caller must hold `members.manage` (an org/team owner/admin under the default grant
+        table) or be the invitation's original inviter; with the
         header omitted (backend mode), the verified config must set
         `org_features.backend_org_management` and the audit row records
         `actor_user_id: null` plus `uoa_actor: { "via": "domain_backend" }`.

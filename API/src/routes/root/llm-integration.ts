@@ -117,6 +117,27 @@ Use this precedence inside your RP:
 
 \`superuser\` in the JWT does NOT mean the user is an admin *inside your product*; it only means they can use UOA's admin UI.
 
+### 4.4a Roles are the domain's words; do not hard-code them
+
+The org and team role **vocabularies are per-domain configuration**
+(\`org_features.org_roles\` and \`org_features.team_roles\`, both defaulting to
+\`["owner","admin","member"]\` and both required to contain \`"owner"\`). A domain may name
+\`auditor\`, \`editor\`, \`reader\`, anything. So:
+
+- **Never coerce an unrecognised role to \`"member"\`.** \`member\` is not a floor — in most
+  products it is write access. An unknown role must resolve to *no* role and *no* capability.
+- **Never compare a role string to decide what someone may do.** \`role === "admin"\` is already
+  false the day a domain renames the role.
+- Read \`org_features.role_grants\` instead: \`{ "org": { <role>: <capability>[] },
+  "team": { <role>: <capability>[] } }\`, with \`"owner"\` implicitly holding everything at the
+  scope it stands in, an unmentioned role holding nothing, and a workspace answer being the union
+  of the org-role and team-role grants. UOA validates that table against the domain's vocabularies
+  and declared \`capabilities\` at config load, so anything you read there is coherent.
+
+UOA gates its own team surfaces on exactly this table, using two capability names
+(\`members.manage\`, \`teams.manage\`) — see \`org_features.role_grants\` at \`/api\`. Products
+declare their own catalogue in \`org_features.capabilities\` and gate on their own verbs.
+
 ### 4.5 First-login tenant bootstrapping — empty memberships
 
 When \`firstLogin.memberships.orgs\` is empty, the user is authenticated but has no tenant on this domain yet. Do NOT fall back to a synthetic tenant (\`"default"\`, the user's email domain, etc.) — you will cross-contaminate users. Branch on \`capabilities\`:
@@ -533,7 +554,7 @@ Revoking an invitation: \`DELETE /org/organisations/:orgId/teams/:teamId/invitat
 
 Member-initiated invites: \`POST /org/organisations/:orgId/teams/:teamId/invitations\` accepts the same path used by the trusted backend bulk-invite call, but when called WITH an \`X-UOA-Access-Token\` header it becomes a single-invite, permission-gated call instead:
 
-- Org or team \`owner\`/\`admin\`: always allowed, sent immediately (\`approvalStatus: not_required\`).
+- Anyone holding \`members.manage\` in the workspace — org or team \`owner\`/\`admin\` under the default grant table: always allowed, sent immediately (\`approvalStatus: not_required\`).
 - A plain ACTIVE team member: gated by the organisation's \`memberInvites\` setting (\`allowed\` default | \`admin_approval\` | \`disabled\`, set via \`PUT /org/organisations/:orgId\` \`{ "member_invites": "admin_approval" }\`). \`admin_approval\` creates the invite as \`pending\` and sends **no email** until an owner/admin approves it.
 - A deactivated member, or a plain member when \`disabled\`, is rejected generically.
 - The response is always \`{ "status": "ok" }\` regardless of outcome — whether the email already has an account is never revealed (no enumeration).

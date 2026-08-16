@@ -22,6 +22,7 @@ import {
   orgCaller,
   parseDomainContext,
   parseDomainContextHook,
+  requireVerifiedConfig,
   tenantUserId,
 } from './team-route.shared.js';
 
@@ -97,7 +98,7 @@ export function registerTeamInviteLinkRoutes(app: FastifyInstance): void {
       setTenantContextFromRequest(request, { orgId, userId: tenantUserId(request) });
       const result = await request.withTenantTx((tx) =>
         listTeamInviteLinks(
-          { orgId, teamId, domain, ...orgCaller(request) },
+          { orgId, teamId, domain, ...orgCaller(request), config: requireVerifiedConfig(request) },
           { prisma: asPrismaClient(tx) },
         ),
       );
@@ -126,7 +127,14 @@ export function registerTeamInviteLinkRoutes(app: FastifyInstance): void {
       setTenantContextFromRequest(request, { orgId, userId: tenantUserId(request) });
       const result = await request.withTenantTx((tx) =>
         revokeTeamInviteLink(
-          { orgId, teamId, linkId, domain, ...orgCaller(request) },
+          {
+            orgId,
+            teamId,
+            linkId,
+            domain,
+            ...orgCaller(request),
+            config: requireVerifiedConfig(request),
+          },
           { prisma: asPrismaClient(tx) },
         ),
       );

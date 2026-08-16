@@ -189,7 +189,7 @@ export const avatarEndpoints: EndpointSchema[] = [
     method: 'PUT',
     path: '/org/organisations/:orgId/teams/:teamId/avatar',
     description:
-      "Set a team's uploaded avatar from a multipart upload. Organisation owner/admin only — the same authorization as PUT /org/organisations/:orgId/teams/:teamId. Rate-limited per org+team (30/hour).",
+      "Set a team's uploaded avatar from a multipart upload. Requires the teams.manage capability — the same authorization as PUT /org/organisations/:orgId/teams/:teamId, i.e. an org OR team owner/admin under the default grant table. Rate-limited per org+team (30/hour).",
     auth: 'domain hash bearer token + access token (X-UOA-Access-Token header) + signed config',
     query: { domain: 'string (required)', config_url: 'string (required)' },
     body: UPLOAD_BODY,
@@ -200,7 +200,7 @@ export const avatarEndpoints: EndpointSchema[] = [
     method: 'DELETE',
     path: '/org/organisations/:orgId/teams/:teamId/avatar',
     description:
-      "Remove a team's uploaded avatar; resolution falls back to the team icon_url or the generated image. Idempotent. Organisation owner/admin only. Rate-limited per org+team (30/hour).",
+      "Remove a team's uploaded avatar; resolution falls back to the team icon_url or the generated image. Idempotent. Requires the teams.manage capability, the same gate as the PUT. Rate-limited per org+team (30/hour).",
     auth: 'domain hash bearer token + access token (X-UOA-Access-Token header) + signed config',
     query: { domain: 'string (required)', config_url: 'string (required)' },
     response: { ok: 'true' },

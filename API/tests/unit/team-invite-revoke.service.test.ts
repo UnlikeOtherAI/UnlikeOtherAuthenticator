@@ -30,6 +30,21 @@ const backendActor: OrgActorProvenance = {
   sourceDomain: 'client.example.com',
 };
 
+/**
+ * The verified client config `revokeTeamInvite` now takes — its capability gate resolves the
+ * domain's `role_grants` out of it. No `org_features` block, so the legacy default table applies,
+ * which is exactly what these tests assert against.
+ */
+function makeRevokeConfig(): ClientConfig {
+  return {
+    domain: 'client.example.com',
+    redirect_urls: ['https://client.example.com/oauth/callback'],
+    enabled_auth_methods: ['email_password'],
+    ui_theme: testUiTheme(),
+    language_config: 'en',
+  } as ClientConfig;
+}
+
 function makeEnv() {
   return {
     NODE_ENV: 'test' as const,
@@ -148,6 +163,7 @@ describe('revokeTeamInvite (DELETE .../teams/:teamId/invitations/:inviteId)', ()
         inviteId: 'invite-1',
         domain: 'client.example.com',
         actorUserId: 'owner-1',
+        config: makeRevokeConfig(),
       },
       deps(prisma),
     );
@@ -184,6 +200,7 @@ describe('revokeTeamInvite (DELETE .../teams/:teamId/invitations/:inviteId)', ()
         inviteId: 'invite-1',
         domain: 'client.example.com',
         actorUserId: 'team-admin-1',
+        config: makeRevokeConfig(),
       },
       deps(prisma),
     );
@@ -204,6 +221,7 @@ describe('revokeTeamInvite (DELETE .../teams/:teamId/invitations/:inviteId)', ()
         inviteId: 'invite-1',
         domain: 'client.example.com',
         actorUserId: 'inviter-1',
+        config: makeRevokeConfig(),
       },
       deps(prisma),
     );
@@ -225,6 +243,7 @@ describe('revokeTeamInvite (DELETE .../teams/:teamId/invitations/:inviteId)', ()
           inviteId: 'invite-1',
           domain: 'client.example.com',
           actorUserId: 'member-1',
+          config: makeRevokeConfig(),
         },
         deps(prisma),
       ),
@@ -247,6 +266,7 @@ describe('revokeTeamInvite (DELETE .../teams/:teamId/invitations/:inviteId)', ()
           inviteId: 'invite-1',
           domain: 'client.example.com',
           actorUserId: 'inviter-1',
+          config: makeRevokeConfig(),
         },
         deps(prisma),
       ),
@@ -264,6 +284,7 @@ describe('revokeTeamInvite (DELETE .../teams/:teamId/invitations/:inviteId)', ()
         inviteId: 'invite-1',
         domain: 'client.example.com',
         actor: backendActor,
+        config: makeRevokeConfig(),
       },
       deps(prisma),
     );
@@ -298,6 +319,7 @@ describe('revokeTeamInvite (DELETE .../teams/:teamId/invitations/:inviteId)', ()
         inviteId: 'invite-1',
         domain: 'client.example.com',
         actorUserId: 'owner-1',
+        config: makeRevokeConfig(),
       },
       deps(prisma),
     );
@@ -319,6 +341,7 @@ describe('revokeTeamInvite (DELETE .../teams/:teamId/invitations/:inviteId)', ()
         inviteId: 'invite-1',
         domain: 'client.example.com',
         actorUserId: 'owner-1',
+        config: makeRevokeConfig(),
       },
       deps(prisma),
     );
@@ -342,6 +365,7 @@ describe('revokeTeamInvite (DELETE .../teams/:teamId/invitations/:inviteId)', ()
         inviteId: 'invite-1',
         domain: 'client.example.com',
         actorUserId: 'owner-1',
+        config: makeRevokeConfig(),
       },
       deps(prisma),
     );
@@ -367,6 +391,7 @@ describe('revokeTeamInvite (DELETE .../teams/:teamId/invitations/:inviteId)', ()
           inviteId: 'invite-1',
           domain: 'client.example.com',
           actorUserId: 'owner-1',
+          config: makeRevokeConfig(),
         },
         deps(prisma),
       ),
@@ -389,6 +414,7 @@ describe('revokeTeamInvite (DELETE .../teams/:teamId/invitations/:inviteId)', ()
           inviteId: 'missing',
           domain: 'client.example.com',
           actorUserId: 'owner-1',
+          config: makeRevokeConfig(),
         },
         deps(prisma),
       ),
@@ -407,6 +433,7 @@ describe('revokeTeamInvite (DELETE .../teams/:teamId/invitations/:inviteId)', ()
           inviteId: 'invite-1',
           domain: 'other.example.com',
           actorUserId: 'owner-1',
+          config: makeRevokeConfig(),
         },
         deps(prisma),
       ),
@@ -424,6 +451,7 @@ describe('revokeTeamInvite (DELETE .../teams/:teamId/invitations/:inviteId)', ()
           teamId: 'team-1',
           inviteId: 'invite-1',
           domain: 'client.example.com',
+          config: makeRevokeConfig(),
         },
         deps(prisma),
       ),

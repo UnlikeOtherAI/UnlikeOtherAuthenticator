@@ -32,6 +32,7 @@ import {
   parseDomainContextHook,
   parseLimitCursor,
   parseTeamDetailQuery,
+  requireVerifiedConfig,
   tenantUserId,
 } from './team-route.shared.js';
 
@@ -81,8 +82,7 @@ export function registerTeamRoutes(app: FastifyInstance): void {
     },
     async (request, reply) => {
       const { domain } = parseDomainContext(request);
-      const config = request.config;
-      if (!config) throw new AppError('UNAUTHORIZED', 401, 'MISSING_CONFIG');
+      const config = requireVerifiedConfig(request);
 
       const orgId = getOrgIdFromParams(request.params);
       const body = TeamBodySchema.parse(request.body ?? {});
@@ -128,7 +128,14 @@ export function registerTeamRoutes(app: FastifyInstance): void {
       setTenantContextFromRequest(request, { orgId, userId: tenantUserId(request) });
       const team = await request.withTenantTx((tx) =>
         getTeam(
-          { orgId, teamId, domain, ...orgCaller(request), includeInvited },
+          {
+            orgId,
+            teamId,
+            domain,
+            ...orgCaller(request),
+            includeInvited,
+            config: requireVerifiedConfig(request),
+          },
           { prisma: asPrismaClient(tx) },
         ),
       );
@@ -177,6 +184,7 @@ export function registerTeamRoutes(app: FastifyInstance): void {
             description: body.description,
             joinPolicy: body.joinPolicy,
             iconUrl: body.icon_url,
+            config: requireVerifiedConfig(request),
           },
           { prisma: asPrismaClient(tx) },
         ),
@@ -205,7 +213,7 @@ export function registerTeamRoutes(app: FastifyInstance): void {
       setTenantContextFromRequest(request, { orgId, userId: tenantUserId(request) });
       await request.withTenantTx((tx) =>
         deleteTeam(
-          { orgId, teamId, domain, ...orgCaller(request) },
+          { orgId, teamId, domain, ...orgCaller(request), config: requireVerifiedConfig(request) },
           { prisma: asPrismaClient(tx) },
         ),
       );
@@ -227,8 +235,7 @@ export function registerTeamRoutes(app: FastifyInstance): void {
     },
     async (request, reply) => {
       const { domain } = parseDomainContext(request);
-      const config = request.config;
-      if (!config) throw new AppError('UNAUTHORIZED', 401, 'MISSING_CONFIG');
+      const config = requireVerifiedConfig(request);
 
       const orgId = getOrgIdFromParams(request.params);
       const teamId = getTeamIdFromParams(request.params);
@@ -282,6 +289,7 @@ export function registerTeamRoutes(app: FastifyInstance): void {
             ...orgCaller(request),
             userId,
             teamRole,
+            config: requireVerifiedConfig(request),
           },
           { prisma: asPrismaClient(tx) },
         ),
@@ -315,6 +323,7 @@ export function registerTeamRoutes(app: FastifyInstance): void {
           domain,
           ...orgCaller(request),
           userId,
+          config: requireVerifiedConfig(request),
         },
         { prisma: request.adminDb },
       );

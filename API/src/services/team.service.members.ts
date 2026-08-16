@@ -14,7 +14,7 @@ import {
   normalizeTeamRole,
   parseMaxMembersPerTeam,
   parseMaxTeamMembershipsPerUser,
-  requireTeamManager,
+  requireWorkspaceCapability,
   resolveAndAuthorizeTeamOrg,
   resolveOrgActor,
   toTeamMemberRecord,
@@ -49,7 +49,7 @@ export async function addTeamMember(
 
   const actorUserId = resolveOrgActor(params);
   const userId = params.userId.trim();
-  const teamRole = normalizeTeamRole(params.teamRole);
+  const teamRole = normalizeTeamRole(params.teamRole, params.config);
   const maxMembersPerTeam = parseMaxMembersPerTeam(params.config);
   const maxTeamMembershipsPerUser = parseMaxTeamMembershipsPerUser(params.config);
 
@@ -63,7 +63,12 @@ export async function addTeamMember(
     domain: params.domain,
     actorUserId,
   });
-  await requireTeamManager(prisma, org.id, actorUserId);
+  await requireWorkspaceCapability(prisma, 'members.manage', {
+    orgId: org.id,
+    teamId: params.teamId,
+    actorUserId,
+    config: params.config,
+  });
 
   const target = await getOrganisationMember(prisma, {
     orgId: org.id,
@@ -186,6 +191,7 @@ export async function changeTeamMemberRole(
     actor?: OrgActorProvenance;
     userId: string;
     teamRole: string;
+    config: ClientConfig;
   },
   deps?: OrgServiceDeps,
 ): Promise<TeamMemberRecord> {
@@ -194,7 +200,7 @@ export async function changeTeamMemberRole(
 
   const actorUserId = resolveOrgActor(params);
   const userId = params.userId.trim();
-  const teamRole = normalizeTeamRole(params.teamRole);
+  const teamRole = normalizeTeamRole(params.teamRole, params.config);
 
   if (!userId) {
     throw new AppError('BAD_REQUEST', 400);
@@ -206,7 +212,12 @@ export async function changeTeamMemberRole(
     domain: params.domain,
     actorUserId,
   });
-  await requireTeamManager(prisma, org.id, actorUserId);
+  await requireWorkspaceCapability(prisma, 'members.manage', {
+    orgId: org.id,
+    teamId: params.teamId,
+    actorUserId,
+    config: params.config,
+  });
 
   const team = await prisma.team.findFirst({
     where: {
@@ -275,6 +286,7 @@ export async function removeTeamMember(
     actorUserId?: string;
     actor?: OrgActorProvenance;
     userId: string;
+    config: ClientConfig;
   },
   deps?: OrgServiceDeps & {
     afterMembershipStatusWrite?: () => Promise<void>;
@@ -299,7 +311,12 @@ export async function removeTeamMember(
     domain: params.domain,
     actorUserId,
   });
-  await requireTeamManager(prisma, org.id, actorUserId);
+  await requireWorkspaceCapability(prisma, 'members.manage', {
+    orgId: org.id,
+    teamId: params.teamId,
+    actorUserId,
+    config: params.config,
+  });
 
   const team = await prisma.team.findFirst({
     where: {

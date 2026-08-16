@@ -237,7 +237,13 @@ describe('team-invite-link.service', () => {
       ]);
 
       const result = await listTeamInviteLinks(
-        { orgId: 'org-1', teamId: 'team-1', domain: 'client.example.com', actorUserId: 'actor-1' },
+        {
+          orgId: 'org-1',
+          teamId: 'team-1',
+          domain: 'client.example.com',
+          actorUserId: 'actor-1',
+          config: makeConfig(),
+        },
         { prisma },
       );
 
@@ -259,7 +265,14 @@ describe('team-invite-link.service', () => {
       prisma.teamInviteLink.findFirst.mockResolvedValue({ id: 'link-1', revokedAt: null });
 
       const result = await revokeTeamInviteLink(
-        { orgId: 'org-1', teamId: 'team-1', linkId: 'link-1', domain: 'client.example.com', actorUserId: 'actor-1' },
+        {
+          orgId: 'org-1',
+          teamId: 'team-1',
+          linkId: 'link-1',
+          domain: 'client.example.com',
+          actorUserId: 'actor-1',
+          config: makeConfig(),
+        },
         { prisma, now: () => NOW },
       );
 

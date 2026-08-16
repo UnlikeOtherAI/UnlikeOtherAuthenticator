@@ -5,6 +5,7 @@ import { findJwkByKidDb, importClientJwkKey, jwkToPublic } from './client-jwk.se
 import { getEnv } from '../config/env.js';
 import { tryParseHttpUrl, tryParseRedirectUrl } from '../utils/http-url.js';
 import { getAppLogger } from '../utils/app-logger.js';
+import { OrgFeaturesSchema } from './config-org-features.schema.js';
 
 const CONFIG_JWT_ALLOWED_ALGS = ['RS256'] as const;
 const CONFIG_JWKS_CACHE_TTL_MS = 10 * 60 * 1000;
@@ -242,66 +243,7 @@ const ClientConfigSchema = RequiredConfigSchema.extend({
       short_refresh_token_ttl_hours: 1,
       long_refresh_token_ttl_days: 30,
     }),
-  org_features: z
-    .object({
-      enabled: z.boolean().default(false),
-      groups_enabled: z.boolean().default(false),
-      user_needs_team: z.boolean().default(false),
-      auto_create_personal_org_on_first_login: z.boolean().default(false),
-      allow_user_create_org: z.boolean().default(false),
-      // Opt-in for creating a further workspace (team) inside an org the user is already an
-      // ACTIVE owner/admin of, straight from the SSO workspace chooser. Separate from
-      // `allow_user_create_org`, which is about a user's *first* org: this one adds a write path
-      // to an existing tenant, so a domain opts into it explicitly and the role check still
-      // applies on top. Default false — no domain gains the popup write path silently.
-      allow_user_create_team: z.boolean().default(false),
-      // Opt-in for backend mode on `/org/*` (brief §24.8): when true, this
-      // domain's product backend may call `/org/*` with NO `X-UOA-Access-Token`
-      // and be authorised by the domain pairing alone. Default false, so no
-      // existing domain gains the mode silently.
-      //
-      // This is a blast-radius control, not a new credential. The domain-hash
-      // bearer and the config-signing private key are two separate secrets;
-      // requiring the flag means a leaked bearer alone cannot rewrite the org
-      // graph — the attacker would also have to get this flag into a config JWT
-      // signed by the partner's own key.
-      backend_org_management: z.boolean().default(false),
-      pending_invites_block_auto_create: z.boolean().default(true),
-      max_teams_per_org: z.number().int().positive().max(1000).default(100),
-      max_groups_per_org: z.number().int().positive().max(200).default(20),
-      max_members_per_org: z.number().int().positive().max(10000).default(1000),
-      max_members_per_team: z.number().int().positive().max(5000).default(200),
-      max_members_per_group: z.number().int().positive().max(5000).default(500),
-      max_team_memberships_per_user: z.number().int().positive().max(200).default(50),
-      org_roles: z
-        .array(z.string().min(1).max(50))
-        .refine((roles) => roles.includes('owner'), { message: 'org_roles must include "owner"' })
-        .default(['owner', 'admin', 'member']),
-      max_flags_per_app: z.number().int().positive().max(500).default(100),
-      scim_override_retention: z.enum(['retain', 'clear']).default('retain'),
-      global_missing_flag_default: z.enum(['enabled', 'disabled']).default('disabled'),
-    })
-    .optional()
-    .default({
-      enabled: false,
-      groups_enabled: false,
-      user_needs_team: false,
-      auto_create_personal_org_on_first_login: false,
-      allow_user_create_org: false,
-      allow_user_create_team: false,
-      backend_org_management: false,
-      pending_invites_block_auto_create: true,
-      max_teams_per_org: 100,
-      max_groups_per_org: 20,
-      max_members_per_org: 1000,
-      max_members_per_team: 200,
-      max_members_per_group: 500,
-      max_team_memberships_per_user: 50,
-      org_roles: ['owner', 'admin', 'member'],
-      max_flags_per_app: 100,
-      scim_override_retention: 'retain',
-      global_missing_flag_default: 'disabled',
-    }),
+  org_features: OrgFeaturesSchema,
 }).superRefine((config, ctx) => {
   const logoUrl = config.ui_theme.logo.url.trim();
   if (logoUrl) {
