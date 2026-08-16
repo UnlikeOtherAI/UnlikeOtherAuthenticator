@@ -12,9 +12,10 @@ const envNames = [
   'MCP_OAUTH_DOMAIN',
 ] as const;
 
-const originalEnv = Object.fromEntries(
-  envNames.map((name) => [name, process.env[name]]),
-) as Record<(typeof envNames)[number], string | undefined>;
+const originalEnv = Object.fromEntries(envNames.map((name) => [name, process.env[name]])) as Record<
+  (typeof envNames)[number],
+  string | undefined
+>;
 
 function restoreEnv(): void {
   for (const name of envNames) {
@@ -48,9 +49,11 @@ describe('public OAuth profile gate', () => {
     try {
       const jwks = await app.inject({ method: 'GET', url: '/oauth/jwks.json' });
       expect(jwks.statusCode).toBe(200);
-      expect(jwks.json()).toMatchObject({
-        keys: [{ kid: 'oauth-profile-gate-test', alg: 'RS256', use: 'sig' }],
-      });
+      // Containment, not an exact set: /oauth/jwks.json also carries the user
+      // access-token verification key on a deployment that publishes one.
+      expect((jwks.json() as { keys: unknown[] }).keys).toContainEqual(
+        expect.objectContaining({ kid: 'oauth-profile-gate-test', alg: 'RS256', use: 'sig' }),
+      );
 
       const responses = await Promise.all([
         app.inject({ method: 'GET', url: '/.well-known/oauth-authorization-server' }),
@@ -82,9 +85,7 @@ describe('public OAuth profile gate', () => {
           },
         }),
       ]);
-      expect(responses.map((response) => response.statusCode)).toEqual([
-        404, 404, 404, 404, 404,
-      ]);
+      expect(responses.map((response) => response.statusCode)).toEqual([404, 404, 404, 404, 404]);
 
       const repeatedRegistrationAttempts = await Promise.all(
         Array.from({ length: 21 }, () =>
@@ -95,9 +96,9 @@ describe('public OAuth profile gate', () => {
           }),
         ),
       );
-      expect(
-        repeatedRegistrationAttempts.every((response) => response.statusCode === 404),
-      ).toBe(true);
+      expect(repeatedRegistrationAttempts.every((response) => response.statusCode === 404)).toBe(
+        true,
+      );
     } finally {
       await app.close();
     }

@@ -155,6 +155,30 @@ const EnvSchema = z
         message: 'TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON must contain public-only RS256 RSA keys',
       })
       .optional(),
+    // Dedicated RS256 signer for the user access token relying parties receive.
+    // Without it the token is HS256 over SHARED_SECRET, which is also the domain
+    // hash secret, the refresh-token pepper, and the login_token / 2FA / social
+    // bridge signing key — so it can never be published for relying parties to
+    // verify against. Configuring both values switches issuance to RS256 and
+    // publishes the verification key at GET /oauth/jwks.json; UOA keeps accepting
+    // already-issued HS256 tokens either way. See Docs/Auth/access-token-verification.md.
+    USER_ACCESS_TOKEN_PRIVATE_JWK: z
+      .string()
+      .min(1)
+      .refine((value) => privateRs256JwkKeyId(value) !== undefined, {
+        message: 'USER_ACCESS_TOKEN_PRIVATE_JWK must be a private RS256 RSA JWK with a kid',
+      })
+      .optional(),
+    // Public-only current and retired user access-token verification keys. Both
+    // generations stay here so signing-key rotation is safe across cached JWKS
+    // responses, mixed Cloud Run revisions, and unexpired tokens.
+    USER_ACCESS_TOKEN_PUBLIC_JWKS_JSON: z
+      .string()
+      .min(1)
+      .refine((value) => publicRs256JwkKeyIds(value) !== undefined, {
+        message: 'USER_ACCESS_TOKEN_PUBLIC_JWKS_JSON must contain public-only RS256 RSA keys',
+      })
+      .optional(),
     // Stripe is an explicitly gated payment processor. Keys may be provisioned
     // ahead of launch, but no customer, Checkout, subscription, or meter call is
     // permitted until the gate is enabled and both credentials are present.
@@ -331,6 +355,27 @@ const EnvSchema = z
         message: 'SIGNATURE_GCS_BUCKET is required for GCS signature storage',
       });
     }
+    if (
+      Boolean(env.USER_ACCESS_TOKEN_PRIVATE_JWK) !== Boolean(env.USER_ACCESS_TOKEN_PUBLIC_JWKS_JSON)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['USER_ACCESS_TOKEN_PUBLIC_JWKS_JSON'],
+        message:
+          'USER_ACCESS_TOKEN_PRIVATE_JWK and USER_ACCESS_TOKEN_PUBLIC_JWKS_JSON must be set together',
+      });
+    }
+    if (env.USER_ACCESS_TOKEN_PRIVATE_JWK && env.USER_ACCESS_TOKEN_PUBLIC_JWKS_JSON) {
+      const privateKid = privateRs256JwkKeyId(env.USER_ACCESS_TOKEN_PRIVATE_JWK);
+      const publicKids = publicRs256JwkKeyIds(env.USER_ACCESS_TOKEN_PUBLIC_JWKS_JSON);
+      if (privateKid && publicKids && !publicKids.includes(privateKid)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['USER_ACCESS_TOKEN_PUBLIC_JWKS_JSON'],
+          message: 'user access-token public JWKS must include the current private key kid',
+        });
+      }
+    }
     if (env.SIGNATURE_EVIDENCE_PRIVATE_JWK && env.SIGNATURE_EVIDENCE_PUBLIC_JWKS_JSON) {
       const privateKid = privateRs256JwkKeyId(env.SIGNATURE_EVIDENCE_PRIVATE_JWK);
       const publicKids = publicRs256JwkKeyIds(env.SIGNATURE_EVIDENCE_PUBLIC_JWKS_JSON);
@@ -412,6 +457,13 @@ export function getPublicBaseUrl(env: Env = getEnv()): string {
 /** Whether RS256 resource-token verification keys may be published. */
 export function isOAuthAccessTokenJwksEnabled(env: Env = getEnv()): boolean {
   return Boolean(env.MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK);
+}
+
+/** Whether user access tokens are issued RS256 and verifiable against published keys.
+ *  Off by default: without it the token stays HS256 over SHARED_SECRET, exactly as
+ *  before. UOA accepts both algorithms either way, so this is safe to flip and unflip. */
+export function isUserAccessTokenRs256Enabled(env: Env = getEnv()): boolean {
+  return Boolean(env.USER_ACCESS_TOKEN_PRIVATE_JWK && env.USER_ACCESS_TOKEN_PUBLIC_JWKS_JSON);
 }
 
 export function isTariffSnapshotJwksEnabled(env: Env = getEnv()): boolean {

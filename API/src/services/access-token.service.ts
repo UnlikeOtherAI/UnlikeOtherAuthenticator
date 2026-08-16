@@ -1,13 +1,25 @@
 import type { PrismaClient } from '@prisma/client';
-import { jwtVerify } from 'jose';
+import { decodeProtectedHeader, jwtVerify } from 'jose';
 import { z } from 'zod';
 
 import { ACCESS_TOKEN_AUDIENCE } from '../config/constants.js';
-import { getAuthServiceIdentifier, getEnv, requireEnv } from '../config/env.js';
+import {
+  getAuthServiceIdentifier,
+  getEnv,
+  isUserAccessTokenRs256Enabled,
+  requireEnv,
+} from '../config/env.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
+import { verifyUserAccessTokenRs256 } from './user-access-token-key.service.js';
 
+// Both are accepted for the whole transition, and neither can stand in for the
+// other: the branch is chosen by the protected header and each branch pins its
+// own single algorithm and its own key material. HS256 is only ever verified
+// with the shared secret and RS256 only ever against the published JWKS, so a
+// token cannot be downgraded from one to the other.
 const ACCESS_TOKEN_ALLOWED_ALGS = ['HS256'] as const;
+const ACCESS_TOKEN_CLOCK_TOLERANCE_SECONDS = 30;
 
 const AccessTokenClaimsSchema = z
   .object({
@@ -74,6 +86,44 @@ function sharedSecretKey(sharedSecret: string): Uint8Array {
 
 type AccessTokenPrisma = Pick<PrismaClient, 'user'>;
 
+/**
+ * Verify the signature and the registered claims, choosing the branch from the
+ * protected header.
+ *
+ * RS256 is accepted only while this deployment publishes a verification key, and
+ * is verified only against that published set — never with the shared secret.
+ * HS256 keeps its existing single-algorithm pin. An `alg` that is neither, or
+ * RS256 on a deployment that publishes no key, fails here and is normalised to
+ * the generic error by the caller.
+ */
+async function verifySignature(
+  token: string,
+  params: { sharedSecret: string; issuer: string },
+): Promise<Record<string, unknown>> {
+  const header = decodeProtectedHeader(token);
+  if (header.alg === 'RS256') {
+    if (!isUserAccessTokenRs256Enabled()) {
+      throw new AppError('UNAUTHORIZED', 401, 'INVALID_ACCESS_TOKEN');
+    }
+    return verifyUserAccessTokenRs256(token, {
+      issuer: params.issuer,
+      audience: ACCESS_TOKEN_AUDIENCE,
+      clockTolerance: ACCESS_TOKEN_CLOCK_TOLERANCE_SECONDS,
+    });
+  }
+
+  const { payload } = await jwtVerify(token, sharedSecretKey(params.sharedSecret), {
+    algorithms: [...ACCESS_TOKEN_ALLOWED_ALGS],
+    issuer: params.issuer,
+    audience: ACCESS_TOKEN_AUDIENCE,
+    // Parity with config.service.ts and auto-onboarding.service.ts: allow a tiny
+    // amount of clock skew between client/server. 30 seconds keeps the token still
+    // short-lived while preventing brittle "barely-expired" rejections.
+    clockTolerance: ACCESS_TOKEN_CLOCK_TOLERANCE_SECONDS,
+  });
+  return payload as Record<string, unknown>;
+}
+
 export async function verifyAccessToken(
   token: string,
   deps?: { sharedSecret?: string; issuer?: string; prisma?: AccessTokenPrisma },
@@ -92,15 +142,7 @@ export async function verifyAccessToken(
   let parsed: z.infer<typeof AccessTokenClaimsSchema>;
   let userId: string;
   try {
-    const { payload } = await jwtVerify(token, sharedSecretKey(sharedSecret), {
-      algorithms: [...ACCESS_TOKEN_ALLOWED_ALGS],
-      issuer,
-      audience: ACCESS_TOKEN_AUDIENCE,
-      // Parity with config.service.ts and auto-onboarding.service.ts: allow a tiny
-      // amount of clock skew between client/server. 30 seconds keeps the token still
-      // short-lived while preventing brittle "barely-expired" rejections.
-      clockTolerance: 30,
-    });
+    const payload = await verifySignature(token, { sharedSecret, issuer });
 
     parsed = AccessTokenClaimsSchema.parse(payload);
     userId = typeof payload.sub === 'string' ? payload.sub : '';

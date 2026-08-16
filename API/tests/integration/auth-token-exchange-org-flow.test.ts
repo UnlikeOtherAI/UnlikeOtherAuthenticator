@@ -1,18 +1,6 @@
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-} from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 
-import { jwtVerify } from 'jose';
-
-import { ACCESS_TOKEN_AUDIENCE } from '../../src/config/constants.js';
 import { createApp } from '../../src/app.js';
 import { hashPassword } from '../../src/services/password.service.js';
 import { cleanClientDomains, seedDomainSecret } from '../helpers/domain-secret.js';
@@ -23,6 +11,7 @@ import {
   hasDatabase,
   signAccessToken,
 } from '../helpers/org-user-endpoints-helper.js';
+import { verifyIssuedAccessToken } from '../helpers/access-token.js';
 
 type OrgClaim = {
   org_id: string;
@@ -66,7 +55,8 @@ describe.skipIf(!hasDatabase)('POST /auth/token with org context from org flow',
   });
 
   beforeEach(async () => {
-    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
+    process.env.SHARED_SECRET =
+      process.env.SHARED_SECRET ?? 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER = process.env.AUTH_SERVICE_IDENTIFIER ?? 'uoa-auth-service';
 
     if (!handle) return;
@@ -113,7 +103,10 @@ describe.skipIf(!hasDatabase)('POST /auth/token with org context from org flow',
     });
     // A Response body is single-use; build a fresh one per fetch so every
     // request in this flow can re-fetch the config.
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(configJwt, { status: 200 })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(configJwt, { status: 200 })),
+    );
 
     const app = await createApp();
     await app.ready();
@@ -234,11 +227,7 @@ describe.skipIf(!hasDatabase)('POST /auth/token with org context from org flow',
     const tokenBody = tokenResponse.json() as { access_token: string; token_type: string };
     expect(tokenBody.token_type).toBe('Bearer');
 
-    const { payload } = await jwtVerify(
-      tokenBody.access_token,
-      new TextEncoder().encode(process.env.SHARED_SECRET!),
-      { issuer: process.env.AUTH_SERVICE_IDENTIFIER, audience: ACCESS_TOKEN_AUDIENCE },
-    );
+    const payload = await verifyIssuedAccessToken(tokenBody.access_token);
 
     expect(payload.domain).toBe(domain);
     expect(payload.sub).toBe(member.id);

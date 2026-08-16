@@ -2,7 +2,13 @@ import type { PrismaClient } from '@prisma/client';
 import { SignJWT } from 'jose';
 
 import { ACCESS_TOKEN_AUDIENCE } from '../config/constants.js';
-import { getAdminAuthDomain, getAuthServiceIdentifier, getEnv, requireEnv } from '../config/env.js';
+import {
+  getAdminAuthDomain,
+  getAuthServiceIdentifier,
+  getEnv,
+  isUserAccessTokenRs256Enabled,
+  requireEnv,
+} from '../config/env.js';
 import { getAdminPrisma, getPrisma } from '../db/prisma.js';
 import { runInTransaction } from '../db/tenant-context.js';
 import { ensureDomainRoleForUser, isPlatformSuperuser } from './domain-role.service.js';
@@ -22,6 +28,7 @@ import {
   requiresExactAuthorizationWorkspace,
 } from './required-workspace-placement.service.js';
 import { lockTokenIssuanceProductPolicy } from './product-workspace-policy-lock.service.js';
+import { signUserAccessTokenRs256 } from './user-access-token-key.service.js';
 import { resolveProductWorkspacePolicy } from './product-workspace-policy.service.js';
 import { assertAuthorizationTwoFaProof } from './authorization-twofactor-proof.service.js';
 import {
@@ -72,6 +79,10 @@ async function signAccessToken(params: {
   tokenVersion: number;
   org?: OrgContext | null;
   active?: ActiveWorkspaceClaim | null;
+  /** False for the first-party admin domain, which signs with its own separate
+   *  HS256 secret and is consumed only by UOA's own Admin panel — not a relying
+   *  party, so it stays out of the publishable-signature surface. */
+  relyingPartyToken: boolean;
 }): Promise<string> {
   const payload = {
     email: params.email,
@@ -98,6 +109,17 @@ async function signAccessToken(params: {
   }
 
   try {
+    // Same claims, same iss/aud/sub, same TTL either way — only the signature and
+    // the kid header change, so this is a drop-in for every existing consumer.
+    if (params.relyingPartyToken && isUserAccessTokenRs256Enabled()) {
+      return await signUserAccessTokenRs256({
+        payload,
+        issuer: params.issuer,
+        audience: ACCESS_TOKEN_AUDIENCE,
+        subject: params.userId,
+        ttl: params.ttl,
+      });
+    }
     return await new SignJWT(payload)
       .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
       .setIssuer(params.issuer)
@@ -116,13 +138,14 @@ function resolveAccessTokenContext(params: {
   domain: string;
   env: ReturnType<typeof getEnv>;
   sharedSecret: string;
-}): { clientId: string; sharedSecret: string } {
+}): { clientId: string; sharedSecret: string; relyingPartyToken: boolean } {
   const adminDomain = normalizeDomain(getAdminAuthDomain(params.env));
   if (normalizeDomain(params.domain) !== adminDomain) {
     if (!params.clientId) throw new AppError('INTERNAL', 500, 'CLIENT_ID_REQUIRED');
     return {
       clientId: params.clientId,
       sharedSecret: params.sharedSecret,
+      relyingPartyToken: true,
     };
   }
 
@@ -133,6 +156,7 @@ function resolveAccessTokenContext(params: {
   return {
     clientId: `admin:${adminDomain}`,
     sharedSecret: params.env.ADMIN_ACCESS_TOKEN_SECRET,
+    relyingPartyToken: false,
   };
 }
 
@@ -248,6 +272,7 @@ export async function issueTokenPairForUser(
     tokenVersion: user.tokenVersion,
     org,
     active,
+    relyingPartyToken: accessTokenContext.relyingPartyToken,
   });
 
   const firstLogin = params.includeFirstLogin

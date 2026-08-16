@@ -1,10 +1,8 @@
 import { createHash } from 'node:crypto';
 
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { jwtVerify } from 'jose';
 
 import { createApp } from '../../src/app.js';
-import { ACCESS_TOKEN_AUDIENCE } from '../../src/config/constants.js';
 import { createAdminDomain } from '../../src/services/domain-secret.service.js';
 import { verifyTwoFaChallenge } from '../../src/services/twofactor-challenge.service.js';
 import { encryptTwoFaSecret } from '../../src/utils/twofa-secret.js';
@@ -16,6 +14,7 @@ import {
 } from '../helpers/test-config.js';
 import { createTestDb } from '../helpers/test-db.js';
 import { computeTotp } from '../helpers/totp.js';
+import { verifyIssuedAccessToken } from '../helpers/access-token.js';
 
 const hasDatabase = Boolean(process.env.DATABASE_URL);
 const domain = 'client.example.com';
@@ -29,14 +28,7 @@ function pkceChallenge(value: string): string {
 }
 
 async function activeClaim(accessToken: string): Promise<unknown> {
-  const { payload } = await jwtVerify(
-    accessToken,
-    new TextEncoder().encode(process.env.SHARED_SECRET!),
-    {
-      issuer: process.env.AUTH_SERVICE_IDENTIFIER,
-      audience: ACCESS_TOKEN_AUDIENCE,
-    },
-  );
+  const payload = await verifyIssuedAccessToken(accessToken);
   return payload.active;
 }
 

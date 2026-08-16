@@ -1,9 +1,7 @@
 import { createHash } from 'node:crypto';
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { jwtVerify } from 'jose';
 
-import { ACCESS_TOKEN_AUDIENCE } from '../../src/config/constants.js';
 import { createApp } from '../../src/app.js';
 import { hashPassword } from '../../src/services/password.service.js';
 import { REFRESH_TOKEN_REPLAY_GRACE_MS } from '../../src/services/refresh-token.service.js';
@@ -12,6 +10,7 @@ import { cleanClientDomains, seedDomainSecret } from '../helpers/domain-secret.j
 import { expectJsonError } from '../helpers/error-response.js';
 import { createTestDb } from '../helpers/test-db.js';
 import { createTestConfigFetchHandler, signTestConfigJwt } from '../helpers/test-config.js';
+import { verifyIssuedAccessToken } from '../helpers/access-token.js';
 
 const hasDatabase = Boolean(process.env.DATABASE_URL);
 const configUrl = 'https://client.example.com/auth-config';
@@ -202,11 +201,7 @@ describe.skipIf(!hasDatabase)('POST /auth/token', () => {
     expect(tokenBody.access_token.length).toBeGreaterThan(20);
     expect(tokenBody.refresh_token.length).toBeGreaterThan(20);
 
-    const { payload } = await jwtVerify(
-      tokenBody.access_token,
-      new TextEncoder().encode(process.env.SHARED_SECRET!),
-      { issuer: process.env.AUTH_SERVICE_IDENTIFIER, audience: ACCESS_TOKEN_AUDIENCE },
-    );
+    const payload = await verifyIssuedAccessToken(tokenBody.access_token);
 
     expect(payload.sub).toBe(created.id);
     expect(payload.email).toBe(userEmail);
