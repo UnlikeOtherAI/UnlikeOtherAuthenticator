@@ -118,7 +118,8 @@ async function seedCreditAccount(
       "auto_top_up_consented_by_user_id", "stripe_payment_method_id",
       "payment_method_summary", "updated_at"
     ) VALUES (
-      ${row.creditAccount}, ${ids.account}, ${row.customer}, ${ids.org}, ${row.team}, 'USD',
+      ${row.creditAccount}, ${ids.account}, ${row.customer}, ${ids.org}, ${row.team},
+      'TEAM', ${`${ids.org}:${row.team}`}, 'USD',
       ${balanceMicrocredits}, 'ACTIVE', ${ids.policy}, ${ids.service}, ${ids.appKey},
       ${row.revision}, ${ids.option}, 200000000, ${ids.offer}, 1500, 'auto-top-up-v1',
       ${consentedAt}, ${ids.user}, ${`pm_auto_top_up_${suffix}`},

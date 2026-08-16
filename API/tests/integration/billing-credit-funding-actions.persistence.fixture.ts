@@ -211,6 +211,7 @@ export async function seedFundingRace(prisma: PrismaClient): Promise<void> {
         customerId: ids.customer,
         orgId: ids.org,
         teamId: ids.team,
+        scopeKey: `${ids.org}:${ids.team}`,
       },
     });
     const paymentMethodSummary = { type: 'card', brand: 'visa', last4: '4242' };
