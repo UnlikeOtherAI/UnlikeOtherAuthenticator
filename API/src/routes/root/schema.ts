@@ -263,7 +263,8 @@ const orgEndpoints: EndpointSchema[] = [
         'array (backend-only variant, required, 1-200) — [{ email: string, name?: string, teamRole?: string }]',
       'email?': 'string — member-initiated variant (required instead of invites)',
       'name?': 'string — member-initiated variant',
-      'teamRole?': 'string — member-initiated variant',
+      'teamRole?':
+        'string — member-initiated variant. Validated against org_features.team_roles (default owner|admin|member); owner is never invitable and is rejected with the generic 400. At most one actionable invite (not accepted/declined/revoked, approval not denied) exists per team + lowercased email — inviting an address that already holds one replaces it and reports resent_existing',
     },
     response: {
       results:
@@ -296,7 +297,7 @@ const orgEndpoints: EndpointSchema[] = [
     method: 'POST',
     path: '/org/organisations/:orgId/teams/:teamId/invitations/:inviteId/resend',
     description:
-      "Resend a pending team invitation email; refreshes the invite's expiry to now + 30 days",
+      "Resend a pending team invitation email; refreshes the invite's expiry to now + 30 days. Only an actionable invitation with settled approval can be resent: accepted, declined, revoked, approval-denied, and still-awaiting-approval invitations all answer the generic 400, so a resend can neither resurrect a revoked invitation nor mail an unapproved one",
     auth: 'domain hash bearer token',
   },
   {

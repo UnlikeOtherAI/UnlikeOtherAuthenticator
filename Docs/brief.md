@@ -1499,6 +1499,31 @@ mode allows an org/team owner/admin or the invite's original inviter; backend
 mode requires the `backend_org_management` opt-in like every other tokenless
 `/org/*` mutation).
 
+**Team invitations have one live row per address, and never grant ownership.**
+At most one *actionable* invitation — unaccepted, undeclined, unrevoked, and
+approval not `DENIED` — exists per `(team, lower(email))`. That is a partial
+unique index, not an application convention, so two concurrent invites to the
+same address can no longer both land; inviting an address that already holds one
+revokes the previous invitation as `REPLACED` and reports `resent_existing`.
+Terminal invitations are untouched and accumulate as history.
+
+An invitation may grant any role in the domain's `team_roles` vocabulary
+**except `owner`**. Ownership of a team comes from direct membership management,
+never from an emailed invitation: `owner` implicitly holds every capability at
+its scope (see the capability table above), and an invitation would hand that to
+whoever controls a mailbox. The rail names `owner` specifically rather than an
+enumerated `member|admin` list, so a domain that defined its own roles invites
+into them normally. The database enforces the `owner` half; the per-domain
+vocabulary half is application-side, because the database cannot see a config.
+
+Accepted, declined, and revoked are mutually exclusive terminal states,
+acceptance pairs its timestamp with the accepting user, and an accepted
+invitation is never still awaiting or refused approval. One pure module owns
+these rules together with the derived `status`, so what a product reads and what
+gates a transition are the same decision. Resending requires an actionable
+invitation whose approval is settled — an expired one is resendable, since that
+is how it gets a fresh token and window; a revoked or unapproved one is not.
+
 **There is no acting user in backend mode.** Checks that are about the acting
 user (org owner/admin, team manager, "must be an ACTIVE member") therefore do not
 apply — the pairing already proves authority over the whole tenant, which

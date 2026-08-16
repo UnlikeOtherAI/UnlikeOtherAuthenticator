@@ -6847,6 +6847,11 @@ paths:
       description: |
         Sends invite emails to one or more addresses. Rate limited: 20/hour.
         Returns per-email result codes.
+
+        At most one actionable invitation (not accepted, not declined, not revoked, approval not
+        denied) exists per team and lowercased address. Inviting an address that already holds one
+        replaces it — the previous invitation is revoked as `REPLACED` and the result is
+        `resent_existing`.
       security:
         - domainHashBearer: []
           accessToken: []
@@ -6892,6 +6897,10 @@ paths:
                         maxLength: 120
                       teamRole:
                         type: string
+                        description: |
+                          Validated against `org_features.team_roles` (default
+                          `owner|admin|member`). `owner` is never invitable — ownership comes from
+                          direct membership management — and is rejected with the generic 400.
       responses:
         '200':
           description: Per-invite results.
@@ -7033,6 +7042,13 @@ paths:
       tags: [Organizations]
       summary: Resend team invitation
       operationId: resendTeamInvitation
+      description: |
+        Issues a fresh token and a fresh 30-day window, replacing the current invitation.
+
+        Only an actionable invitation whose approval is settled can be resent. An accepted,
+        declined or revoked invitation, one whose approval was denied, and one still awaiting
+        approval all answer the generic 400 — resending must not resurrect an invitation an
+        administrator revoked, nor mail one nobody has approved yet.
       security:
         - domainHashBearer: []
           accessToken: []

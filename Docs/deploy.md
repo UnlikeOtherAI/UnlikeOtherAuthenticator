@@ -45,6 +45,20 @@ are easy to miss:
   so it aborts instead of parking the service behind a lock queue. See
   `API/prisma/migrations/20260730180000_org_member_active_org_domain_constraint/migration.sql`.
 
+  `20260816140000_team_invite_actionable_invariants` follows the same shape and adds the ordering
+  rule that matters for constraint migrations: **normalise the data before adding the rule, and
+  never validate a rule against history.** It bounds its timeouts, then collapses duplicate
+  actionable `team_invites` rows in a stable `created_at, id` order (earliest kept, the rest
+  revoked `REPLACED`) and terminalises actionable `owner`-role invitations (revoked `REVOKED`), and
+  only then builds the partial unique index — so the build cannot fail on data production
+  plausibly holds. Every CHECK it adds is `NOT VALID`: accepted historical rows, including accepted
+  `owner` invitations and any row that already violated terminal coherence, are never rewritten or
+  scanned by the deploy, while Postgres still enforces the rule on every new write and on any
+  future UPDATE of an old row. Both cleanups set `revoked_reason`, preserving
+  `20260815090000_team_invite_revocation`'s invariant that a set `revoked_at` always carries one.
+  `API/tests/integration/team-invite-actionable-invariants-migration.test.ts` replays the shipped
+  file over deliberately dirty data and asserts each of those outcomes.
+
 - **A half-applied migration crash-loops the service.** See below.
 
 ### Recovering from a failed migration
