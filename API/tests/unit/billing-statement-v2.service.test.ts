@@ -123,6 +123,9 @@ function portfolio(
 
 function prisma() {
   return {
+    organisation: {
+      findUnique: vi.fn().mockResolvedValue({ name: 'Acme', billingOrgResponsibility: null }),
+    },
     billingTariff: {
       findUnique: vi.fn().mockResolvedValue({ name: 'Standard' }),
     },

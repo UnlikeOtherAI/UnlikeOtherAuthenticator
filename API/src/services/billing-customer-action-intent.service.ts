@@ -22,6 +22,8 @@ export const BILLING_CUSTOMER_ACTION = {
   CREDIT_AUTO_TOP_UP_RECOVER: 'credit_auto_top_up_recover',
   RECURRING_ADDON_CHECKOUT: 'recurring_addon_checkout',
   RECURRING_ADDON_CANCEL: 'recurring_addon_cancel',
+  ORG_BILLING_ASSUME: 'org_billing_assume',
+  ORG_BILLING_RELEASE: 'org_billing_release',
 } as const;
 
 export type BillingCustomerAction =

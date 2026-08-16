@@ -9,7 +9,8 @@ import { AppError } from '../utils/errors.js';
 
 export type ContractCreditSettlementEvidence = {
   accountId: string;
-  teamId: string;
+  /** Null when the organisation, not the team, holds the credit account. */
+  teamId: string | null;
   serviceId: string;
   settlementId: string;
   adjustmentId: string;
@@ -96,7 +97,7 @@ export async function collectContractFundingEvidence(
     }),
   ]);
 
-  const accountByTeam = new Map<string, string>();
+  const accountByTeam = new Map<string | null, string>();
   const credits = settlements.flatMap((settlement) => {
     const latest = settlement.adjustments[0];
     if (!latest) {

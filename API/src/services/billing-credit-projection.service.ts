@@ -1,6 +1,7 @@
 import { BillingCreditEntryDirection, BillingCreditEntryKind } from '@prisma/client';
 
 import type {
+  BillingControlledByV1,
   BillingCreditsManagerV1,
   BillingCreditsMemberV1,
   BillingCreditsV1,
@@ -114,8 +115,17 @@ export function buildBillingCreditsProjection(params: {
   data: BillingCreditProjectionData;
   now: Date;
   actionReadiness?: BillingCreditActionReadiness;
+  controlledBy?: BillingControlledByV1 | null;
 }): BillingCreditsV1 {
   const { data, viewer } = params;
+  const controlledBy = params.controlledBy ?? null;
+  // While the organisation is paying, a team billing manager has nothing on
+  // this surface to manage. They get the member shape — no offers, no options,
+  // no actions at all — so a consumer that predates `controlled_by` renders a
+  // read-only balance instead of controls that would 403. An organisation
+  // billing manager keeps the full shape: the actions resolve to the
+  // organisation's own credit account.
+  const canFund = controlledBy === null ? viewer.billingManager : controlledBy.can_manage;
   const pendingCount = data.pending.length;
   const pendingPayment = sum(data.pending.map((row) => row.paymentAmountMinor));
   const pendingCredits = sum(data.pending.map((row) => row.creditsReceivedMicrocredits));
@@ -186,13 +196,14 @@ export function buildBillingCreditsProjection(params: {
       description:
         'Pending credits await verified payment and are not included in remaining credits.',
     },
+    ...(controlledBy ? { controlled_by: controlledBy } : {}),
   };
   const summary = {
     credits_added: billingCreditAmount(creditsAdded),
     credits_consumed: billingCreditAmount(creditsConsumed),
     pending_credits: billingCreditAmount(pendingCredits),
   };
-  if (viewer.billingManager) {
+  if (canFund) {
     const actions = buildManagerCreditActionsProjection(
       data,
       requestBody,

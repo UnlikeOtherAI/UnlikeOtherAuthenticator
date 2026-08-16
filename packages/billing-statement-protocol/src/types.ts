@@ -1,3 +1,5 @@
+import type { BillingControlledByV1 } from './org-billing-types.js';
+
 export const BILLING_STATEMENT_SCHEMA_VERSION = 1 as const;
 export const BILLING_STATEMENT_SCHEMA_PATH = '/schemas/billing-statement-v1.json' as const;
 export const BILLING_STATEMENT_EXAMPLE_PATH = '/schemas/billing-statement-v1.example.json' as const;
@@ -174,4 +176,11 @@ export type BillingStatementV1 = {
     can_cancel: boolean;
   };
   actions: BillingStatementAction[];
+  /**
+   * Present only while the organisation has taken billing over from its teams
+   * (protocol 1.3.0). While it is present the team's own `actions` are empty
+   * and every capability is false, so a consumer that predates this field
+   * renders a read-only statement rather than controls that would 403.
+   */
+  controlled_by?: BillingControlledByV1;
 };

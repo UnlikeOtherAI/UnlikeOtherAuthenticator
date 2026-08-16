@@ -303,6 +303,64 @@ describe('privacy-safe shared credit projection', () => {
     ]);
   });
 
+  it('offers a team billing manager no funding surface while the organisation pays', () => {
+    const controlledBy = {
+      scope: 'organisation' as const,
+      organisation_id: 'org_1',
+      organisation_name: 'Acme',
+      message: 'Billing for this workspace is managed for the whole of Acme.',
+      can_manage: false,
+      manage_action_id: null,
+    };
+
+    const result = buildBillingCreditsProjection({
+      credential,
+      collection,
+      viewer: viewer(true),
+      period,
+      data: projectionData(),
+      now,
+      controlledBy,
+    });
+
+    expect(() => assertBillingCreditsContract(result)).not.toThrow();
+    // The member shape, deliberately: the account being displayed now belongs
+    // to the whole organisation, so a team manager must not see per-user
+    // detail across it, and must not be offered a control that would 403.
+    expect(result).toMatchObject({
+      controlled_by: controlledBy,
+      viewer: { role: 'member' },
+      capabilities: { can_top_up: false, can_manage_automatic_top_up: false },
+      funding_policy: null,
+    });
+    expect(result.automatic_top_up).not.toHaveProperty('options');
+  });
+
+  it('keeps the full funding surface for an organisation billing manager', () => {
+    const result = buildBillingCreditsProjection({
+      credential,
+      collection,
+      viewer: viewer(true),
+      period,
+      data: projectionData(),
+      now,
+      controlledBy: {
+        scope: 'organisation' as const,
+        organisation_id: 'org_1',
+        organisation_name: 'Acme',
+        message: 'Billing for this workspace is managed for the whole of Acme.',
+        can_manage: true,
+        manage_action_id: 'org-billing-open' as const,
+      },
+    });
+
+    expect(() => assertBillingCreditsContract(result)).not.toThrow();
+    expect(result).toMatchObject({
+      viewer: { role: 'billing_manager' },
+      controlled_by: { can_manage: true, manage_action_id: 'org-billing-open' },
+    });
+  });
+
   it('collapses other users and strips card and consent identity for members', () => {
     const result = buildBillingCreditsProjection({
       credential,

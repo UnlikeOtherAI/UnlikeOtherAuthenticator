@@ -1,3 +1,4 @@
+import { billingControlledByJsonSchema } from './org-billing-schema.js';
 import { BILLING_STATEMENT_SCHEMA_PATH, BILLING_STATEMENT_SCHEMA_VERSION } from './types.js';
 
 export type { BillingStatementAction, BillingStatementV1, ExactMoney } from './types.js';
@@ -456,5 +457,9 @@ export const billingStatementV1JsonSchema = {
         },
       },
     },
+    // Optional, and deliberately absent from `required`: a 1.2.0 consumer and
+    // every existing fixture stay valid, and a statement that carries no
+    // organisation override is byte-identical to the one produced before.
+    controlled_by: billingControlledByJsonSchema,
   },
 } as const;

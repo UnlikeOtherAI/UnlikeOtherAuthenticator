@@ -133,11 +133,11 @@ async function seedCancellationSubject(prisma: PrismaClient): Promise<void> {
     `);
     await tx.$executeRaw(Prisma.sql`
       INSERT INTO "billing_credit_accounts" (
-        "id", "account_id", "customer_id", "org_id", "team_id", "currency",
+        "id", "account_id", "customer_id", "org_id", "team_id", "scope", "scope_key", "currency",
         "updated_at"
       ) VALUES (
         ${ids.creditAccount}, ${ids.account}, ${ids.customer}, ${ids.org}, ${ids.team},
-        'USD', CURRENT_TIMESTAMP
+        'TEAM', ${`${ids.org}:${ids.team}`}, 'USD', CURRENT_TIMESTAMP
       )
     `);
     await tx.$executeRaw(Prisma.sql`

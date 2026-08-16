@@ -5,6 +5,7 @@ import { registerBillingCreditFundingActionRoutes } from './credit-funding-actio
 import { registerBillingCreditsRoute } from './credits.js';
 import { registerCustomerStatementRoutes } from './customer-statement.js';
 import { registerEffectiveTariffRoute } from './effective-tariff.js';
+import { registerBillingOrgResponsibilityRoutes } from './org-responsibility.js';
 import { registerBillingFundingArtifactRoutes } from './funding-artifacts.js';
 import { registerBillingJwksRoute } from './jwks.js';
 import { registerBillingServiceAccessRoutes } from './service-access.js';
@@ -25,6 +26,7 @@ export function registerBillingRoutes(app: FastifyInstance): void {
   registerBillingJwksRoute(app);
   registerBillingServiceJwksRoute(app);
   registerEffectiveTariffRoute(app);
+  registerBillingOrgResponsibilityRoutes(app);
   registerStripeCheckoutRoute(app);
   registerStripeSubscriptionRoutes(app);
   registerStripeWebhookRoute(app);

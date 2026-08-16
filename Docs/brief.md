@@ -2442,3 +2442,60 @@ Summary of what changes and what does not:
   user token, and for operators. Team records now also carry an `avatarImageUrl`.
   `Team.iconUrl` keeps its current meaning and is never written by the avatar endpoints,
   exactly as `User.avatarUrl` is not.
+
+## 2026-08-16 Organisation billing responsibility (one bill for the whole organisation)
+
+Design: [`Docs/plans/2026-08-15-org-billing-override.md`](./plans/2026-08-15-org-billing-override.md).
+
+An organisation may take billing over from all of its teams, across **every**
+service — one place to see and manage spend, credits, payment method and
+invoices for the whole organisation. Products implement none of it: this is one
+UOA capability plus one additive protocol field they already know how to render.
+
+- **`BillingOrgResponsibility`** is the authority record — one row per
+  organisation, `active` with `assumedAt`/`assumedByUserId` and, once released,
+  `releasedAt`/`releasedByUserId`. Deliberately org-wide rather than
+  per-service: the ask is one bill for the whole organisation, and the existing
+  `(scope, scope_key)` convention leaves room to add a service dimension later
+  without a breaking change. Absent or inactive is today's behaviour exactly.
+- **`BillingCreditAccount` gained the scope pair its neighbours already carry.**
+  `team_id` is nullable, `scope`/`scope_key` are not (`org_id` for
+  `ORGANISATION`, `org_id || ':' || team_id` for `TEAM`), and its unique key
+  moved from `(account_id, team_id, currency)` to
+  `(account_id, scope_key, currency)` — Postgres treats NULLs as distinct, so
+  the old index would have admitted duplicate organisation accounts.
+  `resolveCreditAccount` returns the organisation account while the override is
+  active and today's team account otherwise. Every debit already crossed that
+  one resolver, so nothing in Ledger, the worker, or any product changed.
+- **Rating, attribution and evidence stay per team.** A team's Ledger portfolio
+  is rated exactly as before and its snapshot keeps the team it came from; only
+  the account the credits are drawn from changes.
+- **The statement answers at the paying scope.**
+  `POST /billing/v2/customer-statement` still takes organisation + team and UOA
+  decides. Override off is unchanged. Override on adds `controlled_by`; an
+  organisation billing manager additionally receives `organisation_scope` —
+  every team, each from its own pinned `metering-portfolio-v1` snapshot, with
+  organisation totals produced by the existing commercial-line summation. It
+  sits **beside** the requested team's own fields, never in place of them, so a
+  product that predates the field cannot read organisation totals as if they
+  were the team's.
+- **Old-client safety is part of the contract.** A caller who is not an
+  organisation billing manager gets an empty action list and no funding
+  controls at all, so a product still vendoring protocol 1.2.0 renders a
+  read-only surface rather than buttons that would 403.
+- **Enabling is a stated migration, not a silent switch**
+  (`POST /billing/v1/organisation-billing/assume`, organisation billing manager
+  only, same app key + fresh 45-second actor assertion + `tv` epoch discipline
+  as every other billing action). It is refused whole while any team funding
+  action is in flight (`FUNDING_ACTION_IN_FLIGHT`, listing the exact rows) or
+  while a live team-scoped Stripe subscription exists
+  (`TEAM_SUBSCRIPTIONS_ACTIVE`, listing them — auto-migrating one would re-bill
+  a customer without a decision). Team credit balances are never swept, and
+  each team's stored automatic top-up consent is deactivated, never deleted,
+  with an audit row; releasing leaves them inactive until a customer consents
+  again. Releasing reverses credit resolution only — no ledger row, invoice or
+  statement is ever re-scoped.
+- **Protocol 1.3.0** publishes `controlled_by`, `organisation_scope`, and the
+  checkout-session/portal-session envelopes whose absence had products
+  hand-writing their own validators. Every addition is optional, so a 1.2.0
+  consumer and every existing fixture stay valid.

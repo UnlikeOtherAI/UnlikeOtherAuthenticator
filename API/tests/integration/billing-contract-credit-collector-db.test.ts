@@ -142,6 +142,7 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice canonical credit co
         customerId: customer.id,
         orgId: org.id,
         teamId: team.id,
+        scopeKey: `${org.id}:${team.id}`,
         currency: 'USD',
       },
     });

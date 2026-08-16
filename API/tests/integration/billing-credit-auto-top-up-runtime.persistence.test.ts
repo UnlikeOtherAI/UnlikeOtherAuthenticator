@@ -80,11 +80,11 @@ async function seedCreditAccount(
   if (!active) {
     await tx.$executeRaw(Prisma.sql`
       INSERT INTO "billing_credit_accounts" (
-        "id", "account_id", "customer_id", "org_id", "team_id", "currency",
+        "id", "account_id", "customer_id", "org_id", "team_id", "scope", "scope_key", "currency",
         "balance_microcredits", "updated_at"
       ) VALUES (
         ${row.creditAccount}, ${ids.account}, ${row.customer}, ${ids.org}, ${row.team},
-        'USD', ${balanceMicrocredits}, CURRENT_TIMESTAMP
+        'TEAM', ${`${ids.org}:${row.team}`}, 'USD', ${balanceMicrocredits}, CURRENT_TIMESTAMP
       )
     `);
     return;
@@ -109,7 +109,7 @@ async function seedCreditAccount(
   `);
   await tx.$executeRaw(Prisma.sql`
     INSERT INTO "billing_credit_accounts" (
-      "id", "account_id", "customer_id", "org_id", "team_id", "currency",
+      "id", "account_id", "customer_id", "org_id", "team_id", "scope", "scope_key", "currency",
       "balance_microcredits", "auto_top_up_state", "auto_top_up_policy_id",
       "auto_top_up_service_id", "auto_top_up_app_key_id", "auto_top_up_consent_revision_id",
       "auto_top_up_option_id", "auto_top_up_threshold_microcredits",
@@ -118,7 +118,8 @@ async function seedCreditAccount(
       "auto_top_up_consented_by_user_id", "stripe_payment_method_id",
       "payment_method_summary", "updated_at"
     ) VALUES (
-      ${row.creditAccount}, ${ids.account}, ${row.customer}, ${ids.org}, ${row.team}, 'USD',
+      ${row.creditAccount}, ${ids.account}, ${row.customer}, ${ids.org}, ${row.team},
+      'TEAM', ${`${ids.org}:${row.team}`}, 'USD',
       ${balanceMicrocredits}, 'ACTIVE', ${ids.policy}, ${ids.service}, ${ids.appKey},
       ${row.revision}, ${ids.option}, 200000000, ${ids.offer}, 1500, 'auto-top-up-v1',
       ${consentedAt}, ${ids.user}, ${`pm_auto_top_up_${suffix}`},

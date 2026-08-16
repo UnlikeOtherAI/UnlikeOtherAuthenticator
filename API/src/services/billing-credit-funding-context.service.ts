@@ -16,8 +16,12 @@ import {
   type BillingCustomerAction,
   type BillingCustomerActionRequest,
 } from './billing-customer-action-intent.service.js';
-import { ensureTeamCreditAccount } from './billing-credit-account.service.js';
+import { resolveCreditAccount } from './billing-credit-account.service.js';
 import { resolveEffectiveTariffContext } from './billing-entitlement.service.js';
+import {
+  isOrganisationBillingManager,
+  resolveOrgBillingResponsibility,
+} from './billing-org-responsibility.service.js';
 import {
   resolveBillingFundingViewer,
   type BillingFundingViewer,
@@ -51,7 +55,7 @@ export type CreditFundingActionContext = {
   actor: BillingActor;
   viewer: BillingFundingViewer;
   account: StripeAccountContext;
-  creditAccount: Awaited<ReturnType<typeof ensureTeamCreditAccount>>;
+  creditAccount: Awaited<ReturnType<typeof resolveCreditAccount>>;
   customer: BillingStripeCustomer;
   stripe: CreditFundingStripeClient;
   authorizeAction: (tx?: Prisma.TransactionClient) => Promise<void>;
@@ -65,9 +69,11 @@ type ContextDependencies = {
   resolveTariff?: typeof resolveEffectiveTariffContext;
   resolveViewer?: typeof resolveBillingFundingViewer;
   resolveAccount?: typeof resolveStripeAccountContext;
-  ensureCreditAccount?: typeof ensureTeamCreditAccount;
+  ensureCreditAccount?: typeof resolveCreditAccount;
   ensureCustomer?: typeof ensureStripeCustomer;
   authorizeAction?: typeof authorizeBillingCustomerAction;
+  resolveResponsibility?: typeof resolveOrgBillingResponsibility;
+  isOrganisationManager?: typeof isOrganisationBillingManager;
 };
 
 export async function resolveCreditFundingActionContext(
@@ -95,7 +101,24 @@ export async function resolveCreditFundingActionContext(
       { prisma },
     ),
   ]);
-  if (!viewer.billingManager) {
+  // While the organisation has taken billing over, a team billing manager has
+  // nothing to manage: the money is the organisation's, so the authority must
+  // be the organisation's too. Checked here, in UOA, never trusted from the
+  // product (Docs/plans/2026-08-15-org-billing-override.md §6).
+  const responsibility = await (
+    deps?.resolveResponsibility ?? resolveOrgBillingResponsibility
+  )({ organisationId: params.request.organisationId }, { prisma });
+  if (responsibility.active) {
+    const organisationManager = await (
+      deps?.isOrganisationManager ?? isOrganisationBillingManager
+    )(
+      { organisationId: params.request.organisationId, userId: params.request.userId },
+      { prisma },
+    );
+    if (!organisationManager) {
+      throw new AppError('FORBIDDEN', 403, 'BILLING_ORG_MANAGER_REQUIRED');
+    }
+  } else if (!viewer.billingManager) {
     throw new AppError('FORBIDDEN', 403, 'BILLING_MANAGER_REQUIRED');
   }
   const configured = deps?.stripe ? null : requireStripeBillingEnabled();
@@ -107,7 +130,7 @@ export async function resolveCreditFundingActionContext(
     livemode,
     prisma,
   );
-  const creditAccount = await (deps?.ensureCreditAccount ?? ensureTeamCreditAccount)(
+  const creditAccount = await (deps?.ensureCreditAccount ?? resolveCreditAccount)(
     {
       account,
       organisationId: params.request.organisationId,
@@ -140,7 +163,9 @@ export async function resolveCreditFundingActionContext(
         organisationId: params.request.organisationId,
         teamId: params.request.teamId,
         userId: params.request.userId,
-        authorityScope: BillingAssignmentScope.TEAM,
+        authorityScope: responsibility.active
+          ? BillingAssignmentScope.ORGANISATION
+          : BillingAssignmentScope.TEAM,
         operation: params.action.operation,
         actor,
         request: params.action.request,
@@ -155,9 +180,9 @@ export async function resolveCreditFundingActionContext(
         customer: localCustomer,
         account,
         email: user.email,
-        name: team.name || organisation.name,
+        name: localCustomer.teamId === null ? organisation.name : team.name || organisation.name,
         orgId: organisation.id,
-        teamId: team.id,
+        teamId: localCustomer.teamId,
         scope: localCustomer.scope,
         scopeKey: localCustomer.scopeKey,
       },

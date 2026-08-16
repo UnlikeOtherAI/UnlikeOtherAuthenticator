@@ -187,6 +187,110 @@ export const billingCancellationConfirmationV1JsonSchema = {
   },
 } as const;
 
+const hostedReturnUrlSchema = {
+  type: 'string',
+  format: 'uri',
+  pattern: '^https://',
+  maxLength: 2048,
+} as const;
+
+const billingSubjectActionRequestProperties = {
+  product: { type: 'string', minLength: 1, maxLength: 100 },
+  organisation_id: { type: 'string', minLength: 1, maxLength: 256 },
+  team_id: { type: 'string', minLength: 1, maxLength: 256 },
+  user_id: { type: 'string', minLength: 1, maxLength: 256 },
+} as const;
+
+const billingSubjectActionRequestRequired = [
+  'product',
+  'organisation_id',
+  'team_id',
+  'user_id',
+] as const;
+
+export const billingCheckoutSessionRequestJsonSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: [...billingSubjectActionRequestRequired, 'success_url', 'cancel_url'],
+  properties: {
+    ...billingSubjectActionRequestProperties,
+    success_url: hostedReturnUrlSchema,
+    cancel_url: hostedReturnUrlSchema,
+  },
+} as const;
+
+export const billingCheckoutTariffJsonSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: [
+    'id',
+    'key',
+    'version',
+    'mode',
+    'collection_mode',
+    'markup_bps',
+    'markup_percent',
+    'usage_price_multiplier_bps',
+    'monthly_subscription',
+    'usage_billing_enabled',
+    'payment_collection_enabled',
+    'raw_usage_preserved',
+  ],
+  properties: {
+    id: { type: 'string', minLength: 1 },
+    key: { type: 'string', minLength: 1 },
+    version: { type: 'integer', minimum: 0 },
+    mode: { type: 'string', enum: ['standard', 'free', 'at_cost', 'custom'] },
+    collection_mode: { type: 'string', enum: ['stripe', 'manual', 'none'] },
+    markup_bps: { type: 'integer', minimum: 0 },
+    markup_percent: { type: 'string', pattern: '^(0|[1-9][0-9]*)(\\.[0-9]+)?$' },
+    usage_price_multiplier_bps: { type: 'integer', minimum: 0 },
+    monthly_subscription: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['amount_minor', 'currency'],
+      properties: {
+        amount_minor: { type: 'string', pattern: '^(0|[1-9][0-9]*)$' },
+        currency: { type: 'string', pattern: '^[A-Z]{3}$' },
+      },
+    },
+    usage_billing_enabled: { type: 'boolean' },
+    payment_collection_enabled: { type: 'boolean' },
+    raw_usage_preserved: { const: true },
+  },
+} as const;
+
+export const billingCheckoutSessionResponseJsonSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['checkout_session_id', 'checkout_url', 'expires_at', 'tariff'],
+  properties: {
+    checkout_session_id: { type: 'string', minLength: 1 },
+    checkout_url: { type: 'string', format: 'uri', pattern: '^https://' },
+    expires_at: { type: 'string', format: 'date-time' },
+    tariff: billingCheckoutTariffJsonSchema,
+  },
+} as const;
+
+export const billingPortalSessionRequestJsonSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: [...billingSubjectActionRequestRequired, 'return_url'],
+  properties: {
+    ...billingSubjectActionRequestProperties,
+    return_url: hostedReturnUrlSchema,
+  },
+} as const;
+
+export const billingPortalSessionResponseJsonSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['portal_url'],
+  properties: {
+    portal_url: { type: 'string', format: 'uri', pattern: '^https://' },
+  },
+} as const;
+
 export const billingErrorEnvelopeJsonSchema = {
   type: 'object',
   additionalProperties: false,
@@ -204,6 +308,10 @@ export const billingConsumerActionProtocolV1JsonSchema = {
     'Exact public schemas for product-hosted billing redirects and the UOA cancellation interaction.',
   oneOf: [
     { $ref: '#/$defs/BillingHostedRedirectResponse' },
+    { $ref: '#/$defs/BillingCheckoutSessionRequest' },
+    { $ref: '#/$defs/BillingCheckoutSessionResponse' },
+    { $ref: '#/$defs/BillingPortalSessionRequest' },
+    { $ref: '#/$defs/BillingPortalSessionResponse' },
     { $ref: '#/$defs/BillingCancellationPreviewV1' },
     { $ref: '#/$defs/BillingCancellationConfirmRequest' },
     { $ref: '#/$defs/BillingCancellationConfirmationV1' },
@@ -212,6 +320,11 @@ export const billingConsumerActionProtocolV1JsonSchema = {
   $defs: {
     BillingCancellationSelection: billingCancellationSelectionJsonSchema,
     BillingHostedRedirectResponse: billingHostedRedirectResponseJsonSchema,
+    BillingCheckoutSessionRequest: billingCheckoutSessionRequestJsonSchema,
+    BillingCheckoutTariff: billingCheckoutTariffJsonSchema,
+    BillingCheckoutSessionResponse: billingCheckoutSessionResponseJsonSchema,
+    BillingPortalSessionRequest: billingPortalSessionRequestJsonSchema,
+    BillingPortalSessionResponse: billingPortalSessionResponseJsonSchema,
     BillingCancellationPreviewV1: billingCancellationPreviewV1JsonSchema,
     BillingCancellationConfirmRequest: billingCancellationConfirmRequestJsonSchema,
     BillingCancellationConfirmationV1: billingCancellationConfirmationV1JsonSchema,

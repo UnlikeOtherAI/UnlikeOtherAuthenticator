@@ -8,18 +8,29 @@ export {
   billingCancellationConfirmRequestJsonSchema,
   billingCancellationPreviewV1JsonSchema,
   billingCancellationSelectionJsonSchema,
+  billingCheckoutSessionRequestJsonSchema,
+  billingCheckoutSessionResponseJsonSchema,
+  billingCheckoutTariffJsonSchema,
   billingConsumerActionProtocolV1JsonSchema,
   billingErrorEnvelopeJsonSchema,
   billingHostedRedirectResponseJsonSchema,
+  billingPortalSessionRequestJsonSchema,
+  billingPortalSessionResponseJsonSchema,
 } from './action-schema.js';
 export type {
   BillingCancellationConfirmationV1,
   BillingCancellationConfirmRequest,
   BillingCancellationPreviewV1,
   BillingCancellationSelection,
+  BillingCheckoutSessionRequest,
+  BillingCheckoutSessionResponse,
+  BillingCheckoutTariff,
   BillingConsumerActionConformanceFixturesV1,
   BillingErrorEnvelope,
   BillingHostedRedirectResponse,
+  BillingPortalSessionRequest,
+  BillingPortalSessionResponse,
+  BillingSubjectActionRequest,
 } from './action-types.js';
 export {
   BILLING_CONSUMER_ACTION_EXAMPLE_PATH,
@@ -28,6 +39,9 @@ export {
   BILLING_CONSUMER_ACTION_SCHEMA_VERSION,
 } from './action-types.js';
 export { billingStatementV1ConformanceFixture } from './conformance-fixture.js';
+export { billingControlledByJsonSchema } from './org-billing-schema.js';
+export { BILLING_ORG_BILLING_MANAGE_ACTION_ID } from './org-billing-types.js';
+export type { BillingControlledByV1 } from './org-billing-types.js';
 export {
   billingStatementV1OpenApiDocument,
   type BillingStatementV1OpenApiDocument,
@@ -50,6 +64,8 @@ export { billingStatementV2JsonSchema } from './v2-schema.js';
 export type {
   BillingConnectedServicePortfolio,
   BillingConnectedServiceUsage,
+  BillingOrganisationScopeV1,
+  BillingOrganisationTeamUsageV1,
   BillingPortfolioCostContribution,
   BillingPortfolioCostTotal,
   BillingPortfolioOrigin,

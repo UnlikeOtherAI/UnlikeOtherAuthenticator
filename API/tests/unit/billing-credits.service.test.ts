@@ -73,6 +73,7 @@ describe('shared credit reads while Stripe collection is disabled', () => {
         billingManager: true,
       }),
       loadProjectionData: vi.fn().mockResolvedValue(data),
+      resolveControlledBy: vi.fn().mockResolvedValue(null),
     } as never);
 
     expect(fetchPortfolio).toHaveBeenCalled();

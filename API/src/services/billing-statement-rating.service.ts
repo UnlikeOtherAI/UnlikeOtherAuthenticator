@@ -247,3 +247,46 @@ export function rateBillingStatementUsage(params: {
     commercialLines: usageCommercialLines(costs, params.plan),
   };
 }
+
+export function billingCommercialTotals(
+  lines: BillingStatementV1['commercial_lines'],
+): BillingStatementV1['totals'] {
+  type Parts = {
+    monthly: string;
+    usage: string;
+    addOns: string;
+    credits: string;
+  };
+  const byCurrency = new Map<string, Parts>();
+  for (const line of lines) {
+    const current = byCurrency.get(line.amount.currency) ?? {
+      monthly: '0',
+      usage: '0',
+      addOns: '0',
+      credits: '0',
+    };
+    const key =
+      line.kind === 'monthly_subscription'
+        ? 'monthly'
+        : line.kind === 'usage'
+          ? 'usage'
+          : line.kind === 'add_on'
+            ? 'addOns'
+            : 'credits';
+    current[key] = addBillingDecimals(current[key], line.amount.amount);
+    byCurrency.set(line.amount.currency, current);
+  }
+  return [...byCurrency.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([currency, parts]) => ({
+      currency,
+      monthly: exactMoney(parts.monthly, currency),
+      usage: exactMoney(parts.usage, currency),
+      add_ons: exactMoney(parts.addOns, currency),
+      credits: exactMoney(parts.credits, currency),
+      total_due: exactMoney(
+        [parts.monthly, parts.usage, parts.addOns, parts.credits].reduce(addBillingDecimals, '0'),
+        currency,
+      ),
+    }));
+}
