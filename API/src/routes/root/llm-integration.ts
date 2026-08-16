@@ -146,6 +146,16 @@ acting user to **be** \`Organisation.ownerId\`; granting or removing the \`"owne
 the actor to hold it; and billing management is a verdict UOA computes from state only UOA holds,
 never a grant. No \`role_grants\` entry can reach any of them.
 
+Structural does not mean exempt from your vocabulary. Ownership transfer is the one such operation
+that also *writes* a role — the outgoing owner's — so it obeys \`org_roles\` like every other
+membership write. \`POST .../transfer-ownership\` takes an optional \`previousOwnerRole\` naming the
+role that owner is left with; it is validated exactly as \`PUT .../members/:userId\` validates a role
+change, and \`"owner"\` is refused, since the endpoint's contract is a demotion. Omit it and UOA
+writes \`"admin"\` when your vocabulary contains that role, and otherwise your vocabulary's first
+non-owner entry — so order \`org_roles\` from most to least authority. A vocabulary of nothing but
+\`"owner"\` has no demotion target at all, and the transfer is refused rather than writing a role
+your own config would reject back.
+
 ### 4.5 First-login tenant bootstrapping — empty memberships
 
 When \`firstLogin.memberships.orgs\` is empty, the user is authenticated but has no tenant on this domain yet. Do NOT fall back to a synthetic tenant (\`"default"\`, the user's email domain, etc.) — you will cross-contaminate users. Branch on \`capabilities\`:
@@ -470,7 +480,7 @@ plain \`404\`. A backend for domain X cannot see or touch domain Y.
 | \`GET|POST /org/organisations/:orgId/members\` | Yes. \`POST\` takes \`userId\` as today. |
 | \`PUT|DELETE .../members/:userId\` | Yes. |
 | \`POST .../members/:userId/deactivate|reactivate\` | Yes. |
-| \`POST .../transfer-ownership\` | Yes. Demotes the org's **current owner** to admin. |
+| \`POST .../transfer-ownership\` | Yes. Demotes the org's **current owner** — see below for the role they land on. |
 | \`GET .../groups\`, \`GET .../groups/:groupId\` | Yes. |
 | \`GET .../teams\` | Yes — and lists \`HIDDEN\` teams too; that filter is member-to-member discovery. |
 | \`POST .../teams\` | Yes. |

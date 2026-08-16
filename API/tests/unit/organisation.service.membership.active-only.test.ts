@@ -5,7 +5,7 @@ import { getOrganisationMember } from '../../src/services/organisation.service.b
 
 // CLAUDE.md 500-line split of the original organisation.service.membership.test.ts: the
 // activeOnly actor-authorization filter (§4.9). See organisation.service.membership.test.ts
-// (add/list/role-change/remove/ownership-transfer) and
+// (add/list/role-change/remove), organisation.service.ownership.test.ts (ownership transfer) and
 // organisation.service.membership.lifecycle.test.ts (deactivate/reactivate) for the rest. Only the
 // location changed — no assertion here was altered from the pre-split file. This describe never
 // used the shared mocks/env helpers in the pre-split file either, so it stays dependency-free here.

@@ -54,6 +54,12 @@ export type UoaCapability = (typeof UOA_CAPABILITIES)[number];
 /** The one fixed role: mandatory in every vocabulary, implicitly every capability, never granted. */
 export const OWNER_ROLE = 'owner';
 
+/**
+ * The non-owner role the default vocabulary names for an administrator, and the preferred landing
+ * role for a demoted owner — see `resolveDemotedOwnerRole`. Not reserved: a domain may omit it.
+ */
+export const DEFAULT_DEMOTED_OWNER_ROLE = 'admin';
+
 export const DEFAULT_ORG_ROLES: readonly string[] = ['owner', 'admin', 'member'];
 export const DEFAULT_TEAM_ROLES: readonly string[] = ['owner', 'admin', 'member'];
 
@@ -118,6 +124,29 @@ export function resolveTeamRoleVocabulary(config: RoleGrantsConfig): string[] {
 
 export function resolveRoleVocabulary(config: RoleGrantsConfig, scope: RoleGrantScope): string[] {
   return scope === 'org' ? resolveOrgRoleVocabulary(config) : resolveTeamRoleVocabulary(config);
+}
+
+/**
+ * The role an outgoing owner is left with when ownership transfers and the caller named none.
+ *
+ * Brief §24.3 step 4 used to be a literal `role: 'admin'` write, which was true while `admin` was in
+ * every vocabulary and wrong the moment `org_roles` became per-domain: a domain configured
+ * `["owner","member","registrar"]` got an `OrgMember.role` of `"admin"` — outside its own
+ * vocabulary, unmentionable by `role_grants` (so the demoted owner held nothing), and rejected by
+ * `ensureOrgRole` on every later write (so they could not be re-roled through a validated path
+ * either).
+ *
+ * `admin` stays the answer wherever the vocabulary still contains it, at any position — that is
+ * byte-identical to the old write for every domain that keeps the role, which is every domain
+ * today. Otherwise the vocabulary's first non-owner entry stands in: the domain authored that
+ * order, and in the default vocabulary the first non-owner entry *is* `admin`. A vocabulary of
+ * nothing but `owner` has no answer at all — `null`, and the caller refuses the transfer rather
+ * than inventing a role no config would accept back.
+ */
+export function resolveDemotedOwnerRole(config: RoleGrantsConfig): string | null {
+  const vocabulary = resolveOrgRoleVocabulary(config);
+  if (vocabulary.includes(DEFAULT_DEMOTED_OWNER_ROLE)) return DEFAULT_DEMOTED_OWNER_ROLE;
+  return vocabulary.find((role) => role !== OWNER_ROLE) ?? null;
 }
 
 /** The domain's grant table, or the legacy default when it configured none. */

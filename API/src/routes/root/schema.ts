@@ -158,7 +158,11 @@ const orgEndpoints: EndpointSchema[] = [
     description:
       'Transfer organisation ownership. Deliberately NOT a capability: the acting user must BE Organisation.ownerId.',
     auth: 'domain hash bearer token',
-    body: { new_owner_id: 'string (required)' },
+    body: {
+      newOwnerId: 'string (required) — alias: newOwnerUserId; send exactly one',
+      'previousOwnerRole?':
+        'string — the org role the outgoing owner is left with. Validated against this domain org_features.org_roles like any other role write, and must not be "owner". Omitted: "admin" when the vocabulary contains it, else the first non-owner role in it; a vocabulary of only "owner" refuses the transfer.',
+    },
   },
   {
     method: 'GET',

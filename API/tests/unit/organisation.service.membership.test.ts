@@ -5,7 +5,6 @@ import {
   changeOrganisationMemberRole,
   listOrganisationMembers,
   removeOrganisationMember,
-  transferOrganisationOwnership,
 } from '../../src/services/organisation.service.members.js';
 import {
   baseOrg,
@@ -16,11 +15,11 @@ import {
 } from './helpers/organisation-service-membership-test-helpers.js';
 
 // CLAUDE.md 500-line split of the original organisation.service.membership.test.ts: member
-// add/list/role-change/remove/ownership-transfer. Deactivate/reactivate lifecycle lives in
-// organisation.service.membership.lifecycle.test.ts; the activeOnly actor-authorization filter
-// lives in organisation.service.membership.active-only.test.ts. Shared mocks/config/env setup
-// live in tests/unit/helpers/organisation-service-membership-test-helpers.ts. Only the location
-// changed — no assertion here was altered from the pre-split file.
+// add/list/role-change/remove. Ownership transfer moved on to
+// organisation.service.ownership.test.ts alongside the service it covers; deactivate/reactivate
+// lifecycle lives in organisation.service.membership.lifecycle.test.ts; the activeOnly
+// actor-authorization filter lives in organisation.service.membership.active-only.test.ts. Shared
+// mocks/config/env setup live in tests/unit/helpers/organisation-service-membership-test-helpers.ts.
 describe('Organisation service: membership', () => {
   useOrganisationMembershipTestEnv();
 
@@ -288,59 +287,6 @@ describe('Organisation service: membership', () => {
 
     await expect(promise).rejects.toMatchObject({ code: 'BAD_REQUEST', statusCode: 400 });
     expect(prisma.orgMember.delete).not.toHaveBeenCalled();
-  });
-
-  it('transfers ownership to an existing organisation member', async () => {
-    const prisma = makePrismaMock();
-
-    prisma.organisation.findFirst.mockResolvedValue(baseOrg);
-    prisma.orgMember.findFirst
-      .mockResolvedValueOnce({
-        id: 'member-new',
-        orgId: 'org-1',
-        userId: 'u-new-owner',
-        role: 'member',
-      })
-      .mockResolvedValueOnce({
-        id: 'member-old-owner',
-        orgId: 'org-1',
-        userId: 'u-owner',
-        role: 'owner',
-      });
-    prisma.organisation.update.mockResolvedValue({
-      ...baseOrg,
-      ownerId: 'u-new-owner',
-    });
-    prisma.orgMember.update.mockResolvedValue({
-      id: 'member-new',
-      orgId: 'org-1',
-      userId: 'u-new-owner',
-      role: 'owner',
-      createdAt: now,
-      updatedAt: now,
-    });
-    prisma.organisation.findUniqueOrThrow.mockResolvedValue({
-      ...baseOrg,
-      ownerId: 'u-new-owner',
-    });
-
-    const result = await transferOrganisationOwnership(
-      {
-        orgId: 'org-1',
-        domain: 'acme.example.com',
-        actorUserId: 'u-owner',
-        newOwnerId: 'u-new-owner',
-      },
-      { prisma },
-    );
-
-    expect(result).toMatchObject({ id: 'org-1', ownerId: 'u-new-owner' });
-    expect(prisma.organisation.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 'org-1' },
-        data: { ownerId: 'u-new-owner' },
-      }),
-    );
   });
 
   it('refuses an admin actor from adding a new owner member (no self-elevation)', async () => {

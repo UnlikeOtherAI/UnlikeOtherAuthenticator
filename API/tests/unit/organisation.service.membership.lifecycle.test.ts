@@ -13,8 +13,8 @@ import {
 
 // CLAUDE.md 500-line split of the original organisation.service.membership.test.ts:
 // deactivate/reactivate lifecycle. See organisation.service.membership.test.ts (add/list/
-// role-change/remove/ownership-transfer) and organisation.service.membership.active-only.test.ts
-// (activeOnly filter) for the rest. Only the location changed — no assertion here was altered
+// role-change/remove), organisation.service.ownership.test.ts (ownership transfer) and
+// organisation.service.membership.active-only.test.ts (activeOnly filter) for the rest. Only the location changed — no assertion here was altered
 // from the pre-split file.
 describe('Organisation service: member lifecycle (deactivate/reactivate)', () => {
   useOrganisationMembershipLifecycleTestEnv();

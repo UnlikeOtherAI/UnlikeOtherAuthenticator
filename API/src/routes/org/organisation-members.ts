@@ -9,8 +9,8 @@ import {
   addOrganisationMember,
   changeOrganisationMemberRole,
   removeOrganisationMember,
-  transferOrganisationOwnership,
 } from '../../services/organisation.service.members.js';
+import { transferOrganisationOwnership } from '../../services/organisation.service.ownership.js';
 import {
   deactivateOrganisationMember,
   reactivateOrganisationMember,
@@ -22,13 +22,13 @@ import {
   AddMemberBodySchema,
   SetRoleBodySchema,
   getOrgIdFromParams,
-  getTransferOwnerId,
   getUserIdFromParams,
   keyAddMemberRateLimit,
   orgCaller,
   parseDomainContext,
   parseDomainContextHook,
   parseMembersListQuery,
+  parseTransferOwnershipBody,
   requireVerifiedConfig,
   tenantUserId,
 } from './organisation-route.shared.js';
@@ -226,13 +226,16 @@ export function registerOrganisationMemberRoutes(app: FastifyInstance) {
 
   const transferOwnershipHandler = async (request: FastifyRequest, reply: FastifyReply) => {
     const { domain } = parseDomainContext(request);
+    const config = requireVerifiedConfig(request);
     const orgId = getOrgIdFromParams(request.params);
-    const newOwnerId = getTransferOwnerId((request.body ?? {}) as Record<string, unknown>);
+    const { newOwnerId, previousOwnerRole } = parseTransferOwnershipBody(
+      (request.body ?? {}) as Record<string, unknown>,
+    );
 
     setTenantContextFromRequest(request, { orgId, userId: tenantUserId(request) });
     const org = await request.withTenantTx((tx) =>
       transferOrganisationOwnership(
-        { orgId, domain, ...orgCaller(request), newOwnerId },
+        { orgId, domain, ...orgCaller(request), newOwnerId, previousOwnerRole, config },
         { prisma: asPrismaClient(tx) },
       ),
     );

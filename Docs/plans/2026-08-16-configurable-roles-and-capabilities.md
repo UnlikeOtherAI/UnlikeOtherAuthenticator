@@ -551,6 +551,19 @@ Four things worth stating:
   "the roster" three of the four verbs, with the *less* destructive one requiring the *broader*
   capability.
 
+**Structural gates still write vocabulary-valid roles.** The two are independent: who may act is
+structural, what gets stored is always a role the domain configured. `transferOrganisationOwnership`
+was the one place that got this wrong — it demoted the outgoing owner with a literal
+`data: { role: 'admin' }`, which under `org_roles: ["owner","member","registrar"]` stored a role
+outside the domain's own vocabulary: no `role_grants` entry could mention it (so the demoted owner
+held nothing) and `ensureOrgRole` rejected it on every later write (so no validated path could
+re-role them). The transfer now takes an optional `previousOwnerRole`, validated through
+`ensureOrgRole` like any other membership write and refused when it is `owner`; omitted, it resolves
+to `admin` wherever the vocabulary still contains it and otherwise to the vocabulary's first
+non-owner entry (`resolveDemotedOwnerRole`, `role-grants.ts`). A vocabulary of only `owner` refuses
+the transfer outright, before any write. See brief §24.3 and
+`API/tests/unit/organisation.service.ownership.test.ts`.
+
 **Still deliberately outside the table**, because they are structural rather than configured:
 `deleteOrganisation` and `transferOrganisationOwnership` (the actor must BE `Organisation.ownerId`),
 `changeOrganisationMemberRole` (same), the "only an owner may grant or remove `owner`" guards in

@@ -76,6 +76,10 @@ export const TransferOwnershipBodySchema = z
   .object({
     newOwnerId: z.string().trim().min(1).optional(),
     newOwnerUserId: z.string().trim().min(1).optional(),
+    // The role the outgoing owner is left with. Bounded like every other role string (config
+    // `org_roles` entries are 1–50 chars); the service validates it against this domain's actual
+    // vocabulary, since only the verified config knows what those are.
+    previousOwnerRole: z.string().trim().min(1).max(50).optional(),
   })
   .superRefine((value, ctx) => {
     if (!value.newOwnerId && !value.newOwnerUserId) {
@@ -232,11 +236,14 @@ export function getUserIdFromParams(params: unknown): string {
   return MemberUserIdParamSchema.parse(params ?? {}).userId;
 }
 
-export function getTransferOwnerId(body: Record<string, unknown>): string {
+export function parseTransferOwnershipBody(body: Record<string, unknown>): {
+  newOwnerId: string;
+  previousOwnerRole?: string;
+} {
   const parsed = TransferOwnershipBodySchema.parse(body);
   const id = parsed.newOwnerId ?? parsed.newOwnerUserId;
   if (!id) throw new AppError('BAD_REQUEST', 400, 'MISSING_NEW_OWNER');
-  return id;
+  return { newOwnerId: id, previousOwnerRole: parsed.previousOwnerRole };
 }
 
 export function keyCreateOrganisationRateLimit(request: FastifyRequest) {

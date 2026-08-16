@@ -1245,12 +1245,32 @@ groupMembers  GroupMember[]
 
 #### Ownership Transfer
 
-`POST /org/organisations/:orgId/transfer-ownership` accepts `{ newOwnerId: string }`. In a transaction:
+`POST /org/organisations/:orgId/transfer-ownership` accepts
+`{ newOwnerId: string, previousOwnerRole?: string }`. In a transaction:
 
 1. Verify `newOwnerId` is an existing org member.
 2. Set `Organisation.ownerId` to the new owner.
 3. Set the new owner's `OrgMember.role` to `"owner"`.
-4. Set the old owner's `OrgMember.role` to `"admin"`.
+4. Set the old owner's `OrgMember.role` to the demotion target resolved below.
+
+> **The demotion target follows `org_roles` (24.1a).** Step 4 was a literal `"admin"` write, which
+> was true while `admin` was in every vocabulary and wrong once `org_roles` became per-domain: a
+> domain configured `["owner","member","registrar"]` got an `OrgMember.role` outside its own
+> vocabulary — unmentionable by `role_grants`, so the demoted owner silently held nothing, and
+> rejected by `ensureOrgRole` on every later write, so they could not be re-roled through a
+> validated path either.
+>
+> `previousOwnerRole` names the role the outgoing owner is left with. It is validated against this
+> domain's `org_roles` exactly as `PUT .../members/:userId` validates a role change, and `"owner"`
+> is refused with a generic 400 — the endpoint's contract is a demotion, and naming `"owner"` would
+> move `ownerId` while leaving the outgoing owner structurally holding every capability.
+>
+> Omitted, UOA resolves it: `"admin"` whenever the vocabulary still contains that role at any
+> position — byte-identical to the old write for every domain that keeps it — and otherwise the
+> vocabulary's **first non-owner entry**, the domain having authored that order. A vocabulary of
+> nothing but `"owner"` has no demotion target and the transfer is refused with a generic 400
+> rather than writing a role the config would reject back. Resolution happens before any write, so
+> a refusal never leaves ownership half-transferred.
 
 #### User Removal Lifecycle
 

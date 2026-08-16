@@ -314,6 +314,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       organisation.service.lifecycle.ts     — Org deactivation/reactivation with ordered membership locking
       organisation.service.organisation.ts  — Organisation CRUD + slug generation (slice entry point)
       organisation.service.members.ts       — Org membership lifecycle
+      organisation.service.ownership.ts     — Ownership transfer + the outgoing owner's demotion role
       password.service.ts                   — Hashing, validation rules, comparison
       refresh-session-lock.service.ts       — Canonical user-global then user/domain serialization
       refresh-token-replay.service.ts       — Deterministic lost-response successor verification and recovery
@@ -793,7 +794,7 @@ admin client because every avatar route authenticates before a tenant context ex
 - **Maximum 500 lines per code file.** No exceptions.
 - If a service grows past this, split by sub-concern. Two patterns are used in the tree today:
   - **Flow-level split** — peer files named for the sub-flow, e.g. `auth-login.service.ts`, `auth-register.service.ts`, `auth-reset-password.service.ts`.
-  - **Domain slice split** — sibling `<domain>.service.<slice>.ts` files, optionally with an orchestration entry point. Two flavours in the tree today: `internal-admin.service.ts` is the entry point that re-exports from `internal-admin.service.base.ts`, `internal-admin.service.domains.ts`, `internal-admin.service.organisations.ts`, and `internal-admin.service.users.ts`; the `organisation.service.*` family uses no orchestration entry — callers import directly from `organisation.service.organisation.ts`, `organisation.service.members.ts`, or `organisation.service.base.ts`. Pick the form that fits the call sites.
+  - **Domain slice split** — sibling `<domain>.service.<slice>.ts` files, optionally with an orchestration entry point. Two flavours in the tree today: `internal-admin.service.ts` is the entry point that re-exports from `internal-admin.service.base.ts`, `internal-admin.service.domains.ts`, `internal-admin.service.organisations.ts`, and `internal-admin.service.users.ts`; the `organisation.service.*` family uses no orchestration entry — callers import directly from `organisation.service.organisation.ts`, `organisation.service.members.ts`, `organisation.service.ownership.ts`, or `organisation.service.base.ts`. Pick the form that fits the call sites.
 - If a route file grows past this, split by endpoint.
 - Tests have no line limit but should still be organized logically.
 

@@ -24,13 +24,11 @@ import {
   resolveOrganisationByDomain,
   toListLimit,
   toMemberRecord,
-  toOrganisationRecord,
   type OrgActorProvenance,
   type CursorList,
   type OrgServiceDeps,
   type OrgServicePrisma,
   type OrganisationMemberRecord,
-  type OrganisationRecord,
 } from './organisation.service.base.js';
 
 const MEMBER_SELECT = {
@@ -425,95 +423,4 @@ export async function removeOrganisationMember(
   });
 
   return { removed: true };
-}
-
-export async function transferOrganisationOwnership(
-  params: {
-    orgId: string;
-    domain: string;
-    actorUserId?: string;
-    actor?: OrgActorProvenance;
-    newOwnerId: string;
-  },
-  deps?: OrgServiceDeps,
-): Promise<OrganisationRecord> {
-  const env = deps?.env ?? getEnv();
-  assertDatabaseEnabled(env);
-
-  const actorUserId = resolveOrgActor(params);
-  const newOwnerId = params.newOwnerId.trim();
-  if (!newOwnerId) throw new AppError('BAD_REQUEST', 400);
-
-  const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
-  const org = await resolveOrganisationByDomain(prisma, params);
-  // The outgoing owner is the acting user on the user path (who must BE the
-  // owner) and simply the org's current owner in backend mode — the transfer has
-  // the same effect either way, it just is not initiated by a person.
-  if (actorUserId && org.ownerId !== actorUserId) {
-    throw new AppError('FORBIDDEN', 403);
-  }
-  const outgoingOwnerId = actorUserId ?? org.ownerId;
-  if (outgoingOwnerId === newOwnerId) throw new AppError('BAD_REQUEST', 400);
-
-  // `activeOnly` matters here: without it the helper deliberately returns
-  // DEACTIVATED/REMOVED rows (target lookups need tombstones so a removed member
-  // can still be found and re-removed). The transfer only changes the ROLE, not
-  // the status, while demoting the live owner — so handing ownership to a
-  // tombstoned row would leave the organisation owned by a removed member with
-  // no owner able to act. Design §4.9: a non-ACTIVE membership has no powers, so
-  // it cannot receive the highest one.
-  const newOwnerMembership = await getOrganisationMember(
-    prisma,
-    { orgId: org.id, userId: newOwnerId },
-    { activeOnly: true },
-  );
-  if (!newOwnerMembership) throw new AppError('NOT_FOUND', 404);
-
-  const updated = await runInTransaction(prisma, async (tx) => {
-    await tx.organisation.update({
-      where: { id: org.id },
-      data: { ownerId: newOwnerId },
-    });
-
-    await tx.orgMember.update({
-      where: { id: newOwnerMembership.id },
-      data: { role: 'owner' },
-    });
-
-    const oldOwnerMembership = await tx.orgMember.findFirst({
-      where: { orgId: org.id, userId: outgoingOwnerId },
-      select: { id: true },
-    });
-    if (oldOwnerMembership) {
-      await tx.orgMember.update({
-        where: { id: oldOwnerMembership.id },
-        data: { role: 'admin' },
-      });
-    }
-
-    return await tx.organisation.findUniqueOrThrow({
-      where: { id: org.id },
-      select: {
-        id: true,
-        domain: true,
-        name: true,
-        slug: true,
-        ownerId: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
-  });
-
-  await auditOrg({
-    orgId: org.id,
-    actorUserId,
-    actor: params.actor,
-    action: 'org.ownership_transferred',
-    targetType: 'organisation',
-    targetId: org.id,
-    metadata: { newOwnerId, previousOwnerId: outgoingOwnerId },
-  });
-
-  return toOrganisationRecord(updated);
 }
