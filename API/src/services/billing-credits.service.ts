@@ -15,6 +15,7 @@ import { resolveBillingCreditActionReadiness } from './billing-credit-action-rea
 import { settleCreditPortfolio } from './billing-credit-settlement.service.js';
 import { resolveEffectiveTariffContext } from './billing-entitlement.service.js';
 import { resolveBillingFundingViewer } from './billing-funding-viewer.service.js';
+import { resolveBillingControlledBy } from './billing-org-responsibility.service.js';
 import { fetchLedgerMeteringPortfolio } from './billing-ledger-collector.service.js';
 import type { FetchMeteringPortfolio } from './billing-metering.types.js';
 
@@ -37,6 +38,7 @@ type Dependencies = {
   resolveViewer?: typeof resolveBillingFundingViewer;
   loadProjectionData?: typeof loadBillingCreditProjectionData;
   resolveActionReadiness?: typeof resolveBillingCreditActionReadiness;
+  resolveControlledBy?: typeof resolveBillingControlledBy;
 };
 
 export async function getBillingCredits(
@@ -98,7 +100,7 @@ export async function getBillingCredits(
     },
     { prisma },
   );
-  const [viewer, data] = await Promise.all([
+  const [viewer, data, controlledBy] = await Promise.all([
     (deps?.resolveViewer ?? resolveBillingFundingViewer)(
       {
         userId: params.request.userId,
@@ -116,6 +118,10 @@ export async function getBillingCredits(
       },
       { prisma },
     ),
+    (deps?.resolveControlledBy ?? resolveBillingControlledBy)(
+      { organisationId: params.request.organisationId, userId: params.request.userId },
+      { prisma },
+    ),
   ]);
   const actionReadiness = await (
     deps?.resolveActionReadiness ?? resolveBillingCreditActionReadiness
@@ -128,5 +134,6 @@ export async function getBillingCredits(
     data,
     now,
     actionReadiness,
+    controlledBy,
   });
 }

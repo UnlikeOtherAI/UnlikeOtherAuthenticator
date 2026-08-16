@@ -21,17 +21,22 @@ import {
   type NormalizedMeteringPortfolio,
   type NormalizedMeteringUsage,
 } from './billing-metering.types.js';
-import { addBillingDecimals, exactMoney, minorAmountToMajor } from './billing-money.service.js';
+import { exactMoney, minorAmountToMajor } from './billing-money.service.js';
 import {
   listDirectTeamBillingServiceAccess,
   type DirectBillingServiceAccess,
 } from './billing-service-access.service.js';
 import { billingStatementActions } from './billing-statement-action.service.js';
+import { resolveBillingControlledBy } from './billing-org-responsibility.service.js';
+import { buildOrganisationStatementScope } from './billing-statement-organisation.service.js';
 import {
   buildConnectedServicePortfolio,
   filterPortfolioForProduct,
 } from './billing-statement-portfolio.service.js';
-import { rateBillingStatementUsage } from './billing-statement-rating.service.js';
+import {
+  billingCommercialTotals,
+  rateBillingStatementUsage,
+} from './billing-statement-rating.service.js';
 import {
   getStripeSubscriptionSummary,
   type BillingSubscriptionRequest,
@@ -53,6 +58,8 @@ type Dependencies = {
   fetchMetering?: FetchMeteringUsage;
   fetchPortfolio?: FetchMeteringPortfolio;
   listDirectAccess?: typeof listDirectTeamBillingServiceAccess;
+  resolveControlledBy?: typeof resolveBillingControlledBy;
+  buildOrganisationScope?: typeof buildOrganisationStatementScope;
 };
 
 function monthPeriod(
@@ -146,49 +153,6 @@ function subscriptionProjection(summary: SubscriptionSummary): BillingStatementV
     current_period_start: subscription.current_period_start,
     current_period_end: subscription.current_period_end,
   };
-}
-
-function commercialTotals(
-  lines: BillingStatementV1['commercial_lines'],
-): BillingStatementV1['totals'] {
-  type Parts = {
-    monthly: string;
-    usage: string;
-    addOns: string;
-    credits: string;
-  };
-  const byCurrency = new Map<string, Parts>();
-  for (const line of lines) {
-    const current = byCurrency.get(line.amount.currency) ?? {
-      monthly: '0',
-      usage: '0',
-      addOns: '0',
-      credits: '0',
-    };
-    const key =
-      line.kind === 'monthly_subscription'
-        ? 'monthly'
-        : line.kind === 'usage'
-          ? 'usage'
-          : line.kind === 'add_on'
-            ? 'addOns'
-            : 'credits';
-    current[key] = addBillingDecimals(current[key], line.amount.amount);
-    byCurrency.set(line.amount.currency, current);
-  }
-  return [...byCurrency.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([currency, parts]) => ({
-      currency,
-      monthly: exactMoney(parts.monthly, currency),
-      usage: exactMoney(parts.usage, currency),
-      add_ons: exactMoney(parts.addOns, currency),
-      credits: exactMoney(parts.credits, currency),
-      total_due: exactMoney(
-        [parts.monthly, parts.usage, parts.addOns, parts.credits].reduce(addBillingDecimals, '0'),
-        currency,
-      ),
-    }));
 }
 
 async function buildCanonicalBillingStatement(
@@ -329,7 +293,22 @@ async function buildCanonicalBillingStatement(
       };
     }),
   ];
-  const actions = billingStatementActions(summary, canonicalRequest, context.credential);
+  const controlledBy = await (deps?.resolveControlledBy ?? resolveBillingControlledBy)(
+    { organisationId: context.request.organisationId, userId: context.request.userId },
+    { prisma },
+  );
+  // Old-client safety is part of the contract, not an afterthought
+  // (Docs/plans/2026-08-15-org-billing-override.md §4). While the organisation
+  // is paying and this caller is not an organisation billing manager, the team
+  // statement carries no action at all, so a consumer that predates
+  // `controlled_by` renders read-only rather than buttons that would 403.
+  const actions =
+    controlledBy && !controlledBy.can_manage
+      ? {
+          capabilities: { can_upgrade: false, can_open_portal: false, can_cancel: false },
+          actions: [],
+        }
+      : billingStatementActions(summary, canonicalRequest, context.credential);
   const markupPercent = (summary.tariff.markup_bps / 100).toFixed(2);
 
   const statement: BillingStatementV1 = {
@@ -391,8 +370,9 @@ async function buildCanonicalBillingStatement(
     ),
     usage: rated.usage,
     commercial_lines: commercialLines,
-    totals: commercialTotals(commercialLines),
+    totals: billingCommercialTotals(commercialLines),
     ...actions,
+    ...(controlledBy ? { controlled_by: controlledBy } : {}),
   };
   if (version === 'v1') return statement;
   const portfolioUserMetering = userMetering as NormalizedMeteringPortfolio;
@@ -419,6 +399,26 @@ async function buildCanonicalBillingStatement(
       accesses,
       users: members.map((member) => member.user),
     }),
+    // The organisation roll-up goes only to an organisation billing manager,
+    // and only while the organisation is actually paying.
+    ...(controlledBy?.can_manage
+      ? {
+          organisation_scope: await (
+            deps?.buildOrganisationScope ?? buildOrganisationStatementScope
+          )(
+            {
+              organisationId: context.request.organisationId,
+              serviceId: context.credential.service.id,
+              statementProduct,
+              billingMonth: period.key,
+              periodStartsAt: period.startsAtDate,
+              periodEndsAt: period.endsAtDate,
+              products,
+            },
+            { prisma, fetchPortfolio: deps?.fetchPortfolio, listDirectAccess: deps?.listDirectAccess },
+          ),
+        }
+      : {}),
   };
 }
 
