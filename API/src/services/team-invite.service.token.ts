@@ -32,6 +32,7 @@ type InviteTokenRow = {
     acceptedAt: Date | null;
     declinedAt: Date | null;
     revokedAt: Date | null;
+    approvalStatus: string;
     team: { name: string };
     org: { name: string };
   };
@@ -74,6 +75,12 @@ function assertInviteTokenValid(params: {
   if (params.row.teamInvite.acceptedAt || params.row.teamInvite.declinedAt) {
     throw new AppError('BAD_REQUEST', 400);
   }
+  // A DENIED invite is resolved even though it carries no terminal timestamp. In practice an
+  // invite awaiting approval is never emailed a token, so this is defence in depth rather than a
+  // reachable gate — but it keeps the token path agreeing with `isResolved` in the state machine.
+  if (params.row.teamInvite.approvalStatus === 'DENIED') {
+    throw new AppError('BAD_REQUEST', 400);
+  }
 
   assertInviteTokenType(params.row.type);
   return params.row.type;
@@ -105,6 +112,7 @@ async function findInviteToken(params: {
           acceptedAt: true,
           declinedAt: true,
           revokedAt: true,
+          approvalStatus: true,
           team: { select: { name: true } },
           org: { select: { name: true } },
         },

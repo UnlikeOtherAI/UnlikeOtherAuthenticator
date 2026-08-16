@@ -13,6 +13,7 @@ import {
   parseMaxMembersPerTeam,
   parseMaxTeamMembershipsPerUser,
 } from './team.service.base.js';
+import { assertTeamInviteTransition } from './team-invite-state-machine.js';
 import {
   assertActiveWorkspaceScope,
   lockAndAssertActiveWorkspaceScope,
@@ -37,6 +38,7 @@ export async function acceptTeamInviteWithinTransaction(params: {
       teamRole: true,
       acceptedUserId: true,
       acceptedAt: true,
+      declinedAt: true,
       revokedAt: true,
       expiresAt: true,
       approvalStatus: true,
@@ -78,14 +80,12 @@ export async function acceptTeamInviteWithinTransaction(params: {
     throw new AppError('BAD_REQUEST', 400);
   }
 
-  // Task 3/4 (design §4.7): a PENDING/DENIED (member-invite approval not yet granted) or expired
-  // invite is not acceptable — generic error, same as any other invalid-invite case (no oracle).
-  if (invite.approvalStatus === 'PENDING' || invite.approvalStatus === 'DENIED') {
-    throw new AppError('BAD_REQUEST', 400);
-  }
-  if (invite.expiresAt && invite.expiresAt.getTime() <= params.now.getTime()) {
-    throw new AppError('BAD_REQUEST', 400);
-  }
+  // Task 3/4 (design §4.7): a declined, PENDING/DENIED (member-invite approval not yet granted),
+  // or expired invite is not acceptable — generic error, same as any other invalid-invite case
+  // (no oracle). Delegated to the shared state machine so this agrees with decline/resend/revoke
+  // by construction. The revoked and already-accepted cases are handled above because each has an
+  // outcome of its own (a distinct internal code, and the same-user idempotent return).
+  assertTeamInviteTransition({ transition: 'accept', invite, now: params.now });
 
   const user = await params.prisma.user.findUnique({
     where: { id: params.userId },
@@ -235,6 +235,8 @@ export async function declineTeamInviteForUser(params: {
       acceptedAt: true,
       declinedAt: true,
       revokedAt: true,
+      expiresAt: true,
+      approvalStatus: true,
       org: { select: { domain: true } },
     },
   });
@@ -256,8 +258,13 @@ export async function declineTeamInviteForUser(params: {
   }
 
   if (invite.declinedAt) {
+    // Idempotent: declining an already-declined invite is a success with no second write.
     return;
   }
+
+  // Everything the shared policy still refuses at this point — in practice a DENIED invite, which
+  // `pendingInviteStatusWhere` never surfaces to an invitee, so this is a floor rather than a gate.
+  assertTeamInviteTransition({ transition: 'decline', invite, now: params.now });
 
   await params.prisma.teamInvite.update({
     where: { id: invite.id },

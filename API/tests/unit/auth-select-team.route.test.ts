@@ -420,7 +420,10 @@ describe('POST /auth/select-team', () => {
       teamRole: 'member',
       acceptedUserId: null,
       acceptedAt: null,
+      declinedAt: null,
       revokedAt: null,
+      expiresAt: null,
+      approvalStatus: 'NOT_REQUIRED',
       org: { id: 'org-9', domain: 'client.example.com' },
     });
     prismaMock.user.findUnique.mockImplementation(async (args: { where: { id: string } }) => {
@@ -467,6 +470,8 @@ describe('POST /auth/select-team', () => {
       acceptedAt: null,
       declinedAt: null,
       revokedAt: null,
+      expiresAt: null,
+      approvalStatus: 'NOT_REQUIRED',
       org: { domain: 'client.example.com' },
     });
     prismaMock.user.findUnique.mockResolvedValue({

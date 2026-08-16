@@ -7,10 +7,11 @@ import { buildUserIdentity } from './user-scope.service.js';
 import { extractEmailTheme } from './email-theme.service.js';
 import { sendTeamInviteEmail } from './email.service.js';
 import { selectRedirectUrl } from './authorization-code.service.js';
-import { normalizeTeamRole } from './team.service.base.js';
 import {
+  ACTIONABLE_TEAM_INVITE_WHERE,
   TEAM_INVITE_SELECT,
   computeInviteExpiresAt,
+  normalizeInviteGrantRole,
   type InviteDeps,
   type TeamInviteRecord,
   type TeamInviteCreateResult,
@@ -26,6 +27,7 @@ import {
   toInviteRecord,
   type InvitePrisma,
 } from './team-invite.service.base.js';
+import { decideTeamInviteTransition } from './team-invite-state-machine.js';
 
 export async function createTeamInvites(
   params: {
@@ -81,9 +83,12 @@ export async function createTeamInvites(
   for (const input of params.invites) {
     const email = normalizeEmail(input.email);
     const inviteName = normalizeInviteName(input.name);
-    const teamRole = normalizeTeamRole(input.teamRole, params.config);
+    const teamRole = normalizeInviteGrantRole(input.teamRole, params.config);
+    // Only the one actionable invite counts as "existing": a terminal row (accepted, declined,
+    // revoked, or DENIED) must never be treated as the live invite for this email.
     const existingInvite = await prisma.teamInvite.findFirst({
       where: {
+        ...ACTIONABLE_TEAM_INVITE_WHERE,
         teamId: team.id,
         email,
       },
@@ -135,20 +140,18 @@ export async function createTeamInvites(
       }
     }
 
-    const hadExistingUnresolvedInvite = Boolean(
-      existingInvite &&
-      !existingInvite.acceptedAt &&
-      !existingInvite.declinedAt &&
-      !existingInvite.revokedAt,
-    );
+    // The shared policy decides whether this is a fresh invite or a replacement of the live one.
+    const hadExistingUnresolvedInvite =
+      decideTeamInviteTransition({ transition: 'create', invite: existingInvite, now }).kind ===
+      'no-op';
     if (hadExistingUnresolvedInvite) {
+      // Frees the actionable slot before the create below, which is what keeps the new row from
+      // colliding with `team_invites_one_actionable_per_team_email`.
       await prisma.teamInvite.updateMany({
         where: {
+          ...ACTIONABLE_TEAM_INVITE_WHERE,
           teamId: team.id,
           email,
-          acceptedAt: null,
-          declinedAt: null,
-          revokedAt: null,
         },
         data: {
           revokedAt: now,
@@ -311,8 +314,12 @@ export async function trackTeamInviteOpen(
   const prisma = deps?.prisma ?? (getPrisma() as InvitePrisma);
   const now = deps?.now ? deps.now() : new Date();
 
+  // Open tracking only ever touches the live invite. A pixel fetched from an old email — after the
+  // invite was accepted, declined, revoked or replaced — must not keep incrementing a terminal
+  // row's counters, and must not rewrite a row the role rail would now re-check.
   await prisma.teamInvite.updateMany({
     where: {
+      ...ACTIONABLE_TEAM_INVITE_WHERE,
       id: params.inviteId,
       openedAt: null,
     },
@@ -322,6 +329,7 @@ export async function trackTeamInviteOpen(
   });
   await prisma.teamInvite.updateMany({
     where: {
+      ...ACTIONABLE_TEAM_INVITE_WHERE,
       id: params.inviteId,
     },
     data: {

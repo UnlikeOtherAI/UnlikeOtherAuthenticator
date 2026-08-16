@@ -10,6 +10,12 @@ import {
   normalizeDomain,
   resolveOrganisationByDomain,
 } from './organisation.service.base.js';
+import { OWNER_ROLE } from './role-grants.js';
+import {
+  deriveInviteStatus,
+  type TeamInviteStatusValue,
+} from './team-invite-state-machine.js';
+import { normalizeTeamRole } from './team.service.base.js';
 
 export type InvitePrisma = PrismaClient;
 
@@ -86,13 +92,8 @@ export function computeInviteExpiresAt(now: Date): Date {
   return new Date(now.getTime() + INVITE_EXPIRY_MS);
 }
 
-export type TeamInviteStatus =
-  | 'pending'
-  | 'accepted'
-  | 'declined'
-  | 'replaced'
-  | 'revoked'
-  | 'expired';
+/** Re-exported under its established name; the values live with the derivation that produces them. */
+export type TeamInviteStatus = TeamInviteStatusValue;
 export type InviteApprovalStatusValue = 'not_required' | 'pending' | 'approved' | 'denied';
 
 export type TeamInviteRecord = Omit<PendingInviteRow, 'approvalStatus'> & {
@@ -110,6 +111,46 @@ export type TeamInviteCreateResult =
   | { email: string; status: 'already_member' }
   | { email: string; status: 'existing_user' }
   | { email: string; status: 'conflict' };
+
+/**
+ * Prisma `where` fragment for the actionable-invite predicate — exactly the predicate of the
+ * `team_invites_one_actionable_per_team_email` partial unique index: not accepted, not declined,
+ * not revoked, and approval not DENIED. Every read/write that must only ever see the one live
+ * invite for a `(team, email)` filters through this, so a terminal row can never be resent,
+ * re-tracked, or counted as the existing invite.
+ *
+ * Kept beside the index it mirrors, and matched by `isActionable` in the state machine.
+ */
+export const ACTIONABLE_TEAM_INVITE_WHERE = {
+  acceptedAt: null,
+  declinedAt: null,
+  revokedAt: null,
+  approvalStatus: { not: 'DENIED' },
+} as const;
+
+/**
+ * The role an invitation may grant: any role in the domain's own `team_roles` vocabulary EXCEPT
+ * `owner`.
+ *
+ * Two separate rules, deliberately composed rather than merged into one hard-coded list:
+ *
+ *  - the vocabulary is the domain's (`normalizeTeamRole` against configured `team_roles`), so a
+ *    domain that renamed or invented its roles can invite into them;
+ *  - `owner` is refused structurally. `owner` is the one fixed role in every vocabulary and
+ *    implicitly holds every capability at its scope (`role-grants.ts`), so an emailed invitation
+ *    granting it would hand full authority over a team to whoever controls a mailbox. Ownership
+ *    comes from direct membership management, never from an invite.
+ *
+ * The database mirrors only the second rule (`team_invites_team_role_check`: `team_role <>
+ * 'owner'`), because the first is per-domain configuration the database cannot see.
+ */
+export function normalizeInviteGrantRole(value: string | undefined, config: ClientConfig): string {
+  const role = normalizeTeamRole(value, config);
+  if (role === OWNER_ROLE) {
+    throw new AppError('BAD_REQUEST', 400);
+  }
+  return role;
+}
 
 export function normalizeInviteName(value?: string): string | null {
   const trimmed = value?.trim();
@@ -158,10 +199,6 @@ export function toInviteRecord(
   domain: string,
 ): TeamInviteRecord {
   const { approvalStatus, ...rest } = row;
-  const isExpired =
-    !row.acceptedAt && !row.declinedAt && !row.revokedAt
-      ? Boolean(row.expiresAt && row.expiresAt.getTime() <= now.getTime())
-      : false;
 
   return {
     ...rest,
@@ -172,17 +209,9 @@ export function toInviteRecord(
     acceptedAvatarImageUrl: row.acceptedUserId
       ? memberAvatarImageUrl(domain, row.acceptedUserId)
       : null,
-    status: row.acceptedAt
-      ? 'accepted'
-      : row.declinedAt
-        ? 'declined'
-        : row.revokedAt
-          ? // Explicit cancellation reads `revoked`; a null reason is a pre-migration row, and
-            // every one of those was revoked by being replaced with a newer invite.
-            (row.revokedReason === 'REVOKED' ? 'revoked' : 'replaced')
-          : isExpired
-            ? 'expired'
-            : 'pending',
+    // One implementation, shared with the state machine, so the status a product reads and the
+    // status the transition rules reason about can never disagree.
+    status: deriveInviteStatus(row, now),
   };
 }
 

@@ -9,6 +9,7 @@ import {
   resolveOrgActor,
 } from './organisation.service.base.js';
 import { hasWorkspaceCapability } from './team.service.base.js';
+import { decideTeamInviteTransition } from './team-invite-state-machine.js';
 import {
   TEAM_INVITE_SELECT,
   type InviteDeps,
@@ -112,10 +113,14 @@ export async function revokeTeamInvite(
     throw new AppError('FORBIDDEN', 403);
   }
 
-  if (invite.acceptedAt) {
+  // One shared decision policy with every other transition (team-invite-state-machine.ts). The
+  // two caller-visible outcomes below are this endpoint's own contract, so the pure module reports
+  // them as `refuse`/`no-op` and they are mapped to status codes here.
+  const decision = decideTeamInviteTransition({ transition: 'revoke', invite, now });
+  if (decision.kind === 'refuse') {
     throw new AppError('BAD_REQUEST', 409, 'INVITATION_ALREADY_ACCEPTED');
   }
-  if (invite.revokedAt || invite.declinedAt) {
+  if (decision.kind === 'no-op') {
     // Already unusable — idempotent success, and no second audit row claiming a second revocation.
     return { ok: true };
   }

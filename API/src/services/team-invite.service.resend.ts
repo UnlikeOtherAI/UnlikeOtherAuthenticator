@@ -7,8 +7,10 @@ import { buildUserIdentity } from './user-scope.service.js';
 import { extractEmailTheme } from './email-theme.service.js';
 import { sendTeamInviteEmail } from './email.service.js';
 import {
+  ACTIONABLE_TEAM_INVITE_WHERE,
   TEAM_INVITE_SELECT,
   computeInviteExpiresAt,
+  normalizeInviteGrantRole,
   type InviteDeps,
   type TeamInviteRecord,
   buildTeamInviteLink,
@@ -21,6 +23,7 @@ import {
   toInviteRecord,
   type InvitePrisma,
 } from './team-invite.service.base.js';
+import { assertTeamInviteTransition } from './team-invite-state-machine.js';
 
 // Split out of team-invite.service.management.ts (which was at the 500-line cap) so Phase 4's
 // expiry-refresh addition (Task 3) has room without pushing either file over the limit.
@@ -62,9 +65,15 @@ export async function resendTeamInvite(
   if (!invite) {
     throw new AppError('NOT_FOUND', 404);
   }
-  if (invite.acceptedAt) {
-    throw new AppError('BAD_REQUEST', 400);
-  }
+  // Shared policy: an accepted, declined, revoked or DENIED invite cannot be resent, and neither
+  // can one still awaiting approval (nothing has been approved to mail yet). Resending used to
+  // check only `acceptedAt`, so it could resurrect an invite an admin had just revoked, or mail an
+  // invite whose approval was still pending.
+  assertTeamInviteTransition({ transition: 'resend', invite, now });
+  // The stored role is revalidated against the domain's *current* vocabulary and the owner rail
+  // before it is copied onto the replacement row, so a role that is no longer invitable fails with
+  // the generic 400 rather than a raw constraint violation.
+  const teamRole = normalizeInviteGrantRole(invite.teamRole, params.config);
 
   const identity = buildUserIdentity({
     userScope: params.config.user_scope,
@@ -79,13 +88,13 @@ export async function resendTeamInvite(
     throw new AppError('BAD_REQUEST', 409, 'EMAIL_ALREADY_REGISTERED');
   }
 
+  // Frees the actionable slot before the replacement row is created, so the new invite cannot
+  // collide with `team_invites_one_actionable_per_team_email`.
   await prisma.teamInvite.updateMany({
     where: {
+      ...ACTIONABLE_TEAM_INVITE_WHERE,
       teamId: team.id,
       email: invite.email,
-      acceptedAt: null,
-      declinedAt: null,
-      revokedAt: null,
     },
     data: {
       revokedAt: now,
@@ -99,7 +108,7 @@ export async function resendTeamInvite(
       teamId: invite.teamId,
       email: invite.email,
       inviteName: invite.inviteName,
-      teamRole: invite.teamRole,
+      teamRole,
       redirectUrl: invite.redirectUrl,
       invitedByUserId: invite.invitedByUserId,
       invitedByName: invite.invitedByName,

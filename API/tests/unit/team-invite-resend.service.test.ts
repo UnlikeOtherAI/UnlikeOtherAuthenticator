@@ -80,6 +80,10 @@ describe('resendTeamInvite', () => {
       openedAt: null,
       openCount: 0,
       lastSentAt: new Date('2026-03-04T00:00:00.000Z'),
+      // Both are in TEAM_INVITE_SELECT, so the real read always returns them, and the resend
+      // lifecycle gate reads them.
+      expiresAt: null,
+      approvalStatus: 'NOT_REQUIRED',
       createdAt: new Date('2026-03-04T00:00:00.000Z'),
       updatedAt: new Date('2026-03-04T00:00:00.000Z'),
     });

@@ -127,6 +127,8 @@ describe('team invite services', () => {
       revokedAt: null,
       openedAt: null,
       openCount: 0,
+      expiresAt: null,
+      approvalStatus: 'NOT_REQUIRED',
       lastSentAt: new Date('2026-03-01T00:00:00.000Z'),
       createdAt: new Date('2026-03-01T00:00:00.000Z'),
       updatedAt: new Date('2026-03-01T00:00:00.000Z'),
@@ -217,7 +219,10 @@ describe('team invite services', () => {
       teamRole: 'admin',
       acceptedUserId: null,
       acceptedAt: null,
+      declinedAt: null,
       revokedAt: null,
+      expiresAt: null,
+      approvalStatus: 'NOT_REQUIRED',
       org: {
         id: 'org-1',
         domain: 'client.example.com',
@@ -312,6 +317,8 @@ describe('team invite services', () => {
       revokedAt: null,
       openedAt: null,
       openCount: 0,
+      expiresAt: null,
+      approvalStatus: 'NOT_REQUIRED',
       lastSentAt: new Date(),
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -335,6 +342,8 @@ describe('team invite services', () => {
       revokedAt: null,
       openedAt: null,
       openCount: 0,
+      expiresAt: null,
+      approvalStatus: 'NOT_REQUIRED',
       lastSentAt: new Date('2026-03-03T00:00:00.000Z'),
       createdAt: new Date('2026-03-03T00:00:00.000Z'),
       updatedAt: new Date('2026-03-03T00:00:00.000Z'),
@@ -387,9 +396,12 @@ describe('team invite services', () => {
       where: {
         teamId: 'team-1',
         email: 'invitee@example.com',
+        // The actionable predicate — the same one `team_invites_one_actionable_per_team_email`
+        // enforces. A DENIED invite is already non-actionable, so it is never re-revoked.
         acceptedAt: null,
         declinedAt: null,
         revokedAt: null,
+        approvalStatus: { not: 'DENIED' },
       },
       data: {
         revokedAt: new Date('2026-03-03T00:00:00.000Z'),

@@ -13,11 +13,13 @@ import {
   resolveOrgActor,
   resolveOrganisationByDomain,
 } from './organisation.service.base.js';
-import { hasWorkspaceCapability, normalizeTeamRole } from './team.service.base.js';
+import { hasWorkspaceCapability } from './team.service.base.js';
 import { buildUserIdentity } from './user-scope.service.js';
 import {
+  ACTIONABLE_TEAM_INVITE_WHERE,
   TEAM_INVITE_SELECT,
   computeInviteExpiresAt,
+  normalizeInviteGrantRole,
   type InviteDeps,
   type TeamInviteRecord,
   buildTeamInviteLink,
@@ -32,6 +34,10 @@ import {
   toInviteRecord,
   type InvitePrisma,
 } from './team-invite.service.base.js';
+import {
+  assertTeamInviteTransition,
+  decideTeamInviteTransition,
+} from './team-invite-state-machine.js';
 
 // Phase 4 Task 4 (design §4.7): member-initiated invites + the owner/admin approval workflow. Split
 // out of team-invite.service.management.ts (which was already at the 500-line cap before this task)
@@ -134,7 +140,7 @@ export async function createMemberInvite(
 
   const email = normalizeEmail(params.invite.email);
   const inviteName = normalizeInviteName(params.invite.name);
-  const teamRole = normalizeTeamRole(params.invite.teamRole, params.config);
+  const teamRole = normalizeInviteGrantRole(params.invite.teamRole, params.config);
 
   const identity = buildUserIdentity({
     userScope: params.config.user_scope,
@@ -169,19 +175,25 @@ export async function createMemberInvite(
     }
   }
 
+  // Only the one actionable invite counts as "existing"; replacing it frees the slot the partial
+  // unique index guards, before the create below.
   const existingInvite = await prisma.teamInvite.findFirst({
-    where: { teamId: team.id, email },
+    where: { ...ACTIONABLE_TEAM_INVITE_WHERE, teamId: team.id, email },
     orderBy: { createdAt: 'desc' },
-    select: { id: true, acceptedAt: true, declinedAt: true, revokedAt: true },
+    select: {
+      acceptedAt: true,
+      declinedAt: true,
+      revokedAt: true,
+      expiresAt: true,
+      approvalStatus: true,
+    },
   });
-  if (
-    existingInvite &&
-    !existingInvite.acceptedAt &&
-    !existingInvite.declinedAt &&
-    !existingInvite.revokedAt
-  ) {
+  const replacesExisting =
+    decideTeamInviteTransition({ transition: 'create', invite: existingInvite, now }).kind ===
+    'no-op';
+  if (replacesExisting) {
     await prisma.teamInvite.updateMany({
-      where: { teamId: team.id, email, acceptedAt: null, declinedAt: null, revokedAt: null },
+      where: { ...ACTIONABLE_TEAM_INVITE_WHERE, teamId: team.id, email },
       data: { revokedAt: now, revokedReason: 'REPLACED' },
     });
   }
@@ -286,13 +298,22 @@ export async function listPendingApprovalInvites(
     domain: params.domain,
   });
 
+  // `approvalStatus: 'PENDING'` alone is not enough: a row can be revoked or declined while still
+  // stamped PENDING, and an approver must not be shown work that no longer exists. The actionable
+  // predicate is spread FIRST so the explicit PENDING below wins over its `not: 'DENIED'`, then an
+  // expiry filter — an expired invite can no longer be approved, so listing it is a dead end.
+  const now = deps?.now ? deps.now() : new Date();
   const rows = await prisma.teamInvite.findMany({
-    where: { orgId: org.id, approvalStatus: 'PENDING' },
+    where: {
+      ...ACTIONABLE_TEAM_INVITE_WHERE,
+      orgId: org.id,
+      approvalStatus: 'PENDING',
+      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+    },
     orderBy: { createdAt: 'desc' },
     select: TEAM_INVITE_SELECT,
   });
 
-  const now = deps?.now ? deps.now() : new Date();
   return { data: rows.map((row) => toInviteRecord(row, now, org.domain)) };
 }
 
@@ -326,11 +347,10 @@ export async function approveInvite(
   });
   const invite = await findOrgInviteOrThrow({ prisma, orgId: org.id, inviteId: params.inviteId });
 
-  // A revoked invite is no longer approvable — approving would email a link that acceptance
-  // refuses (`revokedAt` gate). Same generic error as the not-pending case below.
-  if (invite.revokedAt || invite.approvalStatus !== 'PENDING') {
-    throw new AppError('BAD_REQUEST', 400);
-  }
+  // Shared policy: only an unresolved, unexpired invite still awaiting approval. A revoked,
+  // declined or accepted invite is no longer approvable — approving would email a link acceptance
+  // refuses — and neither is an expired one. Generic 400 for every case, so this is no oracle.
+  assertTeamInviteTransition({ transition: 'approve', invite, now });
 
   const identity = buildUserIdentity({
     userScope: params.config.user_scope,
@@ -421,11 +441,11 @@ export async function denyInvite(
   });
   const invite = await findOrgInviteOrThrow({ prisma, orgId: org.id, inviteId: params.inviteId });
 
-  // A revoked invite already carries its terminal state; denying it after the fact would overwrite
-  // the honest record. Same generic error as the not-pending case.
-  if (invite.revokedAt || invite.approvalStatus !== 'PENDING') {
-    throw new AppError('BAD_REQUEST', 400);
-  }
+  // Shared policy: only an unresolved invite still awaiting approval. A revoked, declined or
+  // accepted invite already carries its terminal state and denying it after the fact would
+  // overwrite the honest record. Unlike approval there is no expiry gate — expiry blocks approving
+  // and accepting, never the terminal cleanup decision.
+  assertTeamInviteTransition({ transition: 'deny', invite, now });
 
   const updated = await prisma.teamInvite.update({
     where: { id: invite.id },
