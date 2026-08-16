@@ -66,7 +66,7 @@ function assertConsentReplay(
     accountId: string;
     creditAccountId: string;
     orgId: string;
-    teamId: string;
+    teamId: string | null;
     serviceId: string;
     appKeyId: string;
     optionId: string;
@@ -77,7 +77,7 @@ function assertConsentReplay(
     accountId: string;
     creditAccountId: string;
     orgId: string;
-    teamId: string;
+    teamId: string | null;
     serviceId: string;
     appKeyId: string;
     optionId: string;
@@ -166,7 +166,9 @@ export async function updateBillingCreditAutoTopUp(
     accountId: context.account.id,
     creditAccountId: context.creditAccount.id,
     orgId: params.request.organisationId,
-    teamId: params.request.teamId,
+    // The paying scope, not the requesting team: an organisation-scoped credit
+    // account's consent and disable evidence carry no team.
+    teamId: context.creditAccount.teamId,
     serviceId: params.credential.service.id,
     appKeyId: params.credential.id,
     optionId: selection.option.id,
@@ -205,7 +207,7 @@ export async function updateBillingCreditAutoTopUp(
             accountId: context.account.id,
             creditAccountId: context.creditAccount.id,
             orgId: params.request.organisationId,
-            teamId: params.request.teamId,
+            teamId: context.creditAccount.teamId,
             serviceId: params.credential.service.id,
             appKeyId: params.credential.id,
             policyId: selection.policy.id,
@@ -374,7 +376,7 @@ export async function disableBillingCreditAutoTopUp(
           accountId: context.account.id,
           creditAccountId: context.creditAccount.id,
           orgId: params.request.organisationId,
-          teamId: params.request.teamId,
+          teamId: context.creditAccount.teamId,
           serviceId: params.credential.service.id,
           appKeyId: params.credential.id,
           previousConsentRevisionId: account.autoTopUpConsentRevisionId,

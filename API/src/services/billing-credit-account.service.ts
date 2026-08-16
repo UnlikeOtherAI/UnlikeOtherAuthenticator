@@ -10,6 +10,7 @@ import {
   type StripeAccountContext,
 } from './billing-stripe-client.service.js';
 import { runBillingSerializableTransaction } from './billing-serializable-transaction.service.js';
+import { resolveOrgBillingResponsibility } from './billing-org-responsibility.service.js';
 
 export type CreditCollectionContext = {
   account: StripeAccountContext;
@@ -30,7 +31,14 @@ async function resolvePersistedCreditAccount(
   prisma: PrismaClient,
 ): Promise<StripeAccountContext> {
   const scoped = await prisma.billingCreditAccount.findMany({
-    where: { orgId: params.organisationId, teamId: params.teamId, currency: 'USD' },
+    where: {
+      orgId: params.organisationId,
+      OR: [
+        { scope: BillingAssignmentScope.TEAM, teamId: params.teamId },
+        { scope: BillingAssignmentScope.ORGANISATION, teamId: null },
+      ],
+      currency: 'USD',
+    },
     orderBy: { updatedAt: 'desc' },
     take: 2,
     select: { account: { select: { id: true, stripeAccountId: true, livemode: true } } },
@@ -75,16 +83,19 @@ export async function resolveCreditCollectionContext(
   return { account, stripeCollectionEnabled: true, stripe: configured.client };
 }
 
-export async function ensureTeamCreditAccount(
+async function ensureScopedCreditAccount(
   params: {
     account: StripeAccountContext;
     organisationId: string;
-    teamId: string;
+    teamId: string | null;
   },
   deps?: { prisma?: PrismaClient },
 ) {
   const prisma = deps?.prisma ?? getAdminPrisma();
-  const scopeKey = `${params.organisationId}:${params.teamId}`;
+  const scope =
+    params.teamId === null ? BillingAssignmentScope.ORGANISATION : BillingAssignmentScope.TEAM;
+  const scopeKey =
+    params.teamId === null ? params.organisationId : `${params.organisationId}:${params.teamId}`;
   return runBillingSerializableTransaction(
     prisma,
     async (tx) => {
@@ -96,7 +107,7 @@ export async function ensureTeamCreditAccount(
           accountId: params.account.id,
           orgId: params.organisationId,
           teamId: params.teamId,
-          scope: BillingAssignmentScope.TEAM,
+          scope,
           scopeKey,
         },
         update: {},
@@ -105,16 +116,16 @@ export async function ensureTeamCreditAccount(
         customer.accountId !== params.account.id ||
         customer.orgId !== params.organisationId ||
         customer.teamId !== params.teamId ||
-        customer.scope !== BillingAssignmentScope.TEAM ||
+        customer.scope !== scope ||
         customer.scopeKey !== scopeKey
       ) {
         throw new AppError('INTERNAL', 409, 'BILLING_CREDIT_CUSTOMER_SCOPE_CONFLICT');
       }
       const creditAccount = await tx.billingCreditAccount.upsert({
         where: {
-          accountId_teamId_currency: {
+          accountId_scopeKey_currency: {
             accountId: params.account.id,
-            teamId: params.teamId,
+            scopeKey,
             currency: 'USD',
           },
         },
@@ -123,6 +134,8 @@ export async function ensureTeamCreditAccount(
           customerId: customer.id,
           orgId: params.organisationId,
           teamId: params.teamId,
+          scope,
+          scopeKey,
           currency: 'USD',
         },
         update: {},
@@ -132,6 +145,8 @@ export async function ensureTeamCreditAccount(
         creditAccount.customerId !== customer.id ||
         creditAccount.orgId !== params.organisationId ||
         creditAccount.teamId !== params.teamId ||
+        creditAccount.scope !== scope ||
+        creditAccount.scopeKey !== scopeKey ||
         creditAccount.currency !== 'USD'
       ) {
         throw new AppError('INTERNAL', 409, 'BILLING_CREDIT_ACCOUNT_SCOPE_CONFLICT');
@@ -140,6 +155,58 @@ export async function ensureTeamCreditAccount(
     },
     'BILLING_CREDIT_ACCOUNT_RETRY_EXHAUSTED',
   );
+}
+
+export async function ensureTeamCreditAccount(
+  params: {
+    account: StripeAccountContext;
+    organisationId: string;
+    teamId: string;
+  },
+  deps?: { prisma?: PrismaClient },
+) {
+  return ensureScopedCreditAccount(params, deps);
+}
+
+export async function ensureOrganisationCreditAccount(
+  params: {
+    account: StripeAccountContext;
+    organisationId: string;
+  },
+  deps?: { prisma?: PrismaClient },
+) {
+  return ensureScopedCreditAccount({ ...params, teamId: null }, deps);
+}
+
+/**
+ * The single chokepoint every credit debit crosses.
+ *
+ * With an organisation billing responsibility active, every team's metered
+ * spend lands on the ORGANISATION account; without one this is byte-identical
+ * to `ensureTeamCreditAccount`. That is the whole of the money side of
+ * `Docs/plans/2026-08-15-org-billing-override.md` §2: no caller anywhere in
+ * Ledger, the worker, or a product changes.
+ */
+export async function resolveCreditAccount(
+  params: {
+    account: StripeAccountContext;
+    organisationId: string;
+    teamId: string;
+  },
+  deps?: { prisma?: PrismaClient; resolveResponsibility?: typeof resolveOrgBillingResponsibility },
+) {
+  const prisma = deps?.prisma ?? getAdminPrisma();
+  const responsibility = await (deps?.resolveResponsibility ?? resolveOrgBillingResponsibility)(
+    { organisationId: params.organisationId },
+    { prisma },
+  );
+  if (responsibility.active) {
+    return ensureOrganisationCreditAccount(
+      { account: params.account, organisationId: params.organisationId },
+      { prisma },
+    );
+  }
+  return ensureTeamCreditAccount(params, { prisma });
 }
 
 export async function resolveCanonicalPortfolioProduct(

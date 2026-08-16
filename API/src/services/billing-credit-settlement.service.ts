@@ -120,9 +120,21 @@ async function settleInTransaction(
     where: { id: params.creditAccountId },
   });
   if (!account) throw new AppError('NOT_FOUND', 404, 'BILLING_CREDIT_ACCOUNT_MISSING');
+  // The paying account may be the organisation's (Docs/plans/2026-08-15-org-billing-override.md
+  // §2), in which case every team's portfolio settles against it. The team the
+  // usage belongs to still drives rating, attribution and the snapshot row —
+  // only where the credits are drawn from changes.
+  const settlementTeamId = account.teamId ?? params.portfolio.scope.teamId;
+  const portfolioTeam =
+    account.teamId === null
+      ? await tx.team.findFirst({
+          where: { id: params.portfolio.scope.teamId, orgId: account.orgId },
+          select: { id: true },
+        })
+      : null;
   if (
     account.orgId !== params.portfolio.scope.organizationId ||
-    account.teamId !== params.portfolio.scope.teamId ||
+    (account.teamId === null ? portfolioTeam === null : account.teamId !== params.portfolio.scope.teamId) ||
     account.currency !== 'USD'
   ) {
     throw new AppError('INTERNAL', 409, 'BILLING_CREDIT_PORTFOLIO_SCOPE_MISMATCH');
@@ -147,7 +159,7 @@ async function settleInTransaction(
       accountId: account.accountId,
       creditAccountId: account.id,
       organisationId: account.orgId,
-      teamId: account.teamId,
+      teamId: settlementTeamId,
       perspectiveServiceId: perspectiveService.id,
       portfolio: params.portfolio,
     });
@@ -172,7 +184,7 @@ async function settleInTransaction(
         accountId: account.accountId,
         creditAccountId: account.id,
         orgId: account.orgId,
-        teamId: account.teamId,
+        teamId: settlementTeamId,
         perspectiveServiceId: perspectiveService.id,
         perspectiveProduct: params.portfolio.perspectiveProduct,
         billingMonth: params.portfolio.scope.month,
@@ -229,8 +241,8 @@ async function settleInTransaction(
         OR: [
           {
             scope: BillingAssignmentScope.TEAM,
-            teamId: account.teamId,
-            scopeKey: `${account.orgId}:${account.teamId}`,
+            teamId: settlementTeamId,
+            scopeKey: `${account.orgId}:${settlementTeamId}`,
           },
           {
             scope: BillingAssignmentScope.ORGANISATION,
@@ -244,7 +256,7 @@ async function settleInTransaction(
     tx.billingTariff.findMany({
       where: { serviceId: { in: newServiceIds }, isDefault: true },
     }),
-    tx.teamMember.findMany({ where: { teamId: account.teamId }, select: { userId: true } }),
+    tx.teamMember.findMany({ where: { teamId: settlementTeamId }, select: { userId: true } }),
   ]);
   const resolvedTariffs = assignmentTariffs(
     services.filter((service) => newServiceIds.includes(service.id)),

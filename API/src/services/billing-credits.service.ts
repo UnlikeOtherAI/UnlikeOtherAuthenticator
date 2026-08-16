@@ -2,8 +2,8 @@ import type { PrismaClient } from '@prisma/client';
 
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import {
-  ensureTeamCreditAccount,
   resolveCanonicalPortfolioProduct,
+  resolveCreditAccount,
   resolveCreditCollectionContext,
 } from './billing-credit-account.service.js';
 import {
@@ -30,7 +30,7 @@ type Dependencies = {
   now?: () => Date;
   resolveEntitlement?: typeof resolveEffectiveTariffContext;
   resolveCollection?: typeof resolveCreditCollectionContext;
-  ensureCreditAccount?: typeof ensureTeamCreditAccount;
+  ensureCreditAccount?: typeof resolveCreditAccount;
   resolvePortfolioProduct?: typeof resolveCanonicalPortfolioProduct;
   fetchPortfolio?: FetchMeteringPortfolio;
   settlePortfolio?: typeof settleCreditPortfolio;
@@ -65,7 +65,7 @@ export async function getBillingCredits(
     },
     { prisma },
   );
-  const creditAccount = await (deps?.ensureCreditAccount ?? ensureTeamCreditAccount)(
+  const creditAccount = await (deps?.ensureCreditAccount ?? resolveCreditAccount)(
     {
       account: collection.account,
       organisationId: params.request.organisationId,
