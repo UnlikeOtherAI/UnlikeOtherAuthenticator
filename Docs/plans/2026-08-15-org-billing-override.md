@@ -1,7 +1,15 @@
 # Org billing override — one bill for the whole organisation, across all products
 
-> **Status:** design, 2026-08-15. Authority-side capability: this is a UOA
-> feature. Products render it and implement none of it.
+> **Status:** UOA side implemented, 2026-08-16 (`task/org-billing`). §1–§6 are
+> in `API/` and protocol **1.3.0** is published; product rollout (the table at
+> the end) has not started. Authority-side capability: this is a UOA feature.
+> Products render it and implement none of it.
+>
+> **Three decisions taken during implementation, deliberately different from
+> the sketch above — see "Implementation notes" at the end.** The wire field is
+> `controlled_by` in snake_case, the organisation view is additive rather than a
+> replacement, and the actor-assertion audience contract is now stated rather
+> than changed.
 > **Companion:** the per-product billing-consistency audits landing today as
 > `docs/plans/2026-08-15-billing-sso-audit.md` in nessie, water,
 > deepsignal.live, DeepTest, AdGoes.live and docgen. Constraints they surface
@@ -249,3 +257,65 @@ shown to members. Is that "an estimate of provider cost for ops" (allowed) or
 pressing, because an org-wide view is exactly where an operational estimate
 and a customer statement would be tempting to render side by side — and the
 `/tokens` vs `/ops/usage` split exists precisely to stop that.
+
+## Implementation notes (2026-08-16)
+
+Three places where the built thing differs from the sketch above, and why.
+
+1. **`controlled_by`, not `controlledBy`.** The JSON snippet in §4 is
+   camelCase; every other key in both the statement and the credits contracts
+   is snake_case (`credit_account_id`, `disabled_reason`,
+   `connected_service_usage`). The contract's internal consistency wins, so the
+   wire field is `controlled_by` with `organisation_id`, `can_manage` and
+   `manage_action_id`. The TypeScript type is `BillingControlledByV1`.
+   `manage_action_id` is present-and-null rather than absent when
+   `can_manage` is false, matching the package's existing
+   `disabled_reason: string | null` style.
+
+2. **The organisation view is additive, not a replacement.** §3 reads as though
+   an organisation billing manager's request returns *the organisation
+   statement* in place of the team's. It does not: the requested team's own
+   fields stay exactly what they are, and the roll-up arrives as
+   `organisation_scope` on v2. This follows from §4's own rule. A product still
+   vendoring 1.2.0 does not know `organisation_scope`, but it does know
+   `totals` — if those silently became organisation-wide, an un-upgraded
+   product would confidently display the wrong number for the team, which is
+   exactly the failure §4 exists to prevent. Additive is the only shape that
+   degrades honestly. `organisation_scope.totals` is the sum of its teams'
+   totals, computed by the same `billingCommercialTotals` summation UOA already
+   applies to one team's lines.
+
+3. **The actor-assertion audience contract is stated, not changed.** The audit
+   finding (§"Audit constraints" 1) asked UOA to decide before org-scope
+   endpoints were added. It is decided, and it was already the second of the
+   two possibilities: `verifyBillingActor` verifies `aud` against
+   **`BillingAppKey.actorAudience`** — the audience registered for that
+   product's app key — not against the endpoint being called. So an assertion
+   is scoped to *a product's billing surface*, and Nessie pinning
+   `…/billing/v1/effective-tariff` works because that is its registered
+   audience, not by accident. Per-endpoint scoping is provided by a different
+   mechanism: every mutating action goes through
+   `authorizeBillingCustomerAction`, which consumes the actor's `jti` exactly
+   once *per operation* and binds it to a digest of the request body. The two
+   new operations (`org_billing_assume`, `org_billing_release`) use it, so an
+   assertion spent taking billing over cannot be replayed to release it, or to
+   open a checkout. No estate-wide `aud` change was needed, and none was made:
+   changing it would break every product at once for no gain in scoping.
+
+Also worth recording, because it is a constraint the next person will hit:
+`billing_credit_auto_top_up_disable_events` is unique on
+`(app_key_id, actor_jti)`, which is right for a customer switching one team's
+automatic top-up off and wrong for one assumption that has to switch several
+teams off at once. The evidence rows written by an assumption therefore carry a
+namespaced, deterministic
+`org-billing-assume:<responsibilityId>:<creditAccountId>` in `actor_jti` — it
+cannot collide with a real token id, it makes a retried assumption idempotent,
+and the real requesting user and app key are still recorded on the row.
+
+### Not built here
+
+- **No admin surface.** §"Rollout order" step 1 lists one; the API is reachable
+  by the products' own billing backends, and no `/Admin` screen was added. That
+  is a deliberate gap, not an oversight — name it before general availability.
+- **The pilot enablement (step 4) has not happened**, and no product has
+  re-vendored 1.3.0.

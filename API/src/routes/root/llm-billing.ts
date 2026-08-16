@@ -255,6 +255,36 @@ The matching public artifacts use the \`billing-recurring-addons-v1\` filenames 
 \`/schemas\`. Recurring add-ons, including DeepWater privacy, remain separate from shared
 credits and from usage rating.
 
+### Organisation-wide billing
+
+An organisation can take billing over from all of its teams, across every service:
+\`POST /billing/v1/organisation-billing/assume\`, \`.../release\`, and a read at
+\`POST /billing/v1/organisation-billing\`. All three take the ordinary subject body, the
+product's \`customer_lifecycle\` app key and a fresh actor assertion, and additionally
+require an **organisation** billing manager — a verdict UOA makes itself and never accepts
+from a product.
+
+While it is on, \`resolveCreditAccount\` returns the organisation's credit account for
+every team, so all metered spend lands on one balance with no change anywhere in Ledger
+or in a product. The statement and the credits view then carry a \`controlled_by\` block
+(protocol 1.3.0) whose \`message\` is display-ready and whose \`can_manage\` is UOA's
+verdict about the exact caller. **Render \`message\` verbatim and offer only the action
+UOA names.** A caller who cannot manage receives an empty action list and no funding
+controls at all, so a product still vendoring 1.2.0 renders a read-only surface rather
+than buttons that would 403. An organisation billing manager additionally receives
+\`organisation_scope\` on the v2 statement: every team, each rated from its own pinned
+\`metering-portfolio-v1\` snapshot, with organisation totals that are the sum of the team
+totals. It sits beside the requested team's own fields, never in place of them.
+
+Assuming is refused whole — never partially applied — while any team funding action is in
+flight (\`FUNDING_ACTION_IN_FLIGHT\`, listing the exact rows) or while a live team-scoped
+Stripe subscription exists (\`TEAM_SUBSCRIPTIONS_ACTIVE\`, listing them). Auto-migrating a
+subscription would re-bill a customer without a decision, so an operator moves or ends it
+first. Each team's stored automatic top-up consent is deactivated — never deleted — with
+an audit row, and team credit balances are never swept: they remain the team's and are
+reachable again on release. Releasing reverses credit resolution only; organisation-scoped
+ledger rows, invoices and statements stay where the spend was incurred.
+
 ### Contract invoices
 
 UOA also owns manual organisation-contract invoicing. A platform superuser creates a

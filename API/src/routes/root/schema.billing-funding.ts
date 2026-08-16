@@ -233,4 +233,47 @@ export const billingFundingEndpoints: EndpointSchema[] = [
     notes:
       'UOA rechecks the actor and exact scope under a row lock, uses one stable Stripe idempotency key, and persists the exact result before acknowledging success.',
   },
+  {
+    method: 'POST',
+    path: '/billing/v1/organisation-billing',
+    description:
+      'Read whether the organisation has taken billing over from its teams, and whether this exact caller may manage it.',
+    auth: lifecycleAuth,
+    body: fundingSubject,
+    response: {
+      200: '{ organisation_id, active, assumed_at, released_at, can_manage }',
+      '401/403': 'Invalid lifecycle credential, actor, membership, or subject',
+    },
+    notes:
+      'Absent or inactive means each team pays for itself, which is the default everywhere.',
+  },
+  {
+    method: 'POST',
+    path: '/billing/v1/organisation-billing/assume',
+    description:
+      'Take billing over for every team in the organisation, across every service: credits, funding and the statement answer at the organisation from then on.',
+    auth: lifecycleAuth,
+    body: fundingSubject,
+    response: {
+      200: '{ organisation_id, active: true, assumed_at, released_at: null, deactivated_team_auto_top_ups }',
+      '401/403': 'Invalid lifecycle credential, actor, membership, or not an organisation billing manager',
+      409: 'FUNDING_ACTION_IN_FLIGHT with the exact rows, or TEAM_SUBSCRIPTIONS_ACTIVE with the exact live team subscriptions',
+    },
+    notes:
+      'Refused whole, never partially applied. Each team’s stored automatic top-up consent is deactivated (never deleted) with an audit row, and team credit balances are never swept. Live team subscriptions must be moved or ended by an operator: auto-migrating them would re-bill a customer without a decision.',
+  },
+  {
+    method: 'POST',
+    path: '/billing/v1/organisation-billing/release',
+    description:
+      'Hand billing back to the teams. Reverses credit resolution only.',
+    auth: lifecycleAuth,
+    body: fundingSubject,
+    response: {
+      200: '{ organisation_id, active: false, assumed_at, released_at }',
+      '401/403': 'Invalid lifecycle credential, actor, membership, or not an organisation billing manager',
+    },
+    notes:
+      'Organisation-scoped ledger rows, invoices and statements stay where the spend was incurred; history is never re-scoped. Deactivated team auto-top-up consents stay inactive and require explicit re-consent.',
+  },
 ];

@@ -116,6 +116,28 @@ organisation owner/admin; exact-team managers can act only on team or
 subscribing-user scopes. DeepWater's privacy subscription is represented as an
 ordinary versioned US$50/month offer, not product-local billing logic.
 
+`controlled_by` (1.3.0, optional, statement v1/v2 and credits) says that an
+organisation has taken billing over from its teams. UOA composes it: render
+`message` verbatim, and offer the single action named by `manage_action_id`
+only when `can_manage` is true — a UOA verdict about the exact caller, never a
+role the session or browser claims. While the block is present, a caller who
+cannot manage receives an empty action list and no funding controls at all, so
+a consumer still on 1.2.0 renders a read-only surface rather than controls that
+would 403.
+
+`organisation_scope` (1.3.0, optional, statement v2) is the organisation
+roll-up an organisation billing manager receives: every team, each with its own
+pinned `metering-portfolio-v1` snapshot, and organisation totals that are the
+sum of the team totals. It sits beside the requested team's own fields and
+never replaces them, so a consumer that predates it cannot read
+organisation-wide numbers as if they were the team's.
+
+The consumer-action contract also publishes the checkout-session and
+portal-session request and response envelopes (1.3.0). The bodies still come
+from UOA inside a statement action's `request.body`; publishing their shape
+lets a product validate what it relays and what it receives, instead of
+hand-writing a parallel schema.
+
 Run `pnpm generate` after an intentional protocol change. Build and test fail if
 the committed JSON Schema, example, or OpenAPI artifact drifts from the typed
 source. Breaking protocol changes require a new schema version and package

@@ -188,6 +188,9 @@ describe('canonical UOA billing statement', () => {
       billingTariff: {
         findUnique: vi.fn().mockResolvedValue({ name: 'Standard' }),
       },
+      organisation: {
+        findUnique: vi.fn().mockResolvedValue({ name: 'Acme', billingOrgResponsibility: null }),
+      },
       billingService: {
         findMany: vi.fn().mockResolvedValue([
           { identifier: 'deepwater', name: 'DeepWater' },
@@ -374,6 +377,55 @@ describe('canonical UOA billing statement', () => {
         },
       },
     });
+
+    const ajv = new Ajv2020({ allErrors: true, strict: true });
+    addFormats(ajv);
+    const validate = ajv.compile(billingStatementV1JsonSchema);
+    expect(validate(statement), JSON.stringify(validate.errors)).toBe(true);
+  });
+
+  it('offers no action at all while the organisation pays and the caller cannot manage it', async () => {
+    const prisma = {
+      organisation: {
+        findUnique: vi.fn().mockResolvedValue({ name: 'Acme', billingOrgResponsibility: null }),
+      },
+      billingTariff: { findUnique: vi.fn().mockResolvedValue({ name: 'Standard' }) },
+      billingService: { findMany: vi.fn().mockResolvedValue([]) },
+      billingCommercialAdjustment: { findMany: vi.fn().mockResolvedValue([]) },
+      teamMember: { findMany: vi.fn().mockResolvedValue([]) },
+    };
+    const controlledBy = {
+      scope: 'organisation' as const,
+      organisation_id: 'org_1',
+      organisation_name: 'Acme',
+      message: 'Billing for this workspace is managed for the whole of Acme.',
+      can_manage: false,
+      manage_action_id: null,
+    };
+
+    const statement = await getCanonicalBillingStatement(
+      { request, actorToken: 'signed-actor', credential, billingMonth: '2026-07' },
+      {
+        prisma: prisma as never,
+        now: () => now,
+        resolveSummary: vi.fn().mockResolvedValue(summary) as never,
+        fetchMetering: vi.fn(async (params: { groupBy: 'service' | 'user' }) =>
+          metering(params.groupBy),
+        ) as never,
+        listDirectAccess: vi.fn().mockResolvedValue([]),
+        resolveControlledBy: vi.fn().mockResolvedValue(controlledBy),
+      },
+    );
+
+    // A 1.2.0 consumer knows nothing about `controlled_by`; an empty action
+    // list is what makes it render read-only instead of buttons that 403.
+    expect(statement.actions).toEqual([]);
+    expect(statement.capabilities).toEqual({
+      can_upgrade: false,
+      can_open_portal: false,
+      can_cancel: false,
+    });
+    expect(statement.controlled_by).toEqual(controlledBy);
 
     const ajv = new Ajv2020({ allErrors: true, strict: true });
     addFormats(ajv);

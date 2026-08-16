@@ -698,6 +698,66 @@ components:
         user_id:
           type: string
 
+    BillingOrganisationResponsibility:
+      type: object
+      additionalProperties: false
+      required: [organisation_id, active, assumed_at, released_at]
+      properties:
+        organisation_id:
+          type: string
+        active:
+          type: boolean
+          description: While true, every team's metered spend is drawn from one organisation credit account.
+        assumed_at:
+          type: string
+          format: date-time
+          nullable: true
+        released_at:
+          type: string
+          format: date-time
+          nullable: true
+        deactivated_team_auto_top_ups:
+          type: integer
+          description: Team automatic top-up consents deactivated by this assumption.
+        can_manage:
+          type: boolean
+          description: UOA's verdict about the exact caller. Read responses only.
+
+    BillingOrganisationResponsibilityBlocked:
+      type: object
+      additionalProperties: false
+      required: [error, funding_actions_in_flight, team_subscriptions]
+      properties:
+        error:
+          type: string
+          enum: [FUNDING_ACTION_IN_FLIGHT, TEAM_SUBSCRIPTIONS_ACTIVE]
+        funding_actions_in_flight:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [kind, id]
+            properties:
+              kind:
+                type: string
+              id:
+                type: string
+        team_subscriptions:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [subscription_id, service_id, scope_key, status]
+            properties:
+              subscription_id:
+                type: string
+              service_id:
+                type: string
+              scope_key:
+                type: string
+              status:
+                type: string
+
     BillingStripeSubscriptionSummary:
       type: object
       additionalProperties: false
@@ -4387,6 +4447,124 @@ paths:
           description: Ledger returned unavailable or invalid raw metering.
         '503':
           description: The dedicated Ledger metering reader is unconfigured.
+
+  /billing/v1/organisation-billing:
+    post:
+      tags: [Billing]
+      summary: Read whether the organisation has taken billing over from its teams
+      operationId: readOrganisationBillingResponsibility
+      description: |
+        Absent or inactive means each team pays for itself, which is the
+        default. While it is active every team's metered spend is drawn from
+        one organisation credit account, and the statement and credits views
+        carry UOA's display-ready `controlled_by` block. `can_manage` is UOA's
+        verdict about the exact caller and is never accepted from a product.
+      security:
+        - billingAppKey: []
+          billingActor: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BillingSubjectRequest'
+      responses:
+        '200':
+          description: Current organisation billing responsibility.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum: ['private, no-store']
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingOrganisationResponsibility'
+        '401':
+          description: Invalid lifecycle app key or actor assertion.
+        '403':
+          description: Product, subject, or active membership mismatch.
+
+  /billing/v1/organisation-billing/assume:
+    post:
+      tags: [Billing]
+      summary: Take billing over for every team in the organisation
+      operationId: assumeOrganisationBillingResponsibility
+      description: |
+        Requires an organisation billing manager. Refused whole — never
+        partially applied — while any team funding action is in flight, or
+        while a live team-scoped Stripe subscription exists: auto-migrating one
+        would re-bill a customer without a decision, so an operator moves or
+        ends it first. Each team's stored automatic top-up consent is
+        deactivated, never deleted, with an audit row; team credit balances are
+        never swept.
+      security:
+        - billingAppKey: []
+          billingActor: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BillingSubjectRequest'
+      responses:
+        '200':
+          description: The organisation now pays for every team.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum: ['private, no-store']
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingOrganisationResponsibility'
+        '401':
+          description: Invalid lifecycle app key or actor assertion.
+        '403':
+          description: The caller is not an organisation billing manager.
+        '409':
+          description: Funding actions are in flight, or live team subscriptions exist.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingOrganisationResponsibilityBlocked'
+
+  /billing/v1/organisation-billing/release:
+    post:
+      tags: [Billing]
+      summary: Hand billing back to the teams
+      operationId: releaseOrganisationBillingResponsibility
+      description: |
+        Requires an organisation billing manager. Reverses credit resolution
+        only: organisation-scoped ledger rows, invoices and statements stay
+        where the spend was incurred, and deactivated team automatic top-up
+        consents stay inactive until a customer consents again.
+      security:
+        - billingAppKey: []
+          billingActor: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BillingSubjectRequest'
+      responses:
+        '200':
+          description: Each team pays for itself again.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum: ['private, no-store']
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingOrganisationResponsibility'
+        '401':
+          description: Invalid lifecycle app key or actor assertion.
+        '403':
+          description: The caller is not an organisation billing manager.
 
   /billing/v1/service-access/confirm:
     post:
