@@ -122,6 +122,11 @@ export function resolveKnownCapabilities(config: RoleGrantsConfig): Set<string> 
 /**
  * §3 rules 1 and 2, for ONE role at ONE scope. `owner` short-circuits; everything else is a set
  * membership test against the table, with absence meaning the empty set.
+ *
+ * The comparison is byte-exact — no trimming, no case folding. Roles are written through
+ * `ensureOrgRole` / `normalizeTeamRole` against the domain's own vocabulary, so anything stored is
+ * already a vocabulary entry; normalising here could only ever make a stored string match a grant
+ * it is not, which is a widening nobody asked for.
  */
 export function roleHoldsCapability(
   grants: RoleGrantTable,
@@ -129,10 +134,9 @@ export function roleHoldsCapability(
   role: string | null | undefined,
   capability: string,
 ): boolean {
-  const normalized = role?.trim();
-  if (!normalized) return false;
-  if (normalized === OWNER_ROLE) return true;
-  return grants[scope]?.[normalized]?.includes(capability) === true;
+  if (!role) return false;
+  if (role === OWNER_ROLE) return true;
+  return grants[scope]?.[role]?.includes(capability) === true;
 }
 
 /** `roleHoldsCapability` against the domain's resolved table — the common one-shot form. */

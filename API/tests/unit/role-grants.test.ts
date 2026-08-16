@@ -109,9 +109,11 @@ describe('role grants: owner is fixed', () => {
     expect(configRoleHoldsCapability(config(), 'team', 'owner', 'billing.manage')).toBe(true);
   });
 
-  it('is case- and whitespace-exact: "Owner" is a different, ungranted role', () => {
+  it('matches byte-exact: "Owner" and " owner " are different, ungranted roles', () => {
+    // Normalising here could only widen — a stored string matching a grant it is not.
     expect(configRoleHoldsCapability(config(), 'org', 'Owner', 'members.manage')).toBe(false);
-    expect(configRoleHoldsCapability(config(), 'org', ' owner ', 'members.manage')).toBe(true);
+    expect(configRoleHoldsCapability(config(), 'org', ' owner ', 'members.manage')).toBe(false);
+    expect(configRoleHoldsCapability(config(), 'org', ' admin', 'members.manage')).toBe(false);
   });
 });
 
