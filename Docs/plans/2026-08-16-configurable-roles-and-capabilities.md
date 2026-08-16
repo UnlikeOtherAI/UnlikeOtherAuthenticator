@@ -1,6 +1,7 @@
 # Configurable roles and capabilities — the domain defines the words, the product defines the deeds
 
-> **Status:** proposal, 2026-08-16. Replaces the refuted three-tier proposal
+> **Status:** wave 1 landed 2026-08-16 (UOA); waves 2–3 still proposal. Replaces the refuted
+> three-tier proposal
 > (`2026-08-16-estate-role-model.md`, stamped ⛔ do not implement); every claim
 > below was re-verified in source rather than inherited from it.
 > **The ask, in the owner's words:** roles should be configurable per domain in
@@ -431,7 +432,7 @@ first domain does. This is a security fix with its own justification; it does
 not wait for the capability model. (Nessie keeps `lead → admin`: that is a
 known legacy spelling, not an unknown.)
 
-**Wave 1 — UOA.** `team_roles` config key (mirror of `org_roles`, `owner`
+**Wave 1 — UOA. ✅ LANDED (2026-08-16).** `team_roles` config key (mirror of `org_roles`, `owner`
 mandatory; `ALLOWED_TEAM_ROLES` becomes the default rather than the law);
 `role_grants` + `capabilities` schema with validation; the implied **legacy
 default table** when `role_grants` is absent — reproducing today's effective
@@ -467,6 +468,58 @@ before a product's wave 3 adoption is **safe but inert** in that product
 (empty capability set, read-nothing member) — honest degradation, the same
 shape as the billing protocol's old-client rule. Nothing at any point requires
 a coordinated multi-product deploy.
+
+## Wave 1 as built (UOA, 2026-08-16)
+
+Where the design above and the shipped code differ, this section is the code.
+
+**UOA's own capability catalogue is two names**, declared in
+`API/src/services/role-grants.ts` and always legal in a grant table without the domain declaring
+them:
+
+| Capability | Gates |
+| --- | --- |
+| `members.manage` | Team roster mutation (add/remove/re-role), invitations, invite links, the PII-bearing invited list. |
+| `teams.manage` | The team object: create, rename, re-slug, join policy, icon, avatar, delete. |
+
+A domain's `org_features.capabilities` declares its *product's* catalogue on top; validation accepts
+the union.
+
+**The legacy default table** (`LEGACY_DEFAULT_ROLE_GRANTS`), used whenever `role_grants` is absent:
+
+```json
+{ "org": { "admin": ["members.manage", "teams.manage"] },
+  "team": { "admin": ["members.manage", "teams.manage"] } }
+```
+
+`owner` is absent because it is structural, per §1. Legacy-default equivalence is pinned
+exhaustively — every role × scope × capability against the pre-change predicates — in
+`API/tests/unit/role-grants.test.ts`.
+
+**Files.** Resolver `API/src/services/role-grants.ts`; config schema
+`API/src/services/config-org-features.schema.ts` (the whole `org_features` block moved out of
+`config.service.ts`, which was already over the 500-line cap); gates
+`hasWorkspaceCapability` / `requireWorkspaceCapability` in `API/src/services/team.service.base.ts`,
+replacing `isTeamManager` / `requireTeamManager` / `isOrgOrTeamManager`. `normalizeTeamRole` now
+takes the config and validates against `team_roles`. No database migration: the grant table lives
+in the config JWT and `team_role` was already a free string column.
+
+**Release note — one observable change for untouched domains.** The roster/team-mutation gate used
+to read the **org** membership alone, so a team `owner`/`admin` could not add, remove or re-role
+members of the team they administered, nor rename, re-icon or delete it. It now resolves the
+capability over the union of org- and team-scope standing, so they can. Everything else is
+byte-identical: org owner/admin reach-down, plain members refused, backend mode holding every
+capability, and team *creation* staying org-scoped because there is no team to stand in yet.
+Documented in `Docs/brief.md` §24.1b.
+
+**Deliberately not in wave 1**, and still hard-coding `owner|admin` on the **org** scope:
+`organisation.service.lifecycle.ts` `requireOrgManagerActor` (member deactivate/reactivate),
+`organisation.service.organisation.ts` (org rename / member-invites policy),
+`organisation.service.members.ts` (org member add/remove), and
+`billing-stripe-manager.service.ts` `BILLING_MANAGER_ROLES`. The first three are org-scope roster
+and settings gates whose answers are unchanged under the default table; moving them needs `config`
+plumbed through two more services that do not take it today, and belongs in its own change. The
+billing one is a §4 **verdict**, computed by UOA on state only UOA holds, and stays a verdict.
 
 ## The matrix — Nessie, action by action
 
