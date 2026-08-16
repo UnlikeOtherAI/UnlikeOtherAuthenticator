@@ -25,6 +25,7 @@ import {
   parseDomainContext,
   parseDomainContextHook,
   parseLimitCursor,
+  requireVerifiedConfig,
   tenantUserId,
 } from './organisation-route.shared.js';
 
@@ -108,8 +109,7 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
       const { domain } = parseDomainContext(request);
       const { name, owner_user_id: ownerUserId } = CreateOrgBodySchema.parse(request.body ?? {});
       const caller = orgCaller(request);
-      const config = request.config;
-      if (!config) throw new AppError('UNAUTHORIZED', 401, 'MISSING_CONFIG');
+      const config = requireVerifiedConfig(request);
 
       // The owner is the acting user on the user path, and an explicit body field
       // in backend mode. Exactly one of the two — a user-token call that also
@@ -184,8 +184,7 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
     },
     async (request, reply) => {
       const { domain } = parseDomainContext(request);
-      const config = request.config;
-      if (!config) throw new AppError('UNAUTHORIZED', 401, 'MISSING_CONFIG');
+      const config = requireVerifiedConfig(request);
 
       const orgId = getOrgIdFromParams(request.params);
       const { name, member_invites, icon_url } = OrgBodySchema.parse(request.body ?? {});

@@ -18,7 +18,6 @@ import {
 import { createRateLimiter } from '../../middleware/rate-limiter.js';
 import { requireOrgFeatures } from '../../middleware/org-features.js';
 import { requireOrgRole } from '../../middleware/org-role-guard.js';
-import { AppError } from '../../utils/errors.js';
 import {
   AddMemberBodySchema,
   SetRoleBodySchema,
@@ -30,6 +29,7 @@ import {
   parseDomainContext,
   parseDomainContextHook,
   parseMembersListQuery,
+  requireVerifiedConfig,
   tenantUserId,
 } from './organisation-route.shared.js';
 
@@ -81,8 +81,7 @@ export function registerOrganisationMemberRoutes(app: FastifyInstance) {
     },
     async (request, reply) => {
       const { domain } = parseDomainContext(request);
-      const config = request.config;
-      if (!config) throw new AppError('UNAUTHORIZED', 401, 'MISSING_CONFIG');
+      const config = requireVerifiedConfig(request);
 
       const orgId = getOrgIdFromParams(request.params);
       const { userId, role } = AddMemberBodySchema.parse(request.body ?? {});
@@ -119,8 +118,7 @@ export function registerOrganisationMemberRoutes(app: FastifyInstance) {
     },
     async (request, reply) => {
       const { domain } = parseDomainContext(request);
-      const config = request.config;
-      if (!config) throw new AppError('UNAUTHORIZED', 401, 'MISSING_CONFIG');
+      const config = requireVerifiedConfig(request);
 
       const orgId = getOrgIdFromParams(request.params);
       const userId = getUserIdFromParams(request.params);
@@ -158,11 +156,12 @@ export function registerOrganisationMemberRoutes(app: FastifyInstance) {
     },
     async (request, reply) => {
       const { domain } = parseDomainContext(request);
+      const config = requireVerifiedConfig(request);
       const orgId = getOrgIdFromParams(request.params);
       const userId = getUserIdFromParams(request.params);
 
       await removeOrganisationMember(
-        { orgId, domain, ...orgCaller(request), userId },
+        { orgId, domain, ...orgCaller(request), userId, config },
         { prisma: request.adminDb },
       );
 
@@ -183,11 +182,12 @@ export function registerOrganisationMemberRoutes(app: FastifyInstance) {
     },
     async (request, reply) => {
       const { domain } = parseDomainContext(request);
+      const config = requireVerifiedConfig(request);
       const orgId = getOrgIdFromParams(request.params);
       const userId = getUserIdFromParams(request.params);
 
       await deactivateOrganisationMember(
-        { orgId, domain, ...orgCaller(request), userId },
+        { orgId, domain, ...orgCaller(request), userId, config },
         { prisma: request.adminDb },
       );
 
@@ -208,13 +208,14 @@ export function registerOrganisationMemberRoutes(app: FastifyInstance) {
     },
     async (request, reply) => {
       const { domain } = parseDomainContext(request);
+      const config = requireVerifiedConfig(request);
       const orgId = getOrgIdFromParams(request.params);
       const userId = getUserIdFromParams(request.params);
 
       setTenantContextFromRequest(request, { orgId, userId: tenantUserId(request) });
       await request.withTenantTx((tx) =>
         reactivateOrganisationMember(
-          { orgId, domain, ...orgCaller(request), userId },
+          { orgId, domain, ...orgCaller(request), userId, config },
           { prisma: asPrismaClient(tx) },
         ),
       );

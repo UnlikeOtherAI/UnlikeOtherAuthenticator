@@ -1,3 +1,4 @@
+import type { ClientConfig } from './config.service.js';
 import { getEnv } from '../config/env.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { runInTransaction } from '../db/tenant-context.js';
@@ -13,6 +14,7 @@ import {
   assertDatabaseEnabled,
   auditOrg,
   getOrganisationMember,
+  requireOrgCapability,
   resolveOrgActor,
   resolveOrganisationByDomain,
   type OrgActorProvenance,
@@ -25,23 +27,27 @@ import {
 // tenant-resolution/actor-authorization helpers from organisation.service.base.ts.
 
 /**
- * Require org owner/admin standing OF THE ACTING USER.
+ * Require that the ACTING USER holds `members.manage` at org scope.
  *
- * `undefined` means there is no acting user because the domain pairing
- * authorised the call (backend mode) — there is no membership to check, and the
- * caller already holds authority over the whole tenant. `resolveOrgActor` is what
- * proves the distinction; this helper never invents it.
+ * Deactivating and reactivating an org membership is roster mutation — the same family as adding
+ * and removing one — so it resolves the same capability rather than a second name, and a domain
+ * that grants a custom role the roster gets the whole roster rather than three of its four verbs.
+ *
+ * `actorUserId: undefined` means there is no acting user because the domain pairing authorised the
+ * call (backend mode): there is no membership to check, and the caller already holds authority over
+ * the whole tenant. `resolveOrgActor` is what proves the distinction; this helper never invents it.
  */
-async function requireOrgManagerActor(
+async function requireOrgMemberManager(
   prisma: OrgServicePrisma,
-  orgId: string,
-  actorUserId: string | undefined,
+  params: { orgId: string; actorUserId: string | undefined; config: ClientConfig },
 ): Promise<void> {
-  if (!actorUserId) return;
-  const actorMembership = await getOrganisationMember(prisma, { orgId, userId: actorUserId }, { activeOnly: true });
-  if (!actorMembership || (actorMembership.role !== 'owner' && actorMembership.role !== 'admin')) {
-    throw new AppError('FORBIDDEN', 403);
-  }
+  if (!params.actorUserId) return;
+  const actorMembership = await getOrganisationMember(
+    prisma,
+    { orgId: params.orgId, userId: params.actorUserId },
+    { activeOnly: true },
+  );
+  requireOrgCapability(params.config, 'members.manage', actorMembership?.role);
 }
 
 export async function deactivateOrganisationMember(
@@ -51,6 +57,7 @@ export async function deactivateOrganisationMember(
     actorUserId?: string;
     actor?: OrgActorProvenance;
     userId: string;
+    config: ClientConfig;
   },
   deps?: OrgServiceDeps & {
     revokeRefreshTokenFamiliesForUserOrganisation?:
@@ -72,7 +79,7 @@ export async function deactivateOrganisationMember(
   const prisma = deps?.prisma ?? (getAdminPrisma() as unknown as OrgServicePrisma);
   const org = await resolveOrganisationByDomain(prisma, params);
 
-  await requireOrgManagerActor(prisma, org.id, actorUserId);
+  await requireOrgMemberManager(prisma, { orgId: org.id, actorUserId, config: params.config });
 
   // Target must currently be ACTIVE — a DEACTIVATED/REMOVED row has nothing further to
   // deactivate, and never deactivate an owner (must transfer ownership first).
@@ -138,6 +145,7 @@ export async function reactivateOrganisationMember(
     actorUserId?: string;
     actor?: OrgActorProvenance;
     userId: string;
+    config: ClientConfig;
   },
   deps?: OrgServiceDeps & {
     afterMembershipStatusWrite?: () => Promise<void>;
@@ -153,7 +161,7 @@ export async function reactivateOrganisationMember(
   const prisma = deps?.prisma ?? (getAdminPrisma() as unknown as OrgServicePrisma);
   const org = await resolveOrganisationByDomain(prisma, params);
 
-  await requireOrgManagerActor(prisma, org.id, actorUserId);
+  await requireOrgMemberManager(prisma, { orgId: org.id, actorUserId, config: params.config });
 
   // Only a DEACTIVATED row may be reactivated here — a REMOVED member re-joins through
   // addOrganisationMember (the "re-add reactivates" path), not this endpoint.

@@ -16,6 +16,7 @@ import {
   normalizeIconUrl,
   normalizeMemberInvitesSetting,
   parseOrgFeatureRoles,
+  requireOrgCapability,
   resolveOrgActor,
   resolveOrganisationByDomain,
   toListLimit,
@@ -276,14 +277,14 @@ export async function updateOrganisation(
   const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
   const org = await resolveOrganisationByDomain(prisma, params);
 
-  // Owner/admin is a check on the ACTING USER. In backend mode there is none —
-  // the domain pairing already proved the caller owns this whole tenant, which is
-  // strictly more authority than any single member's role.
+  // Renaming the organisation, and setting its invite policy and icon, is the organisation OBJECT —
+  // `organisation.manage`, resolved against this domain's grant table at ORG scope. Team standing
+  // is deliberately not consulted: administering one team must not confer authority over the tenant
+  // containing it. In backend mode there is no acting user — the domain pairing already proved the
+  // caller owns this whole tenant, which is strictly more authority than any single member's role.
   if (actorUserId) {
     const actorMembership = await getOrganisationMember(prisma, { orgId: org.id, userId: actorUserId }, { activeOnly: true });
-    if (!actorMembership || (actorMembership.role !== 'owner' && actorMembership.role !== 'admin')) {
-      throw new AppError('FORBIDDEN', 403);
-    }
+    requireOrgCapability(params.config, 'organisation.manage', actorMembership?.role);
   }
 
   const slug = await deriveSlugWithValidation(org.domain, prisma, name, org.slug);

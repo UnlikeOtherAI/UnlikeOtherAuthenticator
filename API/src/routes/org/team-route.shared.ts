@@ -1,7 +1,6 @@
 import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
-import type { ClientConfig } from '../../services/config.service.js';
 import { AppError } from '../../utils/errors.js';
 import { assertVerifiedDomainMatchesQuery, normalizeDomain } from './domain-context.js';
 
@@ -126,20 +125,6 @@ export type RequestWithClaims = FastifyRequest & {
   };
 };
 
-/**
- * The verified client config for this request.
- *
- * Every `/org/*` route runs `configVerifier`, so the config is always there in practice; this
- * refuses rather than assumes, because the org/team services now resolve the domain's configured
- * role vocabulary and `role_grants` out of it and must never silently fall back to a default table
- * the domain did not write.
- */
-export function requireVerifiedConfig(request: FastifyRequest): ClientConfig {
-  const config = request.config;
-  if (!config) throw new AppError('UNAUTHORIZED', 401, 'MISSING_CONFIG');
-  return config;
-}
-
 export function parseDomainContext(request: FastifyRequest) {
   const parsed = DomainQuerySchema.parse(request.query);
   assertVerifiedDomainMatchesQuery(request, parsed.domain);
@@ -186,10 +171,15 @@ export function getActorUserId(request: RequestWithClaims): string {
   return userId;
 }
 
-// Caller resolution and actor provenance have exactly one definition each;
-// re-exported so team routes and organisation routes cannot drift apart on what
-// "who is calling" means.
-export { getActorProvenance, orgCaller, tenantUserId } from './organisation-route.shared.js';
+// Caller resolution, actor provenance and the verified-config accessor have exactly one definition
+// each; re-exported so team routes and organisation routes cannot drift apart on what "who is
+// calling" or "this domain's config" means.
+export {
+  getActorProvenance,
+  orgCaller,
+  requireVerifiedConfig,
+  tenantUserId,
+} from './organisation-route.shared.js';
 
 export function getOrgIdFromParams(params: unknown): string {
   const parsed = OrgPathSchema.parse(params ?? {});

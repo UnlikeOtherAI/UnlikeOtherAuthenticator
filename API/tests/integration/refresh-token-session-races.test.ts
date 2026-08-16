@@ -235,7 +235,7 @@ describe.skipIf(!hasDatabase)('refresh session serialization and reuse revocatio
     await locked.promise;
 
     const deactivation = deactivateOrganisationMember(
-      { ...workspace, domain, actorUserId: workspace.ownerId },
+      { ...workspace, domain, actorUserId: workspace.ownerId, config: membershipConfig() },
       { prisma: handle.prisma },
     );
     await expectStillPending(deactivation);
@@ -246,7 +246,7 @@ describe.skipIf(!hasDatabase)('refresh session serialization and reuse revocatio
     await expectAllRevoked(workspace.userId, 2);
 
     await reactivateOrganisationMember(
-      { ...workspace, domain, actorUserId: workspace.ownerId },
+      { ...workspace, domain, actorUserId: workspace.ownerId, config: membershipConfig() },
       { prisma: handle.prisma },
     );
     await expect(
@@ -260,7 +260,7 @@ describe.skipIf(!hasDatabase)('refresh session serialization and reuse revocatio
     const statusWritten = deferred();
     const release = deferred();
     const removal = removeOrganisationMember(
-      { ...workspace, domain, actorUserId: workspace.ownerId },
+      { ...workspace, domain, actorUserId: workspace.ownerId, config: membershipConfig() },
       {
         prisma: handle.prisma,
         afterMembershipStatusWrite: async () => {

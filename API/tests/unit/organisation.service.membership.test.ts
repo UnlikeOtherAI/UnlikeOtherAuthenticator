@@ -200,6 +200,7 @@ describe('Organisation service: membership', () => {
         domain: 'acme.example.com',
         actorUserId: 'u-owner',
         userId: 'u-member',
+        config: makeConfig(),
       },
       { prisma },
     );
@@ -248,6 +249,7 @@ describe('Organisation service: membership', () => {
           domain: 'acme.example.com',
           actorUserId: 'u-owner',
           userId: 'u-member',
+          config: makeConfig(),
         },
         { prisma },
       ),
@@ -279,6 +281,7 @@ describe('Organisation service: membership', () => {
         domain: 'acme.example.com',
         actorUserId: 'u-owner',
         userId: 'u-owner',
+        config: makeConfig(),
       },
       { prisma },
     );
@@ -394,6 +397,7 @@ describe('Organisation service: membership', () => {
         domain: 'acme.example.com',
         actorUserId: 'u-admin',
         userId: 'u-other-owner',
+        config: makeConfig(),
       },
       { prisma },
     );

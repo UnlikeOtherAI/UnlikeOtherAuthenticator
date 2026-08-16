@@ -19,6 +19,7 @@ import {
   getOrganisationMember,
   parseOrgFeatureRoles,
   parseOrgLimit,
+  requireOrgCapability,
   resolveOrgActor,
   resolveOrganisationByDomain,
   toListLimit,
@@ -112,12 +113,12 @@ export async function addOrganisationMember(
   // has no subject to protect against.
   if (actorUserId) {
     const actorMembership = await getOrganisationMember(prisma, { orgId: org.id, userId: actorUserId }, { activeOnly: true });
-    if (!actorMembership || (actorMembership.role !== 'owner' && actorMembership.role !== 'admin')) {
-      throw new AppError('FORBIDDEN', 403);
-    }
-    // Only owners may grant the `owner` role. An `admin` actor must not be able to
-    // self-elevate by adding another `owner` row.
-    if (role === 'owner' && actorMembership.role !== 'owner') {
+    requireOrgCapability(params.config, 'members.manage', actorMembership?.role);
+    // Only owners may grant the `owner` role — no capability makes this reachable. `owner` is the
+    // one fixed role (mandatory in every vocabulary, structurally every capability), so comparing
+    // against the literal here is the invariant itself, not a leftover role check: a holder of
+    // `members.manage` must not be able to self-elevate by adding another `owner` row.
+    if (role === 'owner' && actorMembership?.role !== 'owner') {
       throw new AppError('FORBIDDEN', 403);
     }
   }
@@ -287,6 +288,7 @@ export async function removeOrganisationMember(
     actorUserId?: string;
     actor?: OrgActorProvenance;
     userId: string;
+    config: ClientConfig;
   },
   deps?: OrgServiceDeps & {
     afterMembershipStatusWrite?: () => Promise<void>;
@@ -312,15 +314,17 @@ export async function removeOrganisationMember(
   const actorMembership = actorUserId
     ? await getOrganisationMember(prisma, { orgId: org.id, userId: actorUserId }, { activeOnly: true })
     : null;
-  if (actorUserId && (!actorMembership || (actorMembership.role !== 'owner' && actorMembership.role !== 'admin'))) {
-    throw new AppError('FORBIDDEN', 403);
+  if (actorUserId) {
+    requireOrgCapability(params.config, 'members.manage', actorMembership?.role);
   }
 
   const member = await getOrganisationMember(prisma, { orgId: org.id, userId });
   if (!member) throw new AppError('NOT_FOUND', 404);
 
-  // Only owners may remove another `owner` member. An `admin` actor cannot remove
-  // an owner even when other owners remain.
+  // Only owners may remove another `owner` member — the mirror of the self-elevation guard in
+  // `addOrganisationMember`, and for the same reason: `owner` is the one fixed role, so no
+  // configured grant can reach it. A holder of `members.manage` cannot remove an owner even when
+  // other owners remain.
   if (member.role === 'owner' && actorMembership && actorMembership.role !== 'owner') {
     throw new AppError('FORBIDDEN', 403);
   }

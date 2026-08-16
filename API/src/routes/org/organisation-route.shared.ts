@@ -1,6 +1,7 @@
 import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
+import type { ClientConfig } from '../../services/config.service.js';
 import type { OrgActorProvenance } from '../../services/org-audit-log.service.js';
 import { AppError } from '../../utils/errors.js';
 import { assertVerifiedDomainMatchesQuery, normalizeDomain } from './domain-context.js';
@@ -102,6 +103,20 @@ export type RequestWithClaims = FastifyRequest & {
     };
   };
 };
+
+/**
+ * The verified client config for this request.
+ *
+ * Every `/org/*` route runs `configVerifier`, so the config is always there in practice; this
+ * refuses rather than assumes, because the org/team services now resolve the domain's configured
+ * role vocabulary and `role_grants` out of it and must never silently fall back to a default table
+ * the domain did not write.
+ */
+export function requireVerifiedConfig(request: FastifyRequest): ClientConfig {
+  const config = request.config;
+  if (!config) throw new AppError('UNAUTHORIZED', 401, 'MISSING_CONFIG');
+  return config;
+}
 
 export function parseDomainContext(request: FastifyRequest) {
   const parsed = DomainQuerySchema.parse(request.query);

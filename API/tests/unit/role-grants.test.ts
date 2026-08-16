@@ -12,15 +12,17 @@ import {
   workspaceRolesHoldCapability,
   type RoleGrantScope,
   type RoleGrantTable,
+  type UoaCapability,
 } from '../../src/services/role-grants.js';
 
 /**
- * Wave 1 of `Docs/plans/2026-08-16-configurable-roles-and-capabilities.md`.
+ * Wave 1 of `Docs/plans/2026-08-16-configurable-roles-and-capabilities.md`, plus the org-scope
+ * follow-up that added `organisation.manage`.
  *
  * The load-bearing test here is `legacy-default equivalence`: with no `role_grants` in the config —
  * i.e. every domain that exists today — the resolver must answer exactly what the hard-coded
  * predicates it replaced answered. That is the property that makes shipping this inert, so it is
- * asserted exhaustively over every role/scope pair rather than sampled.
+ * asserted exhaustively over every role × scope × capability rather than sampled.
  */
 
 function config(orgFeatures?: Partial<NonNullable<ClientConfig['org_features']>>): ClientConfig {
@@ -30,6 +32,20 @@ function config(orgFeatures?: Partial<NonNullable<ClientConfig['org_features']>>
 /** The predicate this wave replaces, verbatim from `team.service.base.ts` before the change. */
 function legacyIsTeamManager(role: string): boolean {
   return role === 'owner' || role === 'admin';
+}
+
+/**
+ * The pre-change answer for one (scope, capability, role), across every predicate this model
+ * replaced: `isTeamManager` / `isOrgOrTeamManager` (team surfaces), and `requireOrgManagerActor`
+ * plus the inline `role !== 'owner' && role !== 'admin'` comparisons in the three org services.
+ *
+ * They were the same comparison, so the only per-capability distinction is a scope one:
+ * `organisation.manage` gates ORG-scope surfaces (rename, invite policy, icon) whose gates never
+ * read a `TeamMember` row at all, so at team scope nothing but the structural `owner` holds it.
+ */
+function legacyHolds(scope: RoleGrantScope, capability: UoaCapability, role: string): boolean {
+  if (capability === 'organisation.manage' && scope === 'team') return role === 'owner';
+  return legacyIsTeamManager(role);
 }
 
 const ALL_ROLES = ['owner', 'admin', 'member', 'viewer', 'auditor', 'intern', '', 'Admin', 'OWNER'];
@@ -43,14 +59,14 @@ describe('role grants: legacy-default equivalence', () => {
     expect(resolveRoleGrants(config({}))).toBe(LEGACY_DEFAULT_ROLE_GRANTS);
   });
 
-  it('answers exactly `isTeamManager` for every role at every scope and capability', () => {
+  it('answers exactly the predicate it replaced for every role × scope × capability', () => {
     for (const scope of SCOPES) {
       for (const role of ALL_ROLES) {
         for (const capability of UOA_CAPABILITIES) {
           expect(
             configRoleHoldsCapability(noGrants, scope, role, capability),
             `${scope}/${role}/${capability}`,
-          ).toBe(legacyIsTeamManager(role));
+          ).toBe(legacyHolds(scope, capability, role));
         }
       }
     }
@@ -65,10 +81,19 @@ describe('role grants: legacy-default equivalence', () => {
           expect(
             workspaceRolesHoldCapability(grants, { orgRole, teamRole }, capability),
             `${orgRole}+${teamRole}/${capability}`,
-          ).toBe(legacyIsTeamManager(orgRole) || legacyIsTeamManager(teamRole));
+          ).toBe(legacyHolds('org', capability, orgRole) || legacyHolds('team', capability, teamRole));
         }
       }
     }
+  });
+
+  it('keeps `organisation.manage` out of team scope: a team admin cannot rename the org', () => {
+    // Not a detail of the default table but the shape of the capability: the org gates pass no team
+    // standing at all, and administering one team must not confer authority over the tenant that
+    // contains it. Only the structural `owner` answers true at team scope.
+    expect(configRoleHoldsCapability(noGrants, 'org', 'admin', 'organisation.manage')).toBe(true);
+    expect(configRoleHoldsCapability(noGrants, 'team', 'admin', 'organisation.manage')).toBe(false);
+    expect(configRoleHoldsCapability(noGrants, 'team', 'owner', 'organisation.manage')).toBe(true);
   });
 
   it('keeps the org-manager reach-down: an org grant covers team-scope capabilities', () => {
@@ -176,11 +201,13 @@ describe('role grants: a configured table', () => {
     expect([...resolveKnownCapabilities(customConfig)].sort()).toEqual([
       'content.write',
       'members.manage',
+      'organisation.manage',
       'teams.manage',
       'workspace.read',
     ]);
     expect([...resolveKnownCapabilities(config())].sort()).toEqual([
       'members.manage',
+      'organisation.manage',
       'teams.manage',
     ]);
   });

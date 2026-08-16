@@ -220,6 +220,7 @@ describe.skipIf(!hasDatabase)('authorization-code and membership lifecycle race'
         domain,
         actorUserId: workspace.ownerId,
         userId: workspace.userId,
+        config: config(),
       },
       {
         prisma: handle.prisma,

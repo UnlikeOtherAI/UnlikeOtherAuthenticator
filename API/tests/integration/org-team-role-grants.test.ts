@@ -13,12 +13,13 @@ import {
 } from '../helpers/org-user-endpoints-helper.js';
 
 /**
- * Wave 1 of `Docs/plans/2026-08-16-configurable-roles-and-capabilities.md`, over HTTP.
+ * Wave 1 of `Docs/plans/2026-08-16-configurable-roles-and-capabilities.md` and its org-scope
+ * follow-up, over HTTP.
  *
  * Two things the mocked service tests cannot prove on their own: that the corrected roster gate is
  * reachable through the real route chain (config verification, org-role guard, tenant RLS
  * transaction), and that a `role_grants` table travelling in a genuinely signed config JWT decides
- * those routes.
+ * those routes — at org scope (`organisation.manage`, `members.manage`) as well as team scope.
  */
 
 const DOMAIN = 'role-grants.example.com';
@@ -277,6 +278,118 @@ describe.skipIf(!hasDatabase)('/org team gates resolve role_grants', () => {
       );
 
       expect(res.statusCode).toBe(400);
+    });
+  });
+
+  /**
+   * The org-scope gates. `organisation.manage` (rename) and `members.manage` (roster) used to be
+   * one hard-coded `owner|admin` comparison in three services that could not see the config at
+   * all; these drive them through the same real route chain.
+   */
+  describe('org-scope gates', () => {
+    async function renameOrg(ids: Ids, actorToken: string) {
+      return app!.inject({
+        method: 'PUT',
+        url: url(`/organisations/${ids.orgId}`),
+        headers: {
+          authorization: `Bearer ${domainHash}`,
+          'x-uoa-access-token': `Bearer ${actorToken}`,
+        },
+        payload: { name: `Renamed ${Date.now()}` },
+      });
+    }
+
+    async function deactivateTarget(ids: Ids, actorToken: string) {
+      const target = await handle!.prisma.orgMember.findFirstOrThrow({
+        where: { orgId: ids.orgId, role: 'member', userId: { not: ids.actorId } },
+        select: { userId: true },
+      });
+      return app!.inject({
+        method: 'POST',
+        url: url(`/organisations/${ids.orgId}/members/${target.userId}/deactivate`),
+        headers: {
+          authorization: `Bearer ${domainHash}`,
+          'x-uoa-access-token': `Bearer ${actorToken}`,
+        },
+      });
+    }
+
+    describe('with no role_grants (the legacy default table)', () => {
+      beforeEach(async () => {
+        await serveConfig({ enabled: true });
+      });
+
+      it('lets an org admin rename the organisation and run the roster', async () => {
+        const ids = await seed({ actorOrgRole: 'admin', actorTeamRole: null });
+        const actorToken = await token(ids.actorId, ids.orgId, 'admin', {});
+
+        expect((await renameOrg(ids, actorToken)).statusCode).toBe(200);
+        expect((await deactivateTarget(ids, actorToken)).statusCode).toBe(200);
+      });
+
+      it('still refuses a plain org member', async () => {
+        const ids = await seed({ actorOrgRole: 'member', actorTeamRole: null });
+        const actorToken = await token(ids.actorId, ids.orgId, 'member', {});
+
+        expect((await renameOrg(ids, actorToken)).statusCode).toBe(403);
+        expect((await deactivateTarget(ids, actorToken)).statusCode).toBe(403);
+      });
+
+      it('never reaches up from team standing — a team admin is not an org manager', async () => {
+        // The mirror of the org-manager reach-down: an org grant covers every team, but team
+        // standing confers nothing over the tenant containing the team.
+        const ids = await seed({ actorOrgRole: 'member', actorTeamRole: 'admin' });
+        const actorToken = await token(ids.actorId, ids.orgId, 'member', {
+          [ids.teamId]: 'admin',
+        });
+
+        expect((await renameOrg(ids, actorToken)).statusCode).toBe(403);
+        expect((await deactivateTarget(ids, actorToken)).statusCode).toBe(403);
+      });
+    });
+
+    describe('with a domain-authored grant table splitting the two', () => {
+      beforeEach(async () => {
+        await serveConfig({
+          enabled: true,
+          org_roles: ['owner', 'member', 'registrar', 'steward'],
+          role_grants: {
+            org: { registrar: ['organisation.manage'], steward: ['members.manage'] },
+          },
+        });
+      });
+
+      it('lets `registrar` rename but not touch the roster', async () => {
+        const ids = await seed({ actorOrgRole: 'registrar', actorTeamRole: null });
+        const actorToken = await token(ids.actorId, ids.orgId, 'registrar', {});
+
+        expect((await renameOrg(ids, actorToken)).statusCode).toBe(200);
+        expect((await deactivateTarget(ids, actorToken)).statusCode).toBe(403);
+      });
+
+      it('lets `steward` run the roster but not rename', async () => {
+        const ids = await seed({ actorOrgRole: 'steward', actorTeamRole: null });
+        const actorToken = await token(ids.actorId, ids.orgId, 'steward', {});
+
+        expect((await deactivateTarget(ids, actorToken)).statusCode).toBe(200);
+        expect((await renameOrg(ids, actorToken)).statusCode).toBe(403);
+      });
+
+      it('gives a role the table does not mention nothing at all', async () => {
+        const ids = await seed({ actorOrgRole: 'member', actorTeamRole: null });
+        const actorToken = await token(ids.actorId, ids.orgId, 'member', {});
+
+        expect((await renameOrg(ids, actorToken)).statusCode).toBe(403);
+        expect((await deactivateTarget(ids, actorToken)).statusCode).toBe(403);
+      });
+
+      it('never locks the owner out, whatever the table says', async () => {
+        const ids = await seed({ actorOrgRole: 'owner', actorTeamRole: null });
+        const actorToken = await token(ids.actorId, ids.orgId, 'owner', {});
+
+        expect((await renameOrg(ids, actorToken)).statusCode).toBe(200);
+        expect((await deactivateTarget(ids, actorToken)).statusCode).toBe(200);
+      });
     });
   });
 });

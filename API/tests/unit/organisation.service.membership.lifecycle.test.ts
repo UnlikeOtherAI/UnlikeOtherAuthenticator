@@ -6,6 +6,7 @@ import {
 } from '../../src/services/organisation.service.lifecycle.js';
 import {
   baseOrg,
+  makeConfig,
   makePrismaMock,
   useOrganisationMembershipLifecycleTestEnv,
 } from './helpers/organisation-service-membership-test-helpers.js';
@@ -36,6 +37,7 @@ describe('Organisation service: member lifecycle (deactivate/reactivate)', () =>
         domain: 'acme.example.com',
         actorUserId: 'u-owner',
         userId: 'u-member',
+        config: makeConfig(),
       },
       { prisma },
     );
@@ -73,6 +75,7 @@ describe('Organisation service: member lifecycle (deactivate/reactivate)', () =>
         domain: 'acme.example.com',
         actorUserId: 'u-owner',
         userId: 'u-owner-2',
+        config: makeConfig(),
       },
       { prisma },
     );
@@ -96,6 +99,7 @@ describe('Organisation service: member lifecycle (deactivate/reactivate)', () =>
         domain: 'acme.example.com',
         actorUserId: 'u-owner',
         userId: 'u-member',
+        config: makeConfig(),
       },
       { prisma },
     );
@@ -120,6 +124,7 @@ describe('Organisation service: member lifecycle (deactivate/reactivate)', () =>
         domain: 'acme.example.com',
         actorUserId: 'u-owner',
         userId: 'u-member',
+        config: makeConfig(),
       },
       { prisma },
     );
@@ -155,6 +160,7 @@ describe('Organisation service: member lifecycle (deactivate/reactivate)', () =>
           domain: 'acme.example.com',
           actorUserId: 'u-owner',
           userId: 'u-member',
+          config: makeConfig(),
         },
         { prisma },
       ),

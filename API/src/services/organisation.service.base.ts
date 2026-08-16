@@ -19,6 +19,11 @@ import {
   type OrgAuditLogPrisma,
   type OrgAuditTargetType,
 } from './org-audit-log.service.js';
+import {
+  configRoleHoldsCapability,
+  resolveOrgRoleVocabulary,
+  type UoaCapability,
+} from './role-grants.js';
 
 export { normalizeDomain };
 
@@ -230,6 +235,34 @@ export function ensureOrgRole(role: string, allowedRoles: string[]): void {
   }
 }
 
+/**
+ * Require that the ACTING USER's org-scope role grants `capability`, per this domain's
+ * `role_grants` table (`Docs/plans/2026-08-16-configurable-roles-and-capabilities.md` §3).
+ *
+ * Replaces the `role !== 'owner' && role !== 'admin'` comparisons the org services used to make,
+ * so a role a domain invented can hold real authority here too. Three things are deliberate:
+ *
+ *  - **Org scope only.** `requireWorkspaceCapability` (team services) unions org- and team-scope
+ *    standing, because an org grant of a team-scope capability reaches down into every team. The
+ *    reverse must not hold: administering one team cannot confer authority over the organisation
+ *    that contains it, so nothing here reads a `TeamMember` row.
+ *  - **Pure.** Every call site has already loaded the actor's ACTIVE membership for its own
+ *    reasons, so the role is passed in rather than re-queried — this gate costs no extra round
+ *    trip and cannot silently disagree with the row the caller then acts on.
+ *  - **A missing membership is `undefined`/`null` and holds nothing.** Backend mode never reaches
+ *    here at all: with no acting user the domain pairing already outranks every member role, which
+ *    each caller states by guarding on `actorUserId`.
+ */
+export function requireOrgCapability(
+  config: ClientConfig,
+  capability: UoaCapability,
+  actorRole: string | null | undefined,
+): void {
+  if (!configRoleHoldsCapability(config, 'org', actorRole, capability)) {
+    throw new AppError('FORBIDDEN', 403);
+  }
+}
+
 export function toListLimit(limit?: number): number {
   const resolved = limit == null ? 50 : Math.trunc(limit);
   if (!Number.isFinite(resolved) || resolved <= 0) return 1;
@@ -273,14 +306,6 @@ export async function resolveOrganisationByDomain(
 
   if (!row) throw new AppError('NOT_FOUND', 404);
   return row;
-}
-
-function resolveOrgRoles(config: ClientConfig): string[] {
-  return (
-    config.org_features?.org_roles && config.org_features.org_roles.length > 0
-      ? config.org_features.org_roles
-      : ['owner', 'admin', 'member']
-  );
 }
 
 export function toOrganisationRecord(row: {
@@ -471,8 +496,13 @@ export function parseOrgLimit(config: ClientConfig): number {
   return config.org_features?.max_members_per_org ?? 1000;
 }
 
+/**
+ * This domain's org-role vocabulary. One reader, shared with the grant resolver — there used to be
+ * a second copy of the `org_roles ?? ['owner','admin','member']` fallback here, and two readers of
+ * one config key is exactly how a vocabulary and the table validated against it drift apart.
+ */
 export function parseOrgFeatureRoles(config: ClientConfig): string[] {
-  return resolveOrgRoles(config);
+  return resolveOrgRoleVocabulary(config);
 }
 
 export type { OrgActorProvenance, OrgServicePrisma, OrgServiceDeps };

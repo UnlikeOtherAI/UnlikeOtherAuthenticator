@@ -29,15 +29,25 @@
  * The capability names UOA's own gates check. Closed set, declared in code — a capability nobody's
  * code checks is a lie, so this list only grows when a real gate starts asking for one.
  *
- *  - `members.manage` — mutate a workspace roster: add/remove members, change a member's team role,
- *    create/revoke invitations and invite links, and read the PII-bearing invited list.
+ *  - `members.manage` — mutate a roster, at either scope: add/remove an ORG member and
+ *    deactivate/reactivate their membership; add/remove members and change a member's team role in
+ *    a TEAM; create/revoke invitations and invite links; read the PII-bearing invited list.
  *  - `teams.manage` — the team object itself: create, rename, re-slug, change join policy or icon,
  *    delete.
+ *  - `organisation.manage` — the organisation object itself: rename (and with it the slug), the
+ *    member-invites policy, the workspace icon. **Org scope only** — the gates that check it never
+ *    consult team standing, because administering a team must not confer authority over the tenant
+ *    containing it. A `role_grants.team` entry naming it is therefore inert, never an escalation.
+ *
+ * `teams.manage` and `organisation.manage` are one idea at two levels: the container object, as
+ * opposed to who is in it. Deleting an organisation, transferring its ownership and changing an org
+ * member's role are deliberately NOT here — they are checked against `Organisation.ownerId` or the
+ * `owner` role itself, which are structural invariants rather than configurable authority.
  *
  * A domain's `org_features.capabilities` declares its *product's* catalogue on top of these; the
  * names below are always valid in a grant table because UOA compiled them in.
  */
-export const UOA_CAPABILITIES = ['members.manage', 'teams.manage'] as const;
+export const UOA_CAPABILITIES = ['members.manage', 'teams.manage', 'organisation.manage'] as const;
 
 export type UoaCapability = (typeof UOA_CAPABILITIES)[number];
 
@@ -59,15 +69,20 @@ export type RoleGrantTable = {
  * What a domain gets when it has not written a `role_grants` table — i.e. every domain today.
  *
  * It reproduces the effective behaviour of the predicates it replaces (`isTeamManager`,
- * `isOrgOrTeamManager`) exactly: `admin` is a manager at both scopes, every other non-owner role
- * holds nothing, and because the ORG entry grants team-scope capabilities the org-manager
- * reach-down survives (§3 rule 4). Shipping this wave is therefore inert for an untouched config
- * apart from the one deliberate correction in `requireWorkspaceCapability`'s call sites — a team
- * owner/admin now has standing over their own team, which `requireTeamManager` used to ignore.
+ * `isOrgOrTeamManager`, `requireOrgManagerActor` and the inline org `owner|admin` comparisons)
+ * exactly: `admin` is a manager at both scopes, every other non-owner role holds nothing, and
+ * because the ORG entry grants team-scope capabilities the org-manager reach-down survives
+ * (§3 rule 4). Shipping this is therefore inert for an untouched config apart from the one
+ * deliberate correction in `requireWorkspaceCapability`'s call sites — a team owner/admin now has
+ * standing over their own team, which `requireTeamManager` used to ignore.
+ *
+ * The two scopes are written out rather than spread from `UOA_CAPABILITIES` because they genuinely
+ * differ: `organisation.manage` is org-scope only, and a team `admin` never had — and must not
+ * gain — authority to rename the organisation containing their team.
  */
 export const LEGACY_DEFAULT_ROLE_GRANTS: RoleGrantTable = Object.freeze({
-  org: Object.freeze({ admin: [...UOA_CAPABILITIES] }),
-  team: Object.freeze({ admin: [...UOA_CAPABILITIES] }),
+  org: Object.freeze({ admin: ['members.manage', 'teams.manage', 'organisation.manage'] }),
+  team: Object.freeze({ admin: ['members.manage', 'teams.manage'] }),
 }) as RoleGrantTable;
 
 /**
