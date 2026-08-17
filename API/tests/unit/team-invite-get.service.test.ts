@@ -70,9 +70,9 @@ function makeInviteRow(overrides?: Record<string, unknown>) {
 function makePrisma(invite: ReturnType<typeof makeInviteRow> | null = makeInviteRow()) {
   return {
     organisation: {
-      findFirst: vi.fn().mockImplementation((args: { where: { domain: string } }) =>
+      findFirst: vi.fn().mockImplementation((args: { where: { id: string } }) =>
         Promise.resolve(
-          args.where.domain === 'client.example.com'
+          args.where.id === 'org-1'
             ? {
                 id: 'org-1',
                 domain: 'client.example.com',
@@ -195,11 +195,25 @@ describe('getTeamInvite (GET .../teams/:teamId/invitations/:inviteId)', () => {
     expect(prisma.teamInvite.findFirst).toHaveBeenCalledTimes(1);
   });
 
-  it("cross-domain: another domain's org resolves to the same generic 404", async () => {
+  it('another UOA-integrated product reads the same org: resolved by id, not by origin domain', async () => {
+    const prisma = makePrisma();
+
+    // One organisation is usable from every product. The org still belongs to
+    // `client.example.com` (its origin), but a caller arriving from another product's domain —
+    // already gated by `requireOrgRole` on the token's org claim — resolves the same row.
+    const record = await getTeamInvite({ ...params, domain: 'other.example.com' }, deps(prisma));
+
+    expect(record.id).toBe('invite-1');
+    expect(prisma.organisation.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'org-1' } }),
+    );
+  });
+
+  it('unknown org: still the same generic 404, and the invite is never read', async () => {
     const prisma = makePrisma();
 
     await expect(
-      getTeamInvite({ ...params, domain: 'other.example.com' }, deps(prisma)),
+      getTeamInvite({ ...params, orgId: 'org-elsewhere' }, deps(prisma)),
     ).rejects.toMatchObject({ statusCode: 404 });
     // Refused at org resolution — the invite row is never read, so nothing about it can leak.
     expect(prisma.teamInvite.findFirst).not.toHaveBeenCalled();

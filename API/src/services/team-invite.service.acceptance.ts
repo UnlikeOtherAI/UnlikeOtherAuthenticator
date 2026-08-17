@@ -4,7 +4,6 @@ import type { ClientConfig } from './config.service.js';
 import { AppError } from '../utils/errors.js';
 import {
   ensureOrgRole,
-  normalizeDomain,
   parseOrgFeatureRoles,
   parseOrgLimit,
 } from './organisation.service.base.js';
@@ -60,9 +59,10 @@ export async function acceptTeamInviteWithinTransaction(params: {
     throw new AppError('BAD_REQUEST', 400, 'INVITE_REVOKED');
   }
 
-  if (normalizeDomain(invite.org.domain) !== normalizeDomain(params.config.domain)) {
-    throw new AppError('BAD_REQUEST', 400);
-  }
+  // The invite's org may have been created by another UOA-integrated product: one organisation is
+  // usable from every product, so the org's ORIGIN domain is not an acceptance predicate. What
+  // binds the acceptance is the invite token itself — issued for, and verified against, the
+  // issuing product's domain — plus the workspace-scope gate below.
 
   if (invite.acceptedAt) {
     if (invite.acceptedUserId === params.userId) {
@@ -218,7 +218,7 @@ export async function acceptTeamInviteWithinTransaction(params: {
  * Phase 3b (design §4.3/§11.5): decline a pending invite from the workspace chooser, authenticated
  * by an already-verified userId (the login_token bridge) rather than the emailed invite token used
  * by `declineTeamInviteByToken`. Generic `BAD_REQUEST` on every validation failure (unknown invite,
- * wrong domain, invite already resolved, email mismatch) — no oracle on invite existence.
+ * invite already resolved, email mismatch) — no oracle on invite existence.
  */
 export async function declineTeamInviteForUser(params: {
   prisma: Prisma.TransactionClient;
@@ -237,7 +237,6 @@ export async function declineTeamInviteForUser(params: {
       revokedAt: true,
       expiresAt: true,
       approvalStatus: true,
-      org: { select: { domain: true } },
     },
   });
 
@@ -245,9 +244,10 @@ export async function declineTeamInviteForUser(params: {
     throw new AppError('BAD_REQUEST', 400);
   }
 
-  if (normalizeDomain(invite.org.domain) !== normalizeDomain(params.config.domain)) {
-    throw new AppError('BAD_REQUEST', 400);
-  }
+  // The invite's org may have been created by another UOA-integrated product: one organisation is
+  // usable from every product, so the org's ORIGIN domain is not a predicate here. Declining is
+  // bound by the invitee's own identity — the email match below against the already-verified
+  // userId — which is the only thing that ever made this call the invitee's to make.
 
   const user = await params.prisma.user.findUnique({
     where: { id: params.userId },

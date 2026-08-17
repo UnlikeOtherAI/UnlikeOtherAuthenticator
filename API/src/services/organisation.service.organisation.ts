@@ -18,7 +18,7 @@ import {
   parseOrgFeatureRoles,
   requireOrgCapability,
   resolveOrgActor,
-  resolveOrganisationByDomain,
+  resolveOrganisation,
   toListLimit,
   toOrganisationRecord,
   type CursorList,
@@ -239,7 +239,7 @@ export async function getOrganisation(
   const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
   // Domain ownership is checked for BOTH callers: an org on another domain is a
   // 404 here regardless of who asks.
-  const row = await resolveOrganisationByDomain(prisma, params);
+  const row = await resolveOrganisation(prisma, { orgId: params.orgId });
 
   // Defence-in-depth: even though the route layer enforces `requireOrgRole`,
   // re-verify actor membership here so the service contract matches
@@ -275,7 +275,7 @@ export async function updateOrganisation(
   const actorUserId = resolveOrgActor(params);
   const name = ensureOrgName(params.name);
   const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
-  const org = await resolveOrganisationByDomain(prisma, params);
+  const org = await resolveOrganisation(prisma, { orgId: params.orgId });
 
   // Renaming the organisation, and setting its invite policy and icon, is the organisation OBJECT —
   // `organisation.manage`, resolved against this domain's grant table at ORG scope. Team standing
@@ -338,7 +338,7 @@ export async function deleteOrganisation(
   const actorUserId = resolveOrgActor(params);
 
   const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
-  const org = await resolveOrganisationByDomain(prisma, params);
+  const org = await resolveOrganisation(prisma, { orgId: params.orgId });
   // "Must be the owner" is a check on the acting user; backend mode has none.
   if (actorUserId && org.ownerId !== actorUserId) {
     throw new AppError('FORBIDDEN', 403);

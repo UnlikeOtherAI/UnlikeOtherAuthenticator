@@ -1,5 +1,3 @@
-import { randomBytes } from 'node:crypto';
-
 import type { PrismaClient } from '@prisma/client';
 
 import type { ClientConfig } from './config.service.js';
@@ -13,10 +11,20 @@ import {
   auditOrg,
   normalizeDomain,
   resolveOrgActor,
-  resolveOrganisationByDomain,
+  resolveOrganisation,
   type OrgActorProvenance,
 } from './organisation.service.base.js';
-import { hasWorkspaceCapability, normalizeTeamRole } from './team.service.base.js';
+import {
+  DAY_MS,
+  TEAM_INVITE_LINK_SELECT,
+  clampExpiresInDays,
+  clampMaxUses,
+  generateInviteLinkToken,
+  normalizeInviteLinkRole,
+  requireLinkManager,
+  toInviteLinkRecord,
+  type TeamInviteLinkRecord,
+} from './team-invite-link.base.js';
 import {
   assertActiveWorkspaceScope,
   lockWorkspaceMembershipRows,
@@ -26,7 +34,11 @@ import {
 // team, never AUTHENTICATION — redemption only happens on the verified-session path
 // (`POST /auth/select-team`'s `inviteLinkToken`, after the `login_token` bridge proves the email
 // was already verified). Only the token HASH is stored (mirrors `domain-secret.service.ts`'s
-// claim-token pattern); the plaintext token is returned exactly once, at creation.
+// claim-token pattern); the plaintext token is returned exactly once, at creation. The pure
+// primitives (caps, role vocabulary, record shape, manager check) live in
+// `team-invite-link.base.ts`.
+
+export type { TeamInviteLinkRecord };
 
 export type InviteLinkPrisma = PrismaClient;
 
@@ -38,91 +50,6 @@ export type InviteLinkDeps = {
   generateToken?: () => string;
   hashToken?: typeof hashEmailToken;
 };
-
-const MAX_EXPIRES_IN_DAYS = 30;
-const DEFAULT_EXPIRES_IN_DAYS = 30;
-const MAX_USES_CAP = 400;
-const DEFAULT_MAX_USES = 400;
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-const TEAM_INVITE_LINK_SELECT = {
-  id: true,
-  roleToAssign: true,
-  expiresAt: true,
-  maxUses: true,
-  useCount: true,
-  revokedAt: true,
-  createdAt: true,
-} as const;
-
-type TeamInviteLinkRow = {
-  id: string;
-  roleToAssign: string;
-  expiresAt: Date;
-  maxUses: number;
-  useCount: number;
-  revokedAt: Date | null;
-  createdAt: Date;
-};
-
-export type TeamInviteLinkRecord = TeamInviteLinkRow;
-
-function toInviteLinkRecord(row: TeamInviteLinkRow): TeamInviteLinkRecord {
-  return { ...row };
-}
-
-function generateInviteLinkToken(): string {
-  // 32 bytes -> 256 bits of entropy; base64url for safe transport in URLs (mirrors
-  // utils/verification-token.ts's generateEmailToken).
-  return randomBytes(32).toString('base64url');
-}
-
-// Invite links may assign any role in the domain's configured team vocabulary — never "owner"
-// (design §4.7 Task 2). Before `team_roles` was configurable this read `member | admin`, which is
-// the same answer for the default vocabulary and the wrong one for a domain that named its own.
-function normalizeInviteLinkRole(value: string | undefined, config: ClientConfig): string {
-  const role = normalizeTeamRole(value?.trim() || undefined, config);
-  if (role === 'owner') {
-    throw new AppError('BAD_REQUEST', 400);
-  }
-  return role;
-}
-
-function clampExpiresInDays(value?: number): number {
-  if (value === undefined) return DEFAULT_EXPIRES_IN_DAYS;
-  if (!Number.isFinite(value) || value <= 0) {
-    throw new AppError('BAD_REQUEST', 400);
-  }
-  return Math.min(Math.trunc(value), MAX_EXPIRES_IN_DAYS);
-}
-
-function clampMaxUses(value?: number): number {
-  if (value === undefined) return DEFAULT_MAX_USES;
-  if (!Number.isFinite(value) || value <= 0) {
-    throw new AppError('BAD_REQUEST', 400);
-  }
-  return Math.min(Math.trunc(value), MAX_USES_CAP);
-}
-
-/**
- * Actor must hold `members.manage` in this workspace (design §4.9/Phase 2).
- * Delegates to the shared `hasWorkspaceCapability` boolean check (`team.service.base.ts`) — single
- * source of truth, also used by the gap-fix A "Invited" tab gate.
- */
-async function requireLinkManager(
-  prisma: InviteLinkPrisma,
-  params: {
-    orgId: string;
-    teamId: string;
-    actorUserId: string | undefined;
-    config: ClientConfig;
-  },
-): Promise<void> {
-  const isManager = await hasWorkspaceCapability(prisma, 'members.manage', params);
-  if (!isManager) {
-    throw new AppError('FORBIDDEN', 403);
-  }
-}
 
 /**
  * Create a shareable invite link. REJECTS (generic BAD_REQUEST) if the team's `joinPolicy` is
@@ -149,7 +76,7 @@ export async function createTeamInviteLink(
   const prisma = deps?.prisma ?? (getPrisma() as InviteLinkPrisma);
   const now = deps?.now ? deps.now() : new Date();
 
-  const org = await resolveOrganisationByDomain(prisma, { orgId: params.orgId, domain: params.domain });
+  const org = await resolveOrganisation(prisma, { orgId: params.orgId });
 
   const team = await prisma.team.findFirst({
     where: { id: params.teamId, orgId: org.id },
@@ -227,7 +154,7 @@ export async function listTeamInviteLinks(
 
   const actorUserId = resolveOrgActor(params);
   const prisma = deps?.prisma ?? (getPrisma() as InviteLinkPrisma);
-  const org = await resolveOrganisationByDomain(prisma, { orgId: params.orgId, domain: params.domain });
+  const org = await resolveOrganisation(prisma, { orgId: params.orgId });
 
   const team = await prisma.team.findFirst({
     where: { id: params.teamId, orgId: org.id },
@@ -273,7 +200,7 @@ export async function revokeTeamInviteLink(
   const prisma = deps?.prisma ?? (getPrisma() as InviteLinkPrisma);
   const now = deps?.now ? deps.now() : new Date();
 
-  const org = await resolveOrganisationByDomain(prisma, { orgId: params.orgId, domain: params.domain });
+  const org = await resolveOrganisation(prisma, { orgId: params.orgId });
   const team = await prisma.team.findFirst({
     where: { id: params.teamId, orgId: org.id },
     select: { id: true },
@@ -336,13 +263,13 @@ type InviteLinkLookup = {
 
 /**
  * Shared validity lookup for both the landing check (Task 4) and redemption (Task 2). Every
- * failure — unknown token, revoked, expired, over-cap, cross-domain, or a HIDDEN team — throws the
+ * failure — unknown token, revoked, expired, over-cap, a dangling or HIDDEN team — throws the
  * SAME generic error so there is no oracle on which specific condition failed.
  */
 async function findValidInviteLink(
   prisma: InviteLinkLookupPrisma,
-  params: { tokenHash: string; domain: string; now: Date },
-): Promise<{ link: InviteLinkLookup; team: { id: string; orgId: string } }> {
+  params: { tokenHash: string; now: Date },
+): Promise<{ link: InviteLinkLookup; team: { id: string; orgId: string; orgDomain: string } }> {
   const link = await prisma.teamInviteLink.findUnique({
     where: { tokenHash: params.tokenHash },
     select: {
@@ -361,14 +288,18 @@ async function findValidInviteLink(
   if (link.expiresAt.getTime() <= params.now.getTime()) throw new AppError('BAD_REQUEST', 400);
   if (link.useCount >= link.maxUses) throw new AppError('BAD_REQUEST', 400);
 
+  // Looked up by the ids the link carries, not by the redeeming product's domain: one organisation
+  // is usable from every UOA-integrated product, and the link is already a bearer credential
+  // scoped to one team. The org's ORIGIN domain comes back because the caller's next check — the
+  // one-active-org-per-origin-domain invariant — is keyed on that, not on who is redeeming.
   const team = await prisma.team.findFirst({
-    where: { id: link.teamId, orgId: link.orgId, org: { domain: params.domain } },
-    select: { id: true, orgId: true, joinPolicy: true },
+    where: { id: link.teamId, orgId: link.orgId },
+    select: { id: true, orgId: true, joinPolicy: true, org: { select: { domain: true } } },
   });
   if (!team) throw new AppError('BAD_REQUEST', 400);
   if (team.joinPolicy === 'HIDDEN') throw new AppError('BAD_REQUEST', 400);
 
-  return { link, team: { id: team.id, orgId: team.orgId } };
+  return { link, team: { id: team.id, orgId: team.orgId, orgDomain: team.org.domain } };
 }
 
 /**
@@ -387,10 +318,12 @@ export async function assertTeamInviteLinkValidForLanding(
   const now = deps?.now ? deps.now() : new Date();
   const sharedSecret = deps?.sharedSecret ?? requireEnv('SHARED_SECRET').SHARED_SECRET;
   const hashToken = deps?.hashToken ?? hashEmailToken;
-  const domain = normalizeDomain(params.domain);
+  // Validates the token, not the product it was opened from: the team's org may belong to any
+  // UOA-integrated product.
+  void params.domain;
   const tokenHash = hashToken(params.token, sharedSecret);
 
-  await findValidInviteLink(prisma, { tokenHash, domain, now });
+  await findValidInviteLink(prisma, { tokenHash, now });
 }
 
 export type RedeemTeamInviteLinkResult = { teamId: string; orgId: string };
@@ -424,7 +357,7 @@ export async function redeemTeamInviteLink(
   const tokenHash = hashToken(params.token, sharedSecret);
 
   const result = await runInTransaction(prisma, async (tx) => {
-    const { link, team } = await findValidInviteLink(tx, { tokenHash, domain, now });
+    const { link, team } = await findValidInviteLink(tx, { tokenHash, now });
     await lockWorkspaceMembershipRows(
       { userId: params.userId, orgId: team.orgId, teamId: team.id },
       { prisma: tx },
@@ -446,10 +379,12 @@ export async function redeemTeamInviteLink(
       throw new AppError('BAD_REQUEST', 400);
     }
 
-    // Ensure org membership first, respecting one-org-per-domain (mirrors
-    // acceptTeamInviteWithinTransaction in team-invite.service.acceptance.ts).
+    // Ensure org membership first, respecting one-org-per-ORIGIN-domain (mirrors
+    // acceptTeamInviteWithinTransaction in team-invite.service.acceptance.ts). The invariant is
+    // keyed on `organisations.domain` via the trigger-derived `org_members.domain`, so it is the
+    // TARGET org's origin that decides — never the product the user is redeeming from.
     const existingMembershipInDomain = await tx.orgMember.findFirst({
-      where: { userId: params.userId, org: { domain } },
+      where: { userId: params.userId, org: { domain: team.orgDomain } },
       select: { id: true, orgId: true, status: true },
     });
     if (existingMembershipInDomain && existingMembershipInDomain.orgId !== team.orgId) {

@@ -60,7 +60,6 @@ export async function addTeamMember(
   const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
   const org = await resolveAndAuthorizeTeamOrg(prisma, {
     orgId: params.orgId,
-    domain: params.domain,
     actorUserId,
   });
   await requireWorkspaceCapability(prisma, 'members.manage', {
@@ -209,7 +208,6 @@ export async function changeTeamMemberRole(
   const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
   const org = await resolveAndAuthorizeTeamOrg(prisma, {
     orgId: params.orgId,
-    domain: params.domain,
     actorUserId,
   });
   await requireWorkspaceCapability(prisma, 'members.manage', {
@@ -308,7 +306,6 @@ export async function removeTeamMember(
   const prisma = deps?.prisma ?? (getAdminPrisma() as unknown as OrgServicePrisma);
   const org = await resolveAndAuthorizeTeamOrg(prisma, {
     orgId: params.orgId,
-    domain: params.domain,
     actorUserId,
   });
   await requireWorkspaceCapability(prisma, 'members.manage', {
@@ -429,7 +426,6 @@ export async function selfJoinTeam(
   const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
   const org = await resolveAndAuthorizeTeamOrg(prisma, {
     orgId: params.orgId,
-    domain: params.domain,
     actorUserId,
   });
 

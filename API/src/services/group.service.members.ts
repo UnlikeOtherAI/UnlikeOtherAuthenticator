@@ -9,7 +9,7 @@ import {
   getOrganisationMember,
   parseBooleanFlag,
   parseMaxMembersPerGroup,
-  resolveOrganisationByDomain,
+  resolveOrganisation,
   toGroupMemberRecord,
   type GroupMemberRecord,
   type OrgServiceDeps,
@@ -45,10 +45,7 @@ export async function addGroupMember(
   const maxMembersPerGroup = parseMaxMembersPerGroup(params.config);
   const isAdmin = parseBooleanFlag(params.isAdmin);
   const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
-  const org = await resolveOrganisationByDomain(prisma, {
-    orgId: params.orgId,
-    domain: params.domain,
-  });
+  const org = await resolveOrganisation(prisma, { orgId: params.orgId });
   const groupId = params.groupId.trim();
   if (!groupId) throw new AppError('BAD_REQUEST', 400);
 
@@ -115,10 +112,7 @@ export async function removeGroupMember(
   if (!userId) throw new AppError('BAD_REQUEST', 400);
 
   const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
-  const org = await resolveOrganisationByDomain(prisma, {
-    orgId: params.orgId,
-    domain: params.domain,
-  });
+  const org = await resolveOrganisation(prisma, { orgId: params.orgId });
   const groupId = params.groupId.trim();
   if (!groupId) throw new AppError('BAD_REQUEST', 400);
 
@@ -161,10 +155,7 @@ export async function updateGroupMemberAdmin(
   if (typeof params.isAdmin !== 'boolean') throw new AppError('BAD_REQUEST', 400);
 
   const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
-  const org = await resolveOrganisationByDomain(prisma, {
-    orgId: params.orgId,
-    domain: params.domain,
-  });
+  const org = await resolveOrganisation(prisma, { orgId: params.orgId });
   const groupId = params.groupId.trim();
   if (!groupId) throw new AppError('BAD_REQUEST', 400);
 
@@ -220,10 +211,7 @@ export async function assignTeamToGroup(
   if (params.groupId !== null && !normalizedGroupId) throw new AppError('BAD_REQUEST', 400);
 
   const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
-  const org = await resolveOrganisationByDomain(prisma, {
-    orgId: params.orgId,
-    domain: params.domain,
-  });
+  const org = await resolveOrganisation(prisma, { orgId: params.orgId });
 
   const team = await prisma.team.findFirst({
     where: { id: teamId, orgId: org.id },

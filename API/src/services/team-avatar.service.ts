@@ -100,7 +100,6 @@ export async function requireOrgTeamId(
 
   const org = await resolveAndAuthorizeTeamOrg(deps.prisma, {
     orgId: params.orgId,
-    domain: params.domain,
     actorUserId,
   });
 

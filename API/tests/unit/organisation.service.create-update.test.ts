@@ -336,7 +336,7 @@ describe('Organisation service: organisation CRUD', () => {
     );
   });
 
-  it('reads an organisation from its domain and id', async () => {
+  it('reads an organisation by id, from any UOA-integrated product', async () => {
     const prisma = makePrismaMock();
 
     prisma.organisation.findFirst.mockResolvedValue({
@@ -355,14 +355,16 @@ describe('Organisation service: organisation CRUD', () => {
       role: 'member',
     });
 
+    // The org's origin is `acme.example.com`; the caller arrives from another product's domain.
+    // Membership (mocked ACTIVE above) is the gate — the origin domain is not a predicate.
     const org = await getOrganisation(
-      { orgId: 'org-1', domain: 'Acme.Example.com', actorUserId: 'u-actor' },
+      { orgId: 'org-1', domain: 'Other.Example.com', actorUserId: 'u-actor' },
       { prisma },
     );
 
     expect(prisma.organisation.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'org-1', domain: 'acme.example.com' },
+        where: { id: 'org-1' },
       }),
     );
     expect(org).toMatchObject({

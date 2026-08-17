@@ -12,7 +12,7 @@ import {
   getOrganisationMember,
   parseOrgFeatureRoles,
   resolveOrgActor,
-  resolveOrganisationByDomain,
+  resolveOrganisation,
   toOrganisationRecord,
   type OrgActorProvenance,
   type OrgServiceDeps,
@@ -76,7 +76,7 @@ export async function transferOrganisationOwnership(
   const outgoingOwnerRole = resolveOutgoingOwnerRole(params.config, params.previousOwnerRole);
 
   const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
-  const org = await resolveOrganisationByDomain(prisma, params);
+  const org = await resolveOrganisation(prisma, { orgId: params.orgId });
   // The outgoing owner is the acting user on the user path (who must BE the
   // owner) and simply the org's current owner in backend mode — the transfer has
   // the same effect either way, it just is not initiated by a person.

@@ -63,7 +63,6 @@ export async function createTeamInvites(
     prisma,
     orgId: params.orgId,
     teamId: params.teamId,
-    domain: params.domain,
   });
 
   const redirectUrl = params.redirectUrl
@@ -238,7 +237,6 @@ export async function listTeamInvites(
     prisma,
     orgId: params.orgId,
     teamId: params.teamId,
-    domain: params.domain,
   });
 
   const rows = await prisma.teamInvite.findMany({
@@ -283,7 +281,6 @@ export async function getTeamInvite(
     prisma,
     orgId: params.orgId,
     teamId: params.teamId,
-    domain: params.domain,
   });
 
   const row = await prisma.teamInvite.findFirst({

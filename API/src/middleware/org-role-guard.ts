@@ -3,6 +3,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { AppError } from '../utils/errors.js';
 import { verifyAccessToken, type AccessTokenClaims } from '../services/access-token.service.js';
 import { normalizeDomain } from '../utils/domain.js';
+import { getEnv } from '../config/env.js';
 
 function resolveDomainFromRequest(request: FastifyRequest): string {
   const queryDomain = typeof request.query === 'object' && request.query !== null
@@ -121,18 +122,26 @@ export async function resolveActingUserClaims(token: string): Promise<AccessToke
  * `POST .../invitations`, `/domain/users`, and the `/internal/org/*` family
  * already run on, so nothing new is being trusted here.
  *
- * Three things must hold, and each is re-checked here rather than assumed from
+ * Four things must hold, and each is re-checked here rather than assumed from
  * the order of the preValidation array, so registering this guard without its
  * siblings fails closed instead of opening a hole:
  *
  *  1. the domain-hash guard actually ran and passed (`domainAuthClientDomainId`);
  *  2. a config JWT was verified, and its `domain` is what we bind to — never the
  *     raw `?domain=` query value;
- *  3. that verified domain opted in via `org_features.backend_org_management`.
+ *  3. that verified domain opted in via `org_features.backend_org_management`;
+ *  4. and, when the route names an `:orgId`, that org was CREATED on the verified domain.
  *
  * Without the opt-in this is exactly the old behaviour: 401 `MISSING_ACCESS_TOKEN`.
+ *
+ * (4) is the whole of backend mode's tenant boundary and lives only here. User-mode calls are no
+ * longer origin-domain-scoped — one organisation is usable from every UOA-integrated product,
+ * gated by the token's org claim plus live membership — but backend mode has no acting user and
+ * no membership to check, so the org's origin domain is the only boundary it can have. Without
+ * this check, dropping the domain predicate from the service resolvers would have handed every
+ * domain backend the whole estate.
  */
-function acceptDomainBackendCaller(request: FastifyRequest, queryDomain: string): void {
+async function acceptDomainBackendCaller(request: FastifyRequest, queryDomain: string): Promise<void> {
   // (1) The pairing's first half. `verifyDomainHashAuth` sets this only after a
   // constant-time match against the live per-domain secret.
   if (!request.domainAuthClientDomainId) {
@@ -152,6 +161,22 @@ function acceptDomainBackendCaller(request: FastifyRequest, queryDomain: string)
   // (3) Explicit opt-in in the partner's own signed config.
   if (request.config?.org_features?.backend_org_management !== true) {
     throw new AppError('UNAUTHORIZED', 401, 'MISSING_ACCESS_TOKEN');
+  }
+
+  // (4) Origin-domain scope for backend mode. `:orgId` is the caller's own claim about which
+  // tenant to act on, so it is checked against `organisations.domain` — the org's ORIGIN, the
+  // product that created it. An org another product created is a 404, exactly the answer the
+  // service resolvers used to give. Skipped with no database, mirroring the DB-less no-op the
+  // tenant-context plugin already takes; there are no organisation rows to scope to.
+  const orgId = resolveOrgIdFromParams(request);
+  if (orgId && getEnv().DATABASE_URL) {
+    const org = await request.adminDb.organisation.findFirst({
+      where: { id: orgId, domain: verifiedDomain },
+      select: { id: true },
+    });
+    if (!org) {
+      throw new AppError('NOT_FOUND', 404);
+    }
   }
 
   request.orgBackendCaller = { domain: verifiedDomain };
@@ -187,7 +212,7 @@ export function requireOrgBackendOnly() {
       throw new AppError('UNAUTHORIZED', 401, 'ACCESS_TOKEN_NOT_ALLOWED');
     }
 
-    acceptDomainBackendCaller(request, resolveDomainFromRequest(request));
+    await acceptDomainBackendCaller(request, resolveDomainFromRequest(request));
   };
 }
 
@@ -201,7 +226,7 @@ export function requireOrgRole(...requiredRoles: string[]) {
     // header throws inside the resolver rather than reaching this branch.
     const token = resolveOrgAccessTokenHeader(request);
     if (!token) {
-      acceptDomainBackendCaller(request, domain);
+      await acceptDomainBackendCaller(request, domain);
       return;
     }
 

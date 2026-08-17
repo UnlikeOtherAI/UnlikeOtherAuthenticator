@@ -27,6 +27,14 @@ import {
 
 export { normalizeDomain };
 
+// The two organisation resolvers live in their own file (this one is at the 500-line cap) but
+// stay part of the base surface every org service imports.
+export {
+  resolveOrganisation,
+  resolveOrganisationByDomain,
+  type ResolvedOrganisationRow,
+} from './organisation.resolve.js';
+
 type OrgServicePrisma = PrismaClient & {
   $transaction<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T>;
 };
@@ -267,45 +275,6 @@ export function toListLimit(limit?: number): number {
   const resolved = limit == null ? 50 : Math.trunc(limit);
   if (!Number.isFinite(resolved) || resolved <= 0) return 1;
   return Math.min(200, resolved);
-}
-
-export async function resolveOrganisationByDomain(
-  prisma: OrgServicePrisma,
-  params: { orgId: string; domain: string },
-): Promise<{
-  id: string;
-  domain: string;
-  name: string;
-  slug: string;
-  ownerId: string;
-  memberInvites?: string;
-  iconUrl?: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-}> {
-  const orgId = params.orgId.trim();
-  const domain = normalizeDomain(params.domain);
-  if (!orgId || !domain) {
-    throw new AppError('BAD_REQUEST', 400);
-  }
-
-  const row = await prisma.organisation.findFirst({
-    where: { id: orgId, domain },
-    select: {
-      id: true,
-      domain: true,
-      name: true,
-      slug: true,
-      ownerId: true,
-      memberInvites: true,
-      iconUrl: true,
-      createdAt: true,
-      updatedAt: true,
-    },
-  });
-
-  if (!row) throw new AppError('NOT_FOUND', 404);
-  return row;
 }
 
 export function toOrganisationRecord(row: {

@@ -8,7 +8,7 @@ import { generateEmailToken, hashEmailToken } from '../utils/verification-token.
 import {
   memberAvatarImageUrl,
   normalizeDomain,
-  resolveOrganisationByDomain,
+  resolveOrganisation,
 } from './organisation.service.base.js';
 import { OWNER_ROLE } from './role-grants.js';
 import {
@@ -307,15 +307,11 @@ export async function resolveInviteTarget(params: {
   prisma: InvitePrisma;
   orgId: string;
   teamId: string;
-  domain: string;
 }): Promise<{
   org: { id: string; domain: string; name: string; memberInvites?: string };
   team: { id: string; name: string };
 }> {
-  const org = await resolveOrganisationByDomain(params.prisma, {
-    orgId: params.orgId,
-    domain: params.domain,
-  });
+  const org = await resolveOrganisation(params.prisma, { orgId: params.orgId });
 
   const team = await params.prisma.team.findFirst({
     where: {

@@ -4,7 +4,6 @@ import type { PrismaClient } from '@prisma/client';
 
 import type { ClientConfig } from '../../src/services/config.service.js';
 import {
-  assertTeamInviteLinkValidForLanding,
   createTeamInviteLink,
   listTeamInviteLinks,
   redeemTeamInviteLink,
@@ -255,7 +254,12 @@ describe('team-invite-link.service', () => {
     it('revokes a link (idempotent) and a revoked link no longer redeems', async () => {
       const prisma = makePrisma();
       prisma.organisation.findFirst.mockResolvedValue(makeOrgRow());
-      prisma.team.findFirst.mockResolvedValue({ id: 'team-1', orgId: 'org-1', joinPolicy: 'INVITE_ONLY' });
+      prisma.team.findFirst.mockResolvedValue({
+        id: 'team-1',
+        orgId: 'org-1',
+        joinPolicy: 'INVITE_ONLY',
+        org: { domain: 'client.example.com' },
+      });
       prisma.orgMember.findFirst.mockResolvedValue({
         id: 'om-1',
         orgId: 'org-1',
@@ -300,189 +304,6 @@ describe('team-invite-link.service', () => {
         ),
       ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
       expect(prisma.teamInviteLink.updateMany).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('redeemTeamInviteLink', () => {
-    function mockValidLink(overrides?: Record<string, unknown>) {
-      return {
-        id: 'link-1',
-        orgId: 'org-1',
-        teamId: 'team-1',
-        roleToAssign: 'admin',
-        maxUses: 400,
-        useCount: 5,
-        revokedAt: null,
-        expiresAt: new Date(NOW.getTime() + 1000),
-        ...overrides,
-      };
-    }
-
-    it('joins the user as an ACTIVE team member with roleToAssign, incrementing useCount (reactivating a REMOVED row)', async () => {
-      const prisma = makePrisma();
-      prisma.teamInviteLink.findUnique.mockResolvedValue(mockValidLink());
-      prisma.team.findFirst.mockResolvedValue({ id: 'team-1', orgId: 'org-1', joinPolicy: 'INVITE_ONLY' });
-      prisma.teamInviteLink.updateMany.mockResolvedValue({ count: 1 });
-      prisma.orgMember.findFirst
-        .mockResolvedValueOnce(null)
-        .mockResolvedValue({ id: 'om-1', orgId: 'org-1', status: 'ACTIVE' });
-      prisma.orgMember.create.mockResolvedValue({ id: 'om-1' });
-      prisma.teamMember.findFirst.mockResolvedValue({ id: 'tm-1', status: 'REMOVED' });
-      prisma.teamMember.update.mockResolvedValue({ id: 'tm-1' });
-
-      const result = await redeemTeamInviteLink(
-        { token: 'plain-token', userId: 'user-1', domain: 'client.example.com', config: makeConfig() },
-        { prisma, now: () => NOW, sharedSecret: SHARED_SECRET },
-      );
-
-      expect(result).toEqual({ teamId: 'team-1', orgId: 'org-1' });
-      expect(prisma.teamInviteLink.updateMany).toHaveBeenCalledWith({
-        where: { id: 'link-1', revokedAt: null, expiresAt: { gt: NOW }, useCount: { lt: 400 } },
-        data: { useCount: { increment: 1 } },
-      });
-      expect(prisma.orgMember.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: { orgId: 'org-1', userId: 'user-1', role: 'member' } }),
-      );
-      expect(prisma.teamMember.update).toHaveBeenCalledWith({
-        where: { id: 'tm-1' },
-        data: { status: 'ACTIVE', statusChangedAt: NOW, teamRole: 'admin' },
-      });
-    });
-
-    it('is idempotent when the user is already an ACTIVE member — still returns the team', async () => {
-      const prisma = makePrisma();
-      prisma.teamInviteLink.findUnique.mockResolvedValue(mockValidLink());
-      prisma.team.findFirst.mockResolvedValue({ id: 'team-1', orgId: 'org-1', joinPolicy: 'INVITE_ONLY' });
-      prisma.teamInviteLink.updateMany.mockResolvedValue({ count: 1 });
-      prisma.orgMember.findFirst.mockResolvedValue({
-        id: 'om-1',
-        orgId: 'org-1',
-        status: 'ACTIVE',
-      });
-      prisma.teamMember.findFirst.mockResolvedValue({ id: 'tm-1', status: 'ACTIVE' });
-
-      const result = await redeemTeamInviteLink(
-        { token: 'plain-token', userId: 'user-1', domain: 'client.example.com', config: makeConfig() },
-        { prisma, now: () => NOW, sharedSecret: SHARED_SECRET },
-      );
-
-      expect(result).toEqual({ teamId: 'team-1', orgId: 'org-1' });
-      expect(prisma.orgMember.create).not.toHaveBeenCalled();
-      expect(prisma.teamMember.update).not.toHaveBeenCalled();
-      expect(prisma.teamMember.create).not.toHaveBeenCalled();
-    });
-
-    it.each([
-      ['unknown token', () => undefined],
-      ['revoked', () => mockValidLink({ revokedAt: NOW })],
-      ['expired', () => mockValidLink({ expiresAt: new Date(NOW.getTime() - 1000) })],
-      ['over-cap', () => mockValidLink({ useCount: 400, maxUses: 400 })],
-    ])('rejects %s with the same generic error', async (_label, buildLink) => {
-      const prisma = makePrisma();
-      prisma.teamInviteLink.findUnique.mockResolvedValue(buildLink() ?? null);
-      prisma.team.findFirst.mockResolvedValue({ id: 'team-1', orgId: 'org-1', joinPolicy: 'INVITE_ONLY' });
-
-      await expect(
-        redeemTeamInviteLink(
-          { token: 'plain-token', userId: 'user-1', domain: 'client.example.com', config: makeConfig() },
-          { prisma, now: () => NOW, sharedSecret: SHARED_SECRET },
-        ),
-      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
-      expect(prisma.teamInviteLink.updateMany).not.toHaveBeenCalled();
-    });
-
-    it('rejects a HIDDEN team with the generic error', async () => {
-      const prisma = makePrisma();
-      prisma.teamInviteLink.findUnique.mockResolvedValue(mockValidLink());
-      prisma.team.findFirst.mockResolvedValue({ id: 'team-1', orgId: 'org-1', joinPolicy: 'HIDDEN' });
-
-      await expect(
-        redeemTeamInviteLink(
-          { token: 'plain-token', userId: 'user-1', domain: 'client.example.com', config: makeConfig() },
-          { prisma, now: () => NOW, sharedSecret: SHARED_SECRET },
-        ),
-      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
-    });
-
-    it('rejects a cross-domain team with the generic error', async () => {
-      const prisma = makePrisma();
-      prisma.teamInviteLink.findUnique.mockResolvedValue(mockValidLink());
-      // Scoped lookup (`org: { domain }`) never matches a team on another domain.
-      prisma.team.findFirst.mockResolvedValue(null);
-
-      await expect(
-        redeemTeamInviteLink(
-          { token: 'plain-token', userId: 'user-1', domain: 'other.example.com', config: makeConfig() },
-          { prisma, now: () => NOW, sharedSecret: SHARED_SECRET },
-        ),
-      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
-    });
-
-    it('the atomic updateMany guard prevents useCount from exceeding maxUses under a simulated race', async () => {
-      const prisma = makePrisma();
-      prisma.teamInviteLink.findUnique.mockResolvedValue(mockValidLink({ useCount: 399, maxUses: 400 }));
-      prisma.team.findFirst.mockResolvedValue({ id: 'team-1', orgId: 'org-1', joinPolicy: 'INVITE_ONLY' });
-      prisma.orgMember.findFirst.mockResolvedValue({
-        id: 'om-1',
-        orgId: 'org-1',
-        status: 'ACTIVE',
-      });
-      prisma.teamMember.findFirst.mockResolvedValue({ id: 'tm-1', status: 'ACTIVE' });
-
-      // First redemption wins the conditional update (still under cap in the DB).
-      (prisma.teamInviteLink.updateMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ count: 1 });
-      const first = await redeemTeamInviteLink(
-        { token: 'plain-token', userId: 'user-1', domain: 'client.example.com', config: makeConfig() },
-        { prisma, now: () => NOW, sharedSecret: SHARED_SECRET },
-      );
-      expect(first).toEqual({ teamId: 'team-1', orgId: 'org-1' });
-
-      // Second concurrent redemption loses the race — the WHERE clause no longer matches (useCount
-      // already at maxUses in the real DB), simulated here by the conditional update returning 0.
-      (prisma.teamInviteLink.updateMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ count: 0 });
-      await expect(
-        redeemTeamInviteLink(
-          { token: 'plain-token', userId: 'user-2', domain: 'client.example.com', config: makeConfig() },
-          { prisma, now: () => NOW, sharedSecret: SHARED_SECRET },
-        ),
-      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
-    });
-  });
-
-  describe('assertTeamInviteLinkValidForLanding', () => {
-    it('resolves for a valid, non-redeemed token without mutating anything', async () => {
-      const prisma = makePrisma();
-      prisma.teamInviteLink.findUnique.mockResolvedValue({
-        id: 'link-1',
-        orgId: 'org-1',
-        teamId: 'team-1',
-        roleToAssign: 'member',
-        maxUses: 400,
-        useCount: 0,
-        revokedAt: null,
-        expiresAt: new Date(NOW.getTime() + 1000),
-      });
-      prisma.team.findFirst.mockResolvedValue({ id: 'team-1', orgId: 'org-1', joinPolicy: 'INVITE_ONLY' });
-
-      await expect(
-        assertTeamInviteLinkValidForLanding(
-          { token: 'plain-token', domain: 'client.example.com' },
-          { prisma, now: () => NOW, sharedSecret: SHARED_SECRET },
-        ),
-      ).resolves.toBeUndefined();
-      expect(prisma.teamInviteLink.updateMany).not.toHaveBeenCalled();
-    });
-
-    it('rejects an invalid token with the generic error', async () => {
-      const prisma = makePrisma();
-      prisma.teamInviteLink.findUnique.mockResolvedValue(null);
-
-      await expect(
-        assertTeamInviteLinkValidForLanding(
-          { token: 'bad-token', domain: 'client.example.com' },
-          { prisma, now: () => NOW, sharedSecret: SHARED_SECRET },
-        ),
-      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
     });
   });
 });

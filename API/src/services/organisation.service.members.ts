@@ -21,7 +21,7 @@ import {
   parseOrgLimit,
   requireOrgCapability,
   resolveOrgActor,
-  resolveOrganisationByDomain,
+  resolveOrganisation,
   toListLimit,
   toMemberRecord,
   type OrgActorProvenance,
@@ -55,7 +55,7 @@ export async function listOrganisationMembers(
   assertDatabaseEnabled(env);
 
   const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
-  const org = await resolveOrganisationByDomain(prisma, params);
+  const org = await resolveOrganisation(prisma, { orgId: params.orgId });
 
   const limit = toListLimit(params.limit);
   const cursor = params.cursor?.trim();
@@ -103,7 +103,7 @@ export async function addOrganisationMember(
   ensureOrgRole(role, orgRoles);
 
   const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
-  const org = await resolveOrganisationByDomain(prisma, params);
+  const org = await resolveOrganisation(prisma, { orgId: params.orgId });
 
   // Both checks below are about the ACTING USER's standing inside this org. In
   // backend mode there is no acting user: the domain pairing already proved the
@@ -244,7 +244,7 @@ export async function changeOrganisationMemberRole(
   ensureOrgRole(role, orgRoles);
 
   const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
-  const org = await resolveOrganisationByDomain(prisma, params);
+  const org = await resolveOrganisation(prisma, { orgId: params.orgId });
   // "Must be the org owner" is a check on the acting user; backend mode has none.
   if (actorUserId && org.ownerId !== actorUserId) throw new AppError('FORBIDDEN', 403);
 
@@ -305,7 +305,7 @@ export async function removeOrganisationMember(
   // This destructive lifecycle boundary must revoke scoped sessions issued by every product
   // domain in the same transaction, which requires the BYPASSRLS client.
   const prisma = deps?.prisma ?? (getAdminPrisma() as unknown as OrgServicePrisma);
-  const org = await resolveOrganisationByDomain(prisma, params);
+  const org = await resolveOrganisation(prisma, { orgId: params.orgId });
 
   // Actor-standing checks only; backend mode has no acting user. The owner-count
   // invariant below is NOT an actor check and still applies to both callers.

@@ -16,7 +16,7 @@ import {
   getOrganisationMember,
   requireOrgCapability,
   resolveOrgActor,
-  resolveOrganisationByDomain,
+  resolveOrganisation,
   type OrgActorProvenance,
   type OrgServiceDeps,
   type OrgServicePrisma,
@@ -77,7 +77,7 @@ export async function deactivateOrganisationMember(
   // tenant role cannot see refresh rows issued by sibling product domains, so this lifecycle
   // boundary deliberately uses the BYPASSRLS client and repeats every authorization check.
   const prisma = deps?.prisma ?? (getAdminPrisma() as unknown as OrgServicePrisma);
-  const org = await resolveOrganisationByDomain(prisma, params);
+  const org = await resolveOrganisation(prisma, { orgId: params.orgId });
 
   await requireOrgMemberManager(prisma, { orgId: org.id, actorUserId, config: params.config });
 
@@ -159,7 +159,7 @@ export async function reactivateOrganisationMember(
   if (!userId) throw new AppError('BAD_REQUEST', 400);
 
   const prisma = deps?.prisma ?? (getAdminPrisma() as unknown as OrgServicePrisma);
-  const org = await resolveOrganisationByDomain(prisma, params);
+  const org = await resolveOrganisation(prisma, { orgId: params.orgId });
 
   await requireOrgMemberManager(prisma, { orgId: org.id, actorUserId, config: params.config });
 

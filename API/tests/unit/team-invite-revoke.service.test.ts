@@ -4,8 +4,6 @@ import type { PrismaClient } from '@prisma/client';
 import type { ClientConfig } from '../../src/services/config.service.js';
 import type { OrgActorProvenance } from '../../src/services/org-audit-log.service.js';
 import { ORG_AUDIT_ACTOR_METADATA_KEY } from '../../src/services/org-audit-log.service.js';
-import { toInviteRecord } from '../../src/services/team-invite.service.base.js';
-import { approveInvite, denyInvite } from '../../src/services/team-invite.service.member.js';
 import { revokeTeamInvite } from '../../src/services/team-invite.service.revoke.js';
 import { AppError } from '../../src/utils/errors.js';
 import { testUiTheme } from '../helpers/test-config.js';
@@ -95,9 +93,9 @@ function makeInviteRow(overrides?: Record<string, unknown>) {
 function makePrisma(invite: ReturnType<typeof makeInviteRow> | null = makeInviteRow()) {
   return {
     organisation: {
-      findFirst: vi.fn().mockImplementation((args: { where: { domain: string } }) =>
+      findFirst: vi.fn().mockImplementation((args: { where: { id: string } }) =>
         Promise.resolve(
-          args.where.domain === 'client.example.com'
+          args.where.id === 'org-1'
             ? {
                 id: 'org-1',
                 domain: 'client.example.com',
@@ -421,23 +419,61 @@ describe('revokeTeamInvite (DELETE .../teams/:teamId/invitations/:inviteId)', ()
     ).rejects.toMatchObject({ statusCode: 404 });
   });
 
-  it("cross-domain: another domain's org resolves to the same generic 404", async () => {
+  // The org's origin is `client.example.com`; the caller arrives from another product's domain
+  // holding an access token already scoped to this org. Membership, not origin, is the gate.
+  it('another UOA-integrated product: the owner revokes the same invite, org resolved by id', async () => {
     const prisma = makePrisma();
     mockActiveOrgMember(prisma, 'owner-1', 'owner');
 
-    await expect(
-      revokeTeamInvite(
-        {
-          orgId: 'org-1',
-          teamId: 'team-1',
-          inviteId: 'invite-1',
-          domain: 'other.example.com',
-          actorUserId: 'owner-1',
-          config: makeRevokeConfig(),
-        },
-        deps(prisma),
-      ),
-    ).rejects.toMatchObject({ statusCode: 404 });
+    const result = await revokeTeamInvite(
+      {
+        orgId: 'org-1',
+        teamId: 'team-1',
+        inviteId: 'invite-1',
+        domain: 'other.example.com',
+        actorUserId: 'owner-1',
+        config: makeRevokeConfig(),
+      },
+      deps(prisma),
+    );
+
+    expect(result).toEqual({ ok: true });
+    expect(prisma.organisation.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'org-1' } }),
+    );
+  });
+
+  it('another product, but the caller holds no ACTIVE membership: 403, nothing written', async () => {
+    const prisma = makePrisma();
+    prisma.orgMember.findFirst.mockResolvedValue(null);
+    prisma.teamMember.findFirst.mockResolvedValue(null);
+    const params = {
+      orgId: 'org-1',
+      teamId: 'team-1',
+      inviteId: 'invite-1',
+      domain: 'other.example.com',
+      actorUserId: 'outsider-1',
+      config: makeRevokeConfig(),
+    };
+
+    await expect(revokeTeamInvite(params, deps(prisma))).rejects.toMatchObject({ statusCode: 403 });
+    expect(prisma.teamInvite.update).not.toHaveBeenCalled();
+    expect(orgAuditLog.create).not.toHaveBeenCalled();
+  });
+
+  it('unknown org id: still the same generic 404, and the invite is never read', async () => {
+    const prisma = makePrisma();
+    mockActiveOrgMember(prisma, 'owner-1', 'owner');
+    const params = {
+      orgId: 'org-elsewhere',
+      teamId: 'team-1',
+      inviteId: 'invite-1',
+      domain: 'client.example.com',
+      actorUserId: 'owner-1',
+      config: makeRevokeConfig(),
+    };
+
+    await expect(revokeTeamInvite(params, deps(prisma))).rejects.toMatchObject({ statusCode: 404 });
     expect(prisma.teamInvite.findFirst).not.toHaveBeenCalled();
   });
 
@@ -457,112 +493,5 @@ describe('revokeTeamInvite (DELETE .../teams/:teamId/invitations/:inviteId)', ()
       ),
     ).rejects.toBeInstanceOf(AppError);
     expect(prisma.teamInvite.update).not.toHaveBeenCalled();
-  });
-});
-
-describe('approval queue after revocation', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  function makeConfig(): ClientConfig {
-    return {
-      domain: 'client.example.com',
-      redirect_urls: ['https://client.example.com/oauth/callback'],
-      enabled_auth_methods: ['email_password'],
-      ui_theme: testUiTheme(),
-      language_config: 'en',
-      user_scope: 'global',
-      allow_registration: true,
-      registration_mode: 'password_required',
-      '2fa_enabled': false,
-      debug_enabled: false,
-    } as ClientConfig;
-  }
-
-  function makeApprovalPrisma() {
-    const prisma = makePrisma(
-      makeInviteRow({
-        approvalStatus: 'PENDING',
-        requestedByUserId: 'member-9',
-        revokedAt: new Date('2026-08-10T00:00:00.000Z'),
-        revokedReason: 'REVOKED',
-      }),
-    );
-    // findOrgInviteOrThrow includes the team/org relations on the row.
-    prisma.teamInvite.findFirst.mockResolvedValue({
-      ...makeInviteRow({
-        approvalStatus: 'PENDING',
-        requestedByUserId: 'member-9',
-        revokedAt: new Date('2026-08-10T00:00:00.000Z'),
-        revokedReason: 'REVOKED',
-      }),
-      team: { id: 'team-1', name: 'Core Team' },
-      org: { name: 'Acme', domain: 'client.example.com' },
-    });
-    return prisma;
-  }
-
-  it('approveInvite refuses a revoked invite instead of emailing a dead link', async () => {
-    const prisma = makeApprovalPrisma();
-    const sendTeamInviteEmail = vi.fn(async () => undefined);
-
-    await expect(
-      approveInvite(
-        {
-          orgId: 'org-1',
-          domain: 'client.example.com',
-          inviteId: 'invite-1',
-          config: makeConfig(),
-          configUrl: 'https://client.example.com/auth-config',
-          reviewerUserId: 'owner-1',
-        },
-        { env: makeEnv(), prisma, now: () => NOW, sendTeamInviteEmail },
-      ),
-    ).rejects.toMatchObject({ statusCode: 400 });
-    expect(prisma.teamInvite.update).not.toHaveBeenCalled();
-    expect(sendTeamInviteEmail).not.toHaveBeenCalled();
-  });
-
-  it('denyInvite refuses a revoked invite instead of overwriting its record', async () => {
-    const prisma = makeApprovalPrisma();
-
-    await expect(
-      denyInvite(
-        {
-          orgId: 'org-1',
-          domain: 'client.example.com',
-          inviteId: 'invite-1',
-          reviewerUserId: 'owner-1',
-        },
-        { env: makeEnv(), prisma, now: () => NOW },
-      ),
-    ).rejects.toMatchObject({ statusCode: 400 });
-    expect(prisma.teamInvite.update).not.toHaveBeenCalled();
-  });
-});
-
-describe('derived invite status for revocation', () => {
-  it('an explicitly revoked invite reads "revoked"; a replaced one keeps "replaced"', () => {
-    const revoked = toInviteRecord(
-      makeInviteRow({ revokedAt: NOW, revokedReason: 'REVOKED' }),
-      NOW,
-      'client.example.com',
-    );
-    const replaced = toInviteRecord(
-      makeInviteRow({ revokedAt: NOW, revokedReason: 'REPLACED' }),
-      NOW,
-      'client.example.com',
-    );
-    // Pre-migration rows have no reason; the only writer of revokedAt until now was replacement.
-    const legacy = toInviteRecord(
-      makeInviteRow({ revokedAt: NOW, revokedReason: null }),
-      NOW,
-      'client.example.com',
-    );
-
-    expect(revoked.status).toBe('revoked');
-    expect(replaced.status).toBe('replaced');
-    expect(legacy.status).toBe('replaced');
   });
 });

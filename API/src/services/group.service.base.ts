@@ -4,7 +4,7 @@ import {
   assertDatabaseEnabled,
   getOrganisationMember,
   memberAvatarImageUrl,
-  resolveOrganisationByDomain,
+  resolveOrganisation,
   toListLimit,
   type CursorList,
   type OrgServiceDeps,
@@ -42,7 +42,7 @@ export type GroupWithMembersRecord = GroupRecord & {
 export {
   assertDatabaseEnabled,
   getOrganisationMember,
-  resolveOrganisationByDomain,
+  resolveOrganisation,
   toListLimit,
   isP2002Error,
   type CursorList,

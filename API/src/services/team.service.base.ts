@@ -15,7 +15,7 @@ import {
   memberAvatarImageUrl,
   normalizeIconUrl,
   resolveOrgActor,
-  resolveOrganisationByDomain,
+  resolveOrganisation,
   teamAvatarImageUrl,
   toListLimit,
   type CursorList,
@@ -348,7 +348,7 @@ export async function requireWorkspaceCapability(
 
 export async function resolveAndAuthorizeTeamOrg(
   prisma: OrgServicePrisma,
-  params: { orgId: string; domain: string; actorUserId?: string },
+  params: { orgId: string; actorUserId?: string },
 ): Promise<{
   id: string;
   domain: string;
@@ -358,10 +358,7 @@ export async function resolveAndAuthorizeTeamOrg(
   createdAt: Date;
   updatedAt: Date;
 }> {
-  const org = await resolveOrganisationByDomain(prisma, {
-    orgId: params.orgId,
-    domain: params.domain,
-  });
+  const org = await resolveOrganisation(prisma, { orgId: params.orgId });
 
   if (!params.actorUserId) return org;
 

@@ -11,7 +11,7 @@ import {
   type OrgActorProvenance,
   getOrganisationMember,
   resolveOrgActor,
-  resolveOrganisationByDomain,
+  resolveOrganisation,
 } from './organisation.service.base.js';
 import { hasWorkspaceCapability } from './team.service.base.js';
 import { buildUserIdentity } from './user-scope.service.js';
@@ -88,7 +88,6 @@ export async function createMemberInvite(
     prisma,
     orgId: params.orgId,
     teamId: params.teamId,
-    domain: params.domain,
   });
 
   const redirectUrl = params.redirectUrl
@@ -293,10 +292,7 @@ export async function listPendingApprovalInvites(
   assertDatabaseEnabled(env);
 
   const prisma = deps?.prisma ?? (getPrisma() as InvitePrisma);
-  const org = await resolveOrganisationByDomain(prisma, {
-    orgId: params.orgId,
-    domain: params.domain,
-  });
+  const org = await resolveOrganisation(prisma, { orgId: params.orgId });
 
   // `approvalStatus: 'PENDING'` alone is not enough: a row can be revoked or declined while still
   // stamped PENDING, and an approver must not be shown work that no longer exists. The actionable
@@ -341,10 +337,7 @@ export async function approveInvite(
   const now = deps?.now ? deps.now() : new Date();
   const sendInviteEmail = deps?.sendTeamInviteEmail ?? sendTeamInviteEmail;
 
-  const org = await resolveOrganisationByDomain(prisma, {
-    orgId: params.orgId,
-    domain: params.domain,
-  });
+  const org = await resolveOrganisation(prisma, { orgId: params.orgId });
   const invite = await findOrgInviteOrThrow({ prisma, orgId: org.id, inviteId: params.inviteId });
 
   // Shared policy: only an unresolved, unexpired invite still awaiting approval. A revoked,
@@ -435,10 +428,7 @@ export async function denyInvite(
   const prisma = deps?.prisma ?? (getPrisma() as InvitePrisma);
   const now = deps?.now ? deps.now() : new Date();
 
-  const org = await resolveOrganisationByDomain(prisma, {
-    orgId: params.orgId,
-    domain: params.domain,
-  });
+  const org = await resolveOrganisation(prisma, { orgId: params.orgId });
   const invite = await findOrgInviteOrThrow({ prisma, orgId: org.id, inviteId: params.inviteId });
 
   // Shared policy: only an unresolved invite still awaiting approval. A revoked, declined or

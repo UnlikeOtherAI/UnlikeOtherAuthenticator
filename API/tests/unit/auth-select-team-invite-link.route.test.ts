@@ -206,6 +206,7 @@ describe('POST /auth/select-team invite-link redemption', () => {
       id: 'team-7',
       orgId: 'org-7',
       joinPolicy: 'INVITE_ONLY',
+      org: { domain: 'client.example.com' },
     });
     prismaMock.teamInviteLink.updateMany.mockResolvedValue({ count: 1 });
     prismaMock.orgMember.findFirst
@@ -257,6 +258,7 @@ describe('POST /auth/select-team invite-link redemption', () => {
       id: 'team-8',
       orgId: 'org-8',
       joinPolicy: 'INVITE_ONLY',
+      org: { domain: 'client.example.com' },
     });
     prismaMock.teamInviteLink.updateMany.mockResolvedValue({ count: 1 });
     prismaMock.orgMember.findFirst.mockResolvedValue({

@@ -73,8 +73,17 @@ export function registerOrgMeRoute(app: FastifyInstance): void {
 
       const org = await request.withTenantTx(async (tx) => {
         const prisma = asPrismaClient(tx);
+        // Prefer the org the token is actually scoped to. A user can hold ACTIVE memberships in
+        // several organisations, and "the first active membership on this domain" would answer
+        // with a different org than every `/org/organisations/:orgId/**` call the same token can
+        // make — the sidebar and the surface it links to would disagree.
         let context = await getUserOrgContext(
-          { userId: claims.userId, domain: normalizedDomain, config },
+          {
+            userId: claims.userId,
+            domain: normalizedDomain,
+            config,
+            ...(claims.org?.org_id ? { orgId: claims.org.org_id } : {}),
+          },
           { prisma },
         );
 
@@ -82,12 +91,13 @@ export function registerOrgMeRoute(app: FastifyInstance): void {
         // owned by another product domain. Keep the legacy singular org block complete by
         // resolving that selected organisation live through the same server-owned product-policy
         // gate used at token issuance; never synthesize an org from an arbitrary directory row.
-        if (!context && claims.active) {
+        const selectedOrgId = claims.active?.orgId ?? claims.org?.org_id;
+        if (!context && selectedOrgId) {
           context = await getActiveClientOrgContext(
             {
               userId: claims.userId,
               domain: normalizedDomain,
-              orgId: claims.active.orgId,
+              orgId: selectedOrgId,
               groupsEnabled: config.org_features?.groups_enabled,
             },
             { prisma },

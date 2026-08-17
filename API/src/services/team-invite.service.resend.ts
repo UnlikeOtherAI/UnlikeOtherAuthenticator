@@ -51,7 +51,6 @@ export async function resendTeamInvite(
     prisma,
     orgId: params.orgId,
     teamId: params.teamId,
-    domain: params.domain,
   });
 
   const invite = await prisma.teamInvite.findFirst({

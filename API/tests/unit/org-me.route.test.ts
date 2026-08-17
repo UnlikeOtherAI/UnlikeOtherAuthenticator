@@ -162,6 +162,49 @@ describe('GET /org/me cross-product directory', () => {
     expect(buildSidebarWorkspacesMock).toHaveBeenCalled();
   });
 
+  it("resolves the token's own org, not whichever membership happens to come first", async () => {
+    // A user can hold ACTIVE memberships in several organisations. `/org/me` must answer for the
+    // org the token is scoped to — the same one `/org/organisations/:orgId/**` will accept — or
+    // the sidebar and the surface it links to disagree.
+    claimsMock.mockResolvedValue({
+      userId: 'user-1',
+      domain: 'product.example.com',
+      org: { org_id: 'org-token', org_role: 'owner' },
+    });
+    getUserOrgContextMock.mockResolvedValue({
+      org_id: 'org-token',
+      tenant_slug: 'token-org',
+      org_role: 'owner',
+      teams: [],
+      team_roles: {},
+    });
+
+    const response = await getOrgMe();
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().org.org_id).toBe('org-token');
+    expect(getUserOrgContextMock).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'user-1', orgId: 'org-token' }),
+      { prisma: { transaction: true } },
+    );
+    expect(getActiveClientOrgContextMock).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the org claim when there is no same-domain context and no active claim', async () => {
+    claimsMock.mockResolvedValue({
+      userId: 'user-1',
+      domain: 'product.example.com',
+      org: { org_id: 'org-token', org_role: 'owner' },
+    });
+
+    await getOrgMe();
+
+    expect(getActiveClientOrgContextMock).toHaveBeenCalledWith(
+      expect.objectContaining({ orgId: 'org-token' }),
+      { prisma: { transaction: true } },
+    );
+  });
+
   it('does not invent a cross-domain legacy org for an unscoped token', async () => {
     claimsMock.mockResolvedValue({ userId: 'user-1', domain: 'product.example.com' });
 

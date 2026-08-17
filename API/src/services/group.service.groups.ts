@@ -9,7 +9,7 @@ import {
   normalizeGroupDescription,
   normalizeGroupName,
   parseMaxGroupsPerOrg,
-  resolveOrganisationByDomain,
+  resolveOrganisation,
   toGroupRecord,
   toListLimit,
   toGroupMemberRecord,
@@ -37,10 +37,7 @@ export async function listGroups(
 
   const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
 
-  const org = await resolveOrganisationByDomain(prisma, {
-    orgId: params.orgId,
-    domain: params.domain,
-  });
+  const org = await resolveOrganisation(prisma, { orgId: params.orgId });
 
   const limit = toListLimit(params.limit);
   const cursor = params.cursor?.trim();
@@ -90,10 +87,7 @@ export async function createGroup(
   const description = normalizeGroupDescription(params.description);
 
   const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
-  const org = await resolveOrganisationByDomain(prisma, {
-    orgId: params.orgId,
-    domain: params.domain,
-  });
+  const org = await resolveOrganisation(prisma, { orgId: params.orgId });
 
   const groupCount = await prisma.group.count({ where: { orgId: org.id } });
   if (groupCount >= maxGroups) throw new AppError('BAD_REQUEST', 400);
@@ -136,10 +130,7 @@ export async function getGroup(
   assertGroupFeaturesEnabled(params.config);
 
   const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
-  const org = await resolveOrganisationByDomain(prisma, {
-    orgId: params.orgId,
-    domain: params.domain,
-  });
+  const org = await resolveOrganisation(prisma, { orgId: params.orgId });
 
   const row = await prisma.group.findFirst({
     where: {
@@ -213,10 +204,7 @@ export async function updateGroup(
   if (params.description !== undefined) data.description = normalizeGroupDescription(params.description);
 
   const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
-  const org = await resolveOrganisationByDomain(prisma, {
-    orgId: params.orgId,
-    domain: params.domain,
-  });
+  const org = await resolveOrganisation(prisma, { orgId: params.orgId });
 
   const groupId = params.groupId.trim();
   if (!groupId) throw new AppError('BAD_REQUEST', 400);
@@ -262,10 +250,7 @@ export async function deleteGroup(
   assertGroupFeaturesEnabled(params.config);
 
   const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
-  const org = await resolveOrganisationByDomain(prisma, {
-    orgId: params.orgId,
-    domain: params.domain,
-  });
+  const org = await resolveOrganisation(prisma, { orgId: params.orgId });
   const groupId = params.groupId.trim();
   if (!groupId) throw new AppError('BAD_REQUEST', 400);
 
