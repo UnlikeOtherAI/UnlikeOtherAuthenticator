@@ -3,8 +3,9 @@
 // `org-backend-mode-rls.test.ts` drives real routes, which is the right test for
 // "does the product hold together" — but it is NOT a test of the policies. Every
 // route-level case there passes with the domain half of the policy predicate
-// deleted, because the SERVICE layer (`resolveOrganisationByDomain`) refuses the
-// call first. Three mutants survived that whole suite:
+// deleted, because an earlier layer refuses the call first — the strict
+// `resolveOrganisationByDomain` for access requests, and `acceptDomainBackendCaller`
+// for backend mode. Three mutants survived that whole suite:
 //
 //   M1  delete `AND uoa_org_in_domain(org_id, app.domain)` from all four
 //       access_requests policies — the "two independent layers" claim asserted

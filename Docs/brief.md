@@ -1230,6 +1230,8 @@ groupMembers  GroupMember[]
 
 > **Note:** The "one org per domain" constraint and domain-based org scoping below predates the ReBAC model. `api-changes-rebac.md §1` removes `Organisation.domain` — orgs are no longer tied to a single client domain. Auto-enrolment via `OrgEmailDomainRule` replaces domain-scoped org membership. Implementers should follow `api-changes-rebac.md §1–3` for the current model.
 
+> **Shipped step (2026-08-17):** `Organisation.domain` still exists, but it is now the **origin** domain — the product that created the org — and no longer scopes who may manage it. On `/org/organisations/:orgId/**` a user-token call resolves the org by id and is gated by the token's `org` claim plus live membership, so one organisation is usable from every UOA-integrated product. Backend / domain-hash-only calls remain scoped to the origin domain. See the clarification under §24.8.
+
 - An organisation belongs to a **domain** and is the top-level tenant concept.
 - A domain can have **multiple organisations**.
 - A user belongs to **exactly one organisation** per domain (with global `user_scope`, the same person could belong to different orgs on different domains).
@@ -1587,6 +1589,23 @@ so another domain's `:orgId` is a plain 404, and every transaction still sets th
 RLS `app.domain` / `app.org_id` GUCs. `app.user_id` is simply empty in backend
 mode, which only narrows the RLS predicates (it appears solely as an additive
 owner-of / member-of branch on every `/org` table).
+
+> **Clarification (2026-08-17) — shared organisations.** The paragraph above now
+> describes **backend mode only**. One organisation must be usable by every
+> UOA-integrated product, so on the `/org/organisations/:orgId/**` management
+> surface a **user-token** call resolves the organisation by **id alone**
+> (`resolveOrganisation`), gated by the access token's `domain` matching
+> `?domain=`, its `org.org_id` claim matching `:orgId`, and live ACTIVE
+> membership / capability in that org. `organisations.domain` keeps its meaning
+> as the **origin** domain — the product that created the org — and still owns
+> the slug namespace (`@@unique([domain, slug])`), the
+> one-active-org-per-origin-domain invariant, backend-mode ownership, and invite
+> email identity. It is simply no longer an authorization predicate for user
+> calls. **Backend / domain-hash-only mode stays origin-domain-scoped**, enforced
+> once in `acceptDomainBackendCaller` (`middleware/org-role-guard.ts`): an
+> `:orgId` created on another domain is the same plain 404 it always was. The
+> access-request family below keeps the strict `(id, domain)` resolver, its RLS
+> policies being domain-bound. No schema, index, trigger, or RLS change.
 
 The access-request admin routes are part of "every handler". They were the one
 family that resolved its target from `access_requests.target_org_id` /

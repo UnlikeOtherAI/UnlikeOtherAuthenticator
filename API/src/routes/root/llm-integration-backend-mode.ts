@@ -43,8 +43,8 @@ because the config JWT is signed with the partner's own private key.
   proves authority over the entire tenant, which outranks any single member's
   role.
 - Every check that is NOT about the acting user is unchanged and applies to both
-  modes: the organisation must belong to the verified domain, the last owner
-  cannot be removed, membership and team caps still hold, one-org-per-domain
+  modes: the organisation must have been created on the verified domain, the last
+  owner cannot be removed, membership and team caps still hold, one-org-per-domain
   still holds, a user cannot be removed from their last team.
 - Where a route needs to name a user, name it explicitly. \`POST
   /org/organisations\` takes \`owner_user_id\`; the member routes already take
@@ -61,11 +61,19 @@ member: only-the-owner-may-change-roles, only-the-owner-may-delete-the-org, and
 the \`allow_user_create_org\` gate. Everything in the bullet above this one still
 applies.
 
-**Domain isolation is absolute.** The call binds to the domain in the VERIFIED
-config, never the raw query string — a \`?domain=\` that differs is
-\`400 DOMAIN_MISMATCH\`. Every handler then resolves the organisation as
-\`(orgId, verified domain)\`, so an \`:orgId\` that belongs to another domain is a
-plain \`404\`. A backend for domain X cannot see or touch domain Y.
+**Domain isolation is absolute — in this mode.** The call binds to the domain in
+the VERIFIED config, never the raw query string — a \`?domain=\` that differs is
+\`400 DOMAIN_MISMATCH\`. The guard then checks the \`:orgId\` against
+\`organisations.domain\` (the org's ORIGIN — the product that created it), so an
+\`:orgId\` another product created is a plain \`404\`. A backend for domain X cannot
+see or touch an organisation created on domain Y.
+
+This is backend mode's *only* boundary, and the one place origin scoping is still
+an authorization predicate. **User-token calls are different**: one organisation
+is usable from every UOA-integrated product, so \`/org/organisations/:orgId/**\`
+resolves the org by id alone and gates on the token's \`domain\` + \`org\` claim plus
+live ACTIVE membership. A user who belongs to an org created on domain X manages
+it from domain Y with a domain-Y token; a domain-Y *backend* still cannot.
 
 **Per route, in backend mode:**
 
@@ -108,7 +116,7 @@ plain \`404\`. A backend for domain X cannot see or touch domain Y.
 | 400 | (generic) | \`owner_user_id\` names a user who does not exist, does not belong to this domain, or already has an active organisation here. |
 | 429 | \`RATE_LIMITED\` | Backend organisation creation is capped per domain per hour (well above normal provisioning volume). The end-user path keeps its own, much lower, per-user cap. |
 | 404 | \`ORG_FEATURES_DISABLED\` | \`org_features.enabled\` is false. |
-| 404 | (generic) | The \`:orgId\` is not on this domain. |
+| 404 | (generic) | The \`:orgId\` was not created on this domain (backend mode only — user-token calls resolve any org the token is scoped to). |
 
 **Audit attribution.** A backend-initiated mutation writes
 \`actor_user_id: null\` and records who acted under the reserved \`uoa_actor\` key

@@ -57,9 +57,9 @@ function prismaFor(deps?: TeamAvatarDeps): TeamAvatarPrisma {
 
 /**
  * Resolve a `:teamId` for the `/domain/teams/:teamId/avatar` backend route: the team's organisation
- * must belong to the authenticated domain, the same org↔domain ownership rule
- * `resolveOrganisationByDomain` enforces on every `/org/*` read. Unknown ids and teams owned by
- * another domain are both the standard generic 404 — no cross-domain enumeration signal.
+ * must have been CREATED on the authenticated domain — the same origin-domain rule
+ * `acceptDomainBackendCaller` enforces for every other domain-hash-only `/org/*` call. Unknown ids
+ * and teams owned by another domain are both the standard generic 404 — no enumeration signal.
  */
 export async function requireDomainTeamId(
   params: { domain: string; teamId: string },
@@ -78,10 +78,12 @@ export async function requireDomainTeamId(
 }
 
 /**
- * Resolve a team through the full `/org/*` ownership chain — domain → organisation → team — exactly
- * as the sibling team routes do. `resolveAndAuthorizeTeamOrg` rejects an org that is not on the
- * authenticated domain (404) and an actor who is not an ACTIVE member of it (403); `requireManager`
- * additionally demands the `teams.manage` capability, the same gate `updateTeam` applies.
+ * Resolve a team through the full `/org/*` ownership chain — organisation → team — exactly as the
+ * sibling team routes do. `resolveAndAuthorizeTeamOrg` rejects an unknown org (404) and an actor
+ * who is not an ACTIVE member of it (403); `requireManager` additionally demands the
+ * `teams.manage` capability, the same gate `updateTeam` applies. The org's ORIGIN domain is not a
+ * predicate here — one organisation is usable from every UOA-integrated product — and for a
+ * domain-hash-only caller the guard has already pinned it to the origin domain.
  */
 export async function requireOrgTeamId(
   params: {
