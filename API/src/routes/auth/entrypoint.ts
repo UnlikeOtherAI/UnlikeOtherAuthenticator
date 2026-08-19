@@ -54,7 +54,8 @@ export function registerAuthEntrypointRoute(app: FastifyInstance): void {
         config: request.config,
         configUrl: request.configUrl,
         requestUrl,
-      });
+              cspNonce: reply.cspNonce?.script,
+});
       sendAuthHtml(reply, html);
     },
   );

@@ -95,6 +95,10 @@ export async function renderAuthEntrypointHtml(params: {
   config: ClientConfig;
   configUrl: string;
   requestUrl?: string;
+  // Per-request CSP script nonce from @fastify/helmet (reply.cspNonce.script). The global
+  // script-src is 'self' + this nonce, so the bootstrap tag below is only executable when
+  // it carries it. Optional so routes/tests that never set a nonce keep working.
+  cspNonce?: string;
 }): Promise<string> {
   let base = await readAuthIndexHtml();
 
@@ -112,8 +116,11 @@ export async function renderAuthEntrypointHtml(params: {
   const qIdx = requestUrl.indexOf('?');
   const searchStr = qIdx !== -1 ? requestUrl.slice(qIdx) : '';
 
+  // The nonce value is helmet-generated ([a-f0-9] from randomBytes hex), so interpolating
+  // it into the attribute carries no escaping risk.
+  const nonceAttr = params.cspNonce ? ` nonce="${params.cspNonce}"` : '';
   const bootstrap = [
-    '<script>',
+    `<script${nonceAttr}>`,
     `window.__UOA_CLIENT_CONFIG__ = ${escapeJsonForHtmlScriptTag(params.config)};`,
     `window.__UOA_CONFIG_URL__ = ${escapeJsonForHtmlScriptTag(params.configUrl)};`,
     `window.__UOA_INITIAL_SEARCH__ = ${escapeJsonForHtmlScriptTag(searchStr)};`,
@@ -135,7 +142,18 @@ export async function renderAuthEntrypointHtml(params: {
   return `${bootstrap}${base}`;
 }
 
-export function sendAuthHtml(reply: FastifyReply, html: string): void {
+export function sendAuthHtml(
+  reply: FastifyReply,
+  html: string,
+  options?: { cspNonce?: string },
+): void {
+  const scriptNonce = options?.cspNonce ?? reply.cspNonce?.script;
+  if (scriptNonce && html.includes('<script>') && !html.includes(`nonce="${scriptNonce}"`)) {
+    // An inline script without the request nonce is blocked by the CSP. Failing loud is
+    // safer than shipping a page whose bootstrap silently never runs.
+    reply.log.error('auth HTML has an inline script without the CSP script nonce; not sending');
+    throw new Error('auth HTML has an inline script without the CSP script nonce');
+  }
   reply.header('Cache-Control', 'no-store, no-cache');
   reply.header('Pragma', 'no-cache');
   reply.type('text/html; charset=utf-8').status(200).send(html);
@@ -160,6 +178,7 @@ export async function sendDeepLinkHandoff(
     config: params.config,
     configUrl: params.configUrl,
     requestUrl: `/auth?${search.toString()}`,
+    cspNonce: reply.cspNonce?.script,
   });
   sendAuthHtml(reply, html);
 }

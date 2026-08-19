@@ -100,7 +100,8 @@ export function registerAuthTeamInviteLinkRoute(app: FastifyInstance): void {
         config: request.config,
         configUrl: request.configUrl,
         requestUrl: buildBootstrapAuthUrl({ configUrl, token, redirectUrl }),
-      });
+              cspNonce: reply.cspNonce?.script,
+});
       sendAuthHtml(reply, html);
     },
   );

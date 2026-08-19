@@ -140,6 +140,10 @@ export async function createApp(): Promise<FastifyInstance> {
   );
 
   await app.register(helmet, {
+    // Per-request script/style nonces so the bootstrap <script> on the auth pages can be
+    // allowed without 'unsafe-inline'. The nonce lands on `reply.cspNonce` and is appended
+    // to script-src/style-src on every response; the auth entrypoint echoes it onto the tag.
+    enableCSPNonces: true,
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
@@ -153,7 +157,10 @@ export async function createApp(): Promise<FastifyInstance> {
         // which <img src> cannot send, so images render from object URLs.
         imgSrc: ["'self'", 'https:', 'data:', 'blob:'],
         objectSrc: ["'none'"],
-        scriptSrc: ["'self'", "'unsafe-inline'"],
+        // No 'unsafe-inline': the only inline script anywhere is the auth bootstrap
+        // (auth-ui.service.ts), which carries this request's nonce. A nonce policy also
+        // blocks inline event handlers — none exist under API/src.
+        scriptSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'", 'https:'],
         upgradeInsecureRequests: [],
       },

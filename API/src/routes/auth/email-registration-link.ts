@@ -92,6 +92,7 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
         const html = await renderAuthEntrypointHtml({
           config,
           configUrl,
+          cspNonce: reply.cspNonce?.script,
           requestUrl: buildLoginAuthUrl(
             configUrl,
             redirect_url,
@@ -122,6 +123,7 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
         const html = await renderAuthEntrypointHtml({
           config,
           configUrl,
+          cspNonce: reply.cspNonce?.script,
           requestUrl: buildLoginAuthUrl(
             configUrl,
             redirect_url,
@@ -138,6 +140,7 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
         const html = await renderAuthEntrypointHtml({
           config,
           configUrl,
+          cspNonce: reply.cspNonce?.script,
           requestUrl: buildLoginAuthUrl(
             configUrl,
             redirect_url,
@@ -326,6 +329,7 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
       const html = await renderAuthEntrypointHtml({
         config,
         configUrl,
+        cspNonce: reply.cspNonce?.script,
         requestUrl: buildAuthUrl(
           configUrl,
           redirect_url,
