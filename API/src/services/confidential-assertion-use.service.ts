@@ -7,6 +7,11 @@ import { AppError } from '../utils/errors.js';
 
 export const CONFIDENTIAL_ASSERTION_CLOCK_TOLERANCE_SECONDS = 5;
 
+// The assertion verifier accepts a token until exp plus clock tolerance, so
+// the ledger row must strictly outlive that instant; otherwise a replay can
+// find the jti already pruned while jose would still accept the assertion.
+export const CONFIDENTIAL_ASSERTION_LEDGER_RETENTION_MARGIN_SECONDS = 1;
+
 type AssertionUsePrisma = Pick<PrismaClient, 'confidentialAssertionUse'>;
 
 type ConsumeAssertionDeps = {
@@ -34,9 +39,11 @@ function isUniqueConstraintError(error: unknown): boolean {
  * Atomically claims a verified confidential assertion for one-time use.
  *
  * The unique insert is the cross-process serialization point. An expired row
- * with the same source+jti may be removed first because the assertion verifier
- * no longer accepts it after exp plus clock tolerance. If two callers race to
- * replace or create a row, the unique constraint still allows exactly one.
+ * with the same source+jti may be removed first, but only once it sits at exp
+ * plus clock tolerance plus the retention margin, so the ledger always
+ * outlives the last instant the assertion verifier accepts a replay. If two
+ * callers race to replace or create a row, the unique constraint still allows
+ * exactly one.
  */
 export async function consumeConfidentialAssertion(
   params: {
@@ -48,7 +55,10 @@ export async function consumeConfidentialAssertion(
 ): Promise<void> {
   const now = deps.now?.() ?? new Date();
   const expiresAt = new Date(
-    (params.expiresAtEpochSeconds + CONFIDENTIAL_ASSERTION_CLOCK_TOLERANCE_SECONDS) * 1000,
+    (params.expiresAtEpochSeconds +
+      CONFIDENTIAL_ASSERTION_CLOCK_TOLERANCE_SECONDS +
+      CONFIDENTIAL_ASSERTION_LEDGER_RETENTION_MARGIN_SECONDS) *
+      1000,
   );
   if (
     !params.sourceDomain ||
