@@ -321,6 +321,23 @@ export function PopupProvider(props: {
     window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
   }, [parsed.signingToken]);
 
+  // Same cleanup for the sibling bridge tokens: once read into React state they must not
+  // linger in window.location.search (browser history, screenshots, screen shares).
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const bridgeParams: Array<[string, string | null]> = [
+      ['login_token', parsed.loginToken],
+      ['twofa_token', parsed.twoFaToken],
+      ['twofa_setup_token', parsed.twoFaSetupToken],
+    ];
+    const present = bridgeParams.filter(([, token]) => token);
+    if (present.length === 0) return;
+    const url = new URL(window.location.href);
+    if (present.some(([param, token]) => url.searchParams.get(param) !== token)) return;
+    for (const [param] of present) url.searchParams.delete(param);
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+  }, [parsed.loginToken, parsed.twoFaToken, parsed.twoFaSetupToken]);
+
   // Navigating clears any notice, so a reason for landing somewhere cannot leak into a later step
   // the user walked to themselves. The expired-bridge path therefore sets its notice AFTER the
   // view change, not before.

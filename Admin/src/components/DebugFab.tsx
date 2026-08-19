@@ -6,16 +6,14 @@ import { Button } from './ui/Button';
 import { Icon } from './icons/Icon';
 import { Modal } from './ui/Modal';
 
-// Floating debug button (bottom-right, mounted inside the post-login AdminLayout).
-// Opens a modal pre-filled with the current admin session — the raw JWT access
-// token, its decoded header/claims, and any JS-readable cookies — so a superuser
-// can copy their exact session and hand it to support to reproduce an issue.
+// Floating debug button (bottom-right, mounted inside the post-login AdminLayout
+// behind an import.meta.env.DEV gate). Opens a modal pre-filled with non-secret
+// session diagnostics — decoded header/claims, expiry, origin — so a superuser can
+// hand support exactly what they see.
 //
-// Client-only: the admin credential is a Bearer JWT held in sessionStorage (not
-// an httpOnly cookie), so everything needed is already readable in the browser
-// and no server endpoint is required. The token is the caller's own and is
-// already in their storage, so this reveals nothing they could not read from
-// devtools — but it IS the superuser credential, hence the "treat as secret" note.
+// Docs/Admin/architecture-admin.md: the UI must never extract or display the Bearer
+// credential or any product credential, so the snapshot decodes the JWT but never
+// includes the token itself or anything that would replay /internal/admin/*.
 
 function decodeJwtSegment(segment: string): unknown {
   if (!segment) return null;
@@ -56,18 +54,9 @@ function buildSnapshot(): Record<string, unknown> {
       expiresInSeconds: Math.max(0, Math.round((stored.expiresAt - Date.now()) / 1000)),
       expired: stored.expiresAt <= Date.now(),
     },
-    accessToken: stored.accessToken,
     accessTokenHeader: decodeJwtSegment(headerSegment ?? ''),
     accessTokenClaims: decodeJwtSegment(payloadSegment ?? ''),
     cookies,
-    reconstruct: {
-      authorizationHeader: `Bearer ${stored.accessToken}`,
-      curl: `curl -H 'Authorization: Bearer ${stored.accessToken}' ${apiBaseUrl}/internal/admin/session`,
-    },
-    notes: [
-      'accessToken is your superuser Bearer credential — treat it as a secret.',
-      'Send it as the Authorization header to call /internal/admin/* as you until session.expiresAt.',
-    ],
   };
 }
 
@@ -119,8 +108,9 @@ export function DebugFab() {
       >
         <div className="space-y-3">
           <p className="text-xs text-gray-500">
-            Your JWT access token and cookies for this admin session. Paste it to support to reproduce exactly what
-            you see — treat it as a secret.
+            Non-secret diagnostics for this admin session — decoded token claims, expiry, and
+            origin. Paste it to support to describe exactly what you see; the access token itself is
+            never included.
           </p>
           <textarea
             readOnly
