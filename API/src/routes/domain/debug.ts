@@ -33,10 +33,14 @@ export function registerDomainDebugRoute(app: FastifyInstance): void {
       if (!claims) {
         throw new Error('missing request.accessTokenClaims');
       }
+      reply.header('Cache-Control', 'no-store');
+      reply.header('Pragma', 'no-cache');
       reply.status(200).send({
         ok: true,
         domain: normalizedDomain,
-        client_id: request.domainAuthClientId,
+        // The client-domain row id, not the bearer — the middleware's own declaration says the
+        // hash must never be returned in a response (domain-hash-auth.ts).
+        client_id: request.domainAuthClientDomainId,
         superuser: {
           user_id: claims.userId,
           email: claims.email,
