@@ -33,12 +33,24 @@ const QuerySchema = z.object({ ...AvatarImageQueryFields }).strict();
 
 // The only unauthenticated image endpoint, so it carries its own budget: generous enough for a
 // chooser rendering a full workspace list on every login, tight enough that it is not a free
-// image-proxy for whoever knows a team id.
-const publicAvatarRateLimit = createRateLimiter({
+// image-proxy for whoever knows a team id. The per-IP key is attacker's choice if the edge does
+// not overwrite X-Forwarded-For (app.ts sets trustProxy: 1), so compose it with a global bucket
+// no request input can move: the handler performs an outbound provider fetch, and this bounds
+// how many of those a header-rotating flood can drive.
+const publicAvatarIpRateLimit = createRateLimiter({
   keyBuilder: (request: FastifyRequest) => `public:team-avatar:${request.ip ?? 'unknown'}`,
   limit: 300,
   windowMs: 60 * 60 * 1000,
 });
+const publicAvatarGlobalRateLimit = createRateLimiter({
+  keyBuilder: () => 'public:team-avatar:global',
+  limit: 20_000,
+  windowMs: 60 * 60 * 1000,
+});
+async function publicAvatarRateLimit(request: FastifyRequest): Promise<void> {
+  await publicAvatarIpRateLimit(request);
+  await publicAvatarGlobalRateLimit(request);
+}
 
 /** The deterministic per-id image, i.e. what a real team with no logo of its own resolves to. */
 function generatedFallback(teamId: string, style: AvatarStyle | null, size: number | null) {

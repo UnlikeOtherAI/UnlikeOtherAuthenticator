@@ -53,6 +53,19 @@ function ipRateLimiter(prefix: string, limit: number, windowMs: number): RateLim
   });
 }
 
+// app.ts sets trustProxy: 1, so request.ip is the last X-Forwarded-For hop: if the edge does not
+// overwrite a client-supplied XFF, every :ip: bucket above is attacker's choice. Compose each
+// credential-guarding limiter with a GLOBAL bucket that has no request input, so a header-rotating
+// attacker still hits a hard ceiling. Sized as a circuit breaker far above realistic aggregate
+// legitimate traffic (hundreds of req/min even at a busy login burst), not as a quota.
+function globalRateLimiter(prefix: string, limit: number): RateLimiter {
+  return createRateLimiter({
+    limit,
+    windowMs: MINUTE_MS,
+    keyBuilder: () => `${prefix}:global`,
+  });
+}
+
 function bodyRateLimiter(prefix: string, key: string, limit: number, windowMs: number): RateLimiter {
   return createRateLimiter({
     limit,
@@ -69,11 +82,13 @@ function authIpDomainKey(prefix: string, request: FastifyRequest, domain: string
 
 export const loginRateLimiter = composeRateLimiters(
   ipRateLimiter('auth:login', 10, MINUTE_MS),
+  globalRateLimiter('auth:login', 10_000),
   bodyRateLimiter('auth:login', 'email', 5, 15 * MINUTE_MS),
 );
 
 export const registerRateLimiter = composeRateLimiters(
   ipRateLimiter('auth:register', 10, MINUTE_MS),
+  globalRateLimiter('auth:register', 5_000),
   bodyRateLimiter('auth:register', 'email', 5, HOUR_MS),
 );
 
@@ -81,6 +96,7 @@ export const registerRateLimiter = composeRateLimiters(
 // registerRateLimiter but keyed separately so it doesn't share budget with /auth/register.
 export const authStartRateLimiter = composeRateLimiters(
   ipRateLimiter('auth:start', 10, MINUTE_MS),
+  globalRateLimiter('auth:start', 5_000),
   bodyRateLimiter('auth:start', 'email', 5, HOUR_MS),
 );
 
@@ -88,6 +104,7 @@ export const authStartRateLimiter = composeRateLimiters(
 // 6-digit code has a much smaller search space than a password.
 export const verifyCodeRateLimiter = composeRateLimiters(
   ipRateLimiter('auth:verify-code', 10, 15 * MINUTE_MS),
+  globalRateLimiter('auth:verify-code', 5_000),
   bodyRateLimiter('auth:verify-code', 'email', 10, 15 * MINUTE_MS),
 );
 
@@ -95,6 +112,7 @@ export const verifyCodeRateLimiter = composeRateLimiters(
 // the presented token so a leaked/guessed token can't be hammered for team/invite enumeration.
 export const selectTeamRateLimiter = composeRateLimiters(
   ipRateLimiter('auth:select-team', 20, MINUTE_MS),
+  globalRateLimiter('auth:select-team', 5_000),
   bodyRateLimiter('auth:select-team', 'login_token', 20, 15 * MINUTE_MS),
 );
 
@@ -102,17 +120,25 @@ export const selectTeamRateLimiter = composeRateLimiters(
 // /auth/select-team — same IP + token-keyed shape so a leaked/guessed token can't be hammered.
 export const sessionChoicesRateLimiter = composeRateLimiters(
   ipRateLimiter('auth:session-choices', 20, MINUTE_MS),
+  globalRateLimiter('auth:session-choices', 5_000),
   bodyRateLimiter('auth:session-choices', 'login_token', 20, 15 * MINUTE_MS),
 );
 
 export const resetRequestRateLimiter = composeRateLimiters(
   ipRateLimiter('auth:reset-request', 10, MINUTE_MS),
+  globalRateLimiter('auth:reset-request', 2_000),
   bodyRateLimiter('auth:reset-request', 'email', 3, HOUR_MS),
 );
 
-export const tokenConsumeRateLimiter = ipRateLimiter('auth:token-consume', 10, MINUTE_MS);
+export const tokenConsumeRateLimiter = composeRateLimiters(
+  ipRateLimiter('auth:token-consume', 10, MINUTE_MS),
+  globalRateLimiter('auth:token-consume', 5_000),
+);
 
-export const tokenExchangeRateLimiter = ipRateLimiter('auth:token-exchange', 10, MINUTE_MS);
+export const tokenExchangeRateLimiter = composeRateLimiters(
+  ipRateLimiter('auth:token-exchange', 10, MINUTE_MS),
+  globalRateLimiter('auth:token-exchange', 5_000),
+);
 
 const confidentialTokenExchangeDomainLimiter = createRateLimiter({
   limit: 600,
@@ -150,21 +176,35 @@ export async function confidentialTokenExchangeDomainRateLimiter(
 // can't burn another user's IP budget against the same `twofa_token`.
 export const twoFactorVerifyRateLimiter = composeRateLimiters(
   ipRateLimiter('auth:twofa-verify', 5, 15 * MINUTE_MS),
+  globalRateLimiter('auth:twofa-verify', 2_000),
   bodyRateLimiter('auth:twofa-verify', 'twofa_token', 5, 15 * MINUTE_MS),
 );
 
-export const twoFactorSetupRateLimiter = ipRateLimiter('auth:twofa-setup', 5, 15 * MINUTE_MS);
+export const twoFactorSetupRateLimiter = composeRateLimiters(
+  ipRateLimiter('auth:twofa-setup', 5, 15 * MINUTE_MS),
+  globalRateLimiter('auth:twofa-setup', 2_000),
+);
 
 export const twoFactorEnrollRateLimiter = composeRateLimiters(
   ipRateLimiter('auth:twofa-enroll', 5, 15 * MINUTE_MS),
+  globalRateLimiter('auth:twofa-enroll', 2_000),
   bodyRateLimiter('auth:twofa-enroll', 'setup_token', 5, 15 * MINUTE_MS),
 );
 
-export const twoFactorDisableRateLimiter = ipRateLimiter('auth:twofa-disable', 5, 15 * MINUTE_MS);
+export const twoFactorDisableRateLimiter = composeRateLimiters(
+  ipRateLimiter('auth:twofa-disable', 5, 15 * MINUTE_MS),
+  globalRateLimiter('auth:twofa-disable', 2_000),
+);
 
-export const socialCallbackRateLimiter = ipRateLimiter('auth:social-callback', 20, MINUTE_MS);
+export const socialCallbackRateLimiter = composeRateLimiters(
+  ipRateLimiter('auth:social-callback', 20, MINUTE_MS),
+  globalRateLimiter('auth:social-callback', 5_000),
+);
 
-export const configFetchRateLimiter = ipRateLimiter('auth:config-fetch', 60, MINUTE_MS);
+export const configFetchRateLimiter = composeRateLimiters(
+  ipRateLimiter('auth:config-fetch', 60, MINUTE_MS),
+  globalRateLimiter('auth:config-fetch', 10_000),
+);
 
 export const revokeRateLimiter = createRateLimiter({
   limit: 20,
@@ -184,8 +224,7 @@ export const emailSendRateLimiter = createRateLimiter({
   },
 });
 
-export const emailTeamInviteOpenRateLimiter = ipRateLimiter(
-  'auth:email-team-invite-open',
-  30,
-  MINUTE_MS,
+export const emailTeamInviteOpenRateLimiter = composeRateLimiters(
+  ipRateLimiter('auth:email-team-invite-open', 30, MINUTE_MS),
+  globalRateLimiter('auth:email-team-invite-open', 2_000),
 );
