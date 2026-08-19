@@ -58,74 +58,83 @@ async function createErrorTestApp() {
 
 describe('error handler auth HTML rendering', () => {
   const originalDebugEnabled = process.env.DEBUG_ENABLED;
+  const originalNodeEnv = process.env.NODE_ENV;
+  const originalSharedSecret = process.env.SHARED_SECRET;
 
   afterEach(() => {
     restoreEnv('DEBUG_ENABLED', originalDebugEnabled);
+    restoreEnv('NODE_ENV', originalNodeEnv);
+    restoreEnv('SHARED_SECRET', originalSharedSecret);
   });
 
-  it('renders rich auth HTML for Zod errors when DEBUG_ENABLED is false', async () => {
-    process.env.DEBUG_ENABLED = 'false';
-    const app = await createErrorTestApp();
+  // The rich diagnostic page is an operator aid gated on DEBUG_ENABLED — the
+  // same flag that unlocks the debug JSON body — so anonymous HTML callers on
+  // /auth* never see the redirect allowlist, Zod issues, or config example.
+  describe('rich auth HTML when DEBUG_ENABLED is true', () => {
+    it('renders rich auth HTML for Zod errors', async () => {
+      process.env.DEBUG_ENABLED = 'true';
+      const app = await createErrorTestApp();
 
-    try {
-      const response = await app.inject({
-        method: 'GET',
-        url: '/auth/zod-error',
-        headers: { accept: 'text/html' },
-      });
+      try {
+        const response = await app.inject({
+          method: 'GET',
+          url: '/auth/zod-error',
+          headers: { accept: 'text/html' },
+        });
 
-      expectRichAuthHtml(response, {
-        statusCode: 400,
-        code: 'AUTH_REQUEST_INVALID',
-        summary: 'The auth request query could not be parsed.',
-      });
-      expect(response.body).toContain('config_url');
-    } finally {
-      await app.close();
-    }
-  });
+        expectRichAuthHtml(response, {
+          statusCode: 400,
+          code: 'AUTH_REQUEST_INVALID',
+          summary: 'The auth request query could not be parsed.',
+        });
+        expect(response.body).toContain('config_url');
+      } finally {
+        await app.close();
+      }
+    });
 
-  it('renders rich auth HTML for AppError errors when DEBUG_ENABLED is false', async () => {
-    process.env.DEBUG_ENABLED = 'false';
-    const app = await createErrorTestApp();
+    it('renders rich auth HTML for AppError errors', async () => {
+      process.env.DEBUG_ENABLED = 'true';
+      const app = await createErrorTestApp();
 
-    try {
-      const response = await app.inject({
-        method: 'GET',
-        url: '/auth/app-error',
-        headers: { accept: 'text/html' },
-      });
+      try {
+        const response = await app.inject({
+          method: 'GET',
+          url: '/auth/app-error',
+          headers: { accept: 'text/html' },
+        });
 
-      expectRichAuthHtml(response, {
-        statusCode: 400,
-        code: 'REDIRECT_URL_NOT_ALLOWED',
-        summary: 'The requested redirect_url is not allowed for this client config.',
-      });
-    } finally {
-      await app.close();
-    }
-  });
+        expectRichAuthHtml(response, {
+          statusCode: 400,
+          code: 'REDIRECT_URL_NOT_ALLOWED',
+          summary: 'The requested redirect_url is not allowed for this client config.',
+        });
+      } finally {
+        await app.close();
+      }
+    });
 
-  it('renders rich auth HTML for unknown errors when DEBUG_ENABLED is false', async () => {
-    process.env.DEBUG_ENABLED = 'false';
-    const app = await createErrorTestApp();
+    it('renders rich auth HTML for unknown errors', async () => {
+      process.env.DEBUG_ENABLED = 'true';
+      const app = await createErrorTestApp();
 
-    try {
-      const response = await app.inject({
-        method: 'GET',
-        url: '/auth/unknown-error',
-        headers: { accept: 'text/html' },
-      });
+      try {
+        const response = await app.inject({
+          method: 'GET',
+          url: '/auth/unknown-error',
+          headers: { accept: 'text/html' },
+        });
 
-      expectRichAuthHtml(response, {
-        statusCode: 500,
-        code: 'AUTH_REQUEST_FAILED',
-        summary: 'The auth service could not complete this request.',
-      });
-      expect(response.body).not.toContain(rawUnknownErrorMessage);
-    } finally {
-      await app.close();
-    }
+        expectRichAuthHtml(response, {
+          statusCode: 500,
+          code: 'AUTH_REQUEST_FAILED',
+          summary: 'The auth service could not complete this request.',
+        });
+        expect(response.body).not.toContain(rawUnknownErrorMessage);
+      } finally {
+        await app.close();
+      }
+    });
   });
 
   it('keeps non-auth JSON errors on the public generic response path', async () => {
@@ -164,5 +173,99 @@ describe('error handler auth HTML rendering', () => {
     } finally {
       await app.close();
     }
+  });
+
+  describe('generic auth HTML when DEBUG_ENABLED is false', () => {
+    it('serves the generic page for Zod errors with the error code only', async () => {
+      process.env.DEBUG_ENABLED = 'false';
+      const app = await createErrorTestApp();
+
+      try {
+        const response = await app.inject({
+          method: 'GET',
+          url: '/auth/zod-error',
+          headers: { accept: 'text/html' },
+        });
+
+        expect(response.statusCode).toBe(400);
+        expect(String(response.headers['content-type'])).toContain('text/html');
+        expect(response.body).toContain('<h1>Request failed</h1>');
+        expect(response.body).toContain('<code>AUTH_REQUEST_INVALID</code>');
+        expect(response.body).not.toContain('Auth configuration error');
+        expect(response.body).not.toContain('config_url');
+        expect(response.body).not.toContain('Allowlisted redirect_urls');
+        expect(response.body).not.toContain('Full config example');
+      } finally {
+        await app.close();
+      }
+    });
+
+    it('serves the generic page for AppError errors with the error code only', async () => {
+      process.env.DEBUG_ENABLED = 'false';
+      const app = await createErrorTestApp();
+
+      try {
+        const response = await app.inject({
+          method: 'GET',
+          url: '/auth/app-error',
+          headers: { accept: 'text/html' },
+        });
+
+        expect(response.statusCode).toBe(400);
+        expect(response.body).toContain('<h1>Request failed</h1>');
+        expect(response.body).toContain('<code>REDIRECT_URL_NOT_ALLOWED</code>');
+        expect(response.body).not.toContain('Auth configuration error');
+        expect(response.body).not.toContain('Allowlisted redirect_urls');
+      } finally {
+        await app.close();
+      }
+    });
+
+    it('serves the generic page for unknown errors without the raw message', async () => {
+      process.env.DEBUG_ENABLED = 'false';
+      const app = await createErrorTestApp();
+
+      try {
+        const response = await app.inject({
+          method: 'GET',
+          url: '/auth/unknown-error',
+          headers: { accept: 'text/html' },
+        });
+
+        expect(response.statusCode).toBe(500);
+        expect(response.body).toContain('<h1>Request failed</h1>');
+        expect(response.body).not.toContain('Auth configuration error');
+        expect(response.body).not.toContain('<code>');
+        expect(response.body).not.toContain(rawUnknownErrorMessage);
+      } finally {
+        await app.close();
+      }
+    });
+
+    it('serves the generic page in production even with an Accept: text/html header', async () => {
+      process.env.NODE_ENV = 'production';
+      process.env.DEBUG_ENABLED = 'false';
+      // Production env validation requires a longer SHARED_SECRET.
+      process.env.SHARED_SECRET = 'test-shared-secret-with-enough-length-for-production';
+      const app = await createErrorTestApp();
+
+      try {
+        const response = await app.inject({
+          method: 'GET',
+          url: '/auth/zod-error',
+          headers: { accept: 'text/html' },
+        });
+
+        expect(response.statusCode).toBe(400);
+        expect(response.body).toContain('<h1>Request failed</h1>');
+        expect(response.body).toContain('<code>AUTH_REQUEST_INVALID</code>');
+        expect(response.body).not.toContain('Auth configuration error');
+        expect(response.body).not.toContain('config_url');
+        expect(response.body).not.toContain('Allowlisted redirect_urls');
+        expect(response.body).not.toContain('Full config example');
+      } finally {
+        await app.close();
+      }
+    });
   });
 });

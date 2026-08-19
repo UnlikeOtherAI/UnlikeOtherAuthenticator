@@ -4,9 +4,11 @@ import { ZodError } from 'zod';
 import {
   enrichAuthDebugForAppError,
   renderAuthDebugHtml,
+  type AuthDebugInfo,
 } from '../services/auth-debug-page.service.js';
 import { renderClaimInvalidHtml } from '../services/integration-claim-page.service.js';
 import { renderIntegrationStatusHtml } from '../services/integration-status-page.service.js';
+import { getEnv } from '../config/env.js';
 import { isAppError, type AppError } from '../utils/errors.js';
 import { buildPublicErrorBody } from '../utils/error-response.js';
 
@@ -19,21 +21,46 @@ function isIntegrationClaimRequest(request: { raw: { url?: string } }): boolean 
   return (request.raw.url ?? '').startsWith('/integrations/claim/');
 }
 
-function renderGenericErrorHtml(): string {
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function renderGenericErrorHtml(code?: string): string {
+  const codeHtml = code ? `<p><code>${escapeHtml(code)}</code></p>` : '';
   // Keep this intentionally plain; detailed UI comes from the Auth app.
-  return `<!doctype html><html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>Auth</title></head><body><main><h1>Request failed</h1><p>Please close this window and try again.</p></main></body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>Auth</title></head><body><main><h1>Request failed</h1><p>Please close this window and try again.</p>${codeHtml}</main></body></html>`;
 }
 
 function shouldRenderAuthDebug(request: {
   method: string;
   headers: { accept?: string };
   raw: { url?: string };
-  authDebug?: unknown;
+  authDebug?: AuthDebugInfo;
 }): boolean {
   if (!wantsHtml(request)) return false;
+  if (!getEnv().DEBUG_ENABLED) return false;
+  // request.authDebug is not an operator opt-in: config-verifier seeds it on
+  // every /auth* request before verification runs, so the presence check below
+  // would still show every anonymous HTML caller the full diagnostic page
+  // (redirect allowlist, Zod issues, config example). DEBUG_ENABLED is the
+  // actual gate — the same flag that unlocks the debug JSON body.
   if (request.authDebug) return true;
   const requestUrl = request.raw.url ?? '';
   return requestUrl.startsWith('/auth');
+}
+
+function genericErrorCode(request: { authDebug?: AuthDebugInfo }, error: unknown): string | undefined {
+  if (error instanceof ZodError) return 'AUTH_REQUEST_INVALID';
+  // The debug info (when present) has already been enriched with the specific
+  // code; sharing just the code on the generic page matches what the JSON
+  // error body would expose for this failure.
+  if (isAppError(error)) return request.authDebug?.code ?? error.message;
+  return undefined;
 }
 
 function maybeRenderIntegrationStatusPage(request: FastifyRequest, error: AppError): string | null {
@@ -77,7 +104,10 @@ export function registerErrorHandler(app: FastifyInstance): void {
         return;
       }
       if (wantsHtml(request)) {
-        reply.type('text/html; charset=utf-8').status(400).send(renderGenericErrorHtml());
+        reply
+          .type('text/html; charset=utf-8')
+          .status(400)
+          .send(renderGenericErrorHtml(genericErrorCode(request, error)));
         return;
       }
       reply.status(400).send(buildPublicErrorBody({ request, error, statusCode: 400 }));
@@ -111,7 +141,7 @@ export function registerErrorHandler(app: FastifyInstance): void {
         reply
           .type('text/html; charset=utf-8')
           .status(error.statusCode)
-          .send(renderGenericErrorHtml());
+          .send(renderGenericErrorHtml(genericErrorCode(request, error)));
         return;
       }
       reply.status(error.statusCode).send(
@@ -141,7 +171,10 @@ export function registerErrorHandler(app: FastifyInstance): void {
       return;
     }
     if (wantsHtml(request)) {
-      reply.type('text/html; charset=utf-8').status(500).send(renderGenericErrorHtml());
+      reply
+        .type('text/html; charset=utf-8')
+        .status(500)
+        .send(renderGenericErrorHtml(genericErrorCode(request, error)));
       return;
     }
     reply.status(500).send(buildPublicErrorBody({ request, error, statusCode: 500 }));

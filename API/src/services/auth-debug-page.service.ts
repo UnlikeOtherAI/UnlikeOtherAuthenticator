@@ -67,15 +67,6 @@ function sanitizeUrlForDebug(
   }
 }
 
-function tryParseUrl(raw: string | null): URL | null {
-  if (!raw) return null;
-  try {
-    return new URL(raw);
-  } catch {
-    return null;
-  }
-}
-
 function parseRequestDebugUrls(requestUrl: string | undefined): {
   configUrl: string | null;
   redirectUrl: string | null;
@@ -186,11 +177,13 @@ function deriveStageHints(stage: AuthDebugStage, code: string): string[] {
 function buildConfigExample(debug: AuthDebugInfo): string | null {
   if (debug.code !== 'CONFIG_SCHEMA_INVALID') return null;
 
-  const configUrl = tryParseUrl(debug.configUrl);
-  const redirectUrl = tryParseUrl(debug.redirectUrl);
-  const domain = configUrl?.hostname ?? 'client.example.com';
-  const redirect = redirectUrl?.toString() ?? `https://${domain}/auth/callback`;
-  const logoUrl = configUrl ? `${configUrl.origin}/logo.svg` : `https://${domain}/logo.svg`;
+  // Placeholders are fixed on purpose: this example renders even where the
+  // debug page can be reached by an unauthenticated caller, so it must never
+  // embed the tenant's real config_url origin or the attacker's requested
+  // redirect_url (that would mint a per-tenant phishing scaffold).
+  const domain = 'client.example.com';
+  const redirect = 'https://example.com/auth/callback';
+  const logoUrl = 'https://example.com/logo.svg';
 
   const example = {
     domain,

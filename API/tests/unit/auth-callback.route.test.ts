@@ -106,6 +106,7 @@ describe('GET /auth/callback/:provider', () => {
     process.env.GOOGLE_CLIENT_ID = 'google-client-id';
     process.env.GOOGLE_CLIENT_SECRET = 'google-client-secret';
     delete process.env.DATABASE_URL;
+    delete process.env.DEBUG_ENABLED;
 
     fetchConfigJwtFromUrlMock.mockReset();
     verifyConfigJwtSignatureMock.mockReset();
@@ -262,6 +263,8 @@ describe('GET /auth/callback/:provider', () => {
   });
 
   it('renders an honest, callback-stage debug page (not a config_url error) on a cookie mismatch', async () => {
+    // The rich debug page is gated on DEBUG_ENABLED; enable it for this test only.
+    process.env.DEBUG_ENABLED = 'true';
     const { createApp } = await import('../../src/app.js');
     const app = await createApp();
     await app.ready();
@@ -289,6 +292,8 @@ describe('GET /auth/callback/:provider', () => {
   });
 
   it('renders a callback-stage debug page when code/state are missing entirely', async () => {
+    // The rich debug page is gated on DEBUG_ENABLED; enable it for this test only.
+    process.env.DEBUG_ENABLED = 'true';
     const { createApp } = await import('../../src/app.js');
     const app = await createApp();
     await app.ready();
