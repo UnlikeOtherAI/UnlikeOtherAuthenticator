@@ -54,7 +54,7 @@ export function registerOrganisationMemberRoutes(app: FastifyInstance) {
       setTenantContextFromRequest(request, { orgId });
       const members = await request.withTenantTx((tx) =>
         listOrganisationMembers(
-          { orgId, domain, limit, cursor, status },
+          { orgId, domain, ...orgCaller(request), limit, cursor, status },
           { prisma: asPrismaClient(tx) },
         ),
       );

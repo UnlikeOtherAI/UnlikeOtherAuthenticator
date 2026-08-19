@@ -45,6 +45,8 @@ export async function listOrganisationMembers(
   params: {
     orgId: string;
     domain: string;
+    actorUserId?: string;
+    actor?: OrgActorProvenance;
     limit?: number;
     cursor?: string;
     status?: MembershipStatus | 'all';
@@ -54,8 +56,25 @@ export async function listOrganisationMembers(
   const env = deps?.env ?? getEnv();
   assertDatabaseEnabled(env);
 
+  // Optional for direct-service callers without an acting user; `resolveOrgActor`
+  // raises a loud 500 when one was declared but went missing, so the actor check
+  // below is only ever skipped deliberately.
+  const actorUserId = params.actorUserId !== undefined || params.actor !== undefined
+    ? resolveOrgActor(params)
+    : undefined;
+
   const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
   const org = await resolveOrganisation(prisma, { orgId: params.orgId });
+
+  // Defence-in-depth like getOrganisation: re-verify actor membership here so this
+  // service cannot leak org data if a future route refactor omits `requireOrgRole`.
+  // There is no membership to check in backend mode — the caller is the domain.
+  if (actorUserId) {
+    const actorMembership = await getOrganisationMember(prisma, { orgId: org.id, userId: actorUserId }, { activeOnly: true });
+    if (!actorMembership) {
+      throw new AppError('FORBIDDEN', 403);
+    }
+  }
 
   const limit = toListLimit(params.limit);
   const cursor = params.cursor?.trim();

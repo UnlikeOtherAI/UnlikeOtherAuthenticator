@@ -173,6 +173,10 @@ export async function requestRegistrationInstructions(
   });
 
   if (existing && params.config.existing_user_registration_behavior === 'inline_sign_in') {
+    // The 409-style existing_user response is an explicit existence signal by design, but
+    // consume the same timing budget as every other exit so no path through this function
+    // is the odd one out on response shape.
+    await (deps?.consumeAccountFlowTimingBudget ?? consumeAccountFlowTimingBudget)();
     return { status: 'existing_user' };
   }
 
