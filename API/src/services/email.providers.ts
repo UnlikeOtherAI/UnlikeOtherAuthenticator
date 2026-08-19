@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import nodemailer from 'nodemailer';
 
 import type { Env } from '../config/env.js';
@@ -56,8 +58,11 @@ function loadSendgridModule(): Promise<unknown> {
 
 export function safeEmailLog(env: Env, message: EmailMessage): void {
   // Email bodies contain bearer links (tokens). Never log them in production.
+  // The recipient address is PII that would accumulate in Cloud Run logs, so the production line
+  // keeps only the subject plus the same sha256:<12 chars>... masking operator surfaces use.
   if (env.NODE_ENV === 'production') {
-    console.info('[email]', { to: message.to, subject: message.subject });
+    const toHint = createHash('sha256').update(message.to, 'utf8').digest('hex').slice(0, 12);
+    console.info('[email]', { to: `sha256:${toHint}...`, subject: message.subject });
     return;
   }
 
