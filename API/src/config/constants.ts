@@ -46,6 +46,13 @@ export const AVATAR_MAX_BYTES = 1024 * 1024;
 export const AVATAR_PROVIDER_DEADLINE_MS = 5_000;
 export const AVATAR_PROVIDER_MAX_BYTES = 5 * 1024 * 1024;
 
+// The TOTP QR logo URL comes from the signed client config (ui_theme.logo.url), so its publisher
+// controls the DNS for it. The fetch is SSRF-guarded, pinned to a resolved address, time-capped
+// and size-capped exactly like the provider-avatar fetch above — only tighter, because a QR logo
+// never needs more than a few hundred KB.
+export const TOTP_QR_LOGO_DEADLINE_MS = 5_000;
+export const TOTP_QR_LOGO_MAX_BYTES = 1024 * 1024;
+
 // Cache lifetimes for avatar GET responses. Generated avatars are deterministic for a given
 // user/style/size, so they get a long private lifetime; uploaded and proxied images can change.
 export const AVATAR_DYNAMIC_CACHE_CONTROL = 'private, max-age=300';
