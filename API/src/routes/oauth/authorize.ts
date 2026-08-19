@@ -68,8 +68,8 @@ export function registerOAuthAuthorizeRoute(app: FastifyInstance): void {
         // client_id present in the initial search and posts to /oauth/login.
         configUrl: 'urn:uoa:mcp',
         requestUrl: request.raw.url ?? '',
-              cspNonce: reply.cspNonce?.script,
-});
+        cspNonce: reply.cspNonce?.script,
+      });
       sendAuthHtml(reply, html);
     },
   );

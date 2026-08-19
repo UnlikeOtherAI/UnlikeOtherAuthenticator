@@ -293,28 +293,6 @@ const EnvSchema = z
     SIGNATURE_MAX_SIGN_ATTEMPTS: z.coerce.number().int().min(1).max(50).default(10),
   })
   .superRefine((env, ctx) => {
-    // SHARED_SECRET is the HS256 access-token secret, the domain-hash HMAC pepper, and the
-    // refresh-token pepper at once (see utils/client-hash.ts), and the peppered digests are a
-    // single fast HMAC — so a short or low-entropy value would be brute-forceable offline from
-    // any leaked digest column. Production only: local dev and tests keep the 32-char floor.
-    if (env.NODE_ENV === 'production') {
-      if (env.SHARED_SECRET.length < 48) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['SHARED_SECRET'],
-          message:
-            'SHARED_SECRET must be at least 48 characters in production; generate one with `openssl rand -base64 48`',
-        });
-      } else if (new Set(env.SHARED_SECRET).size < 16) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['SHARED_SECRET'],
-          message:
-            'SHARED_SECRET has too little entropy (fewer than 16 distinct characters); generate one with `openssl rand -base64 48`',
-        });
-      }
-    }
-
     if (env.MCP_OAUTH_PUBLIC_PROFILE_ENABLED && !env.MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

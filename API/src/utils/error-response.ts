@@ -27,7 +27,7 @@ type PublicExplanation = {
 
 const DEFAULT_HINTS = ['Check the request shape and server logs for more context.'];
 const GENERIC_PUBLIC_ERROR_BODY: PublicErrorBody = { error: PUBLIC_ERROR_MESSAGE };
-const PRODUCTION_PUBLIC_ERROR_CODES = new Set([
+export const PRODUCTION_PUBLIC_ERROR_CODES = new Set([
   'PASSWORD_POLICY_VIOLATION',
   'MISSING_PASSWORD',
   'INVALID_TOKEN',

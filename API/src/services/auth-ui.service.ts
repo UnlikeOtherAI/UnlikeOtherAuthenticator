@@ -38,15 +38,13 @@ function injectSsrIntoRootDiv(baseHtml: string, ssrHtml: string): string {
   });
 }
 
-let cachedSsrModule:
-  | null
-  | {
-      render: (params: {
-        config: ClientConfig;
-        configUrl: string;
-        url?: string;
-      }) => string | Promise<string>;
-    } = null;
+let cachedSsrModule: null | {
+  render: (params: {
+    config: ClientConfig;
+    configUrl: string;
+    url?: string;
+  }) => string | Promise<string>;
+} = null;
 
 async function renderAuthAppSsr(params: {
   config: ClientConfig;
@@ -142,12 +140,8 @@ export async function renderAuthEntrypointHtml(params: {
   return `${bootstrap}${base}`;
 }
 
-export function sendAuthHtml(
-  reply: FastifyReply,
-  html: string,
-  options?: { cspNonce?: string },
-): void {
-  const scriptNonce = options?.cspNonce ?? reply.cspNonce?.script;
+export function sendAuthHtml(reply: FastifyReply, html: string): void {
+  const scriptNonce = reply.cspNonce?.script;
   if (scriptNonce && html.includes('<script>') && !html.includes(`nonce="${scriptNonce}"`)) {
     // An inline script without the request nonce is blocked by the CSP. Failing loud is
     // safer than shipping a page whose bootstrap silently never runs.

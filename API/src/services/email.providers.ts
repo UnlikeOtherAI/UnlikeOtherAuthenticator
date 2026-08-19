@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHmac } from 'node:crypto';
 
 import nodemailer from 'nodemailer';
 
@@ -59,10 +59,18 @@ function loadSendgridModule(): Promise<unknown> {
 export function safeEmailLog(env: Env, message: EmailMessage): void {
   // Email bodies contain bearer links (tokens). Never log them in production.
   // The recipient address is PII that would accumulate in Cloud Run logs, so the production line
-  // keeps only the subject plus the same sha256:<12 chars>... masking operator surfaces use.
+  // keeps only the subject plus a recipient hint: an HMAC-SHA256 of the address keyed by
+  // SHARED_SECRET, truncated to 12 hex chars. The hint is stable per recipient, so an operator can
+  // correlate lines for one user across a log window, and it stops bulk harvesting of addresses
+  // from logs — but it is not anonymity: anyone who learns SHARED_SECRET can recompute hints for
+  // candidate addresses and match them, and 12 hex chars is only a correlation key, not a
+  // collision-free identifier.
   if (env.NODE_ENV === 'production') {
-    const toHint = createHash('sha256').update(message.to, 'utf8').digest('hex').slice(0, 12);
-    console.info('[email]', { to: `sha256:${toHint}...`, subject: message.subject });
+    const toHint = createHmac('sha256', env.SHARED_SECRET)
+      .update(message.to, 'utf8')
+      .digest('hex')
+      .slice(0, 12);
+    console.info('[email]', { to: `hmac-sha256:${toHint}...`, subject: message.subject });
     return;
   }
 

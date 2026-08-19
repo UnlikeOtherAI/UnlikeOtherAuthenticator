@@ -72,8 +72,8 @@ export function registerAuthEmailResetPasswordRoute(app: FastifyInstance): void 
           config: request.config,
           configUrl: request.configUrl,
           requestUrl: buildLoginAuthUrl(request.configUrl, redirect_url),
-                  cspNonce: reply.cspNonce?.script,
-});
+          cspNonce: reply.cspNonce?.script,
+        });
         sendAuthHtml(reply, html);
         return;
       }
@@ -96,8 +96,8 @@ export function registerAuthEmailResetPasswordRoute(app: FastifyInstance): void 
         config: request.config,
         configUrl: request.configUrl,
         requestUrl: `/auth?${params.toString()}`,
-              cspNonce: reply.cspNonce?.script,
-});
+        cspNonce: reply.cspNonce?.script,
+      });
       sendAuthHtml(reply, html);
     },
   );

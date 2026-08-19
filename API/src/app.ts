@@ -1,3 +1,5 @@
+import { randomBytes } from 'node:crypto';
+
 import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
 import multipart from '@fastify/multipart';
@@ -139,11 +141,22 @@ export async function createApp(): Promise<FastifyInstance> {
     },
   );
 
+  // Per-request script nonce for the bootstrap <script> on the auth pages.
+  // @fastify/helmet's `enableCSPNonces` is all-or-nothing: it appends a nonce to BOTH
+  // script-src and style-src — and once a directive contains a nonce, CSP ignores
+  // 'unsafe-inline' in that directive, so the server-rendered inline <style>/style=
+  // pages shipped unstyled. We therefore generate the nonce ourselves (same
+  // randomBytes(16).toString('hex') helmet used) and keep style-src nonce-free so
+  // its 'unsafe-inline' stays effective. `reply.cspNonce` is what auth-ui.service.ts
+  // reads; `script` is the per-request nonce and `style` is intentionally empty.
+  // (The `cspNonce` reply decorator itself is registered by @fastify/helmet below.)
+  // Helmet's onRequest hooks run AFTER this one (it is registered below), so the nonce
+  // already exists when helmet applies the CSP headers.
+  app.addHook('onRequest', async (_request, reply) => {
+    reply.cspNonce = { script: randomBytes(16).toString('hex'), style: '' };
+  });
+
   await app.register(helmet, {
-    // Per-request script/style nonces so the bootstrap <script> on the auth pages can be
-    // allowed without 'unsafe-inline'. The nonce lands on `reply.cspNonce` and is appended
-    // to script-src/style-src on every response; the auth entrypoint echoes it onto the tag.
-    enableCSPNonces: true,
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
@@ -174,6 +187,21 @@ export async function createApp(): Promise<FastifyInstance> {
     frameguard: { action: 'deny' },
     noSniff: true,
     referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+  });
+
+  // Helmet just wrote the CSP with the static script-src; append this request's script
+  // nonce now that the value exists. Only script-src is touched — style-src keeps
+  // 'unsafe-inline' and gets NO nonce, since a nonce in the same directive would make
+  // browsers ignore 'unsafe-inline' and block the server-rendered inline styles.
+  app.addHook('onRequest', async (_request, reply) => {
+    const csp = reply.getHeader('content-security-policy');
+    const nonce = reply.cspNonce?.script;
+    if (typeof csp === 'string' && nonce) {
+      reply.header(
+        'content-security-policy',
+        csp.replace("script-src 'self'", `script-src 'self' 'nonce-${nonce}'`),
+      );
+    }
   });
 
   if (env.DATABASE_URL) {

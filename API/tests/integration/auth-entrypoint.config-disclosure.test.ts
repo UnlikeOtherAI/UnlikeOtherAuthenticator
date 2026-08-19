@@ -68,7 +68,7 @@ describe('GET /auth (config failure disclosure)', () => {
     expect(res.statusCode).toBe(400);
     expect(res.headers['content-type']).toContain('text/html');
     expect(res.body).toContain('<h1>Request failed</h1>');
-    expect(res.body).toContain('<code>CONFIG_SCHEMA_INVALID</code>');
+    expect(res.body).not.toContain('<code>CONFIG_SCHEMA_INVALID</code>');
     expect(res.body).not.toContain('Auth configuration error');
     expect(res.body).not.toContain('Allowlisted redirect_urls');
     expect(res.body).not.toContain('ui_theme.colors');

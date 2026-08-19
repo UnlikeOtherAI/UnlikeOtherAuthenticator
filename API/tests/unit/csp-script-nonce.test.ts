@@ -74,6 +74,53 @@ function directive(csp: string, name: string): string {
 }
 
 describe('script-src CSP nonce', () => {
+  it('serves non-auth responses with a script nonce and an unsafe-inline, nonce-free style-src', async () => {
+    const { createApp } = await import('../../src/app.js');
+    const app = await createApp();
+    await app.ready();
+    try {
+      const res = await app.inject({ method: 'GET', url: '/api' });
+      expect(res.statusCode).toBe(200);
+      const csp = String(res.headers['content-security-policy']);
+      const scriptSrc = directive(csp, 'script-src');
+      expect(scriptSrc).toContain("'self'");
+      expect(scriptSrc).toMatch(/'nonce-[a-f0-9]{32}'/);
+      expect(scriptSrc).not.toContain("'unsafe-inline'");
+      const styleSrc = directive(csp, 'style-src');
+      expect(styleSrc).toContain("'unsafe-inline'");
+      expect(styleSrc).not.toContain('nonce');
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('serves the inline-style 2FA reset page under a style-src that permits its inline styles', async () => {
+    const { createApp } = await import('../../src/app.js');
+    const app = await createApp();
+    await app.ready();
+    try {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/auth/email/twofa-reset?config_url=https%3A%2F%2Fclient.example.com%2Fauth-config&token=test-token',
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.headers['content-type']).toContain('text/html');
+      // The page relies on inline style="..." attributes — verify it actually ships them.
+      expect(res.body).toContain('style="');
+
+      const csp = String(res.headers['content-security-policy']);
+      const styleSrc = directive(csp, 'style-src');
+      // Style attributes can only be authorised by 'unsafe-inline' (a nonce never can),
+      // so style-src must keep it and must NOT carry a nonce (a nonce would make the
+      // browser ignore 'unsafe-inline' in the same directive).
+      expect(styleSrc).toContain("'unsafe-inline'");
+      expect(styleSrc).not.toContain('nonce');
+    } finally {
+      await app.close();
+    }
+  });
+
   it('emits the bootstrap <script> with the per-request nonce', async () => {
     const html = await renderAuthEntrypointHtml({
       config: baseConfig(),
@@ -102,6 +149,12 @@ describe('script-src CSP nonce', () => {
       const csp = String(res.headers['content-security-policy']);
       const scriptSrc = directive(csp, 'script-src');
       expect(scriptSrc).not.toContain("'unsafe-inline'");
+
+      // style-src must keep 'unsafe-inline' (inline <style> blocks and style="..."
+      // attributes on the server-rendered pages) and must NOT carry a nonce.
+      const styleSrc = directive(csp, 'style-src');
+      expect(styleSrc).toContain("'unsafe-inline'");
+      expect(styleSrc).not.toContain('nonce');
 
       const headerNonce = /'nonce-([^']+)'/.exec(scriptSrc)?.[1];
       expect(headerNonce).toBeTruthy();

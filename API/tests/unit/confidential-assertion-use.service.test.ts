@@ -18,51 +18,8 @@ function prismaMock(options?: { duplicate?: boolean }): PrismaClient {
   } as unknown as PrismaClient;
 }
 
-/**
- * In-memory ledger with the real deleteMany-then-unique-create semantics, so a
- * consume followed by a replay exercises exactly what the database would do:
- * prune rows whose expiresAt has passed, then let the unique index serialize.
- */
-function prismaLedgerMock(): PrismaClient {
-  const rows: { sourceDomain: string; jtiHash: string; expiresAt: Date }[] = [];
-  return {
-    confidentialAssertionUse: {
-      deleteMany: vi.fn(
-        async (args: {
-          where: { sourceDomain: string; jtiHash: string; expiresAt: { lte: Date } };
-        }) => {
-          let count = 0;
-          for (let index = rows.length - 1; index >= 0; index -= 1) {
-            const row = rows[index];
-            if (
-              row.sourceDomain === args.where.sourceDomain &&
-              row.jtiHash === args.where.jtiHash &&
-              row.expiresAt.getTime() <= args.where.expiresAt.lte.getTime()
-            ) {
-              rows.splice(index, 1);
-              count += 1;
-            }
-          }
-          return { count };
-        },
-      ),
-      create: vi.fn(
-        async (args: { data: { sourceDomain: string; jtiHash: string; expiresAt: Date } }) => {
-          const duplicate = rows.some(
-            (row) =>
-              row.sourceDomain === args.data.sourceDomain && row.jtiHash === args.data.jtiHash,
-          );
-          if (duplicate) throw Object.assign(new Error('Unique constraint failed'), { code: 'P2002' });
-          rows.push({ ...args.data });
-          return { id: `use-${rows.length}` };
-        },
-      ),
-    },
-  } as unknown as PrismaClient;
-}
-
 describe('confidential assertion one-time use', () => {
-  it('stores only a source-bound jti hash through expiry plus clock tolerance', async () => {
+  it('stores only a source-bound jti hash through expiry plus clock tolerance plus the retention margin', async () => {
     const prisma = prismaMock();
     const now = new Date('2026-07-19T12:00:00.000Z');
     const expiresAtEpochSeconds = Math.floor(now.getTime() / 1000) + 60;
@@ -142,13 +99,6 @@ describe('replay at the accepted-expiry boundary', () => {
     sourceDomain: 'api.nessie.works',
   };
 
-  // The verifier still accepts the assertion until now reaches exp plus the
-  // clock tolerance, so the ledger row must survive that whole window.
-  const replayableInstants = [
-    ['just before the tolerance boundary', new Date((exp + CONFIDENTIAL_ASSERTION_CLOCK_TOLERANCE_SECONDS) * 1000 - 1)],
-    ['exactly at the tolerance boundary', new Date((exp + CONFIDENTIAL_ASSERTION_CLOCK_TOLERANCE_SECONDS) * 1000)],
-  ] as const;
-
   // The consume-time expiry guard alone would still reject these replays;
   // this is the assertion that regresses if the ledger stops outliving exp
   // plus clock tolerance.
@@ -167,16 +117,15 @@ describe('replay at the accepted-expiry boundary', () => {
     );
   });
 
-  it.each(replayableInstants)('rejects a replay %s', async (_label, replayNow) => {
-    const prisma = prismaLedgerMock();
-
-    await consumeConfidentialAssertion(params, {
-      prisma,
-      now: () => new Date('2026-07-19T12:00:00.000Z'),
-    });
-
-    await expect(
-      consumeConfidentialAssertion(params, { prisma, now: () => replayNow }),
-    ).rejects.toThrow('INVALID_SUBJECT_TOKEN');
-  });
+  // There used to be `it.each` replays "just before" and "exactly at" the
+  // tolerance boundary. They were removed as vacuous: both passed even with
+  // the retention margin reverted. At just-before, the old row (expiresAt =
+  // exp + tolerance) is not yet prunable so the unique insert collides
+  // anyway; at exactly-at, the consume-time expiry guard rejects before the
+  // ledger is consulted. The honest pruning-window scenario — replaying an
+  // assertion whose row HAS been pruned while the verifier would still accept
+  // it — is unreachable: the verifier's acceptance window ends at exp +
+  // tolerance, and the consume-time guard rejects anything whose expiresAt
+  // has passed, which any pruned row's has by definition. What actually pins
+  // the retention margin is the strict-greater assertion above.
 });

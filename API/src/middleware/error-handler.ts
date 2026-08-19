@@ -10,7 +10,10 @@ import { renderClaimInvalidHtml } from '../services/integration-claim-page.servi
 import { renderIntegrationStatusHtml } from '../services/integration-status-page.service.js';
 import { getEnv } from '../config/env.js';
 import { isAppError, type AppError } from '../utils/errors.js';
-import { buildPublicErrorBody } from '../utils/error-response.js';
+import {
+  buildPublicErrorBody,
+  PRODUCTION_PUBLIC_ERROR_CODES,
+} from '../utils/error-response.js';
 
 function wantsHtml(request: { method: string; headers: { accept?: string } }): boolean {
   const accept = request.headers.accept ?? '';
@@ -55,12 +58,23 @@ function shouldRenderAuthDebug(request: {
 }
 
 function genericErrorCode(request: { authDebug?: AuthDebugInfo }, error: unknown): string | undefined {
-  if (error instanceof ZodError) return 'AUTH_REQUEST_INVALID';
-  // The debug info (when present) has already been enriched with the specific
-  // code; sharing just the code on the generic page matches what the JSON
-  // error body would expose for this failure.
-  if (isAppError(error)) return request.authDebug?.code ?? error.message;
-  return undefined;
+  let code: string | undefined;
+  if (error instanceof ZodError) {
+    code = 'AUTH_REQUEST_INVALID';
+  } else if (isAppError(error)) {
+    code = request.authDebug?.code ?? error.message;
+  }
+  if (!code) return undefined;
+  // AppError messages are not always code-shaped; never render a sentence as
+  // if it were an error code (the JSON path applies the same guard).
+  if (!/^[A-Z0-9_]+$/.test(code)) return undefined;
+  // Mirror buildPublicErrorBody: with DEBUG_ENABLED off, the JSON body only
+  // exposes codes in PRODUCTION_PUBLIC_ERROR_CODES and squashes the rest to a
+  // fully generic body — the HTML page must not leak what JSON withholds.
+  if (!getEnv().DEBUG_ENABLED && !PRODUCTION_PUBLIC_ERROR_CODES.has(code)) {
+    return undefined;
+  }
+  return code;
 }
 
 function maybeRenderIntegrationStatusPage(request: FastifyRequest, error: AppError): string | null {

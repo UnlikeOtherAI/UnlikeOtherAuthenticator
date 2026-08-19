@@ -40,6 +40,14 @@ async function createErrorTestApp() {
     throw new AppError('BAD_REQUEST', 400, 'REDIRECT_URL_NOT_ALLOWED');
   });
 
+  app.get('/auth/public-app-error', () => {
+    throw new AppError('UNAUTHORIZED', 401, 'INVALID_TOKEN');
+  });
+
+  app.get('/auth/message-app-error', () => {
+    throw new AppError('BAD_REQUEST', 400, 'Redirect url is not allowed.');
+  });
+
   app.get('/auth/unknown-error', () => {
     throw new Error(rawUnknownErrorMessage);
   });
@@ -190,7 +198,8 @@ describe('error handler auth HTML rendering', () => {
         expect(response.statusCode).toBe(400);
         expect(String(response.headers['content-type'])).toContain('text/html');
         expect(response.body).toContain('<h1>Request failed</h1>');
-        expect(response.body).toContain('<code>AUTH_REQUEST_INVALID</code>');
+        expect(response.body).not.toContain('<code>');
+        expect(response.body).not.toContain('AUTH_REQUEST_INVALID');
         expect(response.body).not.toContain('Auth configuration error');
         expect(response.body).not.toContain('config_url');
         expect(response.body).not.toContain('Allowlisted redirect_urls');
@@ -200,7 +209,7 @@ describe('error handler auth HTML rendering', () => {
       }
     });
 
-    it('serves the generic page for AppError errors with the error code only', async () => {
+    it('withholds a non-public AppError code with DEBUG_ENABLED off', async () => {
       process.env.DEBUG_ENABLED = 'false';
       const app = await createErrorTestApp();
 
@@ -213,9 +222,51 @@ describe('error handler auth HTML rendering', () => {
 
         expect(response.statusCode).toBe(400);
         expect(response.body).toContain('<h1>Request failed</h1>');
-        expect(response.body).toContain('<code>REDIRECT_URL_NOT_ALLOWED</code>');
+        expect(response.body).not.toContain('<code>');
+        expect(response.body).not.toContain('REDIRECT_URL_NOT_ALLOWED');
         expect(response.body).not.toContain('Auth configuration error');
         expect(response.body).not.toContain('Allowlisted redirect_urls');
+      } finally {
+        await app.close();
+      }
+    });
+
+    it('shows a publicly-exposable AppError code with DEBUG_ENABLED off', async () => {
+      process.env.DEBUG_ENABLED = 'false';
+      const app = await createErrorTestApp();
+
+      try {
+        const response = await app.inject({
+          method: 'GET',
+          url: '/auth/public-app-error',
+          headers: { accept: 'text/html' },
+        });
+
+        expect(response.statusCode).toBe(401);
+        expect(response.body).toContain('<h1>Request failed</h1>');
+        expect(response.body).toContain('<code>INVALID_TOKEN</code>');
+        expect(response.body).not.toContain('Auth configuration error');
+      } finally {
+        await app.close();
+      }
+    });
+
+    it('never renders a non-code-shaped AppError message as a code', async () => {
+      process.env.DEBUG_ENABLED = 'false';
+      const app = await createErrorTestApp();
+
+      try {
+        const response = await app.inject({
+          method: 'GET',
+          url: '/auth/message-app-error',
+          headers: { accept: 'text/html' },
+        });
+
+        expect(response.statusCode).toBe(400);
+        expect(response.body).toContain('<h1>Request failed</h1>');
+        expect(response.body).not.toContain('<code>');
+        expect(response.body).not.toContain('Redirect url is not allowed.');
+        expect(response.body).not.toContain('Auth configuration error');
       } finally {
         await app.close();
       }
@@ -258,7 +309,8 @@ describe('error handler auth HTML rendering', () => {
 
         expect(response.statusCode).toBe(400);
         expect(response.body).toContain('<h1>Request failed</h1>');
-        expect(response.body).toContain('<code>AUTH_REQUEST_INVALID</code>');
+        expect(response.body).not.toContain('<code>');
+        expect(response.body).not.toContain('AUTH_REQUEST_INVALID');
         expect(response.body).not.toContain('Auth configuration error');
         expect(response.body).not.toContain('config_url');
         expect(response.body).not.toContain('Allowlisted redirect_urls');

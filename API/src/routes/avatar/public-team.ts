@@ -44,7 +44,7 @@ const publicAvatarIpRateLimit = createRateLimiter({
 });
 const publicAvatarGlobalRateLimit = createRateLimiter({
   keyBuilder: () => 'public:team-avatar:global',
-  limit: 20_000,
+  limit: 120_000,
   windowMs: 60 * 60 * 1000,
 });
 async function publicAvatarRateLimit(request: FastifyRequest): Promise<void> {

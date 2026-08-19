@@ -71,6 +71,8 @@ export const domainEndpoints: EndpointSchema[] = [
     response: {
       'superuser.avatar_image_url':
         "string — the calling superuser's avatar image URL, fetchable with the same domain hash bearer",
+      client_id:
+        "string — the ClientDomain record id (a cuid), stable across client-secret rotation; NOT the domain-hash bearer credential and NOT the SHA256(domain + clientSecret) value carried as the client_id claim in access tokens — do not join them",
     },
     notes: IDENTITY_AVATAR_URL_NOTE,
   },

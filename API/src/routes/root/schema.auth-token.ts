@@ -48,7 +48,7 @@ export const authTokenEndpoint: EndpointSchema = {
     '[note]':
       'There is NO top-level `user` field. User identity lives inside access_token claims (read claims.sub). Every immediate caller uses its own app credential and enabled DB mapping; no shared/cross-app/fallback key or webhook secret is accepted.',
     '[rate limit]':
-      'Authorization-code, refresh, and workspace-switch grants: 10/min per IP. Confidential exchange: 600/min per authenticated source domain plus 60/min per verified source-domain user.',
+      'Authorization-code, refresh, and workspace-switch grants: 10/min per IP, plus a service-wide global ceiling of 30,000/min per instance. Confidential exchange: 600/min per authenticated source domain plus 60/min per verified source-domain user.',
     '401 refresh policy':
       'If the domain signature policy changed and the refresh-token user is incomplete, or a stored scoped session no longer has its exact active product mapping plus ACTIVE org/team memberships, the valid refresh token is not rotated or consumed. Restart interactive authorization; UOA never silently changes the workspace.',
     'workspace-switch contract':

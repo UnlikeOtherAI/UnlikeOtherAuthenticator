@@ -74,7 +74,7 @@ describe('GET /teams/:teamId/avatar global rate limit', () => {
         expect(res.statusCode).toBe(200);
       }
 
-      // Issuing 20,000 requests to cross the real global ceiling would make this the slowest
+      // Issuing 120,000 requests to cross the real global ceiling would make this the slowest
       // test in the suite for no extra signal: the honest assertion is on the composed limiter's
       // shared state. A probe limiter reading the route's fixed key (same pattern as
       // auth-rate-limit-global.test.ts) must refuse once its allowance equals the REQUESTS

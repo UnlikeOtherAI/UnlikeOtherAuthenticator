@@ -2,6 +2,7 @@ import { renderSVG } from '@unlikeotherai/qr-art';
 import { fetch } from 'undici';
 
 import { TOTP_QR_LOGO_DEADLINE_MS, TOTP_QR_LOGO_MAX_BYTES } from '../config/constants.js';
+import { getAppLogger } from '../utils/app-logger.js';
 import { AppError } from '../utils/errors.js';
 import {
   closeSsrfAgent,
@@ -28,10 +29,6 @@ export type LogoFetchDeps = {
   deadlineMs?: number;
 };
 
-function logoFetchFailed(): never {
-  throw new AppError('BAD_REQUEST', 400, 'LOGO_FETCH_FAILED');
-}
-
 function assertOtpAuthUri(value: string): string {
   const trimmed = (value ?? '').trim();
   if (!trimmed || !trimmed.startsWith('otpauth://')) {
@@ -45,6 +42,12 @@ async function inlineLogoUrl(logoUrl: string, deps?: LogoFetchDeps): Promise<str
   if (!trimmed) return '';
   if (trimmed.startsWith('data:image/')) return trimmed;
 
+  // A malformed or non-HTTPS logo URL is a caller (config) error, not a fetch failure, so it
+  // keeps throwing INVALID_LOGO_URL. Everything past this point is a logo the guard refused or
+  // the network could not deliver: a logo is decoration, so — like the provider-avatar fetch in
+  // Docs/Auth/avatars.md ("fail closed to the generated image") — those degrade to a QR without
+  // a logo instead of failing 2FA enrolment. No SSRF control is weakened: the guard still
+  // refuses, only the consequence changes.
   let url: URL;
   try {
     url = parseHttpsUrl(trimmed);
@@ -58,7 +61,23 @@ async function inlineLogoUrl(logoUrl: string, deps?: LogoFetchDeps): Promise<str
       ? deps.deadlineMs
       : TOTP_QR_LOGO_DEADLINE_MS;
 
-  return withLogoDeadline((signal) => fetchLogoImage(url, doFetch, signal), deadlineMs);
+  try {
+    return await withLogoDeadline((signal) => fetchLogoImage(url, doFetch, signal), deadlineMs);
+  } catch (err) {
+    logLogoFetchFailure(trimmed, err);
+    return '';
+  }
+}
+
+/** Operator visibility for a tenant whose logo cannot be fetched: reason only, never the body. */
+function logLogoFetchFailure(logoUrl: string, err: unknown): void {
+  const reason =
+    err instanceof AppError ? err.message : err instanceof Error ? err.name : 'unknown';
+  try {
+    getAppLogger().warn({ logoUrl, reason }, 'TOTP QR logo fetch failed; rendering without logo');
+  } catch {
+    // Logger not initialized (unit tests, scripts): the degraded QR is the contract.
+  }
 }
 
 /**
@@ -102,12 +121,12 @@ async function fetchLogoImage(
   try {
     destinations = await resolvePublicDestinations(url);
   } catch {
-    logoFetchFailed();
+    throw new AppError('BAD_REQUEST', 400, 'LOGO_FETCH_FAILED');
   }
 
   let lastError: unknown;
   for (const destination of destinations) {
-    if (signal.aborted) logoFetchFailed();
+    if (signal.aborted) throw new AppError('BAD_REQUEST', 400, 'LOGO_FETCH_FAILED');
 
     // The agent is pinned to the already-validated address so DNS cannot be rebound between the
     // check and the connect, and redirects are refused rather than followed to an unvalidated host.
@@ -142,13 +161,13 @@ async function requestLogoImage(
   // Every exit below has to leave the response body released: an abandoned body keeps its request
   // active on the pinned agent, which is exactly what closeSsrfAgent waits on in the finally above.
   try {
-    if (!res.ok) logoFetchFailed();
+    if (!res.ok) throw new AppError('BAD_REQUEST', 400, 'LOGO_FETCH_FAILED');
 
     const contentType = res.headers.get('content-type')?.split(';')[0]?.trim() || 'image/png';
-    if (!contentType.startsWith('image/')) logoFetchFailed();
+    if (!contentType.startsWith('image/')) throw new AppError('BAD_REQUEST', 400, 'LOGO_FETCH_FAILED');
 
     const bytes = await readCappedLogoBody(res, TOTP_QR_LOGO_MAX_BYTES);
-    if (!bytes || bytes.length === 0) logoFetchFailed();
+    if (!bytes || bytes.length === 0) throw new AppError('BAD_REQUEST', 400, 'LOGO_FETCH_FAILED');
 
     return `data:${contentType};base64,${bytes.toString('base64')}`;
   } finally {
