@@ -82,4 +82,22 @@ describe('Admin API client binary transport', () => {
       }),
     );
   });
+
+  it('preserves a named public error code for callers that need a specific refusal message', async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({ error: 'Request failed', code: 'ORG_HAS_PROTECTED_RECORDS' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+
+    await expect(createApiClient(origin).delete('/organisations/org-1')).rejects.toEqual(
+      expect.objectContaining<ApiRequestError>({
+        name: 'ApiRequestError',
+        message: 'Request failed with HTTP 400',
+        status: 400,
+        code: 'ORG_HAS_PROTECTED_RECORDS',
+      }),
+    );
+  });
 });

@@ -1,6 +1,6 @@
 import type { ClientConfig } from './config.service.js';
 import { getEnv } from '../config/env.js';
-import { getPrisma } from '../db/prisma.js';
+import { getAdminPrisma, getPrisma } from '../db/prisma.js';
 import { runInTransaction } from '../db/tenant-context.js';
 import { AppError } from '../utils/errors.js';
 
@@ -326,7 +326,7 @@ export async function updateOrganisation(
 export async function deleteOrganisation(
   params: {
     orgId: string;
-    domain: string;
+    domain?: string;
     actorUserId?: string;
     actor?: OrgActorProvenance;
   },
@@ -337,7 +337,9 @@ export async function deleteOrganisation(
 
   const actorUserId = resolveOrgActor(params);
 
-  const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
+  const prisma =
+    deps?.prisma ??
+    ((params.actor?.via === 'admin_superuser' ? getAdminPrisma() : getPrisma()) as unknown as OrgServicePrisma);
   const org = await resolveOrganisation(prisma, { orgId: params.orgId });
   // "Must be the owner" is a check on the acting user; backend mode has none.
   if (actorUserId && org.ownerId !== actorUserId) {
@@ -364,7 +366,7 @@ export async function deleteOrganisation(
     });
   } catch (err) {
     if (isP2003Error(err)) {
-      throw new AppError('BAD_REQUEST', 400);
+      throw new AppError('BAD_REQUEST', 400, 'ORG_HAS_PROTECTED_RECORDS');
     }
     throw err;
   }
@@ -380,7 +382,7 @@ export async function deleteOrganisation(
     targetType: 'organisation',
     targetId: org.id,
     metadata: { name: org.name, slug: org.slug, ownerId: org.ownerId },
-  });
+  }, { prisma: deps?.auditPrisma });
 
   return { deleted: true };
 }

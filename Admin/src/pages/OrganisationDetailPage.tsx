@@ -20,6 +20,7 @@ import { TeamDialog } from '../components/dialogs/TeamDialog';
 import { TransferOwnershipDialog } from '../components/dialogs/TransferOwnershipDialog';
 import { LoginRestrictionSection } from '../components/sections/LoginRestrictionSection';
 import { adminService } from '../services/admin-service';
+import { ApiRequestError } from '../services/api-client';
 import { useOrganisationQuery } from '../features/admin/admin-queries';
 import type { OrganisationMember, OrganisationTwoFaPolicy, PreapprovedMember } from '../features/admin/types';
 import { TeamTable } from '../features/admin/TeamTable';
@@ -47,6 +48,7 @@ export function OrganisationDetailPage() {
   const queryClient = useQueryClient();
   const { confirm, openUser } = useAdminUi();
   const [dialog, setDialog] = useState<DialogState | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const closeDialog = () => setDialog(null);
   const { data: org, isLoading } = useOrganisationQuery(orgId);
   const updateRestriction = useMutation({
@@ -58,6 +60,20 @@ export function OrganisationDetailPage() {
     mutationFn: (twoFaPolicy: OrganisationTwoFaPolicy) =>
       adminService.updateOrganisation(orgId ?? '', { twoFaPolicy }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin'] }),
+  });
+  const deleteOrganisation = useMutation({
+    mutationFn: () => adminService.deleteOrganisation(orgId ?? ''),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['admin'] });
+      navigate('/organisations');
+    },
+    onError: (error) => {
+      setDeleteError(
+        error instanceof ApiRequestError && error.code === 'ORG_HAS_PROTECTED_RECORDS'
+          ? 'This organisation has protected billing/commercial records and cannot be deleted'
+          : 'The organisation could not be deleted. Try again.',
+      );
+    },
   });
   const [tab, setTab] = useState<OrgTab>('teams');
   const { pageItems: teamPageItems, pagination: teamPagination } = usePagination(org?.teams ?? []);
@@ -84,10 +100,35 @@ export function OrganisationDetailPage() {
           <>
             <Button onClick={() => setDialog({ kind: 'edit-org' })}>Edit</Button>
             <Button onClick={() => setDialog({ kind: 'transfer' })}>Transfer Ownership</Button>
-            <Button variant="danger" onClick={() => confirm(`Delete ${org.name}?`, 'A production write endpoint is required before this can delete stored organisations.')}>Delete</Button>
+            <Button
+              disabled={deleteOrganisation.isPending}
+              variant="danger"
+              onClick={() => {
+                setDeleteError(null);
+                confirm(
+                  `Delete ${org.name}?`,
+                  'This permanently deletes the organisation and its teams and memberships. User accounts are retained.',
+                  async () => {
+                    try {
+                      await deleteOrganisation.mutateAsync();
+                    } catch {
+                      // The mutation renders a public refusal or generic failure below.
+                    }
+                  },
+                  org.name,
+                );
+              }}
+            >
+              {deleteOrganisation.isPending ? 'Deleting...' : 'Delete'}
+            </Button>
           </>
         }
       />
+      {deleteError ? (
+        <p className="mb-5 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
+          {deleteError}
+        </p>
+      ) : null}
       <div className="mb-5 grid gap-3 md:grid-cols-[2fr_1fr_1fr]">
         <MetricCard label="Owner" value={org.owner.name ?? org.owner.email} action={<button className="text-xs font-medium text-indigo-600 hover:text-indigo-900" type="button" onClick={() => openUser(org.owner.id)}>{org.owner.email}</button>} />
         <MetricCard label="Members" value={String(org.members.length)} />

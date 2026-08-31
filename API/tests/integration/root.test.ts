@@ -233,6 +233,16 @@ describe('GET /api', () => {
     );
     expect(body.endpoints).toContainEqual(
       expect.objectContaining({
+        method: 'DELETE',
+        path: '/internal/admin/organisations/:orgId',
+        auth: expect.stringContaining('superuser'),
+        response: expect.objectContaining({
+          400: expect.stringContaining('ORG_HAS_PROTECTED_RECORDS'),
+        }),
+      }),
+    );
+    expect(body.endpoints).toContainEqual(
+      expect.objectContaining({
         method: 'POST',
         path: '/internal/admin/billing/services/:serviceId/app-keys',
         auth: expect.stringContaining('superuser'),
@@ -415,5 +425,7 @@ describe('GET /llm', () => {
     expect(res.body).toContain('Remaining credits');
     expect(res.body).toContain('/billing/v1/credits');
     expect(res.body).toContain('/billing/v1/recurring-addons');
+    expect(res.body).toContain('DELETE /internal/admin/organisations/:orgId');
+    expect(res.body).toContain('ORG_HAS_PROTECTED_RECORDS');
   });
 });
