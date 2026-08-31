@@ -218,6 +218,7 @@ describe('workspace-directory service: buildSidebarPendingInvites', () => {
         findMany: vi.fn(async () => [
           {
             id: 'invite-1',
+            orgId: 'org-1',
             teamId: 'team-1',
             team: { name: 'Backend' },
             invitedByName: 'Alice Admin',
@@ -236,6 +237,7 @@ describe('workspace-directory service: buildSidebarPendingInvites', () => {
     expect(result).toEqual([
       {
         inviteId: 'invite-1',
+        orgId: 'org-1',
         teamId: 'team-1',
         teamName: 'Backend',
         invitedBy: 'Alice Admin',
@@ -244,6 +246,7 @@ describe('workspace-directory service: buildSidebarPendingInvites', () => {
     ]);
     expect(prisma.teamInvite.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
+        select: expect.objectContaining({ orgId: true }),
         where: expect.objectContaining({
           email: 'jane@acme.com',
           org: { domain: 'acme.example.com' },

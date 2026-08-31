@@ -162,6 +162,33 @@ describe('GET /org/me cross-product directory', () => {
     expect(buildSidebarWorkspacesMock).toHaveBeenCalled();
   });
 
+  it('returns orgId on sidebar pending invitations', async () => {
+    buildSidebarPendingInvitesMock.mockResolvedValue([
+      {
+        inviteId: 'invite-1',
+        orgId: 'org-invited',
+        teamId: 'team-invited',
+        teamName: 'Invited team',
+        invitedBy: 'Alice Admin',
+        expiresAt: new Date('2026-09-30T00:00:00.000Z'),
+      },
+    ]);
+
+    const response = await getOrgMe();
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().org.pending_invites).toEqual([
+      {
+        inviteId: 'invite-1',
+        orgId: 'org-invited',
+        teamId: 'team-invited',
+        teamName: 'Invited team',
+        invitedBy: 'Alice Admin',
+        expiresAt: '2026-09-30T00:00:00.000Z',
+      },
+    ]);
+  });
+
   it("resolves the token's own org, not whichever membership happens to come first", async () => {
     // A user can hold ACTIVE memberships in several organisations. `/org/me` must answer for the
     // org the token is scoped to — the same one `/org/organisations/:orgId/**` will accept — or

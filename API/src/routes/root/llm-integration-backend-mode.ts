@@ -98,6 +98,7 @@ it from domain Y with a domain-Y token; a domain-Y *backend* still cannot.
 | \`POST .../teams/:teamId/join\` | **No** — 401. Self-join's subject IS the acting user. |
 | \`POST|GET .../teams/:teamId/invitations\`, \`.../resend\` | Yes (already was — this is the bulk-invite contract). |
 | \`GET .../teams/:teamId/invitations/:inviteId\` | Yes — reads one invitation by id, same record shape as the list. |
+| \`POST .../teams/:teamId/invitations/:inviteId/accept\` | **Backend-only.** Strict body \`{ userId }\`; accepts for that asserted UOA invitee and returns \`{ ok, orgId, teamId }\`. Any present user token is refused. |
 | \`DELETE .../teams/:teamId/invitations/:inviteId\` | Yes — revokes any pending invitation, including one still awaiting member-invite approval. |
 | \`POST|GET|DELETE .../teams/:teamId/invite-links\` | Yes. A link created this way has \`created_by_user_id: null\`. |
 | \`GET .../invitations?approval=pending\` | Yes. |
@@ -113,6 +114,7 @@ it from domain Y with a domain-Y token; a domain-Y *backend* still cannot.
 | 400 | \`DOMAIN_MISMATCH\` | \`?domain=\` does not equal the verified config \`domain\`. |
 | 400 | \`OWNER_REQUIRED\` | \`POST /org/organisations\` in backend mode without \`owner_user_id\`. |
 | 400 | \`OWNER_NOT_ALLOWED\` | \`POST /org/organisations\` with a user token AND \`owner_user_id\` — ambiguous. |
+| 400 | \`ORG_CONFLICT_ON_DOMAIN\` | Invitation acceptance cannot succeed because the asserted invitee already has an ACTIVE membership in another organisation on this invitation's origin domain. Products may explain the conflict instead of retrying. |
 | 400 | (generic) | \`owner_user_id\` names a user who does not exist, does not belong to this domain, or already has an active organisation here. |
 | 429 | \`RATE_LIMITED\` | Backend organisation creation is capped per domain per hour (well above normal provisioning volume). The end-user path keeps its own, much lower, per-user cap. |
 | 404 | \`ORG_FEATURES_DISABLED\` | \`org_features.enabled\` is false. |

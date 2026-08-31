@@ -10,10 +10,8 @@ import { renderClaimInvalidHtml } from '../services/integration-claim-page.servi
 import { renderIntegrationStatusHtml } from '../services/integration-status-page.service.js';
 import { getEnv } from '../config/env.js';
 import { isAppError, type AppError } from '../utils/errors.js';
-import {
-  buildPublicErrorBody,
-  PRODUCTION_PUBLIC_ERROR_CODES,
-} from '../utils/error-response.js';
+import { buildPublicErrorBody } from '../utils/error-response.js';
+import { PRODUCTION_PUBLIC_ERROR_CODES } from '../utils/public-error-codes.js';
 
 function wantsHtml(request: { method: string; headers: { accept?: string } }): boolean {
   const accept = request.headers.accept ?? '';
