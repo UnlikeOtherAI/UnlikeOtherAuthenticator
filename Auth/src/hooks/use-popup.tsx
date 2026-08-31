@@ -7,6 +7,8 @@ export type AuthView =
   | 'register'
   | 'reset-password'
   | 'set-password'
+  | 'invite-registration'
+  | 'invite-accepted'
   | 'access-requested'
   | 'signed-in'
   | 'signatures'
@@ -86,6 +88,12 @@ export type PopupQueryParams = {
   emailToken: string | null;
   /** The type of email link flow, set by the server on landing routes. */
   emailTokenType: 'VERIFY_EMAIL_SET_PASSWORD' | 'VERIFY_EMAIL' | 'LOGIN_LINK' | 'PASSWORD_RESET' | null;
+  /** One-time capability for a team invitation account-creation flow. */
+  inviteToken: string | null;
+  /** The invitee address displayed as a locked, non-editable field. */
+  inviteEmail: string | null;
+  /** Server-set marker after a direct social invitation has been accepted. */
+  inviteAccepted: boolean;
   /** Public-client / MCP profile (brief §22.14): present only on /oauth/authorize. */
   clientId: string | null;
   state: string | null;
@@ -173,6 +181,9 @@ export function parsePopupQueryParams(search: string): PopupQueryParams {
       requestAccessStatus: null,
       emailToken: null,
       emailTokenType: null,
+      inviteToken: null,
+      inviteEmail: null,
+      inviteAccepted: false,
       clientId: null,
       state: null,
       resource: null,
@@ -194,6 +205,8 @@ export function parsePopupQueryParams(search: string): PopupQueryParams {
   const requestAccess = ['1', 'true', 'yes'].includes((params.get('request_access') ?? '').toLowerCase());
   const requestAccessStatus = params.get('request_access_status') === 'pending' ? 'pending' : null;
   const emailToken = params.get('email_token');
+  const inviteToken = params.get('invite_token');
+  const inviteEmail = params.get('invite_email');
   const rawType = params.get('email_token_type');
   const clientId = params.get('client_id');
   const state = params.get('state');
@@ -211,6 +224,7 @@ export function parsePopupQueryParams(search: string): PopupQueryParams {
   // (unlike `login_token`, it isn't scoped to another marker param) — validity/membership is
   // re-checked against the verified user's own chooser payload before it can select anything.
   const teamHint = params.get('team_hint');
+  const inviteAccepted = params.get('flow') === 'invite_accepted';
 
   const validTypes = ['VERIFY_EMAIL_SET_PASSWORD', 'VERIFY_EMAIL', 'LOGIN_LINK', 'PASSWORD_RESET'] as const;
   const emailTokenType = rawType && (validTypes as readonly string[]).includes(rawType)
@@ -227,6 +241,9 @@ export function parsePopupQueryParams(search: string): PopupQueryParams {
     requestAccessStatus,
     emailToken: emailToken && emailToken.trim() ? emailToken : null,
     emailTokenType,
+    inviteToken: inviteToken && inviteToken.trim() ? inviteToken : null,
+    inviteEmail: inviteEmail && inviteEmail.trim() ? inviteEmail : null,
+    inviteAccepted,
     clientId: clientId && clientId.trim() ? clientId : null,
     state: state && state.trim() ? state : null,
     resource: resource && resource.trim() ? resource : null,
@@ -253,6 +270,12 @@ function deriveInitialView(parsed: PopupQueryParams): AuthView {
   }
   if (parsed.requestAccessStatus === 'pending') {
     return 'access-requested';
+  }
+  if (parsed.inviteAccepted) {
+    return 'invite-accepted';
+  }
+  if (parsed.inviteToken && parsed.inviteEmail) {
+    return 'invite-registration';
   }
   if (parsed.loginToken) {
     // Phase 3c follow-up (design §4.3 Task 7 remainder): the social callback seeded a login_token
@@ -329,6 +352,8 @@ export function PopupProvider(props: {
       ['login_token', parsed.loginToken],
       ['twofa_token', parsed.twoFaToken],
       ['twofa_setup_token', parsed.twoFaSetupToken],
+      ['invite_token', parsed.inviteToken],
+      ['invite_email', parsed.inviteEmail],
     ];
     const present = bridgeParams.filter(([, token]) => token);
     if (present.length === 0) return;
@@ -336,7 +361,13 @@ export function PopupProvider(props: {
     if (present.some(([param, token]) => url.searchParams.get(param) !== token)) return;
     for (const [param] of present) url.searchParams.delete(param);
     window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
-  }, [parsed.loginToken, parsed.twoFaToken, parsed.twoFaSetupToken]);
+  }, [
+    parsed.inviteEmail,
+    parsed.inviteToken,
+    parsed.loginToken,
+    parsed.twoFaToken,
+    parsed.twoFaSetupToken,
+  ]);
 
   // Navigating clears any notice, so a reason for landing somewhere cannot leak into a later step
   // the user walked to themselves. The expired-bridge path therefore sets its notice AFTER the
@@ -373,6 +404,9 @@ export function PopupProvider(props: {
       requestAccessStatus: parsed.requestAccessStatus,
       emailToken: parsed.emailToken,
       emailTokenType: parsed.emailTokenType,
+      inviteToken: parsed.inviteToken,
+      inviteEmail: parsed.inviteEmail,
+      inviteAccepted: parsed.inviteAccepted,
       clientId: parsed.clientId,
       state: parsed.state,
       resource: parsed.resource,
@@ -416,6 +450,9 @@ export function PopupProvider(props: {
     parsed.requestAccessStatus,
     parsed.emailToken,
     parsed.emailTokenType,
+    parsed.inviteToken,
+    parsed.inviteEmail,
+    parsed.inviteAccepted,
     parsed.clientId,
     parsed.state,
     parsed.resource,

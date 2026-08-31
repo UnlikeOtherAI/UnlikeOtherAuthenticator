@@ -5,6 +5,8 @@ export const es = {
   'auth.register.title': 'Crea tu cuenta',
   'auth.resetPassword.title': 'Restablecer tu contrasena',
   'auth.setPassword.title': 'Establece tu contrasena',
+  'auth.invite.title': 'Crea tu cuenta',
+  'auth.inviteAccepted.title': 'Invitacion aceptada',
   'auth.accessRequested.title': 'Solicitud de acceso enviada',
   'auth.signedIn.title': 'Sesion iniciada',
   'auth.twoFactorVerify.title': 'Verificar codigo de dos factores',
@@ -34,6 +36,8 @@ export const es = {
     'Este enlace es invalido o ha expirado. Solicita uno nuevo e intentalo de nuevo.',
   'form.setPassword.mismatch': 'Las contrasenas no coinciden.',
   'form.setPassword.success': 'Contrasena restablecida correctamente. Ya puedes iniciar sesion.',
+  'form.invite.submit': 'Crear cuenta',
+  'form.invite.error': 'Esta invitacion no es valida o ha caducado. Solicita una nueva invitacion.',
 
   'message.instructionsSent': 'Hemos enviado instrucciones a tu correo electronico',
   'message.emailAlreadyRegistered':
@@ -41,6 +45,7 @@ export const es = {
   'message.accessRequested':
     'Tu solicitud se ha enviado a los administradores del equipo. Puedes cerrar esta ventana y esperar su aprobacion.',
   'message.signedIn': 'Vuelve a la aplicacion para terminar de iniciar sesion. Puedes cerrar esta ventana.',
+  'message.inviteAccepted': 'Tu cuenta se ha creado y te has unido al equipo. Puedes cerrar esta ventana.',
   'action.openApp': 'Abrir la aplicacion',
 
   'nav.forgotPassword': 'Olvidaste tu contrasena?',

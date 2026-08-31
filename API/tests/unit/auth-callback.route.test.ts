@@ -15,6 +15,8 @@ const assertSocialProviderAllowedMock = vi.fn();
 const getGoogleProfileFromCodeMock = vi.fn();
 const verifySocialStateMock = vi.fn();
 const loginWithSocialProfileMock = vi.fn();
+const getTeamInviteLandingDataMock = vi.fn();
+const acceptTeamInviteTokenForSocialLoginMock = vi.fn();
 
 const selectRedirectUrlMock = vi.fn();
 const issueAuthorizationCodeMock = vi.fn();
@@ -66,6 +68,14 @@ vi.mock('../../src/services/social/social-login.service.js', () => {
   };
 });
 
+vi.mock('../../src/services/team-invite.service.js', () => {
+  return {
+    getTeamInviteLandingData: (...args: unknown[]) => getTeamInviteLandingDataMock(...args),
+    acceptTeamInviteTokenForSocialLogin: (...args: unknown[]) =>
+      acceptTeamInviteTokenForSocialLoginMock(...args),
+  };
+});
+
 vi.mock('../../src/services/token.service.js', async () => {
   const actual = await vi.importActual<typeof import('../../src/services/token.service.js')>(
     '../../src/services/token.service.js',
@@ -81,6 +91,7 @@ vi.mock('../../src/services/token.service.js', async () => {
 
 const TEST_NONCE = 'test-social-state-nonce';
 const SOCIAL_STATE_COOKIE_NAME = 'uoa_social_state';
+const SOCIAL_INVITE_COOKIE_NAME = 'uoa_social_invite';
 
 function baseConfig(overrides?: Partial<ClientConfig>): ClientConfig {
   return {
@@ -118,6 +129,8 @@ describe('GET /auth/callback/:provider', () => {
     getGoogleProfileFromCodeMock.mockReset();
     verifySocialStateMock.mockReset();
     loginWithSocialProfileMock.mockReset();
+    getTeamInviteLandingDataMock.mockReset();
+    acceptTeamInviteTokenForSocialLoginMock.mockReset();
     selectRedirectUrlMock.mockReset();
     issueAuthorizationCodeMock.mockReset();
     buildRedirectToUrlMock.mockReset();
@@ -179,6 +192,46 @@ describe('GET /auth/callback/:provider', () => {
     expect(issueAuthorizationCodeMock).not.toHaveBeenCalled();
     // Single-use: the state cookie is cleared after consumption.
     expect(res.headers['set-cookie']).toBeDefined();
+
+    await app.close();
+  });
+
+  it('rejects a social identity whose verified email differs from the invitation email', async () => {
+    verifySocialStateMock.mockResolvedValue({
+      provider: 'google',
+      config_url: 'https://client.example.com/auth-config',
+      redirect_url: 'https://client.example.com/oauth/callback',
+      nonce: TEST_NONCE,
+      team_invite: true,
+    });
+    getTeamInviteLandingDataMock.mockResolvedValue({ email: 'invitee@example.com' });
+    getGoogleProfileFromCodeMock.mockResolvedValue({
+      provider: 'google',
+      email: 'different@example.com',
+      emailVerified: true,
+      name: 'Different User',
+      avatarUrl: null,
+    });
+
+    const { createApp } = await import('../../src/app.js');
+    const app = await createApp();
+    await app.ready();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/auth/callback/google?code=provider-code&state=state-token',
+      cookies: {
+        [SOCIAL_STATE_COOKIE_NAME]: app.signCookie(TEST_NONCE),
+        [SOCIAL_INVITE_COOKIE_NAME]: app.signCookie('invite-capability'),
+      },
+    });
+
+    expect(res.statusCode).toBe(302);
+    expect(res.headers.location).toBe(
+      'https://client.example.com/oauth/callback?error=auth_failed',
+    );
+    expect(loginWithSocialProfileMock).not.toHaveBeenCalled();
+    expect(acceptTeamInviteTokenForSocialLoginMock).not.toHaveBeenCalled();
 
     await app.close();
   });

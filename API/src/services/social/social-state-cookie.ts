@@ -7,6 +7,7 @@ import { SOCIAL_STATE_TTL_MS } from '../../config/constants.js';
 // browser that initiated the flow. Scoped to /auth so it survives the provider's
 // top-level redirect back to /auth/callback but is not sent to unrelated paths.
 export const SOCIAL_STATE_COOKIE_NAME = 'uoa_social_state';
+export const SOCIAL_INVITE_COOKIE_NAME = 'uoa_social_invite';
 
 const COOKIE_PATH = '/auth';
 
@@ -43,6 +44,28 @@ export function setSocialStateCookie(reply: FastifyReply, nonce: string): void {
 // Single-use: always clear the cookie once the callback has consumed it.
 export function clearSocialStateCookie(reply: FastifyReply): void {
   reply.clearCookie(SOCIAL_STATE_COOKIE_NAME, { ...cookieBaseOptions(), maxAge: 0 });
+}
+
+/** Stores an invite capability only in the browser's signed, HttpOnly cookie. */
+export function setSocialInviteCookie(reply: FastifyReply, token: string): void {
+  reply.setCookie(SOCIAL_INVITE_COOKIE_NAME, token, {
+    ...cookieBaseOptions(),
+    maxAge: Math.floor(SOCIAL_STATE_TTL_MS / 1000),
+  });
+}
+
+export function readSocialInviteCookie(request: FastifyRequest): string | null {
+  const raw = request.cookies?.[SOCIAL_INVITE_COOKIE_NAME];
+  if (typeof raw !== 'string' || raw.length === 0) return null;
+
+  const unsigned = request.unsignCookie(raw);
+  return unsigned.valid && typeof unsigned.value === 'string' && unsigned.value.length > 0
+    ? unsigned.value
+    : null;
+}
+
+export function clearSocialInviteCookie(reply: FastifyReply): void {
+  reply.clearCookie(SOCIAL_INVITE_COOKIE_NAME, { ...cookieBaseOptions(), maxAge: 0 });
 }
 
 function constantTimeEqual(actual: string, expected: string): boolean {

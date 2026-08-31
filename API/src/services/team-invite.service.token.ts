@@ -6,6 +6,8 @@ import { getPrisma } from '../db/prisma.js';
 import { runInTransaction } from '../db/tenant-context.js';
 import { AppError } from '../utils/errors.js';
 import { hashEmailToken } from '../utils/verification-token.js';
+import { buildUserIdentity } from './user-scope.service.js';
+import { acceptTeamInviteWithinTransaction } from './team-invite.service.acceptance.js';
 import {
   lockAndReadVerificationTokenEpoch,
   readVerificationTokenEpoch,
@@ -181,6 +183,87 @@ export async function getTeamInviteLandingData(
     teamName: teamInvite.team.name,
     organisationName: teamInvite.org.name,
   };
+}
+
+/**
+ * Consumes an invitation capability after a social provider has verified the
+ * invitee's address. The caller holds the surrounding admin transaction: user
+ * creation, exact-email validation, invite acceptance, and token consumption
+ * therefore commit together.
+ *
+ * A pre-user token normally requires its userKey to remain absent. Social
+ * registration necessarily creates that row first, so this path instead binds
+ * the fresh identity directly to the token's exact userKey and invited email.
+ */
+export async function acceptTeamInviteTokenForSocialLogin(
+  params: {
+    token: string;
+    configUrl: string;
+    config: ClientConfig;
+    userId: string;
+    credentialEpoch: number;
+    email: string;
+  },
+  deps?: InviteTokenDeps,
+): Promise<{ orgId: string; teamId: string }> {
+  const env = deps?.env ?? getEnv();
+  if (!env.DATABASE_URL) {
+    throw new AppError('BAD_REQUEST', 400);
+  }
+
+  const prisma = deps?.prisma ?? getPrisma();
+  const now = deps?.now ? deps.now() : new Date();
+  const sharedSecret = deps?.sharedSecret ?? requireEnv('SHARED_SECRET').SHARED_SECRET;
+  const row = await findInviteToken({ prisma, token: params.token, sharedSecret });
+  if (!row) {
+    throw new AppError('BAD_REQUEST', 400);
+  }
+
+  assertInviteTokenValid({ row, configUrl: params.configUrl, now });
+  const teamInvite = requireTeamInvite(row);
+  const normalizedEmail = params.email.trim().toLowerCase();
+  if (teamInvite.email.toLowerCase() !== normalizedEmail) {
+    throw new AppError('BAD_REQUEST', 400);
+  }
+
+  const identity = buildUserIdentity({
+    userScope: params.config.user_scope,
+    email: normalizedEmail,
+    domain: params.config.domain,
+  });
+  if (row.userKey !== identity.userKey) {
+    throw new AppError('BAD_REQUEST', 400);
+  }
+  if (
+    (row.userId !== null && row.userId !== params.userId) ||
+    (row.tokenVersion !== null && row.tokenVersion !== params.credentialEpoch)
+  ) {
+    throw new AppError('BAD_REQUEST', 400);
+  }
+
+  const workspace = await acceptTeamInviteWithinTransaction({
+    prisma,
+    teamInviteId: teamInvite.id,
+    userId: params.userId,
+    config: params.config,
+    now,
+  });
+  const consumed = await prisma.verificationToken.updateMany({
+    where: {
+      id: row.id,
+      usedAt: null,
+      expiresAt: { gt: now },
+    },
+    data: {
+      usedAt: now,
+      userId: params.userId,
+    },
+  });
+  if (consumed.count !== 1) {
+    throw new AppError('BAD_REQUEST', 400);
+  }
+
+  return workspace;
 }
 
 export async function declineTeamInviteByToken(

@@ -13,6 +13,7 @@ const signLoginSessionMock = vi.fn();
 const resolveTwoFaPolicyMock = vi.fn();
 const startTwoFactorSetupMock = vi.fn();
 const resolveProductWorkspaceBeforeTwoFaMock = vi.fn();
+const getTeamInviteLandingDataMock = vi.fn();
 
 let currentConfig: ClientConfig | null = null;
 const PKCE_QUERY =
@@ -33,6 +34,16 @@ vi.mock('../../src/services/auth-verify-email.service.js', () => ({
   validateVerifyEmailToken: (...args: unknown[]) => validateVerifyEmailTokenMock(...args),
   verifyEmailToken: (...args: unknown[]) => verifyEmailTokenMock(...args),
 }));
+
+vi.mock('../../src/services/team-invite.service.js', async () => {
+  const actual = await vi.importActual<typeof import('../../src/services/team-invite.service.js')>(
+    '../../src/services/team-invite.service.js',
+  );
+  return {
+    ...actual,
+    getTeamInviteLandingData: (...args: unknown[]) => getTeamInviteLandingDataMock(...args),
+  };
+});
 
 vi.mock('../../src/services/access-request-flow.service.js', async () => {
   const actual = await vi.importActual<
@@ -115,6 +126,7 @@ describe('POST /auth/verify-email — workspace chooser wiring (gap-fix B Task 1
       twoFaEnabled: false,
       acceptedInvite: null,
     });
+    getTeamInviteLandingDataMock.mockReset();
     finalizeAuthenticatedUserMock.mockReset();
     buildWorkspaceChoicesMock.mockReset();
     signLoginSessionMock.mockReset();
@@ -164,6 +176,32 @@ describe('POST /auth/verify-email — workspace chooser wiring (gap-fix B Task 1
     });
     expect(buildWorkspaceChoicesMock).not.toHaveBeenCalled();
     expect(signLoginSessionMock).not.toHaveBeenCalled();
+  });
+
+  it('consumes an invite-bound password token without PKCE and never issues an OAuth code', async () => {
+    getTeamInviteLandingDataMock.mockResolvedValue({ email: 'invitee@example.com' });
+    verifyEmailTokenMock.mockResolvedValue({
+      userId: 'user-1',
+      credentialEpoch: 0,
+      type: 'VERIFY_EMAIL_SET_PASSWORD',
+      twoFaEnabled: false,
+      acceptedInvite: { inviteId: 'invite-1', orgId: 'org-1', teamId: 'team-1' },
+    });
+
+    const { createApp } = await import('../../src/app.js');
+    const app = await createApp();
+    await app.ready();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/auth/verify-email?config_url=https%3A%2F%2Fclient.example.com%2Fauth-config',
+      payload: { token: 'invite-token-without-pkce', password: 'Abcdefgh' },
+    });
+    await app.close();
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ ok: true, invite_accepted: true });
+    expect(finalizeAuthenticatedUserMock).not.toHaveBeenCalled();
+    expect(buildWorkspaceChoicesMock).not.toHaveBeenCalled();
   });
 
   it('pre-binds the recognized product workspace before required email-link enrollment', async () => {

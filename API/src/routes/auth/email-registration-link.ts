@@ -6,6 +6,7 @@ import { requireEnv } from '../../config/env.js';
 import { runInTransaction } from '../../db/tenant-context.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
 import { validateRegistrationEmailLandingToken } from '../../services/auth-registration-email-link.service.js';
+import { getTeamInviteLandingData } from '../../services/team-invite.service.js';
 import { parseRequestAccessFlag } from '../../services/access-request-flow.service.js';
 import {
   renderAuthEntrypointHtml,
@@ -136,6 +137,29 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
       }
 
       if (!pkce) {
+        if (type === 'VERIFY_EMAIL_SET_PASSWORD') {
+          try {
+            const invite = await getTeamInviteLandingData(
+              { token, configUrl, config },
+              { prisma: request.adminDb },
+            );
+            const html = await renderAuthEntrypointHtml({
+              config,
+              configUrl,
+              cspNonce: reply.cspNonce?.script,
+              requestUrl: buildInviteRegistrationAuthUrl(configUrl, token, invite.email),
+            });
+            sendAuthHtml(reply, html);
+            return;
+          } catch (err) {
+            // A non-invite registration link reaches this branch too. It keeps the historic
+            // login restart, while unexpected infrastructure failures still surface normally.
+            if (!isAppError(err)) {
+              throw err;
+            }
+          }
+        }
+
         request.log.info('email link omitted PKCE challenge; rendering login restart');
         const html = await renderAuthEntrypointHtml({
           config,
@@ -342,6 +366,14 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
       sendAuthHtml(reply, html);
     },
   );
+}
+
+function buildInviteRegistrationAuthUrl(configUrl: string, token: string, email: string): string {
+  const params = new URLSearchParams();
+  params.set('config_url', configUrl);
+  params.set('invite_token', token);
+  params.set('invite_email', email);
+  return `/auth?${params.toString()}`;
 }
 
 function buildAuthUrl(

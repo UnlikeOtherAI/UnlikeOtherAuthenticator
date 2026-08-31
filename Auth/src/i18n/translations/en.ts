@@ -3,6 +3,8 @@ export const en = {
   'auth.register.title': 'Create your account',
   'auth.resetPassword.title': 'Reset your password',
   'auth.setPassword.title': 'Set your password',
+  'auth.invite.title': 'Create your account',
+  'auth.inviteAccepted.title': 'Invitation accepted',
   'auth.accessRequested.title': 'Access request submitted',
   'auth.signedIn.title': 'You’re signed in',
   'auth.twoFactorVerify.title': 'Verify two-factor code',
@@ -32,6 +34,8 @@ export const en = {
     'This link is invalid or has expired. Request a new one and try again.',
   'form.setPassword.mismatch': 'Passwords do not match.',
   'form.setPassword.success': 'Password reset successful. You can now sign in.',
+  'form.invite.submit': 'Create account',
+  'form.invite.error': 'This invitation is invalid or has expired. Ask for a new invitation.',
 
   // Used by registration and reset-password flows; must remain generic.
   'message.instructionsSent': 'We sent instructions to your email',
@@ -40,6 +44,7 @@ export const en = {
   'message.accessRequested':
     'Your request has been sent to the team administrators. You can close this window and wait for approval.',
   'message.signedIn': 'Return to the app to finish signing in. You can close this window.',
+  'message.inviteAccepted': 'Your account has been created and you have joined the team. You can close this window.',
   'action.openApp': 'Open the app',
 
   // Navigation links between auth views.

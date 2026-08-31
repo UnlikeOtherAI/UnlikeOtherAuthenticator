@@ -257,14 +257,15 @@ export const authEndpoints: EndpointSchema[] = [
     method: 'POST',
     path: '/auth/verify-email',
     description:
-      'Complete email verification (registration). For a non-invite token with config.login_flow.workspace_selection="auto", 2+ ACTIVE teams, a pending invite, or zero teams with can_create_org return the workspace chooser. Exactly one ACTIVE team/no invite is selected server-side and carried through applicable 2FA into the authorization code and active claim. An invite-bound token is already an explicit selection: its accepted orgId/teamId bypasses the chooser, still enforces 2FA, and is preserved through code/access/refresh rotation. workspace_selection="off" leaves legacy clients unscoped, but a recognized product pre-binds one exact workspace before 2FA without showing the chooser.',
+      'Complete email verification (registration). For a non-invite token with config.login_flow.workspace_selection="auto", 2+ ACTIVE teams, a pending invite, or zero teams with can_create_org return the workspace chooser. Exactly one ACTIVE team/no invite is selected server-side and carried through applicable 2FA into the authorization code and active claim. An invite-bound token is already an explicit selection: its accepted orgId/teamId bypasses the chooser, still enforces 2FA, and is preserved through code/access/refresh rotation. A direct email invitation may omit PKCE: it accepts only its live token and returns invite_accepted without issuing an OAuth code. workspace_selection="off" leaves legacy clients unscoped, but a recognized product pre-binds one exact workspace before 2FA without showing the chooser.',
     auth: 'config_url query param',
     query: {
       state:
         'string (optional, ≤2048) — opaque relying-party CSRF value. UOA does not interpret it; it is bound to this login (login_token, 2FA bridge, social state) and echoed verbatim beside `code` on the final redirect, and beside `error` on a failed social callback. Later hops must not re-supply it: a hop presenting a different value is refused.',
       redirect_url: 'string (optional)',
-      code_challenge: 'string (required) — exactly 43-char PKCE S256 challenge',
-      code_challenge_method: '"S256" (required)',
+      code_challenge:
+        'string (required except a direct team invitation) — exactly 43-char PKCE S256 challenge',
+      code_challenge_method: '"S256" (required whenever code_challenge is sent)',
       request_access: 'string (optional) — auto-grant or create a pending access request',
     },
     body: {
@@ -273,6 +274,8 @@ export const authEndpoints: EndpointSchema[] = [
     },
     response: {
       ok: 'true (workspace_selection "off"/skipped branch only — finalizes immediately)',
+      invite_accepted:
+        'true only for a direct live team invitation without PKCE; no authorization code is issued',
       code: 'authorization code (workspace_selection "off"/skipped branch only)',
       redirect_to: 'redirect URL (workspace_selection "off"/skipped branch only)',
       access_request_status: '"pending" when request_access created a pending access request',
@@ -341,7 +344,7 @@ export const authEndpoints: EndpointSchema[] = [
     method: 'GET',
     path: '/auth/email/link',
     description:
-      'Email registration/login link landing. For a non-invite link with config.login_flow.workspace_selection="auto", 2+ ACTIVE teams, a pending invite, or zero teams with can_create_org redirect to the workspace chooser; exactly one ACTIVE team/no invite is selected server-side and carried through applicable 2FA into the code. Invite-bound links carry the accepted invite orgId/teamId through the same 2FA/code/token pipeline without showing the chooser. workspace_selection="off" leaves legacy clients unscoped, but a recognized product pre-binds one exact workspace before 2FA without showing the chooser.',
+      'Email registration/login link landing. A direct password invitation without PKCE opens account creation with the invitation email fixed in a read-only field; the invitation token, not that field, remains authoritative. For a non-invite link with config.login_flow.workspace_selection="auto", 2+ ACTIVE teams, a pending invite, or zero teams with can_create_org redirect to the workspace chooser; exactly one ACTIVE team/no invite is selected server-side and carried through applicable 2FA into the code. Invite-bound links carry the accepted invite orgId/teamId through the same 2FA/code/token pipeline without showing the chooser. workspace_selection="off" leaves legacy clients unscoped, but a recognized product pre-binds one exact workspace before 2FA without showing the chooser.',
     query: {
       state:
         'string (optional, ≤2048) — opaque relying-party CSRF value. UOA does not interpret it; it is bound to this login (login_token, 2FA bridge, social state) and echoed verbatim beside `code` on the final redirect, and beside `error` on a failed social callback. Later hops must not re-supply it: a hop presenting a different value is refused.',
@@ -389,23 +392,26 @@ export const authEndpoints: EndpointSchema[] = [
     method: 'GET',
     path: '/auth/social/:provider',
     description:
-      'Initiate social OAuth flow (google, facebook, github, linkedin, apple). Sets a signed, HttpOnly `uoa_social_state` cookie (SameSite=Lax, Path=/auth) that binds the OAuth `state` to the browser; the cookie must be returned to /auth/callback.',
+      'Initiate social OAuth flow (google, facebook, github, linkedin, apple). Sets a signed, HttpOnly `uoa_social_state` cookie (SameSite=Lax, Path=/auth) that binds the OAuth `state` to the browser; the cookie must be returned to /auth/callback. A direct team invitation may use invite_token without PKCE; its raw capability is retained only in a second signed HttpOnly cookie and never placed in provider-visible state.',
     query: {
       state:
         'string (optional, ≤2048) — opaque relying-party CSRF value. UOA does not interpret it; it is bound to this login (login_token, 2FA bridge, social state) and echoed verbatim beside `code` on the final redirect, and beside `error` on a failed social callback. Later hops must not re-supply it: a hop presenting a different value is refused.',
       config_url: 'string (required)',
       redirect_url: 'string (optional)',
-      code_challenge: 'string (required) — exactly 43-char PKCE S256 challenge',
-      code_challenge_method: '"S256" (required)',
+      code_challenge:
+        'string (required except a direct live team invitation) — exactly 43-char PKCE S256 challenge',
+      code_challenge_method: '"S256" (required whenever code_challenge is sent)',
       request_access:
         'string (optional) — routes social auth through configured-team access policy',
+      invite_token:
+        'string (optional) — direct team invitation capability. The provider-verified email must exactly match the invite email; otherwise authentication is rejected.',
     },
   },
   {
     method: 'GET',
     path: '/auth/callback/:provider',
     description:
-      'OAuth provider callback. Requires the signed `uoa_social_state` cookie set at /auth/social to match the nonce embedded in `state` (login-CSRF protection); the cookie is single-use and cleared on consume. With workspace_selection="auto", workspace is resolved before 2FA: 2+ ACTIVE teams, any pending invite, or zero teams with can_create_org redirect with a login_token chooser bridge, while exactly one ACTIVE team/no invite is selected server-side and its exact orgId/teamId survives any 2FA challenge or enrollment token into the authorization code and active token claim. workspace_selection="off" leaves legacy clients unscoped; recognized products suppress the chooser but pre-bind their exact workspace before 2FA.',
+      'OAuth provider callback. Requires the signed `uoa_social_state` cookie set at /auth/social to match the nonce embedded in `state` (login-CSRF protection); the cookie is single-use and cleared on consume. A direct invitation also requires its signed HttpOnly invite-capability cookie and an exact match between its live invitation email and the provider-verified email; it accepts the invite without issuing an OAuth code. With workspace_selection="auto", workspace is resolved before 2FA: 2+ ACTIVE teams, any pending invite, or zero teams with can_create_org redirect with a login_token chooser bridge, while exactly one ACTIVE team/no invite is selected server-side and its exact orgId/teamId survives any 2FA challenge or enrollment token into the authorization code and active token claim. workspace_selection="off" leaves legacy clients unscoped; recognized products suppress the chooser but pre-bind their exact workspace before 2FA.',
   },
   {
     method: 'GET',

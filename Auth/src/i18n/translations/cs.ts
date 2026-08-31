@@ -5,6 +5,8 @@ export const cs = {
   'auth.register.title': 'Vytvoření účtu',
   'auth.resetPassword.title': 'Obnovení hesla',
   'auth.setPassword.title': 'Nastavení hesla',
+  'auth.invite.title': 'Vytvořte si účet',
+  'auth.inviteAccepted.title': 'Pozvánka přijata',
   'auth.accessRequested.title': 'Žádost o přístup byla odeslána',
   'auth.signedIn.title': 'Jste přihlášeni',
   'auth.twoFactorVerify.title': 'Ověření dvoufaktorovým kódem',
@@ -34,6 +36,8 @@ export const cs = {
     'Tento odkaz je neplatný nebo jeho platnost vypršela. Vyžádejte si nový a zkuste to znovu.',
   'form.setPassword.mismatch': 'Hesla se neshodují.',
   'form.setPassword.success': 'Heslo bylo úspěšně obnoveno. Nyní se můžete přihlásit.',
+  'form.invite.submit': 'Vytvořit účet',
+  'form.invite.error': 'Tato pozvánka je neplatná nebo její platnost vypršela. Požádejte o novou pozvánku.',
 
   'message.instructionsSent': 'Poslali jsme Vám pokyny na e-mail',
   'message.emailAlreadyRegistered':
@@ -41,6 +45,7 @@ export const cs = {
   'message.accessRequested':
     'Vaše žádost byla odeslána správcům týmu. Toto okno můžete zavřít a počkat na schválení.',
   'message.signedIn': 'Vraťte se do aplikace a dokončete přihlášení. Toto okno můžete zavřít.',
+  'message.inviteAccepted': 'Váš účet byl vytvořen a připojili jste se k týmu. Toto okno můžete zavřít.',
   'action.openApp': 'Otevřít aplikaci',
 
   'nav.forgotPassword': 'Zapomněli jste heslo?',

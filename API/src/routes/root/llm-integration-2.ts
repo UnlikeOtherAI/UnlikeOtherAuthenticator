@@ -88,6 +88,19 @@ can be retried; \`session-choices\` and invite decline validate but do not consu
    remains held through commit, so concurrent first use from different products reuses one
    canonical workspace; an issuance failure rolls the workspace and code back together while the
    one-time email token remains consumed.
+
+### Direct email invitations
+
+A personal team-invitation link is an account and membership flow, not a relying-party OAuth
+initiation. A new password invite opens account creation with the invited email prefilled and
+read-only. The server consumes the invitation capability itself, so a modified browser field cannot
+change the account that is created. When an enabled social provider is selected, UOA keeps the raw
+invitation capability in a signed, HttpOnly, short-lived cookie; provider-visible OAuth \`state\`
+contains only a signed non-secret marker. The callback accepts the invitation only after the
+provider returns a verified email that matches the invitation email exactly (case-insensitively).
+Any mismatch, expired, used, or revoked invitation is rejected generically. Direct invitation
+completion returns to the hosted Auth UI without issuing an OAuth authorization code; a normal
+PKCE-bound product flow continues to use the regular authorization-code path.
    A \`LOGIN_LINK\` resolves only the existing \`userId\` stored when it was issued; a missing,
    deleted, or identity-mismatched account fails closed and can never become new-user registration.
    At code exchange UOA re-resolves the current exact-workspace policy and enrollment state. The

@@ -9,6 +9,7 @@ const validateRegistrationEmailLandingTokenMock = vi.fn();
 const renderAuthEntrypointHtmlMock = vi.fn();
 const finalizeAuthenticatedUserMock = vi.fn();
 const verifyEmailTokenMock = vi.fn();
+const getTeamInviteLandingDataMock = vi.fn();
 // Gap-fix B Task 1 (design §4.3): magic-link → chooser wiring.
 const buildWorkspaceChoicesMock = vi.fn();
 const signLoginSessionMock = vi.fn();
@@ -52,6 +53,16 @@ vi.mock('../../src/services/access-request-flow.service.js', async () => {
 vi.mock('../../src/services/auth-verify-email.service.js', () => ({
   verifyEmailToken: (...args: unknown[]) => verifyEmailTokenMock(...args),
 }));
+
+vi.mock('../../src/services/team-invite.service.js', async () => {
+  const actual = await vi.importActual<typeof import('../../src/services/team-invite.service.js')>(
+    '../../src/services/team-invite.service.js',
+  );
+  return {
+    ...actual,
+    getTeamInviteLandingData: (...args: unknown[]) => getTeamInviteLandingDataMock(...args),
+  };
+});
 
 vi.mock('../../src/services/login-session.service.js', () => ({
   signLoginSession: (...args: unknown[]) => signLoginSessionMock(...args),
@@ -137,6 +148,7 @@ describe('GET /auth/email/link', () => {
     renderAuthEntrypointHtmlMock.mockReset();
     finalizeAuthenticatedUserMock.mockReset();
     verifyEmailTokenMock.mockReset();
+    getTeamInviteLandingDataMock.mockReset();
     buildWorkspaceChoicesMock.mockReset();
     signLoginSessionMock.mockReset();
     resolveProductWorkspaceBeforeTwoFaMock.mockReset().mockResolvedValue(null);
@@ -215,6 +227,37 @@ describe('GET /auth/email/link', () => {
     );
     expect(verifyEmailTokenMock).not.toHaveBeenCalled();
     expect(finalizeAuthenticatedUserMock).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('renders the locked-email invite account screen when an invitation has no PKCE challenge', async () => {
+    validateRegistrationEmailLandingTokenMock.mockResolvedValue('VERIFY_EMAIL_SET_PASSWORD');
+    getTeamInviteLandingDataMock.mockResolvedValue({ email: 'invitee@example.com' });
+
+    const { createApp } = await import('../../src/app.js');
+    const app = await createApp();
+    await app.ready();
+
+    const res = await app.inject({
+      method: 'GET',
+      url:
+        '/auth/email/link?' +
+        'config_url=https%3A%2F%2Fclient.example.com%2Fauth-config' +
+        '&token=invite-token-without-pkce',
+      headers: { accept: 'text/html' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toBe('<html>login</html>');
+    expect(renderAuthEntrypointHtmlMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestUrl:
+          '/auth?config_url=https%3A%2F%2Fclient.example.com%2Fauth-config' +
+          '&invite_token=invite-token-without-pkce&invite_email=invitee%40example.com',
+      }),
+    );
+    expect(verifyEmailTokenMock).not.toHaveBeenCalled();
 
     await app.close();
   });

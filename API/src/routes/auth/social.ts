@@ -12,13 +12,15 @@ import { assertSocialProviderAllowed } from '../../services/social/index.js';
 import { signSocialState } from '../../services/social/social-state.service.js';
 import {
   generateSocialStateNonce,
+  setSocialInviteCookie,
   setSocialStateCookie,
 } from '../../services/social/social-state-cookie.js';
+import { getTeamInviteLandingData } from '../../services/team-invite.service.js';
 import type { SocialProviderKey } from '../../services/social/provider.base.js';
 import { parseRequestAccessFlag } from '../../services/access-request-flow.service.js';
 import { selectRedirectUrl } from '../../services/authorization-code.service.js';
 import { AppError } from '../../utils/errors.js';
-import { parseRequiredPkceChallenge } from '../../utils/pkce.js';
+import { parsePkceChallenge } from '../../utils/pkce.js';
 import { configFetchRateLimiter } from './rate-limit-keys.js';
 
 const ParamsSchema = z.object({
@@ -33,6 +35,7 @@ const QuerySchema = z
     code_challenge: z.string().min(1).max(256).optional(),
     code_challenge_method: z.string().min(1).max(32).optional(),
     request_access: z.string().max(16).optional(),
+    invite_token: z.string().min(1).max(4096).optional(),
     // Opaque relying-party CSRF value. UOA does not interpret it; it is bound to
     // this login and echoed verbatim on the final redirect.
     state: z.string().min(1).max(2048).optional(),
@@ -70,6 +73,7 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
         code_challenge,
         code_challenge_method,
         request_access,
+        invite_token,
         state: relyingPartyState,
       } = QuerySchema.parse(request.query);
 
@@ -82,10 +86,19 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
         allowedRedirectUrls: config.redirect_urls,
         requestedRedirectUrl: redirect_url ?? redirect_uri,
       });
-      const pkce = parseRequiredPkceChallenge({
+      const pkce = parsePkceChallenge({
         codeChallenge: code_challenge,
         codeChallengeMethod: code_challenge_method,
       });
+      const invite = invite_token
+        ? await getTeamInviteLandingData(
+            { token: invite_token, configUrl: request.configUrl, config },
+            { prisma: request.adminDb },
+          )
+        : null;
+      if (!pkce && !invite) {
+        throw new AppError('BAD_REQUEST', 400, 'INVALID_PKCE_CHALLENGE');
+      }
 
       const env = getEnv();
 
@@ -107,14 +120,18 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
           redirectUrl,
           requestAccess: parseRequestAccessFlag(request_access),
           state: relyingPartyState,
-          codeChallenge: pkce.codeChallenge,
-          codeChallengeMethod: pkce.codeChallengeMethod,
+          codeChallenge: pkce?.codeChallenge,
+          codeChallengeMethod: pkce?.codeChallengeMethod,
+          teamInvite: Boolean(invite),
           nonce,
           sharedSecret: SHARED_SECRET,
           audience: authServiceIdentifier,
           baseUrlForIssuer: baseUrl,
         });
         setSocialStateCookie(reply, nonce);
+        if (invite_token) {
+          setSocialInviteCookie(reply, invite_token);
+        }
         return state;
       };
 

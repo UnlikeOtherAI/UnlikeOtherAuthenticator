@@ -10,6 +10,7 @@ import {
   validateVerifyEmailToken,
   verifyEmailToken,
 } from '../../services/auth-verify-email.service.js';
+import { getTeamInviteLandingData } from '../../services/team-invite.service.js';
 import {
   buildWorkspaceChoices,
   resolveAutoSelectedWorkspace,
@@ -24,7 +25,7 @@ import { resolveProductWorkspaceBeforeTwoFa } from '../../services/required-work
 import { selectRedirectUrl } from '../../services/authorization-code.service.js';
 import { finalizeWithTwoFaPolicy } from '../../services/workspace-finalize.service.js';
 import { lockProductWorkspacePolicyShared } from '../../services/product-workspace-policy-lock.service.js';
-import { parseRequiredPkceChallenge } from '../../utils/pkce.js';
+import { parsePkceChallenge } from '../../utils/pkce.js';
 import { tokenConsumeRateLimiter } from './rate-limit-keys.js';
 
 const BodySchema = z
@@ -59,15 +60,23 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
       const { token, password } = BodySchema.parse(request.body);
       const { redirect_url, code_challenge, code_challenge_method, request_access, state } =
         QuerySchema.parse(request.query);
-      const pkce = parseRequiredPkceChallenge({
-        codeChallenge: code_challenge,
-        codeChallengeMethod: code_challenge_method,
-      });
-
       const config = request.config;
       const configUrl = request.configUrl;
       if (!config || !configUrl) {
         throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
+      }
+
+      const pkce = parsePkceChallenge({
+        codeChallenge: code_challenge,
+        codeChallengeMethod: code_challenge_method,
+      });
+      if (!pkce) {
+        // Only a live invitation may create an account outside an OAuth initiation. Standard
+        // registration links still require PKCE before their token can be consumed.
+        await getTeamInviteLandingData(
+          { token, configUrl, config },
+          { prisma: request.adminDb },
+        );
       }
 
       const tokenType = await validateVerifyEmailToken(
@@ -93,6 +102,14 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
           },
           { prisma: request.adminDb },
         );
+
+      if (!pkce) {
+        if (!acceptedInvite) {
+          throw new AppError('BAD_REQUEST', 400, 'INVALID_TOKEN');
+        }
+        reply.status(200).send({ ok: true, invite_accepted: true });
+        return;
+      }
 
       const redirectUrl = selectRedirectUrl({
         allowedRedirectUrls: config.redirect_urls,

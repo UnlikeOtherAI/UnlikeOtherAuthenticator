@@ -29,9 +29,15 @@ import type { SocialProfile } from '../../services/social/provider.base.js';
 import { loginWithSocialProfile } from '../../services/social/social-login.service.js';
 import { verifySocialState } from '../../services/social/social-state.service.js';
 import {
+  clearSocialInviteCookie,
   clearSocialStateCookie,
+  readSocialInviteCookie,
   socialStateCookieMatches,
 } from '../../services/social/social-state-cookie.js';
+import {
+  acceptTeamInviteTokenForSocialLogin,
+  getTeamInviteLandingData,
+} from '../../services/team-invite.service.js';
 import { setSocialCallbackDebugContext } from '../../services/auth-debug-page.service.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
 import { lockProductWorkspacePolicyShared } from '../../services/product-workspace-policy-lock.service.js';
@@ -129,8 +135,10 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
       // so it is single-use regardless of outcome, then reject (generically) on
       // any mismatch or missing/forged cookie.
       const nonceMatches = socialStateCookieMatches(request, socialState.nonce);
+      const inviteToken = socialState.team_invite ? readSocialInviteCookie(request) : null;
       clearSocialStateCookie(reply);
-      if (!nonceMatches) {
+      clearSocialInviteCookie(reply);
+      if (!nonceMatches || (socialState.team_invite && !inviteToken)) {
         throw new AppError('BAD_REQUEST', 400, 'INVALID_SOCIAL_STATE');
       }
 
@@ -256,6 +264,19 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
           return { kind: 'auth_failed' as const };
         }
 
+        // Validate the invitation while its pre-user epoch proof is still true. A newly created
+        // social identity intentionally makes that proof inapplicable afterwards; the consume
+        // helper below binds the verified social email and resulting user row instead.
+        const invite = inviteToken
+          ? await getTeamInviteLandingData(
+              { token: inviteToken, configUrl, config },
+              { prisma },
+            )
+          : null;
+        if (invite && invite.email.toLowerCase() !== profile.email.trim().toLowerCase()) {
+          return { kind: 'auth_failed' as const };
+        }
+
         const socialLoginResult = await loginWithSocialProfile(
           {
             profile,
@@ -265,6 +286,8 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
           },
           {
             prisma,
+            allowInviteRegistration: Boolean(invite),
+            skipAutoPlacement: Boolean(invite),
             beforeExistingUserUpdate: async (userId) =>
               lockRefreshSessionUserDomain({ userId, domain: config.domain }, { prisma }),
           },
@@ -301,8 +324,49 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         );
         const rememberMe = config.session?.remember_me_default ?? true;
 
-        let autoSelectedWorkspace: AutoSelectedWorkspace | null = null;
-        if (config.login_flow?.workspace_selection === 'auto') {
+        const acceptedInvite = inviteToken
+          ? await acceptTeamInviteTokenForSocialLogin(
+              {
+                token: inviteToken,
+                configUrl,
+                config,
+                userId,
+                credentialEpoch,
+                email: profile.email,
+              },
+              { prisma },
+            )
+          : null;
+
+        // A direct invitation is an account/membership-creation flow, not a relying-party OAuth
+        // request. No PKCE challenge means there is no client-held verifier to bind an auth code
+        // to, so complete the invite without issuing a browser-visible authorization result.
+        if (acceptedInvite && !socialState.code_challenge) {
+          try {
+            await recordLoginLog(
+              {
+                userId,
+                email: profile.email,
+                domain: config.domain,
+                authMethod: provider,
+                ip: request.ip ?? null,
+                userAgent:
+                  typeof request.headers['user-agent'] === 'string'
+                    ? request.headers['user-agent']
+                    : null,
+              },
+              { prisma },
+            );
+          } catch (err) {
+            request.log.error({ err }, 'failed to record invite-bound social login log');
+          }
+          return { kind: 'invite_accepted' as const };
+        }
+
+        let autoSelectedWorkspace: AutoSelectedWorkspace | null = acceptedInvite
+          ? { orgId: acceptedInvite.orgId, teamId: acceptedInvite.teamId }
+          : null;
+        if (!acceptedInvite && config.login_flow?.workspace_selection === 'auto') {
           const choices = await buildWorkspaceChoices(
             { userId, config },
             {
@@ -399,6 +463,14 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
 
       if (outcome.kind === 'auth_failed') {
         redirectNoStore(reply, buildAuthFailedRedirectUrl(redirectUrl, socialState.state));
+        return;
+      }
+
+      if (outcome.kind === 'invite_accepted') {
+        const u = new URL(`${baseUrl}/auth`);
+        u.searchParams.set('config_url', configUrl);
+        u.searchParams.set('flow', 'invite_accepted');
+        redirectNoStore(reply, u.toString());
         return;
       }
 

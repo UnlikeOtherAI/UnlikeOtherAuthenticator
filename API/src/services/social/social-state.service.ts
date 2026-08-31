@@ -15,6 +15,10 @@ const SocialStateSchema = z.object({
   // value the final callback echoes.
   state: z.string().min(1).max(2048).optional(),
   request_access: z.boolean().optional(),
+  // The raw invitation capability remains in an HttpOnly cookie. This flag is
+  // enough to bind that cookie to the signed provider round trip without
+  // disclosing a redeemable token to the social provider.
+  team_invite: z.literal(true).optional(),
   code_challenge: z.string().min(1).optional(),
   code_challenge_method: z.literal('S256').optional(),
   // CSRF binding: random nonce mirrored in an HttpOnly cookie set on the
@@ -38,6 +42,7 @@ export async function signSocialState(params: {
   redirectUrl: string;
   state?: string;
   requestAccess?: boolean;
+  teamInvite?: boolean;
   codeChallenge?: string;
   codeChallengeMethod?: 'S256';
   nonce: string;
@@ -58,6 +63,7 @@ export async function signSocialState(params: {
       redirect_url: params.redirectUrl,
       state: params.state,
       request_access: params.requestAccess ?? false,
+      team_invite: params.teamInvite ? true : undefined,
       code_challenge: params.codeChallenge,
       code_challenge_method: params.codeChallengeMethod,
       nonce: params.nonce,

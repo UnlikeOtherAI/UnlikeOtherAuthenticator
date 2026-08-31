@@ -29,6 +29,10 @@ type SocialLoginDeps = {
   isPrincipalBannedForRegistration?: typeof isPrincipalBannedForRegistration;
   /** Callback-owned user lock taken after identity discovery but before an existing row update. */
   beforeExistingUserUpdate?: (userId: string) => Promise<void>;
+  /** A validated team invitation permits a new user even when public registration is disabled. */
+  allowInviteRegistration?: boolean;
+  /** Invite acceptance itself is the user's first placement, so skip automatic placement. */
+  skipAutoPlacement?: boolean;
 };
 
 type SocialLoginResult =
@@ -178,6 +182,7 @@ export async function loginWithSocialProfile(
     if (
       !allowedByPolicy &&
       !allowedByAdminAllowlist &&
+      !deps?.allowInviteRegistration &&
       !(await isAdminSuperuserBootstrap({ env, prisma, domain: params.config.domain, email }))
     ) {
       return { status: 'blocked' };
@@ -207,7 +212,7 @@ export async function loginWithSocialProfile(
     prisma: prisma as unknown as PrismaClient,
   });
 
-  if (createdUser) {
+  if (createdUser && !deps?.skipAutoPlacement) {
     try {
       await (deps?.placeUserInConfiguredOrganisation ?? placeUserInConfiguredOrganisation)({
         userId,

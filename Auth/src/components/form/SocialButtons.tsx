@@ -123,6 +123,7 @@ export function SocialButtons(props?: { showDivider?: boolean }): React.JSX.Elem
           popup.codeChallengeMethod,
           popup.requestAccess,
           popup.state,
+          popup.inviteToken,
         );
 
         return (
@@ -144,6 +145,7 @@ function buildSocialUrl(
   codeChallengeMethod: 'S256' | null,
   requestAccess: boolean,
   state: string | null,
+  inviteToken: string | null,
 ): string {
   // Auth UI runs inside the authenticator popup, so use relative URLs.
   const params = new URLSearchParams();
@@ -162,6 +164,9 @@ function buildSocialUrl(
   // and is echoed on the final redirect.
   if (state) {
     params.set('state', state);
+  }
+  if (inviteToken) {
+    params.set('invite_token', inviteToken);
   }
   return `/auth/social/${provider}?${params.toString()}`;
 }

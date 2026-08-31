@@ -46,6 +46,15 @@ describe('parsePopupQueryParams', () => {
     expect(parsed.loginToken).toBeNull();
   });
 
+  it('parses a locked-email invitation registration flow', () => {
+    const parsed = parsePopupQueryParams(
+      '?invite_token=invite-capability&invite_email=invitee%40example.com',
+    );
+
+    expect(parsed.inviteToken).toBe('invite-capability');
+    expect(parsed.inviteEmail).toBe('invitee@example.com');
+  });
+
   // Gap-fix B Task 2 (design §11.4): team_hint deep-link/switch preselect parsing.
   describe('team_hint', () => {
     it('parses a team_hint query param', () => {

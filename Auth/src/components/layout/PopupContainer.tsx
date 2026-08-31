@@ -4,6 +4,8 @@ import { PopupProvider, usePopup } from '../../hooks/use-popup.js';
 import { AccessRequestedPage } from '../../pages/AccessRequestedPage.js';
 import { CodeEntryPage } from '../../pages/CodeEntryPage.js';
 import { LoginPage } from '../../pages/LoginPage.js';
+import { InviteAcceptedPage } from '../../pages/InviteAcceptedPage.js';
+import { InviteRegistrationPage } from '../../pages/InviteRegistrationPage.js';
 import { RegisterPage } from '../../pages/RegisterPage.js';
 import { ResetPasswordPage } from '../../pages/ResetPasswordPage.js';
 import { SetPasswordPage } from '../../pages/SetPasswordPage.js';
@@ -35,6 +37,10 @@ function PopupContent(): React.JSX.Element {
       return <ResetPasswordPage />;
     case 'set-password':
       return <SetPasswordPage />;
+    case 'invite-registration':
+      return <InviteRegistrationPage />;
+    case 'invite-accepted':
+      return <InviteAcceptedPage />;
     case 'access-requested':
       return <AccessRequestedPage />;
     case 'signed-in':

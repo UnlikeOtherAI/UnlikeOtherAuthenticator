@@ -66,6 +66,29 @@ describe('social-state.service', () => {
     });
   });
 
+  it('binds an invitation marker without placing its redeemable token in state', async () => {
+    const jwt = await signSocialState({
+      provider: 'google',
+      configUrl: 'https://client.example.com/auth-config',
+      redirectUrl: 'https://client.example.com/oauth/callback',
+      teamInvite: true,
+      nonce: 'csrf-nonce-value',
+      sharedSecret: 'test-shared-secret-with-enough-length',
+      audience: 'uoa-auth-service',
+      baseUrlForIssuer: 'https://auth.example.com',
+    });
+
+    const state = await verifySocialState({
+      stateJwt: jwt,
+      sharedSecret: 'test-shared-secret-with-enough-length',
+      audience: 'uoa-auth-service',
+      issuer: SOCIAL_STATE_ISSUER,
+    });
+
+    expect(state.team_invite).toBe(true);
+    expect(JSON.stringify(state)).not.toContain('invite-token');
+  });
+
   it('rejects expired social state JWTs', async () => {
     const jwt = await signSocialState({
       provider: 'google',
