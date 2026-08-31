@@ -64,8 +64,8 @@ export type OrgAuditAction =
 export type OrgAuditLogPrisma = Pick<PrismaClient, 'orgAuditLog'>;
 
 /**
- * Provenance of an `/org/*` mutation that the product backend for a domain made
- * itself, rather than a signed-in user making it.
+ * Provenance of a trusted backend actor making an organisation mutation rather
+ * than a signed-in organisation member making it.
  *
  * `undefined` means user-initiated — the shape every request carrying an
  * `x-uoa-access-token` produces, and the only shape that existed before backend
@@ -73,16 +73,22 @@ export type OrgAuditLogPrisma = Pick<PrismaClient, 'orgAuditLog'>;
  * domain pairing alone (domain-hash bearer + verified config JWT, no user token);
  * see `middleware/org-role-guard.ts`.
  *
- * There is no acting user in that mode, so an audit row written for it carries
- * `actorUserId: null` and this provenance instead — "the backend for domain X did
- * this", never a user who did not act.
+ * There is no acting organisation member in either backend mode, so an audit row
+ * carries `actorUserId: null` and this provenance instead. Admin provenance names
+ * the verified platform superuser without treating them as an org member.
  */
-export type OrgActorProvenance = {
-  /** Which acceptance path produced this call. One value today, kept for forward-compat. */
-  via: 'domain_backend';
-  /** The verified config domain the calling backend was authenticated as. */
-  sourceDomain: string;
-};
+export type OrgActorProvenance =
+  | {
+      via: 'domain_backend';
+      /** The verified config domain the calling backend was authenticated as. */
+      sourceDomain: string;
+    }
+  | {
+      via: 'admin_superuser';
+      /** Stable UOA subject and display identity from the verified admin access token. */
+      userId: string;
+      email: string;
+    };
 
 export type WriteOrgAuditLogParams = {
   orgId: string;
@@ -91,22 +97,21 @@ export type WriteOrgAuditLogParams = {
   targetId: string;
   actorUserId?: string | null;
   /**
-   * Provenance of the domain backend that made this mutation itself. Undefined
-   * for every user-initiated mutation, which is every mutation that arrived with
-   * an `x-uoa-access-token`.
+   * Provenance of the trusted backend actor that made this mutation. Undefined
+   * for organisation-member mutations carrying an `x-uoa-access-token`.
    */
   actor?: OrgActorProvenance;
   metadata?: Prisma.InputJsonValue;
 };
 
 /**
- * Reserved `metadata` key holding backend-actor provenance.
+ * Reserved `metadata` key holding trusted backend-actor provenance.
  *
  * `OrgAuditLog` has no dedicated actor column and adding one would mean a schema
  * migration on a production auth service; `metadata` is already a `Json` column
  * with a `{}` default, so provenance rides there under one reserved key. Rows
- * without the key are user-initiated — including every row written before this
- * feature existed, which stays true without a backfill.
+ * without the key are organisation-member initiated — including every row
+ * written before backend provenance existed, which stays true without a backfill.
  */
 export const ORG_AUDIT_ACTOR_METADATA_KEY = 'uoa_actor';
 
@@ -115,6 +120,15 @@ function actorMetadata(
   actor: OrgActorProvenance | undefined,
 ): Record<string, Prisma.InputJsonValue> | undefined {
   if (!actor) return undefined;
+  if (actor.via === 'admin_superuser') {
+    return {
+      [ORG_AUDIT_ACTOR_METADATA_KEY]: {
+        via: actor.via,
+        user_id: actor.userId,
+        email: actor.email,
+      },
+    };
+  }
   return {
     [ORG_AUDIT_ACTOR_METADATA_KEY]: {
       via: actor.via,

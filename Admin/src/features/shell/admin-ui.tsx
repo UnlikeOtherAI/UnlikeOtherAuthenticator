@@ -4,6 +4,7 @@ type Confirmation = {
   title: string;
   body: string;
   onConfirm?: () => Promise<void> | void;
+  requiredText?: string;
 } | null;
 
 type AdminUiContextValue = {
@@ -13,7 +14,12 @@ type AdminUiContextValue = {
   closeConfirmation: () => void;
   closeSidebar: () => void;
   closeUser: () => void;
-  confirm: (title: string, body: string, onConfirm?: () => Promise<void> | void) => void;
+  confirm: (
+    title: string,
+    body: string,
+    onConfirm?: () => Promise<void> | void,
+    requiredText?: string,
+  ) => void;
   openUser: (userId: string) => void;
   toggleSidebar: () => void;
 };
@@ -33,7 +39,8 @@ export function AdminUiProvider({ children }: PropsWithChildren) {
       closeConfirmation: () => setConfirmation(null),
       closeSidebar: () => setIsSidebarOpen(false),
       closeUser: () => setSelectedUserId(null),
-      confirm: (title, body, onConfirm) => setConfirmation({ title, body, onConfirm }),
+      confirm: (title, body, onConfirm, requiredText) =>
+        setConfirmation({ title, body, onConfirm, requiredText }),
       openUser: setSelectedUserId,
       toggleSidebar: () => setIsSidebarOpen((current) => !current),
     }),

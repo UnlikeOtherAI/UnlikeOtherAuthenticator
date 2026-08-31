@@ -401,11 +401,11 @@ export async function getOrganisationMember(
 export async function auditOrg(
   params: {
     orgId: string;
-    /** The acting user, or `undefined` when the domain backend acted (see `actor`). */
+    /** The acting org member, or `undefined` when a trusted backend acted (see `actor`). */
     actorUserId: string | undefined;
     /**
-     * The domain backend that made this mutation itself. Undefined for
-     * user-initiated mutations.
+     * The trusted backend that made this mutation. Undefined for
+     * organisation-member mutations.
      */
     actor?: OrgActorProvenance;
     action: OrgAuditAction;
@@ -436,9 +436,8 @@ export async function auditOrg(
     // service. Log loudly and distinctly instead, so a dropped row is
     // greppable and alertable rather than invisible.
     //
-    // In backend mode this row is the ONLY record that the domain backend acted
-    // (there is no acting user to attribute it to), so treat a failure here as
-    // an operational incident, not noise.
+    // In backend mode this row is the ONLY record of the verified backend actor,
+    // so treat a failure here as an operational incident, not noise.
     try {
       getAppLogger().error(
         {
@@ -449,7 +448,12 @@ export async function auditOrg(
           targetId: params.targetId,
           actorUserId: params.actorUserId ?? null,
           actorVia: params.actor?.via ?? null,
-          actorSourceDomain: params.actor?.sourceDomain ?? null,
+          actorSourceDomain:
+            params.actor?.via === 'domain_backend' ? params.actor.sourceDomain : null,
+          actorAdminUserId:
+            params.actor?.via === 'admin_superuser' ? params.actor.userId : null,
+          actorAdminEmail:
+            params.actor?.via === 'admin_superuser' ? params.actor.email : null,
         },
         'org_audit_log_write_failed',
       );

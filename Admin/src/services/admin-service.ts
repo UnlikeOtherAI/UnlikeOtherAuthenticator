@@ -285,6 +285,10 @@ export const adminService = {
     }),
   getOrganisation: (orgId: string) =>
     api.get<AdminData['organisations'][number] | null>(`/internal/admin/organisations/${encodeURIComponent(orgId)}`),
+  deleteOrganisation: (orgId: string) =>
+    api.delete<{ deleted: boolean }>(
+      `/internal/admin/organisations/${encodeURIComponent(orgId)}`,
+    ),
   updateOrganisation: (orgId: string, input: LoginRestrictionInput & { twoFaPolicy?: OrganisationTwoFaPolicy }) =>
     api.patch<AdminData['organisations'][number] | null>(
       `/internal/admin/organisations/${encodeURIComponent(orgId)}`,

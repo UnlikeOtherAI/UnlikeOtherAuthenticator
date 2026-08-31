@@ -7,6 +7,8 @@ import {
   updateAdminOrganisation,
   updateAdminTeam,
 } from '../../../services/internal-admin.service.js';
+import type { OrgActorProvenance } from '../../../services/org-audit-log.service.js';
+import { deleteOrganisation } from '../../../services/organisation.service.organisation.js';
 import { parseOrganisationTwoFaPolicyInput } from '../../../services/twofactor-policy.service.js';
 import { normalizeDomain } from '../../../utils/domain.js';
 import { AppError } from '../../../utils/errors.js';
@@ -55,6 +57,14 @@ function requireActorEmail(request: { adminAccessTokenClaims?: { email: string }
   return email;
 }
 
+function requireAdminActor(request: {
+  adminAccessTokenClaims?: { userId: string; email: string };
+}): OrgActorProvenance {
+  const claims = request.adminAccessTokenClaims;
+  if (!claims) throw new AppError('INTERNAL', 500, 'MISSING_ADMIN_CLAIMS');
+  return { via: 'admin_superuser', userId: claims.userId, email: claims.email };
+}
+
 export function registerInternalAdminOrganisationRoutes(app: FastifyInstance): void {
   app.post('/internal/admin/organisations', adminRoute(objectSchema), async (request) => {
     const body = CreateOrganisationSchema.parse(request.body);
@@ -82,6 +92,15 @@ export function registerInternalAdminOrganisationRoutes(app: FastifyInstance): v
             : parseOrganisationTwoFaPolicyInput(body.twoFaPolicy),
         actorEmail: requireActorEmail(request),
       });
+    },
+  );
+
+  app.delete(
+    '/internal/admin/organisations/:orgId',
+    adminRoute(objectSchema),
+    async (request) => {
+      const { orgId } = OrgParamsSchema.parse(request.params);
+      return deleteOrganisation({ orgId, actor: requireAdminActor(request) });
     },
   );
 

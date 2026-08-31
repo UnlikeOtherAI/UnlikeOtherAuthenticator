@@ -38,6 +38,14 @@ describe('adminService', () => {
     });
   });
 
+  it('deletes an organisation through the encoded admin path', async () => {
+    api.delete.mockResolvedValue({ deleted: true });
+
+    await expect(adminService.deleteOrganisation('org/1')).resolves.toEqual({ deleted: true });
+
+    expect(api.delete).toHaveBeenCalledWith('/internal/admin/organisations/org%2F1');
+  });
+
   it('fetches the admin user avatar as image bytes from the encoded user path', async () => {
     const bytes = new Blob(['<svg />'], { type: 'image/svg+xml' });
     api.getBlob.mockResolvedValue(bytes);

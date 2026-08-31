@@ -13,10 +13,31 @@ export type ApiClient = {
 };
 
 export class ApiRequestError extends Error {
-  public constructor(public readonly status: number) {
+  public constructor(
+    public readonly status: number,
+    public readonly code?: string,
+  ) {
     super(`Request failed with HTTP ${status}`);
     this.name = 'ApiRequestError';
   }
+}
+
+async function readPublicErrorCode(response: Response): Promise<string | undefined> {
+  try {
+    const body = (await response.json()) as unknown;
+    if (
+      typeof body === 'object' &&
+      body !== null &&
+      'code' in body &&
+      typeof body.code === 'string'
+    ) {
+      return body.code;
+    }
+  } catch {
+    // Some endpoints return an empty or non-JSON error body. The HTTP status is
+    // still useful to callers in that case.
+  }
+  return undefined;
 }
 
 export function createApiClient(baseUrl = adminEnv.apiBaseUrl): ApiClient {
@@ -48,7 +69,7 @@ export function createApiClient(baseUrl = adminEnv.apiBaseUrl): ApiClient {
     });
 
     if (!response.ok) {
-      throw new ApiRequestError(response.status);
+      throw new ApiRequestError(response.status, await readPublicErrorCode(response));
     }
 
     return response;

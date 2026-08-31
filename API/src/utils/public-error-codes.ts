@@ -26,4 +26,7 @@ export const PRODUCTION_PUBLIC_ERROR_CODES = new Set([
   // their OWN memberships (never anyone else's), which is what lets every surface explain the
   // dead end instead of showing a mute 400.
   'ORG_CONFLICT_ON_DOMAIN',
+  // An authenticated platform superuser already knows the exact organisation. This code lets the
+  // Admin UI distinguish durable billing/commercial FK protection from an otherwise generic 400.
+  'ORG_HAS_PROTECTED_RECORDS',
 ]);

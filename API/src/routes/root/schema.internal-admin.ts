@@ -332,6 +332,18 @@ export const internalAdminEndpoints: EndpointSchema[] = [
     response: { 200: 'Updated admin organisation object or null', '401/403': authFailures },
   },
   {
+    method: 'DELETE',
+    path: '/internal/admin/organisations/:orgId',
+    description:
+      'Delete an organisation and its nested membership data; refuses organisations with protected billing/commercial records',
+    auth: adminAuth,
+    response: {
+      200: '{ deleted: true }',
+      400: 'Generic error envelope with code ORG_HAS_PROTECTED_RECORDS when protected records exist',
+      '401/403': authFailures,
+    },
+  },
+  {
     method: 'GET',
     path: '/internal/admin/organisations/:orgId/teams/:teamId',
     description: 'Get one team with its parent organisation',
