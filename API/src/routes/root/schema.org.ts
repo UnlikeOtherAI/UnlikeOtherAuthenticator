@@ -16,7 +16,7 @@ export const orgEndpoints: EndpointSchema[] = [
       'org.workspaces':
         'array — one entry per ACTIVE team membership on this domain, or every active membership when this product is explicitly mapped to `all_active_memberships`: { teamId, orgId, name, slug, orgName, iconUrl, avatarImageUrl, role, lastLoginAt }. Each entry carries its own orgId/orgName; do not assume it belongs to the singular legacy org.org_id. avatarImageUrl is the public /teams/:teamId/avatar form (never null, no credential needed). Entries are ordered lastLoginAt DESC with nulls last, then name ASC (the sidebar order). Cross-product entries have null `lastLoginAt`.',
       'org.pending_invites':
-        "array — the caller's pending invites on this domain: { inviteId, teamId, teamName, invitedBy, expiresAt }",
+        "array — the caller's pending invites on this domain: { inviteId, orgId, teamId, teamName, invitedBy, expiresAt }. orgId identifies the organisation to select after backend acceptance.",
     },
   },
   {

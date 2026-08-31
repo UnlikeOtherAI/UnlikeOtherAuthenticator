@@ -54,6 +54,21 @@ export const orgInvitationEndpoints: EndpointSchema[] = [
     auth: 'domain hash bearer token',
   },
   {
+    method: 'POST',
+    path: '/org/organisations/:orgId/teams/:teamId/invitations/:inviteId/accept',
+    description:
+      'Accept an exact team invitation for its invitee through backend mode. The product asserts the invitee\'s UOA user id; acceptance creates the ACTIVE org/team memberships and marks the invite accepted atomically. Repeating the exact accepted invite with the same userId is idempotent-success. Unknown or mismatched ids, email mismatch, revoked/expired/unapproved invitations, and every other refusal remain generic.',
+    auth: 'backend mode only: domain hash bearer token with no X-UOA-Access-Token; requires org_features.backend_org_management=true',
+    body: {
+      userId: 'string (required, trimmed, non-empty) — UOA user id of the invitee asserted by the product backend',
+    },
+    response: {
+      200: '{ ok: true, orgId, teamId }',
+      400: 'generic for invalid or mismatched invitation state; ORG_CONFLICT_ON_DOMAIN is public only when the user already has an ACTIVE membership in another organisation on this invitation origin domain, because retrying can never succeed',
+      401: 'ACCESS_TOKEN_NOT_ALLOWED when X-UOA-Access-Token is present; MISSING_ACCESS_TOKEN when backend_org_management is not enabled',
+    },
+  },
+  {
     method: 'DELETE',
     path: '/org/organisations/:orgId/teams/:teamId/invitations/:inviteId',
     description:

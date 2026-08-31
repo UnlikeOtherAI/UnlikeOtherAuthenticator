@@ -130,7 +130,7 @@ export async function acceptTeamInviteWithinTransaction(params: {
   });
 
   if (existingMembershipInDomain && existingMembershipInDomain.orgId !== invite.orgId) {
-    throw new AppError('BAD_REQUEST', 400);
+    throw new AppError('BAD_REQUEST', 400, 'ORG_CONFLICT_ON_DOMAIN');
   }
 
   if (!existingMembershipInDomain) {

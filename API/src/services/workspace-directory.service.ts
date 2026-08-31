@@ -31,6 +31,7 @@ export type WorkspaceEntry = {
 
 export type SidebarPendingInvite = {
   inviteId: string;
+  orgId: string;
   teamId: string;
   teamName: string;
   invitedBy: string | null;
@@ -202,6 +203,7 @@ export async function buildSidebarPendingInvites(
     },
     select: {
       id: true,
+      orgId: true,
       teamId: true,
       team: { select: { name: true } },
       invitedByName: true,
@@ -212,6 +214,7 @@ export async function buildSidebarPendingInvites(
 
   return invites.map((row) => ({
     inviteId: row.id,
+    orgId: row.orgId,
     teamId: row.teamId,
     teamName: row.team.name,
     invitedBy: row.invitedByName ?? row.invitedByEmail ?? null,

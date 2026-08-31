@@ -1,10 +1,12 @@
 import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
 
 import { asPrismaClient } from '../../db/tenant-context.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
 import requireDomainHashAuthForDomainQuery from '../../middleware/domain-hash-auth.js';
 import { requireOrgFeatures } from '../../middleware/org-features.js';
 import {
+  requireOrgBackendOnly,
   requireOrgRole,
   resolveActingUserClaims,
   resolveOrgAccessTokenHeader,
@@ -12,6 +14,7 @@ import {
 import { createRateLimiter } from '../../middleware/rate-limiter.js';
 import { setTenantContextFromRequest } from '../../plugins/tenant-context.plugin.js';
 import {
+  acceptTeamInviteWithinTransaction,
   createMemberInvite,
   createTeamInvites,
   getTeamInvite,
@@ -35,6 +38,12 @@ import {
   requireVerifiedConfig,
   tenantUserId,
 } from './team-route.shared.js';
+
+const AcceptTeamInviteBodySchema = z
+  .object({
+    userId: z.string().trim().min(1),
+  })
+  .strict();
 
 export function registerTeamInvitationRoutes(app: FastifyInstance): void {
   app.post(
@@ -221,6 +230,63 @@ export function registerTeamInvitationRoutes(app: FastifyInstance): void {
       );
 
       reply.status(200).send(invite);
+    },
+  );
+
+  app.post(
+    '/org/organisations/:orgId/teams/:teamId/invitations/:inviteId/accept',
+    {
+      preValidation: [
+        requireDomainHashAuthForDomainQuery(),
+        configVerifier,
+        parseDomainContextHook,
+        requireOrgFeatures,
+        requireOrgBackendOnly(),
+        createRateLimiter({
+          limit: 20,
+          windowMs: 60 * 60 * 1000,
+          keyBuilder: keyInviteTeamRateLimit,
+        }),
+      ],
+    },
+    async (request, reply) => {
+      const { domain } = parseDomainContext(request);
+      const config = requireVerifiedConfig(request);
+      const orgId = getOrgIdFromParams(request.params);
+      const teamId = getTeamIdFromParams(request.params);
+      const inviteId = getInviteIdFromParams(request.params);
+      const body = AcceptTeamInviteBodySchema.parse(request.body ?? {});
+
+      setTenantContextFromRequest(request, { orgId });
+      const accepted = await request.withTenantTx(async (tx) => {
+        const invite = await tx.teamInvite.findUnique({
+          where: { id: inviteId },
+          select: {
+            id: true,
+            orgId: true,
+            teamId: true,
+            org: { select: { domain: true } },
+          },
+        });
+        if (
+          !invite ||
+          invite.orgId !== orgId ||
+          invite.teamId !== teamId ||
+          normalizeDomain(invite.org.domain) !== domain
+        ) {
+          throw new AppError('BAD_REQUEST', 400);
+        }
+
+        return await acceptTeamInviteWithinTransaction({
+          prisma: tx,
+          teamInviteId: invite.id,
+          userId: body.userId,
+          config,
+          now: new Date(),
+        });
+      });
+
+      reply.status(200).send({ ok: true, ...accepted });
     },
   );
 

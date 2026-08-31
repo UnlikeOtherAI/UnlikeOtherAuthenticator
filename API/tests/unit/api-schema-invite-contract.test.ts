@@ -139,4 +139,32 @@ describe('/api invite response contract', () => {
     expect(bulk).toContain('including its id');
     expect(llmIntegrationMarkdown).toContain('results[i].invite.id');
   });
+
+  it('documents backend acceptance, its response, and the terminal org conflict code', () => {
+    const accept = endpoints.filter(
+      (endpoint) =>
+        endpoint.method === 'POST' &&
+        endpoint.path ===
+          '/org/organisations/:orgId/teams/:teamId/invitations/:inviteId/accept',
+    );
+    expect(accept).toHaveLength(1);
+    expect(accept[0].body).toHaveProperty('userId');
+    expect(accept[0].response?.[200]).toContain('orgId');
+    expect(accept[0].response?.[400]).toContain('ORG_CONFLICT_ON_DOMAIN');
+
+    expect(llmIntegrationMarkdown).toContain(
+      'POST /org/organisations/:orgId/teams/:teamId/invitations/:inviteId/accept',
+    );
+    expect(llmIntegrationMarkdown).toContain('ORG_CONFLICT_ON_DOMAIN');
+  });
+
+  it('documents orgId on the /org/me pending invitation contract', () => {
+    const orgMe = endpoints.find(
+      (endpoint) => endpoint.method === 'GET' && endpoint.path === '/org/me',
+    );
+    expect(orgMe?.response?.['org.pending_invites']).toContain('orgId');
+    expect(llmIntegrationMarkdown).toContain(
+      '{ "inviteId": "inv_…", "orgId": "org_…", "teamId": "team_3"',
+    );
+  });
 });

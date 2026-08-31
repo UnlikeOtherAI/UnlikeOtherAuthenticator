@@ -10,6 +10,7 @@ import {
 } from '../services/auth-debug-page.service.js';
 import { explainAuthProviderCode } from './error-auth-provider-explanations.js';
 import { isAppError } from './errors.js';
+import { PRODUCTION_PUBLIC_ERROR_CODES } from './public-error-codes.js';
 
 export type PublicErrorBody = {
   error: string;
@@ -27,23 +28,6 @@ type PublicExplanation = {
 
 const DEFAULT_HINTS = ['Check the request shape and server logs for more context.'];
 const GENERIC_PUBLIC_ERROR_BODY: PublicErrorBody = { error: PUBLIC_ERROR_MESSAGE };
-export const PRODUCTION_PUBLIC_ERROR_CODES = new Set([
-  'PASSWORD_POLICY_VIOLATION',
-  'MISSING_PASSWORD',
-  'INVALID_TOKEN',
-  'INVALID_TOKEN_TYPE',
-  'INVALID_TOKEN_CONFIG_URL',
-  'INVALID_TOKEN_USER',
-  'TOKEN_EXPIRED',
-  'TOKEN_ALREADY_USED',
-  'WORKSPACE_NOT_AVAILABLE',
-  'INTERACTION_REQUIRED',
-  'WORKSPACE_SWITCH_CONFLICT',
-  // Invitation revoke (DELETE .../invitations/:inviteId): products branch on the 409's code, so it
-  // must survive the production generic-body squash. Not an oracle — the caller was already
-  // authorized for the exact invite.
-  'INVITATION_ALREADY_ACCEPTED',
-]);
 
 function defaultExplanation(code: string, statusCode: number): PublicExplanation {
   if (statusCode === 400) {
