@@ -64,7 +64,7 @@ export const orgInvitationEndpoints: EndpointSchema[] = [
     },
     response: {
       200: '{ ok: true, orgId, teamId }',
-      400: 'generic for invalid or mismatched invitation state; ORG_CONFLICT_ON_DOMAIN is public only when the user already has an ACTIVE membership in another organisation on this invitation origin domain, because retrying can never succeed',
+      400: 'generic for invalid or mismatched invitation state',
       401: 'ACCESS_TOKEN_NOT_ALLOWED when X-UOA-Access-Token is present; MISSING_ACCESS_TOKEN when backend_org_management is not enabled',
     },
   },

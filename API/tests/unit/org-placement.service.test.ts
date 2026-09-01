@@ -204,7 +204,7 @@ describe('org-placement.service', () => {
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
-  it('skips placement when user is already a member on this domain', async () => {
+  it('skips placement when user is already a member of the mapped organisation', async () => {
     const prisma = {
       organisation: {
         findUnique: vi.fn(async () => ({ id: 'org-1', domain: 'client.example.com' })),
@@ -229,8 +229,59 @@ describe('org-placement.service', () => {
       { prisma },
     );
 
-    expect(result).toEqual({ status: 'skipped', reason: 'already_member_for_domain' });
+    expect(result).toEqual({ status: 'skipped', reason: 'already_member_for_organisation' });
     expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('places a user who belongs to another organisation on the same domain', async () => {
+    const txOrgMemberFindFirst = vi.fn(async () => null);
+    const prisma = {
+      organisation: {
+        findUnique: vi.fn(async () => ({ id: 'org-1', domain: 'client.example.com' })),
+      },
+      team: {
+        findFirst: vi.fn(async () => ({ id: 'team-1' })),
+      },
+      orgMember: {
+        findFirst: vi.fn(async (args: { where: { orgId: string } }) =>
+          args.where.orgId === 'other-org' ? { id: 'existing-member' } : null,
+        ),
+      },
+      $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) =>
+        await fn({
+          orgMember: {
+            findFirst: txOrgMemberFindFirst,
+            create: vi.fn(async () => ({ id: 'org-member-1' })),
+          },
+          teamMember: {
+            create: vi.fn(async () => ({ id: 'team-member-1' })),
+          },
+        }),
+      ),
+    };
+
+    const result = await placeUserInConfiguredOrganisation(
+      {
+        userId: 'user-1',
+        email: 'new.user@company.com',
+        config: makeConfig({
+          registration_domain_mapping: [
+            { email_domain: 'company.com', org_id: 'org-1', team_id: 'team-1' },
+          ],
+        }),
+      },
+      { prisma },
+    );
+
+    expect(result).toEqual({ status: 'placed', orgId: 'org-1', teamId: 'team-1' });
+    expect(prisma.orgMember.findFirst).toHaveBeenCalledWith({
+      where: { userId: 'user-1', orgId: 'org-1' },
+      select: { id: true },
+    });
+    expect(txOrgMemberFindFirst).toHaveBeenCalledWith({
+      where: { userId: 'user-1', orgId: 'org-1' },
+      select: { id: true },
+    });
   });
 
   it('rolls back org membership when team membership create fails in the transaction', async () => {

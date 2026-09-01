@@ -127,12 +127,17 @@ export function toWorkspaceChoices(data: unknown): WorkspaceChoices | null {
 }
 
 /**
- * Design §11.2: "the chooser is skipped automatically ... when the user has exactly one active
- * team and no pending invites." Returns the team to auto-select, or null when the chooser should
- * render normally.
+ * A one-team chooser can auto-select only when it does not contain a creation action. When a
+ * user can add a workspace or organisation, keep the chooser visible so that action remains
+ * reachable.
  */
 export function pickAutoSkipTeam(choices: WorkspaceChoices): TeamChoice | null {
-  if (choices.teams.length === 1 && choices.pending_invites.length === 0) {
+  if (
+    choices.teams.length === 1 &&
+    choices.pending_invites.length === 0 &&
+    !choices.can_create_org &&
+    choices.creatable_orgs.length === 0
+  ) {
     return choices.teams[0] ?? null;
   }
   return null;

@@ -140,7 +140,7 @@ describe('/api invite response contract', () => {
     expect(llmIntegrationMarkdown).toContain('results[i].invite.id');
   });
 
-  it('documents backend acceptance, its response, and the terminal org conflict code', () => {
+  it('documents backend acceptance, its response, and multi-organisation membership', () => {
     const accept = endpoints.filter(
       (endpoint) =>
         endpoint.method === 'POST' &&
@@ -150,12 +150,12 @@ describe('/api invite response contract', () => {
     expect(accept).toHaveLength(1);
     expect(accept[0].body).toHaveProperty('userId');
     expect(accept[0].response?.[200]).toContain('orgId');
-    expect(accept[0].response?.[400]).toContain('ORG_CONFLICT_ON_DOMAIN');
+    expect(accept[0].response?.[400]).not.toContain('ORG_CONFLICT_ON_DOMAIN');
 
     expect(llmIntegrationMarkdown).toContain(
       'POST /org/organisations/:orgId/teams/:teamId/invitations/:inviteId/accept',
     );
-    expect(llmIntegrationMarkdown).toContain('ORG_CONFLICT_ON_DOMAIN');
+    expect(llmIntegrationMarkdown).toContain('more than one organisation on the same origin domain');
   });
 
   it('documents orgId on the /org/me pending invitation contract', () => {

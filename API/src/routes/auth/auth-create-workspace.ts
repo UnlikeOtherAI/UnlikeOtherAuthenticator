@@ -49,7 +49,7 @@ function rejectWorkspaceCreation(): never {
 }
 
 /**
- * Creates the first workspace directly from the SSO chooser. The short-lived
+ * Creates an organisation and its first workspace directly from the SSO chooser. The short-lived
  * login capability is consumed in the same transaction as the organisation,
  * its default team, and the next auth continuation, so a replay cannot leave a
  * duplicate tenant behind.

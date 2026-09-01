@@ -1289,13 +1289,11 @@ Deactivation uses the same locks and atomic revocation while writing `DEACTIVATE
 
 `Organisation.ownerId` has `onDelete: Restrict`. A user who is the sole owner of an org cannot be deleted — ownership must be transferred first.
 
-#### One Org Per User Per Domain
+#### Organisation Membership Uniqueness
 
-The `@@unique([orgId, userId])` on `OrgMember` only prevents duplicate membership within one org. To enforce one-org-per-user-per-domain:
-
-- The service must query "does this user already belong to any org on this domain?" before adding them.
-- This check runs inside the transaction that creates the `OrgMember` record.
-- With `user_scope: "per_domain"`, this is naturally enforced (user records are domain-scoped). With `user_scope: "global"`, the check must be explicit.
+The `@@unique([orgId, userId])` on `OrgMember` prevents duplicate membership within one
+organisation. A user may belong to more than one organisation on the same domain, so membership
+and invitation flows must check the target `orgId`, not any sibling organisation on the domain.
 
 #### Member Addition: No Email-Based Lookup
 
@@ -1327,7 +1325,7 @@ must never be used as a DNS tenant key.
 
 For a hosted SSO flow with `login_flow.workspace_selection: "auto"` and
 `org_features.allow_user_create_org: true`, the workspace chooser may create
-the user's first organisation directly. Creation includes the default team and
+a new organisation directly. Creation includes the default team and
 the selection/code continuation in one transaction. The scoped access token
 then carries `active.tenantSlug`, sourced from the organisation slug; consumers
 must tolerate its absence on a legacy token issued before this addition.
@@ -1551,7 +1549,8 @@ user (org owner/admin, team manager, "must be an ACTIVE member") therefore do no
 apply — the pairing already proves authority over the whole tenant, which
 outranks any one member's role. Checks that are _not_ about the acting user are
 unchanged and apply to both modes: org-belongs-to-domain, the last-owner guard,
-membership and team caps, one-org-per-domain, and "cannot leave your last team".
+membership and team caps, exact-organisation membership uniqueness, and "cannot leave your last
+team".
 
 ##### Checks deliberately dropped in backend mode
 
@@ -1598,8 +1597,8 @@ owner-of / member-of branch on every `/org` table).
 > `?domain=`, its `org.org_id` claim matching `:orgId`, and live ACTIVE
 > membership / capability in that org. `organisations.domain` keeps its meaning
 > as the **origin** domain — the product that created the org — and still owns
-> the slug namespace (`@@unique([domain, slug])`), the
-> one-active-org-per-origin-domain invariant, backend-mode ownership, and invite
+> the slug namespace (`@@unique([domain, slug])`), exact-organisation membership
+> uniqueness, backend-mode ownership, and invite
 > email identity. It is simply no longer an authorization predicate for user
 > calls. **Backend / domain-hash-only mode stays origin-domain-scoped**, enforced
 > once in `acceptDomainBackendCaller` (`middleware/org-role-guard.ts`): an
@@ -1620,18 +1619,15 @@ Backend mode sets a fourth RLS GUC, `app.domain_backend`, derived **only** from
 the guard's own acceptance decision. Two policy branches are gated on it —
 "the domain's backend may see its own domain's organisations" (which is what
 makes `GET /org/organisations` return rows at all) and the equivalent for
-`org_members` (which is what lets the one-org-per-domain probes see a sibling
-org). A signed-in user never sets it, so user-mode visibility is unchanged.
+`org_members` (which lets backend management inspect memberships across the
+domain). A signed-in user never sets it, so user-mode visibility is unchanged.
 
-The one-org-per-user-per-domain invariant itself is additionally enforced in the
-database, so it holds on every write path rather than only where a service probe
-can see far enough. It is a **partial unique index**,
-`org_members_one_active_org_per_domain` on `(user_id, domain) WHERE status =
-'ACTIVE'`, over a `org_members.domain` column that database triggers keep derived
-from `organisations.domain` — application code never writes it. It was briefly a
-`BEFORE ROW` trigger that queried for a conflict; that is check-then-write, which
-at `READ COMMITTED` two concurrent transactions defeat (proven), so it was
-replaced with something the storage engine enforces.
+Membership is unique only within its exact organisation. Before the September
+2026 clarification, the database also had a partial index named
+`org_members_one_active_org_per_domain` over `(user_id, domain) WHERE status =
+'ACTIVE'`; migration `20260901090000_allow_multiple_organisations_per_user`
+removes that retired cross-organisation constraint. `org_members.domain` remains
+derived from `organisations.domain` for domain-scoped policy and audit queries.
 
 Because a backend-initiated mutation has no user to attribute, it is recorded in
 `OrgAuditLog` with `actorUserId: null` plus the reserved `uoa_actor` metadata key
@@ -1998,6 +1994,23 @@ hosted-SSO route, `POST /auth/create-team` — the sibling of
   It is still bounded by the chooser being shown at all — a user with exactly one
   ACTIVE team and no pending invites auto-skips the chooser (§11.2) and creates
   workspaces through the product instead.
+
+##### Multiple organisation creation and membership (2026-09 clarification)
+
+`allow_user_create_org` permits an eligible user to create a **new organisation**, not only
+their first one. In the hosted workspace chooser, the custom destination dropdown combines the
+server-authorized `creatable_orgs` with a `Create a new organisation` option whenever this
+capability is true. Selecting an existing value creates a team there; selecting the new value
+creates an organisation and its default team. The browser never supplies an arbitrary existing
+organisation id, and both paths re-authorize on the server before writing.
+
+Accordingly, one user may hold ACTIVE memberships in multiple organisations with the same origin
+domain. This supersedes the one-org-per-user-per-domain statements in §§24.3, 24.8, 24.9, 24.13,
+and the earlier 24.14 wording. The database no longer has a cross-organisation active-membership
+unique index; the existing unique membership per exact `(orgId, userId)` remains. Invitations and
+direct membership additions use that exact-organisation uniqueness, so joining one organisation
+does not prevent joining another. A single-team chooser auto-skips only when there is neither a
+new-organisation option nor an authorised existing-organisation destination to create in.
 
 #### Examples
 

@@ -56,10 +56,6 @@ async function createErrorTestApp() {
     throw new Error(rawUnknownErrorMessage);
   });
 
-  app.get('/api/org-conflict', () => {
-    throw new AppError('BAD_REQUEST', 400, 'ORG_CONFLICT_ON_DOMAIN');
-  });
-
   app.get('/not-auth/unknown-error', () => {
     throw new Error(rawUnknownErrorMessage);
   });
@@ -161,23 +157,6 @@ describe('error handler auth HTML rendering', () => {
 
       expect(response.statusCode).toBe(500);
       expect(response.json()).toEqual({ error: 'Request failed' });
-    } finally {
-      await app.close();
-    }
-  });
-
-  it('exposes ORG_CONFLICT_ON_DOMAIN with DEBUG_ENABLED off', async () => {
-    process.env.DEBUG_ENABLED = 'false';
-    const app = await createErrorTestApp();
-
-    try {
-      const response = await app.inject({ method: 'GET', url: '/api/org-conflict' });
-
-      expect(response.statusCode).toBe(400);
-      expect(response.json()).toEqual({
-        error: 'Request failed',
-        code: 'ORG_CONFLICT_ON_DOMAIN',
-      });
     } finally {
       await app.close();
     }

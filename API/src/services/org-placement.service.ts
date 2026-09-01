@@ -47,6 +47,7 @@ export type RegistrationOrgPlacementSkipReason =
   | 'team_not_found'
   | 'default_team_missing'
   | 'already_member_for_domain'
+  | 'already_member_for_organisation'
   | 'auto_create_failed'
   | 'transaction_failed';
 
@@ -287,26 +288,26 @@ async function placeFromDomainMapping(params: {
   const existingMembership = await params.prisma.orgMember.findFirst({
     where: {
       userId: params.userId,
-      org: { domain: params.domain },
+      orgId: org.id,
     },
     select: { id: true },
   });
   if (existingMembership) {
-    return { status: 'skipped', reason: 'already_member_for_domain' };
+    return { status: 'skipped', reason: 'already_member_for_organisation' };
   }
 
   try {
     const created = await runInTransaction(params.prisma as unknown as PrismaClient, async (tx) => {
       const txClient = tx as OrgPlacementTx;
 
-      const membershipInDomain = await txClient.orgMember.findFirst({
+      const membershipInOrganisation = await txClient.orgMember.findFirst({
         where: {
           userId: params.userId,
-          org: { domain: params.domain },
+          orgId: org.id,
         },
         select: { id: true },
       });
-      if (membershipInDomain) {
+      if (membershipInOrganisation) {
         return false;
       }
 
@@ -330,7 +331,7 @@ async function placeFromDomainMapping(params: {
     });
 
     if (!created) {
-      return { status: 'skipped', reason: 'already_member_for_domain' };
+      return { status: 'skipped', reason: 'already_member_for_organisation' };
     }
 
     return { status: 'placed', orgId: org.id, teamId };
@@ -339,12 +340,12 @@ async function placeFromDomainMapping(params: {
       const concurrentMembership = await params.prisma.orgMember.findFirst({
         where: {
           userId: params.userId,
-          org: { domain: params.domain },
+          orgId: org.id,
         },
         select: { id: true },
       });
       if (concurrentMembership) {
-        return { status: 'skipped', reason: 'already_member_for_domain' };
+        return { status: 'skipped', reason: 'already_member_for_organisation' };
       }
     }
 

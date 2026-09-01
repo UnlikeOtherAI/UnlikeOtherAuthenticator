@@ -103,7 +103,7 @@ export const authEndpoints: EndpointSchema[] = [
         'array of { inviteId, teamName, invitedBy } — pending invites for this email on this domain (only with login_token)',
       'can_create_org?': 'boolean (only with login_token)',
       'creatable_orgs?':
-        'array of { orgId, orgName } — organisations this user may add a workspace to via POST /auth/create-team (ACTIVE owner/admin there + org_features.allow_user_create_team). Empty unless the domain opted in. Distinct from can_create_org, which is about creating a first organisation',
+        'array of { orgId, orgName } — organisations this user may add a workspace to via POST /auth/create-team (ACTIVE owner/admin there + org_features.allow_user_create_team). Empty unless the domain opted in. Distinct from can_create_org, which permits creating a new organisation',
       ok: 'true (when workspace_selection is "off" — finalizes immediately like /auth/login)',
       code: 'authorization code (workspace_selection "off" branch only)',
       redirect_to: 'full redirect URL with code (workspace_selection "off" branch only)',
@@ -182,7 +182,7 @@ export const authEndpoints: EndpointSchema[] = [
     method: 'POST',
     path: '/auth/create-team',
     description:
-      "Create and immediately select a FURTHER workspace (team) inside an organisation the verified user already belongs to, from the hosted SSO chooser. The sibling of /auth/create-workspace, which creates a user's first organisation: an organisation is the level above a workspace, so this route writes into an existing tenant and is authorized accordingly — the acting user must be an ACTIVE owner/admin of org_id (the same rule POST /org/organisations/:orgId/teams enforces), the organisation must belong to this config's domain, and the domain must set org_features.allow_user_create_team. The org's max_teams_per_org cap still applies. Same transaction envelope as /auth/create-workspace: the bridge token is claimed alongside the new team with its requested hosted-chooser visibility, the creator's ACTIVE team membership, the workspace-scope validation, and required 2FA/code issuance. The chooser's creatable_orgs lists exactly the organisations this will accept.",
+      "Create and immediately select a FURTHER workspace (team) inside an organisation the verified user already belongs to, from the hosted SSO chooser. The sibling of /auth/create-workspace, which creates a new organisation: an organisation is the level above a workspace, so this route writes into an existing tenant and is authorized accordingly — the acting user must be an ACTIVE owner/admin of org_id (the same rule POST /org/organisations/:orgId/teams enforces), the organisation must belong to this config's domain, and the domain must set org_features.allow_user_create_team. The org's max_teams_per_org cap still applies. Same transaction envelope as /auth/create-workspace: the bridge token is claimed alongside the new team with its requested hosted-chooser visibility, the creator's ACTIVE team membership, the workspace-scope validation, and required 2FA/code issuance. The chooser's creatable_orgs lists exactly the organisations this will accept.",
     auth: 'config_url query param + login_token body field',
     query: {
       redirect_url: 'string (optional, redirect_uri also accepted)',
@@ -293,7 +293,7 @@ export const authEndpoints: EndpointSchema[] = [
       'pending_invites?': 'array of { inviteId, teamName, invitedBy } (only with login_token)',
       'can_create_org?': 'boolean (only with login_token)',
       'creatable_orgs?':
-        'array of { orgId, orgName } — organisations this user may add a workspace to via POST /auth/create-team (ACTIVE owner/admin there + org_features.allow_user_create_team). Empty unless the domain opted in. Distinct from can_create_org, which is about creating a first organisation',
+        'array of { orgId, orgName } — organisations this user may add a workspace to via POST /auth/create-team (ACTIVE owner/admin there + org_features.allow_user_create_team). Empty unless the domain opted in. Distinct from can_create_org, which permits creating a new organisation',
     },
   },
   authTokenEndpoint,
