@@ -62,8 +62,9 @@ describe('CreateWorkspaceDialog SSR rendering', () => {
     const html = renderDialog();
 
     expect(html).toContain('Create a new organisation');
-    expect(html).toContain('>Acme</option>');
-    expect(html).toContain('>Globex</option>');
+    expect(html).toContain('aria-haspopup="listbox"');
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).not.toContain('>Acme</option>');
     expect(html).toContain('>Private</option>');
     expect(html).toContain('>Invite only</option>');
     expect(html).toContain('>Open to organisation</option>');

@@ -61,7 +61,7 @@ export async function submitWorkspaceCreation(
 
 /**
  * Creates and selects a further workspace inside an org the user already belongs to. Distinct from
- * `submitWorkspaceCreation`, which creates the user's first organisation: here the org exists and
+ * `submitWorkspaceCreation`, which creates a new organisation: here the org exists and
  * the server re-checks that this user is an ACTIVE owner/admin of it.
  */
 export async function submitTeamCreation(

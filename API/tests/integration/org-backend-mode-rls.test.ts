@@ -469,10 +469,10 @@ describe.skipIf(!hasDatabase)('/org/* under production RLS roles (uoa_app)', () 
   });
 
   // ===================================================================
-  // C2 — one org per user per domain, enforced under RLS.
+  // C2 — one user may own or join several organisations on a domain.
   // ===================================================================
-  describe('one organisation per user per domain', () => {
-    it('refuses to make an existing member the owner of a second org', async () => {
+  describe('multiple organisations per user per domain', () => {
+    it('allows an existing member to own a second org', async () => {
       const first = await seedOrg({
         domain: ATTACKER_DOMAIN,
         name: 'First Org',
@@ -492,14 +492,14 @@ describe.skipIf(!hasDatabase)('/org/* under production RLS roles (uoa_app)', () 
         payload: { name: 'Second Org', owner_user_id: first.ownerId },
       });
 
-      expect(res.statusCode).toBe(400);
+      expect(res.statusCode).toBe(200);
       const orgCount = await handle!.prisma.organisation.count({
         where: { domain: ATTACKER_DOMAIN },
       });
-      expect(orgCount).toBe(1);
+      expect(orgCount).toBe(2);
     });
 
-    it('refuses to add a user who is already active in a sibling org', async () => {
+    it('allows a user to join a sibling org', async () => {
       const first = await seedOrg({
         domain: ATTACKER_DOMAIN,
         name: 'First Org',
@@ -525,18 +525,19 @@ describe.skipIf(!hasDatabase)('/org/* under production RLS roles (uoa_app)', () 
         payload: { userId: first.ownerId, role: 'member' },
       });
 
-      expect(res.statusCode).toBe(400);
+      expect(res.statusCode).toBe(200);
       const memberships = await handle!.prisma.orgMember.count({
         where: { userId: first.ownerId, status: 'ACTIVE' },
       });
-      expect(memberships).toBe(1);
+      expect(memberships).toBe(2);
     });
   });
 
-  // The service-layer probes above are the friendly path. The invariant itself
-  // lives in the database, so it also holds for a writer that never runs them.
-  describe('one organisation per user per domain (database backstop)', () => {
-    it('rejects a second active membership even on a BYPASSRLS connection', async () => {
+  // Exact `(orgId, userId)` uniqueness is still enforced, but active memberships may now span
+  // organisations. The following direct database tests exercise that intended shape under the
+  // BYPASSRLS test connection as well.
+  describe('multiple organisations per user per domain (database)', () => {
+    it('allows a second active membership even on a BYPASSRLS connection', async () => {
       const first = await seedOrg({
         domain: ATTACKER_DOMAIN,
         name: 'First Org',
@@ -550,22 +551,21 @@ describe.skipIf(!hasDatabase)('/org/* under production RLS roles (uoa_app)', () 
         ownerEmail: 'second-owner@example.com',
       });
 
-      // `handle.prisma` is the superuser connection — it bypasses RLS and skips
-      // every service check, so only the trigger can refuse this.
-      await expect(
-        handle!.prisma.orgMember.create({
-          data: { orgId: second.orgId, userId: first.ownerId, role: 'member' },
-        }),
-      ).rejects.toThrow();
+      // `handle.prisma` is the superuser connection — it bypasses RLS and skips every service
+      // check, so this proves the retired cross-organisation unique index is gone.
+      const membership = await handle!.prisma.orgMember.create({
+        data: { orgId: second.orgId, userId: first.ownerId, role: 'member' },
+      });
+      expect(membership.id).toBeTruthy();
 
       expect(
         await handle!.prisma.orgMember.count({
           where: { userId: first.ownerId, status: 'ACTIVE' },
         }),
-      ).toBe(1);
+      ).toBe(2);
     });
 
-    it('still allows a tombstoned membership alongside an active sibling', async () => {
+    it('allows a tombstoned membership to be reactivated alongside an active sibling', async () => {
       const first = await seedOrg({
         domain: ATTACKER_DOMAIN,
         name: 'First Org',
@@ -593,13 +593,11 @@ describe.skipIf(!hasDatabase)('/org/* under production RLS roles (uoa_app)', () 
       });
       expect(removed.id).toBeTruthy();
 
-      // ...but reactivating it into a second ACTIVE membership must not pass.
-      await expect(
-        handle!.prisma.orgMember.update({
-          where: { id: removed.id },
-          data: { status: 'ACTIVE' },
-        }),
-      ).rejects.toThrow();
+      const reactivated = await handle!.prisma.orgMember.update({
+        where: { id: removed.id },
+        data: { status: 'ACTIVE' },
+      });
+      expect(reactivated.status).toBe('ACTIVE');
     });
 
     it('allows the same user an active membership on a different domain', async () => {

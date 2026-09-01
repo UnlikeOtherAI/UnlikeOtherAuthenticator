@@ -290,8 +290,8 @@ async function findValidInviteLink(
 
   // Looked up by the ids the link carries, not by the redeeming product's domain: one organisation
   // is usable from every UOA-integrated product, and the link is already a bearer credential
-  // scoped to one team. The org's ORIGIN domain comes back because the caller's next check — the
-  // one-active-org-per-origin-domain invariant — is keyed on that, not on who is redeeming.
+  // scoped to one team. The org's ORIGIN domain comes back because the caller's next checks bind
+  // the invitation and its accepted membership to that tenant, not to who is redeeming.
   const team = await prisma.team.findFirst({
     where: { id: link.teamId, orgId: link.orgId },
     select: { id: true, orgId: true, joinPolicy: true, org: { select: { domain: true } } },
@@ -379,21 +379,16 @@ export async function redeemTeamInviteLink(
       throw new AppError('BAD_REQUEST', 400);
     }
 
-    // Ensure org membership first, respecting one-org-per-ORIGIN-domain (mirrors
-    // acceptTeamInviteWithinTransaction in team-invite.service.acceptance.ts). The invariant is
-    // keyed on `organisations.domain` via the trigger-derived `org_members.domain`, so it is the
-    // TARGET org's origin that decides — never the product the user is redeeming from.
-    const existingMembershipInDomain = await tx.orgMember.findFirst({
-      where: { userId: params.userId, org: { domain: team.orgDomain } },
+    // Ensure membership in the target organisation. A user may independently belong to other
+    // organisations on the same origin domain, so only this exact org membership is relevant.
+    const existingMembershipInOrganisation = await tx.orgMember.findFirst({
+      where: { userId: params.userId, orgId: team.orgId },
       select: { id: true, orgId: true, status: true },
     });
-    if (existingMembershipInDomain && existingMembershipInDomain.orgId !== team.orgId) {
+    if (existingMembershipInOrganisation && existingMembershipInOrganisation.status !== 'ACTIVE') {
       throw new AppError('BAD_REQUEST', 400);
     }
-    if (existingMembershipInDomain && existingMembershipInDomain.status !== 'ACTIVE') {
-      throw new AppError('BAD_REQUEST', 400);
-    }
-    if (!existingMembershipInDomain) {
+    if (!existingMembershipInOrganisation) {
       await tx.orgMember.create({
         data: { orgId: team.orgId, userId: params.userId, role: 'member' },
         select: { id: true },

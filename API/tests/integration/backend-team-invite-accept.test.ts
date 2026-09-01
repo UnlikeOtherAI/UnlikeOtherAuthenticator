@@ -240,7 +240,7 @@ describe.skipIf(!hasDatabase)('backend-mode team invitation acceptance', () => {
     }
   });
 
-  it('publishes ORG_CONFLICT_ON_DOMAIN when retrying can never resolve the acceptance', async () => {
+  it('accepts an invitee who is already a member of another organisation on the domain', async () => {
     const existing = await seedWorkspace('Existing');
     const target = await seedWorkspace('Target');
     const invitee = await createDomainUser('conflict-invitee@example.com');
@@ -264,17 +264,19 @@ describe.skipIf(!hasDatabase)('backend-mode team invitation acceptance', () => {
         headers,
         payload: { userId: invitee.id },
       });
-      expect(response.statusCode).toBe(400);
-      expect(response.json()).toEqual({
-        error: 'Request failed',
-        code: 'ORG_CONFLICT_ON_DOMAIN',
-      });
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ ok: true, orgId: target.orgId, teamId: target.teamId });
       expect(
         await handle.prisma.teamInvite.findUniqueOrThrow({
           where: { id: invite.id },
           select: { acceptedAt: true, acceptedUserId: true },
         }),
-      ).toEqual({ acceptedAt: null, acceptedUserId: null });
+      ).toMatchObject({ acceptedUserId: invitee.id });
+      expect(
+        await handle.prisma.orgMember.count({
+          where: { orgId: target.orgId, userId: invitee.id, status: 'ACTIVE' },
+        }),
+      ).toBe(1);
     } finally {
       await app.close();
     }

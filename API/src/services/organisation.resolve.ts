@@ -43,8 +43,8 @@ export type ResolvedOrganisationRow = {
  *    origin-domain scope is enforced once, in `acceptDomainBackendCaller`.
  *
  * `organisations.domain` keeps its meaning — the ORIGIN domain, the product that created the
- * org. It still owns the slug namespace, the one-active-org-per-origin-domain invariant, and
- * backend-mode ownership. It just no longer decides who may read or manage the org.
+ * org. It still owns the slug namespace and backend-mode ownership. It just no longer decides who
+ * may read or manage the org.
  */
 export async function resolveOrganisation(
   prisma: OrgServicePrisma,

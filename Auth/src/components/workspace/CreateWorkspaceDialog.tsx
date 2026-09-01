@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useState } from 'react';
+import React, { useEffect, useId, useMemo, useState } from 'react';
 
 import { Button } from '../ui/Button.js';
 import { Input, fieldInputClassName } from '../ui/Input.js';
@@ -7,6 +7,10 @@ import { useTranslation } from '../../i18n/use-translation.js';
 import type { AuthFlowQuery, WorkspaceJoinPolicy } from '../../utils/api.js';
 import { submitTeamCreation, submitWorkspaceCreation } from '../../utils/workspace-actions.js';
 import type { WorkspaceResponseOutcome } from '../../utils/workspace-response.js';
+import {
+  OrganisationDestinationDropdown,
+  type OrganisationDestinationOption,
+} from './OrganisationDestinationDropdown.js';
 
 const NEW_ORGANISATION = '__new_organisation__';
 
@@ -18,7 +22,7 @@ const visibilityDescriptionKeys = {
 
 /**
  * The chooser's one creation dialog. Its destination is intentionally constrained to the
- * server-provided `creatable_orgs` or the separate first-organisation capability; the browser
+ * server-provided `creatable_orgs` or the separate new-organisation capability; the browser
  * never invents an org id and both routes re-authorize before they write.
  */
 export function CreateWorkspaceDialog(props: {
@@ -32,11 +36,19 @@ export function CreateWorkspaceDialog(props: {
   const { t } = useTranslation();
   const onClose = props.onClose;
   const destinationId = useId();
+  const destinationLabelId = useId();
   const visibilityId = useId();
   const visibilityDescriptionId = useId();
-  const initialDestination = props.canCreateNewOrganisation
-    ? NEW_ORGANISATION
-    : (props.creatableOrgs[0]?.orgId ?? '');
+  const destinationOptions = useMemo<OrganisationDestinationOption[]>(
+    () => [
+      ...(props.canCreateNewOrganisation
+        ? [{ value: NEW_ORGANISATION, label: t('workspace.createDialog.newOrganisation') }]
+        : []),
+      ...props.creatableOrgs.map((org) => ({ value: org.orgId, label: org.orgName })),
+    ],
+    [props.canCreateNewOrganisation, props.creatableOrgs, t],
+  );
+  const initialDestination = destinationOptions[0]?.value ?? '';
   const [destination, setDestination] = useState(initialDestination);
   const [name, setName] = useState('');
   // Preserve the hosted creation API's established default. Private remains an explicit choice.
@@ -45,8 +57,7 @@ export function CreateWorkspaceDialog(props: {
   const [error, setError] = useState<string | null>(null);
 
   const isNewOrganisation = destination === NEW_ORGANISATION;
-  const hasMultipleDestinations =
-    props.creatableOrgs.length + (props.canCreateNewOrganisation ? 1 : 0) > 1;
+  const hasMultipleDestinations = destinationOptions.length > 1;
   const selectedOrganisation = props.creatableOrgs.find((org) => org.orgId === destination);
 
   useEffect(() => {
@@ -137,30 +148,21 @@ export function CreateWorkspaceDialog(props: {
 
           <div>
             <label
+              id={destinationLabelId}
               htmlFor={destinationId}
               className="text-sm font-medium text-[var(--uoa-color-text)]"
             >
               {t('workspace.createDialog.destinationLabel')}
             </label>
             {hasMultipleDestinations ? (
-              <select
+              <OrganisationDestinationDropdown
                 id={destinationId}
                 value={destination}
-                onChange={(event) => setDestination(event.target.value)}
+                options={destinationOptions}
+                labelId={destinationLabelId}
+                onChange={setDestination}
                 disabled={submitting}
-                className={fieldInputClassName('appearance-auto')}
-              >
-                {props.canCreateNewOrganisation ? (
-                  <option value={NEW_ORGANISATION}>
-                    {t('workspace.createDialog.newOrganisation')}
-                  </option>
-                ) : null}
-                {props.creatableOrgs.map((org) => (
-                  <option key={org.orgId} value={org.orgId}>
-                    {org.orgName}
-                  </option>
-                ))}
-              </select>
+              />
             ) : (
               <p className="mt-1 rounded-[var(--uoa-radius-input)] border border-[var(--uoa-color-border)] bg-[var(--uoa-color-surface)] px-3 py-2 text-sm text-[var(--uoa-color-text)]">
                 {isNewOrganisation

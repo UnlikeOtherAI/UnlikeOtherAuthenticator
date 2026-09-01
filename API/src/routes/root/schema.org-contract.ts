@@ -19,8 +19,8 @@ const ORG_CONTRACT_NOTE =
   'the origin domain) does not decide who may read or manage it. The gates are the token domain ' +
   'matching ?domain= (else 403 ACCESS_TOKEN_DOMAIN_MISMATCH), the token org claim matching :orgId ' +
   '(else 403 INSUFFICIENT_ORG_ROLE), and live ACTIVE membership/capability in the org. ' +
-  'organisations.domain still owns the slug namespace, the one-active-org-per-origin-domain ' +
-  'invariant, backend-mode ownership, and invite email identity. BACKEND MODE: omit ' +
+  'organisations.domain still owns the slug namespace, backend-mode ownership, and invite email ' +
+  'identity. BACKEND MODE: omit ' +
   'X-UOA-Access-Token entirely — the domain ' +
   'pairing already on every /org route (domain-hash bearer + verified signed config + ?domain=) ' +
   'authorises the call, and there is no acting user, so per-user org/team role checks do not ' +

@@ -87,7 +87,7 @@ describe('team invite acceptance', () => {
     });
   });
 
-  it('names the one-org-per-origin-domain acceptance conflict', async () => {
+  it('accepts an invite into a second organisation on the same domain', async () => {
     const tx = makeAcceptanceTx();
     tx.teamInvite.findUnique.mockResolvedValue({
       id: 'invite-1',
@@ -109,7 +109,19 @@ describe('team invite acceptance', () => {
       email: 'invited@example.com',
       name: 'Invited User',
     });
-    tx.orgMember.findFirst.mockResolvedValue({ id: 'existing-member', orgId: 'org-other' });
+    // Another membership on this domain is deliberately irrelevant: the lookup is scoped to the
+    // target organisation, where this user has no row yet.
+    tx.orgMember.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue({ id: 'org-member-1' });
+    tx.orgMember.count.mockResolvedValue(1);
+    tx.orgMember.create.mockResolvedValue({ id: 'org-member-1' });
+    tx.teamMember.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue({ id: 'team-member-1' });
+    tx.teamMember.count.mockResolvedValueOnce(1).mockResolvedValueOnce(0);
+    tx.teamMember.create.mockResolvedValue({ id: 'team-member-1' });
+    tx.teamInvite.update.mockResolvedValue({ id: 'invite-1' });
 
     await expect(
       acceptTeamInviteWithinTransaction({
@@ -119,15 +131,15 @@ describe('team invite acceptance', () => {
         config: makeConfig(),
         now: new Date('2026-03-02T00:00:00.000Z'),
       }),
-    ).rejects.toMatchObject({
-      code: 'BAD_REQUEST',
-      statusCode: 400,
-      message: 'ORG_CONFLICT_ON_DOMAIN',
-    });
+    ).resolves.toEqual({ orgId: 'org-1', teamId: 'team-1' });
 
-    expect(tx.orgMember.create).not.toHaveBeenCalled();
-    expect(tx.teamMember.create).not.toHaveBeenCalled();
-    expect(tx.teamInvite.update).not.toHaveBeenCalled();
+    expect(tx.orgMember.findFirst).toHaveBeenCalledWith({
+      where: { userId: 'user-1', orgId: 'org-1' },
+      select: { id: true, orgId: true },
+    });
+    expect(tx.orgMember.create).toHaveBeenCalled();
+    expect(tx.teamMember.create).toHaveBeenCalled();
+    expect(tx.teamInvite.update).toHaveBeenCalled();
   });
 
   it('rejects accepting an expired invite with a generic error', async () => {
