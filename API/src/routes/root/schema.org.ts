@@ -179,6 +179,8 @@ export const orgEndpoints: EndpointSchema[] = [
       name: 'string (required)',
       'slug?': 'string — optional custom team slug; otherwise derived from name',
       description: 'string (optional)',
+      'join_creator?':
+        'boolean (default false) — add the acting user to the new team as its owner, in the same transaction. Set this when a person is creating their own workspace: every entry check asks for an ACTIVE TeamMember, so without it they create a team they cannot open. Leave it false when a backend is provisioning teams for other people. Idempotent (upsert), and ignored in backend mode, which has no acting user.',
     },
     response: {
       slug: 'string — unique team slug within the organisation',

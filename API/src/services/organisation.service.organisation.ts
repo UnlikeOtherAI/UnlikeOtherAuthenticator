@@ -33,6 +33,7 @@ import {
   toTeamRecord,
   type TeamRecord,
 } from './team.service.base.js';
+import { resolveWorkspaceCreatorTeamRole } from './role-grants.js';
 import {
   lockWorkspaceMembershipRows,
   lockWorkspaceOrganisationRow,
@@ -241,6 +242,12 @@ export async function createOrganisation(
       data: {
         teamId: defaultTeam.id,
         userId: ownerId,
+        // Founding an organisation makes you the steward of its first workspace,
+        // not a rank-and-file member of it. Without this the row took Prisma's
+        // `member` default, so the founder came out organisation `owner` and
+        // team `member` — holding no team capability over the only workspace
+        // they had just created.
+        teamRole: resolveWorkspaceCreatorTeamRole(params.config),
       },
     });
 

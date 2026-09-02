@@ -31,6 +31,11 @@ export function makePrismaMock(): PrismaClient {
       findFirst: vi.fn(),
       count: vi.fn(),
       create: vi.fn(),
+      // `createTeam({ joinCreator: true })` upserts the creator's membership.
+      // A cast fake is unityped, so a delegate it does not model is `undefined`
+      // at call time rather than a compile error — it has to be modelled here
+      // in the same change that started calling it.
+      upsert: vi.fn(),
       update: vi.fn(),
       delete: vi.fn(),
     },

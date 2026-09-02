@@ -97,6 +97,7 @@ export function registerTeamRoutes(app: FastifyInstance): void {
             name: body.name,
             slug: body.slug,
             description: body.description ?? undefined,
+            joinCreator: body.join_creator ?? false,
             config,
           },
           { prisma: asPrismaClient(tx) },

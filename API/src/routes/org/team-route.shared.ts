@@ -40,6 +40,10 @@ export const TeamBodySchema = z.object({
   name: z.string().trim().min(1).max(100),
   slug: z.string().trim().min(1).max(120).optional(),
   description: z.string().trim().max(500).nullable().optional(),
+  // Create-only: put the acting user in the team they just made, as its owner.
+  // Defaults false so a backend provisioning teams for other people is
+  // unaffected. Ignored in backend mode, which has no acting user.
+  join_creator: z.boolean().optional(),
 });
 
 export const TeamUpdateBodySchema = z.object({

@@ -149,6 +149,27 @@ export function resolveDemotedOwnerRole(config: RoleGrantsConfig): string | null
   return vocabulary.find((role) => role !== OWNER_ROLE) ?? null;
 }
 
+/**
+ * The team role for someone who just created the workspace they are joining.
+ *
+ * Founding an organisation, or adding a workspace to one, makes you that
+ * workspace's steward — so `owner` is the answer wherever the domain's
+ * `team_roles` vocabulary contains it, which is every domain using the default
+ * table. It is resolved rather than hard-written for the reason
+ * `resolveDemotedOwnerRole` is: a domain that configured
+ * `team_roles: ["lead","member"]` would otherwise get a stored `owner` outside
+ * its own vocabulary — unmentionable by `role_grants`, so the creator would
+ * hold nothing, and rejected by `normalizeTeamRole` on every later write.
+ *
+ * Falling back to the vocabulary's first entry keeps the creator at whatever
+ * that domain considers most privileged, since a vocabulary is authored
+ * most-privileged first.
+ */
+export function resolveWorkspaceCreatorTeamRole(config: RoleGrantsConfig): string {
+  const vocabulary = resolveTeamRoleVocabulary(config);
+  return vocabulary.includes(OWNER_ROLE) ? OWNER_ROLE : vocabulary[0];
+}
+
 /** The domain's grant table, or the legacy default when it configured none. */
 export function resolveRoleGrants(config: RoleGrantsConfig): RoleGrantTable {
   return config.org_features?.role_grants ?? LEGACY_DEFAULT_ROLE_GRANTS;
