@@ -210,13 +210,55 @@ describe('Organisation service: organisation CRUD', () => {
     );
   });
 
-  it('rejects creating an org when owner already belongs to another org on the domain', async () => {
+  // The inverse of this used to be asserted here: belonging to an organisation
+  // on the domain rejected creating a second one. That rule was retired with
+  // `org_members_one_active_org_per_domain` in
+  // 20260901090000_allow_multiple_organisations_per_user, because the hosted
+  // workspace chooser offers "create a new organisation" to people who already
+  // have one, and the index rejected that authorised write. Uniqueness within
+  // each exact org is still the `(org_id, user_id)` key's job.
+  it('lets an owner who already belongs to an org on the domain create another', async () => {
     const prisma = makePrismaMock();
 
     prisma.orgMember.findFirst.mockResolvedValue({ id: 'existing-member' });
     prisma.user.findUnique.mockResolvedValue({ id: 'u-owner' });
+    prisma.organisation.findFirst.mockResolvedValue(null);
+    prisma.organisation.create.mockResolvedValue({
+      id: 'org-2',
+      domain: 'acme.example.com',
+      name: 'Second org',
+      slug: 'second-org',
+      ownerId: 'u-owner',
+      createdAt: now,
+      updatedAt: now,
+    });
+    prisma.team.findFirst.mockResolvedValue(null);
+    prisma.team.create.mockResolvedValue({
+      id: 'team-second',
+      orgId: 'org-2',
+      name: 'General',
+      isDefault: true,
+      createdAt: now,
+      updatedAt: now,
+    });
+    prisma.orgMember.create.mockResolvedValue({
+      id: 'member-second',
+      orgId: 'org-2',
+      userId: 'u-owner',
+      role: 'owner',
+      createdAt: now,
+      updatedAt: now,
+    });
+    prisma.teamMember.create.mockResolvedValue({
+      id: 'tm-second',
+      teamId: 'team-second',
+      userId: 'u-owner',
+      teamRole: 'member',
+      createdAt: now,
+      updatedAt: now,
+    });
 
-    const promise = createOrganisation(
+    const org = await createOrganisation(
       {
         domain: 'acme.example.com',
         name: 'Second org',
@@ -227,11 +269,19 @@ describe('Organisation service: organisation CRUD', () => {
       { prisma },
     );
 
-    await expect(promise).rejects.toMatchObject({
-      code: 'BAD_REQUEST',
-      statusCode: 400,
-    });
-    expect(prisma.organisation.create).not.toHaveBeenCalled();
+    expect(org).toMatchObject({ id: 'org-2', ownerId: 'u-owner' });
+    // The second organisation is a real one: its own default team, and the
+    // owner enrolled into it rather than reusing the first org's membership.
+    expect(prisma.orgMember.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { orgId: 'org-2', userId: 'u-owner', role: 'owner' },
+      }),
+    );
+    expect(prisma.team.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ orgId: 'org-2', isDefault: true }),
+      }),
+    );
   });
 
   it('regenerates slug with random suffix when the base slug collides', async () => {
