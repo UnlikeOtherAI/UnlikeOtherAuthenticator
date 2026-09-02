@@ -19,13 +19,6 @@ export const PRODUCTION_PUBLIC_ERROR_CODES = new Set([
   // must survive the production generic-body squash. Not an oracle — the caller was already
   // authorized for the exact invite.
   'INVITATION_ALREADY_ACCEPTED',
-  // Invitation acceptance (backend accept route AND the invitee-facing chooser/select-team
-  // paths): products and hosted surfaces branch on this code because retrying can never succeed
-  // while the acceptor belongs to another organisation on the invite's origin domain. Exposing it
-  // on the invitee-facing paths is deliberate: it tells an authenticated invitee a fact about
-  // their OWN memberships (never anyone else's), which is what lets every surface explain the
-  // dead end instead of showing a mute 400.
-  'ORG_CONFLICT_ON_DOMAIN',
   // An authenticated platform superuser already knows the exact organisation. This code lets the
   // Admin UI distinguish durable billing/commercial FK protection from an otherwise generic 400.
   'ORG_HAS_PROTECTED_RECORDS',

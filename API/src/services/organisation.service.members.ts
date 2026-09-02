@@ -152,21 +152,6 @@ export async function addOrganisationMember(
       throw new AppError('BAD_REQUEST', 400);
     }
 
-    // A REMOVED/DEACTIVATED membership elsewhere on the domain must not block re-adding this
-    // org's own (possibly reactivated) row — only an ACTIVE membership elsewhere violates the
-    // one-org-per-domain invariant.
-    const existingMemberInDomain = await tx.orgMember.findFirst({
-      where: {
-        userId,
-        status: 'ACTIVE',
-        org: { domain: org.domain },
-      },
-      select: { id: true },
-    });
-    if (existingMemberInDomain) {
-      throw new AppError('BAD_REQUEST', 400);
-    }
-
     const memberCount = await tx.orgMember.count({ where: { orgId: org.id, status: 'ACTIVE' } });
     if (memberCount >= maxMembers) throw new AppError('BAD_REQUEST', 400);
 

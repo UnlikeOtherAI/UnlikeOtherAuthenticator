@@ -221,11 +221,11 @@ describe('team-invite-link.service — redemption', () => {
       expect(prisma.team.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({ where: { id: 'team-1', orgId: 'org-1' } }),
       );
-      // The one-active-org-per-origin-domain invariant is evaluated against the ORG's origin
-      // domain, never the product the user redeemed from.
+      // Existing membership is scoped to this invite link's organisation, never the product the
+      // user redeemed from or another organisation on the same origin domain.
       expect(prisma.orgMember.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { userId: 'user-1', org: { domain: 'client.example.com' } },
+          where: { userId: 'user-1', orgId: 'org-1' },
         }),
       );
     });

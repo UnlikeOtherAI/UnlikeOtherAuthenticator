@@ -497,7 +497,7 @@ Request → Route → Middleware → Service → Database (Prisma)
   Every service check that `actorUserId` gated is now explicitly a check on the
   ACTING USER and is skipped when there is none. Invariants that are not actor
   checks — org-belongs-to-domain, the last-owner guard, membership/team caps,
-  one-org-per-domain, "cannot leave your last team" — are untouched and apply to
+  exact-organisation membership uniqueness, "cannot leave your last team" — are untouched and apply to
   both modes.
 
   Actor provenance (`OrgActorProvenance`, `org-audit-log.service.ts`) is derived

@@ -109,18 +109,6 @@ export async function createOrganisation(
   const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
 
   const created = await runInTransaction(prisma, async (tx) => {
-    const ownerInDomainOrg = await tx.orgMember.findFirst({
-      where: {
-        userId: ownerId,
-        status: 'ACTIVE',
-        org: { domain },
-      },
-      select: { id: true },
-    });
-    if (ownerInDomainOrg) {
-      throw new AppError('BAD_REQUEST', 400);
-    }
-
     const userExists = await tx.user.findUnique({
       where: { id: ownerId },
       select: { id: true },

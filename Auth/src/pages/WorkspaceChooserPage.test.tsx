@@ -132,7 +132,7 @@ describe('WorkspaceChooserPage SSR rendering', () => {
     expect(withCreate).not.toContain('aria-label="Create workspace"');
     expect(withCreate).not.toContain('role="dialog"');
 
-    const withoutCreate = renderChooser({
+    const withExistingWorkspaces = renderChooser({
       teams: [
         { teamId: 't1', orgId: 'o1', name: 'Backend Team', role: 'member' },
         { teamId: 't2', orgId: 'o1', name: 'Frontend Team', role: 'member' },
@@ -140,8 +140,8 @@ describe('WorkspaceChooserPage SSR rendering', () => {
       pending_invites: [],
       can_create_org: true,
     });
-    expect(withoutCreate).not.toContain('Workspace name');
-    expect(withoutCreate).not.toContain('aria-label="Create workspace"');
+    expect(withExistingWorkspaces).not.toContain('Workspace name');
+    expect(withExistingWorkspaces).toContain('aria-label="Create workspace"');
   });
 
   it('auto-skips a single team with no pending invites (never shows a one-item chooser)', () => {
@@ -165,6 +165,18 @@ describe('WorkspaceChooserPage SSR rendering', () => {
 
     expect(html).toContain('Solo Team');
     expect(html).toContain('Choose a workspace');
+  });
+
+  it('does not auto-skip a single team when a new organisation can be created', () => {
+    const html = renderChooser({
+      teams: [{ teamId: 't1', orgId: 'o1', name: 'Solo Team', role: 'owner' }],
+      pending_invites: [],
+      can_create_org: true,
+    });
+
+    expect(html).toContain('Choose a workspace');
+    expect(html).toContain('Solo Team');
+    expect(html).toContain('aria-label="Create workspace"');
   });
 
   // Gap-fix B Task 2 (design §11.4): team_hint deep-link/switch preselect — rides the same

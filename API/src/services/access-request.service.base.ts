@@ -202,19 +202,15 @@ export async function ensureUserAssignedToConfiguredAccessTarget(params: {
 
   ensureOrgRole('member', parseOrgFeatureRoles(params.config));
 
-  const existingMembershipInDomain = await params.prisma.orgMember.findFirst({
+  const existingMembershipInOrganisation = await params.prisma.orgMember.findFirst({
     where: {
       userId: params.userId,
-      org: { domain: org.domain },
+      orgId: org.id,
     },
     select: { id: true, orgId: true },
   });
 
-  if (existingMembershipInDomain && existingMembershipInDomain.orgId !== org.id) {
-    throw new AppError('BAD_REQUEST', 400);
-  }
-
-  if (!existingMembershipInDomain) {
+  if (!existingMembershipInOrganisation) {
     const memberCount = await params.prisma.orgMember.count({
       where: { orgId: org.id },
     });

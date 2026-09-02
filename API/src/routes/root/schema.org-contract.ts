@@ -24,8 +24,8 @@ const ORG_CONTRACT_NOTE =
   'UOA verifies it through the product config JWKS and re-resolves the user credential epoch and ACTIVE ' +
   'membership before applying the same user-mode gates. It is not an access token and must never be sent ' +
   'with X-UOA-Access-Token. ' +
-  'organisations.domain still owns the slug namespace, the one-active-org-per-origin-domain ' +
-  'invariant, backend-mode ownership, and invite email identity. BACKEND MODE: omit ' +
+  'organisations.domain still owns the slug namespace, backend-mode ownership, and invite email ' +
+  'identity. BACKEND MODE: omit ' +
   'X-UOA-Access-Token entirely — the domain ' +
   'pairing already on every /org route (domain-hash bearer + verified signed config + ?domain=) ' +
   'authorises the call, and there is no acting user, so per-user org/team role checks do not ' +

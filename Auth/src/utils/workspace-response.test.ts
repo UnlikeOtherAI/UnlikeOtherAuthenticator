@@ -152,6 +152,25 @@ describe('pickAutoSkipTeam', () => {
     expect(pickAutoSkipTeam(choices)).toBeNull();
   });
 
+  it('does not skip when the chooser exposes a creation destination', () => {
+    expect(
+      pickAutoSkipTeam({
+        teams: [TEAM_A],
+        pending_invites: [],
+        can_create_org: true,
+        creatable_orgs: [],
+      }),
+    ).toBeNull();
+    expect(
+      pickAutoSkipTeam({
+        teams: [TEAM_A],
+        pending_invites: [],
+        can_create_org: false,
+        creatable_orgs: [{ orgId: 'org-2', orgName: 'Globex' }],
+      }),
+    ).toBeNull();
+  });
+
   it('does not skip with zero or multiple teams', () => {
     expect(pickAutoSkipTeam({ teams: [], pending_invites: [], can_create_org: true, creatable_orgs: [] })).toBeNull();
     expect(

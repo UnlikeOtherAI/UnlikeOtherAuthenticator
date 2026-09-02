@@ -161,14 +161,6 @@ export async function createMemberInvite(
       return { status: 'ok' };
     }
 
-    const existingDomainMembership = await prisma.orgMember.findFirst({
-      where: { userId: existingUser.id, org: { domain: org.domain } },
-      select: { orgId: true },
-    });
-    if (existingDomainMembership && existingDomainMembership.orgId !== org.id) {
-      return { status: 'ok' };
-    }
-
     if (params.config.existing_user_registration_behavior === 'inline_sign_in') {
       return { status: 'ok' };
     }

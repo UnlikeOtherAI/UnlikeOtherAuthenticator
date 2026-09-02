@@ -116,12 +116,10 @@ export async function acceptTeamInviteWithinTransaction(params: {
     { prisma: params.prisma },
   );
 
-  const existingMembershipInDomain = await params.prisma.orgMember.findFirst({
+  const existingMembershipInOrganisation = await params.prisma.orgMember.findFirst({
     where: {
       userId: params.userId,
-      org: {
-        domain: invite.org.domain,
-      },
+      orgId: invite.orgId,
     },
     select: {
       id: true,
@@ -129,11 +127,7 @@ export async function acceptTeamInviteWithinTransaction(params: {
     },
   });
 
-  if (existingMembershipInDomain && existingMembershipInDomain.orgId !== invite.orgId) {
-    throw new AppError('BAD_REQUEST', 400, 'ORG_CONFLICT_ON_DOMAIN');
-  }
-
-  if (!existingMembershipInDomain) {
+  if (!existingMembershipInOrganisation) {
     const memberCount = await params.prisma.orgMember.count({
       where: { orgId: invite.orgId },
     });

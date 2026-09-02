@@ -164,14 +164,18 @@ export function WorkspaceChooserPage(): React.JSX.Element {
   // `allow_user_create_team`). Unlike `can_create_org` below this is NOT limited to users with no
   // workspace yet — creating a workspace inside an org you already run is an ordinary action.
   const creatableOrgs = workspaceChoices.creatable_orgs;
-  // Organisation membership is intentionally one-per-domain. `can_create_org`
-  // permits a verified first-workspace flow; it does not turn an existing
-  // workspace chooser into a misleading second-organisation creation path.
-  const canCreateFirstWorkspace = workspaceChoices.can_create_org && !hasTeams && !hasInvites;
+  // Creating an organisation is an independent, server-gated destination. A user may own more
+  // than one organisation, so keep it available alongside organisations that can host a new team.
+  const canCreateNewOrganisation = workspaceChoices.can_create_org;
   // With no usable workspace or invitation there is no organisation destination to pick. Put the
   // first-workspace form directly in the chooser rather than stranding it behind a floating modal.
-  const showInlineFirstWorkspaceForm = canCreateFirstWorkspace && creatableOrgs.length === 0;
-  const canOpenCreateDialog = creatableOrgs.length > 0;
+  const showInlineFirstWorkspaceForm =
+    canCreateNewOrganisation && !hasTeams && !hasInvites && creatableOrgs.length === 0;
+  // The inline first-workspace form already exposes the only available creation destination, so
+  // do not duplicate it with the floating trigger. Every other permitted destination opens the
+  // custom picker.
+  const canOpenCreateDialog =
+    creatableOrgs.length > 0 || (canCreateNewOrganisation && !showInlineFirstWorkspaceForm);
 
   return (
     <div className="flex flex-col gap-4">
@@ -241,7 +245,7 @@ export function WorkspaceChooserPage(): React.JSX.Element {
           loginToken={loginToken}
           query={query}
           creatableOrgs={creatableOrgs}
-          canCreateNewOrganisation={canCreateFirstWorkspace}
+          canCreateNewOrganisation={canCreateNewOrganisation}
           onOutcome={handleOutcome}
           onClose={() => setIsCreateDialogOpen(false)}
         />
