@@ -220,11 +220,16 @@ describe('Organisation service: organisation CRUD', () => {
         }),
       }),
     );
+    // The founder joins their own default workspace as its OWNER. This used to
+    // take Prisma's `member` default, leaving them organisation owner and team
+    // member — holding no team capability over the only workspace they had
+    // just created.
     expect(prisma.teamMember.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: {
           teamId: 'team-default',
           userId: 'u-owner',
+          teamRole: 'owner',
         },
       }),
     );

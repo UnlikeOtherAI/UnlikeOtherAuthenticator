@@ -115,7 +115,7 @@ it from domain Y with a domain-Y token; a domain-Y *backend* still cannot.
 | \`POST .../transfer-ownership\` | Yes. Demotes the org's **current owner** — see below for the role they land on. |
 | \`GET .../groups\`, \`GET .../groups/:groupId\` | Yes. |
 | \`GET .../teams\` | Yes — and lists \`HIDDEN\` teams too; that filter is member-to-member discovery. |
-| \`POST .../teams\` | Yes. |
+| \`POST .../teams\` | Yes — but \`join_creator\` is ignored: there is no acting user to add. |
 | \`GET .../teams/:teamId\` | Yes, including \`?include=invited\`. |
 | \`PUT|DELETE .../teams/:teamId\` | Yes. |
 | \`POST .../teams/:teamId/members\` | Yes. Takes \`userId\` as today. |

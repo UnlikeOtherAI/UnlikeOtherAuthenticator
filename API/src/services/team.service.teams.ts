@@ -3,6 +3,7 @@ import { getEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
 import { runInTransaction } from '../db/tenant-context.js';
 import { AppError } from '../utils/errors.js';
+import { resolveWorkspaceCreatorTeamRole } from './role-grants.js';
 
 import {
   assertDatabaseEnabled,
@@ -122,6 +123,17 @@ export async function createTeam(
     description?: string;
     /** Optional creation-time visibility; defaults to the Prisma INVITE_ONLY default. */
     joinPolicy?: string;
+    /**
+     * Add the acting user to the team it just created, as its owner.
+     *
+     * Opt-in, because the two callers want opposite things. A backend
+     * provisioning teams FOR other people must not be dropped into each one;
+     * a person creating their own workspace is unusable without it — every
+     * entry check (including `/billing/v1/service-access/confirm`) asks for an
+     * ACTIVE `TeamMember`, so without this they create a workspace they cannot
+     * open. There is no acting user in backend mode, so this is ignored there.
+     */
+    joinCreator?: boolean;
     config: ClientConfig;
   },
   deps?: OrgServiceDeps,
@@ -179,6 +191,22 @@ export async function createTeam(
         },
         select: TEAM_SELECT,
       });
+
+      if (params.joinCreator && actorUserId) {
+        // Upsert, never a plain insert: the hosted chooser already calls
+        // `addTeamMember` right after `createTeam`, so a non-idempotent write
+        // would turn that existing flow into a unique-constraint failure the
+        // moment it passes this flag.
+        await tx.teamMember.upsert({
+          where: { teamId_userId: { teamId: created.id, userId: actorUserId } },
+          create: {
+            teamId: created.id,
+            userId: actorUserId,
+            teamRole: resolveWorkspaceCreatorTeamRole(params.config),
+          },
+          update: {},
+        });
+      }
 
       return toTeamRecord(created, org.domain);
     } catch (err) {
