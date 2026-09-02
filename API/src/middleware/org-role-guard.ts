@@ -2,6 +2,12 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 
 import { AppError } from '../utils/errors.js';
 import { verifyAccessToken, type AccessTokenClaims } from '../services/access-token.service.js';
+import { verifyConfidentialSubjectToken } from '../services/confidential-token-exchange.service.js';
+import {
+  isAuthenticationEpochMismatchError,
+  lockAndAssertAuthenticationEpoch,
+} from '../services/authentication-epoch.service.js';
+import { getActiveClientOrgContext } from '../services/org-context.service.js';
 import { normalizeDomain } from '../utils/domain.js';
 import { getEnv } from '../config/env.js';
 
@@ -23,6 +29,13 @@ function resolveOrgIdFromParams(request: FastifyRequest): string | undefined {
   return orgId || undefined;
 }
 
+function resolveTeamIdFromParams(request: FastifyRequest): string | undefined {
+  const params = request.params as { teamId?: string } | undefined;
+  if (!params?.teamId) return undefined;
+  const teamId = params.teamId.trim();
+  return teamId || undefined;
+}
+
 export function parseBearerOrRawToken(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
@@ -38,6 +51,12 @@ export function parseBearerOrRawToken(value: unknown): string | null {
 }
 
 export const ORG_ACCESS_TOKEN_HEADER = 'x-uoa-access-token';
+export const ORG_SUBJECT_ASSERTION_HEADER = 'x-uoa-subject-assertion';
+export const ORG_SUBJECT_ASSERTION_AUDIENCE = 'https://authentication.unlikeotherai.com/org';
+
+function invalidSubjectAssertion(): AppError {
+  return new AppError('UNAUTHORIZED', 401, 'INVALID_SUBJECT_TOKEN');
+}
 
 /**
  * Resolve `X-UOA-Access-Token` into either a token or "the caller deliberately
@@ -72,13 +91,29 @@ export function resolveOrgAccessTokenHeader(request: FastifyRequest): string | n
   return token;
 }
 
+/**
+ * Resolve the separate assertion credential without ever treating a malformed
+ * value as an omitted header. A JWT cannot contain a comma, so reject the
+ * comma-joined shape Node uses for repeated custom headers as well.
+ */
+function resolveOrgSubjectAssertionHeader(request: FastifyRequest): string | null {
+  const raw = request.headers[ORG_SUBJECT_ASSERTION_HEADER];
+  if (raw === undefined) return null;
+
+  const assertion = parseBearerOrRawToken(raw);
+  if (!assertion || assertion.includes(',')) {
+    throw invalidSubjectAssertion();
+  }
+  return assertion;
+}
+
 declare module 'fastify' {
   interface FastifyRequest {
     accessTokenClaims?: AccessTokenClaims;
     /**
      * Set by `requireOrgRole` and `requireOrgBackendOnly` — and by nothing else —
-     * when the request was accepted on the domain pairing alone, with no
-     * `x-uoa-access-token` present. Both writers go through the single
+     * when the request was accepted on the domain pairing alone, with neither
+     * user credential present. Both writers go through the single
      * `acceptDomainBackendCaller` below, so both ran the same three checks
      * including the `backend_org_management` opt-in.
      *
@@ -103,13 +138,133 @@ function normalizeOrgId(value: string): string {
  * Every failure mode, error code, and the DB-error passthrough that must never
  * look like a logout are `verifyAccessToken`'s own, unchanged.
  *
- * A product backend that wants to drive `/org/*` server-to-server does not
- * present a token here at all — it omits the header and is authorised by the
- * domain pairing (`requireDomainHashAuthForDomainQuery` + `configVerifier`).
+ * A product backend that wants to drive `/org/*` server-to-server presents
+ * neither user credential and is authorised by the domain pairing
+ * (`requireDomainHashAuthForDomainQuery` + `configVerifier`).
  * See `requireOrgRole` below.
  */
 export async function resolveActingUserClaims(token: string): Promise<AccessTokenClaims> {
   return await verifyAccessToken(token);
+}
+
+/**
+ * Convert a one-minute RS256 subject assertion into the same claims shape the
+ * normal role gate consumes. The assertion is only an authentication handoff:
+ * its workspace claim is always re-resolved against current memberships before
+ * it can act on an organisation route.
+ */
+async function resolveSubjectAssertionClaims(
+  request: FastifyRequest,
+  subjectAssertion: string,
+): Promise<AccessTokenClaims> {
+  const sourceDomain = normalizeDomain(request.config?.domain ?? '');
+  const configJwt = request.configJwt?.trim();
+  if (!sourceDomain || !configJwt) throw invalidSubjectAssertion();
+
+  const assertion = await verifyConfidentialSubjectToken({
+    subjectToken: subjectAssertion,
+    configJwt,
+    sourceDomain,
+    audience: ORG_SUBJECT_ASSERTION_AUDIENCE,
+  });
+  if (!assertion.active) throw invalidSubjectAssertion();
+
+  const requestOrgId = resolveOrgIdFromParams(request);
+  const requestTeamId = resolveTeamIdFromParams(request);
+  if (
+    (requestOrgId && normalizeOrgId(assertion.active.orgId) !== requestOrgId) ||
+    (requestTeamId && normalizeOrgId(assertion.active.teamId) !== requestTeamId)
+  ) {
+    throw new AppError('FORBIDDEN', 403, 'INSUFFICIENT_ORG_ROLE');
+  }
+
+  let identity: { tokenVersion: number };
+  try {
+    identity = await lockAndAssertAuthenticationEpoch(
+      {
+        userId: assertion.sub,
+        domain: sourceDomain,
+        credentialEpoch: assertion.tv,
+      },
+      { prisma: request.adminDb },
+    );
+  } catch (error) {
+    if (isAuthenticationEpochMismatchError(error)) throw invalidSubjectAssertion();
+    throw error;
+  }
+
+  const [user, org] = await Promise.all([
+    request.adminDb.user.findUnique({
+      where: { id: assertion.sub },
+      select: { email: true },
+    }),
+    getActiveClientOrgContext(
+      {
+        userId: assertion.sub,
+        domain: sourceDomain,
+        orgId: assertion.active.orgId,
+        groupsEnabled: request.config?.org_features?.groups_enabled,
+      },
+      {
+        crossProductPrisma: request.adminDb,
+        policyPrisma: request.adminDb,
+        prisma: request.adminDb,
+      },
+    ),
+  ]);
+
+  if (
+    !user ||
+    !org ||
+    normalizeOrgId(org.org_id) !== normalizeOrgId(assertion.active.orgId) ||
+    !org.teams.includes(assertion.active.teamId)
+  ) {
+    throw new AppError('FORBIDDEN', 403, 'INSUFFICIENT_ORG_ROLE');
+  }
+
+  return {
+    userId: assertion.sub,
+    tokenVersion: identity.tokenVersion,
+    email: user.email,
+    domain: sourceDomain,
+    // Assertions identify a user and their live workspace, not an OAuth
+    // client. This non-authoritative marker exists only because the shared
+    // in-memory claims shape has a required clientId field.
+    clientId: 'uoa-subject-assertion',
+    role: 'user',
+    org,
+    active: {
+      orgId: assertion.active.orgId,
+      teamId: assertion.active.teamId,
+      tenantSlug: org.tenant_slug,
+    },
+  };
+}
+
+function assertRequiredOrgRole(
+  claims: AccessTokenClaims,
+  orgId: string | undefined,
+  requiredRoles: string[],
+): void {
+  if (requiredRoles.length > 0) {
+    const memberOrgId = normalizeOrgId(claims.org?.org_id ?? '');
+    if (!memberOrgId || !claims.org?.org_role) {
+      throw new AppError('FORBIDDEN', 403, 'INSUFFICIENT_ORG_ROLE');
+    }
+
+    if (orgId && normalizeOrgId(memberOrgId) !== orgId) {
+      throw new AppError('FORBIDDEN', 403, 'INSUFFICIENT_ORG_ROLE');
+    }
+
+    if (!requiredRoles.includes(claims.org.org_role)) {
+      throw new AppError('FORBIDDEN', 403, 'INSUFFICIENT_ORG_ROLE');
+    }
+  } else if (orgId) {
+    const memberOrgId = normalizeOrgId(claims.org?.org_id ?? '');
+    if (!memberOrgId || memberOrgId !== orgId) {
+      throw new AppError('FORBIDDEN', 403, 'INSUFFICIENT_ORG_ROLE');
+    }
+  }
 }
 
 /**
@@ -208,7 +363,10 @@ export function requireOrgBackendOnly() {
   return async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
     void reply;
 
-    if (request.headers[ORG_ACCESS_TOKEN_HEADER] !== undefined) {
+    if (
+      request.headers[ORG_ACCESS_TOKEN_HEADER] !== undefined ||
+      request.headers[ORG_SUBJECT_ASSERTION_HEADER] !== undefined
+    ) {
       throw new AppError('UNAUTHORIZED', 401, 'ACCESS_TOKEN_NOT_ALLOWED');
     }
 
@@ -221,40 +379,33 @@ export function requireOrgRole(...requiredRoles: string[]) {
     void reply;
 
     const domain = resolveDomainFromRequest(request);
+    const subjectAssertion = resolveOrgSubjectAssertionHeader(request);
+
+    // User-mode credentials are deliberately mutually exclusive. In
+    // particular, do not silently choose whichever one happens to verify: a
+    // partner BFF that accidentally forwards both must fail closed.
+    if (subjectAssertion && request.headers[ORG_ACCESS_TOKEN_HEADER] !== undefined) {
+      throw invalidSubjectAssertion();
+    }
 
     // Only a genuinely ABSENT header selects backend mode. A present-but-blank
-    // header throws inside the resolver rather than reaching this branch.
+    // header throws inside the resolver rather than reaching this branch. A
+    // standalone subject assertion is the separate user-mode exception.
     const token = resolveOrgAccessTokenHeader(request);
-    if (!token) {
+    if (!token && !subjectAssertion) {
       await acceptDomainBackendCaller(request, domain);
       return;
     }
 
-    const claims = await resolveActingUserClaims(token);
+    const claims = token
+      ? await resolveActingUserClaims(token)
+      : await resolveSubjectAssertionClaims(request, subjectAssertion!);
     if (normalizeDomain(claims.domain) !== domain) {
       throw new AppError('FORBIDDEN', 403, 'ACCESS_TOKEN_DOMAIN_MISMATCH');
     }
 
     const orgId = resolveOrgIdFromParams(request);
-    if (requiredRoles.length > 0) {
-      const memberOrgId = normalizeOrgId(claims.org?.org_id ?? '');
-      if (!memberOrgId || !claims.org?.org_role) {
-        throw new AppError('FORBIDDEN', 403, 'INSUFFICIENT_ORG_ROLE');
-      }
-
-      if (orgId && normalizeOrgId(memberOrgId) !== orgId) {
-        throw new AppError('FORBIDDEN', 403, 'INSUFFICIENT_ORG_ROLE');
-      }
-
-      if (!requiredRoles.includes(claims.org.org_role)) {
-        throw new AppError('FORBIDDEN', 403, 'INSUFFICIENT_ORG_ROLE');
-      }
-    } else if (orgId) {
-      const memberOrgId = normalizeOrgId(claims.org?.org_id ?? '');
-      if (!memberOrgId || memberOrgId !== orgId) {
-        throw new AppError('FORBIDDEN', 403, 'INSUFFICIENT_ORG_ROLE');
-      }
-    }
+    assertRequiredOrgRole(claims, orgId, requiredRoles);
 
     request.accessTokenClaims = claims;
   };

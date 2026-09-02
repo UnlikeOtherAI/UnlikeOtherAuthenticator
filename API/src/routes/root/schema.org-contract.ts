@@ -11,7 +11,7 @@ const ORG_DOMAIN_QUERY: Record<string, string> = {
 
 const ORG_CONTRACT_NOTE =
   'Requires org_features.enabled=true (otherwise 404). Two calling modes. ' +
-  'USER MODE: send X-UOA-Access-Token — the acting user is its `userId` claim, a new ' +
+  'USER MODE: send exactly one of X-UOA-Access-Token or X-UOA-Subject-Assertion — the acting user is its `userId` claim, a new ' +
   'organisation is owned by that user (the body must not carry owner_user_id), and ' +
   'non-superusers can only create one when org_features.allow_user_create_org=true, else 403 ' +
   'ORG_CREATION_NOT_ALLOWED. In user mode an :orgId is resolved by ID ALONE: one organisation is ' +
@@ -19,6 +19,11 @@ const ORG_CONTRACT_NOTE =
   'the origin domain) does not decide who may read or manage it. The gates are the token domain ' +
   'matching ?domain= (else 403 ACCESS_TOKEN_DOMAIN_MISMATCH), the token org claim matching :orgId ' +
   '(else 403 INSUFFICIENT_ORG_ROLE), and live ACTIVE membership/capability in the org. ' +
+  'A subject assertion is a product-signed RS256 JWT, valid for at most 60 seconds, with audience ' +
+  'https://authentication.unlikeotherai.com/org and an active org/team that exactly matches the route; ' +
+  'UOA verifies it through the product config JWKS and re-resolves the user credential epoch and ACTIVE ' +
+  'membership before applying the same user-mode gates. It is not an access token and must never be sent ' +
+  'with X-UOA-Access-Token. ' +
   'organisations.domain still owns the slug namespace, the one-active-org-per-origin-domain ' +
   'invariant, backend-mode ownership, and invite email identity. BACKEND MODE: omit ' +
   'X-UOA-Access-Token entirely — the domain ' +
@@ -36,7 +41,7 @@ const ORG_CONTRACT_NOTE =
   'recorded in the org audit log with actor_user_id null and metadata.uoa_actor = ' +
   '{ via: "domain_backend", source_domain }. ' +
   'GET /org/organisations is BACKEND-ONLY: it lists a whole domain and has no user mode, so it ' +
-  'refuses any present X-UOA-Access-Token with 401 ACCESS_TOKEN_NOT_ALLOWED (valid or blank ' +
+  'refuses either present user credential with 401 ACCESS_TOKEN_NOT_ALLOWED (valid or blank ' +
   'alike) — omit the header, and use GET /org/me for a user\'s own workspaces. ' +
   IDENTITY_AVATAR_URL_NOTE;
 

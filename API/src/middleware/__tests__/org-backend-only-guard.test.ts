@@ -27,16 +27,19 @@ function makeBackendRequest(
     queryDomain?: string;
     backendOrgManagement?: boolean;
     accessToken?: string;
+    subjectAssertion?: string;
   } = {},
 ) {
   const configDomain =
     'configDomain' in overrides ? overrides.configDomain : 'client.example.com';
 
   return {
-    headers:
-      'accessToken' in overrides
-        ? { 'x-uoa-access-token': overrides.accessToken }
-        : {},
+    headers: {
+      ...('accessToken' in overrides ? { 'x-uoa-access-token': overrides.accessToken } : {}),
+      ...('subjectAssertion' in overrides
+        ? { 'x-uoa-subject-assertion': overrides.subjectAssertion }
+        : {}),
+    },
     domainAuthClientDomainId:
       'domainAuthClientDomainId' in overrides ? overrides.domainAuthClientDomainId : 'cd_1',
     query: { domain: overrides.queryDomain ?? 'client.example.com' },
@@ -103,6 +106,17 @@ describe('requireOrgBackendOnly middleware', () => {
     // It is refused on presence alone — no verification, so no oracle about
     // whether the token was valid.
     expect(verifyAccessTokenMock).not.toHaveBeenCalled();
+    expect(request.orgBackendCaller).toBeUndefined();
+  });
+
+  it('refuses a subject assertion instead of ignoring it', async () => {
+    const request = makeBackendRequest({ subjectAssertion: 'aaa.bbb.ccc' });
+
+    await expect(requireOrgBackendOnly()(request, {} as FastifyReply)).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+      statusCode: 401,
+      message: 'ACCESS_TOKEN_NOT_ALLOWED',
+    });
     expect(request.orgBackendCaller).toBeUndefined();
   });
 

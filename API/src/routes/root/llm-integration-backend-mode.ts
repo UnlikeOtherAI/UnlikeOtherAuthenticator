@@ -9,8 +9,34 @@ is the backend for domain X"*, and it is the only authentication several \`/org\
 routes have ever needed (\`GET /org/organisations\`, the bulk branch of
 \`POST .../invitations\`, the access-request family).
 
-**Backend mode simply omits \`X-UOA-Access-Token\`.** There is no second
-credential, no token exchange, and no extra header.
+**Backend mode omits both user credentials:** \`X-UOA-Access-Token\` and
+\`X-UOA-Subject-Assertion\`. There is no acting user, no token exchange, and no
+extra header.
+
+### 4.6c Product-signed current-user assertion
+
+An integrated product that needs UOA to authorize the person currently signed
+into that product, but deliberately does not retain a UOA bearer token, sends a
+short-lived RS256 JWT in \`X-UOA-Subject-Assertion\` instead of
+\`X-UOA-Access-Token\`. This is user mode, never backend mode, and it still sends
+the usual domain-hash bearer and verified config URL.
+
+The assertion must be signed by the product key advertised in the verified
+config JWT's JWKS, have \`iss\` and \`source_domain\` equal to that config domain,
+have exact \`aud\` \`https://authentication.unlikeotherai.com/org\`, live for at
+most 60 seconds, and contain \`{ sub, tv, active: { orgId, teamId } }\`. The
+active org/team must exactly match the route parameters. UOA then verifies the
+signature and re-resolves the subject's current credential epoch and ACTIVE
+cross-product membership before it applies the ordinary user role/capability
+gate and writes ordinary user audit attribution. A product assertion is not a
+UOA access token, is never persisted by UOA, and cannot grant tenant-wide
+backend authority.
+
+Send exactly one user credential. A request with both headers, a blank or
+repeated assertion, a stale epoch, invalid signature/audience/lifetime, or a
+different active workspace is refused; it never falls through to backend mode.
+\`GET /org/organisations\` and backend-only invitation acceptance refuse either
+user credential with \`401 ACCESS_TOKEN_NOT_ALLOWED\`.
 
 **Omit the header — do not send it empty.** A header that is present but blank
 (an empty string, spaces, a tab, a newline) is a malformed credential, not an absent one,
