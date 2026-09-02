@@ -388,18 +388,20 @@ export function requireOrgRole(...requiredRoles: string[]) {
       throw invalidSubjectAssertion();
     }
 
-    // Only a genuinely ABSENT header selects backend mode. A present-but-blank
-    // header throws inside the resolver rather than reaching this branch. A
-    // standalone subject assertion is the separate user-mode exception.
+    // Only genuinely ABSENT headers select backend mode. A present-but-blank
+    // one throws inside its resolver rather than reaching here. The three
+    // credential modes are one visible choice so that no arm can be reached
+    // with a credential the branch above did not establish.
     const token = resolveOrgAccessTokenHeader(request);
-    if (!token && !subjectAssertion) {
+    let claims: AccessTokenClaims;
+    if (token) {
+      claims = await resolveActingUserClaims(token);
+    } else if (subjectAssertion) {
+      claims = await resolveSubjectAssertionClaims(request, subjectAssertion);
+    } else {
       await acceptDomainBackendCaller(request, domain);
       return;
     }
-
-    const claims = token
-      ? await resolveActingUserClaims(token)
-      : await resolveSubjectAssertionClaims(request, subjectAssertion!);
     if (normalizeDomain(claims.domain) !== domain) {
       throw new AppError('FORBIDDEN', 403, 'ACCESS_TOKEN_DOMAIN_MISMATCH');
     }

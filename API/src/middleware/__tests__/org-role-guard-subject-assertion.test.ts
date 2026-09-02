@@ -24,8 +24,8 @@ vi.mock('../../services/org-context.service.js', () => ({
 
 const request = (overrides: { accessToken?: string; assertion?: string; teamId?: string } = {}) => {
   const headers: Record<string, string> = {};
-  if ('accessToken' in overrides) headers['x-uoa-access-token'] = overrides.accessToken!;
-  if ('assertion' in overrides) headers['x-uoa-subject-assertion'] = overrides.assertion!;
+  if (overrides.accessToken !== undefined) headers['x-uoa-access-token'] = overrides.accessToken;
+  if (overrides.assertion !== undefined) headers['x-uoa-subject-assertion'] = overrides.assertion;
   return {
     headers,
     query: { domain: 'api.nessie.works' },
