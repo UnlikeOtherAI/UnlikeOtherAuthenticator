@@ -35,9 +35,16 @@ export const orgEndpoints: EndpointSchema[] = [
     method: 'POST',
     path: '/org/organisations',
     description:
-      'Create organisation owned by the calling user (X-UOA-Access-Token). Non-superusers also require org_features.allow_user_create_org=true, else 403 ORG_CREATION_NOT_ALLOWED.',
-    auth: 'domain hash bearer token + X-UOA-Access-Token header (the new org owner)',
-    body: { name: 'string (required, 1-100)' },
+      'Create organisation owned by the calling user (X-UOA-Access-Token). Non-superusers also require org_features.allow_user_create_org=true, else 403 ORG_CREATION_NOT_ALLOWED. In backend mode (no user credential) the body must carry owner_user_id instead and allow_user_create_org does not apply. The response is the organisation record plus defaultTeam: the "General" team created in the same transaction, with the owner already an ACTIVE member of it. Use defaultTeam.id to address the new workspace immediately — no follow-up read is needed, and none is possible with a subject assertion, which must already name the org and team it acts on.',
+    auth: 'domain hash bearer token + X-UOA-Access-Token header (the new org owner), or backend mode',
+    body: {
+      name: 'string (required, 1-100)',
+      'owner_user_id?': 'string — backend mode only, and required there; rejected with 400 OWNER_NOT_ALLOWED alongside a user credential',
+    },
+    response: {
+      '…': 'organisation record fields (id, domain, name, slug, ownerId, memberInvites, iconUrl, createdAt, updatedAt)',
+      defaultTeam: 'object — the full team record of the auto-created default team (isDefault true)',
+    },
   },
   {
     method: 'GET',

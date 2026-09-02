@@ -107,7 +107,7 @@ it from domain Y with a domain-Y token; a domain-Y *backend* still cannot.
 |---|---|
 | \`GET /org/me\` | **No** — 401. It answers "who am I", which has no meaning without a caller. |
 | \`GET /org/organisations\` | Yes (already was). |
-| \`POST /org/organisations\` | Yes. Body **must** carry \`owner_user_id\`; \`allow_user_create_org\` does not apply. |
+| \`POST /org/organisations\` | Yes. Body **must** carry \`owner_user_id\`; \`allow_user_create_org\` does not apply. The response carries \`defaultTeam\` (below). |
 | \`GET|PUT|DELETE /org/organisations/:orgId\` | Yes. |
 | \`GET|POST /org/organisations/:orgId/members\` | Yes. \`POST\` takes \`userId\` as today. |
 | \`PUT|DELETE .../members/:userId\` | Yes. |
@@ -130,6 +130,20 @@ it from domain Y with a domain-Y token; a domain-Y *backend* still cannot.
 | \`GET .../invitations?approval=pending\` | Yes. |
 | \`POST .../invitations/:inviteId/approve|deny\` | Yes. No reviewer is recorded. |
 | \`GET|POST .../access-requests…\` | Yes (already was). Optional \`reviewedByUserId\` in the body, unchanged — it is a label, never an actor. The \`:orgId\`/\`:teamId\` must be your own domain's, even when your signed config names them as the access-request target. |
+
+**Creating an organisation gives you its workspace in the same answer.** The
+create transaction also makes a default team named "General" and puts the owner
+in it, and the response carries that whole team record as \`defaultTeam\`. Use
+\`defaultTeam.id\` to address the new workspace immediately.
+
+This matters most to a product driving creation from its own UI: there is no
+follow-up read that recovers the id with a user credential, because a
+\`X-UOA-Subject-Assertion\` has to name the org and team it is acting on, and
+those are exactly what is unknown a millisecond after the org is born. Without
+the field, such a product had to send the person back through the interactive
+chooser purely to learn one id. Backend mode can of course also call
+\`GET /org/organisations/:orgId/teams\` and pick the \`isDefault\` entry; keeping
+that as a defensive fallback is reasonable, but it is no longer required.
 
 **Errors specific to this mode:**
 
