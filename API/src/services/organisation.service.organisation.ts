@@ -27,7 +27,12 @@ import {
   type OrgServicePrisma,
   type OrganisationRecord,
 } from './organisation.service.base.js';
-import { deriveUniqueTeamSlug, normalizeTeamJoinPolicy } from './team.service.base.js';
+import {
+  deriveUniqueTeamSlug,
+  normalizeTeamJoinPolicy,
+  toTeamRecord,
+  type TeamRecord,
+} from './team.service.base.js';
 import {
   lockWorkspaceMembershipRows,
   lockWorkspaceOrganisationRow,
@@ -44,6 +49,47 @@ const ORGANISATION_SELECT = {
   createdAt: true,
   updatedAt: true,
 } as const;
+
+/**
+ * Everything `toTeamRecord` needs for the default team returned by create.
+ * Kept beside `ORGANISATION_SELECT` so the two response shapes are read
+ * together.
+ */
+const DEFAULT_TEAM_SELECT = {
+  id: true,
+  orgId: true,
+  groupId: true,
+  name: true,
+  slug: true,
+  description: true,
+  isDefault: true,
+  joinPolicy: true,
+  iconUrl: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
+
+/**
+ * What `POST /org/organisations` answers: the organisation record plus the
+ * default team the same transaction created.
+ *
+ * The default team is deliberately NOT added to `OrganisationRecord` itself.
+ * `toOrganisationRecord` serialises that type for the single-org read AND for
+ * the domain-wide list, so carrying a team on it would add a team lookup to
+ * every row of every list page to serve the one caller that already holds the
+ * id in hand.
+ *
+ * It exists because creation was otherwise unusable by an API client. The
+ * transaction creates a default team and makes the owner a member of it, but
+ * without its id the caller cannot address the workspace it just made — and no
+ * user-credentialled read can recover it, because a subject assertion has to
+ * name the org and team it is acting on, which is exactly what is unknown. A
+ * product driving org creation from its own UI was forced to send the person
+ * through UOA's interactive chooser instead.
+ */
+export type CreatedOrganisationRecord = OrganisationRecord & {
+  defaultTeam: TeamRecord;
+};
 
 export async function listOrganisationsForDomain(
   params: { domain: string; limit?: number; cursor?: string },
@@ -91,7 +137,7 @@ export async function createOrganisation(
     actor?: OrgActorProvenance;
   },
   deps?: OrgServiceDeps,
-): Promise<OrganisationRecord> {
+): Promise<CreatedOrganisationRecord> {
   const env = deps?.env ?? getEnv();
   assertDatabaseEnabled(env);
 
@@ -169,7 +215,11 @@ export async function createOrganisation(
         isDefault: true,
         ...(defaultTeamJoinPolicy === undefined ? {} : { joinPolicy: defaultTeamJoinPolicy }),
       },
-      select: { id: true },
+      // Widened from `{ id }` so the create response can carry the whole team
+      // record. The row is already being written here; selecting its columns
+      // costs nothing and saves every API client a follow-up read it may not
+      // even be able to make — see `CreatedOrganisationRecord` below.
+      select: DEFAULT_TEAM_SELECT,
     });
 
     try {
@@ -194,7 +244,10 @@ export async function createOrganisation(
       },
     });
 
-    return toOrganisationRecord(createdOrg);
+    return {
+      ...toOrganisationRecord(createdOrg),
+      defaultTeam: toTeamRecord(defaultTeam, domain),
+    };
   });
 
   await auditOrg({

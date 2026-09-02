@@ -131,8 +131,13 @@ describe('Organisation service: organisation CRUD', () => {
     prisma.team.create.mockResolvedValue({
       id: 'team-default',
       orgId: 'org-1',
+      groupId: null,
       name: 'General',
+      slug: 'general',
+      description: null,
       isDefault: true,
+      joinPolicy: 'INVITE_ONLY',
+      iconUrl: null,
       createdAt: now,
       updatedAt: now,
     });
@@ -170,6 +175,21 @@ describe('Organisation service: organisation CRUD', () => {
       slug: 'acme-inc',
       ownerId: 'u-owner',
     });
+
+    // The create response carries the default team the same transaction made.
+    // Without it an API-driven caller cannot address the workspace it just
+    // created: no user-credentialled read recovers the id, because a subject
+    // assertion must already name the org and team it acts on.
+    expect(org.defaultTeam).toMatchObject({
+      id: 'team-default',
+      orgId: 'org-1',
+      name: 'General',
+      isDefault: true,
+    });
+    // It is the same team the owner was just given membership of.
+    expect(prisma.teamMember.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ teamId: org.defaultTeam.id }) }),
+    );
 
     expect(prisma.organisation.create).toHaveBeenCalledWith(
       expect.objectContaining({
