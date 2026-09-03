@@ -13,7 +13,7 @@ import {
   resolveOrgActor,
   resolveOrganisation,
 } from './organisation.service.base.js';
-import { hasWorkspaceCapability } from './team.service.base.js';
+import { hasTeamCapability } from './team.service.base.js';
 import { buildUserIdentity } from './user-scope.service.js';
 import {
   ACTIONABLE_TEAM_INVITE_WHERE,
@@ -110,8 +110,8 @@ export async function createMemberInvite(
   let approvalStatus: 'NOT_REQUIRED' | 'PENDING' = 'NOT_REQUIRED';
   // A manager invites outright; everyone else goes through the org's member-invite policy. This
   // used to inline its own `owner|admin` comparison at both scopes — the same predicate
-  // `hasWorkspaceCapability` now owns, so a domain's configured roles decide it here too.
-  const isManager = await hasWorkspaceCapability(prisma, 'members.manage', {
+  // `hasTeamCapability` now owns, so a domain's configured roles decide it here too.
+  const isManager = await hasTeamCapability(prisma, 'members.manage', {
     orgId: org.id,
     teamId: team.id,
     actorUserId: params.actorUserId,

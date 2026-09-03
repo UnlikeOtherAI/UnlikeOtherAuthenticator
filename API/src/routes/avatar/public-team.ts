@@ -9,18 +9,18 @@ import { AppError } from '../../utils/errors.js';
 import { AvatarImageQueryFields, sendAvatar } from './shared.js';
 
 /**
- * Public workspace (team) avatar — the one avatar GET with no credential (Docs/Auth/avatars.md
+ * Public team (team) avatar — the one avatar GET with no credential (Docs/Auth/avatars.md
  * §11.3).
  *
  * Every other avatar route is bearer-gated, which is why §9 excluded the auth-popup chooser
  * payloads from carrying an image URL at all: the popup holds no credential a plain `<img src>`
  * could send, so the chooser could only ever draw an initials badge. This route exists so the
- * chooser can render the workspace's real logo.
+ * chooser can render the team's real logo.
  *
  * It is deliberately not an existence oracle. An unknown or deleted `:teamId` renders the same
  * deterministic generated SVG that a real team with no image gets, so every id answers 200 with an
  * image and the response cannot be used to enumerate teams. Team ids are unguessable cuids; what
- * this does expose to anyone holding one is that workspace's logo — the trade the product owner
+ * this does expose to anyone holding one is that team's logo — the trade the product owner
  * chose over a credentialed chooser fetch.
  *
  * No `config_url` is read here (that would let an anonymous caller aim the config fetcher wherever
@@ -32,7 +32,7 @@ const ParamsSchema = z.object({ teamId: z.string().min(1).max(64) }).strict();
 const QuerySchema = z.object({ ...AvatarImageQueryFields }).strict();
 
 // The only unauthenticated image endpoint, so it carries its own budget: generous enough for a
-// chooser rendering a full workspace list on every login, tight enough that it is not a free
+// chooser rendering a full team list on every login, tight enough that it is not a free
 // image-proxy for whoever knows a team id. The per-IP key is attacker's choice if the edge does
 // not overwrite X-Forwarded-For (app.ts sets trustProxy: 1), so compose it with a global bucket
 // no request input can move: the handler performs an outbound provider fetch, and this bounds
@@ -71,7 +71,7 @@ export function registerPublicTeamAvatarRoute(app: FastifyInstance): void {
       // A disabled tenant must stop serving its logo. Org rows have no status of their own, but
       // the owning ClientDomain does, and it is the lifecycle switch every other surface honours.
       // Falling back to the generated image rather than 404 keeps the non-oracle property: a
-      // torn-down workspace looks exactly like one that never set a logo.
+      // torn-down team looks exactly like one that never set a logo.
       const team = await request.adminDb.team.findFirst({
         where: { id: teamId },
         select: { org: { select: { domain: true } } },
@@ -98,7 +98,7 @@ export function registerPublicTeamAvatarRoute(app: FastifyInstance): void {
         size: query.size ?? null,
       }).catch(async (err: unknown) => {
         // Same generated image an existing team with no upload and no icon would serve, so an
-        // unknown id is indistinguishable from a real workspace that never set a logo.
+        // unknown id is indistinguishable from a real team that never set a logo.
         if (err instanceof AppError && err.message === 'TEAM_NOT_FOUND') {
           return await generatedFallback(teamId, query.style ?? null, query.size ?? null);
         }

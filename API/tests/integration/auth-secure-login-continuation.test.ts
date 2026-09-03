@@ -27,12 +27,12 @@ const redirectUrl = 'https://client.example.com/oauth/callback';
 const otherRedirectUrl = 'https://client.example.com/other-callback';
 const challenge = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ';
 
-type Workspace = { userId: string; orgId: string; teamId: string };
+type Team = { userId: string; orgId: string; teamId: string };
 
 function configPayload(overrides?: Record<string, unknown>) {
   return baseClientConfigPayload({
     redirect_urls: [redirectUrl, otherRedirectUrl],
-    login_flow: { email_code_enabled: true, workspace_selection: 'auto' },
+    login_flow: { email_code_enabled: true, team_selection: 'auto' },
     org_features: { enabled: true, user_needs_team: true },
     ...overrides,
   });
@@ -93,10 +93,10 @@ describe.skipIf(!hasDatabase)('secure one-time login continuation', () => {
     vi.restoreAllMocks();
   });
 
-  async function seedWorkspace(params?: {
+  async function seedTeam(params?: {
     email?: string;
     totpSecret?: string;
-  }): Promise<Workspace> {
+  }): Promise<Team> {
     const email = params?.email ?? 'chooser@example.com';
     const encryptedSecret = params?.totpSecret
       ? encryptTwoFaSecret({
@@ -172,31 +172,31 @@ describe.skipIf(!hasDatabase)('secure one-time login continuation', () => {
   }
 
   it('rejects every caller retarget while leaving the capability usable', async () => {
-    const workspace = await seedWorkspace();
+    const team = await seedTeam();
     const config = parsedConfig();
-    const loginToken = await mint(workspace.userId, config, 'retarget-jti');
+    const loginToken = await mint(team.userId, config, 'retarget-jti');
     const app = await installConfig();
     try {
       const attempts = [
         {
           name: 'redirect',
           url: selectUrl({ redirect: otherRedirectUrl }),
-          payload: { login_token: loginToken, teamId: workspace.teamId },
+          payload: { login_token: loginToken, teamId: team.teamId },
         },
         {
           name: 'pkce',
           url: selectUrl({ codeChallenge: `${challenge}x` }),
-          payload: { login_token: loginToken, teamId: workspace.teamId },
+          payload: { login_token: loginToken, teamId: team.teamId },
         },
         {
           name: 'request access',
           url: selectUrl({ requestAccess: true }),
-          payload: { login_token: loginToken, teamId: workspace.teamId },
+          payload: { login_token: loginToken, teamId: team.teamId },
         },
         {
           name: 'remember me',
           url: selectUrl(),
-          payload: { login_token: loginToken, teamId: workspace.teamId, remember_me: false },
+          payload: { login_token: loginToken, teamId: team.teamId, remember_me: false },
         },
       ];
       for (const attempt of attempts) {
@@ -213,7 +213,7 @@ describe.skipIf(!hasDatabase)('secure one-time login continuation', () => {
       const valid = await app.inject({
         method: 'POST',
         url: selectUrl(),
-        payload: { login_token: loginToken, teamId: workspace.teamId },
+        payload: { login_token: loginToken, teamId: team.teamId },
       });
       expect(valid.statusCode, valid.body).toBe(200);
       expect(await handle.prisma.loginSessionUse.count()).toBe(1);
@@ -223,8 +223,8 @@ describe.skipIf(!hasDatabase)('secure one-time login continuation', () => {
   });
 
   it('binds the same config URL to the verified parsed config fingerprint', async () => {
-    const workspace = await seedWorkspace();
-    const loginToken = await mint(workspace.userId, parsedConfig(), 'config-change-jti');
+    const team = await seedTeam();
+    const loginToken = await mint(team.userId, parsedConfig(), 'config-change-jti');
     const app = await installConfig({ allow_registration: false });
     try {
       const response = await app.inject({
@@ -240,19 +240,19 @@ describe.skipIf(!hasDatabase)('secure one-time login continuation', () => {
   });
 
   it('keeps choices and decline non-consuming, then grants exactly once', async () => {
-    const workspace = await seedWorkspace({ email: 'decline@example.com' });
+    const team = await seedTeam({ email: 'decline@example.com' });
     const invite = await handle.prisma.teamInvite.create({
       data: {
-        orgId: workspace.orgId,
-        teamId: workspace.teamId,
+        orgId: team.orgId,
+        teamId: team.teamId,
         email: 'decline@example.com',
-        invitedByUserId: workspace.userId,
+        invitedByUserId: team.userId,
         lastSentAt: new Date(),
         expiresAt: new Date(Date.now() + 60_000),
       },
       select: { id: true },
     });
-    const loginToken = await mint(workspace.userId, parsedConfig(), 'one-time-jti');
+    const loginToken = await mint(team.userId, parsedConfig(), 'one-time-jti');
     const app = await installConfig();
     try {
       const choices = await app.inject({
@@ -274,7 +274,7 @@ describe.skipIf(!hasDatabase)('secure one-time login continuation', () => {
       const selected = await app.inject({
         method: 'POST',
         url: selectUrl(),
-        payload: { login_token: loginToken, teamId: workspace.teamId },
+        payload: { login_token: loginToken, teamId: team.teamId },
       });
       expect(selected.statusCode, selected.body).toBe(200);
       const use = await handle.prisma.loginSessionUse.findFirstOrThrow({
@@ -286,7 +286,7 @@ describe.skipIf(!hasDatabase)('secure one-time login continuation', () => {
       const replay = await app.inject({
         method: 'POST',
         url: selectUrl(),
-        payload: { login_token: loginToken, teamId: workspace.teamId },
+        payload: { login_token: loginToken, teamId: team.teamId },
       });
       expect(replay.statusCode, replay.body).toBe(401);
       expect(await handle.prisma.loginSessionUse.count()).toBe(1);
@@ -297,17 +297,17 @@ describe.skipIf(!hasDatabase)('secure one-time login continuation', () => {
   });
 
   it('commits personal invite acceptance and capability consumption together', async () => {
-    const ownerWorkspace = await seedWorkspace({ email: 'owner-invite@example.com' });
+    const ownerTeam = await seedTeam({ email: 'owner-invite@example.com' });
     const invitee = await handle.prisma.user.create({
       data: { email: 'invited@example.com', userKey: 'invited@example.com' },
       select: { id: true },
     });
     const invite = await handle.prisma.teamInvite.create({
       data: {
-        orgId: ownerWorkspace.orgId,
-        teamId: ownerWorkspace.teamId,
+        orgId: ownerTeam.orgId,
+        teamId: ownerTeam.teamId,
         email: 'invited@example.com',
-        invitedByUserId: ownerWorkspace.userId,
+        invitedByUserId: ownerTeam.userId,
         lastSentAt: new Date(),
         expiresAt: new Date(Date.now() + 60_000),
       },
@@ -330,12 +330,12 @@ describe.skipIf(!hasDatabase)('secure one-time login continuation', () => {
       ).toEqual({ acceptedUserId: invitee.id });
       expect(
         await handle.prisma.orgMember.count({
-          where: { orgId: ownerWorkspace.orgId, userId: invitee.id, status: 'ACTIVE' },
+          where: { orgId: ownerTeam.orgId, userId: invitee.id, status: 'ACTIVE' },
         }),
       ).toBe(1);
       expect(
         await handle.prisma.teamMember.count({
-          where: { teamId: ownerWorkspace.teamId, userId: invitee.id, status: 'ACTIVE' },
+          where: { teamId: ownerTeam.teamId, userId: invitee.id, status: 'ACTIVE' },
         }),
       ).toBe(1);
 
@@ -356,15 +356,15 @@ describe.skipIf(!hasDatabase)('secure one-time login continuation', () => {
 
   it('cannot replay a selection or finish 2FA after membership removal', async () => {
     const totpSecret = 'JBSWY3DPEHPK3PXP';
-    const workspace = await seedWorkspace({ email: 'twofa@example.com', totpSecret });
+    const team = await seedTeam({ email: 'twofa@example.com', totpSecret });
     const config = parsedConfig({ '2fa_enabled': true });
-    const loginToken = await mint(workspace.userId, config, 'twofa-jti');
+    const loginToken = await mint(team.userId, config, 'twofa-jti');
     const app = await installConfig({ '2fa_enabled': true });
     try {
       const selected = await app.inject({
         method: 'POST',
         url: selectUrl(),
-        payload: { login_token: loginToken, teamId: workspace.teamId },
+        payload: { login_token: loginToken, teamId: team.teamId },
       });
       expect(selected.statusCode, selected.body).toBe(200);
       const twofaToken = (selected.json() as { twofa_token: string }).twofa_token;
@@ -374,12 +374,12 @@ describe.skipIf(!hasDatabase)('secure one-time login continuation', () => {
       const replay = await app.inject({
         method: 'POST',
         url: selectUrl(),
-        payload: { login_token: loginToken, teamId: workspace.teamId },
+        payload: { login_token: loginToken, teamId: team.teamId },
       });
       expect(replay.statusCode, replay.body).toBe(401);
 
       await handle.prisma.orgMember.update({
-        where: { orgId_userId: { orgId: workspace.orgId, userId: workspace.userId } },
+        where: { orgId_userId: { orgId: team.orgId, userId: team.userId } },
         data: { status: 'DEACTIVATED', statusChangedAt: new Date() },
       });
       const completed = await app.inject({
@@ -397,13 +397,13 @@ describe.skipIf(!hasDatabase)('secure one-time login continuation', () => {
     }
   });
 
-  it('rejects code exchange if the exact workspace membership became inactive', async () => {
-    const workspace = await seedWorkspace({ email: 'exchange-inactive@example.com' });
+  it('rejects code exchange if the exact team membership became inactive', async () => {
+    const team = await seedTeam({ email: 'exchange-inactive@example.com' });
     const verifier = 'exchange-verifier-abcdefghijklmnopqrstuvwxyz0123456789';
     const exchangeChallenge = createHash('sha256').update(verifier, 'utf8').digest('base64url');
     const issued = await issueAuthorizationCode(
       {
-        userId: workspace.userId,
+        userId: team.userId,
         domain,
         configUrl,
         redirectUrl,
@@ -412,8 +412,8 @@ describe.skipIf(!hasDatabase)('secure one-time login continuation', () => {
         rememberMe: true,
         twoFaCompleted: false,
         credentialEpoch: 0,
-        orgId: workspace.orgId,
-        teamId: workspace.teamId,
+        orgId: team.orgId,
+        teamId: team.teamId,
       },
       {
         prisma: handle.prisma,
@@ -424,8 +424,8 @@ describe.skipIf(!hasDatabase)('secure one-time login continuation', () => {
     await handle.prisma.teamMember.update({
       where: {
         teamId_userId: {
-          teamId: workspace.teamId,
-          userId: workspace.userId,
+          teamId: team.teamId,
+          userId: team.userId,
         },
       },
       data: { status: 'REMOVED', statusChangedAt: new Date() },
@@ -445,7 +445,7 @@ describe.skipIf(!hasDatabase)('secure one-time login continuation', () => {
     ).rejects.toMatchObject({ statusCode: 401, message: 'INVALID_AUTH_CODE' });
     expect(
       await handle.prisma.authorizationCode.findFirstOrThrow({
-        where: { userId: workspace.userId },
+        where: { userId: team.userId },
         select: { usedAt: true },
       }),
     ).toEqual({ usedAt: null });

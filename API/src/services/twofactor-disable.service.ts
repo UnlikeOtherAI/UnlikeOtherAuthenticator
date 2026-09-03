@@ -6,7 +6,7 @@ import { runInTransaction } from '../db/tenant-context.js';
 import { AppError } from '../utils/errors.js';
 import { lockAndAssertAuthenticationEpoch } from './authentication-epoch.service.js';
 import type { ClientConfig } from './config.service.js';
-import { lockProductWorkspacePolicyShared } from './product-workspace-policy-lock.service.js';
+import { lockProductTeamPolicyShared } from './product-team-policy-lock.service.js';
 import { revokeAllRefreshTokensForUser } from './refresh-token-revocation.service.js';
 import { lockRefreshSessionUser } from './refresh-session-lock.service.js';
 import { verifyTwoFactorForLogin } from './twofactor-login.service.js';
@@ -62,7 +62,7 @@ export async function disableTwoFactorForUser(
     code: string;
     credentialEpoch: number;
     config: Pick<ClientConfig, '2fa_enabled' | 'domain'>;
-    /** Exact organisation selected by the access token, including cross-domain workspaces. */
+    /** Exact organisation selected by the access token, including cross-domain teams. */
     orgId?: string;
   },
   deps?: DisableDeps,
@@ -75,7 +75,7 @@ export async function disableTwoFactorForUser(
   await runInTransaction(prisma, async (tx) => {
     // Serialize the effective policy re-read with every domain/organisation
     // policy writer. This lock must precede the user/session hierarchy.
-    await lockProductWorkspacePolicyShared(tx);
+    await lockProductTeamPolicyShared(tx);
     await deps?.beforeRefreshSessionLock?.();
     await lockAndAssertAuthenticationEpoch(
       {

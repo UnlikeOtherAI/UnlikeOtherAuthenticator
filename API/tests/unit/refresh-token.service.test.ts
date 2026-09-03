@@ -89,7 +89,7 @@ describe('refresh-token.service (unit)', () => {
     });
   });
 
-  it('persists orgId/teamId on the created row when provided (dormant workspace scope, design §7)', async () => {
+  it('persists orgId/teamId on the created row when provided (dormant team scope, design §7)', async () => {
     const prisma = {
       refreshToken: {
         create: vi.fn().mockResolvedValue({ id: 'refresh-token-1' }),
@@ -223,7 +223,7 @@ describe('refresh-token.service (unit)', () => {
     expect(rotated.refreshToken).not.toBe(currentRefreshToken);
   });
 
-  it('carries orgId/teamId onto the rotated row and returns them (rotation preserves workspace scope)', async () => {
+  it('carries orgId/teamId onto the rotated row and returns them (rotation preserves team scope)', async () => {
     const currentRefreshToken = 'scoped-refresh-token';
     const beforeRotate = vi.fn().mockResolvedValue(undefined);
     const prisma = {

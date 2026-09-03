@@ -398,7 +398,7 @@ describe('canonical UOA billing statement', () => {
       scope: 'organisation' as const,
       organisation_id: 'org_1',
       organisation_name: 'Acme',
-      message: 'Billing for this workspace is managed for the whole of Acme.',
+      message: 'Billing for this team is managed for the whole of Acme.',
       can_manage: false,
       manage_action_id: null,
     };

@@ -24,7 +24,7 @@ import {
   type ClaimTokenPrisma,
 } from './integration-claim.service.js';
 import type { TwoFaPolicyValue } from './twofactor-policy.service.js';
-import { lockProductWorkspacePolicyExclusive } from './product-workspace-policy-lock.service.js';
+import { lockProductTeamPolicyExclusive } from './product-team-policy-lock.service.js';
 
 type DomainSecretPrisma = Pick<
   PrismaClient,
@@ -141,7 +141,7 @@ export async function createAdminDomain(
   const secret = await createSecretData(domain, params.clientSecret);
 
   const row = await runInTransaction(prisma as unknown as PrismaClient, async (tx) => {
-    await lockProductWorkspacePolicyExclusive(tx);
+    await lockProductTeamPolicyExclusive(tx);
     const existing = await tx.clientDomain.findUnique({ where: { domain }, select: { id: true } });
     if (existing) throw new AppError('BAD_REQUEST', 400, 'DOMAIN_ALREADY_EXISTS');
 
@@ -215,7 +215,7 @@ export async function updateAdminDomain(
   const twoFaPolicy = params.twoFaPolicy;
 
   return runInTransaction(prisma as unknown as PrismaClient, async (tx) => {
-    await lockProductWorkspacePolicyExclusive(tx);
+    await lockProductTeamPolicyExclusive(tx);
     await deps?.afterProductPolicyLock?.();
     const prior = await tx.clientDomain.findUnique({
       where: { domain },

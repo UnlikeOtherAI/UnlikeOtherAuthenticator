@@ -55,7 +55,7 @@ const orgTeamChain = [
 // The GET additionally accepts `?style=`/`?size=`; the strict shared schema would reject them.
 const ImageQuerySchema = DomainQuerySchema.extend({ ...AvatarImageQueryFields }).strict();
 
-// Mutations are keyed per org + team so one workspace churning its logo cannot exhaust another's
+// Mutations are keyed per org + team so one team churning its logo cannot exhaust another's
 // budget. Same 30/hour window as the user-avatar mutations.
 const mutationRateLimit = createRateLimiter({
   keyBuilder: (request: FastifyRequest) => {

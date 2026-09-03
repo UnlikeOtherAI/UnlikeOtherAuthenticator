@@ -8,7 +8,7 @@ import { AppError } from '../../src/utils/errors.js';
 import {
   createRefreshFixture as fixture,
   exchangeTestRefreshToken as exchange,
-  switchTestWorkspace as switchWorkspace,
+  switchTestTeam as switchTeam,
   TEST_REFRESH_CONTEXT as context,
   TEST_REFRESH_SHARED_SECRET as sharedSecret,
 } from '../helpers/fake-refresh-token-store.js';
@@ -170,20 +170,20 @@ describe('refresh response-loss replay recovery', () => {
   });
 });
 
-describe('refresh workspace-transition replay', () => {
+describe('refresh team-transition replay', () => {
   const issuedAt = new Date('2026-07-22T11:00:00.000Z');
-  const workspaceB = { orgId: 'org-2', teamId: 'team-2' };
-  const workspaceC = { orgId: 'org-3', teamId: 'team-3' };
+  const teamB = { orgId: 'org-2', teamId: 'team-2' };
+  const teamC = { orgId: 'org-3', teamId: 'team-3' };
 
   it('rejects a same-scope switch without consuming the live source', async () => {
     const { initial, store } = await fixture(issuedAt);
 
     await expect(
-      switchWorkspace(store, initial.refreshToken, issuedAt, {
+      switchTeam(store, initial.refreshToken, issuedAt, {
         orgId: 'org-1',
         teamId: 'team-1',
       }),
-    ).rejects.toMatchObject({ statusCode: 409, message: 'WORKSPACE_SWITCH_CONFLICT' });
+    ).rejects.toMatchObject({ statusCode: 409, message: 'TEAM_SWITCH_CONFLICT' });
     expect(store.rows).toHaveLength(1);
     expect(store.byRawToken(initial.refreshToken).revokedAt).toBeNull();
     expect(store.userUpdate).not.toHaveBeenCalled();
@@ -195,7 +195,7 @@ describe('refresh workspace-transition replay', () => {
     store.byRawToken(rotated.refreshToken).familyId = 'corrupt-family';
 
     await expect(
-      switchWorkspace(store, initial.refreshToken, new Date(issuedAt.getTime() + 1_000), {
+      switchTeam(store, initial.refreshToken, new Date(issuedAt.getTime() + 1_000), {
         orgId: 'org-1',
         teamId: 'team-1',
       }),
@@ -204,17 +204,17 @@ describe('refresh workspace-transition replay', () => {
     expect(store.userUpdate).toHaveBeenCalledTimes(1);
   });
 
-  it('revokes a replay predecessor with a partial stored workspace scope', async () => {
+  it('revokes a replay predecessor with a partial stored team scope', async () => {
     const { initial, store } = await fixture(issuedAt);
     await exchange(store, initial.refreshToken, issuedAt);
     store.byRawToken(initial.refreshToken).teamId = null;
 
     await expect(
-      switchWorkspace(
+      switchTeam(
         store,
         initial.refreshToken,
         new Date(issuedAt.getTime() + 1_000),
-        workspaceB,
+        teamB,
       ),
     ).rejects.toMatchObject({ statusCode: 401, message: 'INVALID_REFRESH_TOKEN' });
     expect([...store.rows.values()].every((row) => row.revokedAt !== null)).toBe(true);
@@ -222,39 +222,39 @@ describe('refresh workspace-transition replay', () => {
 
   it('creates one deterministic target-scoped successor and replays it for the same intent', async () => {
     const { initial, store } = await fixture(issuedAt);
-    const switched = await switchWorkspace(store, initial.refreshToken, issuedAt, workspaceB);
-    const replay = await switchWorkspace(
+    const switched = await switchTeam(store, initial.refreshToken, issuedAt, teamB);
+    const replay = await switchTeam(
       store,
       initial.refreshToken,
       new Date(issuedAt.getTime() + 1_000),
-      workspaceB,
+      teamB,
     );
 
-    expect(switched).toMatchObject({ ...workspaceB, twoFaCompleted: true, replayed: false });
+    expect(switched).toMatchObject({ ...teamB, twoFaCompleted: true, replayed: false });
     expect(replay).toMatchObject({
-      ...workspaceB,
+      ...teamB,
       refreshToken: switched.refreshToken,
       twoFaCompleted: true,
       replayed: true,
     });
     expect(store.rows).toHaveLength(2);
     expect(store.byRawToken(switched.refreshToken)).toMatchObject({
-      ...workspaceB,
+      ...teamB,
       twoFaCompleted: true,
     });
   });
 
   it('retires a committed switch family when replay target policy is no longer satisfied', async () => {
     const { initial, store } = await fixture(issuedAt);
-    const switched = await switchWorkspace(store, initial.refreshToken, issuedAt, workspaceB);
+    const switched = await switchTeam(store, initial.refreshToken, issuedAt, teamB);
     const targetFailure = new AppError('FORBIDDEN', 403, 'INTERACTION_REQUIRED');
 
     await expect(
-      switchWorkspace(
+      switchTeam(
         store,
         initial.refreshToken,
         new Date(issuedAt.getTime() + 1_000),
-        workspaceB,
+        teamB,
         async () => {
           throw targetFailure;
         },
@@ -266,11 +266,11 @@ describe('refresh workspace-transition replay', () => {
 
   it('returns a non-revoking conflict when another grant won the first edge', async () => {
     const switchedFirst = await fixture(issuedAt);
-    const switched = await switchWorkspace(
+    const switched = await switchTeam(
       switchedFirst.store,
       switchedFirst.initial.refreshToken,
       issuedAt,
-      workspaceB,
+      teamB,
     );
     await expect(
       exchange(
@@ -278,15 +278,15 @@ describe('refresh workspace-transition replay', () => {
         switchedFirst.initial.refreshToken,
         new Date(issuedAt.getTime() + 1_000),
       ),
-    ).rejects.toMatchObject({ statusCode: 409, message: 'WORKSPACE_SWITCH_CONFLICT' });
+    ).rejects.toMatchObject({ statusCode: 409, message: 'TEAM_SWITCH_CONFLICT' });
     await expect(
-      switchWorkspace(
+      switchTeam(
         switchedFirst.store,
         switchedFirst.initial.refreshToken,
         new Date(issuedAt.getTime() + 1_000),
-        workspaceC,
+        teamC,
       ),
-    ).rejects.toMatchObject({ statusCode: 409, message: 'WORKSPACE_SWITCH_CONFLICT' });
+    ).rejects.toMatchObject({ statusCode: 409, message: 'TEAM_SWITCH_CONFLICT' });
     expect(switchedFirst.store.byRawToken(switched.refreshToken).revokedAt).toBeNull();
     expect(switchedFirst.store.userUpdate).not.toHaveBeenCalled();
 
@@ -297,49 +297,49 @@ describe('refresh workspace-transition replay', () => {
       issuedAt,
     );
     await expect(
-      switchWorkspace(
+      switchTeam(
         refreshedFirst.store,
         refreshedFirst.initial.refreshToken,
         new Date(issuedAt.getTime() + 1_000),
-        workspaceB,
+        teamB,
       ),
-    ).rejects.toMatchObject({ statusCode: 409, message: 'WORKSPACE_SWITCH_CONFLICT' });
+    ).rejects.toMatchObject({ statusCode: 409, message: 'TEAM_SWITCH_CONFLICT' });
     expect(refreshedFirst.store.byRawToken(refreshed.refreshToken).revokedAt).toBeNull();
     expect(refreshedFirst.store.userUpdate).not.toHaveBeenCalled();
   });
 
   it('conflicts rather than returning a later descendant from a different switch', async () => {
     const { initial, store } = await fixture(issuedAt);
-    const switchedB = await switchWorkspace(store, initial.refreshToken, issuedAt, workspaceB);
-    const switchedC = await switchWorkspace(
+    const switchedB = await switchTeam(store, initial.refreshToken, issuedAt, teamB);
+    const switchedC = await switchTeam(
       store,
       switchedB.refreshToken,
       new Date(issuedAt.getTime() + 1_000),
-      workspaceC,
+      teamC,
     );
 
     await expect(
-      switchWorkspace(
+      switchTeam(
         store,
         initial.refreshToken,
         new Date(issuedAt.getTime() + 2_000),
-        workspaceB,
+        teamB,
       ),
-    ).rejects.toMatchObject({ statusCode: 409, message: 'WORKSPACE_SWITCH_CONFLICT' });
+    ).rejects.toMatchObject({ statusCode: 409, message: 'TEAM_SWITCH_CONFLICT' });
     expect(store.byRawToken(switchedC.refreshToken).revokedAt).toBeNull();
     expect(store.userUpdate).not.toHaveBeenCalled();
   });
 
   it('classifies every post-grace predecessor use as theft before intent conflicts', async () => {
     const { initial, store } = await fixture(issuedAt);
-    await switchWorkspace(store, initial.refreshToken, issuedAt, workspaceB);
+    await switchTeam(store, initial.refreshToken, issuedAt, teamB);
 
     await expect(
-      switchWorkspace(
+      switchTeam(
         store,
         initial.refreshToken,
         new Date(issuedAt.getTime() + REFRESH_TOKEN_REPLAY_GRACE_MS + 1),
-        workspaceC,
+        teamC,
       ),
     ).rejects.toMatchObject({ statusCode: 401, message: 'INVALID_REFRESH_TOKEN' });
     expect([...store.rows.values()].every((row) => row.revokedAt !== null)).toBe(true);
@@ -348,14 +348,14 @@ describe('refresh workspace-transition replay', () => {
 
   it('classifies a same-target switch retry after grace as theft', async () => {
     const { initial, store } = await fixture(issuedAt);
-    await switchWorkspace(store, initial.refreshToken, issuedAt, workspaceB);
+    await switchTeam(store, initial.refreshToken, issuedAt, teamB);
 
     await expect(
-      switchWorkspace(
+      switchTeam(
         store,
         initial.refreshToken,
         new Date(issuedAt.getTime() + REFRESH_TOKEN_REPLAY_GRACE_MS + 1),
-        workspaceB,
+        teamB,
       ),
     ).rejects.toMatchObject({ statusCode: 401, message: 'INVALID_REFRESH_TOKEN' });
     expect([...store.rows.values()].every((row) => row.revokedAt !== null)).toBe(true);
@@ -364,15 +364,15 @@ describe('refresh workspace-transition replay', () => {
 
   it('detects a detached corrupt successor before post-grace family revocation', async () => {
     const { initial, store } = await fixture(issuedAt);
-    const switched = await switchWorkspace(store, initial.refreshToken, issuedAt, workspaceB);
+    const switched = await switchTeam(store, initial.refreshToken, issuedAt, teamB);
     store.byRawToken(switched.refreshToken).familyId = 'detached-family';
 
     await expect(
-      switchWorkspace(
+      switchTeam(
         store,
         initial.refreshToken,
         new Date(issuedAt.getTime() + REFRESH_TOKEN_REPLAY_GRACE_MS + 1),
-        workspaceB,
+        teamB,
       ),
     ).rejects.toMatchObject({ statusCode: 401, message: 'INVALID_REFRESH_TOKEN' });
     expect([...store.rows.values()].every((row) => row.revokedAt !== null)).toBe(true);
@@ -381,17 +381,17 @@ describe('refresh workspace-transition replay', () => {
 
   it('bumps the access-token epoch for corruption even when all refresh rows are revoked', async () => {
     const { initial, store } = await fixture(issuedAt);
-    const switched = await switchWorkspace(store, initial.refreshToken, issuedAt, workspaceB);
+    const switched = await switchTeam(store, initial.refreshToken, issuedAt, teamB);
     const successor = store.byRawToken(switched.refreshToken);
     successor.familyId = 'detached-family';
     successor.revokedAt = issuedAt;
 
     await expect(
-      switchWorkspace(
+      switchTeam(
         store,
         initial.refreshToken,
         new Date(issuedAt.getTime() + 1_000),
-        workspaceB,
+        teamB,
       ),
     ).rejects.toMatchObject({ statusCode: 401, message: 'INVALID_REFRESH_TOKEN' });
     expect([...store.rows.values()].every((row) => row.revokedAt !== null)).toBe(true);
@@ -400,12 +400,12 @@ describe('refresh workspace-transition replay', () => {
 
   it('rechecks grace after replay policy before returning the successor', async () => {
     const { initial, store } = await fixture(issuedAt);
-    await switchWorkspace(store, initial.refreshToken, issuedAt, workspaceB);
+    await switchTeam(store, initial.refreshToken, issuedAt, teamB);
     let now = new Date(issuedAt.getTime() + REFRESH_TOKEN_REPLAY_GRACE_MS);
 
     await expect(
       exchangeRefreshToken(
-        { ...context, refreshToken: initial.refreshToken, workspace: workspaceB },
+        { ...context, refreshToken: initial.refreshToken, team: teamB },
         {
           beforeReplay: async () => {
             now = new Date(now.getTime() + 1);
@@ -423,12 +423,12 @@ describe('refresh workspace-transition replay', () => {
 
   it('uses theft revocation when failed replay policy finishes after grace', async () => {
     const { initial, store } = await fixture(issuedAt);
-    await switchWorkspace(store, initial.refreshToken, issuedAt, workspaceB);
+    await switchTeam(store, initial.refreshToken, issuedAt, teamB);
     let now = new Date(issuedAt.getTime() + REFRESH_TOKEN_REPLAY_GRACE_MS);
 
     await expect(
       exchangeRefreshToken(
-        { ...context, refreshToken: initial.refreshToken, workspace: workspaceB },
+        { ...context, refreshToken: initial.refreshToken, team: teamB },
         {
           beforeReplay: async () => {
             now = new Date(now.getTime() + 1);
@@ -447,15 +447,15 @@ describe('refresh workspace-transition replay', () => {
 
   it('revokes a family whose deterministic successor changes immutable assurance', async () => {
     const { initial, store } = await fixture(issuedAt);
-    const switched = await switchWorkspace(store, initial.refreshToken, issuedAt, workspaceB);
+    const switched = await switchTeam(store, initial.refreshToken, issuedAt, teamB);
     store.byRawToken(switched.refreshToken).twoFaCompleted = false;
 
     await expect(
-      switchWorkspace(
+      switchTeam(
         store,
         initial.refreshToken,
         new Date(issuedAt.getTime() + 1_000),
-        workspaceB,
+        teamB,
       ),
     ).rejects.toMatchObject({ statusCode: 401, message: 'INVALID_REFRESH_TOKEN' });
     expect([...store.rows.values()].every((row) => row.revokedAt !== null)).toBe(true);

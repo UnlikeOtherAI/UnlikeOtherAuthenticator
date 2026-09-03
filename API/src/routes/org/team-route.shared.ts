@@ -55,7 +55,7 @@ export const TeamUpdateBodySchema = z.object({
   joinPolicy: z
     .enum(['INVITE_ONLY', 'APPROVED_DOMAIN', 'REQUEST_TO_JOIN', 'OPEN_TO_ORG', 'HIDDEN'])
     .optional(),
-  // Workspace icon (design §11.3, gap-fix A Task 3) — owner/admin only (same PUT authorization);
+  // Team icon (design §11.3, gap-fix A Task 3) — owner/admin only (same PUT authorization);
   // omitted leaves the current icon unchanged, `null` clears it. https-only, ≤2048 chars enforced
   // at the service layer (`normalizeIconUrl`) with a generic error otherwise.
   icon_url: z.string().trim().max(2048).nullable().optional(),

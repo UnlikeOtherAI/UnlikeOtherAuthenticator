@@ -18,7 +18,7 @@ const TEAM_HINT_PATTERN = /^[A-Za-z0-9_-]{1,256}$/;
 /**
  * Strips an invalid `team_hint` from the raw request URL before it becomes the SPA's initial
  * bootstrap state. Deliberately a no-op fast path when `team_hint` is absent or already valid, so
- * the byte-identical guarantee for `workspace_selection: "off"` (which never even reads the hint)
+ * the byte-identical guarantee for `team_selection: "off"` (which never even reads the hint)
  * holds regardless of validation — this only ever rewrites the edge case being rejected.
  */
 export function sanitizeTeamHintInUrl(rawUrl: string): string {

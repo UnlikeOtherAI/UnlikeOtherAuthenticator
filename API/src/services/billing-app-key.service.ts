@@ -9,7 +9,7 @@ import {
 } from '../utils/billing-app-key.js';
 import { AppError } from '../utils/errors.js';
 import { importClientJwkKey, parsePublicRsaJwk, type PublicRsaJwk } from './client-jwk.service.js';
-import { lockProductWorkspacePolicyExclusive } from './product-workspace-policy-lock.service.js';
+import { lockProductTeamPolicyExclusive } from './product-team-policy-lock.service.js';
 
 export type BillingAppKeyRecord = {
   id: string;
@@ -167,7 +167,7 @@ export async function createBillingAppKey(
   const plaintext = generateBillingAppKey();
   const prisma = prismaClient(deps);
   const record = await prisma.$transaction(async (tx) => {
-    await lockProductWorkspacePolicyExclusive(tx);
+    await lockProductTeamPolicyExclusive(tx);
     const service = await tx.billingService.findUnique({
       where: { id: params.serviceId },
       select: { id: true, identifier: true, active: true },
@@ -234,7 +234,7 @@ export async function revokeBillingAppKey(
 ): Promise<void> {
   const prisma = prismaClient(deps);
   await prisma.$transaction(async (tx) => {
-    await lockProductWorkspacePolicyExclusive(tx);
+    await lockProductTeamPolicyExclusive(tx);
     await deps?.afterProductPolicyLock?.();
     const key = await tx.billingAppKey.findFirst({
       where: { id: params.keyId, serviceId: params.serviceId },

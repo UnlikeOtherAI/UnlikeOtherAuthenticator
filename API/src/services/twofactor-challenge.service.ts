@@ -22,7 +22,7 @@ const TwoFaChallengeSchema = z.object({
   code_challenge: z.string().min(1).optional(),
   code_challenge_method: z.literal('S256').optional(),
   // Exact scope selected explicitly, auto-selected, or pre-bound for a recognized product.
-  // Legacy clients without a resolved workspace omit both values.
+  // Legacy clients without a resolved team omit both values.
   org_id: z.string().min(1).optional(),
   team_id: z.string().min(1).optional(),
 });

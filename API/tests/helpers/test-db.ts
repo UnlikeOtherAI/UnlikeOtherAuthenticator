@@ -20,7 +20,7 @@ function apiRootDir(): string {
 
 function prismaBinPath(): string {
   const bin = process.platform === 'win32' ? 'prisma.cmd' : 'prisma';
-  // In npm workspaces, binaries are often hoisted to the repo root `node_modules/.bin`.
+  // In npm teams, binaries are often hoisted to the repo root `node_modules/.bin`.
   const local = path.join(apiRootDir(), 'node_modules', '.bin', bin);
   if (fs.existsSync(local)) return local;
   return path.join(apiRootDir(), '..', 'node_modules', '.bin', bin);

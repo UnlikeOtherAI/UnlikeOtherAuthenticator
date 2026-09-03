@@ -6,7 +6,7 @@
  * hash of the user id. Same seed → same sequence → byte-identical markup, which is what makes the
  * ETag and the 24h cache lifetime on generated avatars safe.
  *
- * Colours follow the workspace-icon contract: `hsl(hue, 55%, 45%)` with fixed hue offsets for the
+ * Colours follow the team-icon contract: `hsl(hue, 55%, 45%)` with fixed hue offsets for the
  * secondary colours. `mono` is the deliberate exception — black, white and greys only.
  */
 

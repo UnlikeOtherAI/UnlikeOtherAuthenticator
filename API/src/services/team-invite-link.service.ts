@@ -26,9 +26,9 @@ import {
   type TeamInviteLinkRecord,
 } from './team-invite-link.base.js';
 import {
-  assertActiveWorkspaceScope,
-  lockWorkspaceMembershipRows,
-} from './workspace-scope.service.js';
+  assertActiveTeamScope,
+  lockTeamMembershipRows,
+} from './team-scope.service.js';
 
 // Phase 5 (design §4.7, §7 step 6, §8): shareable team invite links. A link authorizes JOINING a
 // team, never AUTHENTICATION — redemption only happens on the verified-session path
@@ -358,7 +358,7 @@ export async function redeemTeamInviteLink(
 
   const result = await runInTransaction(prisma, async (tx) => {
     const { link, team } = await findValidInviteLink(tx, { tokenHash, now });
-    await lockWorkspaceMembershipRows(
+    await lockTeamMembershipRows(
       { userId: params.userId, orgId: team.orgId, teamId: team.id },
       { prisma: tx },
     );
@@ -419,7 +419,7 @@ export async function redeemTeamInviteLink(
       }
     }
 
-    await assertActiveWorkspaceScope(
+    await assertActiveTeamScope(
       {
         userId: params.userId,
         domain,

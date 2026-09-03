@@ -173,7 +173,7 @@ afterAll(() => {
 });
 
 describe('confidential token exchange', () => {
-  it('issues an identity-only token when the user has no selected workspace', async () => {
+  it('issues an identity-only token when the user has no selected team', async () => {
     const prisma = prismaMock();
     const signAccessToken = vi.fn().mockResolvedValue('ledger-access-token');
 
@@ -217,7 +217,7 @@ describe('confidential token exchange', () => {
     expect(prisma.confidentialAssertionUse.create).toHaveBeenCalledOnce();
   });
 
-  it('re-resolves the user and selected workspace before signing', async () => {
+  it('re-resolves the user and selected team before signing', async () => {
     const subjectToken = await signSubjectToken();
     const signAccessToken = vi.fn().mockResolvedValue('ledger-access-token');
     const consumeSubjectRateLimit = vi.fn();

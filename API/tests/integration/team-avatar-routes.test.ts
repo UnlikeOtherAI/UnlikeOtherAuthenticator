@@ -107,7 +107,7 @@ describe.skipIf(!hasDatabase)('team avatar routes', () => {
   });
 
   /** Owner-created org + team, plus a plain org member, all through the real routes. */
-  async function seedWorkspace() {
+  async function seedTeam() {
     const domainHash = await seedDomainSecret(handle!.prisma, DOMAIN);
     const owner = await createTestUser(handle!, 'team-avatar-owner@example.com');
     const member = await createTestUser(handle!, 'team-avatar-member@example.com');
@@ -188,7 +188,7 @@ describe.skipIf(!hasDatabase)('team avatar routes', () => {
 
   describe('GET/PUT/DELETE /org/organisations/:orgId/teams/:teamId/avatar', () => {
     it('round-trips an upload for an owner and falls back to generated after delete', async () => {
-      const { domainHash, org, team, ownerToken, query } = await seedWorkspace();
+      const { domainHash, org, team, ownerToken, query } = await seedTeam();
       const url = `/org/organisations/${org.id}/teams/${team.id}/avatar?${query}`;
       const headers = {
         authorization: `Bearer ${domainHash}`,
@@ -252,7 +252,7 @@ describe.skipIf(!hasDatabase)('team avatar routes', () => {
     });
 
     it('honours ?style= and ?size= on the generated image', async () => {
-      const { domainHash, org, team, ownerToken, query } = await seedWorkspace();
+      const { domainHash, org, team, ownerToken, query } = await seedTeam();
 
       const mono = await app!.inject({
         method: 'GET',
@@ -270,7 +270,7 @@ describe.skipIf(!hasDatabase)('team avatar routes', () => {
     });
 
     it('lets a plain org member read but not write', async () => {
-      const { domainHash, org, team, memberToken, query } = await seedWorkspace();
+      const { domainHash, org, team, memberToken, query } = await seedTeam();
       const url = `/org/organisations/${org.id}/teams/${team.id}/avatar?${query}`;
       const headers = {
         authorization: `Bearer ${domainHash}`,
@@ -299,7 +299,7 @@ describe.skipIf(!hasDatabase)('team avatar routes', () => {
     });
 
     it('rejects an SVG upload and a missing access token', async () => {
-      const { domainHash, org, team, ownerToken, query } = await seedWorkspace();
+      const { domainHash, org, team, ownerToken, query } = await seedTeam();
       const url = `/org/organisations/${org.id}/teams/${team.id}/avatar?${query}`;
 
       const upload = multipartFile(
@@ -332,7 +332,7 @@ describe.skipIf(!hasDatabase)('team avatar routes', () => {
     });
 
     it('is a generic 404 for a team that belongs to another organisation', async () => {
-      const { domainHash, org, ownerToken, query } = await seedWorkspace();
+      const { domainHash, org, ownerToken, query } = await seedTeam();
 
       const res = await app!.inject({
         method: 'GET',
@@ -350,7 +350,7 @@ describe.skipIf(!hasDatabase)('team avatar routes', () => {
 
   describe('GET/PUT/DELETE /domain/teams/:teamId/avatar', () => {
     it('serves image bytes with the domain hash bearer alone', async () => {
-      const { domainHash, org, team, ownerToken, query } = await seedWorkspace();
+      const { domainHash, org, team, ownerToken, query } = await seedTeam();
 
       // Upload through the /org route, then read it back through the backend route.
       const upload = multipartFile(png(0x66));
@@ -379,7 +379,7 @@ describe.skipIf(!hasDatabase)('team avatar routes', () => {
     });
 
     it('manages the avatar with the domain hash alone — no access token, no role check', async () => {
-      const { domainHash, team } = await seedWorkspace();
+      const { domainHash, team } = await seedTeam();
       const url = `/domain/teams/${team.id}/avatar?domain=${encodeURIComponent(DOMAIN)}`;
       const headers = { authorization: `Bearer ${domainHash}` };
 
@@ -418,7 +418,7 @@ describe.skipIf(!hasDatabase)('team avatar routes', () => {
     it('still applies avatars.default_style from a verified config_url once authenticated', async () => {
       // The config hook now runs AFTER the bearer check. That is about anonymous callers, not about
       // dropping the feature — an authenticated caller must still get its configured default style.
-      const { domainHash, team } = await seedWorkspace();
+      const { domainHash, team } = await seedTeam();
       const headers = { authorization: `Bearer ${domainHash}` };
       const base = `/domain/teams/${team.id}/avatar?domain=${encodeURIComponent(DOMAIN)}`;
 
@@ -454,8 +454,8 @@ describe.skipIf(!hasDatabase)('team avatar routes', () => {
 
     it('audit-logs the backend upload and delete against the acting domain', async () => {
       // The backend route enforces no role of its own, so the audit row is the only record of
-      // which tenant changed a workspace logo. `/internal/admin/*` has always had one.
-      const { domainHash, team } = await seedWorkspace();
+      // which tenant changed a team logo. `/internal/admin/*` has always had one.
+      const { domainHash, team } = await seedTeam();
       const url = `/domain/teams/${team.id}/avatar?domain=${encodeURIComponent(DOMAIN)}`;
       const headers = { authorization: `Bearer ${domainHash}` };
       const upload = multipartFile(png(0x44));
@@ -500,7 +500,7 @@ describe.skipIf(!hasDatabase)('team avatar routes', () => {
     });
 
     it('rejects an SVG upload on the backend path with a generic error', async () => {
-      const { domainHash, team } = await seedWorkspace();
+      const { domainHash, team } = await seedTeam();
       const upload = multipartFile(
         Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'),
         'avatar.svg',
@@ -520,7 +520,7 @@ describe.skipIf(!hasDatabase)('team avatar routes', () => {
     });
 
     it('refuses cross-domain mutations with the same generic 404 as the read', async () => {
-      const { team } = await seedWorkspace();
+      const { team } = await seedTeam();
       const otherHash = await seedDomainSecret(handle!.prisma, OTHER_DOMAIN);
       const url = `/domain/teams/${team.id}/avatar?domain=${encodeURIComponent(OTHER_DOMAIN)}`;
       const upload = multipartFile(png(0x99));
@@ -554,7 +554,7 @@ describe.skipIf(!hasDatabase)('team avatar routes', () => {
     });
 
     it('returns a generic 404 for unknown and cross-domain team ids, and 401 for a bad hash', async () => {
-      const { team } = await seedWorkspace();
+      const { team } = await seedTeam();
       const otherHash = await seedDomainSecret(handle!.prisma, OTHER_DOMAIN);
 
       // The team exists, but its organisation is not on the authenticated domain.
@@ -585,8 +585,8 @@ describe.skipIf(!hasDatabase)('team avatar routes', () => {
   });
 
   describe('GET /teams/:teamId/avatar (public)', () => {
-    it('serves the workspace image with no credential at all', async () => {
-      const { domainHash, team, query } = await seedWorkspace();
+    it('serves the team image with no credential at all', async () => {
+      const { domainHash, team, query } = await seedTeam();
 
       const generated = await app!.inject({ method: 'GET', url: `/teams/${team.id}/avatar` });
       expect(generated.statusCode).toBe(200);
@@ -594,7 +594,7 @@ describe.skipIf(!hasDatabase)('team avatar routes', () => {
       expect(generated.headers['x-content-type-options']).toBe('nosniff');
       expect(generated.headers['content-security-policy']).toBe(SVG_CSP);
       expect(generated.headers['cross-origin-resource-policy']).toBe('cross-origin');
-      // Anonymous callers do not get to learn whether this workspace uploaded a logo.
+      // Anonymous callers do not get to learn whether this team uploaded a logo.
       expect(generated.headers['x-uoa-avatar-source']).toBeUndefined();
 
       const bytes = png(0x5a);
@@ -619,7 +619,7 @@ describe.skipIf(!hasDatabase)('team avatar routes', () => {
     });
 
     it('stops serving a real logo once the owning domain is no longer active', async () => {
-      const { domainHash, team } = await seedWorkspace();
+      const { domainHash, team } = await seedTeam();
 
       const bytes = png(0x3c);
       const upload = multipartFile(bytes);
@@ -636,7 +636,7 @@ describe.skipIf(!hasDatabase)('team avatar routes', () => {
         data: { status: 'disabled' },
       });
 
-      // Not a 404 — a torn-down tenant must look like a workspace that never set a logo, or the
+      // Not a 404 — a torn-down tenant must look like a team that never set a logo, or the
       // route becomes the existence oracle it is designed not to be.
       const after = await app!.inject({ method: 'GET', url: `/teams/${team.id}/avatar` });
       expect(after.statusCode).toBe(200);
@@ -663,7 +663,7 @@ describe.skipIf(!hasDatabase)('team avatar routes', () => {
     });
 
     it('honours ?style= and ?size= but takes no config_url', async () => {
-      const { team } = await seedWorkspace();
+      const { team } = await seedTeam();
 
       const styled = await app!.inject({
         method: 'GET',
@@ -683,7 +683,7 @@ describe.skipIf(!hasDatabase)('team avatar routes', () => {
 
   describe('GET/PUT/DELETE /internal/admin/teams/:teamId/avatar', () => {
     it('serves, replaces and clears any team avatar, writing audit entries', async () => {
-      const { team } = await seedWorkspace();
+      const { team } = await seedTeam();
       const adminToken = await seedAdminToken();
       const url = `/internal/admin/teams/${team.id}/avatar`;
       const headers = { authorization: `Bearer ${adminToken}` };
@@ -733,7 +733,7 @@ describe.skipIf(!hasDatabase)('team avatar routes', () => {
     });
 
     it('returns 401 without a bearer, 403 for a non-superuser, and 404 for an unknown team', async () => {
-      const { team } = await seedWorkspace();
+      const { team } = await seedTeam();
       const adminToken = await seedAdminToken();
 
       const anonymous = await app!.inject({

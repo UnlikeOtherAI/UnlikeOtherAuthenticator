@@ -7,14 +7,14 @@ import { AppError } from '../utils/errors.js';
 import { auditOrg, type OrgActorProvenance } from './organisation.service.base.js';
 import { revokeRefreshTokenFamiliesForUserTeam } from './refresh-token-revocation.service.js';
 import { lockRefreshSessionUser } from './refresh-session-lock.service.js';
-import { lockWorkspaceMembershipRows } from './workspace-scope.service.js';
+import { lockTeamMembershipRows } from './team-scope.service.js';
 import {
   assertDatabaseEnabled,
   getOrganisationMember,
   normalizeTeamRole,
   parseMaxMembersPerTeam,
   parseMaxTeamMembershipsPerUser,
-  requireWorkspaceCapability,
+  requireTeamCapability,
   resolveAndAuthorizeTeamOrg,
   resolveOrgActor,
   toTeamMemberRecord,
@@ -62,7 +62,7 @@ export async function addTeamMember(
     orgId: params.orgId,
     actorUserId,
   });
-  await requireWorkspaceCapability(prisma, 'members.manage', {
+  await requireTeamCapability(prisma, 'members.manage', {
     orgId: org.id,
     teamId: params.teamId,
     actorUserId,
@@ -89,7 +89,7 @@ export async function addTeamMember(
   }
 
   const { member, reactivated } = await runInTransaction(prisma, async (tx) => {
-    await lockWorkspaceMembershipRows(
+    await lockTeamMembershipRows(
       { userId, orgId: org.id, teamId: team.id },
       { prisma: tx },
     );
@@ -210,7 +210,7 @@ export async function changeTeamMemberRole(
     orgId: params.orgId,
     actorUserId,
   });
-  await requireWorkspaceCapability(prisma, 'members.manage', {
+  await requireTeamCapability(prisma, 'members.manage', {
     orgId: org.id,
     teamId: params.teamId,
     actorUserId,
@@ -308,7 +308,7 @@ export async function removeTeamMember(
     orgId: params.orgId,
     actorUserId,
   });
-  await requireWorkspaceCapability(prisma, 'members.manage', {
+  await requireTeamCapability(prisma, 'members.manage', {
     orgId: org.id,
     teamId: params.teamId,
     actorUserId,
@@ -328,7 +328,7 @@ export async function removeTeamMember(
 
   const removedMember = await runInTransaction(prisma, async (tx) => {
     await lockRefreshSessionUser(userId, { prisma: tx });
-    await lockWorkspaceMembershipRows(
+    await lockTeamMembershipRows(
       { userId, orgId: org.id },
       { prisma: tx },
     );
@@ -438,7 +438,7 @@ export async function selfJoinTeam(
   }
 
   const record = await runInTransaction(prisma, async (tx) => {
-    await lockWorkspaceMembershipRows(
+    await lockTeamMembershipRows(
       { userId: actorUserId, orgId: org.id, teamId: team.id },
       { prisma: tx },
     );

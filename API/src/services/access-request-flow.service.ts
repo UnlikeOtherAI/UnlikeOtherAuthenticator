@@ -8,7 +8,7 @@ import { handlePostAuthenticationAccessRequest } from './access-request.service.
 import { lockAndAssertAuthenticationEpoch } from './authentication-epoch.service.js';
 import { assertEmailDomainAllowedForLogin } from './login-domain-policy.service.js';
 import { assertNotBannedAtLogin } from './ban-policy.service.js';
-import { lockProductWorkspacePolicyShared } from './product-workspace-policy-lock.service.js';
+import { lockProductTeamPolicyShared } from './product-team-policy-lock.service.js';
 import {
   finalizeConfigAuthorizationWithSignatures,
   type SignatureContinuationDeps,
@@ -17,14 +17,14 @@ import {
 type FinalizeDeps = {
   authenticationEpochLocked?: boolean;
   prisma?: PrismaClient;
-  // Optional BYPASSRLS transaction used by workspace selection so freshly
+  // Optional BYPASSRLS transaction used by team selection so freshly
   // accepted membership is visible to allow-list and ban policy reads before
   // the outer transaction commits.
   policyPrisma?: PrismaClient;
-  // Explicit BYPASSRLS client for cross-product workspace lookup and scope
+  // Explicit BYPASSRLS client for cross-product team lookup and scope
   // validation. This stays separate from login policy so ordinary route tests
   // and same-domain policy reads do not accidentally cross the RLS boundary.
-  workspacePrisma?: PrismaClient;
+  teamPrisma?: PrismaClient;
   signatureDeps?: SignatureContinuationDeps;
 };
 
@@ -65,7 +65,7 @@ export async function finalizeAuthenticatedUser(
     codeChallenge?: string;
     codeChallengeMethod?: 'S256';
     ip?: string | null;
-    // Workspace scope resolved by explicit selection, auto-selection, or
+    // Team scope resolved by explicit selection, auto-selection, or
     // recognized-product placement. Legacy unresolved callers omit both.
     orgId?: string;
     teamId?: string;
@@ -80,15 +80,15 @@ export async function finalizeAuthenticatedUser(
     const transactionPrisma = deps?.prisma ?? getAdminPrisma();
     return runInTransaction(transactionPrisma, async (tx) => {
       // Authentication finalization may be called as a standalone service. Establish the same
-      // product → user prefix used by workspace selection before the recursive path takes the
+      // product → user prefix used by team selection before the recursive path takes the
       // authentication-epoch lock; callers already inside that hierarchy re-enter this lock.
-      await lockProductWorkspacePolicyShared(tx);
+      await lockProductTeamPolicyShared(tx);
       return finalizeAuthenticatedUser(params, {
         ...deps,
         authenticationEpochLocked: true,
         prisma: tx,
         policyPrisma: deps?.policyPrisma ?? tx,
-        workspacePrisma: deps?.workspacePrisma ?? tx,
+        teamPrisma: deps?.teamPrisma ?? tx,
       });
     });
   }
@@ -103,7 +103,7 @@ export async function finalizeAuthenticatedUser(
   );
 
   // Allowed-login-email-domain restrictions (client domain / org / team). SUPERUSER bypasses.
-  // Workspace selection injects its BYPASSRLS transaction so just-accepted membership is visible.
+  // Team selection injects its BYPASSRLS transaction so just-accepted membership is visible.
   const emailDomainPolicyInput = {
     userId: params.userId,
     domain: params.config.domain,
@@ -152,15 +152,15 @@ export async function finalizeAuthenticatedUser(
   }
 
   const signatureDeps =
-    deps?.signatureDeps || deps?.prisma || deps?.workspacePrisma
+    deps?.signatureDeps || deps?.prisma || deps?.teamPrisma
       ? {
           ...deps?.signatureDeps,
           // The outer authentication transaction is authoritative. Allowing nested signature
           // deps to replace it can split the lock hierarchy across two transactions and make the
           // inner product/user locks wait on their own caller.
           prisma: deps?.prisma ?? deps?.signatureDeps?.prisma,
-          workspacePrisma:
-            deps?.prisma ?? deps?.workspacePrisma ?? deps?.signatureDeps?.workspacePrisma,
+          teamPrisma:
+            deps?.prisma ?? deps?.teamPrisma ?? deps?.signatureDeps?.teamPrisma,
         }
       : undefined;
 

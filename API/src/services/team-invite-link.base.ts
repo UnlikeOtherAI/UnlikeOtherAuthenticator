@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 
 import type { ClientConfig } from './config.service.js';
 import { AppError } from '../utils/errors.js';
-import { hasWorkspaceCapability, normalizeTeamRole } from './team.service.base.js';
+import { hasTeamCapability, normalizeTeamRole } from './team.service.base.js';
 import type { InviteLinkPrisma } from './team-invite-link.service.js';
 
 // Shape, caps and vocabulary for shareable team invite links (design §4.7). Split out of
@@ -75,8 +75,8 @@ export function clampMaxUses(value?: number): number {
 }
 
 /**
- * Actor must hold `members.manage` in this workspace (design §4.9/Phase 2).
- * Delegates to the shared `hasWorkspaceCapability` boolean check (`team.service.base.ts`) — single
+ * Actor must hold `members.manage` in this team (design §4.9/Phase 2).
+ * Delegates to the shared `hasTeamCapability` boolean check (`team.service.base.ts`) — single
  * source of truth, also used by the gap-fix A "Invited" tab gate.
  */
 export async function requireLinkManager(
@@ -88,7 +88,7 @@ export async function requireLinkManager(
     config: ClientConfig;
   },
 ): Promise<void> {
-  const isManager = await hasWorkspaceCapability(prisma, 'members.manage', params);
+  const isManager = await hasTeamCapability(prisma, 'members.manage', params);
   if (!isManager) {
     throw new AppError('FORBIDDEN', 403);
   }

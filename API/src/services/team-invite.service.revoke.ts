@@ -8,7 +8,7 @@ import {
   getOrganisationMember,
   resolveOrgActor,
 } from './organisation.service.base.js';
-import { hasWorkspaceCapability } from './team.service.base.js';
+import { hasTeamCapability } from './team.service.base.js';
 import { decideTeamInviteTransition } from './team-invite-state-machine.js';
 import {
   TEAM_INVITE_SELECT,
@@ -24,7 +24,7 @@ import {
 
 /**
  * Permission: backend mode (no acting user — the domain pairing outranks any member role) or, in
- * user mode, a holder of `members.manage` (shared `hasWorkspaceCapability` check) or the invite's original
+ * user mode, a holder of `members.manage` (shared `hasTeamCapability` check) or the invite's original
  * inviter. The inviter branch still requires a live ACTIVE org membership (the Phase 2 `activeOnly`
  * actor rule); a deactivated/removed inviter keeps no power over their old invites.
  */
@@ -39,7 +39,7 @@ async function canRevokeInvite(
   },
 ): Promise<boolean> {
   if (!params.actorUserId) return true;
-  if (await hasWorkspaceCapability(prisma, 'members.manage', params)) return true;
+  if (await hasTeamCapability(prisma, 'members.manage', params)) return true;
 
   if (params.invitedByUserId && params.invitedByUserId === params.actorUserId) {
     const membership = await getOrganisationMember(

@@ -5,7 +5,7 @@ import { LOGIN_SESSION_AUDIENCE } from '../../config/constants.js';
 import { requireEnv } from '../../config/env.js';
 import { runInTransaction } from '../../db/tenant-context.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
-import { buildWorkspaceChoices } from '../../services/first-login.service.js';
+import { buildSessionChoices } from '../../services/first-login.service.js';
 import {
   assertLoginSessionContinuation,
   verifyLoginSession,
@@ -19,11 +19,11 @@ import {
   declineTeamInviteForUser,
 } from '../../services/team-invite.service.js';
 import { redeemTeamInviteLink } from '../../services/team-invite-link.service.js';
-import { finalizeWithTwoFaPolicy } from '../../services/workspace-finalize.service.js';
-import { lockAndAssertActiveClientWorkspaceScope } from '../../services/workspace-scope.service.js';
+import { finalizeWithTwoFaPolicy } from '../../services/team-finalize.service.js';
+import { lockAndAssertActiveClientTeamScope } from '../../services/team-scope.service.js';
 import { AppError } from '../../utils/errors.js';
 import { lockAndAssertAuthenticationEpoch } from '../../services/authentication-epoch.service.js';
-import { lockProductWorkspacePolicyShared } from '../../services/product-workspace-policy-lock.service.js';
+import { lockProductTeamPolicyShared } from '../../services/product-team-policy-lock.service.js';
 import { parseRequiredPkceChallenge } from '../../utils/pkce.js';
 import { selectTeamRateLimiter } from './rate-limit-keys.js';
 
@@ -68,11 +68,11 @@ function rejectSelection(): never {
 }
 
 /**
- * Phase 3b (design §4.3, §11.5, §8): choose a workspace (or accept/decline a pending invite) for an
+ * Phase 3b (design §4.3, §11.5, §8): choose a team (or accept/decline a pending invite) for an
  * already-verified user carrying a `login_token` bridge. Validates the bridge token, the selected
  * team's ACTIVE membership and centrally resolved client/product policy (IDOR guard — an
  * ineligible team or one the user isn't an ACTIVE member of is rejected identically to an invalid
- * token), enforces the selected org's 2FA policy, and finalizes with the resolved workspace scope
+ * token), enforces the selected org's 2FA policy, and finalizes with the resolved team scope
  * threaded onto the authorization code.
  */
 export function registerAuthSelectTeamRoute(app: FastifyInstance): void {
@@ -129,7 +129,7 @@ export function registerAuthSelectTeamRoute(app: FastifyInstance): void {
       // Decline path: no membership change, no finalize — return the refreshed chooser.
       if (inviteId && action === 'decline') {
         const choices = await runInTransaction(prisma, async (tx) => {
-          await lockProductWorkspacePolicyShared(tx);
+          await lockProductTeamPolicyShared(tx);
           await lockAndAssertAuthenticationEpoch(
             {
               userId: session.userId,
@@ -153,14 +153,14 @@ export function registerAuthSelectTeamRoute(app: FastifyInstance): void {
             config,
             now: new Date(),
           });
-          return buildWorkspaceChoices({ userId: lockedSession.userId, config }, { prisma: tx });
+          return buildSessionChoices({ userId: lockedSession.userId, config }, { prisma: tx });
         });
         reply.status(200).send({ login_token, ...choices });
         return;
       }
 
       const outcome = await runInTransaction(prisma, async (tx) => {
-        await lockProductWorkspacePolicyShared(tx);
+        await lockProductTeamPolicyShared(tx);
         await lockAndAssertAuthenticationEpoch(
           {
             userId: session.userId,
@@ -236,7 +236,7 @@ export function registerAuthSelectTeamRoute(app: FastifyInstance): void {
 
         // Every resolved path, including shareable invite-link redemption,
         // must finish with the exact ACTIVE org + team rows locked.
-        await lockAndAssertActiveClientWorkspaceScope(
+        await lockAndAssertActiveClientTeamScope(
           {
             userId: lockedSession.userId,
             domain: config.domain,
@@ -270,7 +270,7 @@ export function registerAuthSelectTeamRoute(app: FastifyInstance): void {
             orgId,
             teamId: resolvedTeamId,
           },
-          { policyLockHeld: true, policyPrisma: tx, prisma: tx, workspacePrisma: tx },
+          { policyLockHeld: true, policyPrisma: tx, prisma: tx, teamPrisma: tx },
         );
         return {
           finalized,

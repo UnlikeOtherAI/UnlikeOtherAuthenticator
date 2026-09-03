@@ -7,13 +7,13 @@ export const orgEndpoints: EndpointSchema[] = [
   {
     method: 'GET',
     path: '/org/me',
-    description: 'Current user org context and complete authorized workspace directory',
+    description: 'Current user org context and complete authorized team directory',
     auth: 'access token (X-UOA-Access-Token header)',
     query: { config_url: 'string (required)' },
     response: {
       org:
-        'object | absent — live legacy org context plus the directory fields below. Normally anchored to the active same-domain organisation. For an `all_active_memberships` product whose selected workspace belongs to another domain, it is anchored to the token’s exact `active.orgId` after that organisation and the product policy are revalidated live. It remains absent when neither live context exists; an unscoped token never causes an arbitrary cross-domain org to be synthesized.',
-      'org.workspaces':
+        'object | absent — live legacy org context plus the directory fields below. Normally anchored to the active same-domain organisation. For an `all_active_memberships` product whose selected team belongs to another domain, it is anchored to the token’s exact `active.orgId` after that organisation and the product policy are revalidated live. It remains absent when neither live context exists; an unscoped token never causes an arbitrary cross-domain org to be synthesized.',
+      'org.teams':
         'array — one entry per ACTIVE team membership on this domain, or every active membership when this product is explicitly mapped to `all_active_memberships`: { teamId, orgId, name, slug, orgName, iconUrl, avatarImageUrl, role, lastLoginAt }. Each entry carries its own orgId/orgName; do not assume it belongs to the singular legacy org.org_id. avatarImageUrl is the public /teams/:teamId/avatar form (never null, no credential needed). Entries are ordered lastLoginAt DESC with nulls last, then name ASC (the sidebar order). Cross-product entries have null `lastLoginAt`.',
       'org.pending_invites':
         "array — the caller's pending invites on this domain: { inviteId, orgId, teamId, teamName, invitedBy, expiresAt }. orgId identifies the organisation to select after backend acceptance.",
@@ -35,7 +35,7 @@ export const orgEndpoints: EndpointSchema[] = [
     method: 'POST',
     path: '/org/organisations',
     description:
-      'Create organisation owned by the calling user (X-UOA-Access-Token). Non-superusers also require org_features.allow_user_create_org=true, else 403 ORG_CREATION_NOT_ALLOWED. In backend mode (no user credential) the body must carry owner_user_id instead and allow_user_create_org does not apply. The response is the organisation record plus defaultTeam: the "General" team created in the same transaction, with the owner already an ACTIVE member of it. Use defaultTeam.id to address the new workspace immediately — no follow-up read is needed, and none is possible with a subject assertion, which must already name the org and team it acts on.',
+      'Create organisation owned by the calling user (X-UOA-Access-Token). Non-superusers also require org_features.allow_user_create_org=true, else 403 ORG_CREATION_NOT_ALLOWED. In backend mode (no user credential) the body must carry owner_user_id instead and allow_user_create_org does not apply. The response is the organisation record plus defaultTeam: the "General" team created in the same transaction, with the owner already an ACTIVE member of it. Use defaultTeam.id to address the new team immediately — no follow-up read is needed, and none is possible with a subject assertion, which must already name the org and team it acts on.',
     auth: 'domain hash bearer token + X-UOA-Access-Token header (the new org owner), or backend mode',
     body: {
       name: 'string (required, 1-100)',
@@ -180,7 +180,7 @@ export const orgEndpoints: EndpointSchema[] = [
       'slug?': 'string — optional custom team slug; otherwise derived from name',
       description: 'string (optional)',
       'join_creator?':
-        'boolean (default false) — add the acting user to the new team as its owner, in the same transaction. Set this when a person is creating their own workspace: every entry check asks for an ACTIVE TeamMember, so without it they create a team they cannot open. Leave it false when a backend is provisioning teams for other people. Idempotent (upsert), and ignored in backend mode, which has no acting user.',
+        'boolean (default false) — add the acting user to the new team as its owner, in the same transaction. Set this when a person is creating their own team: every entry check asks for an ACTIVE TeamMember, so without it they create a team they cannot open. Leave it false when a backend is provisioning teams for other people. Idempotent (upsert), and ignored in backend mode, which has no acting user.',
     },
     response: {
       slug: 'string — unique team slug within the organisation',

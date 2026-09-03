@@ -33,11 +33,11 @@ import {
   toTeamRecord,
   type TeamRecord,
 } from './team.service.base.js';
-import { resolveWorkspaceCreatorTeamRole } from './role-grants.js';
+import { resolveTeamCreatorTeamRole } from './role-grants.js';
 import {
-  lockWorkspaceMembershipRows,
-  lockWorkspaceOrganisationRow,
-} from './workspace-scope.service.js';
+  lockTeamMembershipRows,
+  lockTeamOrganisationRow,
+} from './team-scope.service.js';
 
 const ORGANISATION_SELECT = {
   id: true,
@@ -82,7 +82,7 @@ const DEFAULT_TEAM_SELECT = {
  *
  * It exists because creation was otherwise unusable by an API client. The
  * transaction creates a default team and makes the owner a member of it, but
- * without its id the caller cannot address the workspace it just made — and no
+ * without its id the caller cannot address the team it just made — and no
  * user-credentialled read can recover it, because a subject assertion has to
  * name the org and team it is acting on, which is exactly what is unknown. A
  * product driving org creation from its own UI was forced to send the person
@@ -130,7 +130,7 @@ export async function createOrganisation(
   params: {
     domain: string;
     name: string;
-    /** Optional default-team visibility for the hosted first-workspace continuation. */
+    /** Optional default-team visibility for the hosted first-team continuation. */
     defaultTeamJoinPolicy?: string;
     ownerId: string;
     config: ClientConfig;
@@ -242,12 +242,12 @@ export async function createOrganisation(
       data: {
         teamId: defaultTeam.id,
         userId: ownerId,
-        // Founding an organisation makes you the steward of its first workspace,
+        // Founding an organisation makes you the steward of its first team,
         // not a rank-and-file member of it. Without this the row took Prisma's
         // `member` default, so the founder came out organisation `owner` and
-        // team `member` — holding no team capability over the only workspace
+        // team `member` — holding no team capability over the only team
         // they had just created.
-        teamRole: resolveWorkspaceCreatorTeamRole(params.config),
+        teamRole: resolveTeamCreatorTeamRole(params.config),
       },
     });
 
@@ -346,7 +346,7 @@ export async function updateOrganisation(
       ...(params.memberInvites !== undefined
         ? { memberInvites: normalizeMemberInvitesSetting(params.memberInvites) }
         : {}),
-      // Workspace icon (design §11.3, gap-fix A Task 3) — omitted leaves the current icon
+      // Team icon (design §11.3, gap-fix A Task 3) — omitted leaves the current icon
       // unchanged; `null` clears it; validated https-only/≤2048 chars by normalizeIconUrl.
       ...(params.iconUrl !== undefined ? { iconUrl: normalizeIconUrl(params.iconUrl) } : {}),
     },
@@ -396,7 +396,7 @@ export async function deleteOrganisation(
 
   try {
     await runInTransaction(prisma, async (tx) => {
-      if (!(await lockWorkspaceOrganisationRow(org.id, { prisma: tx }))) {
+      if (!(await lockTeamOrganisationRow(org.id, { prisma: tx }))) {
         throw new AppError('NOT_FOUND', 404);
       }
       const members = await tx.orgMember.findMany({
@@ -405,7 +405,7 @@ export async function deleteOrganisation(
         select: { userId: true },
       });
       for (const member of members) {
-        await lockWorkspaceMembershipRows(
+        await lockTeamMembershipRows(
           { userId: member.userId, orgId: org.id },
           { prisma: tx },
         );

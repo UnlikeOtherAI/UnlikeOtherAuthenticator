@@ -13,7 +13,7 @@ export type AuthView =
   | 'signed-in'
   | 'signatures'
   | 'code-entry'
-  | 'workspace-chooser';
+  | 'team-chooser';
 
 export type TwoFactorSetupState = {
   setup_token: string;
@@ -22,7 +22,7 @@ export type TwoFactorSetupState = {
   manual_secret?: string;
 };
 
-/** Phase 3c (design §11.2): a single ACTIVE workspace membership offered by the chooser. */
+/** Phase 3c (design §11.2): a single ACTIVE team membership offered by the chooser. */
 export type TeamChoice = {
   teamId: string;
   orgId: string;
@@ -30,19 +30,19 @@ export type TeamChoice = {
   role: string;
   iconUrl?: string | null;
   /**
-   * Always-resolving workspace image (Docs/Auth/avatars.md §11.4): the credential-free
+   * Always-resolving team image (Docs/Auth/avatars.md §11.4): the credential-free
    * `/teams/:teamId/avatar` form, the only one this popup can put in an `<img src>`. Optional so a
    * payload minted before the field existed still parses; the card falls back accordingly.
    */
   avatarImageUrl?: string | null;
-  /** The owning organisation's name — two orgs can each have a workspace called "General". */
+  /** The owning organisation's name — two orgs can each have a team called "General". */
   orgName?: string;
   /** Gap-fix B (design §11.4): lets a `team_hint` deep-link match by slug as well as by id. */
   slug?: string;
 };
 
 /**
- * An organisation this user may add a workspace to (`creatable_orgs`): they are an ACTIVE
+ * An organisation this user may add a team to (`creatable_orgs`): they are an ACTIVE
  * owner/admin of it and the domain enabled `org_features.allow_user_create_team`. The chooser
  * presents these server-authorized targets in its creation-dialog destination selector.
  */
@@ -58,8 +58,8 @@ export type InviteChoice = {
   invitedBy?: string | null;
 };
 
-/** Mirrors `buildWorkspaceChoices` (API `first-login.service.ts`) field-for-field. */
-export type WorkspaceChoices = {
+/** Mirrors `buildSessionChoices` (API `first-login.service.ts`) field-for-field. */
+export type SessionChoices = {
   teams: TeamChoice[];
   pending_invites: InviteChoice[];
   can_create_org: boolean;
@@ -109,16 +109,16 @@ export type PopupQueryParams = {
   handoffTarget: string | null;
   /**
    * Phase 3c follow-up (design §4.3 Task 7 remainder): the `login_token` bridge seeded via a
-   * redirect (currently: the social callback's workspace_chooser branch), only ever set alongside
-   * `flow=workspace_chooser`. Unlike `twofa_token`, the chooser payload itself doesn't fit in the
+   * redirect (currently: the social callback's team_chooser branch), only ever set alongside
+   * `flow=team_chooser`. Unlike `twofa_token`, the chooser payload itself doesn't fit in the
    * URL — the SPA hydrates it afterwards via `POST /auth/session-choices`.
    */
   loginToken: string | null;
   /**
    * Gap-fix B Task 2 (design §11.4): a deep-link/switch preselect — "jump straight into this
-   * workspace" from a product's sidebar (`GET /auth?...&team_hint=<teamId|slug>`). Client-side
+   * team" from a product's sidebar (`GET /auth?...&team_hint=<teamId|slug>`). Client-side
    * ONLY: it may only cause auto-selection of a team already present in the verified user's own
-   * chooser payload (`WorkspaceChooserPage`'s hint-match), never anything wider — `select-team`'s
+   * chooser payload (`TeamChooserPage`'s hint-match), never anything wider — `select-team`'s
    * server-side ACTIVE-membership + domain check remains the sole authority.
    */
   teamHint: string | null;
@@ -140,7 +140,7 @@ export type PopupContextValue = PopupQueryParams & {
   setPendingEmail: (email: string | null) => void;
   /**
    * Bridge token from /auth/verify-code, a chooser-producing /auth/login (design §4.3), or the
-   * `login_token`/`flow=workspace_chooser` query pair seeded by the social callback (declared on
+   * `login_token`/`flow=team_chooser` query pair seeded by the social callback (declared on
    * `PopupQueryParams` above so it can be parsed from the URL like `twoFaToken`).
    */
   setLoginToken: (token: string | null) => void;
@@ -151,9 +151,9 @@ export type PopupContextValue = PopupQueryParams & {
    */
   notice: TranslationKey | null;
   setNotice: (key: TranslationKey | null) => void;
-  /** The workspace chooser payload for the current `loginToken`. */
-  workspaceChoices: WorkspaceChoices | null;
-  setWorkspaceChoices: (choices: WorkspaceChoices | null) => void;
+  /** The team chooser payload for the current `loginToken`. */
+  teamChoices: SessionChoices | null;
+  setSessionChoices: (choices: SessionChoices | null) => void;
   /**
    * Perform the final OAuth redirect (authorization code flow).
    * This intentionally uses a normal top-level navigation, not postMessage.
@@ -216,10 +216,10 @@ export function parsePopupQueryParams(search: string): PopupQueryParams {
     params.get('flow') === 'signatures' ? params.get('signing_token') : null;
   const handoffTarget = params.get('handoff_target');
   // Phase 3c follow-up (design §4.3 Task 7 remainder): only trust `login_token` when the redirect
-  // also carries the `flow=workspace_chooser` marker — mirrors how `twofa_token` is scoped by its
+  // also carries the `flow=team_chooser` marker — mirrors how `twofa_token` is scoped by its
   // own dedicated query param, so a stray `login_token` on an unrelated redirect is never picked up.
   const loginToken =
-    params.get('flow') === 'workspace_chooser' ? params.get('login_token') : null;
+    params.get('flow') === 'team_chooser' ? params.get('login_token') : null;
   // Gap-fix B Task 2 (design §11.4): a deep-link/switch chooser preselect. Parsed unconditionally
   // (unlike `login_token`, it isn't scoped to another marker param) — validity/membership is
   // re-checked against the verified user's own chooser payload before it can select anything.
@@ -279,8 +279,8 @@ function deriveInitialView(parsed: PopupQueryParams): AuthView {
   }
   if (parsed.loginToken) {
     // Phase 3c follow-up (design §4.3 Task 7 remainder): the social callback seeded a login_token
-    // bridge via redirect. WorkspaceChooserPage hydrates workspaceChoices itself on mount.
-    return 'workspace-chooser';
+    // bridge via redirect. TeamChooserPage hydrates teamChoices itself on mount.
+    return 'team-chooser';
   }
   if (parsed.emailToken && parsed.emailTokenType) {
     // Email link landing: show set-password for both registration+password and password reset.
@@ -299,14 +299,14 @@ export function PopupProvider(props: {
   initialSearch?: string;
   /**
    * Seed values for the client-held chooser state (Phase 3c). These never come from the
-   * URL — they're set by `setPendingEmail`/`setLoginToken`/`setWorkspaceChoices` as the flow
+   * URL — they're set by `setPendingEmail`/`setLoginToken`/`setSessionChoices` as the flow
    * progresses — but exposing them as optional props lets callers (tests, storybook-style
    * harnesses) construct a provider already positioned at a given step.
    */
   initialView?: AuthView;
   initialPendingEmail?: string | null;
   initialLoginToken?: string | null;
-  initialWorkspaceChoices?: WorkspaceChoices | null;
+  initialSessionChoices?: SessionChoices | null;
   children: React.ReactNode;
 }): React.JSX.Element {
   const [search] = useState(() => {
@@ -323,15 +323,15 @@ export function PopupProvider(props: {
   // Seeded from the query for the server-rendered handoff; updated by redirectTo for the
   // client-side flows (email/password, 2FA, verify-email) when the target is a custom scheme.
   const [handoffTarget, setHandoffTarget] = useState<string | null>(() => parsed.handoffTarget);
-  // Phase 3c (design §11.2): client-held state for the code-entry + workspace-chooser steps.
+  // Phase 3c (design §11.2): client-held state for the code-entry + team-chooser steps.
   const [pendingEmail, setPendingEmailState] = useState<string | null>(
     () => props.initialPendingEmail ?? null,
   );
   const [loginToken, setLoginTokenState] = useState<string | null>(
     () => props.initialLoginToken ?? parsed.loginToken,
   );
-  const [workspaceChoices, setWorkspaceChoicesState] = useState<WorkspaceChoices | null>(
-    () => props.initialWorkspaceChoices ?? null,
+  const [teamChoices, setSessionChoicesState] = useState<SessionChoices | null>(
+    () => props.initialSessionChoices ?? null,
   );
   const [notice, setNotice] = useState<TranslationKey | null>(null);
 
@@ -378,8 +378,8 @@ export function PopupProvider(props: {
   }, []);
   const setPendingEmail = useCallback((email: string | null) => setPendingEmailState(email), []);
   const setLoginToken = useCallback((token: string | null) => setLoginTokenState(token), []);
-  const setWorkspaceChoices = useCallback(
-    (choices: WorkspaceChoices | null) => setWorkspaceChoicesState(choices),
+  const setSessionChoices = useCallback(
+    (choices: SessionChoices | null) => setSessionChoicesState(choices),
     [],
   );
   const startTwoFactorVerify = useCallback((token: string) => {
@@ -425,8 +425,8 @@ export function PopupProvider(props: {
       setLoginToken,
       notice,
       setNotice,
-      workspaceChoices,
-      setWorkspaceChoices,
+      teamChoices,
+      setSessionChoices,
       redirectTo: (url: string) => {
         if (typeof window === 'undefined') return;
         // Native deep links (custom schemes) launch the OS handler without unloading this
@@ -470,8 +470,8 @@ export function PopupProvider(props: {
     loginToken,
     setLoginToken,
     notice,
-    workspaceChoices,
-    setWorkspaceChoices,
+    teamChoices,
+    setSessionChoices,
     props.configUrl,
     props.config,
   ]);

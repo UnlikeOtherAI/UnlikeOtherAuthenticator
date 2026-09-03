@@ -128,7 +128,7 @@ describe('mcp access-token (RS256)', () => {
   it('signs an identity-only confidential token without org or active claims', async () => {
     const resource = 'https://ledger.unlikeotherai.com';
     const token = await signConfidentialAccessToken({
-      subject: 'usr_without_workspace',
+      subject: 'usr_without_team',
       credentialEpoch: 0,
       email: 'first-login@example.com',
       sourceDomain: 'api.nessie.works',
@@ -145,7 +145,7 @@ describe('mcp access-token (RS256)', () => {
       audience: resource,
     });
     expect(payload).toMatchObject({
-      sub: 'usr_without_workspace',
+      sub: 'usr_without_team',
       tv: 0,
       email: 'first-login@example.com',
       source_domain: 'api.nessie.works',

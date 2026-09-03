@@ -11,7 +11,7 @@ import { hashPassword } from './password.service.js';
 import { ensureDomainRoleForUser } from './domain-role.service.js';
 import { placeUserInConfiguredOrganisation } from './org-placement.service.js';
 import { revokeAllRefreshTokensForUser } from './refresh-token-revocation.service.js';
-import { lockProductWorkspacePolicyShared } from './product-workspace-policy-lock.service.js';
+import { lockProductTeamPolicyShared } from './product-team-policy-lock.service.js';
 import { acceptTeamInviteWithinTransaction } from './team-invite.service.js';
 import {
   lockAndReadVerificationTokenEpoch,
@@ -52,7 +52,7 @@ type VerifyEmailTokenRow = Prisma.VerificationTokenGetPayload<{
 
 export type VerifyEmailTokenType = 'LOGIN_LINK' | 'VERIFY_EMAIL_SET_PASSWORD' | 'VERIFY_EMAIL';
 
-export type AcceptedEmailInviteWorkspace = {
+export type AcceptedEmailInviteTeam = {
   inviteId: string;
   orgId: string;
   teamId: string;
@@ -63,7 +63,7 @@ export type VerifyEmailResult = {
   credentialEpoch: number;
   type: VerifyEmailTokenType;
   twoFaEnabled: boolean;
-  acceptedInvite: AcceptedEmailInviteWorkspace | null;
+  acceptedInvite: AcceptedEmailInviteTeam | null;
 };
 
 function assertVerifyEmailTokenType(
@@ -166,7 +166,7 @@ export async function verifyEmailToken(
 
   // Token consumption + user creation/update must be atomic to enforce one-time use.
   const consumed = await runInTransaction(prisma, async (tx) => {
-    await lockProductWorkspacePolicyShared(tx);
+    await lockProductTeamPolicyShared(tx);
     const tokenRow = await tx.verificationToken.findUnique({
       where: { tokenHash },
       select: {
@@ -311,9 +311,9 @@ export async function verifyEmailToken(
       prisma: tx,
     });
 
-    let acceptedInvite: AcceptedEmailInviteWorkspace | null = null;
+    let acceptedInvite: AcceptedEmailInviteTeam | null = null;
     if (tokenRow.teamInviteId) {
-      const workspace = await (
+      const team = await (
         deps?.acceptTeamInviteWithinTransaction ?? acceptTeamInviteWithinTransaction
       )({
         prisma: tx,
@@ -324,8 +324,8 @@ export async function verifyEmailToken(
       });
       acceptedInvite = {
         inviteId: tokenRow.teamInviteId,
-        orgId: workspace.orgId,
-        teamId: workspace.teamId,
+        orgId: team.orgId,
+        teamId: team.teamId,
       };
     }
 
@@ -393,7 +393,7 @@ export async function verifyEmailToken(
     }
   }
 
-  // An invite-bound token is both identity verification and an explicit workspace selection. Return
+  // An invite-bound token is both identity verification and an explicit team selection. Return
   // the exact accepted scope so callers can enforce its 2FA policy and carry it into the code.
   return {
     userId: consumed.userId,

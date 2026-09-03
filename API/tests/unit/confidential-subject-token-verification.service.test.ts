@@ -81,7 +81,7 @@ describe('confidential subject-token verification', () => {
     });
   });
 
-  it('accepts a signed identity assertion without workspace context', async () => {
+  it('accepts a signed identity assertion without team context', async () => {
     const assertion = await verifyConfidentialSubjectToken(
       {
         subjectToken: await signSubjectToken({ omitActive: true }),
@@ -96,7 +96,7 @@ describe('confidential subject-token verification', () => {
     expect(assertion).not.toHaveProperty('active');
   });
 
-  it('rejects partial or malformed workspace context', async () => {
+  it('rejects partial or malformed team context', async () => {
     const malformedActiveClaims: unknown[] = [
       {},
       { orgId: 'org_1' },

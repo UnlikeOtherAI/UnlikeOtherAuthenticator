@@ -31,7 +31,7 @@ const configUrl = 'https://client.example.com/auth-config';
 const redirectUrl = 'https://client.example.com/oauth/callback';
 const challenge = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ';
 
-type Workspace = {
+type Team = {
   ownerId: string;
   orgId: string;
   teamId: string;
@@ -51,7 +51,7 @@ function deferred(): {
 function configPayload(overrides?: Record<string, unknown>) {
   return baseClientConfigPayload({
     redirect_urls: [redirectUrl],
-    login_flow: { email_code_enabled: true, workspace_selection: 'auto' },
+    login_flow: { email_code_enabled: true, team_selection: 'auto' },
     org_features: { enabled: true, user_needs_team: true },
     ...overrides,
   });
@@ -110,7 +110,7 @@ describe.skipIf(!hasDatabase)('login continuation transaction races', () => {
     vi.unstubAllGlobals();
   });
 
-  async function seedWorkspace(): Promise<Workspace> {
+  async function seedTeam(): Promise<Team> {
     const owner = await handle.prisma.user.create({
       data: {
         email: 'owner@example.com',
@@ -186,13 +186,13 @@ describe.skipIf(!hasDatabase)('login continuation transaction races', () => {
   }
 
   it('lets only the claimed request create and notify an access request', async () => {
-    const workspace = await seedWorkspace();
+    const team = await seedTeam();
     const userId = await seedUser('requester@example.com');
     const payload = configPayload({
       access_requests: {
         enabled: true,
-        target_org_id: workspace.orgId,
-        target_team_id: workspace.teamId,
+        target_org_id: team.orgId,
+        target_team_id: team.teamId,
         notify_org_roles: ['owner'],
       },
     });
@@ -238,13 +238,13 @@ describe.skipIf(!hasDatabase)('login continuation transaction races', () => {
   });
 
   it('rolls back a failed notification and leaves the capability retryable', async () => {
-    const workspace = await seedWorkspace();
+    const team = await seedTeam();
     const userId = await seedUser('retry-requester@example.com');
     const payload = configPayload({
       access_requests: {
         enabled: true,
-        target_org_id: workspace.orgId,
-        target_team_id: workspace.teamId,
+        target_org_id: team.orgId,
+        target_team_id: team.teamId,
         notify_org_roles: ['owner'],
       },
     });
@@ -285,15 +285,15 @@ describe.skipIf(!hasDatabase)('login continuation transaction races', () => {
   });
 
   it('redeems an invite link and records its audit exactly once under replay', async () => {
-    const workspace = await seedWorkspace();
+    const team = await seedTeam();
     const userId = await seedUser('invitee@example.com');
     const token = 'concurrent-invite-link-token';
     const link = await handle.prisma.teamInviteLink.create({
       data: {
-        orgId: workspace.orgId,
-        teamId: workspace.teamId,
+        orgId: team.orgId,
+        teamId: team.teamId,
         tokenHash: hashEmailToken(token, process.env.SHARED_SECRET!),
-        createdByUserId: workspace.ownerId,
+        createdByUserId: team.ownerId,
         expiresAt: new Date(Date.now() + 60_000),
         maxUses: 5,
       },
@@ -327,18 +327,18 @@ describe.skipIf(!hasDatabase)('login continuation transaction races', () => {
       ).toEqual({ useCount: 1 });
       expect(
         await handle.prisma.orgMember.count({
-          where: { orgId: workspace.orgId, userId, status: 'ACTIVE' },
+          where: { orgId: team.orgId, userId, status: 'ACTIVE' },
         }),
       ).toBe(1);
       expect(
         await handle.prisma.teamMember.count({
-          where: { teamId: workspace.teamId, userId, status: 'ACTIVE' },
+          where: { teamId: team.teamId, userId, status: 'ACTIVE' },
         }),
       ).toBe(1);
       expect(
         await handle.prisma.orgAuditLog.count({
           where: {
-            orgId: workspace.orgId,
+            orgId: team.orgId,
             actorUserId: userId,
             action: 'team_member.added',
           },
@@ -350,11 +350,11 @@ describe.skipIf(!hasDatabase)('login continuation transaction races', () => {
   });
 
   it('does not consume or reactivate an invite link for an inactive org member', async () => {
-    const workspace = await seedWorkspace();
+    const team = await seedTeam();
     const userId = await seedUser('inactive-invitee@example.com');
     await handle.prisma.orgMember.create({
       data: {
-        orgId: workspace.orgId,
+        orgId: team.orgId,
         userId,
         role: 'member',
         status: 'DEACTIVATED',
@@ -363,7 +363,7 @@ describe.skipIf(!hasDatabase)('login continuation transaction races', () => {
     });
     await handle.prisma.teamMember.create({
       data: {
-        teamId: workspace.teamId,
+        teamId: team.teamId,
         userId,
         teamRole: 'member',
         status: 'REMOVED',
@@ -373,10 +373,10 @@ describe.skipIf(!hasDatabase)('login continuation transaction races', () => {
     const token = 'inactive-member-invite-link-token';
     const link = await handle.prisma.teamInviteLink.create({
       data: {
-        orgId: workspace.orgId,
-        teamId: workspace.teamId,
+        orgId: team.orgId,
+        teamId: team.teamId,
         tokenHash: hashEmailToken(token, process.env.SHARED_SECRET!),
-        createdByUserId: workspace.ownerId,
+        createdByUserId: team.ownerId,
         expiresAt: new Date(Date.now() + 60_000),
       },
       select: { id: true },
@@ -406,13 +406,13 @@ describe.skipIf(!hasDatabase)('login continuation transaction races', () => {
       ).toEqual({ useCount: 0 });
       expect(
         await handle.prisma.orgMember.findUniqueOrThrow({
-          where: { orgId_userId: { orgId: workspace.orgId, userId } },
+          where: { orgId_userId: { orgId: team.orgId, userId } },
           select: { status: true },
         }),
       ).toEqual({ status: 'DEACTIVATED' });
       expect(
         await handle.prisma.teamMember.findUniqueOrThrow({
-          where: { teamId_userId: { teamId: workspace.teamId, userId } },
+          where: { teamId_userId: { teamId: team.teamId, userId } },
           select: { status: true },
         }),
       ).toEqual({ status: 'REMOVED' });

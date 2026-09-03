@@ -12,19 +12,19 @@ import {
 } from '../../services/auth-verify-email.service.js';
 import { getTeamInviteLandingData } from '../../services/team-invite.service.js';
 import {
-  buildWorkspaceChoices,
-  resolveAutoSelectedWorkspace,
-  shouldPresentWorkspaceChooser,
-  type AutoSelectedWorkspace,
+  buildSessionChoices,
+  resolveAutoSelectedTeam,
+  shouldPresentTeamChooser,
+  type AutoSelectedTeam,
 } from '../../services/first-login.service.js';
 import { signLoginSession } from '../../services/login-session.service.js';
 import { lockAndAssertAuthenticationEpoch } from '../../services/authentication-epoch.service.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
 import { parseRequestAccessFlag } from '../../services/access-request-flow.service.js';
-import { resolveProductWorkspaceBeforeTwoFa } from '../../services/required-workspace-placement.service.js';
+import { resolveProductTeamBeforeTwoFa } from '../../services/required-team-placement.service.js';
 import { selectRedirectUrl } from '../../services/authorization-code.service.js';
-import { finalizeWithTwoFaPolicy } from '../../services/workspace-finalize.service.js';
-import { lockProductWorkspacePolicyShared } from '../../services/product-workspace-policy-lock.service.js';
+import { finalizeWithTwoFaPolicy } from '../../services/team-finalize.service.js';
+import { lockProductTeamPolicyShared } from '../../services/product-team-policy-lock.service.js';
 import { parsePkceChallenge } from '../../utils/pkce.js';
 import { tokenConsumeRateLimiter } from './rate-limit-keys.js';
 
@@ -125,7 +125,7 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
             ? 'verify_email'
             : 'verify_email_set_password';
       const continuation = await runInTransaction(request.adminDb, async (tx) => {
-        await lockProductWorkspacePolicyShared(tx);
+        await lockProductTeamPolicyShared(tx);
         const authenticationState = await lockAndAssertAuthenticationEpoch(
           { userId, domain: config.domain, credentialEpoch },
           { prisma: tx, fallbackTwoFaEnabled: twoFaEnabled },
@@ -133,16 +133,16 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
 
         // Hold first-placement selection through exact-scope policy evaluation and code issuance.
         // The admin transaction preserves intentional cross-product and accepted-invite reads.
-        let selectedWorkspace: AutoSelectedWorkspace | null = acceptedInvite
+        let selectedTeam: AutoSelectedTeam | null = acceptedInvite
           ? { orgId: acceptedInvite.orgId, teamId: acceptedInvite.teamId }
           : null;
-        if (!acceptedInvite && config.login_flow?.workspace_selection === 'auto') {
-          const choices = await buildWorkspaceChoices(
+        if (!acceptedInvite && config.login_flow?.team_selection === 'auto') {
+          const choices = await buildSessionChoices(
             { userId, config },
             { crossProductPrisma: tx, policyPrisma: tx, prisma: tx },
           );
-          selectedWorkspace = resolveAutoSelectedWorkspace(choices);
-          if (shouldPresentWorkspaceChooser(choices, selectedWorkspace)) {
+          selectedTeam = resolveAutoSelectedTeam(choices);
+          if (shouldPresentTeamChooser(choices, selectedTeam)) {
             const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
             const loginToken = await signLoginSession({
               userId,
@@ -159,12 +159,12 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
               sharedSecret: SHARED_SECRET,
               audience: LOGIN_SESSION_AUDIENCE,
             });
-            return { kind: 'workspace_chooser' as const, choices, loginToken };
+            return { kind: 'team_chooser' as const, choices, loginToken };
           }
         }
-        selectedWorkspace ??= await resolveProductWorkspaceBeforeTwoFa(
+        selectedTeam ??= await resolveProductTeamBeforeTwoFa(
           { userId, config },
-          { prisma: tx, workspacePrisma: tx },
+          { prisma: tx, teamPrisma: tx },
         );
 
         const outcome = await finalizeWithTwoFaPolicy(
@@ -182,7 +182,7 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
             codeChallenge: pkce.codeChallenge,
             codeChallengeMethod: pkce.codeChallengeMethod,
             ip: request.ip ?? null,
-            ...(selectedWorkspace ?? {}),
+            ...(selectedTeam ?? {}),
           },
           {
             currentTwoFaEnabled: authenticationState.twoFaEnabled,
@@ -190,13 +190,13 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
             policyPrisma: tx,
             prisma: tx,
             twoFaPolicyPrisma: tx,
-            workspacePrisma: tx,
+            teamPrisma: tx,
           },
         );
         return { kind: 'finalized' as const, outcome };
       });
 
-      if (continuation.kind === 'workspace_chooser') {
+      if (continuation.kind === 'team_chooser') {
         reply.status(200).send({
           login_token: continuation.loginToken,
           ...continuation.choices,

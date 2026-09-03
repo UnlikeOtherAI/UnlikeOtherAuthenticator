@@ -18,9 +18,9 @@ import {
   exchangeConfidentialChainedAccessToken,
 } from '../../services/confidential-chained-token-exchange.service.js';
 import {
-  exchangeWorkspaceSwitchForTokens,
-  WORKSPACE_SWITCH_GRANT_TYPE,
-} from '../../services/workspace-switch-token.service.js';
+  exchangeTeamSwitchForTokens,
+  TEAM_SWITCH_GRANT_TYPE,
+} from '../../services/team-switch-token.service.js';
 import {
   confidentialTokenExchangeDomainRateLimiter,
   tokenExchangePreAuthRateLimiter,
@@ -42,9 +42,9 @@ const RefreshTokenGrantSchema = z
   })
   .strict();
 
-const WorkspaceSwitchGrantSchema = z
+const TeamSwitchGrantSchema = z
   .object({
-    grant_type: z.literal(WORKSPACE_SWITCH_GRANT_TYPE),
+    grant_type: z.literal(TEAM_SWITCH_GRANT_TYPE),
     refresh_token: z.string().min(1).max(4096),
     organization_id: z.string().min(1).max(256),
     team_id: z.string().min(1).max(256),
@@ -76,12 +76,12 @@ type TokenExchangeBody =
       code_verifier?: string;
     }
   | { grant_type: 'refresh_token'; refresh_token: string }
-  | z.infer<typeof WorkspaceSwitchGrantSchema>
+  | z.infer<typeof TeamSwitchGrantSchema>
   | z.infer<typeof ConfidentialTokenExchangeGrantSchema>;
 
 declare module 'fastify' {
   interface FastifyRequest {
-    authenticatedTokenGrantErrorProfile?: 'workspace-switch';
+    authenticatedTokenGrantErrorProfile?: 'team-switch';
   }
 }
 
@@ -96,9 +96,9 @@ function parseTokenExchangeBody(body: unknown): TokenExchangeBody {
     return refreshGrant.data;
   }
 
-  const workspaceSwitchGrant = WorkspaceSwitchGrantSchema.safeParse(body);
-  if (workspaceSwitchGrant.success) {
-    return workspaceSwitchGrant.data;
+  const teamSwitchGrant = TeamSwitchGrantSchema.safeParse(body);
+  if (teamSwitchGrant.success) {
+    return teamSwitchGrant.data;
   }
 
   const authorizationCodeGrant = AuthorizationCodeGrantSchema.safeParse(body);
@@ -183,15 +183,15 @@ export function registerAuthTokenExchangeRoute(app: FastifyInstance): void {
       }
 
       let tokenPair;
-      if (body.grant_type === WORKSPACE_SWITCH_GRANT_TYPE) {
+      if (body.grant_type === TEAM_SWITCH_GRANT_TYPE) {
         const clientId = requireAuthenticatedClientId(request.domainAuthClientId);
         const authenticatedClientDomainId = requireAuthenticatedClientId(
           request.domainAuthClientDomainId,
         );
         // This marker is set only after both client-auth identities exist. The central error
         // handler may then expose INVALID_REFRESH_TOKEN without exposing pre-handler failures.
-        request.authenticatedTokenGrantErrorProfile = 'workspace-switch';
-        tokenPair = await exchangeWorkspaceSwitchForTokens(
+        request.authenticatedTokenGrantErrorProfile = 'team-switch';
+        tokenPair = await exchangeTeamSwitchForTokens(
           {
             refreshToken: body.refresh_token,
             organizationId: body.organization_id,

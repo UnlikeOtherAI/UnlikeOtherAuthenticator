@@ -42,7 +42,7 @@ const AccessTokenClaimsSchema = z
       })
       .passthrough()
       .optional(),
-    // Slack-style workspace-scoped sessions (design §7 step 3-4), populated by explicit selection
+    // Slack-style team-scoped sessions (design §7 step 3-4), populated by explicit selection
     // or an unambiguous server-side auto-selection.
     active: z
       .object({

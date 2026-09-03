@@ -162,7 +162,7 @@ export function registerErrorHandler(app: FastifyInstance): void {
           error,
           statusCode: error.statusCode,
           exposeInvalidRefreshToken:
-            request.authenticatedTokenGrantErrorProfile === 'workspace-switch',
+            request.authenticatedTokenGrantErrorProfile === 'team-switch',
         }),
       );
       return;

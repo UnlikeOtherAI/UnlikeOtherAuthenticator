@@ -76,7 +76,7 @@ export const orgInvitationEndpoints: EndpointSchema[] = [
     auth: 'domain hash bearer token; access token (X-UOA-Access-Token header) optional — omit for backend mode',
     response: {
       200: '{ ok: true } (also for an already-revoked invitation)',
-      403: 'caller holds neither members.manage in this workspace nor authorship of the invitation',
+      403: 'caller holds neither members.manage in this team nor authorship of the invitation',
       404: 'generic — unknown invite id, foreign org/team, or cross-domain (no existence leak)',
       409: 'code INVITATION_ALREADY_ACCEPTED — the invitation was already accepted; remove the member instead',
     },

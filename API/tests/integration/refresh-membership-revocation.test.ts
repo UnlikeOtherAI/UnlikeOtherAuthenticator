@@ -23,7 +23,7 @@ import { baseClientConfigPayload } from '../helpers/test-config.js';
 import { createTestDb } from '../helpers/test-db.js';
 
 const hasDatabase = Boolean(process.env.DATABASE_URL);
-const workspaceDomain = 'workspace.refresh-revocation.example';
+const teamDomain = 'team.refresh-revocation.example';
 const productDomains = [
   'api.nessie.refresh-revocation.example',
   'api.deepwater.refresh-revocation.example',
@@ -32,7 +32,7 @@ const productDomains = [
 ] as const;
 const sharedSecret = 'test-shared-secret-with-enough-length';
 
-type Workspace = {
+type Team = {
   ownerId: string;
   userId: string;
   orgId: string;
@@ -53,16 +53,16 @@ function config(domain: string): ClientConfig {
     baseClientConfigPayload({
       domain,
       redirect_urls: [`https://${domain}/oauth/callback`],
-      login_flow: { email_code_enabled: false, workspace_selection: 'off' },
+      login_flow: { email_code_enabled: false, team_selection: 'off' },
       org_features: { enabled: false },
     }),
   );
 }
 
-function workspaceConfig(): ClientConfig {
+function teamConfig(): ClientConfig {
   return validateConfigFields(
     baseClientConfigPayload({
-      domain: workspaceDomain,
+      domain: teamDomain,
       org_features: { enabled: true, user_needs_team: true },
     }),
   );
@@ -76,7 +76,7 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
   return { promise, resolve };
 }
 
-describe.skipIf(!hasDatabase)('workspace refresh-family revocation', () => {
+describe.skipIf(!hasDatabase)('team refresh-family revocation', () => {
   let handle: Awaited<ReturnType<typeof createTestDb>>;
   const originalEnv = {
     DATABASE_URL: process.env.DATABASE_URL,
@@ -120,7 +120,7 @@ describe.skipIf(!hasDatabase)('workspace refresh-family revocation', () => {
     await handle.prisma.user.deleteMany();
   });
 
-  async function seedWorkspace(): Promise<Workspace> {
+  async function seedTeam(): Promise<Team> {
     const owner = await handle.prisma.user.create({
       data: { email: `owner-${randomUUID()}@example.com`, userKey: randomUUID() },
       select: { id: true },
@@ -131,8 +131,8 @@ describe.skipIf(!hasDatabase)('workspace refresh-family revocation', () => {
     });
     const org = await handle.prisma.organisation.create({
       data: {
-        domain: workspaceDomain,
-        name: 'Target workspace',
+        domain: teamDomain,
+        name: 'Target team',
         slug: `target-${randomUUID()}`,
         ownerId: owner.id,
       },
@@ -141,7 +141,7 @@ describe.skipIf(!hasDatabase)('workspace refresh-family revocation', () => {
     const otherOrg = await handle.prisma.organisation.create({
       data: {
         domain: 'other.refresh-revocation.example',
-        name: 'Other workspace',
+        name: 'Other team',
         slug: `other-${randomUUID()}`,
         ownerId: owner.id,
       },
@@ -255,7 +255,7 @@ describe.skipIf(!hasDatabase)('workspace refresh-family revocation', () => {
   function refreshProduct(
     token: IssuedRefresh,
     clientDomainId: string,
-    afterActiveWorkspaceLock?: () => Promise<void>,
+    afterActiveTeamLock?: () => Promise<void>,
   ) {
     return exchangeRefreshTokenForTokens(
       {
@@ -269,7 +269,7 @@ describe.skipIf(!hasDatabase)('workspace refresh-family revocation', () => {
         adminPrisma: handle.prisma,
         prisma: handle.prisma,
         sharedSecret,
-        afterActiveWorkspaceLock,
+        afterActiveTeamLock,
       },
     );
   }
@@ -286,28 +286,28 @@ describe.skipIf(!hasDatabase)('workspace refresh-family revocation', () => {
   }
 
   it('deactivation revokes exact-org families across every product plus legacy same-domain state', async () => {
-    const workspace = await seedWorkspace();
+    const team = await seedTeam();
     const productTokens = await Promise.all(
       productDomains.map((domain) =>
-        issue(workspace.userId, domain, workspace.orgId, workspace.teamId),
+        issue(team.userId, domain, team.orgId, team.teamId),
       ),
     );
-    const legacy = await issue(workspace.userId, workspaceDomain, null, null, 'legacy');
+    const legacy = await issue(team.userId, teamDomain, null, null, 'legacy');
     const unrelated = await issue(
-      workspace.userId,
+      team.userId,
       productDomains[0],
-      workspace.otherOrgId,
-      workspace.otherOrgTeamId,
+      team.otherOrgId,
+      team.otherOrgTeamId,
       'unrelated',
     );
 
     await deactivateOrganisationMember(
       {
-        orgId: workspace.orgId,
-        domain: workspaceDomain,
-        actorUserId: workspace.ownerId,
-        userId: workspace.userId,
-        config: workspaceConfig(),
+        orgId: team.orgId,
+        domain: teamDomain,
+        actorUserId: team.ownerId,
+        userId: team.userId,
+        config: teamConfig(),
       },
       { prisma: handle.prisma },
     );
@@ -327,11 +327,11 @@ describe.skipIf(!hasDatabase)('workspace refresh-family revocation', () => {
 
     await reactivateOrganisationMember(
       {
-        orgId: workspace.orgId,
-        domain: workspaceDomain,
-        actorUserId: workspace.ownerId,
-        userId: workspace.userId,
-        config: workspaceConfig(),
+        orgId: team.orgId,
+        domain: teamDomain,
+        actorUserId: team.ownerId,
+        userId: team.userId,
+        config: teamConfig(),
       },
       { prisma: handle.prisma },
     );
@@ -340,31 +340,31 @@ describe.skipIf(!hasDatabase)('workspace refresh-family revocation', () => {
   });
 
   it('org removal remains revoked after the member is re-added', async () => {
-    const workspace = await seedWorkspace();
+    const team = await seedTeam();
     const token = await issue(
-      workspace.userId,
+      team.userId,
       productDomains[1],
-      workspace.orgId,
-      workspace.teamId,
+      team.orgId,
+      team.teamId,
     );
     await removeOrganisationMember(
       {
-        orgId: workspace.orgId,
-        domain: workspaceDomain,
-        actorUserId: workspace.ownerId,
-        userId: workspace.userId,
-        config: workspaceConfig(),
+        orgId: team.orgId,
+        domain: teamDomain,
+        actorUserId: team.ownerId,
+        userId: team.userId,
+        config: teamConfig(),
       },
       { prisma: handle.prisma },
     );
     await addOrganisationMember(
       {
-        orgId: workspace.orgId,
-        domain: workspaceDomain,
-        actorUserId: workspace.ownerId,
-        userId: workspace.userId,
+        orgId: team.orgId,
+        domain: teamDomain,
+        actorUserId: team.ownerId,
+        userId: team.userId,
         role: 'member',
-        config: workspaceConfig(),
+        config: teamConfig(),
       },
       { prisma: handle.prisma },
     );
@@ -372,29 +372,29 @@ describe.skipIf(!hasDatabase)('workspace refresh-family revocation', () => {
   });
 
   it('team removal revokes only exact-team families across all product domains and re-add stays dead', async () => {
-    const workspace = await seedWorkspace();
+    const team = await seedTeam();
     const targetTokens = await Promise.all(
       productDomains.map((domain) =>
-        issue(workspace.userId, domain, workspace.orgId, workspace.teamId),
+        issue(team.userId, domain, team.orgId, team.teamId),
       ),
     );
     const otherTeam = await issue(
-      workspace.userId,
+      team.userId,
       productDomains[0],
-      workspace.orgId,
-      workspace.otherTeamId,
+      team.orgId,
+      team.otherTeamId,
       'other-team',
     );
-    const legacy = await issue(workspace.userId, workspaceDomain, null, null, 'legacy-team');
+    const legacy = await issue(team.userId, teamDomain, null, null, 'legacy-team');
 
     await removeTeamMember(
       {
-        orgId: workspace.orgId,
-        teamId: workspace.teamId,
-        domain: workspaceDomain,
-        actorUserId: workspace.ownerId,
-        userId: workspace.userId,
-        config: workspaceConfig(),
+        orgId: team.orgId,
+        teamId: team.teamId,
+        domain: teamDomain,
+        actorUserId: team.ownerId,
+        userId: team.userId,
+        config: teamConfig(),
       },
       { prisma: handle.prisma },
     );
@@ -414,12 +414,12 @@ describe.skipIf(!hasDatabase)('workspace refresh-family revocation', () => {
 
     await addTeamMember(
       {
-        orgId: workspace.orgId,
-        teamId: workspace.teamId,
-        domain: workspaceDomain,
-        actorUserId: workspace.ownerId,
-        userId: workspace.userId,
-        config: workspaceConfig(),
+        orgId: team.orgId,
+        teamId: team.teamId,
+        domain: teamDomain,
+        actorUserId: team.ownerId,
+        userId: team.userId,
+        config: teamConfig(),
       },
       { prisma: handle.prisma },
     );
@@ -428,10 +428,10 @@ describe.skipIf(!hasDatabase)('workspace refresh-family revocation', () => {
   });
 
   it('refresh-first serializes before team removal, which then revokes the replacement', async () => {
-    const workspace = await seedWorkspace();
+    const team = await seedTeam();
     const domain = productDomains[2];
     const clientDomainId = await registerProduct(domain);
-    const token = await issue(workspace.userId, domain, workspace.orgId, workspace.teamId);
+    const token = await issue(team.userId, domain, team.orgId, team.teamId);
     const locked = deferred();
     const release = deferred();
     const rotation = refreshProduct(token, clientDomainId, async () => {
@@ -442,12 +442,12 @@ describe.skipIf(!hasDatabase)('workspace refresh-family revocation', () => {
 
     const removal = removeTeamMember(
       {
-        orgId: workspace.orgId,
-        teamId: workspace.teamId,
-        domain: workspaceDomain,
-        actorUserId: workspace.ownerId,
-        userId: workspace.userId,
-        config: workspaceConfig(),
+        orgId: team.orgId,
+        teamId: team.teamId,
+        domain: teamDomain,
+        actorUserId: team.ownerId,
+        userId: team.userId,
+        config: teamConfig(),
       },
       { prisma: handle.prisma },
     );
@@ -457,7 +457,7 @@ describe.skipIf(!hasDatabase)('workspace refresh-family revocation', () => {
     const rotated = await rotation;
     await expect(removal).resolves.toEqual({ removed: true });
     const rows = await handle.prisma.refreshToken.findMany({
-      where: { userId: workspace.userId, teamId: workspace.teamId },
+      where: { userId: team.userId, teamId: team.teamId },
       select: { revokedAt: true },
     });
     expect(rows).toHaveLength(2);
@@ -466,20 +466,20 @@ describe.skipIf(!hasDatabase)('workspace refresh-family revocation', () => {
   });
 
   it('removal-first makes the waiting refresh fail without creating a replacement', async () => {
-    const workspace = await seedWorkspace();
+    const team = await seedTeam();
     const domain = productDomains[3];
     const clientDomainId = await registerProduct(domain);
-    const token = await issue(workspace.userId, domain, workspace.orgId, workspace.teamId);
+    const token = await issue(team.userId, domain, team.orgId, team.teamId);
     const statusWritten = deferred();
     const release = deferred();
     const removal = removeTeamMember(
       {
-        orgId: workspace.orgId,
-        teamId: workspace.teamId,
-        domain: workspaceDomain,
-        actorUserId: workspace.ownerId,
-        userId: workspace.userId,
-        config: workspaceConfig(),
+        orgId: team.orgId,
+        teamId: team.teamId,
+        domain: teamDomain,
+        actorUserId: team.ownerId,
+        userId: team.userId,
+        config: teamConfig(),
       },
       {
         prisma: handle.prisma,
@@ -499,7 +499,7 @@ describe.skipIf(!hasDatabase)('workspace refresh-family revocation', () => {
     await expect(rotation).rejects.toMatchObject({ statusCode: 401 });
     expect(
       await handle.prisma.refreshToken.count({
-        where: { userId: workspace.userId, teamId: workspace.teamId },
+        where: { userId: team.userId, teamId: team.teamId },
       }),
     ).toBe(1);
   });

@@ -239,7 +239,7 @@ export const mockAdminData: AdminData = {
         platform('iot', { id: 'kiosk', name: 'IoT kiosk', identifier: 'widgets.kiosk' }),
       ],
       [
-        flag('f5', 'integrations_v2', 'New integrations workspace', true, 'all', [], 'Apr 19, 2026'),
+        flag('f5', 'integrations_v2', 'New integrations team', true, 'all', [], 'Apr 19, 2026'),
         flag('f6', 'mobile_uploads', 'Mobile upload queue', false, 'selected', ['ios'], 'Apr 12, 2026'),
         flag('f7', 'usage_export', 'Usage export beta', false, 'selected', ['web'], 'Apr 9, 2026'),
         flag('f8', 'android_quick_scan', 'Android companion scanner', false, 'selected', ['android'], 'Apr 8, 2026'),

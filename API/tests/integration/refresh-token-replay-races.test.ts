@@ -30,7 +30,7 @@ function config(configDomain = domain): ClientConfig {
     baseClientConfigPayload({
       domain: configDomain,
       redirect_urls: [`https://${configDomain}/oauth/callback`],
-      login_flow: { email_code_enabled: false, workspace_selection: 'off' },
+      login_flow: { email_code_enabled: false, team_selection: 'off' },
       org_features: { enabled: false, user_needs_team: false },
     }),
   );

@@ -178,8 +178,8 @@ async function createRefreshTokenRecord(
     familyId?: string;
     parentTokenId?: string;
     userId: string;
-    // Workspace scope carried from the authorization code / prior refresh token (design §7 step
-    // 3-4); defaults to null when no workspace was selected.
+    // Team scope carried from the authorization code / prior refresh token (design §7 step
+    // 3-4); defaults to null when no team was selected.
     orgId?: string | null;
     teamId?: string | null;
     twoFaCompleted: boolean;
@@ -228,8 +228,8 @@ export async function issueRefreshToken(
     familyId?: string;
     parentTokenId?: string;
     userId: string;
-    // Workspace scope carried from the authorization code / prior refresh token (design §7 step
-    // 3-4); defaults to null when no workspace was selected.
+    // Team scope carried from the authorization code / prior refresh token (design §7 step
+    // 3-4); defaults to null when no team was selected.
     orgId?: string | null;
     teamId?: string | null;
     twoFaCompleted: boolean;
@@ -246,8 +246,8 @@ export async function issueRefreshToken(
 export async function exchangeRefreshToken(
   params: RefreshTokenContext & {
     refreshToken: string;
-    /** Present only for the explicit workspace-switch grant. */
-    workspace?: { orgId: string; teamId: string };
+    /** Present only for the explicit team-switch grant. */
+    team?: { orgId: string; teamId: string };
   },
   deps?: RefreshTokenDeps,
 ): Promise<{
@@ -295,7 +295,7 @@ export async function exchangeRefreshToken(
     }
   }
 
-  const expectedWorkspace = params.workspace ?? { orgId: row.orgId, teamId: row.teamId };
+  const expectedTeam = params.team ?? { orgId: row.orgId, teamId: row.teamId };
 
   if (row.replacedByTokenId) {
     return resolveRefreshTokenReplay(
@@ -303,8 +303,8 @@ export async function exchangeRefreshToken(
         ...params,
         row,
         sharedSecret,
-        expectedWorkspace,
-        workspaceSwitch: Boolean(params.workspace),
+        expectedTeam,
+        teamSwitch: Boolean(params.team),
       },
       {
         beforeRotate: deps?.beforeReplay ?? deps?.beforeRotate,
@@ -324,11 +324,11 @@ export async function exchangeRefreshToken(
     throw new AppError('UNAUTHORIZED', 401, 'INVALID_REFRESH_TOKEN');
   }
   if (
-    params.workspace &&
-    row.orgId === params.workspace.orgId &&
-    row.teamId === params.workspace.teamId
+    params.team &&
+    row.orgId === params.team.orgId &&
+    row.teamId === params.team.teamId
   ) {
-    throw new AppError('BAD_REQUEST', 409, 'WORKSPACE_SWITCH_CONFLICT');
+    throw new AppError('BAD_REQUEST', 409, 'TEAM_SWITCH_CONFLICT');
   }
 
   // Policy gates run here, after the opaque token and its exact client context
@@ -364,8 +364,8 @@ export async function exchangeRefreshToken(
       configUrl: row.configUrl,
       // An ordinary rotation preserves scope. The explicit switch grant instead
       // records its exact target on this deterministic first successor.
-      orgId: expectedWorkspace.orgId,
-      teamId: expectedWorkspace.teamId,
+      orgId: expectedTeam.orgId,
+      teamId: expectedTeam.teamId,
       twoFaCompleted: row.twoFaCompleted === true,
     },
     successor,
@@ -401,8 +401,8 @@ export async function exchangeRefreshToken(
     refreshToken: nextRefreshToken.refreshToken,
     expiresInSeconds: nextRefreshToken.expiresInSeconds,
     replayed: false,
-    orgId: expectedWorkspace.orgId,
-    teamId: expectedWorkspace.teamId,
+    orgId: expectedTeam.orgId,
+    teamId: expectedTeam.teamId,
     twoFaCompleted: row.twoFaCompleted === true,
   };
 }

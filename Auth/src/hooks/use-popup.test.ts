@@ -32,15 +32,15 @@ describe('parsePopupQueryParams', () => {
     expect(parsed.twoFaSetupToken).toBeNull();
   });
 
-  it('parses a login_token seeded alongside flow=workspace_chooser (social-callback bridge)', () => {
+  it('parses a login_token seeded alongside flow=team_chooser (social-callback bridge)', () => {
     const parsed = parsePopupQueryParams(
-      '?config_url=https%3A%2F%2Fclient.example.com%2Fauth%2Fconfig&login_token=bridge.jwt&flow=workspace_chooser',
+      '?config_url=https%3A%2F%2Fclient.example.com%2Fauth%2Fconfig&login_token=bridge.jwt&flow=team_chooser',
     );
 
     expect(parsed.loginToken).toBe('bridge.jwt');
   });
 
-  it('ignores a login_token without the flow=workspace_chooser marker', () => {
+  it('ignores a login_token without the flow=team_chooser marker', () => {
     const parsed = parsePopupQueryParams('?login_token=bridge.jwt');
 
     expect(parsed.loginToken).toBeNull();

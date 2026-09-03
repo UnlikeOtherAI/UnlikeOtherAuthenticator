@@ -14,10 +14,10 @@ import {
 } from './team.service.base.js';
 import { assertTeamInviteTransition } from './team-invite-state-machine.js';
 import {
-  assertActiveWorkspaceScope,
-  lockAndAssertActiveWorkspaceScope,
-  lockWorkspaceMembershipRows,
-} from './workspace-scope.service.js';
+  assertActiveTeamScope,
+  lockAndAssertActiveTeamScope,
+  lockTeamMembershipRows,
+} from './team-scope.service.js';
 
 export async function acceptTeamInviteWithinTransaction(params: {
   prisma: Prisma.TransactionClient;
@@ -62,11 +62,11 @@ export async function acceptTeamInviteWithinTransaction(params: {
   // The invite's org may have been created by another UOA-integrated product: one organisation is
   // usable from every product, so the org's ORIGIN domain is not an acceptance predicate. What
   // binds the acceptance is the invite token itself — issued for, and verified against, the
-  // issuing product's domain — plus the workspace-scope gate below.
+  // issuing product's domain — plus the team-scope gate below.
 
   if (invite.acceptedAt) {
     if (invite.acceptedUserId === params.userId) {
-      await lockAndAssertActiveWorkspaceScope(
+      await lockAndAssertActiveTeamScope(
         {
           userId: params.userId,
           domain: params.config.domain,
@@ -107,7 +107,7 @@ export async function acceptTeamInviteWithinTransaction(params: {
   }
 
   ensureOrgRole('member', parseOrgFeatureRoles(params.config));
-  await lockWorkspaceMembershipRows(
+  await lockTeamMembershipRows(
     {
       userId: params.userId,
       orgId: invite.orgId,
@@ -186,7 +186,7 @@ export async function acceptTeamInviteWithinTransaction(params: {
   // Existing DEACTIVATED/REMOVED rows are tombstones, not invitations to
   // reactivate. New rows are ACTIVE by default; every existing row must already
   // be ACTIVE at both organisation and team levels before the invite is marked.
-  await assertActiveWorkspaceScope(
+  await assertActiveTeamScope(
     {
       userId: params.userId,
       domain: params.config.domain,
@@ -209,7 +209,7 @@ export async function acceptTeamInviteWithinTransaction(params: {
 }
 
 /**
- * Phase 3b (design §4.3/§11.5): decline a pending invite from the workspace chooser, authenticated
+ * Phase 3b (design §4.3/§11.5): decline a pending invite from the team chooser, authenticated
  * by an already-verified userId (the login_token bridge) rather than the emailed invite token used
  * by `declineTeamInviteByToken`. Generic `BAD_REQUEST` on every validation failure (unknown invite,
  * invite already resolved, email mismatch) — no oracle on invite existence.

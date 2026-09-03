@@ -150,7 +150,7 @@ export async function resolveActingUserClaims(token: string): Promise<AccessToke
 /**
  * Convert a one-minute RS256 subject assertion into the same claims shape the
  * normal role gate consumes. The assertion is only an authentication handoff:
- * its workspace claim is always re-resolved against current memberships before
+ * its team claim is always re-resolved against current memberships before
  * it can act on an organisation route.
  */
 async function resolveSubjectAssertionClaims(
@@ -227,7 +227,7 @@ async function resolveSubjectAssertionClaims(
     tokenVersion: identity.tokenVersion,
     email: user.email,
     domain: sourceDomain,
-    // Assertions identify a user and their live workspace, not an OAuth
+    // Assertions identify a user and their live team, not an OAuth
     // client. This non-authoritative marker exists only because the shared
     // in-memory claims shape has a required clientId field.
     clientId: 'uoa-subject-assertion',

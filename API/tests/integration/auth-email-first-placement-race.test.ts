@@ -120,7 +120,7 @@ describe.skipIf(!hasDatabase)('email-route first-product placement transaction',
         registration_mode: 'passwordless',
         user_scope: 'global',
         '2fa_enabled': false,
-        login_flow: { email_code_enabled: false, workspace_selection: 'off' },
+        login_flow: { email_code_enabled: false, team_selection: 'off' },
         org_features: { enabled: true, user_needs_team: true },
       }),
     );
@@ -295,7 +295,7 @@ describe.skipIf(!hasDatabase)('email-route first-product placement transaction',
 
       // On the vulnerable implementation both requests release the one-statement advisory lock
       // and reach the zero-choice query. Pin them after that read so the same-domain recheck in
-      // ensureUserHasRequiredTeam deterministically creates two product-local workspaces. With the
+      // ensureUserHasRequiredTeam deterministically creates two product-local teams. With the
       // fixed route transaction, only one query reaches the table and the other request is already
       // waiting on the placement lock, so this branch is unreachable.
       if (concurrentState.relationWaiters >= 2) {

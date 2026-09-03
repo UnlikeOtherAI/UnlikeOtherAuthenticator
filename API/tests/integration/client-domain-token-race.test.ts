@@ -34,7 +34,7 @@ function config(): ClientConfig {
     baseClientConfigPayload({
       domain,
       redirect_urls: [redirectUrl],
-      login_flow: { email_code_enabled: false, workspace_selection: 'off' },
+      login_flow: { email_code_enabled: false, team_selection: 'off' },
       org_features: { enabled: false },
     }),
   );
@@ -141,7 +141,7 @@ describe.skipIf(!hasDatabase)('ClientDomain disable versus token issuance', () =
       },
       {
         adminPrisma: handle.prisma,
-        afterProductWorkspacePolicyLock: afterLock,
+        afterProductTeamPolicyLock: afterLock,
         prisma: handle.prisma,
         sharedSecret: process.env.SHARED_SECRET!,
       },

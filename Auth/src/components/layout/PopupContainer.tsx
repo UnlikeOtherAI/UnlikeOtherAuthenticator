@@ -13,7 +13,7 @@ import { SignedInPage } from '../../pages/SignedInPage.js';
 import { SigningPage } from '../../pages/SigningPage.js';
 import { TwoFactorSetupPage } from '../../pages/TwoFactorSetupPage.js';
 import { TwoFactorVerifyPage } from '../../pages/TwoFactorVerifyPage.js';
-import { WorkspaceChooserPage } from '../../pages/WorkspaceChooserPage.js';
+import { TeamChooserPage } from '../../pages/TeamChooserPage.js';
 import { AuthLayout } from './AuthLayout.js';
 
 function PopupContent(): React.JSX.Element {
@@ -49,8 +49,8 @@ function PopupContent(): React.JSX.Element {
       return <SigningPage />;
     case 'code-entry':
       return <CodeEntryPage />;
-    case 'workspace-chooser':
-      return <WorkspaceChooserPage />;
+    case 'team-chooser':
+      return <TeamChooserPage />;
     default:
       return <LoginPage />;
   }

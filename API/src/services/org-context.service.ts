@@ -6,16 +6,16 @@ import { AppError } from '../utils/errors.js';
 import type { ClientConfig } from './config.service.js';
 import { assertDatabaseEnabled, normalizeDomain } from './organisation.service.base.js';
 import {
-  resolveProductWorkspacePolicy,
-  type ProductWorkspacePolicyPrisma,
-} from './product-workspace-policy.service.js';
+  resolveProductTeamPolicy,
+  type ProductTeamPolicyPrisma,
+} from './product-team-policy.service.js';
 
 type OrgContextPrisma = PrismaClient;
 
 type OrgContextDeps = {
   crossProductPrisma?: OrgContextPrisma;
   env?: ReturnType<typeof getEnv>;
-  policyPrisma?: ProductWorkspacePolicyPrisma;
+  policyPrisma?: ProductTeamPolicyPrisma;
   prisma?: OrgContextPrisma;
 };
 
@@ -158,10 +158,10 @@ export async function getActiveClientOrgContext(
   const sameDomain = await getActiveUserOrgContext(params, deps);
   if (sameDomain) return sameDomain;
 
-  const policy = await resolveProductWorkspacePolicy(
+  const policy = await resolveProductTeamPolicy(
     { domain: params.domain },
     {
-      prisma: deps?.policyPrisma ?? (getAdminPrisma() as unknown as ProductWorkspacePolicyPrisma),
+      prisma: deps?.policyPrisma ?? (getAdminPrisma() as unknown as ProductTeamPolicyPrisma),
     },
   );
   if (policy.scope !== 'all_active_memberships') return null;

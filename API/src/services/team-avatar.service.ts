@@ -15,7 +15,7 @@ import {
   type ResolvedAvatar,
 } from './avatar-subject.service.js';
 import {
-  requireWorkspaceCapability,
+  requireTeamCapability,
   resolveAndAuthorizeTeamOrg,
   resolveOrgActor,
   type OrgServicePrisma,
@@ -106,7 +106,7 @@ export async function requireOrgTeamId(
   });
 
   if (params.requireManager) {
-    await requireWorkspaceCapability(deps.prisma, 'teams.manage', {
+    await requireTeamCapability(deps.prisma, 'teams.manage', {
       orgId: org.id,
       teamId: params.teamId,
       actorUserId,

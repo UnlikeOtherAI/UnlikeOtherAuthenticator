@@ -14,15 +14,15 @@ import {
   isAuthenticationEpochMismatchError,
   lockAndAssertAuthenticationEpoch,
 } from './authentication-epoch.service.js';
-import { lockProductWorkspacePolicyShared } from './product-workspace-policy-lock.service.js';
-import { lockAndAssertActiveClientWorkspaceScope } from './workspace-scope.service.js';
-import type { ProductWorkspacePolicyPrisma } from './product-workspace-policy.service.js';
+import { lockProductTeamPolicyShared } from './product-team-policy-lock.service.js';
+import { lockAndAssertActiveClientTeamScope } from './team-scope.service.js';
+import type { ProductTeamPolicyPrisma } from './product-team-policy.service.js';
 
 type AuthorizationCodePrisma = PrismaClient;
 
 type AuthorizationCodeDeps = {
   crossProductPrisma?: AuthorizationCodePrisma;
-  policyPrisma?: ProductWorkspacePolicyPrisma;
+  policyPrisma?: ProductTeamPolicyPrisma;
   prisma?: AuthorizationCodePrisma;
   now?: () => Date;
   sharedSecret?: string;
@@ -90,7 +90,7 @@ export async function issueAuthorizationCode(
     rememberMe?: boolean;
     twoFaCompleted: boolean;
     credentialEpoch: number;
-    // Workspace scope resolved by explicit selection, auto-selection, or the
+    // Team scope resolved by explicit selection, auto-selection, or the
     // server-owned recognized-product placement performed before 2FA.
     orgId?: string;
     teamId?: string;
@@ -114,7 +114,7 @@ export async function issueAuthorizationCode(
   return runInTransaction(prisma, async (tx) => {
     // Preserve the estate-wide order used by token exchange and credential writers. A caller
     // already inside this hierarchy simply re-enters the transaction-scoped advisory locks.
-    await lockProductWorkspacePolicyShared(tx);
+    await lockProductTeamPolicyShared(tx);
     await lockAndAssertAuthenticationEpoch(
       {
         userId: params.userId,
@@ -126,7 +126,7 @@ export async function issueAuthorizationCode(
 
     // Revalidate immediately before the issuance write. This is the final boundary reached after
     // chooser, 2FA, forced enrollment, or signatures, and it follows the user lock hierarchy.
-    await lockAndAssertActiveClientWorkspaceScope(
+    await lockAndAssertActiveClientTeamScope(
       {
         userId: params.userId,
         domain: params.domain,
@@ -188,7 +188,7 @@ export async function consumeAuthorizationCode(params: {
   sharedSecret: string;
   prisma: AuthorizationCodePrisma;
   crossProductPrisma?: AuthorizationCodePrisma;
-  policyPrisma?: ProductWorkspacePolicyPrisma;
+  policyPrisma?: ProductTeamPolicyPrisma;
   afterAuthenticationEpochLock?: () => Promise<void>;
   afterActiveScopeLock?: () => Promise<void>;
 }): Promise<{
@@ -291,7 +291,7 @@ export async function consumeAuthorizationCode(params: {
   try {
     // A code must not create a scoped session after the selected membership was
     // suspended or removed between issuance and exchange.
-    await lockAndAssertActiveClientWorkspaceScope(
+    await lockAndAssertActiveClientTeamScope(
       {
         userId: row.userId,
         domain: row.domain,
@@ -305,7 +305,7 @@ export async function consumeAuthorizationCode(params: {
       },
     );
   } catch {
-    rejectAuthCode('workspace_scope_inactive');
+    rejectAuthCode('team_scope_inactive');
   }
   await params.afterActiveScopeLock?.();
 

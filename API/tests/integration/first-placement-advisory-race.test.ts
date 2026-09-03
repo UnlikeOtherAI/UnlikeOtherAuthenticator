@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { runInTransaction } from '../../src/db/tenant-context.js';
 import { issueAuthorizationCode } from '../../src/services/authorization-code.service.js';
 import { validateConfigFields, type ClientConfig } from '../../src/services/config.service.js';
-import { resolveProductWorkspaceBeforeTwoFa } from '../../src/services/required-workspace-placement.service.js';
+import { resolveProductTeamBeforeTwoFa } from '../../src/services/required-team-placement.service.js';
 import { exchangeAuthorizationCodeForTokens } from '../../src/services/token.service.js';
 import { createClientId } from '../../src/utils/hash.js';
 import { baseClientConfigPayload } from '../helpers/test-config.js';
@@ -30,7 +30,7 @@ function productConfig(domain: string): ClientConfig {
     baseClientConfigPayload({
       domain,
       redirect_urls: [`https://${domain}/oauth/callback`],
-      login_flow: { email_code_enabled: false, workspace_selection: 'off' },
+      login_flow: { email_code_enabled: false, team_selection: 'off' },
       org_features: { enabled: true, user_needs_team: true },
     }),
   );
@@ -97,15 +97,15 @@ describe.skipIf(!hasDatabase)('first-placement per-user advisory lock', () => {
   }) {
     return runInTransaction(handle.prisma, async (tx) => {
       const config = productConfig(params.domain);
-      const workspace = await resolveProductWorkspaceBeforeTwoFa(
+      const team = await resolveProductTeamBeforeTwoFa(
         { userId: params.userId, config },
         {
-          afterWorkspaceLock: params.afterPlacementLock,
+          afterTeamLock: params.afterPlacementLock,
           prisma: tx,
-          workspacePrisma: tx,
+          teamPrisma: tx,
         },
       );
-      if (!workspace) throw new Error('recognized product did not resolve an exact workspace');
+      if (!team) throw new Error('recognized product did not resolve an exact team');
 
       const issued = await issueAuthorizationCode(
         {
@@ -118,7 +118,7 @@ describe.skipIf(!hasDatabase)('first-placement per-user advisory lock', () => {
           rememberMe: true,
           twoFaCompleted: false,
           credentialEpoch: 0,
-          ...workspace,
+          ...team,
         },
         {
           crossProductPrisma: tx,
@@ -127,7 +127,7 @@ describe.skipIf(!hasDatabase)('first-placement per-user advisory lock', () => {
           sharedSecret: process.env.SHARED_SECRET!,
         },
       );
-      return { code: issued.code, workspace };
+      return { code: issued.code, team };
     });
   }
 
@@ -173,7 +173,7 @@ describe.skipIf(!hasDatabase)('first-placement per-user advisory lock', () => {
     throw new Error('timed out waiting for the second product placement transaction');
   }
 
-  it('creates one workspace when two products place the same new user simultaneously', async () => {
+  it('creates one team when two products place the same new user simultaneously', async () => {
     const user = await handle.prisma.user.create({
       data: {
         email: 'first-placement@example.com',
@@ -208,7 +208,7 @@ describe.skipIf(!hasDatabase)('first-placement per-user advisory lock', () => {
       release.resolve();
 
       const [firstAuthorization, secondAuthorization] = await Promise.all([first, second]);
-      expect(firstAuthorization.workspace).toEqual(secondAuthorization.workspace);
+      expect(firstAuthorization.team).toEqual(secondAuthorization.team);
 
       const [firstTokens, secondTokens] = await Promise.all([
         exchange({

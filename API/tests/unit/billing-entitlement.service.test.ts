@@ -186,7 +186,7 @@ describe('effective billing tariff resolution', () => {
     });
   });
 
-  it('fails closed when the user no longer has active workspace membership', async () => {
+  it('fails closed when the user no longer has active team membership', async () => {
     await expect(
       getEffectiveTariffSnapshot(
         { request, actorToken: 'actor', credential },

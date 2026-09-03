@@ -44,9 +44,9 @@ describe('config: role_grants validation', () => {
       payload({
         org_roles: ['owner', 'admin', 'auditor'],
         team_roles: ['owner', 'editor', 'viewer'],
-        capabilities: ['workspace.read', 'content.write'],
+        capabilities: ['team.read', 'content.write'],
         role_grants: {
-          org: { auditor: ['workspace.read'], admin: ['members.manage'] },
+          org: { auditor: ['team.read'], admin: ['members.manage'] },
           team: { editor: ['members.manage', 'content.write'], viewer: [] },
         },
       }),
@@ -88,8 +88,8 @@ describe('config: role_grants validation', () => {
     expect(() =>
       validateConfigFields(
         payload({
-          capabilities: ['workspace.read'],
-          role_grants: { org: { admin: ['workspace.read', 'billing.manage'] } },
+          capabilities: ['team.read'],
+          role_grants: { org: { admin: ['team.read', 'billing.manage'] } },
         }),
       ),
     ).toThrow(/undeclared capability .{1,2}billing\.manage/);

@@ -73,8 +73,8 @@ jobs:
         run: pnpm --filter @uoa/api prisma:generate
 
       # The integration suite serves the built auth/admin windows and imports
-      # built workspace packages, so build everything before testing.
-      - name: Build workspace
+      # built team packages, so build everything before testing.
+      - name: Build team
         run: pnpm -r --if-present build
 
       # Unit tests assume DB-less mode (several assert the no-database code

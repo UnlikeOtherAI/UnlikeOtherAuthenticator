@@ -6,7 +6,7 @@ import { testUiTheme } from '../helpers/test-config.js';
 
 const validateRegistrationEmailLandingTokenMock = vi.fn();
 const verifyEmailTokenMock = vi.fn();
-const buildWorkspaceChoicesMock = vi.fn();
+const buildSessionChoicesMock = vi.fn();
 const resolveTwoFaPolicyMock = vi.fn();
 const startTwoFactorSetupMock = vi.fn();
 const finalizeAuthenticatedUserMock = vi.fn();
@@ -43,7 +43,7 @@ vi.mock('../../src/services/first-login.service.js', async () => {
   );
   return {
     ...actual,
-    buildWorkspaceChoices: (...args: unknown[]) => buildWorkspaceChoicesMock(...args),
+    buildSessionChoices: (...args: unknown[]) => buildSessionChoicesMock(...args),
   };
 });
 
@@ -83,7 +83,7 @@ function config(): ClientConfig {
     registration_mode: 'passwordless',
     '2fa_enabled': true,
     debug_enabled: false,
-    login_flow: { email_code_enabled: false, workspace_selection: 'auto' },
+    login_flow: { email_code_enabled: false, team_selection: 'auto' },
     access_requests: { enabled: false, notify_org_roles: ['owner', 'admin'] },
   } as ClientConfig;
 }
@@ -108,7 +108,7 @@ async function getLink() {
   }
 }
 
-describe('GET /auth/email/link exact-one workspace 2FA', () => {
+describe('GET /auth/email/link exact-one team 2FA', () => {
   beforeEach(() => {
     currentConfig = config();
     process.env.SHARED_SECRET = 'test-shared-secret-with-enough-length';
@@ -120,7 +120,7 @@ describe('GET /auth/email/link exact-one workspace 2FA', () => {
       twoFaEnabled: true,
       acceptedInvite: null,
     });
-    buildWorkspaceChoicesMock.mockReset().mockResolvedValue({
+    buildSessionChoicesMock.mockReset().mockResolvedValue({
       teams: [
         {
           teamId: 'team-1',
@@ -143,7 +143,7 @@ describe('GET /auth/email/link exact-one workspace 2FA', () => {
     vi.restoreAllMocks();
   });
 
-  it('redirects with a challenge that carries the exact workspace', async () => {
+  it('redirects with a challenge that carries the exact team', async () => {
     const response = await getLink();
 
     expect(response.statusCode).toBe(302);
@@ -160,7 +160,7 @@ describe('GET /auth/email/link exact-one workspace 2FA', () => {
     expect(finalizeAuthenticatedUserMock).not.toHaveBeenCalled();
   });
 
-  it('redirects required enrollment with the exact workspace in setup finalization', async () => {
+  it('redirects required enrollment with the exact team in setup finalization', async () => {
     verifyEmailTokenMock.mockResolvedValue({
       userId: 'user-1',
       credentialEpoch: 0,

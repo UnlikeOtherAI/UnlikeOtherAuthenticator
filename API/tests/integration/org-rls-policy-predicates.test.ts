@@ -183,7 +183,7 @@ describe.skipIf(!hasDatabase)('/org/* RLS policy predicates (as uoa_app)', () =>
   describe('organisations_select domain branch is backend-gated (kills M5)', () => {
     // THE regression this gate prevents. Without it the branch collapses to
     // `domain = app.domain`, which every signed-in user's transaction satisfies:
-    // a member of one workspace would suddenly see every organisation on the
+    // a member of one team would suddenly see every organisation on the
     // domain. `app.domain_backend` is unset in user mode, so the branch is
     // unreachable there — and this is the only test that would notice if the
     // gate were removed.

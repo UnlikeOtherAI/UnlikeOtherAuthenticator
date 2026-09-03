@@ -6,15 +6,15 @@ import { usePopup } from '../hooks/use-popup.js';
 import { useTheme } from '../hooks/use-theme.js';
 import { useTranslation } from '../i18n/use-translation.js';
 import type { AuthFlowQuery } from '../utils/api.js';
-import { requestSignInCode, submitVerifyCode } from '../utils/workspace-actions.js';
-import { applyWorkspaceOutcome } from '../utils/workspace-response.js';
+import { requestSignInCode, submitVerifyCode } from '../utils/team-actions.js';
+import { applyTeamOutcome } from '../utils/team-response.js';
 
 const CODE_LENGTH = 6;
 
 /**
  * Phase 3c (design §11.2): "We sent a code to {email}" + the 6-digit `CodeInput`. On submit,
- * `/auth/verify-code` may resolve to the workspace chooser, a 2FA challenge, or a final redirect
- * — all decoded by the shared `applyWorkspaceOutcome` helper so this page only owns its own form
+ * `/auth/verify-code` may resolve to the team chooser, a 2FA challenge, or a final redirect
+ * — all decoded by the shared `applyTeamOutcome` helper so this page only owns its own form
  * state. Failures are always generic; the user can retry or ask for a fresh code.
  */
 export function CodeEntryPage(): React.JSX.Element {
@@ -29,7 +29,7 @@ export function CodeEntryPage(): React.JSX.Element {
     requestAccess,
     setView,
     setLoginToken,
-    setWorkspaceChoices,
+    setSessionChoices,
     redirectTo,
     startTwoFactorVerify,
     startTwoFactorSetup,
@@ -64,9 +64,9 @@ export function CodeEntryPage(): React.JSX.Element {
     const outcome = await submitVerifyCode({ email, code, ...query });
     setSubmitting(false);
 
-    const applied = applyWorkspaceOutcome(outcome, {
+    const applied = applyTeamOutcome(outcome, {
       setLoginToken,
-      setWorkspaceChoices,
+      setSessionChoices,
       setView,
       redirectTo,
       startTwoFactorVerify,

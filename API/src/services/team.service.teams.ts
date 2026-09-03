@@ -3,7 +3,7 @@ import { getEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
 import { runInTransaction } from '../db/tenant-context.js';
 import { AppError } from '../utils/errors.js';
-import { resolveWorkspaceCreatorTeamRole } from './role-grants.js';
+import { resolveTeamCreatorTeamRole } from './role-grants.js';
 
 import {
   assertDatabaseEnabled,
@@ -14,7 +14,7 @@ import {
   normalizeTeamJoinPolicy,
   normalizeTeamName,
   parseMaxTeamsPerOrg,
-  requireWorkspaceCapability,
+  requireTeamCapability,
   resolveAndAuthorizeTeamOrg,
   resolveOrgActor,
   toListLimit,
@@ -31,10 +31,10 @@ import {
 import { auditOrg } from './organisation.service.base.js';
 import { getTeamInvitedEntries, type TeamInvitedEntry } from './team-invite.service.invited.js';
 import {
-  lockWorkspaceMembershipRows,
-  lockWorkspaceOrganisationRow,
-  lockWorkspaceTeamRow,
-} from './workspace-scope.service.js';
+  lockTeamMembershipRows,
+  lockTeamOrganisationRow,
+  lockTeamTeamRow,
+} from './team-scope.service.js';
 
 const TEAM_SELECT = {
   id: true,
@@ -80,7 +80,7 @@ export async function listTeams(
       orgId: org.id,
       // HIDDEN teams are excluded from any org-MEMBER-visible listing unless the caller is already
       // an ACTIVE member of that specific team (design §4.6) — invite-only discovery is preserved.
-      // That is a discovery rule between members of one workspace. In backend mode the caller is
+      // That is a discovery rule between members of one team. In backend mode the caller is
       // the domain itself, which already owns every row here, so there is nothing to hide from it
       // and no `actorUserId` to key the exception on.
       ...(actorUserId
@@ -128,9 +128,9 @@ export async function createTeam(
      *
      * Opt-in, because the two callers want opposite things. A backend
      * provisioning teams FOR other people must not be dropped into each one;
-     * a person creating their own workspace is unusable without it — every
+     * a person creating their own team is unusable without it — every
      * entry check (including `/billing/v1/service-access/confirm`) asks for an
-     * ACTIVE `TeamMember`, so without this they create a workspace they cannot
+     * ACTIVE `TeamMember`, so without this they create a team they cannot
      * open. There is no acting user in backend mode, so this is ignored there.
      */
     joinCreator?: boolean;
@@ -156,7 +156,7 @@ export async function createTeam(
 
   // No `teamId`: the team does not exist yet, so only an ORG-scope grant of `teams.manage` can
   // authorise this — which is exactly the org owner/admin rule this route always had.
-  await requireWorkspaceCapability(prisma, 'teams.manage', {
+  await requireTeamCapability(prisma, 'teams.manage', {
     orgId: org.id,
     actorUserId,
     config: params.config,
@@ -202,7 +202,7 @@ export async function createTeam(
           create: {
             teamId: created.id,
             userId: actorUserId,
-            teamRole: resolveWorkspaceCreatorTeamRole(params.config),
+            teamRole: resolveTeamCreatorTeamRole(params.config),
           },
           update: {},
         });
@@ -362,7 +362,7 @@ export async function updateTeam(
     orgId: params.orgId,
     actorUserId,
   });
-  await requireWorkspaceCapability(prisma, 'teams.manage', {
+  await requireTeamCapability(prisma, 'teams.manage', {
     orgId: org.id,
     teamId: params.teamId,
     actorUserId,
@@ -436,7 +436,7 @@ export async function deleteTeam(
     orgId: params.orgId,
     actorUserId,
   });
-  await requireWorkspaceCapability(prisma, 'teams.manage', {
+  await requireTeamCapability(prisma, 'teams.manage', {
     orgId: org.id,
     teamId: params.teamId,
     actorUserId,
@@ -444,10 +444,10 @@ export async function deleteTeam(
   });
 
   await runInTransaction(prisma, async (tx) => {
-    if (!(await lockWorkspaceOrganisationRow(org.id, { prisma: tx }))) {
+    if (!(await lockTeamOrganisationRow(org.id, { prisma: tx }))) {
       throw new AppError('NOT_FOUND', 404);
     }
-    const team = await lockWorkspaceTeamRow(
+    const team = await lockTeamTeamRow(
       { orgId: org.id, teamId: params.teamId },
       { prisma: tx },
     );
@@ -473,7 +473,7 @@ export async function deleteTeam(
       select: { userId: true },
     });
     for (const member of membershipRows) {
-      await lockWorkspaceMembershipRows(
+      await lockTeamMembershipRows(
         { userId: member.userId, orgId: org.id },
         { prisma: tx },
       );

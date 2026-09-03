@@ -62,7 +62,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
         llm-intro.ts        — /llm content: introduction section
         llm-integration.ts  — /llm content: integration section
         llm-integration-backend-mode.ts — /llm content: §4.6b backend-mode /org/* route and error tables
-        llm-integration-teams.ts — /llm content: §4.7a–§4.7b team join policies, invitations, workspace stack
+        llm-integration-teams.ts — /llm content: §4.7a–§4.7b team join policies, invitations, team stack
         config-docs.ts      — Shared documentation blocks for /api (config JWT, access token, etc.)
         config-validate.ts  — POST /config/validate (lint a candidate config JWT)
         config-verify.ts    — POST /config/verify (verify a signed config JWT)
@@ -215,7 +215,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       verification-token-epoch.service.ts  — Issue-time user/credential-epoch proof and lock enforcement
       auto-onboarding.service.ts            — Auto-onboarding flow
       authorization-code.service.ts         — Epoch-bound scoped code issuance and one-transaction consumption
-      authorization-origin-lock.service.ts  — Product → user → workspace → signature authorization lock order
+      authorization-origin-lock.service.ts  — Product → user → team → signature authorization lock order
       billing-actor.service.ts              — Credential-bound short-lived actor JWT verification
       billing-app-key.service.ts            — Product app-key minting, lookup, revocation, and audit
       billing-credit-account.service.ts     — Exact Stripe account/mode shared-team credit account and portfolio perspective
@@ -281,7 +281,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       confidential-assertion-use.service.ts — Durable source+jti one-time claims for confidential exchange
       confidential-chained-token-exchange.service.ts — Verify and narrow UOA-issued audience-bound subjects for app-to-app chains
       confidential-delegation.service.ts — ClientDomain/product/resource/scope policy and audited CRUD
-      confidential-token-exchange.service.ts — Verify source assertions, re-resolve workspace identity, and issue resource tokens
+      confidential-token-exchange.service.ts — Verify source assertions, re-resolve team identity, and issue resource tokens
       domain-email-config.service.ts        — Per-domain email config + SES wiring
       domain-role.service.ts                — Domain role lookups (superuser etc.)
       domain-secret.service.ts              — Domain shared-secret management
@@ -323,8 +323,8 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       password.service.ts                   — Hashing, validation rules, comparison
       refresh-session-lock.service.ts       — Canonical user-global then user/domain serialization
       refresh-token-replay.service.ts       — Deterministic lost-response successor verification and recovery
-      refresh-token-revocation.service.ts   — Domain/workspace/global revocation transactions
-      refresh-token-rotation-policy.service.ts — Source/target workspace, 2FA, and signature gates held through rotation
+      refresh-token-revocation.service.ts   — Domain/team/global revocation transactions
+      refresh-token-rotation-policy.service.ts — Source/target team, 2FA, and signature gates held through rotation
       refresh-token.service.ts              — Refresh issuance, scope-stable deterministic replay, reuse detection, family logout
       refresh-token-transaction.service.ts  — Durable reuse revocation commit before opaque rejection
       retention-pruning.service.ts          — Retention pruning jobs
@@ -370,8 +370,8 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       twofactor-setup-token.service.ts      — Short-lived setup token signing/verification
       user-scope.service.ts                 — User scope handling (global vs per-domain)
       user-team-requirement.service.ts      — Per-domain team-requirement enforcement
-      workspace-scope.service.ts            — Ordered membership locks and exact ACTIVE-scope checks
-      workspace-switch-token.service.ts     — Explicit exact-target refresh-family transition and token issue
+      team-scope.service.ts            — Ordered membership locks and exact ACTIVE-scope checks
+      team-switch-token.service.ts     — Explicit exact-target refresh-family transition and token issue
       /social
         apple.service.ts                    — Apple OAuth flow
         facebook.service.ts                 — Facebook OAuth flow
@@ -515,10 +515,10 @@ user-global, exact user+normalized-domain when applicable, then organisation/tea
 signature-policy locks. Refresh discovers identity by opaque lookup, takes the session locks, and
 re-reads before any decision. Org lifecycle takes user-global + user/domain before membership;
 team lifecycle takes user-global before membership. Their `uoa_admin` transactions atomically write
-status and revoke exact cross-domain workspace families plus legacy same-domain rows as applicable.
+status and revoke exact cross-domain team families plus legacy same-domain rows as applicable.
 Reuse revokes its family and commits through the private transaction outcome before the opaque 401.
 
-The custom workspace-switch grant is the only refresh-family transition allowed to
+The custom team-switch grant is the only refresh-family transition allowed to
 change scope. It locks and validates the current source and exact target memberships
 before target 2FA/signature policy, then records `{org_id, team_id}` on the one
 deterministic successor. `RefreshToken.twoFaCompleted` originates at authorization-code
@@ -556,7 +556,7 @@ secret decryption, TOTP verification/enrollment, finalization, or authorization-
 Authorization codes and signing continuations persist the exact `User.tokenVersion` accepted by
 the originating authentication. Code redemption requires equality again while holding the
 user-global lock through code consumption and refresh issuance. Signing creation/completion and
-claim writes use product → user → workspace → signature → continuation order in one transaction;
+claim writes use product → user → team → signature → continuation order in one transaction;
 completion rechecks the immutable epoch before consuming the continuation or minting a code. A
 password or 2FA reset therefore wins before redemption/completion and rejects the stale capability,
 or waits behind issuance and then invalidates the newly created family/code. Historical null epoch
@@ -574,7 +574,7 @@ the issued scope is the exact requested subset. This separates app provenance
 (the individual product's domain credential) from user/org/team provenance (the
 source-signed assertion), with no shared key, user-token substitution, or env
 fallback. It then delegates source-JWKS verification, current identity
-resolution, conditional selected-workspace resolution, and RS256 issuance to
+resolution, conditional selected-team resolution, and RS256 issuance to
 `confidential-token-exchange.service.ts`. Pre-context reads use the admin Prisma
 client because the user tenant is not trusted until the assertion, user, domain
 role, and any selected memberships have been verified. Immediately after those
@@ -685,7 +685,7 @@ invoice storage abstraction, and re-verifies SHA-256 on download.
 See `Docs/Requirements/contract-invoicing.md`.
 
 The API re-exports the MIT-licensed
-`@unlikeotherai/billing-statement-protocol` workspace instead of owning a
+`@unlikeotherai/billing-statement-protocol` team instead of owning a
 private copy of the customer contract. That package is the source for the
 TypeScript types and runtime schema and generates drift-checked JSON Schema,
 synthetic example, and OpenAPI 3.1 artifacts. It covers

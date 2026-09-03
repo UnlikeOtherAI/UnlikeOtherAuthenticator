@@ -13,7 +13,7 @@ export type SigningContinuationCapabilityDeps = {
   now?: () => Date;
   prisma?: PrismaClient;
   /** BYPASSRLS client retained for callers that already carry the auth transaction. */
-  workspacePrisma?: PrismaClient;
+  teamPrisma?: PrismaClient;
   publicBaseUrl?: string;
   sharedSecret?: string;
   afterAuthenticationEpochLock?: () => Promise<void>;
@@ -100,7 +100,7 @@ function sameOrigin(left: SigningContinuation, right: SigningContinuation): bool
 
 /**
  * Discover the opaque capability without locking, then take the canonical product → user →
- * workspace → signature hierarchy before locking and re-reading the continuation itself.
+ * team → signature hierarchy before locking and re-reading the continuation itself.
  */
 export async function lockAndRequireSigningContinuationForDecision(
   signingToken: string,

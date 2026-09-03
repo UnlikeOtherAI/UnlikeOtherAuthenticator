@@ -88,9 +88,9 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
           // Two different principals share this route and their budgets have
           // nothing to do with each other.
           //
-          // A signed-in END USER creating their own workspace keeps the
+          // A signed-in END USER creating their own team keeps the
           // historical 5/hour — that ceiling exists to stop one person minting
-          // workspaces, and it is keyed per user.
+          // teams, and it is keyed per user.
           //
           // In backend mode there is no user to key on, so the key collapses to
           // one bucket for the whole domain (keying on the requested owner

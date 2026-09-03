@@ -1,5 +1,5 @@
 // Sections 4.7a and 4.7b of the /llm guide: team join policies, the invitation
-// lifecycle, the sidebar workspace stack, the "Invited" tab and workspace icons.
+// lifecycle, the sidebar team stack, the "Invited" tab and team icons.
 export const llmTeamsInvitationsMarkdown = `### 4.7a Team join policies + member-initiated invites (Phase 4)
 
 Every \`Team\` has a \`joinPolicy\`: \`INVITE_ONLY\` (default) | \`APPROVED_DOMAIN\` | \`REQUEST_TO_JOIN\` | \`OPEN_TO_ORG\` | \`HIDDEN\`. The policy **gates** the existing join mechanisms rather than replacing them:
@@ -10,7 +10,7 @@ Every \`Team\` has a \`joinPolicy\`: \`INVITE_ONLY\` (default) | \`APPROVED_DOMA
 - **HIDDEN** teams are excluded from \`GET /org/organisations/:orgId/teams\` for callers who are not already an ACTIVE member of that team.
 - Set the policy with \`PUT /org/organisations/:orgId/teams/:teamId\` (\`{ "joinPolicy": "OPEN_TO_ORG" }\`, owner/admin only).
 
-Team invites now carry an \`expiresAt\` (30 days from send/resend — resending refreshes it) and an \`approvalStatus\`: \`not_required\` | \`pending\` | \`approved\` | \`denied\`. The derived invite \`status\` gains \`expired\` and \`revoked\` alongside \`pending | accepted | declined | replaced\` (\`replaced\` = superseded by a newer invite for the same email; \`revoked\` = explicitly cancelled); an expired, revoked, or not-yet-approved invite cannot be accepted and is excluded from the workspace chooser / \`firstLogin.pending_invites\`.
+Team invites now carry an \`expiresAt\` (30 days from send/resend — resending refreshes it) and an \`approvalStatus\`: \`not_required\` | \`pending\` | \`approved\` | \`denied\`. The derived invite \`status\` gains \`expired\` and \`revoked\` alongside \`pending | accepted | declined | replaced\` (\`replaced\` = superseded by a newer invite for the same email; \`revoked\` = explicitly cancelled); an expired, revoked, or not-yet-approved invite cannot be accepted and is excluded from the team chooser / \`firstLogin.pending_invites\`.
 
 **One live invitation per address.** At most one *actionable* invitation — not accepted, not declined, not revoked, and approval not \`denied\` — exists per \`(team, lowercased email)\`, enforced by a partial unique index rather than by application checks alone, so two concurrent invites to the same address can no longer both land. Inviting an address that already holds one replaces it: the previous invitation is revoked as \`replaced\` and the result is \`resent_existing\`. Terminal invitations are untouched and accumulate as history.
 
@@ -28,14 +28,14 @@ Revoking an invitation: \`DELETE /org/organisations/:orgId/teams/:teamId/invitat
 
 Member-initiated invites: \`POST /org/organisations/:orgId/teams/:teamId/invitations\` accepts the same path used by the trusted backend bulk-invite call, but when called WITH an \`X-UOA-Access-Token\` header it becomes a single-invite, permission-gated call instead:
 
-- Anyone holding \`members.manage\` in the workspace — org or team \`owner\`/\`admin\` under the default grant table: always allowed, sent immediately (\`approvalStatus: not_required\`).
+- Anyone holding \`members.manage\` in the team — org or team \`owner\`/\`admin\` under the default grant table: always allowed, sent immediately (\`approvalStatus: not_required\`).
 - A plain ACTIVE team member: gated by the organisation's \`memberInvites\` setting (\`allowed\` default | \`admin_approval\` | \`disabled\`, set via \`PUT /org/organisations/:orgId\` \`{ "member_invites": "admin_approval" }\`). \`admin_approval\` creates the invite as \`pending\` and sends **no email** until an owner/admin approves it.
 - A deactivated member, or a plain member when \`disabled\`, is rejected generically.
 - The response is always \`{ "status": "ok" }\` regardless of outcome — whether the email already has an account is never revealed (no enumeration).
 
 Owner/admin review the pending queue with \`GET /org/organisations/:orgId/invitations?approval=pending\`, then \`POST /org/organisations/:orgId/invitations/:inviteId/approve\` (sends the invite email) or \`.../deny\` (silent to the invitee, sends nothing).
 
-### 4.7b Sidebar workspace stack, "Invited" tab, and workspace icons (gap-fix A, design §11.3–§11.5)
+### 4.7b Sidebar team stack, "Invited" tab, and team icons (gap-fix A, design §11.3–§11.5)
 
 \`GET /org/me\` now returns two additive fields inside \`org\` alongside the existing \`org_id\`,
 \`org_role\`, \`teams\`, \`team_roles\`, \`groups\` (unchanged — this is purely additive). For a
@@ -50,7 +50,7 @@ organisation and the product policy live:
     "org_role": "admin",
     "teams": ["team_1", "team_2"],
     "team_roles": { "team_1": "owner", "team_2": "member" },
-    "workspaces": [
+    "teams": [
       {
         "teamId": "team_1",
         "orgId": "org_…",
@@ -81,11 +81,11 @@ organisation and the product policy live:
 }
 \`\`\`
 
-- \`workspaces[]\` — one entry per ACTIVE team membership on this domain. When UOA's server-owned
+- \`teams[]\` — one entry per ACTIVE team membership on this domain. When UOA's server-owned
   product policy is \`all_active_memberships\`, it instead contains the same complete active
-  workspace directory as the hosted chooser. It is ordered \`lastLoginAt\` DESC with nulls last,
+  team directory as the hosted chooser. It is ordered \`lastLoginAt\` DESC with nulls last,
   then \`name\` ASC (this IS the sidebar order — render it as-is). \`lastLoginAt\` is \`null\` when
-  the caller never opened a session scoped to that workspace; cross-product entries intentionally
+  the caller never opened a session scoped to that team; cross-product entries intentionally
   remain \`null\` because another product's session history is not exposed. Group by each entry's
   own \`orgId\`/\`orgName\`; the directory may span organisations and is not implicitly scoped by the
   singular legacy \`org_id\` field.
@@ -93,10 +93,10 @@ organisation and the product policy live:
   It is never null and resolves uploaded image → proxied \`iconUrl\` → deterministic generated image,
   so a native or browser client renders this field directly instead of fetching \`iconUrl\` itself.
 - \`pending_invites[]\` — the caller's own pending invites on this domain (same eligibility as the
-  workspace chooser: unaccepted/undeclined/unrevoked, not expired, and not still awaiting
+  team chooser: unaccepted/undeclined/unrevoked, not expired, and not still awaiting
   member-invite approval). Each row's \`orgId\` is the organisation to select after backend
   acceptance; do not infer it from the legacy singular \`org.org_id\`.
-- Render this straight into the Slack-style sidebar: active workspace highlighted (match
+- Render this straight into the Slack-style sidebar: active team highlighted (match
   \`active.teamId\` from the access-token claim, §4.2), the rest one click away via \`team_hint\` on
   \`/auth\`, invite cards for \`pending_invites\`.
 
@@ -134,7 +134,7 @@ any other value for \`include\` is ignored, same as omitting it):
 - \`invited\` is gated to an org **or** team \`owner\`/\`admin\` (invite emails are PII): a plain member
   gets \`invited: []\`, never a \`403\` — the rest of the team read is unaffected either way.
 
-**Workspace icons** (design §11.3) — \`Team.iconUrl\` / \`Organisation.iconUrl\`, external URL only, no
+**Team icons** (design §11.3) — \`Team.iconUrl\` / \`Organisation.iconUrl\`, external URL only, no
 local storage (brief §15). Set with the existing \`PUT\` endpoints:
 
 \`\`\`jsonc
@@ -148,5 +148,5 @@ Same body/response shape for \`PUT /org/organisations/:orgId\`. Rules, identical
   characters — anything else (\`http:\`, a bare string, oversized) is rejected with the same generic
   \`400\` UOA uses everywhere else (no "must be https" specificity leaked back).
 - Owner/admin only — the same authorization the \`PUT\` already enforced.
-- \`iconUrl\` is echoed on every team/org read and write, the workspace chooser's \`teams[]\`, \`/org/me\`'s
-  \`workspaces[]\`, and \`firstLogin.memberships.teams[]\` — one column, one field name, everywhere.`;
+- \`iconUrl\` is echoed on every team/org read and write, the team chooser's \`teams[]\`, \`/org/me\`'s
+  \`teams[]\`, and \`firstLogin.memberships.teams[]\` — one column, one field name, everywhere.`;

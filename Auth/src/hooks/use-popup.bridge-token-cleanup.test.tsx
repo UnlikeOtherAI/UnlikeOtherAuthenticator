@@ -45,7 +45,7 @@ afterEach(() => {
 describe('PopupProvider — bridge tokens are stripped from the URL once parsed', () => {
   it('removes login_token with its flow', async () => {
     await mountWithSearch(
-      '?config_url=https%3A%2F%2Fclient.example.com%2Fauth-config&login_token=bridge.jwt&flow=workspace_chooser',
+      '?config_url=https%3A%2F%2Fclient.example.com%2Fauth-config&login_token=bridge.jwt&flow=team_chooser',
     );
 
     expect(window.location.search).not.toContain('login_token');

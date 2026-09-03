@@ -93,11 +93,11 @@ function sameRefreshTokenFamily(left: RefreshTokenRow, right: RefreshTokenRow): 
   );
 }
 
-function hasValidWorkspaceScope(row: Pick<RefreshTokenRow, 'orgId' | 'teamId'>): boolean {
+function hasValidTeamScope(row: Pick<RefreshTokenRow, 'orgId' | 'teamId'>): boolean {
   return Boolean(row.orgId) === Boolean(row.teamId);
 }
 
-function matchesWorkspaceScope(
+function matchesTeamScope(
   row: Pick<RefreshTokenRow, 'orgId' | 'teamId'>,
   expected: { orgId: string | null; teamId: string | null },
 ): boolean {
@@ -113,8 +113,8 @@ export async function resolveRefreshTokenReplay(
     refreshToken: string;
     row: RefreshTokenRow;
     sharedSecret: string;
-    expectedWorkspace: { orgId: string | null; teamId: string | null };
-    workspaceSwitch: boolean;
+    expectedTeam: { orgId: string | null; teamId: string | null };
+    teamSwitch: boolean;
   },
   deps: {
     beforeRotate?: (row: {
@@ -140,12 +140,12 @@ export async function resolveRefreshTokenReplay(
   twoFaCompleted: boolean;
 }> {
   const firstDecisionAt = deps.now();
-  if (!hasValidWorkspaceScope(params.row)) {
+  if (!hasValidTeamScope(params.row)) {
     return deps.rejectCorruption(params.row, firstDecisionAt);
   }
   let current = params.row;
   let currentRawToken = params.refreshToken;
-  let workspaceConflict = false;
+  let teamConflict = false;
   const seen = new Set([current.id]);
   let depth = 0;
 
@@ -171,12 +171,12 @@ export async function resolveRefreshTokenReplay(
       successor.tokenHash !== hashRefreshToken(successorRawToken, params.sharedSecret) ||
       !sameRefreshTokenFamily(params.row, successor) ||
       !matchesRefreshTokenContext(successor, params) ||
-      !hasValidWorkspaceScope(successor)
+      !hasValidTeamScope(successor)
     ) {
       return deps.rejectCorruption(params.row, deps.now());
     }
-    if (!matchesWorkspaceScope(successor, params.expectedWorkspace)) {
-      workspaceConflict = true;
+    if (!matchesTeamScope(successor, params.expectedTeam)) {
+      teamConflict = true;
     }
     seen.add(successor.id);
     current = successor;
@@ -198,13 +198,13 @@ export async function resolveRefreshTokenReplay(
     // above and still performs the one-time security invalidation.
     throw new AppError('UNAUTHORIZED', 401, 'INVALID_REFRESH_TOKEN');
   }
-  if (workspaceConflict) {
-    throw new AppError('BAD_REQUEST', 409, 'WORKSPACE_SWITCH_CONFLICT');
+  if (teamConflict) {
+    throw new AppError('BAD_REQUEST', 409, 'TEAM_SWITCH_CONFLICT');
   }
-  if (params.workspaceSwitch && matchesWorkspaceScope(params.row, params.expectedWorkspace)) {
+  if (params.teamSwitch && matchesTeamScope(params.row, params.expectedTeam)) {
     // Classify this as a semantic no-op only after proving the deterministic
     // successor chain is structurally valid. A corrupt chain is still reuse.
-    throw new AppError('BAD_REQUEST', 409, 'WORKSPACE_SWITCH_CONFLICT');
+    throw new AppError('BAD_REQUEST', 409, 'TEAM_SWITCH_CONFLICT');
   }
 
   try {
@@ -224,7 +224,7 @@ export async function resolveRefreshTokenReplay(
       return deps.rejectReuse(params.row, rejectedAt);
     }
     if (
-      params.workspaceSwitch &&
+      params.teamSwitch &&
       isAppError(error) &&
       (error.statusCode === 401 || error.statusCode === 403)
     ) {

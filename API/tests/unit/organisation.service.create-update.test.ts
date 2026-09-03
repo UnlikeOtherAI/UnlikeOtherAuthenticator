@@ -177,7 +177,7 @@ describe('Organisation service: organisation CRUD', () => {
     });
 
     // The create response carries the default team the same transaction made.
-    // Without it an API-driven caller cannot address the workspace it just
+    // Without it an API-driven caller cannot address the team it just
     // created: no user-credentialled read recovers the id, because a subject
     // assertion must already name the org and team it acts on.
     expect(org.defaultTeam).toMatchObject({
@@ -220,9 +220,9 @@ describe('Organisation service: organisation CRUD', () => {
         }),
       }),
     );
-    // The founder joins their own default workspace as its OWNER. This used to
+    // The founder joins their own default team as its OWNER. This used to
     // take Prisma's `member` default, leaving them organisation owner and team
-    // member — holding no team capability over the only workspace they had
+    // member — holding no team capability over the only team they had
     // just created.
     expect(prisma.teamMember.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -239,7 +239,7 @@ describe('Organisation service: organisation CRUD', () => {
   // on the domain rejected creating a second one. That rule was retired with
   // `org_members_one_active_org_per_domain` in
   // 20260901090000_allow_multiple_organisations_per_user, because the hosted
-  // workspace chooser offers "create a new organisation" to people who already
+  // team chooser offers "create a new organisation" to people who already
   // have one, and the index rejected that authorised write. Uniqueness within
   // each exact org is still the `(org_id, user_id)` key's job.
   it('lets an owner who already belongs to an org on the domain create another', async () => {

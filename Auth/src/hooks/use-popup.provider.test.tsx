@@ -19,9 +19,9 @@ function renderWithSearch(search: string): string {
 
 /**
  * Gap-fix B Task 2 (design §11.4): `team_hint` must never, on its own, land the SPA on the
- * workspace chooser — that only ever happens via a `login_token` bridge (which itself is only
- * minted server-side when `config.login_flow.workspace_selection === "auto"`). This is the
- * client-side half of "hint ignored under workspace_selection: off".
+ * team chooser — that only ever happens via a `login_token` bridge (which itself is only
+ * minted server-side when `config.login_flow.team_selection === "auto"`). This is the
+ * client-side half of "hint ignored under team_selection: off".
  */
 describe('PopupProvider — team_hint does not affect initial view on its own', () => {
   it('opens the signing view only for a scoped signing continuation', () => {
@@ -40,9 +40,9 @@ describe('PopupProvider — team_hint does not affect initial view on its own', 
 
   it('still parses team_hint normally alongside an unrelated login_token/flow pair', () => {
     const html = renderWithSearch(
-      '?config_url=https%3A%2F%2Fclient.example.com%2Fauth-config&team_hint=design&login_token=bridge.jwt&flow=workspace_chooser',
+      '?config_url=https%3A%2F%2Fclient.example.com%2Fauth-config&team_hint=design&login_token=bridge.jwt&flow=team_chooser',
     );
 
-    expect(html).toContain('workspace-chooser:design');
+    expect(html).toContain('team-chooser:design');
   });
 });

@@ -7,8 +7,8 @@ const claimsMock = vi.hoisted(() => vi.fn());
 const getActiveClientOrgContextMock = vi.hoisted(() => vi.fn());
 const getUserOrgContextMock = vi.hoisted(() => vi.fn());
 const buildSidebarPendingInvitesMock = vi.hoisted(() => vi.fn());
-const buildSidebarWorkspacesMock = vi.hoisted(() => vi.fn());
-const resolveProductWorkspacePolicyMock = vi.hoisted(() => vi.fn());
+const buildSidebarTeamsMock = vi.hoisted(() => vi.fn());
+const resolveProductTeamPolicyMock = vi.hoisted(() => vi.fn());
 
 const config = {
   domain: 'product.example.com',
@@ -51,14 +51,14 @@ vi.mock('../../src/services/org-context.service.js', () => ({
   getUserOrgContext: (...args: unknown[]) => getUserOrgContextMock(...args),
 }));
 
-vi.mock('../../src/services/workspace-directory.service.js', () => ({
+vi.mock('../../src/services/team-directory.service.js', () => ({
   buildSidebarPendingInvites: (...args: unknown[]) => buildSidebarPendingInvitesMock(...args),
-  buildSidebarWorkspaces: (...args: unknown[]) => buildSidebarWorkspacesMock(...args),
+  buildSidebarTeams: (...args: unknown[]) => buildSidebarTeamsMock(...args),
 }));
 
-vi.mock('../../src/services/product-workspace-policy.service.js', () => ({
-  resolveProductWorkspacePolicy: (...args: unknown[]) =>
-    resolveProductWorkspacePolicyMock(...args),
+vi.mock('../../src/services/product-team-policy.service.js', () => ({
+  resolveProductTeamPolicy: (...args: unknown[]) =>
+    resolveProductTeamPolicyMock(...args),
 }));
 
 async function getOrgMe() {
@@ -88,8 +88,8 @@ describe('GET /org/me cross-product directory', () => {
       getActiveClientOrgContextMock,
       getUserOrgContextMock,
       buildSidebarPendingInvitesMock,
-      buildSidebarWorkspacesMock,
-      resolveProductWorkspacePolicyMock,
+      buildSidebarTeamsMock,
+      resolveProductTeamPolicyMock,
     ]) {
       mock.mockReset();
     }
@@ -107,17 +107,17 @@ describe('GET /org/me cross-product directory', () => {
       teams: ['team-cross'],
       team_roles: { 'team-cross': 'member' },
     });
-    resolveProductWorkspacePolicyMock.mockResolvedValue({
+    resolveProductTeamPolicyMock.mockResolvedValue({
       scope: 'all_active_memberships',
       serviceId: 'service-1',
       product: 'nessie',
     });
-    buildSidebarWorkspacesMock.mockResolvedValue([
+    buildSidebarTeamsMock.mockResolvedValue([
       {
         teamId: 'team-cross',
         orgId: 'org-cross',
-        name: 'Cross-domain workspace',
-        slug: 'cross-domain-workspace',
+        name: 'Cross-domain team',
+        slug: 'cross-domain-team',
         orgName: 'External org',
         iconUrl: null,
         avatarImageUrl: '/teams/team-cross/avatar',
@@ -140,7 +140,7 @@ describe('GET /org/me cross-product directory', () => {
         org_role: 'member',
         teams: ['team-cross'],
         team_roles: { 'team-cross': 'member' },
-        workspaces: [
+        teams: [
           expect.objectContaining({
             teamId: 'team-cross',
             orgId: 'org-cross',
@@ -159,7 +159,7 @@ describe('GET /org/me cross-product directory', () => {
       },
       { prisma: { transaction: true } },
     );
-    expect(buildSidebarWorkspacesMock).toHaveBeenCalled();
+    expect(buildSidebarTeamsMock).toHaveBeenCalled();
   });
 
   it('returns orgId on sidebar pending invitations', async () => {
@@ -240,7 +240,7 @@ describe('GET /org/me cross-product directory', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ ok: true });
     expect(getActiveClientOrgContextMock).not.toHaveBeenCalled();
-    expect(buildSidebarWorkspacesMock).not.toHaveBeenCalled();
+    expect(buildSidebarTeamsMock).not.toHaveBeenCalled();
   });
 
   it('keeps the directory absent when the selected cross-product context no longer validates', async () => {
@@ -251,6 +251,6 @@ describe('GET /org/me cross-product directory', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ ok: true });
     expect(getActiveClientOrgContextMock).toHaveBeenCalled();
-    expect(buildSidebarWorkspacesMock).not.toHaveBeenCalled();
+    expect(buildSidebarTeamsMock).not.toHaveBeenCalled();
   });
 });

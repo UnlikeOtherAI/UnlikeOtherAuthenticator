@@ -7,7 +7,7 @@ import { usePopup } from '../../hooks/use-popup.js';
 import { useTranslation } from '../../i18n/use-translation.js';
 import { postJson, type ApiResult } from '../../utils/api.js';
 import { checkPasswordPolicy } from '../../utils/password-policy.js';
-import { applyWorkspaceOutcome, interpretWorkspaceResponse } from '../../utils/workspace-response.js';
+import { applyTeamOutcome, interpretTeamResponse } from '../../utils/team-response.js';
 
 type SetPasswordRequest = { token: string; password: string };
 
@@ -23,7 +23,7 @@ export function SetPasswordForm(): React.JSX.Element {
     emailTokenType,
     setView,
     setLoginToken,
-    setWorkspaceChoices,
+    setSessionChoices,
     startTwoFactorVerify,
     startTwoFactorSetup,
     setNotice,
@@ -129,14 +129,14 @@ export function SetPasswordForm(): React.JSX.Element {
       return;
     }
 
-    // Gap-fix B Task 1 (design §4.3): /auth/verify-email can now also resolve to the workspace
+    // Gap-fix B Task 1 (design §4.3): /auth/verify-email can now also resolve to the team
     // chooser payload (same shape /auth/verify-code and /auth/login use) instead of a final
     // redirect — decode it the same generic way `LoginForm`/`CodeEntryPage` do so this view lands
-    // on `WorkspaceChooserPage` instead of erroring on an unrecognized response shape.
-    const outcome = interpretWorkspaceResponse(result.data);
-    const applied = applyWorkspaceOutcome(outcome, {
+    // on `TeamChooserPage` instead of erroring on an unrecognized response shape.
+    const outcome = interpretTeamResponse(result.data);
+    const applied = applyTeamOutcome(outcome, {
       setLoginToken,
-      setWorkspaceChoices,
+      setSessionChoices,
       setView,
       redirectTo,
       startTwoFactorVerify,

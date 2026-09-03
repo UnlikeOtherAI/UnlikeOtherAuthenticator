@@ -28,7 +28,7 @@ function apiRootDir(): string {
   return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 }
 
-/** Same resolution as `tests/helpers/test-db.ts`: workspace binaries may or may not be hoisted. */
+/** Same resolution as `tests/helpers/test-db.ts`: team binaries may or may not be hoisted. */
 function prismaBinPath(): string {
   const local = path.join(apiRootDir(), 'node_modules', '.bin', 'prisma');
   return fs.existsSync(local) ? local : path.join(apiRootDir(), '..', 'node_modules', '.bin', 'prisma');

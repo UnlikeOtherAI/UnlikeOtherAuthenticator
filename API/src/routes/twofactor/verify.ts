@@ -7,7 +7,7 @@ import { runWithRequestAdminTransaction } from '../../plugins/tenant-context.plu
 import { recordLoginLog } from '../../services/login-log.service.js';
 import { finalizeAuthenticatedUser } from '../../services/access-request-flow.service.js';
 import { lockAndAssertAuthenticationEpoch } from '../../services/authentication-epoch.service.js';
-import { lockProductWorkspacePolicyShared } from '../../services/product-workspace-policy-lock.service.js';
+import { lockProductTeamPolicyShared } from '../../services/product-team-policy-lock.service.js';
 import { verifyTwoFaChallenge } from '../../services/twofactor-challenge.service.js';
 import { verifyTwoFactorForLogin } from '../../services/twofactor-login.service.js';
 import { selectRedirectUrl } from '../../services/authorization-code.service.js';
@@ -56,7 +56,7 @@ export function registerTwoFactorVerifyRoute(app: FastifyInstance): void {
       }
 
       const finalResult = await runWithRequestAdminTransaction(request, async (prisma) => {
-        await lockProductWorkspacePolicyShared(prisma);
+        await lockProductTeamPolicyShared(prisma);
         await lockAndAssertAuthenticationEpoch(
           {
             userId: challenge.userId,
@@ -98,7 +98,7 @@ export function registerTwoFactorVerifyRoute(app: FastifyInstance): void {
             orgId: lockedChallenge.orgId,
             teamId: lockedChallenge.teamId,
           },
-          { workspacePrisma: request.adminDb, prisma },
+          { teamPrisma: request.adminDb, prisma },
         );
 
         try {

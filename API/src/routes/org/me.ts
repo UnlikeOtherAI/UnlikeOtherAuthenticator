@@ -12,9 +12,9 @@ import {
 } from '../../services/org-context.service.js';
 import {
   buildSidebarPendingInvites,
-  buildSidebarWorkspaces,
-} from '../../services/workspace-directory.service.js';
-import { resolveProductWorkspacePolicy } from '../../services/product-workspace-policy.service.js';
+  buildSidebarTeams,
+} from '../../services/team-directory.service.js';
+import { resolveProductTeamPolicy } from '../../services/product-team-policy.service.js';
 import { AppError } from '../../utils/errors.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
 import { assertVerifiedDomainMatchesQuery, normalizeDomain } from './domain-context.js';
@@ -87,7 +87,7 @@ export function registerOrgMeRoute(app: FastifyInstance): void {
           { prisma },
         );
 
-        // A recognized product can issue an exact workspace-scoped token for an organisation
+        // A recognized product can issue an exact team-scoped token for an organisation
         // owned by another product domain. Keep the legacy singular org block complete by
         // resolving that selected organisation live through the same server-owned product-policy
         // gate used at token issuance; never synthesize an org from an arbitrary directory row.
@@ -109,16 +109,16 @@ export function registerOrgMeRoute(app: FastifyInstance): void {
         // org_id/org_role/teams/team_roles/groups above are unchanged. Domain-scoped reads share
         // this tenant transaction; policy-authorized cross-domain reads use their existing guarded
         // admin-client path.
-        const workspacePolicy = await resolveProductWorkspacePolicy({ domain: normalizedDomain });
-        const [workspaces, pendingInvites] = await Promise.all([
-          buildSidebarWorkspaces(
+        const teamPolicy = await resolveProductTeamPolicy({ domain: normalizedDomain });
+        const [teams, pendingInvites] = await Promise.all([
+          buildSidebarTeams(
             { userId: claims.userId, domain: normalizedDomain },
-            { prisma, policy: workspacePolicy },
+            { prisma, policy: teamPolicy },
           ),
           buildSidebarPendingInvites({ userId: claims.userId, domain: normalizedDomain }, { prisma }),
         ]);
 
-        return { ...context, workspaces, pending_invites: pendingInvites };
+        return { ...context, teams, pending_invites: pendingInvites };
       });
 
       const response: { ok: true; org?: typeof org } = { ok: true };

@@ -256,9 +256,9 @@ components:
           type: string
           description: |
             Machine-readable error code. Most codes are exposed only when DEBUG_ENABLED;
-            production-safe workspace-switch outcomes WORKSPACE_NOT_AVAILABLE,
-            INTERACTION_REQUIRED, and WORKSPACE_SWITCH_CONFLICT are always exposed. After
-            domain-client authentication succeeds, an invalid workspace-switch source also
+            production-safe team-switch outcomes TEAM_NOT_AVAILABLE,
+            INTERACTION_REQUIRED, and TEAM_SWITCH_CONFLICT are always exposed. After
+            domain-client authentication succeeds, an invalid team-switch source also
             exposes INVALID_REFRESH_TOKEN; client-authentication failures remain generic.
         summary:
           type: string
@@ -1419,7 +1419,7 @@ components:
           enum: [Bearer]
         firstLogin:
           type: object
-          description: Present only on authorization-code exchange; omitted by refresh and workspace-switch grants.
+          description: Present only on authorization-code exchange; omitted by refresh and team-switch grants.
           properties:
             memberships:
               type: object
@@ -2426,11 +2426,11 @@ paths:
   /auth/token:
     post:
       tags: [Auth]
-      summary: Token exchange, workspace switch, or confidential subject-token exchange
+      summary: Token exchange, team switch, or confidential subject-token exchange
       operationId: exchangeToken
       description: |
         Exchanges an authorization code or refresh token for the legacy access-token
-        pair. The explicit workspace-switch grant rotates that same family onto one
+        pair. The explicit team-switch grant rotates that same family onto one
         exact target organisation/team after rechecking current memberships, product
         policy, target 2FA policy, and the family's immutable interactive assurance.
         Ordinary refresh never changes scope. Same-scope or competing transition intent
@@ -2496,14 +2496,14 @@ paths:
                       type: string
                       minLength: 1
                       maxLength: 4096
-                - title: Workspace Switch Grant
+                - title: Team Switch Grant
                   type: object
                   required: [grant_type, refresh_token, organization_id, team_id]
                   additionalProperties: false
                   properties:
                     grant_type:
                       type: string
-                      enum: ['urn:unlikeotherai:params:oauth:grant-type:workspace-switch']
+                      enum: ['urn:unlikeotherai:params:oauth:grant-type:team-switch']
                     refresh_token:
                       type: string
                       minLength: 1
@@ -2587,7 +2587,7 @@ paths:
           description: |
             Missing/invalid domain hash authentication remains generic. After client
             authentication succeeds, an invalid, expired, revoked, corrupt, or post-grace reused
-            workspace-switch source returns the stable code INVALID_REFRESH_TOKEN without
+            team-switch source returns the stable code INVALID_REFRESH_TOKEN without
             revealing which condition failed.
           content:
             application/json:
@@ -2595,20 +2595,20 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
           description: |
-            Workspace switch: WORKSPACE_NOT_AVAILABLE means the exact target pair is
+            Team switch: TEAM_NOT_AVAILABLE means the exact target pair is
             unavailable or denied without distinguishing why; INTERACTION_REQUIRED
             means the family lacks the target's current interactive assurance. Before a switch
             edge exists, both are non-consuming and non-revoking. A matching replay whose
             committed target no longer satisfies either condition retires that family and returns
             authenticated 401 INVALID_REFRESH_TOKEN. Confidential exchange also uses 403
-            for denied mapping, target, scope, role, or workspace membership.
+            for denied mapping, target, scope, role, or team membership.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '409':
           description: |
-            WORKSPACE_SWITCH_CONFLICT: the same-scope request is a no-op or this valid
+            TEAM_SWITCH_CONFLICT: the same-scope request is a no-op or this valid
             deterministic family already advanced under another grant or exact target.
             The conflict does not consume or revoke the valid family.
           content:
@@ -4046,9 +4046,9 @@ paths:
       operationId: getMyOrgContext
       description: |
         Returns the authenticated user's live legacy organisation context and
-        authorized workspace directory. The directory is domain-scoped by default.
+        authorized team directory. The directory is domain-scoped by default.
         For a server-recognized all_active_memberships product it contains every
-        active workspace, including cross-domain workspaces; when there is no
+        active team, including cross-domain teams; when there is no
         same-domain context, the complete legacy org block is anchored to the
         token's exact selected active.orgId after live policy and membership checks.
         Requires domain hash auth AND a user access token.

@@ -14,14 +14,14 @@ export const authEndpoints: EndpointSchema[] = [
       code_challenge: 'string (required for sign-in actions) — exactly 43-char PKCE S256 challenge',
       code_challenge_method: '"S256" when code_challenge is sent',
       team_hint:
-        "string (optional, ≤256 chars, id/slug-safe charset) — chooser preselect / one-click workspace switch (design §11.4): when the workspace chooser renders, a team already in the verified user's own chooser payload matching this teamId or slug is auto-selected, same as the single-team auto-skip. Client-side ONLY — an invalid or non-matching value is silently ignored (chooser renders normally) and select-team's server-side product-policy + exact ACTIVE-membership check remains the sole authority; it can never select a team the user doesn't already have.",
+        "string (optional, ≤256 chars, id/slug-safe charset) — chooser preselect / one-click team switch (design §11.4): when the team chooser renders, a team already in the verified user's own chooser payload matching this teamId or slug is auto-selected, same as the single-team auto-skip. Client-side ONLY — an invalid or non-matching value is silently ignored (chooser renders normally) and select-team's server-side product-policy + exact ACTIVE-membership check remains the sole authority; it can never select a team the user doesn't already have.",
     },
   },
   {
     method: 'POST',
     path: '/auth/login',
     description:
-      'Email/password login. workspace_selection="auto" may return the chooser; "off" suppresses it. A server-recognized product still resolves its mandatory exact workspace before 2FA, applies that Organisation policy strongest-wins, and fails closed on ambiguous placement.',
+      'Email/password login. team_selection="auto" may return the chooser; "off" suppresses it. A server-recognized product still resolves its mandatory exact team before 2FA, applies that Organisation policy strongest-wins, and fails closed on ambiguous placement.',
     auth: 'config_url query param',
     query: {
       state:
@@ -78,7 +78,7 @@ export const authEndpoints: EndpointSchema[] = [
     method: 'POST',
     path: '/auth/verify-code',
     description:
-      'Verify a 6-digit sign-in code issued by /auth/start (requires config.login_flow.email_code_enabled). 5 wrong attempts kill the code; every failure mode (no code, wrong code, expired, dead) returns the same generic auth error. IP + email rate-limited. With workspace_selection="off", recognized products suppress the chooser but resolve and bind their exact workspace before 2FA.',
+      'Verify a 6-digit sign-in code issued by /auth/start (requires config.login_flow.email_code_enabled). 5 wrong attempts kill the code; every failure mode (no code, wrong code, expired, dead) returns the same generic auth error. IP + email rate-limited. With team_selection="off", recognized products suppress the chooser but resolve and bind their exact team before 2FA.',
     auth: 'config_url query param',
     query: {
       state:
@@ -96,26 +96,26 @@ export const authEndpoints: EndpointSchema[] = [
     },
     response: {
       'login_token?':
-        'short-lived, one-time chooser capability (only when config.login_flow.workspace_selection="auto") — binds this verified user/domain to the exact config URL + parsed-config fingerprint, redirect, PKCE, remember-me, request-access, expiry, and JTI; authorizes no other continuation',
+        'short-lived, one-time chooser capability (only when config.login_flow.team_selection="auto") — binds this verified user/domain to the exact config URL + parsed-config fingerprint, redirect, PKCE, remember-me, request-access, expiry, and JTI; authorizes no other continuation',
       'teams?':
         "array of { teamId, orgId, name, slug, role, iconUrl, avatarImageUrl, orgName } — this user's ACTIVE team memberships on this domain (only with login_token). avatarImageUrl is the public /teams/:teamId/avatar form (never null, no credential needed) — the chooser renders in a popup that holds no bearer",
       'pending_invites?':
         'array of { inviteId, teamName, invitedBy } — pending invites for this email on this domain (only with login_token)',
       'can_create_org?': 'boolean (only with login_token)',
       'creatable_orgs?':
-        'array of { orgId, orgName } — organisations this user may add a workspace to via POST /auth/create-team (ACTIVE owner/admin there + org_features.allow_user_create_team). Empty unless the domain opted in. Distinct from can_create_org, which permits creating a new organisation',
-      ok: 'true (when workspace_selection is "off" — finalizes immediately like /auth/login)',
-      code: 'authorization code (workspace_selection "off" branch only)',
-      redirect_to: 'full redirect URL with code (workspace_selection "off" branch only)',
-      twofa_required: 'true (only if 2FA needed, workspace_selection "off" branch only)',
-      twofa_token: 'challenge token (only if 2FA needed, workspace_selection "off" branch only)',
+        'array of { orgId, orgName } — organisations this user may add a team to via POST /auth/create-team (ACTIVE owner/admin there + org_features.allow_user_create_team). Empty unless the domain opted in. Distinct from can_create_org, which permits creating a new organisation',
+      ok: 'true (when team_selection is "off" — finalizes immediately like /auth/login)',
+      code: 'authorization code (team_selection "off" branch only)',
+      redirect_to: 'full redirect URL with code (team_selection "off" branch only)',
+      twofa_required: 'true (only if 2FA needed, team_selection "off" branch only)',
+      twofa_token: 'challenge token (only if 2FA needed, team_selection "off" branch only)',
     },
   },
   {
     method: 'POST',
     path: '/auth/select-team',
     description:
-      'Choose a workspace (or accept/decline a pending invite, or redeem a shareable invite link) using the login_token bridge from a verified identity path. Rejects generically if the signature/expiry/config URL/semantic config fingerprint differs, if any caller-supplied redirect/PKCE/remember-me/request-access field retargets the signed continuation, if a selected/accepted exact org + team scope is not ACTIVE, or if an invite link is invalid or cannot produce an ACTIVE exact scope. Final selection claims the hashed JTI first in the transaction, before invite/audit/access-request-email effects; a concurrent replay cannot perform those effects, while later failure rolls the claim back for retry. Choices and decline are non-consuming. Scope is revalidated after 2FA/signatures immediately before code issuance and again inside the single code-consume/token-creation transaction at exchange. The chooser-selection and code-exchange transactions hold the ordered membership locks shared with lifecycle writers; post-2FA/signature code issuance revalidates but does not hold those locks.',
+      'Choose a team (or accept/decline a pending invite, or redeem a shareable invite link) using the login_token bridge from a verified identity path. Rejects generically if the signature/expiry/config URL/semantic config fingerprint differs, if any caller-supplied redirect/PKCE/remember-me/request-access field retargets the signed continuation, if a selected/accepted exact org + team scope is not ACTIVE, or if an invite link is invalid or cannot produce an ACTIVE exact scope. Final selection claims the hashed JTI first in the transaction, before invite/audit/access-request-email effects; a concurrent replay cannot perform those effects, while later failure rolls the claim back for retry. Choices and decline are non-consuming. Scope is revalidated after 2FA/signatures immediately before code issuance and again inside the single code-consume/token-creation transaction at exchange. The chooser-selection and code-exchange transactions hold the ordered membership locks shared with lifecycle writers; post-2FA/signature code issuance revalidates but does not hold those locks.',
     auth: 'config_url query param + login_token body field',
     query: {
       redirect_url: 'string (optional, redirect_uri also accepted)',
@@ -136,7 +136,7 @@ export const authEndpoints: EndpointSchema[] = [
     },
     response: {
       ok: 'true',
-      code: 'authorization code, now carrying the selected workspace scope (active claim on exchange) when a team/invite was resolved',
+      code: 'authorization code, now carrying the selected team scope (active claim on exchange) when a team/invite was resolved',
       redirect_to: 'full redirect URL with code',
       twofa_required: 'true (only if the selected org requires 2FA)',
       twofa_token: 'challenge token (only if 2FA needed)',
@@ -148,9 +148,9 @@ export const authEndpoints: EndpointSchema[] = [
   },
   {
     method: 'POST',
-    path: '/auth/create-workspace',
+    path: '/auth/create-organisation',
     description:
-      "Create and immediately select a verified user's first workspace from the hosted SSO chooser. The login_token bridge and all supplied continuation fields must match the signed identity-verification continuation. Within one transaction, UOA claims the bridge token, creates the organisation and its default team with the requested hosted-chooser visibility, validates the exact ACTIVE client workspace scope, and completes required 2FA/code issuance. The organisation slug is the canonical tenant DNS label: it is exposed in the resulting access token as active.tenantSlug and is unique for the client domain. Team slugs remain local to their organisation and must not be used as tenant subdomains.",
+      "Create and immediately select a verified user's first team from the hosted SSO chooser. The login_token bridge and all supplied continuation fields must match the signed identity-verification continuation. Within one transaction, UOA claims the bridge token, creates the organisation and its default team with the requested hosted-chooser visibility, validates the exact ACTIVE client team scope, and completes required 2FA/code issuance. The organisation slug is the canonical tenant DNS label: it is exposed in the resulting access token as active.tenantSlug and is unique for the client domain. Team slugs remain local to their organisation and must not be used as tenant subdomains.",
     auth: 'config_url query param + login_token body field',
     query: {
       redirect_url: 'string (optional, redirect_uri also accepted)',
@@ -161,7 +161,7 @@ export const authEndpoints: EndpointSchema[] = [
     },
     body: {
       login_token: 'string (required) — bridge token from /auth/verify-code or /auth/login',
-      name: 'string (required, 1–100 characters after trimming) — workspace name; UOA derives the organisation/tenant slug',
+      name: 'string (required, 1–100 characters after trimming) — team name; UOA derives the organisation/tenant slug',
       join_policy:
         '"HIDDEN" | "INVITE_ONLY" | "OPEN_TO_ORG" (optional; defaults to INVITE_ONLY) — default-team visibility. HIDDEN is private/discoverable only by invitees; OPEN_TO_ORG lets active organisation members join themselves',
       remember_me:
@@ -169,7 +169,7 @@ export const authEndpoints: EndpointSchema[] = [
     },
     response: {
       ok: 'true',
-      code: 'authorization code carrying the new selected workspace scope when issuance completes',
+      code: 'authorization code carrying the new selected team scope when issuance completes',
       redirect_to: 'full redirect URL with code',
       twofa_required: 'true when the new selected org requires enrolled 2FA',
       twofa_token: 'challenge token (only if 2FA needed)',
@@ -182,7 +182,7 @@ export const authEndpoints: EndpointSchema[] = [
     method: 'POST',
     path: '/auth/create-team',
     description:
-      "Create and immediately select a FURTHER workspace (team) inside an organisation the verified user already belongs to, from the hosted SSO chooser. The sibling of /auth/create-workspace, which creates a new organisation: an organisation is the level above a workspace, so this route writes into an existing tenant and is authorized accordingly — the acting user must be an ACTIVE owner/admin of org_id (the same rule POST /org/organisations/:orgId/teams enforces), the organisation must belong to this config's domain, and the domain must set org_features.allow_user_create_team. The org's max_teams_per_org cap still applies. Same transaction envelope as /auth/create-workspace: the bridge token is claimed alongside the new team with its requested hosted-chooser visibility, the creator's ACTIVE team membership, the workspace-scope validation, and required 2FA/code issuance. The chooser's creatable_orgs lists exactly the organisations this will accept.",
+      "Create and immediately select a FURTHER team (team) inside an organisation the verified user already belongs to, from the hosted SSO chooser. The sibling of /auth/create-organisation, which creates a new organisation: an organisation is the level above a team, so this route writes into an existing tenant and is authorized accordingly — the acting user must be an ACTIVE owner/admin of org_id (the same rule POST /org/organisations/:orgId/teams enforces), the organisation must belong to this config's domain, and the domain must set org_features.allow_user_create_team. The org's max_teams_per_org cap still applies. Same transaction envelope as /auth/create-organisation: the bridge token is claimed alongside the new team with its requested hosted-chooser visibility, the creator's ACTIVE team membership, the team-scope validation, and required 2FA/code issuance. The chooser's creatable_orgs lists exactly the organisations this will accept.",
     auth: 'config_url query param + login_token body field',
     query: {
       redirect_url: 'string (optional, redirect_uri also accepted)',
@@ -195,15 +195,15 @@ export const authEndpoints: EndpointSchema[] = [
       login_token: 'string (required) — bridge token from /auth/verify-code or /auth/login',
       org_id:
         "string (required) — an organisation from the chooser's creatable_orgs; anything else is the generic auth failure",
-      name: 'string (required, 1–100 characters after trimming) — workspace name; UOA derives the team slug, local to the organisation',
+      name: 'string (required, 1–100 characters after trimming) — team name; UOA derives the team slug, local to the organisation',
       join_policy:
-        '"HIDDEN" | "INVITE_ONLY" | "OPEN_TO_ORG" (optional; defaults to INVITE_ONLY) — workspace visibility. HIDDEN is private/discoverable only by invitees; OPEN_TO_ORG lets active organisation members join themselves',
+        '"HIDDEN" | "INVITE_ONLY" | "OPEN_TO_ORG" (optional; defaults to INVITE_ONLY) — team visibility. HIDDEN is private/discoverable only by invitees; OPEN_TO_ORG lets active organisation members join themselves',
       remember_me:
         'boolean (optional) — when present must equal the value signed at identity verification; omission uses that signed value',
     },
     response: {
       ok: 'true',
-      code: 'authorization code carrying the new selected workspace scope when issuance completes',
+      code: 'authorization code carrying the new selected team scope when issuance completes',
       redirect_to: 'full redirect URL with code',
       twofa_required: 'true when the org requires enrolled 2FA',
       twofa_token: 'challenge token (only if 2FA needed)',
@@ -215,7 +215,7 @@ export const authEndpoints: EndpointSchema[] = [
     method: 'POST',
     path: '/auth/session-choices',
     description:
-      'Hydrate the workspace-chooser payload for a login_token bridge seeded via a redirect, since a GET redirect cannot inline chooser JSON. Verifies signature, expiry, exact config URL, and the canonical fingerprint of the currently verified parsed config. This read is deliberately non-consuming; only final selection claims the hashed JTI. Introduces no enumeration because it answers only for an already-verified capability.',
+      'Hydrate the team-chooser payload for a login_token bridge seeded via a redirect, since a GET redirect cannot inline chooser JSON. Verifies signature, expiry, exact config URL, and the canonical fingerprint of the currently verified parsed config. This read is deliberately non-consuming; only final selection claims the hashed JTI. Introduces no enumeration because it answers only for an already-verified capability.',
     auth: 'config_url query param + login_token body field',
     query: { config_url: 'string (required)' },
     body: {
@@ -229,7 +229,7 @@ export const authEndpoints: EndpointSchema[] = [
         'array of { inviteId, teamName, invitedBy } — pending invites for this email on this domain',
       can_create_org: 'boolean',
       creatable_orgs:
-        'array of { orgId, orgName } — organisations this user may add a workspace to via POST /auth/create-team',
+        'array of { orgId, orgName } — organisations this user may add a team to via POST /auth/create-team',
     },
   },
   {
@@ -257,7 +257,7 @@ export const authEndpoints: EndpointSchema[] = [
     method: 'POST',
     path: '/auth/verify-email',
     description:
-      'Complete email verification (registration). For a non-invite token with config.login_flow.workspace_selection="auto", 2+ ACTIVE teams, a pending invite, or zero teams with can_create_org return the workspace chooser. Exactly one ACTIVE team/no invite is selected server-side and carried through applicable 2FA into the authorization code and active claim. An invite-bound token is already an explicit selection: its accepted orgId/teamId bypasses the chooser, still enforces 2FA, and is preserved through code/access/refresh rotation. A direct email invitation may omit PKCE: it accepts only its live token and returns invite_accepted without issuing an OAuth code. workspace_selection="off" leaves legacy clients unscoped, but a recognized product pre-binds one exact workspace before 2FA without showing the chooser.',
+      'Complete email verification (registration). For a non-invite token with config.login_flow.team_selection="auto", 2+ ACTIVE teams, a pending invite, or zero teams with can_create_org return the team chooser. Exactly one ACTIVE team/no invite is selected server-side and carried through applicable 2FA into the authorization code and active claim. An invite-bound token is already an explicit selection: its accepted orgId/teamId bypasses the chooser, still enforces 2FA, and is preserved through code/access/refresh rotation. A direct email invitation may omit PKCE: it accepts only its live token and returns invite_accepted without issuing an OAuth code. team_selection="off" leaves legacy clients unscoped, but a recognized product pre-binds one exact team before 2FA without showing the chooser.',
     auth: 'config_url query param',
     query: {
       state:
@@ -273,27 +273,27 @@ export const authEndpoints: EndpointSchema[] = [
       password: 'string (optional) — required for password_required registration mode',
     },
     response: {
-      ok: 'true (workspace_selection "off"/skipped branch only — finalizes immediately)',
+      ok: 'true (team_selection "off"/skipped branch only — finalizes immediately)',
       invite_accepted:
         'true only for a direct live team invitation without PKCE; no authorization code is issued',
-      code: 'authorization code (workspace_selection "off"/skipped branch only)',
-      redirect_to: 'redirect URL (workspace_selection "off"/skipped branch only)',
+      code: 'authorization code (team_selection "off"/skipped branch only)',
+      redirect_to: 'redirect URL (team_selection "off"/skipped branch only)',
       access_request_status: '"pending" when request_access created a pending access request',
-      twofa_required: 'true when the selected/accepted workspace requires enrolled 2FA',
+      twofa_required: 'true when the selected/accepted team requires enrolled 2FA',
       twofa_token:
-        'workspace-bearing challenge token when enrolled 2FA must complete before code issuance',
+        'team-bearing challenge token when enrolled 2FA must complete before code issuance',
       twofa_enroll_required:
         'true when effective policy requires enrollment before the scoped code can be issued',
       setup_token:
-        'workspace-bearing setup token when twofa_enroll_required is true (alongside QR/manual setup fields)',
+        'team-bearing setup token when twofa_enroll_required is true (alongside QR/manual setup fields)',
       'login_token?':
         'short-lived bridge JWT (only when the chooser gate passes) — authorizes ONLY POST /auth/select-team for this verified user',
       'teams?':
-        'array of { teamId, orgId, name, slug, role, iconUrl, avatarImageUrl, orgName } (only with login_token). avatarImageUrl is the public /teams/:teamId/avatar form (never null, no credential needed); orgName is the owning organisation, so same-named workspaces in different orgs stay distinguishable',
+        'array of { teamId, orgId, name, slug, role, iconUrl, avatarImageUrl, orgName } (only with login_token). avatarImageUrl is the public /teams/:teamId/avatar form (never null, no credential needed); orgName is the owning organisation, so same-named teams in different orgs stay distinguishable',
       'pending_invites?': 'array of { inviteId, teamName, invitedBy } (only with login_token)',
       'can_create_org?': 'boolean (only with login_token)',
       'creatable_orgs?':
-        'array of { orgId, orgName } — organisations this user may add a workspace to via POST /auth/create-team (ACTIVE owner/admin there + org_features.allow_user_create_team). Empty unless the domain opted in. Distinct from can_create_org, which permits creating a new organisation',
+        'array of { orgId, orgName } — organisations this user may add a team to via POST /auth/create-team (ACTIVE owner/admin there + org_features.allow_user_create_team). Empty unless the domain opted in. Distinct from can_create_org, which permits creating a new organisation',
     },
   },
   authTokenEndpoint,
@@ -344,7 +344,7 @@ export const authEndpoints: EndpointSchema[] = [
     method: 'GET',
     path: '/auth/email/link',
     description:
-      'Email registration/login link landing. A direct password invitation without PKCE opens account creation with the invitation email fixed in a read-only field; the invitation token, not that field, remains authoritative. For a non-invite link with config.login_flow.workspace_selection="auto", 2+ ACTIVE teams, a pending invite, or zero teams with can_create_org redirect to the workspace chooser; exactly one ACTIVE team/no invite is selected server-side and carried through applicable 2FA into the code. Invite-bound links carry the accepted invite orgId/teamId through the same 2FA/code/token pipeline without showing the chooser. workspace_selection="off" leaves legacy clients unscoped, but a recognized product pre-binds one exact workspace before 2FA without showing the chooser.',
+      'Email registration/login link landing. A direct password invitation without PKCE opens account creation with the invitation email fixed in a read-only field; the invitation token, not that field, remains authoritative. For a non-invite link with config.login_flow.team_selection="auto", 2+ ACTIVE teams, a pending invite, or zero teams with can_create_org redirect to the team chooser; exactly one ACTIVE team/no invite is selected server-side and carried through applicable 2FA into the code. Invite-bound links carry the accepted invite orgId/teamId through the same 2FA/code/token pipeline without showing the chooser. team_selection="off" leaves legacy clients unscoped, but a recognized product pre-binds one exact team before 2FA without showing the chooser.',
     query: {
       state:
         'string (optional, ≤2048) — opaque relying-party CSRF value. UOA does not interpret it; it is bound to this login (login_token, 2FA bridge, social state) and echoed verbatim beside `code` on the final redirect, and beside `error` on a failed social callback. Later hops must not re-supply it: a hop presenting a different value is refused.',
@@ -411,7 +411,7 @@ export const authEndpoints: EndpointSchema[] = [
     method: 'GET',
     path: '/auth/callback/:provider',
     description:
-      'OAuth provider callback. Requires the signed `uoa_social_state` cookie set at /auth/social to match the nonce embedded in `state` (login-CSRF protection); the cookie is single-use and cleared on consume. A direct invitation also requires its signed HttpOnly invite-capability cookie and an exact match between its live invitation email and the provider-verified email; it accepts the invite without issuing an OAuth code. With workspace_selection="auto", workspace is resolved before 2FA: 2+ ACTIVE teams, any pending invite, or zero teams with can_create_org redirect with a login_token chooser bridge, while exactly one ACTIVE team/no invite is selected server-side and its exact orgId/teamId survives any 2FA challenge or enrollment token into the authorization code and active token claim. workspace_selection="off" leaves legacy clients unscoped; recognized products suppress the chooser but pre-bind their exact workspace before 2FA.',
+      'OAuth provider callback. Requires the signed `uoa_social_state` cookie set at /auth/social to match the nonce embedded in `state` (login-CSRF protection); the cookie is single-use and cleared on consume. A direct invitation also requires its signed HttpOnly invite-capability cookie and an exact match between its live invitation email and the provider-verified email; it accepts the invite without issuing an OAuth code. With team_selection="auto", team is resolved before 2FA: 2+ ACTIVE teams, any pending invite, or zero teams with can_create_org redirect with a login_token chooser bridge, while exactly one ACTIVE team/no invite is selected server-side and its exact orgId/teamId survives any 2FA challenge or enrollment token into the authorization code and active token claim. team_selection="off" leaves legacy clients unscoped; recognized products suppress the chooser but pre-bind their exact team before 2FA.',
   },
   {
     method: 'GET',

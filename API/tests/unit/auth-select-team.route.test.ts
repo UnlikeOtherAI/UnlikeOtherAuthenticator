@@ -93,7 +93,7 @@ function baseConfig(overrides?: Partial<ClientConfig>): ClientConfig {
     registration_mode: 'password_required',
     '2fa_enabled': false,
     debug_enabled: false,
-    login_flow: { email_code_enabled: false, workspace_selection: 'auto' },
+    login_flow: { email_code_enabled: false, team_selection: 'auto' },
     access_requests: { enabled: false, notify_org_roles: ['owner', 'admin'] },
     org_features: {
       enabled: true,
@@ -375,7 +375,7 @@ describe('POST /auth/select-team', () => {
     );
   });
 
-  it('finalizes with no workspace scope when neither teamId nor inviteId is given', async () => {
+  it('finalizes with no team scope when neither teamId nor inviteId is given', async () => {
     const loginToken = await mintLoginToken('user-1');
     prismaMock.user.findUnique.mockResolvedValue({ twoFaEnabled: false, tokenVersion: 0 });
 

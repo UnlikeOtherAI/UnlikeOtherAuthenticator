@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  resolveAutoSelectedWorkspace,
-  shouldPresentWorkspaceChooser,
-  type WorkspaceChoices,
+  resolveAutoSelectedTeam,
+  shouldPresentTeamChooser,
+  type SessionChoices,
 } from '../../src/services/first-login.service.js';
 
-describe('resolveAutoSelectedWorkspace', () => {
+describe('resolveAutoSelectedTeam', () => {
   const soloTeam = {
     teamId: 'team-1',
     orgId: 'org-1',
@@ -16,7 +16,7 @@ describe('resolveAutoSelectedWorkspace', () => {
     slug: 'solo',
   };
 
-  function choices(overrides?: Partial<WorkspaceChoices>): WorkspaceChoices {
+  function choices(overrides?: Partial<SessionChoices>): SessionChoices {
     return {
       teams: [soloTeam],
       pending_invites: [],
@@ -26,7 +26,7 @@ describe('resolveAutoSelectedWorkspace', () => {
   }
 
   it('returns the exact org/team for one ACTIVE team with no pending invites', () => {
-    expect(resolveAutoSelectedWorkspace(choices())).toEqual({
+    expect(resolveAutoSelectedTeam(choices())).toEqual({
       orgId: 'org-1',
       teamId: 'team-1',
     });
@@ -34,40 +34,40 @@ describe('resolveAutoSelectedWorkspace', () => {
 
   it('does not select when there are multiple teams, a pending invite, or no team', () => {
     expect(
-      resolveAutoSelectedWorkspace(
+      resolveAutoSelectedTeam(
         choices({
           teams: [soloTeam, { ...soloTeam, teamId: 'team-2', name: 'Second', slug: 'second' }],
         }),
       ),
     ).toBeNull();
     expect(
-      resolveAutoSelectedWorkspace(
+      resolveAutoSelectedTeam(
         choices({
           pending_invites: [{ inviteId: 'invite-1', teamName: 'Invited', invitedBy: 'Alice' }],
         }),
       ),
     ).toBeNull();
-    expect(resolveAutoSelectedWorkspace(choices({ teams: [] }))).toBeNull();
+    expect(resolveAutoSelectedTeam(choices({ teams: [] }))).toBeNull();
   });
 
-  it('presents the chooser for ambiguous choices and the empty create-workspace entrypoint', () => {
+  it('presents the chooser for ambiguous choices and the empty create-team entrypoint', () => {
     expect(
-      shouldPresentWorkspaceChooser(
+      shouldPresentTeamChooser(
         choices({
           teams: [soloTeam, { ...soloTeam, teamId: 'team-2', name: 'Second', slug: 'second' }],
         }),
       ),
     ).toBe(true);
     expect(
-      shouldPresentWorkspaceChooser(
+      shouldPresentTeamChooser(
         choices({
           pending_invites: [{ inviteId: 'invite-1', teamName: 'Invited', invitedBy: 'Alice' }],
         }),
       ),
     ).toBe(true);
-    expect(shouldPresentWorkspaceChooser(choices({ teams: [], can_create_org: true }))).toBe(true);
-    expect(shouldPresentWorkspaceChooser(choices())).toBe(false);
-    expect(shouldPresentWorkspaceChooser(choices({ teams: [], can_create_org: false }))).toBe(
+    expect(shouldPresentTeamChooser(choices({ teams: [], can_create_org: true }))).toBe(true);
+    expect(shouldPresentTeamChooser(choices())).toBe(false);
+    expect(shouldPresentTeamChooser(choices({ teams: [], can_create_org: false }))).toBe(
       false,
     );
   });

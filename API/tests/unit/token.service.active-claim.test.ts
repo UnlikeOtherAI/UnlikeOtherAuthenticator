@@ -16,7 +16,7 @@ import {
 // (issuance/org-claim/PKCE) and token.service.refresh-active-claim.test.ts (refresh re-validation)
 // for the rest. Only the location changed — no assertion here was altered from the pre-split file.
 //
-// `active` workspace-scope claim emitted from authorization_codes.org_id/team_id.
+// `active` team-scope claim emitted from authorization_codes.org_id/team_id.
 describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
   useTokenServiceTestEnv();
 
@@ -129,14 +129,14 @@ describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
     });
   });
 
-  it('rejects a recognized-product code that deferred workspace binding until exchange', async () => {
+  it('rejects a recognized-product code that deferred team binding until exchange', async () => {
     const now = new Date('2026-07-07T00:00:00.500Z');
     const sharedSecret = process.env.SHARED_SECRET!;
     const code = 'code-with-cross-product-scope';
     const config = {
       ...makeConfig({ enabled: false }),
       domain: 'api.deepsignal.live',
-      login_flow: { email_code_enabled: false, workspace_selection: 'off' as const },
+      login_flow: { email_code_enabled: false, team_selection: 'off' as const },
     };
     const clientId = createClientId(config.domain, sharedSecret);
     const configUrl = 'https://api.deepsignal.live/auth-config';
@@ -328,7 +328,7 @@ describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
     expect(prisma.refreshToken.create).not.toHaveBeenCalled();
   });
 
-  it('rejects a malformed authorization code carrying only part of a workspace scope', async () => {
+  it('rejects a malformed authorization code carrying only part of a team scope', async () => {
     const now = new Date('2026-07-07T00:00:01.000Z');
     const sharedSecret = process.env.SHARED_SECRET!;
     const code = 'code-with-partial-scope';

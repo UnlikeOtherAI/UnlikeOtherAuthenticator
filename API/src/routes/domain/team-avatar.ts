@@ -23,7 +23,7 @@ import {
 
 /**
  * `/domain/teams/:teamId/avatar` (Docs/Auth/avatars.md §11) — the team counterpart of
- * `/domain/users/:userId/avatar`, for product backends managing and rendering a workspace logo
+ * `/domain/users/:userId/avatar`, for product backends managing and rendering a team logo
  * with no end-user context.
  *
  * Domain-hash bearer only, deliberately: consuming products keep a bound refresh credential rather
@@ -34,7 +34,7 @@ import {
  *
  * Because the backend's own gating is the only role check, every mutation writes an `AdminAuditLog`
  * row naming the acting domain — the same traceability the `/internal/admin/*` avatar routes have
- * always had, and the record that makes an unexpected workspace-logo change attributable.
+ * always had, and the record that makes an unexpected team-logo change attributable.
  */
 
 const ParamsSchema = z.object({ teamId: z.string().trim().min(1).max(200) }).strict();
@@ -49,7 +49,7 @@ const ImageQuerySchema = z
 
 const MutationQuerySchema = z.object({ domain: z.string().trim().min(1) }).strict();
 
-// Keyed per domain + team so one backend churning one workspace's logo cannot exhaust the budget
+// Keyed per domain + team so one backend churning one team's logo cannot exhaust the budget
 // for another team or another domain. Same 30/hour window as every other avatar mutation.
 const mutationRateLimit = createRateLimiter({
   keyBuilder: (request: FastifyRequest) => {

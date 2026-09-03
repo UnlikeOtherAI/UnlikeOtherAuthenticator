@@ -10,7 +10,7 @@ import {
   revokeRefreshTokensForUserDomain,
 } from './refresh-token-revocation.service.js';
 import { lockRefreshSessionUserDomain } from './refresh-session-lock.service.js';
-import { lockWorkspaceMembershipRows } from './workspace-scope.service.js';
+import { lockTeamMembershipRows } from './team-scope.service.js';
 
 import {
   assertDatabaseEnabled,
@@ -141,7 +141,7 @@ export async function addOrganisationMember(
   }
 
   const { member: createdMember, reactivated } = await runInTransaction(prisma, async (tx) => {
-    await lockWorkspaceMembershipRows({ userId, orgId: org.id }, { prisma: tx });
+    await lockTeamMembershipRows({ userId, orgId: org.id }, { prisma: tx });
     // Include the status so a prior DEACTIVATED/REMOVED row can be reactivated instead of
     // rejected (design §4.1: statuses are tombstones, re-adding flips them back to ACTIVE).
     const existingMemberInOrg = await tx.orgMember.findFirst({
@@ -343,7 +343,7 @@ export async function removeOrganisationMember(
 
   await runInTransaction(prisma, async (tx) => {
     await lockRefreshSessionUserDomain({ userId, domain: org.domain }, { prisma: tx });
-    await lockWorkspaceMembershipRows({ userId, orgId: org.id }, { prisma: tx });
+    await lockTeamMembershipRows({ userId, orgId: org.id }, { prisma: tx });
     const lockedMember = await tx.orgMember.findFirst({
       where: { orgId: org.id, userId },
       select: { id: true, role: true, userId: true },

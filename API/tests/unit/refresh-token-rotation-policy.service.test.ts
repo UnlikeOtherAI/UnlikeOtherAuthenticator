@@ -53,8 +53,8 @@ function makePrisma(params?: {
 function switchGuard(prisma: PrismaClient, validateSource = true) {
   return createRefreshTokenRotationPolicyGuard({
     prisma,
-    targetWorkspace: target,
-    targetWorkspaceError: 'WORKSPACE_NOT_AVAILABLE',
+    targetTeam: target,
+    targetTeamError: 'TEAM_NOT_AVAILABLE',
     validateSource,
     twoFa: {
       config: { ...makeConfig(), '2fa_enabled': true },
@@ -63,15 +63,15 @@ function switchGuard(prisma: PrismaClient, validateSource = true) {
   });
 }
 
-describe('refresh-token workspace-switch policy guard', () => {
+describe('refresh-token team-switch policy guard', () => {
   it('locks both exact memberships before checking 2FA and signature policy', async () => {
     const prisma = makePrisma({ twoFaEnabled: true });
-    const afterWorkspaceLock = vi.fn().mockResolvedValue(undefined);
+    const afterTeamLock = vi.fn().mockResolvedValue(undefined);
     const guard = createRefreshTokenRotationPolicyGuard({
       prisma,
-      targetWorkspace: target,
-      targetWorkspaceError: 'WORKSPACE_NOT_AVAILABLE',
-      afterWorkspaceLock,
+      targetTeam: target,
+      targetTeamError: 'TEAM_NOT_AVAILABLE',
+      afterTeamLock,
       twoFa: {
         config: { ...makeConfig(), '2fa_enabled': true },
         error: 'INTERACTION_REQUIRED',
@@ -80,7 +80,7 @@ describe('refresh-token workspace-switch policy guard', () => {
 
     await expect(guard({ ...row, twoFaCompleted: true })).resolves.toBeUndefined();
     expect(prisma.$queryRaw).toHaveBeenCalledTimes(4);
-    expect(afterWorkspaceLock).toHaveBeenCalledOnce();
+    expect(afterTeamLock).toHaveBeenCalledOnce();
     expect(prisma.user.findUnique).toHaveBeenCalledWith({
       where: { id: row.userId },
       select: { twoFaEnabled: true },
@@ -88,11 +88,11 @@ describe('refresh-token workspace-switch policy guard', () => {
     expect(prisma.$executeRaw).toHaveBeenCalledOnce();
   });
 
-  it('maps only target eligibility failures to WORKSPACE_NOT_AVAILABLE', async () => {
+  it('maps only target eligibility failures to TEAM_NOT_AVAILABLE', async () => {
     const targetMissing = makePrisma({ activeTeams: [source.teamId] });
     await expect(switchGuard(targetMissing)(row)).rejects.toMatchObject({
       statusCode: 403,
-      message: 'WORKSPACE_NOT_AVAILABLE',
+      message: 'TEAM_NOT_AVAILABLE',
     });
     expect(targetMissing.user.findUnique).not.toHaveBeenCalled();
 

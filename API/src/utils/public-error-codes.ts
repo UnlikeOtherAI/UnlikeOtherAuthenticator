@@ -12,9 +12,9 @@ export const PRODUCTION_PUBLIC_ERROR_CODES = new Set([
   'INVALID_TOKEN_USER',
   'TOKEN_EXPIRED',
   'TOKEN_ALREADY_USED',
-  'WORKSPACE_NOT_AVAILABLE',
+  'TEAM_NOT_AVAILABLE',
   'INTERACTION_REQUIRED',
-  'WORKSPACE_SWITCH_CONFLICT',
+  'TEAM_SWITCH_CONFLICT',
   // Invitation revoke (DELETE .../invitations/:inviteId): products branch on the 409's code, so it
   // must survive the production generic-body squash. Not an oracle — the caller was already
   // authorized for the exact invite.

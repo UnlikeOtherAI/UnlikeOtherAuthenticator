@@ -8,11 +8,11 @@ import { testUiTheme } from '../helpers/test-config.js';
 const validateVerifyEmailTokenMock = vi.fn();
 const verifyEmailTokenMock = vi.fn();
 const finalizeAuthenticatedUserMock = vi.fn();
-const buildWorkspaceChoicesMock = vi.fn();
+const buildSessionChoicesMock = vi.fn();
 const signLoginSessionMock = vi.fn();
 const resolveTwoFaPolicyMock = vi.fn();
 const startTwoFactorSetupMock = vi.fn();
-const resolveProductWorkspaceBeforeTwoFaMock = vi.fn();
+const resolveProductTeamBeforeTwoFaMock = vi.fn();
 const getTeamInviteLandingDataMock = vi.fn();
 
 let currentConfig: ClientConfig | null = null;
@@ -61,7 +61,7 @@ vi.mock('../../src/services/first-login.service.js', async () => {
   );
   return {
     ...actual,
-    buildWorkspaceChoices: (...args: unknown[]) => buildWorkspaceChoicesMock(...args),
+    buildSessionChoices: (...args: unknown[]) => buildSessionChoicesMock(...args),
   };
 });
 
@@ -69,14 +69,14 @@ vi.mock('../../src/services/login-session.service.js', () => ({
   signLoginSession: (...args: unknown[]) => signLoginSessionMock(...args),
 }));
 
-vi.mock('../../src/services/required-workspace-placement.service.js', async () => {
+vi.mock('../../src/services/required-team-placement.service.js', async () => {
   const actual = await vi.importActual<
-    typeof import('../../src/services/required-workspace-placement.service.js')
-  >('../../src/services/required-workspace-placement.service.js');
+    typeof import('../../src/services/required-team-placement.service.js')
+  >('../../src/services/required-team-placement.service.js');
   return {
     ...actual,
-    resolveProductWorkspaceBeforeTwoFa: (...args: unknown[]) =>
-      resolveProductWorkspaceBeforeTwoFaMock(...args),
+    resolveProductTeamBeforeTwoFa: (...args: unknown[]) =>
+      resolveProductTeamBeforeTwoFaMock(...args),
   };
 });
 
@@ -115,7 +115,7 @@ function baseConfig(overrides?: Partial<ClientConfig>): ClientConfig {
   } as ClientConfig;
 }
 
-describe('POST /auth/verify-email — workspace chooser wiring (gap-fix B Task 1, design §4.3)', () => {
+describe('POST /auth/verify-email — team chooser wiring (gap-fix B Task 1, design §4.3)', () => {
   beforeEach(() => {
     currentConfig = baseConfig();
     validateVerifyEmailTokenMock.mockReset().mockResolvedValue('VERIFY_EMAIL_SET_PASSWORD');
@@ -128,11 +128,11 @@ describe('POST /auth/verify-email — workspace chooser wiring (gap-fix B Task 1
     });
     getTeamInviteLandingDataMock.mockReset();
     finalizeAuthenticatedUserMock.mockReset();
-    buildWorkspaceChoicesMock.mockReset();
+    buildSessionChoicesMock.mockReset();
     signLoginSessionMock.mockReset();
     resolveTwoFaPolicyMock.mockReset().mockResolvedValue('OFF');
     startTwoFactorSetupMock.mockReset();
-    resolveProductWorkspaceBeforeTwoFaMock.mockReset().mockResolvedValue(null);
+    resolveProductTeamBeforeTwoFaMock.mockReset().mockResolvedValue(null);
     process.env.SHARED_SECRET = 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER = 'uoa-auth-service';
   });
@@ -159,7 +159,7 @@ describe('POST /auth/verify-email — workspace chooser wiring (gap-fix B Task 1
     }
   }
 
-  it('workspace_selection "off" (default): behaves exactly like before — no login_token, direct finalize', async () => {
+  it('team_selection "off" (default): behaves exactly like before — no login_token, direct finalize', async () => {
     finalizeAuthenticatedUserMock.mockResolvedValue({
       status: 'granted',
       code: 'auth_code_1',
@@ -174,7 +174,7 @@ describe('POST /auth/verify-email — workspace chooser wiring (gap-fix B Task 1
       code: 'auth_code_1',
       redirect_to: 'https://client.example.com/oauth/callback?code=auth_code_1',
     });
-    expect(buildWorkspaceChoicesMock).not.toHaveBeenCalled();
+    expect(buildSessionChoicesMock).not.toHaveBeenCalled();
     expect(signLoginSessionMock).not.toHaveBeenCalled();
   });
 
@@ -201,15 +201,15 @@ describe('POST /auth/verify-email — workspace chooser wiring (gap-fix B Task 1
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ ok: true, invite_accepted: true });
     expect(finalizeAuthenticatedUserMock).not.toHaveBeenCalled();
-    expect(buildWorkspaceChoicesMock).not.toHaveBeenCalled();
+    expect(buildSessionChoicesMock).not.toHaveBeenCalled();
   });
 
-  it('pre-binds the recognized product workspace before required email-link enrollment', async () => {
+  it('pre-binds the recognized product team before required email-link enrollment', async () => {
     currentConfig = baseConfig({
       '2fa_enabled': true,
-      login_flow: { email_code_enabled: false, workspace_selection: 'off' },
+      login_flow: { email_code_enabled: false, team_selection: 'off' },
     });
-    resolveProductWorkspaceBeforeTwoFaMock.mockResolvedValue({
+    resolveProductTeamBeforeTwoFaMock.mockResolvedValue({
       orgId: 'org-cross',
       teamId: 'team-cross',
     });
@@ -236,11 +236,11 @@ describe('POST /auth/verify-email — workspace chooser wiring (gap-fix B Task 1
     );
   });
 
-  it('workspace_selection "auto" + 2+ ACTIVE teams: returns the login_token + chooser payload instead of finalizing', async () => {
+  it('team_selection "auto" + 2+ ACTIVE teams: returns the login_token + chooser payload instead of finalizing', async () => {
     currentConfig = baseConfig({
-      login_flow: { email_code_enabled: false, workspace_selection: 'auto' },
+      login_flow: { email_code_enabled: false, team_selection: 'auto' },
     });
-    buildWorkspaceChoicesMock.mockResolvedValue({
+    buildSessionChoicesMock.mockResolvedValue({
       teams: [
         {
           teamId: 'team-1',
@@ -298,11 +298,11 @@ describe('POST /auth/verify-email — workspace chooser wiring (gap-fix B Task 1
     );
   });
 
-  it('workspace_selection "auto" but only 1 ACTIVE team and no invites: auto-skip binds that workspace to the code', async () => {
+  it('team_selection "auto" but only 1 ACTIVE team and no invites: auto-skip binds that team to the code', async () => {
     currentConfig = baseConfig({
-      login_flow: { email_code_enabled: false, workspace_selection: 'auto' },
+      login_flow: { email_code_enabled: false, team_selection: 'auto' },
     });
-    buildWorkspaceChoicesMock.mockResolvedValue({
+    buildSessionChoicesMock.mockResolvedValue({
       teams: [
         {
           teamId: 'team-1',
@@ -340,10 +340,10 @@ describe('POST /auth/verify-email — workspace chooser wiring (gap-fix B Task 1
     );
   });
 
-  it('exact-one auto-skip carries workspace through an enrolled 2FA challenge', async () => {
+  it('exact-one auto-skip carries team through an enrolled 2FA challenge', async () => {
     currentConfig = baseConfig({
       '2fa_enabled': true,
-      login_flow: { email_code_enabled: false, workspace_selection: 'auto' },
+      login_flow: { email_code_enabled: false, team_selection: 'auto' },
     });
     verifyEmailTokenMock.mockResolvedValue({
       userId: 'user-1',
@@ -352,7 +352,7 @@ describe('POST /auth/verify-email — workspace chooser wiring (gap-fix B Task 1
       twoFaEnabled: true,
       acceptedInvite: null,
     });
-    buildWorkspaceChoicesMock.mockResolvedValue({
+    buildSessionChoicesMock.mockResolvedValue({
       teams: [
         {
           teamId: 'team-1',
@@ -382,12 +382,12 @@ describe('POST /auth/verify-email — workspace chooser wiring (gap-fix B Task 1
     expect(finalizeAuthenticatedUserMock).not.toHaveBeenCalled();
   });
 
-  it('exact-one auto-skip carries workspace into required 2FA enrollment', async () => {
+  it('exact-one auto-skip carries team into required 2FA enrollment', async () => {
     currentConfig = baseConfig({
       '2fa_enabled': true,
-      login_flow: { email_code_enabled: false, workspace_selection: 'auto' },
+      login_flow: { email_code_enabled: false, team_selection: 'auto' },
     });
-    buildWorkspaceChoicesMock.mockResolvedValue({
+    buildSessionChoicesMock.mockResolvedValue({
       teams: [
         {
           teamId: 'team-1',
@@ -428,7 +428,7 @@ describe('POST /auth/verify-email — workspace chooser wiring (gap-fix B Task 1
 
   it('invite-bound token carries its accepted scope and never interposes the chooser', async () => {
     currentConfig = baseConfig({
-      login_flow: { email_code_enabled: false, workspace_selection: 'auto' },
+      login_flow: { email_code_enabled: false, team_selection: 'auto' },
     });
     verifyEmailTokenMock.mockResolvedValue({
       userId: 'user-1',
@@ -451,7 +451,7 @@ describe('POST /auth/verify-email — workspace chooser wiring (gap-fix B Task 1
       code: 'auth_code_1',
       redirect_to: 'https://client.example.com/oauth/callback?code=auth_code_1',
     });
-    expect(buildWorkspaceChoicesMock).not.toHaveBeenCalled();
+    expect(buildSessionChoicesMock).not.toHaveBeenCalled();
     expect(signLoginSessionMock).not.toHaveBeenCalled();
     expect(finalizeAuthenticatedUserMock).toHaveBeenCalledWith(
       expect.objectContaining({ orgId: 'org-invite', teamId: 'team-invite' }),
@@ -461,9 +461,9 @@ describe('POST /auth/verify-email — workspace chooser wiring (gap-fix B Task 1
 
   it('zero teams with create permission returns the chooser instead of finalizing unscoped', async () => {
     currentConfig = baseConfig({
-      login_flow: { email_code_enabled: false, workspace_selection: 'auto' },
+      login_flow: { email_code_enabled: false, team_selection: 'auto' },
     });
-    buildWorkspaceChoicesMock.mockResolvedValue({
+    buildSessionChoicesMock.mockResolvedValue({
       teams: [],
       pending_invites: [],
       can_create_org: true,

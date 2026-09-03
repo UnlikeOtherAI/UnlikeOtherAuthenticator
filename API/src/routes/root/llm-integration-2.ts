@@ -1,17 +1,17 @@
-export const llmIntegrationMarkdown2 = `## Phase 4.8 — Slack-style email sign-in codes + workspace selection (opt-in)
+export const llmIntegrationMarkdown2 = `## Phase 4.8 — Slack-style email sign-in codes + team selection (opt-in)
 
 Additive on top of \`/auth/register\` and \`/auth/login\` — chooser UI remains gated by config
 \`login_flow\`. Legacy clients are unchanged at the defaults; server-recognized products still
-pre-bind their mandatory exact workspace before 2FA when the chooser is off:
+pre-bind their mandatory exact team before 2FA when the chooser is off:
 
 \`\`\`jsonc
 "login_flow": {
   "email_code_enabled": false,      // offer a 6-digit sign-in code alongside the magic link
-  "workspace_selection": "off"      // "off" suppresses the chooser; "auto" may show it
+  "team_selection": "off"      // "off" suppresses the chooser; "auto" may show it
 }
 \`\`\`
 
-**Security note (read before enabling):** workspace names, team membership, and pending invites are
+**Security note (read before enabling):** team names, team membership, and pending invites are
 revealed ONLY after the user's identity has been verified (a valid sign-in code or magic link) —
 never from \`/auth/start\`, which always returns the same generic message regardless of whether the
 email exists. The \`login_token\` bridge issued by \`/auth/verify-code\` (and, when the chooser is on,
@@ -28,11 +28,11 @@ can be retried; \`session-choices\` and invite decline validate but do not consu
 2. \`POST /auth/verify-code?config_url=...\` — body \`{ email, code }\`. IP + email rate-limited; wrong
    code, expired code, no code, and a dead (5-attempt) code all return the identical generic auth
    error. On success:
-   - \`workspace_selection: "auto"\` → \`{ login_token, teams: [{ teamId, orgId, name, slug, role, iconUrl, avatarImageUrl, orgName }], pending_invites: [{ inviteId, teamName, invitedBy }], can_create_org, creatable_orgs }\`.
-   - \`workspace_selection: "off"\` (default) → finalizes immediately, same response shape as
+   - \`team_selection: "auto"\` → \`{ login_token, teams: [{ teamId, orgId, name, slug, role, iconUrl, avatarImageUrl, orgName }], pending_invites: [{ inviteId, teamName, invitedBy }], can_create_org, creatable_orgs }\`.
+   - \`team_selection: "off"\` (default) → finalizes immediately, same response shape as
      \`/auth/login\` (\`{ ok, code, redirect_to }\`, or a \`twofa_token\`/\`twofa_enroll_required\` branch —
      2FA still applies, only the chooser step is skipped). A recognized product first resolves its
-     exact server-owned workspace and includes that Organisation in strongest-wins 2FA policy.
+     exact server-owned team and includes that Organisation in strongest-wins 2FA policy.
 3. \`POST /auth/select-team?config_url=...\` — body \`{ login_token, teamId }\` (or
    \`{ login_token, inviteId, action: "accept" | "decline" }\`). Validates the bridge token, that the
    caller has not changed any signed continuation field, and that the user holds exact ACTIVE
@@ -43,7 +43,7 @@ can be retried; \`session-choices\` and invite decline validate but do not consu
    mappings remain same-domain; pending invites are never expanded. Ineligible or inactive scope is
    rejected exactly like an invalid token — no IDOR oracle. Enforces the selected
    org's 2FA policy, then finalizes with the resolved
-   workspace scope: the returned \`code\` carries \`orgId\`/\`teamId\`, so the eventual \`POST /auth/token\`
+   team scope: the returned \`code\` carries \`orgId\`/\`teamId\`, so the eventual \`POST /auth/token\`
    exchange's access token includes the \`active: { orgId, teamId }\` claim (§4.2) next to the existing
    \`org\` claim. Code exchange locks and revalidates the exact ACTIVE organisation/team scope in the
    same transaction that consumes the code and issues the refresh/access-token family, so a
@@ -51,42 +51,42 @@ can be retried; \`session-choices\` and invite decline validate but do not consu
    the code, or waits until the successful exchange has committed.
    The same central policy builds \`firstLogin.memberships\`. Every scoped refresh revalidates the
    exact mapping and memberships and fails without rotating if they changed; UOA never silently
-   drops \`active\`, switches tenants, or creates a product-domain workspace.
-4. \`POST /auth/login\` (password) also routes into the chooser when \`workspace_selection: "auto"\` and
+   drops \`active\`, switches tenants, or creates a product-domain team.
+4. \`POST /auth/login\` (password) also routes into the chooser when \`team_selection: "auto"\` and
    2FA is already satisfied: it returns \`{ login_token, teams, pending_invites, can_create_org }\`
    instead of finalizing directly, and the client then calls \`/auth/select-team\`. With the default
    \`"off"\`, legacy clients remain unchanged; recognized products suppress the chooser but resolve
-   one exact workspace (or required first placement) before any 2FA decision and fail closed on
+   one exact team (or required first placement) before any 2FA decision and fail closed on
    ambiguous choices.
-5. Social login (\`GET /auth/callback/:provider\`) resolves workspace immediately after identity,
-   before 2FA. With \`workspace_selection: "auto"\`, 2+ ACTIVE teams, any pending invite, or zero
+5. Social login (\`GET /auth/callback/:provider\`) resolves team immediately after identity,
+   before 2FA. With \`team_selection: "auto"\`, 2+ ACTIVE teams, any pending invite, or zero
    teams with \`can_create_org: true\` route to the chooser. Exactly one ACTIVE team and no invite is
    an unambiguous server-side selection: its
    exact \`orgId\`/\`teamId\` is carried through any 2FA challenge or required-enrollment setup token
    into the authorization code, so access and rotated refresh sessions retain
-   \`active: { orgId, teamId }\`. With \`workspace_selection: "off"\`, legacy clients remain unscoped,
+   \`active: { orgId, teamId }\`. With \`team_selection: "off"\`, legacy clients remain unscoped,
    while recognized products pre-bind the same exact scope without showing a chooser. As a GET
    redirect the multi-choice branch can't inline the chooser
    JSON, so it mints the same \`login_token\` bridge and redirects to
-   \`/auth?config_url=...&redirect_url=...&login_token=...&flow=workspace_chooser\`.
+   \`/auth?config_url=...&redirect_url=...&login_token=...&flow=team_chooser\`.
    The Auth UI then calls \`POST /auth/session-choices?config_url=...\` \`{ login_token }\` to hydrate
    \`{ teams, pending_invites, can_create_org }\` — generic rejection for an invalid/expired token, no
    enumeration.
 6. Magic links (\`GET /auth/email/link\`, both the passwordless LOGIN_LINK/VERIFY_EMAIL auto-consume
    and the VERIFY_EMAIL_SET_PASSWORD → \`POST /auth/verify-email\` path) join the same chooser gate —
    the design's "magic links join the same flow". LOGIN_LINK/VERIFY_EMAIL redirect to \`/auth?...&
-   login_token=...&flow=workspace_chooser\` exactly like the social callback; \`POST /auth/verify-email\`
+   login_token=...&flow=team_chooser\` exactly like the social callback; \`POST /auth/verify-email\`
    instead returns the inline JSON chooser payload exactly like \`/auth/login\`. The same exact-one
    rule binds the sole ACTIVE team's \`orgId\`/\`teamId\` when the chooser is skipped, and that exact
    scope survives an enrolled-2FA challenge or required-enrollment setup token before code issuance.
-   Zero teams with \`can_create_org: true\` still enter the chooser so the create-workspace action is
+   Zero teams with \`can_create_org: true\` still enter the chooser so the create-team action is
    reachable. An invite-bound link never sees the chooser: token consumption returns the accepted
    invite's exact \`orgId\`/\`teamId\`, applies the effective 2FA policy, and preserves that scope
    through the authorization code, access token, refresh token, and rotation.
    Both email continuations perform chooser reads, recognized-product placement, exact policy/2FA
    finalization, and immediate code issuance in one admin transaction. Its per-user placement lock
    remains held through commit, so concurrent first use from different products reuses one
-   canonical workspace; an issuance failure rolls the workspace and code back together while the
+   canonical team; an issuance failure rolls the team and code back together while the
    one-time email token remains consumed.
 
 ### Direct email invitations
@@ -103,11 +103,11 @@ completion returns to the hosted Auth UI without issuing an OAuth authorization 
 PKCE-bound product flow continues to use the regular authorization-code path.
    A \`LOGIN_LINK\` resolves only the existing \`userId\` stored when it was issued; a missing,
    deleted, or identity-mismatched account fails closed and can never become new-user registration.
-   At code exchange UOA re-resolves the current exact-workspace policy and enrollment state. The
+   At code exchange UOA re-resolves the current exact-team policy and enrollment state. The
    code carries whether TOTP was completed, so a newly stricter policy rejects a proof-free code
    transactionally instead of issuing a refresh/access-token family.
 7. \`GET /auth\` accepts an optional \`team_hint=<teamId|slug>\` — a chooser preselect / one-click
-   workspace switch (design §11.4): a product's sidebar links back into \`/auth\` with the workspace
+   team switch (design §11.4): a product's sidebar links back into \`/auth\` with the team
    the user clicked, and if a team in that user's own (already-verified) chooser payload matches by
    \`teamId\` or \`slug\`, the Auth UI auto-selects it via the same code path as the single-team
    auto-skip. Client-side preselect ONLY — an invalid or non-matching hint is silently ignored (the
@@ -116,7 +116,7 @@ PKCE-bound product flow continues to use the regular authorization-code path.
 
 ---
 
-## Phase 4.8.1 — Seamless backend workspace switch
+## Phase 4.8.1 — Seamless backend team switch
 
 Once the user has a renewable session, the product backend can switch that session to a team from
 the authorized directory without reopening the hosted chooser:
@@ -127,7 +127,7 @@ Authorization: Bearer <domain-hash credential>
 Content-Type: application/json
 
 {
-  "grant_type": "urn:unlikeotherai:params:oauth:grant-type:workspace-switch",
+  "grant_type": "urn:unlikeotherai:params:oauth:grant-type:team-switch",
   "refresh_token": "<opaque server-side refresh token>",
   "organization_id": "<exact target org id>",
   "team_id": "<exact target team id>"
@@ -143,15 +143,15 @@ stronger proof, restart interactive authorization and complete 2FA.
 
 Success is the normal token-pair envelope with \`access_token.active\` scoped exactly to the requested
 \`organization_id\`/\`team_id\`; \`firstLogin\` is absent. Atomically commit both returned tokens and the
-selected workspace before acknowledging the UI switch. A plain \`grant_type=refresh_token\` always
+selected team before acknowledging the UI switch. A plain \`grant_type=refresh_token\` always
 preserves its current org/team and can never be used as an implicit switch.
 
 Response-loss recovery is strict: for 120 seconds, retry the same predecessor only with the same grant
 and target. UOA returns the deterministic current successor only while every descendant retains that
 exact target. If another refresh or switch won, or a later switch moved the family again, UOA returns
-\`409 WORKSPACE_SWITCH_CONFLICT\` and does not consume or revoke the valid family. After the 120-second
+\`409 TEAM_SWITCH_CONFLICT\` and does not consume or revoke the valid family. After the 120-second
 window, every predecessor use is treated as theft and revokes the family, regardless of supplied intent.
-Same-scope switch requests are also non-consuming \`WORKSPACE_SWITCH_CONFLICT\` no-ops.
+Same-scope switch requests are also non-consuming \`TEAM_SWITCH_CONFLICT\` no-ops.
 If an exact retry proves the switch edge already committed but the target membership, 2FA, or
 signature policy no longer passes, UOA retires that refresh family and returns authenticated
 \`401 INVALID_REFRESH_TOKEN\`. This is definitive: clear the pending switch and require login. It
@@ -159,11 +159,11 @@ does not revoke sibling refresh families or increment the global access-token ep
 
 Production-safe semantic errors:
 
-- \`403 WORKSPACE_NOT_AVAILABLE\` — the exact org/team pair is unavailable or server policy denies it;
+- \`403 TEAM_NOT_AVAILABLE\` — the exact org/team pair is unavailable or server policy denies it;
   this intentionally does not reveal which check failed. Refresh the directory or reauthorize.
 - \`403 INTERACTION_REQUIRED\` — current family assurance is insufficient for the target. Start a new
   interactive authorization flow.
-- \`409 WORKSPACE_SWITCH_CONFLICT\` — same-scope no-op or a valid successor belongs to another
+- \`409 TEAM_SWITCH_CONFLICT\` — same-scope no-op or a valid successor belongs to another
   grant/target. Reconcile with the latest locally committed session; do not loop on the predecessor.
 - After domain-client authentication succeeds, invalid, expired, revoked, structurally corrupt, or
   post-grace reused sources return the stable \`401 INVALID_REFRESH_TOKEN\` code without revealing
@@ -294,9 +294,9 @@ In a non-production deployment with \`DEBUG_ENABLED=true\` you can additionally 
 | \`INTEGRATION_DECLINED\` | Auto-discovery | A UOA superuser declined your integration request for this domain. Contact support. |
 | \`CONFIG_DOMAIN_MISMATCH\` | Post-decode | \`payload.domain\` does not exactly match the hostname of the \`config_url\` UOA fetched. Hostnames are compared case-insensitively but must otherwise be identical (no trailing dot, no port mismatch). |
 | \`REDIRECT_URL_NOT_ALLOWED\` | \`/auth\` + \`/auth/token\` | \`redirect_url\` is not in \`config.redirect_urls\`. **Common cause:** the bare URL is allowlisted but a per-request \`?state=…\` (or any query parameter) was appended — matching is byte-for-byte including the query string. Carry state out-of-band (see Phase 3.1), do not mutate the URL. |
-| \`WORKSPACE_NOT_AVAILABLE\` | workspace-switch grant | The exact requested org/team is no longer available or server-owned product policy denies it. Refresh the authorized workspace directory; UOA intentionally does not reveal which condition failed. |
-| \`INTERACTION_REQUIRED\` | workspace-switch grant | The renewable family does not carry enough completed-2FA assurance for the target's current policy. Restart interactive authorization. |
-| \`WORKSPACE_SWITCH_CONFLICT\` | workspace-switch grant | The request is same-scope or the deterministic family already advanced under another grant/target. Reconcile the latest committed session; do not retry a stale predecessor forever. |
+| \`TEAM_NOT_AVAILABLE\` | team-switch grant | The exact requested org/team is no longer available or server-owned product policy denies it. Refresh the authorized team directory; UOA intentionally does not reveal which condition failed. |
+| \`INTERACTION_REQUIRED\` | team-switch grant | The renewable family does not carry enough completed-2FA assurance for the target's current policy. Restart interactive authorization. |
+| \`TEAM_SWITCH_CONFLICT\` | team-switch grant | The request is same-scope or the deterministic family already advanced under another grant/target. Reconcile the latest committed session; do not retry a stale predecessor forever. |
 | Schema validation failures | Schema stage | A required field is missing or malformed. \`/config/validate\` returns the exact JSON path and reason in \`issues\`. |
 | \`auth_failed\` (final redirect) | Post-callback | Intentionally generic. With \`allow_registration: false\`, social login does not create users — the user must already exist for that domain. Check \`/internal/admin/handshake-errors\`. |
 | Google \`redirect_uri_mismatch\` | Provider | Your Google OAuth client does not list the exact callback URL UOA generated from \`PUBLIC_BASE_URL\` + \`/auth/callback/google\`. |
@@ -317,7 +317,7 @@ For deep diagnostics of failed \`/auth\` requests, a UOA superuser can open **/a
 - Do NOT skip \`/config/validate\` before pointing real users at UOA.
 - Do NOT append \`?state=…\` (or any per-request query) to \`redirect_url\`. The allowlist match is byte-for-byte; your \`/start\` endpoint must return the state token **separately** so the caller can stash it in \`sessionStorage\` or a first-party cookie. See Phase 3.1.
 - Do NOT assume \`POST /auth/token\` returns a top-level \`user\` object. It does not. See 4.1.
-- Do NOT attempt to verify a legacy authorization-code/refresh/workspace-switch \`access_token\` against the config JWKS. It is HS256 and not RP-verifiable. A confidential assertion token is verified against \`/oauth/jwks.json\`, never the config JWKS. See 4.3 and 4.6a.
+- Do NOT attempt to verify a legacy authorization-code/refresh/team-switch \`access_token\` against the config JWKS. It is HS256 and not RP-verifiable. A confidential assertion token is verified against \`/oauth/jwks.json\`, never the config JWKS. See 4.3 and 4.6a.
 - Do NOT fall back to a synthetic tenant ID (\`"default"\`, email domain, etc.) when \`firstLogin.memberships.orgs\` is empty. See 4.5.
 - Do NOT use \`claims.role\` for RP authorization. It is the UOA platform role, not your tenant role. See 4.4.
 

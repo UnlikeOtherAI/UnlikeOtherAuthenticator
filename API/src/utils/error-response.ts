@@ -233,19 +233,19 @@ function explainKnownCode(
           'The supplied refresh token is invalid, expired, revoked, or belongs to a different token family.',
         hints: ['Authenticate again to obtain a fresh refresh token.'],
       };
-    case 'WORKSPACE_NOT_AVAILABLE':
+    case 'TEAM_NOT_AVAILABLE':
       return {
-        summary: 'The requested workspace is not available to this session.',
-        hints: ['Refresh the workspace directory or complete interactive authorization again.'],
+        summary: 'The requested team is not available to this session.',
+        hints: ['Refresh the team directory or complete interactive authorization again.'],
       };
     case 'INTERACTION_REQUIRED':
       return {
-        summary: 'Interactive authentication is required before this workspace can be selected.',
+        summary: 'Interactive authentication is required before this team can be selected.',
         hints: [
           'Start a fresh authorization flow and complete every required authentication step.',
         ],
       };
-    case 'WORKSPACE_SWITCH_CONFLICT':
+    case 'TEAM_SWITCH_CONFLICT':
       return {
         summary: 'The refresh-token family has already advanced under a different operation.',
         hints: [

@@ -212,8 +212,8 @@ export async function finalizeConfigAuthorizationWithSignatures(
       {
         prisma: tx,
         afterAuthenticationEpochLock: deps?.afterAuthenticationEpochLock,
-        crossProductPrisma: deps?.workspacePrisma ?? tx,
-        policyPrisma: deps?.workspacePrisma ?? tx,
+        crossProductPrisma: deps?.teamPrisma ?? tx,
+        policyPrisma: deps?.teamPrisma ?? tx,
       },
     );
     const policy = await evaluateSignaturePolicy(
@@ -230,8 +230,8 @@ export async function finalizeConfigAuthorizationWithSignatures(
           credentialEpoch: input.credentialEpoch,
         },
         {
-          crossProductPrisma: deps?.workspacePrisma ?? tx,
-          policyPrisma: deps?.workspacePrisma ?? tx,
+          crossProductPrisma: deps?.teamPrisma ?? tx,
+          policyPrisma: deps?.teamPrisma ?? tx,
           prisma: tx,
           now: deps?.now,
           sharedSecret: sharedSecret(deps),
@@ -386,8 +386,8 @@ export async function completeSigningContinuation(
           teamId: continuation.teamId ?? undefined,
         },
         {
-          crossProductPrisma: deps?.workspacePrisma ?? tx,
-          policyPrisma: deps?.workspacePrisma ?? tx,
+          crossProductPrisma: deps?.teamPrisma ?? tx,
+          policyPrisma: deps?.teamPrisma ?? tx,
           prisma: tx,
           now: deps?.now,
           sharedSecret: sharedSecret(deps),

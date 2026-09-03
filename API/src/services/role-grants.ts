@@ -16,7 +16,7 @@
  *     must not be able to write a config that locks its own recovery role out.
  *  2. Any other role is looked up in `role_grants[scope]`. A missing role, a missing table entry,
  *     an unknown string: the empty set. There is no coercion and no default role.
- *  3. A workspace answer is the UNION of the org-role grants and the team-role grants. Union, not
+ *  3. A team answer is the UNION of the org-role grants and the team-role grants. Union, not
  *     override — a scope with nothing to say adds nothing. An org-scope grant of a team-scope
  *     capability therefore means "in every team of the org", which is how the legacy default table
  *     reproduces today's org-manager reach-down.
@@ -35,7 +35,7 @@
  *  - `teams.manage` — the team object itself: create, rename, re-slug, change join policy or icon,
  *    delete.
  *  - `organisation.manage` — the organisation object itself: rename (and with it the slug), the
- *    member-invites policy, the workspace icon. **Org scope only** — the gates that check it never
+ *    member-invites policy, the team icon. **Org scope only** — the gates that check it never
  *    consult team standing, because administering a team must not confer authority over the tenant
  *    containing it. A `role_grants.team` entry naming it is therefore inert, never an escalation.
  *
@@ -79,7 +79,7 @@ export type RoleGrantTable = {
  * exactly: `admin` is a manager at both scopes, every other non-owner role holds nothing, and
  * because the ORG entry grants team-scope capabilities the org-manager reach-down survives
  * (§3 rule 4). Shipping this is therefore inert for an untouched config apart from the one
- * deliberate correction in `requireWorkspaceCapability`'s call sites — a team owner/admin now has
+ * deliberate correction in `requireTeamCapability`'s call sites — a team owner/admin now has
  * standing over their own team, which `requireTeamManager` used to ignore.
  *
  * The two scopes are written out rather than spread from `UOA_CAPABILITIES` because they genuinely
@@ -150,10 +150,10 @@ export function resolveDemotedOwnerRole(config: RoleGrantsConfig): string | null
 }
 
 /**
- * The team role for someone who just created the workspace they are joining.
+ * The team role for someone who just created the team they are joining.
  *
- * Founding an organisation, or adding a workspace to one, makes you that
- * workspace's steward — so `owner` is the answer wherever the domain's
+ * Founding an organisation, or adding a team to one, makes you that
+ * team's steward — so `owner` is the answer wherever the domain's
  * `team_roles` vocabulary contains it, which is every domain using the default
  * table. It is resolved rather than hard-written for the reason
  * `resolveDemotedOwnerRole` is: a domain that configured
@@ -165,7 +165,7 @@ export function resolveDemotedOwnerRole(config: RoleGrantsConfig): string | null
  * that domain considers most privileged, since a vocabulary is authored
  * most-privileged first.
  */
-export function resolveWorkspaceCreatorTeamRole(config: RoleGrantsConfig): string {
+export function resolveTeamCreatorTeamRole(config: RoleGrantsConfig): string {
   const vocabulary = resolveTeamRoleVocabulary(config);
   return vocabulary.includes(OWNER_ROLE) ? OWNER_ROLE : vocabulary[0];
 }
@@ -215,11 +215,11 @@ export function configRoleHoldsCapability(
 }
 
 /**
- * §3 rule 3: the workspace answer is the union of the two scopes. Passing `teamRole: null` is the
+ * §3 rule 3: the team answer is the union of the two scopes. Passing `teamRole: null` is the
  * honest shape for an action that has no team to stand in yet (creating one), where only org-scope
  * grants can authorise.
  */
-export function workspaceRolesHoldCapability(
+export function teamRolesHoldCapability(
   grants: RoleGrantTable,
   roles: { orgRole?: string | null; teamRole?: string | null },
   capability: string,

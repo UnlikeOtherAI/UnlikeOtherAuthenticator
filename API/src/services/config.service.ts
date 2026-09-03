@@ -212,14 +212,14 @@ const ClientConfigSchema = RequiredConfigSchema.extend({
   // This is the currently selected language (not the list of available languages).
   language: z.string().trim().min(1).optional(),
   // Slack-style login foundation (design §4.3, §4.4). Nothing reads this yet — Phase 3b wires the
-  // email-code flow and workspace selection; this just makes it a valid, parsed config field.
+  // email-code flow and team selection; this just makes it a valid, parsed config field.
   login_flow: z
     .object({
       email_code_enabled: z.boolean().default(false),
-      workspace_selection: z.enum(['off', 'auto']).default('off'),
+      team_selection: z.enum(['off', 'auto']).default('off'),
     })
     .optional()
-    .default({ email_code_enabled: false, workspace_selection: 'off' }),
+    .default({ email_code_enabled: false, team_selection: 'off' }),
   // Docs/Auth/avatars.md §4: optional per-domain default for generated avatars. Absent means the
   // stable per-user pseudo-random pick; an unknown value rejects the config like any other invalid
   // claim. A `?style=` query parameter on the avatar endpoints still overrides this.

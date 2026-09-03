@@ -52,7 +52,7 @@ effective = strongest(domainPolicy, sameDomainOrgPolicies, selectedOrgPolicy)
 // REQUIRED > OPTIONAL > OFF
 ```
 
-The user's orgs are resolved through the existing `org_features` / `OrgMember` path that login already uses for tenant context. If the user belongs to multiple orgs on the domain, take the strongest org policy. Once a workspace is selected, that exact Organisation is included even when a server-recognized product selected it across domains. Recognized products pre-bind their mandatory exact workspace before this decision on password, social, email-code, and email-link paths; `workspace_selection: "off"` suppresses the chooser only.
+The user's orgs are resolved through the existing `org_features` / `OrgMember` path that login already uses for tenant context. If the user belongs to multiple orgs on the domain, take the strongest org policy. Once a team is selected, that exact Organisation is included even when a server-recognized product selected it across domains. Recognized products pre-bind their mandatory exact team before this decision on password, social, email-code, and email-link paths; `team_selection: "off"` suppresses the chooser only.
 
 ### Interaction with the legacy `2fa_enabled` config flag
 
@@ -100,14 +100,14 @@ In `API/src/routes/auth/login.ts`, `API/src/routes/oauth/login.ts`, `API/src/rou
 5. If `effective === OPTIONAL` and not enrolled → proceed normally (user's choice).
 
 Authorization-code issuance persists whether this interactive login completed TOTP. Code exchange
-locks/revalidates the exact ACTIVE workspace, resolves the current strongest policy and enrollment,
+locks/revalidates the exact ACTIVE team, resolves the current strongest policy and enrollment,
 and rejects a proof-free code if proof is now required. The rejection rolls code consumption back
 and creates no refresh/access-token family, closing policy and membership changes between the
 interactive step and exchange.
 
 The resulting refresh family stores that `twoFaCompleted` decision as immutable
-assurance; every ordinary rotation and explicit workspace-switch successor copies
-it exactly. Legacy rows migrate to `false`. The custom workspace-switch grant
+assurance; every ordinary rotation and explicit team-switch successor copies
+it exactly. Legacy rows migrate to `false`. The custom team-switch grant
 re-resolves the prospective Organisation policy and current enrollment under the
 same product-policy/refresh/membership lock hierarchy. If that target requires
 proof the family does not carry, it returns the production-safe, non-consuming

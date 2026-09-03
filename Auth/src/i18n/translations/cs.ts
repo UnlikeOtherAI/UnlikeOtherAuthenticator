@@ -12,7 +12,7 @@ export const cs = {
   'auth.twoFactorVerify.title': 'Ověření dvoufaktorovým kódem',
   'auth.twoFactorSetup.title': 'Nastavení dvoufaktorového ověření',
   'auth.codeEntry.title': 'Zadejte svůj kód',
-  'auth.workspaceChooser.title': 'Vyberte pracovní prostor',
+  'auth.teamChooser.title': 'Vyberte pracovní prostor',
   'auth.signatures.title': 'Zkontrolujte a podepište dohody',
 
   'form.email.label': 'E-mail',
@@ -60,46 +60,46 @@ export const cs = {
   'codeEntry.resend.sent': 'Poslali jsme nový kód na váš e-mail',
   'codeEntry.error': 'Kód se nepodařilo ověřit. Zkuste to prosím znovu.',
 
-  'workspaceChooser.subtitle': 'Vaše pracovní prostory pro {email}',
-  'workspaceChooser.autoSkip': 'Přihlašování…',
-  'workspace.role.owner': 'Vlastník',
-  'workspace.role.admin': 'Správce',
-  'workspace.invite.title': 'Byli jste pozváni do {teamName}',
-  'workspace.invite.invitedBy': 'Pozval(a) {invitedBy}',
-  'workspace.invite.accept': 'Přijmout',
-  'workspace.invite.decline': 'Odmítnout',
-  'workspace.createOrg.title': 'Vytvořit nový pracovní prostor',
-  'workspace.createOrg.subtitle': 'Začněte zcela nový pracovní prostor',
-  'workspace.createOrg.nameLabel': 'Název pracovního prostoru',
-  'workspace.createOrg.submit': 'Vytvořit pracovní prostor',
-  'workspace.createOrg.cancel': 'Zrušit',
-  'workspace.createDialog.open': 'Vytvořit pracovní prostor',
-  'workspace.createDialog.title': 'Vytvořit pracovní prostor',
-  'workspace.createDialog.subtitle': 'Zvolte, kam patří a kdo jej může najít.',
-  'workspace.createDialog.destinationLabel': 'Organizace',
-  'workspace.createDialog.newOrganisation': 'Vytvořit novou organizaci',
-  'workspace.createDialog.newOrganisationDescription':
+  'teamChooser.subtitle': 'Vaše pracovní prostory pro {email}',
+  'teamChooser.autoSkip': 'Přihlašování…',
+  'team.role.owner': 'Vlastník',
+  'team.role.admin': 'Správce',
+  'team.invite.title': 'Byli jste pozváni do {teamName}',
+  'team.invite.invitedBy': 'Pozval(a) {invitedBy}',
+  'team.invite.accept': 'Přijmout',
+  'team.invite.decline': 'Odmítnout',
+  'team.createOrg.title': 'Vytvořit nový pracovní prostor',
+  'team.createOrg.subtitle': 'Začněte zcela nový pracovní prostor',
+  'team.createOrg.nameLabel': 'Název pracovního prostoru',
+  'team.createOrg.submit': 'Vytvořit pracovní prostor',
+  'team.createOrg.cancel': 'Zrušit',
+  'team.createDialog.open': 'Vytvořit pracovní prostor',
+  'team.createDialog.title': 'Vytvořit pracovní prostor',
+  'team.createDialog.subtitle': 'Zvolte, kam patří a kdo jej může najít.',
+  'team.createDialog.destinationLabel': 'Organizace',
+  'team.createDialog.newOrganisation': 'Vytvořit novou organizaci',
+  'team.createDialog.newOrganisationDescription':
     'Tím vznikne organizace a její první pracovní prostor.',
-  'workspace.createDialog.existingOrganisationDescription':
+  'team.createDialog.existingOrganisationDescription':
     'Tím přidáte pracovní prostor do vybrané organizace.',
-  'workspace.createDialog.visibilityLabel': 'Viditelnost',
-  'workspace.createDialog.visibility.private': 'Soukromý',
-  'workspace.createDialog.visibility.privateDescription':
+  'team.createDialog.visibilityLabel': 'Viditelnost',
+  'team.createDialog.visibility.private': 'Soukromý',
+  'team.createDialog.visibility.privateDescription':
     'Tento pracovní prostor mohou najít jen lidé, které pozvete.',
-  'workspace.createDialog.visibility.inviteOnly': 'Pouze na pozvání',
-  'workspace.createDialog.visibility.inviteOnlyDescription':
+  'team.createDialog.visibility.inviteOnly': 'Pouze na pozvání',
+  'team.createDialog.visibility.inviteOnlyDescription':
     'Lidé potřebují pozvání, aby se mohli k pracovnímu prostoru připojit.',
-  'workspace.createDialog.visibility.openToOrganisation': 'Otevřený pro organizaci',
-  'workspace.createDialog.visibility.openToOrganisationDescription':
+  'team.createDialog.visibility.openToOrganisation': 'Otevřený pro organizaci',
+  'team.createDialog.visibility.openToOrganisationDescription':
     'Aktivní členové organizace se mohou k pracovnímu prostoru připojit sami.',
-  'workspace.createDialog.submit': 'Vytvořit pracovní prostor',
-  'workspace.createDialog.cancel': 'Zrušit',
+  'team.createDialog.submit': 'Vytvořit pracovní prostor',
+  'team.createDialog.cancel': 'Zrušit',
 
   'notice.sessionExpired': 'Přihlášení trvalo příliš dlouho a vypršelo. Přihlaste se prosím znovu.',
-  'workspace.orgSection.addWorkspace': 'Přidat pracovní prostor do {org}',
-  'workspace.createTeam.nameLabel': 'Název pracovního prostoru',
-  'workspace.createTeam.submit': 'Vytvořit',
-  'workspace.createTeam.cancel': 'Zrušit',
+  'team.orgSection.addTeam': 'Přidat pracovní prostor do {org}',
+  'team.createTeam.nameLabel': 'Název pracovního prostoru',
+  'team.createTeam.submit': 'Vytvořit',
+  'team.createTeam.cancel': 'Zrušit',
 
   'twoFactor.setup.instructions':
     'Naskenujte tento QR kód v ověřovací aplikaci a potom zadejte 6místný kód pro dokončení nastavení.',

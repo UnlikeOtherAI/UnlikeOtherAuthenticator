@@ -21,9 +21,9 @@ import {
   consumeConfidentialAssertion,
 } from './confidential-assertion-use.service.js';
 import { resolveConfidentialDelegation } from './confidential-delegation.service.js';
-import { lockTokenIssuanceProductPolicy } from './product-workspace-policy-lock.service.js';
-import { resolveProductWorkspacePolicy } from './product-workspace-policy.service.js';
-import { requiresExactAuthorizationWorkspace } from './required-workspace-placement.service.js';
+import { lockTokenIssuanceProductPolicy } from './product-team-policy-lock.service.js';
+import { resolveProductTeamPolicy } from './product-team-policy.service.js';
+import { requiresExactAuthorizationTeam } from './required-team-placement.service.js';
 import {
   isAuthenticationEpochMismatchError,
   lockAndAssertAuthenticationEpoch,
@@ -201,12 +201,12 @@ async function exchangeConfidentialSubjectTokenInsidePolicyLock(
     }
     throw error;
   }
-  const workspacePolicy = await resolveProductWorkspacePolicy({ domain: sourceDomain }, { prisma });
-  if (!assertion.active && requiresExactAuthorizationWorkspace(params.config, workspacePolicy)) {
+  const teamPolicy = await resolveProductTeamPolicy({ domain: sourceDomain }, { prisma });
+  if (!assertion.active && requiresExactAuthorizationTeam(params.config, teamPolicy)) {
     throw new AppError('FORBIDDEN', 403, 'TOKEN_EXCHANGE_SUBJECT_FORBIDDEN');
   }
   if (assertion.active && !params.config.org_features?.enabled) {
-    if (workspacePolicy.scope !== 'all_active_memberships') {
+    if (teamPolicy.scope !== 'all_active_memberships') {
       throw new AppError('FORBIDDEN', 403, 'TOKEN_EXCHANGE_SUBJECT_FORBIDDEN');
     }
   }
@@ -258,7 +258,7 @@ async function exchangeConfidentialSubjectTokenInsidePolicyLock(
     },
   );
 
-  const workspaceClaims =
+  const teamClaims =
     assertion.active && org
       ? { org, active: { ...assertion.active, tenantSlug: org.tenant_slug } }
       : {};
@@ -273,7 +273,7 @@ async function exchangeConfidentialSubjectTokenInsidePolicyLock(
     issuer,
     ttlSeconds: CONFIDENTIAL_ACCESS_TOKEN_TTL_SECONDS,
     scope: delegation.scope,
-    ...workspaceClaims,
+    ...teamClaims,
   });
 
   return {

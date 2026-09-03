@@ -9,16 +9,16 @@ import { loginWithEmailPassword } from '../../services/auth-login.service.js';
 import { lockAndAssertAuthenticationEpoch } from '../../services/authentication-epoch.service.js';
 import { parseRequestAccessFlag } from '../../services/access-request-flow.service.js';
 import {
-  buildWorkspaceChoices,
-  resolveAutoSelectedWorkspace,
-  shouldPresentWorkspaceChooser,
-  type AutoSelectedWorkspace,
+  buildSessionChoices,
+  resolveAutoSelectedTeam,
+  shouldPresentTeamChooser,
+  type AutoSelectedTeam,
 } from '../../services/first-login.service.js';
 import { signLoginSession } from '../../services/login-session.service.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
-import { lockProductWorkspacePolicyShared } from '../../services/product-workspace-policy-lock.service.js';
-import { resolveProductWorkspaceBeforeTwoFa } from '../../services/required-workspace-placement.service.js';
-import { finalizeWithTwoFaPolicy } from '../../services/workspace-finalize.service.js';
+import { lockProductTeamPolicyShared } from '../../services/product-team-policy-lock.service.js';
+import { resolveProductTeamBeforeTwoFa } from '../../services/required-team-placement.service.js';
+import { finalizeWithTwoFaPolicy } from '../../services/team-finalize.service.js';
 import { selectRedirectUrl } from '../../services/authorization-code.service.js';
 import { parseRequiredPkceChallenge } from '../../utils/pkce.js';
 import { loginRateLimiter } from './rate-limit-keys.js';
@@ -73,7 +73,7 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
       // The shared policy fence and its BYPASSRLS policy re-read must use the
       // same transaction as challenge/setup/code issuance.
       const outcome = await runWithRequestAdminTransaction(request, async (prisma) => {
-        await lockProductWorkspacePolicyShared(prisma);
+        await lockProductTeamPolicyShared(prisma);
         const { userId, twoFaEnabled, credentialEpoch } = await loginWithEmailPassword(
           { email, password, config },
           { prisma },
@@ -91,9 +91,9 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
         const rememberMe = remember_me ?? config.session?.remember_me_default ?? true;
         const requestAccess = parseRequestAccessFlag(request_access);
 
-        let selectedWorkspace: AutoSelectedWorkspace | null = null;
-        if (config.login_flow?.workspace_selection === 'auto') {
-          const choices = await buildWorkspaceChoices(
+        let selectedTeam: AutoSelectedTeam | null = null;
+        if (config.login_flow?.team_selection === 'auto') {
+          const choices = await buildSessionChoices(
             { userId, config },
             {
               crossProductPrisma: prisma,
@@ -101,8 +101,8 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
               prisma,
             },
           );
-          selectedWorkspace = resolveAutoSelectedWorkspace(choices);
-          if (shouldPresentWorkspaceChooser(choices, selectedWorkspace)) {
+          selectedTeam = resolveAutoSelectedTeam(choices);
+          if (shouldPresentTeamChooser(choices, selectedTeam)) {
             const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
             const loginToken = await signLoginSession({
               userId,
@@ -120,13 +120,13 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
               // Must match the audience verify-code/select-team/session-choices verify against.
               audience: LOGIN_SESSION_AUDIENCE,
             });
-            return { kind: 'workspace_chooser' as const, loginToken, choices };
+            return { kind: 'team_chooser' as const, loginToken, choices };
           }
         }
 
-        selectedWorkspace ??= await resolveProductWorkspaceBeforeTwoFa(
+        selectedTeam ??= await resolveProductTeamBeforeTwoFa(
           { userId, config },
-          { prisma, workspacePrisma: prisma },
+          { prisma, teamPrisma: prisma },
         );
 
         const finalized = await finalizeWithTwoFaPolicy(
@@ -144,7 +144,7 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
             codeChallenge: pkce.codeChallenge,
             codeChallengeMethod: pkce.codeChallengeMethod,
             ip: request.ip ?? null,
-            ...(selectedWorkspace ?? {}),
+            ...(selectedTeam ?? {}),
           },
           {
             currentTwoFaEnabled: authenticationState.twoFaEnabled,
@@ -152,7 +152,7 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
             policyPrisma: prisma,
             prisma,
             twoFaPolicyPrisma: prisma,
-            workspacePrisma: prisma,
+            teamPrisma: prisma,
           },
         );
 
@@ -197,7 +197,7 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
         return;
       }
 
-      if (outcome.kind === 'workspace_chooser') {
+      if (outcome.kind === 'team_chooser') {
         reply.status(200).send({ login_token: outcome.loginToken, ...outcome.choices });
         return;
       }

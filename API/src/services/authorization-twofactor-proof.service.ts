@@ -4,7 +4,7 @@ import { AppError } from '../utils/errors.js';
 import type { ClientConfig } from './config.service.js';
 import { resolveTwoFaPolicy } from './twofactor-policy.service.js';
 
-/** Recheck interactive 2FA proof against current user and exact-workspace policy. */
+/** Recheck interactive 2FA proof against current user and exact-team policy. */
 export async function assertAuthorizationTwoFaProof(
   params: {
     config: ClientConfig;

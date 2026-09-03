@@ -26,8 +26,8 @@ const createTeamMock = vi.hoisted(() => vi.fn());
 const addTeamMemberMock = vi.hoisted(() => vi.fn());
 const finalizeWithTwoFaPolicyMock = vi.hoisted(() => vi.fn());
 const lockAuthenticationEpochMock = vi.hoisted(() => vi.fn());
-const lockProductWorkspacePolicyMock = vi.hoisted(() => vi.fn());
-const lockWorkspaceScopeMock = vi.hoisted(() => vi.fn());
+const lockProductTeamPolicyMock = vi.hoisted(() => vi.fn());
+const lockTeamScopeMock = vi.hoisted(() => vi.fn());
 const lockOrganisationRowMock = vi.hoisted(() => vi.fn());
 const recordLoginLogMock = vi.hoisted(() => vi.fn());
 
@@ -51,18 +51,18 @@ vi.mock('../../src/services/team.service.teams.js', () => ({
 vi.mock('../../src/services/team.service.members.js', () => ({
   addTeamMember: (...args: unknown[]) => addTeamMemberMock(...args),
 }));
-vi.mock('../../src/services/workspace-finalize.service.js', () => ({
+vi.mock('../../src/services/team-finalize.service.js', () => ({
   finalizeWithTwoFaPolicy: (...args: unknown[]) => finalizeWithTwoFaPolicyMock(...args),
 }));
 vi.mock('../../src/services/authentication-epoch.service.js', () => ({
   lockAndAssertAuthenticationEpoch: (...args: unknown[]) => lockAuthenticationEpochMock(...args),
 }));
-vi.mock('../../src/services/product-workspace-policy-lock.service.js', () => ({
-  lockProductWorkspacePolicyShared: (...args: unknown[]) => lockProductWorkspacePolicyMock(...args),
+vi.mock('../../src/services/product-team-policy-lock.service.js', () => ({
+  lockProductTeamPolicyShared: (...args: unknown[]) => lockProductTeamPolicyMock(...args),
 }));
-vi.mock('../../src/services/workspace-scope.service.js', () => ({
-  lockAndAssertActiveClientWorkspaceScope: (...args: unknown[]) => lockWorkspaceScopeMock(...args),
-  lockWorkspaceOrganisationRow: (...args: unknown[]) => lockOrganisationRowMock(...args),
+vi.mock('../../src/services/team-scope.service.js', () => ({
+  lockAndAssertActiveClientTeamScope: (...args: unknown[]) => lockTeamScopeMock(...args),
+  lockTeamOrganisationRow: (...args: unknown[]) => lockOrganisationRowMock(...args),
 }));
 vi.mock('../../src/services/login-log.service.js', () => ({
   recordLoginLog: (...args: unknown[]) => recordLoginLogMock(...args),
@@ -80,7 +80,7 @@ function baseConfig(allowTeamCreation = true): ClientConfig {
     registration_mode: 'password_required',
     '2fa_enabled': false,
     debug_enabled: false,
-    login_flow: { email_code_enabled: false, workspace_selection: 'auto' },
+    login_flow: { email_code_enabled: false, team_selection: 'auto' },
     access_requests: { enabled: false, notify_org_roles: ['owner', 'admin'] },
     org_features: {
       enabled: true,
@@ -160,8 +160,8 @@ describe('POST /auth/create-team', () => {
       addTeamMemberMock,
       finalizeWithTwoFaPolicyMock,
       lockAuthenticationEpochMock,
-      lockProductWorkspacePolicyMock,
-      lockWorkspaceScopeMock,
+      lockProductTeamPolicyMock,
+      lockTeamScopeMock,
       lockOrganisationRowMock,
       recordLoginLogMock,
     ]) {
@@ -185,8 +185,8 @@ describe('POST /auth/create-team', () => {
       },
     });
     lockAuthenticationEpochMock.mockResolvedValue({ twoFaEnabled: false });
-    lockProductWorkspacePolicyMock.mockResolvedValue(undefined);
-    lockWorkspaceScopeMock.mockResolvedValue(undefined);
+    lockProductTeamPolicyMock.mockResolvedValue(undefined);
+    lockTeamScopeMock.mockResolvedValue(undefined);
     recordLoginLogMock.mockResolvedValue(undefined);
   });
 
@@ -195,7 +195,7 @@ describe('POST /auth/create-team', () => {
     vi.restoreAllMocks();
   });
 
-  it('creates the workspace with the chosen visibility in the named org, adds the creator, and finalizes the same continuation', async () => {
+  it('creates the team with the chosen visibility in the named org, adds the creator, and finalizes the same continuation', async () => {
     const loginToken = await mintLoginToken();
     const res = await postCreateTeam({
       login_token: loginToken,
@@ -222,7 +222,7 @@ describe('POST /auth/create-team', () => {
       }),
       { prisma: prismaMock, auditPrisma: prismaMock },
     );
-    // The creator must be IN the workspace they just made, or it would not even be selectable.
+    // The creator must be IN the team they just made, or it would not even be selectable.
     expect(addTeamMemberMock).toHaveBeenCalledWith(
       expect.objectContaining({
         orgId: 'org-1',
@@ -232,7 +232,7 @@ describe('POST /auth/create-team', () => {
       }),
       { prisma: prismaMock, auditPrisma: prismaMock },
     );
-    expect(lockWorkspaceScopeMock).toHaveBeenCalledWith(
+    expect(lockTeamScopeMock).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: 'user-1',
         domain: 'client.example.com',
@@ -245,7 +245,7 @@ describe('POST /auth/create-team', () => {
       expect.objectContaining({ orgId: 'org-1', teamId: 'team-new' }),
       expect.anything(),
     );
-    // The bridge token is claimed before the write, so a replay cannot leave a second workspace.
+    // The bridge token is claimed before the write, so a replay cannot leave a second team.
     expect(consumeLoginSessionMock.mock.invocationCallOrder[0]).toBeLessThan(
       createTeamMock.mock.invocationCallOrder[0]!,
     );
@@ -263,10 +263,10 @@ describe('POST /auth/create-team', () => {
     expect(finalizeWithTwoFaPolicyMock).not.toHaveBeenCalled();
   });
 
-  it('rejects a create request outside the auto workspace-selection flow', async () => {
+  it('rejects a create request outside the auto team-selection flow', async () => {
     currentConfig = {
       ...baseConfig(),
-      login_flow: { email_code_enabled: false, workspace_selection: 'off' },
+      login_flow: { email_code_enabled: false, team_selection: 'off' },
     } as ClientConfig;
     const loginToken = await mintLoginToken();
     const res = await postCreateTeam({ login_token: loginToken, org_id: 'org-1', name: 'Support' });
@@ -303,7 +303,7 @@ describe('POST /auth/create-team', () => {
     expect(finalizeWithTwoFaPolicyMock).not.toHaveBeenCalled();
   });
 
-  it('requires an org_id — a workspace always lives inside an organisation', async () => {
+  it('requires an org_id — a team always lives inside an organisation', async () => {
     const loginToken = await mintLoginToken();
     const res = await postCreateTeam({ login_token: loginToken, name: 'Support' });
 

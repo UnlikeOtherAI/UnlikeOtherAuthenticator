@@ -484,7 +484,7 @@ describe('organisation billing responsibility (protocol 1.3.0)', () => {
     scope: 'organisation',
     organisation_id: 'org_synthetic',
     organisation_name: 'Acme',
-    message: 'Billing for this workspace is managed for the whole organisation.',
+    message: 'Billing for this team is managed for the whole organisation.',
     can_manage: true,
     manage_action_id: BILLING_ORG_BILLING_MANAGE_ACTION_ID,
   } as const;

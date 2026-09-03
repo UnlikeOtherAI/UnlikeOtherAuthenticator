@@ -3,10 +3,10 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ClientConfig } from '../../src/services/config.service.js';
 import {
   buildFirstLoginBlock,
-  buildWorkspaceChoices,
-  shouldPresentWorkspaceChooser,
+  buildSessionChoices,
+  shouldPresentTeamChooser,
 } from '../../src/services/first-login.service.js';
-import { CLIENT_DOMAIN_WORKSPACE_POLICY } from '../../src/services/product-workspace-policy.service.js';
+import { CLIENT_DOMAIN_TEAM_POLICY } from '../../src/services/product-team-policy.service.js';
 import { testUiTheme } from '../helpers/test-config.js';
 
 function makeConfig(overrides?: Partial<ClientConfig>): ClientConfig {
@@ -93,7 +93,7 @@ describe('first-login.service', () => {
         userId: 'user-1',
         config: makeConfig({ org_features: { allow_user_create_org: true } }),
       },
-      { policy: CLIENT_DOMAIN_WORKSPACE_POLICY, prisma },
+      { policy: CLIENT_DOMAIN_TEAM_POLICY, prisma },
     );
 
     expect(result).toEqual({
@@ -134,7 +134,7 @@ describe('first-login.service', () => {
         userId: 'user-1',
         config: makeConfig({ org_features: { allow_user_create_org: false } }),
       },
-      { policy: CLIENT_DOMAIN_WORKSPACE_POLICY, prisma },
+      { policy: CLIENT_DOMAIN_TEAM_POLICY, prisma },
     );
 
     expect(result).toEqual({
@@ -250,7 +250,7 @@ describe('first-login.service', () => {
   });
 });
 
-describe('buildWorkspaceChoices', () => {
+describe('buildSessionChoices', () => {
   it('returns empty choices when the user cannot be found', async () => {
     const prisma = {
       user: { findUnique: vi.fn(async () => null) },
@@ -258,9 +258,9 @@ describe('buildWorkspaceChoices', () => {
       teamInvite: { findMany: vi.fn() },
     };
 
-    const result = await buildWorkspaceChoices(
+    const result = await buildSessionChoices(
       { userId: 'user-1', config: makeConfig() },
-      { policy: CLIENT_DOMAIN_WORKSPACE_POLICY, prisma },
+      { policy: CLIENT_DOMAIN_TEAM_POLICY, prisma },
     );
 
     expect(result).toEqual({
@@ -293,9 +293,9 @@ describe('buildWorkspaceChoices', () => {
       teamInvite: { findMany: vi.fn(async () => []) },
     };
 
-    const result = await buildWorkspaceChoices(
+    const result = await buildSessionChoices(
       { userId: 'user-1', config: makeConfig({ org_features: { allow_user_create_org: true } }) },
-      { policy: CLIENT_DOMAIN_WORKSPACE_POLICY, prisma },
+      { policy: CLIENT_DOMAIN_TEAM_POLICY, prisma },
     );
 
     expect(result).toEqual({
@@ -358,9 +358,9 @@ describe('buildWorkspaceChoices', () => {
       },
     };
 
-    const result = await buildWorkspaceChoices(
+    const result = await buildSessionChoices(
       { userId: 'user-1', config: makeConfig() },
-      { policy: CLIENT_DOMAIN_WORKSPACE_POLICY, prisma },
+      { policy: CLIENT_DOMAIN_TEAM_POLICY, prisma },
     );
 
     expect(result.pending_invites).toEqual([
@@ -423,7 +423,7 @@ describe('buildWorkspaceChoices', () => {
       teamInvite: { findMany: vi.fn() },
     };
 
-    const result = await buildWorkspaceChoices(
+    const result = await buildSessionChoices(
       { userId: 'user-1', config: makeConfig({ domain: 'api.deepsignal.live' }) },
       {
         crossProductPrisma,
@@ -457,6 +457,6 @@ describe('buildWorkspaceChoices', () => {
         },
       },
     });
-    expect(shouldPresentWorkspaceChooser(result)).toBe(true);
+    expect(shouldPresentTeamChooser(result)).toBe(true);
   });
 });

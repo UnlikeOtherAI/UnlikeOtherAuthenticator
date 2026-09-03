@@ -5,7 +5,7 @@ import { sanitizeTeamHintInUrl } from '../../src/routes/auth/entrypoint.js';
 /**
  * Gap-fix B Task 2 (design §11.4): `team_hint` is a client-side chooser preselect ONLY. This is
  * defense-in-depth on top of the frontend's own no-match-is-a-no-op behaviour — an invalid hint
- * must never even reach the SPA bootstrap. The byte-identical guarantee for `workspace_selection:
+ * must never even reach the SPA bootstrap. The byte-identical guarantee for `team_selection:
  * "off"` (and for every request that never carries a `team_hint`) rests on the fast-path below
  * leaving `rawUrl` completely untouched.
  */

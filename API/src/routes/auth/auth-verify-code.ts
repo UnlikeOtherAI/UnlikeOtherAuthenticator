@@ -6,15 +6,15 @@ import { LOGIN_SESSION_AUDIENCE } from '../../config/constants.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
 import { runWithRequestAdminTransaction } from '../../plugins/tenant-context.plugin.js';
 import { lockAndAssertAuthenticationEpoch } from '../../services/authentication-epoch.service.js';
-import { buildWorkspaceChoices } from '../../services/first-login.service.js';
+import { buildSessionChoices } from '../../services/first-login.service.js';
 import { verifyLoginCode } from '../../services/login-code.service.js';
 import { signLoginSession } from '../../services/login-session.service.js';
 import { parseRequestAccessFlag } from '../../services/access-request-flow.service.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
-import { resolveProductWorkspaceBeforeTwoFa } from '../../services/required-workspace-placement.service.js';
+import { resolveProductTeamBeforeTwoFa } from '../../services/required-team-placement.service.js';
 import { selectRedirectUrl } from '../../services/authorization-code.service.js';
-import { finalizeWithTwoFaPolicy } from '../../services/workspace-finalize.service.js';
-import { lockProductWorkspacePolicyShared } from '../../services/product-workspace-policy-lock.service.js';
+import { finalizeWithTwoFaPolicy } from '../../services/team-finalize.service.js';
+import { lockProductTeamPolicyShared } from '../../services/product-team-policy-lock.service.js';
 import { AppError } from '../../utils/errors.js';
 import { parseRequiredPkceChallenge } from '../../utils/pkce.js';
 import { verifyCodeRateLimiter } from './rate-limit-keys.js';
@@ -42,11 +42,11 @@ const QuerySchema = z
 
 /**
  * Phase 3b (design §4.3): verify a LOGIN_CODE issued by /auth/start. On success:
- * - `workspace_selection: "auto"` — mint a `login_token` bridge and return the workspace chooser
+ * - `team_selection: "auto"` — mint a `login_token` bridge and return the team chooser
  *   payload (teams/pending_invites/can_create_org). 2FA is deferred to /auth/select-team for the
  *   selected org (design §11.2 flow order: identity → chooser → 2FA → redirect).
- * - `workspace_selection: "off"` (default) — skip the chooser and finalize immediately.
- *   Recognized products still pre-bind their server-owned exact workspace before 2FA.
+ * - `team_selection: "off"` (default) — skip the chooser and finalize immediately.
+ *   Recognized products still pre-bind their server-owned exact team before 2FA.
  */
 export function registerAuthVerifyCodeRoute(app: FastifyInstance): void {
   app.post(
@@ -80,9 +80,9 @@ export function registerAuthVerifyCodeRoute(app: FastifyInstance): void {
         { prisma: request.adminDb },
       );
 
-      if (config.login_flow?.workspace_selection === 'auto') {
+      if (config.login_flow?.team_selection === 'auto') {
         const chooser = await runWithRequestAdminTransaction(request, async (prisma) => {
-          await lockProductWorkspacePolicyShared(prisma);
+          await lockProductTeamPolicyShared(prisma);
           await lockAndAssertAuthenticationEpoch(
             { userId, domain: config.domain, credentialEpoch },
             { prisma },
@@ -103,7 +103,7 @@ export function registerAuthVerifyCodeRoute(app: FastifyInstance): void {
             sharedSecret: SHARED_SECRET,
             audience: LOGIN_SESSION_AUDIENCE,
           });
-          const choices = await buildWorkspaceChoices({ userId, config }, { prisma });
+          const choices = await buildSessionChoices({ userId, config }, { prisma });
           return { loginToken, choices };
         });
         reply.status(200).send({ login_token: chooser.loginToken, ...chooser.choices });
@@ -111,14 +111,14 @@ export function registerAuthVerifyCodeRoute(app: FastifyInstance): void {
       }
 
       const outcome = await runWithRequestAdminTransaction(request, async (prisma) => {
-        await lockProductWorkspacePolicyShared(prisma);
+        await lockProductTeamPolicyShared(prisma);
         const authenticationState = await lockAndAssertAuthenticationEpoch(
           { userId, domain: config.domain, credentialEpoch },
           { prisma },
         );
-        const selectedWorkspace = await resolveProductWorkspaceBeforeTwoFa(
+        const selectedTeam = await resolveProductTeamBeforeTwoFa(
           { userId, config },
-          { prisma, workspacePrisma: prisma },
+          { prisma, teamPrisma: prisma },
         );
 
         const result = await finalizeWithTwoFaPolicy(
@@ -136,7 +136,7 @@ export function registerAuthVerifyCodeRoute(app: FastifyInstance): void {
             codeChallenge: pkce.codeChallenge,
             codeChallengeMethod: pkce.codeChallengeMethod,
             ip: request.ip ?? null,
-            ...(selectedWorkspace ?? {}),
+            ...(selectedTeam ?? {}),
           },
           {
             currentTwoFaEnabled: authenticationState.twoFaEnabled,
@@ -144,7 +144,7 @@ export function registerAuthVerifyCodeRoute(app: FastifyInstance): void {
             policyPrisma: prisma,
             prisma,
             twoFaPolicyPrisma: prisma,
-            workspacePrisma: prisma,
+            teamPrisma: prisma,
           },
         );
 

@@ -23,7 +23,7 @@ The evidence signing key is a dedicated RS256 RSA JWK with a unique \`kid\`; it 
 
 ### Authorization and refresh behavior
 
-Every successful identity path—password, social, email link, email code, workspace selection, 2FA completion, and public-client OAuth—calls the same current-policy evaluator after authentication and required 2FA but before authorization-code creation. A missing signature returns the hosted Auth signing URL instead of a code. The opaque \`signing_token\` is short-lived, stored only as a keyed hash, removed from the browser address bar after hydration, and accepted only in JSON bodies under \`POST /signatures/session/*\`.
+Every successful identity path—password, social, email link, email code, team selection, 2FA completion, and public-client OAuth—calls the same current-policy evaluator after authentication and required 2FA but before authorization-code creation. A missing signature returns the hosted Auth signing URL instead of a code. The opaque \`signing_token\` is short-lived, stored only as a keyed hash, removed from the browser address bar after hydration, and accepted only in JSON bodies under \`POST /signatures/session/*\`.
 
 The hosted UI shows and downloads the exact hash-verified source PDF, presents the exact acceptance statement separately, requires explicit confirmation, captures a typed name only for \`typed_name\`, and offers the resulting receipt. A typed name is a user assertion—not independent identity verification. UOA describes this output as authenticated agreement evidence, never notarisation, PAdES, a qualified signature, or legal advice.
 

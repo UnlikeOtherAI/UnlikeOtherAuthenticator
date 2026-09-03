@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { removeTeamMember } from '../../src/services/team.service.members.js';
 import { deleteTeam } from '../../src/services/team.service.teams.js';
-import { lockWorkspaceMembershipRows } from '../../src/services/workspace-scope.service.js';
+import { lockTeamMembershipRows } from '../../src/services/team-scope.service.js';
 import { createTestDb } from '../helpers/test-db.js';
 import { baseClientConfigPayload } from '../helpers/test-config.js';
 import { validateConfigFields, type ClientConfig } from '../../src/services/config.service.js';
@@ -10,7 +10,7 @@ import { validateConfigFields, type ClientConfig } from '../../src/services/conf
 const hasDatabase = Boolean(process.env.DATABASE_URL);
 const domain = 'team-delete-race.example.com';
 
-type SeededWorkspace = {
+type SeededTeam = {
   ownerId: string;
   userId: string;
   orgId: string;
@@ -63,7 +63,7 @@ describe.skipIf(!hasDatabase)('team deletion and membership removal race', () =>
     await handle.prisma.user.deleteMany();
   });
 
-  async function seedWorkspace(): Promise<SeededWorkspace> {
+  async function seedTeam(): Promise<SeededTeam> {
     const owner = await handle.prisma.user.create({
       data: { email: 'owner@team-delete-race.example.com', userKey: 'team-delete-owner' },
       select: { id: true },
@@ -129,7 +129,7 @@ describe.skipIf(!hasDatabase)('team deletion and membership removal race', () =>
     };
   }
 
-  async function seedMemberWithoutTeam(workspace: SeededWorkspace): Promise<string> {
+  async function seedMemberWithoutTeam(team: SeededTeam): Promise<string> {
     const user = await handle.prisma.user.create({
       data: {
         email: 'late-member@team-delete-race.example.com',
@@ -139,7 +139,7 @@ describe.skipIf(!hasDatabase)('team deletion and membership removal race', () =>
     });
     await handle.prisma.orgMember.create({
       data: {
-        orgId: workspace.orgId,
+        orgId: team.orgId,
         userId: user.id,
         role: 'member',
       },
@@ -148,16 +148,16 @@ describe.skipIf(!hasDatabase)('team deletion and membership removal race', () =>
   }
 
   function remove(
-    workspace: SeededWorkspace,
+    team: SeededTeam,
     afterMembershipStatusWrite?: () => Promise<void>,
   ) {
     return removeTeamMember(
       {
-        orgId: workspace.orgId,
-        teamId: workspace.targetTeamId,
+        orgId: team.orgId,
+        teamId: team.targetTeamId,
         domain,
-        actorUserId: workspace.ownerId,
-        userId: workspace.userId,
+        actorUserId: team.ownerId,
+        userId: team.userId,
         config: teamConfig(),
       },
       {
@@ -168,15 +168,15 @@ describe.skipIf(!hasDatabase)('team deletion and membership removal race', () =>
   }
 
   function deleteTargetTeam(
-    workspace: SeededWorkspace,
+    team: SeededTeam,
     afterMembershipLocks?: () => Promise<void>,
   ) {
     return deleteTeam(
       {
-        orgId: workspace.orgId,
-        teamId: workspace.targetTeamId,
+        orgId: team.orgId,
+        teamId: team.targetTeamId,
         domain,
-        actorUserId: workspace.ownerId,
+        actorUserId: team.ownerId,
         config: teamConfig(),
       },
       {
@@ -197,13 +197,13 @@ describe.skipIf(!hasDatabase)('team deletion and membership removal race', () =>
     expect(state).toBe('pending');
   }
 
-  async function expectOnlyBackupMembership(workspace: SeededWorkspace): Promise<void> {
+  async function expectOnlyBackupMembership(team: SeededTeam): Promise<void> {
     expect(
       await handle.prisma.teamMember.findUnique({
         where: {
           teamId_userId: {
-            teamId: workspace.defaultTeamId,
-            userId: workspace.userId,
+            teamId: team.defaultTeamId,
+            userId: team.userId,
           },
         },
         select: { status: true },
@@ -213,8 +213,8 @@ describe.skipIf(!hasDatabase)('team deletion and membership removal race', () =>
       await handle.prisma.teamMember.findUniqueOrThrow({
         where: {
           teamId_userId: {
-            teamId: workspace.backupTeamId,
-            userId: workspace.userId,
+            teamId: team.backupTeamId,
+            userId: team.userId,
           },
         },
         select: { status: true },
@@ -223,8 +223,8 @@ describe.skipIf(!hasDatabase)('team deletion and membership removal race', () =>
     expect(
       await handle.prisma.teamMember.count({
         where: {
-          userId: workspace.userId,
-          team: { orgId: workspace.orgId },
+          userId: team.userId,
+          team: { orgId: team.orgId },
           status: 'ACTIVE',
         },
       }),
@@ -232,17 +232,17 @@ describe.skipIf(!hasDatabase)('team deletion and membership removal race', () =>
   }
 
   it('does not recreate default membership when removal obtains the locks first', async () => {
-    const workspace = await seedWorkspace();
+    const team = await seedTeam();
     const statusWritten = deferred();
     const releaseRemoval = deferred();
 
-    const removal = remove(workspace, async () => {
+    const removal = remove(team, async () => {
       statusWritten.resolve();
       await releaseRemoval.promise;
     });
     await statusWritten.promise;
 
-    const deletion = deleteTargetTeam(workspace);
+    const deletion = deleteTargetTeam(team);
     await expectStillPending(deletion);
     releaseRemoval.resolve();
 
@@ -250,25 +250,25 @@ describe.skipIf(!hasDatabase)('team deletion and membership removal race', () =>
     await expect(deletion).resolves.toEqual({ deleted: true });
     expect(
       await handle.prisma.team.findUnique({
-        where: { id: workspace.targetTeamId },
+        where: { id: team.targetTeamId },
         select: { id: true },
       }),
     ).toBeNull();
-    await expectOnlyBackupMembership(workspace);
+    await expectOnlyBackupMembership(team);
   });
 
   it('deletes first and makes a waiting removal fail against current state', async () => {
-    const workspace = await seedWorkspace();
+    const team = await seedTeam();
     const membershipsLocked = deferred();
     const releaseDeletion = deferred();
 
-    const deletion = deleteTargetTeam(workspace, async () => {
+    const deletion = deleteTargetTeam(team, async () => {
       membershipsLocked.resolve();
       await releaseDeletion.promise;
     });
     await membershipsLocked.promise;
 
-    const removal = remove(workspace);
+    const removal = remove(team);
     await expectStillPending(removal);
     releaseDeletion.resolve();
 
@@ -279,27 +279,27 @@ describe.skipIf(!hasDatabase)('team deletion and membership removal race', () =>
     });
     expect(
       await handle.prisma.team.findUnique({
-        where: { id: workspace.targetTeamId },
+        where: { id: team.targetTeamId },
         select: { id: true },
       }),
     ).toBeNull();
-    await expectOnlyBackupMembership(workspace);
+    await expectOnlyBackupMembership(team);
   });
 
   it('waits for an in-flight insert, then re-homes its committed member', async () => {
-    const workspace = await seedWorkspace();
-    const lateUserId = await seedMemberWithoutTeam(workspace);
+    const team = await seedTeam();
+    const lateUserId = await seedMemberWithoutTeam(team);
     const membershipInserted = deferred();
     const releaseInsertion = deferred();
 
     const insertion = handle.prisma.$transaction(async (tx) => {
-      await lockWorkspaceMembershipRows(
-        { userId: lateUserId, orgId: workspace.orgId },
+      await lockTeamMembershipRows(
+        { userId: lateUserId, orgId: team.orgId },
         { prisma: tx },
       );
       const membership = await tx.teamMember.create({
         data: {
-          teamId: workspace.targetTeamId,
+          teamId: team.targetTeamId,
           userId: lateUserId,
           teamRole: 'member',
         },
@@ -311,7 +311,7 @@ describe.skipIf(!hasDatabase)('team deletion and membership removal race', () =>
     });
     await membershipInserted.promise;
 
-    const deletion = deleteTargetTeam(workspace);
+    const deletion = deleteTargetTeam(team);
     await expectStillPending(deletion);
     releaseInsertion.resolve();
 
@@ -319,7 +319,7 @@ describe.skipIf(!hasDatabase)('team deletion and membership removal race', () =>
     await expect(deletion).resolves.toEqual({ deleted: true });
     expect(
       await handle.prisma.team.findUnique({
-        where: { id: workspace.targetTeamId },
+        where: { id: team.targetTeamId },
         select: { id: true },
       }),
     ).toBeNull();
@@ -327,7 +327,7 @@ describe.skipIf(!hasDatabase)('team deletion and membership removal race', () =>
       await handle.prisma.teamMember.findUniqueOrThrow({
         where: {
           teamId_userId: {
-            teamId: workspace.defaultTeamId,
+            teamId: team.defaultTeamId,
             userId: lateUserId,
           },
         },
@@ -337,17 +337,17 @@ describe.skipIf(!hasDatabase)('team deletion and membership removal race', () =>
   });
 
   it('blocks a late insert behind deletion and leaves no orphan membership', async () => {
-    const workspace = await seedWorkspace();
-    const lateUserId = await seedMemberWithoutTeam(workspace);
+    const team = await seedTeam();
+    const lateUserId = await seedMemberWithoutTeam(team);
     const targetTeamLocked = deferred();
     const releaseDeletion = deferred();
 
     const deletionWithLockHook = deleteTeam(
       {
-        orgId: workspace.orgId,
-        teamId: workspace.targetTeamId,
+        orgId: team.orgId,
+        teamId: team.targetTeamId,
         domain,
-        actorUserId: workspace.ownerId,
+        actorUserId: team.ownerId,
         config: teamConfig(),
       },
       {
@@ -362,14 +362,14 @@ describe.skipIf(!hasDatabase)('team deletion and membership removal race', () =>
 
     const insertAttempted = deferred();
     const insertion = handle.prisma.$transaction(async (tx) => {
-      await lockWorkspaceMembershipRows(
-        { userId: lateUserId, orgId: workspace.orgId },
+      await lockTeamMembershipRows(
+        { userId: lateUserId, orgId: team.orgId },
         { prisma: tx },
       );
       insertAttempted.resolve();
       return tx.teamMember.create({
         data: {
-          teamId: workspace.targetTeamId,
+          teamId: team.targetTeamId,
           userId: lateUserId,
           teamRole: 'member',
         },
@@ -384,7 +384,7 @@ describe.skipIf(!hasDatabase)('team deletion and membership removal race', () =>
     await expect(insertion).rejects.toMatchObject({ code: 'P2003' });
     expect(
       await handle.prisma.team.findUnique({
-        where: { id: workspace.targetTeamId },
+        where: { id: team.targetTeamId },
         select: { id: true },
       }),
     ).toBeNull();

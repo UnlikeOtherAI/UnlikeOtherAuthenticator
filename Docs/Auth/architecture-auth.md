@@ -50,12 +50,12 @@ For the full product spec, see [brief.md](./brief.md). For tech stack, see [tech
       /twofactor
         QrCodeDisplay.tsx     — QR code rendering for 2FA setup
         TwoFactorSetup.tsx    — Full 2FA enrollment flow (QR + verify)
-      /workspace
-        WorkspaceList.tsx        — Vertical stack of WorkspaceCards, server order preserved (Phase 3c)
-        WorkspaceCard.tsx        — One ACTIVE workspace: icon + name + role (owner/admin only) (Phase 3c)
+      /team
+        TeamList.tsx        — Vertical stack of TeamCards, server order preserved (Phase 3c)
+        TeamCard.tsx        — One ACTIVE team: icon + name + role (owner/admin only) (Phase 3c)
         InviteCard.tsx           — Pending team invite: accept / decline (Phase 3c)
-        CreateWorkspaceDialog.tsx — Modal workspace creation form: server-authorized organisation destination + visibility (Phase 3c)
-        CreateFirstWorkspaceForm.tsx — Inline first-workspace form when the chooser has no active workspace or invite (Phase 3c)
+        CreateTeamDialog.tsx — Modal team creation form: server-authorized organisation destination + visibility (Phase 3c)
+        CreateFirstTeamForm.tsx — Inline first-team form when the chooser has no active team or invite (Phase 3c)
     /pages
       LoginPage.tsx           — Login page (email/password + social buttons)
       RegisterPage.tsx        — Registration page
@@ -65,7 +65,7 @@ For the full product spec, see [brief.md](./brief.md). For tech stack, see [tech
       TwoFactorSetupPage.tsx  — 2FA enrollment page
       TwoFactorVerifyPage.tsx — 2FA challenge during login
       CodeEntryPage.tsx       — Email sign-in code entry, login_flow.email_code_enabled (Phase 3c)
-      WorkspaceChooserPage.tsx — Slack-style "choose a workspace" screen, workspace_selection: "auto" (Phase 3c)
+      TeamChooserPage.tsx — Slack-style "choose a team" screen, team_selection: "auto" (Phase 3c)
       SigningPage.tsx         — Ordered PDF review, explicit click-wrap/typed-name signing, receipts, final recheck
       ErrorPage.tsx           — Generic error display
     /theme
@@ -89,10 +89,10 @@ For the full product spec, see [brief.md](./brief.md). For tech stack, see [tech
       validation.ts           — Client-side input validation (email format, password rules)
       errors.ts               — Error display helpers (always generic)
       code-input.ts           — Pure numeric-code sanitization behind ui/CodeInput.tsx (Phase 3c)
-      workspace-response.ts   — Decodes /auth/verify-code, /auth/select-team, and a
+      team-response.ts   — Decodes /auth/verify-code, /auth/select-team, and a
                                  chooser-producing /auth/login into one client outcome (Phase 3c)
-      workspace-actions.ts    — Typed wrappers over chooser selection and SSO workspace creation calls (Phase 3c)
-      workspace-icon.ts       — Deterministic initials-on-color fallback avatar (design §11.3, Phase 3c)
+      team-actions.ts    — Typed wrappers over chooser selection and SSO team creation calls (Phase 3c)
+      team-icon.ts       — Deterministic initials-on-color fallback avatar (design §11.3, Phase 3c)
   /public
     index.html                — Entry point HTML
   vite.config.ts              — Build configuration
@@ -175,13 +175,13 @@ The auth flow is state-driven, not route-driven. A single popup URL loads the ap
 7. **2FA setup** → TwoFactorSetupPage → QR scan → Verify code → Done
 8. **Error** → ErrorPage (generic message only)
 9. **Email sign-in code** (Phase 3c, `login_flow.email_code_enabled`) → LoginPage "Email me a
-   sign-in code" → CodeEntryPage → verify-code → WorkspaceChooserPage (if `workspace_selection:
+   sign-in code" → CodeEntryPage → verify-code → TeamChooserPage (if `team_selection:
 "auto"`) or straight to step 2/3
-10. **Workspace chooser** (Phase 3c, `workspace_selection: "auto"`) — reached after any verified
-    identity path (email code/link, password, or social) → WorkspaceChooserPage (workspace list +
-    pending invites + create-workspace). It is auto-skipped only for exactly one ACTIVE team and no
+10. **Team chooser** (Phase 3c, `team_selection: "auto"`) — reached after any verified
+    identity path (email code/link, password, or social) → TeamChooserPage (team list +
+    pending invites + create-team). It is auto-skipped only for exactly one ACTIVE team and no
     pending invite; zero teams with `can_create_org` stays on the chooser. An invite-bound email is
-    already an exact workspace selection and bypasses the chooser. Both server-selected and
+    already an exact team selection and bypasses the chooser. Both server-selected and
     invite-selected org/team scope then passes through TwoFactorVerifyPage or required
     TwoFactorSetupPage and into the team-scoped authorization code. The chooser capability signs
     the exact config URL and parsed-config fingerprint plus redirect, PKCE, remember-me, and access
@@ -189,7 +189,7 @@ The auth flow is state-driven, not route-driven. A single popup URL loads the ap
     invite/audit/access-request-email effects; a concurrent replay stops at that unique claim, while
     any later failure rolls the claim and all database effects back so the user may retry. Chooser
     hydration and invite decline are non-consuming. The signed chooser capability also preserves
-    the verified identity method. Selecting a workspace is a continuation step, not a new
+    the verified identity method. Selecting a team is a continuation step, not a new
     authentication method: finalization, 2FA/signature continuations, AuthIdentity, and login logs
     continue to identify the original Google/social, password, email-code, or
     email-link method. Legacy clients list only ACTIVE teams belonging
@@ -204,7 +204,7 @@ The auth flow is state-driven, not route-driven. A single popup URL loads the ap
     `user_needs_team`; those client-controlled flags cannot remove billing attribution. Exact
     membership is rechecked at selection, after 2FA/signatures immediately before code issuance,
     and at exchange. Recognized-product scope is resolved before the first 2FA decision on password,
-    social, email-code, and email-link flows even when `workspace_selection: off`; "off" suppresses
+    social, email-code, and email-link flows even when `team_selection: off`; "off" suppresses
     the chooser, not the server-owned attribution boundary. The exact selected Organisation joins
     strongest-wins policy resolution across domains.
     The selection and code-exchange transactions lock the organisation membership row first and
@@ -212,7 +212,7 @@ The auth flow is state-driven, not route-driven. A single popup URL loads the ap
     activation/deactivation/removal, so those transactions and lifecycle changes have one serial
     outcome rather than a time-of-check/time-of-use gap. Post-2FA/signature code issuance performs
     the immediate revalidation only; exchange is the final locked authority before token creation.
-    Auth-code, refresh, explicit workspace-switch, and confidential token issuance hold one global shared product-policy
+    Auth-code, refresh, explicit team-switch, and confidential token issuance hold one global shared product-policy
     advisory lock through commit. The supported ClientDomain, lifecycle app-key, integration
     acceptance, BillingService, and Organisation 2FA-policy mutators take its exclusive form before
     reading or writing policy. Token issuance also re-reads the exact authenticated ClientDomain id/domain/status
@@ -220,28 +220,28 @@ The auth flow is state-driven, not route-driven. A single popup URL loads the ap
     same product policy, so it cannot contradict the signed `active` claim. A scoped refresh
     revalidates the exact policy, org, and team and fails with the
     normal invalid-refresh response if any of them changed; it never drops scope and silently
-    selects or creates a different product-domain workspace. Same-domain selections remain valid
+    selects or creates a different product-domain team. Same-domain selections remain valid
     if an unrelated product binding is later revoked. Recognized products reject an unscoped
     authorization code at exchange; only legacy clients can retain the late unscoped path. An auto
-    flow or recognized product may select only one exact eligible ACTIVE workspace. Multiple choices
+    flow or recognized product may select only one exact eligible ACTIVE team. Multiple choices
     fail closed. Zero choices create a personal org/team only when the config explicitly enables
     `user_needs_team`; otherwise a recognized product fails closed. First placement is serialized
     by a per-user transaction advisory lock, so simultaneous first logins from different products
-    create one workspace and the loser reuses it. Legacy same-domain `workspace_selection: off`
+    create one team and the loser reuses it. Legacy same-domain `team_selection: off`
     clients keep historical unscoped sessions when placement is already satisfied (or a lifecycle
     tombstone deliberately prevents healing), and their existing unscoped refreshes remain valid.
     On both email identity continuations (`GET /auth/email/link` and `POST /auth/verify-email`),
     chooser reads, recognized-product placement, exact policy/2FA finalization, and immediate
     authorization-code issuance share one `uoa_admin` transaction. The per-user placement lock
     therefore survives the cross-product zero-choice read through commit; a later issuance failure
-    rolls back the new workspace and code together. Email-token consumption and invite acceptance
+    rolls back the new team and code together. Email-token consumption and invite acceptance
     retain their existing earlier one-time transaction, so such a failure consumes the link and the
     user must request another one.
     Authorization codes also persist whether interactive TOTP completed. Exchange re-resolves the
-    current exact-workspace policy and user enrollment inside the token transaction; insufficient
+    current exact-team policy and user enrollment inside the token transaction; insufficient
     proof rejects generically, rolls code consumption back, and creates no refresh/access family.
-    Ordinary refresh rotation never performs placement or workspace switching. A backend may use
-    only the explicit \`urn:unlikeotherai:params:oauth:grant-type:workspace-switch\` grant with an
+    Ordinary refresh rotation never performs placement or team switching. A backend may use
+    only the explicit \`urn:unlikeotherai:params:oauth:grant-type:team-switch\` grant with an
     exact \`organization_id\`/\`team_id\` from the authorized directory. UOA locks/revalidates source
     and target, product policy, target 2FA assurance, and signature policy before creating the
     deterministic target-scoped successor. The family carries its original completed-TOTP proof
@@ -255,11 +255,11 @@ The auth flow is state-driven, not route-driven. A single popup URL loads the ap
     Existing-account `LOGIN_LINK` tokens resolve only their issue-time `userId`; deletion or identity
     mismatch fails closed and never falls through to registration.
     When the chooser reports `can_create_org`, the hosted SSO can create the verified user's first
-    workspace through `/auth/create-workspace`; it creates the organisation and default team in the
+    team through `/auth/create-organisation`; it creates the organisation and default team in the
     same continuation transaction. A newly issued scoped access token carries the organisation slug
     in `active.tenantSlug`, the DNS-safe tenant label unique for that client domain. `Team.slug` is
     only unique inside its organisation and is never a subdomain key.
-11. **Required agreements** (optional per-domain service) — after identity, workspace selection,
+11. **Required agreements** (optional per-domain service) — after identity, team selection,
     and required 2FA, the shared API gate redirects to `SigningPage` instead of issuing a code.
     The page renders the hash-verified source PDF, exact acceptance statement, click-wrap or
     typed-name assertion, and downloadable receipt in Admin display order. Final completion
@@ -267,7 +267,7 @@ The auth flow is state-driven, not route-driven. A single popup URL loads the ap
     is held in memory and removed from the address bar after hydration.
 
 These two steps are held entirely in client state (`use-popup.tsx`'s `pendingEmail`/`loginToken`/
-`workspaceChoices`) between the identity-verification call and the final redirect — see
+`teamChoices`) between the identity-verification call and the final redirect — see
 `Docs/plans/2026-07-07-slack-style-login-and-membership.md` §11.2.
 
 ---

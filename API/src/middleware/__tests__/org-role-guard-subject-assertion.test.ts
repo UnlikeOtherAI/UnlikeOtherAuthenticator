@@ -53,7 +53,7 @@ describe('requireOrgRole — subject assertion user mode', () => {
     });
     lockEpoch.mockResolvedValueOnce({ tokenVersion: 7 });
     getActiveOrg.mockResolvedValueOnce({
-      org_id: 'org_1', tenant_slug: 'live-workspace', org_role: 'owner',
+      org_id: 'org_1', tenant_slug: 'live-team', org_role: 'owner',
       teams: ['team_1'], team_roles: { team_1: 'admin' },
     });
     const input = request({ assertion: 'nessie.subject.assertion' });
@@ -77,11 +77,11 @@ describe('requireOrgRole — subject assertion user mode', () => {
     expect(input.accessTokenClaims).toMatchObject({
       userId: 'user_1', tokenVersion: 7, email: 'user@example.com',
       org: { org_id: 'org_1', org_role: 'owner' },
-      active: { orgId: 'org_1', teamId: 'team_1', tenantSlug: 'live-workspace' },
+      active: { orgId: 'org_1', teamId: 'team_1', tenantSlug: 'live-team' },
     });
   });
 
-  it('refuses a mismatched active workspace before any live lookup', async () => {
+  it('refuses a mismatched active team before any live lookup', async () => {
     verifySubjectAssertion.mockResolvedValueOnce({
       sub: 'user_1', tv: 7, active: { orgId: 'org_1', teamId: 'team_other' },
     });

@@ -35,7 +35,7 @@ export type RequiredTeamPlacement = {
  * Serialize the first placement decision for one stable UOA user. Product
  * choice resolution must take this lock before reading memberships, otherwise
  * two first-time product exchanges can both observe zero rows and create two
- * personal workspaces.
+ * personal teams.
  */
 export async function lockRequiredTeamPlacementUser(
   userId: string,
@@ -233,7 +233,7 @@ export async function ensureUserHasRequiredTeam(
     }
 
     // Lifecycle tombstones are an intentional denial, not an absence to heal
-    // around. Creating a new workspace here would bypass deactivation/removal.
+    // around. Creating a new team here would bypass deactivation/removal.
     if (orgMembership.status !== 'ACTIVE') return null;
 
     const teamMembershipCount = await tx.teamMember.count({

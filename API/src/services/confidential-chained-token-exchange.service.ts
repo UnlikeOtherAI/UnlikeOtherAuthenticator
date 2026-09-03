@@ -27,7 +27,7 @@ import {
 } from './oauth/access-token.service.js';
 import { getActiveClientOrgContext, type OrgContext } from './org-context.service.js';
 import { CONFIDENTIAL_ASSERTION_CLOCK_TOLERANCE_SECONDS } from './confidential-assertion-use.service.js';
-import { lockTokenIssuanceProductPolicy } from './product-workspace-policy-lock.service.js';
+import { lockTokenIssuanceProductPolicy } from './product-team-policy-lock.service.js';
 import {
   isAuthenticationEpochMismatchError,
   lockAndAssertAuthenticationEpoch,
@@ -44,7 +44,7 @@ const consumeChainedSubjectExchange = createKeyedRateLimiter({
   windowMs: 60 * 1000,
 });
 
-const ActiveWorkspaceSchema = z
+const ActiveTeamSchema = z
   .object({
     orgId: z.string().trim().min(1).max(256),
     teamId: z.string().trim().min(1).max(256),
@@ -81,7 +81,7 @@ const ChainedSubjectAccessTokenSchema = z
     jti: z.string().trim().min(1).max(256),
     iat: z.number().int().positive(),
     exp: z.number().int().positive(),
-    active: ActiveWorkspaceSchema,
+    active: ActiveTeamSchema,
     org: OrgContextSchema,
     act: z.unknown().optional(),
   })

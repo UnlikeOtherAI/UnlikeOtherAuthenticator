@@ -10,7 +10,7 @@ export const en = {
   'auth.twoFactorVerify.title': 'Verify two-factor code',
   'auth.twoFactorSetup.title': 'Set up two-factor authentication',
   'auth.codeEntry.title': 'Enter your code',
-  'auth.workspaceChooser.title': 'Choose a workspace',
+  'auth.teamChooser.title': 'Choose a team',
   'auth.signatures.title': 'Review and sign agreements',
 
   'form.email.label': 'Email',
@@ -61,47 +61,47 @@ export const en = {
   'codeEntry.resend.sent': 'We sent a new code to your email',
   'codeEntry.error': 'Could not verify the code. Please try again.',
 
-  // Phase 3c: workspace chooser (design §11.2 — copy names the workspace, not the product).
-  'workspaceChooser.subtitle': 'Your workspaces for {email}',
-  'workspaceChooser.autoSkip': 'Signing you in…',
-  'workspace.role.owner': 'Owner',
-  'workspace.role.admin': 'Admin',
-  'workspace.invite.title': 'You’ve been invited to {teamName}',
-  'workspace.invite.invitedBy': 'Invited by {invitedBy}',
-  'workspace.invite.accept': 'Accept',
-  'workspace.invite.decline': 'Decline',
-  'workspace.createOrg.title': 'Create a new workspace',
-  'workspace.createOrg.subtitle': 'Start a brand new workspace',
-  'workspace.createOrg.nameLabel': 'Workspace name',
-  'workspace.createOrg.submit': 'Create workspace',
-  'workspace.createOrg.cancel': 'Cancel',
-  'workspace.createDialog.open': 'Create workspace',
-  'workspace.createDialog.title': 'Create a workspace',
-  'workspace.createDialog.subtitle': 'Choose where it belongs and who can find it.',
-  'workspace.createDialog.destinationLabel': 'Organisation',
-  'workspace.createDialog.newOrganisation': 'Create a new organisation',
-  'workspace.createDialog.newOrganisationDescription':
-    'This creates an organisation and its first workspace.',
-  'workspace.createDialog.existingOrganisationDescription':
-    'This adds a workspace to the selected organisation.',
-  'workspace.createDialog.visibilityLabel': 'Visibility',
-  'workspace.createDialog.visibility.private': 'Private',
-  'workspace.createDialog.visibility.privateDescription':
-    'Only people you invite can discover this workspace.',
-  'workspace.createDialog.visibility.inviteOnly': 'Invite only',
-  'workspace.createDialog.visibility.inviteOnlyDescription':
-    'People need an invite before they can join this workspace.',
-  'workspace.createDialog.visibility.openToOrganisation': 'Open to organisation',
-  'workspace.createDialog.visibility.openToOrganisationDescription':
-    'Active members of the organisation can join this workspace themselves.',
-  'workspace.createDialog.submit': 'Create workspace',
-  'workspace.createDialog.cancel': 'Cancel',
+  // Phase 3c: team chooser (design §11.2 — copy names the team, not the product).
+  'teamChooser.subtitle': 'Your teams for {email}',
+  'teamChooser.autoSkip': 'Signing you in…',
+  'team.role.owner': 'Owner',
+  'team.role.admin': 'Admin',
+  'team.invite.title': 'You’ve been invited to {teamName}',
+  'team.invite.invitedBy': 'Invited by {invitedBy}',
+  'team.invite.accept': 'Accept',
+  'team.invite.decline': 'Decline',
+  'team.createOrg.title': 'Create a new team',
+  'team.createOrg.subtitle': 'Start a brand new team',
+  'team.createOrg.nameLabel': 'Team name',
+  'team.createOrg.submit': 'Create team',
+  'team.createOrg.cancel': 'Cancel',
+  'team.createDialog.open': 'Create team',
+  'team.createDialog.title': 'Create a team',
+  'team.createDialog.subtitle': 'Choose where it belongs and who can find it.',
+  'team.createDialog.destinationLabel': 'Organisation',
+  'team.createDialog.newOrganisation': 'Create a new organisation',
+  'team.createDialog.newOrganisationDescription':
+    'This creates an organisation and its first team.',
+  'team.createDialog.existingOrganisationDescription':
+    'This adds a team to the selected organisation.',
+  'team.createDialog.visibilityLabel': 'Visibility',
+  'team.createDialog.visibility.private': 'Private',
+  'team.createDialog.visibility.privateDescription':
+    'Only people you invite can discover this team.',
+  'team.createDialog.visibility.inviteOnly': 'Invite only',
+  'team.createDialog.visibility.inviteOnlyDescription':
+    'People need an invite before they can join this team.',
+  'team.createDialog.visibility.openToOrganisation': 'Open to organisation',
+  'team.createDialog.visibility.openToOrganisationDescription':
+    'Active members of the organisation can join this team themselves.',
+  'team.createDialog.submit': 'Create team',
+  'team.createDialog.cancel': 'Cancel',
 
   'notice.sessionExpired': 'Your sign-in took too long and expired. Please sign in again.',
-  'workspace.orgSection.addWorkspace': 'Add a workspace to {org}',
-  'workspace.createTeam.nameLabel': 'Workspace name',
-  'workspace.createTeam.submit': 'Create',
-  'workspace.createTeam.cancel': 'Cancel',
+  'team.orgSection.addTeam': 'Add a team to {org}',
+  'team.createTeam.nameLabel': 'Team name',
+  'team.createTeam.submit': 'Create',
+  'team.createTeam.cancel': 'Cancel',
 
   'twoFactor.setup.instructions':
     'Scan this QR code with an authenticator app, then enter the 6-digit code to verify setup.',

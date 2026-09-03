@@ -96,7 +96,7 @@ describe('shared post-authentication signature gate', () => {
         twoFaCompleted: true,
         credentialEpoch: 0,
       },
-      { prisma, workspacePrisma: prisma },
+      { prisma, teamPrisma: prisma },
     );
     expect(result).toEqual({
       status: 'signing_required',
@@ -132,9 +132,9 @@ describe('shared post-authentication signature gate', () => {
     expect(finalizeConfigAuthorizationWithSignaturesMock).not.toHaveBeenCalled();
   });
 
-  it('keeps signature workspace decisions on the authoritative outer transaction', async () => {
+  it('keeps signature team decisions on the authoritative outer transaction', async () => {
     const outerPrisma = {} as PrismaClient;
-    const detachedWorkspacePrisma = { detached: true } as unknown as PrismaClient;
+    const detachedTeamPrisma = { detached: true } as unknown as PrismaClient;
     finalizeConfigAuthorizationWithSignaturesMock.mockResolvedValue({
       status: 'granted',
       code: 'code-1',
@@ -162,13 +162,13 @@ describe('shared post-authentication signature gate', () => {
       {
         authenticationEpochLocked: true,
         prisma: outerPrisma,
-        workspacePrisma: detachedWorkspacePrisma,
+        teamPrisma: detachedTeamPrisma,
       },
     );
 
     expect(finalizeConfigAuthorizationWithSignaturesMock).toHaveBeenCalledWith(expect.any(Object), {
       prisma: outerPrisma,
-      workspacePrisma: outerPrisma,
+      teamPrisma: outerPrisma,
     });
   });
 });

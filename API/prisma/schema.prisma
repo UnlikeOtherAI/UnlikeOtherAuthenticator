@@ -450,12 +450,12 @@ model AuthorizationCode {
   codeChallengeMethod String?   @map("code_challenge_method")
   rememberMe          Boolean   @default(false) @map("remember_me")
   // Proof state captured at interactive code issuance and rechecked against
-  // the current exact-workspace 2FA policy during confidential code exchange.
+  // the current exact-team 2FA policy during confidential code exchange.
   twoFaCompleted      Boolean   @default(false) @map("two_fa_completed")
   // Snapshot of User.tokenVersion for the interactive authentication that minted this code.
   // Legacy null rows fail closed because their issue-time credential epoch is unknowable.
   tokenVersion        Int?      @map("token_version")
-  // Workspace scope captured by explicit selection or an unambiguous one-team auto-selection;
+  // Team scope captured by explicit selection or an unambiguous one-team auto-selection;
   // consumeAuthorizationCode threads it into the issued session's `active` claim.
   orgId               String?   @map("org_id")
   teamId              String?   @map("team_id")
@@ -527,12 +527,12 @@ model RefreshToken {
   domain            String
   clientId          String    @map("client_id")
   configUrl         String    @map("config_url")
-  // Workspace scope carried from the authorization code that created this session (design §7 step
+  // Team scope carried from the authorization code that created this session (design §7 step
   // 3-4); rotation preserves it onto the new row.
   orgId             String?   @map("org_id")
   teamId            String?   @map("team_id")
   // Interactive 2FA assurance from the authorization code that created this family. Rotation and
-  // workspace switching copy it unchanged; legacy families fail closed with false.
+  // team switching copy it unchanged; legacy families fail closed with false.
   twoFaCompleted    Boolean   @default(false) @map("two_fa_completed")
   // One-time durable marker for theft/corruption epoch invalidation. Policy retirement sets only
   // revokedAt, so a later post-grace predecessor use can still trigger exactly one epoch bump.
@@ -1251,7 +1251,7 @@ model Team {
 
 /// Uploaded team ("company") avatar — the team mirror of `UserAvatar`
 /// (Docs/Auth/avatars.md §11). Kept in its own table so `teams.icon_url` (the externally
-/// hosted workspace icon) keeps its current meaning and cannot clobber an upload.
+/// hosted team icon) keeps its current meaning and cannot clobber an upload.
 model TeamAvatar {
   id          String   @id @default(cuid())
   teamId      String   @unique @map("team_id")

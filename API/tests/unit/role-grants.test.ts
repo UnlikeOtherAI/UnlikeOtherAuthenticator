@@ -9,7 +9,7 @@ import {
   resolveRoleGrants,
   resolveTeamRoleVocabulary,
   roleHoldsCapability,
-  workspaceRolesHoldCapability,
+  teamRolesHoldCapability,
   type RoleGrantScope,
   type RoleGrantTable,
   type UoaCapability,
@@ -79,7 +79,7 @@ describe('role grants: legacy-default equivalence', () => {
       for (const teamRole of ALL_ROLES) {
         for (const capability of UOA_CAPABILITIES) {
           expect(
-            workspaceRolesHoldCapability(grants, { orgRole, teamRole }, capability),
+            teamRolesHoldCapability(grants, { orgRole, teamRole }, capability),
             `${orgRole}+${teamRole}/${capability}`,
           ).toBe(legacyHolds('org', capability, orgRole) || legacyHolds('team', capability, teamRole));
         }
@@ -101,10 +101,10 @@ describe('role grants: legacy-default equivalence', () => {
     // which is what `requireTeamManager`'s org-only check used to encode.
     const grants = resolveRoleGrants(noGrants);
     expect(
-      workspaceRolesHoldCapability(grants, { orgRole: 'admin', teamRole: null }, 'members.manage'),
+      teamRolesHoldCapability(grants, { orgRole: 'admin', teamRole: null }, 'members.manage'),
     ).toBe(true);
     expect(
-      workspaceRolesHoldCapability(grants, { orgRole: 'member', teamRole: null }, 'members.manage'),
+      teamRolesHoldCapability(grants, { orgRole: 'member', teamRole: null }, 'members.manage'),
     ).toBe(false);
   });
 
@@ -144,13 +144,13 @@ describe('role grants: owner is fixed', () => {
 
 describe('role grants: a configured table', () => {
   const custom: RoleGrantTable = {
-    org: { auditor: ['workspace.read'], admin: ['members.manage'] },
-    team: { editor: ['members.manage', 'content.write'], viewer: ['workspace.read'] },
+    org: { auditor: ['team.read'], admin: ['members.manage'] },
+    team: { editor: ['members.manage', 'content.write'], viewer: ['team.read'] },
   };
   const customConfig = config({
     org_roles: ['owner', 'admin', 'auditor'],
     team_roles: ['owner', 'editor', 'viewer'],
-    capabilities: ['workspace.read', 'content.write'],
+    capabilities: ['team.read', 'content.write'],
     role_grants: custom,
   });
 
@@ -164,7 +164,7 @@ describe('role grants: a configured table', () => {
     // The unknown-role fixture the spec's conformance section demands: `intern` is nowhere in the
     // table, so it can do nothing — never coerced to `member`.
     for (const scope of SCOPES) {
-      for (const capability of [...UOA_CAPABILITIES, 'workspace.read']) {
+      for (const capability of [...UOA_CAPABILITIES, 'team.read']) {
         expect(configRoleHoldsCapability(customConfig, scope, 'intern', capability)).toBe(false);
       }
     }
@@ -181,13 +181,13 @@ describe('role grants: a configured table', () => {
   it('unions the two scopes rather than letting either override', () => {
     const grants = resolveRoleGrants(customConfig);
     expect(
-      workspaceRolesHoldCapability(grants, { orgRole: 'auditor', teamRole: 'editor' }, 'members.manage'),
+      teamRolesHoldCapability(grants, { orgRole: 'auditor', teamRole: 'editor' }, 'members.manage'),
     ).toBe(true);
     expect(
-      workspaceRolesHoldCapability(grants, { orgRole: 'auditor', teamRole: 'viewer' }, 'members.manage'),
+      teamRolesHoldCapability(grants, { orgRole: 'auditor', teamRole: 'viewer' }, 'members.manage'),
     ).toBe(false);
     expect(
-      workspaceRolesHoldCapability(grants, { orgRole: 'auditor', teamRole: 'viewer' }, 'workspace.read'),
+      teamRolesHoldCapability(grants, { orgRole: 'auditor', teamRole: 'viewer' }, 'team.read'),
     ).toBe(true);
   });
 
@@ -203,7 +203,7 @@ describe('role grants: a configured table', () => {
       'members.manage',
       'organisation.manage',
       'teams.manage',
-      'workspace.read',
+      'team.read',
     ]);
     expect([...resolveKnownCapabilities(config())].sort()).toEqual([
       'members.manage',

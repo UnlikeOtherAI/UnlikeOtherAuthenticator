@@ -55,7 +55,7 @@ function baseConfig(overrides?: Partial<ClientConfig>): ClientConfig {
     allow_registration: true,
     '2fa_enabled': false,
     debug_enabled: false,
-    login_flow: { email_code_enabled: false, workspace_selection: 'auto' },
+    login_flow: { email_code_enabled: false, team_selection: 'auto' },
     org_features: {
       enabled: true,
       groups_enabled: false,
@@ -107,8 +107,8 @@ async function mintLoginToken(userId: string, domain = 'client.example.com'): Pr
 
 /**
  * Phase 3b Task 7 follow-up (design §4.3, §11.2): POST /auth/session-choices is the primitive the
- * SPA calls to hydrate the workspace chooser for a login_token seeded via a redirect (the social
- * callback's workspace_chooser branch). It never accepts anything but an already-verified
+ * SPA calls to hydrate the team chooser for a login_token seeded via a redirect (the social
+ * callback's team_chooser branch). It never accepts anything but an already-verified
  * login_token, so it never leaks membership/invite data to an unverified caller.
  */
 describe('POST /auth/session-choices', () => {
@@ -211,7 +211,7 @@ describe('POST /auth/session-choices', () => {
     expect(prismaMock.teamInvite.findMany).not.toHaveBeenCalled();
   });
 
-  it('returns the workspace choices for a valid login_token', async () => {
+  it('returns the team choices for a valid login_token', async () => {
     const loginToken = await mintLoginToken('user-1');
     prismaMock.user.findUnique.mockResolvedValue({
       email: 'jo@example.com',
@@ -259,7 +259,7 @@ describe('POST /auth/session-choices', () => {
       ],
       pending_invites: [],
       can_create_org: true,
-      // No `allow_user_create_team` on this config, so no org is offered for workspace creation.
+      // No `allow_user_create_team` on this config, so no org is offered for team creation.
       creatable_orgs: [],
     });
     // No login_token echoed back — the caller already holds one; only the choices are new.

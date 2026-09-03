@@ -12,7 +12,7 @@ import { lockAndAssertAuthenticationEpoch } from '../../services/authentication-
 import { verifyAccessToken, type AccessTokenClaims } from '../../services/access-token.service.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
 import { selectRedirectUrl } from '../../services/authorization-code.service.js';
-import { lockProductWorkspacePolicyShared } from '../../services/product-workspace-policy-lock.service.js';
+import { lockProductTeamPolicyShared } from '../../services/product-team-policy-lock.service.js';
 import { disableTwoFactorForUser } from '../../services/twofactor-disable.service.js';
 import { enrollTwoFactorForUser } from '../../services/twofactor-enroll.service.js';
 import { resolveTwoFaPolicy } from '../../services/twofactor-policy.service.js';
@@ -103,7 +103,7 @@ export function registerTwoFactorSelfServiceRoutes(app: FastifyInstance): void {
           throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
         }
         const rendered = await runInTransaction(request.adminDb, async (tx) => {
-          await lockProductWorkspacePolicyShared(tx);
+          await lockProductTeamPolicyShared(tx);
           await lockAndAssertAuthenticationEpoch(
             {
               userId: setup.userId,
@@ -142,7 +142,7 @@ export function registerTwoFactorSelfServiceRoutes(app: FastifyInstance): void {
 
       const claims = await requireAccessTokenClaims(request);
       const setup = await runInTransaction(request.adminDb, async (tx) => {
-        await lockProductWorkspacePolicyShared(tx);
+        await lockProductTeamPolicyShared(tx);
         await lockAndAssertAuthenticationEpoch(
           {
             userId: claims.userId,
@@ -201,7 +201,7 @@ export function registerTwoFactorSelfServiceRoutes(app: FastifyInstance): void {
       }
 
       const finalResult = await runWithRequestAdminTransaction(request, async (prisma) => {
-        await lockProductWorkspacePolicyShared(prisma);
+        await lockProductTeamPolicyShared(prisma);
         await lockAndAssertAuthenticationEpoch(
           {
             userId: setup.userId,
@@ -257,7 +257,7 @@ export function registerTwoFactorSelfServiceRoutes(app: FastifyInstance): void {
             orgId: lockedSetup.orgId,
             teamId: lockedSetup.teamId,
           },
-          { workspacePrisma: prisma, prisma },
+          { teamPrisma: prisma, prisma },
         );
 
         try {

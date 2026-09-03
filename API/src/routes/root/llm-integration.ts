@@ -80,7 +80,7 @@ The \`access_token\` is a JWT (compact JWS, three base64url segments). Decode th
 | \`domain\` | custom | The integration domain from your config JWT. Confirms which integration minted this token. |
 | \`client_id\` | custom | \`SHA256(domain + clientSecret)\` hex. Identifies the exact client credential used. |
 | \`org\` | custom (optional) | Present only when \`org_features.enabled\` and the user has an org on this domain. Shape: \`{ org_id, tenant_slug, org_role, teams[], team_roles{}, groups?[], group_admin?[] }\`. |
-| \`active.tenantSlug\` | custom (optional) | Canonical DNS-safe subdomain label for the selected workspace. It is sourced from the organisation slug and unique within this client domain. Treat its absence as a legacy-token compatibility case; never use \`Team.slug\` as a tenant host key. |
+| \`active.tenantSlug\` | custom (optional) | Canonical DNS-safe subdomain label for the selected team. It is sourced from the organisation slug and unique within this client domain. Treat its absence as a legacy-token compatibility case; never use \`Team.slug\` as a tenant host key. |
 | \`iss\` | standard | UOA host, e.g. \`authentication.unlikeotherai.com\`. |
 | \`aud\` | standard | Always \`"uoa:access-token"\`. |
 | \`iat\`, \`exp\` | standard | Epoch seconds. Respect \`exp\`. |
@@ -133,7 +133,7 @@ The org and team role **vocabularies are per-domain configuration**
   false the day a domain renames the role.
 - Read \`org_features.role_grants\` instead: \`{ "org": { <role>: <capability>[] },
   "team": { <role>: <capability>[] } }\`, with \`"owner"\` implicitly holding everything at the
-  scope it stands in, an unmentioned role holding nothing, and a workspace answer being the union
+  scope it stands in, an unmentioned role holding nothing, and a team answer being the union
   of the org-role and team-role grants. UOA validates that table against the domain's vocabularies
   and declared \`capabilities\` at config load, so anything you read there is coherent.
 
@@ -165,7 +165,7 @@ When \`firstLogin.memberships.orgs\` is empty, the user is authenticated but has
 
 | \`capabilities.can_create_org\` | \`capabilities.can_accept_invite\` | RP action |
 |---|---|---|
-| \`true\` | any | Show "Create your organisation" UI. Your backend calls \`POST /org/organisations?domain=<d>&config_url=<u>\` with domain-hash auth **and the user's \`X-UOA-Access-Token\` header**; the body is \`{ name }\` only — the new org is owned by that token's user (there is no \`owner_id\` in the body). The response carries \`defaultTeam\` — the "General" team created in the same transaction, with the owner already an ACTIVE member — so you can select the new workspace straight away instead of re-reading. After success, re-issue the session and re-fetch \`GET /org/me\`. |
+| \`true\` | any | Show "Create your organisation" UI. Your backend calls \`POST /org/organisations?domain=<d>&config_url=<u>\` with domain-hash auth **and the user's \`X-UOA-Access-Token\` header**; the body is \`{ name }\` only — the new org is owned by that token's user (there is no \`owner_id\` in the body). The response carries \`defaultTeam\` — the "General" team created in the same transaction, with the owner already an ACTIVE member — so you can select the new team straight away instead of re-reading. After success, re-issue the session and re-fetch \`GET /org/me\`. |
 | \`false\` | \`true\` | User has a pending invite. Show "Accept invitation" UI; the invite link is delivered by email from UOA — or you can resolve it yourself via \`firstLogin.pending_invites[0]\`. |
 | \`false\` | \`false\` | No tenant and no path to one. Reject the login with a "Contact your administrator" screen — do NOT silently grant access. Your UOA superuser must provision the org/team. |
 
@@ -219,7 +219,7 @@ const tenantId = firstOrg.orgId;
 const tenantRole = firstOrg.role;                  // use THIS for authz, not claims.role
 const tenantSlug = (claims.active as { tenantSlug?: string } | undefined)?.tenantSlug;
 // Route a scoped, newly-issued token to \`\${tenantSlug}.your-tenant-domain\`.
-// Re-authenticate or resolve the workspace through UOA before routing a legacy
+// Re-authenticate or resolve the team through UOA before routing a legacy
 // token that has no tenantSlug.
 
 await storeRefreshTokenServerSide(body.refresh_token, body.refresh_token_expires_in);
@@ -231,24 +231,24 @@ Server-side behaviour on first verified login is controlled by \`org_features\`:
 - \`registration_domain_mapping\` (top-level config) places the user into a configured org + team when the email domain matches.
 - \`auto_create_personal_org_on_first_login\` (default \`false\`) creates a personal org with the user as \`owner\` plus a default team when no mapping matches. Skipped when \`pending_invites_block_auto_create\` is \`true\` and a pending invite exists for the email.
 - \`allow_user_create_org\` (default \`false\`) gates \`POST /org/organisations\` for end-users. Superusers bypass. Keep \`false\` for admin-provisioned tenants.
-- \`allow_user_create_team\` (default \`false\`) gates \`POST /auth/create-team\`: whether a user may add a **further workspace** to an organisation they already run, from the SSO chooser. Separate from \`allow_user_create_org\` because it writes into an existing tenant rather than creating a new one, and the org owner/admin role check still applies on top.
+- \`allow_user_create_team\` (default \`false\`) gates \`POST /auth/create-team\`: whether a user may add a **further team** to an organisation they already run, from the SSO chooser. Separate from \`allow_user_create_org\` because it writes into an existing tenant rather than creating a new one, and the org owner/admin role check still applies on top.
 
-When \`login_flow.workspace_selection\` is \`"auto"\`, the hosted chooser has one
+When \`login_flow.team_selection\` is \`"auto"\`, the hosted chooser has one
 card-corner creation control that opens a dialog. It offers **Create a new
 organisation** whenever the signed configuration grants organisation creation through
 \`can_create_org: true\`; it sends \`{ login_token, name, join_policy? }\` to
-\`POST /auth/create-workspace\`. That endpoint creates the organisation and its
+\`POST /auth/create-organisation\`. That endpoint creates the organisation and its
 default team atomically with the remaining login continuation. Do not mint a
 tenant locally or use an empty \`/auth/select-team\` selection for this path.
 
-An **organisation is the level above a workspace**, and the two creation paths differ accordingly.
+An **organisation is the level above a team**, and the two creation paths differ accordingly.
 \`can_create_org\` permits a user to create a *new organisation*; the chooser's \`creatable_orgs\`
-(\`[{ orgId, orgName }]\`) lists organisations the user may add a *further workspace* to — they are
+(\`[{ orgId, orgName }]\`) lists organisations the user may add a *further team* to — they are
 an ACTIVE owner/admin there and the domain set \`org_features.allow_user_create_team\`. When there
 is more than one permitted destination, the dialog presents these exact values in an organisation
 dropdown; never infer, add, or substitute an \`org_id\`. It posts
 \`{ login_token, org_id, name, join_policy? }\` to \`POST /auth/create-team\`, which re-checks that
-role and the org's \`max_teams_per_org\` cap, adds the creator to the new workspace, and finalizes
+role and the org's \`max_teams_per_org\` cap, adds the creator to the new team, and finalizes
 the login in the same transaction.
 
 Both hosted chooser creation routes accept the optional \`join_policy\` values
@@ -256,7 +256,7 @@ Both hosted chooser creation routes accept the optional \`join_policy\` values
 \`HIDDEN\` as **Private**: it is not discoverable and only people who are invited can find it.
 \`INVITE_ONLY\` requires an invite to join, while \`OPEN_TO_ORG\` lets active members of the selected
 organisation join themselves. Other team policies are managed through the organisation API, not this
-hosted creation continuation. A user with exactly one workspace and no pending invites still auto-skips
+hosted creation continuation. A user with exactly one team and no pending invites still auto-skips
 the chooser, so that user reaches creation through the product rather than the sign-in popup.
 
 After exchanging the resulting authorization code, use
@@ -264,12 +264,12 @@ After exchanging the resulting authorization code, use
 organisation slug and is unique within the client domain. \`Team.slug\` is only
 unique inside its organisation, so it must not be used as a subdomain. Existing
 tokens may omit \`tenantSlug\` until they expire; re-authenticate or resolve the
-workspace through UOA before redirecting a legacy session to a tenant host.
+team through UOA before redirecting a legacy session to a tenant host.
 
 ### 4.6a Per-product confidential assertion exchange
 
 A registered backend can exchange a short-lived user assertion, optionally
-scoped to a selected workspace, for a resource-bound token without forwarding
+scoped to a selected team, for a resource-bound token without forwarding
 its normal UOA access token or its domain credential to the resource server.
 The calling product MUST authenticate this request with its own existing
 per-domain app credential. UOA resolves that authenticated ClientDomain plus the
@@ -283,10 +283,10 @@ grants above remain unchanged.
 import { SignJWT } from 'jose';
 
 const now = Math.floor(Date.now() / 1000);
-const workspace = orgId && teamId ? { active: { orgId, teamId } } : {};
+const team = orgId && teamId ? { active: { orgId, teamId } } : {};
 const subjectToken = await new SignJWT({
   source_domain: 'api.nessie.works',
-  ...workspace,
+  ...team,
 })
   .setProtectedHeader({ alg: 'RS256', kid: NESSIE_CONFIG_KEY_ID, typ: 'JWT' })
   .setIssuer('api.nessie.works')
@@ -332,10 +332,10 @@ that JWKS through its SSRF-protected, same-host pipeline and requires RS256 +
 \`kid\`. The assertion requires exact \`iss\` and \`source_domain\`, exact
 \`aud = PUBLIC_BASE_URL + "/auth/token"\`, stable UOA \`sub\`, non-empty \`jti\`,
 \`iat\`/\`exp\` no more than 60 seconds apart. \`active\` is optional for
-first-time or workspace-less users. When present it must be exactly
-\`{ orgId, teamId }\` with both values non-empty; partial or malformed workspace
+first-time or team-less users. When present it must be exactly
+\`{ orgId, teamId }\` with both values non-empty; partial or malformed team
 objects are rejected. Mint a fresh unique \`jti\` for every attempt: after
-identity and optional workspace validation, UOA atomically consumes that
+identity and optional team validation, UOA atomically consumes that
 source-domain + \`jti\` once through \`exp\` plus clock tolerance. Exact and
 concurrent replays are rejected across service instances.
 
@@ -357,7 +357,7 @@ domain roles, and removed/deactivated or cross-org/team selections are rejected.
 The issued token is verified with \`GET /oauth/jwks.json\` and contains
 \`iss\`, resource \`aud\`, stable \`sub\`, advisory \`email\`,
 \`source_domain\`, non-secret \`azp\` (the source domain), \`product\`, the exact
-requested \`scope\` subset, \`jti\`, \`iat\`, and \`exp\`. A validated workspace
+requested \`scope\` subset, \`jti\`, \`iat\`, and \`exp\`. A validated team
 adds current \`org\` and selected
 \`active\`; an identity-only exchange omits both. It contains no
 \`client_id\` and never contains the 64-character domain-hash bearer credential.
@@ -391,7 +391,7 @@ product provenance (for Nessie→DeepSignal:
 \`{"sub":"api.nessie.works","product":"nessie"}\`). A chained access-token
 subject remains reusable until \`exp\`; only the first-hop source JWT assertion
 is one-time. This supports concurrent multi-process calls without weakening the
-exact audience, app-credential, workspace, or scope checks.
+exact audience, app-credential, team, or scope checks.
 
 Unknown or disabled mappings, a product selected with another app credential,
 an inexact resource (including path/trailing-slash differences), duplicate or
@@ -442,7 +442,7 @@ ${llmTeamsInvitationsMarkdown}
 
 ### 4.7 Two-factor login branches
 
-When config \`2fa_enabled\` is false or absent, no 2FA branch runs. When it is true, UOA resolves DB policy from the Service/domain, same-domain Organisations, and the exact selected Organisation using strongest-wins (\`off < optional < required\`). A recognized product resolves that exact workspace before 2FA even when its chooser is off. Authorization-code exchange rechecks current policy and enrollment against persisted interactive proof, so a newly stricter policy fails closed before token issuance.
+When config \`2fa_enabled\` is false or absent, no 2FA branch runs. When it is true, UOA resolves DB policy from the Service/domain, same-domain Organisations, and the exact selected Organisation using strongest-wins (\`off < optional < required\`). A recognized product resolves that exact team before 2FA even when its chooser is off. Authorization-code exchange rechecks current policy and enrollment against persisted interactive proof, so a newly stricter policy fails closed before token issuance.
 
 - Enrolled users get \`{ ok: true, twofa_required: true, twofa_token }\`; submit \`{ twofa_token, code }\` to \`POST /2fa/verify?config_url=...\` and follow \`redirect_to\`.
 - Required but unenrolled users get \`{ ok: true, kind: "twofa_enroll_required", twofa_enroll_required: true, setup_token, otpauth_uri?, qr_svg?, manual_secret? }\`; the Auth UI completes \`POST /2fa/enroll\` with the setup token and initial code before any authorization code is granted.

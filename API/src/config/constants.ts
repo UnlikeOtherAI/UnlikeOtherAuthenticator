@@ -25,7 +25,7 @@ export const LOGIN_CODE_TTL_MS = 10 * 60 * 1000;
 export const LOGIN_CODE_MAX_ATTEMPTS = 5;
 
 // Slack-style login (Phase 3b, design §4.3/§4.4): the `login_token` bridge JWT authorizes ONLY
-// workspace selection for an already-verified user (same class as `twofa_token`) — never
+// team selection for an already-verified user (same class as `twofa_token`) — never
 // authentication by itself. JWT `aud` claim, mirroring ACCESS_TOKEN_AUDIENCE's fixed-audience shape.
 export const LOGIN_SESSION_AUDIENCE = 'uoa:login-session';
 export const LOGIN_SESSION_TTL_MS = 10 * 60 * 1000;

@@ -5,10 +5,10 @@ import { getAdminPrisma, getPrisma } from '../db/prisma.js';
 import { avatarImageBaseUrl, publicTeamAvatarImageUrl } from '../utils/avatar-url.js';
 import { configRoleHoldsCapability } from './role-grants.js';
 import {
-  resolveProductWorkspacePolicy,
-  type ProductWorkspacePolicy,
-  type ProductWorkspacePolicyPrisma,
-} from './product-workspace-policy.service.js';
+  resolveProductTeamPolicy,
+  type ProductTeamPolicy,
+  type ProductTeamPolicyPrisma,
+} from './product-team-policy.service.js';
 
 type FirstLoginPrisma = {
   user: Pick<PrismaClient['user'], 'findUnique'>;
@@ -20,8 +20,8 @@ type FirstLoginPrisma = {
 /**
  * The "is this TeamInvite row still a real pending invite" predicate (design §4.7): unaccepted,
  * undeclined, unrevoked, and not expired. This is the single source of truth for that eligibility
- * check — `buildFirstLoginBlock`, `buildWorkspaceChoices` (the chooser), the gap-fix A `/org/me`
- * sidebar (`workspace-directory.service.ts`), and the "Invited" tab (`team-invite.service.invited.ts`)
+ * check — `buildFirstLoginBlock`, `buildSessionChoices` (the chooser), the gap-fix A `/org/me`
+ * sidebar (`team-directory.service.ts`), and the "Invited" tab (`team-invite.service.invited.ts`)
  * all compose it with their own scoping (email+domain vs team+org) rather than duplicating it.
  *
  * `includePendingApproval` defaults to false, matching the historical chooser/firstLogin behaviour:
@@ -85,8 +85,8 @@ export async function buildFirstLoginBlock(
     config: ClientConfig;
   },
   deps?: {
-    policy?: ProductWorkspacePolicy;
-    policyPrisma?: ProductWorkspacePolicyPrisma;
+    policy?: ProductTeamPolicy;
+    policyPrisma?: ProductTeamPolicyPrisma;
     crossProductPrisma?: FirstLoginPrisma;
     prisma?: FirstLoginPrisma;
     now?: () => Date;
@@ -149,12 +149,12 @@ export async function buildFirstLoginBlock(
       },
     }),
     deps?.policy ??
-      resolveProductWorkspacePolicy(
+      resolveProductTeamPolicy(
         { domain },
         {
           now: deps?.now,
           prisma:
-            deps?.policyPrisma ?? (getAdminPrisma() as unknown as ProductWorkspacePolicyPrisma),
+            deps?.policyPrisma ?? (getAdminPrisma() as unknown as ProductTeamPolicyPrisma),
         },
       ),
   ]);
@@ -162,7 +162,7 @@ export async function buildFirstLoginBlock(
   let productOrgRows: typeof sameDomainOrgRows = [];
   let productTeamRows: typeof sameDomainTeamRows = [];
   if (policy.scope === 'all_active_memberships') {
-    // Product workspace expansion is a pre-auth, cross-tenant operation. It is
+    // Product team expansion is a pre-auth, cross-tenant operation. It is
     // intentionally isolated on the BYPASSRLS client; the supplied tenant
     // transaction still contributes same-domain rows created earlier in the
     // login transaction.
@@ -235,7 +235,7 @@ export async function buildFirstLoginBlock(
   };
 }
 
-export type WorkspaceChoiceTeam = {
+export type TeamChoiceTeam = {
   teamId: string;
   orgId: string;
   name: string;
@@ -243,14 +243,14 @@ export type WorkspaceChoiceTeam = {
   // Design §11.3 (gap-fix A Task 3) — matches `Auth/src/hooks/use-popup.tsx`'s `TeamChoice.iconUrl`.
   iconUrl: string | null;
   /**
-   * Always-resolving workspace image (Docs/Auth/avatars.md §11.4), in the credential-free
+   * Always-resolving team image (Docs/Auth/avatars.md §11.4), in the credential-free
    * `/teams/:teamId/avatar` form — the chooser renders in a popup that holds no bearer, so this is
    * the only avatar URL form it can put in an `<img src>`. Never null: uploaded → proxied
    * `iconUrl` → generated.
    */
   avatarImageUrl: string;
   /**
-   * The owning organisation's name — two workspaces can share a name across different orgs (a
+   * The owning organisation's name — two teams can share a name across different orgs (a
    * "General" in each), so the chooser needs the level above to tell them apart. Null only when a
    * caller supplied a team row without the org join; the query here always selects it.
    */
@@ -260,47 +260,47 @@ export type WorkspaceChoiceTeam = {
   slug: string;
 };
 
-export type WorkspaceChoicePendingInvite = {
+export type TeamChoicePendingInvite = {
   inviteId: string;
   teamName: string;
   invitedBy: string | null;
 };
 
 /**
- * An organisation this user may add a further workspace (team) to from the chooser: they are an
+ * An organisation this user may add a further team (team) to from the chooser: they are an
  * ACTIVE owner/admin of it and the domain has opted in with `org_features.allow_user_create_team`.
  *
  * Deliberately distinct from `can_create_org`, which is about a user's *first* organisation
- * (brief §1718). An org is a level above a workspace: this list says "you may create a workspace
+ * (brief §1718). An org is a level above a team: this list says "you may create a team
  * **here**", so the client can offer creation per organisation rather than as one ambiguous button
  * when the user belongs to several.
  */
-export type WorkspaceChoiceCreatableOrg = {
+export type TeamChoiceCreatableOrg = {
   orgId: string;
   orgName: string;
 };
 
-export type WorkspaceChoices = {
-  teams: WorkspaceChoiceTeam[];
-  pending_invites: WorkspaceChoicePendingInvite[];
+export type SessionChoices = {
+  teams: TeamChoiceTeam[];
+  pending_invites: TeamChoicePendingInvite[];
   can_create_org: boolean;
-  creatable_orgs: WorkspaceChoiceCreatableOrg[];
+  creatable_orgs: TeamChoiceCreatableOrg[];
 };
 
-export type AutoSelectedWorkspace = {
+export type AutoSelectedTeam = {
   orgId: string;
   teamId: string;
 };
 
 /**
- * `workspace_selection: "auto"` skips the chooser only when there is exactly one unambiguous
- * ACTIVE workspace and no pending invite. The skipped chooser is still a workspace selection:
+ * `team_selection: "auto"` skips the chooser only when there is exactly one unambiguous
+ * ACTIVE team and no pending invite. The skipped chooser is still a team selection:
  * callers must bind this exact org/team to the authorization code (and any intervening 2FA
  * bridge), just as `/auth/select-team` does for an explicit click.
  */
-export function resolveAutoSelectedWorkspace(
-  choices: WorkspaceChoices,
-): AutoSelectedWorkspace | null {
+export function resolveAutoSelectedTeam(
+  choices: SessionChoices,
+): AutoSelectedTeam | null {
   if (choices.teams.length !== 1 || choices.pending_invites.length !== 0) {
     return null;
   }
@@ -313,19 +313,19 @@ export function resolveAutoSelectedWorkspace(
 /**
  * An auto-selection flow needs the chooser whenever there is a real decision or next action that
  * cannot be represented by an authorization code alone. In particular, an empty membership list
- * with `can_create_org` is the create-workspace entrypoint, not an unscoped-login fallback.
+ * with `can_create_org` is the create-team entrypoint, not an unscoped-login fallback.
  */
-export function shouldPresentWorkspaceChooser(
-  choices: WorkspaceChoices,
-  autoSelectedWorkspace = resolveAutoSelectedWorkspace(choices),
+export function shouldPresentTeamChooser(
+  choices: SessionChoices,
+  autoSelectedTeam = resolveAutoSelectedTeam(choices),
 ): boolean {
   return (
-    !autoSelectedWorkspace &&
+    !autoSelectedTeam &&
     (choices.teams.length >= 2 || choices.pending_invites.length > 0 || choices.can_create_org)
   );
 }
 
-type WorkspaceChooserPrisma = {
+type TeamChooserPrisma = {
   user: Pick<PrismaClient['user'], 'findUnique'>;
   orgMember: Pick<PrismaClient['orgMember'], 'findMany'>;
   teamMember: Pick<PrismaClient['teamMember'], 'findMany'>;
@@ -333,26 +333,26 @@ type WorkspaceChooserPrisma = {
 };
 
 /**
- * Phase 3b (design §4.3): the post-verification workspace chooser payload. Only ever built AFTER
+ * Phase 3b (design §4.3): the post-verification team chooser payload. Only ever built AFTER
  * identity verification (a successful /auth/verify-code or a valid login_token) — never before, so
- * it never leaks workspace names or membership existence to an unverified caller. Only ACTIVE team
+ * it never leaks team names or membership existence to an unverified caller. Only ACTIVE team
  * memberships are listed; DEACTIVATED/REMOVED rows are silently omitted (design §8: a suspended user
  * never sees "you were suspended", the team just isn't there).
  */
-export async function buildWorkspaceChoices(
+export async function buildSessionChoices(
   params: {
     userId: string;
     config: ClientConfig;
   },
   deps?: {
-    policy?: ProductWorkspacePolicy;
-    policyPrisma?: ProductWorkspacePolicyPrisma;
-    crossProductPrisma?: WorkspaceChooserPrisma;
-    prisma?: WorkspaceChooserPrisma;
+    policy?: ProductTeamPolicy;
+    policyPrisma?: ProductTeamPolicyPrisma;
+    crossProductPrisma?: TeamChooserPrisma;
+    prisma?: TeamChooserPrisma;
     now?: () => Date;
   },
-): Promise<WorkspaceChoices> {
-  const prisma = deps?.prisma ?? (getPrisma() as unknown as WorkspaceChooserPrisma);
+): Promise<SessionChoices> {
+  const prisma = deps?.prisma ?? (getPrisma() as unknown as TeamChooserPrisma);
   const now = deps?.now ? deps.now() : new Date();
 
   const user = await prisma.user.findUnique({
@@ -366,16 +366,16 @@ export async function buildWorkspaceChoices(
   const domain = params.config.domain.trim().toLowerCase().replace(/\.$/, '');
   const policy =
     deps?.policy ??
-    (await resolveProductWorkspacePolicy(
+    (await resolveProductTeamPolicy(
       { domain },
       {
         now: deps?.now,
-        prisma: deps?.policyPrisma ?? (getAdminPrisma() as unknown as ProductWorkspacePolicyPrisma),
+        prisma: deps?.policyPrisma ?? (getAdminPrisma() as unknown as ProductTeamPolicyPrisma),
       },
     ));
 
-  // An org is the level above a workspace: this decides which organisations the user may add a
-  // workspace TO. Only queried when the domain has opted in — otherwise the chooser offers no
+  // An org is the level above a team: this decides which organisations the user may add a
+  // team TO. Only queried when the domain has opted in — otherwise the chooser offers no
   // creation and the read would be dead weight on every login.
   const canCreateTeams = Boolean(
     params.config.org_features?.enabled && params.config.org_features.allow_user_create_team,
@@ -420,7 +420,7 @@ export async function buildWorkspaceChoices(
   let productTeamRows: typeof sameDomainTeamRows = [];
   if (policy.scope === 'all_active_memberships') {
     const crossProductPrisma =
-      deps?.crossProductPrisma ?? (getAdminPrisma() as unknown as WorkspaceChooserPrisma);
+      deps?.crossProductPrisma ?? (getAdminPrisma() as unknown as TeamChooserPrisma);
     productTeamRows = await crossProductPrisma.teamMember.findMany({
       where: {
         userId: params.userId,
@@ -448,7 +448,7 @@ export async function buildWorkspaceChoices(
   ];
 
   const avatarBaseUrl = avatarImageBaseUrl();
-  const teams: WorkspaceChoiceTeam[] = teamRows.map((row) => ({
+  const teams: TeamChoiceTeam[] = teamRows.map((row) => ({
     teamId: row.teamId,
     orgId: row.team.orgId,
     name: row.team.name,
@@ -459,18 +459,18 @@ export async function buildWorkspaceChoices(
     slug: row.team.slug,
   }));
 
-  const pendingInvites: WorkspaceChoicePendingInvite[] = inviteRows.map((row) => ({
+  const pendingInvites: TeamChoicePendingInvite[] = inviteRows.map((row) => ({
     inviteId: row.id,
     teamName: row.team.name,
     invitedBy: row.invitedByName ?? row.invitedByEmail ?? null,
   }));
 
-  // Creating a workspace inside an org needs `teams.manage` at ORG scope (there is no team to
+  // Creating a team inside an org needs `teams.manage` at ORG scope (there is no team to
   // stand in yet), so the chooser only offers it where the user's org role actually grants it —
   // the same rule `POST /org/organisations/:orgId/teams` enforces, mirrored here so the UI cannot
   // invite a call that would 403. The org's team cap is NOT pre-checked; `/auth/create-team`
   // enforces it.
-  const creatableOrgs: WorkspaceChoiceCreatableOrg[] = orgRows
+  const creatableOrgs: TeamChoiceCreatableOrg[] = orgRows
     .filter((row) => configRoleHoldsCapability(params.config, 'org', row.role, 'teams.manage'))
     .map((row) => ({ orgId: row.orgId, orgName: row.org.name }));
 

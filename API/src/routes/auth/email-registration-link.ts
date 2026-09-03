@@ -17,19 +17,19 @@ import { selectRedirectUrl } from '../../services/authorization-code.service.js'
 import { isCustomSchemeUrl } from '../../utils/http-url.js';
 import { verifyEmailToken } from '../../services/auth-verify-email.service.js';
 import {
-  buildWorkspaceChoices,
-  resolveAutoSelectedWorkspace,
-  shouldPresentWorkspaceChooser,
-  type AutoSelectedWorkspace,
+  buildSessionChoices,
+  resolveAutoSelectedTeam,
+  shouldPresentTeamChooser,
+  type AutoSelectedTeam,
 } from '../../services/first-login.service.js';
 import { signLoginSession } from '../../services/login-session.service.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
-import { resolveProductWorkspaceBeforeTwoFa } from '../../services/required-workspace-placement.service.js';
+import { resolveProductTeamBeforeTwoFa } from '../../services/required-team-placement.service.js';
 import { AppError, isAppError } from '../../utils/errors.js';
 import { parsePkceChallenge, type PkceChallenge } from '../../utils/pkce.js';
-import { finalizeWithTwoFaPolicy } from '../../services/workspace-finalize.service.js';
+import { finalizeWithTwoFaPolicy } from '../../services/team-finalize.service.js';
 import { lockAndAssertAuthenticationEpoch } from '../../services/authentication-epoch.service.js';
-import { lockProductWorkspacePolicyShared } from '../../services/product-workspace-policy-lock.service.js';
+import { lockProductTeamPolicyShared } from '../../services/product-team-policy-lock.service.js';
 import { tokenConsumeRateLimiter } from './rate-limit-keys.js';
 
 const QuerySchema = z
@@ -198,25 +198,25 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
 
           const authMethod = type === 'VERIFY_EMAIL' ? 'verify_email' : 'login_link';
           const continuation = await runInTransaction(request.adminDb, async (tx) => {
-            await lockProductWorkspacePolicyShared(tx);
+            await lockProductTeamPolicyShared(tx);
             const authenticationState = await lockAndAssertAuthenticationEpoch(
               { userId, domain: config.domain, credentialEpoch },
               { prisma: tx, fallbackTwoFaEnabled: twoFaEnabled },
             );
 
             // Keep exact first-placement selection, policy evaluation, and code/continuation
-            // issuance in one BYPASSRLS transaction. The selected workspace may come from an
+            // issuance in one BYPASSRLS transaction. The selected team may come from an
             // accepted invite or another recognized product.
-            let selectedWorkspace: AutoSelectedWorkspace | null = acceptedInvite
+            let selectedTeam: AutoSelectedTeam | null = acceptedInvite
               ? { orgId: acceptedInvite.orgId, teamId: acceptedInvite.teamId }
               : null;
-            if (!acceptedInvite && config.login_flow?.workspace_selection === 'auto') {
-              const choices = await buildWorkspaceChoices(
+            if (!acceptedInvite && config.login_flow?.team_selection === 'auto') {
+              const choices = await buildSessionChoices(
                 { userId, config },
                 { crossProductPrisma: tx, policyPrisma: tx, prisma: tx },
               );
-              selectedWorkspace = resolveAutoSelectedWorkspace(choices);
-              if (shouldPresentWorkspaceChooser(choices, selectedWorkspace)) {
+              selectedTeam = resolveAutoSelectedTeam(choices);
+              if (shouldPresentTeamChooser(choices, selectedTeam)) {
                 const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
                 const loginToken = await signLoginSession({
                   userId,
@@ -233,12 +233,12 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
                   sharedSecret: SHARED_SECRET,
                   audience: LOGIN_SESSION_AUDIENCE,
                 });
-                return { kind: 'workspace_chooser' as const, loginToken };
+                return { kind: 'team_chooser' as const, loginToken };
               }
             }
-            selectedWorkspace ??= await resolveProductWorkspaceBeforeTwoFa(
+            selectedTeam ??= await resolveProductTeamBeforeTwoFa(
               { userId, config },
-              { prisma: tx, workspacePrisma: tx },
+              { prisma: tx, teamPrisma: tx },
             );
 
             const outcome = await finalizeWithTwoFaPolicy(
@@ -256,7 +256,7 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
                 codeChallenge: pkce.codeChallenge,
                 codeChallengeMethod: pkce.codeChallengeMethod,
                 ip: request.ip ?? null,
-                ...(selectedWorkspace ?? {}),
+                ...(selectedTeam ?? {}),
               },
               {
                 currentTwoFaEnabled: authenticationState.twoFaEnabled,
@@ -264,16 +264,16 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
                 policyPrisma: tx,
                 prisma: tx,
                 twoFaPolicyPrisma: tx,
-                workspacePrisma: tx,
+                teamPrisma: tx,
               },
             );
             return { kind: 'finalized' as const, outcome };
           });
 
-          if (continuation.kind === 'workspace_chooser') {
+          if (continuation.kind === 'team_chooser') {
             redirectNoStore(
               reply,
-              buildWorkspaceChooserAuthUrl(
+              buildTeamChooserAuthUrl(
                 configUrl,
                 redirectUrl,
                 continuation.loginToken,
@@ -395,11 +395,11 @@ function buildAuthUrl(
   return `/auth?${params.toString()}`;
 }
 
-// Gap-fix B Task 1 (design §4.3/§11.2): the same `/auth?...&login_token=...&flow=workspace_chooser`
-// shape `callback.ts`'s social workspace-chooser branch redirects to, adapted to this route's own
+// Gap-fix B Task 1 (design §4.3/§11.2): the same `/auth?...&login_token=...&flow=team_chooser`
+// shape `callback.ts`'s social team-chooser branch redirects to, adapted to this route's own
 // convention of always preserving the (already-verified) PKCE challenge across an `/auth` redirect —
 // see `buildAuthUrl`/`buildLoginAuthUrl` above, which do the same for their own redirect targets.
-function buildWorkspaceChooserAuthUrl(
+function buildTeamChooserAuthUrl(
   configUrl: string,
   redirectUrl: string,
   loginToken: string,
@@ -412,7 +412,7 @@ function buildWorkspaceChooserAuthUrl(
   params.set('code_challenge', pkce.codeChallenge);
   params.set('code_challenge_method', pkce.codeChallengeMethod);
   params.set('login_token', loginToken);
-  params.set('flow', 'workspace_chooser');
+  params.set('flow', 'team_chooser');
   if (requestAccess) params.set('request_access', 'true');
   return `/auth?${params.toString()}`;
 }

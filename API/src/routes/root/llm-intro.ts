@@ -240,7 +240,7 @@ configured. Never gate on a role string; see \`/llm\` §4.4a.
 
 ### 2.5 Two-factor policy model
 
-\`2fa_enabled\` in the config JWT is the master gate. If it is false or absent, UOA treats 2FA as off for that integration even if an Admin policy exists. If it is true, UOA resolves the effective policy from the DB-backed Service/domain policy, same-domain Organisation policies, and the exact selected Organisation even when a recognized product selected it across domains. The strongest policy wins: \`off < optional < required\`. Recognized products resolve exact scope before 2FA even with \`workspace_selection: "off"\`; authorization-code exchange rechecks current policy/enrollment against persisted interactive TOTP proof before creating tokens.
+\`2fa_enabled\` in the config JWT is the master gate. If it is false or absent, UOA treats 2FA as off for that integration even if an Admin policy exists. If it is true, UOA resolves the effective policy from the DB-backed Service/domain policy, same-domain Organisation policies, and the exact selected Organisation even when a recognized product selected it across domains. The strongest policy wins: \`off < optional < required\`. Recognized products resolve exact scope before 2FA even with \`team_selection: "off"\`; authorization-code exchange rechecks current policy/enrollment against persisted interactive TOTP proof before creating tokens.
 
 - \`off\`: login proceeds without a TOTP prompt.
 - \`optional\`: users may enroll themselves; enrolled users must verify a code at login.
@@ -303,7 +303,7 @@ substitutes**: PKCE proves the party redeeming the code is the party that starte
 the flow, while \`state\` binds *this* callback to *your* pending record, which is
 what defeats login-CSRF (an attacker feeding you their own code).
 
-UOA binds the value to the login for its whole lifetime — through the workspace
+UOA binds the value to the login for its whole lifetime — through the team
 chooser, the 2FA challenge and enrolment bridges, the social provider round-trip,
 and the signature continuation — so no mid-flow hop can substitute a different
 one. It is echoed on failure too: a failed social callback redirects to

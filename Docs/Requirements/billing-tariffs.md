@@ -708,7 +708,7 @@ the supplied body, but must reject unknown actions. The old
 `POST /billing/v1/stripe/subscription/cancel` route no longer exists.
 
 The versioned, MIT-licensed
-`packages/billing-statement-protocol` workspace is UOA's canonical TypeScript
+`packages/billing-statement-protocol` team is UOA's canonical TypeScript
 source and is safe to publish, pack, or vendor into an open-source consumer. It
 exports only protocol constants, types, JSON Schema, OpenAPI 3.1 components,
 and synthetic fixtures for `BillingStatementV1`, `BillingStatementV2`, and the

@@ -75,7 +75,7 @@ describe.skipIf(!hasDatabase)('backend-mode team invitation acceptance', () => {
     return user;
   }
 
-  async function seedWorkspace(label: string) {
+  async function seedTeam(label: string) {
     const owner = await createDomainUser(`${label.toLowerCase()}-owner@example.com`);
     const org = await handle.prisma.organisation.create({
       data: {
@@ -141,11 +141,11 @@ describe.skipIf(!hasDatabase)('backend-mode team invitation acceptance', () => {
   }
 
   it('creates both memberships, marks the invite accepted, and repeats as idempotent success', async () => {
-    const workspace = await seedWorkspace('Happy');
+    const team = await seedTeam('Happy');
     const invitee = await createDomainUser('happy-invitee@example.com');
     const invite = await seedInvite({
-      orgId: workspace.orgId,
-      teamId: workspace.teamId,
+      orgId: team.orgId,
+      teamId: team.teamId,
       email: 'happy-invitee@example.com',
     });
     const { app, headers } = await createBackendRequestState();
@@ -153,7 +153,7 @@ describe.skipIf(!hasDatabase)('backend-mode team invitation acceptance', () => {
     try {
       const request = {
         method: 'POST' as const,
-        url: url(workspace.orgId, workspace.teamId, invite.id),
+        url: url(team.orgId, team.teamId, invite.id),
         headers,
         payload: { userId: invitee.id },
       };
@@ -161,19 +161,19 @@ describe.skipIf(!hasDatabase)('backend-mode team invitation acceptance', () => {
       expect(first.statusCode).toBe(200);
       expect(first.json()).toEqual({
         ok: true,
-        orgId: workspace.orgId,
-        teamId: workspace.teamId,
+        orgId: team.orgId,
+        teamId: team.teamId,
       });
 
       expect(
         await handle.prisma.orgMember.findUnique({
-          where: { orgId_userId: { orgId: workspace.orgId, userId: invitee.id } },
+          where: { orgId_userId: { orgId: team.orgId, userId: invitee.id } },
           select: { role: true, status: true },
         }),
       ).toEqual({ role: 'member', status: 'ACTIVE' });
       expect(
         await handle.prisma.teamMember.findUnique({
-          where: { teamId_userId: { teamId: workspace.teamId, userId: invitee.id } },
+          where: { teamId_userId: { teamId: team.teamId, userId: invitee.id } },
           select: { teamRole: true, status: true },
         }),
       ).toEqual({ teamRole: 'member', status: 'ACTIVE' });
@@ -189,12 +189,12 @@ describe.skipIf(!hasDatabase)('backend-mode team invitation acceptance', () => {
       expect(repeat.json()).toEqual(first.json());
       expect(
         await handle.prisma.orgMember.count({
-          where: { orgId: workspace.orgId, userId: invitee.id },
+          where: { orgId: team.orgId, userId: invitee.id },
         }),
       ).toBe(1);
       expect(
         await handle.prisma.teamMember.count({
-          where: { teamId: workspace.teamId, userId: invitee.id },
+          where: { teamId: team.teamId, userId: invitee.id },
         }),
       ).toBe(1);
     } finally {
@@ -203,11 +203,11 @@ describe.skipIf(!hasDatabase)('backend-mode team invitation acceptance', () => {
   });
 
   it('refuses a present user token and a config without backend_org_management', async () => {
-    const workspace = await seedWorkspace('Guard');
+    const team = await seedTeam('Guard');
     const invitee = await createDomainUser('guard-invitee@example.com');
     const invite = await seedInvite({
-      orgId: workspace.orgId,
-      teamId: workspace.teamId,
+      orgId: team.orgId,
+      teamId: team.teamId,
       email: 'guard-invitee@example.com',
     });
 
@@ -215,7 +215,7 @@ describe.skipIf(!hasDatabase)('backend-mode team invitation acceptance', () => {
     try {
       const response = await enabled.app.inject({
         method: 'POST',
-        url: url(workspace.orgId, workspace.teamId, invite.id),
+        url: url(team.orgId, team.teamId, invite.id),
         headers: { ...enabled.headers, 'x-uoa-access-token': 'Bearer user-token' },
         payload: { userId: invitee.id },
       });
@@ -229,7 +229,7 @@ describe.skipIf(!hasDatabase)('backend-mode team invitation acceptance', () => {
     try {
       const response = await disabled.app.inject({
         method: 'POST',
-        url: url(workspace.orgId, workspace.teamId, invite.id),
+        url: url(team.orgId, team.teamId, invite.id),
         headers: disabled.headers,
         payload: { userId: invitee.id },
       });
@@ -241,8 +241,8 @@ describe.skipIf(!hasDatabase)('backend-mode team invitation acceptance', () => {
   });
 
   it('accepts an invitee who is already a member of another organisation on the domain', async () => {
-    const existing = await seedWorkspace('Existing');
-    const target = await seedWorkspace('Target');
+    const existing = await seedTeam('Existing');
+    const target = await seedTeam('Target');
     const invitee = await createDomainUser('conflict-invitee@example.com');
     await handle.prisma.orgMember.create({
       data: { orgId: existing.orgId, userId: invitee.id, role: 'member' },
@@ -283,9 +283,9 @@ describe.skipIf(!hasDatabase)('backend-mode team invitation acceptance', () => {
   });
 
   it('keeps invalid invite state and path bindings on the generic 400 body', async () => {
-    const workspace = await seedWorkspace('Generic');
+    const team = await seedTeam('Generic');
     const wrongTeam = await handle.prisma.team.create({
-      data: { orgId: workspace.orgId, name: 'Wrong Team', slug: 'wrong-team' },
+      data: { orgId: team.orgId, name: 'Wrong Team', slug: 'wrong-team' },
       select: { id: true },
     });
     const emailMismatchUser = await createDomainUser('mismatch-user@example.com');
@@ -298,8 +298,8 @@ describe.skipIf(!hasDatabase)('backend-mode team invitation acceptance', () => {
         label: 'email mismatch',
         userId: emailMismatchUser.id,
         invite: await seedInvite({
-          orgId: workspace.orgId,
-          teamId: workspace.teamId,
+          orgId: team.orgId,
+          teamId: team.teamId,
           email: 'different-email@example.com',
         }),
       },
@@ -307,8 +307,8 @@ describe.skipIf(!hasDatabase)('backend-mode team invitation acceptance', () => {
         label: 'revoked',
         userId: revokedUser.id,
         invite: await seedInvite({
-          orgId: workspace.orgId,
-          teamId: workspace.teamId,
+          orgId: team.orgId,
+          teamId: team.teamId,
           email: 'revoked-user@example.com',
           revokedAt: new Date(),
           revokedReason: 'REVOKED',
@@ -318,8 +318,8 @@ describe.skipIf(!hasDatabase)('backend-mode team invitation acceptance', () => {
         label: 'expired',
         userId: expiredUser.id,
         invite: await seedInvite({
-          orgId: workspace.orgId,
-          teamId: workspace.teamId,
+          orgId: team.orgId,
+          teamId: team.teamId,
           email: 'expired-user@example.com',
           expiresAt: new Date(Date.now() - 60_000),
         }),
@@ -328,11 +328,11 @@ describe.skipIf(!hasDatabase)('backend-mode team invitation acceptance', () => {
         label: 'approval pending',
         userId: pendingUser.id,
         invite: await seedInvite({
-          orgId: workspace.orgId,
-          teamId: workspace.teamId,
+          orgId: team.orgId,
+          teamId: team.teamId,
           email: 'pending-user@example.com',
           approvalStatus: 'PENDING',
-          requestedByUserId: workspace.ownerId,
+          requestedByUserId: team.ownerId,
         }),
       },
     ];
@@ -342,7 +342,7 @@ describe.skipIf(!hasDatabase)('backend-mode team invitation acceptance', () => {
       for (const testCase of cases) {
         const response = await app.inject({
           method: 'POST',
-          url: url(workspace.orgId, workspace.teamId, testCase.invite.id),
+          url: url(team.orgId, team.teamId, testCase.invite.id),
           headers,
           payload: { userId: testCase.userId },
         });
@@ -352,7 +352,7 @@ describe.skipIf(!hasDatabase)('backend-mode team invitation acceptance', () => {
 
       const pathMismatch = await app.inject({
         method: 'POST',
-        url: url(workspace.orgId, wrongTeam.id, cases[0].invite.id),
+        url: url(team.orgId, wrongTeam.id, cases[0].invite.id),
         headers,
         payload: { userId: emailMismatchUser.id },
       });

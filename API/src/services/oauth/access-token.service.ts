@@ -102,7 +102,7 @@ export async function signMcpAccessToken(claims: McpAccessTokenClaims): Promise<
   }
 }
 
-type ConfidentialWorkspaceClaims =
+type ConfidentialTeamClaims =
   | {
       org: OrgContext;
       active: {
@@ -135,7 +135,7 @@ export type ConfidentialAccessTokenClaims = {
   expiresAtEpochSeconds?: number;
   scope: string;
   actor?: ConfidentialActorChain;
-} & ConfidentialWorkspaceClaims;
+} & ConfidentialTeamClaims;
 
 /**
  * Sign a resource-bound access token for a confidential RFC 8693 exchange.

@@ -9,11 +9,11 @@ import { usePopup } from '../../hooks/use-popup.js';
 import { useTranslation } from '../../i18n/use-translation.js';
 import { postJson } from '../../utils/api.js';
 import { isEmailCodeEnabled, isRegistrationAllowed } from '../../utils/auth-config.js';
-import { requestSignInCode } from '../../utils/workspace-actions.js';
+import { requestSignInCode } from '../../utils/team-actions.js';
 import {
-  applyWorkspaceOutcome,
-  interpretWorkspaceResponse,
-} from '../../utils/workspace-response.js';
+  applyTeamOutcome,
+  interpretTeamResponse,
+} from '../../utils/team-response.js';
 
 type LoginRequest = {
   email: string;
@@ -30,7 +30,7 @@ type LoginResponse = {
   qr_svg?: string;
   manual_secret?: string;
   redirect_to?: string;
-  // Workspace chooser payload (design §11.2, `workspace_selection: "auto"`); no `ok` field.
+  // Team chooser payload (design §11.2, `team_selection: "auto"`); no `ok` field.
   login_token?: string;
   teams?: unknown[];
   pending_invites?: unknown[];
@@ -77,7 +77,7 @@ export function LoginForm(): React.JSX.Element {
     scope,
     setPendingEmail,
     setLoginToken,
-    setWorkspaceChoices,
+    setSessionChoices,
   } = usePopup();
   const registrationAllowed = isRegistrationAllowed(config);
   const emailCodeEnabled = isEmailCodeEnabled(config);
@@ -133,15 +133,15 @@ export function LoginForm(): React.JSX.Element {
     }
 
     // Phase 3c (design §11.2): a password login can resolve to the same four shapes
-    // /auth/verify-code and /auth/select-team do — including the workspace chooser when
-    // `workspace_selection: "auto"`. Decode once, then apply generically.
-    const outcome = interpretWorkspaceResponse(result.data);
+    // /auth/verify-code and /auth/select-team do — including the team chooser when
+    // `team_selection: "auto"`. Decode once, then apply generically.
+    const outcome = interpretTeamResponse(result.data);
     if (outcome.kind === 'chooser') {
       setPendingEmail(email);
     }
-    const applied = applyWorkspaceOutcome(outcome, {
+    const applied = applyTeamOutcome(outcome, {
       setLoginToken,
-      setWorkspaceChoices,
+      setSessionChoices,
       setView,
       redirectTo,
       startTwoFactorVerify,

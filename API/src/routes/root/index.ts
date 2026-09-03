@@ -10,7 +10,7 @@ import {
   configJwtDocumentation,
   configValidationEndpointDocumentation,
   configVerificationEndpointDocumentation,
-  workspaceSwitchDocumentation,
+  teamSwitchDocumentation,
 } from './config-docs.js';
 import { registerConfigValidateRoute } from './config-validate.js';
 import { registerConfigVerifyRoute } from './config-verify.js';
@@ -55,7 +55,7 @@ export function registerRootRoute(app: FastifyInstance): void {
       api: '/api',
       config_jwt: configJwtDocumentation,
       access_token: accessTokenDocumentation,
-      workspace_switch: workspaceSwitchDocumentation,
+      team_switch: teamSwitchDocumentation,
       confidential_token_exchange: confidentialTokenExchangeDocumentation,
       config_validation: configValidationEndpointDocumentation,
       config_verification: configVerificationEndpointDocumentation,

@@ -947,7 +947,7 @@ describe.skipIf(!hasDatabase)('/org/* under production RLS roles (uoa_app)', () 
       await handle!.prisma.domainRole.create({
         data: { domain: ATTACKER_DOMAIN, userId: owner.id },
       });
-      // The flag governs whether END USERS may self-serve a workspace; it says
+      // The flag governs whether END USERS may self-serve a team; it says
       // nothing about the domain asking on its own behalf.
       await stubConfigs({ allowUserCreateOrg: false });
 

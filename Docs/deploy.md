@@ -207,14 +207,14 @@ pre-auth tenant transaction can receive cross-product choices only through the
 explicit admin client:
 
 ```sh
-RUN_PRODUCT_WORKSPACE_RLS_TESTS=true \
+RUN_PRODUCT_TEAM_RLS_TESTS=true \
   DATABASE_URL='<uoa_app DSN>' \
   DATABASE_ADMIN_URL='<uoa_admin DSN>' \
   pnpm --filter @uoa/api exec vitest run \
-    tests/integration/product-workspace-policy-rls.test.ts
+    tests/integration/product-team-policy-rls.test.ts
 ```
 
-Product-workspace policy is a live token-issuance kill switch. Change
+Product-team policy is a live token-issuance kill switch. Change
 `client_domains.status`, `billing_services.active`, lifecycle
 `billing_app_keys`, or integration acceptance only through the supported Admin
 services: domain create/update, BillingService create, lifecycle app-key

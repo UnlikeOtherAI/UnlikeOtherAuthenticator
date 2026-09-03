@@ -19,8 +19,8 @@ const enrollTwoFactorForUserMock = vi.fn();
 const decryptTwoFaSecretMock = vi.fn();
 const resolveTwoFaPolicyMock = vi.fn();
 const finalizeConfigAuthorizationWithSignaturesMock = vi.fn();
-const lockProductWorkspacePolicySharedMock = vi.fn();
-const resolveProductWorkspaceBeforeTwoFaMock = vi.fn();
+const lockProductTeamPolicySharedMock = vi.fn();
+const resolveProductTeamBeforeTwoFaMock = vi.fn();
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
   let resolve!: () => void;
@@ -110,9 +110,9 @@ vi.mock('../../src/services/twofactor-policy.service.js', () => {
   };
 });
 
-vi.mock('../../src/services/product-workspace-policy-lock.service.js', () => ({
-  lockProductWorkspacePolicyShared: (...args: unknown[]) =>
-    lockProductWorkspacePolicySharedMock(...args),
+vi.mock('../../src/services/product-team-policy-lock.service.js', () => ({
+  lockProductTeamPolicyShared: (...args: unknown[]) =>
+    lockProductTeamPolicySharedMock(...args),
 }));
 
 vi.mock('../../src/services/login-domain-policy.service.js', () => ({
@@ -125,14 +125,14 @@ vi.mock('../../src/services/ban-policy.service.js', () => ({
   isPrincipalBannedForRegistration: vi.fn(async () => false),
 }));
 
-vi.mock('../../src/services/required-workspace-placement.service.js', async () => {
+vi.mock('../../src/services/required-team-placement.service.js', async () => {
   const actual = await vi.importActual<
-    typeof import('../../src/services/required-workspace-placement.service.js')
-  >('../../src/services/required-workspace-placement.service.js');
+    typeof import('../../src/services/required-team-placement.service.js')
+  >('../../src/services/required-team-placement.service.js');
   return {
     ...actual,
-    resolveProductWorkspaceBeforeTwoFa: (...args: unknown[]) =>
-      resolveProductWorkspaceBeforeTwoFaMock(...args),
+    resolveProductTeamBeforeTwoFa: (...args: unknown[]) =>
+      resolveProductTeamBeforeTwoFaMock(...args),
   };
 });
 
@@ -171,8 +171,8 @@ describe('2FA gated by config `2fa_enabled`', () => {
     decryptTwoFaSecretMock.mockReset();
     resolveTwoFaPolicyMock.mockReset();
     finalizeConfigAuthorizationWithSignaturesMock.mockReset();
-    lockProductWorkspacePolicySharedMock.mockReset().mockResolvedValue(undefined);
-    resolveProductWorkspaceBeforeTwoFaMock.mockReset().mockResolvedValue(null);
+    lockProductTeamPolicySharedMock.mockReset().mockResolvedValue(undefined);
+    resolveProductTeamBeforeTwoFaMock.mockReset().mockResolvedValue(null);
     resolveTwoFaPolicyMock.mockImplementation(
       ({ config }: { config: Pick<ClientConfig, '2fa_enabled'> }) =>
         config['2fa_enabled'] === true ? 'OPTIONAL' : 'OFF',
@@ -331,7 +331,7 @@ describe('2FA gated by config `2fa_enabled`', () => {
       }
       const lockEntered = deferred();
       const releaseLock = deferred();
-      lockProductWorkspacePolicySharedMock.mockImplementationOnce(async () => {
+      lockProductTeamPolicySharedMock.mockImplementationOnce(async () => {
         lockEntered.resolve();
         await releaseLock.promise;
       });
@@ -367,7 +367,7 @@ describe('2FA gated by config `2fa_enabled`', () => {
     },
   );
 
-  it('carries an auto-selected workspace from the 2FA challenge into final code issuance', async () => {
+  it('carries an auto-selected team from the 2FA challenge into final code issuance', async () => {
     currentConfig['2fa_enabled'] = true;
     verifyTwoFaChallengeMock.mockResolvedValue({
       userId: 'user_1',
@@ -407,12 +407,12 @@ describe('2FA gated by config `2fa_enabled`', () => {
         teamId: 'team_1',
         twoFaCompleted: true,
       }),
-      expect.objectContaining({ workspacePrisma: expect.anything() }),
+      expect.objectContaining({ teamPrisma: expect.anything() }),
     );
     await app.close();
   });
 
-  it('carries an auto-selected workspace from required enrollment into final code issuance', async () => {
+  it('carries an auto-selected team from required enrollment into final code issuance', async () => {
     currentConfig['2fa_enabled'] = true;
     resolveTwoFaPolicyMock.mockResolvedValue('REQUIRED');
     verifyTwoFaSetupTokenMock.mockResolvedValue({
@@ -455,7 +455,7 @@ describe('2FA gated by config `2fa_enabled`', () => {
         teamId: 'team_1',
         twoFaCompleted: true,
       }),
-      expect.objectContaining({ workspacePrisma: expect.anything() }),
+      expect.objectContaining({ teamPrisma: expect.anything() }),
     );
     expect(resolveTwoFaPolicyMock).toHaveBeenCalledWith(
       expect.objectContaining({ orgId: 'org_1', userId: 'user_1' }),

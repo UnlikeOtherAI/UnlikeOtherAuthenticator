@@ -42,7 +42,7 @@ const ORG_CONTRACT_NOTE =
   '{ via: "domain_backend", source_domain }. ' +
   'GET /org/organisations is BACKEND-ONLY: it lists a whole domain and has no user mode, so it ' +
   'refuses either present user credential with 401 ACCESS_TOKEN_NOT_ALLOWED (valid or blank ' +
-  'alike) — omit the header, and use GET /org/me for a user\'s own workspaces. ' +
+  'alike) — omit the header, and use GET /org/me for a user\'s own teams. ' +
   IDENTITY_AVATAR_URL_NOTE;
 
 export function withOrgContract(list: EndpointSchema[]): EndpointSchema[] {

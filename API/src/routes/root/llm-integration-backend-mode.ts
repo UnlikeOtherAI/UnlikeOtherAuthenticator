@@ -34,7 +34,7 @@ backend authority.
 
 Send exactly one user credential. A request with both headers, a blank or
 repeated assertion, a stale epoch, invalid signature/audience/lifetime, or a
-different active workspace is refused; it never falls through to backend mode.
+different active team is refused; it never falls through to backend mode.
 \`GET /org/organisations\` and backend-only invitation acceptance refuse either
 user credential with \`401 ACCESS_TOKEN_NOT_ALLOWED\`.
 
@@ -131,10 +131,10 @@ it from domain Y with a domain-Y token; a domain-Y *backend* still cannot.
 | \`POST .../invitations/:inviteId/approve|deny\` | Yes. No reviewer is recorded. |
 | \`GET|POST .../access-requests…\` | Yes (already was). Optional \`reviewedByUserId\` in the body, unchanged — it is a label, never an actor. The \`:orgId\`/\`:teamId\` must be your own domain's, even when your signed config names them as the access-request target. |
 
-**Creating an organisation gives you its workspace in the same answer.** The
+**Creating an organisation gives you its team in the same answer.** The
 create transaction also makes a default team named "General" and puts the owner
 in it, and the response carries that whole team record as \`defaultTeam\`. Use
-\`defaultTeam.id\` to address the new workspace immediately.
+\`defaultTeam.id\` to address the new team immediately.
 
 This matters most to a product driving creation from its own UI: there is no
 follow-up read that recovers the id with a user credential, because a
@@ -150,7 +150,7 @@ that as a defensive fallback is reasonable, but it is no longer required.
 | Status | Code | Meaning |
 |---|---|---|
 | 401 | \`MISSING_ACCESS_TOKEN\` | No user token and \`backend_org_management\` is not \`true\` (or the domain-hash guard did not pass). Also: an \`X-UOA-Access-Token\` that is present but blank (\`""\`, whitespace, \`"Bearer "\`) — a blank credential is malformed, never "omitted". |
-| 401 | \`ACCESS_TOKEN_NOT_ALLOWED\` | \`GET /org/organisations\` is backend-only and has no user mode. It refuses ANY present \`X-UOA-Access-Token\`, valid or blank — omit the header. For a user's own workspaces use \`GET /org/me\`. |
+| 401 | \`ACCESS_TOKEN_NOT_ALLOWED\` | \`GET /org/organisations\` is backend-only and has no user mode. It refuses ANY present \`X-UOA-Access-Token\`, valid or blank — omit the header. For a user's own teams use \`GET /org/me\`. |
 | 400 | \`DOMAIN_MISMATCH\` | \`?domain=\` does not equal the verified config \`domain\`. |
 | 400 | \`OWNER_REQUIRED\` | \`POST /org/organisations\` in backend mode without \`owner_user_id\`. |
 | 400 | \`OWNER_NOT_ALLOWED\` | \`POST /org/organisations\` with a user token AND \`owner_user_id\` — ambiguous. |

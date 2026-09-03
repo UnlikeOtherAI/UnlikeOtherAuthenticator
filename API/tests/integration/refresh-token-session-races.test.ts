@@ -24,7 +24,7 @@ const hasDatabase = Boolean(process.env.DATABASE_URL);
 const domain = 'legacy-session-race.example';
 const sharedSecret = 'test-shared-secret-with-enough-length';
 
-type Workspace = {
+type Team = {
   ownerId: string;
   userId: string;
   orgId: string;
@@ -42,7 +42,7 @@ function legacyConfig(): ClientConfig {
     baseClientConfigPayload({
       domain,
       redirect_urls: [`https://${domain}/oauth/callback`],
-      login_flow: { email_code_enabled: false, workspace_selection: 'off' },
+      login_flow: { email_code_enabled: false, team_selection: 'off' },
       org_features: { enabled: true, user_needs_team: false },
     }),
   );
@@ -104,7 +104,7 @@ describe.skipIf(!hasDatabase)('refresh session serialization and reuse revocatio
     await handle.prisma.user.deleteMany();
   });
 
-  async function seedWorkspace(): Promise<Workspace> {
+  async function seedTeam(): Promise<Team> {
     const owner = await handle.prisma.user.create({
       data: { email: `owner-${randomUUID()}@example.com`, userKey: randomUUID() },
       select: { id: true },
@@ -116,7 +116,7 @@ describe.skipIf(!hasDatabase)('refresh session serialization and reuse revocatio
     const org = await handle.prisma.organisation.create({
       data: {
         domain,
-        name: 'Legacy session workspace',
+        name: 'Legacy session team',
         slug: `legacy-${randomUUID()}`,
         ownerId: owner.id,
       },
@@ -222,8 +222,8 @@ describe.skipIf(!hasDatabase)('refresh session serialization and reuse revocatio
   }
 
   it('refresh-first lets deactivation revoke the legacy replacement permanently', async () => {
-    const workspace = await seedWorkspace();
-    const original = await issueLegacy(workspace.userId);
+    const team = await seedTeam();
+    const original = await issueLegacy(team.userId);
     const locked = deferred();
     const release = deferred();
     const rotation = refreshLegacy(original, {
@@ -235,7 +235,7 @@ describe.skipIf(!hasDatabase)('refresh session serialization and reuse revocatio
     await locked.promise;
 
     const deactivation = deactivateOrganisationMember(
-      { ...workspace, domain, actorUserId: workspace.ownerId, config: membershipConfig() },
+      { ...team, domain, actorUserId: team.ownerId, config: membershipConfig() },
       { prisma: handle.prisma },
     );
     await expectStillPending(deactivation);
@@ -243,10 +243,10 @@ describe.skipIf(!hasDatabase)('refresh session serialization and reuse revocatio
 
     const replacement = await rotation;
     await expect(deactivation).resolves.toEqual({ deactivated: true });
-    await expectAllRevoked(workspace.userId, 2);
+    await expectAllRevoked(team.userId, 2);
 
     await reactivateOrganisationMember(
-      { ...workspace, domain, actorUserId: workspace.ownerId, config: membershipConfig() },
+      { ...team, domain, actorUserId: team.ownerId, config: membershipConfig() },
       { prisma: handle.prisma },
     );
     await expect(
@@ -255,12 +255,12 @@ describe.skipIf(!hasDatabase)('refresh session serialization and reuse revocatio
   });
 
   it('removal-first blocks legacy rotation and re-add cannot revive the family', async () => {
-    const workspace = await seedWorkspace();
-    const original = await issueLegacy(workspace.userId);
+    const team = await seedTeam();
+    const original = await issueLegacy(team.userId);
     const statusWritten = deferred();
     const release = deferred();
     const removal = removeOrganisationMember(
-      { ...workspace, domain, actorUserId: workspace.ownerId, config: membershipConfig() },
+      { ...team, domain, actorUserId: team.ownerId, config: membershipConfig() },
       {
         prisma: handle.prisma,
         afterMembershipStatusWrite: async () => {
@@ -277,14 +277,14 @@ describe.skipIf(!hasDatabase)('refresh session serialization and reuse revocatio
 
     await expect(removal).resolves.toEqual({ removed: true });
     await expect(rotation).rejects.toMatchObject({ statusCode: 401 });
-    await expectAllRevoked(workspace.userId, 1);
+    await expectAllRevoked(team.userId, 1);
 
     await addOrganisationMember(
       {
-        orgId: workspace.orgId,
+        orgId: team.orgId,
         domain,
-        actorUserId: workspace.ownerId,
-        userId: workspace.userId,
+        actorUserId: team.ownerId,
+        userId: team.userId,
         role: 'member',
         config: membershipConfig(),
       },
@@ -294,27 +294,27 @@ describe.skipIf(!hasDatabase)('refresh session serialization and reuse revocatio
   });
 
   it('commits family revocation before rejecting reuse and keeps the replacement dead', async () => {
-    const workspace = await seedWorkspace();
-    const original = await issueLegacy(workspace.userId);
+    const team = await seedTeam();
+    const original = await issueLegacy(team.userId);
     const rotated = await refreshLegacy(original);
     const current = withRefreshValue(original, rotated.refreshToken);
-    await backdateBeyondReplayGrace(workspace.userId);
+    await backdateBeyondReplayGrace(team.userId);
 
     await expect(refreshLegacy(original)).rejects.toMatchObject({
       statusCode: 401,
       message: 'INVALID_REFRESH_TOKEN',
     });
-    await expectAllRevoked(workspace.userId, 2);
+    await expectAllRevoked(team.userId, 2);
     await expect(refreshLegacy(current)).rejects.toMatchObject({ statusCode: 401 });
-    await expectAllRevoked(workspace.userId, 2);
+    await expectAllRevoked(team.userId, 2);
   });
 
   it('current rotation first is followed by reuse revoking its new replacement', async () => {
-    const workspace = await seedWorkspace();
-    const original = await issueLegacy(workspace.userId);
+    const team = await seedTeam();
+    const original = await issueLegacy(team.userId);
     const firstRotation = await refreshLegacy(original);
     const current = withRefreshValue(original, firstRotation.refreshToken);
-    await backdateBeyondReplayGrace(workspace.userId);
+    await backdateBeyondReplayGrace(team.userId);
     const locked = deferred();
     const release = deferred();
     const currentRotation = refreshLegacy(current, {
@@ -331,18 +331,18 @@ describe.skipIf(!hasDatabase)('refresh session serialization and reuse revocatio
 
     const newest = await currentRotation;
     await expect(reuse).rejects.toMatchObject({ statusCode: 401 });
-    await expectAllRevoked(workspace.userId, 3);
+    await expectAllRevoked(team.userId, 3);
     await expect(
       refreshLegacy(withRefreshValue(original, newest.refreshToken)),
     ).rejects.toMatchObject({ statusCode: 401 });
   });
 
   it('reuse first revokes the current token before its waiting rotation can replace it', async () => {
-    const workspace = await seedWorkspace();
-    const original = await issueLegacy(workspace.userId);
+    const team = await seedTeam();
+    const original = await issueLegacy(team.userId);
     const firstRotation = await refreshLegacy(original);
     const current = withRefreshValue(original, firstRotation.refreshToken);
-    await backdateBeyondReplayGrace(workspace.userId);
+    await backdateBeyondReplayGrace(team.userId);
     const locked = deferred();
     const release = deferred();
     const reuse = refreshLegacy(original, {
@@ -359,6 +359,6 @@ describe.skipIf(!hasDatabase)('refresh session serialization and reuse revocatio
 
     await expect(reuse).rejects.toMatchObject({ statusCode: 401 });
     await expect(currentRotation).rejects.toMatchObject({ statusCode: 401 });
-    await expectAllRevoked(workspace.userId, 2);
+    await expectAllRevoked(team.userId, 2);
   });
 });

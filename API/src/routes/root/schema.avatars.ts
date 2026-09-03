@@ -50,7 +50,7 @@ export const IDENTITY_AVATAR_URL_NOTE =
   'Team records carry the same thing for the team itself: avatarImageUrl, ' +
   '<PUBLIC_BASE_URL>/domain/teams/<teamId>/avatar?domain=<domain> in domain-hash and dual-auth ' +
   'contexts, <PUBLIC_BASE_URL>/internal/admin/teams/<teamId>/avatar in admin-bearer contexts ' +
-  '(except GET /org/me workspaces[], which use the public <PUBLIC_BASE_URL>/teams/<teamId>/avatar ' +
+  '(except GET /org/me teams[], which use the public <PUBLIC_BASE_URL>/teams/<teamId>/avatar ' +
   'form so product-authorized cross-domain entries remain renderable; see Docs/Auth/avatars.md ' +
   '§11). It is derived and never null — unlike iconUrl, which keeps its ' +
   'existing "externally hosted icon, may be null" meaning.';
@@ -210,7 +210,7 @@ export const avatarEndpoints: EndpointSchema[] = [
     method: 'GET',
     path: '/teams/:teamId/avatar',
     description:
-      "Image bytes for a workspace (team) avatar with no credential at all — the only unauthenticated avatar route, so a browser or native client can render it directly. Responses carry Cross-Origin-Resource-Policy: cross-origin; credentialed avatar routes keep the default same-origin policy. This is what the auth-window workspace chooser and GET /org/me workspace directory use. Not an existence oracle: an unknown or deleted team id renders the same deterministic generated SVG a real team with no image gets, so every id answers 200 with an image. Rate-limited per IP (300/hour) plus a global ceiling of 120,000/hour service-wide.",
+      "Image bytes for a team (team) avatar with no credential at all — the only unauthenticated avatar route, so a browser or native client can render it directly. Responses carry Cross-Origin-Resource-Policy: cross-origin; credentialed avatar routes keep the default same-origin policy. This is what the auth-window team chooser and GET /org/me team directory use. Not an existence oracle: an unknown or deleted team id renders the same deterministic generated SVG a real team with no image gets, so every id answers 200 with an image. Rate-limited per IP (300/hour) plus a global ceiling of 120,000/hour service-wide.",
     auth: 'none (public)',
     query: IMAGE_QUERY,
     response: IMAGE_RESPONSE,

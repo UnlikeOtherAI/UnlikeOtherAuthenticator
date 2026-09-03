@@ -44,7 +44,7 @@ type OrgServiceDeps = {
   prisma?: OrgServicePrisma;
   /**
    * Lets an authenticated continuation keep its organisation audit row inside
-   * the same transaction as workspace creation and code issuance.
+   * the same transaction as team creation and code issuance.
    */
   auditPrisma?: OrgAuditLogPrisma;
 };
@@ -250,7 +250,7 @@ export function ensureOrgRole(role: string, allowedRoles: string[]): void {
  * Replaces the `role !== 'owner' && role !== 'admin'` comparisons the org services used to make,
  * so a role a domain invented can hold real authority here too. Three things are deliberate:
  *
- *  - **Org scope only.** `requireWorkspaceCapability` (team services) unions org- and team-scope
+ *  - **Org scope only.** `requireTeamCapability` (team services) unions org- and team-scope
  *    standing, because an org grant of a team-scope capability reaches down into every team. The
  *    reverse must not hold: administering one team cannot confer authority over the organisation
  *    that contains it, so nothing here reads a `TeamMember` row.

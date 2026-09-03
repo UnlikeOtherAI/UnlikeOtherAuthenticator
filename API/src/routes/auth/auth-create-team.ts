@@ -13,15 +13,15 @@ import {
   verifyLoginSession,
 } from '../../services/login-session.service.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
-import { lockProductWorkspacePolicyShared } from '../../services/product-workspace-policy-lock.service.js';
+import { lockProductTeamPolicyShared } from '../../services/product-team-policy-lock.service.js';
 import { addTeamMember } from '../../services/team.service.members.js';
 import { createTeam } from '../../services/team.service.teams.js';
 import { lockRequiredTeamPlacementUser } from '../../services/user-team-requirement.service.js';
-import { finalizeWithTwoFaPolicy } from '../../services/workspace-finalize.service.js';
+import { finalizeWithTwoFaPolicy } from '../../services/team-finalize.service.js';
 import {
-  lockAndAssertActiveClientWorkspaceScope,
-  lockWorkspaceOrganisationRow,
-} from '../../services/workspace-scope.service.js';
+  lockAndAssertActiveClientTeamScope,
+  lockTeamOrganisationRow,
+} from '../../services/team-scope.service.js';
 import { selectRedirectUrl } from '../../services/authorization-code.service.js';
 import { parseRequiredPkceChallenge } from '../../utils/pkce.js';
 import { AppError } from '../../utils/errors.js';
@@ -54,21 +54,21 @@ function rejectTeamCreation(): never {
 }
 
 /**
- * Creates a further workspace (team) inside an organisation the user already belongs to, straight
+ * Creates a further team (team) inside an organisation the user already belongs to, straight
  * from the SSO chooser, then selects it.
  *
- * The sibling of `/auth/create-workspace`, and deliberately a separate route: that one creates a
+ * The sibling of `/auth/create-organisation`, and deliberately a separate route: that one creates a
  * user's *first* organisation (brief §1718), this one writes into an existing tenant. An org is
- * the level above a workspace, so the authorization differs — `createTeam` runs
+ * the level above a team, so the authorization differs — `createTeam` runs
  * `requireTeamManager`, i.e. the acting user must be an ACTIVE **org owner/admin** of `org_id`,
  * and the org must belong to this config's domain. The domain must also opt in with
  * `org_features.allow_user_create_team`; the role check alone is not enough to add a popup-driven
  * write path to a tenant.
  *
- * The security envelope is `/auth/create-workspace`'s, unchanged: the short-lived login capability
+ * The security envelope is `/auth/create-organisation`'s, unchanged: the short-lived login capability
  * is verified, re-verified under the epoch lock, and consumed in the same transaction as the team,
  * its creator membership, and the auth continuation — so a replayed token cannot leave a duplicate
- * workspace behind.
+ * team behind.
  */
 export function registerAuthCreateTeamRoute(app: FastifyInstance): void {
   app.post(
@@ -117,7 +117,7 @@ export function registerAuthCreateTeamRoute(app: FastifyInstance): void {
       });
 
       const outcome = await runInTransaction(request.adminDb, async (tx) => {
-        await lockProductWorkspacePolicyShared(tx);
+        await lockProductTeamPolicyShared(tx);
         await lockAndAssertAuthenticationEpoch(
           {
             userId: session.userId,
@@ -142,17 +142,17 @@ export function registerAuthCreateTeamRoute(app: FastifyInstance): void {
           codeChallengeMethod: pkce.codeChallengeMethod,
         });
         if (
-          config.login_flow?.workspace_selection !== 'auto' ||
+          config.login_flow?.team_selection !== 'auto' ||
           !config.org_features?.enabled ||
           !config.org_features.allow_user_create_team
         ) {
           rejectTeamCreation();
         }
-        // Serializes concurrent login bridges the same way `/auth/create-workspace` does, so two
-        // of them cannot each create a workspace from the same chooser.
+        // Serializes concurrent login bridges the same way `/auth/create-organisation` does, so two
+        // of them cannot each create a team from the same chooser.
         await lockRequiredTeamPlacementUser(lockedSession.userId, { prisma: tx });
 
-        // Claim before writing. A later failure rolls the claim and the workspace back together,
+        // Claim before writing. A later failure rolls the claim and the team back together,
         // leaving a legitimate retry possible.
         await consumeLoginSession({
           domain: lockedSession.domain,
@@ -169,7 +169,7 @@ export function registerAuthCreateTeamRoute(app: FastifyInstance): void {
         // read-outside-any-lock: two admins of the same org could each read `count = cap - 1` and
         // both insert. A missing row means the org is gone; fold it into the generic failure
         // rather than leaking which of "no such org" or "not yours" it was.
-        if (!(await lockWorkspaceOrganisationRow(org_id, { prisma: tx }))) {
+        if (!(await lockTeamOrganisationRow(org_id, { prisma: tx }))) {
           rejectTeamCreation();
         }
 
@@ -188,8 +188,8 @@ export function registerAuthCreateTeamRoute(app: FastifyInstance): void {
           { prisma: tx, auditPrisma: tx },
         );
 
-        // The creator has to be IN the workspace they just made: the chooser only lists ACTIVE
-        // memberships, and the finalize below binds a workspace this user must belong to.
+        // The creator has to be IN the team they just made: the chooser only lists ACTIVE
+        // memberships, and the finalize below binds a team this user must belong to.
         await addTeamMember(
           {
             orgId: org_id,
@@ -203,7 +203,7 @@ export function registerAuthCreateTeamRoute(app: FastifyInstance): void {
           { prisma: tx, auditPrisma: tx },
         );
 
-        await lockAndAssertActiveClientWorkspaceScope(
+        await lockAndAssertActiveClientTeamScope(
           {
             userId: lockedSession.userId,
             domain: config.domain,
@@ -236,7 +236,7 @@ export function registerAuthCreateTeamRoute(app: FastifyInstance): void {
             orgId: org_id,
             teamId: team.id,
           },
-          { policyLockHeld: true, policyPrisma: tx, prisma: tx, workspacePrisma: tx },
+          { policyLockHeld: true, policyPrisma: tx, prisma: tx, teamPrisma: tx },
         );
         return { finalized, userId: lockedSession.userId, authMethod: lockedSession.authMethod };
       });

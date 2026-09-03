@@ -5,7 +5,7 @@ import { lockRefreshSessionUserDomain } from './refresh-session-lock.service.js'
 import { lockSignaturePolicyForDecision } from './signature-policy-lock.service.js';
 import { evaluateSignaturePolicy } from './signature-policy.service.js';
 import { isTwoFaAuthenticationSufficient, resolveTwoFaPolicy } from './twofactor-policy.service.js';
-import { lockAndAssertRefreshWorkspaceScope } from './workspace-scope.service.js';
+import { lockAndAssertRefreshTeamScope } from './team-scope.service.js';
 
 type RefreshRotationRow = {
   userId: string;
@@ -30,9 +30,9 @@ export function createRefreshTokenFamilyDecisionLock(params: {
 export function createRefreshTokenRotationPolicyGuard(params: {
   prisma: PrismaClient;
   now?: () => Date;
-  afterWorkspaceLock?: () => Promise<void>;
-  targetWorkspace?: { orgId: string; teamId: string };
-  targetWorkspaceError?: 'WORKSPACE_NOT_AVAILABLE';
+  afterTeamLock?: () => Promise<void>;
+  targetTeam?: { orgId: string; teamId: string };
+  targetTeamError?: 'TEAM_NOT_AVAILABLE';
   validateSource?: boolean;
   twoFa?: {
     config: Parameters<typeof resolveTwoFaPolicy>[0]['config'];
@@ -42,15 +42,15 @@ export function createRefreshTokenRotationPolicyGuard(params: {
   return async ({ userId, domain, orgId, teamId, twoFaCompleted }) => {
     // Lifecycle writers take the same org-then-team locks before tombstone + revocation.
     if (params.validateSource !== false) {
-      await lockAndAssertRefreshWorkspaceScope(
+      await lockAndAssertRefreshTeamScope(
         { userId, domain, orgId, teamId },
         { crossProductPrisma: params.prisma, policyPrisma: params.prisma, prisma: params.prisma },
       );
     }
-    if (params.targetWorkspace) {
+    if (params.targetTeam) {
       try {
-        await lockAndAssertRefreshWorkspaceScope(
-          { userId, domain, ...params.targetWorkspace },
+        await lockAndAssertRefreshTeamScope(
+          { userId, domain, ...params.targetTeam },
           {
             crossProductPrisma: params.prisma,
             policyPrisma: params.prisma,
@@ -58,13 +58,13 @@ export function createRefreshTokenRotationPolicyGuard(params: {
           },
         );
       } catch (error) {
-        if (params.targetWorkspaceError && error instanceof AppError && error.statusCode === 401) {
-          throw new AppError('FORBIDDEN', 403, params.targetWorkspaceError);
+        if (params.targetTeamError && error instanceof AppError && error.statusCode === 401) {
+          throw new AppError('FORBIDDEN', 403, params.targetTeamError);
         }
         throw error;
       }
     }
-    await params.afterWorkspaceLock?.();
+    await params.afterTeamLock?.();
 
     if (params.twoFa) {
       const [policy, user] = await Promise.all([
@@ -72,7 +72,7 @@ export function createRefreshTokenRotationPolicyGuard(params: {
           {
             config: params.twoFa.config,
             userId,
-            orgId: params.targetWorkspace?.orgId ?? orgId,
+            orgId: params.targetTeam?.orgId ?? orgId,
           },
           { prisma: params.prisma },
         ),

@@ -11,9 +11,9 @@ const finalizeAuthenticatedUserMock = vi.fn();
 const verifyEmailTokenMock = vi.fn();
 const getTeamInviteLandingDataMock = vi.fn();
 // Gap-fix B Task 1 (design §4.3): magic-link → chooser wiring.
-const buildWorkspaceChoicesMock = vi.fn();
+const buildSessionChoicesMock = vi.fn();
 const signLoginSessionMock = vi.fn();
-const resolveProductWorkspaceBeforeTwoFaMock = vi.fn();
+const resolveProductTeamBeforeTwoFaMock = vi.fn();
 
 let currentConfig: ClientConfig | null = null;
 const PKCE_QUERY =
@@ -68,14 +68,14 @@ vi.mock('../../src/services/login-session.service.js', () => ({
   signLoginSession: (...args: unknown[]) => signLoginSessionMock(...args),
 }));
 
-vi.mock('../../src/services/required-workspace-placement.service.js', async () => {
+vi.mock('../../src/services/required-team-placement.service.js', async () => {
   const actual = await vi.importActual<
-    typeof import('../../src/services/required-workspace-placement.service.js')
-  >('../../src/services/required-workspace-placement.service.js');
+    typeof import('../../src/services/required-team-placement.service.js')
+  >('../../src/services/required-team-placement.service.js');
   return {
     ...actual,
-    resolveProductWorkspaceBeforeTwoFa: (...args: unknown[]) =>
-      resolveProductWorkspaceBeforeTwoFaMock(...args),
+    resolveProductTeamBeforeTwoFa: (...args: unknown[]) =>
+      resolveProductTeamBeforeTwoFaMock(...args),
   };
 });
 
@@ -85,7 +85,7 @@ vi.mock('../../src/services/first-login.service.js', async () => {
   );
   return {
     ...actual,
-    buildWorkspaceChoices: (...args: unknown[]) => buildWorkspaceChoicesMock(...args),
+    buildSessionChoices: (...args: unknown[]) => buildSessionChoicesMock(...args),
   };
 });
 
@@ -149,9 +149,9 @@ describe('GET /auth/email/link', () => {
     finalizeAuthenticatedUserMock.mockReset();
     verifyEmailTokenMock.mockReset();
     getTeamInviteLandingDataMock.mockReset();
-    buildWorkspaceChoicesMock.mockReset();
+    buildSessionChoicesMock.mockReset();
     signLoginSessionMock.mockReset();
-    resolveProductWorkspaceBeforeTwoFaMock.mockReset().mockResolvedValue(null);
+    resolveProductTeamBeforeTwoFaMock.mockReset().mockResolvedValue(null);
     renderAuthEntrypointHtmlMock.mockResolvedValue('<html>login</html>');
     process.env.SHARED_SECRET = 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER = 'uoa-auth-service';
@@ -297,7 +297,7 @@ describe('GET /auth/email/link', () => {
   });
 });
 
-describe('GET /auth/email/link — workspace chooser wiring (gap-fix B Task 1, design §4.3)', () => {
+describe('GET /auth/email/link — team chooser wiring (gap-fix B Task 1, design §4.3)', () => {
   beforeEach(() => {
     currentConfig = baseConfig();
     validateRegistrationEmailLandingTokenMock.mockReset().mockResolvedValue('LOGIN_LINK');
@@ -309,9 +309,9 @@ describe('GET /auth/email/link — workspace chooser wiring (gap-fix B Task 1, d
       twoFaEnabled: false,
       acceptedInvite: null,
     });
-    buildWorkspaceChoicesMock.mockReset();
+    buildSessionChoicesMock.mockReset();
     signLoginSessionMock.mockReset();
-    resolveProductWorkspaceBeforeTwoFaMock.mockReset().mockResolvedValue(null);
+    resolveProductTeamBeforeTwoFaMock.mockReset().mockResolvedValue(null);
     process.env.SHARED_SECRET = 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER = 'uoa-auth-service';
   });
@@ -340,7 +340,7 @@ describe('GET /auth/email/link — workspace chooser wiring (gap-fix B Task 1, d
     }
   }
 
-  it('workspace_selection "off" (default): unchanged — finalizes and redirects with the code', async () => {
+  it('team_selection "off" (default): unchanged — finalizes and redirects with the code', async () => {
     finalizeAuthenticatedUserMock.mockResolvedValue({
       status: 'granted',
       code: 'abc123',
@@ -351,12 +351,12 @@ describe('GET /auth/email/link — workspace chooser wiring (gap-fix B Task 1, d
 
     expect(res.statusCode).toBe(302);
     expect(res.headers.location).toBe('https://client.example.com/oauth/callback?code=abc123');
-    expect(buildWorkspaceChoicesMock).not.toHaveBeenCalled();
+    expect(buildSessionChoicesMock).not.toHaveBeenCalled();
     expect(signLoginSessionMock).not.toHaveBeenCalled();
   });
 
-  it('pre-binds a recognized product workspace even when the chooser is off', async () => {
-    resolveProductWorkspaceBeforeTwoFaMock.mockResolvedValue({
+  it('pre-binds a recognized product team even when the chooser is off', async () => {
+    resolveProductTeamBeforeTwoFaMock.mockResolvedValue({
       orgId: 'org-cross',
       teamId: 'team-cross',
     });
@@ -375,11 +375,11 @@ describe('GET /auth/email/link — workspace chooser wiring (gap-fix B Task 1, d
     );
   });
 
-  it('workspace_selection "auto" + 2+ ACTIVE teams: redirects to /auth with login_token + flow=workspace_chooser, PKCE preserved, correct audience', async () => {
+  it('team_selection "auto" + 2+ ACTIVE teams: redirects to /auth with login_token + flow=team_chooser, PKCE preserved, correct audience', async () => {
     currentConfig = baseConfig({
-      login_flow: { email_code_enabled: false, workspace_selection: 'auto' },
+      login_flow: { email_code_enabled: false, team_selection: 'auto' },
     });
-    buildWorkspaceChoicesMock.mockResolvedValue({
+    buildSessionChoicesMock.mockResolvedValue({
       teams: [
         {
           teamId: 'team-1',
@@ -409,7 +409,7 @@ describe('GET /auth/email/link — workspace chooser wiring (gap-fix B Task 1, d
     const location = new URL(res.headers.location as string, 'http://localhost');
     expect(location.pathname).toBe('/auth');
     expect(location.searchParams.get('login_token')).toBe('login_token_abc');
-    expect(location.searchParams.get('flow')).toBe('workspace_chooser');
+    expect(location.searchParams.get('flow')).toBe('team_chooser');
     expect(location.searchParams.get('config_url')).toBe('https://client.example.com/auth-config');
     expect(location.searchParams.get('redirect_url')).toBe(
       'https://client.example.com/oauth/callback',
@@ -427,11 +427,11 @@ describe('GET /auth/email/link — workspace chooser wiring (gap-fix B Task 1, d
     );
   });
 
-  it('workspace_selection "auto" but only 1 ACTIVE team and no invites: auto-skip binds that workspace to the code', async () => {
+  it('team_selection "auto" but only 1 ACTIVE team and no invites: auto-skip binds that team to the code', async () => {
     currentConfig = baseConfig({
-      login_flow: { email_code_enabled: false, workspace_selection: 'auto' },
+      login_flow: { email_code_enabled: false, team_selection: 'auto' },
     });
-    buildWorkspaceChoicesMock.mockResolvedValue({
+    buildSessionChoicesMock.mockResolvedValue({
       teams: [
         {
           teamId: 'team-1',
@@ -467,7 +467,7 @@ describe('GET /auth/email/link — workspace chooser wiring (gap-fix B Task 1, d
 
   it('invite-bound link carries its accepted scope and never interposes the chooser', async () => {
     currentConfig = baseConfig({
-      login_flow: { email_code_enabled: false, workspace_selection: 'auto' },
+      login_flow: { email_code_enabled: false, team_selection: 'auto' },
     });
     verifyEmailTokenMock.mockResolvedValue({
       userId: 'user-1',
@@ -485,7 +485,7 @@ describe('GET /auth/email/link — workspace chooser wiring (gap-fix B Task 1, d
 
     expect(res.statusCode).toBe(302);
     expect(res.headers.location).toBe('https://client.example.com/oauth/callback?code=abc123');
-    expect(buildWorkspaceChoicesMock).not.toHaveBeenCalled();
+    expect(buildSessionChoicesMock).not.toHaveBeenCalled();
     expect(signLoginSessionMock).not.toHaveBeenCalled();
     expect(finalizeAuthenticatedUserMock).toHaveBeenCalledWith(
       expect.objectContaining({ orgId: 'org-invite', teamId: 'team-invite' }),
@@ -495,9 +495,9 @@ describe('GET /auth/email/link — workspace chooser wiring (gap-fix B Task 1, d
 
   it('zero teams with create permission redirects to the chooser instead of finalizing unscoped', async () => {
     currentConfig = baseConfig({
-      login_flow: { email_code_enabled: false, workspace_selection: 'auto' },
+      login_flow: { email_code_enabled: false, team_selection: 'auto' },
     });
-    buildWorkspaceChoicesMock.mockResolvedValue({
+    buildSessionChoicesMock.mockResolvedValue({
       teams: [],
       pending_invites: [],
       can_create_org: true,
@@ -509,7 +509,7 @@ describe('GET /auth/email/link — workspace chooser wiring (gap-fix B Task 1, d
     expect(res.statusCode).toBe(302);
     const location = new URL(res.headers.location as string, 'http://localhost');
     expect(location.pathname).toBe('/auth');
-    expect(location.searchParams.get('flow')).toBe('workspace_chooser');
+    expect(location.searchParams.get('flow')).toBe('team_chooser');
     expect(location.searchParams.get('login_token')).toBe('login_token_create');
     expect(finalizeAuthenticatedUserMock).not.toHaveBeenCalled();
   });

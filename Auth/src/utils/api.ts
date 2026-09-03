@@ -166,7 +166,7 @@ export async function postBinary<TReq>(path: string, body: TReq): Promise<ApiBin
 /**
  * Phase 3c (design §11.2): the query parameters every `/auth/*` flow endpoint needs — the
  * same shape `LoginForm`/`RegisterForm` build inline, pulled out so the code-entry and
- * workspace-chooser calls can share it.
+ * team-chooser calls can share it.
  */
 export type AuthFlowQuery = {
   configUrl: string;
@@ -218,7 +218,7 @@ export type VerifyLoginCodeRequest = {
  * `/auth/login` can all resolve to (mirrors the Phase 3b API route bodies field-for-field —
  * see `auth-verify-code.ts` / `auth-select-team.ts`). The chooser payload has no `ok` field.
  */
-export type WorkspaceChooserResponse = {
+export type TeamChooserResponse = {
   login_token: string;
   teams: unknown[];
   pending_invites: unknown[];
@@ -248,7 +248,7 @@ export type AuthFlowFinalResponse = {
 };
 
 export type AuthFlowResponse =
-  | WorkspaceChooserResponse
+  | TeamChooserResponse
   | TwoFaRequiredResponse
   | TwoFaEnrollRequiredResponse
   | AuthFlowFinalResponse;
@@ -274,20 +274,20 @@ export type SelectTeamRequest = {
 };
 
 /** The hosted chooser deliberately offers only policies it can describe safely. */
-export type WorkspaceJoinPolicy = 'HIDDEN' | 'INVITE_ONLY' | 'OPEN_TO_ORG';
+export type TeamJoinPolicy = 'HIDDEN' | 'INVITE_ONLY' | 'OPEN_TO_ORG';
 
-export type CreateWorkspaceRequest = {
+export type CreateOrganisationRequest = {
   login_token: string;
   name: string;
   /** Optional for compatibility; the server defaults to INVITE_ONLY when omitted. */
-  join_policy?: WorkspaceJoinPolicy;
+  join_policy?: TeamJoinPolicy;
   remember_me?: boolean;
 };
 
-/** `/auth/create-team` adds the org the workspace belongs to — that's the level above. */
-export type CreateTeamRequest = CreateWorkspaceRequest & { org_id: string };
+/** `/auth/create-team` adds the org the team belongs to — that's the level above. */
+export type CreateTeamRequest = CreateOrganisationRequest & { org_id: string };
 
-/** POST /auth/select-team — choose a workspace or accept/decline an invite (Phase 3b). */
+/** POST /auth/select-team — choose a team or accept/decline an invite (Phase 3b). */
 export function selectTeam(
   body: SelectTeamRequest,
   query: AuthFlowQuery,
@@ -299,21 +299,21 @@ export function selectTeam(
   );
 }
 
-/** POST /auth/create-workspace — create and immediately select a new tenant workspace. */
-export function createWorkspace(
-  body: CreateWorkspaceRequest,
+/** POST /auth/create-organisation — create and immediately select a new tenant team. */
+export function createOrganisation(
+  body: CreateOrganisationRequest,
   query: AuthFlowQuery,
 ): Promise<ApiResult<AuthFlowResponse>> {
-  return postJson<CreateWorkspaceRequest, AuthFlowResponse>(
-    '/auth/create-workspace',
+  return postJson<CreateOrganisationRequest, AuthFlowResponse>(
+    '/auth/create-organisation',
     body,
     buildAuthFlowQuery(query),
   );
 }
 
 /**
- * POST /auth/create-team — create a further workspace inside an organisation the user already
- * belongs to, then select it. The sibling of `createWorkspace`, which creates a first *org*.
+ * POST /auth/create-team — create a further team inside an organisation the user already
+ * belongs to, then select it. The sibling of `createOrganisation`, which creates a first *org*.
  */
 export function createTeam(
   body: CreateTeamRequest,
@@ -329,7 +329,7 @@ export function createTeam(
 export type SessionChoicesRequest = { login_token: string };
 
 /**
- * The bare chooser shape `/auth/session-choices` returns — unlike `WorkspaceChooserResponse` it
+ * The bare chooser shape `/auth/session-choices` returns — unlike `TeamChooserResponse` it
  * never carries a `login_token` (the caller already holds one; that's what it sent).
  */
 export type SessionChoicesResponse = {

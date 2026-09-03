@@ -87,8 +87,8 @@ export function buildBillingControlledBy(params: {
     organisation_id: params.organisationId,
     organisation_name: organisation,
     message: params.canManage
-      ? `Billing for this workspace is managed for the whole of ${organisation}. Open organisation billing to see spend, credits, payment method and invoices for every team.`
-      : `Billing for this workspace is managed for the whole of ${organisation}. An organisation billing manager looks after spend, credits and payment.`,
+      ? `Billing for this team is managed for the whole of ${organisation}. Open organisation billing to see spend, credits, payment method and invoices for every team.`
+      : `Billing for this team is managed for the whole of ${organisation}. An organisation billing manager looks after spend, credits and payment.`,
     can_manage: params.canManage,
     manage_action_id: params.canManage ? BILLING_ORG_BILLING_MANAGE_ACTION_ID : null,
   };

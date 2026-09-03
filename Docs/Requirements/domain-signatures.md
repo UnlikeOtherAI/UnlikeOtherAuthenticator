@@ -146,7 +146,7 @@ Verify config, domain, redirect and PKCE
                  ↓
 Authenticate the user
                  ↓
-Complete workspace selection and required 2FA
+Complete team selection and required 2FA
                  ↓
 Is the signature service enabled for this domain?
         ├── No  → issue authorization code normally
@@ -166,7 +166,7 @@ Is the signature service enabled for this domain?
 The gate belongs at the shared finalization chokepoint immediately before
 `issueAuthorizationCode()`. Every path that can finish authentication must use it,
 including password login, verified-email registration, social login, email-code login,
-workspace selection, and the public-client `/oauth/*` profile. No route may issue an
+team selection, and the public-client `/oauth/*` profile. No route may issue an
 authorization code around the gate.
 
 ## Signing Continuation
@@ -199,7 +199,7 @@ metadata. The user can restart authentication.
 
 Each accepted signing submission is first reserved as one durable
 `SignatureClaimIntent` for the exact continuation and AgreementVersion. The reservation
-transaction locks product policy → user epoch → exact workspace → domain signature policy →
+transaction locks product policy → user epoch → exact team → domain signature policy →
 continuation, freezes the signer/auth context,
 current policy revision, exact published-version inputs, source key/hash, server acceptance
 time, non-guessable verification reference, and a fingerprint of the user's existing
@@ -511,7 +511,7 @@ abstractions while implementing this module.
    without invalidating already-issued short-lived access tokens.
 9. Revocation preserves history and forces a new signature at the next gate.
 10. The public verification endpoint can validate receipt integrity without exposing PII.
-11. Password, social, email-link, email-code, workspace-selection, and public-client OAuth
+11. Password, social, email-link, email-code, team-selection, and public-client OAuth
     paths all enforce the same gate.
 
 ## Decisions Required Before Implementation

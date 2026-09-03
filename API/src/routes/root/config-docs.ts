@@ -147,8 +147,8 @@ export const configJwtDocumentation = {
     language: 'string — currently selected language override',
     login_flow: {
       email_code_enabled: 'boolean (default false)',
-      workspace_selection:
-        '"off" | "auto" (default "off") — "auto" resolves workspace after identity verification. Legacy clients use ACTIVE org+team memberships on their own config domain. A server-recognized product domain (active ClientDomain plus one unambiguous active/current CUSTOMER_LIFECYCLE app-key service mapping with exact HTTPS actorIssuer) uses all exact ACTIVE org+team memberships; unknown/revoked/ambiguous mappings remain same-domain and pending invites are always same-domain. Exactly one eligible membership with no pending invite is selected server-side and bound through applicable 2FA to the authorization code/active claim; multiple teams, any invite, or zero teams with can_create_org preserve the chooser. "off" suppresses the chooser, but a recognized product still resolves one exact workspace (or required first placement) before 2FA and fails closed on ambiguity; only legacy non-product login remains unscoped. The exact selected Organisation policy participates in strongest-wins even across domains. The chooser login_token cryptographically binds the exact verified config URL+semantics, redirect, PKCE, remember-me, and access-request continuation and is consumed once with the final selection. An accepted email invite is already an explicit selection and carries its exact ACTIVE org/team through 2FA.',
+      team_selection:
+        '"off" | "auto" (default "off") — "auto" resolves team after identity verification. Legacy clients use ACTIVE org+team memberships on their own config domain. A server-recognized product domain (active ClientDomain plus one unambiguous active/current CUSTOMER_LIFECYCLE app-key service mapping with exact HTTPS actorIssuer) uses all exact ACTIVE org+team memberships; unknown/revoked/ambiguous mappings remain same-domain and pending invites are always same-domain. Exactly one eligible membership with no pending invite is selected server-side and bound through applicable 2FA to the authorization code/active claim; multiple teams, any invite, or zero teams with can_create_org preserve the chooser. "off" suppresses the chooser, but a recognized product still resolves one exact team (or required first placement) before 2FA and fails closed on ambiguity; only legacy non-product login remains unscoped. The exact selected Organisation policy participates in strongest-wins even across domains. The chooser login_token cryptographically binds the exact verified config URL+semantics, redirect, PKCE, remember-me, and access-request continuation and is consumed once with the final selection. An accepted email invite is already an explicit selection and carries its exact ACTIVE org/team through 2FA.',
     },
     avatars: {
       default_style:
@@ -170,7 +170,7 @@ export const configJwtDocumentation = {
       allow_user_create_org:
         'boolean (default false) — permit end-users to call POST /org/organisations with their own access token (superusers bypass)',
       allow_user_create_team:
-        'boolean (default false) — permit an ACTIVE org owner/admin to create a FURTHER workspace (team) in that organisation from the SSO chooser via POST /auth/create-team. Separate from allow_user_create_org (a new organisation): this writes into an existing tenant, so the domain opts in and the owner/admin role check still applies',
+        'boolean (default false) — permit an ACTIVE org owner/admin to create a FURTHER team (team) in that organisation from the SSO chooser via POST /auth/create-team. Separate from allow_user_create_org (a new organisation): this writes into an existing tenant, so the domain opts in and the owner/admin role check still applies',
       backend_org_management:
         "boolean (default false) — permit this domain's product backend to call /org/* with NO X-UOA-Access-Token, authorised by the domain pairing (domain-hash bearer + this signed config) alone. There is then no acting user, so per-user org-role checks do not apply and every mutation is attributed to the backend in the org audit log",
       pending_invites_block_auto_create:
@@ -187,7 +187,7 @@ export const configJwtDocumentation = {
       capabilities:
         "string[] (optional) — the consuming product's declared capability catalogue, mirrored here so role_grants can be validated against it. UOA's own names (members.manage, teams.manage, organisation.manage) are always valid on top of this list",
       role_grants:
-        'object (optional) — { "org": { <role>: <capability>[] }, "team": { <role>: <capability>[] } }. Which roles hold which capabilities; UOA gates its own org and team surfaces on capability names, never role strings. Its own catalogue: members.manage (roster mutation at either scope — add/remove/deactivate/reactivate an org member, add/remove/re-role a team member, invitations, invite links, the invited list), teams.manage (the team object: create, rename, re-slug, join policy, icon, delete), organisation.manage (the organisation object: rename, member-invites policy, icon; ORG SCOPE ONLY — those gates never read a team role, so a role_grants.team entry naming it is inert). Rules: "owner" (org or team) implicitly holds every capability and MUST NOT appear here; a role the table does not mention holds nothing (no coercion to "member"); a workspace answer is the union of the org-role and team-role grants, so an org grant of a team-scope capability reaches into every team. Deliberately not capabilities, because they are structural: organisation delete, ownership transfer, changing an org member role (the actor must BE Organisation.ownerId), granting or removing the "owner" role, and billing management (a UOA-computed verdict). Rejected at config load if a role is not in the matching vocabulary, a capability is undeclared, "owner" is named, or the scope key is unknown. Absent means the legacy default table: {"org":{"admin":["members.manage","teams.manage","organisation.manage"]},"team":{"admin":["members.manage","teams.manage"]}}',
+        'object (optional) — { "org": { <role>: <capability>[] }, "team": { <role>: <capability>[] } }. Which roles hold which capabilities; UOA gates its own org and team surfaces on capability names, never role strings. Its own catalogue: members.manage (roster mutation at either scope — add/remove/deactivate/reactivate an org member, add/remove/re-role a team member, invitations, invite links, the invited list), teams.manage (the team object: create, rename, re-slug, join policy, icon, delete), organisation.manage (the organisation object: rename, member-invites policy, icon; ORG SCOPE ONLY — those gates never read a team role, so a role_grants.team entry naming it is inert). Rules: "owner" (org or team) implicitly holds every capability and MUST NOT appear here; a role the table does not mention holds nothing (no coercion to "member"); a team answer is the union of the org-role and team-role grants, so an org grant of a team-scope capability reaches into every team. Deliberately not capabilities, because they are structural: organisation delete, ownership transfer, changing an org member role (the actor must BE Organisation.ownerId), granting or removing the "owner" role, and billing management (a UOA-computed verdict). Rejected at config load if a role is not in the matching vocabulary, a capability is undeclared, "owner" is named, or the scope key is unknown. Absent means the legacy default table: {"org":{"admin":["members.manage","teams.manage","organisation.manage"]},"team":{"admin":["members.manage","teams.manage"]}}',
       max_flags_per_app: 'number (default 100, max 500)',
       scim_override_retention: '"retain" | "clear" (default "retain")',
       global_missing_flag_default: '"enabled" | "disabled" (default "disabled")',
@@ -237,9 +237,9 @@ export const configValidationEndpointDocumentation = {
 
 export const accessTokenDocumentation = {
   description:
-    'Authorization-code, refresh, and explicit workspace-switch grants at POST /auth/token return the legacy HS256 JWT signed with SHARED_SECRET. The confidential RFC 8693 token-exchange grant is separate: it returns a 5-minute, resource-bound RS256 token verified with GET /oauth/jwks.json. Never apply one profile’s verification rules to the other.',
+    'Authorization-code, refresh, and explicit team-switch grants at POST /auth/token return the legacy HS256 JWT signed with SHARED_SECRET. The confidential RFC 8693 token-exchange grant is separate: it returns a 5-minute, resource-bound RS256 token verified with GET /oauth/jwks.json. Never apply one profile’s verification rules to the other.',
   signing: {
-    profile: 'legacy authorization-code, refresh-token, and workspace-switch grants only',
+    profile: 'legacy authorization-code, refresh-token, and team-switch grants only',
     algorithm: 'HS256',
     key: 'deployment-wide SHARED_SECRET (not exposed, no UOA-side public JWKS)',
     audience: 'uoa:access-token',
@@ -253,7 +253,7 @@ export const accessTokenDocumentation = {
       'string — integration domain from the config JWT. Confirms which integration minted this token.',
     client_id:
       'string — SHA256(domain + clientSecret) hex. Identifies the exact client credential used.',
-    org: 'object | absent — present when org_features.enabled and the user has a live org context. This is normally same-domain; an exact workspace-scoped session for a server-recognized all_active_memberships product carries its selected cross-domain org instead. Shape: { org_id, org_role, teams[], team_roles{}, groups?[], group_admin?[] }.',
+    org: 'object | absent — present when org_features.enabled and the user has a live org context. This is normally same-domain; an exact team-scoped session for a server-recognized all_active_memberships product carries its selected cross-domain org instead. Shape: { org_id, org_role, teams[], team_roles{}, groups?[], group_admin?[] }.',
     iss: 'string — UOA host (e.g. authentication.unlikeotherai.com).',
     aud: 'string — always "uoa:access-token".',
     iat: 'number — issued at, epoch seconds.',
@@ -270,12 +270,12 @@ export const accessTokenDocumentation = {
     'The /auth/token response envelope is snake_case (access_token, refresh_token, expires_in, refresh_token_expires_in, token_type). The key firstLogin is camelCase; memberships.orgs[].orgId, memberships.teams[].teamId, memberships.teams[].orgId, and pending_invites[].inviteId/orgId/teamId/teamName are camelCase. pending_invites and capabilities.can_* remain snake_case.',
 };
 
-export const workspaceSwitchDocumentation = {
+export const teamSwitchDocumentation = {
   endpoint: 'POST /auth/token?config_url=<verified config URL>',
   description:
-    'Backend-only explicit rotation of one renewable legacy session to one exact currently authorized organisation/team. It is the only token grant that may change workspace scope; ordinary refresh is strictly scope-preserving.',
+    'Backend-only explicit rotation of one renewable legacy session to one exact currently authorized organisation/team. It is the only token grant that may change team scope; ordinary refresh is strictly scope-preserving.',
   request: {
-    grant_type: 'urn:unlikeotherai:params:oauth:grant-type:workspace-switch',
+    grant_type: 'urn:unlikeotherai:params:oauth:grant-type:team-switch',
     refresh_token: 'opaque current or in-grace predecessor refresh token',
     organization_id: 'exact target organisation id',
     team_id: 'exact target team id within organization_id',
@@ -287,13 +287,13 @@ export const workspaceSwitchDocumentation = {
   response:
     'The normal access_token + refresh_token envelope, scoped exactly to organization_id/team_id, with no firstLogin block. Persist the pair atomically before using it.',
   replay:
-    'For 120 seconds, an exact retry may recover the deterministic successor only while every descendant retains the requested target and its current policy still passes. A different grant/target or any later scope transition returns WORKSPACE_SWITCH_CONFLICT without consuming or revoking a valid family. If the matching edge committed but its target policy is now unavailable or needs stronger assurance, UOA retires only that family and returns authenticated INVALID_REFRESH_TOKEN so a lost-response caller can clear its intent safely. Post-grace predecessor reuse always takes theft revocation. An ordinary refresh never returns a changed scope.',
+    'For 120 seconds, an exact retry may recover the deterministic successor only while every descendant retains the requested target and its current policy still passes. A different grant/target or any later scope transition returns TEAM_SWITCH_CONFLICT without consuming or revoking a valid family. If the matching edge committed but its target policy is now unavailable or needs stronger assurance, UOA retires only that family and returns authenticated INVALID_REFRESH_TOKEN so a lost-response caller can clear its intent safely. Post-grace predecessor reuse always takes theft revocation. An ordinary refresh never returns a changed scope.',
   errors: {
-    WORKSPACE_NOT_AVAILABLE:
+    TEAM_NOT_AVAILABLE:
       '403 — the exact pair is unavailable or product policy denies it; intentionally does not distinguish why',
     INTERACTION_REQUIRED:
       '403 — the family lacks the target policy’s current interactive assurance; restart authorization',
-    WORKSPACE_SWITCH_CONFLICT:
+    TEAM_SWITCH_CONFLICT:
       '409 — same-scope no-op or a valid deterministic successor belongs to another grant/target',
     INVALID_REFRESH_TOKEN:
       '401 — after domain-client authentication succeeds, invalid, expired, revoked, structurally corrupt, or post-grace reused source; the stable code is exposed but the underlying reason remains opaque',
@@ -306,7 +306,7 @@ export const confidentialTokenExchangeDocumentation = {
   request: {
     grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
     subject_token:
-      'Either a source-signed one-time RS256 JWT assertion carrying optional active workspace context, or a UOA-issued RS256 at+jwt access token already bound to the authenticated calling app with mandatory org/active context',
+      'Either a source-signed one-time RS256 JWT assertion carrying optional active team context, or a UOA-issued RS256 at+jwt access token already bound to the authenticated calling app with mandatory org/active context',
     subject_token_type:
       'urn:ietf:params:oauth:token-type:jwt for the first hop, or urn:ietf:params:oauth:token-type:access_token for a chained hop',
     product:
@@ -328,14 +328,14 @@ export const confidentialTokenExchangeDocumentation = {
     audience: 'PUBLIC_BASE_URL + /auth/token',
     key_source: 'same-host jwks_url claim from the verified source config JWT',
     replay_protection:
-      'A fresh unique jti is mandatory. After current identity and optional workspace validation, UOA atomically consumes source-domain+jti once in PostgreSQL through exp plus clock tolerance; exact/concurrent replay is rejected across instances.',
+      'A fresh unique jti is mandatory. After current identity and optional team validation, UOA atomically consumes source-domain+jti once in PostgreSQL through exp plus clock tolerance; exact/concurrent replay is rejected across instances.',
   },
   chained_access_token_binding: {
     authentication:
       'the immediate caller still presents only its own per-domain app credential; another product credential, a webhook secret, a user token, or a shared fallback is never accepted as caller authentication',
     verification:
       'the subject must be a UOA RS256 at+jwt with iss equal to UOA and aud exactly https://<authenticated caller config domain>; source_domain and azp must identify the same inbound source product domain',
-    workspace:
+    team:
       'org and active are mandatory and internally consistent. UOA revalidates the inbound source-product mapping, then checks the stable user, source-domain role, ACTIVE organisation, and ACTIVE selected team under the ultimate signed origin at the tail of the act chain.',
     narrowing:
       'requested scope must be allowed by the immediate caller mapping and be a subset of the inbound token scope. The downstream expiry is capped to the remaining inbound lifetime.',
@@ -347,7 +347,7 @@ export const confidentialTokenExchangeDocumentation = {
     lifetime: 'maximum 300 seconds; a chained result never outlives its inbound access token',
     jwks: 'GET /oauth/jwks.json',
     claims:
-      'iss, aud, sub, email (advisory), source_domain, azp (immediate caller domain only), product, exact requested scope, jti, iat, exp; org and active are present together for a validated workspace and preserve the revalidated original tenancy. Chained tokens add an RFC 8693 act chain containing upstream source/product provenance.',
+      'iss, aud, sub, email (advisory), source_domain, azp (immediate caller domain only), product, exact requested scope, jti, iat, exp; org and active are present together for a validated team and preserve the revalidated original tenancy. Chained tokens add an RFC 8693 act chain containing upstream source/product provenance.',
     forbidden_claims:
       'client_id and the 64-character domain-hash bearer credential are never copied into this token',
   },

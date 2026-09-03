@@ -157,15 +157,15 @@ export function exchangeTestRefreshToken(
   );
 }
 
-export function switchTestWorkspace(
+export function switchTestTeam(
   store: FakeRefreshStore,
   refreshToken: string,
   now: Date,
-  workspace: { orgId: string; teamId: string },
+  team: { orgId: string; teamId: string },
   beforeReplay?: () => Promise<void>,
 ) {
   return exchangeRefreshToken(
-    { ...TEST_REFRESH_CONTEXT, refreshToken, workspace },
+    { ...TEST_REFRESH_CONTEXT, refreshToken, team },
     {
       beforeReplay: beforeReplay ? async () => beforeReplay() : undefined,
       now: () => now,

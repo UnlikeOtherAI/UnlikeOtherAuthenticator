@@ -17,7 +17,7 @@ const configUrl = 'https://client.example.com/auth-config';
 const redirectUrl = 'https://client.example.com/oauth/callback';
 const verifier = 'membership-race-verifier-abcdefghijklmnopqrstuvwxyz';
 
-type SeededWorkspace = {
+type SeededTeam = {
   ownerId: string;
   userId: string;
   orgId: string;
@@ -35,11 +35,11 @@ function deferred(): {
   return { promise, resolve };
 }
 
-function config(workspaceSelection: 'off' | 'auto' = 'off'): ClientConfig {
+function config(teamSelection: 'off' | 'auto' = 'off'): ClientConfig {
   return validateConfigFields(
     baseClientConfigPayload({
       redirect_urls: [redirectUrl],
-      login_flow: { email_code_enabled: false, workspace_selection: workspaceSelection },
+      login_flow: { email_code_enabled: false, team_selection: teamSelection },
       org_features: { enabled: true, user_needs_team: true },
       session: {
         remember_me_enabled: true,
@@ -97,7 +97,7 @@ describe.skipIf(!hasDatabase)('authorization-code and membership lifecycle race'
     });
   });
 
-  async function seedWorkspace(): Promise<SeededWorkspace> {
+  async function seedTeam(): Promise<SeededTeam> {
     const owner = await handle.prisma.user.create({
       data: { email: 'owner@example.com', userKey: 'owner@example.com' },
       select: { id: true },
@@ -129,11 +129,11 @@ describe.skipIf(!hasDatabase)('authorization-code and membership lifecycle race'
     return { ownerId: owner.id, userId: user.id, orgId: org.id, teamId: team.id };
   }
 
-  async function issueCode(workspace: SeededWorkspace): Promise<string> {
+  async function issueCode(team: SeededTeam): Promise<string> {
     const codeChallenge = createHash('sha256').update(verifier, 'utf8').digest('base64url');
     const issued = await issueAuthorizationCode(
       {
-        userId: workspace.userId,
+        userId: team.userId,
         domain,
         configUrl,
         redirectUrl,
@@ -142,8 +142,8 @@ describe.skipIf(!hasDatabase)('authorization-code and membership lifecycle race'
         rememberMe: true,
         twoFaCompleted: false,
         credentialEpoch: 0,
-        orgId: workspace.orgId,
-        teamId: workspace.teamId,
+        orgId: team.orgId,
+        teamId: team.teamId,
       },
       {
         prisma: handle.prisma,
@@ -172,7 +172,7 @@ describe.skipIf(!hasDatabase)('authorization-code and membership lifecycle race'
     return issued.code;
   }
 
-  function exchange(code: string, afterActiveWorkspaceLock?: () => Promise<void>) {
+  function exchange(code: string, afterActiveTeamLock?: () => Promise<void>) {
     return exchangeAuthorizationCodeForTokens(
       {
         code,
@@ -186,12 +186,12 @@ describe.skipIf(!hasDatabase)('authorization-code and membership lifecycle race'
         prisma: handle.prisma,
         adminPrisma: handle.prisma,
         sharedSecret: process.env.SHARED_SECRET!,
-        afterActiveWorkspaceLock,
+        afterActiveTeamLock,
       },
     );
   }
 
-  function exchangeRequired(code: string, afterRequiredWorkspaceLock?: () => Promise<void>) {
+  function exchangeRequired(code: string, afterRequiredTeamLock?: () => Promise<void>) {
     return exchangeAuthorizationCodeForTokens(
       {
         code,
@@ -205,21 +205,21 @@ describe.skipIf(!hasDatabase)('authorization-code and membership lifecycle race'
         prisma: handle.prisma,
         adminPrisma: handle.prisma,
         sharedSecret: process.env.SHARED_SECRET!,
-        afterRequiredWorkspaceLock,
+        afterRequiredTeamLock,
       },
     );
   }
 
   function deactivate(
-    workspace: SeededWorkspace,
+    team: SeededTeam,
     afterMembershipStatusWrite?: () => Promise<void>,
   ) {
     return deactivateOrganisationMember(
       {
-        orgId: workspace.orgId,
+        orgId: team.orgId,
         domain,
-        actorUserId: workspace.ownerId,
-        userId: workspace.userId,
+        actorUserId: team.ownerId,
+        userId: team.userId,
         config: config(),
       },
       {
@@ -241,12 +241,12 @@ describe.skipIf(!hasDatabase)('authorization-code and membership lifecycle race'
   }
 
   it('rejects exchange when deactivation obtains the membership locks first', async () => {
-    const workspace = await seedWorkspace();
-    const code = await issueCode(workspace);
+    const team = await seedTeam();
+    const code = await issueCode(team);
     const statusWritten = deferred();
     const releaseDeactivation = deferred();
 
-    const deactivation = deactivate(workspace, async () => {
+    const deactivation = deactivate(team, async () => {
       statusWritten.resolve();
       await releaseDeactivation.promise;
     });
@@ -263,7 +263,7 @@ describe.skipIf(!hasDatabase)('authorization-code and membership lifecycle race'
     });
     expect(
       await handle.prisma.authorizationCode.findFirstOrThrow({
-        where: { userId: workspace.userId },
+        where: { userId: team.userId },
         select: { usedAt: true },
       }),
     ).toEqual({ usedAt: null });
@@ -271,8 +271,8 @@ describe.skipIf(!hasDatabase)('authorization-code and membership lifecycle race'
   });
 
   it('finishes exchange before a deactivation waiting on the same locks', async () => {
-    const workspace = await seedWorkspace();
-    const code = await issueCode(workspace);
+    const team = await seedTeam();
+    const code = await issueCode(team);
     const scopeLocked = deferred();
     const releaseExchange = deferred();
 
@@ -282,7 +282,7 @@ describe.skipIf(!hasDatabase)('authorization-code and membership lifecycle race'
     });
     await scopeLocked.promise;
 
-    const deactivation = deactivate(workspace);
+    const deactivation = deactivate(team);
     await expectStillPending(deactivation);
     releaseExchange.resolve();
 
@@ -292,31 +292,31 @@ describe.skipIf(!hasDatabase)('authorization-code and membership lifecycle race'
     await expect(deactivation).resolves.toEqual({ deactivated: true });
     expect(
       await handle.prisma.authorizationCode.findFirstOrThrow({
-        where: { userId: workspace.userId },
+        where: { userId: team.userId },
         select: { usedAt: true },
       }),
     ).toEqual({ usedAt: expect.any(Date) });
     expect(
       await handle.prisma.refreshToken.findFirstOrThrow({
-        where: { userId: workspace.userId },
+        where: { userId: team.userId },
         select: { revokedAt: true },
       }),
     ).toEqual({ revokedAt: expect.any(Date) });
     expect(
       await handle.prisma.orgMember.findUniqueOrThrow({
-        where: { orgId_userId: { orgId: workspace.orgId, userId: workspace.userId } },
+        where: { orgId_userId: { orgId: team.orgId, userId: team.userId } },
         select: { status: true },
       }),
     ).toEqual({ status: 'DEACTIVATED' });
   });
 
-  it('rejects an unscoped required exchange when deactivation locks the resolved workspace first', async () => {
-    const workspace = await seedWorkspace();
-    const code = await issueUnscopedCode(workspace.userId);
+  it('rejects an unscoped required exchange when deactivation locks the resolved team first', async () => {
+    const team = await seedTeam();
+    const code = await issueUnscopedCode(team.userId);
     const statusWritten = deferred();
     const releaseDeactivation = deferred();
 
-    const deactivation = deactivate(workspace, async () => {
+    const deactivation = deactivate(team, async () => {
       statusWritten.resolve();
       await releaseDeactivation.promise;
     });
@@ -332,8 +332,8 @@ describe.skipIf(!hasDatabase)('authorization-code and membership lifecycle race'
   });
 
   it('commits required placement before waiting deactivation revokes the newly issued refresh', async () => {
-    const workspace = await seedWorkspace();
-    const code = await issueUnscopedCode(workspace.userId);
+    const team = await seedTeam();
+    const code = await issueUnscopedCode(team.userId);
     const placementLocked = deferred();
     const releaseExchange = deferred();
 
@@ -343,7 +343,7 @@ describe.skipIf(!hasDatabase)('authorization-code and membership lifecycle race'
     });
     await placementLocked.promise;
 
-    const deactivation = deactivate(workspace);
+    const deactivation = deactivate(team);
     await expectStillPending(deactivation);
     releaseExchange.resolve();
 
@@ -352,12 +352,12 @@ describe.skipIf(!hasDatabase)('authorization-code and membership lifecycle race'
     await expect(deactivation).resolves.toEqual({ deactivated: true });
     expect(
       await handle.prisma.refreshToken.findFirstOrThrow({
-        where: { userId: workspace.userId },
+        where: { userId: team.userId },
         select: { orgId: true, teamId: true, revokedAt: true },
       }),
     ).toEqual({
-      orgId: workspace.orgId,
-      teamId: workspace.teamId,
+      orgId: team.orgId,
+      teamId: team.teamId,
       revokedAt: expect.any(Date),
     });
   });

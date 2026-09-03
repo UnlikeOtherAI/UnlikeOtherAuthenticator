@@ -1,16 +1,16 @@
 import type { PrismaClient } from '@prisma/client';
 
 import { lockAndAssertAuthenticationEpoch } from './authentication-epoch.service.js';
-import { lockProductWorkspacePolicyShared } from './product-workspace-policy-lock.service.js';
-import type { ProductWorkspacePolicyPrisma } from './product-workspace-policy.service.js';
+import { lockProductTeamPolicyShared } from './product-team-policy-lock.service.js';
+import type { ProductTeamPolicyPrisma } from './product-team-policy.service.js';
 import { lockSignaturePolicyForDecision } from './signature-policy-lock.service.js';
-import { lockAndAssertActiveClientWorkspaceScope } from './workspace-scope.service.js';
+import { lockAndAssertActiveClientTeamScope } from './team-scope.service.js';
 
 type AuthorizationOriginPrisma = PrismaClient;
 
 /**
  * Freeze every mutable input that can invalidate an authenticated signing/code continuation.
- * The order is global and shared with token issuance: product → user → workspace → signature.
+ * The order is global and shared with token issuance: product → user → team → signature.
  */
 export async function lockAuthorizationOriginForDecision(
   params: {
@@ -25,10 +25,10 @@ export async function lockAuthorizationOriginForDecision(
     prisma: AuthorizationOriginPrisma;
     afterAuthenticationEpochLock?: () => Promise<void>;
     crossProductPrisma?: AuthorizationOriginPrisma;
-    policyPrisma?: ProductWorkspacePolicyPrisma;
+    policyPrisma?: ProductTeamPolicyPrisma;
   },
 ): Promise<void> {
-  await lockProductWorkspacePolicyShared(deps.prisma);
+  await lockProductTeamPolicyShared(deps.prisma);
   await lockAndAssertAuthenticationEpoch(
     {
       userId: params.userId,
@@ -39,7 +39,7 @@ export async function lockAuthorizationOriginForDecision(
   );
 
   if (params.profile === 'CONFIG_JWT') {
-    await lockAndAssertActiveClientWorkspaceScope(
+    await lockAndAssertActiveClientTeamScope(
       {
         userId: params.userId,
         domain: params.domain,

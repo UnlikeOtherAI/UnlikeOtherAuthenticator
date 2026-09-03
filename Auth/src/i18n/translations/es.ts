@@ -12,7 +12,7 @@ export const es = {
   'auth.twoFactorVerify.title': 'Verificar codigo de dos factores',
   'auth.twoFactorSetup.title': 'Configurar autenticacion de dos factores',
   'auth.codeEntry.title': 'Ingresa tu codigo',
-  'auth.workspaceChooser.title': 'Elige un espacio de trabajo',
+  'auth.teamChooser.title': 'Elige un espacio de trabajo',
   'auth.signatures.title': 'Revisa y firma los acuerdos',
 
   'form.email.label': 'Correo electronico',
@@ -60,46 +60,46 @@ export const es = {
   'codeEntry.resend.sent': 'Enviamos un nuevo codigo a tu correo electronico',
   'codeEntry.error': 'No se pudo verificar el codigo. Intentalo de nuevo.',
 
-  'workspaceChooser.subtitle': 'Tus espacios de trabajo para {email}',
-  'workspaceChooser.autoSkip': 'Iniciando sesion...',
-  'workspace.role.owner': 'Propietario',
-  'workspace.role.admin': 'Administrador',
-  'workspace.invite.title': 'Te invitaron a {teamName}',
-  'workspace.invite.invitedBy': 'Invitado por {invitedBy}',
-  'workspace.invite.accept': 'Aceptar',
-  'workspace.invite.decline': 'Rechazar',
-  'workspace.createOrg.title': 'Crear un nuevo espacio de trabajo',
-  'workspace.createOrg.subtitle': 'Comienza un espacio de trabajo nuevo',
-  'workspace.createOrg.nameLabel': 'Nombre del espacio de trabajo',
-  'workspace.createOrg.submit': 'Crear espacio de trabajo',
-  'workspace.createOrg.cancel': 'Cancelar',
-  'workspace.createDialog.open': 'Crear espacio de trabajo',
-  'workspace.createDialog.title': 'Crear un espacio de trabajo',
-  'workspace.createDialog.subtitle': 'Elige dónde pertenece y quién puede encontrarlo.',
-  'workspace.createDialog.destinationLabel': 'Organización',
-  'workspace.createDialog.newOrganisation': 'Crear una nueva organización',
-  'workspace.createDialog.newOrganisationDescription':
+  'teamChooser.subtitle': 'Tus espacios de trabajo para {email}',
+  'teamChooser.autoSkip': 'Iniciando sesion...',
+  'team.role.owner': 'Propietario',
+  'team.role.admin': 'Administrador',
+  'team.invite.title': 'Te invitaron a {teamName}',
+  'team.invite.invitedBy': 'Invitado por {invitedBy}',
+  'team.invite.accept': 'Aceptar',
+  'team.invite.decline': 'Rechazar',
+  'team.createOrg.title': 'Crear un nuevo espacio de trabajo',
+  'team.createOrg.subtitle': 'Comienza un espacio de trabajo nuevo',
+  'team.createOrg.nameLabel': 'Nombre del espacio de trabajo',
+  'team.createOrg.submit': 'Crear espacio de trabajo',
+  'team.createOrg.cancel': 'Cancelar',
+  'team.createDialog.open': 'Crear espacio de trabajo',
+  'team.createDialog.title': 'Crear un espacio de trabajo',
+  'team.createDialog.subtitle': 'Elige dónde pertenece y quién puede encontrarlo.',
+  'team.createDialog.destinationLabel': 'Organización',
+  'team.createDialog.newOrganisation': 'Crear una nueva organización',
+  'team.createDialog.newOrganisationDescription':
     'Esto crea una organización y su primer espacio de trabajo.',
-  'workspace.createDialog.existingOrganisationDescription':
+  'team.createDialog.existingOrganisationDescription':
     'Esto añade un espacio de trabajo a la organización seleccionada.',
-  'workspace.createDialog.visibilityLabel': 'Visibilidad',
-  'workspace.createDialog.visibility.private': 'Privado',
-  'workspace.createDialog.visibility.privateDescription':
+  'team.createDialog.visibilityLabel': 'Visibilidad',
+  'team.createDialog.visibility.private': 'Privado',
+  'team.createDialog.visibility.privateDescription':
     'Solo las personas a las que invites pueden encontrar este espacio de trabajo.',
-  'workspace.createDialog.visibility.inviteOnly': 'Solo con invitación',
-  'workspace.createDialog.visibility.inviteOnlyDescription':
+  'team.createDialog.visibility.inviteOnly': 'Solo con invitación',
+  'team.createDialog.visibility.inviteOnlyDescription':
     'Las personas necesitan una invitación para unirse a este espacio de trabajo.',
-  'workspace.createDialog.visibility.openToOrganisation': 'Abierto a la organización',
-  'workspace.createDialog.visibility.openToOrganisationDescription':
+  'team.createDialog.visibility.openToOrganisation': 'Abierto a la organización',
+  'team.createDialog.visibility.openToOrganisationDescription':
     'Los miembros activos de la organización pueden unirse a este espacio de trabajo.',
-  'workspace.createDialog.submit': 'Crear espacio de trabajo',
-  'workspace.createDialog.cancel': 'Cancelar',
+  'team.createDialog.submit': 'Crear espacio de trabajo',
+  'team.createDialog.cancel': 'Cancelar',
 
   'notice.sessionExpired': 'Tu inicio de sesión tardó demasiado y caducó. Inicia sesión de nuevo.',
-  'workspace.orgSection.addWorkspace': 'Añadir un espacio de trabajo a {org}',
-  'workspace.createTeam.nameLabel': 'Nombre del espacio de trabajo',
-  'workspace.createTeam.submit': 'Crear',
-  'workspace.createTeam.cancel': 'Cancelar',
+  'team.orgSection.addTeam': 'Añadir un espacio de trabajo a {org}',
+  'team.createTeam.nameLabel': 'Nombre del espacio de trabajo',
+  'team.createTeam.submit': 'Crear',
+  'team.createTeam.cancel': 'Cancelar',
 
   'twoFactor.setup.instructions':
     'Escanea este codigo QR con una app autenticadora y luego ingresa el codigo de 6 digitos para verificar la configuracion.',

@@ -103,7 +103,7 @@ describe('exchangeRefreshTokenForTokens active-claim re-validation (unit)', () =
     };
   }
 
-  it("keeps the active claim, including first-login placement, when the rotated token's workspace remains ACTIVE", async () => {
+  it("keeps the active claim, including first-login placement, when the rotated token's team remains ACTIVE", async () => {
     const { now, prisma } = makeRotationPrisma({
       storedOrgId: 'org-1',
       storedTeamId: 'team-1',
@@ -274,7 +274,7 @@ describe('exchangeRefreshTokenForTokens active-claim re-validation (unit)', () =
     expect(prisma.user.findUnique).not.toHaveBeenCalled();
   });
 
-  it('rejects an unscoped refresh when automatic workspace selection requires an exact team', async () => {
+  it('rejects an unscoped refresh when automatic team selection requires an exact team', async () => {
     const { now, prisma } = makeRotationPrisma({
       storedOrgId: null,
       storedTeamId: null,
@@ -282,7 +282,7 @@ describe('exchangeRefreshTokenForTokens active-claim re-validation (unit)', () =
     });
     const config = {
       ...makeConfig({ enabled: true, user_needs_team: true }),
-      login_flow: { email_code_enabled: false, workspace_selection: 'auto' as const },
+      login_flow: { email_code_enabled: false, team_selection: 'auto' as const },
     };
 
     await expect(
@@ -307,7 +307,7 @@ describe('exchangeRefreshTokenForTokens active-claim re-validation (unit)', () =
     });
     const config = {
       ...makeConfig({ enabled: true, user_needs_team: true }),
-      login_flow: { email_code_enabled: false, workspace_selection: 'off' as const },
+      login_flow: { email_code_enabled: false, team_selection: 'off' as const },
     };
 
     const result = await exchangeRefreshTokenForTokens(

@@ -1,7 +1,7 @@
 import type { ClientConfig } from './config.service.js';
 import { getEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
-import { hasWorkspaceCapability } from './team.service.base.js';
+import { hasTeamCapability } from './team.service.base.js';
 import { pendingInviteStatusWhere } from './first-login.service.js';
 import {
   TEAM_INVITE_SELECT,
@@ -50,7 +50,7 @@ export async function getTeamInvitedEntries(
   if (!env.DATABASE_URL) return [];
 
   const prisma = deps?.prisma ?? (getPrisma() as InvitePrisma);
-  const isManager = await hasWorkspaceCapability(prisma, 'members.manage', params);
+  const isManager = await hasTeamCapability(prisma, 'members.manage', params);
   if (!isManager) return [];
 
   const now = deps?.now ? deps.now() : new Date();

@@ -13,10 +13,10 @@ import { readConfigJwtFromTrustedSource } from '../../services/config-jwt-source
 import { applyDomainRedirectAllowlist } from '../../services/domain-redirect-allowlist.service.js';
 import { LOGIN_SESSION_AUDIENCE } from '../../config/constants.js';
 import {
-  buildWorkspaceChoices,
-  resolveAutoSelectedWorkspace,
-  shouldPresentWorkspaceChooser,
-  type AutoSelectedWorkspace,
+  buildSessionChoices,
+  resolveAutoSelectedTeam,
+  shouldPresentTeamChooser,
+  type AutoSelectedTeam,
 } from '../../services/first-login.service.js';
 import { signLoginSession } from '../../services/login-session.service.js';
 import { assertSocialProviderAllowed } from '../../services/social/index.js';
@@ -40,12 +40,12 @@ import {
 } from '../../services/team-invite.service.js';
 import { setSocialCallbackDebugContext } from '../../services/auth-debug-page.service.js';
 import { recordLoginLog } from '../../services/login-log.service.js';
-import { lockProductWorkspacePolicyShared } from '../../services/product-workspace-policy-lock.service.js';
+import { lockProductTeamPolicyShared } from '../../services/product-team-policy-lock.service.js';
 import { sendDeepLinkHandoff } from '../../services/auth-ui.service.js';
 import { isCustomSchemeUrl } from '../../utils/http-url.js';
 import { requestRegistrationInstructions } from '../../services/auth-register.service.js';
-import { resolveProductWorkspaceBeforeTwoFa } from '../../services/required-workspace-placement.service.js';
-import { finalizeWithTwoFaPolicy } from '../../services/workspace-finalize.service.js';
+import { resolveProductTeamBeforeTwoFa } from '../../services/required-team-placement.service.js';
+import { finalizeWithTwoFaPolicy } from '../../services/team-finalize.service.js';
 import { selectRedirectUrl } from '../../services/authorization-code.service.js';
 import { lockAndAssertAuthenticationEpoch } from '../../services/authentication-epoch.service.js';
 import { lockRefreshSessionUserDomain } from '../../services/refresh-session-lock.service.js';
@@ -245,7 +245,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
       }
 
       const outcome = await runWithRequestAdminTransaction(request, async (prisma) => {
-        await lockProductWorkspacePolicyShared(prisma);
+        await lockProductTeamPolicyShared(prisma);
 
         if (!profile.emailVerified) {
           await requestRegistrationInstructions(
@@ -363,11 +363,11 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
           return { kind: 'invite_accepted' as const };
         }
 
-        let autoSelectedWorkspace: AutoSelectedWorkspace | null = acceptedInvite
+        let autoSelectedTeam: AutoSelectedTeam | null = acceptedInvite
           ? { orgId: acceptedInvite.orgId, teamId: acceptedInvite.teamId }
           : null;
-        if (!acceptedInvite && config.login_flow?.workspace_selection === 'auto') {
-          const choices = await buildWorkspaceChoices(
+        if (!acceptedInvite && config.login_flow?.team_selection === 'auto') {
+          const choices = await buildSessionChoices(
             { userId, config },
             {
               crossProductPrisma: prisma,
@@ -375,8 +375,8 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
               prisma,
             },
           );
-          autoSelectedWorkspace = resolveAutoSelectedWorkspace(choices);
-          if (shouldPresentWorkspaceChooser(choices, autoSelectedWorkspace)) {
+          autoSelectedTeam = resolveAutoSelectedTeam(choices);
+          if (shouldPresentTeamChooser(choices, autoSelectedTeam)) {
             const loginToken = await signLoginSession({
               userId,
               credentialEpoch,
@@ -392,16 +392,16 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
               sharedSecret: SHARED_SECRET,
               audience: LOGIN_SESSION_AUDIENCE,
             });
-            return { kind: 'workspace_chooser' as const, loginToken };
+            return { kind: 'team_chooser' as const, loginToken };
           }
         }
 
-        autoSelectedWorkspace ??= await resolveProductWorkspaceBeforeTwoFa(
+        autoSelectedTeam ??= await resolveProductTeamBeforeTwoFa(
           { userId, config },
-          { prisma, workspacePrisma: prisma },
+          { prisma, teamPrisma: prisma },
         );
 
-        // The workspace decision happens before 2FA: an explicit chooser returns above, while an
+        // The team decision happens before 2FA: an explicit chooser returns above, while an
         // unambiguous auto-skip is carried through any 2FA bridge and bound to the final code.
         const finalized = await finalizeWithTwoFaPolicy(
           {
@@ -418,7 +418,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
             codeChallenge: socialState.code_challenge,
             codeChallengeMethod: socialState.code_challenge_method,
             ip: request.ip ?? null,
-            ...(autoSelectedWorkspace ?? {}),
+            ...(autoSelectedTeam ?? {}),
           },
           {
             currentTwoFaEnabled: authenticationState.twoFaEnabled,
@@ -426,7 +426,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
             policyPrisma: prisma,
             prisma,
             twoFaPolicyPrisma: prisma,
-            workspacePrisma: prisma,
+            teamPrisma: prisma,
           },
         );
 
@@ -486,7 +486,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         return;
       }
 
-      if (outcome.kind === 'workspace_chooser') {
+      if (outcome.kind === 'team_chooser') {
         const u = new URL(`${baseUrl}/auth`);
         u.searchParams.set('config_url', configUrl);
         u.searchParams.set('redirect_url', redirectUrl);
@@ -495,13 +495,13 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         // token), the login_token bridge holds only userId+domain. The SPA must re-present the
         // challenge on POST /auth/select-team, where issueAuthorizationCode requires it — so it
         // has to survive this redirect via the URL, same as email-registration-link.ts's
-        // buildWorkspaceChooserAuthUrl.
+        // buildTeamChooserAuthUrl.
         if (socialState.code_challenge && socialState.code_challenge_method) {
           u.searchParams.set('code_challenge', socialState.code_challenge);
           u.searchParams.set('code_challenge_method', socialState.code_challenge_method);
         }
         u.searchParams.set('login_token', outcome.loginToken);
-        u.searchParams.set('flow', 'workspace_chooser');
+        u.searchParams.set('flow', 'team_chooser');
         if (socialState.request_access === true) {
           u.searchParams.set('request_access', 'true');
         }

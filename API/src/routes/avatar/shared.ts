@@ -38,7 +38,7 @@ export function sendAvatar(
     crossOrigin?: boolean;
     /**
      * Omit `X-UOA-Avatar-Source`. Set on the public route: the header would tell an anonymous
-     * caller whether a workspace uploaded a custom logo, and let them watch it change. Every
+     * caller whether a team uploaded a custom logo, and let them watch it change. Every
      * other avatar route has already authenticated the caller before answering.
      */
     hideSource?: boolean;
@@ -155,7 +155,7 @@ type DomainAvatarAuditAction =
  * Record a `/domain/*` avatar mutation against the acting domain.
  *
  * `/internal/admin/*` avatar mutations have always been audited; the `/domain/*` ones were not, so
- * a product backend could replace a user's or a workspace's image leaving no trace anywhere. That
+ * a product backend could replace a user's or a team's image leaving no trace anywhere. That
  * matters more here than on the operator side, because a `global`-scope user is ONE identity shared
  * by every domain they belong to: the row this writes is the only record of which tenant changed an
  * image that the others then render. See the header note on `registerDomainUserAvatarRoutes`.

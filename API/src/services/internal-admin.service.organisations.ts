@@ -26,7 +26,7 @@ import {
   normalizeTeamDescription,
   normalizeTeamName,
 } from './team.service.base.js';
-import { lockProductWorkspacePolicyExclusive } from './product-workspace-policy-lock.service.js';
+import { lockProductTeamPolicyExclusive } from './product-team-policy-lock.service.js';
 import type { TwoFaPolicyValue } from './twofactor-policy.service.js';
 
 export async function getAdminOrganisations(limit?: number) {
@@ -162,7 +162,7 @@ export async function updateAdminOrganisation(
       // Token issuance holds the shared side of this fence through commit. Taking
       // the exclusive side before the policy read makes a switch see either the
       // complete old policy or the complete new policy, never a stale decision.
-      await lockProductWorkspacePolicyExclusive(tx);
+      await lockProductTeamPolicyExclusive(tx);
     }
     const existing = await tx.organisation.findUnique({
       where: { id: orgId },

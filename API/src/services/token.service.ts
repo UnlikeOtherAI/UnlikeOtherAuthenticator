@@ -24,12 +24,12 @@ import {
 } from './org-context.service.js';
 import { buildFirstLoginBlock, type FirstLoginBlock } from './first-login.service.js';
 import {
-  resolveAuthorizationCodeWorkspace,
-  requiresExactAuthorizationWorkspace,
-} from './required-workspace-placement.service.js';
-import { lockTokenIssuanceProductPolicy } from './product-workspace-policy-lock.service.js';
+  resolveAuthorizationCodeTeam,
+  requiresExactAuthorizationTeam,
+} from './required-team-placement.service.js';
+import { lockTokenIssuanceProductPolicy } from './product-team-policy-lock.service.js';
 import { signUserAccessTokenRs256 } from './user-access-token-key.service.js';
-import { resolveProductWorkspacePolicy } from './product-workspace-policy.service.js';
+import { resolveProductTeamPolicy } from './product-team-policy.service.js';
 import { assertAuthorizationTwoFaProof } from './authorization-twofactor-proof.service.js';
 import {
   createRefreshTokenFamilyDecisionLock,
@@ -53,19 +53,19 @@ type TokenDeps = {
   refreshTokenTtlDays?: number;
   sharedSecret?: string;
   // Deterministic concurrency-test hook. Production callers leave this unset.
-  afterProductWorkspacePolicyLock?: () => Promise<void>;
+  afterProductTeamPolicyLock?: () => Promise<void>;
   afterAuthorizationCodeAuthenticationLock?: () => Promise<void>;
   afterRefreshSessionLock?: () => Promise<void>;
-  afterActiveWorkspaceLock?: () => Promise<void>;
-  afterRequiredWorkspaceLock?: () => Promise<void>;
+  afterActiveTeamLock?: () => Promise<void>;
+  afterRequiredTeamLock?: () => Promise<void>;
 };
 
 function sharedSecretKey(sharedSecret: string): Uint8Array {
   return new TextEncoder().encode(sharedSecret);
 }
 
-type ActiveWorkspace = { orgId: string; teamId: string };
-type ActiveWorkspaceClaim = ActiveWorkspace & { tenantSlug: string };
+type ActiveTeam = { orgId: string; teamId: string };
+type ActiveTeamClaim = ActiveTeam & { tenantSlug: string };
 
 async function signAccessToken(params: {
   userId: string;
@@ -78,7 +78,7 @@ async function signAccessToken(params: {
   issuer: string;
   tokenVersion: number;
   org?: OrgContext | null;
-  active?: ActiveWorkspaceClaim | null;
+  active?: ActiveTeamClaim | null;
   /** False for the first-party admin domain, which signs with its own separate
    *  HS256 secret and is consumed only by UOA's own Admin panel — not a relying
    *  party, so it stays out of the publishable-signature surface. */
@@ -97,7 +97,7 @@ async function signAccessToken(params: {
     role: 'superuser' | 'user';
     tv: number;
     org?: OrgContext;
-    active?: ActiveWorkspaceClaim;
+    active?: ActiveTeamClaim;
   };
 
   if (params.org) {
@@ -182,7 +182,7 @@ export async function issueTokenPairForUser(
     refreshTokenExpiresInSeconds: number;
     userId: string;
     includeFirstLogin?: boolean;
-    active?: ActiveWorkspace | null;
+    active?: ActiveTeam | null;
   },
   deps?: TokenIssuerDeps,
 ): Promise<IssuedTokenPair> {
@@ -326,7 +326,7 @@ export async function exchangeAuthorizationCodeForTokens(
   return runInTransaction(adminPrisma, async (tx) => {
     await lockTokenIssuanceProductPolicy(
       { clientDomainId: params.authenticatedClientDomainId, domain: params.config.domain },
-      { prisma: tx, afterLock: deps?.afterProductWorkspacePolicyLock },
+      { prisma: tx, afterLock: deps?.afterProductTeamPolicyLock },
     );
     const now = deps?.now ? deps.now() : new Date();
     const { userId, rememberMe, twoFaCompleted, orgId, teamId } = await consumeAuthorizationCode({
@@ -341,22 +341,22 @@ export async function exchangeAuthorizationCodeForTokens(
       crossProductPrisma: tx,
       policyPrisma: tx,
       afterAuthenticationEpochLock: deps?.afterAuthorizationCodeAuthenticationLock,
-      afterActiveScopeLock: deps?.afterActiveWorkspaceLock,
+      afterActiveScopeLock: deps?.afterActiveTeamLock,
     });
 
-    // Both values must be present to carry an explicit or unambiguously auto-selected workspace
+    // Both values must be present to carry an explicit or unambiguously auto-selected team
     // onto the session (design §7 steps 3-4).
-    const active: ActiveWorkspace | null = await resolveAuthorizationCodeWorkspace(
+    const active: ActiveTeam | null = await resolveAuthorizationCodeTeam(
       { userId, config: params.config, stored: { orgId, teamId } },
       {
-        afterWorkspaceLock: deps?.afterRequiredWorkspaceLock,
+        afterTeamLock: deps?.afterRequiredTeamLock,
         env,
         prisma: tx,
-        workspacePrisma: tx,
+        teamPrisma: tx,
       },
     );
 
-    // Re-evaluate the strongest current policy after the exact workspace is
+    // Re-evaluate the strongest current policy after the exact team is
     // locked/resolved. A policy or enrollment change after interactive auth
     // can invalidate the code, but can never downgrade the required proof.
     await assertAuthorizationTwoFaProof(
@@ -434,7 +434,7 @@ export async function exchangeRefreshTokenForTokens(
   const exchangeInsideTransaction = async (tx: PrismaClient): Promise<IssuedTokenPair> => {
     await lockTokenIssuanceProductPolicy(
       { clientDomainId: params.authenticatedClientDomainId, domain: params.config.domain },
-      { prisma: tx, afterLock: deps?.afterProductWorkspacePolicyLock },
+      { prisma: tx, afterLock: deps?.afterProductTeamPolicyLock },
     );
     const rotatedRefreshToken = await exchangeRefreshToken(
       {
@@ -454,26 +454,26 @@ export async function exchangeRefreshTokenForTokens(
         beforeRotate: createRefreshTokenRotationPolicyGuard({
           prisma: tx,
           now: deps?.now,
-          afterWorkspaceLock: deps?.afterActiveWorkspaceLock,
+          afterTeamLock: deps?.afterActiveTeamLock,
         }),
       },
     );
 
-    // Re-validate the exact selected workspace on every refresh. Product-bound
+    // Re-validate the exact selected team on every refresh. Product-bound
     // clients use the same central eligibility policy as the chooser and code
     // exchange; deactivated/removed membership or revoked product policy drops
     // `active` within one access-token TTL.
     const storedScopePresent = Boolean(rotatedRefreshToken.orgId || rotatedRefreshToken.teamId);
     if (!storedScopePresent) {
-      const policy = await resolveProductWorkspacePolicy(
+      const policy = await resolveProductTeamPolicy(
         { domain: params.config.domain },
         { prisma: tx },
       );
-      if (requiresExactAuthorizationWorkspace(params.config, policy)) {
+      if (requiresExactAuthorizationTeam(params.config, policy)) {
         throw new AppError('UNAUTHORIZED', 401, 'INVALID_REFRESH_TOKEN');
       }
     }
-    let active: ActiveWorkspace | null = null;
+    let active: ActiveTeam | null = null;
     if (storedScopePresent) {
       if (!rotatedRefreshToken.orgId || !rotatedRefreshToken.teamId) {
         throw new AppError('UNAUTHORIZED', 401, 'INVALID_REFRESH_TOKEN');
@@ -492,8 +492,8 @@ export async function exchangeRefreshTokenForTokens(
         !orgContext.teams.includes(rotatedRefreshToken.teamId)
       ) {
         // Rotation and this decision share the same admin transaction. Throwing
-        // rolls the replacement token back and forces an interactive workspace
-        // selection instead of silently switching or creating a workspace.
+        // rolls the replacement token back and forces an interactive team
+        // selection instead of silently switching or creating a team.
         throw new AppError('UNAUTHORIZED', 401, 'INVALID_REFRESH_TOKEN');
       }
       active = { orgId: rotatedRefreshToken.orgId, teamId: rotatedRefreshToken.teamId };

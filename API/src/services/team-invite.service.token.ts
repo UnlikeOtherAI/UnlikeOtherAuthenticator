@@ -241,7 +241,7 @@ export async function acceptTeamInviteTokenForSocialLogin(
     throw new AppError('BAD_REQUEST', 400);
   }
 
-  const workspace = await acceptTeamInviteWithinTransaction({
+  const team = await acceptTeamInviteWithinTransaction({
     prisma,
     teamInviteId: teamInvite.id,
     userId: params.userId,
@@ -263,7 +263,7 @@ export async function acceptTeamInviteTokenForSocialLogin(
     throw new AppError('BAD_REQUEST', 400);
   }
 
-  return workspace;
+  return team;
 }
 
 export async function declineTeamInviteByToken(

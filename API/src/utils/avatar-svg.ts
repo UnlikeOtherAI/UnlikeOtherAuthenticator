@@ -4,9 +4,9 @@
  * Pure and dependency-free: same `userId` + style + size always yields byte-identical SVG, on any
  * instance, so responses are cacheable and a user's fallback avatar never flickers between styles.
  *
- * The seed and colour contract is deliberately the same one documented for workspace icons in
- * `Auth/src/utils/workspace-icon.ts` (djb2 hash → `hsl(hue, 55%, 45%)`), reimplemented here rather
- * than imported so the API has no cross-workspace dependency:
+ * The seed and colour contract is deliberately the same one documented for team icons in
+ * `Auth/src/utils/team-icon.ts` (djb2 hash → `hsl(hue, 55%, 45%)`), reimplemented here rather
+ * than imported so the API has no cross-team dependency:
  *
  *   1. seed  = djb2(userId), unsigned
  *   2. hue   = seed % 360, saturation 55%, lightness 45%
@@ -30,7 +30,7 @@ export const AVATAR_MAX_SIZE = 512;
 /** The `viewBox` is constant; `size` only changes the rendered width/height. */
 export const AVATAR_VIEWBOX = '0 0 100 100';
 
-/** djb2 string hash, kept unsigned via `>>> 0` — the workspace-icon contract. */
+/** djb2 string hash, kept unsigned via `>>> 0` — the team-icon contract. */
 export function djb2(value: string): number {
   let hash = 5381;
   for (let i = 0; i < value.length; i++) {

@@ -72,7 +72,7 @@ export async function resolveTwoFaPolicy(
   params: {
     config: Pick<ClientConfig, '2fa_enabled' | 'domain'>;
     userId?: string | null;
-    /** Exact selected or prospective workspace, including one from another product domain. */
+    /** Exact selected or prospective team, including one from another product domain. */
     orgId?: string | null;
   },
   deps?: { prisma?: PolicyPrisma },

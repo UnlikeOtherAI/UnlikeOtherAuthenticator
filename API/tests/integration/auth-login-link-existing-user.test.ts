@@ -27,7 +27,7 @@ function payload() {
   return baseClientConfigPayload({
     '2fa_enabled': true,
     existing_user_registration_behavior: 'email_login_link',
-    login_flow: { email_code_enabled: true, workspace_selection: 'auto' },
+    login_flow: { email_code_enabled: true, team_selection: 'auto' },
     org_features: { enabled: true, user_needs_team: true },
   });
 }

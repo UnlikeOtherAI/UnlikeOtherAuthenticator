@@ -19,8 +19,8 @@ The Authenticator now issues a **token pair** from `POST /auth/token`:
 
 1. Authorization-code exchange
 2. Refresh-token exchange with `grant_type=refresh_token`
-3. Explicit workspace switch with
-   `grant_type=urn:unlikeotherai:params:oauth:grant-type:workspace-switch`
+3. Explicit team switch with
+   `grant_type=urn:unlikeotherai:params:oauth:grant-type:team-switch`
 4. Confidential JWT assertion exchange with
    `grant_type=urn:ietf:params:oauth:grant-type:token-exchange`
 
@@ -56,8 +56,8 @@ Refresh tokens are stored in the `refresh_tokens` table with:
 - `domain`
 - `client_id`
 - `config_url`
-- `org_id` (nullable exact workspace scope)
-- `team_id` (nullable exact workspace scope)
+- `org_id` (nullable exact team scope)
+- `team_id` (nullable exact team scope)
 - `two_fa_completed` (immutable authorization-code assurance; legacy rows default `false`)
 - `security_revoked_at` (nullable one-time theft/corruption epoch-invalidation marker)
 - `expires_at`
@@ -83,10 +83,10 @@ be submitted with the same authenticated application credential and exact
 `domain`/`client_id`/`config_url` context. UOA validates every stored
 parent/successor hash and immutable assurance link, re-runs current policy, and
 returns the one current live descendant without creating another row. For an
-ordinary refresh, every descendant must preserve the predecessor workspace. For
+ordinary refresh, every descendant must preserve the predecessor team. For
 an explicit switch, every descendant must preserve the exact requested target.
 A different valid transition returns the non-revoking
-`WORKSPACE_SWITCH_CONFLICT` instead of returning a token with changed scope. The response reports
+`TEAM_SWITCH_CONFLICT` instead of returning a token with changed scope. The response reports
 that descendant's actual remaining lifetime. This also makes concurrent
 submissions converge on one successor across UOA replicas.
 
@@ -109,7 +109,7 @@ stored successor chain is corrupt:
    cannot be trusted, all refresh state for that user is revoked
 2. The user's global access-token version is incremented
 3. Both revocations commit in the same transaction
-4. Only after commit, the authenticated workspace-switch request fails with the stable
+4. Only after commit, the authenticated team-switch request fails with the stable
    `INVALID_REFRESH_TOKEN` code; the response never distinguishes invalidity, expiry, revocation,
    corruption, or replay (and client-authentication failures remain generic)
 5. Subsequent refresh attempts and access tokens from the prior version fail
@@ -126,9 +126,9 @@ opaque lookup, takes both locks, and then re-reads the row before deciding reuse
 rotation. Reuse and a current-token rotation therefore cannot cross: whichever commits first
 determines the state observed by the waiter, and no new live replacement can escape revocation.
 
-## Explicit Workspace Switch
+## Explicit Team Switch
 
-Only the custom workspace-switch grant may change `org_id`/`team_id`. Before it
+Only the custom team-switch grant may change `org_id`/`team_id`. Before it
 writes the deterministic successor, UOA holds the product-policy and refresh
 family locks, validates the old source scope, locks and validates the exact
 target ACTIVE organisation/team memberships, evaluates the target's current
@@ -138,9 +138,9 @@ refresh always copies its current scope.
 
 The grant has no caller-supplied operation ID. The presented predecessor, grant
 intent, and exact target define the transition. Same-scope requests and valid
-competing transitions are non-consuming `409 WORKSPACE_SWITCH_CONFLICT`
+competing transitions are non-consuming `409 TEAM_SWITCH_CONFLICT`
 outcomes. Target membership or product-policy denial is the deliberately
-non-oracular `403 WORKSPACE_NOT_AVAILABLE`; insufficient family assurance is
+non-oracular `403 TEAM_NOT_AVAILABLE`; insufficient family assurance is
 `403 INTERACTION_REQUIRED`. Those three safe semantic outcomes do not revoke a
 valid family before an edge commits. On replay of an already-committed matching edge, target-policy
 failure instead retires that family and returns authenticated `INVALID_REFRESH_TOKEN`. Invalid
@@ -149,9 +149,9 @@ sources and any predecessor used after the 120-second grace return the stable
 underlying reason, and retain the existing theft-revocation semantics. Missing or invalid
 domain-client authentication remains a generic 401 with no refresh-token code.
 
-## Workspace Lifecycle Revocation
+## Team Lifecycle Revocation
 
-Workspace-scoped refresh families are terminated when their membership stops being ACTIVE:
+Team-scoped refresh families are terminated when their membership stops being ACTIVE:
 
 - Organisation deactivation or removal revokes every live row for the exact
   `(user_id, org_id)` across all issuing product domains. The lifecycle transaction also preserves
@@ -168,7 +168,7 @@ creating a replacement. This also serializes legacy unscoped rows, which have no
 available to lock. Refresh-first is followed and revoked by the lifecycle writer; lifecycle-first
 is observed by refresh's post-lock re-read and creates no replacement. Lifecycle revocation does
 not bump the global token version: already-issued access tokens expire normally, and unrelated
-workspace/product sessions are not globally invalidated.
+team/product sessions are not globally invalidated.
 
 ## Logout and Global Credential Revocation
 
@@ -229,12 +229,12 @@ Refresh-token request:
 }
 ```
 
-Workspace-switch request (all four properties are required; additional
+Team-switch request (all four properties are required; additional
 properties such as `operation_id` are rejected):
 
 ```json
 {
-  "grant_type": "urn:unlikeotherai:params:oauth:grant-type:workspace-switch",
+  "grant_type": "urn:unlikeotherai:params:oauth:grant-type:team-switch",
   "refresh_token": "opaque_refresh_token",
   "organization_id": "exact_target_org_id",
   "team_id": "exact_target_team_id"
@@ -243,7 +243,7 @@ properties such as `operation_id` are rejected):
 
 Success uses the standard token-pair envelope below, carries
 `access_token.active` for exactly the requested pair, and never includes
-`firstLogin`. Persist the complete returned pair and selected workspace
+`firstLogin`. Persist the complete returned pair and selected team
 atomically. A retry inside the response-loss window must use the same
 predecessor and target; it can never recover across a later scope change.
 
@@ -309,14 +309,14 @@ The confidential grant instead returns only:
 
 It does not issue or rotate a refresh token. For a first-hop JWT, the source
 backend creates a fresh assertion with a new unique `jti` when another resource
-token is needed. After identity and any selected workspace are revalidated, UOA
+token is needed. After identity and any selected team are revalidated, UOA
 atomically consumes that source-domain `jti` in PostgreSQL before signing. Exact
 or concurrent replays are rejected across instances. Only a SHA-256 digest is
 retained through the assertion's `exp` plus accepted clock tolerance, then
 pruned.
 An audience-bound access-token subject is reusable until `exp`; UOA does not add
 it to the one-time assertion-use ledger. This permits concurrent calls across
-DeepSignal instances while exact audience, app authentication, workspace
+DeepSignal instances while exact audience, app authentication, team
 revalidation, and scope narrowing remain mandatory.
 
 Application authentication and subject provenance are separate. Each product
@@ -334,13 +334,13 @@ The source assertion's `exp - iat` MUST be no more than 60 seconds. The issued
 resource access token is at most five minutes (`expires_in: 300`); a chained
 result is capped to the inbound token's remaining lifetime.
 
-The signed assertion may omit `active` for a first-time or workspace-less user.
+The signed assertion may omit `active` for a first-time or team-less user.
 UOA still re-resolves the stable user and source-domain role. When `active` is
 present it must contain both non-empty `orgId` and `teamId`; UOA verifies the
 current ACTIVE memberships and includes `org` plus `active` in the resource
-token. When absent, both workspace claims are omitted from the issued token.
+token. When absent, both team claims are omitted from the issued token.
 Chained access-token subjects require both claims. Their output keeps the
-revalidated original workspace, identifies the immediate caller in
+revalidated original team, identifies the immediate caller in
 `source_domain`/`azp`/`product`, and adds an RFC 8693 `act` chain for upstream
 source/product provenance.
 
@@ -388,11 +388,11 @@ Client backends integrating with the Authenticator must:
 2. Store the returned refresh token in a server-only location
 3. Use `grant_type=refresh_token` to renew sessions
 4. Use only the explicit custom grant to switch to an exact pair from the live
-   authorized workspace directory; never infer switching from ordinary refresh
+   authorized team directory; never infer switching from ordinary refresh
 5. Call `POST /auth/revoke` during logout
 6. Clear local cookies/session state if refresh fails
 7. Persist the returned refresh successor, access-token state, and selected
-   workspace atomically
+   team atomically
    before acknowledging a local session renewal
 8. If the UOA success response may have been lost, retry the same predecessor
    promptly with the same application credential, grant intent, exact target,
@@ -406,7 +406,7 @@ Client backends integrating with the Authenticator must:
 ## Deployment Notes
 
 - The refresh-token feature requires the `refresh_tokens` Prisma migration to be deployed before the new application revision starts serving traffic.
-- Workspace switching requires `20260813120000_bind_refresh_twofa_proof` before
+- Team switching requires `20260813120000_bind_refresh_twofa_proof` before
   the new application revision serves the custom grant. Existing families are
   intentionally treated as lacking completed interactive 2FA proof.
 - Confidential assertion replay protection requires the `confidential_assertion_uses` migration to be deployed before confidential exchange traffic reaches the new revision.

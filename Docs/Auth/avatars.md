@@ -27,7 +27,7 @@ Avatar **GET endpoints always return an image**, never JSON. Mutation endpoints
 
 Four styles, implemented as dependency-free server-generated SVG. Generation is
 **deterministic per user**: seeded from a djb2 hash of the user id (the same hash
-contract as `Auth/src/utils/workspace-icon.ts`), so a user's generated avatar is stable
+contract as `Auth/src/utils/team-icon.ts`), so a user's generated avatar is stable
 across requests and instances, and cache-friendly.
 
 | Style   | Description |
@@ -37,7 +37,7 @@ across requests and instances, and cache-friendly.
 | `rings` | Concentric rings with seed-varied radii, stroke widths, and an offset centre |
 | `mono`  | Black-and-white preset: seed-picked geometric pattern (diagonal stripes or quarter-circle truchet tiles), no colour |
 
-Colour derivation follows the existing workspace-icon contract:
+Colour derivation follows the existing team-icon contract:
 `hue = djb2(userId) % 360`, saturation 55%, lightness 45%, with fixed hue offsets for
 secondary colours. `mono` uses only black/white/greys.
 
@@ -361,7 +361,7 @@ These payloads deliberately carry no avatar URL:
   `pending_invites.invitedBy`. These render in the browser popup: there is no credentialed fetch
   available there, and the inviter entry carries no user id. The **teams** in those same payloads
   are the exception and do carry `avatarImageUrl`, in the credential-free `/teams/:teamId/avatar`
-  form of §11.3 — that route exists precisely so the chooser can draw real workspace logos. No
+  form of §11.3 — that route exists precisely so the chooser can draw real team logos. No
   equivalent public user-avatar route exists, so the user exclusion stands.
 - **Invite rows for invitees who have no user account yet.** There is no user to render, and
   minting a URL for a non-existent id would be a lie.
@@ -391,7 +391,7 @@ half lives in `services/avatar-subject.service.ts`; `avatar.service.ts` and
 Per team, fixed:
 
 1. **Uploaded** — an image set through UOA, stored in Postgres (`team_avatars`).
-2. **Icon URL** — `Team.iconUrl` (the externally hosted workspace icon from
+2. **Icon URL** — `Team.iconUrl` (the externally hosted team icon from
    `PUT /org/organisations/:orgId/teams/:teamId`, design §11.3), **proxied server-side**
    under exactly the same SSRF/HTTPS-only/timeout/size/sniff rules as a user's provider
    URL. Any failure falls back to generated.
@@ -438,21 +438,21 @@ multipart field `file`, generic errors.
 | GET | `/org/organisations/:orgId/teams/:teamId/avatar` | domain hash bearer + `X-UOA-Access-Token` + verified config (`?domain=`, `?config_url=`) | any ACTIVE member of the org — the same chain and visibility as `GET .../teams/:teamId` |
 | PUT / DELETE | `/org/organisations/:orgId/teams/:teamId/avatar` | same chain | org **owner/admin** only — the same authorization as `PUT .../teams/:teamId` |
 | GET / PUT / DELETE | `/internal/admin/teams/:teamId/avatar` | admin superuser bearer | operators, any team |
-| GET | `/teams/:teamId/avatar` | **none — public** | the auth-window chooser, and anything else rendering a workspace logo in a browser |
+| GET | `/teams/:teamId/avatar` | **none — public** | the auth-window chooser, and anything else rendering a team logo in a browser |
 
 **The public read.** Every other row needs a bearer, which a plain `<img src>` cannot send — that
 is why §9 originally excluded the chooser payloads from carrying any image URL at all. This route
 closes that gap: no credential, no `?domain=`, resolved by team id alone, so the auth popup can
-render the real workspace logo instead of an initials badge.
+render the real team logo instead of an initials badge.
 
 It is deliberately **not an existence oracle**: an unknown or deleted team id renders the same
 deterministic generated SVG a real team with no image gets, so every id answers 200 with an image
 and existence cannot be probed. `X-UOA-Avatar-Source` is omitted here for the same reason — on the
 credentialed routes it is useful metadata, but to an anonymous caller it would disclose whether a
-workspace uploaded a custom logo and let them watch it change. A team whose owning domain is no
+team uploaded a custom logo and let them watch it change. A team whose owning domain is no
 longer an active `ClientDomain` serves the generated image too: a torn-down tenant stops publishing
 its logo, and still looks like one that never set one. What it does expose, to anyone holding a team id (an unguessable cuid), is
-that workspace's logo — accepted knowingly as the cost of logos in the chooser. Reads are
+that team's logo — accepted knowingly as the cost of logos in the chooser. Reads are
 rate-limited 300/hour per IP, the only avatar GET with a budget of its own, and no `config_url` is
 accepted (an anonymous caller must not be able to aim the config fetcher's DNS/HTTPS/JWKS work), so
 the generated style is always the platform default rather than a domain's `avatars.default_style`.
@@ -500,7 +500,7 @@ URL that always resolves to an image, fetchable with the same credential class t
 | Team records (`GET`/`POST`/`PUT` on `/org/organisations/:orgId/teams[/:teamId]`) | `avatarImageUrl` |
 | Group detail `teams[]` and the `/internal/org` team↔group assignment response | `avatarImageUrl` |
 | Admin org-block `teams[]` and `GET /internal/admin/teams` | `avatarImageUrl` (admin URL form) |
-| `GET /org/me` `workspaces[]` | `avatarImageUrl` (public URL form) |
+| `GET /org/me` `teams[]` | `avatarImageUrl` (public URL form) |
 
 The field is derived, never null, and `PUBLIC_BASE_URL`-relative exactly like the user forms.
 `iconUrl` is untouched and keeps its own meaning: the external URL an owner set, or `null`.
@@ -513,7 +513,7 @@ chooser's reader holds no credential at all, which is the whole reason that rout
 carry no team avatar URL: their schemas reject unknown properties, so a change there is a version
 bump.
 
-`GET /org/me` uses that same public form for every `workspaces[]` entry. A product authorized for
+`GET /org/me` uses that same public form for every `teams[]` entry. A product authorized for
 `all_active_memberships` may receive teams owned by several domains, so one domain-bound avatar URL
 cannot represent the whole directory; the public endpoint remains non-null and renderable for each
 authorized entry without exposing a domain credential.

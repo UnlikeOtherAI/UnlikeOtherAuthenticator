@@ -44,7 +44,7 @@ function baseConfig(overrides?: Partial<ClientConfig>): ClientConfig {
     registration_mode: 'password_required',
     '2fa_enabled': false,
     debug_enabled: false,
-    login_flow: { email_code_enabled: false, workspace_selection: 'off' },
+    login_flow: { email_code_enabled: false, team_selection: 'off' },
     access_requests: { enabled: false, notify_org_roles: ['owner', 'admin'] },
     org_features: {
       enabled: false,
@@ -131,14 +131,14 @@ describe('POST /auth/start', () => {
   });
 
   it('does NOT issue a login code when login_flow.email_code_enabled is false (default)', async () => {
-    currentConfig = baseConfig({ login_flow: { email_code_enabled: false, workspace_selection: 'off' } });
+    currentConfig = baseConfig({ login_flow: { email_code_enabled: false, team_selection: 'off' } });
     const res = await postStart('jane@example.com');
     expect(res.statusCode).toBe(200);
     expect(issueLoginCodeMock).not.toHaveBeenCalled();
   });
 
   it('issues a login code (best-effort) when login_flow.email_code_enabled is true', async () => {
-    currentConfig = baseConfig({ login_flow: { email_code_enabled: true, workspace_selection: 'off' } });
+    currentConfig = baseConfig({ login_flow: { email_code_enabled: true, team_selection: 'off' } });
     const res = await postStart('jane@example.com');
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ message: 'We sent instructions to your email' });
@@ -149,7 +149,7 @@ describe('POST /auth/start', () => {
   });
 
   it('still returns the generic success response when issueLoginCode throws', async () => {
-    currentConfig = baseConfig({ login_flow: { email_code_enabled: true, workspace_selection: 'off' } });
+    currentConfig = baseConfig({ login_flow: { email_code_enabled: true, team_selection: 'off' } });
     issueLoginCodeMock.mockRejectedValue(new Error('boom'));
 
     const res = await postStart('jane@example.com');

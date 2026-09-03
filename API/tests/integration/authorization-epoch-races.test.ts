@@ -35,7 +35,7 @@ function clientConfig(): ClientConfig {
     baseClientConfigPayload({
       domain,
       redirect_urls: [redirectUrl],
-      login_flow: { email_code_enabled: false, workspace_selection: 'off' },
+      login_flow: { email_code_enabled: false, team_selection: 'off' },
       org_features: { enabled: false },
     }),
   );
@@ -155,7 +155,7 @@ describe.skipIf(!hasDatabase)('authorization credential-epoch races', () => {
   function complete(signingToken: string, afterLock?: () => Promise<void>) {
     return completeSigningContinuation(signingToken, {
       prisma: handle.prisma,
-      workspacePrisma: handle.prisma,
+      teamPrisma: handle.prisma,
       sharedSecret,
       publicBaseUrl: 'https://auth.example.com',
       afterAuthenticationEpochLock: afterLock,

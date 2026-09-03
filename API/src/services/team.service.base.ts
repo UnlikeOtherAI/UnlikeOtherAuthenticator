@@ -289,7 +289,7 @@ export function toTeamMemberRecord(
  * `teamId` is omitted only where there is genuinely no team to stand in — creating one. Then only
  * org-scope grants can authorise, which is exactly what `requireTeamManager` used to do everywhere.
  */
-export type WorkspaceCapabilityCheck = {
+export type TeamCapabilityCheck = {
   orgId: string;
   teamId?: string;
   actorUserId: string | undefined;
@@ -297,7 +297,7 @@ export type WorkspaceCapabilityCheck = {
 };
 
 /**
- * Does the acting user hold `capability` in this workspace?
+ * Does the acting user hold `capability` in this team?
  *
  * The single non-throwing source of truth for UOA's own gates, replacing the hard-coded
  * `role === 'owner' || role === 'admin'` predicates (`isTeamManager` / `isOrgOrTeamManager`). It
@@ -308,10 +308,10 @@ export type WorkspaceCapabilityCheck = {
  * The org lookup runs first and short-circuits, so the common manager path costs the same one query
  * it always did.
  */
-export async function hasWorkspaceCapability(
+export async function hasTeamCapability(
   prisma: OrgServicePrisma,
   capability: UoaCapability,
-  params: WorkspaceCapabilityCheck,
+  params: TeamCapabilityCheck,
 ): Promise<boolean> {
   if (!params.actorUserId) return true;
 
@@ -335,13 +335,13 @@ export async function hasWorkspaceCapability(
   return roleHoldsCapability(grants, 'team', actorTeamMembership?.teamRole, capability);
 }
 
-/** `hasWorkspaceCapability` as a 403. The refusal names no role — under a custom vocabulary it could not. */
-export async function requireWorkspaceCapability(
+/** `hasTeamCapability` as a 403. The refusal names no role — under a custom vocabulary it could not. */
+export async function requireTeamCapability(
   prisma: OrgServicePrisma,
   capability: UoaCapability,
-  params: WorkspaceCapabilityCheck,
+  params: TeamCapabilityCheck,
 ): Promise<void> {
-  if (!(await hasWorkspaceCapability(prisma, capability, params))) {
+  if (!(await hasTeamCapability(prisma, capability, params))) {
     throw new AppError('FORBIDDEN', 403);
   }
 }

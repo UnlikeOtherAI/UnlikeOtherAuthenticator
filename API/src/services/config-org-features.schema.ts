@@ -42,8 +42,8 @@ const BaseOrgFeaturesSchema = z.object({
   user_needs_team: z.boolean().default(false),
   auto_create_personal_org_on_first_login: z.boolean().default(false),
   allow_user_create_org: z.boolean().default(false),
-  // Opt-in for creating a further workspace (team) inside an org the user is already an
-  // ACTIVE owner/admin of, straight from the SSO workspace chooser. Separate from
+  // Opt-in for creating a further team (team) inside an org the user is already an
+  // ACTIVE owner/admin of, straight from the SSO team chooser. Separate from
   // `allow_user_create_org`, which is about a user's *first* org: this one adds a write path
   // to an existing tenant, so a domain opts into it explicitly and the role check still
   // applies on top. Default false — no domain gains the popup write path silently.

@@ -11,7 +11,7 @@ import { AppError } from '../utils/errors.js';
  * Everything here is pure: no I/O, no clock reads (callers pass `now`), no Prisma imports.
  *
  * Deliberately NOT here: who may invite, and which role they may grant. That is a capability
- * question, owned by `role-grants.ts` + `hasWorkspaceCapability`, and a vocabulary question, owned
+ * question, owned by `role-grants.ts` + `hasTeamCapability`, and a vocabulary question, owned
  * by the domain's configured `team_roles`. A state machine that also carried an
  * `owner|admin|member` actor rail would be a second, hard-coded authorization model beside the
  * configurable one — exactly the predicate the capability table replaced.

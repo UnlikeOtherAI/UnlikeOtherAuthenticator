@@ -6,9 +6,9 @@ import { requireEnv } from '../../config/env.js';
 import { runInTransaction } from '../../db/tenant-context.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
 import { lockAndAssertAuthenticationEpoch } from '../../services/authentication-epoch.service.js';
-import { buildWorkspaceChoices } from '../../services/first-login.service.js';
+import { buildSessionChoices } from '../../services/first-login.service.js';
 import { verifyLoginSession } from '../../services/login-session.service.js';
-import { lockProductWorkspacePolicyShared } from '../../services/product-workspace-policy-lock.service.js';
+import { lockProductTeamPolicyShared } from '../../services/product-team-policy-lock.service.js';
 import { AppError } from '../../utils/errors.js';
 import { sessionChoicesRateLimiter } from './rate-limit-keys.js';
 
@@ -26,7 +26,7 @@ const QuerySchema = z.object({
 
 /**
  * Phase 3b Task 7 follow-up (design §4.3, §11.2): the primitive the SPA calls to hydrate the
- * workspace-chooser payload after landing via a redirect that seeded a `login_token` bridge
+ * team-chooser payload after landing via a redirect that seeded a `login_token` bridge
  * instead of inlining the payload (the social callback is a GET redirect, unlike
  * `/auth/verify-code` and `/auth/login`, which can return the chooser inline). Verifies the
  * bridge token exactly like `/auth/select-team` does and rejects (generically) on any failure —
@@ -58,7 +58,7 @@ export function registerAuthSessionChoicesRoute(app: FastifyInstance): void {
       });
 
       const choices = await runInTransaction(request.adminDb, async (tx) => {
-        await lockProductWorkspacePolicyShared(tx);
+        await lockProductTeamPolicyShared(tx);
         await lockAndAssertAuthenticationEpoch(
           {
             userId: session.userId,
@@ -75,7 +75,7 @@ export function registerAuthSessionChoicesRoute(app: FastifyInstance): void {
           audience: LOGIN_SESSION_AUDIENCE,
           now: new Date(),
         });
-        return buildWorkspaceChoices({ userId: lockedSession.userId, config }, { prisma: tx });
+        return buildSessionChoices({ userId: lockedSession.userId, config }, { prisma: tx });
       });
 
       reply.status(200).send({ ...choices });

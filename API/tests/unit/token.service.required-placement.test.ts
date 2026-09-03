@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { verifyAccessToken } from '../../src/services/access-token.service.js';
 import type { ClientConfig } from '../../src/services/config.service.js';
-import { resolveRequiredAuthorizationWorkspace } from '../../src/services/required-workspace-placement.service.js';
+import { resolveRequiredAuthorizationTeam } from '../../src/services/required-team-placement.service.js';
 import { exchangeAuthorizationCodeForTokens } from '../../src/services/token.service.js';
 import { createClientId } from '../../src/utils/hash.js';
 import {
@@ -21,10 +21,10 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
   return { promise, resolve };
 }
 
-describe('required workspace placement during token exchange', () => {
+describe('required team placement during token exchange', () => {
   useTokenServiceTestEnv();
 
-  it('creates, validates, persists, and signs the exact workspace for a brand-new user', async () => {
+  it('creates, validates, persists, and signs the exact team for a brand-new user', async () => {
     const now = new Date('2026-07-21T20:00:00.000Z');
     const config = {
       ...makeConfig({
@@ -33,7 +33,7 @@ describe('required workspace placement during token exchange', () => {
         user_needs_team: true,
         allow_user_create_org: true,
       }),
-      login_flow: { email_code_enabled: false, workspace_selection: 'auto' as const },
+      login_flow: { email_code_enabled: false, team_selection: 'auto' as const },
     } as ClientConfig;
     let placed = false;
     const prisma = {
@@ -152,11 +152,11 @@ describe('required workspace placement during token exchange', () => {
     });
   });
 
-  it('fails closed on multiple product workspaces before personal placement', async () => {
+  it('fails closed on multiple product teams before personal placement', async () => {
     const config = {
       ...makeConfig({ enabled: true, user_needs_team: true }),
       domain: 'api.deeptest.live',
-      login_flow: { email_code_enabled: false, workspace_selection: 'auto' as const },
+      login_flow: { email_code_enabled: false, team_selection: 'auto' as const },
     } as ClientConfig;
     const createOrganisation = vi.fn();
     const prisma = {
@@ -166,7 +166,7 @@ describe('required workspace placement during token exchange', () => {
       teamMember: { findMany: vi.fn().mockResolvedValue([]) },
       user: { findUnique: vi.fn().mockResolvedValue({ email: 'member@example.com' }) },
     } as unknown as PrismaClient;
-    const workspacePrisma = {
+    const teamPrisma = {
       billingAppKey: {
         findMany: vi
           .fn()
@@ -190,12 +190,12 @@ describe('required workspace placement during token exchange', () => {
     } as unknown as PrismaClient;
 
     await expect(
-      resolveRequiredAuthorizationWorkspace(
+      resolveRequiredAuthorizationTeam(
         { config, userId: 'user-member' },
         {
           env: { DATABASE_URL: 'postgres://example' } as never,
           prisma,
-          workspacePrisma,
+          teamPrisma,
         },
       ),
     ).rejects.toMatchObject({ statusCode: 401, message: 'INVALID_AUTH_CODE' });
@@ -233,15 +233,15 @@ describe('required workspace placement during token exchange', () => {
     } as unknown as PrismaClient;
 
     await expect(
-      resolveRequiredAuthorizationWorkspace(
+      resolveRequiredAuthorizationTeam(
         {
           config: {
             ...makeConfig({ enabled: true, user_needs_team: true }),
-            login_flow: { email_code_enabled: false, workspace_selection: 'off' },
+            login_flow: { email_code_enabled: false, team_selection: 'off' },
           } as ClientConfig,
           userId: 'user-tombstone',
         },
-        { prisma, workspacePrisma: prisma },
+        { prisma, teamPrisma: prisma },
       ),
     ).resolves.toBeNull();
     expect(createOrganisation).not.toHaveBeenCalled();
@@ -274,24 +274,24 @@ describe('required workspace placement during token exchange', () => {
     } as unknown as PrismaClient;
 
     await expect(
-      resolveRequiredAuthorizationWorkspace(
+      resolveRequiredAuthorizationTeam(
         {
           config: {
             ...makeConfig({ enabled: true, user_needs_team: true }),
-            login_flow: { email_code_enabled: false, workspace_selection: 'off' },
+            login_flow: { email_code_enabled: false, team_selection: 'off' },
           } as ClientConfig,
           userId: 'user-existing',
         },
-        { prisma, workspacePrisma: prisma },
+        { prisma, teamPrisma: prisma },
       ),
     ).resolves.toBeNull();
     expect(prisma.organisation.create).not.toHaveBeenCalled();
     expect(prisma.team.create).not.toHaveBeenCalled();
   });
 
-  it('serializes simultaneous product placement and makes the loser reuse the winner workspace', async () => {
-    type Workspace = { domain: string; orgId: string; teamId: string };
-    let workspace: Workspace | null = null;
+  it('serializes simultaneous product placement and makes the loser reuse the winner team', async () => {
+    type Team = { domain: string; orgId: string; teamId: string };
+    let team: Team | null = null;
     let createCount = 0;
     let lockOwner: string | null = null;
     let nextLock: (() => void) | null = null;
@@ -311,7 +311,7 @@ describe('required workspace placement during token exchange', () => {
       return {
         ...makeConfig({ enabled: true, user_needs_team: true }),
         domain,
-        login_flow: { email_code_enabled: false, workspace_selection: 'off' },
+        login_flow: { email_code_enabled: false, team_selection: 'off' },
       } as ClientConfig;
     }
 
@@ -328,15 +328,15 @@ describe('required workspace placement during token exchange', () => {
           org: { name: string };
         };
       }> =>
-        workspace
+        team
           ? [
               {
-                teamId: workspace.teamId,
+                teamId: team.teamId,
                 teamRole: 'admin',
                 team: {
                   iconUrl: null,
                   name: 'Personal team',
-                  orgId: workspace.orgId,
+                  orgId: team.orgId,
                   slug: 'personal-team',
                   org: { name: 'Personal org' },
                 },
@@ -386,12 +386,12 @@ describe('required workspace placement during token exchange', () => {
           create: vi.fn().mockResolvedValue({ id: 'org-member-race' }),
           findFirst: vi.fn(
             async (args: { where: { org?: { domain?: string }; orgId?: string } }) => {
-              if (!workspace) return null;
-              if (args.where.org?.domain && args.where.org.domain !== workspace.domain) return null;
-              if (args.where.orgId && args.where.orgId !== workspace.orgId) return null;
+              if (!team) return null;
+              if (args.where.org?.domain && args.where.org.domain !== team.domain) return null;
+              if (args.where.orgId && args.where.orgId !== team.orgId) return null;
               return {
                 id: 'org-member-race',
-                orgId: workspace.orgId,
+                orgId: team.orgId,
                 role: 'owner',
                 status: 'ACTIVE',
               };
@@ -405,19 +405,19 @@ describe('required workspace placement during token exchange', () => {
         teamInvite: { findMany: vi.fn().mockResolvedValue([]) },
         teamMember: {
           create: vi.fn(async () => {
-            workspace = { domain, orgId: 'org-race', teamId: 'team-race' };
+            team = { domain, orgId: 'org-race', teamId: 'team-race' };
             return { id: 'team-member-race' };
           }),
           findFirst: vi.fn(
             async (args: {
               where: { team?: { org?: { domain?: string }; orgId?: string }; teamId?: string };
             }) => {
-              if (!workspace) return null;
-              if (args.where.team?.org?.domain && args.where.team.org.domain !== workspace.domain) {
+              if (!team) return null;
+              if (args.where.team?.org?.domain && args.where.team.org.domain !== team.domain) {
                 return null;
               }
-              if (args.where.team?.orgId && args.where.team.orgId !== workspace.orgId) return null;
-              if (args.where.teamId && args.where.teamId !== workspace.teamId) return null;
+              if (args.where.team?.orgId && args.where.team.orgId !== team.orgId) return null;
+              if (args.where.teamId && args.where.teamId !== team.teamId) return null;
               return { id: 'team-member-race' };
             },
           ),
@@ -425,9 +425,9 @@ describe('required workspace placement during token exchange', () => {
             async (args: {
               where: { team?: { org?: { domain?: string; members?: unknown } } };
             }) => {
-              if (!workspace) return [];
+              if (!team) return [];
               const orgFilter = args.where.team?.org;
-              if (orgFilter?.domain && orgFilter.domain !== workspace.domain) return [];
+              if (orgFilter?.domain && orgFilter.domain !== team.domain) return [];
               return choiceRow();
             },
           ),
@@ -444,14 +444,14 @@ describe('required workspace placement during token exchange', () => {
 
     const firstTx = makeTransaction('first', 'api.deeptest.live');
     const secondTx = makeTransaction('second', 'api.deepsignal.live');
-    const first = resolveRequiredAuthorizationWorkspace(
+    const first = resolveRequiredAuthorizationTeam(
       { config: productConfig('api.deeptest.live'), userId: 'user-race' },
-      { prisma: firstTx, workspacePrisma: firstTx },
+      { prisma: firstTx, teamPrisma: firstTx },
     );
     await firstLocked.promise;
-    const second = resolveRequiredAuthorizationWorkspace(
+    const second = resolveRequiredAuthorizationTeam(
       { config: productConfig('api.deepsignal.live'), userId: 'user-race' },
-      { prisma: secondTx, workspacePrisma: secondTx },
+      { prisma: secondTx, teamPrisma: secondTx },
     );
     await secondQueued.promise;
     expect(createCount).toBe(0);

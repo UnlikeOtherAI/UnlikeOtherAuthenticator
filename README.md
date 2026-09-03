@@ -117,7 +117,7 @@ cd unlike-other-authenticator
 npm install
 ```
 
-This installs dependencies for both the API and Auth workspaces.
+This installs dependencies for both the API and Auth teams.
 
 ### 3. Environment Variables
 
@@ -154,10 +154,10 @@ LOG_RETENTION_DAYS=90
 
 ```bash
 # Generate Prisma client
-npm run prisma:generate --workspace API
+npm run prisma:generate --team API
 
 # Run database migrations
-npm run prisma:migrate:dev --workspace API
+npm run prisma:migrate:dev --team API
 ```
 
 ### 5. Run Development Servers
@@ -179,16 +179,16 @@ The Auth UI runs on `http://localhost:5173` by default.
 npm run build
 ```
 
-This builds both API and Auth workspaces.
+This builds both API and Auth teams.
 
 ### 7. Run in Production
 
 ```bash
 # Apply production migrations
-npm run prisma:migrate:deploy --workspace API
+npm run prisma:migrate:deploy --team API
 
 # Start API server
-npm run start --workspace API
+npm run start --team API
 ```
 
 ## Architecture
@@ -297,20 +297,20 @@ npm run dev:api          # Start API server in watch mode
 npm run dev:auth         # Start Auth UI dev server
 
 # Building
-npm run build            # Build both workspaces
+npm run build            # Build both teams
 
 # Code Quality
-npm run lint             # Lint all workspaces
+npm run lint             # Lint all teams
 npm run format           # Format code with Prettier
 npm run typecheck        # TypeScript type checking
 
 # Testing
-npm run test             # Run tests in all workspaces
+npm run test             # Run tests in all teams
 
 # Database
-npm run prisma:generate --workspace API       # Generate Prisma client
-npm run prisma:migrate:dev --workspace API    # Create and apply migration
-npm run prisma:studio --workspace API         # Open Prisma Studio
+npm run prisma:generate --team API       # Generate Prisma client
+npm run prisma:migrate:dev --team API    # Create and apply migration
+npm run prisma:studio --team API         # Open Prisma Studio
 ```
 
 ### Testing
@@ -320,10 +320,10 @@ npm run prisma:studio --workspace API         # Open Prisma Studio
 npm test
 
 # Run API tests only
-npm test --workspace API
+npm test --team API
 
 # Watch mode (during development)
-npm test -- --watch --workspace API
+npm test -- --watch --team API
 ```
 
 Tests are written using Vitest and cover:
@@ -472,7 +472,7 @@ See [Section 24 of the brief](./Docs/brief.md#24-organisations-teams--groups) fo
 
 UOA's display-ready `BillingStatementV1` contract lives in the MIT-licensed
 [`@unlikeotherai/billing-statement-protocol`](./packages/billing-statement-protocol)
-workspace alongside the complete customer-action contract: hosted redirect,
+team alongside the complete customer-action contract: hosted redirect,
 cancellation selection, preview and exact `confirm_action`, confirmation
 request/response, and the minimal error envelope. It exports public TypeScript
 types and exact runtime schemas, plus generated JSON Schema, OpenAPI 3.1, and

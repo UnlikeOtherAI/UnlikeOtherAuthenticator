@@ -21,7 +21,7 @@ function hashLoginSessionJti(domain: string, jti: string): string {
 /**
  * Claim a verified chooser capability exactly once. The unique insert is the
  * cross-process serialization point and belongs in the same transaction as
- * workspace mutation and final authorization issuance.
+ * team mutation and final authorization issuance.
  */
 export async function consumeLoginSession(
   params: {

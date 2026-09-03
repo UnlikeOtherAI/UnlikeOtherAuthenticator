@@ -378,7 +378,7 @@ Every SDK must:
 **Swift (iOS/macOS)**
 - Present `UIAlertController` (iOS) or `NSAlert` (macOS) automatically
 - Support SwiftUI environment via a ViewModifier: `.uoaKillSwitch()`
-- App store URL opens via `UIApplication.open` / `NSWorkspace.open`
+- App store URL opens via `UIApplication.open` / `NSTeam.open`
 
 **Kotlin (Android)**
 - Present `AlertDialog` (Material) automatically

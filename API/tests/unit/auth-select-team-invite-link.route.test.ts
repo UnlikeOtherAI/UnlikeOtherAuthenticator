@@ -85,7 +85,7 @@ function baseConfig(overrides?: Partial<ClientConfig>): ClientConfig {
     registration_mode: 'password_required',
     '2fa_enabled': false,
     debug_enabled: false,
-    login_flow: { email_code_enabled: false, workspace_selection: 'auto' },
+    login_flow: { email_code_enabled: false, team_selection: 'auto' },
     access_requests: { enabled: false, notify_org_roles: ['owner', 'admin'] },
     org_features: {
       enabled: true,
