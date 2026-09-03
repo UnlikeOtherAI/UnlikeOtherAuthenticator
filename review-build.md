@@ -1,98 +1,106 @@
 VERDICT: ship with changes
 
-Review limitation: the single permitted `cat` was truncated by the environment,
-so §3.3–§5 and §8–§9 (auth boundary, endpoint schemas, lane details) were read
-only through their cross-references from the surviving sections. Findings below
-are solid where cited; anything touching §4–§5/§8–§9 internals is provisional
-and should be re-checked against the full text.
+# Hostile buildability review — slice-build-core.md
 
-BLOCKING
+## BLOCKING
 
-1. §7.5 + §10 Phase 1 — the shared `packages/uoa-ui` extraction is loaded into
-   the thinnest phase. Phase 1's stated value is "a real person signs in and
-   sees their workspaces." That does not require a cross-app refactor: git-mv
-   out of the Auth window, Tailwind content-glob surgery in two apps, workspace
-   wiring, Dockerfile changes, and a byte-identical Auth guarantee enforced by
-   screenshots. It directly violates the repo's "no premature abstraction" and
-   "build exactly what is specified" rules — the design even admits the new
-   Dialog/ConfirmDialog/Menu are only "candidates to move" when the Auth window
-   needs them, which contradicts moving everything preemptively. Fix: Phase 1
-   copies the ~10 listed files into `/Account` verbatim (imports rewritten);
-   extraction becomes its own later phase triggered by an actual second-consumer
-   need. This shrinks Phase 1 by roughly half and removes the only change that
-   can break an unrelated production app.
+1. §3.5 / §6 — "Signs in with: Email, Google" and the social-only branch of the
+   Security page need a list of linked identity providers per user, but no
+   endpoint in the phase plan returns it. §6 gates **Change password** on
+   `user.hasPassword` (so `/account/me` must carry that flag), yet the Profile
+   screen renders a provider list and §3.5 renders a "Set a password" button
+   "if social-only" — none of Phases 1–3 adds a `GET /account/identities` (or
+   equivalent) endpoint, and the assumed-complete `/org/*` surface is org/team
+   scoped, not user-identity scoped. A competent implementer hits this the
+   moment they build the Phase 1 "Profile read-only" screen. Either specify the
+   endpoint and its phase, or cut the provider list from the mock.
 
-2. §3.1 — the Home screen has no zero-state design, yet it is the first screen
-   a brand-new user sees (and Q1 recommends allowing registration, meaning a
-   person can land here with zero orgs, zero teams, zero invites). The §6 gate
-   table references an "empty-state create form" that §3.1 never wires up. An
-   implementer must invent the most important state of the most important
-   screen. Fix: add the empty-state wireframe (what renders, what the create
-   form posts to, what happens on success) before Phase 1 starts.
+2. §6 (gate table) contradicts §6 (intro paragraph). The intro says
+   `PUT …/members/:userId` is one of "the three structural owner-only powers"
+   requiring `Organisation.ownerId === actor`, and claims capabilities are
+   "computed server-side with the very functions the write routes use". But the
+   table gates Org → People role selects and ⋯ Remove/Deactivate/Reactivate on
+   `org.capabilities['members.manage']`. If role change and deactivate really
+   route through `PUT …/members/:userId`, every non-owner admin sees controls
+   that always 403, and the doc's own §5 "403 on a write" state becomes the
+   designed behaviour for a whole control class — which the table's "Shown to a
+   person who lacks it: No ⋯" column explicitly forbids. If instead deactivate
+   is a different route gated on `members.manage`, the intro is wrong. Pick one;
+   an implementer cannot resolve this from the document and must not guess.
 
-3. §3.1 — invite cards render "expires in 12 days," but nothing in the visible
-   text pins invitation expiry into the `GET /account/me` (§9.1) schema. The
-   design leans on `buildSidebarPendingInvites`, whose payload is not shown to
-   include an expiry. This is exactly the "control depending on data no listed
-   endpoint returns" failure mode. Fix: pin the invite object schema (at
-   minimum: org/team identity, inviter email, expiresAt) in §9.1, or drop the
-   expiry line from the card.
+3. §3.1 — the Home screen's data contract for teams the person is not a member
+   of is unspecified. §5 says `/account/me` lists only ACTIVE membership rows,
+   and §3.1 mocks a `+ Join "Design"` row for OPEN_TO_ORG teams and a
+   `not a member` row on the *org* page (§3.2, where "org member sees all
+   teams"). It never says whether Home renders INVITE_ONLY or HIDDEN teams the
+   person isn't in, and whether `/account/me` embeds non-member teams at all.
+   "Data: GET /account/me once" is asserted, not specced. Define the response
+   shape for org cards (teams array scope, role strings, `memberInvites`,
+   `capabilities`, `isOwner`, `isDefault`, `joinPolicy` per team) or the Home
+   mock is unbuildable against the pinned contract.
 
-4. §3.2 — the People section shows "Load more," implying member-list
-   pagination. The design asserts the `/org/*` contract is complete but never
-   states whether `GET …/members` paginates or what the portal does when it
-   does not. Fix: one line confirming the endpoint's pagination behaviour and
-   the portal's fetch pattern, or remove the control.
+4. §3.2 / §3.3 vs repo rule (no file over 500 lines). Both screens are specced
+   as single scrolling pages carrying 5–6 sections plus 4–5 dialogs each
+   (§3.2: rename, icon, invite-policy, transfer, delete; §3.3: invite-by-email,
+   add-from-org, new-link, plus header ⋯ items). Built naively as one page
+   component per mock, either file blows the 500-line cap. The slice names the
+   shared primitives (§7.4 Dialog, QueryState) but never allocates the section
+   and dialog decomposition. This is cheap to fix now and expensive after an
+   implementer has to re-chop a 900-line OrgPage.
 
-NON-BLOCKING
+## NON-BLOCKING
 
-- §10 Phase 4 item 3 — i18n (`language_config` beyond `en` via a "shared
-  I18nProvider") is pure scope creep: not in §1 scope, no consumer demand
-  stated, and the named I18nProvider does not appear in the §7.4 extraction
-  table, so it is an unspecified dependency too. Cut it, or defer to the same
-  future phase as the extraction where it would have a home.
-- §10 Phase 4 item 1 — the `ClientDomainConfigSnapshot` table plus per-request
-  substitution of a foreign domain's `org_features` into `request.config`
-  inside the account arm of `requireOrgRole` is heavy, security-sensitive
-  machinery (mutating request config from a persisted snapshot) for the
-  cosmetic problem of exact role-label fidelity. The interim default vocabulary
-  is acceptable; make this its own design rather than a phase task, and do not
-  let "substitute into request.config" ship without a threat review.
-- §9.1 `GET /account/me` partially re-invents the existing `GET /org/me` (orgs,
-  teams, roles, invites). The aggregation is justified for Phase 1 (the lane
-  arrives only in Phase 2) and the capability/policy additions are genuinely
-  new, but the design should state explicitly why `/org/me` was not extended
-  instead, so the next implementer does not maintain two directory endpoints
-  by drift.
-- §6 — org People "role select" gates on `org.isOwner` while the surrounding
-  copy says "role select + ⋯ only with the matching capability." Pick one rule
-  (owner-only, per the API) and make the table and §3.2 agree.
-- §10 Phase 2 — lane + §9.7 endpoints + full org page + full team page + create
-  org/team + self-join in one phase is the largest phase by an order of
-  magnitude. Shippable, but if anything slips it all slips; splitting
-  invitation accept/decline (which unblocks the already-rendered Phase 1
-  invite cards) into its own thin phase would de-risk.
-- §3 heading "Information architecture" appears twice in the rendered output —
-  check the file for a duplicated section (possibly a truncation artifact, but
-  verify).
-- Repo rule "no file over 500 lines": §3.2/§3.3 as specced (header card, three
-  to five sections, approvals, danger zone, all dialogs) are file-size risks.
-  State the decomposition expectation (section components, dialogs colocated)
-  in §12's architecture doc so the implementer does not land one 900-line page.
+- Phase 1 is not the thinnest sign-in-and-see-workstreams slice: it includes a
+  read-only Profile page and `AvatarImage` (§10, item 3), both of which Phase 3
+  immediately reopens for editing. Cut both from Phase 1; Phase 1 = shell,
+  sign-in, callback, session, read-only Home. Profile arrives once, editable.
+- Phase 4 item 3 (`language_config` beyond `en` via I18nProvider) is speculative
+  scope: the slice itself says the account config's default vocabulary governs
+  "until then" (§10, item 1 note) and never states a non-en language is
+  configured. Defer until a deployment actually serves one.
+- Phase 4 item 1 (`ClientDomainConfigSnapshot` and config substitution into
+  `request.config`) is the largest and riskiest change in the whole slice — it
+  mutates the confidential-exchange request path — and it is justified by an
+  open question ("Q4") rather than a confirmed defect. Ship Phases 1–3 without
+  it; gate it on evidence that a product-created org's grant table actually
+  diverges in production.
+- §3.5 "Sign out everywhere — signs you out of every product" has cross-product
+  blast radius the portal owner may not intend to vouch for in v1. It is
+  specced, so not creep, but the copy promises more than the portal controls;
+  consider "every UOA session" or defer the claim.
+- §3.2 Transfer dialog: "the outgoing owner becomes `admin` unless the
+  vocabulary lacks it" is an unbranchable instruction — if the vocabulary can
+  lack `admin`, the implementer needs the specified fallback (member? error?),
+  not discretion.
+- §5 "403 on a write → toast + refetch + controls disappear" fires a full
+  `/account/me` refetch on every stale-capability 403; fine, but state that a
+  single refetch is the design so nobody builds per-control polling.
+- Duplication check owed: the operator admin panel already exists. Before Phase
+  2 starts, confirm it does not already ship org/team/people/invitation
+  management screens the portal would re-implement; if it does, either reuse or
+  write down why the audience difference justifies the parallel UI. The auth
+  popup's LoginPage auto-start pattern is correctly referenced rather than
+  reinvented (§3).
 
-WHAT TO KEEP
+## What to keep
 
-- §6 capability-driven gate table with the three implementer rules — hiding as
-  courtesy, server refuses independently, role label never interpreted. This
-  is the strongest part of the document; it converts an ACL into buildable UI
-  logic.
-- §5's error-state table branching on HTTP status + what `/account/me` already
-  said, never on production-squashed codes — correct constraint discipline.
-- §1's not-scope table, especially billing, email change, and "no add-member-
-  by-id" — each has a real architectural reason, not just preference.
-- Reusing the parameterised `static-spa.service.ts` and the admin OAuth shape
-  rather than inventing a third serving/auth pattern (§2 facts 1–3 show the
-  domain constraint was actually understood).
-- Separating the portal from `/admin` by config identity rather than domain —
-  the one deliberate departure from "copy the admin," and the right call.
-- Phase 5 correctly gated on Q9 instead of being built speculatively.
+- The IA table with per-screen "decision it serves", and the explicit
+  exclusions (no `/account/teams`, no `/account/members`, no search) — this is
+  exactly the discipline "build exactly what is specified" needs.
+- The §5 states table: error-status-driven copy, no reliance on production-
+  squashed error codes, "the client never guesses a reason the server
+  withheld" — correct against the production squash and worth pinning as a
+  rule.
+- The §6 gate-table format itself (visible-when / shown-to-who-lacks-it),
+  including "hiding is a courtesy, the server refuses too" — the right model
+  for capability-driven UI; it just needs the blocking contradiction in
+  finding 2 resolved.
+- Phase 5 being explicitly conditional on Q9, with the refresh token still
+  never visible to the browser — conditional scope done right.
+- Phase 1's verification rigour (guard unit tests, capability pinning against
+  `LEGACY_DEFAULT_ROLE_GRANTS`, screenshot-byte-identical auth window) —
+  provided the extraction itself survives the duplication check above.
+- `join_creator: true` on team creation with the fix commit cited (§3.4) — the
+  kind of concrete, verifiable detail that keeps an implementer out of the
+  "creator isn't a member" trap.
+- One `QueryState` primitive owning all four render states on every screen.
