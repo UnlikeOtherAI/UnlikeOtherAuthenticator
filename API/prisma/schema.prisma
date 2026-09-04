@@ -132,6 +132,14 @@ enum BillingAppKeyPurpose {
   AUTOMATIC_MEMBERSHIP
 }
 
+enum AutomaticMembershipOperationStatus {
+  accepted
+  completed
+  already_member
+  failed
+  cancelled
+}
+
 enum BillingAdjustmentKind {
   ADD_ON
   CREDIT
@@ -1660,6 +1668,36 @@ model BillingAppKey {
 
   @@index([serviceId])
   @@map("billing_app_keys")
+}
+
+model AutomaticMembershipProvisionFence {
+  id         String   @id
+  serviceId  String   @map("service_id")
+  orgId      String   @map("org_id")
+  ruleId     String   @map("rule_id")
+  generation Int
+  fenceToken String   @map("fence_token")
+  active     Boolean  @default(true)
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  @@unique([serviceId, ruleId])
+  @@map("automatic_membership_provision_fences")
+}
+
+model AutomaticMembershipOperation {
+  id             String                           @id
+  serviceId      String                           @map("service_id")
+  orgId          String                           @map("org_id")
+  teamId         String                           @map("team_id")
+  ruleId         String                           @map("rule_id")
+  generation     Int
+  fenceToken     String                           @map("fence_token")
+  subjectId      String                           @map("subject_id")
+  idempotencyKey String                           @map("idempotency_key")
+  status         AutomaticMembershipOperationStatus
+  createdAt      DateTime                         @default(now()) @map("created_at")
+  updatedAt      DateTime                         @updatedAt @map("updated_at")
+  @@unique([serviceId, idempotencyKey])
+  @@map("automatic_membership_operations")
 }
 
 // UOA-owned evidence that a user has directly authenticated to a product.

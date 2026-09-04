@@ -1,10 +1,10 @@
 import { createHash } from 'node:crypto';
-import { MembershipStatus, type PrismaClient } from '@prisma/client';
+import { AutomaticMembershipOperationStatus, MembershipStatus, type PrismaClient } from '@prisma/client';
 
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import { AppError } from '../utils/errors.js';
 
-type AutomaticMembershipPrisma = Pick<PrismaClient, 'billingServiceAccess' | 'team' | 'orgMember' | 'teamMember' | 'authIdentity' | 'user' | '$transaction'>;
+type AutomaticMembershipPrisma = Pick<PrismaClient, 'billingServiceAccess' | 'team' | 'orgMember' | 'teamMember' | 'authIdentity' | 'user' | 'automaticMembershipProvisionFence' | 'automaticMembershipOperation' | '$transaction'>;
 const memberRoles = new Set(['owner', 'admin']);
 
 async function assertScope(prisma: AutomaticMembershipPrisma, credential: VerifiedBillingAppKey, orgId: string): Promise<void> {
@@ -56,12 +56,29 @@ export async function listAutomaticMembershipSubjects(
   return { snapshot_id: createHash('sha256').update(`${credential.id}:${input.orgId}:${input.domain}`).digest('base64url'), subjects: page.map((row) => row.userId), cursor: rows.length > input.limit ? rows[input.limit - 1]?.id ?? null : null };
 }
 
+export async function setAutomaticMembershipFence(
+  prisma: AutomaticMembershipPrisma, credential: VerifiedBillingAppKey, input: { orgId: string; ruleId: string; generation: number; fenceToken: string; active: boolean },
+): Promise<void> {
+  await assertScope(prisma, credential, input.orgId);
+  const current = await prisma.automaticMembershipProvisionFence.findUnique({ where: { serviceId_ruleId: { serviceId: credential.service.id, ruleId: input.ruleId } }, select: { generation: true } });
+  if (current && input.generation < current.generation) throw new AppError('CONFLICT', 409, 'AUTOMATIC_MEMBERSHIP_STALE_FENCE');
+  await prisma.automaticMembershipProvisionFence.upsert({
+    where: { serviceId_ruleId: { serviceId: credential.service.id, ruleId: input.ruleId } },
+    create: { id: createHash('sha256').update(`${credential.service.id}:${input.ruleId}`).digest('base64url'), serviceId: credential.service.id, orgId: input.orgId, ruleId: input.ruleId, generation: input.generation, fenceToken: input.fenceToken, active: input.active },
+    update: { orgId: input.orgId, generation: input.generation, fenceToken: input.fenceToken, active: input.active },
+  });
+}
+
 export async function grantAutomaticMembership(
-  prisma: AutomaticMembershipPrisma, credential: VerifiedBillingAppKey, input: { orgId: string; teamId: string; subject: string; idempotencyKey: string },
+  prisma: AutomaticMembershipPrisma, credential: VerifiedBillingAppKey, input: { orgId: string; teamId: string; subject: string; idempotencyKey: string; ruleId: string; generation: number; fenceToken: string },
 ): Promise<{ operation_id: string; status: 'completed' | 'already_member' }> {
   await assertScope(prisma, credential, input.orgId);
   const operation_id = createHash('sha256').update(`${credential.id}:${input.idempotencyKey}`).digest('base64url');
   return prisma.$transaction(async (tx) => {
+    const fence = await tx.automaticMembershipProvisionFence.findUnique({ where: { serviceId_ruleId: { serviceId: credential.service.id, ruleId: input.ruleId } } });
+    if (!fence || !fence.active || fence.orgId !== input.orgId || fence.generation !== input.generation || fence.fenceToken !== input.fenceToken) throw new AppError('CONFLICT', 409, 'AUTOMATIC_MEMBERSHIP_STALE_FENCE');
+    const replay = await tx.automaticMembershipOperation.findUnique({ where: { serviceId_idempotencyKey: { serviceId: credential.service.id, idempotencyKey: input.idempotencyKey } } });
+    if (replay) return { operation_id: replay.id, status: replay.status === AutomaticMembershipOperationStatus.already_member ? 'already_member' : 'completed' };
     const team = await tx.team.findFirst({ where: { id: input.teamId, orgId: input.orgId }, select: { id: true } });
     const user = await tx.user.findUnique({ where: { id: input.subject }, select: { id: true } });
     if (!team || !user) throw new AppError('NOT_FOUND', 404, 'AUTOMATIC_MEMBERSHIP_TARGET_NOT_FOUND');
@@ -71,6 +88,14 @@ export async function grantAutomaticMembership(
     ]);
     await tx.orgMember.upsert({ where: { orgId_userId: { orgId: input.orgId, userId: input.subject } }, create: { orgId: input.orgId, userId: input.subject, role: 'member', status: MembershipStatus.ACTIVE }, update: { status: MembershipStatus.ACTIVE } });
     await tx.teamMember.upsert({ where: { teamId_userId: { teamId: input.teamId, userId: input.subject } }, create: { teamId: input.teamId, userId: input.subject, teamRole: 'member', status: MembershipStatus.ACTIVE }, update: { status: MembershipStatus.ACTIVE } });
-    return { operation_id, status: existingOrg?.status === MembershipStatus.ACTIVE && existingTeam?.status === MembershipStatus.ACTIVE ? 'already_member' : 'completed' };
+    const status = existingOrg?.status === MembershipStatus.ACTIVE && existingTeam?.status === MembershipStatus.ACTIVE ? AutomaticMembershipOperationStatus.already_member : AutomaticMembershipOperationStatus.completed;
+    await tx.automaticMembershipOperation.create({ data: { id: operation_id, serviceId: credential.service.id, orgId: input.orgId, teamId: input.teamId, ruleId: input.ruleId, generation: input.generation, fenceToken: input.fenceToken, subjectId: input.subject, idempotencyKey: input.idempotencyKey, status } });
+    return { operation_id, status: status === AutomaticMembershipOperationStatus.already_member ? 'already_member' : 'completed' };
   });
+}
+
+export async function getAutomaticMembershipOperation(prisma: AutomaticMembershipPrisma, credential: VerifiedBillingAppKey, operationId: string): Promise<{ operation_id: string; status: string }> {
+  const operation = await prisma.automaticMembershipOperation.findFirst({ where: { id: operationId, serviceId: credential.service.id }, select: { id: true, status: true } });
+  if (!operation) throw new AppError('NOT_FOUND', 404, 'AUTOMATIC_MEMBERSHIP_OPERATION_NOT_FOUND');
+  return { operation_id: operation.id, status: operation.status };
 }
