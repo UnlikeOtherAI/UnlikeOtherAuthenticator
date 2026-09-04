@@ -326,7 +326,7 @@ export function mergeAuthDebugInfo(
 // callback-stage hint instead of the misleading "config_url is missing".
 export function setSocialCallbackDebugContext(
   request: FastifyRequest,
-  params: { configUrl: string; redirectUrl: string },
+  params: { configUrl: string; redirectUrl: string | null },
 ): void {
   request.authDebug = createAuthDebugInfo({
     requestUrl: request.raw.url,

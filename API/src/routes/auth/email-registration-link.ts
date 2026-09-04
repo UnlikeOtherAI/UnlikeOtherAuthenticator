@@ -15,6 +15,7 @@ import {
 import { selectRedirectUrl } from '../../services/authorization-code.service.js';
 import { isCustomSchemeUrl } from '../../utils/http-url.js';
 import { verifyEmailToken } from '../../services/auth-verify-email.service.js';
+import { getTeamInviteLandingData } from '../../services/team-invite.service.js';
 import {
   buildWorkspaceChoices,
   resolveAutoSelectedWorkspace,
@@ -131,16 +132,33 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
       }
 
       if (!pkce) {
-        request.log.info('email link omitted PKCE challenge; rendering login restart');
+        // Email-team-invite links are initiated from a mailbox rather than an
+        // OAuth client, so they correctly have no PKCE verifier. Preserve only
+        // a valid invite continuation for social sign-in; all other email links
+        // remain a normal login restart.
+        let hasTeamInvite = false;
+        try {
+          await getTeamInviteLandingData(
+            { token, config, configUrl },
+            { prisma: request.adminDb },
+          );
+          hasTeamInvite = true;
+        } catch {
+          // Not an invite-bound token. Do not expose token validity from the
+          // restart screen; the normal login flow is still available.
+        }
+        request.log.info({ hasTeamInvite }, 'email link omitted PKCE challenge; rendering login');
         const html = await renderAuthEntrypointHtml({
           config,
           configUrl,
-          requestUrl: buildLoginAuthUrl(
-            configUrl,
-            redirect_url,
-            parseRequestAccessFlag(request_access),
-            undefined,
-          ),
+          requestUrl: hasTeamInvite
+            ? buildTeamInviteAuthUrl(configUrl, token)
+            : buildLoginAuthUrl(
+                configUrl,
+                redirect_url,
+                parseRequestAccessFlag(request_access),
+                undefined,
+              ),
         });
         sendAuthHtml(reply, html);
         return;
@@ -410,5 +428,13 @@ function buildLoginAuthUrl(
     params.set('code_challenge_method', pkce.codeChallengeMethod);
   }
   if (requestAccess) params.set('request_access', 'true');
+  return `/auth?${params.toString()}`;
+}
+
+function buildTeamInviteAuthUrl(configUrl: string, token: string): string {
+  const params = new URLSearchParams();
+  params.set('config_url', configUrl);
+  params.set('email_token', token);
+  params.set('flow', 'team_invite');
   return `/auth?${params.toString()}`;
 }

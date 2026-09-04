@@ -6,6 +6,7 @@ export const es = {
   'auth.resetPassword.title': 'Restablecer tu contrasena',
   'auth.setPassword.title': 'Establece tu contrasena',
   'auth.accessRequested.title': 'Solicitud de acceso enviada',
+  'auth.invitationAccepted.title': 'Invitación aceptada',
   'auth.signedIn.title': 'Sesion iniciada',
   'auth.twoFactorVerify.title': 'Verificar codigo de dos factores',
   'auth.twoFactorSetup.title': 'Configurar autenticacion de dos factores',
@@ -40,6 +41,8 @@ export const es = {
     'Este correo electronico ya esta registrado. Inicia sesion o restablece tu contrasena para continuar.',
   'message.accessRequested':
     'Tu solicitud se ha enviado a los administradores del equipo. Puedes cerrar esta ventana y esperar su aprobacion.',
+  'message.invitationAccepted':
+    'Te uniste al espacio de trabajo. Regresa a Nessie e inicia sesión para continuar.',
   'message.signedIn': 'Vuelve a la aplicacion para terminar de iniciar sesion. Puedes cerrar esta ventana.',
   'action.openApp': 'Abrir la aplicacion',
 

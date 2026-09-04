@@ -12,7 +12,12 @@ export {
   acceptTeamInviteWithinTransaction,
   declineTeamInviteForUser,
 } from './team-invite.service.acceptance.js';
-export { declineTeamInviteByToken, getTeamInviteLandingData } from './team-invite.service.token.js';
+export {
+  acceptTeamInviteSocialContinuation,
+  declineTeamInviteByToken,
+  getTeamInviteLandingData,
+  getTeamInviteSocialContinuationData,
+} from './team-invite.service.token.js';
 export {
   approveInvite,
   createMemberInvite,

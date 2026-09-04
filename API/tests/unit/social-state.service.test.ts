@@ -66,6 +66,32 @@ describe('social-state.service', () => {
     });
   });
 
+  it('round-trips only a peppered team-invite lookup value without a redirect or PKCE', async () => {
+    const jwt = await signSocialState({
+      provider: 'google',
+      configUrl: 'https://client.example.com/auth-config',
+      inviteTokenHash: 'a'.repeat(64),
+      nonce: 'csrf-nonce-value',
+      sharedSecret: 'test-shared-secret-with-enough-length',
+      audience: 'uoa-auth-service',
+      baseUrlForIssuer: 'https://auth.example.com',
+      now: new Date('2026-01-01T00:00:00.000Z'),
+      ttlMs: 60_000,
+    });
+
+    const state = await verifySocialState({
+      stateJwt: jwt,
+      sharedSecret: 'test-shared-secret-with-enough-length',
+      audience: 'uoa-auth-service',
+      issuer: SOCIAL_STATE_ISSUER,
+      now: new Date('2026-01-01T00:00:30.000Z'),
+    });
+
+    expect(state).toMatchObject({ invite_token_hash: 'a'.repeat(64), nonce: 'csrf-nonce-value' });
+    expect(state.redirect_url).toBeUndefined();
+    expect(state.code_challenge).toBeUndefined();
+  });
+
   it('rejects expired social state JWTs', async () => {
     const jwt = await signSocialState({
       provider: 'google',

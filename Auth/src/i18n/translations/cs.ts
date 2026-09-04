@@ -6,6 +6,7 @@ export const cs = {
   'auth.resetPassword.title': 'Obnovení hesla',
   'auth.setPassword.title': 'Nastavení hesla',
   'auth.accessRequested.title': 'Žádost o přístup byla odeslána',
+  'auth.invitationAccepted.title': 'Pozvánka přijata',
   'auth.signedIn.title': 'Jste přihlášeni',
   'auth.twoFactorVerify.title': 'Ověření dvoufaktorovým kódem',
   'auth.twoFactorSetup.title': 'Nastavení dvoufaktorového ověření',
@@ -40,6 +41,8 @@ export const cs = {
     'Tento e-mail už je zaregistrovaný. Pokračujte prosím přihlášením nebo obnovením hesla.',
   'message.accessRequested':
     'Vaše žádost byla odeslána správcům týmu. Toto okno můžete zavřít a počkat na schválení.',
+  'message.invitationAccepted':
+    'Připojili jste se k pracovnímu prostoru. Vraťte se do Nessie a pokračujte přihlášením.',
   'message.signedIn': 'Vraťte se do aplikace a dokončete přihlášení. Toto okno můžete zavřít.',
   'action.openApp': 'Otevřít aplikaci',
 

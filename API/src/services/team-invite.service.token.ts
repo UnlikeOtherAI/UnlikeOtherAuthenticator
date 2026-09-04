@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
 import type { ClientConfig } from './config.service.js';
 
 import { getEnv, requireEnv } from '../config/env.js';
@@ -10,6 +10,7 @@ import {
   lockAndReadVerificationTokenEpoch,
   readVerificationTokenEpoch,
 } from './verification-token-epoch.service.js';
+import { acceptTeamInviteWithinTransaction } from './team-invite.service.acceptance.js';
 
 type InviteTokenPrisma = PrismaClient;
 
@@ -18,6 +19,7 @@ type InviteTokenType = 'LOGIN_LINK' | 'VERIFY_EMAIL' | 'VERIFY_EMAIL_SET_PASSWOR
 type InviteTokenRow = {
   id: string;
   type: string;
+  email: string;
   configUrl: string;
   tokenVersion: number | null;
   userId: string | null;
@@ -82,11 +84,19 @@ async function findInviteToken(params: {
   sharedSecret: string;
 }): Promise<InviteTokenRow | null> {
   const tokenHash = hashEmailToken(params.token, params.sharedSecret);
+  return await findInviteTokenByHash({ prisma: params.prisma, tokenHash });
+}
+
+async function findInviteTokenByHash(params: {
+  prisma: InviteTokenPrisma;
+  tokenHash: string;
+}): Promise<InviteTokenRow | null> {
   return await params.prisma.verificationToken.findUnique({
-    where: { tokenHash },
+    where: { tokenHash: params.tokenHash },
     select: {
       id: true,
       type: true,
+      email: true,
       configUrl: true,
       tokenVersion: true,
       userId: true,
@@ -170,6 +180,112 @@ export async function getTeamInviteLandingData(
     teamName: teamInvite.team.name,
     organisationName: teamInvite.org.name,
   };
+}
+
+/**
+ * Resolve the short-lived continuation placed in signed social OAuth state.
+ * The state deliberately carries the peppered token hash rather than the raw
+ * email capability, so the provider never receives the token itself.
+ */
+export async function getTeamInviteSocialContinuationData(params: {
+  tokenHash: string;
+  configUrl: string;
+  config: ClientConfig;
+  prisma: InviteTokenPrisma;
+  now?: Date;
+}): Promise<{ email: string }> {
+  void params.config;
+  const row = await findInviteTokenByHash({
+    prisma: params.prisma,
+    tokenHash: params.tokenHash,
+  });
+  if (!row) {
+    throw new AppError('BAD_REQUEST', 400);
+  }
+
+  assertInviteTokenValid({
+    row,
+    configUrl: params.configUrl,
+    now: params.now ?? new Date(),
+  });
+  if (!(await readVerificationTokenEpoch(params.prisma, row))) {
+    throw new AppError('BAD_REQUEST', 400);
+  }
+
+  return { email: row.email };
+}
+
+/**
+ * Consume an email-team-invite continuation after a social provider has
+ * verified the invitee's email. This issues no OAuth authorization code: an
+ * email invite joins a workspace, while a product sign-in must begin its own
+ * PKCE-bound authorization-code flow.
+ */
+export async function acceptTeamInviteSocialContinuation(params: {
+  tokenHash: string;
+  configUrl: string;
+  config: ClientConfig;
+  userId: string;
+  prisma: Prisma.TransactionClient;
+  now?: Date;
+}): Promise<void> {
+  const row = await findInviteTokenByHash({
+    prisma: params.prisma as unknown as InviteTokenPrisma,
+    tokenHash: params.tokenHash,
+  });
+  if (!row) {
+    throw new AppError('BAD_REQUEST', 400);
+  }
+
+  const decisionNow = params.now ?? new Date();
+  assertInviteTokenValid({ row, configUrl: params.configUrl, now: decisionNow });
+
+  const user = await params.prisma.user.findUnique({
+    where: { id: params.userId },
+    select: { id: true, email: true, userKey: true },
+  });
+  if (
+    !user ||
+    user.email.toLowerCase() !== row.email.toLowerCase() ||
+    user.userKey !== row.userKey
+  ) {
+    throw new AppError('BAD_REQUEST', 400);
+  }
+
+  if (row.userId === null && row.tokenVersion === null) {
+    // A pre-registration invite is consumed only after the provider has proven
+    // the exact invited mailbox above. It cannot use the normal epoch helper:
+    // that deliberately rejects a token once this social login has created the
+    // matching UOA user.
+  } else {
+    const epoch = await lockAndReadVerificationTokenEpoch(params.prisma, row);
+    if (epoch?.kind !== 'user' || epoch.userId !== params.userId) {
+      throw new AppError('BAD_REQUEST', 400);
+    }
+  }
+
+  // Claim before changing membership. The conditional update makes concurrent
+  // callbacks harmless; an unsuccessful branch rolls the claim back with the
+  // surrounding request transaction.
+  const claimed = await params.prisma.verificationToken.updateMany({
+    where: {
+      id: row.id,
+      usedAt: null,
+      expiresAt: { gt: decisionNow },
+    },
+    data: { usedAt: decisionNow, userId: params.userId },
+  });
+  if (claimed.count !== 1) {
+    throw new AppError('BAD_REQUEST', 400);
+  }
+
+  await acceptTeamInviteWithinTransaction({
+    prisma: params.prisma,
+    teamInviteId: requireTeamInvite(row).id,
+    userId: params.userId,
+    config: params.config,
+    now: decisionNow,
+  });
 }
 
 export async function declineTeamInviteByToken(

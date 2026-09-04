@@ -4,6 +4,7 @@ export const en = {
   'auth.resetPassword.title': 'Reset your password',
   'auth.setPassword.title': 'Set your password',
   'auth.accessRequested.title': 'Access request submitted',
+  'auth.invitationAccepted.title': 'Invitation accepted',
   'auth.signedIn.title': 'You’re signed in',
   'auth.twoFactorVerify.title': 'Verify two-factor code',
   'auth.twoFactorSetup.title': 'Set up two-factor authentication',
@@ -39,6 +40,8 @@ export const en = {
     'This email is already registered. Sign in or reset your password to continue.',
   'message.accessRequested':
     'Your request has been sent to the team administrators. You can close this window and wait for approval.',
+  'message.invitationAccepted':
+    'You’ve joined the workspace. Return to Nessie and sign in to continue.',
   'message.signedIn': 'Return to the app to finish signing in. You can close this window.',
   'action.openApp': 'Open the app',
 

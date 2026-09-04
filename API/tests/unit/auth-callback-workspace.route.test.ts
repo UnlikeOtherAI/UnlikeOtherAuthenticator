@@ -19,6 +19,8 @@ const buildWorkspaceChoicesMock = vi.fn();
 const finalizeAuthenticatedUserMock = vi.fn();
 const startTwoFactorSetupMock = vi.fn();
 const resolveProductWorkspaceBeforeTwoFaMock = vi.fn();
+const getTeamInviteSocialContinuationDataMock = vi.fn();
+const acceptTeamInviteSocialContinuationMock = vi.fn();
 
 vi.mock('../../src/services/config-jwt-source.service.js', () => ({
   readConfigJwtFromTrustedSource: (...args: unknown[]) =>
@@ -53,6 +55,19 @@ vi.mock('../../src/services/social/social-state.service.js', () => ({
 vi.mock('../../src/services/social/social-login.service.js', () => ({
   loginWithSocialProfile: (...args: unknown[]) => loginWithSocialProfileMock(...args),
 }));
+
+vi.mock('../../src/services/team-invite.service.js', async () => {
+  const actual = await vi.importActual<typeof import('../../src/services/team-invite.service.js')>(
+    '../../src/services/team-invite.service.js',
+  );
+  return {
+    ...actual,
+    getTeamInviteSocialContinuationData: (...args: unknown[]) =>
+      getTeamInviteSocialContinuationDataMock(...args),
+    acceptTeamInviteSocialContinuation: (...args: unknown[]) =>
+      acceptTeamInviteSocialContinuationMock(...args),
+  };
+});
 
 vi.mock('../../src/services/twofactor-policy.service.js', () => ({
   resolveTwoFaPolicy: (...args: unknown[]) => resolveTwoFaPolicyMock(...args),
@@ -185,6 +200,10 @@ describe('GET /auth/callback/:provider workspace selection', () => {
     });
     startTwoFactorSetupMock.mockReset();
     resolveProductWorkspaceBeforeTwoFaMock.mockReset().mockResolvedValue(null);
+    getTeamInviteSocialContinuationDataMock.mockReset().mockResolvedValue({
+      email: 'user@gmail.com',
+    });
+    acceptTeamInviteSocialContinuationMock.mockReset().mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -243,6 +262,31 @@ describe('GET /auth/callback/:provider workspace selection', () => {
     expect(location.searchParams.get('flow')).toBe('workspace_chooser');
     expect(location.searchParams.has('code_challenge')).toBe(false);
     expect(location.searchParams.has('code_challenge_method')).toBe(false);
+  });
+
+  it('accepts an email invitation after Google verifies the invited mailbox without issuing OAuth code', async () => {
+    verifySocialStateMock.mockResolvedValue({
+      provider: 'google',
+      config_url: CONFIG_URL,
+      nonce: TEST_NONCE,
+      invite_token_hash: 'a'.repeat(64),
+    });
+
+    const response = await runCallback();
+
+    expect(response.statusCode).toBe(302);
+    const location = new URL(response.headers.location as string);
+    expect(location.pathname).toBe('/auth');
+    expect(location.searchParams.get('flow')).toBe('team_invitation_accepted');
+    expect(location.searchParams.get('config_url')).toBe(CONFIG_URL);
+    expect(loginWithSocialProfileMock).toHaveBeenCalledWith(
+      expect.objectContaining({ inviteEmail: 'user@gmail.com' }),
+      expect.anything(),
+    );
+    expect(acceptTeamInviteSocialContinuationMock).toHaveBeenCalledWith(
+      expect.objectContaining({ tokenHash: 'a'.repeat(64), userId: 'user-1' }),
+    );
+    expect(finalizeAuthenticatedUserMock).not.toHaveBeenCalled();
   });
 
   it('binds the sole ACTIVE team to the authorization-code finalizer', async () => {

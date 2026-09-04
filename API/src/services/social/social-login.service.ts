@@ -95,6 +95,8 @@ export async function loginWithSocialProfile(
     profile: SocialProfile;
     config: ClientConfig;
     requestAccess?: boolean;
+    /** A valid email-team-invite continuation may create only its invited mailbox. */
+    inviteEmail?: string;
     ip?: string | null;
   },
   deps?: SocialLoginDeps,
@@ -114,6 +116,8 @@ export async function loginWithSocialProfile(
   });
 
   const prisma = deps?.prisma ?? (getPrisma() as unknown as SocialLoginPrisma);
+  const isInvitedMailbox =
+    typeof params.inviteEmail === 'string' && params.inviteEmail.toLowerCase() === email.toLowerCase();
 
   const existing = await prisma.user.findUnique({
     where: { userKey },
@@ -168,6 +172,7 @@ export async function loginWithSocialProfile(
     if (
       !allowedByPolicy &&
       !allowedByAdminAllowlist &&
+      !isInvitedMailbox &&
       !(await isAdminSuperuserBootstrap({ env, prisma, domain: params.config.domain, email }))
     ) {
       return { status: 'blocked' };
@@ -196,7 +201,7 @@ export async function loginWithSocialProfile(
     prisma: prisma as unknown as PrismaClient,
   });
 
-  if (createdUser) {
+  if (createdUser && !isInvitedMailbox) {
     try {
       await (deps?.placeUserInConfiguredOrganisation ?? placeUserInConfiguredOrganisation)({
         userId,

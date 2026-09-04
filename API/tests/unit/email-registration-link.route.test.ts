@@ -13,6 +13,7 @@ const verifyEmailTokenMock = vi.fn();
 const buildWorkspaceChoicesMock = vi.fn();
 const signLoginSessionMock = vi.fn();
 const resolveProductWorkspaceBeforeTwoFaMock = vi.fn();
+const getTeamInviteLandingDataMock = vi.fn();
 
 let currentConfig: ClientConfig | null = null;
 const PKCE_QUERY =
@@ -52,6 +53,16 @@ vi.mock('../../src/services/access-request-flow.service.js', async () => {
 vi.mock('../../src/services/auth-verify-email.service.js', () => ({
   verifyEmailToken: (...args: unknown[]) => verifyEmailTokenMock(...args),
 }));
+
+vi.mock('../../src/services/team-invite.service.js', async () => {
+  const actual = await vi.importActual<typeof import('../../src/services/team-invite.service.js')>(
+    '../../src/services/team-invite.service.js',
+  );
+  return {
+    ...actual,
+    getTeamInviteLandingData: (...args: unknown[]) => getTeamInviteLandingDataMock(...args),
+  };
+});
 
 vi.mock('../../src/services/login-session.service.js', () => ({
   signLoginSession: (...args: unknown[]) => signLoginSessionMock(...args),
@@ -140,9 +151,39 @@ describe('GET /auth/email/link', () => {
     buildWorkspaceChoicesMock.mockReset();
     signLoginSessionMock.mockReset();
     resolveProductWorkspaceBeforeTwoFaMock.mockReset().mockResolvedValue(null);
+    getTeamInviteLandingDataMock.mockReset().mockRejectedValue(new AppError('BAD_REQUEST', 400));
     renderAuthEntrypointHtmlMock.mockResolvedValue('<html>login</html>');
     process.env.SHARED_SECRET = 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER = 'uoa-auth-service';
+  });
+
+  it('retains a valid team invitation for social sign-in when its email link has no PKCE', async () => {
+    validateRegistrationEmailLandingTokenMock.mockResolvedValue('VERIFY_EMAIL_SET_PASSWORD');
+    getTeamInviteLandingDataMock.mockResolvedValue({ email: 'invitee@example.com' });
+
+    const { createApp } = await import('../../src/app.js');
+    const app = await createApp();
+    await app.ready();
+
+    const res = await app.inject({
+      method: 'GET',
+      url:
+        '/auth/email/link?' +
+        'config_url=https%3A%2F%2Fclient.example.com%2Fauth-config' +
+        '&token=team-invite-token',
+      headers: { accept: 'text/html' },
+    });
+
+    await app.close();
+
+    expect(res.statusCode).toBe(200);
+    expect(renderAuthEntrypointHtmlMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestUrl:
+          '/auth?config_url=https%3A%2F%2Fclient.example.com%2Fauth-config' +
+          '&email_token=team-invite-token&flow=team_invite',
+      }),
+    );
   });
 
   afterEach(() => {

@@ -42,6 +42,10 @@ import { resolveProductWorkspaceBeforeTwoFa } from '../../services/required-work
 import { finalizeWithTwoFaPolicy } from '../../services/workspace-finalize.service.js';
 import { selectRedirectUrl } from '../../services/authorization-code.service.js';
 import { lockAndAssertAuthenticationEpoch } from '../../services/authentication-epoch.service.js';
+import {
+  acceptTeamInviteSocialContinuation,
+  getTeamInviteSocialContinuationData,
+} from '../../services/team-invite.service.js';
 import { socialCallbackRateLimiter } from './rate-limit-keys.js';
 
 const ParamsSchema = z.object({
@@ -117,7 +121,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
       // instead of the misleading "config_url is missing".
       setSocialCallbackDebugContext(request, {
         configUrl: socialState.config_url,
-        redirectUrl: socialState.redirect_url,
+        redirectUrl: socialState.redirect_url ?? null,
       });
 
       // Login-CSRF protection: the state nonce must match the signed, HttpOnly
@@ -136,6 +140,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
 
       const configUrl = socialState.config_url;
       const requestedRedirectUrl = socialState.redirect_url;
+      const isInviteContinuation = Boolean(socialState.invite_token_hash);
 
       // Brief 22.1 + 22.4: fetch and verify config on each auth initiation.
       const configJwt = await readConfigJwtFromTrustedSource(configUrl);
@@ -153,10 +158,15 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
       request.configUrl = configUrl;
 
       // Re-validate redirect URL against current config (config can change between initiation and callback).
-      const redirectUrl = selectRedirectUrl({
-        allowedRedirectUrls: config.redirect_urls,
-        requestedRedirectUrl,
-      });
+      // An email invitation joins a workspace after verified identity. It is
+      // not an OAuth authorization request, so it never selects a redirect or
+      // creates a code without PKCE.
+      const redirectUrl = isInviteContinuation
+        ? ''
+        : selectRedirectUrl({
+            allowedRedirectUrls: config.redirect_urls,
+            requestedRedirectUrl,
+          });
 
       const env = getEnv();
 
@@ -235,7 +245,19 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
       const outcome = await runWithRequestAdminTransaction(request, async (prisma) => {
         await lockProductWorkspacePolicyShared(prisma);
 
+        const inviteContinuation = socialState.invite_token_hash
+          ? await getTeamInviteSocialContinuationData({
+              tokenHash: socialState.invite_token_hash,
+              configUrl,
+              config,
+              prisma,
+            })
+          : null;
+
         if (!profile.emailVerified) {
+          if (inviteContinuation) {
+            return { kind: 'auth_failed' as const };
+          }
           await requestRegistrationInstructions(
             {
               email: profile.email,
@@ -256,6 +278,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
             profile,
             config,
             requestAccess: socialState.request_access === true,
+            inviteEmail: inviteContinuation?.email,
             ip: request.ip ?? null,
           },
           { prisma },
@@ -266,6 +289,16 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         }
 
         const { userId, twoFaEnabled } = socialLoginResult;
+        if (socialState.invite_token_hash) {
+          await acceptTeamInviteSocialContinuation({
+            tokenHash: socialState.invite_token_hash,
+            configUrl,
+            config,
+            userId,
+            prisma,
+          });
+          return { kind: 'invite_accepted' as const };
+        }
         const returnedEpoch = (socialLoginResult as { credentialEpoch?: unknown }).credentialEpoch;
         if (
           returnedEpoch !== undefined &&
@@ -387,7 +420,18 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
       });
 
       if (outcome.kind === 'auth_failed') {
+        if (isInviteContinuation) {
+          throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
+        }
         redirectNoStore(reply, buildAuthFailedRedirectUrl(redirectUrl));
+        return;
+      }
+
+      if (outcome.kind === 'invite_accepted') {
+        const u = new URL(`${baseUrl}/auth`);
+        u.searchParams.set('config_url', configUrl);
+        u.searchParams.set('flow', 'team_invitation_accepted');
+        redirectNoStore(reply, u.toString());
         return;
       }
 

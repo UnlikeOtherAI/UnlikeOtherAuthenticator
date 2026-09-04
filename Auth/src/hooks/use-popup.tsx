@@ -6,6 +6,7 @@ export type AuthView =
   | 'reset-password'
   | 'set-password'
   | 'access-requested'
+  | 'invitation-accepted'
   | 'signed-in'
   | 'signatures'
   | 'code-entry'
@@ -65,6 +66,10 @@ export type PopupQueryParams = {
   emailToken: string | null;
   /** The type of email link flow, set by the server on landing routes. */
   emailTokenType: 'VERIFY_EMAIL_SET_PASSWORD' | 'VERIFY_EMAIL' | 'LOGIN_LINK' | 'PASSWORD_RESET' | null;
+  /** A valid email-team-invite capability, retained only for the social continuation. */
+  teamInviteToken: string | null;
+  /** Set only by UOA after it has transactionally accepted an email-team-invite. */
+  invitationAccepted: boolean;
   /** Public-client / MCP profile (brief §22.14): present only on /oauth/authorize. */
   clientId: string | null;
   state: string | null;
@@ -145,6 +150,8 @@ export function parsePopupQueryParams(search: string): PopupQueryParams {
       requestAccessStatus: null,
       emailToken: null,
       emailTokenType: null,
+      teamInviteToken: null,
+      invitationAccepted: false,
       clientId: null,
       state: null,
       resource: null,
@@ -166,6 +173,8 @@ export function parsePopupQueryParams(search: string): PopupQueryParams {
   const requestAccess = ['1', 'true', 'yes'].includes((params.get('request_access') ?? '').toLowerCase());
   const requestAccessStatus = params.get('request_access_status') === 'pending' ? 'pending' : null;
   const emailToken = params.get('email_token');
+  const teamInviteToken = params.get('flow') === 'team_invite' ? emailToken : null;
+  const invitationAccepted = params.get('flow') === 'team_invitation_accepted';
   const rawType = params.get('email_token_type');
   const clientId = params.get('client_id');
   const state = params.get('state');
@@ -199,6 +208,8 @@ export function parsePopupQueryParams(search: string): PopupQueryParams {
     requestAccessStatus,
     emailToken: emailToken && emailToken.trim() ? emailToken : null,
     emailTokenType,
+    teamInviteToken: teamInviteToken && teamInviteToken.trim() ? teamInviteToken : null,
+    invitationAccepted,
     clientId: clientId && clientId.trim() ? clientId : null,
     state: state && state.trim() ? state : null,
     resource: resource && resource.trim() ? resource : null,
@@ -225,6 +236,9 @@ function deriveInitialView(parsed: PopupQueryParams): AuthView {
   }
   if (parsed.requestAccessStatus === 'pending') {
     return 'access-requested';
+  }
+  if (parsed.invitationAccepted) {
+    return 'invitation-accepted';
   }
   if (parsed.loginToken) {
     // Phase 3c follow-up (design §4.3 Task 7 remainder): the social callback seeded a login_token
@@ -321,6 +335,8 @@ export function PopupProvider(props: {
       requestAccessStatus: parsed.requestAccessStatus,
       emailToken: parsed.emailToken,
       emailTokenType: parsed.emailTokenType,
+      teamInviteToken: parsed.teamInviteToken,
+      invitationAccepted: parsed.invitationAccepted,
       clientId: parsed.clientId,
       state: parsed.state,
       resource: parsed.resource,
@@ -362,6 +378,8 @@ export function PopupProvider(props: {
     parsed.requestAccessStatus,
     parsed.emailToken,
     parsed.emailTokenType,
+    parsed.teamInviteToken,
+    parsed.invitationAccepted,
     parsed.clientId,
     parsed.state,
     parsed.resource,

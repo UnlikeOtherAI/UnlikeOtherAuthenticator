@@ -122,6 +122,7 @@ export function SocialButtons(props?: { showDivider?: boolean }): React.JSX.Elem
           popup.codeChallenge,
           popup.codeChallengeMethod,
           popup.requestAccess,
+          popup.teamInviteToken,
         );
 
         return (
@@ -142,6 +143,7 @@ function buildSocialUrl(
   codeChallenge: string | null,
   codeChallengeMethod: 'S256' | null,
   requestAccess: boolean,
+  teamInviteToken: string | null,
 ): string {
   // Auth UI runs inside the authenticator popup, so use relative URLs.
   const params = new URLSearchParams();
@@ -155,6 +157,9 @@ function buildSocialUrl(
   }
   if (requestAccess) {
     params.set('request_access', 'true');
+  }
+  if (teamInviteToken) {
+    params.set('email_token', teamInviteToken);
   }
   return `/auth/social/${provider}?${params.toString()}`;
 }

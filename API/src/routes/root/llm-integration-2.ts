@@ -71,7 +71,11 @@ can be retried; \`session-choices\` and invite decline validate but do not consu
    \`/auth?config_url=...&redirect_url=...&login_token=...&flow=workspace_chooser\`.
    The Auth UI then calls \`POST /auth/session-choices?config_url=...\` \`{ login_token }\` to hydrate
    \`{ teams, pending_invites, can_create_org }\` — generic rejection for an invalid/expired token, no
-   enumeration.
+   enumeration. An email-team-invite that began from its mailbox has no PKCE authorization request:
+   choosing a social provider preserves only the peppered invite lookup in signed, browser-bound OAuth
+   state; after the provider verifies the invited mailbox UOA atomically accepts the invite and shows a
+   completion page. It does not mint an authorization code, so a later product sign-in still starts its
+   own PKCE flow.
 6. Magic links (\`GET /auth/email/link\`, both the passwordless LOGIN_LINK/VERIFY_EMAIL auto-consume
    and the VERIFY_EMAIL_SET_PASSWORD → \`POST /auth/verify-email\` path) join the same chooser gate —
    the design's "magic links join the same flow". LOGIN_LINK/VERIFY_EMAIL redirect to \`/auth?...&

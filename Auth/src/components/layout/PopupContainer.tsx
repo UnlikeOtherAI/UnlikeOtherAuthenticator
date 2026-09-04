@@ -3,6 +3,7 @@ import React from 'react';
 import { PopupProvider, usePopup } from '../../hooks/use-popup.js';
 import { AccessRequestedPage } from '../../pages/AccessRequestedPage.js';
 import { CodeEntryPage } from '../../pages/CodeEntryPage.js';
+import { InvitationAcceptedPage } from '../../pages/InvitationAcceptedPage.js';
 import { LoginPage } from '../../pages/LoginPage.js';
 import { RegisterPage } from '../../pages/RegisterPage.js';
 import { ResetPasswordPage } from '../../pages/ResetPasswordPage.js';
@@ -37,6 +38,8 @@ function PopupContent(): React.JSX.Element {
       return <SetPasswordPage />;
     case 'access-requested':
       return <AccessRequestedPage />;
+    case 'invitation-accepted':
+      return <InvitationAcceptedPage />;
     case 'signed-in':
       return <SignedInPage />;
     case 'signatures':

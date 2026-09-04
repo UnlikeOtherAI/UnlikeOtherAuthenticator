@@ -46,6 +46,18 @@ describe('parsePopupQueryParams', () => {
     expect(parsed.loginToken).toBeNull();
   });
 
+  it('retains an email invite only with its dedicated flow marker', () => {
+    const parsed = parsePopupQueryParams('?flow=team_invite&email_token=invite-capability');
+    expect(parsed.teamInviteToken).toBe('invite-capability');
+    expect(parsed.invitationAccepted).toBe(false);
+  });
+
+  it('recognizes the server-issued team-invitation completion marker', () => {
+    const parsed = parsePopupQueryParams('?flow=team_invitation_accepted');
+    expect(parsed.teamInviteToken).toBeNull();
+    expect(parsed.invitationAccepted).toBe(true);
+  });
+
   // Gap-fix B Task 2 (design §11.4): team_hint deep-link/switch preselect parsing.
   describe('team_hint', () => {
     it('parses a team_hint query param', () => {

@@ -11,10 +11,14 @@ const SocialStateSchema = z
   .object({
     provider: z.enum(['google', 'apple', 'facebook', 'github', 'linkedin']),
     config_url: z.string().min(1),
-    redirect_url: z.string().min(1),
+    redirect_url: z.string().min(1).optional(),
     request_access: z.boolean().optional(),
     code_challenge: z.string().min(1).optional(),
     code_challenge_method: z.literal('S256').optional(),
+    // An email-team-invite continuation carries only the peppered database
+    // lookup value, never the bearer token from the email URL. The callback
+    // still needs the matching HttpOnly social-state nonce to use it.
+    invite_token_hash: z.string().regex(/^[a-f0-9]{64}$/).optional(),
     // CSRF binding: random nonce mirrored in an HttpOnly cookie set on the
     // initiating browser. The callback rejects unless the two match.
     nonce: z.string().min(1),
@@ -33,10 +37,11 @@ function normalizeBaseUrl(value: string): string {
 export async function signSocialState(params: {
   provider: SocialProviderKey;
   configUrl: string;
-  redirectUrl: string;
+  redirectUrl?: string;
   requestAccess?: boolean;
   codeChallenge?: string;
   codeChallengeMethod?: 'S256';
+  inviteTokenHash?: string;
   nonce: string;
   sharedSecret: string;
   audience: string;
@@ -56,6 +61,7 @@ export async function signSocialState(params: {
       request_access: params.requestAccess ?? false,
       code_challenge: params.codeChallenge,
       code_challenge_method: params.codeChallengeMethod,
+      invite_token_hash: params.inviteTokenHash,
       nonce: params.nonce,
     })
       .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })

@@ -17,8 +17,10 @@ import {
 import type { SocialProviderKey } from '../../services/social/provider.base.js';
 import { parseRequestAccessFlag } from '../../services/access-request-flow.service.js';
 import { selectRedirectUrl } from '../../services/authorization-code.service.js';
+import { getTeamInviteLandingData } from '../../services/team-invite.service.js';
 import { AppError } from '../../utils/errors.js';
 import { parseRequiredPkceChallenge } from '../../utils/pkce.js';
+import { hashEmailToken } from '../../utils/verification-token.js';
 import { configFetchRateLimiter } from './rate-limit-keys.js';
 
 const ParamsSchema = z.object({
@@ -33,6 +35,9 @@ const QuerySchema = z
     code_challenge: z.string().min(1).max(256).optional(),
     code_challenge_method: z.string().min(1).max(32).optional(),
     request_access: z.string().max(16).optional(),
+    // Present only when the Auth UI is resuming an email-team-invite landing.
+    // It is replaced with a peppered lookup value before OAuth state is signed.
+    email_token: z.string().min(1).max(4096).optional(),
   })
   .strict();
 
@@ -59,24 +64,45 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
     },
     async (request, reply) => {
       const { provider } = ParamsSchema.parse(request.params);
-      const { redirect_url, redirect_uri, code_challenge, code_challenge_method, request_access } =
-        QuerySchema.parse(request.query);
+      const {
+        redirect_url,
+        redirect_uri,
+        code_challenge,
+        code_challenge_method,
+        request_access,
+        email_token,
+      } = QuerySchema.parse(request.query);
 
       const config = request.config;
       if (!config || !request.configUrl) throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
 
       assertSocialProviderAllowed({ config, provider });
 
-      const redirectUrl = selectRedirectUrl({
-        allowedRedirectUrls: config.redirect_urls,
-        requestedRedirectUrl: redirect_url ?? redirect_uri,
-      });
-      const pkce = parseRequiredPkceChallenge({
-        codeChallenge: code_challenge,
-        codeChallengeMethod: code_challenge_method,
-      });
-
       const env = getEnv();
+      const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
+      let redirectUrl: string | undefined;
+      let pkce: ReturnType<typeof parseRequiredPkceChallenge> | undefined;
+      let inviteTokenHash: string | undefined;
+
+      if (email_token) {
+        // An emailed invitation proves a workspace action, not an OAuth client
+        // authorization. Validate it before leaving this origin, then preserve
+        // only its peppered lookup value in signed OAuth state.
+        await getTeamInviteLandingData(
+          { token: email_token, config, configUrl: request.configUrl },
+          { prisma: request.adminDb },
+        );
+        inviteTokenHash = hashEmailToken(email_token, SHARED_SECRET);
+      } else {
+        redirectUrl = selectRedirectUrl({
+          allowedRedirectUrls: config.redirect_urls,
+          requestedRedirectUrl: redirect_url ?? redirect_uri,
+        });
+        pkce = parseRequiredPkceChallenge({
+          codeChallenge: code_challenge,
+          codeChallengeMethod: code_challenge_method,
+        });
+      }
 
       // Bind the OAuth `state` to this browser: a CSPRNG nonce is embedded in the
       // signed state JWT and mirrored in an HttpOnly cookie. The callback rejects
@@ -91,14 +117,14 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
       const signStateForProvider = async (
         providerKey: SocialProviderKey,
       ): Promise<string> => {
-        const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
         const state = await signSocialState({
           provider: providerKey,
           configUrl: requestConfigUrl,
           redirectUrl,
-          requestAccess: parseRequestAccessFlag(request_access),
-          codeChallenge: pkce.codeChallenge,
-          codeChallengeMethod: pkce.codeChallengeMethod,
+          requestAccess: email_token ? false : parseRequestAccessFlag(request_access),
+          codeChallenge: pkce?.codeChallenge,
+          codeChallengeMethod: pkce?.codeChallengeMethod,
+          inviteTokenHash,
           nonce,
           sharedSecret: SHARED_SECRET,
           audience: authServiceIdentifier,
