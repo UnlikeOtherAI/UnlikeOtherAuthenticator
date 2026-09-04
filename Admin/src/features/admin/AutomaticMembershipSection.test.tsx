@@ -44,4 +44,15 @@ describe('AutomaticMembershipSection', () => {
       'Activate automatic access?', expect.stringContaining('safe, resumable backfill'), expect.any(Function),
     );
   });
+
+  it('only exposes domain release after the rule is revoked', async () => {
+    renderSection();
+    await screen.findByText('acme.example');
+    expect(screen.queryByRole('button', { name: 'Release domain ownership' })).toBeNull();
+
+    mocks.getRules.mockResolvedValue({ rules: [{ id: 'rule-1', domain: 'acme.example', scope: 'organisation', external_team_id: null, state: 'revoked', notification_email: null, team_ids: ['team-1'], dns: null, last_check_at: null, last_check_error: null, verification_expires_at: null, backfill: null }], audit: [] });
+    cleanup();
+    renderSection();
+    expect(await screen.findByRole('button', { name: 'Release domain ownership' })).toBeTruthy();
+  });
 });

@@ -44,6 +44,17 @@ const controlResponseSchema = z.object({
   audit: z.array(auditSchema).max(100).optional(),
   message: z.string().max(500).optional(),
 }).strict();
+const controlErrorSchema = z.object({
+  code: z.string().regex(/^[A-Z][A-Z0-9_]{0,127}$/),
+}).passthrough();
+const actionableStatuses: Readonly<Record<number, 'BAD_REQUEST' | 'UNAUTHORIZED' | 'FORBIDDEN' | 'CONFLICT' | 'NOT_FOUND' | 'RATE_LIMITED'>> = {
+  400: 'BAD_REQUEST',
+  401: 'UNAUTHORIZED',
+  403: 'FORBIDDEN',
+  404: 'NOT_FOUND',
+  409: 'CONFLICT',
+  429: 'RATE_LIMITED',
+};
 
 export type AutomaticMembershipControlAction = z.infer<typeof actionSchema>;
 export type AutomaticMembershipScope = z.infer<typeof scopeSchema>;
@@ -99,6 +110,17 @@ async function readBoundedJson(response: Response): Promise<unknown> {
   }
 }
 
+async function safeControlRejection(response: Response): Promise<AppError | null> {
+  const code = actionableStatuses[response.status];
+  if (!code) return null;
+  try {
+    const parsed = controlErrorSchema.safeParse(await readBoundedJson(response));
+    return parsed.success ? new AppError(code, response.status, parsed.data.code) : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Calls Nessie from UOA's trusted server boundary. The Admin browser only talks
  * to UOA and never learns the bridge secret or an internal Nessie URL.
@@ -137,6 +159,8 @@ export async function controlNessieAutomaticMembership(
     throw new AppError('INTERNAL', 502, 'AUTOMATIC_MEMBERSHIP_CONTROL_UNAVAILABLE');
   }
   if (!response.ok || response.redirected) {
+    const rejection = response.redirected ? null : await safeControlRejection(response);
+    if (rejection) throw rejection;
     throw new AppError('INTERNAL', 502, 'AUTOMATIC_MEMBERSHIP_CONTROL_REJECTED');
   }
   try {

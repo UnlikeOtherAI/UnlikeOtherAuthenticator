@@ -44,4 +44,21 @@ describe('Nessie automatic membership admin bridge', () => {
       uoaActorSub: 'user_1', externalOrgId: 'org_1', scope: 'organisation', action: 'list',
     })).rejects.toMatchObject({ statusCode: 404, message: 'AUTOMATIC_MEMBERSHIP_CONTROL_NOT_CONFIGURED' });
   });
+
+  it('preserves an actionable, safe Nessie rejection for the Admin client', async () => {
+    process.env.NESSIE_UOA_AUTOMATIC_MEMBERSHIP_CONTROL_URL = 'https://nessie.example';
+    process.env.NESSIE_UOA_AUTOMATIC_MEMBERSHIP_CONTROL_SECRET = secret;
+    await expect(controlNessieAutomaticMembership({
+      uoaActorSub: 'user_1', externalOrgId: 'org_1', scope: 'organisation', action: 'release',
+    }, {
+      fetch: async () => new Response(JSON.stringify({
+        error: 'Nessie implementation detail that must not be exposed',
+        code: 'AUTOMATIC_MEMBERSHIP_RULE_MUST_BE_REVOKED',
+      }), { status: 409 }),
+    })).rejects.toMatchObject({
+      code: 'CONFLICT',
+      statusCode: 409,
+      message: 'AUTOMATIC_MEMBERSHIP_RULE_MUST_BE_REVOKED',
+    });
+  });
 });
