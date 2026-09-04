@@ -48,13 +48,14 @@ export function registerOrganisationMemberRoutes(app: FastifyInstance) {
       ],
     },
     async (request, reply) => {
-      const { domain, limit, cursor, status } = parseMembersListQuery(request);
+      const { domain, limit, cursor, direction, status } = parseMembersListQuery(request);
       const orgId = getOrgIdFromParams(request.params);
+      const config = requireVerifiedConfig(request);
 
       setTenantContextFromRequest(request, { orgId });
       const members = await request.withTenantTx((tx) =>
         listOrganisationMembers(
-          { orgId, domain, ...orgCaller(request), limit, cursor, status },
+          { orgId, domain, ...orgCaller(request), config, limit, cursor, direction, status },
           { prisma: asPrismaClient(tx) },
         ),
       );

@@ -17,6 +17,8 @@ export function makePrismaMock(): PrismaClient {
     },
     orgMember: {
       findFirst: vi.fn(),
+      findMany: vi.fn(),
+      count: vi.fn(),
     },
     team: {
       findMany: vi.fn(),
@@ -42,6 +44,7 @@ export function makePrismaMock(): PrismaClient {
     // Gap-fix A Task 2 (`?include=invited`): getTeam's invited-entries lookup.
     teamInvite: {
       findMany: vi.fn(),
+      count: vi.fn(),
     },
     refreshToken: {
       updateMany: vi.fn().mockResolvedValue({ count: 0 }),

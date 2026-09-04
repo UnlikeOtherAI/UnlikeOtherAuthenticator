@@ -6,11 +6,7 @@ import { assertVerifiedDomainMatchesQuery, normalizeDomain } from './domain-cont
 
 export const DomainQuerySchema = z
   .object({
-    domain: z
-      .string()
-      .trim()
-      .min(1)
-      .transform(normalizeDomain),
+    domain: z.string().trim().min(1).transform(normalizeDomain),
     config_url: z.string().trim().min(1),
   })
   .strict();
@@ -18,6 +14,23 @@ export const DomainQuerySchema = z
 export const ListQuerySchema = DomainQuerySchema.extend({
   limit: z.coerce.number().int().positive().max(200).optional(),
   cursor: z.string().trim().min(1).optional(),
+}).strict();
+
+export const TeamMemberStatusQuerySchema = z.enum(['ACTIVE', 'DEACTIVATED', 'REMOVED', 'all']);
+
+export const TeamMembersRosterQuerySchema = ListQuerySchema.extend({
+  direction: z.enum(['forward', 'backward']).optional(),
+  status: TeamMemberStatusQuerySchema.optional(),
+}).strict();
+
+export const TeamMemberCandidatesQuerySchema = ListQuerySchema.extend({
+  direction: z.enum(['forward', 'backward']).optional(),
+  q: z.string().trim().min(1).max(100),
+  limit: z.coerce.number().int().positive().max(50).optional(),
+}).strict();
+
+export const TeamPendingInvitationsQuerySchema = ListQuerySchema.extend({
+  direction: z.enum(['forward', 'backward']).optional(),
 }).strict();
 
 // Gap-fix A Task 2 (design §11.4 "Invited" tab): `?include=invited` on the team detail read only.
@@ -156,6 +169,24 @@ export function parseDomainFromRequest(request: FastifyRequest): string {
 
 export function parseLimitCursor(request: FastifyRequest) {
   const parsed = ListQuerySchema.parse(request.query);
+  assertVerifiedDomainMatchesQuery(request, parsed.domain);
+  return parsed;
+}
+
+export function parseTeamMembersRosterQuery(request: FastifyRequest) {
+  const parsed = TeamMembersRosterQuerySchema.parse(request.query);
+  assertVerifiedDomainMatchesQuery(request, parsed.domain);
+  return parsed;
+}
+
+export function parseTeamMemberCandidatesQuery(request: FastifyRequest) {
+  const parsed = TeamMemberCandidatesQuerySchema.parse(request.query);
+  assertVerifiedDomainMatchesQuery(request, parsed.domain);
+  return parsed;
+}
+
+export function parseTeamPendingInvitationsQuery(request: FastifyRequest) {
+  const parsed = TeamPendingInvitationsQuerySchema.parse(request.query);
   assertVerifiedDomainMatchesQuery(request, parsed.domain);
   return parsed;
 }

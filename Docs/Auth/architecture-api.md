@@ -63,6 +63,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
         llm-integration.ts  — /llm content: integration section
         llm-integration-backend-mode.ts — /llm content: §4.6b backend-mode /org/* route and error tables
         llm-integration-teams.ts — /llm content: §4.7a–§4.7b team join policies, invitations, team stack
+        llm-integration-rosters.ts — /llm content: cursor-paged member roster, invite-feed, and team-candidate contracts
         config-docs.ts      — Shared documentation blocks for /api (config JWT, access token, etc.)
         config-validate.ts  — POST /config/validate (lint a candidate config JWT)
         config-verify.ts    — POST /config/verify (verify a signed config JWT)
@@ -175,6 +176,8 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       /org
         me.ts               — GET /org/me
         organisations.ts    — Organisations + memberships + ownership transfer
+        organisation-members.ts — Cursor-paged organisation member roster and lifecycle mutations
+        member-invitations.ts — Cursor-paged actionable invitation feed and explicit target-team chooser
         teams.ts            — Teams + team membership operations
         team-avatar.ts      — GET/PUT/DELETE /org/organisations/:orgId/teams/:teamId/avatar
         team-invitations.ts — Team invitation lifecycle endpoints
@@ -319,6 +322,7 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       organisation.service.lifecycle.ts     — Org deactivation/reactivation with ordered membership locking
       organisation.service.organisation.ts  — Organisation CRUD + slug generation (slice entry point)
       organisation.service.members.ts       — Org membership lifecycle
+      organisation.service.roster.ts        — Scoped identity roster and per-action organisation permissions
       organisation.service.ownership.ts     — Ownership transfer + the outgoing owner's demotion role
       password.service.ts                   — Hashing, validation rules, comparison
       refresh-session-lock.service.ts       — Canonical user-global then user/domain serialization
@@ -350,12 +354,15 @@ The tree below reflects the current `API/src` layout. It is a snapshot — when 
       team-invite.service.base.ts           — Team invite service building blocks
       team-invite.service.acceptance.ts     — Team invite acceptance flow
       team-invite.service.management.ts     — Team invite create/list/revoke
+      team-invite.service.roster.ts         — Actionable invitation feeds and authorised target-team chooser
       team-invite.service.token.ts          — Team invite token issuance/verification
       team-invite-state-machine.ts          — Pure invite predicates, derived status, and transition decisions
       team.service.ts                       — Team orchestration API
       team.service.base.ts                  — Team service building blocks
       team.service.teams.ts                 — Team CRUD
       team.service.members.ts               — Team member lifecycle
+      team.service.roster.ts                — Cursor-paged team roster and scoped add-member candidates
+      roster-pagination.service.ts          — Signed, scope-bound keyset cursor and shared pagination envelope
       token.service.ts                      — Access token, refresh token, and authorization code orchestration
       totp.service.ts                       — TOTP secret generation and verification
       totp-qr.service.ts                    — Logo'd TOTP QR SVG rendering

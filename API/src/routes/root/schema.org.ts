@@ -11,8 +11,7 @@ export const orgEndpoints: EndpointSchema[] = [
     auth: 'access token (X-UOA-Access-Token header)',
     query: { config_url: 'string (required)' },
     response: {
-      org:
-        'object | absent — live legacy org context plus the directory fields below. Normally anchored to the active same-domain organisation. For an `all_active_memberships` product whose selected team belongs to another domain, it is anchored to the token’s exact `active.orgId` after that organisation and the product policy are revalidated live. It remains absent when neither live context exists; an unscoped token never causes an arbitrary cross-domain org to be synthesized.',
+      org: 'object | absent — live legacy org context plus the directory fields below. Normally anchored to the active same-domain organisation. For an `all_active_memberships` product whose selected team belongs to another domain, it is anchored to the token’s exact `active.orgId` after that organisation and the product policy are revalidated live. It remains absent when neither live context exists; an unscoped token never causes an arbitrary cross-domain org to be synthesized.',
       'org.teams':
         'array — one entry per ACTIVE team membership on this domain, or every active membership when this product is explicitly mapped to `all_active_memberships`: { teamId, orgId, name, slug, orgName, iconUrl, avatarImageUrl, role, lastLoginAt }. Each entry carries its own orgId/orgName; do not assume it belongs to the singular legacy org.org_id. avatarImageUrl is the public /teams/:teamId/avatar form (never null, no credential needed). Entries are ordered lastLoginAt DESC with nulls last, then name ASC (the sidebar order). Cross-product entries have null `lastLoginAt`.',
       'org.pending_invites':
@@ -39,11 +38,13 @@ export const orgEndpoints: EndpointSchema[] = [
     auth: 'domain hash bearer token + X-UOA-Access-Token header (the new org owner), or backend mode',
     body: {
       name: 'string (required, 1-100)',
-      'owner_user_id?': 'string — backend mode only, and required there; rejected with 400 OWNER_NOT_ALLOWED alongside a user credential',
+      'owner_user_id?':
+        'string — backend mode only, and required there; rejected with 400 OWNER_NOT_ALLOWED alongside a user credential',
     },
     response: {
       '…': 'organisation record fields (id, domain, name, slug, ownerId, memberInvites, iconUrl, createdAt, updatedAt)',
-      defaultTeam: 'object — the full team record of the auto-created default team (isDefault true)',
+      defaultTeam:
+        'object — the full team record of the auto-created default team (isDefault true)',
     },
   },
   {
@@ -79,18 +80,22 @@ export const orgEndpoints: EndpointSchema[] = [
   {
     method: 'GET',
     path: '/org/organisations/:orgId/members',
-    description: 'List organisation members',
+    description:
+      'Stateless organisation roster. Every row is an exact organisation membership plus its scoped UOA identity. Email is returned only when the caller holds members.manage; permissions are action-specific verdicts, never a generic manager flag.',
     auth: 'domain hash bearer token',
     query: {
       'status?': 'string — ACTIVE (default) | DEACTIVATED | REMOVED | all',
       'limit?': 'number — page size, max 200',
-      'cursor?': 'string — id of the last row of the previous page (from next_cursor)',
+      'direction?': 'forward (default) | backward',
+      'cursor?': 'opaque signed keyset cursor from meta.nextCursor or meta.prevCursor',
     },
     response: {
-      data: 'array — member records',
-      next_cursor: 'string | null',
-      'data[].avatarImageUrl':
-        "string — the member's avatar image URL, fetchable with the same domain hash bearer",
+      data: 'array — { id, orgId, subject, userId (legacy alias), role, status, identity { displayName, avatarImageUrl, email? }, avatarImageUrl, createdAt, updatedAt }; email is omitted without members.manage',
+      total: 'number — count for the selected status filter',
+      meta: 'object — { hasMore, nextCursor, prevCursor }',
+      next_cursor: 'string | null — compatibility alias for meta.nextCursor',
+      permissions:
+        'object — { addMember, changeMemberRole, removeMember, deactivateMember, reactivateMember, viewMemberEmail }; each is a live caller verdict',
     },
   },
   {
@@ -124,7 +129,7 @@ export const orgEndpoints: EndpointSchema[] = [
     method: 'DELETE',
     path: '/org/organisations/:orgId/members/:userId',
     description:
-      "Remove organisation member (soft-remove: status becomes REMOVED; atomically revokes exact user+org refresh families across product domains plus legacy sessions on this domain). User mode requires the members.manage capability at ORG scope; removing an owner additionally requires the actor to BE an owner.",
+      'Remove organisation member (soft-remove: status becomes REMOVED; atomically revokes exact user+org refresh families across product domains plus legacy sessions on this domain). User mode requires the members.manage capability at ORG scope; removing an owner additionally requires the actor to BE an owner.',
     auth: 'domain hash bearer token',
   },
   {
@@ -224,8 +229,7 @@ export const orgEndpoints: EndpointSchema[] = [
     response: {
       slug: 'string — unique team slug within the organisation',
       iconUrl: 'string | null — echoed on every team read/write',
-      avatarImageUrl:
-        'string — always-resolving team avatar image URL (Docs/Auth/avatars.md §11)',
+      avatarImageUrl: 'string — always-resolving team avatar image URL (Docs/Auth/avatars.md §11)',
     },
   },
   {
@@ -250,6 +254,46 @@ export const orgEndpoints: EndpointSchema[] = [
 
 export const orgTeamMemberEndpoints: EndpointSchema[] = [
   {
+    method: 'GET',
+    path: '/org/organisations/:orgId/teams/:teamId/members',
+    description:
+      'Stateless team roster. Supports lifecycle status filters and action-specific caller permissions. Email is returned only to members.manage holders (or the trusted backend in backend mode).',
+    auth: 'domain hash bearer token',
+    query: {
+      'status?': 'string — ACTIVE (default) | DEACTIVATED | REMOVED | all',
+      'limit?': 'number — page size, max 200',
+      'direction?': 'forward (default) | backward',
+      'cursor?': 'opaque signed keyset cursor from meta.nextCursor or meta.prevCursor',
+    },
+    response: {
+      data: 'array — { id, teamId, subject, userId (legacy alias), role, teamRole, status, identity { displayName, avatarImageUrl, email? }, avatarImageUrl, createdAt, updatedAt }',
+      total: 'number — count for the selected status filter',
+      meta: 'object — { hasMore, nextCursor, prevCursor }',
+      next_cursor: 'string | null — compatibility alias for meta.nextCursor',
+      permissions:
+        'object — { addMember, changeMemberRole, removeMember, viewMemberEmail, searchMemberCandidates }; each is a live caller verdict',
+    },
+  },
+  {
+    method: 'GET',
+    path: '/org/organisations/:orgId/teams/:teamId/members/candidates',
+    description:
+      'Bounded, manager-only debounced candidate search for adding a member to this exact team. Searches ACTIVE members of this exact organisation only and excludes users already ACTIVE in the team; it is never a domain-wide user lookup.',
+    auth: 'domain hash bearer token',
+    query: {
+      q: 'string (required, 1-100 characters) — server-side display-name or email match',
+      'limit?': 'number — candidate count, default 20, max 50',
+      'direction?': 'forward (default) | backward',
+      'cursor?': 'opaque signed keyset cursor from meta.nextCursor or meta.prevCursor',
+    },
+    response: {
+      data: 'array — { subject, userId, orgRole, identity { displayName, avatarImageUrl, email }, avatarImageUrl }; email is safe here because members.manage is required',
+      total: 'number — count for this exact q and eligible-team filter',
+      meta: 'object — { hasMore, nextCursor, prevCursor }',
+      permissions: 'object — { addMember, searchMemberCandidates }',
+    },
+  },
+  {
     method: 'POST',
     path: '/org/organisations/:orgId/teams/:teamId/members',
     description:
@@ -268,8 +312,7 @@ export const orgTeamMemberEndpoints: EndpointSchema[] = [
   {
     method: 'PUT',
     path: '/org/organisations/:orgId/teams/:teamId/members/:userId',
-    description:
-      'Change team member role. Same members.manage gate as adding a member.',
+    description: 'Change team member role. Same members.manage gate as adding a member.',
     auth: 'domain hash bearer token',
     body: {
       team_role:

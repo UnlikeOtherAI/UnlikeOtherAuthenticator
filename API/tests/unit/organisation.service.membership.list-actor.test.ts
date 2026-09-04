@@ -47,10 +47,13 @@ describe('listOrganisationMembers: actor-membership gate (defence in depth)', ()
         orgId: 'org-1',
         userId: 'u-new',
         role: 'member',
+        status: 'ACTIVE',
         createdAt: now,
         updatedAt: now,
+        user: { id: 'u-new', name: 'New Member', email: 'new@example.com' },
       },
     ]);
+    prisma.orgMember.count.mockResolvedValue(1);
 
     const result = await listOrganisationMembers(
       { orgId: 'org-1', domain: 'acme.example.com', actorUserId: 'u-actor' },
@@ -58,8 +61,17 @@ describe('listOrganisationMembers: actor-membership gate (defence in depth)', ()
     );
 
     expect(result).toMatchObject({
-      data: [{ id: 'member-new', userId: 'u-new' }],
+      data: [{ id: 'member-new', userId: 'u-new', subject: 'u-new', status: 'ACTIVE' }],
       next_cursor: null,
+    });
+    expect(result.data[0].identity).toEqual({
+      displayName: 'New Member',
+      avatarImageUrl: expect.any(String),
+    });
+    expect(result.permissions).toMatchObject({
+      addMember: false,
+      changeMemberRole: false,
+      viewMemberEmail: false,
     });
   });
 
@@ -73,10 +85,13 @@ describe('listOrganisationMembers: actor-membership gate (defence in depth)', ()
         orgId: 'org-1',
         userId: 'u-new',
         role: 'member',
+        status: 'ACTIVE',
         createdAt: now,
         updatedAt: now,
+        user: { id: 'u-new', name: 'New Member', email: 'new@example.com' },
       },
     ]);
+    prisma.orgMember.count.mockResolvedValue(1);
 
     const result = await listOrganisationMembers(
       { orgId: 'org-1', domain: 'acme.example.com' },
@@ -86,6 +101,12 @@ describe('listOrganisationMembers: actor-membership gate (defence in depth)', ()
     expect(result).toMatchObject({
       data: [{ id: 'member-new', userId: 'u-new' }],
       next_cursor: null,
+    });
+    expect(result.data[0].identity.email).toBe('new@example.com');
+    expect(result.permissions).toMatchObject({
+      addMember: true,
+      changeMemberRole: true,
+      viewMemberEmail: true,
     });
     // No membership to check in backend mode — the caller is the domain.
     expect(prisma.orgMember.findFirst).not.toHaveBeenCalled();

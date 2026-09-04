@@ -29,13 +29,6 @@ function resolveOrgIdFromParams(request: FastifyRequest): string | undefined {
   return orgId || undefined;
 }
 
-function resolveTeamIdFromParams(request: FastifyRequest): string | undefined {
-  const params = request.params as { teamId?: string } | undefined;
-  if (!params?.teamId) return undefined;
-  const teamId = params.teamId.trim();
-  return teamId || undefined;
-}
-
 export function parseBearerOrRawToken(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
@@ -170,11 +163,7 @@ async function resolveSubjectAssertionClaims(
   if (!assertion.active) throw invalidSubjectAssertion();
 
   const requestOrgId = resolveOrgIdFromParams(request);
-  const requestTeamId = resolveTeamIdFromParams(request);
-  if (
-    (requestOrgId && normalizeOrgId(assertion.active.orgId) !== requestOrgId) ||
-    (requestTeamId && normalizeOrgId(assertion.active.teamId) !== requestTeamId)
-  ) {
+  if (requestOrgId && normalizeOrgId(assertion.active.orgId) !== requestOrgId) {
     throw new AppError('FORBIDDEN', 403, 'INSUFFICIENT_ORG_ROLE');
   }
 
@@ -227,9 +216,12 @@ async function resolveSubjectAssertionClaims(
     tokenVersion: identity.tokenVersion,
     email: user.email,
     domain: sourceDomain,
-    // Assertions identify a user and their live team, not an OAuth
-    // client. This non-authoritative marker exists only because the shared
-    // in-memory claims shape has a required clientId field.
+    // Assertions identify a user and their live team, not an OAuth client.
+    // A request may name another team in the same organisation: its service
+    // must resolve the actor's current capability for that exact target rather
+    // than silently treating this provenance field as authority. This
+    // non-authoritative marker exists only because the shared in-memory claims
+    // shape has a required clientId field.
     clientId: 'uoa-subject-assertion',
     role: 'user',
     org,

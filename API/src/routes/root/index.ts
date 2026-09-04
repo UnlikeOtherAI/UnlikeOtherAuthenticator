@@ -47,7 +47,7 @@ export function registerRootRoute(app: FastifyInstance): void {
     return {
       name: 'UnlikeOtherAuthenticator',
       description:
-        'Centralized OAuth and authentication service used by multiple products, including one-time first-hop assertions and audience-bound chained confidential exchange.',
+        'Centralized OAuth and authentication service used by multiple products, including one-time first-hop assertions, audience-bound chained confidential exchange, and paged organisation membership rosters.',
       version,
       repository: 'https://github.com/UnlikeOtherAI/UnlikeOtherAuthenticator',
       home: '/',

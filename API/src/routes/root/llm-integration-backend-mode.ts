@@ -25,8 +25,11 @@ The assertion must be signed by the product key advertised in the verified
 config JWT's JWKS, have \`iss\` and \`source_domain\` equal to that config domain,
 have exact \`aud\` \`https://authentication.unlikeotherai.com/org\`, live for at
 most 60 seconds, and contain \`{ sub, tv, active: { orgId, teamId } }\`. The
-active org/team must exactly match the route parameters. UOA then verifies the
-signature and re-resolves the subject's current credential epoch and ACTIVE
+active organisation must match the route \`orgId\`. The active team records
+where the person came from; when the route names a different team, UOA resolves
+that exact target and the caller's current capability there before the action.
+It never lets a product session silently choose a target team. UOA then verifies
+the signature and re-resolves the subject's current credential epoch and ACTIVE
 cross-product membership before it applies the ordinary user role/capability
 gate and writes ordinary user audit attribution. A product assertion is not a
 UOA access token, is never persisted by UOA, and cannot grant tenant-wide
@@ -34,7 +37,7 @@ backend authority.
 
 Send exactly one user credential. A request with both headers, a blank or
 repeated assertion, a stale epoch, invalid signature/audience/lifetime, or a
-different active team is refused; it never falls through to backend mode.
+different active organisation is refused; it never falls through to backend mode.
 \`GET /org/organisations\` and backend-only invitation acceptance refuse either
 user credential with \`401 ACCESS_TOKEN_NOT_ALLOWED\`.
 

@@ -20,9 +20,10 @@ const ORG_CONTRACT_NOTE =
   'matching ?domain= (else 403 ACCESS_TOKEN_DOMAIN_MISMATCH), the token org claim matching :orgId ' +
   '(else 403 INSUFFICIENT_ORG_ROLE), and live ACTIVE membership/capability in the org. ' +
   'A subject assertion is a product-signed RS256 JWT, valid for at most 60 seconds, with audience ' +
-  'https://authentication.unlikeotherai.com/org and an active org/team that exactly matches the route; ' +
-  'UOA verifies it through the product config JWKS and re-resolves the user credential epoch and ACTIVE ' +
-  'membership before applying the same user-mode gates. It is not an access token and must never be sent ' +
+  'https://authentication.unlikeotherai.com/org and an active org/team whose org exactly matches :orgId; ' +
+  'the active team is caller provenance, not authority for a requested team. UOA verifies it through the ' +
+  'product config JWKS and re-resolves the user credential epoch, ACTIVE org membership, and the requested ' +
+  'team capability before applying the same user-mode gates. It is not an access token and must never be sent ' +
   'with X-UOA-Access-Token. ' +
   'organisations.domain still owns the slug namespace, backend-mode ownership, and invite email ' +
   'identity. BACKEND MODE: omit ' +

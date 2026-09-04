@@ -6,6 +6,7 @@ import {
   listOrganisationMembers,
   removeOrganisationMember,
 } from '../../src/services/organisation.service.members.js';
+import { encodeRosterCursor } from '../../src/services/roster-pagination.service.js';
 import {
   baseOrg,
   makeConfig,
@@ -33,18 +34,23 @@ describe('Organisation service: membership', () => {
         orgId: 'org-1',
         userId: 'u-new',
         role: 'member',
+        status: 'ACTIVE',
         createdAt: now,
         updatedAt: now,
+        user: { id: 'u-new', name: 'New Member', email: 'new@example.com' },
       },
       {
         id: 'member-old',
         orgId: 'org-1',
         userId: 'u-old',
         role: 'member',
+        status: 'ACTIVE',
         createdAt: now,
         updatedAt: now,
+        user: { id: 'u-old', name: 'Old Member', email: 'old@example.com' },
       },
     ]);
+    prisma.orgMember.count.mockResolvedValue(2);
 
     const result = await listOrganisationMembers(
       { orgId: 'org-1', domain: 'acme.example.com', limit: 1 },
@@ -53,9 +59,68 @@ describe('Organisation service: membership', () => {
 
     expect(result).toMatchObject({
       data: [{ id: 'member-new', userId: 'u-new' }],
-      // Cursor is the last row of the returned page (brief §24.11 last_id).
-      next_cursor: 'member-new',
+      total: 2,
     });
+    expect(result.next_cursor).toContain('.');
+    expect(result.meta).toMatchObject({
+      hasMore: true,
+      nextCursor: result.next_cursor,
+      prevCursor: null,
+    });
+  });
+
+  it('uses the opaque keyset cursor to walk backward while retaining display order', async () => {
+    const prisma = makePrismaMock();
+    const newer = new Date('2026-02-16T00:00:00.000Z');
+    const cursor = encodeRosterCursor(
+      { id: 'member-middle', createdAt: now },
+      process.env.SHARED_SECRET!,
+      'organisation:org-1:status:ACTIVE',
+    );
+
+    prisma.organisation.findFirst.mockResolvedValue(baseOrg);
+    prisma.orgMember.findMany.mockResolvedValue([
+      {
+        id: 'member-later-tie',
+        orgId: 'org-1',
+        userId: 'u-later-tie',
+        role: 'member',
+        status: 'ACTIVE',
+        createdAt: now,
+        updatedAt: now,
+        user: { id: 'u-later-tie', name: 'Later tie', email: 'later-tie@example.com' },
+      },
+      {
+        id: 'member-newest',
+        orgId: 'org-1',
+        userId: 'u-newest',
+        role: 'member',
+        status: 'ACTIVE',
+        createdAt: newer,
+        updatedAt: newer,
+        user: { id: 'u-newest', name: 'Newest', email: 'newest@example.com' },
+      },
+    ]);
+    prisma.orgMember.count.mockResolvedValue(3);
+
+    const result = await listOrganisationMembers(
+      { orgId: 'org-1', domain: 'acme.example.com', cursor, direction: 'backward' },
+      { prisma },
+    );
+
+    expect(result.data.map((member) => member.id)).toEqual(['member-newest', 'member-later-tie']);
+    expect(result.meta.nextCursor).toEqual(expect.any(String));
+    expect(prisma.orgMember.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        where: expect.objectContaining({
+          OR: expect.arrayContaining([
+            { createdAt: { gt: now } },
+            { createdAt: now, id: { gt: 'member-middle' } },
+          ]),
+        }),
+      }),
+    );
   });
 
   it('adds a new organisation member and assigns the default team', async () => {
@@ -232,8 +297,18 @@ describe('Organisation service: membership', () => {
     prisma.organisation.findFirst.mockResolvedValue(baseOrg);
     prisma.orgMember.findFirst
       .mockResolvedValueOnce({ id: 'm-owner', orgId: 'org-1', userId: 'u-owner', role: 'owner' })
-      .mockResolvedValueOnce({ id: 'member-target', orgId: 'org-1', userId: 'u-member', role: 'member' })
-      .mockResolvedValue({ id: 'member-target', orgId: 'org-1', userId: 'u-member', role: 'member' });
+      .mockResolvedValueOnce({
+        id: 'member-target',
+        orgId: 'org-1',
+        userId: 'u-member',
+        role: 'member',
+      })
+      .mockResolvedValue({
+        id: 'member-target',
+        orgId: 'org-1',
+        userId: 'u-member',
+        role: 'member',
+      });
     prisma.orgMember.count.mockResolvedValue(1);
     prisma.orgMember.update.mockResolvedValue({ id: 'member-target', status: 'REMOVED' });
     prisma.teamMember.updateMany.mockResolvedValue({ count: 1 });
@@ -388,7 +463,12 @@ describe('Organisation service: membership', () => {
       { prisma },
     );
 
-    expect(member).toMatchObject({ id: 'member-old', userId: 'u-old', role: 'member', status: 'ACTIVE' });
+    expect(member).toMatchObject({
+      id: 'member-old',
+      userId: 'u-old',
+      role: 'member',
+      status: 'ACTIVE',
+    });
     expect(prisma.orgMember.create).not.toHaveBeenCalled();
     expect(prisma.orgMember.update).toHaveBeenCalledWith({
       where: { id: 'member-old' },

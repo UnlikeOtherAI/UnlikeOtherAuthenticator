@@ -3,6 +3,60 @@ import type { EndpointSchema } from './schema.js';
 // Team invitations (bulk + member-initiated), invite links, and access requests.
 export const orgInvitationEndpoints: EndpointSchema[] = [
   {
+    method: 'GET',
+    path: '/org/organisations/:orgId/member-invitation-targets',
+    description:
+      'Cursor-paged explicit team chooser for the Members invitation dialog. It contains only teams in this exact organisation for which the caller currently holds members.manage; it never infers authority from a selected team or from the product session.',
+    auth: 'domain hash bearer token plus optional user credential; backend mode receives all teams',
+    query: {
+      'limit?': 'number — page size, max 200',
+      'direction?': 'forward (default) | backward',
+      'cursor?': 'opaque signed keyset cursor from meta.nextCursor or meta.prevCursor',
+    },
+    response: {
+      data: 'array — { id, name, slug, avatarImageUrl }',
+      total: 'number — teams the caller may target with an invitation',
+      meta: 'object — { hasMore, nextCursor, prevCursor }',
+      permissions: 'object — { createInvitation }',
+    },
+  },
+  {
+    method: 'GET',
+    path: '/org/organisations/:orgId/member-invitations',
+    description:
+      'Organisation-wide cursor-paged feed of actionable TeamInvite records for the Members Pending invitations tab. This is not the owner-only member-invite approval queue: every row names its exact target team, and results are limited to teams where the caller currently holds members.manage.',
+    auth: 'domain hash bearer token plus optional user credential; backend mode receives all teams',
+    query: {
+      'limit?': 'number — page size, max 200',
+      'direction?': 'forward (default) | backward',
+      'cursor?': 'opaque signed keyset cursor from meta.nextCursor or meta.prevCursor',
+    },
+    response: {
+      data: 'array — actionable invite records with status (pending|expired), full invitee email and target team { id, name, slug, avatarImageUrl }',
+      total: 'number — actionable invitation count for the permitted target teams',
+      meta: 'object — { hasMore, nextCursor, prevCursor }',
+      permissions: 'object — { createInvitation, viewPendingInvitations }',
+    },
+  },
+  {
+    method: 'GET',
+    path: '/org/organisations/:orgId/teams/:teamId/member-invitations',
+    description:
+      'The exact-team form of the actionable Pending invitations feed for the team Members page. Its pagination envelope and row shape are identical to the organisation-wide feed; a caller without members.manage for this team receives no invite data.',
+    auth: 'domain hash bearer token plus optional user credential; backend mode receives the exact team',
+    query: {
+      'limit?': 'number — page size, max 200',
+      'direction?': 'forward (default) | backward',
+      'cursor?': 'opaque signed keyset cursor from meta.nextCursor or meta.prevCursor',
+    },
+    response: {
+      data: 'array — actionable invite records with target team identity',
+      total: 'number — actionable invitation count for this exact team',
+      meta: 'object — { hasMore, nextCursor, prevCursor }',
+      permissions: 'object — { createInvitation, viewPendingInvitations }',
+    },
+  },
+  {
     method: 'POST',
     path: '/org/organisations/:orgId/teams/:teamId/invitations',
     description:

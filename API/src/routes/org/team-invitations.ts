@@ -8,8 +8,6 @@ import { requireOrgFeatures } from '../../middleware/org-features.js';
 import {
   requireOrgBackendOnly,
   requireOrgRole,
-  resolveActingUserClaims,
-  resolveOrgAccessTokenHeader,
 } from '../../middleware/org-role-guard.js';
 import { createRateLimiter } from '../../middleware/rate-limiter.js';
 import { setTenantContextFromRequest } from '../../plugins/tenant-context.plugin.js';
@@ -18,6 +16,7 @@ import {
   createMemberInvite,
   createTeamInvites,
   getTeamInvite,
+  listPendingInvitations,
   listTeamInvites,
   resendTeamInvite,
   revokeTeamInvite,
@@ -35,6 +34,7 @@ import {
   orgCaller,
   parseDomainContext,
   parseDomainContextHook,
+  parseTeamPendingInvitationsQuery,
   requireVerifiedConfig,
   tenantUserId,
 } from './team-route.shared.js';
@@ -54,6 +54,7 @@ export function registerTeamInvitationRoutes(app: FastifyInstance): void {
         configVerifier,
         parseDomainContextHook,
         requireOrgFeatures,
+        requireOrgRole(),
         createRateLimiter({
           limit: 20,
           windowMs: 60 * 60 * 1000,
@@ -72,26 +73,16 @@ export function registerTeamInvitationRoutes(app: FastifyInstance): void {
       const orgId = getOrgIdFromParams(request.params);
       const teamId = getTeamIdFromParams(request.params);
 
-      // Dual-mode route (Phase 4 Task 4, design §4.7): presence of the user access token switches
-      // this from the trusted backend bulk-invite call (unchanged below) to the permission-gated,
-      // single-invite, member-initiated path — same path/method, alongside the backend contract.
-      // Same absent-vs-blank rule as `requireOrgRole`: only a genuinely missing
-      // header selects the trusted backend bulk-invite path. A present-but-blank
-      // header (an anonymous visitor's empty session forwarded by a BFF) is a
-      // malformed credential and 401s inside the resolver.
-      const accessToken = resolveOrgAccessTokenHeader(request);
-      if (accessToken) {
-        // Same resolver as `requireOrgRole`, so this member-initiated path accepts
-        // exactly the tokens every other `/org/*` route accepts.
-        const claims = await resolveActingUserClaims(accessToken);
-        if (normalizeDomain(claims.domain) !== domain) {
-          throw new AppError('FORBIDDEN', 403, 'ACCESS_TOKEN_DOMAIN_MISMATCH');
-        }
-
+      // `requireOrgRole` selects the caller once: either a user credential
+      // (access token or subject assertion) makes this a permission-gated,
+      // single-invite call, or the proven domain backend keeps the existing
+      // bulk contract. A subject assertion is intentionally a user credential,
+      // never an accidental fall-through to backend authority.
+      const caller = orgCaller(request);
+      if ('actorUserId' in caller) {
         const body = MemberInviteBodySchema.parse(request.body ?? {});
-        const actorUserId = claims.userId;
 
-        setTenantContextFromRequest(request, { orgId, userId: actorUserId });
+        setTenantContextFromRequest(request, { orgId, userId: caller.actorUserId });
         const result = await request.withTenantTx((tx) =>
           createMemberInvite(
             {
@@ -100,7 +91,7 @@ export function registerTeamInvitationRoutes(app: FastifyInstance): void {
               domain,
               config,
               configUrl,
-              actorUserId,
+              actorUserId: caller.actorUserId,
               redirectUrl: body.redirectUrl,
               invite: { email: body.email, name: body.name, teamRole: body.teamRole },
             },
@@ -127,6 +118,35 @@ export function registerTeamInvitationRoutes(app: FastifyInstance): void {
             invitedBy: body.invitedBy,
             invites: body.invites,
           },
+          { prisma: asPrismaClient(tx) },
+        ),
+      );
+
+      reply.status(200).send(result);
+    },
+  );
+
+  app.get(
+    '/org/organisations/:orgId/teams/:teamId/member-invitations',
+    {
+      preValidation: [
+        requireDomainHashAuthForDomainQuery(),
+        configVerifier,
+        parseDomainContextHook,
+        requireOrgFeatures,
+        requireOrgRole(),
+      ],
+    },
+    async (request, reply) => {
+      const { domain, limit, cursor, direction } = parseTeamPendingInvitationsQuery(request);
+      const orgId = getOrgIdFromParams(request.params);
+      const teamId = getTeamIdFromParams(request.params);
+      const config = requireVerifiedConfig(request);
+
+      setTenantContextFromRequest(request, { orgId, userId: tenantUserId(request) });
+      const result = await request.withTenantTx((tx) =>
+        listPendingInvitations(
+          { orgId, teamId, domain, ...orgCaller(request), config, limit, cursor, direction },
           { prisma: asPrismaClient(tx) },
         ),
       );

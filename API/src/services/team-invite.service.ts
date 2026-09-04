@@ -29,3 +29,11 @@ export {
   denyInvite,
   listPendingApprovalInvites,
 } from './team-invite.service.member.js';
+export {
+  listInvitationTargets,
+  listPendingInvitations,
+  type InvitationTarget,
+  type InvitationTargetPage,
+  type PendingInvitation,
+  type PendingInvitationPage,
+} from './team-invite.service.roster.js';

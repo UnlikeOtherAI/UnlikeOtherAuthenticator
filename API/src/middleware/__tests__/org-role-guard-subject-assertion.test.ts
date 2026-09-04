@@ -81,14 +81,24 @@ describe('requireOrgRole — subject assertion user mode', () => {
     });
   });
 
-  it('refuses a mismatched active team before any live lookup', async () => {
+  it('keeps a different active team as provenance and lets the target service authorize it', async () => {
     verifySubjectAssertion.mockResolvedValueOnce({
       sub: 'user_1', tv: 7, active: { orgId: 'org_1', teamId: 'team_other' },
     });
-    await expect(requireOrgRole()(request({ assertion: 'assertion' }), {} as FastifyReply))
-      .rejects.toMatchObject({ code: 'FORBIDDEN', statusCode: 403, message: 'INSUFFICIENT_ORG_ROLE' });
-    expect(lockEpoch).not.toHaveBeenCalled();
-    expect(getActiveOrg).not.toHaveBeenCalled();
+    lockEpoch.mockResolvedValueOnce({ tokenVersion: 7 });
+    getActiveOrg.mockResolvedValueOnce({
+      org_id: 'org_1', tenant_slug: 'live-team', org_role: 'member',
+      teams: ['team_other'], team_roles: { team_other: 'admin' },
+    });
+    const input = request({ assertion: 'assertion', teamId: 'team_target' });
+
+    await requireOrgRole()(input, {} as FastifyReply);
+
+    expect(lockEpoch).toHaveBeenCalledOnce();
+    expect(getActiveOrg).toHaveBeenCalledOnce();
+    expect(input.accessTokenClaims).toMatchObject({
+      active: { orgId: 'org_1', teamId: 'team_other' },
+    });
   });
 
   it('refuses a stale credential epoch', async () => {

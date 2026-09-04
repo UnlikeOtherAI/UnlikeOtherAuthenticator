@@ -13,6 +13,8 @@ import {
   createTeam,
   deleteTeam,
   getTeam,
+  findTeamMemberCandidates,
+  listTeamMembers,
   listTeams,
   removeTeamMember,
   updateTeam,
@@ -31,7 +33,9 @@ import {
   parseDomainContext,
   parseDomainContextHook,
   parseLimitCursor,
+  parseTeamMemberCandidatesQuery,
   parseTeamDetailQuery,
+  parseTeamMembersRosterQuery,
   requireVerifiedConfig,
   tenantUserId,
 } from './team-route.shared.js';
@@ -142,6 +146,74 @@ export function registerTeamRoutes(app: FastifyInstance): void {
       );
 
       reply.status(200).send(team);
+    },
+  );
+
+  app.get(
+    '/org/organisations/:orgId/teams/:teamId/members',
+    {
+      preValidation: [
+        requireDomainHashAuthForDomainQuery(),
+        configVerifier,
+        parseDomainContextHook,
+        requireOrgFeatures,
+        requireOrgRole(),
+      ],
+    },
+    async (request, reply) => {
+      const { domain, limit, cursor, direction, status } = parseTeamMembersRosterQuery(request);
+      const orgId = getOrgIdFromParams(request.params);
+      const teamId = getTeamIdFromParams(request.params);
+      const config = requireVerifiedConfig(request);
+
+      setTenantContextFromRequest(request, { orgId, userId: tenantUserId(request) });
+      const roster = await request.withTenantTx((tx) =>
+        listTeamMembers(
+          {
+            orgId,
+            teamId,
+            domain,
+            ...orgCaller(request),
+            config,
+            limit,
+            cursor,
+            direction,
+            status,
+          },
+          { prisma: asPrismaClient(tx) },
+        ),
+      );
+
+      reply.status(200).send(roster);
+    },
+  );
+
+  app.get(
+    '/org/organisations/:orgId/teams/:teamId/members/candidates',
+    {
+      preValidation: [
+        requireDomainHashAuthForDomainQuery(),
+        configVerifier,
+        parseDomainContextHook,
+        requireOrgFeatures,
+        requireOrgRole(),
+      ],
+    },
+    async (request, reply) => {
+      const { domain, q, limit, cursor, direction } = parseTeamMemberCandidatesQuery(request);
+      const orgId = getOrgIdFromParams(request.params);
+      const teamId = getTeamIdFromParams(request.params);
+      const config = requireVerifiedConfig(request);
+
+      setTenantContextFromRequest(request, { orgId, userId: tenantUserId(request) });
+      const candidates = await request.withTenantTx((tx) =>
+        findTeamMemberCandidates(
+          { orgId, teamId, domain, ...orgCaller(request), config, q, limit, cursor, direction },
+          { prisma: asPrismaClient(tx) },
+        ),
+      );
+
+      reply.status(200).send(candidates);
     },
   );
 

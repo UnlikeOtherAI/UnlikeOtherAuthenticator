@@ -1,5 +1,3 @@
-import type { MembershipStatus } from '@prisma/client';
-
 import type { ClientConfig } from './config.service.js';
 import { getEnv } from '../config/env.js';
 import { getAdminPrisma, getPrisma } from '../db/prisma.js';
@@ -22,10 +20,8 @@ import {
   requireOrgCapability,
   resolveOrgActor,
   resolveOrganisation,
-  toListLimit,
   toMemberRecord,
   type OrgActorProvenance,
-  type CursorList,
   type OrgServiceDeps,
   type OrgServicePrisma,
   type OrganisationMemberRecord,
@@ -41,61 +37,7 @@ const MEMBER_SELECT = {
   updatedAt: true,
 } as const;
 
-export async function listOrganisationMembers(
-  params: {
-    orgId: string;
-    domain: string;
-    actorUserId?: string;
-    actor?: OrgActorProvenance;
-    limit?: number;
-    cursor?: string;
-    status?: MembershipStatus | 'all';
-  },
-  deps?: OrgServiceDeps,
-): Promise<CursorList<OrganisationMemberRecord>> {
-  const env = deps?.env ?? getEnv();
-  assertDatabaseEnabled(env);
-
-  // Optional for direct-service callers without an acting user; `resolveOrgActor`
-  // raises a loud 500 when one was declared but went missing, so the actor check
-  // below is only ever skipped deliberately.
-  const actorUserId = params.actorUserId !== undefined || params.actor !== undefined
-    ? resolveOrgActor(params)
-    : undefined;
-
-  const prisma = deps?.prisma ?? (getPrisma() as unknown as OrgServicePrisma);
-  const org = await resolveOrganisation(prisma, { orgId: params.orgId });
-
-  // Defence-in-depth like getOrganisation: re-verify actor membership here so this
-  // service cannot leak org data if a future route refactor omits `requireOrgRole`.
-  // There is no membership to check in backend mode — the caller is the domain.
-  if (actorUserId) {
-    const actorMembership = await getOrganisationMember(prisma, { orgId: org.id, userId: actorUserId }, { activeOnly: true });
-    if (!actorMembership) {
-      throw new AppError('FORBIDDEN', 403);
-    }
-  }
-
-  const limit = toListLimit(params.limit);
-  const cursor = params.cursor?.trim();
-  const status = params.status ?? 'ACTIVE';
-  const rows = await prisma.orgMember.findMany({
-    where: { orgId: org.id, ...(status === 'all' ? {} : { status }) },
-    // Total order — see the note in team.service.teams.ts: a cursor walk on a
-    // non-unique `createdAt` silently drops rows that share a millisecond.
-    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-    take: limit + 1,
-    cursor: cursor ? { id: cursor } : undefined,
-    skip: cursor ? 1 : 0,
-    select: MEMBER_SELECT,
-  });
-
-  const data = rows.slice(0, limit).map((row) => toMemberRecord(row, org.domain));
-  // Brief §24.11: `cursor=<last_id>` — the cursor is the last row of the
-  // returned page (the follow-up query skips it), not the first of the next.
-  const hasMore = rows.length > limit;
-  return { data, next_cursor: hasMore ? rows[limit - 1].id : null };
-}
+export { listOrganisationMembers } from './organisation.service.roster.js';
 
 export async function addOrganisationMember(
   params: {
@@ -129,7 +71,11 @@ export async function addOrganisationMember(
   // caller owns the whole tenant, and "an admin must not self-elevate to owner"
   // has no subject to protect against.
   if (actorUserId) {
-    const actorMembership = await getOrganisationMember(prisma, { orgId: org.id, userId: actorUserId }, { activeOnly: true });
+    const actorMembership = await getOrganisationMember(
+      prisma,
+      { orgId: org.id, userId: actorUserId },
+      { activeOnly: true },
+    );
     requireOrgCapability(params.config, 'members.manage', actorMembership?.role);
     // Only owners may grant the `owner` role — no capability makes this reachable. `owner` is the
     // one fixed role (mandatory in every vocabulary, structurally every capability), so comparing
@@ -155,7 +101,10 @@ export async function addOrganisationMember(
     const memberCount = await tx.orgMember.count({ where: { orgId: org.id, status: 'ACTIVE' } });
     if (memberCount >= maxMembers) throw new AppError('BAD_REQUEST', 400);
 
-    const targetUser = await tx.user.findUnique({ where: { id: userId }, select: { id: true, domain: true } });
+    const targetUser = await tx.user.findUnique({
+      where: { id: userId },
+      select: { id: true, domain: true },
+    });
     if (!targetUser) throw new AppError('BAD_REQUEST', 400);
     if (targetUser.domain && targetUser.domain !== org.domain) {
       throw new AppError('BAD_REQUEST', 400);
@@ -294,8 +243,7 @@ export async function removeOrganisationMember(
   },
   deps?: OrgServiceDeps & {
     afterMembershipStatusWrite?: () => Promise<void>;
-    revokeRefreshTokenFamiliesForUserOrganisation?:
-      typeof revokeRefreshTokenFamiliesForUserOrganisation;
+    revokeRefreshTokenFamiliesForUserOrganisation?: typeof revokeRefreshTokenFamiliesForUserOrganisation;
     revokeRefreshTokensForUserDomain?: typeof revokeRefreshTokensForUserDomain;
   },
 ): Promise<{ removed: boolean }> {
@@ -314,7 +262,11 @@ export async function removeOrganisationMember(
   // Actor-standing checks only; backend mode has no acting user. The owner-count
   // invariant below is NOT an actor check and still applies to both callers.
   const actorMembership = actorUserId
-    ? await getOrganisationMember(prisma, { orgId: org.id, userId: actorUserId }, { activeOnly: true })
+    ? await getOrganisationMember(
+        prisma,
+        { orgId: org.id, userId: actorUserId },
+        { activeOnly: true },
+      )
     : null;
   if (actorUserId) {
     requireOrgCapability(params.config, 'members.manage', actorMembership?.role);
@@ -357,17 +309,18 @@ export async function removeOrganisationMember(
       throw new AppError('BAD_REQUEST', 400);
     }
 
-    const owners = lockedMember.userId === org.ownerId
-      ? await tx.orgMember.findMany({
-          where: {
-            orgId: org.id,
-            role: 'owner',
-            status: 'ACTIVE',
-            userId: { not: lockedMember.userId },
-          },
-          select: { userId: true },
-        })
-      : [];
+    const owners =
+      lockedMember.userId === org.ownerId
+        ? await tx.orgMember.findMany({
+            where: {
+              orgId: org.id,
+              role: 'owner',
+              status: 'ACTIVE',
+              userId: { not: lockedMember.userId },
+            },
+            select: { userId: true },
+          })
+        : [];
 
     if (lockedMember.userId === org.ownerId && owners.length) {
       await tx.organisation.update({

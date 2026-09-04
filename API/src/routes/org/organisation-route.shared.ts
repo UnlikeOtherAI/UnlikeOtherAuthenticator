@@ -11,11 +11,7 @@ import { assertVerifiedDomainMatchesQuery, normalizeDomain } from './domain-cont
 
 export const DomainQuerySchema = z
   .object({
-    domain: z
-      .string()
-      .trim()
-      .min(1)
-      .transform(normalizeDomain),
+    domain: z.string().trim().min(1).transform(normalizeDomain),
     config_url: z.string().trim().min(1),
   })
   .strict();
@@ -28,7 +24,12 @@ export const ListQuerySchema = DomainQuerySchema.extend({
 export const MemberStatusQuerySchema = z.enum(['ACTIVE', 'DEACTIVATED', 'REMOVED', 'all']);
 
 export const ListMembersQuerySchema = ListQuerySchema.extend({
+  direction: z.enum(['forward', 'backward']).optional(),
   status: MemberStatusQuerySchema.optional(),
+}).strict();
+
+export const MemberInvitationRosterQuerySchema = ListQuerySchema.extend({
+  direction: z.enum(['forward', 'backward']).optional(),
 }).strict();
 
 export const OrgPathSchema = z.object({
@@ -155,6 +156,12 @@ export function parseLimitCursor(request: FastifyRequest) {
 
 export function parseMembersListQuery(request: FastifyRequest) {
   const parsed = ListMembersQuerySchema.parse(request.query);
+  assertVerifiedDomainMatchesQuery(request, parsed.domain);
+  return parsed;
+}
+
+export function parseMemberInvitationRosterQuery(request: FastifyRequest) {
+  const parsed = MemberInvitationRosterQuerySchema.parse(request.query);
   assertVerifiedDomainMatchesQuery(request, parsed.domain);
   return parsed;
 }
