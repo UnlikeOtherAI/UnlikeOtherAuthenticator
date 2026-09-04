@@ -6,6 +6,10 @@ dedicated \`automatic_membership\` app key bound to the \`nessie\` service. UOA
 rejects every organisation without current direct Nessie service-access evidence.
 The contract returns stable subjects, never emails; UOA validates current verified
 identity data itself and grants only \`member\` roles, preserving stronger roles.
+It creates absent memberships only: an existing DEACTIVATED or REMOVED membership
+is reported as skipped and is never reactivated by a domain rule. Backfills use
+opaque, snapshot-bound cursors; either snapshot conflict is an explicit signal to
+restart safely because grants are idempotent.
 The product's ordinary domain bearer, user profile cache, and billing app keys are
 not valid credentials for this capability. See \`GET /api\` for each endpoint.
 

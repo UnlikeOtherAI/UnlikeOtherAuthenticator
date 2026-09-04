@@ -5,6 +5,15 @@ import { ACCESS_TOKEN_AUDIENCE } from '../../src/config/constants.js';
 
 const control = vi.hoisted(() => ({ controlNessieAutomaticMembership: vi.fn() }));
 vi.mock('../../src/services/nessie-automatic-membership-control.service.js', () => control);
+const prisma = vi.hoisted(() => ({
+  orgMember: { findUnique: vi.fn() },
+  teamMember: { findFirst: vi.fn() },
+  orgAuditLog: { create: vi.fn() },
+}));
+vi.mock('../../src/db/prisma.js', async () => ({
+  ...(await vi.importActual<typeof import('../../src/db/prisma.js')>('../../src/db/prisma.js')),
+  getAdminPrisma: () => prisma,
+}));
 
 const secret = 'admin-token-secret-with-enough-length';
 const domain = 'admin.example.com';
@@ -23,6 +32,9 @@ describe('internal automatic membership control routes', () => {
     process.env.ADMIN_ACCESS_TOKEN_SECRET = secret;
     Reflect.deleteProperty(process.env, 'DATABASE_URL');
     control.controlNessieAutomaticMembership.mockReset();
+    prisma.orgMember.findUnique.mockResolvedValue({ role: 'owner', status: 'ACTIVE' });
+    prisma.teamMember.findFirst.mockResolvedValue({ id: 'team-member' });
+    prisma.orgAuditLog.create.mockResolvedValue({ id: 'audit' });
   });
   afterEach(() => {
     if (priorDomain === undefined) Reflect.deleteProperty(process.env, 'ADMIN_AUTH_DOMAIN');
@@ -45,6 +57,9 @@ describe('internal automatic membership control routes', () => {
         uoaActorSub: 'uoa-admin-sub', externalOrgId: 'org-1', externalTeamId: 'team-1',
         scope: 'team', action: 'verify', payload: { rule_id: 'rule-1' },
       });
+      expect(prisma.teamMember.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({ teamId: 'team-1', userId: 'uoa-admin-sub', status: 'ACTIVE' }),
+      }));
     } finally { await app.close(); }
   });
 

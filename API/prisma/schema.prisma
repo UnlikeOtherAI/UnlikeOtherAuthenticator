@@ -138,6 +138,7 @@ enum AutomaticMembershipOperationStatus {
   already_member
   failed
   cancelled
+  skipped_inactive
 }
 
 enum BillingAdjustmentKind {
@@ -1676,6 +1677,7 @@ model AutomaticMembershipProvisionFence {
   orgId      String   @map("org_id")
   ruleId     String   @map("rule_id")
   generation Int
+  lifecycleRevision Int @default(0) @map("lifecycle_revision")
   fenceToken String   @map("fence_token")
   active     Boolean  @default(true)
   updatedAt  DateTime @updatedAt @map("updated_at")
@@ -1707,6 +1709,8 @@ model AutomaticMembershipSubjectSnapshot {
   domain    String   @map("domain_ascii")
   cutoffAt  DateTime @map("cutoff_at")
   expiresAt DateTime @map("expires_at")
+  cursorHash String? @map("cursor_hash")
+  cursorUserId String? @map("cursor_user_id")
   createdAt DateTime @default(now()) @map("created_at")
   @@index([expiresAt])
   @@map("automatic_membership_subject_snapshots")
