@@ -106,7 +106,7 @@ The RP trust model is channel-based:
 2. That call was authenticated with your per-domain \`client_hash\` bearer, which only UOA and your backend know.
 3. You passed \`code\` + \`code_verifier\` (PKCE) that only your tab could have produced.
 
-Because all three hold, the token's issuer is UOA by construction. Do not expose \`access_token\` to the browser; do not forward it to third parties; and treat it as opaque beyond decoding claims for user identity / expiry. When you need to validate a presented access token later, call UOA (e.g. use it in the \`X-UOA-Access-Token\` header against UOA's own endpoints such as \`GET /org/me\`) rather than attempting local verification.
+Because all three hold, the token's issuer is UOA by construction. Do not expose \`access_token\` to the browser; do not forward it to third parties; and treat it as opaque beyond decoding claims for user identity / expiry. When you need to validate a presented access token later, call UOA (e.g. use it in the \`X-UOA-Access-Token\` header against UOA's own endpoints such as \`GET /org/me\`) rather than attempting local verification. A backend that deliberately retains no UOA access token may call \`GET /org/me\` with its one-minute, product-signed \`X-UOA-Subject-Assertion\` instead; UOA rechecks the assertion's authentication epoch and exact active org/team before returning roles. The response is role context, not resolved product capabilities.
 
 ### 4.4 Which role to honour for authorization
 

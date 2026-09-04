@@ -60,6 +60,8 @@ export function registerRootRoute(app: FastifyInstance): void {
       config_validation: configValidationEndpointDocumentation,
       config_verification: configVerificationEndpointDocumentation,
       endpoints,
+      org_me_subject_assertion:
+        'GET /org/me accepts either a UOA access token or a one-minute product-signed subject assertion and returns freshly resolved org roles, never product capability verdicts.',
     };
   });
 }
