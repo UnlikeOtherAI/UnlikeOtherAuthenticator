@@ -129,6 +129,7 @@ enum BillingTariffSource {
 enum BillingAppKeyPurpose {
   ENTITLEMENT
   CUSTOMER_LIFECYCLE
+  AUTOMATIC_MEMBERSHIP
 }
 
 enum BillingAdjustmentKind {

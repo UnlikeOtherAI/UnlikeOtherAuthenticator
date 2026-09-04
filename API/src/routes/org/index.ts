@@ -12,8 +12,10 @@ import { registerTeamInvitationRoutes } from './team-invitations.js';
 import { registerTeamInviteLinkRoutes } from './team-invite-links.js';
 import { registerInvitationApprovalRoutes } from './invitation-approvals.js';
 import { registerMemberInvitationRoutes } from './member-invitations.js';
+import { registerAutomaticMembershipRoutes } from './automatic-membership.js';
 
 export function registerOrgRoutes(app: FastifyInstance): void {
+  registerAutomaticMembershipRoutes(app);
   registerOrgMeRoute(app);
   registerOrganisationRoutes(app);
   registerOrganisationMemberRoutes(app);

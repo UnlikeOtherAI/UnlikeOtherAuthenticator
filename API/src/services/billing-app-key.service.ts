@@ -114,9 +114,10 @@ function validateActorJwk(input: unknown): PublicRsaJwk {
   return jwk;
 }
 
-export type PublicBillingAppKeyPurpose = 'entitlement' | 'customer_lifecycle';
+export type PublicBillingAppKeyPurpose = 'entitlement' | 'customer_lifecycle' | 'automatic_membership';
 
 function appKeyPurpose(value: PublicBillingAppKeyPurpose): BillingAppKeyPurpose {
+  if (value === 'automatic_membership') return BillingAppKeyPurpose.AUTOMATIC_MEMBERSHIP;
   return value === 'customer_lifecycle'
     ? BillingAppKeyPurpose.CUSTOMER_LIFECYCLE
     : BillingAppKeyPurpose.ENTITLEMENT;
@@ -158,7 +159,8 @@ export async function createBillingAppKey(
   const purpose = appKeyPurpose(params.purpose);
   if (
     (purpose === BillingAppKeyPurpose.ENTITLEMENT && checkoutReturnOrigins.length > 0) ||
-    (purpose === BillingAppKeyPurpose.CUSTOMER_LIFECYCLE && checkoutReturnOrigins.length === 0)
+    (purpose === BillingAppKeyPurpose.CUSTOMER_LIFECYCLE && checkoutReturnOrigins.length === 0) ||
+    (purpose === BillingAppKeyPurpose.AUTOMATIC_MEMBERSHIP && checkoutReturnOrigins.length > 0)
   ) {
     throw new AppError('BAD_REQUEST', 400, 'BILLING_APP_KEY_PURPOSE_INVALID');
   }
