@@ -24,6 +24,7 @@ import {
   type OrgServiceDeps,
   type OrgServicePrisma,
 } from './team.service.base.js';
+import { resolveTeamRoleVocabulary } from './role-grants.js';
 
 const TEAM_ROSTER_SELECT = {
   id: true,
@@ -70,6 +71,8 @@ export type TeamRosterPermissions = {
   removeMember: boolean;
   viewMemberEmail: boolean;
   searchMemberCandidates: boolean;
+  /** Roles a roster manager may assign. Ownership stays a separate operation. */
+  teamRoleOptions: string[];
 };
 
 export type TeamRosterPage = {
@@ -160,6 +163,7 @@ async function teamRosterPermissions(
   prisma: OrgServicePrisma,
   params: { orgId: string; teamId: string; actorUserId: string | undefined; config: ClientConfig },
 ): Promise<TeamRosterPermissions> {
+  const teamRoleOptions = resolveTeamRoleVocabulary(params.config).filter((role) => role !== 'owner');
   // Backend mode is intentionally true here: the domain pairing is the actor and
   // retains the same full authority that existing team mutation routes have.
   if (!params.actorUserId) {
@@ -169,6 +173,7 @@ async function teamRosterPermissions(
       removeMember: true,
       viewMemberEmail: true,
       searchMemberCandidates: true,
+      teamRoleOptions,
     };
   }
 
@@ -179,6 +184,7 @@ async function teamRosterPermissions(
     removeMember: canManage,
     viewMemberEmail: canManage,
     searchMemberCandidates: canManage,
+    teamRoleOptions: canManage ? teamRoleOptions : [],
   };
 }
 

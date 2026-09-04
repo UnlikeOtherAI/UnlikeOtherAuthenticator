@@ -10,6 +10,7 @@ import {
   changeOrganisationMemberRole,
   removeOrganisationMember,
 } from '../../services/organisation.service.members.js';
+import { listMemberWorkspaceAccess } from '../../services/member-workspace-access.service.js';
 import { transferOrganisationOwnership } from '../../services/organisation.service.ownership.js';
 import {
   deactivateOrganisationMember,
@@ -61,6 +62,35 @@ export function registerOrganisationMemberRoutes(app: FastifyInstance) {
       );
 
       reply.status(200).send(members);
+    },
+  );
+
+  app.get(
+    '/org/organisations/:orgId/members/:userId/workspaces',
+    {
+      preValidation: [
+        requireDomainHashAuthForDomainQuery(),
+        configVerifier,
+        parseDomainContextHook,
+        requireOrgFeatures,
+        requireOrgRole(),
+      ],
+    },
+    async (request, reply) => {
+      const { domain } = parseDomainContext(request);
+      const orgId = getOrgIdFromParams(request.params);
+      const userId = getUserIdFromParams(request.params);
+      const config = requireVerifiedConfig(request);
+
+      setTenantContextFromRequest(request, { orgId, userId: tenantUserId(request) });
+      const result = await request.withTenantTx((tx) =>
+        listMemberWorkspaceAccess(
+          { orgId, domain, ...orgCaller(request), userId, config },
+          { prisma: asPrismaClient(tx) },
+        ),
+      );
+
+      reply.status(200).send(result);
     },
   );
 

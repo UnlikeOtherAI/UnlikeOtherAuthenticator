@@ -56,6 +56,15 @@ ACTIVE members of the target team. The endpoint itself
 requires \`members.manage\`; it returns no invitation feed and does not search a
 domain-wide user directory.
 
+When an organisation manager opens a member, call
+\`GET /org/organisations/:orgId/members/:userId/workspaces\`. Its rows are the
+editable workspace memberships for that exact person: a team is a workspace,
+and \`hasAccess\` is the live membership state. The feed contains only teams
+where the caller currently holds \`members.manage\`; do not infer access to, or
+attempt to change, a team omitted from it. Add or remove a selected workspace
+through that exact team's existing member endpoints, which re-authorize each
+write.
+
 For the Pending invitations tab, use
 \`GET /org/organisations/:orgId/member-invitations\`. This is a separate,
 actionable \`TeamInvite\` feed, not
