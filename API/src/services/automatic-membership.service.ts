@@ -1,10 +1,10 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { AutomaticMembershipOperationStatus, MembershipStatus, type PrismaClient } from '@prisma/client';
 
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import { AppError } from '../utils/errors.js';
 
-type AutomaticMembershipPrisma = Pick<PrismaClient, 'billingServiceAccess' | 'team' | 'orgMember' | 'teamMember' | 'authIdentity' | 'user' | 'automaticMembershipProvisionFence' | 'automaticMembershipOperation' | '$transaction'>;
+type AutomaticMembershipPrisma = Pick<PrismaClient, 'billingServiceAccess' | 'team' | 'orgMember' | 'teamMember' | 'authIdentity' | 'user' | 'automaticMembershipProvisionFence' | 'automaticMembershipOperation' | 'automaticMembershipSubjectSnapshot' | '$transaction'>;
 const memberRoles = new Set(['owner', 'admin']);
 
 async function assertScope(prisma: AutomaticMembershipPrisma, credential: VerifiedBillingAppKey, orgId: string): Promise<void> {
@@ -47,13 +47,20 @@ export async function attestAutomaticMembershipDomain(
 }
 
 export async function listAutomaticMembershipSubjects(
-  prisma: AutomaticMembershipPrisma, credential: VerifiedBillingAppKey, input: { orgId: string; domain: string; cursor?: string; limit: number },
+  prisma: AutomaticMembershipPrisma, credential: VerifiedBillingAppKey, input: { orgId: string; domain: string; cursor?: string; snapshotId?: string; limit: number },
 ): Promise<{ snapshot_id: string; subjects: string[]; cursor: string | null }> {
   await assertScope(prisma, credential, input.orgId);
-  const rows = await prisma.authIdentity.findMany({ where: { verifiedAt: { not: null }, ...(input.cursor ? { id: { gt: input.cursor } } : {}) }, select: { id: true, userId: true, email: true }, orderBy: { id: 'asc' }, take: input.limit + 1 });
+  const now = new Date();
+  const snapshot = input.snapshotId
+    ? await prisma.automaticMembershipSubjectSnapshot.findFirst({ where: { id: input.snapshotId, serviceId: credential.service.id, orgId: input.orgId, domain: input.domain, expiresAt: { gt: now } } })
+    : await prisma.automaticMembershipSubjectSnapshot.create({ data: { id: randomUUID(), serviceId: credential.service.id, orgId: input.orgId, domain: input.domain, cutoffAt: now, expiresAt: new Date(now.getTime() + 15 * 60 * 1000) } });
+  if (!snapshot) throw new AppError('CONFLICT', 409, 'AUTOMATIC_MEMBERSHIP_SNAPSHOT_EXPIRED');
+  // The snapshot cutoff makes rows immutable for this run. DISTINCT user ids
+  // prevents multiple verified providers for one person becoming duplicate work.
+  const rows = await prisma.authIdentity.findMany({ where: { verifiedAt: { not: null }, createdAt: { lte: snapshot.cutoffAt }, ...(input.cursor ? { userId: { gt: input.cursor } } : {}) }, select: { userId: true, email: true }, orderBy: { userId: 'asc' }, distinct: ['userId'], take: input.limit + 1 });
   const eligible = rows.filter((row) => exactEmailDomain(row.email, input.domain));
   const page = eligible.slice(0, input.limit);
-  return { snapshot_id: createHash('sha256').update(`${credential.id}:${input.orgId}:${input.domain}`).digest('base64url'), subjects: page.map((row) => row.userId), cursor: rows.length > input.limit ? rows[input.limit - 1]?.id ?? null : null };
+  return { snapshot_id: snapshot.id, subjects: page.map((row) => row.userId), cursor: rows.length > input.limit ? rows[input.limit - 1]?.userId ?? null : null };
 }
 
 export async function setAutomaticMembershipFence(
@@ -70,13 +77,15 @@ export async function setAutomaticMembershipFence(
 }
 
 export async function grantAutomaticMembership(
-  prisma: AutomaticMembershipPrisma, credential: VerifiedBillingAppKey, input: { orgId: string; teamId: string; subject: string; idempotencyKey: string; ruleId: string; generation: number; fenceToken: string },
+  prisma: AutomaticMembershipPrisma, credential: VerifiedBillingAppKey, input: { orgId: string; teamId: string; subject: string; domain: string; idempotencyKey: string; ruleId: string; generation: number; fenceToken: string },
 ): Promise<{ operation_id: string; status: 'completed' | 'already_member' }> {
   await assertScope(prisma, credential, input.orgId);
   const operation_id = createHash('sha256').update(`${credential.id}:${input.idempotencyKey}`).digest('base64url');
   return prisma.$transaction(async (tx) => {
     const fence = await tx.automaticMembershipProvisionFence.findUnique({ where: { serviceId_ruleId: { serviceId: credential.service.id, ruleId: input.ruleId } } });
     if (!fence || !fence.active || fence.orgId !== input.orgId || fence.generation !== input.generation || fence.fenceToken !== input.fenceToken) throw new AppError('CONFLICT', 409, 'AUTOMATIC_MEMBERSHIP_STALE_FENCE');
+    const verified = await tx.authIdentity.findMany({ where: { userId: input.subject, verifiedAt: { not: null } }, select: { email: true } });
+    if (!verified.some((identity) => exactEmailDomain(identity.email, input.domain))) throw new AppError('FORBIDDEN', 403, 'AUTOMATIC_MEMBERSHIP_DOMAIN_NOT_VERIFIED');
     const replay = await tx.automaticMembershipOperation.findUnique({ where: { serviceId_idempotencyKey: { serviceId: credential.service.id, idempotencyKey: input.idempotencyKey } } });
     if (replay) return { operation_id: replay.id, status: replay.status === AutomaticMembershipOperationStatus.already_member ? 'already_member' : 'completed' };
     const team = await tx.team.findFirst({ where: { id: input.teamId, orgId: input.orgId }, select: { id: true } });

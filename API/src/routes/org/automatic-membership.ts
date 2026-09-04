@@ -9,7 +9,7 @@ import { attestAutomaticMembershipDomain, getAutomaticMembershipOperation, grant
 const Params = z.object({ orgId: z.string().trim().min(1), teamId: z.string().trim().min(1) });
 const Attestation = z.object({ uoaSub: z.string().trim().min(1), domain: z.string().trim().toLowerCase().min(1) }).strict();
 const Authorization = z.object({ subject: z.string().trim().min(1), team_ids: z.array(z.string().trim().min(1)).max(100) }).strict();
-const Grant = z.object({ subject: z.string().trim().min(1), idempotency_key: z.string().trim().min(16).max(512), rule_id: z.string().trim().min(1).max(128), rule_generation: z.number().int().positive(), fence_token: z.string().trim().min(8).max(512) }).strict();
+const Grant = z.object({ subject: z.string().trim().min(1), domain: z.string().trim().toLowerCase().min(1), idempotency_key: z.string().trim().min(16).max(512), rule_id: z.string().trim().min(1).max(128), rule_generation: z.number().int().positive(), fence_token: z.string().trim().min(8).max(512) }).strict();
 const Fence = z.object({ generation: z.number().int().positive(), fence_token: z.string().trim().min(8).max(512), active: z.boolean() }).strict();
 const Subjects = z.object({ domain: z.string().trim().toLowerCase().min(1), cursor: z.string().trim().min(1).optional(), snapshot_id: z.string().trim().min(1).optional(), limit: z.coerce.number().int().min(1).max(100).default(25) }).strict();
 
@@ -36,12 +36,12 @@ export function registerAutomaticMembershipRoutes(app: FastifyInstance): void {
   app.get('/org/automatic-membership/organisations/:orgId/subjects', { preHandler: [requireAutomaticMembershipAppKey] }, async (request) => {
     const { orgId } = Params.pick({ orgId: true }).parse(request.params);
     const query = Subjects.parse(request.query);
-    return listAutomaticMembershipSubjects(getAdminPrisma(), credential(request), { orgId, domain: query.domain, cursor: query.cursor, limit: query.limit });
+    return listAutomaticMembershipSubjects(getAdminPrisma(), credential(request), { orgId, domain: query.domain, cursor: query.cursor, snapshotId: query.snapshot_id, limit: query.limit });
   });
   app.post('/org/automatic-membership/organisations/:orgId/teams/:teamId/grants', { preHandler: [requireAutomaticMembershipAppKey] }, async (request) => {
     const { orgId, teamId } = Params.parse(request.params);
     const body = Grant.parse(request.body);
-    return grantAutomaticMembership(getAdminPrisma(), credential(request), { orgId, teamId, subject: body.subject, idempotencyKey: body.idempotency_key, ruleId: body.rule_id, generation: body.rule_generation, fenceToken: body.fence_token });
+    return grantAutomaticMembership(getAdminPrisma(), credential(request), { orgId, teamId, subject: body.subject, domain: body.domain, idempotencyKey: body.idempotency_key, ruleId: body.rule_id, generation: body.rule_generation, fenceToken: body.fence_token });
   });
   app.put('/org/automatic-membership/organisations/:orgId/rules/:ruleId/fence', { preHandler: [requireAutomaticMembershipAppKey] }, async (request) => {
     const { orgId } = Params.pick({ orgId: true }).parse(request.params);

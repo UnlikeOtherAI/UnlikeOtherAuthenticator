@@ -1700,6 +1700,18 @@ model AutomaticMembershipOperation {
   @@map("automatic_membership_operations")
 }
 
+model AutomaticMembershipSubjectSnapshot {
+  id        String   @id
+  serviceId String   @map("service_id")
+  orgId     String   @map("org_id")
+  domain    String   @map("domain_ascii")
+  cutoffAt  DateTime @map("cutoff_at")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([expiresAt])
+  @@map("automatic_membership_subject_snapshots")
+}
+
 // UOA-owned evidence that a user has directly authenticated to a product.
 // Indirect service use is never promoted to direct access from Ledger metering.
 model BillingServiceAccess {
