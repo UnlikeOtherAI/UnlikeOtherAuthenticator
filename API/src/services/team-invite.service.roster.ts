@@ -30,7 +30,7 @@ import {
   type TeamInviteRecord,
 } from './team-invite.service.base.js';
 
-type InvitationScope = {
+export type MemberManagementTeamScope = {
   org: Awaited<ReturnType<typeof resolveOrganisation>>;
   /** `null` is every team in the organisation (backend or org-level manager). */
   teamIds: string[] | null;
@@ -69,14 +69,14 @@ export type PendingInvitationPage = {
  * result is deliberately membership-rooted: neither roster may be broadened
  * into a domain-wide directory or infer authority from a selected UI team.
  */
-async function resolveInvitationScope(
+export async function resolveMemberManagementTeamScope(
   prisma: InvitePrisma,
   params: {
     orgId: string;
     actorUserId: string | undefined;
     config: ClientConfig;
   },
-): Promise<InvitationScope> {
+): Promise<MemberManagementTeamScope> {
   const org = await resolveOrganisation(prisma, { orgId: params.orgId });
   if (!params.actorUserId) return { org, teamIds: null };
 
@@ -109,7 +109,7 @@ async function resolveInvitationScope(
   return { org, teamIds };
 }
 
-function scopeBinding(scope: InvitationScope): string {
+function scopeBinding(scope: MemberManagementTeamScope): string {
   return scope.teamIds === null ? 'all-teams' : scope.teamIds.join(',');
 }
 
@@ -132,7 +132,7 @@ export async function listInvitationTargets(
 
   const actorUserId = resolveOrgActor(params);
   const prisma = deps?.prisma ?? getPrisma();
-  const scope = await resolveInvitationScope(prisma, {
+  const scope = await resolveMemberManagementTeamScope(prisma, {
     orgId: params.orgId,
     actorUserId,
     config: params.config,
@@ -215,7 +215,7 @@ export async function listPendingInvitations(
 
   const actorUserId = resolveOrgActor(params);
   const prisma = deps?.prisma ?? getPrisma();
-  const scope = await resolveInvitationScope(prisma, {
+  const scope = await resolveMemberManagementTeamScope(prisma, {
     orgId: params.orgId,
     actorUserId,
     config: params.config,

@@ -16,6 +16,11 @@ export {
 } from './team.service.members.js';
 
 export { findTeamMemberCandidates, listTeamMembers } from './team.service.roster.js';
+export {
+  listMemberWorkspaceAccess,
+  type MemberWorkspaceAccess,
+  type MemberWorkspaceAccessResult,
+} from './member-workspace-access.service.js';
 
 export type {
   TeamMemberCandidate,
