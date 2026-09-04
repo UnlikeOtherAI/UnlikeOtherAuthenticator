@@ -8,7 +8,7 @@ export const orgEndpoints: EndpointSchema[] = [
     method: 'GET',
     path: '/org/me',
     description: 'Current user org context and complete authorized team directory',
-    auth: 'access token (X-UOA-Access-Token header)',
+    auth: 'domain hash bearer token plus exactly one user credential: X-UOA-Access-Token or X-UOA-Subject-Assertion',
     query: { config_url: 'string (required)' },
     response: {
       org: 'object | absent — live legacy org context plus the directory fields below. Normally anchored to the active same-domain organisation. For an `all_active_memberships` product whose selected team belongs to another domain, it is anchored to the token’s exact `active.orgId` after that organisation and the product policy are revalidated live. It remains absent when neither live context exists; an unscoped token never causes an arbitrary cross-domain org to be synthesized.',

@@ -1466,10 +1466,11 @@ The `/org/` endpoints use a **dual-auth pattern**: domain hash token for backend
 
 #### User Identity
 
-For endpoints needing user context, the access token goes in `X-UOA-Access-Token` header (already redacted in Fastify logger config). The `Authorization` header carries the domain hash token.
+For endpoints needing user context, the access token goes in `X-UOA-Access-Token` header (already redacted in Fastify logger config). A product backend that does not retain that token may instead send its one-minute `X-UOA-Subject-Assertion`; UOA verifies the assertion against the product JWKS and re-resolves the caller's authentication epoch and exact ACTIVE org/team membership before returning or acting. The two user credentials are mutually exclusive. The `Authorization` header carries the domain hash token.
 
 `X-UOA-Access-Token` carries exactly one token profile: the HS256 user access
-token issued by the login flow. There is no second credential shape on `/org/*`.
+token issued by the login flow. `X-UOA-Subject-Assertion` is a separate,
+short-lived product assertion rather than another access-token shape.
 
 #### Backend mode — no user token at all
 

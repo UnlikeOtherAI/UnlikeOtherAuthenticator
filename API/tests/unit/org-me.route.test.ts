@@ -30,7 +30,7 @@ vi.mock('../../src/middleware/org-features.js', () => ({
 }));
 
 vi.mock('../../src/middleware/org-role-guard.js', () => ({
-  resolveActingUserClaims: (...args: unknown[]) => claimsMock(...args),
+  resolveOrgUserClaims: (...args: unknown[]) => claimsMock(...args),
 }));
 
 vi.mock('../../src/plugins/tenant-context.plugin.js', () => ({

@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { asPrismaClient } from '../../db/tenant-context.js';
 import { requireDomainHashAuthForDomainQuery } from '../../middleware/domain-hash-auth.js';
 import { requireOrgFeaturesEnabled } from '../../middleware/org-features.js';
-import { resolveActingUserClaims } from '../../middleware/org-role-guard.js';
+import { resolveOrgUserClaims } from '../../middleware/org-role-guard.js';
 import { setTenantContextFromRequest } from '../../plugins/tenant-context.plugin.js';
 import {
   getActiveClientOrgContext,
@@ -26,18 +26,6 @@ const QuerySchema = z
   })
   .strict();
 
-function parseBearerOrRawToken(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-
-  const lower = trimmed.toLowerCase();
-  if (!lower.startsWith('bearer ')) return trimmed;
-
-  const token = trimmed.slice('bearer '.length).trim();
-  return token || null;
-}
-
 export function registerOrgMeRoute(app: FastifyInstance): void {
   app.get(
     '/org/me',
@@ -49,14 +37,11 @@ export function registerOrgMeRoute(app: FastifyInstance): void {
       const normalizedDomain = normalizeDomain(domain);
       assertVerifiedDomainMatchesQuery(request, normalizedDomain);
 
-      const token = parseBearerOrRawToken(request.headers['x-uoa-access-token']);
-      if (!token) {
-        throw new AppError('UNAUTHORIZED', 401, 'MISSING_ACCESS_TOKEN');
-      }
-
-      // Same resolver as `requireOrgRole`, so `/org/me` accepts exactly the tokens
-      // every other `/org/*` route accepts.
-      const claims = await resolveActingUserClaims(token);
+      // Same resolver as every user-mode `/org/*` route.  In particular a
+      // product can use its one-minute subject assertion to read current role
+      // context without retaining a UOA user token; the assertion path
+      // re-resolves its exact ACTIVE org/team membership before returning.
+      const claims = await resolveOrgUserClaims(request);
       if (normalizeDomain(claims.domain) !== normalizedDomain) {
         throw new AppError('FORBIDDEN', 403, 'ACCESS_TOKEN_DOMAIN_MISMATCH');
       }

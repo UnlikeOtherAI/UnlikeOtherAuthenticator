@@ -233,6 +233,28 @@ async function resolveSubjectAssertionClaims(
   };
 }
 
+/**
+ * Resolve exactly one user credential for a user-scoped `/org/*` route.
+ *
+ * Unlike `requireOrgRole`, this helper deliberately has no backend-mode arm:
+ * routes such as `GET /org/me` answer about the acting person and cannot
+ * invent one from a domain pairing.  A product backend can therefore exchange
+ * its one-minute subject assertion for current org-role context without ever
+ * retaining or forwarding the person's UOA access token.
+ */
+export async function resolveOrgUserClaims(request: FastifyRequest): Promise<AccessTokenClaims> {
+  const subjectAssertion = resolveOrgSubjectAssertionHeader(request);
+  if (subjectAssertion && request.headers[ORG_ACCESS_TOKEN_HEADER] !== undefined) {
+    throw invalidSubjectAssertion();
+  }
+
+  const token = resolveOrgAccessTokenHeader(request);
+  if (token) return resolveActingUserClaims(token);
+  if (subjectAssertion) return resolveSubjectAssertionClaims(request, subjectAssertion);
+
+  throw new AppError('UNAUTHORIZED', 401, 'MISSING_ACCESS_TOKEN');
+}
+
 function assertRequiredOrgRole(
   claims: AccessTokenClaims,
   orgId: string | undefined,
@@ -371,29 +393,16 @@ export function requireOrgRole(...requiredRoles: string[]) {
     void reply;
 
     const domain = resolveDomainFromRequest(request);
-    const subjectAssertion = resolveOrgSubjectAssertionHeader(request);
-
-    // User-mode credentials are deliberately mutually exclusive. In
-    // particular, do not silently choose whichever one happens to verify: a
-    // partner BFF that accidentally forwards both must fail closed.
-    if (subjectAssertion && request.headers[ORG_ACCESS_TOKEN_HEADER] !== undefined) {
-      throw invalidSubjectAssertion();
-    }
-
-    // Only genuinely ABSENT headers select backend mode. A present-but-blank
-    // one throws inside its resolver rather than reaching here. The three
-    // credential modes are one visible choice so that no arm can be reached
-    // with a credential the branch above did not establish.
-    const token = resolveOrgAccessTokenHeader(request);
-    let claims: AccessTokenClaims;
-    if (token) {
-      claims = await resolveActingUserClaims(token);
-    } else if (subjectAssertion) {
-      claims = await resolveSubjectAssertionClaims(request, subjectAssertion);
-    } else {
+    const hasUserCredential =
+      request.headers[ORG_ACCESS_TOKEN_HEADER] !== undefined
+      || request.headers[ORG_SUBJECT_ASSERTION_HEADER] !== undefined;
+    if (!hasUserCredential) {
       await acceptDomainBackendCaller(request, domain);
       return;
     }
+    // User-mode credentials are mutually exclusive and present-but-blank
+    // headers are errors inside the shared resolver, never backend mode.
+    const claims = await resolveOrgUserClaims(request);
     if (normalizeDomain(claims.domain) !== domain) {
       throw new AppError('FORBIDDEN', 403, 'ACCESS_TOKEN_DOMAIN_MISMATCH');
     }

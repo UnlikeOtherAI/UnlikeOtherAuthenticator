@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
-import { requireOrgRole } from '../org-role-guard.js';
+import { requireOrgRole, resolveOrgUserClaims } from '../org-role-guard.js';
 
 const verifySubjectAssertion = vi.fn();
 const lockEpoch = vi.fn();
@@ -47,6 +47,24 @@ afterEach(() => {
 });
 
 describe('requireOrgRole — subject assertion user mode', () => {
+  it('resolves a subject assertion for a user-scoped route without selecting backend mode', async () => {
+    verifySubjectAssertion.mockResolvedValueOnce({
+      sub: 'user_1', tv: 7, active: { orgId: 'org_1', teamId: 'team_1' },
+    });
+    lockEpoch.mockResolvedValueOnce({ tokenVersion: 7 });
+    getActiveOrg.mockResolvedValueOnce({
+      org_id: 'org_1', tenant_slug: 'live-team', org_role: 'admin',
+      teams: ['team_1'], team_roles: { team_1: 'admin' },
+    });
+
+    await expect(resolveOrgUserClaims(request({ assertion: 'nessie.subject.assertion' })))
+      .resolves.toMatchObject({
+        userId: 'user_1',
+        org: { org_id: 'org_1', org_role: 'admin' },
+        active: { orgId: 'org_1', teamId: 'team_1' },
+      });
+  });
+
   it('re-resolves a Nessie assertion into normal claims before applying the required role', async () => {
     verifySubjectAssertion.mockResolvedValueOnce({
       sub: 'user_1', tv: 7, active: { orgId: 'org_1', teamId: 'team_1' },
