@@ -60,6 +60,10 @@ const EnvSchema = z
     // Signed RS256 config JWT served to the first-party Admin UI. The payload must be
     // Google-only, registration-disabled, and scoped to ADMIN_AUTH_DOMAIN.
     ADMIN_CONFIG_JWT: z.string().min(1).optional(),
+    // Server-to-server bridge to Nessie's automatic-membership control plane.
+    // Neither value is ever served to the Admin browser.
+    NESSIE_UOA_AUTOMATIC_MEMBERSHIP_CONTROL_URL: z.string().url().optional(),
+    NESSIE_UOA_AUTOMATIC_MEMBERSHIP_CONTROL_SECRET: z.string().min(32).optional(),
     // Trusted JWKS endpoint used to verify client config JWTs. Config JWTs must be RS256
     // and include a kid that resolves to a key from this JWKS.
     CONFIG_JWKS_URL: z.string().url().optional(),
@@ -305,6 +309,17 @@ const EnvSchema = z
         code: z.ZodIssueCode.custom,
         path: ['MCP_OAUTH_DOMAIN'],
         message: 'MCP_OAUTH_DOMAIN is required for the public OAuth profile',
+      });
+    }
+    if (
+      Boolean(env.NESSIE_UOA_AUTOMATIC_MEMBERSHIP_CONTROL_URL) !==
+      Boolean(env.NESSIE_UOA_AUTOMATIC_MEMBERSHIP_CONTROL_SECRET)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['NESSIE_UOA_AUTOMATIC_MEMBERSHIP_CONTROL_SECRET'],
+        message:
+          'NESSIE_UOA_AUTOMATIC_MEMBERSHIP_CONTROL_URL and NESSIE_UOA_AUTOMATIC_MEMBERSHIP_CONTROL_SECRET must be set together',
       });
     }
     addBillingEnvironmentIssues(env, ctx);

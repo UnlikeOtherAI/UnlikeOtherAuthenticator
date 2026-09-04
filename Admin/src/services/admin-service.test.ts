@@ -46,6 +46,19 @@ describe('adminService', () => {
     expect(api.delete).toHaveBeenCalledWith('/internal/admin/organisations/org%2F1');
   });
 
+  it('keeps automatic membership controls behind UOA admin routes and encodes scope', async () => {
+    api.get.mockResolvedValue({ rules: [] });
+    api.post.mockResolvedValue({ rules: [] });
+
+    await adminService.getAutomaticMembership('org/1', 'team', 'team 1');
+    await adminService.controlAutomaticMembership('org/1', 'organisation', 'verify', { rule_id: 'rule-1' });
+
+    expect(api.get).toHaveBeenCalledWith('/internal/admin/organisations/org%2F1/teams/team%201/automatic-membership');
+    expect(api.post).toHaveBeenCalledWith('/internal/admin/organisations/org%2F1/automatic-membership', {
+      action: 'verify', payload: { rule_id: 'rule-1' },
+    });
+  });
+
   it('fetches the admin user avatar as image bytes from the encoded user path', async () => {
     const bytes = new Blob(['<svg />'], { type: 'image/svg+xml' });
     api.getBlob.mockResolvedValue(bytes);

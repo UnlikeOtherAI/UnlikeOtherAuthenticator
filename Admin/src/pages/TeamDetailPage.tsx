@@ -15,6 +15,7 @@ import { TeamDialog } from '../components/dialogs/TeamDialog';
 import { LoginRestrictionSection } from '../components/sections/LoginRestrictionSection';
 import { adminService } from '../services/admin-service';
 import { useTeamQuery } from '../features/admin/admin-queries';
+import { AutomaticMembershipSection } from '../features/admin/AutomaticMembershipSection';
 import { TeamAvatar } from '../features/admin/TeamAvatar';
 import { TeamAvatarSection } from '../features/admin/TeamAvatarSection';
 import { UserAvatar } from '../features/admin/UserAvatar';
@@ -84,6 +85,9 @@ export function TeamDetailPage() {
           allowedEmails={team.allowedEmails}
           onSave={(next) => updateRestriction.mutateAsync(next)}
         />
+      </div>
+      <div className="mb-5">
+        <AutomaticMembershipSection orgId={org.id} scope="team" teamId={team.id} />
       </div>
       <Card>
         <CardHeader>

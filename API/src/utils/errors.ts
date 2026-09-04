@@ -2,6 +2,7 @@ export type AppErrorCode =
   | 'BAD_REQUEST'
   | 'UNAUTHORIZED'
   | 'FORBIDDEN'
+  | 'CONFLICT'
   | 'NOT_FOUND'
   | 'RATE_LIMITED'
   | 'INTERNAL';

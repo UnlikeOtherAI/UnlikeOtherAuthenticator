@@ -11,6 +11,7 @@ import { orgEndpoints, orgGroupEndpoints, orgTeamMemberEndpoints } from './schem
 import { appEndpoints, baseEndpoints, domainEndpoints, emailEndpoints } from './schema.platform.js';
 import { signatureEndpoints } from './schema.signatures.js';
 import { automaticMembershipEndpoints } from './schema.automatic-membership.js';
+import { automaticMembershipAdminEndpoints } from './schema.automatic-membership-admin.js';
 
 export type EndpointSchema = {
   method: string;
@@ -43,6 +44,7 @@ export const endpoints: EndpointSchema[] = [
   ...avatarEndpoints,
   ...orgContractEndpoints,
   ...automaticMembershipEndpoints,
+  ...automaticMembershipAdminEndpoints,
   ...integrationsEndpoints,
   ...internalAdminEndpoints,
   ...oauthEndpoints,

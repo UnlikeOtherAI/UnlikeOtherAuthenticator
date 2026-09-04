@@ -22,6 +22,7 @@ import { LoginRestrictionSection } from '../components/sections/LoginRestriction
 import { adminService } from '../services/admin-service';
 import { ApiRequestError } from '../services/api-client';
 import { useOrganisationQuery } from '../features/admin/admin-queries';
+import { AutomaticMembershipSection } from '../features/admin/AutomaticMembershipSection';
 import type { OrganisationMember, OrganisationTwoFaPolicy, PreapprovedMember } from '../features/admin/types';
 import { TeamTable } from '../features/admin/TeamTable';
 import { UserAvatar } from '../features/admin/UserAvatar';
@@ -31,7 +32,7 @@ import {
 } from '../features/admin/TwoFactorPolicySelect';
 import { useAdminUi } from '../features/shell/admin-ui';
 
-type OrgTab = 'teams' | 'members' | 'preapproved';
+type OrgTab = 'teams' | 'members' | 'preapproved' | 'automatic';
 
 type DialogState =
   | { kind: 'edit-org' }
@@ -153,7 +154,7 @@ export function OrganisationDetailPage() {
           onSave={(next) => updateTwoFaPolicy.mutateAsync(next)}
         />
       </div>
-      <SegmentedTabs<OrgTab> value={tab} onChange={setTab} options={[{ label: 'Teams', value: 'teams' }, { label: 'Members', value: 'members' }, { label: 'Pre-approved', value: 'preapproved' }]} />
+      <SegmentedTabs<OrgTab> value={tab} onChange={setTab} options={[{ label: 'Teams', value: 'teams' }, { label: 'Members', value: 'members' }, { label: 'Pre-approved', value: 'preapproved' }, { label: 'Automatic access', value: 'automatic' }]} />
       {tab === 'teams' ? (
         <Card>
           <CardHeader>
@@ -250,6 +251,7 @@ export function OrganisationDetailPage() {
           <PaginationFooter {...preapprovalPagination} />
         </Card>
       ) : null}
+      {tab === 'automatic' ? <AutomaticMembershipSection orgId={org.id} scope="organisation" /> : null}
       <EditOrganisationDialog open={dialog?.kind === 'edit-org'} organisation={org} onClose={closeDialog} />
       <TransferOwnershipDialog open={dialog?.kind === 'transfer'} organisation={org} onClose={closeDialog} />
       <TeamDialog open={dialog?.kind === 'add-team'} team={null} onClose={closeDialog} />

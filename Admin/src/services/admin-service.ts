@@ -74,6 +74,31 @@ type TeamUpdateInput = LoginRestrictionInput & {
   description?: string | null;
 };
 
+export type AutomaticMembershipScope = 'organisation' | 'team';
+export type AutomaticMembershipRule = {
+  id: string;
+  domain: string;
+  scope: AutomaticMembershipScope;
+  external_team_id: string | null;
+  state: 'pending' | 'verified' | 'active' | 'suspended' | 'revoked' | 'rotating';
+  notification_email: string | null;
+  team_ids: string[];
+  dns: { record_name: string; record_value: string } | null;
+  last_check_at: string | null;
+  last_check_error: string | null;
+  verification_expires_at: string | null;
+  backfill: { status: string; processed: number; granted: number; failed: number; error: string | null } | null;
+};
+export type AutomaticMembershipControl = {
+  rules?: AutomaticMembershipRule[];
+  teams?: Array<{ external_team_id: string; name: string }>;
+  rule?: AutomaticMembershipRule;
+  audit?: Array<{ id: string; action: string; created_at: string; detail: string | null }>;
+  message?: string;
+};
+export type AutomaticMembershipAction =
+  | 'create' | 'update' | 'verify' | 'rotate' | 'activate' | 'suspend' | 'revoke' | 'release';
+
 export type AgreementInput = {
   title: string;
   description: string | null;
@@ -285,6 +310,25 @@ export const adminService = {
     }),
   getOrganisation: (orgId: string) =>
     api.get<AdminData['organisations'][number] | null>(`/internal/admin/organisations/${encodeURIComponent(orgId)}`),
+  getAutomaticMembership: (orgId: string, scope: AutomaticMembershipScope, teamId?: string) =>
+    api.get<AutomaticMembershipControl>(
+      scope === 'organisation'
+        ? `/internal/admin/organisations/${encodeURIComponent(orgId)}/automatic-membership`
+        : `/internal/admin/organisations/${encodeURIComponent(orgId)}/teams/${encodeURIComponent(teamId ?? '')}/automatic-membership`,
+    ),
+  getAutomaticMembershipTeams: (orgId: string) =>
+    api.get<AutomaticMembershipControl>(
+      `/internal/admin/organisations/${encodeURIComponent(orgId)}/automatic-membership/teams`,
+    ),
+  controlAutomaticMembership: (
+    orgId: string, scope: AutomaticMembershipScope, action: AutomaticMembershipAction,
+    payload: Record<string, unknown>, teamId?: string,
+  ) => api.post<AutomaticMembershipControl>(
+    scope === 'organisation'
+      ? `/internal/admin/organisations/${encodeURIComponent(orgId)}/automatic-membership`
+      : `/internal/admin/organisations/${encodeURIComponent(orgId)}/teams/${encodeURIComponent(teamId ?? '')}/automatic-membership`,
+    { action, payload },
+  ),
   deleteOrganisation: (orgId: string) =>
     api.delete<{ deleted: boolean }>(
       `/internal/admin/organisations/${encodeURIComponent(orgId)}`,

@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 
 import { registerInternalAdminApiKeyRoutes } from './api-keys.js';
+import { registerInternalAdminAutomaticMembershipRoutes } from './automatic-membership.js';
 import { registerInternalAdminAppRoutes } from './apps.js';
 import { registerInternalAdminBanRoutes } from './bans.js';
 import { registerInternalAdminBillingStripeUsageRoute } from './billing-stripe-usage.js';
@@ -25,6 +26,7 @@ export function registerInternalAdminRoutes(app: FastifyInstance): void {
   registerInternalAdminConfigRoute(app);
   registerInternalAdminTokenRoute(app);
   registerInternalAdminReadRoutes(app);
+  registerInternalAdminAutomaticMembershipRoutes(app);
   registerInternalAdminOrganisationRoutes(app);
   registerInternalAdminAppRoutes(app);
   registerInternalAdminBanRoutes(app);
