@@ -14,8 +14,8 @@ import {
 } from './team.service.base.js';
 import { assertTeamInviteTransition } from './team-invite-state-machine.js';
 import {
-  assertActiveTeamScope,
-  lockAndAssertActiveTeamScope,
+  assertActiveClientTeamScope,
+  lockAndAssertActiveClientTeamScope,
   lockTeamMembershipRows,
 } from './team-scope.service.js';
 
@@ -66,7 +66,7 @@ export async function acceptTeamInviteWithinTransaction(params: {
 
   if (invite.acceptedAt) {
     if (invite.acceptedUserId === params.userId) {
-      await lockAndAssertActiveTeamScope(
+      await lockAndAssertActiveClientTeamScope(
         {
           userId: params.userId,
           domain: params.config.domain,
@@ -186,7 +186,15 @@ export async function acceptTeamInviteWithinTransaction(params: {
   // Existing DEACTIVATED/REMOVED rows are tombstones, not invitations to
   // reactivate. New rows are ACTIVE by default; every existing row must already
   // be ACTIVE at both organisation and team levels before the invite is marked.
-  await assertActiveTeamScope(
+  //
+  // Client/product-aware, because the paragraph above is only true if it is: an
+  // organisation founded through one product and invited into through another
+  // has no membership row on the inviting product's domain, and the plain
+  // domain-scoped assertion refused every such acceptance with a bare 401.
+  // The exact ACTIVE organisation and team membership requirement is unchanged;
+  // only the domain co-location is relaxed, and only under an explicit
+  // single-product policy.
+  await assertActiveClientTeamScope(
     {
       userId: params.userId,
       domain: params.config.domain,
