@@ -248,7 +248,7 @@ describe.skipIf(!databaseTestsEnabled)('recurring add-on cancellation persistenc
     await seedCancellationSubject(handle.prisma);
     secondPrisma = new PrismaClient({ datasources: { db: { url: handle.databaseUrl } } });
     await secondPrisma.$connect();
-  }, 60_000);
+  });
 
   afterAll(async () => {
     await secondPrisma?.$disconnect();

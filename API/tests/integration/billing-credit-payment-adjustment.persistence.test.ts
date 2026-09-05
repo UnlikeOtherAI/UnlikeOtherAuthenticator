@@ -182,7 +182,7 @@ describe.skipIf(!databaseTestsEnabled)('credit payment adjustment persistence', 
   beforeAll(async () => {
     handle = await createTestDb();
     if (!handle) throw new Error('DATABASE_URL is required for DB-backed tests');
-  }, 60_000);
+  });
 
   beforeEach(async () => {
     await handle.prisma.$executeRawUnsafe(

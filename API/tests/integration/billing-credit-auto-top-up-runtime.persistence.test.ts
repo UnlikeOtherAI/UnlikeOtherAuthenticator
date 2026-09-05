@@ -248,7 +248,7 @@ describe.skipIf(!databaseTestsEnabled)('credit automatic top-up PostgreSQL runti
     handle = await createTestDb();
     if (!handle) throw new Error('DATABASE_URL is required for DB-backed tests');
     await seed(handle.prisma);
-  }, 120_000);
+  });
 
   afterAll(async () => {
     if (handle) await handle.cleanup();

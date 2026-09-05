@@ -125,7 +125,7 @@ describe.skipIf(!hasDatabase)('domain signature lifecycle — real PostgreSQL', 
       },
     });
     versionId = version.id;
-  }, 30_000);
+  });
 
   afterAll(async () => {
     process.env.DATABASE_URL = originalDatabaseUrl;

@@ -125,7 +125,7 @@ describe.skipIf(!databaseTestsEnabled)('recurring add-on scope authorization', (
     handle = await createTestDb();
     if (!handle) throw new Error('DATABASE_URL is required for DB-backed tests');
     await seedOrganisationSubscription(handle.prisma);
-  }, 60_000);
+  });
 
   afterAll(async () => {
     if (handle) await handle.cleanup();
