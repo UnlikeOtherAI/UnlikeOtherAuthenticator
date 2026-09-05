@@ -39,6 +39,12 @@ export type EmailInviteContinuation =
 
 export type EmailInviteContinuationDeps = {
   inviteDeps?: InviteTokenDeps;
+  /**
+   * Consuming an invitation writes memberships and a domain role, which
+   * row-level security refuses to the app role. Callers inside a request must
+   * pass the admin connection; omitting it fails only against a real RLS
+   * database, never against a superuser-backed test.
+   */
   verifyDeps?: VerifyEmailDeps;
   getTeamInviteLandingData?: typeof defaultGetTeamInviteLandingData;
   verifyEmailToken?: typeof defaultVerifyEmailToken;

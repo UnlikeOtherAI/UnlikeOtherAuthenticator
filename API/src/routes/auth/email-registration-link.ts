@@ -145,9 +145,15 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
         // authorization code. Resolve what it should do instead — including for an
         // invitee who already has an account, whose LOGIN_LINK token would otherwise
         // fall through to a login restart that drops the invitation entirely.
+        // Both reads and the acceptance write run on the admin connection: row-level
+        // security refuses `domain_roles`/membership writes to the app role, and
+        // consuming an invitation is exactly such a write.
         const continuation = await resolveEmailInviteContinuation(
           { token, configUrl, config },
-          { inviteDeps: { prisma: request.adminDb } },
+          {
+            inviteDeps: { prisma: request.adminDb },
+            verifyDeps: { prisma: request.adminDb },
+          },
         );
 
         if (continuation.kind === 'registration') {

@@ -8,7 +8,7 @@ import {
   createTestConfigFetchHandler,
   signTestConfigJwt,
 } from '../helpers/test-config.js';
-import { createTestDb } from '../helpers/test-db.js';
+import { createRlsTestDb } from '../helpers/test-db.js';
 
 const hasDatabase = Boolean(process.env.DATABASE_URL);
 const domain = 'client.example.com';
@@ -20,20 +20,29 @@ const invitedEmail = 'already-registered@example.com';
  * already has an account the token is a LOGIN_LINK, which used to fall through
  * to a bare login form: the invitation was never consumed, and the form's social
  * buttons then failed outright for want of PKCE. The invitee could never join.
+ *
+ * This runs against `createRlsTestDb`, not the superuser-backed `createTestDb`,
+ * because accepting an invitation writes a domain role and two memberships that
+ * row-level security refuses to the app role. A superuser-backed run passes
+ * even when the route consumes the token on the wrong connection — which is
+ * exactly how a 500 reached production once.
  */
 describe.skipIf(!hasDatabase)('email invitation for an account that already exists', () => {
-  let handle: Awaited<ReturnType<typeof createTestDb>>;
+  let handle: Awaited<ReturnType<typeof createRlsTestDb>>;
 
   const originalEnv = {
     DATABASE_URL: process.env.DATABASE_URL,
+    DATABASE_ADMIN_URL: process.env.DATABASE_ADMIN_URL,
     SHARED_SECRET: process.env.SHARED_SECRET,
     AUTH_SERVICE_IDENTIFIER: process.env.AUTH_SERVICE_IDENTIFIER,
   };
 
   beforeAll(async () => {
-    handle = await createTestDb();
+    handle = await createRlsTestDb();
     if (!handle) throw new Error('DATABASE_URL is required for DB-backed tests');
-    process.env.DATABASE_URL = handle.databaseUrl;
+    // The app role, with every policy enforced — the same split production runs.
+    process.env.DATABASE_URL = handle.appDatabaseUrl;
+    process.env.DATABASE_ADMIN_URL = handle.adminDatabaseUrl;
     process.env.SHARED_SECRET = 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER = 'uoa-auth-service';
   });
