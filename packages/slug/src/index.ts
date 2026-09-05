@@ -187,13 +187,33 @@ export const SLUG_SUFFIX_LENGTH = 4;
  * characters and a byte is 256 values, so plain modulo would favour the first
  * four letters.
  */
+type CryptoLike = { getRandomValues: (array: Uint8Array) => Uint8Array };
+
+/**
+ * The platform CSPRNG, reached without depending on DOM or Node type
+ * definitions — this package is compiled for both, and naming either would make
+ * it build in one and not the other.
+ */
+function webCrypto(): CryptoLike {
+  const candidate = (globalThis as { crypto?: CryptoLike }).crypto;
+  if (!candidate?.getRandomValues) {
+    // Deterministic failure rather than a quiet fallback to Math.random: the
+    // suffix exists so a hostname does not disclose how many tenants share a
+    // name, and a predictable one would not do that job while looking as if it
+    // did. Present in every browser and in Node 18 and later.
+    throw new Error('[slug] no Web Crypto available for slug suffix generation');
+  }
+  return candidate;
+}
+
 export function randomSlugSuffix(length: number = SLUG_SUFFIX_LENGTH): string {
+  const crypto = webCrypto();
   const limit = Math.floor(256 / SUFFIX_ALPHABET.length) * SUFFIX_ALPHABET.length;
   let out = '';
 
   while (out.length < length) {
     const bytes = new Uint8Array(length - out.length);
-    globalThis.crypto.getRandomValues(bytes);
+    crypto.getRandomValues(bytes);
     for (const byte of bytes) {
       if (byte < limit) out += SUFFIX_ALPHABET[byte % SUFFIX_ALPHABET.length];
     }
