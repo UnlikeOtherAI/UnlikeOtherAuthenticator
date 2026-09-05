@@ -23,6 +23,8 @@ import {
 const ResolveQuerySchema = z
   .object({
     domain: z.string().trim().min(1),
+    // Product clients append this to every /domain/* URL; accepted and unused.
+    config_url: z.string().trim().min(1).max(2048).optional(),
     org: z.string().trim().min(1).max(63),
     team: z.string().trim().min(1).max(63),
   })
@@ -31,6 +33,7 @@ const ResolveQuerySchema = z
 const AvailabilityQuerySchema = z
   .object({
     domain: z.string().trim().min(1),
+    config_url: z.string().trim().min(1).max(2048).optional(),
     slug: z.string().trim().min(1).max(63),
     scope: z.enum(['organisation', 'team']),
     // Required for scope=team: availability is per organisation, never global.
