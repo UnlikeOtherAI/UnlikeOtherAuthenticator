@@ -11,6 +11,7 @@ import {
   OrganisationDestinationDropdown,
   type OrganisationDestinationOption,
 } from './OrganisationDestinationDropdown.js';
+import { TeamAddressField } from './TeamAddressField.js';
 
 const NEW_ORGANISATION = '__new_organisation__';
 
@@ -51,6 +52,10 @@ export function CreateTeamDialog(props: {
   const initialDestination = destinationOptions[0]?.value ?? '';
   const [destination, setDestination] = useState(initialDestination);
   const [name, setName] = useState('');
+  const [slug, setSlug] = useState('');
+  // An address the server would refuse should not be submittable; an empty one
+  // is fine, because the server derives one.
+  const [addressUsable, setAddressUsable] = useState(true);
   // Preserve the hosted creation API's established default. Private remains an explicit choice.
   const [joinPolicy, setJoinPolicy] = useState<TeamJoinPolicy>('INVITE_ONLY');
   const [submitting, setSubmitting] = useState(false);
@@ -80,6 +85,7 @@ export function CreateTeamDialog(props: {
       outcome = await submitOrganisationCreation({
         loginToken: props.loginToken,
         name: teamName,
+        slug: slug.trim() || undefined,
         joinPolicy,
         ...props.query,
       });
@@ -94,6 +100,7 @@ export function CreateTeamDialog(props: {
         loginToken: props.loginToken,
         orgId: selectedOrganisation.orgId,
         name: teamName,
+        slug: slug.trim() || undefined,
         joinPolicy,
         ...props.query,
       });
@@ -144,6 +151,21 @@ export function CreateTeamDialog(props: {
             maxLength={100}
             autoFocus
             required
+          />
+
+          <TeamAddressField
+            name={name}
+            value={slug}
+            onChange={setSlug}
+            onStatusChange={setAddressUsable}
+            scope={
+              isNewOrganisation
+                ? { kind: 'organisation' }
+                : { kind: 'team', orgId: selectedOrganisation?.orgId ?? '' }
+            }
+            loginToken={props.loginToken}
+            query={props.query}
+            disabled={submitting || (!isNewOrganisation && !selectedOrganisation)}
           />
 
           <div>
@@ -208,7 +230,7 @@ export function CreateTeamDialog(props: {
           {error ? <p className="text-sm text-[var(--uoa-color-danger)]">{error}</p> : null}
 
           <div className="flex flex-wrap items-center gap-3">
-            <Button type="submit" disabled={submitting || !name.trim()}>
+            <Button type="submit" disabled={submitting || !name.trim() || !addressUsable}>
               {submitting ? '...' : t('team.createDialog.submit')}
             </Button>
             <Button type="button" variant="secondary" disabled={submitting} onClick={props.onClose}>

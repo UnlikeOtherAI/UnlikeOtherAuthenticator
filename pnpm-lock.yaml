@@ -215,6 +215,9 @@ importers:
 
   Auth:
     dependencies:
+      '@unlikeotherai/slug':
+        specifier: workspace:*
+        version: link:../packages/slug
       react:
         specifier: ^19.2.8
         version: 19.2.8

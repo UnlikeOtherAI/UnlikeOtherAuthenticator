@@ -48,11 +48,16 @@ export async function submitTeamSelection(
 
 /** Creates and selects a team with the same authenticated login capability as the chooser. */
 export async function submitOrganisationCreation(
-  params: { loginToken: string; name: string; joinPolicy?: TeamJoinPolicy } & AuthFlowQuery,
+  params: {
+    loginToken: string;
+    name: string;
+    slug?: string;
+    joinPolicy?: TeamJoinPolicy;
+  } & AuthFlowQuery,
 ): Promise<TeamResponseOutcome> {
-  const { loginToken, name, joinPolicy, ...query } = params;
+  const { loginToken, name, slug, joinPolicy, ...query } = params;
   const result = await createOrganisation(
-    { login_token: loginToken, name, join_policy: joinPolicy },
+    { login_token: loginToken, name, slug, join_policy: joinPolicy },
     query,
   );
   if (!result.ok && isExpiredBridge(result.status)) return { kind: 'expired' };
@@ -69,12 +74,13 @@ export async function submitTeamCreation(
     loginToken: string;
     orgId: string;
     name: string;
+    slug?: string;
     joinPolicy?: TeamJoinPolicy;
   } & AuthFlowQuery,
 ): Promise<TeamResponseOutcome> {
-  const { loginToken, orgId, name, joinPolicy, ...query } = params;
+  const { loginToken, orgId, name, slug, joinPolicy, ...query } = params;
   const result = await createTeam(
-    { login_token: loginToken, org_id: orgId, name, join_policy: joinPolicy },
+    { login_token: loginToken, org_id: orgId, name, slug, join_policy: joinPolicy },
     query,
   );
   if (!result.ok && isExpiredBridge(result.status)) return { kind: 'expired' };
