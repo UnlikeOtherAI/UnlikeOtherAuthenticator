@@ -12,6 +12,7 @@ COPY API/package.json API/
 COPY Auth/package.json Auth/
 COPY Admin/package.json Admin/
 COPY packages/billing-statement-protocol/package.json packages/billing-statement-protocol/
+COPY packages/slug/package.json packages/slug/
 
 RUN pnpm install --frozen-lockfile
 
@@ -19,10 +20,12 @@ COPY API/ API/
 COPY Auth/ Auth/
 COPY Admin/ Admin/
 COPY packages/billing-statement-protocol/ packages/billing-statement-protocol/
+COPY packages/slug/ packages/slug/
 COPY assets/ assets/
 COPY tsconfig.base.json ./
 
 RUN pnpm --filter @unlikeotherai/billing-statement-protocol build
+RUN pnpm --filter @unlikeotherai/slug build
 RUN pnpm --filter @uoa/api prisma:generate
 RUN pnpm --filter @uoa/api build
 RUN pnpm --filter @uoa/auth build
@@ -46,6 +49,7 @@ COPY --chown=node:node API/package.json API/
 COPY --chown=node:node Auth/package.json Auth/
 COPY --chown=node:node Admin/package.json Admin/
 COPY --chown=node:node packages/billing-statement-protocol/package.json packages/billing-statement-protocol/
+COPY --chown=node:node packages/slug/package.json packages/slug/
 COPY --chown=node:node API/prisma/ API/prisma/
 
 RUN pnpm install --frozen-lockfile --filter @uoa/api... --filter @uoa/auth...
@@ -58,6 +62,7 @@ COPY --from=build --chown=node:node /app/packages/billing-statement-protocol/dis
 COPY --from=build --chown=node:node /app/packages/billing-statement-protocol/schema/ packages/billing-statement-protocol/schema/
 COPY --from=build --chown=node:node /app/packages/billing-statement-protocol/fixtures/ packages/billing-statement-protocol/fixtures/
 COPY --from=build --chown=node:node /app/packages/billing-statement-protocol/openapi/ packages/billing-statement-protocol/openapi/
+COPY --from=build --chown=node:node /app/packages/slug/dist/ packages/slug/dist/
 COPY --from=build --chown=node:node /app/Auth/dist/ Auth/dist/
 COPY --from=build --chown=node:node /app/Auth/dist-ssr/ Auth/dist-ssr/
 COPY --from=build --chown=node:node /app/Admin/dist/ Admin/dist/

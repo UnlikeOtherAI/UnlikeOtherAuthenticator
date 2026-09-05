@@ -23,6 +23,7 @@ export {
   declineTeamInviteByToken,
   getTeamInviteLandingData,
 } from './team-invite.service.token.js';
+export type { InviteTokenDeps } from './team-invite.service.token.js';
 export {
   approveInvite,
   createMemberInvite,

@@ -82,7 +82,12 @@ can be retried; \`session-choices\` and invite decline validate but do not consu
    Zero teams with \`can_create_org: true\` still enter the chooser so the create-team action is
    reachable. An invite-bound link never sees the chooser: token consumption returns the accepted
    invite's exact \`orgId\`/\`teamId\`, applies the effective 2FA policy, and preserves that scope
-   through the authorization code, access token, refresh token, and rotation.
+   through the authorization code, access token, refresh token, and rotation. An invitation opened
+   straight from a mailbox has no PKCE verifier at all, so it can never reach that pipeline: a new
+   address lands on the invite registration screen and signs in there, while an address that already
+   has an account (a \`LOGIN_LINK\` token) has its invitation consumed on the spot and ends on a
+   terminal confirmation page — the invitee then signs in to the product normally. Neither branch
+   falls back to the login restart, which would leave the invitation pending forever.
    Both email continuations perform chooser reads, recognized-product placement, exact policy/2FA
    finalization, and immediate code issuance in one admin transaction. Its per-user placement lock
    remains held through commit, so concurrent first use from different products reuses one

@@ -20,7 +20,7 @@ import {
 
 type VerifyEmailPrisma = PrismaClient;
 
-type VerifyEmailDeps = {
+export type VerifyEmailDeps = {
   afterRefreshSessionLock?: () => Promise<void>;
   beforeRefreshSessionLock?: () => Promise<void>;
   env?: ReturnType<typeof getEnv>;
