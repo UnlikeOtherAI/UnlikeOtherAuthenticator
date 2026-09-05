@@ -81,6 +81,9 @@ importers:
       '@unlikeotherai/qr-art':
         specifier: ^0.1.0
         version: 0.1.0
+      '@unlikeotherai/slug':
+        specifier: workspace:*
+        version: link:../packages/slug
       ajv:
         specifier: ^8.18.0
         version: 8.18.0
@@ -261,6 +264,15 @@ importers:
       ajv-formats:
         specifier: ^3.0.1
         version: 3.0.1(ajv@8.18.0)
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.6
+        version: 3.2.6(@types/node@22.19.17)(happy-dom@20.11.0)(jiti@2.6.1)(jsdom@30.0.1)(tsx@4.21.0)
+
+  packages/slug:
+    devDependencies:
       typescript:
         specifier: ^5.7.3
         version: 5.9.3

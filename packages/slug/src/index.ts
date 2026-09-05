@@ -166,3 +166,38 @@ export function withSlugSuffix(base: string, suffix: string): string {
   const trimmed = base.slice(0, room).replace(/-+$/g, '');
   return `${trimmed || 'x'}${tail}`;
 }
+
+/** Characters a disambiguating suffix is drawn from. */
+const SUFFIX_ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789';
+
+/** Default suffix length, matching the organisation path this package replaced. */
+export const SLUG_SUFFIX_LENGTH = 4;
+
+/**
+ * A random suffix for disambiguating a derived slug.
+ *
+ * Random rather than incrementing, and that is the whole point: `acme-2` tells
+ * anyone who can read a hostname that exactly one other tenant chose the same
+ * name, and `acme-37` tells them there are thirty-six. `Docs/brief.md` records
+ * that reasoning for organisations; teams now share it.
+ *
+ * Uses `globalThis.crypto` rather than `node:crypto` so the same module works
+ * in the browser, where the creation dialog previews a slug before submitting
+ * it. Rejection sampling keeps the distribution flat — the alphabet is 36
+ * characters and a byte is 256 values, so plain modulo would favour the first
+ * four letters.
+ */
+export function randomSlugSuffix(length: number = SLUG_SUFFIX_LENGTH): string {
+  const limit = Math.floor(256 / SUFFIX_ALPHABET.length) * SUFFIX_ALPHABET.length;
+  let out = '';
+
+  while (out.length < length) {
+    const bytes = new Uint8Array(length - out.length);
+    globalThis.crypto.getRandomValues(bytes);
+    for (const byte of bytes) {
+      if (byte < limit) out += SUFFIX_ALPHABET[byte % SUFFIX_ALPHABET.length];
+    }
+  }
+
+  return out;
+}

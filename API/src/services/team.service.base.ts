@@ -10,6 +10,14 @@ import {
 } from './role-grants.js';
 
 import {
+  checkSlug,
+  deriveSlugBase,
+  isReservedLabel,
+  randomSlugSuffix,
+  withSlugSuffix,
+} from '@unlikeotherai/slug';
+
+import {
   assertDatabaseEnabled,
   getOrganisationMember,
   memberAvatarImageUrl,
@@ -81,10 +89,13 @@ export type TeamWithMembersRecord = TeamRecord & {
   members: TeamMemberRecord[];
 };
 
-const TEAM_SLUG_ALLOWED_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 const TEAM_SLUG_FALLBACK = 'team';
-const MAX_TEAM_SLUG_LENGTH = 120;
-const MAX_TEAM_SLUG_COLLISION_RETRIES = 10_000;
+
+// Ten, where this was 10_000. The old loop walked `-2`, `-3`, `-4` in order and
+// genuinely needed thousands of attempts on a popular name; a random
+// four-character suffix draws from 1.6 million, so ten attempts is already a
+// vanishing probability of failure.
+const MAX_TEAM_SLUG_COLLISION_RETRIES = 10;
 
 export function normalizeTeamName(value: string): string {
   const trimmed = value.trim();
@@ -103,83 +114,79 @@ export function normalizeTeamDescription(value?: string | null): string | null |
   return trimmed === '' ? null : trimmed;
 }
 
-function normalizeTeamSlugBase(value: string): string {
-  const normalized = value
-    .trim()
-    .toLowerCase()
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^\x20-\x7e]/g, '');
-
-  const slug = normalized
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-+/, '')
-    .replace(/-+$/, '');
-
-  const base = slug || TEAM_SLUG_FALLBACK;
-  const trimmed = base.slice(0, MAX_TEAM_SLUG_LENGTH).replace(/-+$/g, '');
-  return trimmed.length >= 2 ? trimmed : TEAM_SLUG_FALLBACK;
-}
-
-function buildTeamSlugCandidate(base: string, suffix?: number): string {
-  if (!suffix) return base;
-
-  const suffixText = `-${suffix}`;
-  const trimmedBase = base
-    .slice(0, Math.max(1, MAX_TEAM_SLUG_LENGTH - suffixText.length))
-    .replace(/-+$/g, '');
-
-  const candidateBase = trimmedBase.length >= 2 ? trimmedBase : TEAM_SLUG_FALLBACK;
-  return `${candidateBase}${suffixText}`;
-}
-
-export function normalizeTeamSlug(value: string): string {
-  const slug = normalizeTeamSlugBase(value);
-  if (slug.length < 2 || slug.length > MAX_TEAM_SLUG_LENGTH || !TEAM_SLUG_ALLOWED_RE.test(slug)) {
-    throw new AppError('BAD_REQUEST', 400);
+/**
+ * Validate a team slug that a person chose.
+ *
+ * Refuses rather than coerces, which is the behaviour change: the previous
+ * implementation normalised first and validated after, so its rejection branch
+ * was unreachable and an explicit `"a"` was stored as `team` without comment.
+ * A slug is a DNS label a person is about to put in an address bar, so quietly
+ * storing a different one is worse than saying it will not work.
+ */
+export function normalizeTeamSlug(value: string, reservedLabels?: Iterable<string>): string {
+  const result = checkSlug(value, { reserved: reservedLabels });
+  if (!result.ok) {
+    throw new AppError('BAD_REQUEST', 400, `TEAM_SLUG_${result.reason.toUpperCase()}`);
   }
-
-  return slug;
+  return result.slug;
 }
 
+/**
+ * Derive an available team slug from a team's name.
+ *
+ * Only a derived slug is ever suffixed. An explicit one that collides is
+ * refused by `ensureAvailableTeamSlug`, because silently handing someone
+ * `design-k4f2` when they asked for `design` is the same class of surprise the
+ * coercion above was.
+ *
+ * A reserved label is treated exactly like a taken one: a team genuinely named
+ * "API" derives to `api`, which no tenant may hold, so it takes a suffix and
+ * becomes `api-k4f2` rather than failing a creation that has nothing wrong
+ * with it.
+ */
 export async function deriveUniqueTeamSlug(params: {
   orgId: string;
   prisma: Pick<OrgServicePrisma, 'team'>;
   name: string;
   existingSlugToIgnore?: string;
+  reservedLabels?: Iterable<string>;
 }): Promise<string> {
-  const base = normalizeTeamSlugBase(params.name);
+  const base = deriveSlugBase(params.name, { fallback: TEAM_SLUG_FALLBACK });
   const ignoredSlug = params.existingSlugToIgnore?.trim();
 
-  for (let suffix = 0; suffix < MAX_TEAM_SLUG_COLLISION_RETRIES; suffix += 1) {
-    const candidate = buildTeamSlugCandidate(base, suffix === 0 ? undefined : suffix + 1);
-    if (candidate === ignoredSlug) {
-      return candidate;
-    }
+  for (let attempt = 0; attempt < MAX_TEAM_SLUG_COLLISION_RETRIES; attempt += 1) {
+    const candidate = attempt === 0 ? base : withSlugSuffix(base, randomSlugSuffix());
+
+    if (candidate === ignoredSlug) return candidate;
+    if (isReservedLabel(candidate, params.reservedLabels)) continue;
 
     const existing = await params.prisma.team.findFirst({
-      where: {
-        orgId: params.orgId,
-        slug: candidate,
-      },
+      where: { orgId: params.orgId, slug: candidate },
       select: { id: true },
     });
-    if (!existing) {
-      return candidate;
-    }
+    if (!existing) return candidate;
   }
 
   throw new AppError('INTERNAL', 500, 'TEAM_SLUG_COLLISION_RETRY_EXHAUSTED');
 }
 
+/**
+ * Validate an explicitly supplied team slug and confirm it is free.
+ *
+ * Uniqueness stays scoped to the organisation, which is what
+ * `@@unique([orgId, slug])` already enforces and what the Tenant Subdomain
+ * Contract requires: a team slug is a label beneath its organisation's own
+ * subdomain, never a tenant key in its own right, so two organisations both
+ * holding `design` is correct rather than a collision.
+ */
 export async function ensureAvailableTeamSlug(params: {
   orgId: string;
   prisma: Pick<OrgServicePrisma, 'team'>;
   slug: string;
   existingSlugToIgnore?: string;
+  reservedLabels?: Iterable<string>;
 }): Promise<string> {
-  const candidate = normalizeTeamSlug(params.slug);
+  const candidate = normalizeTeamSlug(params.slug, params.reservedLabels);
   if (candidate === params.existingSlugToIgnore?.trim()) {
     return candidate;
   }
@@ -192,7 +199,7 @@ export async function ensureAvailableTeamSlug(params: {
     select: { id: true },
   });
   if (existing) {
-    throw new AppError('BAD_REQUEST', 400);
+    throw new AppError('BAD_REQUEST', 400, 'TEAM_SLUG_TAKEN');
   }
 
   return candidate;
