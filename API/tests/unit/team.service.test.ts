@@ -211,6 +211,8 @@ describe('Team service', () => {
     const created = prisma.team.create.mock.calls[0]?.[0] as { data: { slug: string } };
     expect(created.data.slug).toMatch(/^engineering-[a-z0-9]{4}$/);
     expect(created.data.slug).not.toBe('engineering-2');
+    // And the row the caller gets back is the one that was written.
+    expect(team.slug).toBe('engineering-k4f2');
   });
 
   it('rejects creating a team when org reaches max_teams_per_org', async () => {

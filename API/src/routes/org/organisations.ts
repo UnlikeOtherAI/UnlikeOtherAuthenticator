@@ -107,7 +107,7 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
     },
     async (request, reply) => {
       const { domain } = parseDomainContext(request);
-      const { name, owner_user_id: ownerUserId } = CreateOrgBodySchema.parse(request.body ?? {});
+      const { name, owner_user_id: ownerUserId, slug } = CreateOrgBodySchema.parse(request.body ?? {});
       const caller = orgCaller(request);
       const config = requireVerifiedConfig(request);
 
@@ -138,7 +138,7 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
       setTenantContextFromRequest(request, { orgId: null, userId: ownerId });
       const org = await request.withTenantTx((tx) =>
         createOrganisation(
-          { domain, name, ownerId, config, ...caller },
+          { domain, name, slug, ownerId, config, ...caller },
           { prisma: asPrismaClient(tx) },
         ),
       );
@@ -187,7 +187,7 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
       const config = requireVerifiedConfig(request);
 
       const orgId = getOrgIdFromParams(request.params);
-      const { name, member_invites, icon_url } = OrgBodySchema.parse(request.body ?? {});
+      const { name, member_invites, icon_url, slug } = OrgBodySchema.parse(request.body ?? {});
 
       setTenantContextFromRequest(request, { orgId, userId: tenantUserId(request) });
       const org = await request.withTenantTx((tx) =>
@@ -200,6 +200,7 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
             config,
             memberInvites: member_invites,
             iconUrl: icon_url,
+            slug,
           },
           { prisma: asPrismaClient(tx) },
         ),

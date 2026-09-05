@@ -51,7 +51,9 @@ export const TeamPathSchema = z.object({
 
 export const TeamBodySchema = z.object({
   name: z.string().trim().min(1).max(100),
-  slug: z.string().trim().min(1).max(120).optional(),
+  // A DNS label: 2..63. Shape and reserved words are enforced in the service
+  // (`@unlikeotherai/slug`), which refuses with a reason rather than coercing.
+  slug: z.string().trim().min(2).max(63).optional(),
   description: z.string().trim().max(500).nullable().optional(),
   // Create-only: put the acting user in the team they just made, as its owner.
   // Defaults false so a backend provisioning teams for other people is
@@ -61,7 +63,9 @@ export const TeamBodySchema = z.object({
 
 export const TeamUpdateBodySchema = z.object({
   name: z.string().trim().min(1).max(100).optional(),
-  slug: z.string().trim().min(1).max(120).optional(),
+  // A DNS label: 2..63. Shape and reserved words are enforced in the service
+  // (`@unlikeotherai/slug`), which refuses with a reason rather than coercing.
+  slug: z.string().trim().min(2).max(63).optional(),
   description: z.string().trim().max(500).nullable().optional(),
   // Join policy (design §4.6, Phase 4) — owner/admin only; omitted leaves the current policy
   // unchanged. Validated against the enum at the service layer.

@@ -45,6 +45,10 @@ export const OrgBodySchema = z.object({
   // omitted leaves the current icon unchanged, `null` clears it. https-only, ≤2048 chars enforced
   // at the service layer (`normalizeIconUrl`) with a generic error otherwise.
   icon_url: z.string().trim().max(2048).nullable().optional(),
+  // The tenant's DNS label. Omitted leaves the address untouched — a rename
+  // must never move it — so this is the only way to change it. 2..63; shape and
+  // reserved words are enforced in the service.
+  slug: z.string().trim().min(2).max(63).optional(),
 });
 
 /**

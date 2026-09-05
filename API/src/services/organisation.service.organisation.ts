@@ -133,6 +133,8 @@ export async function createOrganisation(
     name: string;
     /** Optional default-team visibility for the hosted first-team continuation. */
     defaultTeamJoinPolicy?: string;
+    /** Chosen tenant address. Omitted derives one from the name. */
+    slug?: string;
     ownerId: string;
     config: ClientConfig;
     actorUserId?: string;
@@ -194,7 +196,13 @@ export async function createOrganisation(
       if (!ownerDomainRole) throw new AppError('BAD_REQUEST', 400);
     }
 
-    const slug = await deriveSlugWithValidation(domain, tx, name);
+    // A chosen address is validated and refused with a reason; only a derived
+    // one is disambiguated with a suffix. Accepting `slug` here and deriving
+    // anyway would be worse than not accepting it at all.
+    const slug =
+      params.slug === undefined
+        ? await deriveSlugWithValidation(domain, tx, name)
+        : await ensureAvailableOrgSlug({ domain, prisma: tx, slug: params.slug });
     const createdOrg = await tx.organisation.create({
       data: {
         domain,
