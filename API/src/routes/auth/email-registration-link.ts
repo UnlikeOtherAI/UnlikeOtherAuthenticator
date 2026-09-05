@@ -6,7 +6,11 @@ import { requireEnv } from '../../config/env.js';
 import { runInTransaction } from '../../db/tenant-context.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
 import { validateRegistrationEmailLandingToken } from '../../services/auth-registration-email-link.service.js';
-import { getTeamInviteLandingData } from '../../services/team-invite.service.js';
+import { resolveEmailInviteContinuation } from '../../services/email-invite-continuation.service.js';
+import {
+  renderInviteHtml,
+  renderInviteUnavailableHtml,
+} from '../../services/team-invite-page.service.js';
 import { parseRequestAccessFlag } from '../../services/access-request-flow.service.js';
 import {
   renderAuthEntrypointHtml,
@@ -137,27 +141,50 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
       }
 
       if (!pkce) {
-        if (type === 'VERIFY_EMAIL_SET_PASSWORD') {
-          try {
-            const invite = await getTeamInviteLandingData(
-              { token, configUrl, config },
-              { prisma: request.adminDb },
+        // An emailed invitation has no code verifier, so it can never end in an
+        // authorization code. Resolve what it should do instead — including for an
+        // invitee who already has an account, whose LOGIN_LINK token would otherwise
+        // fall through to a login restart that drops the invitation entirely.
+        const continuation = await resolveEmailInviteContinuation(
+          { token, configUrl, config },
+          { inviteDeps: { prisma: request.adminDb } },
+        );
+
+        if (continuation.kind === 'registration') {
+          const html = await renderAuthEntrypointHtml({
+            config,
+            configUrl,
+            cspNonce: reply.cspNonce?.script,
+            requestUrl: buildInviteRegistrationAuthUrl(configUrl, token, continuation.email),
+          });
+          sendAuthHtml(reply, html);
+          return;
+        }
+
+        if (continuation.kind === 'accepted') {
+          request.log.info('email invitation accepted for an existing account without PKCE');
+          reply
+            .status(200)
+            .type('text/html; charset=utf-8')
+            .send(
+              renderInviteHtml({
+                title: 'Invitation accepted',
+                body: `You have joined ${continuation.teamName} on ${continuation.organisationName}. You can close this window and sign in.`,
+              }),
             );
-            const html = await renderAuthEntrypointHtml({
-              config,
-              configUrl,
-              cspNonce: reply.cspNonce?.script,
-              requestUrl: buildInviteRegistrationAuthUrl(configUrl, token, invite.email),
-            });
-            sendAuthHtml(reply, html);
-            return;
-          } catch (err) {
-            // A non-invite registration link reaches this branch too. It keeps the historic
-            // login restart, while unexpected infrastructure failures still surface normally.
-            if (!isAppError(err)) {
-              throw err;
-            }
-          }
+          return;
+        }
+
+        if (continuation.kind === 'unavailable') {
+          request.log.info(
+            { err: continuation.error },
+            'email invitation could not be accepted',
+          );
+          reply
+            .status(400)
+            .type('text/html; charset=utf-8')
+            .send(renderInviteUnavailableHtml(continuation.error));
+          return;
         }
 
         request.log.info('email link omitted PKCE challenge; rendering login restart');

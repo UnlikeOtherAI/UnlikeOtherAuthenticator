@@ -40,7 +40,7 @@ type InviteTokenRow = {
   };
 };
 
-type InviteTokenDeps = {
+export type InviteTokenDeps = {
   env?: ReturnType<typeof getEnv>;
   prisma?: InviteTokenPrisma;
   sharedSecret?: string;

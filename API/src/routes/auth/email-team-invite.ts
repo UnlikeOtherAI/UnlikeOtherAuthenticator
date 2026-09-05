@@ -6,7 +6,10 @@ import {
   declineTeamInviteByToken,
   getTeamInviteLandingData,
 } from '../../services/team-invite.service.js';
-import { isAppError } from '../../utils/errors.js';
+import {
+  renderInviteHtml,
+  renderInviteUnavailableHtml,
+} from '../../services/team-invite-page.service.js';
 import { tokenConsumeRateLimiter } from './rate-limit-keys.js';
 
 const QuerySchema = z
@@ -16,87 +19,6 @@ const QuerySchema = z
     redirect_url: z.string().trim().min(1).max(2048).optional(),
   })
   .strict();
-
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
-}
-
-function buildAcceptUrl(params: {
-  token: string;
-  configUrl: string;
-  redirectUrl?: string;
-}): string {
-  const query = new URLSearchParams();
-  query.set('token', params.token);
-  query.set('config_url', params.configUrl);
-  if (params.redirectUrl) {
-    query.set('redirect_url', params.redirectUrl);
-  }
-  return `/auth/email/link?${query.toString()}`;
-}
-
-/**
- * The one differentiated failure on this page: an explicitly revoked invitation says so, because
- * the token holder legitimately received the link and deserves to know it was withdrawn rather
- * than being told to retry. Everything else (unknown/expired/used/declined/accepted) stays the
- * generic "no longer available" — no oracle on which condition failed.
- */
-function renderUnavailableHtml(err: unknown): string {
-  if (isAppError(err) && err.message === 'INVITE_REVOKED') {
-    return renderInviteHtml({
-      title: 'Invitation revoked',
-      body: 'This invitation has been revoked by the team that sent it. If you think this is a mistake, ask them to send you a new invitation.',
-    });
-  }
-  return renderInviteHtml({
-    title: 'Invitation unavailable',
-    body: 'This invitation is no longer available.',
-  });
-}
-
-function buildDeclineUrl(params: { token: string; configUrl: string }): string {
-  const query = new URLSearchParams();
-  query.set('token', params.token);
-  query.set('config_url', params.configUrl);
-  return `/auth/email/team-invite/decline?${query.toString()}`;
-}
-
-function renderInviteHtml(params: {
-  title: string;
-  body: string;
-  acceptUrl?: string;
-  declineUrl?: string;
-}): string {
-  const primaryButton = params.acceptUrl
-    ? `<a href="${escapeHtml(params.acceptUrl)}" style="display:inline-block;padding:12px 16px;border-radius:12px;background:#111827;color:#ffffff;text-decoration:none;font-weight:600;">Accept invitation</a>`
-    : '';
-  const declineButton = params.declineUrl
-    ? `<a href="${escapeHtml(params.declineUrl)}" style="display:inline-block;padding:12px 16px;border-radius:12px;border:1px solid #d1d5db;color:#111827;text-decoration:none;font-weight:600;">Decline invitation</a>`
-    : '';
-
-  return `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>${escapeHtml(params.title)}</title>
-  </head>
-  <body style="margin:0;background:#f3f4f6;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111827;">
-    <div style="max-width:560px;margin:48px auto;padding:24px;">
-      <div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:16px;padding:32px;">
-        <h1 style="margin:0 0 16px 0;font-size:28px;line-height:1.2;">${escapeHtml(params.title)}</h1>
-        <p style="margin:0 0 24px 0;font-size:16px;line-height:1.6;">${escapeHtml(params.body)}</p>
-        <div style="display:flex;gap:12px;flex-wrap:wrap;">${primaryButton}${declineButton}</div>
-      </div>
-    </div>
-  </body>
-</html>`;
-}
 
 export function registerAuthEmailTeamInviteRoute(app: FastifyInstance): void {
   app.get(
@@ -149,7 +71,7 @@ export function registerAuthEmailTeamInviteRoute(app: FastifyInstance): void {
             }),
           );
       } catch (err) {
-        reply.status(400).type('text/html; charset=utf-8').send(renderUnavailableHtml(err));
+        reply.status(400).type('text/html; charset=utf-8').send(renderInviteUnavailableHtml(err));
       }
     },
   );
@@ -195,8 +117,29 @@ export function registerAuthEmailTeamInviteRoute(app: FastifyInstance): void {
             }),
           );
       } catch (err) {
-        reply.status(400).type('text/html; charset=utf-8').send(renderUnavailableHtml(err));
+        reply.status(400).type('text/html; charset=utf-8').send(renderInviteUnavailableHtml(err));
       }
     },
   );
+}
+
+function buildAcceptUrl(params: {
+  token: string;
+  configUrl: string;
+  redirectUrl?: string;
+}): string {
+  const query = new URLSearchParams();
+  query.set('token', params.token);
+  query.set('config_url', params.configUrl);
+  if (params.redirectUrl) {
+    query.set('redirect_url', params.redirectUrl);
+  }
+  return `/auth/email/link?${query.toString()}`;
+}
+
+function buildDeclineUrl(params: { token: string; configUrl: string }): string {
+  const query = new URLSearchParams();
+  query.set('token', params.token);
+  query.set('config_url', params.configUrl);
+  return `/auth/email/team-invite/decline?${query.toString()}`;
 }

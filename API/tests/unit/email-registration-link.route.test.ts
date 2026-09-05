@@ -200,6 +200,8 @@ describe('GET /auth/email/link', () => {
 
   it('renders the login screen instead of an auth error when the email link has no PKCE challenge', async () => {
     validateRegistrationEmailLandingTokenMock.mockResolvedValue('LOGIN_LINK');
+    // A plain login link carries no invitation, so the lookup refuses it.
+    getTeamInviteLandingDataMock.mockRejectedValue(new AppError('BAD_REQUEST', 400));
 
     const { createApp } = await import('../../src/app.js');
     const app = await createApp();
@@ -233,7 +235,12 @@ describe('GET /auth/email/link', () => {
 
   it('renders the locked-email invite account screen when an invitation has no PKCE challenge', async () => {
     validateRegistrationEmailLandingTokenMock.mockResolvedValue('VERIFY_EMAIL_SET_PASSWORD');
-    getTeamInviteLandingDataMock.mockResolvedValue({ email: 'invitee@example.com' });
+    getTeamInviteLandingDataMock.mockResolvedValue({
+      tokenType: 'VERIFY_EMAIL_SET_PASSWORD',
+      email: 'invitee@example.com',
+      teamName: 'Hugo',
+      organisationName: 'Hugo_org',
+    });
 
     const { createApp } = await import('../../src/app.js');
     const app = await createApp();
@@ -258,6 +265,79 @@ describe('GET /auth/email/link', () => {
       }),
     );
     expect(verifyEmailTokenMock).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('accepts the invitation for an existing account when an invitation has no PKCE challenge', async () => {
+    validateRegistrationEmailLandingTokenMock.mockResolvedValue('LOGIN_LINK');
+    getTeamInviteLandingDataMock.mockResolvedValue({
+      tokenType: 'LOGIN_LINK',
+      email: 'invitee@example.com',
+      teamName: 'Hugo',
+      organisationName: 'Hugo_org',
+    });
+    verifyEmailTokenMock.mockResolvedValue({
+      userId: 'user-1',
+      credentialEpoch: 1,
+      type: 'LOGIN_LINK',
+      twoFaEnabled: false,
+      acceptedInvite: { inviteId: 'invite-1', orgId: 'org-1', teamId: 'team-1' },
+    });
+
+    const { createApp } = await import('../../src/app.js');
+    const app = await createApp();
+    await app.ready();
+
+    const res = await app.inject({
+      method: 'GET',
+      url:
+        '/auth/email/link?' +
+        'config_url=https%3A%2F%2Fclient.example.com%2Fauth-config' +
+        '&token=existing-account-invite-token',
+      headers: { accept: 'text/html' },
+      remoteAddress: '203.0.113.10',
+    });
+
+    // The invitation is consumed here: without a code verifier there is no
+    // product session to hand back, and a login restart would drop it entirely.
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toContain('text/html');
+    expect(res.body).toContain('Invitation accepted');
+    expect(res.body).toContain('Hugo_org');
+    expect(verifyEmailTokenMock).toHaveBeenCalledTimes(1);
+    expect(renderAuthEntrypointHtmlMock).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('reports an unusable invitation instead of a login restart that would drop it', async () => {
+    validateRegistrationEmailLandingTokenMock.mockResolvedValue('LOGIN_LINK');
+    getTeamInviteLandingDataMock.mockResolvedValue({
+      tokenType: 'LOGIN_LINK',
+      email: 'invitee@example.com',
+      teamName: 'Hugo',
+      organisationName: 'Hugo_org',
+    });
+    verifyEmailTokenMock.mockRejectedValue(new AppError('BAD_REQUEST', 400, 'INVITE_REVOKED'));
+
+    const { createApp } = await import('../../src/app.js');
+    const app = await createApp();
+    await app.ready();
+
+    const res = await app.inject({
+      method: 'GET',
+      url:
+        '/auth/email/link?' +
+        'config_url=https%3A%2F%2Fclient.example.com%2Fauth-config' +
+        '&token=revoked-invite-token',
+      headers: { accept: 'text/html' },
+      remoteAddress: '203.0.113.11',
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toContain('Invitation revoked');
+    expect(renderAuthEntrypointHtmlMock).not.toHaveBeenCalled();
 
     await app.close();
   });
