@@ -235,8 +235,16 @@ describe.skipIf(!hasDatabase)('/org list cursor pagination with created_at ties'
   it('returns every organisation member exactly once when all rows share created_at', async () => {
     const owner = await createOwner();
     const org = await createOrg(owner.id, 'members-tie');
+    // listOrganisationMembers authorizes the actor as an ACTIVE org member before
+    // listing, and `organisations.owner_id` is not a membership: the real
+    // `createOrganisation` writes this row in the same transaction, so the raw
+    // seed has to as well. Its own row is one of the tied members below.
+    const ownerMember = await handle!.prisma.orgMember.create({
+      data: { orgId: org.id, userId: owner.id, role: 'owner', createdAt: tiedAt, updatedAt: tiedAt },
+      select: { id: true },
+    });
 
-    const created: string[] = [];
+    const created: string[] = [ownerMember.id];
     for (let i = 0; i < TIE_COUNT; i += 1) {
       const user = await createOwner(`tied-member-${i}@example.com`);
       const member = await handle!.prisma.orgMember.create({

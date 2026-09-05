@@ -38,7 +38,9 @@ Owner/admin review the pending queue with \`GET /org/organisations/:orgId/invita
 ### 4.7b Sidebar team stack, "Invited" tab, and team icons (gap-fix A, design §11.3–§11.5)
 
 \`GET /org/me\` now returns two additive fields inside \`org\` alongside the existing \`org_id\`,
-\`org_role\`, \`teams\`, \`team_roles\`, \`groups\` (unchanged — this is purely additive). For a
+\`org_role\`, \`teams\`, \`team_roles\`, \`groups\` (unchanged — this is purely additive; \`teams\`
+remains the array of team IDs that keys \`team_roles\`, and the renderable directory is the
+separate \`team_directory\`). For a
 recognized \`all_active_memberships\` product with no same-domain organisation, the complete legacy
 block is anchored to the access token's exact selected \`active.orgId\` after UOA revalidates that
 organisation and the product policy live:
@@ -50,7 +52,7 @@ organisation and the product policy live:
     "org_role": "admin",
     "teams": ["team_1", "team_2"],
     "team_roles": { "team_1": "owner", "team_2": "member" },
-    "teams": [
+    "team_directory": [
       {
         "teamId": "team_1",
         "orgId": "org_…",
@@ -81,7 +83,7 @@ organisation and the product policy live:
 }
 \`\`\`
 
-- \`teams[]\` — one entry per ACTIVE team membership on this domain. When UOA's server-owned
+- \`team_directory[]\` — one entry per ACTIVE team membership on this domain. When UOA's server-owned
   product policy is \`all_active_memberships\`, it instead contains the same complete active
   team directory as the hosted chooser. It is ordered \`lastLoginAt\` DESC with nulls last,
   then \`name\` ASC (this IS the sidebar order — render it as-is). \`lastLoginAt\` is \`null\` when
@@ -149,4 +151,4 @@ Same body/response shape for \`PUT /org/organisations/:orgId\`. Rules, identical
   \`400\` UOA uses everywhere else (no "must be https" specificity leaked back).
 - Owner/admin only — the same authorization the \`PUT\` already enforced.
 - \`iconUrl\` is echoed on every team/org read and write, the team chooser's \`teams[]\`, \`/org/me\`'s
-  \`teams[]\`, and \`firstLogin.memberships.teams[]\` — one column, one field name, everywhere.`;
+  \`team_directory[]\`, and \`firstLogin.memberships.teams[]\` — one column, one field name, everywhere.`;

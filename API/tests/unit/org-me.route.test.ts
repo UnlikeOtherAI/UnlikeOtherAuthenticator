@@ -140,7 +140,9 @@ describe('GET /org/me cross-product directory', () => {
         org_role: 'member',
         teams: ['team-cross'],
         team_roles: { 'team-cross': 'member' },
-        teams: [
+        // Distinct keys: a duplicate `teams` here silently dropped the legacy
+        // id-array assertion and let the directory clobber it in the route.
+        team_directory: [
           expect.objectContaining({
             teamId: 'team-cross',
             orgId: 'org-cross',

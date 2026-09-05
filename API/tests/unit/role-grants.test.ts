@@ -201,9 +201,10 @@ describe('role grants: a configured table', () => {
     expect([...resolveKnownCapabilities(customConfig)].sort()).toEqual([
       'content.write',
       'members.manage',
+      // Lexicographic: '.' (0x2E) sorts before 's' (0x73), so 'team.read' precedes 'teams.manage'.
       'organisation.manage',
-      'teams.manage',
       'team.read',
+      'teams.manage',
     ]);
     expect([...resolveKnownCapabilities(config())].sort()).toEqual([
       'members.manage',
