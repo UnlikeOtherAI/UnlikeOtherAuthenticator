@@ -1,4 +1,3 @@
-import { BillingAppKeyPurpose } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { runInTransaction } from '../../src/db/tenant-context.js';
@@ -15,15 +14,20 @@ const invitingDomain = 'client.example.com';
 const foundingDomain = 'other-product.example.com';
 
 /**
- * One organisation is usable from every UOA-integrated product, so the org's
- * origin domain is not an acceptance predicate — `acceptTeamInviteWithinTransaction`
- * says exactly that in its own comments. The scope gate at the end of that
- * function nevertheless filtered memberships by the inviting product's domain,
- * which no cross-domain invitee can satisfy: they have no membership row at all
- * until this very call creates one. Every such acceptance was refused with a
- * bare 401, which the mail-bound flow renders as "Invitation unavailable".
+ * Every client domain is equal. An organisation belongs to whoever founded it
+ * and is usable from every UOA-integrated product, so the organisation's origin
+ * domain says nothing about whether an invitation into it may be accepted —
+ * which is exactly what `acceptTeamInviteWithinTransaction` has always claimed
+ * in its own comments.
+ *
+ * It nevertheless ended by filtering the invitee's memberships by the inviting
+ * product's domain. A cross-product invitee can never satisfy that: they hold
+ * no membership row anywhere until this call creates one, and the rows it
+ * creates belong to the founding product's organisation. Every such acceptance
+ * was refused with a bare 401, surfacing as "Invitation unavailable" on the
+ * mail-bound flow.
  */
-describe.skipIf(!hasDatabase)('accepting an invitation into a cross-domain organisation', () => {
+describe.skipIf(!hasDatabase)('accepting an invitation into a cross-product organisation', () => {
   let handle: Awaited<ReturnType<typeof createTestDb>>;
   const originalDatabaseUrl = process.env.DATABASE_URL;
 
@@ -46,9 +50,6 @@ describe.skipIf(!hasDatabase)('accepting an invitation into a cross-domain organ
     await handle.prisma.team.deleteMany();
     await handle.prisma.organisation.deleteMany();
     await handle.prisma.user.deleteMany();
-    await handle.prisma.billingAppKey.deleteMany();
-    await handle.prisma.billingService.deleteMany();
-    await handle.prisma.clientDomain.deleteMany();
   });
 
   const config = validateConfigFields(
@@ -58,32 +59,7 @@ describe.skipIf(!hasDatabase)('accepting an invitation into a cross-domain organ
     }),
   );
 
-  /** Make `invitingDomain` an active product with exactly one lifecycle key. */
-  async function grantSingleProductPolicy(): Promise<void> {
-    await handle.prisma.clientDomain.create({
-      data: { domain: invitingDomain, label: 'Cross domain product', status: 'active' },
-    });
-    const service = await handle.prisma.billingService.create({
-      data: { identifier: 'cross-domain-product', name: 'Cross domain product' },
-    });
-    await handle.prisma.billingAppKey.create({
-      data: {
-        serviceId: service.id,
-        purpose: BillingAppKeyPurpose.CUSTOMER_LIFECYCLE,
-        name: 'Cross domain acceptance test',
-        keyPrefix: 'uoa_xdomain_test',
-        secretDigest: 'b'.repeat(64),
-        actorIssuer: `https://${invitingDomain}`,
-        actorAudience: 'https://authentication.example.com/billing',
-        actorKeyId: 'cross-domain-key',
-        actorPublicJwk: {},
-        // A CUSTOMER_LIFECYCLE key must carry at least one return origin.
-        checkoutReturnOrigins: [`https://${invitingDomain}`],
-      },
-    });
-  }
-
-  async function seedInvite(): Promise<{ inviteId: string; userId: string; teamId: string }> {
+  async function seedInvite(options?: { tombstonedMembership?: boolean }) {
     const owner = await handle.prisma.user.create({
       data: { email: 'owner@example.com', userKey: 'owner@example.com' },
       select: { id: true },
@@ -93,8 +69,6 @@ describe.skipIf(!hasDatabase)('accepting an invitation into a cross-domain organ
       select: { id: true },
     });
     const org = await handle.prisma.organisation.create({
-      // Founded through the other product, exactly like an org created in one
-      // product and then used from another.
       data: { domain: foundingDomain, name: 'Shared Org', slug: 'shared-org', ownerId: owner.id },
       select: { id: true },
     });
@@ -108,6 +82,16 @@ describe.skipIf(!hasDatabase)('accepting an invitation into a cross-domain organ
     await handle.prisma.teamMember.create({
       data: { teamId: team.id, userId: owner.id, teamRole: 'owner' },
     });
+
+    if (options?.tombstonedMembership) {
+      await handle.prisma.orgMember.create({
+        data: { orgId: org.id, userId: invitee.id, role: 'member', status: 'REMOVED' },
+      });
+      await handle.prisma.teamMember.create({
+        data: { teamId: team.id, userId: invitee.id, teamRole: 'member', status: 'REMOVED' },
+      });
+    }
+
     const invite = await handle.prisma.teamInvite.create({
       data: {
         orgId: org.id,
@@ -120,7 +104,7 @@ describe.skipIf(!hasDatabase)('accepting an invitation into a cross-domain organ
       },
       select: { id: true },
     });
-    return { inviteId: invite.id, userId: invitee.id, teamId: team.id };
+    return { inviteId: invite.id, userId: invitee.id, teamId: team.id, orgId: org.id };
   }
 
   const accept = (inviteId: string, userId: string) =>
@@ -131,29 +115,32 @@ describe.skipIf(!hasDatabase)('accepting an invitation into a cross-domain organ
         userId,
         config,
         now: new Date(),
-        // The default admin client resolves from the ambient DATABASE_URL, which
-        // is not this test's isolated schema.
-        scopeDeps: { crossProductPrisma: tx, policyPrisma: tx },
       }),
     );
 
-  it('joins the invitee when the inviting product maps to one active service', async () => {
-    await grantSingleProductPolicy();
-    const { inviteId, userId, teamId } = await seedInvite();
+  it('joins the invitee, whichever product founded the organisation', async () => {
+    const { inviteId, userId, teamId, orgId } = await seedInvite();
 
-    await expect(accept(inviteId, userId)).resolves.toMatchObject({ teamId });
+    await expect(accept(inviteId, userId)).resolves.toMatchObject({ orgId, teamId });
 
-    const membership = await handle.prisma.teamMember.findFirst({
-      where: { teamId, userId },
-      select: { status: true },
-    });
-    expect(membership?.status).toBe('ACTIVE');
+    const [teamMembership, orgMembership] = await Promise.all([
+      handle.prisma.teamMember.findFirst({
+        where: { teamId, userId },
+        select: { status: true },
+      }),
+      handle.prisma.orgMember.findFirst({
+        where: { orgId, userId },
+        select: { status: true },
+      }),
+    ]);
+    expect(teamMembership?.status).toBe('ACTIVE');
+    expect(orgMembership?.status).toBe('ACTIVE');
   });
 
-  it('still refuses when the inviting domain has no single-product mapping', async () => {
-    const { inviteId, userId } = await seedInvite();
+  it('still refuses a membership that was removed, rather than reactivating it', async () => {
+    const { inviteId, userId } = await seedInvite({ tombstonedMembership: true });
 
-    // No client domain, no lifecycle key: the relaxation is policy-gated, not free.
+    // Dropping the domain comparison must not weaken the tombstone rule.
     await expect(accept(inviteId, userId)).rejects.toMatchObject({ statusCode: 401 });
   });
 });

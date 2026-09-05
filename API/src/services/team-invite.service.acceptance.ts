@@ -14,8 +14,8 @@ import {
 } from './team.service.base.js';
 import { assertTeamInviteTransition } from './team-invite-state-machine.js';
 import {
-  assertActiveClientTeamScope,
-  lockAndAssertActiveClientTeamScope,
+  assertActiveTeamMembership,
+  lockAndAssertActiveTeamMembership,
   lockTeamMembershipRows,
 } from './team-scope.service.js';
 
@@ -25,16 +25,6 @@ export async function acceptTeamInviteWithinTransaction(params: {
   userId: string;
   config: ClientConfig;
   now: Date;
-  /**
-   * Cross-product membership and the single-product policy are read outside the
-   * caller's transaction, on the BYPASSRLS client, and default to it. Tests
-   * provisioned into an isolated schema pass their own client, because the
-   * default one is resolved once from the ambient environment.
-   */
-  scopeDeps?: {
-    crossProductPrisma?: Parameters<typeof lockAndAssertActiveClientTeamScope>[1]['crossProductPrisma'];
-    policyPrisma?: Parameters<typeof lockAndAssertActiveClientTeamScope>[1]['policyPrisma'];
-  };
 }): Promise<{ orgId: string; teamId: string }> {
   const invite = await params.prisma.teamInvite.findUnique({
     where: { id: params.teamInviteId },
@@ -76,14 +66,13 @@ export async function acceptTeamInviteWithinTransaction(params: {
 
   if (invite.acceptedAt) {
     if (invite.acceptedUserId === params.userId) {
-      await lockAndAssertActiveClientTeamScope(
+      await lockAndAssertActiveTeamMembership(
         {
           userId: params.userId,
-          domain: params.config.domain,
           orgId: invite.orgId,
           teamId: invite.teamId,
         },
-        { prisma: params.prisma, ...params.scopeDeps },
+        { prisma: params.prisma },
       );
       return { orgId: invite.orgId, teamId: invite.teamId };
     }
@@ -197,21 +186,20 @@ export async function acceptTeamInviteWithinTransaction(params: {
   // reactivate. New rows are ACTIVE by default; every existing row must already
   // be ACTIVE at both organisation and team levels before the invite is marked.
   //
-  // Client/product-aware, because the paragraph above is only true if it is: an
-  // organisation founded through one product and invited into through another
-  // has no membership row on the inviting product's domain, and the plain
-  // domain-scoped assertion refused every such acceptance with a bare 401.
-  // The exact ACTIVE organisation and team membership requirement is unchanged;
-  // only the domain co-location is relaxed, and only under an explicit
-  // single-product policy.
-  await assertActiveClientTeamScope(
+  // Deliberately domain-agnostic, because the paragraph at the top of this
+  // function is only true if it is: an organisation founded through one product
+  // and invited into through another has no membership row on the inviting
+  // product's domain, so a domain-scoped assertion refused every such
+  // acceptance with a bare 401. The invitation itself is the authority here —
+  // minted for, and verified against, the issuing product's domain — and the
+  // ACTIVE requirement above is what this call still enforces.
+  await assertActiveTeamMembership(
     {
       userId: params.userId,
-      domain: params.config.domain,
       orgId: invite.orgId,
       teamId: invite.teamId,
     },
-    { prisma: params.prisma, ...params.scopeDeps },
+    { prisma: params.prisma },
   );
 
   await params.prisma.teamInvite.update({
