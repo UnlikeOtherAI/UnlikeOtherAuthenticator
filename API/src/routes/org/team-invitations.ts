@@ -21,7 +21,6 @@ import {
   resendTeamInvite,
   revokeTeamInvite,
 } from '../../services/team-invite.service.js';
-import { normalizeDomain } from '../../utils/domain.js';
 import { AppError } from '../../utils/errors.js';
 
 import {
@@ -270,7 +269,6 @@ export function registerTeamInvitationRoutes(app: FastifyInstance): void {
       ],
     },
     async (request, reply) => {
-      const { domain } = parseDomainContext(request);
       const config = requireVerifiedConfig(request);
       const orgId = getOrgIdFromParams(request.params);
       const teamId = getTeamIdFromParams(request.params);
@@ -288,12 +286,13 @@ export function registerTeamInvitationRoutes(app: FastifyInstance): void {
             org: { select: { domain: true } },
           },
         });
-        if (
-          !invite ||
-          invite.orgId !== orgId ||
-          invite.teamId !== teamId ||
-          normalizeDomain(invite.org.domain) !== domain
-        ) {
+        // The organisation's own domain is deliberately not compared with the
+        // calling product's: every client domain is equal, and one organisation
+        // is usable from every UOA-integrated product. What binds this call is
+        // the exact invitation named in the path, its org/team agreeing with
+        // the path, the tenant context the transaction runs under, and the
+        // invited address matching the accepting user inside acceptance.
+        if (!invite || invite.orgId !== orgId || invite.teamId !== teamId) {
           throw new AppError('BAD_REQUEST', 400);
         }
 

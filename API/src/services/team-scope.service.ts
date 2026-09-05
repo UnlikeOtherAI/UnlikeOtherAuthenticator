@@ -165,6 +165,54 @@ export async function assertActiveTeamScope(
 }
 
 /**
+ * Exact ACTIVE organisation and team membership, with no client domain in the
+ * question at all.
+ *
+ * Every client domain is equal: an organisation belongs to whoever founded it
+ * and is usable from every UOA-integrated product, so which product is asking
+ * says nothing about whether this person is a member of this team. Only the
+ * membership rows decide, and DEACTIVATED/REMOVED rows are tombstones that
+ * still refuse.
+ *
+ * Callers that must additionally decide *which* teams a product may offer or
+ * select keep using the client/product-aware assertions below — this one is for
+ * the places where a capability, such as an invitation, has already established
+ * the right to act on one exact team.
+ */
+export async function assertActiveTeamMembership(
+  params: {
+    userId: string;
+    orgId?: string | null;
+    teamId?: string | null;
+  },
+  deps: { prisma: TeamScopePrisma },
+): Promise<void> {
+  if (
+    !(await activeTeamScopeExists({ ...params, allowCrossDomain: true, domain: '' }, deps))
+  ) {
+    rejectTeamScope();
+  }
+}
+
+/** Lock the exact membership rows, then apply {@link assertActiveTeamMembership}. */
+export async function lockAndAssertActiveTeamMembership(
+  params: {
+    userId: string;
+    orgId?: string | null;
+    teamId?: string | null;
+  },
+  deps: { prisma: TeamScopePrisma & TeamLockPrisma },
+): Promise<void> {
+  const orgId = params.orgId ?? undefined;
+  const teamId = params.teamId ?? undefined;
+  if (!orgId && !teamId) return;
+  if (!orgId || !teamId) rejectTeamScope();
+
+  await lockTeamMembershipRows({ userId: params.userId, orgId, teamId }, deps);
+  await assertActiveTeamMembership(params, deps);
+}
+
+/**
  * Validate a selected team against the client domain first. A cross-domain
  * retry is permitted only for one unambiguous, active UOA product mapping and
  * still requires exact ACTIVE organisation and team memberships.
