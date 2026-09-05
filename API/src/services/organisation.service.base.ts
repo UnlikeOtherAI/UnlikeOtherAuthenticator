@@ -1,4 +1,3 @@
-import { randomBytes } from 'node:crypto';
 import { Prisma, PrismaClient, type MembershipStatus } from '@prisma/client';
 
 import type { OrgActorProvenance } from './org-audit-log.service.js';
@@ -12,6 +11,13 @@ import {
 import { getAppLogger } from '../utils/app-logger.js';
 import { normalizeDomain } from '../utils/domain.js';
 import { AppError } from '../utils/errors.js';
+import {
+  checkSlug,
+  deriveSlugBase,
+  isReservedLabel,
+  randomSlugSuffix,
+  withSlugSuffix,
+} from '@unlikeotherai/slug';
 import { parseIconUrl } from '../utils/http-url.js';
 import {
   writeOrgAuditLog,
@@ -131,20 +137,11 @@ export function teamAvatarImageUrl(domain: string, teamId: string): string {
   return domainTeamAvatarImageUrl({ baseUrl: avatarImageBaseUrl(), domain, teamId });
 }
 
-const RESERVED_ORG_SLUGS = new Set([
-  'admin',
-  'api',
-  'internal',
-  'me',
-  'system',
-  'settings',
-  'new',
-  'default',
-]);
-
-const SLUG_ALLOWED_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
+// The label rules — length, charset, reserved words — live in
+// `@unlikeotherai/slug`, because an organisation slug and a team slug are both
+// DNS labels in the same hostname and may not disagree about what is legal.
 const SLUG_RANDOM_SUFFIX_MAX_ATTEMPTS = 10;
-const SLUG_SUFFIX_LENGTH = 4;
+const ORG_SLUG_FALLBACK = 'org';
 
 /**
  * Resolve who is calling an `/org/*` service, and refuse to guess.
@@ -200,33 +197,6 @@ export function isP2002Error(err: unknown): err is Prisma.PrismaClientKnownReque
 
 export function isP2003Error(err: unknown): err is Prisma.PrismaClientKnownRequestError {
   return err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2003';
-}
-
-function normalizeSlugBase(name: string): string {
-  const normalized = name
-    .trim()
-    .toLowerCase()
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^\x20-\x7e]/g, '');
-
-  return normalized
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-+/, '')
-    .replace(/-+$/, '');
-}
-
-function randomSuffix(): string {
-  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-  const bytes = randomBytes(SLUG_SUFFIX_LENGTH);
-
-  let out = '';
-  for (const byte of bytes) {
-    out += chars[byte % chars.length];
-  }
-
-  return out;
 }
 
 export function ensureOrgName(name: string): string {
@@ -325,28 +295,61 @@ export function toMemberRecord(
   };
 }
 
+/**
+ * Derive an available organisation slug from an organisation's name.
+ *
+ * Forgiving, deliberately, and the counterpart to `ensureAvailableOrgSlug`
+ * below: a slug the product is *inventing* must always produce something, but
+ * a slug a person *chose* is refused with a reason. Derivation used to reject —
+ * an organisation named "团队" normalised to the empty string and 400'd, and one
+ * named "API" was refused for holding a reserved word — which meant a legal
+ * company name could not be registered because of a label nobody had asked to
+ * see. Now the name is rendered as best it can be and disambiguated, exactly as
+ * the team path does, and whoever cares about the address changes it.
+ */
 export function deriveSlugWithValidation(
   domain: string,
   prisma: Pick<OrgServicePrisma, 'organisation'>,
   name: string,
   existingSlugToIgnore?: string,
 ): Promise<string> {
-  const base = normalizeSlugBase(name);
-  if (base.length > 120) {
-    const trimmed = base.slice(0, 120);
-    const final = trimmed.replace(/-+$/g, '');
-    if (final.length < 2) throw new AppError('BAD_REQUEST', 400);
-    return resolveUniqueSlugWithCollisionRetries(domain, prisma, final, existingSlugToIgnore);
-  }
-
-  if (base.length < 2 || base.length > 120 || !SLUG_ALLOWED_RE.test(base)) {
-    throw new AppError('BAD_REQUEST', 400);
-  }
-  if (RESERVED_ORG_SLUGS.has(base)) {
-    throw new AppError('BAD_REQUEST', 400);
-  }
-
+  const base = deriveSlugBase(name, { fallback: ORG_SLUG_FALLBACK });
   return resolveUniqueSlugWithCollisionRetries(domain, prisma, base, existingSlugToIgnore);
+}
+
+/**
+ * Validate an explicitly chosen organisation slug and confirm it is free.
+ *
+ * Uniqueness is per client domain, matching `@@unique([domain, slug])`, because
+ * the organisation slug is the tenant's own DNS label under that product's base
+ * domain — two organisations on one domain cannot share it the way two teams
+ * inside one organisation can.
+ */
+export async function ensureAvailableOrgSlug(params: {
+  domain: string;
+  prisma: Pick<OrgServicePrisma, 'organisation'>;
+  slug: string;
+  existingSlugToIgnore?: string;
+  reservedLabels?: Iterable<string>;
+}): Promise<string> {
+  const result = checkSlug(params.slug, { reserved: params.reservedLabels });
+  if (!result.ok) {
+    throw new AppError('BAD_REQUEST', 400, `ORG_SLUG_${result.reason.toUpperCase()}`);
+  }
+
+  if (result.slug === params.existingSlugToIgnore?.trim()) {
+    return result.slug;
+  }
+
+  const existing = await params.prisma.organisation.findFirst({
+    where: { domain: params.domain, slug: result.slug },
+    select: { id: true },
+  });
+  if (existing) {
+    throw new AppError('BAD_REQUEST', 400, 'ORG_SLUG_TAKEN');
+  }
+
+  return result.slug;
 }
 
 export async function resolveUniqueSlugWithCollisionRetries(
@@ -354,6 +357,7 @@ export async function resolveUniqueSlugWithCollisionRetries(
   prisma: Pick<OrgServicePrisma, 'organisation'>,
   base: string,
   existingSlugToIgnore?: string,
+  reservedLabels?: Iterable<string>,
 ): Promise<string> {
   const normalizedIgnore = existingSlugToIgnore?.trim();
   let candidate = base;
@@ -363,14 +367,18 @@ export async function resolveUniqueSlugWithCollisionRetries(
       return candidate;
     }
 
-    const exists = await prisma.organisation.findFirst({
-      where: { domain, slug: candidate },
-      select: { id: true },
-    });
-    if (!exists) return candidate;
+    // A reserved label is unavailable in exactly the way a taken one is, so it
+    // takes the same path: suffix and try again, rather than failing a
+    // creation whose only fault is the company's name.
+    const unavailable =
+      isReservedLabel(candidate, reservedLabels) ||
+      (await prisma.organisation.findFirst({
+        where: { domain, slug: candidate },
+        select: { id: true },
+      })) !== null;
+    if (!unavailable) return candidate;
 
-    const basePart = base.slice(0, Math.max(1, 120 - (1 + SLUG_SUFFIX_LENGTH)));
-    candidate = `${basePart}-${randomSuffix()}`.replace(/-+$/g, '');
+    candidate = withSlugSuffix(base, randomSlugSuffix());
   }
 
   throw new AppError('INTERNAL', 500, 'ORG_SLUG_COLLISION_RETRY_EXHAUSTED');
