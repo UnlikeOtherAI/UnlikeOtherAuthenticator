@@ -455,12 +455,27 @@ describe.skipIf(!hasDatabase)('user-facing /org organisations and members', () =
     expect(meRes.statusCode).toBe(200);
     const meBody = meRes.json() as { ok: true; org?: OrgMeRecord };
     expect(meBody.ok).toBe(true);
+    // `/org/me` returns the enriched sidebar directory, not bare ids — the
+    // documented shape is `{ teamId, orgId, name, slug, orgName, orgSlug,
+    // iconUrl, avatarImageUrl, role, lastLoginAt }` (schema.org.ts). The bare-id
+    // form belongs to the access token's `org.teams` claim, which is a
+    // different thing; this assertion had not moved with the enrichment.
     expect(meBody.org).toMatchObject({
       org_id: org.id,
       org_role: 'owner',
-      teams: [defaultTeam!.id],
     });
-    expect(meBody.org?.team_roles[defaultTeam!.id]).toBe('member');
+    expect(meBody.org?.teams).toHaveLength(1);
+    expect(meBody.org?.teams?.[0]).toMatchObject({
+      teamId: defaultTeam!.id,
+      orgId: org.id,
+      orgSlug: org.slug,
+      role: 'owner',
+    });
+    // Founding an organisation makes you the steward of its first team.
+    // This asserted 'member', which is the defect `resolveTeamCreatorTeamRole`
+    // was introduced to fix — the founder came out org owner and team member,
+    // holding no capability over the only team they had just created.
+    expect(meBody.org?.team_roles[defaultTeam!.id]).toBe('owner');
 
     await app.close();
   });

@@ -165,11 +165,29 @@ describe.skipIf(!hasDatabase)('/org list cursor pagination with created_at ties'
     });
   }
 
-  async function createOrg(ownerId: string, slug = 'acme'): Promise<{ id: string }> {
-    return await handle!.prisma.organisation.create({
+  /**
+   * An organisation plus its owner's membership row.
+   *
+   * The membership is not decoration: `createOrganisation` writes one for the
+   * founder, and the `/org/*` roster reads re-resolve live membership rather
+   * than trusting a token's claims. An organisation whose owner has no
+   * OrgMember row is a shape production never produces, and reading its
+   * members is correctly refused with 403 — which is what this fixture used to
+   * build.
+   */
+  async function createOrg(
+    ownerId: string,
+    slug = 'acme',
+  ): Promise<{ id: string; ownerMemberId: string }> {
+    const org = await handle!.prisma.organisation.create({
       data: { domain: DOMAIN, name: `Acme ${slug}`, slug, ownerId },
       select: { id: true },
     });
+    const ownerMember = await handle!.prisma.orgMember.create({
+      data: { orgId: org.id, userId: ownerId, role: 'owner' },
+      select: { id: true },
+    });
+    return { id: org.id, ownerMemberId: ownerMember.id };
   }
 
   it('returns every organisation exactly once when all rows share created_at', async () => {
@@ -201,11 +219,9 @@ describe.skipIf(!hasDatabase)('/org list cursor pagination with created_at ties'
 
   it('returns every team exactly once when all rows share created_at', async () => {
     const owner = await createOwner();
+    // createOrg gives the owner their membership row; listTeams authorizes the
+    // actor as an ACTIVE org member before listing.
     const org = await createOrg(owner.id, 'teams-tie');
-    // listTeams authorizes the actor as an ACTIVE org member before listing.
-    await handle!.prisma.orgMember.create({
-      data: { orgId: org.id, userId: owner.id, role: 'owner' },
-    });
 
     const created: string[] = [];
     for (let i = 0; i < TIE_COUNT; i += 1) {
@@ -236,7 +252,8 @@ describe.skipIf(!hasDatabase)('/org list cursor pagination with created_at ties'
     const owner = await createOwner();
     const org = await createOrg(owner.id, 'members-tie');
 
-    const created: string[] = [];
+    // The owner's own membership is part of the roster the walk will return.
+    const created: string[] = [org.ownerMemberId];
     for (let i = 0; i < TIE_COUNT; i += 1) {
       const user = await createOwner(`tied-member-${i}@example.com`);
       const member = await handle!.prisma.orgMember.create({

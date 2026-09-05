@@ -107,11 +107,22 @@ describe.skipIf(!hasDatabase)('GET /domain/debug', () => {
       },
     });
 
+    // `client_id` is the client-domain ROW id, never the bearer.
+    // `domain-hash-auth.ts` declares the hash "must never be persisted, logged,
+    // put in an audit row, or returned in a response", and the route obeys that.
+    // This assertion used to require the opposite — it pinned the exact leak the
+    // middleware forbids — so it is corrected here rather than the route.
+    const clientDomain = await handle!.prisma.clientDomain.findFirstOrThrow({
+      where: { domain },
+      select: { id: true },
+    });
+
     expect(res.statusCode).toBe(200);
+    expect(clientDomain.id).not.toBe(domainHash);
     expect(res.json()).toEqual({
       ok: true,
       domain,
-      client_id: domainHash,
+      client_id: clientDomain.id,
       superuser: {
         user_id: userId,
         email: 'admin@example.com',

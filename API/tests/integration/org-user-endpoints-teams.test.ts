@@ -59,7 +59,16 @@ describe.skipIf(!hasDatabase)('user-facing /org team CRUD and membership', () =>
   it('manages teams, team pagination, and team memberships', async () => {
     const domain = 'org-teams.example.com';
     const orgConfigUrl = 'https://org-teams.example.com/auth-config';
-    const configJwt = await createSignedConfigJwt(process.env.SHARED_SECRET!, { allow_user_create_org: true }, domain);
+    // `backend_org_management` is what lets a domain-hash-only caller use the
+    // bulk invite contract. `acceptDomainBackendCaller` requires the domain to
+    // have opted in through its signed config, and this test drives that path
+    // (the invitations route serves a single-invite contract to a user
+    // credential and the bulk one to the proven backend).
+    const configJwt = await createSignedConfigJwt(
+      process.env.SHARED_SECRET!,
+      { allow_user_create_org: true, backend_org_management: true },
+      domain,
+    );
     // A fresh Response per call: Response bodies are single-use, and multiple
     // requests (plus app startup) fetch the config through this stub.
     vi.stubGlobal('fetch', vi.fn(async () => new Response(configJwt, { status: 200 })));

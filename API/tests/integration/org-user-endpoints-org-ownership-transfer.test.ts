@@ -100,6 +100,19 @@ describe.skipIf(!hasDatabase)('organisation owner transfer before sole-owner rem
       },
     });
 
+    const secondOwnerToken = await signAccessToken({
+      subject: secondOwner.id,
+      domain,
+      secret: process.env.SHARED_SECRET!,
+      issuer: process.env.AUTH_SERVICE_IDENTIFIER!,
+      org: {
+        orgId: org.id,
+        orgRole: 'owner',
+        teams: [],
+        team_roles: {},
+      },
+    });
+
     const addSecondOwner = await app.inject({
       method: 'POST',
       url: `/org/organisations/${org.id}/members?domain=${encodeURIComponent(domain)}&config_url=${encodeURIComponent(orgConfigUrl)}`,
@@ -144,12 +157,28 @@ describe.skipIf(!hasDatabase)('organisation owner transfer before sole-owner rem
     });
     expect(removeOriginalOwner.statusCode).toBe(200);
 
-    const membersAfterTransfer = await app.inject({
+    // Read the roster as the person who is still in the organisation. This
+    // used to pass `ownerToken` — the token of the member removed two calls
+    // earlier — and expect 200. It is 403 now because the roster re-resolves
+    // live membership rather than trusting the token's claims, so a removed
+    // member can no longer read the org they were removed from. The 403 is the
+    // correct answer; the test was asserting the old, laxer behaviour.
+    const removedOwnerRead = await app.inject({
       method: 'GET',
       url: `/org/organisations/${org.id}/members?domain=${encodeURIComponent(domain)}&config_url=${encodeURIComponent(orgConfigUrl)}&limit=10`,
       headers: {
         authorization: `Bearer ${domainHash}`,
         'x-uoa-access-token': `Bearer ${ownerToken}`,
+      },
+    });
+    expect(removedOwnerRead.statusCode).toBe(403);
+
+    const membersAfterTransfer = await app.inject({
+      method: 'GET',
+      url: `/org/organisations/${org.id}/members?domain=${encodeURIComponent(domain)}&config_url=${encodeURIComponent(orgConfigUrl)}&limit=10`,
+      headers: {
+        authorization: `Bearer ${domainHash}`,
+        'x-uoa-access-token': `Bearer ${secondOwnerToken}`,
       },
     });
     expect(membersAfterTransfer.statusCode).toBe(200);
