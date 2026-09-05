@@ -52,6 +52,25 @@ export const domainEndpoints: EndpointSchema[] = [
   },
   {
     method: 'GET',
+    path: '/domain/organisations/resolve',
+    description:
+      "Resolve a tenant's own hostname label to its organisation, with the name and icon a branded landing page needs.",
+    auth: 'domain hash bearer token',
+    query: {
+      domain: 'string (required)',
+      org: 'string (required) — the organisation slug, i.e. the tenant label',
+    },
+    response: {
+      org_id: 'string',
+      org_name: 'string',
+      org_slug: 'string',
+      org_icon_url: 'string | null — the organisation mark, null when unset',
+    },
+    notes:
+      'The organisation ONLY. Its teams are deliberately not listed: the label is guessable, and a product must not turn a guessable hostname into a directory of a customer\'s internal structure. Show a person the teams they belong to from their own membership, after they authenticate. Resolving still discloses that an organisation of this name exists on this domain, which is inherent in giving a tenant a public address.',
+  },
+  {
+    method: 'GET',
     path: '/domain/slug-available',
     description:
       'Whether a slug may be taken, for the address field in a create dialog. Answers with a reason rather than a bare boolean.',

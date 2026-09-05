@@ -5,6 +5,7 @@ import { requireDomainHashAuthForDomainQuery } from '../../middleware/domain-has
 import {
   checkOrgSlugAvailability,
   checkTeamSlugAvailability,
+  resolveOrgHostname,
   resolveTeamHostname,
 } from '../../services/team-hostname.service.js';
 
@@ -27,6 +28,14 @@ const ResolveQuerySchema = z
     config_url: z.string().trim().min(1).max(2048).optional(),
     org: z.string().trim().min(1).max(63),
     team: z.string().trim().min(1).max(63),
+  })
+  .strict();
+
+const ResolveOrgQuerySchema = z
+  .object({
+    domain: z.string().trim().min(1),
+    config_url: z.string().trim().min(1).max(2048).optional(),
+    org: z.string().trim().min(1).max(63),
   })
   .strict();
 
@@ -74,6 +83,32 @@ export function registerDomainTeamHostnameRoutes(app: FastifyInstance): void {
         team_id: resolved.teamId,
         team_name: resolved.teamName,
         team_slug: resolved.teamSlug,
+      });
+    },
+  );
+
+  app.get(
+    '/domain/organisations/resolve',
+    { preHandler: [requireDomainHashAuthForDomainQuery] },
+    async (request, reply) => {
+      const { domain, org } = ResolveOrgQuerySchema.parse(request.query);
+
+      const resolved = await resolveOrgHostname({ domain, orgSlug: org });
+      if (!resolved) {
+        reply.status(404).send({ ok: false, error: 'NOT_FOUND' });
+        return;
+      }
+
+      // Deliberately the organisation alone. Its teams are not listed here: a
+      // guessable hostname must not become a directory of a customer's internal
+      // structure. A product shows the teams a person belongs to only once that
+      // person is authenticated, from their own membership.
+      reply.status(200).send({
+        ok: true,
+        org_id: resolved.orgId,
+        org_name: resolved.orgName,
+        org_slug: resolved.orgSlug,
+        org_icon_url: resolved.orgIconUrl,
       });
     },
   );
