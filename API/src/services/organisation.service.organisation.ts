@@ -8,6 +8,7 @@ import {
   assertDatabaseEnabled,
   auditOrg,
   deriveSlugWithValidation,
+  ensureAvailableOrgSlug,
   getOrganisationMember,
   ensureOrgName,
   isP2002Error,
@@ -132,6 +133,8 @@ export async function createOrganisation(
     name: string;
     /** Optional default-team visibility for the hosted first-team continuation. */
     defaultTeamJoinPolicy?: string;
+    /** Chosen tenant address. Omitted derives one from the name. */
+    slug?: string;
     ownerId: string;
     config: ClientConfig;
     actorUserId?: string;
@@ -193,7 +196,13 @@ export async function createOrganisation(
       if (!ownerDomainRole) throw new AppError('BAD_REQUEST', 400);
     }
 
-    const slug = await deriveSlugWithValidation(domain, tx, name);
+    // A chosen address is validated and refused with a reason; only a derived
+    // one is disambiguated with a suffix. Accepting `slug` here and deriving
+    // anyway would be worse than not accepting it at all.
+    const slug =
+      params.slug === undefined
+        ? await deriveSlugWithValidation(domain, tx, name)
+        : await ensureAvailableOrgSlug({ domain, prisma: tx, slug: params.slug });
     const createdOrg = await tx.organisation.create({
       data: {
         domain,
@@ -314,6 +323,8 @@ export async function updateOrganisation(
     config: ClientConfig;
     memberInvites?: string;
     iconUrl?: string | null;
+    /** Deliberate re-slug. Omitted leaves the tenant's address untouched. */
+    slug?: string;
   },
   deps?: OrgServiceDeps,
 ): Promise<OrganisationRecord> {
@@ -335,7 +346,21 @@ export async function updateOrganisation(
     requireOrgCapability(params.config, 'organisation.manage', actorMembership?.role);
   }
 
-  const slug = await deriveSlugWithValidation(org.domain, prisma, name, org.slug);
+  // A rename does NOT move the slug. The organisation slug is the tenant's DNS
+  // label (Docs/brief.md, "Tenant Subdomain Contract"), so re-deriving it here
+  // silently relocated every tenant hostname the moment somebody corrected a
+  // typo in their company name — links, bookmarks and any product routing on
+  // `active.tenantSlug` broke, with nothing in the request asking for it.
+  // Changing the address is now its own deliberate act: pass `slug`.
+  const slug =
+    params.slug === undefined
+      ? org.slug
+      : await ensureAvailableOrgSlug({
+          domain: org.domain,
+          prisma,
+          slug: params.slug,
+          existingSlugToIgnore: org.slug,
+        });
   const updated = await prisma.organisation.update({
     where: { id: org.id },
     data: {

@@ -279,9 +279,39 @@ export type TeamJoinPolicy = 'HIDDEN' | 'INVITE_ONLY' | 'OPEN_TO_ORG';
 export type CreateOrganisationRequest = {
   login_token: string;
   name: string;
+  /**
+   * The address the person chose. Omitted lets the server derive one from the
+   * name; supplied, the server validates it and refuses with a reason rather
+   * than quietly storing something else.
+   */
+  slug?: string;
   /** Optional for compatibility; the server defaults to INVITE_ONLY when omitted. */
   join_policy?: TeamJoinPolicy;
   remember_me?: boolean;
+};
+
+/** Why an address cannot be used, as the server names it. */
+export type SlugUnavailableReason =
+  | 'taken'
+  | 'too_short'
+  | 'too_long'
+  | 'charset'
+  | 'double_hyphen'
+  | 'all_digits'
+  | 'reserved';
+
+export type SlugAvailabilityRequest = {
+  login_token: string;
+  slug: string;
+  /** Present for a team address; absent asks about a new organisation's own. */
+  org_id?: string;
+};
+
+export type SlugAvailabilityResponse = {
+  ok: true;
+  available: boolean;
+  slug?: string;
+  reason?: SlugUnavailableReason;
 };
 
 /** `/auth/create-team` adds the org the team belongs to — that's the level above. */
@@ -294,6 +324,23 @@ export function selectTeam(
 ): Promise<ApiResult<AuthFlowResponse>> {
   return postJson<SelectTeamRequest, AuthFlowResponse>(
     '/auth/select-team',
+    body,
+    buildAuthFlowQuery(query),
+  );
+}
+
+/**
+ * POST /auth/slug-available — whether an address may be taken.
+ *
+ * Verifies the login capability without consuming it, so the field can ask
+ * repeatedly while somebody types.
+ */
+export function checkSlugAvailability(
+  body: SlugAvailabilityRequest,
+  query: AuthFlowQuery,
+): Promise<ApiResult<SlugAvailabilityResponse>> {
+  return postJson<SlugAvailabilityRequest, SlugAvailabilityResponse>(
+    '/auth/slug-available',
     body,
     buildAuthFlowQuery(query),
   );

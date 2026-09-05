@@ -28,7 +28,7 @@ can be retried; \`session-choices\` and invite decline validate but do not consu
 2. \`POST /auth/verify-code?config_url=...\` — body \`{ email, code }\`. IP + email rate-limited; wrong
    code, expired code, no code, and a dead (5-attempt) code all return the identical generic auth
    error. On success:
-   - \`team_selection: "auto"\` → \`{ login_token, teams: [{ teamId, orgId, name, slug, role, iconUrl, avatarImageUrl, orgName }], pending_invites: [{ inviteId, teamName, invitedBy }], can_create_org, creatable_orgs }\`.
+   - \`team_selection: "auto"\` → \`{ login_token, teams: [{ teamId, orgId, name, slug, role, iconUrl, avatarImageUrl, orgName, orgSlug }], pending_invites: [{ inviteId, teamName, invitedBy }], can_create_org, creatable_orgs }\`.
    - \`team_selection: "off"\` (default) → finalizes immediately, same response shape as
      \`/auth/login\` (\`{ ok, code, redirect_to }\`, or a \`twofa_token\`/\`twofa_enroll_required\` branch —
      2FA still applies, only the chooser step is skipped). A recognized product first resolves its

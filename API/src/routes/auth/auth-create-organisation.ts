@@ -27,6 +27,10 @@ const BodySchema = z
   .object({
     login_token: z.string().min(1).max(4096),
     name: z.string().trim().min(1).max(100),
+    // The address the person chose in the dialog. Omitted derives one from the
+    // name; supplied, it is validated and refused with a reason rather than
+    // quietly rewritten.
+    slug: z.string().trim().min(2).max(63).optional(),
     // The hosted dialog only exposes these three plainly-described visibility choices. Other
     // policies remain available through the organisation management API.
     join_policy: z.enum(['HIDDEN', 'INVITE_ONLY', 'OPEN_TO_ORG']).optional(),
@@ -59,7 +63,7 @@ export function registerAuthCreateOrganisationRoute(app: FastifyInstance): void 
     '/auth/create-organisation',
     { preHandler: [selectTeamRateLimiter, configVerifier] },
     async (request, reply) => {
-      const { login_token, name, join_policy, remember_me } = BodySchema.parse(request.body);
+      const { login_token, name, slug, join_policy, remember_me } = BodySchema.parse(request.body);
       const { redirect_url, code_challenge, code_challenge_method, request_access } =
         QuerySchema.parse(request.query);
       const config = request.config;
@@ -149,6 +153,7 @@ export function registerAuthCreateOrganisationRoute(app: FastifyInstance): void 
           {
             domain: config.domain,
             name,
+            slug,
             defaultTeamJoinPolicy: join_policy,
             ownerId: lockedSession.userId,
             actorUserId: lockedSession.userId,

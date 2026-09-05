@@ -19,6 +19,16 @@ export type TeamEntry = {
   name: string;
   slug: string;
   orgName: string;
+  /**
+   * The organisation's slug — its tenant DNS label.
+   *
+   * Present so a product can build a team's address without a second lookup:
+   * a team slug is unique only inside its organisation, so it is never a
+   * hostname on its own (Docs/brief.md, "Tenant Subdomain Contract"). The
+   * picker lists teams across organisations, which is exactly where the
+   * organisation label is not already known from `active.tenantSlug`.
+   */
+  orgSlug: string;
   iconUrl: string | null;
   /** Public, always-resolving team image: uploaded → proxied iconUrl → generated. */
   avatarImageUrl: string;
@@ -102,7 +112,7 @@ export async function buildSidebarTeams(
           name: true,
           slug: true,
           iconUrl: true,
-          org: { select: { name: true } },
+          org: { select: { name: true, slug: true } },
         },
       },
     },
@@ -125,7 +135,7 @@ export async function buildSidebarTeams(
               name: true,
               slug: true,
               iconUrl: true,
-              org: { select: { name: true } },
+              org: { select: { name: true, slug: true } },
             },
           },
         },
@@ -165,6 +175,7 @@ export async function buildSidebarTeams(
     name: membership.team.name,
     slug: membership.team.slug,
     orgName: membership.team.org.name,
+    orgSlug: membership.team.org.slug,
     iconUrl: membership.team.iconUrl,
     avatarImageUrl: publicTeamAvatarImageUrl({
       baseUrl: avatarBaseUrl,

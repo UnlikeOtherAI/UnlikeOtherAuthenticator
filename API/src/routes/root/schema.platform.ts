@@ -30,6 +30,51 @@ export const baseEndpoints: EndpointSchema[] = [
 export const domainEndpoints: EndpointSchema[] = [
   {
     method: 'GET',
+    path: '/domain/teams/resolve',
+    description:
+      'Resolve a tenant hostname to ids. Hostnames are <team.slug>.<organisation.slug>.<product base domain>, so both labels are required: a team slug is unique only within its organisation and never identifies a tenant on its own.',
+    auth: 'domain hash bearer token',
+    query: {
+      domain: 'string (required)',
+      org: 'string (required) — the organisation slug, i.e. the tenant label',
+      team: 'string (required) — the team slug, read relative to that organisation',
+    },
+    response: {
+      org_id: 'string',
+      org_name: 'string',
+      org_slug: 'string',
+      team_id: 'string',
+      team_name: 'string',
+      team_slug: 'string',
+    },
+    notes:
+      'Domain-hash rather than /org/* deliberately: a product resolves a hostname before anyone has an active team, so there is no session to assert a subject from. Resolution is scoped to the calling client domain. An unknown organisation and a known organisation with an unknown team both answer the generic 404, so a tenant\'s team list is not readable from outside it.',
+  },
+  {
+    method: 'GET',
+    path: '/domain/slug-available',
+    description:
+      'Whether a slug may be taken, for the address field in a create dialog. Answers with a reason rather than a bare boolean.',
+    auth: 'domain hash bearer token',
+    query: {
+      domain: 'string (required)',
+      slug: 'string (required)',
+      scope: '"organisation" | "team" (required)',
+      org_id: 'string (required when scope=team) — availability is per organisation, never global',
+      reserved:
+        'string (optional) — comma-separated product hostnames to reserve on top of the base list',
+    },
+    response: {
+      available: 'boolean',
+      slug: 'string — the normalised label, present when available',
+      reason:
+        '"taken" | "too_short" | "too_long" | "charset" | "double_hyphen" | "all_digits" | "reserved" — present when unavailable',
+    },
+    notes:
+      'Team scope is bounded by org_id so the check cannot be used to enumerate another customer\'s team names. An invalid label is answered without touching the database.',
+  },
+  {
+    method: 'GET',
     path: '/domain/users',
     description: 'List users for a domain',
     auth: 'domain hash bearer token',

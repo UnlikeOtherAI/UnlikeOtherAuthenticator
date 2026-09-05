@@ -1330,6 +1330,47 @@ the selection/code continuation in one transaction. The scoped access token
 then carries `active.tenantSlug`, sourced from the organisation slug; consumers
 must tolerate its absence on a legacy token issued before this addition.
 
+#### Team Subdomain Clarification (2026-09)
+
+An addition to the contract above, not a change to it. Products asked whether a
+team can have a subdomain of its own. It can, and the rule that a team slug is
+never a tenant key still holds, because the team label sits **beneath** the
+organisation's:
+
+```
+<team.slug>.<organisation.slug>.<product tenant base domain>
+     e.g.  design.acme.nessie.works
+```
+
+The organisation label remains the tenant key and stays unique per client
+domain. The team label is only ever interpreted relative to an organisation
+already identified by the label to its right, which is exactly the scope
+`@@unique([org_id, slug])` guarantees. Two organisations may therefore both hold
+a `design` team, and neither may hold the tenant address of the other.
+
+A flat `<team.slug>.<base domain>` remains forbidden. It would require team
+slugs to be unique per client domain, which they are not, and making them so
+would mean machine-renaming every organisation's default team but one — the
+opposite of a label somebody chose.
+
+**Slug rules are now DNS rules.** Both labels are validated as DNS labels
+(`packages/slug`): 2–63 octets rather than 120, `[a-z0-9]` with interior
+hyphens, no doubled hyphen — which is also how every `xn--` A-label is refused
+— and no all-numeric label. Reserved words are enforced in the service rather
+than the database, because a product extends the list through its signed config
+(`hostnames.reserved_labels`) and a database constraint would freeze it.
+
+**Choosing versus deriving.** A slug the product derives from a name always
+succeeds, disambiguating a taken or reserved label with a random four-character
+suffix. A slug a person typed is validated and refused with a reason, never
+silently rewritten — handing back `acme-k4f2` to somebody who asked for `acme`
+is the failure this rule exists to prevent.
+
+**A rename does not move an address.** Renaming an organisation or a team leaves
+its slug alone; changing the address is a separate, deliberate write. Before
+this, renaming an organisation re-derived its slug, so correcting a typo in a
+company name silently relocated that tenant's hostname.
+
 ---
 
 ### 24.5 Team Semantics

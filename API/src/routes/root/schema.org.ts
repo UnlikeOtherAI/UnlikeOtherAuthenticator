@@ -15,7 +15,7 @@ export const orgEndpoints: EndpointSchema[] = [
       'org.teams':
         'array of team IDs — the legacy claim field, identical in shape to the JWT `org.teams` claim and the keys of `org.team_roles`, but reflecting current database state. For the renderable directory use `org.team_directory`.',
       'org.team_directory':
-        'array — one entry per ACTIVE team membership on this domain, or every active membership when this product is explicitly mapped to `all_active_memberships`: { teamId, orgId, name, slug, orgName, iconUrl, avatarImageUrl, role, lastLoginAt }. Each entry carries its own orgId/orgName; do not assume it belongs to the singular legacy org.org_id. avatarImageUrl is the public /teams/:teamId/avatar form (never null, no credential needed). Entries are ordered lastLoginAt DESC with nulls last, then name ASC (the sidebar order). Cross-product entries have null `lastLoginAt`.',
+        'array — one entry per ACTIVE team membership on this domain, or every active membership when this product is explicitly mapped to `all_active_memberships`: { teamId, orgId, name, slug, orgName, orgSlug, iconUrl, avatarImageUrl, role, lastLoginAt }. Each entry carries its own orgId/orgName; do not assume it belongs to the singular legacy org.org_id. avatarImageUrl is the public /teams/:teamId/avatar form (never null, no credential needed). Entries are ordered lastLoginAt DESC with nulls last, then name ASC (the sidebar order). Cross-product entries have null `lastLoginAt`.',
       'org.pending_invites':
         "array — the caller's pending invites on this domain: { inviteId, orgId, teamId, teamName, invitedBy, expiresAt }. orgId identifies the organisation to select after backend acceptance.",
     },

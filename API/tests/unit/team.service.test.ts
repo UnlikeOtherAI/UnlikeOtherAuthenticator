@@ -187,7 +187,7 @@ describe('Team service', () => {
       orgId: 'org-1',
       groupId: null,
       name: 'Engineering',
-      slug: 'engineering-2',
+      slug: 'engineering-k4f2',
       description: null,
       isDefault: false,
       createdAt: now,
@@ -205,14 +205,14 @@ describe('Team service', () => {
       { prisma },
     );
 
-    expect(team.slug).toBe('engineering-2');
-    expect(prisma.team.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          slug: 'engineering-2',
-        }),
-      }),
-    );
+    // The suffix is random, not incrementing: `engineering-2` would tell anyone
+    // who can read the hostname that exactly one other team took the name.
+    // Assert the shape, and that it is not the counter it used to be.
+    const created = prisma.team.create.mock.calls[0]?.[0] as { data: { slug: string } };
+    expect(created.data.slug).toMatch(/^engineering-[a-z0-9]{4}$/);
+    expect(created.data.slug).not.toBe('engineering-2');
+    // And the row the caller gets back is the one that was written.
+    expect(team.slug).toBe('engineering-k4f2');
   });
 
   it('rejects creating a team when org reaches max_teams_per_org', async () => {

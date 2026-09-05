@@ -228,6 +228,25 @@ const ClientConfigSchema = RequiredConfigSchema.extend({
       default_style: z.enum(['tiles', 'waves', 'rings', 'mono']).optional(),
     })
     .optional(),
+  // Tenant hostnames (Docs/brief.md, "Team Subdomain Clarification"). Absent
+  // means the product does not route tenants by hostname, which is every
+  // product until it says otherwise — the claim is additive and optional.
+  //
+  // `team_base_domain` is the product's own base, under which a team lives at
+  // `<team.slug>.<organisation.slug>.<team_base_domain>`; UOA stores no
+  // hostnames of its own, because the labels belong to UOA and the domain
+  // belongs to the product.
+  //
+  // `reserved_labels` are the product's hostnames — its api, app, www — which
+  // no tenant may take. They are added to this service's base list and can
+  // never subtract from it, so a product cannot free `mx` for a customer and
+  // lose its own mail.
+  hostnames: z
+    .object({
+      team_base_domain: z.string().trim().min(1).max(253).optional(),
+      reserved_labels: z.array(z.string().trim().min(1).max(63)).max(200).optional(),
+    })
+    .optional(),
   session: z
     .object({
       remember_me_enabled: z.boolean().default(true),

@@ -114,6 +114,7 @@ describe.skipIf(!hasDatabase)('GET /domain/debug', () => {
     });
 
     expect(res.statusCode).toBe(200);
+    expect(clientDomain.id).not.toBe(domainHash);
     expect(res.json()).toEqual({
       ok: true,
       domain,

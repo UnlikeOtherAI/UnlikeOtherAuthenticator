@@ -10,19 +10,6 @@ import {
   updateOrganisation,
 } from '../../src/services/organisation.service.organisation.js';
 
-const { randomBytes } = vi.hoisted(() => ({
-  randomBytes: vi.fn(),
-}));
-
-vi.mock('node:crypto', async () => {
-  const actual = await vi.importActual<typeof import('node:crypto')>('node:crypto');
-
-  return {
-    ...actual,
-    randomBytes,
-  };
-});
-
 const now = new Date('2026-02-15T00:00:00.000Z');
 
 function makePrismaMock() {
@@ -101,8 +88,6 @@ describe('Organisation service: organisation CRUD', () => {
     process.env.SHARED_SECRET = 'test-shared-secret-with-enough-length';
     process.env.AUTH_SERVICE_IDENTIFIER = 'uoa-auth-service';
     process.env.DATABASE_URL = 'postgres://example.invalid/db';
-    randomBytes.mockReset();
-    randomBytes.mockReturnValue(Buffer.from([0x00, 0x00, 0x00, 0x00]));
   });
 
   afterAll(() => {
@@ -309,21 +294,18 @@ describe('Organisation service: organisation CRUD', () => {
     );
   });
 
-  it('regenerates slug with random suffix when the base slug collides', async () => {
+  it('leaves the tenant address alone when the organisation is only renamed', async () => {
     const prisma = makePrismaMock();
 
-    prisma.organisation.findFirst
-      .mockResolvedValueOnce({
-        id: 'org-1',
-        domain: 'acme.example.com',
-        name: 'Original',
-        slug: 'original',
-        ownerId: 'u-owner',
-        createdAt: now,
-        updatedAt: now,
-      })
-      .mockResolvedValueOnce({ id: 'other-org' })
-      .mockResolvedValueOnce(null);
+    prisma.organisation.findFirst.mockResolvedValueOnce({
+      id: 'org-1',
+      domain: 'acme.example.com',
+      name: 'Original',
+      slug: 'original',
+      ownerId: 'u-owner',
+      createdAt: now,
+      updatedAt: now,
+    });
     prisma.orgMember.findFirst.mockResolvedValue({
       id: 'm-owner',
       orgId: 'org-1',
@@ -336,7 +318,7 @@ describe('Organisation service: organisation CRUD', () => {
       id: 'org-1',
       domain: 'acme.example.com',
       name: 'Acme',
-      slug: 'acme-aaaa',
+      slug: 'original',
       ownerId: 'u-owner',
       createdAt: now,
       updatedAt: now,
@@ -353,17 +335,109 @@ describe('Organisation service: organisation CRUD', () => {
       { prisma },
     );
 
+    // The slug is the tenant's DNS label. Re-deriving it here used to relocate
+    // every tenant hostname the moment somebody fixed a typo in their company
+    // name, with nothing in the request asking for it.
     expect(prisma.organisation.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 'org-1' },
         data: expect.objectContaining({
           name: 'Acme',
-          slug: 'acme-aaaa',
+          slug: 'original',
         }),
       }),
     );
-    expect(result.slug).toBe('acme-aaaa');
-    expect(randomBytes).toHaveBeenCalledTimes(1);
+    expect(result.slug).toBe('original');
+  });
+
+  it('moves the tenant address only when a slug is explicitly supplied', async () => {
+    const prisma = makePrismaMock();
+
+    prisma.organisation.findFirst
+      .mockResolvedValueOnce({
+        id: 'org-1',
+        domain: 'acme.example.com',
+        name: 'Original',
+        slug: 'original',
+        ownerId: 'u-owner',
+        createdAt: now,
+        updatedAt: now,
+      })
+      // The availability probe for the requested slug.
+      .mockResolvedValueOnce(null);
+    prisma.orgMember.findFirst.mockResolvedValue({
+      id: 'm-owner',
+      orgId: 'org-1',
+      userId: 'u-owner',
+      role: 'owner',
+      createdAt: now,
+      updatedAt: now,
+    });
+    prisma.organisation.update.mockResolvedValue({
+      id: 'org-1',
+      domain: 'acme.example.com',
+      name: 'Acme',
+      slug: 'acme',
+      ownerId: 'u-owner',
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const result = await updateOrganisation(
+      {
+        orgId: 'org-1',
+        domain: 'acme.example.com',
+        name: 'Acme',
+        slug: 'acme',
+        actorUserId: 'u-owner',
+        config: makeConfig(),
+      },
+      { prisma },
+    );
+
+    expect(result.slug).toBe('acme');
+  });
+
+  it('refuses an explicitly supplied slug that another organisation holds', async () => {
+    const prisma = makePrismaMock();
+
+    prisma.organisation.findFirst
+      .mockResolvedValueOnce({
+        id: 'org-1',
+        domain: 'acme.example.com',
+        name: 'Original',
+        slug: 'original',
+        ownerId: 'u-owner',
+        createdAt: now,
+        updatedAt: now,
+      })
+      .mockResolvedValueOnce({ id: 'other-org' });
+    prisma.orgMember.findFirst.mockResolvedValue({
+      id: 'm-owner',
+      orgId: 'org-1',
+      userId: 'u-owner',
+      role: 'owner',
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    // A chosen slug that collides is refused, never silently suffixed: handing
+    // somebody `acme-k4f2` when they asked for `acme` is the surprise this
+    // whole change exists to remove.
+    await expect(
+      updateOrganisation(
+        {
+          orgId: 'org-1',
+          domain: 'acme.example.com',
+          name: 'Acme',
+          slug: 'acme',
+          actorUserId: 'u-owner',
+          config: makeConfig(),
+        },
+        { prisma },
+      ),
+    ).rejects.toMatchObject({ statusCode: 400, message: 'ORG_SLUG_TAKEN' });
+    expect(prisma.organisation.update).not.toHaveBeenCalled();
   });
 
   // icon_url validation coverage (accept https, clear on null, reject http/oversized) lives in
