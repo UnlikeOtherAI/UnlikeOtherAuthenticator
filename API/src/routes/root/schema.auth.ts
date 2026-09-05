@@ -98,7 +98,7 @@ export const authEndpoints: EndpointSchema[] = [
       'login_token?':
         'short-lived, one-time chooser capability (only when config.login_flow.team_selection="auto") — binds this verified user/domain to the exact config URL + parsed-config fingerprint, redirect, PKCE, remember-me, request-access, expiry, and JTI; authorizes no other continuation',
       'teams?':
-        "array of { teamId, orgId, name, slug, role, iconUrl, avatarImageUrl, orgName } — this user's ACTIVE team memberships on this domain (only with login_token). avatarImageUrl is the public /teams/:teamId/avatar form (never null, no credential needed) — the chooser renders in a popup that holds no bearer",
+        "array of { teamId, orgId, name, slug, role, iconUrl, avatarImageUrl, orgName, orgSlug } — this user's ACTIVE team memberships on this domain (only with login_token). avatarImageUrl is the public /teams/:teamId/avatar form (never null, no credential needed) — the chooser renders in a popup that holds no bearer",
       'pending_invites?':
         'array of { inviteId, teamName, invitedBy } — pending invites for this email on this domain (only with login_token)',
       'can_create_org?': 'boolean (only with login_token)',
@@ -224,7 +224,7 @@ export const authEndpoints: EndpointSchema[] = [
     },
     response: {
       teams:
-        "array of { teamId, orgId, name, slug, role, iconUrl, avatarImageUrl, orgName } — this user's ACTIVE team memberships on this domain. avatarImageUrl is the public /teams/:teamId/avatar form (never null, no credential needed)",
+        "array of { teamId, orgId, name, slug, role, iconUrl, avatarImageUrl, orgName, orgSlug } — this user's ACTIVE team memberships on this domain. avatarImageUrl is the public /teams/:teamId/avatar form (never null, no credential needed)",
       pending_invites:
         'array of { inviteId, teamName, invitedBy } — pending invites for this email on this domain',
       can_create_org: 'boolean',
@@ -289,7 +289,7 @@ export const authEndpoints: EndpointSchema[] = [
       'login_token?':
         'short-lived bridge JWT (only when the chooser gate passes) — authorizes ONLY POST /auth/select-team for this verified user',
       'teams?':
-        'array of { teamId, orgId, name, slug, role, iconUrl, avatarImageUrl, orgName } (only with login_token). avatarImageUrl is the public /teams/:teamId/avatar form (never null, no credential needed); orgName is the owning organisation, so same-named teams in different orgs stay distinguishable',
+        'array of { teamId, orgId, name, slug, role, iconUrl, avatarImageUrl, orgName, orgSlug } (only with login_token). avatarImageUrl is the public /teams/:teamId/avatar form (never null, no credential needed); orgName is the owning organisation, so same-named teams in different orgs stay distinguishable',
       'pending_invites?': 'array of { inviteId, teamName, invitedBy } (only with login_token)',
       'can_create_org?': 'boolean (only with login_token)',
       'creatable_orgs?':
