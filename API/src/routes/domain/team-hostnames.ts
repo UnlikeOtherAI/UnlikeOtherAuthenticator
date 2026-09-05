@@ -5,7 +5,9 @@ import { requireDomainHashAuthForDomainQuery } from '../../middleware/domain-has
 import {
   checkOrgSlugAvailability,
   checkTeamSlugAvailability,
+  resolveOrgById,
   resolveOrgHostname,
+  resolveTeamById,
   resolveTeamHostname,
 } from '../../services/team-hostname.service.js';
 
@@ -38,6 +40,15 @@ const ResolveOrgQuerySchema = z
     org: z.string().trim().min(1).max(63),
   })
   .strict();
+
+const ByIdQuerySchema = z
+  .object({
+    domain: z.string().trim().min(1),
+    config_url: z.string().trim().min(1).max(2048).optional(),
+  })
+  .strict();
+
+const IdParamsSchema = z.object({ id: z.string().trim().min(1).max(64) }).strict();
 
 const AvailabilityQuerySchema = z
   .object({
@@ -109,6 +120,57 @@ export function registerDomainTeamHostnameRoutes(app: FastifyInstance): void {
         org_name: resolved.orgName,
         org_slug: resolved.orgSlug,
         org_icon_url: resolved.orgIconUrl,
+      });
+    },
+  );
+
+  app.get(
+    '/domain/organisations/:id/address',
+    { preHandler: [requireDomainHashAuthForDomainQuery] },
+    async (request, reply) => {
+      const { domain } = ByIdQuerySchema.parse(request.query);
+      const { id } = IdParamsSchema.parse(request.params);
+
+      const resolved = await resolveOrgById({ domain, orgId: id });
+      if (!resolved) {
+        reply.status(404).send({ ok: false, error: 'NOT_FOUND' });
+        return;
+      }
+
+      reply.status(200).send({
+        ok: true,
+        org_id: resolved.orgId,
+        org_name: resolved.orgName,
+        org_slug: resolved.orgSlug,
+        org_icon_url: resolved.orgIconUrl,
+      });
+    },
+  );
+
+  app.get(
+    '/domain/teams/:id/address',
+    { preHandler: [requireDomainHashAuthForDomainQuery] },
+    async (request, reply) => {
+      const { domain } = ByIdQuerySchema.parse(request.query);
+      const { id } = IdParamsSchema.parse(request.params);
+
+      const resolved = await resolveTeamById({ domain, teamId: id });
+      if (!resolved) {
+        reply.status(404).send({ ok: false, error: 'NOT_FOUND' });
+        return;
+      }
+
+      // Both labels, in one read: a team's address needs the team slug AND its
+      // organisation's, and a picker that moves the address bar would otherwise
+      // make a request per row.
+      reply.status(200).send({
+        ok: true,
+        team_id: resolved.teamId,
+        team_name: resolved.teamName,
+        team_slug: resolved.teamSlug,
+        org_id: resolved.orgId,
+        org_name: resolved.orgName,
+        org_slug: resolved.orgSlug,
       });
     },
   );

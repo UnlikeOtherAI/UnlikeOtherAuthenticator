@@ -115,6 +115,85 @@ export async function resolveOrgHostname(
   };
 }
 
+/**
+ * The address of an organisation the caller already knows the id of.
+ *
+ * The inverse of `resolveOrgHostname`, and the reason it exists: a product
+ * stores UOA's ids and no slug of its own — the slug belongs to UOA — so
+ * "which hostname is this organisation at?" is otherwise unanswerable. Without
+ * it a product can route a hostname it was given but cannot build one, which is
+ * exactly half a feature.
+ */
+export async function resolveOrgById(
+  params: { domain: string; orgId: string },
+  deps: HostnameDeps = {},
+): Promise<ResolvedOrgHostname | null> {
+  const prisma = deps.prisma ?? (getPrisma() as unknown as HostnamePrisma);
+  const org = await prisma.organisation.findFirst({
+    // Scoped to the calling client domain like every other /domain/* read: a
+    // product may only ever ask about organisations on its own domain, even
+    // when it holds an id from somewhere else.
+    where: { id: params.orgId.trim(), domain: normalizeDomain(params.domain) },
+    select: { id: true, name: true, slug: true, iconUrl: true },
+  });
+  if (!org) return null;
+
+  return {
+    orgId: org.id,
+    orgName: org.name,
+    orgSlug: org.slug,
+    orgIconUrl: org.iconUrl ?? null,
+  };
+}
+
+export type ResolvedTeamById = {
+  teamId: string;
+  teamName: string;
+  teamSlug: string;
+  orgId: string;
+  orgName: string;
+  orgSlug: string;
+};
+
+/**
+ * Both labels of a team's address, from the team's id.
+ *
+ * A team hostname is `<team.slug>.<organisation.slug>.<base domain>`, so a
+ * caller needs both labels and holds neither. This returns the pair in one
+ * read — a team picker that moves the address bar would otherwise make a
+ * request per row.
+ */
+export async function resolveTeamById(
+  params: { domain: string; teamId: string },
+  deps: HostnameDeps = {},
+): Promise<ResolvedTeamById | null> {
+  const prisma = deps.prisma ?? (getPrisma() as unknown as HostnamePrisma);
+  const team = await prisma.team.findFirst({
+    where: {
+      id: params.teamId.trim(),
+      // The organisation predicate is what scopes this to the caller's domain;
+      // a team id alone would otherwise reach across tenants.
+      org: { domain: normalizeDomain(params.domain) },
+    },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      org: { select: { id: true, name: true, slug: true } },
+    },
+  });
+  if (!team?.org) return null;
+
+  return {
+    teamId: team.id,
+    teamName: team.name,
+    teamSlug: team.slug,
+    orgId: team.org.id,
+    orgName: team.org.name,
+    orgSlug: team.org.slug,
+  };
+}
+
 export type SlugAvailability =
   | { available: true; slug: string }
   | { available: false; reason: SlugRejection | 'taken' };
