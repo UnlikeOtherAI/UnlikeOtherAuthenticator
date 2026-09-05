@@ -59,11 +59,9 @@ describe.skipIf(!hasDatabase)('user-facing /org team CRUD and membership', () =>
   it('manages teams, team pagination, and team memberships', async () => {
     const domain = 'org-teams.example.com';
     const orgConfigUrl = 'https://org-teams.example.com/auth-config';
-    // `backend_org_management` is what lets a domain-hash-only caller use the
-    // bulk invite contract. `acceptDomainBackendCaller` requires the domain to
-    // have opted in through its signed config, and this test drives that path
-    // (the invitations route serves a single-invite contract to a user
-    // credential and the bulk one to the proven backend).
+    // The bulk-invite and invitation-list calls below deliberately present the
+    // domain hash alone (backend mode), which `acceptDomainBackendCaller` gates
+    // on this explicit opt-in — without it they are a correct 401.
     const configJwt = await createSignedConfigJwt(
       process.env.SHARED_SECRET!,
       { allow_user_create_org: true, backend_org_management: true },

@@ -4,7 +4,7 @@ import { createApp } from '../../src/app.js';
 import { seedDomainSecret } from '../helpers/domain-secret.js';
 import { expectJsonError } from '../helpers/error-response.js';
 import { createTestDb } from '../helpers/test-db.js';
-import { clearOrgTestDatabase, createSignedConfigJwt, createTestUser, hasDatabase, OrgListRecord, OrgMeRecord, OrgMemberRecord, OrgRecord, signAccessToken } from '../helpers/org-user-endpoints-helper.js';
+import { clearOrgTestDatabase, createSignedConfigJwt, createTestUser, hasDatabase, OrgListRecord, OrgMemberRecord, OrgRecord, signAccessToken } from '../helpers/org-user-endpoints-helper.js';
 
 describe.skipIf(!hasDatabase)('user-facing /org organisations and members', () => {
   let handle: Awaited<ReturnType<typeof createTestDb>>;
@@ -402,114 +402,6 @@ describe.skipIf(!hasDatabase)('user-facing /org organisations and members', () =
     });
     expect(addMissing.statusCode).toBe(400);
     expectJsonError(addMissing.json());
-
-    await app.close();
-  });
-
-  it('returns current org context from /org/me for org members', async () => {
-    const domain = 'client.example.com';
-    const orgConfigUrl = 'https://client.example.com/auth-config';
-    const configJwt = await createSignedConfigJwt(process.env.SHARED_SECRET!, { allow_user_create_org: true });
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(configJwt, { status: 200 })));
-
-    const owner = await createTestUser(handle!, 'me-owner@example.com');
-    const actorToken = await signAccessToken({
-      subject: owner.id,
-      domain,
-      secret: process.env.SHARED_SECRET!,
-      issuer: process.env.AUTH_SERVICE_IDENTIFIER!,
-    });
-
-    const app = await createApp();
-    await app.ready();
-
-    const domainHash = await seedDomainSecret(handle!.prisma, domain);
-
-    const createOrg = await app.inject({
-      method: 'POST',
-      url: `/org/organisations?domain=${encodeURIComponent(domain)}&config_url=${encodeURIComponent(orgConfigUrl)}`,
-      headers: {
-        authorization: `Bearer ${domainHash}`,
-        'x-uoa-access-token': `Bearer ${actorToken}`,
-      },
-      payload: { name: 'Acme Me Org' },
-    });
-    expect(createOrg.statusCode).toBe(200);
-    const org = createOrg.json() as OrgRecord;
-
-    const defaultTeam = await handle!.prisma.team.findFirst({
-      where: { orgId: org.id, isDefault: true },
-      select: { id: true },
-    });
-    expect(defaultTeam).not.toBeNull();
-
-    const meRes = await app.inject({
-      method: 'GET',
-      url: `/org/me?domain=${encodeURIComponent(domain)}&config_url=${encodeURIComponent(orgConfigUrl)}`,
-      headers: {
-        authorization: `Bearer ${domainHash}`,
-        'x-uoa-access-token': `Bearer ${actorToken}`,
-      },
-    });
-
-    expect(meRes.statusCode).toBe(200);
-    const meBody = meRes.json() as { ok: true; org?: OrgMeRecord };
-    expect(meBody.ok).toBe(true);
-    // `/org/me` returns the enriched sidebar directory, not bare ids — the
-    // documented shape is `{ teamId, orgId, name, slug, orgName, orgSlug,
-    // iconUrl, avatarImageUrl, role, lastLoginAt }` (schema.org.ts). The bare-id
-    // form belongs to the access token's `org.teams` claim, which is a
-    // different thing; this assertion had not moved with the enrichment.
-    expect(meBody.org).toMatchObject({
-      org_id: org.id,
-      org_role: 'owner',
-    });
-    expect(meBody.org?.teams).toHaveLength(1);
-    expect(meBody.org?.teams?.[0]).toMatchObject({
-      teamId: defaultTeam!.id,
-      orgId: org.id,
-      orgSlug: org.slug,
-      role: 'owner',
-    });
-    // Founding an organisation makes you the steward of its first team.
-    // This asserted 'member', which is the defect `resolveTeamCreatorTeamRole`
-    // was introduced to fix — the founder came out org owner and team member,
-    // holding no capability over the only team they had just created.
-    expect(meBody.org?.team_roles[defaultTeam!.id]).toBe('owner');
-
-    await app.close();
-  });
-
-  it('returns no org payload for users without org membership at /org/me', async () => {
-    const domain = 'client.example.com';
-    const orgConfigUrl = 'https://client.example.com/auth-config';
-    const configJwt = await createSignedConfigJwt(process.env.SHARED_SECRET!, {});
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(configJwt, { status: 200 })));
-
-    const user = await createTestUser(handle!, 'me-anon@example.com');
-    const userToken = await signAccessToken({
-      subject: user.id,
-      domain,
-      secret: process.env.SHARED_SECRET!,
-      issuer: process.env.AUTH_SERVICE_IDENTIFIER!,
-    });
-
-    const app = await createApp();
-    await app.ready();
-
-    const domainHash = await seedDomainSecret(handle!.prisma, domain);
-    const meRes = await app.inject({
-      method: 'GET',
-      url: `/org/me?domain=${encodeURIComponent(domain)}&config_url=${encodeURIComponent(orgConfigUrl)}`,
-      headers: {
-        authorization: `Bearer ${domainHash}`,
-        'x-uoa-access-token': `Bearer ${userToken}`,
-      },
-    });
-
-    expect(meRes.statusCode).toBe(200);
-    const meBody = meRes.json() as { ok: true; org?: OrgMeRecord };
-    expect(meBody).toEqual({ ok: true });
 
     await app.close();
   });

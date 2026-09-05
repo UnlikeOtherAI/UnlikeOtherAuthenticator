@@ -64,7 +64,7 @@ describe.skipIf(!hasDatabase)('invite-bound email team token flow', () => {
     const domainAuth = await createAdminDomain(
       {
         domain,
-        clientSecret: 'invite-team-test-client-secret-0123456789',
+        clientSecret: 'invite-team-test-client-secret-123456789',
         actorEmail: 'integration-test@example.com',
       },
       { prisma: handle!.prisma },

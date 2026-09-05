@@ -1769,7 +1769,7 @@ Returns `404` if `groups_enabled` is `false`.
 | ------ | --------- | -------------------------------------------------- | ---------------------- |
 | GET    | `/org/me` | Current user's org context and team directory | Any authenticated user |
 
-The additive `org.teams[]` directory follows the same server-owned product team policy as
+The additive `org.team_directory[]` directory follows the same server-owned product team policy as
 the hosted chooser. It is domain-scoped by default. A verified product mapped to
 `all_active_memberships` receives every ACTIVE team the caller may enter, so a product sidebar
 never silently shows a smaller switcher than UOA's chooser. Cross-product entries expose no other
@@ -1778,9 +1778,10 @@ product's login-recency data (`lastLoginAt` remains `null`). Every entry carries
 team's uploaded image, proxied `iconUrl`, or generated fallback without client credentials. If the
 caller has no same-domain organisation, a recognized product's exact team-scoped access token
 anchors the complete legacy `org_id`/role/team block to its selected `active.orgId` after a live
-policy and membership recheck; `teams[]` still contains every authorized membership and each
-row's own `orgId`/`orgName` is authoritative for grouping. An unscoped token never selects an
-arbitrary cross-domain organisation.
+policy and membership recheck; `team_directory[]` still contains every authorized membership and
+each row's own `orgId`/`orgName` is authoritative for grouping. An unscoped token never selects an
+arbitrary cross-domain organisation. `org.team_directory[]` is a separate field from the legacy
+`org.teams[]`, which stays an array of team IDs keying `org.team_roles`.
 
 The legacy fields return the same structure as the JWT `org` claim but always reflect current
 database state.

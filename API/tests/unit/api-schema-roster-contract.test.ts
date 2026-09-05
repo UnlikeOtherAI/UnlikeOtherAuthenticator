@@ -9,7 +9,7 @@ const candidatePath = '/org/organisations/:orgId/teams/:teamId/members/candidate
 const invitationTargetPath = '/org/organisations/:orgId/member-invitation-targets';
 const pendingInvitationsPath = '/org/organisations/:orgId/member-invitations';
 const teamPendingInvitationsPath = '/org/organisations/:orgId/teams/:teamId/member-invitations';
-const memberWorkspacesPath = '/org/organisations/:orgId/members/:userId/workspaces';
+const memberTeamsPath = '/org/organisations/:orgId/members/:userId/teams';
 
 function getEndpoint(path: string) {
   const endpoint = endpoints.find((item) => item.method === 'GET' && item.path === path);
@@ -57,12 +57,12 @@ describe('/api and /llm roster contract', () => {
     expect(llmRostersMarkdown).toContain('active team as a silent target');
   });
 
-  it('documents the scoped workspace-access read for an organisation member', () => {
-    const endpoint = getEndpoint(memberWorkspacesPath);
+  it('documents the scoped team-access read for an organisation member', () => {
+    const endpoint = getEndpoint(memberTeamsPath);
     expect(endpoint.description).toContain('only teams where the caller currently holds members.manage');
     expect(endpoint.response).toHaveProperty('data');
     expect(endpoint.response?.data).toContain('hasAccess');
-    expect(llmRostersMarkdown).toContain(memberWorkspacesPath);
-    expect(llmRostersMarkdown).toContain('team is a workspace');
+    expect(llmRostersMarkdown).toContain(memberTeamsPath);
+    expect(llmRostersMarkdown).toContain('editable team memberships for that exact person');
   });
 });

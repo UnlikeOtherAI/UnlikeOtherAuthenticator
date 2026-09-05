@@ -85,6 +85,12 @@ describe.skipIf(!hasDatabase)('GET /domain/debug', () => {
 
     const domain = 'client.example.com';
     const domainHash = await seedDomainSecret(handle!.prisma, domain, process.env.SHARED_SECRET);
+    // The response names the client-domain ROW, never the bearer the caller
+    // presented — see the declaration in domain-hash-auth.ts.
+    const clientDomain = await handle!.prisma.clientDomain.findFirstOrThrow({
+      where: { domain },
+      select: { id: true },
+    });
     const userId = await seedUser('admin@example.com');
     const accessToken = await signTestAccessToken({
       userId,

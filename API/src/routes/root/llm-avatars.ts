@@ -76,7 +76,7 @@ Team records in JSON follow the same identity rule as users: **every team record
 
 A few payloads deliberately carry **no** avatar URL: bare actor-attribution emails with no user object (\`created_by_email\`, \`published_by_email\`, \`actor_email\`, the signature revocation actor), the frozen billing-statement protocol packages (their schemas reject unknown properties — adding one is a protocol version bump), the admin login-log rows (whose shape drops \`userId\`), the *user* identities in auth-popup chooser payloads (\`/auth/session-choices\`, \`/auth/verify-code\`, \`/auth/select-team\`, the \`/auth/login\` chooser, and \`/org/me\` \`pending_invites.invitedBy\` — browser-popup context with no credentialed fetch), and invite rows for invitees who have no user account yet.
 
-The chooser's **teams** and \`GET /org/me\`'s \`teams[]\`, unlike its user identities, do carry \`avatarImageUrl\` in the public \`<PUBLIC_BASE_URL>/teams/<teamId>/avatar\` form, the one URL that needs no credential. That is exactly why the public route exists; the user-identity exclusion above is unchanged, because there is no public user-avatar route to point at.
+The chooser's **teams** and \`GET /org/me\`'s \`team_directory[]\`, unlike its user identities, do carry \`avatarImageUrl\` in the public \`<PUBLIC_BASE_URL>/teams/<teamId>/avatar\` form, the one URL that needs no credential. That is exactly why the public route exists; the user-identity exclusion above is unchanged, because there is no public user-avatar route to point at.
 
 See [the JSON endpoint contract](/api) and \`Docs/Auth/avatars.md\` for the full specification.
 `;

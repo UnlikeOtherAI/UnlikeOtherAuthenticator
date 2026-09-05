@@ -114,10 +114,13 @@ export type OrgMemberRecord = {
 export type OrgMeRecord = {
   org_id: string;
   org_role: string;
+  /** Legacy claim field: team IDs, and the keys of `team_roles`. */
   teams: string[];
   team_roles: Record<string, string>;
   groups?: string[];
   group_admin?: string[];
+  /** The additive renderable directory — a separate field, never a richer `teams`. */
+  team_directory: { teamId: string; orgId: string; name: string; role: string }[];
 };
 
 export async function clearOrgTestDatabase(handle: OrgTestDbHandle): Promise<void> {
