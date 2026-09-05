@@ -77,6 +77,8 @@ describe.skipIf(!hasDatabase)('accepting an invitation into a cross-domain organ
         actorAudience: 'https://authentication.example.com/billing',
         actorKeyId: 'cross-domain-key',
         actorPublicJwk: {},
+        // A CUSTOMER_LIFECYCLE key must carry at least one return origin.
+        checkoutReturnOrigins: [`https://${invitingDomain}`],
       },
     });
   }
