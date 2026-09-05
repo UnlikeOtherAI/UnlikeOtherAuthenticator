@@ -1000,7 +1000,7 @@ model Organisation {
   id                  String       @id @default(cuid())
   domain              String
   name                String       @db.VarChar(100)
-  slug                String       @db.VarChar(120)
+  slug                String       @db.VarChar(63)
   ownerId             String       @map("owner_id")
   iconUrl             String?      @map("icon_url") // external URL only, no local storage (brief §15); §11.3
   twoFaPolicy         TwoFaPolicy? @map("two_fa_policy")
@@ -1204,7 +1204,7 @@ model Team {
   orgId               String   @map("org_id")
   groupId             String?  @map("group_id")
   name                String   @db.VarChar(100)
-  slug                String   @db.VarChar(120)
+  slug                String   @db.VarChar(63)
   description         String?  @db.VarChar(500)
   isDefault           Boolean  @default(false) @map("is_default")
   allowedEmailDomains String[] @default([]) @map("allowed_email_domains")
