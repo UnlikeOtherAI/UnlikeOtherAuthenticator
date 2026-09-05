@@ -61,7 +61,7 @@ describe.skipIf(!hasDatabase)('accepting an invitation into a cross-domain organ
   /** Make `invitingDomain` an active product with exactly one lifecycle key. */
   async function grantSingleProductPolicy(): Promise<void> {
     await handle.prisma.clientDomain.create({
-      data: { domain: invitingDomain, clientSecretHash: 'x'.repeat(64), status: 'active' },
+      data: { domain: invitingDomain, label: 'Cross domain product', status: 'active' },
     });
     const service = await handle.prisma.billingService.create({
       data: { identifier: 'cross-domain-product', name: 'Cross domain product' },
