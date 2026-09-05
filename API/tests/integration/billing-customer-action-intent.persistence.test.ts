@@ -77,7 +77,7 @@ describe.skipIf(!databaseTestsEnabled)('customer billing action intent authority
       },
     });
     ids = { actor: actor.id, appKey: appKey.id, org: org.id, service: service.id, team: team.id };
-  }, 120_000);
+  });
 
   afterAll(async () => {
     if (handle) await handle.cleanup();

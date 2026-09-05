@@ -30,7 +30,7 @@ describe.skipIf(!databaseTestsEnabled)('credit funding PostgreSQL lifecycle race
     handle = await createTestDb();
     if (!handle) throw new Error('DATABASE_URL is required for DB-backed tests');
     await seedFundingRace(handle.prisma);
-  }, 120_000);
+  });
 
   afterAll(async () => {
     if (handle) await handle.cleanup();

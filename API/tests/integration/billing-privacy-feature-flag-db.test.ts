@@ -22,7 +22,7 @@ describe.skipIf(!process.env.DATABASE_URL)('DeepWater privacy flag migration', (
     const created = await createTestDb();
     if (!created) throw new Error('DATABASE_URL_REQUIRED');
     db = created;
-  }, 120_000);
+  });
 
   afterAll(async () => {
     await db?.cleanup();

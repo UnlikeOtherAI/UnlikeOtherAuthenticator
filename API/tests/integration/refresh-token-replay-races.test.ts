@@ -73,7 +73,7 @@ describe.skipIf(!hasDatabase)('refresh response-loss PostgreSQL serialization', 
     process.env.SHARED_SECRET = sharedSecret;
     process.env.AUTH_SERVICE_IDENTIFIER = 'uoa-auth-service';
     process.env.ACCESS_TOKEN_TTL = '15m';
-  }, 30_000);
+  });
 
   afterAll(async () => {
     for (const [key, value] of Object.entries(originalEnv)) {
