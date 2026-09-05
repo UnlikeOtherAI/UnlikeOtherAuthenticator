@@ -10,7 +10,7 @@ import {
   changeOrganisationMemberRole,
   removeOrganisationMember,
 } from '../../services/organisation.service.members.js';
-import { listMemberWorkspaceAccess } from '../../services/member-workspace-access.service.js';
+import { listMemberTeamAccess } from '../../services/member-team-access.service.js';
 import { transferOrganisationOwnership } from '../../services/organisation.service.ownership.js';
 import {
   deactivateOrganisationMember,
@@ -65,33 +65,49 @@ export function registerOrganisationMemberRoutes(app: FastifyInstance) {
     },
   );
 
+  const memberTeamAccessOptions = {
+    preValidation: [
+      requireDomainHashAuthForDomainQuery(),
+      configVerifier,
+      parseDomainContextHook,
+      requireOrgFeatures,
+      requireOrgRole(),
+    ],
+  };
+
+  const listMemberTeamAccessRoute = async (
+    request: FastifyRequest,
+    reply: FastifyReply,
+  ): Promise<void> => {
+    const { domain } = parseDomainContext(request);
+    const orgId = getOrgIdFromParams(request.params);
+    const userId = getUserIdFromParams(request.params);
+    const config = requireVerifiedConfig(request);
+
+    setTenantContextFromRequest(request, { orgId, userId: tenantUserId(request) });
+    const result = await request.withTenantTx((tx) =>
+      listMemberTeamAccess(
+        { orgId, domain, ...orgCaller(request), userId, config },
+        { prisma: asPrismaClient(tx) },
+      ),
+    );
+
+    reply.status(200).send(result);
+  };
+
+  app.get(
+    '/org/organisations/:orgId/members/:userId/teams',
+    memberTeamAccessOptions,
+    listMemberTeamAccessRoute,
+  );
+
+  // The name this route shipped under, before the vocabulary settled on
+  // "team". It stays registered so a relying product can be deployed before or
+  // after this one rather than in lock-step. Remove it once no caller asks.
   app.get(
     '/org/organisations/:orgId/members/:userId/workspaces',
-    {
-      preValidation: [
-        requireDomainHashAuthForDomainQuery(),
-        configVerifier,
-        parseDomainContextHook,
-        requireOrgFeatures,
-        requireOrgRole(),
-      ],
-    },
-    async (request, reply) => {
-      const { domain } = parseDomainContext(request);
-      const orgId = getOrgIdFromParams(request.params);
-      const userId = getUserIdFromParams(request.params);
-      const config = requireVerifiedConfig(request);
-
-      setTenantContextFromRequest(request, { orgId, userId: tenantUserId(request) });
-      const result = await request.withTenantTx((tx) =>
-        listMemberWorkspaceAccess(
-          { orgId, domain, ...orgCaller(request), userId, config },
-          { prisma: asPrismaClient(tx) },
-        ),
-      );
-
-      reply.status(200).send(result);
-    },
+    memberTeamAccessOptions,
+    listMemberTeamAccessRoute,
   );
 
   app.post(

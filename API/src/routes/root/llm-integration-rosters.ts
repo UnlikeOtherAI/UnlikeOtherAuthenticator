@@ -57,11 +57,11 @@ requires \`members.manage\`; it returns no invitation feed and does not search a
 domain-wide user directory.
 
 When an organisation manager opens a member, call
-\`GET /org/organisations/:orgId/members/:userId/workspaces\`. Its rows are the
-editable workspace memberships for that exact person: a team is a workspace,
-and \`hasAccess\` is the live membership state. The feed contains only teams
+\`GET /org/organisations/:orgId/members/:userId/teams\`. Its rows are the
+editable team memberships for that exact person, and \`hasAccess\` is the
+live membership state. The feed contains only teams
 where the caller currently holds \`members.manage\`; do not infer access to, or
-attempt to change, a team omitted from it. Add or remove a selected workspace
+attempt to change, a team omitted from it. Add or remove a selected team
 through that exact team's existing member endpoints, which re-authorize each
 write.
 

@@ -115,13 +115,13 @@ export const orgEndpoints: EndpointSchema[] = [
   },
   {
     method: 'GET',
-    path: '/org/organisations/:orgId/members/:userId/workspaces',
+    path: '/org/organisations/:orgId/members/:userId/teams',
     description:
-      'List the selected member\'s editable workspace access. The result contains only teams where the caller currently holds members.manage; it never exposes or changes memberships outside that scope.',
+      'List the selected member\'s editable team access. The result contains only teams where the caller currently holds members.manage; it never exposes or changes memberships outside that scope.',
     auth: 'domain hash bearer token',
     response: {
-      data: 'array — { id, name, slug, avatarImageUrl, hasAccess }; a team is a workspace',
-      permissions: 'object — { changeWorkspaceAccess }; live caller verdict',
+      data: 'array — { id, name, slug, avatarImageUrl, hasAccess }',
+      permissions: 'object — { changeTeamAccess }; live caller verdict',
     },
   },
   {

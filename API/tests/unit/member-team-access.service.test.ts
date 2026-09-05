@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { listMemberWorkspaceAccess } from '../../src/services/member-workspace-access.service.js';
+import { listMemberTeamAccess } from '../../src/services/member-team-access.service.js';
 import {
   makeConfig,
   makePrismaMock,
@@ -18,10 +18,10 @@ const org = {
   updatedAt: now,
 };
 
-describe('member workspace access', () => {
+describe('member team access', () => {
   useTeamServiceTestEnv();
 
-  it('returns only workspaces the caller can manage with the target membership state', async () => {
+  it('returns only teams the caller can manage with the target membership state', async () => {
     const prisma = makePrismaMock();
     prisma.organisation.findFirst.mockResolvedValue(org);
     prisma.orgMember.findFirst
@@ -37,7 +37,7 @@ describe('member workspace access', () => {
       },
     ]);
 
-    const result = await listMemberWorkspaceAccess(
+    const result = await listMemberTeamAccess(
       {
         orgId: org.id,
         domain: org.domain,
@@ -50,14 +50,14 @@ describe('member workspace access', () => {
 
     expect(result).toMatchObject({
       data: [{ id: 'team-managed', name: 'Product', hasAccess: true }],
-      permissions: { changeWorkspaceAccess: true },
+      permissions: { changeTeamAccess: true },
     });
     expect(prisma.team.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { orgId: org.id, id: { in: ['team-managed'] } },
     }));
   });
 
-  it('does not disclose workspaces to a member without workspace-management authority', async () => {
+  it('does not disclose teams to a member without team-management authority', async () => {
     const prisma = makePrismaMock();
     prisma.organisation.findFirst.mockResolvedValue(org);
     prisma.orgMember.findFirst
@@ -65,7 +65,7 @@ describe('member workspace access', () => {
       .mockResolvedValueOnce({ id: 'om-target', orgId: org.id, userId: 'u-target', role: 'member' });
     prisma.teamMember.findMany.mockResolvedValue([{ teamId: 'team-1', teamRole: 'member' }]);
 
-    await expect(listMemberWorkspaceAccess(
+    await expect(listMemberTeamAccess(
       {
         orgId: org.id,
         domain: org.domain,
@@ -74,7 +74,7 @@ describe('member workspace access', () => {
         config: makeConfig(),
       },
       { prisma },
-    )).resolves.toEqual({ data: [], permissions: { changeWorkspaceAccess: false } });
+    )).resolves.toEqual({ data: [], permissions: { changeTeamAccess: false } });
     expect(prisma.team.findMany).not.toHaveBeenCalled();
   });
 });
