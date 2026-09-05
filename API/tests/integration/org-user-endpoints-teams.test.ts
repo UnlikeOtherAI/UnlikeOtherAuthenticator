@@ -59,7 +59,14 @@ describe.skipIf(!hasDatabase)('user-facing /org team CRUD and membership', () =>
   it('manages teams, team pagination, and team memberships', async () => {
     const domain = 'org-teams.example.com';
     const orgConfigUrl = 'https://org-teams.example.com/auth-config';
-    const configJwt = await createSignedConfigJwt(process.env.SHARED_SECRET!, { allow_user_create_org: true }, domain);
+    // The bulk-invite and invitation-list calls below deliberately present the
+    // domain hash alone (backend mode), which `acceptDomainBackendCaller` gates
+    // on this explicit opt-in — without it they are a correct 401.
+    const configJwt = await createSignedConfigJwt(
+      process.env.SHARED_SECRET!,
+      { allow_user_create_org: true, backend_org_management: true },
+      domain,
+    );
     // A fresh Response per call: Response bodies are single-use, and multiple
     // requests (plus app startup) fetch the config through this stub.
     vi.stubGlobal('fetch', vi.fn(async () => new Response(configJwt, { status: 200 })));

@@ -144,12 +144,41 @@ describe.skipIf(!hasDatabase)('organisation owner transfer before sole-owner rem
     });
     expect(removeOriginalOwner.statusCode).toBe(200);
 
-    const membersAfterTransfer = await app.inject({
+    // Removal is immediate for reads too: the ex-owner's still-valid token no
+    // longer carries an ACTIVE membership, so the roster refuses it.
+    const membersAsRemovedOwner = await app.inject({
       method: 'GET',
       url: `/org/organisations/${org.id}/members?domain=${encodeURIComponent(domain)}&config_url=${encodeURIComponent(orgConfigUrl)}&limit=10`,
       headers: {
         authorization: `Bearer ${domainHash}`,
         'x-uoa-access-token': `Bearer ${ownerToken}`,
+      },
+    });
+    expect(membersAsRemovedOwner.statusCode).toBe(403);
+    expectJsonError(membersAsRemovedOwner.json());
+
+    // The roster must be read as the NEW owner. `ownerToken` belongs to the member
+    // just removed, and the roster requires an ACTIVE membership — reading it with
+    // that token is a correct 403, not the assertion this test is making.
+    const secondOwnerToken = await signAccessToken({
+      subject: secondOwner.id,
+      domain,
+      secret: process.env.SHARED_SECRET!,
+      issuer: process.env.AUTH_SERVICE_IDENTIFIER!,
+      org: {
+        orgId: org.id,
+        orgRole: 'owner',
+        teams: [],
+        team_roles: {},
+      },
+    });
+
+    const membersAfterTransfer = await app.inject({
+      method: 'GET',
+      url: `/org/organisations/${org.id}/members?domain=${encodeURIComponent(domain)}&config_url=${encodeURIComponent(orgConfigUrl)}&limit=10`,
+      headers: {
+        authorization: `Bearer ${domainHash}`,
+        'x-uoa-access-token': `Bearer ${secondOwnerToken}`,
       },
     });
     expect(membersAfterTransfer.statusCode).toBe(200);

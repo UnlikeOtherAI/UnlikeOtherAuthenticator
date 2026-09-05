@@ -50,7 +50,7 @@ export const IDENTITY_AVATAR_URL_NOTE =
   'Team records carry the same thing for the team itself: avatarImageUrl, ' +
   '<PUBLIC_BASE_URL>/domain/teams/<teamId>/avatar?domain=<domain> in domain-hash and dual-auth ' +
   'contexts, <PUBLIC_BASE_URL>/internal/admin/teams/<teamId>/avatar in admin-bearer contexts ' +
-  '(except GET /org/me teams[], which use the public <PUBLIC_BASE_URL>/teams/<teamId>/avatar ' +
+  '(except GET /org/me team_directory[], which use the public <PUBLIC_BASE_URL>/teams/<teamId>/avatar ' +
   'form so product-authorized cross-domain entries remain renderable; see Docs/Auth/avatars.md ' +
   '§11). It is derived and never null — unlike iconUrl, which keeps its ' +
   'existing "externally hosted icon, may be null" meaning.';

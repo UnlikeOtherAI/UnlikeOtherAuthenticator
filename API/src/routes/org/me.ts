@@ -94,8 +94,13 @@ export function registerOrgMeRoute(app: FastifyInstance): void {
         // org_id/org_role/teams/team_roles/groups above are unchanged. Domain-scoped reads share
         // this tenant transaction; policy-authorized cross-domain reads use their existing guarded
         // admin-client path.
+        //
+        // `team_directory`, NOT `teams`: the legacy `context.teams` is the array of team IDs from
+        // the JWT `org` claim, and `team_roles` is keyed by those ids. Spreading a richer `teams`
+        // over it silently replaced ids with objects and desynchronised the pair — brief §24
+        // ("the legacy fields return the same structure as the JWT `org` claim") forbids that.
         const teamPolicy = await resolveProductTeamPolicy({ domain: normalizedDomain });
-        const [teams, pendingInvites] = await Promise.all([
+        const [teamDirectory, pendingInvites] = await Promise.all([
           buildSidebarTeams(
             { userId: claims.userId, domain: normalizedDomain },
             { prisma, policy: teamPolicy },
@@ -103,7 +108,7 @@ export function registerOrgMeRoute(app: FastifyInstance): void {
           buildSidebarPendingInvites({ userId: claims.userId, domain: normalizedDomain }, { prisma }),
         ]);
 
-        return { ...context, teams, pending_invites: pendingInvites };
+        return { ...context, team_directory: teamDirectory, pending_invites: pendingInvites };
       });
 
       const response: { ok: true; org?: typeof org } = { ok: true };

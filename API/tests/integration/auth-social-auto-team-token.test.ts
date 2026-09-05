@@ -73,7 +73,7 @@ describe.skipIf(!hasDatabase)('social auto-selected team token flow', () => {
     const domainAuth = await createAdminDomain(
       {
         domain,
-        clientSecret: 'single-team-test-client-secret',
+        clientSecret: 'single-team-test-client-secret-123456789',
         actorEmail: 'integration-test@example.com',
       },
       { prisma: handle!.prisma },
