@@ -202,8 +202,8 @@ describe('role grants: a configured table', () => {
       'content.write',
       'members.manage',
       'organisation.manage',
-      'teams.manage',
       'team.read',
+      'teams.manage',
     ]);
     expect([...resolveKnownCapabilities(config())].sort()).toEqual([
       'members.manage',
