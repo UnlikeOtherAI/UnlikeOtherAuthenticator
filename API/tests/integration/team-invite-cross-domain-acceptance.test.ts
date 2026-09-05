@@ -131,6 +131,9 @@ describe.skipIf(!hasDatabase)('accepting an invitation into a cross-domain organ
         userId,
         config,
         now: new Date(),
+        // The default admin client resolves from the ambient DATABASE_URL, which
+        // is not this test's isolated schema.
+        scopeDeps: { crossProductPrisma: tx, policyPrisma: tx },
       }),
     );
 

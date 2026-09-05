@@ -25,6 +25,16 @@ export async function acceptTeamInviteWithinTransaction(params: {
   userId: string;
   config: ClientConfig;
   now: Date;
+  /**
+   * Cross-product membership and the single-product policy are read outside the
+   * caller's transaction, on the BYPASSRLS client, and default to it. Tests
+   * provisioned into an isolated schema pass their own client, because the
+   * default one is resolved once from the ambient environment.
+   */
+  scopeDeps?: {
+    crossProductPrisma?: Parameters<typeof lockAndAssertActiveClientTeamScope>[1]['crossProductPrisma'];
+    policyPrisma?: Parameters<typeof lockAndAssertActiveClientTeamScope>[1]['policyPrisma'];
+  };
 }): Promise<{ orgId: string; teamId: string }> {
   const invite = await params.prisma.teamInvite.findUnique({
     where: { id: params.teamInviteId },
@@ -73,7 +83,7 @@ export async function acceptTeamInviteWithinTransaction(params: {
           orgId: invite.orgId,
           teamId: invite.teamId,
         },
-        { prisma: params.prisma },
+        { prisma: params.prisma, ...params.scopeDeps },
       );
       return { orgId: invite.orgId, teamId: invite.teamId };
     }
@@ -201,7 +211,7 @@ export async function acceptTeamInviteWithinTransaction(params: {
       orgId: invite.orgId,
       teamId: invite.teamId,
     },
-    { prisma: params.prisma },
+    { prisma: params.prisma, ...params.scopeDeps },
   );
 
   await params.prisma.teamInvite.update({
