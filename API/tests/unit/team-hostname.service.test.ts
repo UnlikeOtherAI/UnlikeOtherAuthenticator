@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   checkOrgSlugAvailability,
   checkTeamSlugAvailability,
+  resolveOrgHostname,
   resolveTeamHostname,
 } from '../../src/services/team-hostname.service.js';
 
@@ -166,5 +167,79 @@ describe('slug availability', () => {
     expect(
       await checkTeamSlugAvailability({ orgId: 'o1', slug: 'design' }, { prisma }),
     ).toEqual({ available: false, reason: 'taken' });
+  });
+});
+
+describe('resolveOrgHostname', () => {
+  it('resolves the tenant label alone, with the branding a landing page needs', async () => {
+    const prisma = makePrisma();
+    prisma.organisation.findFirst.mockResolvedValue({
+      id: 'o1',
+      name: 'Acme',
+      slug: 'acme',
+      iconUrl: 'https://cdn.example.com/acme.png',
+    });
+
+    expect(
+      await resolveOrgHostname({ domain: 'api.nessie.works', orgSlug: 'acme' }, { prisma }),
+    ).toEqual({
+      orgId: 'o1',
+      orgName: 'Acme',
+      orgSlug: 'acme',
+      orgIconUrl: 'https://cdn.example.com/acme.png',
+    });
+  });
+
+  it('returns a null icon rather than omitting it when none is set', async () => {
+    const prisma = makePrisma();
+    prisma.organisation.findFirst.mockResolvedValue({
+      id: 'o1',
+      name: 'Acme',
+      slug: 'acme',
+      iconUrl: null,
+    });
+
+    const resolved = await resolveOrgHostname(
+      { domain: 'api.nessie.works', orgSlug: 'acme' },
+      { prisma },
+    );
+    expect(resolved?.orgIconUrl).toBeNull();
+  });
+
+  it('scopes the lookup to the calling client domain', async () => {
+    const prisma = makePrisma();
+    prisma.organisation.findFirst.mockResolvedValue(null);
+
+    await resolveOrgHostname({ domain: 'api.nessie.works', orgSlug: 'acme' }, { prisma });
+
+    expect(prisma.organisation.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { domain: 'api.nessie.works', slug: 'acme' } }),
+    );
+  });
+
+  it('never touches the team table — a tenant landing page lists no teams', async () => {
+    const prisma = makePrisma();
+    prisma.organisation.findFirst.mockResolvedValue({
+      id: 'o1',
+      name: 'Acme',
+      slug: 'acme',
+      iconUrl: null,
+    });
+
+    await resolveOrgHostname({ domain: 'api.nessie.works', orgSlug: 'acme' }, { prisma });
+
+    // A guessable hostname must not become a directory of a customer's
+    // internal structure. Teams are shown from the viewer's own membership,
+    // after they authenticate, never from the hostname.
+    expect(prisma.team.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('returns null for an unknown label', async () => {
+    const prisma = makePrisma();
+    prisma.organisation.findFirst.mockResolvedValue(null);
+
+    expect(
+      await resolveOrgHostname({ domain: 'api.nessie.works', orgSlug: 'nope' }, { prisma }),
+    ).toBeNull();
   });
 });

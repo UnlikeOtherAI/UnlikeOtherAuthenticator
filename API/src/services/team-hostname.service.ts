@@ -70,6 +70,51 @@ export async function resolveTeamHostname(
   };
 }
 
+export type ResolvedOrgHostname = {
+  orgId: string;
+  orgName: string;
+  orgSlug: string;
+  /** The organisation's own mark, or null when it has never set one. */
+  orgIconUrl: string | null;
+};
+
+/**
+ * Resolve an organisation label alone — the tenant host one level above a
+ * team's, `<organisation.slug>.<base domain>`.
+ *
+ * A product serves a branded landing page there, so this deliberately returns
+ * the organisation's display name and icon as well as its id: rendering
+ * somebody else's brand should not cost a second authenticated round trip.
+ *
+ * It reveals that an organisation exists on this domain, and what it is called,
+ * to anyone who can guess the label. That is inherent to giving a tenant a
+ * public address at all — but it is why this answers about the ORGANISATION
+ * only. Its teams are never listed here; a product must not turn a guessable
+ * hostname into a directory of a customer's internal structure.
+ */
+export async function resolveOrgHostname(
+  params: { domain: string; orgSlug: string },
+  deps: HostnameDeps = {},
+): Promise<ResolvedOrgHostname | null> {
+  const domain = normalizeDomain(params.domain);
+  const orgSlug = params.orgSlug.trim().toLowerCase();
+  if (!orgSlug) return null;
+
+  const prisma = deps.prisma ?? (getPrisma() as unknown as HostnamePrisma);
+  const org = await prisma.organisation.findFirst({
+    where: { domain, slug: orgSlug },
+    select: { id: true, name: true, slug: true, iconUrl: true },
+  });
+  if (!org) return null;
+
+  return {
+    orgId: org.id,
+    orgName: org.name,
+    orgSlug: org.slug,
+    orgIconUrl: org.iconUrl ?? null,
+  };
+}
+
 export type SlugAvailability =
   | { available: true; slug: string }
   | { available: false; reason: SlugRejection | 'taken' };
