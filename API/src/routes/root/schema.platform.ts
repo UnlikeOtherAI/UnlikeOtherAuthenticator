@@ -71,6 +71,40 @@ export const domainEndpoints: EndpointSchema[] = [
   },
   {
     method: 'GET',
+    path: '/domain/organisations/:id/address',
+    description:
+      "An organisation's own hostname label, from its id — the inverse of /domain/organisations/resolve.",
+    auth: 'domain hash bearer token',
+    query: { domain: 'string (required)' },
+    response: {
+      org_id: 'string',
+      org_name: 'string',
+      org_slug: 'string',
+      org_icon_url: 'string | null',
+    },
+    notes:
+      'A product stores UOA ids and no slug of its own, because the slug belongs to UOA — so without this a product can route a hostname it was handed but cannot build one. Scoped to the calling client domain like every /domain/* read.',
+  },
+  {
+    method: 'GET',
+    path: '/domain/teams/:id/address',
+    description:
+      "Both labels of a team's address, from the team's id: the team slug and its organisation's.",
+    auth: 'domain hash bearer token',
+    query: { domain: 'string (required)' },
+    response: {
+      team_id: 'string',
+      team_name: 'string',
+      team_slug: 'string',
+      org_id: 'string',
+      org_name: 'string',
+      org_slug: 'string',
+    },
+    notes:
+      'Returns the pair in one read because a team hostname is <team.slug>.<organisation.slug>.<base domain> and a caller holds neither label — a picker that moves the address bar would otherwise make a request per row. Team ids are globally unique, so the read is confined by an organisation-domain predicate rather than by the id alone.',
+  },
+  {
+    method: 'GET',
     path: '/domain/slug-available',
     description:
       'Whether a slug may be taken, for the address field in a create dialog. Answers with a reason rather than a bare boolean.',

@@ -3,7 +3,9 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   checkOrgSlugAvailability,
   checkTeamSlugAvailability,
+  resolveOrgById,
   resolveOrgHostname,
+  resolveTeamById,
   resolveTeamHostname,
 } from '../../src/services/team-hostname.service.js';
 
@@ -240,6 +242,82 @@ describe('resolveOrgHostname', () => {
 
     expect(
       await resolveOrgHostname({ domain: 'api.nessie.works', orgSlug: 'nope' }, { prisma }),
+    ).toBeNull();
+  });
+});
+
+describe('resolving an address from an id', () => {
+  it('gives an organisation its own hostname label', async () => {
+    const prisma = makePrisma();
+    prisma.organisation.findFirst.mockResolvedValue({
+      id: 'o1',
+      name: 'Acme',
+      slug: 'acme',
+      iconUrl: null,
+    });
+
+    expect(
+      await resolveOrgById({ domain: 'api.nessie.works', orgId: 'o1' }, { prisma }),
+    ).toEqual({ orgId: 'o1', orgName: 'Acme', orgSlug: 'acme', orgIconUrl: null });
+  });
+
+  it('scopes an organisation id to the calling client domain', async () => {
+    const prisma = makePrisma();
+    prisma.organisation.findFirst.mockResolvedValue(null);
+
+    await resolveOrgById({ domain: 'api.nessie.works', orgId: 'o1' }, { prisma });
+
+    expect(prisma.organisation.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'o1', domain: 'api.nessie.works' } }),
+    );
+  });
+
+  it('gives a team BOTH labels its address needs, in one read', async () => {
+    const prisma = makePrisma();
+    prisma.team.findFirst.mockResolvedValue({
+      id: 't1',
+      name: 'Design',
+      slug: 'design',
+      org: { id: 'o1', name: 'Acme', slug: 'acme' },
+    });
+
+    expect(
+      await resolveTeamById({ domain: 'api.nessie.works', teamId: 't1' }, { prisma }),
+    ).toEqual({
+      teamId: 't1',
+      teamName: 'Design',
+      teamSlug: 'design',
+      orgId: 'o1',
+      orgName: 'Acme',
+      orgSlug: 'acme',
+    });
+  });
+
+  it('scopes a team id through its organisation, so it cannot reach another tenant', async () => {
+    const prisma = makePrisma();
+    prisma.team.findFirst.mockResolvedValue(null);
+
+    await resolveTeamById({ domain: 'api.nessie.works', teamId: 't1' }, { prisma });
+
+    // A bare team id would otherwise be a cross-tenant read: team ids are
+    // globally unique, so only the organisation predicate confines it.
+    expect(prisma.team.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 't1', org: { domain: 'api.nessie.works' } },
+      }),
+    );
+  });
+
+  it('returns null for an unknown id rather than a partial record', async () => {
+    const prisma = makePrisma();
+    prisma.organisation.findFirst.mockResolvedValue(null);
+    prisma.team.findFirst.mockResolvedValue(null);
+
+    expect(
+      await resolveOrgById({ domain: 'api.nessie.works', orgId: 'nope' }, { prisma }),
+    ).toBeNull();
+    expect(
+      await resolveTeamById({ domain: 'api.nessie.works', teamId: 'nope' }, { prisma }),
     ).toBeNull();
   });
 });
