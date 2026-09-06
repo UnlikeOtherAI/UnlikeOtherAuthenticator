@@ -1,7 +1,7 @@
 import type { PrismaClient } from '@prisma/client';
 import { checkSlug, type SlugRejection } from '@unlikeotherai/slug';
 
-import { getPrisma } from '../db/prisma.js';
+import { getAdminPrisma } from '../db/prisma.js';
 import { normalizeDomain } from '../utils/domain.js';
 
 /**
@@ -18,6 +18,21 @@ import { normalizeDomain } from '../utils/domain.js';
  * Every read here is scoped to the calling client domain. A product resolving a
  * hostname may only ever see organisations on its own domain, which is the same
  * boundary `@@unique([domain, slug])` draws.
+ *
+ * **These reads use the admin client, and the domain predicate is what confines
+ * them.** `organisations` and `teams` have FORCE ROW LEVEL SECURITY, and every
+ * other route reaches them through `request.withTenantTx(...)`, which sets the
+ * tenant context the policies read. A `/domain/*` route has no such context —
+ * it is authenticated by the domain hash, with no user and no active
+ * organisation — so the tenant-scoped client matches nothing at all here. It
+ * does not error: it silently returns no rows, which made every resolve answer
+ * 404 and every availability check answer "available", including for slugs that
+ * were plainly taken.
+ *
+ * So the confinement is explicit instead: every query below filters on the
+ * caller's own `domain`, and for teams on their organisation's. Anything added
+ * to this file must keep that predicate — it is now the only thing standing
+ * between a product and another product's tenants.
  */
 
 type HostnamePrisma = {
@@ -46,7 +61,7 @@ export async function resolveTeamHostname(
   const teamSlug = params.teamSlug.trim().toLowerCase();
   if (!orgSlug || !teamSlug) return null;
 
-  const prisma = deps.prisma ?? (getPrisma() as unknown as HostnamePrisma);
+  const prisma = deps.prisma ?? (getAdminPrisma() as unknown as HostnamePrisma);
 
   const org = await prisma.organisation.findFirst({
     where: { domain, slug: orgSlug },
@@ -100,7 +115,7 @@ export async function resolveOrgHostname(
   const orgSlug = params.orgSlug.trim().toLowerCase();
   if (!orgSlug) return null;
 
-  const prisma = deps.prisma ?? (getPrisma() as unknown as HostnamePrisma);
+  const prisma = deps.prisma ?? (getAdminPrisma() as unknown as HostnamePrisma);
   const org = await prisma.organisation.findFirst({
     where: { domain, slug: orgSlug },
     select: { id: true, name: true, slug: true, iconUrl: true },
@@ -128,7 +143,7 @@ export async function resolveOrgById(
   params: { domain: string; orgId: string },
   deps: HostnameDeps = {},
 ): Promise<ResolvedOrgHostname | null> {
-  const prisma = deps.prisma ?? (getPrisma() as unknown as HostnamePrisma);
+  const prisma = deps.prisma ?? (getAdminPrisma() as unknown as HostnamePrisma);
   const org = await prisma.organisation.findFirst({
     // Scoped to the calling client domain like every other /domain/* read: a
     // product may only ever ask about organisations on its own domain, even
@@ -167,7 +182,7 @@ export async function resolveTeamById(
   params: { domain: string; teamId: string },
   deps: HostnameDeps = {},
 ): Promise<ResolvedTeamById | null> {
-  const prisma = deps.prisma ?? (getPrisma() as unknown as HostnamePrisma);
+  const prisma = deps.prisma ?? (getAdminPrisma() as unknown as HostnamePrisma);
   const team = await prisma.team.findFirst({
     where: {
       id: params.teamId.trim(),
@@ -212,7 +227,7 @@ export async function checkOrgSlugAvailability(
   const result = checkSlug(params.slug, { reserved: params.reservedLabels });
   if (!result.ok) return { available: false, reason: result.reason };
 
-  const prisma = deps.prisma ?? (getPrisma() as unknown as HostnamePrisma);
+  const prisma = deps.prisma ?? (getAdminPrisma() as unknown as HostnamePrisma);
   const existing = await prisma.organisation.findFirst({
     where: { domain: normalizeDomain(params.domain), slug: result.slug },
     select: { id: true },
@@ -236,7 +251,7 @@ export async function checkTeamSlugAvailability(
   const result = checkSlug(params.slug, { reserved: params.reservedLabels });
   if (!result.ok) return { available: false, reason: result.reason };
 
-  const prisma = deps.prisma ?? (getPrisma() as unknown as HostnamePrisma);
+  const prisma = deps.prisma ?? (getAdminPrisma() as unknown as HostnamePrisma);
   const existing = await prisma.team.findFirst({
     where: { orgId: params.orgId, slug: result.slug },
     select: { id: true },
