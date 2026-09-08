@@ -112,8 +112,14 @@ describe('team invite services', () => {
         type: 'VERIFY_EMAIL_SET_PASSWORD',
         teamInviteId: 'invite-1',
         tokenHash: 'hash-123',
+        expiresAt: new Date('2026-03-02T00:00:00.000Z'),
       }),
     });
+    expect(prisma.teamInvite.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ expiresAt: new Date('2026-03-02T00:00:00.000Z') }),
+      }),
+    );
     expect(sendTeamInviteEmail).toHaveBeenCalledWith(
       expect.objectContaining({
         to: 'new-user@example.com',
@@ -307,9 +313,7 @@ describe('team invite services', () => {
       },
     );
 
-    expect(result.results).toEqual([
-      { email: 'existing@example.com', status: 'existing_user' },
-    ]);
+    expect(result.results).toEqual([{ email: 'existing@example.com', status: 'existing_user' }]);
     expect(prisma.teamInvite.create).not.toHaveBeenCalled();
     expect(prisma.verificationToken.create).not.toHaveBeenCalled();
     expect(sendTeamInviteEmail).not.toHaveBeenCalled();

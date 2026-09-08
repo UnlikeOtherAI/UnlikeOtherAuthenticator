@@ -35,8 +35,8 @@ export function registerAuthEmailTeamInviteRoute(app: FastifyInstance): void {
           .type('text/html; charset=utf-8')
           .send(
             renderInviteHtml({
-              title: 'Invitation unavailable',
-              body: 'This invitation is no longer available.',
+              title: 'Invitation invalid',
+              body: 'This invitation is invalid. Ask the team to send you a new invitation.',
             }),
           );
         return;
@@ -90,8 +90,8 @@ export function registerAuthEmailTeamInviteRoute(app: FastifyInstance): void {
           .type('text/html; charset=utf-8')
           .send(
             renderInviteHtml({
-              title: 'Invitation unavailable',
-              body: 'This invitation is no longer available.',
+              title: 'Invitation invalid',
+              body: 'This invitation is invalid. Ask the team to send you a new invitation.',
             }),
           );
         return;

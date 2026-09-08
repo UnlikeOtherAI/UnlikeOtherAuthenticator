@@ -113,8 +113,8 @@ export async function resendTeamInvite(
       invitedByName: invite.invitedByName,
       invitedByEmail: invite.invitedByEmail,
       lastSentAt: now,
-      // Task 3 (design §4.7): resending refreshes the invite-level expiry to now + 30 days,
-      // regardless of the prior invite's remaining window (matching Slack's re-invite UX).
+      // Resending replaces the prior invite with a fresh 24-hour capability, regardless of the
+      // prior invite's remaining window.
       expiresAt: computeInviteExpiresAt(now),
     },
     select: TEAM_INVITE_SELECT,

@@ -83,7 +83,8 @@ export const orgInvitationEndpoints: EndpointSchema[] = [
   {
     method: 'GET',
     path: '/org/organisations/:orgId/teams/:teamId/invitations',
-    description: 'List invitation history for a team; user callers need current members.manage in this exact team.',
+    description:
+      'List invitation history for a team; user callers need current members.manage in this exact team.',
     auth: 'domain hash bearer token plus optional access token or subject assertion; absent credentials require backend_org_management and origin-domain isolation',
     response: {
       data: 'array — invite records with status (pending|accepted|declined|replaced|revoked|expired), approvalStatus (not_required|pending|approved|denied), expiresAt, inviter, send/open, accepted/declined/revoked state, plus invitedByAvatarImageUrl and acceptedAvatarImageUrl (null until the matching user id exists; the invitee email never gets one)',
@@ -104,17 +105,18 @@ export const orgInvitationEndpoints: EndpointSchema[] = [
     method: 'POST',
     path: '/org/organisations/:orgId/teams/:teamId/invitations/:inviteId/resend',
     description:
-      "Resend a pending team invitation email; refreshes the invite's expiry to now + 30 days. Only an actionable invitation with settled approval can be resent: accepted, declined, revoked, approval-denied, and still-awaiting-approval invitations all answer the generic 400, so a resend can neither resurrect a revoked invitation nor mail an unapproved one",
+      'Resend a pending team invitation email; refreshes both the invite and emailed token to a complete 24-hour window. Only an actionable invitation with settled approval can be resent: accepted, declined, revoked, approval-denied, and still-awaiting-approval invitations all answer the generic 400, so a resend can neither resurrect a revoked invitation nor mail an unapproved one',
     auth: 'domain hash bearer token plus optional access token or subject assertion; user callers need current members.manage in this exact team; absent credentials require backend_org_management and origin-domain isolation',
   },
   {
     method: 'POST',
     path: '/org/organisations/:orgId/teams/:teamId/invitations/:inviteId/accept',
     description:
-      'Accept an exact team invitation for its invitee through backend mode. The product asserts the invitee\'s UOA user id; acceptance creates the ACTIVE org/team memberships and marks the invite accepted atomically. Repeating the exact accepted invite with the same userId is idempotent-success. The organisation\'s own origin domain is not compared with the calling product\'s: every client domain is equal and one organisation is usable from every product, so an invitation into an organisation founded through another product is accepted here. Unknown or mismatched ids, email mismatch, revoked/expired/unapproved invitations, and every other refusal remain generic.',
+      "Accept an exact team invitation for its invitee through backend mode. The product asserts the invitee's UOA user id; acceptance creates the ACTIVE org/team memberships and marks the invite accepted atomically. Repeating the exact accepted invite with the same userId is idempotent-success. The organisation's own origin domain is not compared with the calling product's: every client domain is equal and one organisation is usable from every product, so an invitation into an organisation founded through another product is accepted here. Unknown or mismatched ids, email mismatch, revoked/expired/unapproved invitations, and every other refusal remain generic.",
     auth: 'backend mode only: domain hash bearer token with no X-UOA-Access-Token; requires org_features.backend_org_management=true',
     body: {
-      userId: 'string (required, trimmed, non-empty) — UOA user id of the invitee asserted by the product backend',
+      userId:
+        'string (required, trimmed, non-empty) — UOA user id of the invitee asserted by the product backend',
     },
     response: {
       200: '{ ok: true, orgId, teamId }',

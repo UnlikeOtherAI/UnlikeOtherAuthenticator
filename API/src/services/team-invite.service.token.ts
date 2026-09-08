@@ -34,6 +34,7 @@ type InviteTokenRow = {
     acceptedAt: Date | null;
     declinedAt: Date | null;
     revokedAt: Date | null;
+    expiresAt: Date | null;
     approvalStatus: string;
     team: { name: string };
     org: { name: string };
@@ -47,45 +48,51 @@ export type InviteTokenDeps = {
   now?: () => Date;
 };
 
-function assertInviteTokenType(type: string): asserts type is InviteTokenType {
-  if (type !== 'LOGIN_LINK' && type !== 'VERIFY_EMAIL' && type !== 'VERIFY_EMAIL_SET_PASSWORD') {
-    throw new AppError('BAD_REQUEST', 400);
-  }
+function isInviteTokenType(type: string): type is InviteTokenType {
+  return type === 'LOGIN_LINK' || type === 'VERIFY_EMAIL' || type === 'VERIFY_EMAIL_SET_PASSWORD';
 }
 
-function assertInviteTokenValid(params: {
+function invalidInvite(): never {
+  throw new AppError('BAD_REQUEST', 400, 'INVITE_INVALID');
+}
+
+function assertInviteTokenStructure(params: {
   row: InviteTokenRow;
   configUrl: string;
-  now: Date;
 }): InviteTokenType {
-  if (params.row.configUrl !== params.configUrl) {
-    throw new AppError('BAD_REQUEST', 400);
-  }
-  if (params.row.usedAt || params.row.expiresAt.getTime() <= params.now.getTime()) {
-    throw new AppError('BAD_REQUEST', 400);
-  }
   if (!params.row.teamInviteId || !params.row.teamInvite) {
     throw new AppError('BAD_REQUEST', 400);
   }
-  // Revoked sits beside the used/expired checks above, but carries a distinct internal code so the
-  // hosted landing page can say WHY the link is dead. This is not an oracle: only the holder of the
-  // emailed token can reach it, and that person already knows the invite existed. Every other
-  // failure stays the same generic error.
-  if (params.row.teamInvite.revokedAt) {
-    throw new AppError('BAD_REQUEST', 400, 'INVITE_REVOKED');
+  if (params.row.configUrl !== params.configUrl || params.row.usedAt) {
+    return invalidInvite();
   }
-  if (params.row.teamInvite.acceptedAt || params.row.teamInvite.declinedAt) {
-    throw new AppError('BAD_REQUEST', 400);
+  if (
+    params.row.teamInvite.revokedAt ||
+    params.row.teamInvite.acceptedAt ||
+    params.row.teamInvite.declinedAt
+  ) {
+    return invalidInvite();
   }
-  // A DENIED invite is resolved even though it carries no terminal timestamp. In practice an
-  // invite awaiting approval is never emailed a token, so this is defence in depth rather than a
-  // reachable gate — but it keeps the token path agreeing with `isResolved` in the state machine.
-  if (params.row.teamInvite.approvalStatus === 'DENIED') {
-    throw new AppError('BAD_REQUEST', 400);
+  // A PENDING invite has not yet been authorized for delivery, and a DENIED invite can never be
+  // accepted. Neither state may reveal an expiry outcome if a stale token is encountered.
+  if (
+    params.row.teamInvite.approvalStatus !== 'NOT_REQUIRED' &&
+    params.row.teamInvite.approvalStatus !== 'APPROVED'
+  ) {
+    return invalidInvite();
   }
 
-  assertInviteTokenType(params.row.type);
+  if (!isInviteTokenType(params.row.type)) return invalidInvite();
   return params.row.type;
+}
+
+function assertInviteNotExpired(row: InviteTokenRow, now: Date): void {
+  if (
+    row.expiresAt.getTime() <= now.getTime() ||
+    (row.teamInvite?.expiresAt && row.teamInvite.expiresAt.getTime() <= now.getTime())
+  ) {
+    throw new AppError('BAD_REQUEST', 400, 'INVITE_EXPIRED');
+  }
 }
 
 async function findInviteToken(params: {
@@ -114,6 +121,7 @@ async function findInviteToken(params: {
           acceptedAt: true,
           declinedAt: true,
           revokedAt: true,
+          expiresAt: true,
           approvalStatus: true,
           team: { select: { name: true } },
           org: { select: { name: true } },
@@ -164,15 +172,15 @@ export async function getTeamInviteLandingData(
     throw new AppError('BAD_REQUEST', 400);
   }
 
-  const tokenType = assertInviteTokenValid({
+  const tokenType = assertInviteTokenStructure({
     row,
     configUrl: params.configUrl,
-    now,
   });
   const epoch = await readVerificationTokenEpoch(prisma, row);
   if (!epoch) {
-    throw new AppError('BAD_REQUEST', 400);
+    return invalidInvite();
   }
+  assertInviteNotExpired(row, now);
   const teamInvite = requireTeamInvite(row);
 
   return {
@@ -219,7 +227,7 @@ export async function acceptTeamInviteTokenForSocialLogin(
     throw new AppError('BAD_REQUEST', 400);
   }
 
-  assertInviteTokenValid({ row, configUrl: params.configUrl, now });
+  assertInviteTokenStructure({ row, configUrl: params.configUrl });
   const teamInvite = requireTeamInvite(row);
   const normalizedEmail = params.email.trim().toLowerCase();
   if (teamInvite.email.toLowerCase() !== normalizedEmail) {
@@ -238,8 +246,9 @@ export async function acceptTeamInviteTokenForSocialLogin(
     (row.userId !== null && row.userId !== params.userId) ||
     (row.tokenVersion !== null && row.tokenVersion !== params.credentialEpoch)
   ) {
-    throw new AppError('BAD_REQUEST', 400);
+    return invalidInvite();
   }
+  assertInviteNotExpired(row, now);
 
   const team = await acceptTeamInviteWithinTransaction({
     prisma,
@@ -302,13 +311,13 @@ export async function declineTeamInviteByToken(
     const epoch = await lockAndReadVerificationTokenEpoch(tx, row);
     const decisionNow = readNow();
     if (!epoch) {
-      throw new AppError('BAD_REQUEST', 400);
+      return invalidInvite();
     }
-    assertInviteTokenValid({
+    assertInviteTokenStructure({
       row,
       configUrl: params.configUrl,
-      now: decisionNow,
     });
+    assertInviteNotExpired(row, decisionNow);
     const teamInvite = requireTeamInvite(row);
 
     await tx.teamInvite.update({

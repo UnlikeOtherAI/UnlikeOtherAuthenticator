@@ -1334,9 +1334,8 @@ model TeamInvite {
   openedAt          DateTime?            @map("opened_at")
   openCount         Int                  @default(0) @map("open_count")
   lastSentAt        DateTime             @map("last_sent_at")
-  // Invite-level expiry (design §4.7, Phase 4), independent of the emailed token's own (much
-  // shorter) TTL. Nullable so the column is additive; the migration backfills existing unresolved
-  // invites to `lastSentAt + 30 days` and every new/resent invite sets `now + 30 days`.
+  // Invite-level expiry (design §4.7, Phase 4). Emailed invitations and their verification tokens
+  // share one 24-hour deadline; the nullable column remains additive for legacy rows.
   expiresAt         DateTime?            @map("expires_at")
   // Member-initiated invite approval workflow (design §4.7, Phase 4). NOT_REQUIRED for every invite
   // created by an owner/admin (or the backend bulk-invite endpoint) — unchanged behaviour.

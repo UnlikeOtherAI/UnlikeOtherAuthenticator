@@ -64,6 +64,8 @@ function isEmailLinkTokenError(err: unknown): boolean {
     'INVALID_TOKEN_TYPE',
     'TOKEN_ALREADY_USED',
     'TOKEN_EXPIRED',
+    'INVITE_EXPIRED',
+    'INVITE_INVALID',
   ].includes(err.message);
 }
 
@@ -122,6 +124,14 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
       } catch (err) {
         if (!isEmailLinkTokenError(err)) {
           throw err;
+        }
+
+        if (
+          isAppError(err) &&
+          (err.message === 'INVITE_EXPIRED' || err.message === 'INVITE_INVALID')
+        ) {
+          reply.status(400).type('text/html; charset=utf-8').send(renderInviteUnavailableHtml(err));
+          return;
         }
 
         request.log.info({ err }, 'email link token could not be used; rendering login');

@@ -1,7 +1,7 @@
 import type { PrismaClient } from '@prisma/client';
 import type { ClientConfig } from './config.service.js';
 
-import { EMAIL_TOKEN_TTL_MS } from '../config/constants.js';
+import { TEAM_INVITE_TTL_MS } from '../config/constants.js';
 import { getEnv, requireEnv } from '../config/env.js';
 import { AppError } from '../utils/errors.js';
 import { generateEmailToken, hashEmailToken } from '../utils/verification-token.js';
@@ -83,13 +83,8 @@ export const TEAM_INVITE_SELECT = {
   updatedAt: true,
 } as const;
 
-// 30-day default invite window (design §4.7): new/resent invites set `expiresAt = now + 30 days`;
-// the foundation migration backfills the same window onto pre-existing unresolved invites so the
-// Task 3 expiry gate is behaviour-preserving.
-const INVITE_EXPIRY_MS = 30 * 24 * 60 * 60 * 1000;
-
 export function computeInviteExpiresAt(now: Date): Date {
-  return new Date(now.getTime() + INVITE_EXPIRY_MS);
+  return new Date(now.getTime() + TEAM_INVITE_TTL_MS);
 }
 
 /** Re-exported under its established name; the values live with the derivation that produces them. */
@@ -273,7 +268,7 @@ export async function issueInviteToken(params: {
   const hashEmailTokenFn = params.hashEmailTokenFn ?? hashEmailToken;
   const token = generateEmailTokenFn();
   const tokenHash = hashEmailTokenFn(token, sharedSecret);
-  const expiresAt = new Date(params.now.getTime() + EMAIL_TOKEN_TTL_MS);
+  const expiresAt = new Date(params.now.getTime() + TEAM_INVITE_TTL_MS);
 
   await params.prisma.verificationToken.updateMany({
     where: {
