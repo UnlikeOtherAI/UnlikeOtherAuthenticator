@@ -2,17 +2,13 @@ import type { Prisma } from '@prisma/client';
 import type { ClientConfig } from './config.service.js';
 
 import { AppError } from '../utils/errors.js';
-import {
-  ensureOrgRole,
-  parseOrgFeatureRoles,
-  parseOrgLimit,
-} from './organisation.service.base.js';
+import { ensureOrgRole, parseOrgFeatureRoles, parseOrgLimit } from './organisation.service.base.js';
 import {
   normalizeTeamRole,
   parseMaxMembersPerTeam,
   parseMaxTeamMembershipsPerUser,
 } from './team.service.base.js';
-import { assertTeamInviteTransition } from './team-invite-state-machine.js';
+import { assertTeamInviteTransition, isExpired } from './team-invite-state-machine.js';
 import {
   assertActiveTeamMembership,
   lockAndAssertActiveTeamMembership,
@@ -53,10 +49,8 @@ export async function acceptTeamInviteWithinTransaction(params: {
   if (!invite) {
     throw new AppError('BAD_REQUEST', 400);
   }
-  // Same placement as the expiry/approval gates below; the distinct internal code lets hosted
-  // surfaces explain a revoked link to the token holder (who already knows the invite existed).
   if (invite.revokedAt) {
-    throw new AppError('BAD_REQUEST', 400, 'INVITE_REVOKED');
+    throw new AppError('BAD_REQUEST', 400, 'INVITE_INVALID');
   }
 
   // The invite's org may have been created by another UOA-integrated product: one organisation is
@@ -79,11 +73,15 @@ export async function acceptTeamInviteWithinTransaction(params: {
     throw new AppError('BAD_REQUEST', 400);
   }
 
-  // Task 3/4 (design §4.7): a declined, PENDING/DENIED (member-invite approval not yet granted),
-  // or expired invite is not acceptable — generic error, same as any other invalid-invite case
-  // (no oracle). Delegated to the shared state machine so this agrees with decline/resend/revoke
-  // by construction. The revoked and already-accepted cases are handled above because each has an
-  // outcome of its own (a distinct internal code, and the same-user idempotent return).
+  if (
+    isExpired(invite, params.now) &&
+    (invite.approvalStatus === 'NOT_REQUIRED' || invite.approvalStatus === 'APPROVED')
+  ) {
+    throw new AppError('BAD_REQUEST', 400, 'INVITE_EXPIRED');
+  }
+
+  // Declined or unapproved invitations remain the same generic invalid result. The shared state
+  // machine keeps this transition aligned with decline/resend/revoke by construction.
   assertTeamInviteTransition({ transition: 'accept', invite, now: params.now });
 
   const user = await params.prisma.user.findUnique({

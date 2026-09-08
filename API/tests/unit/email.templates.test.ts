@@ -166,9 +166,11 @@ describe('buildTeamInviteTemplate', () => {
     expect(tpl.text).toContain('Taylor, you have been invited to join the Core Team team on Acme.');
     expect(tpl.text).toContain(link);
     expect(tpl.text).toMatch(/accept the invitation/i);
+    expect(tpl.text).toContain('This invitation expires in 24 hours');
 
     expect(tpl.html).toContain('Join Core Team');
     expect(tpl.html).toContain('Accept invitation');
+    expect(tpl.html).toContain('This invitation expires in 24 hours');
     expect(tpl.html).toContain(`href="${escapedLink}"`);
     expect(tpl.html).toContain('team-invite-open/invite-1.gif');
   });

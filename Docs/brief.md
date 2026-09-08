@@ -2056,6 +2056,22 @@ direct membership additions use that exact-organisation uniqueness, so joining o
 does not prevent joining another. A single-team chooser auto-skips only when there is neither a
 new-organisation option nor an authorised existing-organisation destination to create in.
 
+##### Emailed invitation validity and failure copy (2026-09 clarification)
+
+An emailed team invitation is valid for exactly 24 hours from its send or resend. The durable
+`TeamInvite.expiresAt` and the linked `VerificationToken.expiresAt` use that same deadline class;
+the email token must never expire earlier than the invitation shown on a member-management
+surface. Re-inviting the same pending address or using the explicit resend action creates a fresh
+invitation/token pair and restarts the complete 24-hour window.
+
+The hosted invitation journey has exactly two failure presentations. A known invitation whose
+email-token or invitation deadline elapsed says **Invitation expired** and asks the recipient to
+request a new invitation. Every other unusable state—including malformed or unknown tokens,
+config mismatch, prior use, acceptance, decline, replacement, revocation, approval denial, and
+credential-epoch mismatch—says only **Invitation invalid**. These classifications are private to
+the mailbox-bound HTML journey; product API refusals retain their generic non-enumerating bodies.
+This supersedes the earlier 30-day emailed-invitation window and revoked-specific hosted copy.
+
 #### Examples
 
 - **Restaurant SaaS (self-service).** `auto_create_personal_org_on_first_login: true`, `allow_user_create_org: true`. New user signs up → immediately owns an org → can invite staff. No client-side "create org" screen needed.

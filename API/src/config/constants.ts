@@ -4,6 +4,11 @@ export const PUBLIC_ERROR_MESSAGE = 'Request failed';
 // TTL is implementation-defined; keep short by default.
 export const EMAIL_TOKEN_TTL_MS = 30 * 60 * 1000;
 
+// A team invitation is one capability split across a durable invite row and its emailed token.
+// Both clocks use the same 24-hour window so the link cannot become unusable before the invite
+// shown in member management expires.
+export const TEAM_INVITE_TTL_MS = 24 * 60 * 60 * 1000;
+
 // Brief 22.13: authorization codes must be short-lived (OAuth authorization code flow).
 export const AUTHORIZATION_CODE_TTL_MS = 5 * 60 * 1000;
 

@@ -51,20 +51,19 @@ export function renderInviteHtml(params: {
 }
 
 /**
- * The one differentiated failure on this page: an explicitly revoked invitation says so, because
- * the token holder legitimately received the link and deserves to know it was withdrawn rather
- * than being told to retry. Everything else (unknown/expired/used/declined/accepted) stays the
- * generic "no longer available" — no oracle on which condition failed.
+ * An expired invitation says so because the token holder needs to know that resending is the
+ * remedy. Every other unusable state stays the same invalid result, so the page does not reveal
+ * whether a token was revoked, consumed, malformed, or bound to different context.
  */
 export function renderInviteUnavailableHtml(err: unknown): string {
-  if (isAppError(err) && err.message === 'INVITE_REVOKED') {
+  if (isAppError(err) && err.message === 'INVITE_EXPIRED') {
     return renderInviteHtml({
-      title: 'Invitation revoked',
-      body: 'This invitation has been revoked by the team that sent it. If you think this is a mistake, ask them to send you a new invitation.',
+      title: 'Invitation expired',
+      body: 'This invitation has expired. Ask the team to send you a new invitation.',
     });
   }
   return renderInviteHtml({
-    title: 'Invitation unavailable',
-    body: 'This invitation is no longer available.',
+    title: 'Invitation invalid',
+    body: 'This invitation is invalid. Ask the team to send you a new invitation.',
   });
 }

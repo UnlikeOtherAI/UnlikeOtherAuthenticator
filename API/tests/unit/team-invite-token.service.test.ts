@@ -50,6 +50,7 @@ it('binds an existing-user invite token to its issue-time credential epoch', asy
       type: 'LOGIN_LINK',
       userId: 'user-1',
       tokenVersion: 7,
+      expiresAt: new Date('2026-04-02T00:00:00.000Z'),
     }),
   });
 });
@@ -74,6 +75,7 @@ it('declines an invite token and invalidates linked unused tokens', async () => 
           acceptedAt: null,
           declinedAt: null,
           revokedAt: null,
+          approvalStatus: 'NOT_REQUIRED',
           team: { name: 'Core Team' },
           org: { name: 'Acme' },
         },
@@ -160,6 +162,7 @@ it('rejects an existing-user invite link from a superseded credential epoch', as
           acceptedAt: null,
           declinedAt: null,
           revokedAt: null,
+          approvalStatus: 'NOT_REQUIRED',
           team: { name: 'Core Team' },
           org: { name: 'Acme' },
         },
@@ -201,7 +204,7 @@ it('rejects an existing-user invite link from a superseded credential epoch', as
   ).rejects.toMatchObject({ statusCode: 400 });
 });
 
-it('refuses a revoked invitation token with the distinct INVITE_REVOKED code', async () => {
+it('classifies a revoked invitation token as invalid', async () => {
   const prisma = {
     verificationToken: {
       findUnique: vi.fn().mockResolvedValue({
@@ -221,6 +224,8 @@ it('refuses a revoked invitation token with the distinct INVITE_REVOKED code', a
           acceptedAt: null,
           declinedAt: null,
           revokedAt: new Date('2026-08-15T12:00:00.000Z'),
+          expiresAt: new Date('2099-04-01T00:10:00.000Z'),
+          approvalStatus: 'NOT_REQUIRED',
           team: { name: 'Core Team' },
           org: { name: 'Acme' },
         },
@@ -252,5 +257,178 @@ it('refuses a revoked invitation token with the distinct INVITE_REVOKED code', a
         sharedSecret: 'test-shared-secret-with-enough-length',
       },
     ),
-  ).rejects.toMatchObject({ statusCode: 400, message: 'INVITE_REVOKED' });
+  ).rejects.toMatchObject({ statusCode: 400, message: 'INVITE_INVALID' });
+});
+
+it('classifies an expired emailed token as an expired invitation', async () => {
+  const prisma = {
+    verificationToken: {
+      findUnique: vi.fn().mockResolvedValue({
+        id: 'token-row-expired',
+        type: 'VERIFY_EMAIL_SET_PASSWORD',
+        configUrl: 'https://client.example.com/auth-config',
+        userId: null,
+        userKey: 'invitee@example.com',
+        tokenVersion: null,
+        teamInviteId: 'invite-1',
+        expiresAt: new Date('2026-04-01T00:00:00.000Z'),
+        usedAt: null,
+        teamInvite: {
+          id: 'invite-1',
+          inviteName: 'Invited User',
+          email: 'invitee@example.com',
+          acceptedAt: null,
+          declinedAt: null,
+          revokedAt: null,
+          expiresAt: new Date('2026-04-02T00:00:00.000Z'),
+          approvalStatus: 'NOT_REQUIRED',
+          team: { name: 'Core Team' },
+          org: { name: 'Acme' },
+        },
+      }),
+    },
+    user: { findUnique: vi.fn().mockResolvedValue(null) },
+  } as unknown as PrismaClient;
+
+  await expect(
+    getTeamInviteLandingData(
+      {
+        token: 'token-123',
+        configUrl: 'https://client.example.com/auth-config',
+        config: makeConfig(),
+      },
+      {
+        env: {
+          NODE_ENV: 'test',
+          HOST: '127.0.0.1',
+          PORT: 3000,
+          LOG_LEVEL: 'info',
+          SHARED_SECRET: 'test-shared-secret-with-enough-length',
+          AUTH_SERVICE_IDENTIFIER: 'uoa-auth-service',
+          DATABASE_URL: 'postgres://example.invalid/db',
+          ACCESS_TOKEN_TTL: '30m',
+          LOG_RETENTION_DAYS: 90,
+          AI_TRANSLATION_PROVIDER: 'disabled',
+        },
+        prisma,
+        sharedSecret: 'test-shared-secret-with-enough-length',
+        now: () => new Date('2026-04-01T00:00:00.000Z'),
+      },
+    ),
+  ).rejects.toMatchObject({ statusCode: 400, message: 'INVITE_EXPIRED' });
+});
+
+it('classifies a durable invitation at its exact deadline as expired while its emailed token remains live', async () => {
+  const prisma = {
+    verificationToken: {
+      findUnique: vi.fn().mockResolvedValue({
+        id: 'token-row-live',
+        type: 'VERIFY_EMAIL_SET_PASSWORD',
+        configUrl: 'https://client.example.com/auth-config',
+        userId: null,
+        userKey: 'invitee@example.com',
+        tokenVersion: null,
+        teamInviteId: 'invite-1',
+        expiresAt: new Date('2026-04-02T00:00:00.000Z'),
+        usedAt: null,
+        teamInvite: {
+          id: 'invite-1',
+          inviteName: 'Invited User',
+          email: 'invitee@example.com',
+          acceptedAt: null,
+          declinedAt: null,
+          revokedAt: null,
+          expiresAt: new Date('2026-04-01T00:00:00.000Z'),
+          approvalStatus: 'NOT_REQUIRED',
+          team: { name: 'Core Team' },
+          org: { name: 'Acme' },
+        },
+      }),
+    },
+    user: { findUnique: vi.fn().mockResolvedValue(null) },
+  } as unknown as PrismaClient;
+
+  await expect(
+    getTeamInviteLandingData(
+      {
+        token: 'token-123',
+        configUrl: 'https://client.example.com/auth-config',
+        config: makeConfig(),
+      },
+      {
+        env: {
+          NODE_ENV: 'test',
+          HOST: '127.0.0.1',
+          PORT: 3000,
+          LOG_LEVEL: 'info',
+          SHARED_SECRET: 'test-shared-secret-with-enough-length',
+          AUTH_SERVICE_IDENTIFIER: 'uoa-auth-service',
+          DATABASE_URL: 'postgres://example.invalid/db',
+          ACCESS_TOKEN_TTL: '30m',
+          LOG_RETENTION_DAYS: 90,
+          AI_TRANSLATION_PROVIDER: 'disabled',
+        },
+        prisma,
+        sharedSecret: 'test-shared-secret-with-enough-length',
+        now: () => new Date('2026-04-01T00:00:00.000Z'),
+      },
+    ),
+  ).rejects.toMatchObject({ statusCode: 400, message: 'INVITE_EXPIRED' });
+});
+
+it('classifies a stale token for a pending approval as invalid before checking its deadline', async () => {
+  const prisma = {
+    verificationToken: {
+      findUnique: vi.fn().mockResolvedValue({
+        id: 'token-row-pending',
+        type: 'VERIFY_EMAIL_SET_PASSWORD',
+        configUrl: 'https://client.example.com/auth-config',
+        userId: null,
+        userKey: 'invitee@example.com',
+        tokenVersion: null,
+        teamInviteId: 'invite-1',
+        expiresAt: new Date('2026-04-01T00:00:00.000Z'),
+        usedAt: null,
+        teamInvite: {
+          id: 'invite-1',
+          inviteName: 'Invited User',
+          email: 'invitee@example.com',
+          acceptedAt: null,
+          declinedAt: null,
+          revokedAt: null,
+          expiresAt: new Date('2026-04-01T00:00:00.000Z'),
+          approvalStatus: 'PENDING',
+          team: { name: 'Core Team' },
+          org: { name: 'Acme' },
+        },
+      }),
+    },
+  } as unknown as PrismaClient;
+
+  await expect(
+    getTeamInviteLandingData(
+      {
+        token: 'token-123',
+        configUrl: 'https://client.example.com/auth-config',
+        config: makeConfig(),
+      },
+      {
+        env: {
+          NODE_ENV: 'test',
+          HOST: '127.0.0.1',
+          PORT: 3000,
+          LOG_LEVEL: 'info',
+          SHARED_SECRET: 'test-shared-secret-with-enough-length',
+          AUTH_SERVICE_IDENTIFIER: 'uoa-auth-service',
+          DATABASE_URL: 'postgres://example.invalid/db',
+          ACCESS_TOKEN_TTL: '30m',
+          LOG_RETENTION_DAYS: 90,
+          AI_TRANSLATION_PROVIDER: 'disabled',
+        },
+        prisma,
+        sharedSecret: 'test-shared-secret-with-enough-length',
+        now: () => new Date('2026-04-01T00:00:00.000Z'),
+      },
+    ),
+  ).rejects.toMatchObject({ statusCode: 400, message: 'INVITE_INVALID' });
 });

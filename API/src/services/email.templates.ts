@@ -1,4 +1,4 @@
-import { EMAIL_TOKEN_TTL_MS } from '../config/constants.js';
+import { EMAIL_TOKEN_TTL_MS, TEAM_INVITE_TTL_MS } from '../config/constants.js';
 
 type EmailTemplate = {
   subject: string;
@@ -50,6 +50,10 @@ export function escapeHtml(value: string): string {
 
 function tokenTtlMinutes(): number {
   return Math.max(1, Math.round(EMAIL_TOKEN_TTL_MS / (60 * 1000)));
+}
+
+function teamInviteTtlHours(): number {
+  return Math.max(1, Math.round(TEAM_INVITE_TTL_MS / (60 * 60 * 1000)));
 }
 
 export function resolveTheme(theme?: Partial<EmailTheme>): EmailTheme {
@@ -218,7 +222,7 @@ export function buildTeamInviteTemplate(params: {
   trackingPixelUrl?: string;
   theme?: Partial<EmailTheme>;
 }): EmailTemplate {
-  const minutes = tokenTtlMinutes();
+  const hours = teamInviteTtlHours();
   const theme = resolveTheme(params.theme);
   const recipient = params.inviteeName?.trim() ? `${params.inviteeName.trim()}, ` : '';
   const subject = `You have been invited to join ${params.teamName}`;
@@ -232,7 +236,7 @@ export function buildTeamInviteTemplate(params: {
     'Use this link to accept the invitation:',
     params.link,
     '',
-    `This link expires in ${minutes} minutes and can only be used once.`,
+    `This invitation expires in ${hours} hours and can only be used once.`,
     '',
     'If you did not expect this invitation, you can ignore this email.',
   ].join('\n');
@@ -247,7 +251,8 @@ export function buildTeamInviteTemplate(params: {
       : undefined,
     buttonLabel: 'Accept invitation',
     buttonUrl: params.link,
-    minutes,
+    minutes: hours * 60,
+    expiryLabel: `This invitation expires in ${hours} hours and can only be used once.`,
   });
 
   return { subject, text, html };

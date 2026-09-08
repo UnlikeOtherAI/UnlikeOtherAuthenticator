@@ -71,6 +71,9 @@ export async function resolveEmailInviteContinuation(
     // A plain (non-invitation) email link reaches this path too, and must keep
     // its historic login restart. Only infrastructure failures surface.
     if (!isAppError(err)) throw err;
+    if (err.message === 'INVITE_EXPIRED' || err.message === 'INVITE_INVALID') {
+      return { kind: 'unavailable', error: err };
+    }
     return { kind: 'none' };
   }
 

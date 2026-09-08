@@ -198,6 +198,33 @@ describe('GET /auth/email/link', () => {
     await app.close();
   });
 
+  it('renders an explicit expired page for an expired invitation token', async () => {
+    validateRegistrationEmailLandingTokenMock.mockRejectedValue(
+      new AppError('BAD_REQUEST', 400, 'INVITE_EXPIRED'),
+    );
+
+    const { createApp } = await import('../../src/app.js');
+    const app = await createApp();
+    await app.ready();
+
+    const res = await app.inject({
+      method: 'GET',
+      url:
+        '/auth/email/link?' +
+        'config_url=https%3A%2F%2Fclient.example.com%2Fauth-config' +
+        '&token=expired-invite-token',
+      headers: { accept: 'text/html' },
+      remoteAddress: '203.0.113.99',
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toContain('Invitation expired');
+    expect(res.body).not.toContain('Invitation invalid');
+    expect(renderAuthEntrypointHtmlMock).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
   it('renders the login screen instead of an auth error when the email link has no PKCE challenge', async () => {
     validateRegistrationEmailLandingTokenMock.mockResolvedValue('LOGIN_LINK');
     // A plain login link carries no invitation, so the lookup refuses it.
@@ -319,7 +346,7 @@ describe('GET /auth/email/link', () => {
       teamName: 'Hugo',
       organisationName: 'Hugo_org',
     });
-    verifyEmailTokenMock.mockRejectedValue(new AppError('BAD_REQUEST', 400, 'INVITE_REVOKED'));
+    verifyEmailTokenMock.mockRejectedValue(new AppError('BAD_REQUEST', 400, 'INVITE_INVALID'));
 
     const { createApp } = await import('../../src/app.js');
     const app = await createApp();
@@ -336,7 +363,7 @@ describe('GET /auth/email/link', () => {
     });
 
     expect(res.statusCode).toBe(400);
-    expect(res.body).toContain('Invitation revoked');
+    expect(res.body).toContain('Invitation invalid');
     expect(renderAuthEntrypointHtmlMock).not.toHaveBeenCalled();
 
     await app.close();

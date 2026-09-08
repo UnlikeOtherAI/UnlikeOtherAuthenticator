@@ -135,7 +135,7 @@ describe('resendTeamInvite', () => {
     expect(sendTeamInviteEmail).not.toHaveBeenCalled();
   });
 
-  it('Phase 4: refreshes expiresAt to now + 30 days on resend', async () => {
+  it('refreshes the invite and emailed token to 24 hours on resend', async () => {
     const prisma = makeInvitePrisma();
     prisma.organisation.findFirst.mockResolvedValue({
       id: 'org-1',
@@ -191,7 +191,7 @@ describe('resendTeamInvite', () => {
       openedAt: null,
       openCount: 0,
       lastSentAt: new Date('2026-02-01T00:00:00.000Z'),
-      expiresAt: new Date('2026-03-03T00:00:00.000Z'),
+      expiresAt: new Date('2026-02-02T00:00:00.000Z'),
       approvalStatus: 'NOT_REQUIRED',
       requestedByUserId: null,
       createdAt: new Date('2026-02-01T00:00:00.000Z'),
@@ -237,10 +237,13 @@ describe('resendTeamInvite', () => {
     expect(prisma.teamInvite.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          expiresAt: new Date('2026-03-03T00:00:00.000Z'),
+          expiresAt: new Date('2026-02-02T00:00:00.000Z'),
         }),
       }),
     );
-    expect(result.expiresAt).toEqual(new Date('2026-03-03T00:00:00.000Z'));
+    expect(prisma.verificationToken.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ expiresAt: new Date('2026-02-02T00:00:00.000Z') }),
+    });
+    expect(result.expiresAt).toEqual(new Date('2026-02-02T00:00:00.000Z'));
   });
 });
