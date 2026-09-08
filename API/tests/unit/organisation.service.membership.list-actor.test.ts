@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { listOrganisationMembers } from '../../src/services/organisation.service.members.js';
 import {
   baseOrg,
+  makeConfig,
   makePrismaMock,
   now,
   useOrganisationMembershipTestEnv,
@@ -72,6 +73,7 @@ describe('listOrganisationMembers: actor-membership gate (defence in depth)', ()
       addMember: false,
       changeMemberRole: false,
       viewMemberEmail: false,
+      orgRoleOptions: [],
     });
   });
 
@@ -107,8 +109,29 @@ describe('listOrganisationMembers: actor-membership gate (defence in depth)', ()
       addMember: true,
       changeMemberRole: true,
       viewMemberEmail: true,
+      orgRoleOptions: ['admin', 'member'],
     });
     // No membership to check in backend mode — the caller is the domain.
     expect(prisma.orgMember.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('returns the configured assignable org roles only to the organisation owner', async () => {
+    const prisma = makePrismaMock();
+    prisma.organisation.findFirst.mockResolvedValue(baseOrg);
+    prisma.orgMember.findFirst.mockResolvedValue({
+      id: 'm-owner', orgId: 'org-1', userId: 'u-owner', role: 'owner',
+    });
+    prisma.orgMember.findMany.mockResolvedValue([]);
+    prisma.orgMember.count.mockResolvedValue(0);
+
+    const result = await listOrganisationMembers({
+      orgId: 'org-1', domain: 'acme.example.com', actorUserId: 'u-owner',
+      config: makeConfig({ org_roles: ['owner', 'registrar', 'auditor'] }),
+    }, { prisma });
+
+    expect(result.permissions).toMatchObject({
+      changeMemberRole: true,
+      orgRoleOptions: ['registrar', 'auditor'],
+    });
   });
 });

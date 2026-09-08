@@ -62,6 +62,8 @@ export function registerRootRoute(app: FastifyInstance): void {
       endpoints,
       org_me_subject_assertion:
         'GET /org/me accepts either a UOA access token or a one-minute product-signed subject assertion and returns freshly resolved org roles, never product capability verdicts.',
+      team_invitation_management:
+        'Team invitation history, detail and resend require current members.manage for the exact target team with a user credential; credential-free backend mode requires explicit opt-in and origin-domain isolation.',
     };
   });
 }

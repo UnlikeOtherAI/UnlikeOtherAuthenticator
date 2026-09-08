@@ -12,7 +12,7 @@ import {
   type RosterDirection,
   type RosterPaginationMeta,
 } from './roster-pagination.service.js';
-import { configRoleHoldsCapability } from './role-grants.js';
+import { OWNER_ROLE, configRoleHoldsCapability, resolveOrgRoleVocabulary } from './role-grants.js';
 import {
   assertDatabaseEnabled,
   getOrganisationMember,
@@ -71,6 +71,8 @@ export type OrganisationRosterPermissions = {
   deactivateMember: boolean;
   reactivateMember: boolean;
   viewMemberEmail: boolean;
+  /** Config-authored roles an organisation owner may assign; `owner` transfers through its own route. */
+  orgRoleOptions: string[];
 };
 
 export type OrganisationRosterPage = {
@@ -126,13 +128,19 @@ function rosterPermissions(params: {
     configRoleHoldsCapability(params.config, 'org', params.actorRole, 'members.manage');
   const isOwner = !params.actorUserId || params.orgOwnerId === params.actorUserId;
 
+  const changeMemberRole = isOwner;
   return {
     addMember: canManage,
-    changeMemberRole: isOwner,
+    changeMemberRole,
     removeMember: canManage,
     deactivateMember: canManage,
     reactivateMember: canManage,
     viewMemberEmail: canManage,
+    // The role vocabulary is UOA configuration, not a client-side convention. A caller who
+    // cannot change roles gets no role-picker data, and ownership is never an in-place role edit.
+    orgRoleOptions: changeMemberRole
+      ? resolveOrgRoleVocabulary(params.config).filter((role) => role !== OWNER_ROLE)
+      : [],
   };
 }
 

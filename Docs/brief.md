@@ -901,6 +901,7 @@ The claim is optional and defaults to disabled. The object shape and defaults ar
 | `max_team_memberships_per_user`           | integer                     | `50`                           | Maximum teams a single user can belong to — also caps JWT size (max 200)                                                                                                                                                                                                                                                                      |
 | `org_roles`                               | string[]                    | `["owner", "admin", "member"]` | Allowed org-level roles. Must always contain `"owner"`.                                                                                                                                                                                                                                                                                       |
 | `team_roles`                              | string[]                    | `["owner", "admin", "member"]` | Allowed team-level roles — the mirror of `org_roles`, must always contain `"owner"`. Before this existed the three canonical roles were fixed in code; they are now only the default.                                                                                                                                                          |
+| `member_invitable_team_roles`              | string[]                    | `[]`                              | Explicit non-owner team roles a non-manager may assign through a member-initiated invitation. `member_invites` decides whether the member may invite; this list independently decides the authority that invitation may grant. The omitted invitation role selects the first configured entry. Empty means a non-manager cannot create an invitation. |
 | `capabilities`                            | string[]                    | absent                         | The consuming product's declared capability catalogue, mirrored here so `role_grants` can be validated against it. UOA's own names (`members.manage`, `teams.manage`, `organisation.manage`) are always valid on top of this list.                                                                                                                                    |
 | `role_grants`                             | object                      | absent                         | `{ "org": { role: capability[] }, "team": { role: capability[] } }` — which roles hold which capabilities. Absent means the legacy default table (see below), which reproduces the pre-`role_grants` behaviour exactly.                                                                                                                        |
 | `max_flags_per_app`                       | integer                     | `100`                          | Maximum feature flag definitions per App (max 500). Enforced at creation; existing flags unaffected if cap is lowered.                                                                                                                                                                                                                        |
@@ -2723,3 +2724,16 @@ UOA capability plus one additive protocol field they already know how to render.
   checkout-session/portal-session envelopes whose absence had products
   hand-writing their own validators. Every addition is optional, so a 1.2.0
   consumer and every existing fixture stay valid.
+
+## 2026-09-08 Invitation management authorization clarification
+
+Team invitation history, detail and resend use the same caller boundary as the
+member roster: a UOA access token or fresh product subject assertion identifies
+an ACTIVE organisation member, and the exact target team must grant that actor
+`members.manage`. The selected session team is provenance, not a target filter.
+Invalid, blank and ambiguous credentials fail closed. Credential-free calls
+require `backend_org_management=true` and retain origin-domain isolation.
+These checks apply before reading invitation PII or sending replacement mail;
+resend retains the shared invitation state machine and cannot revive terminal
+or unapproved invitations. Member add and role-change request bodies use the
+existing camelCase `userId` and `teamRole` fields.

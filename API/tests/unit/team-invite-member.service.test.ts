@@ -32,6 +32,7 @@ function makeConfig(overrides?: Partial<ClientConfig>): ClientConfig {
       max_members_per_group: 500,
       max_team_memberships_per_user: 50,
       org_roles: ['owner', 'admin', 'member'],
+      member_invitable_team_roles: ['member'],
     },
     ...overrides,
   } as ClientConfig;
@@ -216,6 +217,71 @@ describe('member-initiated invites (Phase 4 Task 4)', () => {
 
     expect(result).toEqual({ status: 'ok' });
     expect(deps.sendTeamInviteEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it('plain member cannot grant a role outside the configured member-invitable policy', async () => {
+    const prisma = makePrisma('allowed');
+    prisma.orgMember.findFirst.mockResolvedValue({
+      id: 'm-1', orgId: 'org-1', userId: 'member-1', role: 'member',
+    });
+    prisma.teamMember.findFirst.mockResolvedValue({ teamRole: 'member' });
+    const deps = inviteDeps(prisma);
+
+    await expect(createMemberInvite({
+      orgId: 'org-1', teamId: 'team-1', domain: 'client.example.com', config: makeConfig(),
+      configUrl: 'https://client.example.com/auth-config', actorUserId: 'member-1',
+      invite: { email: 'new@example.com', teamRole: 'admin' },
+    }, deps)).rejects.toMatchObject({ code: 'FORBIDDEN', statusCode: 403 });
+
+    expect(prisma.teamInvite.create).not.toHaveBeenCalled();
+    expect(deps.sendTeamInviteEmail).not.toHaveBeenCalled();
+  });
+
+  it('a domain-defined role with members.manage uses the manager path', async () => {
+    const prisma = makePrisma('disabled');
+    prisma.orgMember.findFirst.mockResolvedValue({
+      id: 'm-1', orgId: 'org-1', userId: 'registrar-1', role: 'registrar',
+    });
+    prisma.teamInvite.create.mockResolvedValue({ id: 'invite-registrar' });
+    const config = makeConfig();
+    config.org_features!.org_roles = ['owner', 'registrar', 'member'];
+    config.org_features!.role_grants = { org: { registrar: ['members.manage'] } };
+    const deps = inviteDeps(prisma);
+
+    await expect(createMemberInvite({
+      orgId: 'org-1', teamId: 'team-1', domain: 'client.example.com', config,
+      configUrl: 'https://client.example.com/auth-config', actorUserId: 'registrar-1',
+      invite: { email: 'new@example.com', teamRole: 'admin' },
+    }, deps)).resolves.toEqual({ status: 'ok' });
+
+    expect(prisma.teamInvite.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ teamRole: 'admin', approvalStatus: 'NOT_REQUIRED' }),
+    }));
+    expect(deps.sendTeamInviteEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it('plain member uses the configured safe default role when omitted', async () => {
+    const prisma = makePrisma('admin_approval');
+    prisma.orgMember.findFirst.mockResolvedValue({
+      id: 'm-1', orgId: 'org-1', userId: 'member-1', role: 'member',
+    });
+    prisma.teamMember.findFirst.mockResolvedValue({ teamRole: 'member' });
+    prisma.teamInvite.create.mockResolvedValue({ id: 'invite-4' });
+    const config = makeConfig();
+    config.org_features!.team_roles = ['owner', 'member', 'guest'];
+    config.org_features!.member_invitable_team_roles = ['guest'];
+    const deps = inviteDeps(prisma);
+
+    await createMemberInvite({
+      orgId: 'org-1', teamId: 'team-1', domain: 'client.example.com', config,
+      configUrl: 'https://client.example.com/auth-config', actorUserId: 'member-1',
+      invite: { email: 'new@example.com' },
+    }, deps);
+
+    expect(prisma.teamInvite.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ teamRole: 'guest', approvalStatus: 'PENDING' }),
+    }));
+    expect(deps.sendTeamInviteEmail).not.toHaveBeenCalled();
   });
 
   it('plain member + memberInvites "admin_approval": creates PENDING and sends NO email', async () => {

@@ -97,7 +97,7 @@ export const orgEndpoints: EndpointSchema[] = [
       meta: 'object — { hasMore, nextCursor, prevCursor }',
       next_cursor: 'string | null — compatibility alias for meta.nextCursor',
       permissions:
-        'object — { addMember, changeMemberRole, removeMember, deactivateMember, reactivateMember, viewMemberEmail }; each is a live caller verdict',
+        'object — { addMember, changeMemberRole, removeMember, deactivateMember, reactivateMember, viewMemberEmail, orgRoleOptions }; each is a live caller verdict. orgRoleOptions is the verified-config org role vocabulary excluding owner, present only when changeMemberRole is true; ownership transfer is a separate action.',
     },
   },
   {

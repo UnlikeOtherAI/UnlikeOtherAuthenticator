@@ -27,7 +27,8 @@ and an **opaque** \`cursor\`. They return this common envelope:
   "permissions": {
     "addMember": false,
     "changeMemberRole": false,
-    "removeMember": false
+    "removeMember": false,
+    "orgRoleOptions": []
   }
 }
 \`\`\`
@@ -46,6 +47,10 @@ Use \`meta.nextCursor\` with \`direction=forward\` and \`meta.prevCursor\` with
 The \`permissions\` object reports individual action verdicts rather than an
 overbroad \`isManager\` flag. Respect the relevant action key when deciding
 whether to show a control; UOA still reauthorizes the eventual mutation.
+For the organisation roster, \`orgRoleOptions\` is the verified config's complete
+assignable organisation-role vocabulary, excluding \`owner\`, and is non-empty
+only when \`changeMemberRole\` is true. Use it for the role picker; ownership
+transfer has a separate route and must never be presented as a role option.
 
 To power a debounced Add member picker, call
 \`GET /org/organisations/:orgId/teams/:teamId/members/candidates?q=…\`.
@@ -63,7 +68,10 @@ live membership state. The feed contains only teams
 where the caller currently holds \`members.manage\`; do not infer access to, or
 attempt to change, a team omitted from it. Add or remove a selected team
 through that exact team's existing member endpoints, which re-authorize each
-write.
+write. Role changes use \`PUT .../teams/:teamId/members/:userId\` with
+\`{ "teamRole": "admin" }\`; adding a member uses \`POST .../members\` with
+\`{ "userId": "uoa_user_…", "teamRole": "member" }\`. These request fields
+are camelCase; the returned roster's \`role\` is a display field.
 
 For the Pending invitations tab, use
 \`GET /org/organisations/:orgId/member-invitations\`. This is a separate,
@@ -79,4 +87,15 @@ Before creating an organisation-level invitation, obtain the explicit target
 team from \`GET /org/organisations/:orgId/member-invitation-targets\`; it has
 the same cursor envelope and only includes teams the caller can manage. Submit
 the selected id to the existing exact-team invitation endpoint. Do not reuse a
-product session's active team as a silent target.`;
+product session's active team as a silent target.
+
+Invitation history (\`GET .../teams/:teamId/invitations\`), invitation detail
+(\`GET .../invitations/:inviteId\`) and resend
+(\`POST .../invitations/:inviteId/resend\`) require a current
+\`members.manage\` grant in that exact target team. Present either the user's
+access token or a fresh \`X-UOA-Subject-Assertion\`; its session team supplies
+provenance and does not silently narrow the target. A present but invalid,
+blank or ambiguous credential fails closed. Omitting both credentials selects
+backend mode only with \`backend_org_management=true\` and only for an
+organisation created on the verified product domain. Resending still refuses
+revoked, accepted, declined, denied or unapproved invitations.`;

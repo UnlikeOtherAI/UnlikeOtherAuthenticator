@@ -30,6 +30,8 @@ describe('/api and /llm roster contract', () => {
     expect(llmRostersMarkdown).toContain('meta.nextCursor');
     expect(llmRostersMarkdown).toContain('opaque');
     expect(llmRostersMarkdown).toContain('permissions');
+    expect(getEndpoint(orgRosterPath).response?.permissions).toContain('orgRoleOptions');
+    expect(llmRostersMarkdown).toContain('orgRoleOptions');
   });
 
   it('documents the manager-only, bounded, scoped candidate endpoint', () => {

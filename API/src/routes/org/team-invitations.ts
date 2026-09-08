@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
 import { asPrismaClient } from '../../db/tenant-context.js';
@@ -22,6 +22,10 @@ import {
   revokeTeamInvite,
 } from '../../services/team-invite.service.js';
 import { AppError } from '../../utils/errors.js';
+import {
+  requireTeamCapability,
+  resolveAndAuthorizeTeamOrg,
+} from '../../services/team.service.base.js';
 
 import {
   BulkInviteBodySchema,
@@ -43,6 +47,25 @@ const AcceptTeamInviteBodySchema = z
     userId: z.string().trim().min(1),
   })
   .strict();
+
+/** Invitation history contains PII; resending exercises the same exact-team authority. */
+async function requireInvitationManager(
+  request: FastifyRequest,
+  prisma: Parameters<typeof requireTeamCapability>[0],
+): Promise<void> {
+  const caller = orgCaller(request);
+  const actorUserId = 'actorUserId' in caller ? caller.actorUserId : undefined;
+  const org = await resolveAndAuthorizeTeamOrg(prisma, {
+    orgId: getOrgIdFromParams(request.params),
+    actorUserId,
+  });
+  await requireTeamCapability(prisma, 'members.manage', {
+    orgId: org.id,
+    teamId: getTeamIdFromParams(request.params),
+    actorUserId,
+    config: requireVerifiedConfig(request),
+  });
+}
 
 export function registerTeamInvitationRoutes(app: FastifyInstance): void {
   app.post(
@@ -162,6 +185,7 @@ export function registerTeamInvitationRoutes(app: FastifyInstance): void {
         configVerifier,
         parseDomainContextHook,
         requireOrgFeatures,
+        requireOrgRole(),
       ],
     },
     async (request, reply) => {
@@ -169,22 +193,22 @@ export function registerTeamInvitationRoutes(app: FastifyInstance): void {
       const orgId = getOrgIdFromParams(request.params);
       const teamId = getTeamIdFromParams(request.params);
 
-      setTenantContextFromRequest(request, { orgId });
-      const invites = await request.withTenantTx((tx) =>
-        listTeamInvites(
+      setTenantContextFromRequest(request, { orgId, userId: tenantUserId(request) });
+      const invites = await request.withTenantTx(async (tx) => {
+        await requireInvitationManager(request, asPrismaClient(tx));
+        return listTeamInvites(
           { orgId, teamId, domain },
           { prisma: asPrismaClient(tx) },
-        ),
-      );
+        );
+      });
 
       reply.status(200).send(invites);
     },
   );
 
   // Read one invitation by id — the by-id companion to the list above, for a consumer holding an
-  // id from a bulk-invite result, the list, or a resend. Same preValidation stack as the list
-  // (domain-hash + verified config + org features), so it is backend-mode capable in exactly the
-  // same way, and returns exactly the record shape the list's entries carry.
+  // id from a bulk-invite result, the list, or a resend. The list and detail share the same
+  // caller and exact-team capability checks, including backend-mode tenant isolation.
   app.get(
     '/org/organisations/:orgId/teams/:teamId/invitations/:inviteId',
     {
@@ -193,6 +217,7 @@ export function registerTeamInvitationRoutes(app: FastifyInstance): void {
         configVerifier,
         parseDomainContextHook,
         requireOrgFeatures,
+        requireOrgRole(),
       ],
     },
     async (request, reply) => {
@@ -201,13 +226,14 @@ export function registerTeamInvitationRoutes(app: FastifyInstance): void {
       const teamId = getTeamIdFromParams(request.params);
       const inviteId = getInviteIdFromParams(request.params);
 
-      setTenantContextFromRequest(request, { orgId });
-      const invite = await request.withTenantTx((tx) =>
-        getTeamInvite(
+      setTenantContextFromRequest(request, { orgId, userId: tenantUserId(request) });
+      const invite = await request.withTenantTx(async (tx) => {
+        await requireInvitationManager(request, asPrismaClient(tx));
+        return getTeamInvite(
           { orgId, teamId, inviteId, domain },
           { prisma: asPrismaClient(tx) },
-        ),
-      );
+        );
+      });
 
       reply.status(200).send(invite);
     },
@@ -221,6 +247,7 @@ export function registerTeamInvitationRoutes(app: FastifyInstance): void {
         configVerifier,
         parseDomainContextHook,
         requireOrgFeatures,
+        requireOrgRole(),
         createRateLimiter({
           limit: 20,
           windowMs: 60 * 60 * 1000,
@@ -240,13 +267,14 @@ export function registerTeamInvitationRoutes(app: FastifyInstance): void {
       const teamId = getTeamIdFromParams(request.params);
       const inviteId = getInviteIdFromParams(request.params);
 
-      setTenantContextFromRequest(request, { orgId });
-      const invite = await request.withTenantTx((tx) =>
-        resendTeamInvite(
+      setTenantContextFromRequest(request, { orgId, userId: tenantUserId(request) });
+      const invite = await request.withTenantTx(async (tx) => {
+        await requireInvitationManager(request, asPrismaClient(tx));
+        return resendTeamInvite(
           { orgId, teamId, inviteId, domain, config, configUrl },
           { prisma: asPrismaClient(tx) },
-        ),
-      );
+        );
+      });
 
       reply.status(200).send(invite);
     },
