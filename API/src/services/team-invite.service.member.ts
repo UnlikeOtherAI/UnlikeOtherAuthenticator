@@ -108,6 +108,7 @@ export async function createMemberInvite(
   }
 
   let approvalStatus: 'NOT_REQUIRED' | 'PENDING' = 'NOT_REQUIRED';
+  let memberInvitableRoles: string[] | undefined;
   // A manager invites outright; everyone else goes through the org's member-invite policy. This
   // used to inline its own `owner|admin` comparison at both scopes — the same predicate
   // `hasTeamCapability` now owns, so a domain's configured roles decide it here too.
@@ -135,11 +136,25 @@ export async function createMemberInvite(
     if (setting === 'admin_approval') {
       approvalStatus = 'PENDING';
     }
+    memberInvitableRoles = params.config.org_features?.member_invitable_team_roles ?? [];
+  }
+
+  if (memberInvitableRoles?.length === 0) {
+    throw new AppError('FORBIDDEN', 403);
   }
 
   const email = normalizeEmail(params.invite.email);
   const inviteName = normalizeInviteName(params.invite.name);
-  const teamRole = normalizeInviteGrantRole(params.invite.teamRole, params.config);
+  const teamRole = normalizeInviteGrantRole(
+    params.invite.teamRole ?? memberInvitableRoles?.[0],
+    params.config,
+  );
+  if (memberInvitableRoles && !memberInvitableRoles.includes(teamRole)) {
+    // A member-invite policy says whether this actor may propose an invite; the configured
+    // invitable-role list separately says which authority that proposal may grant. Resolve an
+    // omitted role first so it cannot bypass the same policy through a default.
+    throw new AppError('FORBIDDEN', 403);
+  }
 
   const identity = buildUserIdentity({
     userScope: params.config.user_scope,

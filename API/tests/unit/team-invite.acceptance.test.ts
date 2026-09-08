@@ -142,6 +142,27 @@ describe('team invite acceptance', () => {
     expect(tx.teamInvite.update).toHaveBeenCalled();
   });
 
+  it('accepting an invite never overwrites an existing team membership role', async () => {
+    const tx = makeAcceptanceTx();
+    tx.teamInvite.findUnique.mockResolvedValue({
+      id: 'invite-1', orgId: 'org-1', teamId: 'team-1', email: 'invited@example.com',
+      inviteName: null, teamRole: 'member', acceptedUserId: null, acceptedAt: null,
+      declinedAt: null, revokedAt: null, expiresAt: null, approvalStatus: 'NOT_REQUIRED',
+      org: { id: 'org-1', domain: 'client.example.com' },
+    });
+    tx.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'invited@example.com', name: 'Invited' });
+    tx.orgMember.findFirst.mockResolvedValue({ id: 'org-member-1', orgId: 'org-1' });
+    tx.teamMember.findFirst.mockResolvedValue({ id: 'team-member-1', teamRole: 'admin' });
+    tx.teamInvite.update.mockResolvedValue({ id: 'invite-1' });
+
+    await expect(acceptTeamInviteWithinTransaction({
+      prisma: tx, teamInviteId: 'invite-1', userId: 'user-1', config: makeConfig(),
+      now: new Date('2026-03-02T00:00:00.000Z'),
+    })).resolves.toEqual({ orgId: 'org-1', teamId: 'team-1' });
+
+    expect(tx.teamMember.create).not.toHaveBeenCalled();
+  });
+
   it('rejects accepting an expired invite with a generic error', async () => {
     const tx = makeAcceptanceTx();
     tx.teamInvite.findUnique.mockResolvedValue({

@@ -36,6 +36,22 @@ describe('config: team_roles', () => {
     expect(() => validateConfigFields(payload({ team_roles: ['owner', ''] }))).toThrow();
     expect(() => validateConfigFields(payload({ team_roles: ['owner', 'x'.repeat(51)] }))).toThrow();
   });
+
+  it('validates the explicit member-invitable role policy against the team vocabulary', () => {
+    const cfg = validateConfigFields(
+      payload({
+        team_roles: ['owner', 'registrar', 'viewer'],
+        member_invitable_team_roles: ['viewer'],
+      }),
+    );
+    expect(cfg.org_features?.member_invitable_team_roles).toEqual(['viewer']);
+    expect(() => validateConfigFields(payload({ member_invitable_team_roles: ['registrar'] }))).toThrow(
+      /member_invitable_team_roles/,
+    );
+    expect(() => validateConfigFields(payload({ member_invitable_team_roles: ['owner'] }))).toThrow(
+      /member_invitable_team_roles/,
+    );
+  });
 });
 
 describe('config: role_grants validation', () => {

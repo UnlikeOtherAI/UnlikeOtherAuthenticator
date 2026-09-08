@@ -184,6 +184,8 @@ export const configJwtDocumentation = {
       org_roles: 'string[] (default ["owner", "admin", "member"]). Must include "owner".',
       team_roles:
         'string[] (default ["owner", "admin", "member"]). Must include "owner". The mirror of org_roles for team membership: team roles used to be fixed in code, and this makes them the domain\'s to name. Validated on every team-role write',
+      member_invitable_team_roles:
+        'string[] (default []) — explicit non-owner team roles a non-manager may assign through a member-initiated invite. member_invites decides whether members may invite; this list decides the authority an invite can grant. Omitted teamRole selects the first configured role, so an empty list rejects member-initiated invites until the domain opts in.',
       capabilities:
         "string[] (optional) — the consuming product's declared capability catalogue, mirrored here so role_grants can be validated against it. UOA's own names (members.manage, teams.manage, organisation.manage) are always valid on top of this list",
       role_grants:

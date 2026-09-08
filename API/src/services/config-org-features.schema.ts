@@ -77,6 +77,11 @@ const BaseOrgFeaturesSchema = z.object({
     .array(RoleNameSchema)
     .refine((roles) => roles.includes(OWNER_ROLE), { message: 'team_roles must include "owner"' })
     .default([...DEFAULT_TEAM_ROLES]),
+  // A domain's explicit allow-list of team roles that a non-manager may assign with a
+  // member-initiated invitation. It intentionally defaults to empty: `memberInvites: "allowed"`
+  // controls whether a member may invite, while this list controls the authority that invite can
+  // grant. The two decisions must never be conflated.
+  member_invitable_team_roles: z.array(RoleNameSchema).default([]),
   // The consuming product's declared capability catalogue, mirrored here so `role_grants` can be
   // validated against it. UOA's own capability names are always legal on top of this list.
   capabilities: z.array(CapabilityNameSchema).optional(),
@@ -91,6 +96,16 @@ const BaseOrgFeaturesSchema = z.object({
 type ParsedOrgFeatures = z.infer<typeof BaseOrgFeaturesSchema>;
 
 function validateRoleGrants(features: ParsedOrgFeatures, ctx: z.RefinementCtx): void {
+  for (const [index, role] of features.member_invitable_team_roles.entries()) {
+    if (role === OWNER_ROLE || !features.team_roles.includes(role)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'member_invitable_team_roles must name non-owner roles from team_roles',
+        path: ['member_invitable_team_roles', index],
+      });
+    }
+  }
+
   const grants = features.role_grants;
   if (!grants) return;
 
@@ -132,6 +147,7 @@ function validateRoleGrants(features: ParsedOrgFeatures, ctx: z.RefinementCtx): 
       });
     }
   }
+
 }
 
 export const OrgFeaturesSchema = BaseOrgFeaturesSchema.superRefine(validateRoleGrants)
@@ -153,6 +169,7 @@ export const OrgFeaturesSchema = BaseOrgFeaturesSchema.superRefine(validateRoleG
     max_team_memberships_per_user: 50,
     org_roles: [...DEFAULT_ORG_ROLES],
     team_roles: [...DEFAULT_TEAM_ROLES],
+    member_invitable_team_roles: [],
     max_flags_per_app: 100,
     scim_override_retention: 'retain',
     global_missing_flag_default: 'disabled',
