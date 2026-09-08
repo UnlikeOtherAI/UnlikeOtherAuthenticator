@@ -83,8 +83,8 @@ export const orgInvitationEndpoints: EndpointSchema[] = [
   {
     method: 'GET',
     path: '/org/organisations/:orgId/teams/:teamId/invitations',
-    description: 'List invitation history for a team',
-    auth: 'domain hash bearer token',
+    description: 'List invitation history for a team; user callers need current members.manage in this exact team.',
+    auth: 'domain hash bearer token plus optional access token or subject assertion; absent credentials require backend_org_management and origin-domain isolation',
     response: {
       data: 'array — invite records with status (pending|accepted|declined|replaced|revoked|expired), approvalStatus (not_required|pending|approved|denied), expiresAt, inviter, send/open, accepted/declined/revoked state, plus invitedByAvatarImageUrl and acceptedAvatarImageUrl (null until the matching user id exists; the invitee email never gets one)',
     },
@@ -93,8 +93,8 @@ export const orgInvitationEndpoints: EndpointSchema[] = [
     method: 'GET',
     path: '/org/organisations/:orgId/teams/:teamId/invitations/:inviteId',
     description:
-      'Read one team invitation by id — the by-id companion to the invitation list, for a caller holding an id from a bulk-invite result, the list, or a resend. Read-only: nothing is written and no audit row is produced.',
-    auth: 'domain hash bearer token',
+      'Read one team invitation by id — the by-id companion to the invitation list, for a caller holding an id from a bulk-invite result, the list, or a resend. User callers need current members.manage in this exact team. Read-only: nothing is written and no audit row is produced.',
+    auth: 'domain hash bearer token plus optional access token or subject assertion; absent credentials require backend_org_management and origin-domain isolation',
     response: {
       200: 'invite record — exactly the shape the list returns per entry, including status (pending|accepted|declined|replaced|revoked|expired), approvalStatus (not_required|pending|approved|denied), expiresAt, inviter, send/open, accepted/declined/revoked state, invitedByAvatarImageUrl and acceptedAvatarImageUrl',
       404: 'generic — unknown invite id, an invitation belonging to a foreign org/team, or cross-domain (no existence leak)',
@@ -105,7 +105,7 @@ export const orgInvitationEndpoints: EndpointSchema[] = [
     path: '/org/organisations/:orgId/teams/:teamId/invitations/:inviteId/resend',
     description:
       "Resend a pending team invitation email; refreshes the invite's expiry to now + 30 days. Only an actionable invitation with settled approval can be resent: accepted, declined, revoked, approval-denied, and still-awaiting-approval invitations all answer the generic 400, so a resend can neither resurrect a revoked invitation nor mail an unapproved one",
-    auth: 'domain hash bearer token',
+    auth: 'domain hash bearer token plus optional access token or subject assertion; user callers need current members.manage in this exact team; absent credentials require backend_org_management and origin-domain isolation',
   },
   {
     method: 'POST',

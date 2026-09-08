@@ -2723,3 +2723,16 @@ UOA capability plus one additive protocol field they already know how to render.
   checkout-session/portal-session envelopes whose absence had products
   hand-writing their own validators. Every addition is optional, so a 1.2.0
   consumer and every existing fixture stay valid.
+
+## 2026-09-08 Invitation management authorization clarification
+
+Team invitation history, detail and resend use the same caller boundary as the
+member roster: a UOA access token or fresh product subject assertion identifies
+an ACTIVE organisation member, and the exact target team must grant that actor
+`members.manage`. The selected session team is provenance, not a target filter.
+Invalid, blank and ambiguous credentials fail closed. Credential-free calls
+require `backend_org_management=true` and retain origin-domain isolation.
+These checks apply before reading invitation PII or sending replacement mail;
+resend retains the shared invitation state machine and cannot revive terminal
+or unapproved invitations. Member add and role-change request bodies use the
+existing camelCase `userId` and `teamRole` fields.
