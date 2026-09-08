@@ -27,7 +27,8 @@ and an **opaque** \`cursor\`. They return this common envelope:
   "permissions": {
     "addMember": false,
     "changeMemberRole": false,
-    "removeMember": false
+    "removeMember": false,
+    "orgRoleOptions": []
   }
 }
 \`\`\`
@@ -46,6 +47,10 @@ Use \`meta.nextCursor\` with \`direction=forward\` and \`meta.prevCursor\` with
 The \`permissions\` object reports individual action verdicts rather than an
 overbroad \`isManager\` flag. Respect the relevant action key when deciding
 whether to show a control; UOA still reauthorizes the eventual mutation.
+For the organisation roster, \`orgRoleOptions\` is the verified config's complete
+assignable organisation-role vocabulary, excluding \`owner\`, and is non-empty
+only when \`changeMemberRole\` is true. Use it for the role picker; ownership
+transfer has a separate route and must never be presented as a role option.
 
 To power a debounced Add member picker, call
 \`GET /org/organisations/:orgId/teams/:teamId/members/candidates?q=…\`.
