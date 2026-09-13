@@ -57,15 +57,24 @@ export function CreateFirstTeamForm(props: {
         {t('team.createDialog.newOrganisationDescription')}
       </p>
 
-      <Input
-        label={t('team.createOrg.nameLabel')}
-        value={name}
-        onChange={(event) => setName(event.target.value)}
-        disabled={submitting}
-        maxLength={100}
-        autoFocus
-        required
-      />
+      {/*
+        F3: this form creates an ORGANISATION (the route hard-codes its first team to
+        "General"), so the field is labelled for what it actually names, and the hint says
+        what the submit produces. `team.createOrg.nameLabel` stays as-is — the create dialog
+        still uses it for a genuine team name.
+      */}
+      <div className="flex flex-col gap-1">
+        <Input
+          label={t('team.createOrg.organisationNameLabel')}
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          disabled={submitting}
+          maxLength={100}
+          autoFocus
+          required
+        />
+        <p className="text-xs text-[var(--uoa-color-muted)]">{t('team.createOrg.firstTeamHint')}</p>
+      </div>
 
       <div>
         <label

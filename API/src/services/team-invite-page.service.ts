@@ -8,6 +8,8 @@
  * flow to the invitee.
  */
 import { isAppError } from '../utils/errors.js';
+import type { ClientConfig } from './config.service.js';
+import { selectRedirectUrl } from './authorization-code.service.js';
 
 export function escapeInvitePageHtml(value: string): string {
   return value
@@ -18,12 +20,50 @@ export function escapeInvitePageHtml(value: string): string {
     .replaceAll("'", '&#39;');
 }
 
+/**
+ * The product name to put on a "Continue to …" control: the client config's own logo
+ * alt text when it has one, and otherwise its domain. Never a value taken from the
+ * request — both come from the verified config JWT.
+ */
+export function resolveInviteProductName(config: ClientConfig): string {
+  const alt = config.ui_theme?.logo?.alt?.trim();
+  return alt && alt.length > 0 ? alt : config.domain;
+}
+
+/**
+ * The invitation flow's terminal pages are reached from a mailbox, so the only way back into
+ * the product is a link UOA puts there itself. A `redirect_url` may only become that link when
+ * it is one of the config's own `redirect_urls` — an unlisted or unparseable value is dropped
+ * and the page renders exactly as it did before the parameter existed, never as a redirector
+ * to an attacker-chosen address.
+ */
+export function resolveInviteContinueUrl(
+  config: ClientConfig,
+  requestedRedirectUrl: string | undefined,
+): string | undefined {
+  if (!requestedRedirectUrl?.trim()) return undefined;
+  try {
+    return selectRedirectUrl({
+      allowedRedirectUrls: config.redirect_urls,
+      requestedRedirectUrl,
+    });
+  } catch {
+    return undefined;
+  }
+}
+
 export function renderInviteHtml(params: {
   title: string;
   body: string;
   acceptUrl?: string;
   declineUrl?: string;
+  /** Already validated against `config.redirect_urls` — see `resolveInviteContinueUrl`. */
+  continueUrl?: string;
+  productName?: string;
 }): string {
+  const continueButton = params.continueUrl
+    ? `<a href="${escapeInvitePageHtml(params.continueUrl)}" style="display:inline-block;padding:12px 16px;border-radius:12px;background:#111827;color:#ffffff;text-decoration:none;font-weight:600;">Continue to ${escapeInvitePageHtml(params.productName ?? 'the app')}</a>`
+    : '';
   const primaryButton = params.acceptUrl
     ? `<a href="${escapeInvitePageHtml(params.acceptUrl)}" style="display:inline-block;padding:12px 16px;border-radius:12px;background:#111827;color:#ffffff;text-decoration:none;font-weight:600;">Accept invitation</a>`
     : '';
@@ -43,7 +83,7 @@ export function renderInviteHtml(params: {
       <div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:16px;padding:32px;">
         <h1 style="margin:0 0 16px 0;font-size:28px;line-height:1.2;">${escapeInvitePageHtml(params.title)}</h1>
         <p style="margin:0 0 24px 0;font-size:16px;line-height:1.6;">${escapeInvitePageHtml(params.body)}</p>
-        <div style="display:flex;gap:12px;flex-wrap:wrap;">${primaryButton}${declineButton}</div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;">${primaryButton}${continueButton}${declineButton}</div>
       </div>
     </div>
   </body>

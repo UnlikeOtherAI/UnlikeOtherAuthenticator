@@ -191,14 +191,18 @@ describe('TeamChooserPage SSR rendering', () => {
     expect(html).toContain('>Owner<');
   });
 
-  it('renders an inline first-team form when there is no team destination yet', () => {
+  it('renders an inline first-organisation form when there is no team destination yet', () => {
     const withCreate = renderChooser({
       teams: [],
       pending_invites: [],
       can_create_org: true,
     });
-    expect(withCreate).toContain('Team name');
+    // F3: the submit creates an organisation whose first team is always "General", so the
+    // field names the organisation and the hint says what the first team will be called.
+    expect(withCreate).toContain('Organisation name');
+    expect(withCreate).not.toContain('Team name');
     expect(withCreate).toContain('This creates an organisation and its first team.');
+    expect(withCreate).toContain('Your first team will be called General');
     expect(withCreate).toContain('Visibility');
     expect(withCreate).toContain('Create team');
     expect(withCreate).not.toContain('aria-label="Create team"');
@@ -212,7 +216,8 @@ describe('TeamChooserPage SSR rendering', () => {
       pending_invites: [],
       can_create_org: true,
     });
-    expect(withExistingTeams).not.toContain('Team name');
+    expect(withExistingTeams).not.toContain('Organisation name');
+    expect(withExistingTeams).not.toContain('Your first team will be called General');
     expect(withExistingTeams).toContain('aria-label="Create team"');
   });
 

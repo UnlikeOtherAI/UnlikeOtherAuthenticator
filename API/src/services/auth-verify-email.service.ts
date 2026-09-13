@@ -143,10 +143,22 @@ export async function validateVerifyEmailToken(
   return type;
 }
 
+/** F6: an optional self-declared display name, normalized the one way the API accepts it. */
+function normalizeProvidedName(name: string | undefined): string | undefined {
+  const trimmed = name?.trim();
+  return trimmed ? trimmed.slice(0, 120) : undefined;
+}
+
 export async function verifyEmailToken(
   params: {
     token: string;
     password?: string;
+    /**
+     * F6: an optional name the person typed on the registration or set-password screen.
+     * Stored only while their own name is still blank, so it can never overwrite an
+     * established profile name, and an invitation's `inviteName` stays the fallback.
+     */
+    name?: string;
     configUrl: string;
     config: ClientConfig;
   },
@@ -310,6 +322,19 @@ export async function verifyEmailToken(
       userId,
       prisma: tx,
     });
+
+    // F6: registration by e-mail never asked for a name, so products showed "Unnamed member".
+    // The blank-name filter is the whole guard — an account that already has a name keeps it,
+    // whether it was set on a previous visit or by a social provider. This runs before invite
+    // acceptance, which backfills `inviteName` under the same blank-name rule, so a name the
+    // person typed themselves wins over the one the inviter guessed.
+    const providedName = normalizeProvidedName(params.name);
+    if (providedName) {
+      await tx.user.updateMany({
+        where: { id: userId, OR: [{ name: null }, { name: '' }] },
+        data: { name: providedName },
+      });
+    }
 
     let acceptedInvite: AcceptedEmailInviteTeam | null = null;
     if (tokenRow.teamInviteId) {

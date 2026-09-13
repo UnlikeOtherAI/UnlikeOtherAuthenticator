@@ -16,6 +16,8 @@ export const es = {
   'auth.signatures.title': 'Revisa y firma los acuerdos',
 
   'form.email.label': 'Correo electronico',
+  'form.name.label': 'Tu nombre',
+  'form.name.placeholder': 'Opcional',
   'form.password.label': 'Contrasena',
   'form.newPassword.label': 'Nueva contrasena',
   'form.confirmPassword.label': 'Confirmar contrasena',
@@ -46,6 +48,9 @@ export const es = {
     'Tu solicitud se ha enviado a los administradores del equipo. Puedes cerrar esta ventana y esperar su aprobacion.',
   'message.signedIn': 'Vuelve a la aplicacion para terminar de iniciar sesion. Puedes cerrar esta ventana.',
   'message.inviteAccepted': 'Tu cuenta se ha creado y te has unido al equipo. Puedes cerrar esta ventana.',
+  'message.inviteAccepted.joined': 'Tu cuenta se ha creado y te has unido al equipo.',
+  'message.inviteAccepted.continue': 'Continuar a {product}',
+  'message.inviteAccepted.product': 'la aplicación',
   'action.openApp': 'Abrir la aplicacion',
 
   'nav.forgotPassword': 'Olvidaste tu contrasena?',
@@ -74,6 +79,9 @@ export const es = {
   'team.createOrg.nameLabel': 'Nombre del equipo',
   'team.createOrg.submit': 'Crear equipo',
   'team.createOrg.cancel': 'Cancelar',
+  'team.createOrg.organisationNameLabel': 'Nombre de la organización',
+  'team.createOrg.firstTeamHint':
+    'Tu primer equipo se llamará General; puedes cambiarle el nombre más adelante.',
   'team.address.label': 'Dirección del equipo',
   'team.address.hint': 'Esta será la dirección web del equipo. Puedes cambiarla más adelante.',
   'team.address.checking': 'Comprobando disponibilidad…',

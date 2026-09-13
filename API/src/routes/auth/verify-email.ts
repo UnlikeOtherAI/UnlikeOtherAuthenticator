@@ -32,6 +32,9 @@ const BodySchema = z
   .object({
     token: z.string().min(1).max(4096),
     password: z.string().min(1).max(1024).optional(),
+    // F6: optional self-declared display name. Stored only while the account's own name is
+    // blank — see `verifyEmailToken` — so it can never rewrite an established profile.
+    name: z.string().trim().max(120).optional(),
   })
   .strict();
 
@@ -57,7 +60,7 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
       preHandler: [tokenConsumeRateLimiter, configVerifier],
     },
     async (request, reply) => {
-      const { token, password } = BodySchema.parse(request.body);
+      const { token, password, name } = BodySchema.parse(request.body);
       const { redirect_url, code_challenge, code_challenge_method, request_access, state } =
         QuerySchema.parse(request.query);
       const config = request.config;
@@ -97,6 +100,7 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
           {
             token,
             password,
+            name,
             config,
             configUrl,
           },

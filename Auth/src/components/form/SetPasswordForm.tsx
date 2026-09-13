@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 
 import { Button } from '../ui/Button.js';
+import { Input } from '../ui/Input.js';
 import { PasswordInput } from '../ui/PasswordInput.js';
 import { PasswordRequirements } from './PasswordRequirements.js';
 import { usePopup } from '../../hooks/use-popup.js';
@@ -9,7 +10,7 @@ import { postJson, type ApiResult } from '../../utils/api.js';
 import { checkPasswordPolicy } from '../../utils/password-policy.js';
 import { applyTeamOutcome, interpretTeamResponse } from '../../utils/team-response.js';
 
-type SetPasswordRequest = { token: string; password: string };
+type SetPasswordRequest = { token: string; password: string; name?: string };
 
 export function SetPasswordForm(): React.JSX.Element {
   const { t } = useTranslation();
@@ -30,6 +31,7 @@ export function SetPasswordForm(): React.JSX.Element {
     requestAccess,
   } = usePopup();
 
+  const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -117,9 +119,13 @@ export function SetPasswordForm(): React.JSX.Element {
     }
     if (requestAccess) query.request_access = true;
 
+    // F6: optional, and only on the registration branch — a password reset is an existing
+    // account, whose name is not this form's business. The server stores it only while the
+    // account's own name is blank.
+    const declaredName = name.trim();
     const result = await postJson<SetPasswordRequest, unknown>(
       '/auth/verify-email',
-      { token: emailToken, password },
+      { token: emailToken, password, ...(declaredName ? { name: declaredName } : {}) },
       query,
     );
     setLoading(false);
@@ -176,6 +182,18 @@ export function SetPasswordForm(): React.JSX.Element {
         aria-busy={!hydrated || undefined}
         className="m-0 flex min-w-0 flex-col gap-4 border-0 p-0"
       >
+        {isPasswordReset ? null : (
+          <Input
+            name="name"
+            autoComplete="name"
+            maxLength={120}
+            label={t('form.name.label')}
+            placeholder={t('form.name.placeholder')}
+            value={name}
+            onChange={(e) => setName(e.currentTarget.value)}
+          />
+        )}
+
         <PasswordInput
           name="password"
           autoComplete="new-password"
