@@ -341,7 +341,7 @@ describe('buildSessionChoices', () => {
       user: {
         findUnique: vi.fn(async () => ({ email: 'jane@acme.com' })),
         // The inviter of a member-initiated invitation is recorded as a user id alone.
-        findMany: vi.fn(async () => [{ id: 'user-9', name: 'Carol Owner', email: 'carol@acme.com' }]),
+        findMany: vi.fn(async () => [{ id: 'user-9', name: 'Carol Owner' }]),
       },
       teamMember: { findMany: vi.fn(async () => []) },
       teamInvite: {
@@ -351,15 +351,14 @@ describe('buildSessionChoices', () => {
             team: { name: 'Design' },
             org: { name: 'Acme Inc' },
             invitedByName: 'Alice Admin',
-            invitedByEmail: 'alice@acme.com',
             invitedByUserId: null,
           },
           {
             id: 'invite-2',
             team: { name: 'Ops' },
             org: { name: 'Acme Inc' },
+            // Only an e-mail address was recorded for this inviter; it is never a label.
             invitedByName: null,
-            invitedByEmail: 'bob@acme.com',
             invitedByUserId: null,
           },
           {
@@ -367,7 +366,6 @@ describe('buildSessionChoices', () => {
             team: { name: 'General' },
             org: { name: 'Bravo Org' },
             invitedByName: null,
-            invitedByEmail: null,
             invitedByUserId: 'user-9',
           },
         ]),
@@ -381,7 +379,7 @@ describe('buildSessionChoices', () => {
 
     expect(result.pending_invites).toEqual([
       { inviteId: 'invite-1', teamName: 'Design', orgName: 'Acme Inc', invitedBy: 'Alice Admin' },
-      { inviteId: 'invite-2', teamName: 'Ops', orgName: 'Acme Inc', invitedBy: 'bob@acme.com' },
+      { inviteId: 'invite-2', teamName: 'Ops', orgName: 'Acme Inc', invitedBy: null },
       {
         inviteId: 'invite-3',
         teamName: 'General',
@@ -394,24 +392,61 @@ describe('buildSessionChoices', () => {
     expect(prisma.user.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: { in: ['user-9'] } } }),
     );
+    // Exactly the filter `/org/me` uses (`pendingInviteWhereForCaller`): the chooser and the
+    // sidebar must answer with one set, so the reach is composed the same way in both.
     expect(prisma.teamInvite.findMany).toHaveBeenCalledWith({
       where: {
-        email: 'jane@acme.com',
-        acceptedAt: null,
-        declinedAt: null,
-        revokedAt: null,
-        approvalStatus: { in: ['NOT_REQUIRED', 'APPROVED'] },
-        OR: [{ expiresAt: null }, { expiresAt: { gt: expect.any(Date) } }],
-        org: { domain: 'client.example.com' },
+        AND: [
+          { email: 'jane@acme.com' },
+          {
+            acceptedAt: null,
+            declinedAt: null,
+            revokedAt: null,
+            approvalStatus: { in: ['NOT_REQUIRED', 'APPROVED'] },
+            OR: [{ expiresAt: null }, { expiresAt: { gt: expect.any(Date) } }],
+          },
+          { OR: [{ org: { domain: 'client.example.com' } }] },
+        ],
       },
       select: {
         id: true,
         team: { select: { name: true } },
         org: { select: { name: true } },
         invitedByName: true,
-        invitedByEmail: true,
         invitedByUserId: true,
       },
+    });
+  });
+
+  it('reaches an all-memberships product’s other organisations for invitations too', async () => {
+    const prisma = {
+      user: { findUnique: vi.fn(async () => ({ email: 'jane@acme.com' })), findMany: vi.fn() },
+      teamMember: { findMany: vi.fn(async () => []) },
+      teamInvite: { findMany: vi.fn(async () => []) },
+    };
+    const crossProductPrisma = {
+      user: { findUnique: vi.fn(), findMany: vi.fn() },
+      teamMember: { findMany: vi.fn(async () => []) },
+      teamInvite: { findMany: vi.fn(async () => []) },
+    };
+
+    await buildSessionChoices(
+      { userId: 'user-1', config: makeConfig() },
+      {
+        policy: { scope: 'all_active_memberships', serviceId: 'service-1', product: 'nessie' },
+        prisma,
+        crossProductPrisma,
+      },
+    );
+
+    const where = prisma.teamInvite.findMany.mock.calls[0]![0]!.where as {
+      AND: Record<string, unknown>[];
+    };
+    expect(where.AND[2]).toEqual({
+      OR: [
+        { org: { domain: 'client.example.com' } },
+        { org: { members: { some: { userId: 'user-1', status: 'ACTIVE' } } } },
+      ],
     });
   });
 

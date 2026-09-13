@@ -1,10 +1,14 @@
-import type { Prisma, PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
 
 import type { ClientConfig } from './config.service.js';
 import { getAdminPrisma, getPrisma } from '../db/prisma.js';
 import { avatarImageBaseUrl, publicTeamAvatarImageUrl } from '../utils/avatar-url.js';
 import { configRoleHoldsCapability } from './role-grants.js';
 import { resolveInviterLabel } from './invite-inviter-label.service.js';
+import {
+  pendingInviteStatusWhere,
+  pendingInviteWhereForCaller,
+} from './pending-invite-scope.service.js';
 import {
   resolveProductTeamPolicy,
   type ProductTeamPolicy,
@@ -17,33 +21,6 @@ type FirstLoginPrisma = {
   teamMember: Pick<PrismaClient['teamMember'], 'findMany'>;
   teamInvite: Pick<PrismaClient['teamInvite'], 'findMany'>;
 };
-
-/**
- * The "is this TeamInvite row still a real pending invite" predicate (design §4.7): unaccepted,
- * undeclined, unrevoked, and not expired. This is the single source of truth for that eligibility
- * check — `buildFirstLoginBlock`, `buildSessionChoices` (the chooser), the gap-fix A `/org/me`
- * sidebar (`team-directory.service.ts`), and the "Invited" tab (`team-invite.service.invited.ts`)
- * all compose it with their own scoping (email+domain vs team+org) rather than duplicating it.
- *
- * `includePendingApproval` defaults to false, matching the historical chooser/firstLogin behaviour:
- * an invite still awaiting member-invite approval (design §4.7 Phase 4) is not yet a real pending
- * invite FOR THE INVITEE. The "Invited" tab (an admin's view) passes `true` — an admin managing
- * invites must see ones still awaiting their own approval.
- */
-export function pendingInviteStatusWhere(params: {
-  now: Date;
-  includePendingApproval?: boolean;
-}): Prisma.TeamInviteWhereInput {
-  return {
-    acceptedAt: null,
-    declinedAt: null,
-    revokedAt: null,
-    approvalStatus: params.includePendingApproval
-      ? { in: ['NOT_REQUIRED', 'APPROVED', 'PENDING'] }
-      : { in: ['NOT_REQUIRED', 'APPROVED'] },
-    OR: [{ expiresAt: null }, { expiresAt: { gt: params.now } }],
-  };
-}
 
 export type FirstLoginMembershipOrg = {
   orgId: string;
@@ -404,19 +381,25 @@ export async function buildSessionChoices(
       },
     }),
     prisma.teamInvite.findMany({
-      where: {
+      // Exactly the sidebar's filter (`pending-invite-scope.service.ts`): eligibility, this
+      // caller's own address, and the product's organisation reach. The chooser used to be
+      // domain-scoped while `/org/me` spanned the policy's organisations, so an
+      // `all_active_memberships` product could be offered an invitation in one surface and not
+      // the other. This read stays on the caller-supplied client: `/auth/select-team` rebuilds
+      // the payload inside the transaction that just accepted or declined an invitation, and a
+      // separate connection would not see that yet.
+      where: pendingInviteWhereForCaller({
         email: user.email,
-        org: { domain },
-        // Task 3/4 (design §4.7): expired invites and invites awaiting member-invite approval are
-        // not yet real pending invites for the invitee — excluded from the chooser.
-        ...pendingInviteStatusWhere({ now }),
-      },
+        userId: params.userId,
+        domain,
+        policy,
+        now,
+      }),
       select: {
         id: true,
         team: { select: { name: true } },
         org: { select: { name: true } },
         invitedByName: true,
-        invitedByEmail: true,
         invitedByUserId: true,
       },
     }),

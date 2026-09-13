@@ -1,7 +1,7 @@
 import type { PrismaClient } from '@prisma/client';
 
 /**
- * "Invited by …" for an invitation card, from whichever trace of the inviter the row actually has.
+ * "Invited by …" for an invitation card: the inviter's NAME, or nothing.
  *
  * A `TeamInvite` records its inviter in one of two ways. The trusted-backend bulk endpoint is
  * given `invitedBy: { name?, email? }` and stores those strings. The member-initiated endpoint
@@ -10,14 +10,14 @@ import type { PrismaClient } from '@prisma/client';
  * chooser's invite card and `/org/me`'s `pending_invites[]` rendered no inviter at all although
  * the inviter was perfectly well known.
  *
- * Resolution order is name-on-the-row → email-on-the-row → the inviting user's own name → their
- * e-mail address, which is the same precedence the stored pair already expresses. Exposing that
- * to the invitee reveals nothing they were not already told: the invitation e-mail names its
- * sender.
+ * Resolution is name-on-the-row → the inviting user's own name, and null when neither exists.
+ * The e-mail address is deliberately NOT a fallback, and neither is anything derived from it:
+ * "Alice invited you" is the whole intent, and the address is a disclosure the invitee has not
+ * otherwise been given — `buildTeamInviteTemplate` names the team, the organisation and the
+ * product, never the sender. A card with no name simply shows no inviter line.
  */
 export type InviterLabelRow = {
   invitedByName: string | null;
-  invitedByEmail: string | null;
   invitedByUserId: string | null;
 };
 
@@ -27,8 +27,9 @@ export type InviterLabelPrisma = {
 
 export type InviterLabel = (row: InviterLabelRow) => string | null;
 
+/** A blank or whitespace-only stored name is no name at all; it must not render an empty line. */
 function storedLabel(row: InviterLabelRow): string | null {
-  return row.invitedByName ?? row.invitedByEmail ?? null;
+  return row.invitedByName?.trim() || null;
 }
 
 /**
@@ -51,12 +52,14 @@ export async function resolveInviterLabel(
 
   if (missing.length === 0) return storedLabel;
 
+  // `name` only — the e-mail address is never selected here, so it cannot leak into a label by
+  // a later edit either.
   const inviters = await deps.prisma.user.findMany({
     where: { id: { in: missing } },
-    select: { id: true, name: true, email: true },
+    select: { id: true, name: true },
   });
   const labelByUserId = new Map(
-    inviters.map((user) => [user.id, user.name ?? user.email ?? null] as const),
+    inviters.map((user) => [user.id, user.name?.trim() || null] as const),
   );
 
   return (row) =>

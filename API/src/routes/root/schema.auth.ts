@@ -100,7 +100,7 @@ export const authEndpoints: EndpointSchema[] = [
       'teams?':
         "array of { teamId, orgId, name, slug, role, iconUrl, avatarImageUrl, orgName, orgSlug } — this user's ACTIVE team memberships on this domain (only with login_token). avatarImageUrl is the public /teams/:teamId/avatar form (never null, no credential needed) — the chooser renders in a popup that holds no bearer",
       'pending_invites?':
-        'array of { inviteId, teamName, orgName, invitedBy } — pending invites for this email on this domain (only with login_token). orgName is the inviting organisation (null only for a legacy row without it): two organisations can each own a team called "General", and the invite card carries no other organisation label',
+        'array of { inviteId, teamName, orgName, invitedBy } — pending invites for this email on this domain (only with login_token). orgName is the inviting organisation (null only for a legacy row without it): two organisations can each own a team called "General", and the invite card carries no other organisation label. invitedBy is the inviter NAME and null when no name is known — never an e-mail address',
       'can_create_org?': 'boolean (only with login_token)',
       'creatable_orgs?':
         'array of { orgId, orgName } — organisations this user may add a team to via POST /auth/create-team (ACTIVE owner/admin there + org_features.allow_user_create_team). Empty unless the domain opted in. Distinct from can_create_org, which permits creating a new organisation',
@@ -226,7 +226,7 @@ export const authEndpoints: EndpointSchema[] = [
       teams:
         "array of { teamId, orgId, name, slug, role, iconUrl, avatarImageUrl, orgName, orgSlug } — this user's ACTIVE team memberships on this domain. avatarImageUrl is the public /teams/:teamId/avatar form (never null, no credential needed)",
       pending_invites:
-        'array of { inviteId, teamName, orgName, invitedBy } — pending invites for this email on this domain. orgName is the inviting organisation (null only for a legacy row without it)',
+        'array of { inviteId, teamName, orgName, invitedBy } — pending invites for this email on this domain. orgName is the inviting organisation (null only for a legacy row without it); invitedBy is the inviter NAME, never an e-mail address, and null when no name is known',
       can_create_org: 'boolean',
       creatable_orgs:
         'array of { orgId, orgName } — organisations this user may add a team to via POST /auth/create-team',
