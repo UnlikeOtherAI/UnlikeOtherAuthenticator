@@ -96,9 +96,12 @@ export async function acceptTeamInviteWithinTransaction(params: {
     throw new AppError('BAD_REQUEST', 400);
   }
 
+  // The inviter's guess at a name only fills a gap. Guard the write on the blank name rather
+  // than on the value read above: `POST /auth/verify-email` may commit a name the person typed
+  // themselves between that read and this write, and check-then-act would overwrite it.
   if (!user.name && invite.inviteName) {
-    await params.prisma.user.update({
-      where: { id: params.userId },
+    await params.prisma.user.updateMany({
+      where: { id: params.userId, OR: [{ name: null }, { name: '' }] },
       data: { name: invite.inviteName },
     });
   }
