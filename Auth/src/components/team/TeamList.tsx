@@ -49,6 +49,8 @@ export function TeamList(props: {
 }): React.JSX.Element {
   const sections = buildSections(props.teams);
   // A single group needs no heading — grouping only earns its space when it disambiguates names.
+  // The organisation itself is still named, on each card instead: a person with one organisation
+  // has just as much right to see which one they are signing into as a person with two.
   const showOrgNames = sections.length > 1;
 
   return (
@@ -68,6 +70,7 @@ export function TeamList(props: {
                 query={props.query}
                 onOutcome={props.onOutcome}
                 disabled={props.disabled}
+                showOrgName={!showOrgNames}
               />
             ))}
           </div>

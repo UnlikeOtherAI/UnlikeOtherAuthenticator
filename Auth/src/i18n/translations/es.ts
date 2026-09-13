@@ -66,6 +66,7 @@ export const es = {
   'team.role.admin': 'Administrador',
   'team.invite.title': 'Te invitaron a {teamName}',
   'team.invite.invitedBy': 'Invitado por {invitedBy}',
+  'team.invite.inOrg': 'en {orgName}',
   'team.invite.accept': 'Aceptar',
   'team.invite.decline': 'Rechazar',
   'team.createOrg.title': 'Crear un nuevo equipo',

@@ -119,6 +119,78 @@ describe('TeamChooserPage SSR rendering', () => {
     expect(html).toContain('Decline');
   });
 
+  // The invited team is one this person has no membership in, so it is never in the list below —
+  // the card is the only thing that can say which organisation is inviting them, and two
+  // organisations can each own a "General".
+  it('names the inviting organisation and the inviter on the invite card', () => {
+    const html = renderChooser({
+      teams: [{ teamId: 't1', orgId: 'o1', name: 'General', role: 'owner', orgName: 'Alpha Team' }],
+      pending_invites: [
+        {
+          inviteId: 'inv-1',
+          teamName: 'General',
+          orgName: 'Bravo Org',
+          invitedBy: 'Test B',
+        },
+      ],
+      can_create_org: false,
+    });
+
+    expect(html).toContain('You’ve been invited to');
+    expect(html).toContain('in Bravo Org');
+    expect(html).toContain('Invited by Test B');
+  });
+
+  it('omits the organisation line when the payload carries no organisation name', () => {
+    const html = renderChooser({
+      teams: [
+        { teamId: 't1', orgId: 'o1', name: 'Backend Team', role: 'member' },
+        { teamId: 't2', orgId: 'o1', name: 'Frontend Team', role: 'owner' },
+      ],
+      pending_invites: [{ inviteId: 'inv-1', teamName: 'Growth Squad', invitedBy: null }],
+      can_create_org: false,
+    });
+
+    expect(html).toContain('Growth Squad');
+    expect(html).not.toContain('Invited by');
+    expect(html).not.toContain('in undefined');
+    expect(html).not.toContain('in null');
+  });
+
+  // One organisation renders no <h2> heading, so without this the person is told the team name
+  // and nothing else — "General" alone identifies nothing.
+  it('names the organisation under each team when the chooser has only one', () => {
+    const html = renderChooser({
+      teams: [
+        { teamId: 't1', orgId: 'o1', name: 'General', role: 'owner', orgName: 'Alpha Team' },
+        { teamId: 't2', orgId: 'o1', name: 'Beta Team', role: 'member', orgName: 'Alpha Team' },
+      ],
+      pending_invites: [],
+      can_create_org: false,
+    });
+
+    expect(html).not.toMatch(/<h2[^>]*>Alpha Team<\/h2>/);
+    expect(html).toContain('Alpha Team · Owner');
+    expect(html).toContain('>Alpha Team<');
+  });
+
+  it('leaves the organisation to the headings when there is more than one', () => {
+    const html = renderChooser({
+      teams: [
+        { teamId: 't1', orgId: 'o1', name: 'General', role: 'owner', orgName: 'Alpha Team' },
+        { teamId: 't2', orgId: 'o2', name: 'General', role: 'member', orgName: 'Bravo Org' },
+      ],
+      pending_invites: [],
+      can_create_org: false,
+    });
+
+    expect(html).toMatch(/<h2[^>]*>Alpha Team<\/h2>/);
+    expect(html).toMatch(/<h2[^>]*>Bravo Org<\/h2>/);
+    // The card subtitle stays the role alone — the heading above it already names the org.
+    expect(html).not.toContain('Alpha Team · Owner');
+    expect(html).toContain('>Owner<');
+  });
+
   it('renders an inline first-team form when there is no team destination yet', () => {
     const withCreate = renderChooser({
       teams: [],

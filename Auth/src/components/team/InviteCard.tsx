@@ -47,6 +47,16 @@ export function InviteCard(props: {
         <p className="text-sm font-medium text-[var(--uoa-color-text)]">
           {t('team.invite.title', { teamName: props.invite.teamName })}
         </p>
+        {/*
+          The organisation, on its own line. An invitation can name a team in an organisation this
+          person has no membership in at all, so it never appears in the team list below — and two
+          organisations can each own a "General", which left the card genuinely ambiguous.
+        */}
+        {props.invite.orgName ? (
+          <p className="mt-1 truncate text-xs font-medium text-[var(--uoa-color-text)]">
+            {t('team.invite.inOrg', { orgName: props.invite.orgName })}
+          </p>
+        ) : null}
         {props.invite.invitedBy ? (
           <p className="mt-1 text-xs text-[var(--uoa-color-muted)]">
             {t('team.invite.invitedBy', { invitedBy: props.invite.invitedBy })}

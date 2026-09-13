@@ -66,6 +66,7 @@ export const cs = {
   'team.role.admin': 'Správce',
   'team.invite.title': 'Byli jste pozváni do {teamName}',
   'team.invite.invitedBy': 'Pozval(a) {invitedBy}',
+  'team.invite.inOrg': 'v organizaci {orgName}',
   'team.invite.accept': 'Přijmout',
   'team.invite.decline': 'Odmítnout',
   'team.createOrg.title': 'Vytvořit nový tým',
