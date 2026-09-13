@@ -46,6 +46,9 @@ export const es = {
     'Tu solicitud se ha enviado a los administradores del equipo. Puedes cerrar esta ventana y esperar su aprobacion.',
   'message.signedIn': 'Vuelve a la aplicacion para terminar de iniciar sesion. Puedes cerrar esta ventana.',
   'message.inviteAccepted': 'Tu cuenta se ha creado y te has unido al equipo. Puedes cerrar esta ventana.',
+  'message.inviteAccepted.joined': 'Tu cuenta se ha creado y te has unido al equipo.',
+  'message.inviteAccepted.continue': 'Continuar a {product}',
+  'message.inviteAccepted.product': 'la aplicación',
   'action.openApp': 'Abrir la aplicacion',
 
   'nav.forgotPassword': 'Olvidaste tu contrasena?',

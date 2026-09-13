@@ -10,6 +10,8 @@ import { resolveEmailInviteContinuation } from '../../services/email-invite-cont
 import {
   renderInviteHtml,
   renderInviteUnavailableHtml,
+  resolveInviteContinueUrl,
+  resolveInviteProductName,
 } from '../../services/team-invite-page.service.js';
 import { parseRequestAccessFlag } from '../../services/access-request-flow.service.js';
 import {
@@ -166,12 +168,23 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
           },
         );
 
+        // F5: an invitation opened from a mailbox ends here, with no product session and no
+        // way back into the product unless UOA puts one on the page. Only a `redirect_url`
+        // the config itself lists may become that link; anything else is dropped.
+        const continueUrl = resolveInviteContinueUrl(config, redirect_url);
+        const productName = resolveInviteProductName(config);
+
         if (continuation.kind === 'registration') {
           const html = await renderAuthEntrypointHtml({
             config,
             configUrl,
             cspNonce: reply.cspNonce?.script,
-            requestUrl: buildInviteRegistrationAuthUrl(configUrl, token, continuation.email),
+            requestUrl: buildInviteRegistrationAuthUrl(
+              configUrl,
+              token,
+              continuation.email,
+              continueUrl,
+            ),
           });
           sendAuthHtml(reply, html);
           return;
@@ -185,7 +198,11 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
             .send(
               renderInviteHtml({
                 title: 'Invitation accepted',
-                body: `You have joined ${continuation.teamName} on ${continuation.organisationName}. You can close this window and sign in.`,
+                body: continueUrl
+                  ? `You have joined ${continuation.teamName} on ${continuation.organisationName}.`
+                  : `You have joined ${continuation.teamName} on ${continuation.organisationName}. You can close this window and sign in.`,
+                continueUrl,
+                productName,
               }),
             );
           return;
@@ -411,11 +428,22 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
   );
 }
 
-function buildInviteRegistrationAuthUrl(configUrl: string, token: string, email: string): string {
+/**
+ * F5: `redirect_url` rides the invite-registration continuation so the SPA's
+ * "Invitation accepted" view can offer a way into the product. It is only ever the
+ * allow-listed value resolved by `resolveInviteContinueUrl`, never the raw query param.
+ */
+function buildInviteRegistrationAuthUrl(
+  configUrl: string,
+  token: string,
+  email: string,
+  continueUrl?: string,
+): string {
   const params = new URLSearchParams();
   params.set('config_url', configUrl);
   params.set('invite_token', token);
   params.set('invite_email', email);
+  if (continueUrl) params.set('redirect_url', continueUrl);
   return `/auth?${params.toString()}`;
 }
 

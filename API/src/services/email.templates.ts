@@ -226,13 +226,18 @@ export function buildTeamInviteTemplate(params: {
   const theme = resolveTheme(params.theme);
   const recipient = params.inviteeName?.trim() ? `${params.inviteeName.trim()}, ` : '';
   const subject = `You have been invited to join ${params.teamName}`;
-  const body =
-    `${recipient}you have been invited to join the ${params.teamName} team on ${params.organisationName}. ` +
-    'Click the button below to accept the invitation.';
+  // F5: an invitee reading this in a mailbox has no other clue which product the team lives
+  // in. The config's own logo alt text is the product's name; the subject stays unchanged so
+  // existing filters and threads are unaffected.
+  const product = theme.logoAlt?.trim();
+  const invitation =
+    `${recipient}you have been invited to join the ${params.teamName} team on ` +
+    `${params.organisationName}${product ? ` via ${product}` : ''}.`;
+  const body = `${invitation} Click the button below to accept the invitation.`;
   const text = [
     `Invitation to join ${params.teamName}`,
     '',
-    `${recipient}you have been invited to join the ${params.teamName} team on ${params.organisationName}.`,
+    invitation,
     'Use this link to accept the invitation:',
     params.link,
     '',

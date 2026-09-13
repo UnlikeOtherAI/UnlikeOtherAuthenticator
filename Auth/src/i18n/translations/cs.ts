@@ -46,6 +46,9 @@ export const cs = {
     'Vaše žádost byla odeslána správcům týmu. Toto okno můžete zavřít a počkat na schválení.',
   'message.signedIn': 'Vraťte se do aplikace a dokončete přihlášení. Toto okno můžete zavřít.',
   'message.inviteAccepted': 'Váš účet byl vytvořen a připojili jste se k týmu. Toto okno můžete zavřít.',
+  'message.inviteAccepted.joined': 'Váš účet byl vytvořen a připojili jste se k týmu.',
+  'message.inviteAccepted.continue': 'Pokračovat do {product}',
+  'message.inviteAccepted.product': 'aplikace',
   'action.openApp': 'Otevřít aplikaci',
 
   'nav.forgotPassword': 'Zapomněli jste heslo?',

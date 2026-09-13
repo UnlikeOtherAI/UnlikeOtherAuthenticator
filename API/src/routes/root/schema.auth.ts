@@ -350,7 +350,8 @@ export const authEndpoints: EndpointSchema[] = [
         'string (optional, ≤2048) — opaque relying-party CSRF value. UOA does not interpret it; it is bound to this login (login_token, 2FA bridge, social state) and echoed verbatim beside `code` on the final redirect, and beside `error` on a failed social callback. Later hops must not re-supply it: a hop presenting a different value is refused.',
       token: 'string (required)',
       config_url: 'string (required)',
-      redirect_url: 'string (optional)',
+      redirect_url:
+        'string (optional) — must be one of config.redirect_urls. On an invitation terminal page it also becomes a "Continue to <product>" link (product name from ui_theme.logo.alt, else the config domain) and rides the invite-registration continuation so the hosted "Invitation accepted" view offers the same link. A value not in config.redirect_urls is dropped: the page renders exactly as it does without the parameter.',
       code_challenge:
         'string (optional for recovery; required to complete the one-click OAuth grant) — exactly 43-char PKCE S256 challenge preserved through email verification',
       code_challenge_method: '"S256" when code_challenge is sent',
@@ -365,7 +366,8 @@ export const authEndpoints: EndpointSchema[] = [
     query: {
       token: 'string (required)',
       config_url: 'string (required)',
-      redirect_url: 'string (optional)',
+      redirect_url:
+        'string (optional) — carried onto the Accept action so the terminal page can offer a "Continue to <product>" link. Only honoured when it is one of config.redirect_urls.',
     },
   },
   {

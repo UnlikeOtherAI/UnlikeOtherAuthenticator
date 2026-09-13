@@ -45,6 +45,10 @@ export const en = {
     'Your request has been sent to the team administrators. You can close this window and wait for approval.',
   'message.signedIn': 'Return to the app to finish signing in. You can close this window.',
   'message.inviteAccepted': 'Your account has been created and you have joined the team. You can close this window.',
+  'message.inviteAccepted.joined':
+    'Your account has been created and you have joined the team.',
+  'message.inviteAccepted.continue': 'Continue to {product}',
+  'message.inviteAccepted.product': 'the app',
   'action.openApp': 'Open the app',
 
   // Navigation links between auth views.

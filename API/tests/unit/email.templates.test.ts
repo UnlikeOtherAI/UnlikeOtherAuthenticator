@@ -174,6 +174,22 @@ describe('buildTeamInviteTemplate', () => {
     expect(tpl.html).toContain(`href="${escapedLink}"`);
     expect(tpl.html).toContain('team-invite-open/invite-1.gif');
   });
+
+  it('names the product from the theme logo alt text, leaving the subject alone', () => {
+    const tpl = buildTeamInviteTemplate({
+      link: 'https://auth.example.com/auth/email/link?token=t',
+      organisationName: 'Acme',
+      teamName: 'Core Team',
+      inviteeName: 'Taylor',
+      theme: { logoAlt: 'Nessie' },
+    });
+
+    expect(tpl.subject).toBe('You have been invited to join Core Team');
+    expect(tpl.text).toContain(
+      'Taylor, you have been invited to join the Core Team team on Acme via Nessie.',
+    );
+    expect(tpl.html).toContain('on Acme via Nessie.');
+  });
 });
 
 describe('buildAccessRequestNotificationTemplate', () => {
