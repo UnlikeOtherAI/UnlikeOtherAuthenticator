@@ -73,6 +73,9 @@ export const es = {
   'team.createOrg.nameLabel': 'Nombre del equipo',
   'team.createOrg.submit': 'Crear equipo',
   'team.createOrg.cancel': 'Cancelar',
+  'team.createOrg.organisationNameLabel': 'Nombre de la organización',
+  'team.createOrg.firstTeamHint':
+    'Tu primer equipo se llamará General; puedes cambiarle el nombre más adelante.',
   'team.address.label': 'Dirección del equipo',
   'team.address.hint': 'Esta será la dirección web del equipo. Puedes cambiarla más adelante.',
   'team.address.checking': 'Comprobando disponibilidad…',

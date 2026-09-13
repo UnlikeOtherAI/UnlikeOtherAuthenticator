@@ -75,6 +75,9 @@ export const en = {
   'team.createOrg.nameLabel': 'Team name',
   'team.createOrg.submit': 'Create team',
   'team.createOrg.cancel': 'Cancel',
+  'team.createOrg.organisationNameLabel': 'Organisation name',
+  'team.createOrg.firstTeamHint':
+    'Your first team will be called General — you can rename it later.',
   'team.address.label': 'Team address',
   'team.address.hint': 'This becomes the web address for the team. You can change it later.',
   'team.address.checking': 'Checking availability…',
