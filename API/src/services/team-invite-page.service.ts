@@ -36,6 +36,11 @@ export function resolveInviteProductName(config: ClientConfig): string {
  * it is one of the config's own `redirect_urls` — an unlisted or unparseable value is dropped
  * and the page renders exactly as it did before the parameter existed, never as a redirector
  * to an attacker-chosen address.
+ *
+ * Only that verdict is swallowed. `selectRedirectUrl` rejecting the request is an expected
+ * answer here; anything else it throws is a fault — a malformed allow-list entry, a bug in the
+ * selector — and swallowing it would silently delete the Continue button from every invitation
+ * on that domain with nothing in the logs to say why.
  */
 export function resolveInviteContinueUrl(
   config: ClientConfig,
@@ -47,8 +52,9 @@ export function resolveInviteContinueUrl(
       allowedRedirectUrls: config.redirect_urls,
       requestedRedirectUrl,
     });
-  } catch {
-    return undefined;
+  } catch (err) {
+    if (isAppError(err)) return undefined;
+    throw err;
   }
 }
 

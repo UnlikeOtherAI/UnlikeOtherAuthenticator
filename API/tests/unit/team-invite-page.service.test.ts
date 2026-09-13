@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { renderInviteUnavailableHtml } from '../../src/services/team-invite-page.service.js';
 import { AppError } from '../../src/utils/errors.js';
@@ -9,6 +9,27 @@ import {
   resolveInviteContinueUrl,
   resolveInviteProductName,
 } from '../../src/services/team-invite-page.service.js';
+
+/**
+ * `resolveInviteContinueUrl` must distinguish "this redirect URL is not allowed" (an answer)
+ * from "the selector blew up" (a fault). The real selector is used everywhere below; this
+ * switch lets one case make it throw something that is not an `AppError`.
+ */
+const selector = vi.hoisted(() => ({ fail: null as null | (() => never) }));
+
+vi.mock('../../src/services/authorization-code.service.js', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../../src/services/authorization-code.service.js')>();
+  return {
+    ...actual,
+    selectRedirectUrl: (params: Parameters<typeof actual.selectRedirectUrl>[0]) =>
+      selector.fail ? selector.fail() : actual.selectRedirectUrl(params),
+  };
+});
+
+afterEach(() => {
+  selector.fail = null;
+});
 
 const ALLOWED = 'https://app.nessie.works/login';
 
@@ -62,6 +83,33 @@ describe('resolveInviteContinueUrl', () => {
   it('never falls back to the first configured redirect URL when none was requested', () => {
     expect(resolveInviteContinueUrl(config(), undefined)).toBeUndefined();
     expect(resolveInviteContinueUrl(config(), '   ')).toBeUndefined();
+  });
+
+  // The SPA's `selectAllowedContinueUrl` mirrors this policy; these two cases are asserted on
+  // both sides so the server page and the hosted page can never disagree about a product.
+  it('accepts an allow-listed native deep link', () => {
+    const native = 'nessie://auth/callback';
+    expect(
+      resolveInviteContinueUrl(config({ redirect_urls: [native] } as Partial<ClientConfig>), native),
+    ).toBe(native);
+  });
+
+  it('refuses plain http on a real host even when the config lists it', () => {
+    const insecure = 'http://evil.example/callback';
+    expect(
+      resolveInviteContinueUrl(
+        config({ redirect_urls: [insecure] } as Partial<ClientConfig>),
+        insecure,
+      ),
+    ).toBeUndefined();
+  });
+
+  it('propagates a fault from the selector instead of silently dropping the button', () => {
+    selector.fail = () => {
+      throw new TypeError('allow-list entry is not a string');
+    };
+
+    expect(() => resolveInviteContinueUrl(config(), ALLOWED)).toThrow(TypeError);
   });
 });
 
