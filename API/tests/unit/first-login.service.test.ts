@@ -336,23 +336,39 @@ describe('buildSessionChoices', () => {
     });
   });
 
-  it('maps pending invites and falls back from invitedByName to invitedByEmail', async () => {
+  it('maps pending invites, naming the organisation and resolving the inviter', async () => {
     const prisma = {
-      user: { findUnique: vi.fn(async () => ({ email: 'jane@acme.com' })) },
+      user: {
+        findUnique: vi.fn(async () => ({ email: 'jane@acme.com' })),
+        // The inviter of a member-initiated invitation is recorded as a user id alone.
+        findMany: vi.fn(async () => [{ id: 'user-9', name: 'Carol Owner', email: 'carol@acme.com' }]),
+      },
       teamMember: { findMany: vi.fn(async () => []) },
       teamInvite: {
         findMany: vi.fn(async () => [
           {
             id: 'invite-1',
             team: { name: 'Design' },
+            org: { name: 'Acme Inc' },
             invitedByName: 'Alice Admin',
             invitedByEmail: 'alice@acme.com',
+            invitedByUserId: null,
           },
           {
             id: 'invite-2',
             team: { name: 'Ops' },
+            org: { name: 'Acme Inc' },
             invitedByName: null,
             invitedByEmail: 'bob@acme.com',
+            invitedByUserId: null,
+          },
+          {
+            id: 'invite-3',
+            team: { name: 'General' },
+            org: { name: 'Bravo Org' },
+            invitedByName: null,
+            invitedByEmail: null,
+            invitedByUserId: 'user-9',
           },
         ]),
       },
@@ -364,9 +380,20 @@ describe('buildSessionChoices', () => {
     );
 
     expect(result.pending_invites).toEqual([
-      { inviteId: 'invite-1', teamName: 'Design', invitedBy: 'Alice Admin' },
-      { inviteId: 'invite-2', teamName: 'Ops', invitedBy: 'bob@acme.com' },
+      { inviteId: 'invite-1', teamName: 'Design', orgName: 'Acme Inc', invitedBy: 'Alice Admin' },
+      { inviteId: 'invite-2', teamName: 'Ops', orgName: 'Acme Inc', invitedBy: 'bob@acme.com' },
+      {
+        inviteId: 'invite-3',
+        teamName: 'General',
+        orgName: 'Bravo Org',
+        invitedBy: 'Carol Owner',
+      },
     ]);
+    // One lookup for the whole page, only for the rows that carry no stored label.
+    expect(prisma.user.findMany).toHaveBeenCalledTimes(1);
+    expect(prisma.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: { in: ['user-9'] } } }),
+    );
     expect(prisma.teamInvite.findMany).toHaveBeenCalledWith({
       where: {
         email: 'jane@acme.com',
@@ -380,8 +407,10 @@ describe('buildSessionChoices', () => {
       select: {
         id: true,
         team: { select: { name: true } },
+        org: { select: { name: true } },
         invitedByName: true,
         invitedByEmail: true,
+        invitedByUserId: true,
       },
     });
   });

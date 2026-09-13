@@ -4,6 +4,7 @@ import type { ClientConfig } from './config.service.js';
 import { getAdminPrisma, getPrisma } from '../db/prisma.js';
 import { avatarImageBaseUrl, publicTeamAvatarImageUrl } from '../utils/avatar-url.js';
 import { configRoleHoldsCapability } from './role-grants.js';
+import { resolveInviterLabel } from './invite-inviter-label.service.js';
 import {
   resolveProductTeamPolicy,
   type ProductTeamPolicy,
@@ -263,6 +264,12 @@ export type TeamChoiceTeam = {
 export type TeamChoicePendingInvite = {
   inviteId: string;
   teamName: string;
+  /**
+   * The inviting organisation's name — two organisations can each own a team called "General",
+   * and the card carries no other organisation label. Null only for a caller that supplied an
+   * invite row without the org join; the query here always selects it.
+   */
+  orgName: string | null;
   invitedBy: string | null;
 };
 
@@ -326,7 +333,9 @@ export function shouldPresentTeamChooser(
 }
 
 type TeamChooserPrisma = {
-  user: Pick<PrismaClient['user'], 'findUnique'>;
+  // `findMany` resolves the inviting user for member-initiated invitations, which record the
+  // inviter as an id alone (`invite-inviter-label.service.ts`).
+  user: Pick<PrismaClient['user'], 'findUnique' | 'findMany'>;
   orgMember: Pick<PrismaClient['orgMember'], 'findMany'>;
   teamMember: Pick<PrismaClient['teamMember'], 'findMany'>;
   teamInvite: Pick<PrismaClient['teamInvite'], 'findMany'>;
@@ -405,8 +414,10 @@ export async function buildSessionChoices(
       select: {
         id: true,
         team: { select: { name: true } },
+        org: { select: { name: true } },
         invitedByName: true,
         invitedByEmail: true,
+        invitedByUserId: true,
       },
     }),
     canCreateTeams
@@ -459,10 +470,13 @@ export async function buildSessionChoices(
     slug: row.team.slug,
   }));
 
+  // Member-initiated invitations record only `invitedByUserId` — resolve those inviters.
+  const invitedBy = await resolveInviterLabel(inviteRows, { prisma });
   const pendingInvites: TeamChoicePendingInvite[] = inviteRows.map((row) => ({
     inviteId: row.id,
     teamName: row.team.name,
-    invitedBy: row.invitedByName ?? row.invitedByEmail ?? null,
+    orgName: row.org?.name ?? null,
+    invitedBy: invitedBy(row),
   }));
 
   // Creating a team inside an org needs `teams.manage` at ORG scope (there is no team to

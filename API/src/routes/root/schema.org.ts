@@ -17,7 +17,7 @@ export const orgEndpoints: EndpointSchema[] = [
       'org.team_directory':
         'array — one entry per ACTIVE team membership on this domain, or every active membership when this product is explicitly mapped to `all_active_memberships`: { teamId, orgId, name, slug, orgName, orgSlug, iconUrl, avatarImageUrl, role, lastLoginAt }. Each entry carries its own orgId/orgName; do not assume it belongs to the singular legacy org.org_id. avatarImageUrl is the public /teams/:teamId/avatar form (never null, no credential needed). Entries are ordered lastLoginAt DESC with nulls last, then name ASC (the sidebar order). Cross-product entries have null `lastLoginAt`.',
       'org.pending_invites':
-        "array — the caller's pending invites on this domain: { inviteId, orgId, teamId, teamName, invitedBy, expiresAt }. orgId identifies the organisation to select after backend acceptance.",
+        "array — every actionable invitation addressed to the caller across the organisations this product may show: { inviteId, orgId, orgName, orgSlug, teamId, teamName, invitedBy, expiresAt }. The reach is the directory's own — every organisation on this domain, plus every organisation the caller is an ACTIVE member of when this product is mapped to `all_active_memberships` — so an invitation into an organisation OTHER than the token's is listed here and must not be filed under the singular legacy org.org_id. orgId/orgName/orgSlug name the inviting organisation: label the card with them (two organisations can each own a team called \"General\") and select that organisation after acceptance. invitedBy is the inviter's name falling back to their e-mail address, null when neither was recorded. Ordered oldest invitation first.",
     },
   },
   {
@@ -107,7 +107,9 @@ export const orgEndpoints: EndpointSchema[] = [
       'Add organisation member. User mode requires the members.manage capability at ORG scope (org_features.role_grants) — org owner/admin under the default table. Granting the "owner" role additionally requires the actor to BE an owner: owner is the one fixed role, so no grant reaches it.',
     auth: 'domain hash bearer token',
     body: {
-      user_id: 'string (required)',
+      // The handler parses `userId` (AddMemberBodySchema in organisation-route.shared.ts); the
+      // documented `user_id` never reached it and answered 400.
+      userId: 'string (required)',
       role: 'string (optional, default "member") — validated against org_features.org_roles',
     },
     response: {
@@ -313,8 +315,10 @@ export const orgTeamMemberEndpoints: EndpointSchema[] = [
       'Add team member. User mode requires the members.manage capability, resolved over the union of the org-role and team-role grants (org_features.role_grants); under the default table that is an org OR team owner/admin — a team admin can administer their own roster without org standing.',
     auth: 'domain hash bearer token',
     body: {
-      user_id: 'string (required)',
-      team_role:
+      // Parsed by AddTeamMemberBodySchema (team-route.shared.ts) as camelCase; the snake_case
+      // spelling documented before never reached the handler and answered 400.
+      userId: 'string (required)',
+      teamRole:
         'string (optional, default "member") — validated against org_features.team_roles, this domain\'s configured team-role vocabulary',
     },
     response: {

@@ -158,13 +158,34 @@ describe('/api invite response contract', () => {
     expect(llmIntegrationMarkdown).toContain('more than one organisation on the same origin domain');
   });
 
-  it('documents orgId on the /org/me pending invitation contract', () => {
+  it('documents the inviting organisation on the /org/me pending invitation contract', () => {
     const orgMe = endpoints.find(
       (endpoint) => endpoint.method === 'GET' && endpoint.path === '/org/me',
     );
+    // orgId alone cannot label a card, and an invitation may name a team in an organisation the
+    // caller is not signed into — so the name and slug of the INVITING organisation are part of
+    // the contract, not a detail the product can look up from the singular org block.
     expect(orgMe?.response?.['org.pending_invites']).toContain('orgId');
+    expect(orgMe?.response?.['org.pending_invites']).toContain('orgName');
+    expect(orgMe?.response?.['org.pending_invites']).toContain('orgSlug');
     expect(llmIntegrationMarkdown).toContain(
-      '{ "inviteId": "inv_…", "orgId": "org_…", "teamId": "team_3"',
+      '{ "inviteId": "inv_…", "orgId": "org_…", "orgName": "Acme Inc", "orgSlug": "acme", "teamId": "team_3"',
     );
+  });
+
+  it('documents orgName on every chooser pending-invite contract surface', () => {
+    // The hosted chooser's own card has no other organisation label, and two organisations can
+    // each own a team called "General".
+    const chooserSurfaces = endpoints.filter((endpoint) =>
+      Object.keys(endpoint.response ?? {}).some((key) => key.startsWith('pending_invites')),
+    );
+    expect(chooserSurfaces.length).toBeGreaterThan(0);
+    for (const endpoint of chooserSurfaces) {
+      const documented = Object.entries(endpoint.response ?? {})
+        .filter(([key]) => key.startsWith('pending_invites'))
+        .map(([, value]) => value)
+        .join('\n');
+      expect(documented, `${endpoint.method} ${endpoint.path}`).toContain('orgName');
+    }
   });
 });

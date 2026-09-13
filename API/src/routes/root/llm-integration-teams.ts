@@ -79,7 +79,7 @@ organisation and the product policy live:
       }
     ],
     "pending_invites": [
-      { "inviteId": "inv_…", "orgId": "org_…", "teamId": "team_3", "teamName": "Growth", "invitedBy": "Alice Admin", "expiresAt": "2026-08-01T00:00:00.000Z" }
+      { "inviteId": "inv_…", "orgId": "org_…", "orgName": "Acme Inc", "orgSlug": "acme", "teamId": "team_3", "teamName": "Growth", "invitedBy": "Alice Admin", "expiresAt": "2026-08-01T00:00:00.000Z" }
     ]
   }
 }
@@ -96,10 +96,18 @@ organisation and the product policy live:
 - \`avatarImageUrl\` — the public, credential-free \`<PUBLIC_BASE_URL>/teams/<teamId>/avatar\` form.
   It is never null and resolves uploaded image → proxied \`iconUrl\` → deterministic generated image,
   so a native or browser client renders this field directly instead of fetching \`iconUrl\` itself.
-- \`pending_invites[]\` — the caller's own pending invites on this domain (same eligibility as the
-  team chooser: unaccepted/undeclined/unrevoked, not expired, and not still awaiting
-  member-invite approval). Each row's \`orgId\` is the organisation to select after backend
-  acceptance; do not infer it from the legacy singular \`org.org_id\`.
+- \`pending_invites[]\` — every actionable invitation addressed to the caller (same eligibility as
+  the team chooser: unaccepted/undeclined/unrevoked, not expired, and not still awaiting
+  member-invite approval). Its organisation reach is the directory's own: every organisation on
+  this domain, plus — for an \`all_active_memberships\` product — every organisation the caller is
+  an ACTIVE member of. An invitation into an organisation the caller is NOT currently signed into
+  therefore appears here, which is the whole point: the hosted chooser offers it at sign-in and
+  this is where the product finds the same invitation afterwards. Each row's
+  \`orgId\`/\`orgName\`/\`orgSlug\` name the INVITING organisation — render "<teamName> · <orgName>"
+  (two organisations can each own a team called "General"), file any notification under that
+  organisation rather than the active one, and select it after acceptance. Never infer the
+  organisation from the legacy singular \`org.org_id\`. \`invitedBy\` is the inviter's name falling
+  back to their e-mail address, \`null\` when neither was recorded. Ordered oldest first.
 - Render this straight into the Slack-style sidebar: active team highlighted (match
   \`active.teamId\` from the access-token claim, §4.2), the rest one click away via \`team_hint\` on
   \`/auth\`, invite cards for \`pending_invites\`.
