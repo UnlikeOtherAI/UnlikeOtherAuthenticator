@@ -16,6 +16,8 @@ export const es = {
   'auth.signatures.title': 'Revisa y firma los acuerdos',
 
   'form.email.label': 'Correo electronico',
+  'form.name.label': 'Tu nombre',
+  'form.name.placeholder': 'Opcional',
   'form.password.label': 'Contrasena',
   'form.newPassword.label': 'Nueva contrasena',
   'form.confirmPassword.label': 'Confirmar contrasena',

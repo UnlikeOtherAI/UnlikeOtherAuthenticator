@@ -14,6 +14,8 @@ export const en = {
   'auth.signatures.title': 'Review and sign agreements',
 
   'form.email.label': 'Email',
+  'form.name.label': 'Your name',
+  'form.name.placeholder': 'Optional',
   'form.password.label': 'Password',
   'form.newPassword.label': 'New password',
   'form.confirmPassword.label': 'Confirm password',

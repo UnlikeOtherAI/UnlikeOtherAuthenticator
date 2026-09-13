@@ -35,10 +35,10 @@ const TEST_CONFIG = {
   language_config: 'en',
 };
 
-function renderResetForm(): string {
+function renderForm(tokenType: 'PASSWORD_RESET' | 'VERIFY_EMAIL_SET_PASSWORD'): string {
   const search =
     '?config_url=https%3A%2F%2Fclient.example.com%2Fauth-config' +
-    '&email_token=reset-token&email_token_type=PASSWORD_RESET';
+    `&email_token=some-token&email_token_type=${tokenType}`;
   return renderToString(
     <ThemeProvider config={TEST_CONFIG} configUrl="">
       <I18nProvider config={TEST_CONFIG} configUrl="">
@@ -48,6 +48,10 @@ function renderResetForm(): string {
       </I18nProvider>
     </ThemeProvider>,
   );
+}
+
+function renderResetForm(): string {
+  return renderForm('PASSWORD_RESET');
 }
 
 describe('SetPasswordForm SSR (pre-hydration gating)', () => {
@@ -64,5 +68,27 @@ describe('SetPasswordForm SSR (pre-hydration gating)', () => {
     const html = renderResetForm();
 
     expect(html).toMatch(/<fieldset[^>]*aria-busy="true"/);
+  });
+});
+
+describe('SetPasswordForm optional name field', () => {
+  it('offers an optional name on the registration branch', () => {
+    // F6: without this field a person who signs up by e-mail has no name at all, and every
+    // product roster falls back to "Unnamed member".
+    const html = renderForm('VERIFY_EMAIL_SET_PASSWORD');
+
+    expect(html).toContain('Your name');
+    expect(html).toContain('name="name"');
+    expect(html).toContain('maxLength="120"');
+    // Optional: nothing on this field may block the submit.
+    expect(html).not.toMatch(/name="name"[^>]*required/);
+  });
+
+  it('does not ask for a name on a password reset', () => {
+    // A reset is an existing account; its profile name is not this form's business.
+    const html = renderResetForm();
+
+    expect(html).not.toContain('Your name');
+    expect(html).not.toContain('name="name"');
   });
 });

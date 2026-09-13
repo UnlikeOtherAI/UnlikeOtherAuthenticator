@@ -16,6 +16,8 @@ export const cs = {
   'auth.signatures.title': 'Zkontrolujte a podepište dohody',
 
   'form.email.label': 'E-mail',
+  'form.name.label': 'Vaše jméno',
+  'form.name.placeholder': 'Nepovinné',
   'form.password.label': 'Heslo',
   'form.newPassword.label': 'Nové heslo',
   'form.confirmPassword.label': 'Potvrzení hesla',

@@ -272,6 +272,7 @@ export const authEndpoints: EndpointSchema[] = [
     body: {
       token: 'string (required) — email verification token',
       password: 'string (optional) — required for password_required registration mode',
+      name: 'string (optional, ≤120, trimmed) — self-declared display name. Stored only while the account has no name yet, so it never overwrites an established one; for an invitation the inviter-supplied name remains the fallback when this is omitted.',
     },
     response: {
       ok: 'true (team_selection "off"/skipped branch only — finalizes immediately)',
