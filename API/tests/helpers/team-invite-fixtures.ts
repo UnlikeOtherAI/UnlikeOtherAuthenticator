@@ -41,6 +41,7 @@ export function makeAcceptanceTx() {
     user: {
       findUnique: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
     },
     orgMember: {
       findFirst: vi.fn(),

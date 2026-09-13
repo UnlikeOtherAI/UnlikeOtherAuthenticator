@@ -75,13 +75,27 @@ describe('InviteAcceptedPage', () => {
     expect(html).toContain('You can close this window.');
   });
 
-  it('drops a non-http scheme even if it were somehow listed', () => {
+  it('drops a dangerous scheme even if it were somehow listed', () => {
     const html = render('javascript:alert(1)', {
       ...TEST_CONFIG,
       redirect_urls: ['javascript:alert(1)'],
     });
     expect(html).not.toContain('Continue to');
     expect(html).not.toContain('javascript:alert(1)');
+  });
+
+  it('offers the link for an allow-listed native deep link, as the server page does', () => {
+    const native = 'nessie://auth/callback';
+    const html = render(native, { ...TEST_CONFIG, redirect_urls: [native] });
+    expect(html).toContain('Continue to Nessie');
+    expect(html).toContain(`href="${native}"`);
+  });
+
+  it('drops plain http on a real host even when the config lists it', () => {
+    const insecure = 'http://evil.example/callback';
+    const html = render(insecure, { ...TEST_CONFIG, redirect_urls: [insecure] });
+    expect(html).not.toContain('Continue to');
+    expect(html).not.toContain('evil.example');
   });
 
 });

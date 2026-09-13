@@ -33,10 +33,7 @@ describe('team invite acceptance', () => {
       email: 'invited@example.com',
       name: null,
     });
-    tx.user.update.mockResolvedValue({
-      id: 'user-1',
-      name: 'Invited User',
-    });
+    tx.user.updateMany.mockResolvedValue({ count: 1 });
     tx.orgMember.findFirst
       .mockResolvedValueOnce(null)
       .mockResolvedValue({ id: 'org-member-1' });
@@ -85,6 +82,58 @@ describe('team invite acceptance', () => {
       },
       select: { id: true },
     });
+
+    // The inviter's guess fills a blank name, and the write is guarded on the name still
+    // being blank: a name the invitee typed on the registration screen can commit between
+    // the read above and this write, and must win.
+    expect(tx.user.updateMany).toHaveBeenCalledWith({
+      where: { id: 'user-1', OR: [{ name: null }, { name: '' }] },
+      data: { name: 'Invited User' },
+    });
+    expect(tx.user.update).not.toHaveBeenCalled();
+  });
+
+  it('never backfills over a name the user already has', async () => {
+    const tx = makeAcceptanceTx();
+    tx.teamInvite.findUnique.mockResolvedValue({
+      id: 'invite-1',
+      orgId: 'org-1',
+      teamId: 'team-1',
+      email: 'invited@example.com',
+      inviteName: 'Inviter Guess',
+      teamRole: 'member',
+      acceptedUserId: null,
+      acceptedAt: null,
+      declinedAt: null,
+      revokedAt: null,
+      expiresAt: null,
+      approvalStatus: 'NOT_REQUIRED',
+      org: { id: 'org-1', domain: 'client.example.com' },
+    });
+    tx.user.findUnique.mockResolvedValue({
+      id: 'user-1',
+      email: 'invited@example.com',
+      name: 'Nessie Test A',
+    });
+    tx.user.updateMany.mockResolvedValue({ count: 0 });
+    tx.orgMember.findFirst.mockResolvedValueOnce(null).mockResolvedValue({ id: 'org-member-1' });
+    tx.orgMember.count.mockResolvedValue(1);
+    tx.orgMember.create.mockResolvedValue({ id: 'org-member-1' });
+    tx.teamMember.findFirst.mockResolvedValueOnce(null).mockResolvedValue({ id: 'team-member-1' });
+    tx.teamMember.count.mockResolvedValueOnce(1).mockResolvedValueOnce(0);
+    tx.teamMember.create.mockResolvedValue({ id: 'team-member-1' });
+    tx.teamInvite.update.mockResolvedValue({ id: 'invite-1' });
+
+    await acceptTeamInviteWithinTransaction({
+      prisma: tx,
+      teamInviteId: 'invite-1',
+      userId: 'user-1',
+      config: makeConfig(),
+      now: new Date('2026-03-02T00:00:00.000Z'),
+    });
+
+    expect(tx.user.updateMany).not.toHaveBeenCalled();
+    expect(tx.user.update).not.toHaveBeenCalled();
   });
 
   it('accepts an invite into a second organisation on the same domain', async () => {
