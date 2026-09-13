@@ -2,7 +2,7 @@ import type { ClientConfig } from './config.service.js';
 import { getEnv } from '../config/env.js';
 import { getPrisma } from '../db/prisma.js';
 import { hasTeamCapability } from './team.service.base.js';
-import { pendingInviteStatusWhere } from './first-login.service.js';
+import { pendingInviteStatusWhere } from './pending-invite-scope.service.js';
 import {
   TEAM_INVITE_SELECT,
   toInviteRecord,

@@ -1,9 +1,9 @@
-import type { Prisma, PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
 
 import { getAdminPrisma, getPrisma } from '../db/prisma.js';
 import { avatarImageBaseUrl, publicTeamAvatarImageUrl } from '../utils/avatar-url.js';
-import { pendingInviteStatusWhere } from './first-login.service.js';
 import { resolveInviterLabel } from './invite-inviter-label.service.js';
+import { pendingInviteWhereForCaller } from './pending-invite-scope.service.js';
 import {
   type ProductTeamPolicy,
 } from './product-team-policy.service.js';
@@ -209,28 +209,6 @@ export async function buildSidebarTeams(
 }
 
 /**
- * The organisations an invitation may be reported from, as a `TeamInvite` filter.
- *
- * Deliberately the same reach `buildSidebarTeams` has: every organisation on this product's
- * domain, plus — only for a product the server mapped to `all_active_memberships` — every
- * organisation the caller already holds an ACTIVE membership in, which is where an invitation
- * to a *second* team of an organisation founded through another product domain lives.
- */
-function inviteOrgReach(params: {
-  userId: string;
-  domain: string;
-  policy: ProductTeamPolicy;
-}): Prisma.TeamInviteWhereInput {
-  const reach: Prisma.TeamInviteWhereInput[] = [{ org: { domain: params.domain } }];
-  if (params.policy.scope === 'all_active_memberships') {
-    reach.push({
-      org: { members: { some: { userId: params.userId, status: 'ACTIVE' } } },
-    });
-  }
-  return { OR: reach };
-}
-
-/**
  * The sidebar's `pending_invites[]` (design §11.4): same eligibility filter as the chooser's
  * `buildSessionChoices` (`pendingInviteStatusWhere`, `includePendingApproval` defaults to false —
  * an invite still awaiting member-invite approval isn't a real pending invite for the invitee yet).
@@ -244,8 +222,11 @@ function inviteOrgReach(params: {
  * defect. A user's own pending invitations are not tenant data of the organisation they are
  * signed into, so the read runs on the admin client and is bounded by the two filters that
  * actually define it — the caller's OWN verified address (resolved from their user row, never
- * from a parameter) and the product's organisation reach above. That is the same set the hosted
- * chooser already shows this same user at sign-in.
+ * from a parameter) and the product's organisation reach.
+ *
+ * The filter itself is `pendingInviteWhereForCaller`, which the hosted chooser
+ * (`buildSessionChoices`) now uses too, so the two surfaces answer with one set rather than
+ * merely intending to.
  */
 export async function buildSidebarPendingInvites(
   params: { userId: string; domain: string },
@@ -264,16 +245,13 @@ export async function buildSidebarPendingInvites(
   const policy = deps?.policy ?? { scope: 'client_domain' as const };
 
   const invites = await invitePrisma.teamInvite.findMany({
-    // `AND`, not a spread: `pendingInviteStatusWhere` already carries its own top-level `OR`
-    // (the "no expiry, or not yet expired" pair). Spreading the reach's `OR` beside it would
-    // overwrite that key and quietly re-admit expired invitations.
-    where: {
-      AND: [
-        { email: user.email },
-        pendingInviteStatusWhere({ now }),
-        inviteOrgReach({ userId: params.userId, domain: params.domain, policy }),
-      ],
-    },
+    where: pendingInviteWhereForCaller({
+      email: user.email,
+      userId: params.userId,
+      domain: params.domain,
+      policy,
+      now,
+    }),
     select: {
       id: true,
       orgId: true,
@@ -281,7 +259,6 @@ export async function buildSidebarPendingInvites(
       team: { select: { name: true } },
       org: { select: { name: true, slug: true } },
       invitedByName: true,
-      invitedByEmail: true,
       invitedByUserId: true,
       expiresAt: true,
     },

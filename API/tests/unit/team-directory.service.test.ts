@@ -216,14 +216,17 @@ describe('team-directory service: buildSidebarPendingInvites', () => {
       team: { name: 'Backend' },
       org: { name: 'Acme Inc', slug: 'acme' },
       invitedByName: 'Alice Admin',
-      invitedByEmail: 'alice@acme.com',
+      invitedByUserId: null,
       expiresAt: new Date('2026-08-01T00:00:00.000Z'),
       ...overrides,
     };
   }
 
   function makeInvitePrisma(rows: unknown[]) {
-    return { teamInvite: { findMany: vi.fn(async () => rows) } };
+    return {
+      teamInvite: { findMany: vi.fn(async () => rows) },
+      user: { findMany: vi.fn(async () => []) },
+    };
   }
 
   function makeDirectoryPrisma(email: string | null) {
@@ -277,16 +280,41 @@ describe('team-directory service: buildSidebarPendingInvites', () => {
     expect(where.AND[2]).toEqual({ OR: [{ org: { domain: 'acme.example.com' } }] });
   });
 
-  it('falls back to the inviter e-mail address when no name was recorded', async () => {
+  // The invitee is never told the sender's address — the invitation e-mail does not carry it
+  // either — so a nameless inviter renders no line at all rather than an address.
+  it('leaves the inviter null rather than disclosing an e-mail address', async () => {
     const prisma = makeDirectoryPrisma('jane@acme.com');
-    const invitePrisma = makeInvitePrisma([inviteRow({ invitedByName: null })]);
+    const invitePrisma = makeInvitePrisma([
+      inviteRow({ invitedByName: null, invitedByUserId: 'user-9' }),
+    ]);
+    invitePrisma.user = {
+      findMany: vi.fn(async () => [{ id: 'user-9', name: null, email: 'alice@acme.com' }]),
+    };
 
     const result = await buildSidebarPendingInvites(
       { userId: 'user-1', domain: 'acme.example.com' },
       { prisma, invitePrisma },
     );
 
-    expect(result[0]?.invitedBy).toBe('alice@acme.com');
+    expect(result[0]?.invitedBy).toBeNull();
+  });
+
+  it('resolves the inviting user’s name for a member-initiated invitation', async () => {
+    const prisma = makeDirectoryPrisma('jane@acme.com');
+    const invitePrisma = makeInvitePrisma([
+      inviteRow({ invitedByName: '   ', invitedByUserId: 'user-9' }),
+    ]);
+    invitePrisma.user = {
+      findMany: vi.fn(async () => [{ id: 'user-9', name: 'Carol Owner' }]),
+    };
+
+    const result = await buildSidebarPendingInvites(
+      { userId: 'user-1', domain: 'acme.example.com' },
+      { prisma, invitePrisma },
+    );
+
+    // A blank stored name is no name: it must not win over the resolvable one.
+    expect(result[0]?.invitedBy).toBe('Carol Owner');
   });
 
   it('reaches organisations of an all-memberships product beyond this domain', async () => {

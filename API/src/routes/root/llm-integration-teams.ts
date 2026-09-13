@@ -100,14 +100,16 @@ organisation and the product policy live:
   the team chooser: unaccepted/undeclined/unrevoked, not expired, and not still awaiting
   member-invite approval). Its organisation reach is the directory's own: every organisation on
   this domain, plus — for an \`all_active_memberships\` product — every organisation the caller is
-  an ACTIVE member of. An invitation into an organisation the caller is NOT currently signed into
-  therefore appears here, which is the whole point: the hosted chooser offers it at sign-in and
-  this is where the product finds the same invitation afterwards. Each row's
+  an ACTIVE member of — the identical filter the hosted chooser's own \`pending_invites\` uses, so
+  the two surfaces answer with one set. An invitation into an organisation the caller is NOT
+  currently signed into therefore appears here, which is the whole point: the chooser offers it at
+  sign-in and this is where the product finds the same invitation afterwards. Each row's
   \`orgId\`/\`orgName\`/\`orgSlug\` name the INVITING organisation — render "<teamName> · <orgName>"
   (two organisations can each own a team called "General"), file any notification under that
   organisation rather than the active one, and select it after acceptance. Never infer the
-  organisation from the legacy singular \`org.org_id\`. \`invitedBy\` is the inviter's name falling
-  back to their e-mail address, \`null\` when neither was recorded. Ordered oldest first.
+  organisation from the legacy singular \`org.org_id\`. \`invitedBy\` is the inviter's NAME — never
+  their e-mail address, and \`null\` when no name is known, in which case render no inviter line
+  rather than inventing one. Ordered oldest first.
 - Render this straight into the Slack-style sidebar: active team highlighted (match
   \`active.teamId\` from the access-token claim, §4.2), the rest one click away via \`team_hint\` on
   \`/auth\`, invite cards for \`pending_invites\`.
