@@ -8,12 +8,31 @@ import {
   parseMaxMembersPerTeam,
   parseMaxTeamMembershipsPerUser,
 } from './team.service.base.js';
+import {
+  writeOrgAuditLog,
+  type OrgAuditLogPrisma,
+  type WriteOrgAuditLogParams,
+} from './org-audit-log.service.js';
 import { assertTeamInviteTransition, isExpired } from './team-invite-state-machine.js';
 import {
   assertActiveTeamMembership,
   lockAndAssertActiveTeamMembership,
   lockTeamMembershipRows,
 } from './team-scope.service.js';
+
+/**
+ * Reactivation audit rows are written inside the acceptance transaction, so a later rollback in
+ * the caller (token consumption, team-scope policy, 2FA) never leaves a row for a reactivation that
+ * did not happen. That is RLS-safe on every caller: they run either on the BYPASSRLS admin client
+ * or in a tenant transaction scoped to the invite's organisation, and `org_audit_log_insert`
+ * checks the same `org_id = app.org_id` predicate `org_members_update` already had to pass.
+ */
+async function writeInviteAuditLog(
+  prisma: Prisma.TransactionClient,
+  entry: Omit<WriteOrgAuditLogParams, 'actor'>,
+): Promise<void> {
+  await writeOrgAuditLog(entry, { prisma: prisma as unknown as OrgAuditLogPrisma });
+}
 
 export async function acceptTeamInviteWithinTransaction(params: {
   prisma: Prisma.TransactionClient;
@@ -124,17 +143,41 @@ export async function acceptTeamInviteWithinTransaction(params: {
     select: {
       id: true,
       orgId: true,
+      role: true,
+      status: true,
     },
   });
+  const existingTeamMembership = await params.prisma.teamMember.findFirst({
+    where: {
+      teamId: invite.teamId,
+      userId: params.userId,
+    },
+    select: { id: true, status: true },
+  });
 
-  if (!existingMembershipInOrganisation) {
+  // DEACTIVATED is an administrative suspension (design §4.1/§4.5): only
+  // `POST .../members/:userId/reactivate` lifts it, and an invitation is not that
+  // decision. REMOVED is a tombstone of a past membership, and a fresh, valid
+  // invitation is exactly the re-add that design §4.1 says flips it back to ACTIVE.
+  if (
+    existingMembershipInOrganisation?.status === 'DEACTIVATED' ||
+    existingTeamMembership?.status === 'DEACTIVATED'
+  ) {
+    throw new AppError('BAD_REQUEST', 400, 'MEMBERSHIP_DEACTIVATED');
+  }
+
+  // Limits count ACTIVE rows, like every other add path: a tombstone is not a membership, and a
+  // reactivated row consumes a seat exactly as a newly created one does.
+  if (!existingMembershipInOrganisation || existingMembershipInOrganisation.status === 'REMOVED') {
     const memberCount = await params.prisma.orgMember.count({
-      where: { orgId: invite.orgId },
+      where: { orgId: invite.orgId, status: 'ACTIVE' },
     });
     if (memberCount >= parseOrgLimit(params.config)) {
       throw new AppError('BAD_REQUEST', 400);
     }
+  }
 
+  if (!existingMembershipInOrganisation) {
     await params.prisma.orgMember.create({
       data: {
         orgId: invite.orgId,
@@ -143,19 +186,34 @@ export async function acceptTeamInviteWithinTransaction(params: {
       },
       select: { id: true },
     });
+  } else if (existingMembershipInOrganisation.status === 'REMOVED') {
+    // The invitation grants the default member role. A role held before removal (admin, owner,
+    // a custom role) is never silently restored; an owner re-grants it deliberately.
+    await params.prisma.orgMember.update({
+      where: { id: existingMembershipInOrganisation.id },
+      data: { role: 'member', status: 'ACTIVE', statusChangedAt: params.now },
+      select: { id: true },
+    });
+    await writeInviteAuditLog(params.prisma, {
+      orgId: invite.orgId,
+      actorUserId: params.userId,
+      action: 'member.reactivated',
+      targetType: 'org_member',
+      targetId: existingMembershipInOrganisation.id,
+      metadata: {
+        userId: params.userId,
+        role: 'member',
+        previousRole: existingMembershipInOrganisation.role,
+        previousStatus: 'REMOVED',
+        via: 'invite',
+        inviteId: invite.id,
+      },
+    });
   }
 
-  const existingTeamMembership = await params.prisma.teamMember.findFirst({
-    where: {
-      teamId: invite.teamId,
-      userId: params.userId,
-    },
-    select: { id: true },
-  });
-
-  if (!existingTeamMembership) {
+  if (!existingTeamMembership || existingTeamMembership.status === 'REMOVED') {
     const teamMemberCount = await params.prisma.teamMember.count({
-      where: { teamId: invite.teamId },
+      where: { teamId: invite.teamId, status: 'ACTIVE' },
     });
     if (teamMemberCount >= parseMaxMembersPerTeam(params.config)) {
       throw new AppError('BAD_REQUEST', 400);
@@ -164,6 +222,7 @@ export async function acceptTeamInviteWithinTransaction(params: {
     const userMembershipCount = await params.prisma.teamMember.count({
       where: {
         userId: params.userId,
+        status: 'ACTIVE',
         team: {
           orgId: invite.orgId,
         },
@@ -172,20 +231,44 @@ export async function acceptTeamInviteWithinTransaction(params: {
     if (userMembershipCount >= parseMaxTeamMembershipsPerUser(params.config)) {
       throw new AppError('BAD_REQUEST', 400);
     }
+  }
 
+  const teamRole = normalizeTeamRole(invite.teamRole, params.config);
+  if (!existingTeamMembership) {
     await params.prisma.teamMember.create({
       data: {
         teamId: invite.teamId,
         userId: params.userId,
-        teamRole: normalizeTeamRole(invite.teamRole, params.config),
+        teamRole,
       },
       select: { id: true },
     });
+  } else if (existingTeamMembership.status === 'REMOVED') {
+    await params.prisma.teamMember.update({
+      where: { id: existingTeamMembership.id },
+      data: { teamRole, status: 'ACTIVE', statusChangedAt: params.now },
+      select: { id: true },
+    });
+    await writeInviteAuditLog(params.prisma, {
+      orgId: invite.orgId,
+      actorUserId: params.userId,
+      action: 'team_member.added',
+      targetType: 'team_member',
+      targetId: existingTeamMembership.id,
+      metadata: {
+        teamId: invite.teamId,
+        userId: params.userId,
+        teamRole,
+        via: 'invite',
+        reactivated: true,
+        inviteId: invite.id,
+      },
+    });
   }
 
-  // Existing DEACTIVATED/REMOVED rows are tombstones, not invitations to
-  // reactivate. New rows are ACTIVE by default; every existing row must already
-  // be ACTIVE at both organisation and team levels before the invite is marked.
+  // Every row is now ACTIVE or the call has already refused; this re-reads the committed state
+  // under the locks taken above so a concurrent lifecycle write cannot slip between.
+  // An ACTIVE row keeps its existing role — accepting an invite never overwrites it.
   //
   // Deliberately domain-agnostic, because the paragraph at the top of this
   // function is only true if it is: an organisation founded through one product

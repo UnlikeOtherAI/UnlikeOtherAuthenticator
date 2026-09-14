@@ -112,7 +112,7 @@ export const orgInvitationEndpoints: EndpointSchema[] = [
     method: 'POST',
     path: '/org/organisations/:orgId/teams/:teamId/invitations/:inviteId/accept',
     description:
-      "Accept an exact team invitation for its invitee through backend mode. The product asserts the invitee's UOA user id; acceptance creates the ACTIVE org/team memberships and marks the invite accepted atomically. Repeating the exact accepted invite with the same userId is idempotent-success. The organisation's own origin domain is not compared with the calling product's: every client domain is equal and one organisation is usable from every product, so an invitation into an organisation founded through another product is accepted here. Unknown or mismatched ids, email mismatch, revoked/expired/unapproved invitations, and every other refusal remain generic.",
+      "Accept an exact team invitation for its invitee through backend mode. The product asserts the invitee's UOA user id; acceptance creates the ACTIVE org/team memberships and marks the invite accepted atomically. Repeating the exact accepted invite with the same userId is idempotent-success. The organisation's own origin domain is not compared with the calling product's: every client domain is equal and one organisation is usable from every product, so an invitation into an organisation founded through another product is accepted here. A person previously REMOVED from the organisation or team is re-admitted: the tombstoned rows return to ACTIVE with the default org role `member` (a role held before removal is never restored) and the invitation's teamRole, counted against member limits like a new membership and audited as member.reactivated / team_member.added (reactivated). A DEACTIVATED (suspended) org or team membership is not lifted by an invitation and is refused with MEMBERSHIP_DEACTIVATED; only POST .../members/:userId/reactivate lifts it. Unknown or mismatched ids, email mismatch, revoked/expired/unapproved invitations, and every other refusal remain generic.",
     auth: 'backend mode only: domain hash bearer token with no X-UOA-Access-Token; requires org_features.backend_org_management=true',
     body: {
       userId:
@@ -120,7 +120,7 @@ export const orgInvitationEndpoints: EndpointSchema[] = [
     },
     response: {
       200: '{ ok: true, orgId, teamId }',
-      400: 'generic for invalid or mismatched invitation state',
+      400: 'MEMBERSHIP_DEACTIVATED when the invitee is suspended in that organisation or team; generic for every other invalid or mismatched invitation state',
       401: 'ACCESS_TOKEN_NOT_ALLOWED when X-UOA-Access-Token is present; MISSING_ACCESS_TOKEN when backend_org_management is not enabled',
     },
   },

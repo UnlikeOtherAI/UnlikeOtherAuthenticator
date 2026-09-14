@@ -1286,6 +1286,17 @@ When removing a user from an org (`DELETE /org/organisations/:orgId/members/:use
 
 Deactivation uses the same locks and atomic revocation while writing `DEACTIVATED`. Reactivation or re-add never restores a revoked refresh family; the user must sign in again.
 
+**Re-invitation after removal (2026-09-14).** Accepting a fresh, valid team invitation is a re-add:
+under the same ordered membership locks it flips the person's `REMOVED` organisation row and the
+invited team's `REMOVED` row back to `ACTIVE` in the acceptance transaction. The organisation role
+becomes `member` — a role held before removal is never restored — and the team role comes from the
+invitation. The reactivated seats count against the organisation, team and per-user membership
+limits exactly like new rows, other tombstoned team rows stay `REMOVED`, and each reactivated row
+is audited (`member.reactivated`, `team_member.added` with `reactivated: true`). `DEACTIVATED` is an
+administrative suspension, not a tombstone of a past membership: an invitation never lifts it and
+acceptance is refused with the public code `MEMBERSHIP_DEACTIVATED`. An invitation already accepted
+never reactivates anything on replay.
+
 #### Sole Owner Deletion
 
 `Organisation.ownerId` has `onDelete: Restrict`. A user who is the sole owner of an org cannot be deleted — ownership must be transferred first.

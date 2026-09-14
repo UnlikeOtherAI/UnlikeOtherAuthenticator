@@ -120,13 +120,14 @@ describe.skipIf(!hasDatabase)('personal invite ACTIVE membership invariant', () 
   }
 
   it.each([
-    ['DEACTIVATED org tombstone', 'DEACTIVATED', 'ACTIVE'],
-    ['REMOVED team tombstone', 'ACTIVE', 'REMOVED'],
-  ] as const)('fails closed for an unresolved invite with a %s', async (_name, orgStatus, teamStatus) => {
+    ['DEACTIVATED org membership', 'DEACTIVATED', 'DEACTIVATED'],
+    ['DEACTIVATED team membership', 'ACTIVE', 'DEACTIVATED'],
+  ] as const)('refuses an unresolved invite with a %s and changes nothing', async (_name, orgStatus, teamStatus) => {
     const seeded = await seed({ orgStatus, teamStatus });
 
     await expect(accept(seeded.inviteId, seeded.userId)).rejects.toMatchObject({
-      statusCode: 401,
+      statusCode: 400,
+      message: 'MEMBERSHIP_DEACTIVATED',
     });
     const invite = await handle.prisma.teamInvite.findUniqueOrThrow({
       where: { id: seeded.inviteId },

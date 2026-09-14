@@ -282,6 +282,74 @@ describe.skipIf(!hasDatabase)('backend-mode team invitation acceptance', () => {
     }
   });
 
+  it('re-admits a REMOVED invitee and names a DEACTIVATED refusal in the public body', async () => {
+    const team = await seedTeam('Lifecycle');
+    const removedUser = await createDomainUser('removed-invitee@example.com');
+    const suspendedUser = await createDomainUser('suspended-invitee@example.com');
+    for (const [userId, status] of [
+      [removedUser.id, 'REMOVED'],
+      [suspendedUser.id, 'DEACTIVATED'],
+    ] as const) {
+      await handle.prisma.orgMember.create({
+        data: { orgId: team.orgId, userId, role: 'admin', status },
+      });
+      await handle.prisma.teamMember.create({
+        data: { teamId: team.teamId, userId, teamRole: 'admin', status },
+      });
+    }
+    const removedInvite = await seedInvite({
+      orgId: team.orgId,
+      teamId: team.teamId,
+      email: 'removed-invitee@example.com',
+    });
+    const suspendedInvite = await seedInvite({
+      orgId: team.orgId,
+      teamId: team.teamId,
+      email: 'suspended-invitee@example.com',
+    });
+    const { app, headers } = await createBackendRequestState();
+
+    try {
+      const reinvited = await app.inject({
+        method: 'POST',
+        url: url(team.orgId, team.teamId, removedInvite.id),
+        headers,
+        payload: { userId: removedUser.id },
+      });
+      expect(reinvited.statusCode, reinvited.body).toBe(200);
+      expect(reinvited.json()).toEqual({ ok: true, orgId: team.orgId, teamId: team.teamId });
+      expect(
+        await handle.prisma.orgMember.findUnique({
+          where: { orgId_userId: { orgId: team.orgId, userId: removedUser.id } },
+          select: { role: true, status: true },
+        }),
+      ).toEqual({ role: 'member', status: 'ACTIVE' });
+      expect(
+        await handle.prisma.teamMember.findUnique({
+          where: { teamId_userId: { teamId: team.teamId, userId: removedUser.id } },
+          select: { teamRole: true, status: true },
+        }),
+      ).toEqual({ teamRole: 'member', status: 'ACTIVE' });
+
+      const suspended = await app.inject({
+        method: 'POST',
+        url: url(team.orgId, team.teamId, suspendedInvite.id),
+        headers,
+        payload: { userId: suspendedUser.id },
+      });
+      expect(suspended.statusCode).toBe(400);
+      expect(suspended.json()).toMatchObject({ code: 'MEMBERSHIP_DEACTIVATED' });
+      expect(
+        await handle.prisma.orgMember.findUnique({
+          where: { orgId_userId: { orgId: team.orgId, userId: suspendedUser.id } },
+          select: { status: true },
+        }),
+      ).toEqual({ status: 'DEACTIVATED' });
+    } finally {
+      await app.close();
+    }
+  });
+
   it('keeps invalid invite state and path bindings on the generic 400 body', async () => {
     const team = await seedTeam('Generic');
     const wrongTeam = await handle.prisma.team.create({

@@ -26,4 +26,9 @@ export const PRODUCTION_PUBLIC_ERROR_CODES = new Set([
   // name. Not an oracle — `/auth/slug-available` and `/domain/slug-available` already answer
   // "taken" for the same label.
   'ORG_SLUG_TAKEN',
+  // Accepting an invitation for a person whose membership in that organisation or team is
+  // DEACTIVATED (an administrative suspension an invitation must not lift). Not an oracle: the
+  // backend-mode caller can already list `?status=DEACTIVATED`, and the invitee learns only their
+  // own state. The hosted invitation page still renders the generic "Invitation invalid".
+  'MEMBERSHIP_DEACTIVATED',
 ]);

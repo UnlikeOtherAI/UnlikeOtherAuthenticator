@@ -127,7 +127,7 @@ it from domain Y with a domain-Y token; a domain-Y *backend* still cannot.
 | \`POST .../teams/:teamId/join\` | **No** — 401. Self-join's subject IS the acting user. |
 | \`POST|GET .../teams/:teamId/invitations\`, \`.../resend\` | Yes (already was — this is the bulk-invite contract). |
 | \`GET .../teams/:teamId/invitations/:inviteId\` | Yes — reads one invitation by id, same record shape as the list. |
-| \`POST .../teams/:teamId/invitations/:inviteId/accept\` | **Backend-only.** Strict body \`{ userId }\`; accepts for that asserted UOA invitee and returns \`{ ok, orgId, teamId }\`. Any present user token is refused. |
+| \`POST .../teams/:teamId/invitations/:inviteId/accept\` | **Backend-only.** Strict body \`{ userId }\`; accepts for that asserted UOA invitee and returns \`{ ok, orgId, teamId }\`. A previously \`REMOVED\` invitee is reactivated as \`member\` with the invitation's team role; a \`DEACTIVATED\` one is refused 400 \`MEMBERSHIP_DEACTIVATED\`. Any present user token is refused. |
 | \`DELETE .../teams/:teamId/invitations/:inviteId\` | Yes — revokes any pending invitation, including one still awaiting member-invite approval. |
 | \`POST|GET|DELETE .../teams/:teamId/invite-links\` | Yes. A link created this way has \`created_by_user_id: null\`. |
 | \`GET .../invitations?approval=pending\` | Yes. |

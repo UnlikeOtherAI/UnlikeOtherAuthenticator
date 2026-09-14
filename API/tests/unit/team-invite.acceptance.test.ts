@@ -184,7 +184,7 @@ describe('team invite acceptance', () => {
 
     expect(tx.orgMember.findFirst).toHaveBeenCalledWith({
       where: { userId: 'user-1', orgId: 'org-1' },
-      select: { id: true, orgId: true },
+      select: { id: true, orgId: true, role: true, status: true },
     });
     expect(tx.orgMember.create).toHaveBeenCalled();
     expect(tx.teamMember.create).toHaveBeenCalled();

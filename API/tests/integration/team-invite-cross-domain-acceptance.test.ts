@@ -137,10 +137,16 @@ describe.skipIf(!hasDatabase)('accepting an invitation into a cross-product orga
     expect(orgMembership?.status).toBe('ACTIVE');
   });
 
-  it('still refuses a membership that was removed, rather than reactivating it', async () => {
-    const { inviteId, userId } = await seedInvite({ tombstonedMembership: true });
+  it('re-admits a removed member through a fresh invitation, whichever product founded the organisation', async () => {
+    const { inviteId, userId, teamId, orgId } = await seedInvite({ tombstonedMembership: true });
 
-    // Dropping the domain comparison must not weaken the tombstone rule.
-    await expect(accept(inviteId, userId)).rejects.toMatchObject({ statusCode: 401 });
+    // A fresh invitation is a re-add; the domain comparison stays irrelevant to it.
+    await expect(accept(inviteId, userId)).resolves.toMatchObject({ orgId, teamId });
+    expect(
+      await handle.prisma.orgMember.findFirst({ where: { orgId, userId }, select: { status: true } }),
+    ).toEqual({ status: 'ACTIVE' });
+    expect(
+      await handle.prisma.teamMember.findFirst({ where: { teamId, userId }, select: { status: true } }),
+    ).toEqual({ status: 'ACTIVE' });
   });
 });
