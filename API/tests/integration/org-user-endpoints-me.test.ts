@@ -110,7 +110,7 @@ describe.skipIf(!hasDatabase)('user-facing /org/me org context', () => {
     // The directory is an ADDITIVE field. It must not be delivered as `teams`:
     // that key is the id array asserted above, and `team_roles` is keyed by it.
     expect(meBody.org?.team_directory).toEqual([
-      expect.objectContaining({ teamId: defaultTeam!.id, orgId: org.id, name: 'General' }),
+      expect.objectContaining({ teamId: defaultTeam!.id, orgId: org.id, name: 'Acme Me Org' }),
     ]);
 
     await app.close();

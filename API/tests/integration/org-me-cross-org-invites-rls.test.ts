@@ -198,7 +198,8 @@ describe.skipIf(!hasDatabase)('/org/me cross-organisation pending invites (uoa_a
       where: { name: 'Alpha Team' },
       select: { id: true, domain: true, teams: { select: { id: true, name: true } } },
     });
-    const alphaGeneral = alpha.teams.find((team) => team.name === 'General')!;
+    // The first team carries the organisation's own name.
+    const alphaGeneral = alpha.teams.find((team) => team.name === 'Alpha Team')!;
 
     // 2. B founds "Bravo Org" the way the product does, on the SAME client domain.
     const bTokenUnscoped = await tokenFor({ userId: userB.id, email: USER_B });
@@ -390,7 +391,8 @@ describe.skipIf(!hasDatabase)('/org/me cross-organisation pending invites (uoa_a
       where: { name: 'Alpha Team' },
       select: { id: true, teams: { select: { id: true, name: true } } },
     });
-    const alphaGeneral = alpha.teams.find((team) => team.name === 'General')!;
+    // The first team carries the organisation's own name.
+    const alphaGeneral = alpha.teams.find((team) => team.name === 'Alpha Team')!;
 
     // An invitation in an organisation founded on a DIFFERENT domain, which this user is an
     // ACTIVE member of — reachable only under the all-memberships policy.
