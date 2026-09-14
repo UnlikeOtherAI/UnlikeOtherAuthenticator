@@ -52,7 +52,14 @@ export function registerOrgMeRoute(app: FastifyInstance): void {
       }
 
       // /org/me uses the organisations bootstrap predicate (domain + membership);
-      // app.org_id is deliberately left empty here — see row-level-security.md §7.
+      // app.org_id is deliberately not asserted here — see row-level-security.md §7.
+      //
+      // Read `setTenantContextFromRequest` before relying on that sentence: `orgId: null` only
+      // declines to OVERRIDE, it does not force the GUC empty. The helper coalesces
+      // (`extras.orgId ?? claims.org.org_id ?? null`), so a team-scoped access token still puts
+      // its own organisation into `app.org_id`. Every org_id-keyed policy therefore answers for
+      // that one organisation — which is why `pending_invites` below cannot be read on this
+      // transaction.
       request.accessTokenClaims = claims;
       setTenantContextFromRequest(request, { orgId: null, userId: claims.userId });
 
@@ -105,7 +112,15 @@ export function registerOrgMeRoute(app: FastifyInstance): void {
             { userId: claims.userId, domain: normalizedDomain },
             { prisma, policy: teamPolicy },
           ),
-          buildSidebarPendingInvites({ userId: claims.userId, domain: normalizedDomain }, { prisma }),
+          // Same policy, and therefore the same organisation reach, as the directory above: an
+          // invitation the hosted chooser offers at sign-in must not vanish once the product
+          // asks for it. The invite read itself runs on the admin client inside the service —
+          // `team_invites` RLS is keyed on `app.org_id`, which here names the token's own
+          // organisation and would hide every sibling organisation's invitation.
+          buildSidebarPendingInvites(
+            { userId: claims.userId, domain: normalizedDomain },
+            { prisma, policy: teamPolicy },
+          ),
         ]);
 
         return { ...context, team_directory: teamDirectory, pending_invites: pendingInvites };

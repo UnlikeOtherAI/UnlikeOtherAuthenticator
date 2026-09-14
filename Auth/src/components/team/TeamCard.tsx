@@ -19,6 +19,13 @@ export function TeamCard(props: {
   query: AuthFlowQuery;
   onOutcome: (outcome: TeamResponseOutcome) => void;
   disabled?: boolean;
+  /**
+   * Show the owning organisation under the team name. `TeamList` sets this when the chooser has
+   * only ONE organisation and therefore renders no organisation heading: the person still has to
+   * be told which organisation they are about to sign into, and "General" on its own tells them
+   * nothing. With two or more organisations the headings carry it and this stays off.
+   */
+  showOrgName?: boolean;
 }): React.JSX.Element {
   const { t } = useTranslation();
   const [submitting, setSubmitting] = useState(false);
@@ -43,6 +50,12 @@ export function TeamCard(props: {
   const showRole = props.team.role === 'owner' || props.team.role === 'admin';
   const roleLabel =
     props.team.role === 'owner' ? t('team.role.owner') : t('team.role.admin');
+  const subtitle = [
+    props.showOrgName ? (props.team.orgName ?? null) : null,
+    showRole ? roleLabel : null,
+  ]
+    .filter((part): part is string => Boolean(part))
+    .join(' · ');
 
   return (
     <button
@@ -75,8 +88,8 @@ export function TeamCard(props: {
         <span className="block truncate text-sm font-medium text-[var(--uoa-color-text)]">
           {props.team.name}
         </span>
-        {showRole ? (
-          <span className="block truncate text-xs text-[var(--uoa-color-muted)]">{roleLabel}</span>
+        {subtitle ? (
+          <span className="block truncate text-xs text-[var(--uoa-color-muted)]">{subtitle}</span>
         ) : null}
       </span>
     </button>

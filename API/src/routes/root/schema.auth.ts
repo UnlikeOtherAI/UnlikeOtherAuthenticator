@@ -1,5 +1,6 @@
 import type { EndpointSchema } from './schema.js';
 import { authTokenEndpoint } from './schema.auth-token.js';
+import { authEmailEndpoints } from './schema.auth-email.js';
 
 export const authEndpoints: EndpointSchema[] = [
   {
@@ -100,7 +101,7 @@ export const authEndpoints: EndpointSchema[] = [
       'teams?':
         "array of { teamId, orgId, name, slug, role, iconUrl, avatarImageUrl, orgName, orgSlug } — this user's ACTIVE team memberships on this domain (only with login_token). avatarImageUrl is the public /teams/:teamId/avatar form (never null, no credential needed) — the chooser renders in a popup that holds no bearer",
       'pending_invites?':
-        'array of { inviteId, teamName, invitedBy } — pending invites for this email on this domain (only with login_token)',
+        'array of { inviteId, teamName, orgName, invitedBy } — pending invites for this email on this domain (only with login_token). orgName is the inviting organisation (null only for a legacy row without it): two organisations can each own a team called "General", and the invite card carries no other organisation label. invitedBy is the inviter NAME and null when no name is known — never an e-mail address',
       'can_create_org?': 'boolean (only with login_token)',
       'creatable_orgs?':
         'array of { orgId, orgName } — organisations this user may add a team to via POST /auth/create-team (ACTIVE owner/admin there + org_features.allow_user_create_team). Empty unless the domain opted in. Distinct from can_create_org, which permits creating a new organisation',
@@ -226,7 +227,7 @@ export const authEndpoints: EndpointSchema[] = [
       teams:
         "array of { teamId, orgId, name, slug, role, iconUrl, avatarImageUrl, orgName, orgSlug } — this user's ACTIVE team memberships on this domain. avatarImageUrl is the public /teams/:teamId/avatar form (never null, no credential needed)",
       pending_invites:
-        'array of { inviteId, teamName, invitedBy } — pending invites for this email on this domain',
+        'array of { inviteId, teamName, orgName, invitedBy } — pending invites for this email on this domain. orgName is the inviting organisation (null only for a legacy row without it); invitedBy is the inviter NAME, never an e-mail address, and null when no name is known',
       can_create_org: 'boolean',
       creatable_orgs:
         'array of { orgId, orgName } — organisations this user may add a team to via POST /auth/create-team',
@@ -271,6 +272,7 @@ export const authEndpoints: EndpointSchema[] = [
     body: {
       token: 'string (required) — email verification token',
       password: 'string (optional) — required for password_required registration mode',
+      name: 'string (optional, ≤120, trimmed) — self-declared display name. Stored only while the account has no name yet, so it never overwrites an established one; for an invitation the inviter-supplied name remains the fallback when this is omitted.',
     },
     response: {
       ok: 'true (team_selection "off"/skipped branch only — finalizes immediately)',
@@ -290,7 +292,7 @@ export const authEndpoints: EndpointSchema[] = [
         'short-lived bridge JWT (only when the chooser gate passes) — authorizes ONLY POST /auth/select-team for this verified user',
       'teams?':
         'array of { teamId, orgId, name, slug, role, iconUrl, avatarImageUrl, orgName, orgSlug } (only with login_token). avatarImageUrl is the public /teams/:teamId/avatar form (never null, no credential needed); orgName is the owning organisation, so same-named teams in different orgs stay distinguishable',
-      'pending_invites?': 'array of { inviteId, teamName, invitedBy } (only with login_token)',
+      'pending_invites?': 'array of { inviteId, teamName, orgName, invitedBy } (only with login_token); orgName is the inviting organisation',
       'can_create_org?': 'boolean (only with login_token)',
       'creatable_orgs?':
         'array of { orgId, orgName } — organisations this user may add a team to via POST /auth/create-team (ACTIVE owner/admin there + org_features.allow_user_create_team). Empty unless the domain opted in. Distinct from can_create_org, which permits creating a new organisation',
@@ -321,74 +323,7 @@ export const authEndpoints: EndpointSchema[] = [
     body: { token: 'string (required)', password: 'string (required)' },
     response: { ok: 'true' },
   },
-  {
-    method: 'GET',
-    path: '/auth/email/reset-password',
-    description: 'Email link landing — renders set-password UI',
-    query: { token: 'string (required)', config_url: 'string (required)' },
-  },
-  {
-    method: 'GET',
-    path: '/auth/email/twofa-reset',
-    description: 'Email link landing for 2FA reset — renders confirmation page only',
-    query: { token: 'string (required)', config_url: 'string (required)' },
-  },
-  {
-    method: 'POST',
-    path: '/auth/email/twofa-reset/confirm',
-    description: 'Confirm email-based 2FA reset and consume the one-time token',
-    auth: 'config_url query param',
-    query: { token: 'string (required)', config_url: 'string (required)' },
-  },
-  {
-    method: 'GET',
-    path: '/auth/email/link',
-    description:
-      'Email registration/login link landing. A direct password invitation without PKCE opens account creation with the invitation email fixed in a read-only field; the invitation token, not that field, remains authoritative. An invitation for an address that already has an account carries a LOGIN_LINK token and likewise arrives without PKCE: it is accepted here and answered with a terminal confirmation page, because there is no code verifier to end in an authorization code and a login restart would drop the invitation. A refused invitation acceptance answers 400 rather than showing a login form: an elapsed invite/token deadline renders Invitation expired, while revoked, used, conflicting, and every other unusable state render Invitation invalid. For a non-invite link with config.login_flow.team_selection="auto", 2+ ACTIVE teams, a pending invite, or zero teams with can_create_org redirect to the team chooser; exactly one ACTIVE team/no invite is selected server-side and carried through applicable 2FA into the code. Invite-bound links carry the accepted invite orgId/teamId through the same 2FA/code/token pipeline without showing the chooser. team_selection="off" leaves legacy clients unscoped, but a recognized product pre-binds one exact team before 2FA without showing the chooser.',
-    query: {
-      state:
-        'string (optional, ≤2048) — opaque relying-party CSRF value. UOA does not interpret it; it is bound to this login (login_token, 2FA bridge, social state) and echoed verbatim beside `code` on the final redirect, and beside `error` on a failed social callback. Later hops must not re-supply it: a hop presenting a different value is refused.',
-      token: 'string (required)',
-      config_url: 'string (required)',
-      redirect_url: 'string (optional)',
-      code_challenge:
-        'string (optional for recovery; required to complete the one-click OAuth grant) — exactly 43-char PKCE S256 challenge preserved through email verification',
-      code_challenge_method: '"S256" when code_challenge is sent',
-      request_access: 'string (optional) — preserves access-request intent through email auth',
-    },
-  },
-  {
-    method: 'GET',
-    path: '/auth/email/team-invite',
-    description:
-      'Team invite landing page with accept/decline actions. Emailed invitations are valid for 24 hours. An elapsed invitation or email-token deadline renders Invitation expired; every other unusable state renders Invitation invalid.',
-    query: {
-      token: 'string (required)',
-      config_url: 'string (required)',
-      redirect_url: 'string (optional)',
-    },
-  },
-  {
-    method: 'GET',
-    path: '/auth/email/team-invite/decline',
-    description: 'Decline a team invitation',
-    query: { token: 'string (required)', config_url: 'string (required)' },
-  },
-  {
-    method: 'GET',
-    path: '/auth/email/team-invite-open/:inviteId.gif',
-    description: 'Tracking pixel for team invite open events',
-  },
-  {
-    method: 'GET',
-    path: '/auth/team-invite-link/:token',
-    description:
-      'Shareable team invite-link landing page. Public, IP-rate-limited, no auth. Validates the token WITHOUT redeeming it or granting any membership (unknown/revoked/expired/over-cap/HIDDEN all render the same generic invalid-link page). A valid token renders the normal Auth UI bootstrapped to start email verification, carrying invite_link_token for the client to pass into POST /auth/select-team once identity is verified.',
-    query: {
-      config_url: 'string (required)',
-      redirect_url: 'string (optional)',
-    },
-  },
+  ...authEmailEndpoints,
   {
     method: 'GET',
     path: '/auth/social/:provider',

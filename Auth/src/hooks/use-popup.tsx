@@ -55,6 +55,13 @@ export type CreatableOrgChoice = {
 export type InviteChoice = {
   inviteId: string;
   teamName: string;
+  /**
+   * The inviting organisation's name. Optional so a payload minted before the field existed still
+   * parses; when it is there the card names it, because an invitation can come from an
+   * organisation this person has no team in at all and two organisations can each own a
+   * "General".
+   */
+  orgName?: string | null;
   invitedBy?: string | null;
 };
 

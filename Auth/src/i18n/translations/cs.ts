@@ -16,6 +16,8 @@ export const cs = {
   'auth.signatures.title': 'Zkontrolujte a podepište dohody',
 
   'form.email.label': 'E-mail',
+  'form.name.label': 'Vaše jméno',
+  'form.name.placeholder': 'Nepovinné',
   'form.password.label': 'Heslo',
   'form.newPassword.label': 'Nové heslo',
   'form.confirmPassword.label': 'Potvrzení hesla',
@@ -46,6 +48,9 @@ export const cs = {
     'Vaše žádost byla odeslána správcům týmu. Toto okno můžete zavřít a počkat na schválení.',
   'message.signedIn': 'Vraťte se do aplikace a dokončete přihlášení. Toto okno můžete zavřít.',
   'message.inviteAccepted': 'Váš účet byl vytvořen a připojili jste se k týmu. Toto okno můžete zavřít.',
+  'message.inviteAccepted.joined': 'Váš účet byl vytvořen a připojili jste se k týmu.',
+  'message.inviteAccepted.continue': 'Pokračovat do {product}',
+  'message.inviteAccepted.product': 'aplikace',
   'action.openApp': 'Otevřít aplikaci',
 
   'nav.forgotPassword': 'Zapomněli jste heslo?',
@@ -66,6 +71,7 @@ export const cs = {
   'team.role.admin': 'Správce',
   'team.invite.title': 'Byli jste pozváni do {teamName}',
   'team.invite.invitedBy': 'Pozval(a) {invitedBy}',
+  'team.invite.inOrg': 'v organizaci {orgName}',
   'team.invite.accept': 'Přijmout',
   'team.invite.decline': 'Odmítnout',
   'team.createOrg.title': 'Vytvořit nový tým',
@@ -73,6 +79,9 @@ export const cs = {
   'team.createOrg.nameLabel': 'Název týmu',
   'team.createOrg.submit': 'Vytvořit tým',
   'team.createOrg.cancel': 'Zrušit',
+  'team.createOrg.organisationNameLabel': 'Název organizace',
+  'team.createOrg.firstTeamHint':
+    'Váš první tým se bude jmenovat General — později jej můžete přejmenovat.',
   'team.address.label': 'Adresa týmu',
   'team.address.hint': 'Toto bude webová adresa týmu. Později ji můžete změnit.',
   'team.address.checking': 'Ověřuje se dostupnost…',

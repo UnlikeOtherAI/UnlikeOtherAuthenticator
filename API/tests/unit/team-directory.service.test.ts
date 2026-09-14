@@ -208,72 +208,154 @@ describe('team-directory service: buildSidebarTeams', () => {
 });
 
 describe('team-directory service: buildSidebarPendingInvites', () => {
-  it('excludes expired invites and invites still awaiting member-invite approval', async () => {
-    const now = new Date('2026-07-09T12:00:00.000Z');
-    const prisma = {
+  function inviteRow(overrides?: Record<string, unknown>) {
+    return {
+      id: 'invite-1',
+      orgId: 'org-1',
+      teamId: 'team-1',
+      team: { name: 'Backend' },
+      org: { name: 'Acme Inc', slug: 'acme' },
+      invitedByName: 'Alice Admin',
+      invitedByUserId: null,
+      expiresAt: new Date('2026-08-01T00:00:00.000Z'),
+      ...overrides,
+    };
+  }
+
+  function makeInvitePrisma(rows: unknown[]) {
+    return {
+      teamInvite: { findMany: vi.fn(async () => rows) },
+      user: { findMany: vi.fn(async () => []) },
+    };
+  }
+
+  function makeDirectoryPrisma(email: string | null) {
+    return {
       teamMember: { findMany: vi.fn() },
       refreshToken: { groupBy: vi.fn() },
-      user: { findUnique: vi.fn(async () => ({ email: 'jane@acme.com' })) },
-      teamInvite: {
-        findMany: vi.fn(async () => [
-          {
-            id: 'invite-1',
-            orgId: 'org-1',
-            teamId: 'team-1',
-            team: { name: 'Backend' },
-            invitedByName: 'Alice Admin',
-            invitedByEmail: 'alice@acme.com',
-            expiresAt: new Date('2026-08-01T00:00:00.000Z'),
-          },
-        ]),
-      },
+      user: { findUnique: vi.fn(async () => (email === null ? null : { email })) },
+      teamInvite: { findMany: vi.fn() },
     };
+  }
+
+  it('names the inviting organisation and excludes expired or unapproved invites', async () => {
+    const now = new Date('2026-07-09T12:00:00.000Z');
+    const prisma = makeDirectoryPrisma('jane@acme.com');
+    const invitePrisma = makeInvitePrisma([inviteRow()]);
 
     const result = await buildSidebarPendingInvites(
       { userId: 'user-1', domain: 'acme.example.com' },
-      { prisma, now: () => now },
+      { prisma, invitePrisma, now: () => now },
     );
 
     expect(result).toEqual([
       {
         inviteId: 'invite-1',
         orgId: 'org-1',
+        orgName: 'Acme Inc',
+        orgSlug: 'acme',
         teamId: 'team-1',
         teamName: 'Backend',
         invitedBy: 'Alice Admin',
         expiresAt: new Date('2026-08-01T00:00:00.000Z'),
       },
     ]);
-    expect(prisma.teamInvite.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        select: expect.objectContaining({ orgId: true }),
-        where: expect.objectContaining({
-          email: 'jane@acme.com',
-          org: { domain: 'acme.example.com' },
-          acceptedAt: null,
-          declinedAt: null,
-          revokedAt: null,
-          // Task 1 uses the chooser's default eligibility (no PENDING approvals surfaced yet).
-          approvalStatus: { in: ['NOT_REQUIRED', 'APPROVED'] },
-        }),
-      }),
-    );
+
+    const where = invitePrisma.teamInvite.findMany.mock.calls[0]![0]!.where as {
+      AND: Record<string, unknown>[];
+    };
+    expect(where.AND[0]).toEqual({ email: 'jane@acme.com' });
+    // The eligibility predicate keeps its own top-level OR (the expiry pair). Composing the
+    // organisation reach as a sibling AND clause rather than a spread is what stops that OR
+    // being overwritten — an expired invitation would otherwise come back.
+    expect(where.AND[1]).toMatchObject({
+      acceptedAt: null,
+      declinedAt: null,
+      revokedAt: null,
+      approvalStatus: { in: ['NOT_REQUIRED', 'APPROVED'] },
+      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+    });
+    // Domain-scoped product: every organisation on this domain, and nothing else. Crucially NOT
+    // narrowed to the organisation the caller's access token is scoped to.
+    expect(where.AND[2]).toEqual({ OR: [{ org: { domain: 'acme.example.com' } }] });
   });
 
-  it('returns an empty array when the user cannot be found', async () => {
-    const prisma = {
-      teamMember: { findMany: vi.fn() },
-      refreshToken: { groupBy: vi.fn() },
-      user: { findUnique: vi.fn(async () => null) },
-      teamInvite: { findMany: vi.fn() },
+  // The invitee is never told the sender's address — the invitation e-mail does not carry it
+  // either — so a nameless inviter renders no line at all rather than an address.
+  it('leaves the inviter null rather than disclosing an e-mail address', async () => {
+    const prisma = makeDirectoryPrisma('jane@acme.com');
+    const invitePrisma = makeInvitePrisma([
+      inviteRow({ invitedByName: null, invitedByUserId: 'user-9' }),
+    ]);
+    invitePrisma.user = {
+      findMany: vi.fn(async () => [{ id: 'user-9', name: null, email: 'alice@acme.com' }]),
     };
 
     const result = await buildSidebarPendingInvites(
       { userId: 'user-1', domain: 'acme.example.com' },
-      { prisma },
+      { prisma, invitePrisma },
+    );
+
+    expect(result[0]?.invitedBy).toBeNull();
+  });
+
+  it('resolves the inviting user’s name for a member-initiated invitation', async () => {
+    const prisma = makeDirectoryPrisma('jane@acme.com');
+    const invitePrisma = makeInvitePrisma([
+      inviteRow({ invitedByName: '   ', invitedByUserId: 'user-9' }),
+    ]);
+    invitePrisma.user = {
+      findMany: vi.fn(async () => [{ id: 'user-9', name: 'Carol Owner' }]),
+    };
+
+    const result = await buildSidebarPendingInvites(
+      { userId: 'user-1', domain: 'acme.example.com' },
+      { prisma, invitePrisma },
+    );
+
+    // A blank stored name is no name: it must not win over the resolvable one.
+    expect(result[0]?.invitedBy).toBe('Carol Owner');
+  });
+
+  it('reaches organisations of an all-memberships product beyond this domain', async () => {
+    const prisma = makeDirectoryPrisma('jane@acme.com');
+    const invitePrisma = makeInvitePrisma([
+      inviteRow({ orgId: 'org-other', org: { name: 'Bravo Org', slug: 'bravo' } }),
+    ]);
+
+    const result = await buildSidebarPendingInvites(
+      { userId: 'user-1', domain: 'acme.example.com' },
+      {
+        prisma,
+        invitePrisma,
+        policy: { scope: 'all_active_memberships', serviceId: 'service-1', product: 'nessie' },
+      },
+    );
+
+    expect(result[0]?.orgName).toBe('Bravo Org');
+    const where = invitePrisma.teamInvite.findMany.mock.calls[0]![0]!.where as {
+      AND: Record<string, unknown>[];
+    };
+    // Same reach as `buildSidebarTeams` under this policy: the domain's organisations plus the
+    // ones the caller is already an ACTIVE member of, whichever domain founded them.
+    expect(where.AND[2]).toEqual({
+      OR: [
+        { org: { domain: 'acme.example.com' } },
+        { org: { members: { some: { userId: 'user-1', status: 'ACTIVE' } } } },
+      ],
+    });
+  });
+
+  it('returns an empty array when the user cannot be found', async () => {
+    const prisma = makeDirectoryPrisma(null);
+    const invitePrisma = makeInvitePrisma([]);
+
+    const result = await buildSidebarPendingInvites(
+      { userId: 'user-1', domain: 'acme.example.com' },
+      { prisma, invitePrisma },
     );
 
     expect(result).toEqual([]);
-    expect(prisma.teamInvite.findMany).not.toHaveBeenCalled();
+    expect(invitePrisma.teamInvite.findMany).not.toHaveBeenCalled();
   });
 });

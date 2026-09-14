@@ -20,25 +20,39 @@ const TEST_CONFIG = {
   language_config: 'en',
 };
 
+function renderInviteRegistration(): string {
+  return renderToString(
+    <ThemeProvider config={TEST_CONFIG} configUrl="">
+      <I18nProvider config={TEST_CONFIG} configUrl="">
+        <PopupProvider
+          configUrl=""
+          config={TEST_CONFIG}
+          initialSearch="?invite_token=invite-capability&invite_email=invitee%40example.com"
+          initialView="invite-registration"
+        >
+          <InviteRegistrationPage />
+        </PopupProvider>
+      </I18nProvider>
+    </ThemeProvider>,
+  );
+}
+
 describe('InviteRegistrationPage SSR', () => {
   it('renders the invited email as read-only and binds Google to the invite flow', () => {
-    const html = renderToString(
-      <ThemeProvider config={TEST_CONFIG} configUrl="">
-        <I18nProvider config={TEST_CONFIG} configUrl="">
-          <PopupProvider
-            configUrl=""
-            config={TEST_CONFIG}
-            initialSearch="?invite_token=invite-capability&invite_email=invitee%40example.com"
-            initialView="invite-registration"
-          >
-            <InviteRegistrationPage />
-          </PopupProvider>
-        </I18nProvider>
-      </ThemeProvider>,
-    );
+    const html = renderInviteRegistration();
 
     expect(html).toContain('value="invitee@example.com"');
     expect(html).toContain('readOnly=""');
     expect(html).toContain('/auth/social/google?config_url=&amp;invite_token=invite-capability');
+  });
+
+  it('offers an optional name field so the invitee is not an "Unnamed member"', () => {
+    const html = renderInviteRegistration();
+
+    // F6: optional — an empty field still leaves the inviter-supplied name as the fallback.
+    expect(html).toContain('Your name');
+    expect(html).toContain('name="name"');
+    expect(html).toContain('maxLength="120"');
+    expect(html).not.toMatch(/name="name"[^>]*required/);
   });
 });

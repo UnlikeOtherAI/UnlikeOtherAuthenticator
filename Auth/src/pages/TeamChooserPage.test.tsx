@@ -119,14 +119,90 @@ describe('TeamChooserPage SSR rendering', () => {
     expect(html).toContain('Decline');
   });
 
-  it('renders an inline first-team form when there is no team destination yet', () => {
+  // The invited team is one this person has no membership in, so it is never in the list below —
+  // the card is the only thing that can say which organisation is inviting them, and two
+  // organisations can each own a "General".
+  it('names the inviting organisation and the inviter on the invite card', () => {
+    const html = renderChooser({
+      teams: [{ teamId: 't1', orgId: 'o1', name: 'General', role: 'owner', orgName: 'Alpha Team' }],
+      pending_invites: [
+        {
+          inviteId: 'inv-1',
+          teamName: 'General',
+          orgName: 'Bravo Org',
+          invitedBy: 'Test B',
+        },
+      ],
+      can_create_org: false,
+    });
+
+    expect(html).toContain('You’ve been invited to');
+    expect(html).toContain('in Bravo Org');
+    expect(html).toContain('Invited by Test B');
+  });
+
+  it('omits the organisation line when the payload carries no organisation name', () => {
+    const html = renderChooser({
+      teams: [
+        { teamId: 't1', orgId: 'o1', name: 'Backend Team', role: 'member' },
+        { teamId: 't2', orgId: 'o1', name: 'Frontend Team', role: 'owner' },
+      ],
+      pending_invites: [{ inviteId: 'inv-1', teamName: 'Growth Squad', invitedBy: null }],
+      can_create_org: false,
+    });
+
+    expect(html).toContain('Growth Squad');
+    expect(html).not.toContain('Invited by');
+    expect(html).not.toContain('in undefined');
+    expect(html).not.toContain('in null');
+  });
+
+  // One organisation renders no <h2> heading, so without this the person is told the team name
+  // and nothing else — "General" alone identifies nothing.
+  it('names the organisation under each team when the chooser has only one', () => {
+    const html = renderChooser({
+      teams: [
+        { teamId: 't1', orgId: 'o1', name: 'General', role: 'owner', orgName: 'Alpha Team' },
+        { teamId: 't2', orgId: 'o1', name: 'Beta Team', role: 'member', orgName: 'Alpha Team' },
+      ],
+      pending_invites: [],
+      can_create_org: false,
+    });
+
+    expect(html).not.toMatch(/<h2[^>]*>Alpha Team<\/h2>/);
+    expect(html).toContain('Alpha Team · Owner');
+    expect(html).toContain('>Alpha Team<');
+  });
+
+  it('leaves the organisation to the headings when there is more than one', () => {
+    const html = renderChooser({
+      teams: [
+        { teamId: 't1', orgId: 'o1', name: 'General', role: 'owner', orgName: 'Alpha Team' },
+        { teamId: 't2', orgId: 'o2', name: 'General', role: 'member', orgName: 'Bravo Org' },
+      ],
+      pending_invites: [],
+      can_create_org: false,
+    });
+
+    expect(html).toMatch(/<h2[^>]*>Alpha Team<\/h2>/);
+    expect(html).toMatch(/<h2[^>]*>Bravo Org<\/h2>/);
+    // The card subtitle stays the role alone — the heading above it already names the org.
+    expect(html).not.toContain('Alpha Team · Owner');
+    expect(html).toContain('>Owner<');
+  });
+
+  it('renders an inline first-organisation form when there is no team destination yet', () => {
     const withCreate = renderChooser({
       teams: [],
       pending_invites: [],
       can_create_org: true,
     });
-    expect(withCreate).toContain('Team name');
+    // F3: the submit creates an organisation whose first team is always "General", so the
+    // field names the organisation and the hint says what the first team will be called.
+    expect(withCreate).toContain('Organisation name');
+    expect(withCreate).not.toContain('Team name');
     expect(withCreate).toContain('This creates an organisation and its first team.');
+    expect(withCreate).toContain('Your first team will be called General');
     expect(withCreate).toContain('Visibility');
     expect(withCreate).toContain('Create team');
     expect(withCreate).not.toContain('aria-label="Create team"');
@@ -140,7 +216,8 @@ describe('TeamChooserPage SSR rendering', () => {
       pending_invites: [],
       can_create_org: true,
     });
-    expect(withExistingTeams).not.toContain('Team name');
+    expect(withExistingTeams).not.toContain('Organisation name');
+    expect(withExistingTeams).not.toContain('Your first team will be called General');
     expect(withExistingTeams).toContain('aria-label="Create team"');
   });
 

@@ -14,6 +14,8 @@ export const en = {
   'auth.signatures.title': 'Review and sign agreements',
 
   'form.email.label': 'Email',
+  'form.name.label': 'Your name',
+  'form.name.placeholder': 'Optional',
   'form.password.label': 'Password',
   'form.newPassword.label': 'New password',
   'form.confirmPassword.label': 'Confirm password',
@@ -45,6 +47,10 @@ export const en = {
     'Your request has been sent to the team administrators. You can close this window and wait for approval.',
   'message.signedIn': 'Return to the app to finish signing in. You can close this window.',
   'message.inviteAccepted': 'Your account has been created and you have joined the team. You can close this window.',
+  'message.inviteAccepted.joined':
+    'Your account has been created and you have joined the team.',
+  'message.inviteAccepted.continue': 'Continue to {product}',
+  'message.inviteAccepted.product': 'the app',
   'action.openApp': 'Open the app',
 
   // Navigation links between auth views.
@@ -68,6 +74,7 @@ export const en = {
   'team.role.admin': 'Admin',
   'team.invite.title': 'You’ve been invited to {teamName}',
   'team.invite.invitedBy': 'Invited by {invitedBy}',
+  'team.invite.inOrg': 'in {orgName}',
   'team.invite.accept': 'Accept',
   'team.invite.decline': 'Decline',
   'team.createOrg.title': 'Create a new team',
@@ -75,6 +82,9 @@ export const en = {
   'team.createOrg.nameLabel': 'Team name',
   'team.createOrg.submit': 'Create team',
   'team.createOrg.cancel': 'Cancel',
+  'team.createOrg.organisationNameLabel': 'Organisation name',
+  'team.createOrg.firstTeamHint':
+    'Your first team will be called General — you can rename it later.',
   'team.address.label': 'Team address',
   'team.address.hint': 'This becomes the web address for the team. You can change it later.',
   'team.address.checking': 'Checking availability…',

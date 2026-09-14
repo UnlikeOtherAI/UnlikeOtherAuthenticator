@@ -2,7 +2,8 @@ import type { PrismaClient } from '@prisma/client';
 
 import { getAdminPrisma, getPrisma } from '../db/prisma.js';
 import { avatarImageBaseUrl, publicTeamAvatarImageUrl } from '../utils/avatar-url.js';
-import { pendingInviteStatusWhere } from './first-login.service.js';
+import { resolveInviterLabel } from './invite-inviter-label.service.js';
+import { pendingInviteWhereForCaller } from './pending-invite-scope.service.js';
 import {
   type ProductTeamPolicy,
 } from './product-team-policy.service.js';
@@ -42,6 +43,17 @@ export type TeamEntry = {
 export type SidebarPendingInvite = {
   inviteId: string;
   orgId: string;
+  /**
+   * The inviting organisation's name and slug.
+   *
+   * An invitation can name a team in an organisation the caller is not signed
+   * into, and two organisations can each own a team called "General" — so a
+   * product cannot label the card from the singular `org.org_id` block or from
+   * `team_directory` (which lists teams the caller is already a member of, and
+   * therefore never contains the invited team).
+   */
+  orgName: string;
+  orgSlug: string;
   teamId: string;
   teamName: string;
   invitedBy: string | null;
@@ -57,6 +69,14 @@ type TeamDirectoryPrisma = {
 
 type TeamDirectoryDeps = {
   crossProductPrisma?: Pick<PrismaClient, 'teamMember'>;
+  /**
+   * The client the pending-invite read runs on. Defaults to the BYPASSRLS admin
+   * client for the reason spelled out on `buildSidebarPendingInvites`: the
+   * `team_invites` RLS policy is keyed on `app.org_id` alone, so the request's
+   * own tenant transaction can only ever see invitations belonging to the
+   * organisation the access token is scoped to.
+   */
+  invitePrisma?: Pick<PrismaClient, 'teamInvite' | 'user'>;
   policy?: ProductTeamPolicy;
   prisma?: TeamDirectoryPrisma;
   now?: () => Date;
@@ -192,6 +212,21 @@ export async function buildSidebarTeams(
  * The sidebar's `pending_invites[]` (design §11.4): same eligibility filter as the chooser's
  * `buildSessionChoices` (`pendingInviteStatusWhere`, `includePendingApproval` defaults to false —
  * an invite still awaiting member-invite approval isn't a real pending invite for the invitee yet).
+ *
+ * **Why this read does not use the request's tenant transaction.** `team_invites` is
+ * org_id-scoped under RLS — `team_invites_select` is `org_id = app.org_id` and nothing else
+ * (20260423000001_rls_enable_policies) — and `/org/me` runs its transaction with `app.org_id`
+ * resolved from the caller's access token. Reading invitations there answers only for the one
+ * organisation the token is scoped to, and silently drops every invitation from a sibling
+ * organisation: exactly the "the chooser offers it at sign-in, the product never sees it"
+ * defect. A user's own pending invitations are not tenant data of the organisation they are
+ * signed into, so the read runs on the admin client and is bounded by the two filters that
+ * actually define it — the caller's OWN verified address (resolved from their user row, never
+ * from a parameter) and the product's organisation reach.
+ *
+ * The filter itself is `pendingInviteWhereForCaller`, which the hosted chooser
+ * (`buildSessionChoices`) now uses too, so the two surfaces answer with one set rather than
+ * merely intending to.
  */
 export async function buildSidebarPendingInvites(
   params: { userId: string; domain: string },
@@ -206,29 +241,42 @@ export async function buildSidebarPendingInvites(
   });
   if (!user) return [];
 
-  const invites = await prisma.teamInvite.findMany({
-    where: {
+  const invitePrisma = deps?.invitePrisma ?? getAdminPrisma();
+  const policy = deps?.policy ?? { scope: 'client_domain' as const };
+
+  const invites = await invitePrisma.teamInvite.findMany({
+    where: pendingInviteWhereForCaller({
       email: user.email,
-      org: { domain: params.domain },
-      ...pendingInviteStatusWhere({ now }),
-    },
+      userId: params.userId,
+      domain: params.domain,
+      policy,
+      now,
+    }),
     select: {
       id: true,
       orgId: true,
       teamId: true,
       team: { select: { name: true } },
+      org: { select: { name: true, slug: true } },
       invitedByName: true,
-      invitedByEmail: true,
+      invitedByUserId: true,
       expiresAt: true,
     },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
   });
+
+  // The inviter may be recorded as a user id alone (every member-initiated invitation is), and
+  // that user can belong to a sibling organisation — resolve on the same client as the rows.
+  const invitedBy = await resolveInviterLabel(invites, { prisma: invitePrisma });
 
   return invites.map((row) => ({
     inviteId: row.id,
     orgId: row.orgId,
+    orgName: row.org.name,
+    orgSlug: row.org.slug,
     teamId: row.teamId,
     teamName: row.team.name,
-    invitedBy: row.invitedByName ?? row.invitedByEmail ?? null,
+    invitedBy: invitedBy(row),
     expiresAt: row.expiresAt,
   }));
 }
