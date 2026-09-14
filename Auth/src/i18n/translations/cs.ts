@@ -81,7 +81,9 @@ export const cs = {
   'team.createOrg.cancel': 'Zrušit',
   'team.createOrg.organisationNameLabel': 'Název organizace',
   'team.createOrg.firstTeamHint':
-    'Váš první tým se bude jmenovat General — později jej můžete přejmenovat.',
+    'Váš první tým se bude jmenovat stejně jako organizace — později jej můžete přejmenovat.',
+  'team.createOrg.error.nameTaken':
+    'Organizace s tímto názvem už existuje. Zvolte prosím jiný název.',
   'team.address.label': 'Adresa týmu',
   'team.address.hint': 'Toto bude webová adresa týmu. Později ji můžete změnit.',
   'team.address.checking': 'Ověřuje se dostupnost…',

@@ -117,8 +117,8 @@ describe('Organisation service: organisation CRUD', () => {
       id: 'team-default',
       orgId: 'org-1',
       groupId: null,
-      name: 'General',
-      slug: 'general',
+      name: 'Acme Inc',
+      slug: 'acme-inc',
       description: null,
       isDefault: true,
       joinPolicy: 'INVITE_ONLY',
@@ -168,7 +168,7 @@ describe('Organisation service: organisation CRUD', () => {
     expect(org.defaultTeam).toMatchObject({
       id: 'team-default',
       orgId: 'org-1',
-      name: 'General',
+      name: 'Acme Inc',
       isDefault: true,
     });
     // It is the same team the owner was just given membership of.
@@ -199,8 +199,8 @@ describe('Organisation service: organisation CRUD', () => {
       expect.objectContaining({
         data: expect.objectContaining({
           orgId: 'org-1',
-          name: 'General',
-          slug: 'general',
+          name: 'Acme Inc',
+          slug: 'acme-inc',
           isDefault: true,
         }),
       }),
@@ -218,6 +218,34 @@ describe('Organisation service: organisation CRUD', () => {
         },
       }),
     );
+  });
+
+  // A name whose address another organisation holds is refused, never suffixed:
+  // creating "kilomayo" beside an existing `kilomayo` used to produce
+  // `kilomayo-qws8`, a hostname nobody asked for.
+  it('refuses a name whose derived address another organisation holds', async () => {
+    const prisma = makePrismaMock();
+
+    prisma.orgMember.findFirst.mockResolvedValue(null);
+    prisma.user.findUnique.mockResolvedValue({ id: 'u-owner' });
+    prisma.organisation.findFirst.mockResolvedValue({ id: 'other-org' });
+
+    await expect(
+      createOrganisation(
+        {
+          domain: 'acme.example.com',
+          name: 'KiloMayo',
+          ownerId: 'u-owner',
+          config: makeConfig(),
+          actorUserId: 'u-owner',
+        },
+        { prisma },
+      ),
+    ).rejects.toMatchObject({ statusCode: 400, message: 'ORG_SLUG_TAKEN' });
+    expect(prisma.organisation.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { domain: 'acme.example.com', slug: 'kilomayo' } }),
+    );
+    expect(prisma.organisation.create).not.toHaveBeenCalled();
   });
 
   // The inverse of this used to be asserted here: belonging to an organisation

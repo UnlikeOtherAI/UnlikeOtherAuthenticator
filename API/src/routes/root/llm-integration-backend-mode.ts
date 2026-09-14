@@ -135,7 +135,7 @@ it from domain Y with a domain-Y token; a domain-Y *backend* still cannot.
 | \`GET|POST .../access-requests…\` | Yes (already was). Optional \`reviewedByUserId\` in the body, unchanged — it is a label, never an actor. The \`:orgId\`/\`:teamId\` must be your own domain's, even when your signed config names them as the access-request target. |
 
 **Creating an organisation gives you its team in the same answer.** The
-create transaction also makes a default team named "General" and puts the owner
+create transaction also makes a default team named after the organisation and puts the owner
 in it, and the response carries that whole team record as \`defaultTeam\`. Use
 \`defaultTeam.id\` to address the new team immediately.
 

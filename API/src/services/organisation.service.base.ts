@@ -296,16 +296,9 @@ export function toMemberRecord(
 }
 
 /**
- * Derive an available organisation slug from an organisation's name.
- *
- * Forgiving, deliberately, and the counterpart to `ensureAvailableOrgSlug`
- * below: a slug the product is *inventing* must always produce something, but
- * a slug a person *chose* is refused with a reason. Derivation used to reject —
- * an organisation named "团队" normalised to the empty string and 400'd, and one
- * named "API" was refused for holding a reserved word — which meant a legal
- * company name could not be registered because of a label nobody had asked to
- * see. Now the name is rendered as best it can be and disambiguated, exactly as
- * the team path does, and whoever cares about the address changes it.
+ * Derive a slug for an organisation the system creates by itself at sign-in,
+ * where nobody can be asked for another name: a taken label gets a random suffix.
+ * Anything a person creates uses `deriveAvailableOrgSlug`, which refuses instead.
  */
 export function deriveSlugWithValidation(
   domain: string,
@@ -315,6 +308,23 @@ export function deriveSlugWithValidation(
 ): Promise<string> {
   const base = deriveSlugBase(name, { fallback: ORG_SLUG_FALLBACK });
   return resolveUniqueSlugWithCollisionRetries(domain, prisma, base, existingSlugToIgnore);
+}
+
+/**
+ * Derive the slug for an organisation a person is creating from its name, and
+ * refuse (`ORG_SLUG_TAKEN`) rather than suffix when it is taken — `kilomayo-qws8`
+ * is an address nobody asked for. The person picks another name instead.
+ */
+export function deriveAvailableOrgSlug(params: {
+  domain: string;
+  prisma: Pick<OrgServicePrisma, 'organisation'>;
+  name: string;
+}): Promise<string> {
+  return ensureAvailableOrgSlug({
+    domain: params.domain,
+    prisma: params.prisma,
+    slug: deriveSlugBase(params.name, { fallback: ORG_SLUG_FALLBACK }),
+  });
 }
 
 /**

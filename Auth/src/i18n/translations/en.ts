@@ -84,7 +84,9 @@ export const en = {
   'team.createOrg.cancel': 'Cancel',
   'team.createOrg.organisationNameLabel': 'Organisation name',
   'team.createOrg.firstTeamHint':
-    'Your first team will be called General — you can rename it later.',
+    'Your first team will have the same name as the organisation — you can rename it later.',
+  'team.createOrg.error.nameTaken':
+    'An organisation with this name already exists. Please pick another name.',
   'team.address.label': 'Team address',
   'team.address.hint': 'This becomes the web address for the team. You can change it later.',
   'team.address.checking': 'Checking availability…',

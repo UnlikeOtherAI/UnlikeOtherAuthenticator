@@ -1238,7 +1238,7 @@ groupMembers  GroupMember[]
 - A user belongs to **exactly one organisation** per domain (with global `user_scope`, the same person could belong to different orgs on different domains).
 - The user who creates an organisation becomes its **owner** (tracked via `ownerId`).
 - Every organisation has a **default team** created automatically at org creation time (see 24.5).
-- Creating an org: in one transaction, create the org, add the creator as owner (`OrgMember` with role `"owner"`), and create the default "General" team with `isDefault: true`.
+- Creating an org: in one transaction, create the org, add the creator as owner (`OrgMember` with role `"owner"`), and create the default team — named after the organisation — with `isDefault: true`.
 
 #### Owner-Only Operations
 
@@ -1313,7 +1313,7 @@ Organisation slugs are derived from the `name` field:
 - **Maximum length:** 120 characters
 - Unicode characters transliterated to ASCII before slugifying
 - **Reserved slugs** that must be rejected: `admin`, `api`, `internal`, `me`, `system`, `settings`, `new`, `default`
-- **Collision resolution:** append a random 4-character alphanumeric suffix (e.g., `my-org-a7f3`). Try up to 10 times, then fail. Do NOT use incrementing numeric suffixes (avoids leaking org count).
+- **Collision resolution:** an organisation a person creates is **refused** with `ORG_SLUG_TAKEN` when its address is taken — derived from the name or chosen — and never suffixed (see "Choosing versus deriving" below). Only a personal organisation the system creates during sign-in, with nobody at a form to ask, appends a random 4-character alphanumeric suffix (e.g., `my-org-a7f3`), trying up to 10 times. Do NOT use incrementing numeric suffixes (avoids leaking org count).
 - Slugs are **regenerated** when the org name is updated via `PUT /org/organisations/:orgId`.
 
 #### Tenant Subdomain Contract (2026-08)
@@ -1361,11 +1361,16 @@ hyphens, no doubled hyphen — which is also how every `xn--` A-label is refused
 than the database, because a product extends the list through its signed config
 (`hostnames.reserved_labels`) and a database constraint would freeze it.
 
-**Choosing versus deriving.** A slug the product derives from a name always
-succeeds, disambiguating a taken or reserved label with a random four-character
-suffix. A slug a person typed is validated and refused with a reason, never
-silently rewritten — handing back `acme-k4f2` to somebody who asked for `acme`
-is the failure this rule exists to prevent.
+**Choosing versus deriving.** A slug a person typed is validated and refused
+with a reason, never silently rewritten — handing back `acme-k4f2` to somebody
+who asked for `acme` is the failure this rule exists to prevent. The same holds
+when the person typed only a name (2026-09): the address derived from it is
+refused with `ORG_SLUG_TAKEN` when another organisation on the domain holds it,
+so the person picks another name. Only a personal organisation the system
+creates by itself during sign-in — nobody is at a form to ask, and refusing
+would fail the sign-in — disambiguates a taken or reserved label with a random
+four-character suffix. Team slugs, unique only inside their organisation, keep
+deriving with a suffix.
 
 **A rename does not move an address.** Renaming an organisation or a team leaves
 its slug alone; changing the address is a separate, deliberate write. Before
@@ -1397,7 +1402,7 @@ company name silently relocated that tenant's hostname.
 
 #### Default Team
 
-- When an org is created, a team named "General" is auto-created with `isDefault: true`.
+- When an org is created, a team with the organisation's own name is auto-created with `isDefault: true` (it was "General" before 2026-09; existing teams keep their names).
 - When a user is added to an org, they are auto-added to the default team.
 - The default team **cannot be deleted**.
 - The default team can be renamed but `isDefault` cannot be changed.
@@ -1920,7 +1925,7 @@ If `org_roles` changes and existing members have roles no longer in the list, th
 6. **File size limit: 500 lines.**
 7. **Follow existing code patterns.** See `token.service.ts`, `domain-role.service.ts`, `domain-hash-auth.ts`.
 8. **Prisma only.** No raw SQL. Use transactions for multi-step mutations.
-9. **Slug rules.** Random suffixes, not incrementing (see 24.4).
+9. **Slug rules.** A person-created organisation's taken address is refused, not suffixed; where a suffix is used it is random, not incrementing (see 24.4).
 10. **Deletion cascades.** Org deletion cascades teams, groups, memberships. Team deletion cascades memberships (cannot delete default). Group deletion sets `groupId = null` on teams.
 11. **`org_roles` must include `"owner"`.** Validated on write, not read.
 12. **One org per user per domain.** Enforced at application layer.

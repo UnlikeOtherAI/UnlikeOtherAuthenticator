@@ -107,7 +107,11 @@ export function CreateTeamDialog(props: {
     }
     setSubmitting(false);
     if (outcome.kind === 'error') {
-      setError(t('form.error.generic'));
+      setError(
+        outcome.code === 'ORG_SLUG_TAKEN'
+          ? t('team.createOrg.error.nameTaken')
+          : t('form.error.generic'),
+      );
       return;
     }
     props.onOutcome(outcome);

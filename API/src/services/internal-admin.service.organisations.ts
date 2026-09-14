@@ -17,7 +17,7 @@ import {
   normalizeDomain,
 } from './internal-admin.service.base.js';
 import {
-  deriveSlugWithValidation,
+  deriveAvailableOrgSlug,
   isP2002Error,
   isP2003Error,
 } from './organisation.service.base.js';
@@ -106,7 +106,7 @@ export async function createAdminOrganisation(input: {
   if (!owner) throw new AppError('BAD_REQUEST', 400, 'OWNER_NOT_FOUND');
 
   const created = await runInTransaction(prisma, async (tx) => {
-    const slug = await deriveSlugWithValidation(domain, tx, name);
+    const slug = await deriveAvailableOrgSlug({ domain, prisma: tx, name });
     const org = await tx.organisation.create({
       data: {
         domain,
@@ -121,8 +121,9 @@ export async function createAdminOrganisation(input: {
     const team = await tx.team.create({
       data: {
         orgId: org.id,
-        name: 'General',
-        slug: await deriveUniqueTeamSlug({ orgId: org.id, prisma: tx, name: 'General' }),
+        // Named after the organisation, like every person-created first team.
+        name,
+        slug: await deriveUniqueTeamSlug({ orgId: org.id, prisma: tx, name }),
         isDefault: true,
       },
       select: { id: true },

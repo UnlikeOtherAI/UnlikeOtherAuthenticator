@@ -22,4 +22,8 @@ export const PRODUCTION_PUBLIC_ERROR_CODES = new Set([
   // An authenticated platform superuser already knows the exact organisation. This code lets the
   // Admin UI distinguish durable billing/commercial FK protection from an otherwise generic 400.
   'ORG_HAS_PROTECTED_RECORDS',
+  // Creating an organisation whose address is already held: the person is asked to pick another
+  // name. Not an oracle — `/auth/slug-available` and `/domain/slug-available` already answer
+  // "taken" for the same label.
+  'ORG_SLUG_TAKEN',
 ]);

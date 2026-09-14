@@ -59,7 +59,6 @@ export type RegistrationOrgPlacementResult =
 const DEFAULT_MEMBER_ROLE = 'member';
 const DEFAULT_TEAM_ROLE = 'member';
 const OWNER_ROLE = 'owner';
-const DEFAULT_TEAM_NAME = 'General';
 const MAX_ORG_NAME_LENGTH = 100;
 
 function findMappingForEmailDomain(params: {
@@ -151,11 +150,12 @@ async function autoCreatePersonalOrgForUser(params: {
       const team = await txClient.team.create({
         data: {
           orgId: org.id,
-          name: DEFAULT_TEAM_NAME,
+          // The first team carries the organisation's name, as on every create path.
+          name: orgName,
           slug: await deriveUniqueTeamSlug({
             orgId: org.id,
             prisma: txClient,
-            name: DEFAULT_TEAM_NAME,
+            name: orgName,
           }),
           isDefault: true,
         },

@@ -151,6 +151,23 @@ describe('submitOrganisationCreation', () => {
     expect(spy).toHaveBeenCalledWith({ login_token: 'bridge.jwt', name: 'Acme Space' }, QUERY);
     expect(outcome).toEqual({ kind: 'redirect', url: 'https://client.example.com/cb' });
   });
+
+  it('keeps the taken-address code so the form can ask for another name', async () => {
+    vi.spyOn(api, 'createOrganisation').mockResolvedValue({
+      ok: false,
+      status: 400,
+      error: 'Request failed',
+      code: 'ORG_SLUG_TAKEN',
+    });
+
+    const outcome = await submitOrganisationCreation({
+      loginToken: 'bridge.jwt',
+      name: 'KiloMayo',
+      ...QUERY,
+    });
+
+    expect(outcome).toEqual({ kind: 'error', code: 'ORG_SLUG_TAKEN' });
+  });
 });
 
 describe('requestSignInCode', () => {

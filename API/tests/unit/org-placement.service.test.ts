@@ -469,7 +469,7 @@ describe('org-placement.service', () => {
       expect.objectContaining({
         data: expect.objectContaining({
           orgId: 'org-new',
-          name: 'General',
+          name: "Jane's organisation",
           isDefault: true,
         }),
       }),

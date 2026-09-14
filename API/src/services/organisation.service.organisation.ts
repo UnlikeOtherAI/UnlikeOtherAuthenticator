@@ -7,7 +7,7 @@ import { AppError } from '../utils/errors.js';
 import {
   assertDatabaseEnabled,
   auditOrg,
-  deriveSlugWithValidation,
+  deriveAvailableOrgSlug,
   ensureAvailableOrgSlug,
   getOrganisationMember,
   ensureOrgName,
@@ -196,12 +196,13 @@ export async function createOrganisation(
       if (!ownerDomainRole) throw new AppError('BAD_REQUEST', 400);
     }
 
-    // A chosen address is validated and refused with a reason; only a derived
-    // one is disambiguated with a suffix. Accepting `slug` here and deriving
-    // anyway would be worse than not accepting it at all.
+    // A person is creating this organisation, so its address is never silently
+    // rewritten: a chosen one is validated, and one derived from the name is
+    // held to the same rules. Either refuses with a reason when taken, so the
+    // person picks another name instead of being handed `acme-k4f2`.
     const slug =
       params.slug === undefined
-        ? await deriveSlugWithValidation(domain, tx, name)
+        ? await deriveAvailableOrgSlug({ domain, prisma: tx, name })
         : await ensureAvailableOrgSlug({ domain, prisma: tx, slug: params.slug });
     const createdOrg = await tx.organisation.create({
       data: {
@@ -216,11 +217,13 @@ export async function createOrganisation(
     const defaultTeam = await tx.team.create({
       data: {
         orgId: createdOrg.id,
-        name: 'General',
+        // The first team carries the organisation's own name, not a generic
+        // "General" that two organisations on one domain would both show.
+        name,
         slug: await deriveUniqueTeamSlug({
           orgId: createdOrg.id,
           prisma: tx,
-          name: 'General',
+          name,
         }),
         isDefault: true,
         ...(defaultTeamJoinPolicy === undefined ? {} : { joinPolicy: defaultTeamJoinPolicy }),

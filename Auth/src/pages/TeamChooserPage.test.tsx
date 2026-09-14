@@ -197,12 +197,12 @@ describe('TeamChooserPage SSR rendering', () => {
       pending_invites: [],
       can_create_org: true,
     });
-    // F3: the submit creates an organisation whose first team is always "General", so the
-    // field names the organisation and the hint says what the first team will be called.
+    // F3: the submit creates an organisation whose first team takes the organisation's name, so
+    // the field names the organisation and the hint says what the first team will be called.
     expect(withCreate).toContain('Organisation name');
     expect(withCreate).not.toContain('Team name');
     expect(withCreate).toContain('This creates an organisation and its first team.');
-    expect(withCreate).toContain('Your first team will be called General');
+    expect(withCreate).toContain('Your first team will have the same name as the organisation');
     expect(withCreate).toContain('Visibility');
     expect(withCreate).toContain('Create team');
     expect(withCreate).not.toContain('aria-label="Create team"');

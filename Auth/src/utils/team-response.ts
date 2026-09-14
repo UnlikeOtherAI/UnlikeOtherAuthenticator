@@ -26,7 +26,8 @@ export type TeamResponseOutcome =
    * user back to sign in instead of offering a retry that cannot succeed.
    */
   | { kind: 'expired' }
-  | { kind: 'error' };
+  /** `code` is the public API error code, when the API exposed one the form can explain. */
+  | { kind: 'error'; code?: string };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);

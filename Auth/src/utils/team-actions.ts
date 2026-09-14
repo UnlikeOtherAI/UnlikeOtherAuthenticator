@@ -61,6 +61,8 @@ export async function submitOrganisationCreation(
     query,
   );
   if (!result.ok && isExpiredBridge(result.status)) return { kind: 'expired' };
+  // The one refusal a person can act on: another organisation already holds this address.
+  if (!result.ok && result.code === 'ORG_SLUG_TAKEN') return { kind: 'error', code: result.code };
   return interpretTeamResponse(result.ok ? result.data : null);
 }
 
