@@ -151,44 +151,74 @@ describe('registration link template aliases', () => {
 });
 
 describe('buildTeamInviteTemplate', () => {
-  it('includes the invite context and action link', () => {
+  it('says who invited whom to what, with the action link', () => {
     const link = 'https://auth.example.com/auth/email/link?token=t&config_url=https%3A%2F%2Fcfg.example.com%2Fconfig.jwt';
     const tpl = buildTeamInviteTemplate({
       link,
       organisationName: 'Acme',
       teamName: 'Core Team',
       inviteeName: 'Taylor',
+      inviterName: 'Ondra',
       trackingPixelUrl: 'https://auth.example.com/auth/email/team-invite-open/invite-1.gif',
     });
     const escapedLink = link.replaceAll('&', '&amp;');
 
-    expect(tpl.subject).toBe('You have been invited to join Core Team');
-    expect(tpl.text).toContain('Taylor, you have been invited to join the Core Team team on Acme.');
+    expect(tpl.subject).toBe('Ondra invited you to join the Core Team at Acme');
+    expect(tpl.text).toContain('Hi Taylor,');
+    expect(tpl.text).toContain('Ondra invited you to join the Core Team at Acme.');
+    expect(tpl.text).toContain('Accept the invitation:');
     expect(tpl.text).toContain(link);
-    expect(tpl.text).toMatch(/accept the invitation/i);
-    expect(tpl.text).toContain('This invitation expires in 24 hours');
+    expect(tpl.text).toContain('The link works once and expires in 24 hours.');
+    expect(tpl.text).toContain('Not expecting this invitation? You can ignore this email.');
 
     expect(tpl.html).toContain('Join Core Team');
+    expect(tpl.html).toContain('Hi Taylor,');
     expect(tpl.html).toContain('Accept invitation');
-    expect(tpl.html).toContain('This invitation expires in 24 hours');
+    expect(tpl.html).toContain('The link works once and expires in 24 hours.');
+    expect(tpl.html).toContain('Not expecting this invitation? You can ignore this email.');
+    // Nobody asked for an invitation, so the generic "did not request" footer must not appear.
+    expect(tpl.html).not.toContain('If you did not request this');
     expect(tpl.html).toContain(`href="${escapedLink}"`);
     expect(tpl.html).toContain('team-invite-open/invite-1.gif');
   });
 
-  it('names the product from the theme logo alt text, leaving the subject alone', () => {
+  it('names the product from the theme logo alt text', () => {
     const tpl = buildTeamInviteTemplate({
       link: 'https://auth.example.com/auth/email/link?token=t',
       organisationName: 'Acme',
-      teamName: 'Core Team',
-      inviteeName: 'Taylor',
+      teamName: 'Design',
+      inviterName: 'Ondra',
       theme: { logoAlt: 'Nessie' },
     });
 
-    expect(tpl.subject).toBe('You have been invited to join Core Team');
-    expect(tpl.text).toContain(
-      'Taylor, you have been invited to join the Core Team team on Acme via Nessie.',
-    );
-    expect(tpl.html).toContain('on Acme via Nessie.');
+    expect(tpl.subject).toBe('Ondra invited you to join the Design team at Acme on Nessie');
+    expect(tpl.text).toContain('Ondra invited you to join the Design team at Acme on Nessie.');
+    expect(tpl.html).toContain('the Design team at Acme on Nessie.');
+  });
+
+  it('does not repeat an organisation whose first team shares its name', () => {
+    const tpl = buildTeamInviteTemplate({
+      link: 'https://auth.example.com/auth/email/link?token=t',
+      organisationName: 'UnlikeOtherAI',
+      teamName: 'UnlikeOtherAI',
+      inviterName: 'Ondra Rafaj',
+      theme: { logoAlt: 'Nessie' },
+    });
+
+    expect(tpl.subject).toBe('Ondra Rafaj invited you to join UnlikeOtherAI on Nessie');
+    expect(tpl.text).not.toContain('UnlikeOtherAI on UnlikeOtherAI');
+  });
+
+  it('names no sender and skips the greeting when neither name is known', () => {
+    const tpl = buildTeamInviteTemplate({
+      link: 'https://auth.example.com/auth/email/link?token=t',
+      organisationName: 'Acme',
+      teamName: 'Design',
+    });
+
+    expect(tpl.subject).toBe('You’ve been invited to join the Design team at Acme');
+    expect(tpl.text.startsWith('You’ve been invited to join the Design team at Acme.')).toBe(true);
+    expect(tpl.html).not.toContain('Hi ');
   });
 });
 

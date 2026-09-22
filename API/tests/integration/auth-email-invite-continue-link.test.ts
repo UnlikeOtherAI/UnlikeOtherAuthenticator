@@ -147,7 +147,7 @@ describe.skipIf(!hasDatabase)('invitation terminal page continue link', () => {
         headers: { accept: 'text/html' },
       });
       expect(allowed.statusCode, allowed.body).toBe(200);
-      expect(allowed.body).toContain('Invitation accepted');
+      expect(allowed.body).toContain('You’re in');
       expect(allowed.body).toContain('Continue to Nessie');
       expect(allowed.body).toContain(`href="${allowedRedirectUrl}"`);
 
@@ -160,10 +160,10 @@ describe.skipIf(!hasDatabase)('invitation terminal page continue link', () => {
         remoteAddress: '203.0.113.21',
       });
       expect(unlisted.statusCode, unlisted.body).toBe(200);
-      expect(unlisted.body).toContain('Invitation accepted');
+      expect(unlisted.body).toContain('You’re in');
       expect(unlisted.body).not.toContain('Continue to');
       expect(unlisted.body).not.toContain('evil.example.com');
-      expect(unlisted.body).toContain('You can close this window and sign in.');
+      expect(unlisted.body).toContain('Sign in to Nessie to get started.');
 
       // No redirect_url at all: unchanged behaviour, and never the config's first entry.
       const plain = await app.inject({
@@ -173,7 +173,7 @@ describe.skipIf(!hasDatabase)('invitation terminal page continue link', () => {
         remoteAddress: '203.0.113.22',
       });
       expect(plain.statusCode, plain.body).toBe(200);
-      expect(plain.body).toContain('Invitation accepted');
+      expect(plain.body).toContain('You’re in');
       expect(plain.body).not.toContain('Continue to');
     } finally {
       await app.close();

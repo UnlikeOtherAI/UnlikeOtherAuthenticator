@@ -5,6 +5,7 @@ import { AppError } from '../utils/errors.js';
 import { selectRedirectUrl } from './authorization-code.service.js';
 import { extractEmailTheme } from './email-theme.service.js';
 import { sendTeamInviteEmail } from './email.service.js';
+import { resolveInviterName } from './invite-inviter-label.service.js';
 import {
   assertDatabaseEnabled,
   auditOrg,
@@ -254,6 +255,7 @@ export async function createMemberInvite(
       organisationName: org.name,
       teamName: team.name,
       inviteeName: inviteName ?? undefined,
+      inviterName: (await resolveInviterName(invite, { prisma })) ?? undefined,
       theme: extractEmailTheme(params.config),
     });
   }
@@ -400,6 +402,7 @@ export async function approveInvite(
     organisationName: invite.org.name,
     teamName: invite.team.name,
     inviteeName: updated.inviteName ?? undefined,
+    inviterName: (await resolveInviterName(updated, { prisma })) ?? undefined,
     theme: extractEmailTheme(params.config),
   });
 

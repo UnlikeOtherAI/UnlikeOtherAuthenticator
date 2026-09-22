@@ -13,8 +13,8 @@ import type { PrismaClient } from '@prisma/client';
  * Resolution is name-on-the-row → the inviting user's own name, and null when neither exists.
  * The e-mail address is deliberately NOT a fallback, and neither is anything derived from it:
  * "Alice invited you" is the whole intent, and the address is a disclosure the invitee has not
- * otherwise been given — `buildTeamInviteTemplate` names the team, the organisation and the
- * product, never the sender. A card with no name simply shows no inviter line.
+ * otherwise been given — the invitation e-mail and its landing page name the sender by this label
+ * and never by address. With no name they say "You've been invited" and name no sender at all.
  */
 export type InviterLabelRow = {
   invitedByName: string | null;
@@ -64,4 +64,12 @@ export async function resolveInviterLabel(
 
   return (row) =>
     storedLabel(row) ?? (row.invitedByUserId ? (labelByUserId.get(row.invitedByUserId) ?? null) : null);
+}
+
+/** The same resolution for a single invitation: its e-mail and landing page name one inviter. */
+export async function resolveInviterName(
+  row: InviterLabelRow,
+  deps: { prisma: InviterLabelPrisma },
+): Promise<string | null> {
+  return (await resolveInviterLabel([row], deps))(row);
 }

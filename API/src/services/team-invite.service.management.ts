@@ -6,6 +6,7 @@ import { assertDatabaseEnabled } from './organisation.service.base.js';
 import { buildUserIdentity } from './user-scope.service.js';
 import { extractEmailTheme } from './email-theme.service.js';
 import { sendTeamInviteEmail } from './email.service.js';
+import { resolveInviterName } from './invite-inviter-label.service.js';
 import { selectRedirectUrl } from './authorization-code.service.js';
 import {
   ACTIONABLE_TEAM_INVITE_WHERE,
@@ -77,6 +78,9 @@ export async function createTeamInvites(
   const invitedByName = normalizeInviteName(params.invitedBy?.name);
   const invitedByEmail = params.invitedBy?.email ? normalizeEmail(params.invitedBy.email) : null;
   const invitedByUserId = params.invitedBy?.userId?.trim() || null;
+  // One inviter for the whole batch, so one lookup rather than one per address.
+  const inviterName =
+    (await resolveInviterName({ invitedByName, invitedByUserId }, { prisma })) ?? undefined;
   const results: TeamInviteCreateResult[] = [];
 
   for (const input of params.invites) {
@@ -208,6 +212,7 @@ export async function createTeamInvites(
       organisationName: org.name,
       teamName: team.name,
       inviteeName: inviteName ?? undefined,
+      inviterName,
       theme,
     });
 

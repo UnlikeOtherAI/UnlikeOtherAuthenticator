@@ -10,6 +10,8 @@ import {
   renderInviteHtml,
   renderInviteUnavailableHtml,
 } from '../../services/team-invite-page.service.js';
+import { resolveProductName } from '../../services/product-name.service.js';
+import { describeInvitation, describeInviteDestination } from '../../services/team-invite-copy.js';
 import { tokenConsumeRateLimiter } from './rate-limit-keys.js';
 
 const QuerySchema = z
@@ -30,15 +32,7 @@ export function registerAuthEmailTeamInviteRoute(app: FastifyInstance): void {
       const { token, redirect_url } = QuerySchema.parse(request.query);
 
       if (!request.config || !request.configUrl) {
-        reply
-          .status(400)
-          .type('text/html; charset=utf-8')
-          .send(
-            renderInviteHtml({
-              title: 'Invitation invalid',
-              body: 'This invitation is invalid. Ask the team to send you a new invitation.',
-            }),
-          );
+        reply.status(400).type('text/html; charset=utf-8').send(renderInviteUnavailableHtml(null));
         return;
       }
 
@@ -58,7 +52,12 @@ export function registerAuthEmailTeamInviteRoute(app: FastifyInstance): void {
           .send(
             renderInviteHtml({
               title: `Join ${invite.teamName}`,
-              body: `${invite.inviteName ?? invite.email} has been invited to join ${invite.teamName} on ${invite.organisationName}.`,
+              body: describeInvitation({
+                inviterName: invite.invitedByName,
+                teamName: invite.teamName,
+                organisationName: invite.organisationName,
+                productName: resolveProductName(request.config),
+              }),
               acceptUrl: buildAcceptUrl({
                 token,
                 configUrl: request.configUrl,
@@ -85,15 +84,7 @@ export function registerAuthEmailTeamInviteRoute(app: FastifyInstance): void {
       const { token } = QuerySchema.parse(request.query);
 
       if (!request.config || !request.configUrl) {
-        reply
-          .status(400)
-          .type('text/html; charset=utf-8')
-          .send(
-            renderInviteHtml({
-              title: 'Invitation invalid',
-              body: 'This invitation is invalid. Ask the team to send you a new invitation.',
-            }),
-          );
+        reply.status(400).type('text/html; charset=utf-8').send(renderInviteUnavailableHtml(null));
         return;
       }
 
@@ -113,7 +104,9 @@ export function registerAuthEmailTeamInviteRoute(app: FastifyInstance): void {
           .send(
             renderInviteHtml({
               title: 'Invitation declined',
-              body: `${invite.inviteName ?? invite.email} declined the invitation to join ${invite.teamName} on ${invite.organisationName}.`,
+              body:
+                `You declined the invitation to join ${describeInviteDestination(invite.teamName, invite.organisationName)}. ` +
+                'Changed your mind? Ask the person who invited you to send a new one.',
             }),
           );
       } catch (err) {

@@ -11,8 +11,9 @@ import {
   renderInviteHtml,
   renderInviteUnavailableHtml,
   resolveInviteContinueUrl,
-  resolveInviteProductName,
 } from '../../services/team-invite-page.service.js';
+import { resolveProductName } from '../../services/product-name.service.js';
+import { describeInviteDestination } from '../../services/team-invite-copy.js';
 import { parseRequestAccessFlag } from '../../services/access-request-flow.service.js';
 import {
   renderAuthEntrypointHtml,
@@ -179,7 +180,7 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
         // way back into the product unless UOA puts one on the page. Only a `redirect_url`
         // the config itself lists may become that link; anything else is dropped.
         const continueUrl = resolveInviteContinueUrl(config, redirect_url);
-        const productName = resolveInviteProductName(config);
+        const productName = resolveProductName(config);
 
         if (continuation.kind === 'registration') {
           const html = await renderAuthEntrypointHtml({
@@ -191,6 +192,7 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
               token,
               continuation.email,
               continueUrl,
+              continuation.inviteName,
             ),
           });
           sendAuthHtml(reply, html);
@@ -199,15 +201,16 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
 
         if (continuation.kind === 'accepted') {
           request.log.info('email invitation accepted for an existing account without PKCE');
+          const joined = describeInviteDestination(continuation.teamName, continuation.organisationName);
           reply
             .status(200)
             .type('text/html; charset=utf-8')
             .send(
               renderInviteHtml({
-                title: 'Invitation accepted',
+                title: 'You’re in',
                 body: continueUrl
-                  ? `You have joined ${continuation.teamName} on ${continuation.organisationName}.`
-                  : `You have joined ${continuation.teamName} on ${continuation.organisationName}. You can close this window and sign in.`,
+                  ? `You’ve joined ${joined}.`
+                  : `You’ve joined ${joined}. Sign in to ${productName} to get started.`,
                 continueUrl,
                 productName,
               }),

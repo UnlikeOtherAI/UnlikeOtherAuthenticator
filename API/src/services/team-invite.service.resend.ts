@@ -6,6 +6,7 @@ import { assertDatabaseEnabled } from './organisation.service.base.js';
 import { buildUserIdentity } from './user-scope.service.js';
 import { extractEmailTheme } from './email-theme.service.js';
 import { sendTeamInviteEmail } from './email.service.js';
+import { resolveInviterName } from './invite-inviter-label.service.js';
 import {
   ACTIONABLE_TEAM_INVITE_WHERE,
   TEAM_INVITE_SELECT,
@@ -152,6 +153,7 @@ export async function resendTeamInvite(
     organisationName: org.name,
     teamName: team.name,
     inviteeName: resentInvite.inviteName ?? undefined,
+    inviterName: (await resolveInviterName(resentInvite, { prisma })) ?? undefined,
     theme: extractEmailTheme(params.config),
   });
 

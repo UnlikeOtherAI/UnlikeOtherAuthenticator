@@ -142,10 +142,12 @@ describe.skipIf(!hasDatabase)('email invitation for an account that already exis
       });
 
       expect(landing.statusCode, landing.body).toBe(200);
-      expect(landing.body).toContain('Invitation accepted');
+      expect(landing.body).toContain('You’re in');
       expect(landing.body).toContain('Hugo Team');
-      // The old behaviour: a sign-in form whose Google button then 400s.
-      expect(landing.body).not.toContain('Sign in');
+      // The old behaviour: the auth window's sign-in form, whose Google button then 400s. The
+      // confirmation page may tell the person to sign in; it must not be the sign-in form.
+      expect(landing.body).not.toContain('<form');
+      expect(landing.body).not.toContain('__UOA_INITIAL_SEARCH__');
 
       const membership = await handle!.prisma.teamMember.findFirst({
         where: { teamId: team.id, userId: invitedUser.id },
@@ -175,7 +177,7 @@ describe.skipIf(!hasDatabase)('email invitation for an account that already exis
         headers: { accept: 'text/html' },
         remoteAddress: '203.0.113.20',
       });
-      expect(replay.body).not.toContain('Invitation accepted');
+      expect(replay.body).not.toContain('You’re in');
     } finally {
       await app.close();
     }
