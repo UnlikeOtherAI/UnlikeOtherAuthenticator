@@ -17,7 +17,7 @@ export function InviteRegistrationForm(): React.JSX.Element {
   const { t } = useTranslation();
   const { configUrl, inviteName, inviteToken, setView } = usePopup();
   // Seeded with the name the inviter typed, and still editable: the invitee knows their own name.
-  const [name, setName] = useState(inviteName ?? '');
+  const [name, setName] = useState(inviteName?.trim() ?? '');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);

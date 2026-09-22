@@ -121,6 +121,22 @@ describe('script-src CSP nonce', () => {
     }
   });
 
+  it('titles the auth window with the product, escaped and with no replacement patterns', async () => {
+    const theme = testUiTheme() as { logo: { url: string; alt: string } };
+    const html = await renderAuthEntrypointHtml({
+      config: { ...baseConfig(), ui_theme: { ...theme, logo: { url: '', alt: "Make $$ & $' <fast>" } } } as ClientConfig,
+      configUrl: 'https://client.example.com/auth-config',
+      requestUrl: '/auth?config_url=https%3A%2F%2Fclient.example.com%2Fauth-config',
+      cspNonce: 'abc123nonce',
+    });
+
+    expect(html).toContain('<title>Make $$ &amp; $&#39; &lt;fast&gt;</title>');
+    expect(html).not.toContain('<title>Auth</title>');
+    // `$'` must not have copied the rest of the document into the title.
+    expect(html.match(/<title>/g)).toHaveLength(1);
+    expect(html).toContain('<script nonce="abc123nonce">');
+  });
+
   it('emits the bootstrap <script> with the per-request nonce', async () => {
     const html = await renderAuthEntrypointHtml({
       config: baseConfig(),

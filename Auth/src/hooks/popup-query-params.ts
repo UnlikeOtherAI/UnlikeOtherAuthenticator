@@ -137,7 +137,8 @@ export function parsePopupQueryParams(search: string): PopupQueryParams {
     emailTokenType,
     inviteToken: inviteToken && inviteToken.trim() ? inviteToken : null,
     inviteEmail: inviteEmail && inviteEmail.trim() ? inviteEmail : null,
-    inviteName: inviteName && inviteName.trim() ? inviteName.trim() : null,
+    // Kept exactly as it arrived, like its siblings: the address-bar scrub compares raw values.
+    inviteName: inviteName && inviteName.trim() ? inviteName : null,
     inviteAccepted,
     clientId: clientId && clientId.trim() ? clientId : null,
     state: state && state.trim() ? state : null,

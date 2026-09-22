@@ -10,7 +10,7 @@ import {
   renderInviteHtml,
   renderInviteUnavailableHtml,
 } from '../../services/team-invite-page.service.js';
-import { resolveProductName } from '../../services/product-name.service.js';
+import { resolveProductBrandName } from '../../services/product-name.service.js';
 import { describeInvitation, describeInviteDestination } from '../../services/team-invite-copy.js';
 import { tokenConsumeRateLimiter } from './rate-limit-keys.js';
 
@@ -56,7 +56,7 @@ export function registerAuthEmailTeamInviteRoute(app: FastifyInstance): void {
                 inviterName: invite.invitedByName,
                 teamName: invite.teamName,
                 organisationName: invite.organisationName,
-                productName: resolveProductName(request.config),
+                productName: resolveProductBrandName(request.config),
               }),
               acceptUrl: buildAcceptUrl({
                 token,

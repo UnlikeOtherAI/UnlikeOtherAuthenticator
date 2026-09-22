@@ -109,6 +109,8 @@ const inviteDeps = (prisma: PrismaClient, memberInvitesActor?: string) => ({
   generateEmailToken: () => 'token-123',
   hashEmailToken: () => 'hash-123',
   sendTeamInviteEmail: vi.fn(async () => undefined),
+  // The inviter's name is read on its own client (the admin connection in production).
+  inviterPrisma: prisma,
   ...(memberInvitesActor ? {} : {}),
 });
 

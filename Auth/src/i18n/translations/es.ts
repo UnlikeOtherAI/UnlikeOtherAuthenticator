@@ -39,7 +39,8 @@ export const es = {
   'form.setPassword.mismatch': 'Las contraseñas no coinciden.',
   'form.setPassword.success': 'Contraseña restablecida. Ya puedes iniciar sesión.',
   'form.invite.submit': 'Crear cuenta',
-  'form.invite.error': 'Esta invitación ya no se puede usar. Pide a quien te invitó que te envíe una nueva.',
+  'form.invite.error':
+    'No hemos podido aceptar la invitación. Inténtalo de nuevo o pide a quien te invitó que te envíe una nueva.',
 
   'message.instructionsSent': 'Te hemos enviado instrucciones por correo electrónico',
   'message.emailAlreadyRegistered':

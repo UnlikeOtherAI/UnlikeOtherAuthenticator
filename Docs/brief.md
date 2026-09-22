@@ -2090,9 +2090,9 @@ This supersedes the earlier 30-day emailed-invitation window and revoked-specifi
 
 Copy update (2026-09-22): the two presentations keep exactly this classification, but their
 titles now speak to the recipient — **This invitation has expired** and **This invitation can’t
-be used** — and both point the recipient at the person who invited them. The landing page, the
-invitation email, and the decline and accepted pages name the inviter by name when UOA knows it
-(never by address) and address the invitee as "you".
+be used** — and both point the recipient at the person who invited them. The invitation email
+and the landing page name the inviter by display name when UOA knows it (never by address); the
+decline and accepted pages address the invitee as "you" and name no inviter.
 
 #### Examples
 

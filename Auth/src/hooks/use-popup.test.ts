@@ -12,9 +12,9 @@ describe('parsePopupQueryParams', () => {
     expect(parsed.scope).toBe('openid profile');
   });
 
-  it('parses the inviter-given name, trimmed, and ignores a blank one', () => {
+  it('parses the inviter-given name as it arrived, and ignores a blank one', () => {
     const parsed = parsePopupQueryParams(
-      '?invite_token=invite-capability&invite_email=invitee%40example.com&invite_name=%20Ada%20Lovelace%20',
+      '?invite_token=invite-capability&invite_email=invitee%40example.com&invite_name=Ada%20Lovelace',
     );
     expect(parsed.inviteName).toBe('Ada Lovelace');
     expect(parsePopupQueryParams('?invite_token=t&invite_name=%20%20').inviteName).toBeNull();

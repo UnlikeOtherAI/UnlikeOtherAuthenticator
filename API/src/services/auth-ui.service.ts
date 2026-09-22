@@ -102,10 +102,9 @@ export async function renderAuthEntrypointHtml(params: {
 }): Promise<string> {
   // The built shell carries a placeholder title; the tab should name the product being signed
   // in to, not this service.
-  let base = (await readAuthIndexHtml()).replace(
-    /<title>[^<]*<\/title>/i,
-    `<title>${escapeHtml(resolveProductName(params.config))}</title>`,
-  );
+  // A replacer function, not a string: `$&`, `$'` and friends in a product name must stay literal.
+  const title = `<title>${escapeHtml(resolveProductName(params.config))}</title>`;
+  let base = (await readAuthIndexHtml()).replace(/<title>[^<]*<\/title>/i, () => title);
 
   // Brief 7.1 / 9.1: the OAuth auth UI is rendered server-side.
   const ssrHtml = await renderAuthAppSsr({

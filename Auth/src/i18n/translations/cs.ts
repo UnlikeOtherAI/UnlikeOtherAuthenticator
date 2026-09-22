@@ -39,7 +39,8 @@ export const cs = {
   'form.setPassword.mismatch': 'Hesla se neshodují.',
   'form.setPassword.success': 'Heslo bylo úspěšně obnoveno. Nyní se můžete přihlásit.',
   'form.invite.submit': 'Vytvořit účet',
-  'form.invite.error': 'Tuto pozvánku už nejde použít. Požádejte toho, kdo vás pozval, o novou.',
+  'form.invite.error':
+    'Pozvánku se nepodařilo přijmout. Zkuste to znovu, nebo požádejte toho, kdo Vás pozval, o novou.',
 
   'message.instructionsSent': 'Poslali jsme Vám pokyny na e-mail',
   'message.emailAlreadyRegistered':

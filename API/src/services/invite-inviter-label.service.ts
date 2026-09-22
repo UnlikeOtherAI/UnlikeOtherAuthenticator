@@ -1,5 +1,7 @@
 import type { PrismaClient } from '@prisma/client';
 
+import { getAdminPrisma } from '../db/prisma.js';
+
 /**
  * "Invited by …" for an invitation card: the inviter's NAME, or nothing.
  *
@@ -66,10 +68,18 @@ export async function resolveInviterLabel(
     storedLabel(row) ?? (row.invitedByUserId ? (labelByUserId.get(row.invitedByUserId) ?? null) : null);
 }
 
-/** The same resolution for a single invitation: its e-mail and landing page name one inviter. */
+/**
+ * The same resolution for a single invitation: its e-mail and landing page name one inviter.
+ *
+ * The lookup runs on the admin connection unless a client is given. Invitation senders hold a
+ * tenant transaction, and under a per-domain user scope the inviter's `users` row can sit outside
+ * what that transaction may see — the e-mail would then say "You've been invited" while the
+ * landing page and `/org/me` (both admin reads) say "Alice invited you". It is a name-only read.
+ */
 export async function resolveInviterName(
   row: InviterLabelRow,
-  deps: { prisma: InviterLabelPrisma },
+  deps?: { prisma?: InviterLabelPrisma },
 ): Promise<string | null> {
-  return (await resolveInviterLabel([row], deps))(row);
+  if (storedLabel(row) !== null || !row.invitedByUserId) return storedLabel(row);
+  return (await resolveInviterLabel([row], { prisma: deps?.prisma ?? getAdminPrisma() }))(row);
 }

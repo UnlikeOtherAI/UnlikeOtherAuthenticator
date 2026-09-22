@@ -37,7 +37,8 @@ export const en = {
   'form.setPassword.mismatch': 'Passwords do not match.',
   'form.setPassword.success': 'Password reset successful. You can now sign in.',
   'form.invite.submit': 'Create account',
-  'form.invite.error': 'This invitation can’t be used anymore. Ask the person who invited you to send a new one.',
+  'form.invite.error':
+    'We couldn’t accept this invitation. Try again, or ask the person who invited you to send a new one.',
 
   // Used by registration and reset-password flows; must remain generic.
   'message.instructionsSent': 'We sent instructions to your email',

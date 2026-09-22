@@ -255,7 +255,7 @@ export async function createMemberInvite(
       organisationName: org.name,
       teamName: team.name,
       inviteeName: inviteName ?? undefined,
-      inviterName: (await resolveInviterName(invite, { prisma })) ?? undefined,
+      inviterName: (await resolveInviterName(invite, { prisma: deps?.inviterPrisma })) ?? undefined,
       theme: extractEmailTheme(params.config),
     });
   }
@@ -402,7 +402,7 @@ export async function approveInvite(
     organisationName: invite.org.name,
     teamName: invite.team.name,
     inviteeName: updated.inviteName ?? undefined,
-    inviterName: (await resolveInviterName(updated, { prisma })) ?? undefined,
+    inviterName: (await resolveInviterName(updated, { prisma: deps?.inviterPrisma })) ?? undefined,
     theme: extractEmailTheme(params.config),
   });
 

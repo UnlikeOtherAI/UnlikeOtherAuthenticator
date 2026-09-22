@@ -125,9 +125,12 @@ describe('team invite services', () => {
         to: 'new-user@example.com',
         organisationName: 'Acme',
         teamName: 'Core Team',
+        inviterName: 'Owner',
         trackingPixelUrl: 'https://auth.example.com/auth/email/team-invite-open/invite-1.gif',
       }),
     );
+    // The inviter is named, never addressed: their e-mail must not reach the invitation.
+    expect(JSON.stringify(sendTeamInviteEmail.mock.calls)).not.toContain('owner@example.com');
   });
 
   it('replaces an unresolved same-team invite with a freshly sent invite', async () => {

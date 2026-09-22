@@ -80,7 +80,8 @@ export async function createTeamInvites(
   const invitedByUserId = params.invitedBy?.userId?.trim() || null;
   // One inviter for the whole batch, so one lookup rather than one per address.
   const inviterName =
-    (await resolveInviterName({ invitedByName, invitedByUserId }, { prisma })) ?? undefined;
+    (await resolveInviterName({ invitedByName, invitedByUserId }, { prisma: deps?.inviterPrisma }))
+    ?? undefined;
   const results: TeamInviteCreateResult[] = [];
 
   for (const input of params.invites) {

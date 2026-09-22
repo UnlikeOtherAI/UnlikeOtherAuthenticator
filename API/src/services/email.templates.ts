@@ -1,5 +1,5 @@
 import { EMAIL_TOKEN_TTL_MS, TEAM_INVITE_TTL_MS } from '../config/constants.js';
-import { describeInvitation } from './team-invite-copy.js';
+import { cleanInviteDisplayName, describeInvitation } from './team-invite-copy.js';
 
 type EmailTemplate = {
   subject: string;
@@ -237,7 +237,7 @@ export function buildTeamInviteTemplate(params: {
     organisationName: params.organisationName,
     productName: theme.logoAlt,
   });
-  const invitee = params.inviteeName?.trim();
+  const invitee = cleanInviteDisplayName(params.inviteeName);
   const greeting = invitee ? `Hi ${invitee},` : null;
   const subject = invitation.replace(/\.$/, '');
   const expiryLabel = `The link works once and expires in ${hours} hours.`;

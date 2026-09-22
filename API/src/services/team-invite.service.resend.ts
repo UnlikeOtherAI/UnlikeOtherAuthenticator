@@ -153,7 +153,7 @@ export async function resendTeamInvite(
     organisationName: org.name,
     teamName: team.name,
     inviteeName: resentInvite.inviteName ?? undefined,
-    inviterName: (await resolveInviterName(resentInvite, { prisma })) ?? undefined,
+    inviterName: (await resolveInviterName(resentInvite, { prisma: deps?.inviterPrisma })) ?? undefined,
     theme: extractEmailTheme(params.config),
   });
 
