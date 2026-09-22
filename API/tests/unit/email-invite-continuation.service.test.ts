@@ -35,9 +35,25 @@ describe('resolveEmailInviteContinuation', () => {
       verifyEmailToken,
     });
 
-    expect(result).toEqual({ kind: 'registration', email: 'invitee@example.com' });
+    expect(result).toEqual({ kind: 'registration', email: 'invitee@example.com', inviteName: null });
     // Nothing is consumed: the invitee still has to create their account.
     expect(verifyEmailToken).not.toHaveBeenCalled();
+  });
+
+  it('carries the name the inviter gave to the invite registration screen', async () => {
+    const result = await resolveEmailInviteContinuation(params, {
+      getTeamInviteLandingData: vi.fn().mockResolvedValue({
+        ...landingData('VERIFY_EMAIL_SET_PASSWORD'),
+        inviteName: 'Ada Lovelace',
+      }),
+      verifyEmailToken: vi.fn(),
+    });
+
+    expect(result).toEqual({
+      kind: 'registration',
+      email: 'invitee@example.com',
+      inviteName: 'Ada Lovelace',
+    });
   });
 
   it('accepts the invitation for an account that already exists', async () => {

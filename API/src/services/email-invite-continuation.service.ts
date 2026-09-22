@@ -30,8 +30,11 @@ import {
 export type EmailInviteContinuation =
   /** No invitation is bound to this token; the caller keeps its historic behaviour. */
   | { kind: 'none' }
-  /** A brand-new account: show the invite registration screen for this address. */
-  | { kind: 'registration'; email: string }
+  /**
+   * A brand-new account: show the invite registration screen for this address, with the name
+   * the inviter gave (if any) pre-filled.
+   */
+  | { kind: 'registration'; email: string; inviteName: string | null }
   /** An existing account: the invitation has been accepted and the token consumed. */
   | { kind: 'accepted'; teamName: string; organisationName: string }
   /** The invitation could not be used (expired, revoked, already used, conflicting). */
@@ -78,7 +81,7 @@ export async function resolveEmailInviteContinuation(
   }
 
   if (invite.tokenType === 'VERIFY_EMAIL_SET_PASSWORD') {
-    return { kind: 'registration', email: invite.email };
+    return { kind: 'registration', email: invite.email, inviteName: invite.inviteName };
   }
 
   try {
