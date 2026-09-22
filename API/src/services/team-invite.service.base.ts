@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@prisma/client';
 import type { ClientConfig } from './config.service.js';
+import type { InviterLabelPrisma } from './invite-inviter-label.service.js';
 
 import { TEAM_INVITE_TTL_MS } from '../config/constants.js';
 import { getEnv, requireEnv } from '../config/env.js';
@@ -22,6 +23,8 @@ export type InvitePrisma = PrismaClient;
 export type InviteDeps = {
   env?: ReturnType<typeof getEnv>;
   prisma?: InvitePrisma;
+  /** Reads the inviter's display name for the e-mail; the admin connection when absent. */
+  inviterPrisma?: InviterLabelPrisma;
   now?: () => Date;
   sharedSecret?: string;
   generateEmailToken?: typeof generateEmailToken;

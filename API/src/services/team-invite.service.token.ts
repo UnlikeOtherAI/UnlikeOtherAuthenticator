@@ -8,6 +8,7 @@ import { AppError } from '../utils/errors.js';
 import { hashEmailToken } from '../utils/verification-token.js';
 import { buildUserIdentity } from './user-scope.service.js';
 import { acceptTeamInviteWithinTransaction } from './team-invite.service.acceptance.js';
+import { resolveInviterName } from './invite-inviter-label.service.js';
 import {
   lockAndReadVerificationTokenEpoch,
   readVerificationTokenEpoch,
@@ -31,6 +32,8 @@ type InviteTokenRow = {
     id: string;
     inviteName: string | null;
     email: string;
+    invitedByName: string | null;
+    invitedByUserId: string | null;
     acceptedAt: Date | null;
     declinedAt: Date | null;
     revokedAt: Date | null;
@@ -118,6 +121,8 @@ async function findInviteToken(params: {
           id: true,
           inviteName: true,
           email: true,
+          invitedByName: true,
+          invitedByUserId: true,
           acceptedAt: true,
           declinedAt: true,
           revokedAt: true,
@@ -151,6 +156,8 @@ export async function getTeamInviteLandingData(
   inviteId: string;
   email: string;
   inviteName: string | null;
+  /** Who sent it, by name only — null when UOA has no name for them. */
+  invitedByName: string | null;
   teamName: string;
   organisationName: string;
 }> {
@@ -188,6 +195,7 @@ export async function getTeamInviteLandingData(
     inviteId: teamInvite.id,
     email: teamInvite.email,
     inviteName: teamInvite.inviteName,
+    invitedByName: await resolveInviterName(teamInvite, { prisma }),
     teamName: teamInvite.team.name,
     organisationName: teamInvite.org.name,
   };

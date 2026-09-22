@@ -15,8 +15,9 @@ type VerifyInviteResponse = { invite_accepted?: boolean };
 /** Password creation for a mail-bound invitation. The token—not this UI field—is the authority. */
 export function InviteRegistrationForm(): React.JSX.Element {
   const { t } = useTranslation();
-  const { configUrl, inviteToken, setView } = usePopup();
-  const [name, setName] = useState('');
+  const { configUrl, inviteName, inviteToken, setView } = usePopup();
+  // Seeded with the name the inviter typed, and still editable: the invitee knows their own name.
+  const [name, setName] = useState(inviteName?.trim() ?? '');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);

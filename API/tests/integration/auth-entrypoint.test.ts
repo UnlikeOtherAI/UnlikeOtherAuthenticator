@@ -143,7 +143,7 @@ describe('GET /auth', () => {
     expect(res.statusCode).toBe(200);
     expect(res.body).toContain('data-testid="language-selector"');
     // Brief 8 / Phase 10.4: default to the language selected on the client website.
-    expect(res.body).toContain('Iniciar sesion');
+    expect(res.body).toContain('Iniciar sesión');
 
     await app.close();
   });

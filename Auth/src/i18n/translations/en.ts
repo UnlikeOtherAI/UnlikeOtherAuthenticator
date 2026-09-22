@@ -4,7 +4,7 @@ export const en = {
   'auth.resetPassword.title': 'Reset your password',
   'auth.setPassword.title': 'Set your password',
   'auth.invite.title': 'Create your account',
-  'auth.inviteAccepted.title': 'Invitation accepted',
+  'auth.inviteAccepted.title': 'You’re in',
   'auth.accessRequested.title': 'Access request submitted',
   'auth.signedIn.title': 'You’re signed in',
   'auth.twoFactorVerify.title': 'Verify two-factor code',
@@ -37,7 +37,8 @@ export const en = {
   'form.setPassword.mismatch': 'Passwords do not match.',
   'form.setPassword.success': 'Password reset successful. You can now sign in.',
   'form.invite.submit': 'Create account',
-  'form.invite.error': 'This invitation is invalid or has expired. Ask for a new invitation.',
+  'form.invite.error':
+    'We couldn’t accept this invitation. Try again, or ask the person who invited you to send a new one.',
 
   // Used by registration and reset-password flows; must remain generic.
   'message.instructionsSent': 'We sent instructions to your email',
@@ -46,9 +47,8 @@ export const en = {
   'message.accessRequested':
     'Your request has been sent to the team administrators. You can close this window and wait for approval.',
   'message.signedIn': 'Return to the app to finish signing in. You can close this window.',
-  'message.inviteAccepted': 'Your account has been created and you have joined the team. You can close this window.',
-  'message.inviteAccepted.joined':
-    'Your account has been created and you have joined the team.',
+  'message.inviteAccepted': 'Your account is ready and you’ve joined the team. You can close this tab.',
+  'message.inviteAccepted.joined': 'Your account is ready and you’ve joined the team.',
   'message.inviteAccepted.continue': 'Continue to {product}',
   'message.inviteAccepted.product': 'the app',
   'action.openApp': 'Open the app',

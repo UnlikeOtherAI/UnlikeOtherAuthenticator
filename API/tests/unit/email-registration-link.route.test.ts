@@ -218,8 +218,8 @@ describe('GET /auth/email/link', () => {
     });
 
     expect(res.statusCode).toBe(400);
-    expect(res.body).toContain('Invitation expired');
-    expect(res.body).not.toContain('Invitation invalid');
+    expect(res.body).toContain('This invitation has expired');
+    expect(res.body).not.toContain('can’t be used');
     expect(renderAuthEntrypointHtmlMock).not.toHaveBeenCalled();
 
     await app.close();
@@ -296,6 +296,44 @@ describe('GET /auth/email/link', () => {
     await app.close();
   });
 
+  it('carries the inviter-given name to the invite account screen so it can be pre-filled', async () => {
+    validateRegistrationEmailLandingTokenMock.mockResolvedValue('VERIFY_EMAIL_SET_PASSWORD');
+    getTeamInviteLandingDataMock.mockResolvedValue({
+      tokenType: 'VERIFY_EMAIL_SET_PASSWORD',
+      email: 'invitee@example.com',
+      inviteName: 'Ada Lovelace',
+      teamName: 'Hugo',
+      organisationName: 'Hugo_org',
+    });
+
+    const { createApp } = await import('../../src/app.js');
+    const app = await createApp();
+    await app.ready();
+
+    const res = await app.inject({
+      method: 'GET',
+      url:
+        '/auth/email/link?' +
+        'config_url=https%3A%2F%2Fclient.example.com%2Fauth-config' +
+        '&token=invite-token-without-pkce',
+      headers: { accept: 'text/html' },
+      // Its own address, so this request does not spend the shared per-IP token-consume budget.
+      remoteAddress: '203.0.113.12',
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(renderAuthEntrypointHtmlMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestUrl:
+          '/auth?config_url=https%3A%2F%2Fclient.example.com%2Fauth-config' +
+          '&invite_token=invite-token-without-pkce&invite_email=invitee%40example.com' +
+          '&invite_name=Ada+Lovelace',
+      }),
+    );
+
+    await app.close();
+  });
+
   it('accepts the invitation for an existing account when an invitation has no PKCE challenge', async () => {
     validateRegistrationEmailLandingTokenMock.mockResolvedValue('LOGIN_LINK');
     getTeamInviteLandingDataMock.mockResolvedValue({
@@ -330,7 +368,7 @@ describe('GET /auth/email/link', () => {
     // product session to hand back, and a login restart would drop it entirely.
     expect(res.statusCode).toBe(200);
     expect(res.headers['content-type']).toContain('text/html');
-    expect(res.body).toContain('Invitation accepted');
+    expect(res.body).toContain('You’re in');
     expect(res.body).toContain('Hugo_org');
     expect(verifyEmailTokenMock).toHaveBeenCalledTimes(1);
     expect(renderAuthEntrypointHtmlMock).not.toHaveBeenCalled();
@@ -363,7 +401,7 @@ describe('GET /auth/email/link', () => {
     });
 
     expect(res.statusCode).toBe(400);
-    expect(res.body).toContain('Invitation invalid');
+    expect(res.body).toContain('This invitation can’t be used');
     expect(renderAuthEntrypointHtmlMock).not.toHaveBeenCalled();
 
     await app.close();

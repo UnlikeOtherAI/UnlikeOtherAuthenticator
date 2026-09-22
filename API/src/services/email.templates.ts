@@ -1,4 +1,5 @@
 import { EMAIL_TOKEN_TTL_MS, TEAM_INVITE_TTL_MS } from '../config/constants.js';
+import { cleanInviteDisplayName, describeInvitation } from './team-invite-copy.js';
 
 type EmailTemplate = {
   subject: string;
@@ -99,6 +100,8 @@ function buildEmailHtml(params: {
   buttonUrl: string;
   minutes: number;
   expiryLabel?: string;
+  /** The closing "ignore this" line; an invitation was never requested, so it says so its own way. */
+  ignoreLabel?: string;
   /**
    * Notification mode for emails sent to admins (no expiry copy, no
    * copy-paste URL block, no "ignore if you did not request" footer).
@@ -129,7 +132,7 @@ function buildEmailHtml(params: {
             </tr>
             <tr>
               <td style="padding:0 24px 24px 24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:${t.muted};font-size:12px;line-height:18px;">
-                If you did not request this, you can ignore this email.
+                ${escapeHtml(params.ignoreLabel ?? 'If you did not request this, you can ignore this email.')}
               </td>
             </tr>`;
 
@@ -219,45 +222,57 @@ export function buildTeamInviteTemplate(params: {
   organisationName: string;
   teamName: string;
   inviteeName?: string;
+  /** Who sent it, by name only — never an address (see `invite-inviter-label.service.ts`). */
+  inviterName?: string;
   trackingPixelUrl?: string;
   theme?: Partial<EmailTheme>;
 }): EmailTemplate {
   const hours = teamInviteTtlHours();
   const theme = resolveTheme(params.theme);
-  const recipient = params.inviteeName?.trim() ? `${params.inviteeName.trim()}, ` : '';
-  const subject = `You have been invited to join ${params.teamName}`;
   // F5: an invitee reading this in a mailbox has no other clue which product the team lives
-  // in. The config's own logo alt text is the product's name; the subject stays unchanged so
-  // existing filters and threads are unaffected.
-  const product = theme.logoAlt?.trim();
-  const invitation =
-    `${recipient}you have been invited to join the ${params.teamName} team on ` +
-    `${params.organisationName}${product ? ` via ${product}` : ''}.`;
-  const body = `${invitation} Click the button below to accept the invitation.`;
+  // in. The config's own logo alt text is the product's name.
+  const invitation = describeInvitation({
+    inviterName: params.inviterName,
+    teamName: params.teamName,
+    organisationName: params.organisationName,
+    productName: theme.logoAlt,
+  });
+  const invitee = cleanInviteDisplayName(params.inviteeName);
+  const greeting = invitee ? `Hi ${invitee},` : null;
+  const subject = invitation.replace(/\.$/, '');
+  const expiryLabel = `The link works once and expires in ${hours} hours.`;
+  const ignoreLabel = 'Not expecting this invitation? You can ignore this email.';
   const text = [
-    `Invitation to join ${params.teamName}`,
-    '',
+    ...(greeting ? [greeting, ''] : []),
     invitation,
-    'Use this link to accept the invitation:',
+    '',
+    'Accept the invitation:',
     params.link,
     '',
-    `This invitation expires in ${hours} hours and can only be used once.`,
+    expiryLabel,
     '',
-    'If you did not expect this invitation, you can ignore this email.',
+    ignoreLabel,
   ].join('\n');
+
+  const bodyHtml = [
+    greeting ? `<p style="margin:0 0 12px 0;">${escapeHtml(greeting)}</p>` : '',
+    `<p style="margin:0;">${escapeHtml(invitation)}</p>`,
+    params.trackingPixelUrl
+      ? `<img src="${escapeHtml(params.trackingPixelUrl)}" alt="" width="1" height="1" style="display:none;" />`
+      : '',
+  ].join('');
 
   const html = buildEmailHtml({
     theme,
     subject,
     heading: `Join ${params.teamName}`,
-    body,
-    bodyHtml: params.trackingPixelUrl
-      ? `${escapeHtml(body)}<img src="${escapeHtml(params.trackingPixelUrl)}" alt="" width="1" height="1" style="display:none;" />`
-      : undefined,
+    body: greeting ? `${greeting} ${invitation}` : invitation,
+    bodyHtml,
     buttonLabel: 'Accept invitation',
     buttonUrl: params.link,
     minutes: hours * 60,
-    expiryLabel: `This invitation expires in ${hours} hours and can only be used once.`,
+    expiryLabel,
+    ignoreLabel,
   });
 
   return { subject, text, html };

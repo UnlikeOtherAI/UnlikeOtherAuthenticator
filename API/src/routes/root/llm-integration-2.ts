@@ -107,7 +107,7 @@ Any mismatch, expired, used, or revoked invitation is rejected generically. Dire
 completion returns to the hosted Auth UI without issuing an OAuth authorization code; a normal
 PKCE-bound product flow continues to use the regular authorization-code path.
 
-Both terminal screens — the SPA's "Invitation accepted" after registration, and the
+Both terminal screens — the SPA's "You’re in" after registration, and the
 server-rendered confirmation for an address that already had an account — end outside any
 product session, so send \`redirect_url\` on the invitation link (\`POST /org/:orgId/invitations\`
 \`redirect_url\`, carried through \`GET /auth/email/team-invite\` and \`GET /auth/email/link\`).
@@ -120,8 +120,8 @@ exactly as they do without the parameter, and never redirect anywhere you did no
 The invitation registration screen and the public set-password screen both send an optional
 \`name\` in the \`POST /auth/verify-email\` body (≤120 chars, trimmed). UOA stores it only when
 the account has no name yet, so it can never overwrite an established profile name; for an
-invitation, the inviter-supplied name on the invitation stays the fallback when the field is
-left empty.
+invitation, the inviter-supplied name pre-fills that field (the invitee can change it) and stays
+the fallback when the field is left empty.
    A \`LOGIN_LINK\` resolves only the existing \`userId\` stored when it was issued; a missing,
    deleted, or identity-mismatched account fails closed and can never become new-user registration.
    At code exchange UOA re-resolves the current exact-team policy and enrollment state. The

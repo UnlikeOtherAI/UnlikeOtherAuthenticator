@@ -93,6 +93,7 @@ export async function sendTeamInviteEmail(params: {
   organisationName: string;
   teamName: string;
   inviteeName?: string;
+  inviterName?: string;
   trackingPixelUrl?: string;
   theme?: Partial<EmailTheme>;
 }): Promise<void> {
@@ -102,6 +103,7 @@ export async function sendTeamInviteEmail(params: {
     organisationName: params.organisationName,
     teamName: params.teamName,
     inviteeName: params.inviteeName,
+    inviterName: params.inviterName,
     trackingPixelUrl: params.trackingPixelUrl,
     theme: params.theme,
   });

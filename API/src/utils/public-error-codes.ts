@@ -29,6 +29,6 @@ export const PRODUCTION_PUBLIC_ERROR_CODES = new Set([
   // Accepting an invitation for a person whose membership in that organisation or team is
   // DEACTIVATED (an administrative suspension an invitation must not lift). Not an oracle: the
   // backend-mode caller can already list `?status=DEACTIVATED`, and the invitee learns only their
-  // own state. The hosted invitation page still renders the generic "Invitation invalid".
+  // own state. The hosted invitation page still renders the generic "This invitation can’t be used".
   'MEMBERSHIP_DEACTIVATED',
 ]);

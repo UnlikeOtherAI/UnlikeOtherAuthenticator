@@ -4,10 +4,10 @@ import { renderInviteUnavailableHtml } from '../../src/services/team-invite-page
 import { AppError } from '../../src/utils/errors.js';
 
 import type { ClientConfig } from '../../src/services/config.service.js';
+import { resolveProductName } from '../../src/services/product-name.service.js';
 import {
   renderInviteHtml,
   resolveInviteContinueUrl,
-  resolveInviteProductName,
 } from '../../src/services/team-invite-page.service.js';
 
 /**
@@ -49,8 +49,9 @@ describe('renderInviteUnavailableHtml', () => {
   it('names a genuine invitation expiry', () => {
     const html = renderInviteUnavailableHtml(new AppError('BAD_REQUEST', 400, 'INVITE_EXPIRED'));
 
-    expect(html).toContain('Invitation expired');
-    expect(html).not.toContain('Invitation invalid');
+    expect(html).toContain('This invitation has expired');
+    expect(html).toContain('Ask the person who invited you to send a new one.');
+    expect(html).not.toContain('can’t be used');
   });
 
   it.each([
@@ -61,9 +62,9 @@ describe('renderInviteUnavailableHtml', () => {
   ])('uses one invalid result for every non-expiry failure', (error) => {
     const html = renderInviteUnavailableHtml(error);
 
-    expect(html).toContain('Invitation invalid');
-    expect(html).not.toContain('Invitation expired');
-    expect(html).not.toContain('Invitation revoked');
+    expect(html).toContain('This invitation can’t be used');
+    expect(html).not.toContain('expired');
+    expect(html).not.toContain('revoked');
   });
 });
 
@@ -113,16 +114,16 @@ describe('resolveInviteContinueUrl', () => {
   });
 });
 
-describe('resolveInviteProductName', () => {
+describe('resolveProductName', () => {
   it('prefers the config logo alt text', () => {
-    expect(resolveInviteProductName(config())).toBe('Nessie');
+    expect(resolveProductName(config())).toBe('Nessie');
   });
 
   it('falls back to the config domain when the logo has no usable alt text', () => {
     const withoutAlt = config({
       ui_theme: { logo: { url: '', alt: '   ' } },
     } as unknown as Partial<ClientConfig>);
-    expect(resolveInviteProductName(withoutAlt)).toBe('api.nessie.works');
+    expect(resolveProductName(withoutAlt)).toBe('api.nessie.works');
   });
 });
 

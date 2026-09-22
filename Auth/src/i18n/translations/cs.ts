@@ -6,7 +6,7 @@ export const cs = {
   'auth.resetPassword.title': 'Obnovení hesla',
   'auth.setPassword.title': 'Nastavení hesla',
   'auth.invite.title': 'Vytvořte si účet',
-  'auth.inviteAccepted.title': 'Pozvánka přijata',
+  'auth.inviteAccepted.title': 'Jste v týmu',
   'auth.accessRequested.title': 'Žádost o přístup byla odeslána',
   'auth.signedIn.title': 'Jste přihlášeni',
   'auth.twoFactorVerify.title': 'Ověření dvoufaktorovým kódem',
@@ -39,7 +39,8 @@ export const cs = {
   'form.setPassword.mismatch': 'Hesla se neshodují.',
   'form.setPassword.success': 'Heslo bylo úspěšně obnoveno. Nyní se můžete přihlásit.',
   'form.invite.submit': 'Vytvořit účet',
-  'form.invite.error': 'Tato pozvánka je neplatná nebo její platnost vypršela. Požádejte o novou pozvánku.',
+  'form.invite.error':
+    'Pozvánku se nepodařilo přijmout. Zkuste to znovu, nebo požádejte toho, kdo Vás pozval, o novou.',
 
   'message.instructionsSent': 'Poslali jsme Vám pokyny na e-mail',
   'message.emailAlreadyRegistered':
@@ -47,8 +48,8 @@ export const cs = {
   'message.accessRequested':
     'Vaše žádost byla odeslána správcům týmu. Toto okno můžete zavřít a počkat na schválení.',
   'message.signedIn': 'Vraťte se do aplikace a dokončete přihlášení. Toto okno můžete zavřít.',
-  'message.inviteAccepted': 'Váš účet byl vytvořen a připojili jste se k týmu. Toto okno můžete zavřít.',
-  'message.inviteAccepted.joined': 'Váš účet byl vytvořen a připojili jste se k týmu.',
+  'message.inviteAccepted': 'Účet je připravený a jste v týmu. Tuto kartu můžete zavřít.',
+  'message.inviteAccepted.joined': 'Účet je připravený a jste v týmu.',
   'message.inviteAccepted.continue': 'Pokračovat do {product}',
   'message.inviteAccepted.product': 'aplikace',
   'action.openApp': 'Otevřít aplikaci',

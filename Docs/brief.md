@@ -2088,6 +2088,12 @@ credential-epoch mismatch—says only **Invitation invalid**. These classificati
 the mailbox-bound HTML journey; product API refusals retain their generic non-enumerating bodies.
 This supersedes the earlier 30-day emailed-invitation window and revoked-specific hosted copy.
 
+Copy update (2026-09-22): the two presentations keep exactly this classification, but their
+titles now speak to the recipient — **This invitation has expired** and **This invitation can’t
+be used** — and both point the recipient at the person who invited them. The invitation email
+and the landing page name the inviter by display name when UOA knows it (never by address); the
+decline and accepted pages address the invitee as "you" and name no inviter.
+
 #### Examples
 
 - **Restaurant SaaS (self-service).** `auto_create_personal_org_on_first_login: true`, `allow_user_create_org: true`. New user signs up → immediately owns an org → can invite staff. No client-side "create org" screen needed.

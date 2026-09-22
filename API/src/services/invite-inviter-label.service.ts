@@ -1,5 +1,7 @@
 import type { PrismaClient } from '@prisma/client';
 
+import { getAdminPrisma } from '../db/prisma.js';
+
 /**
  * "Invited by …" for an invitation card: the inviter's NAME, or nothing.
  *
@@ -13,8 +15,8 @@ import type { PrismaClient } from '@prisma/client';
  * Resolution is name-on-the-row → the inviting user's own name, and null when neither exists.
  * The e-mail address is deliberately NOT a fallback, and neither is anything derived from it:
  * "Alice invited you" is the whole intent, and the address is a disclosure the invitee has not
- * otherwise been given — `buildTeamInviteTemplate` names the team, the organisation and the
- * product, never the sender. A card with no name simply shows no inviter line.
+ * otherwise been given — the invitation e-mail and its landing page name the sender by this label
+ * and never by address. With no name they say "You've been invited" and name no sender at all.
  */
 export type InviterLabelRow = {
   invitedByName: string | null;
@@ -64,4 +66,20 @@ export async function resolveInviterLabel(
 
   return (row) =>
     storedLabel(row) ?? (row.invitedByUserId ? (labelByUserId.get(row.invitedByUserId) ?? null) : null);
+}
+
+/**
+ * The same resolution for a single invitation: its e-mail and landing page name one inviter.
+ *
+ * The lookup runs on the admin connection unless a client is given. Invitation senders hold a
+ * tenant transaction, and under a per-domain user scope the inviter's `users` row can sit outside
+ * what that transaction may see — the e-mail would then say "You've been invited" while the
+ * landing page and `/org/me` (both admin reads) say "Alice invited you". It is a name-only read.
+ */
+export async function resolveInviterName(
+  row: InviterLabelRow,
+  deps?: { prisma?: InviterLabelPrisma },
+): Promise<string | null> {
+  if (storedLabel(row) !== null || !row.invitedByUserId) return storedLabel(row);
+  return (await resolveInviterLabel([row], { prisma: deps?.prisma ?? getAdminPrisma() }))(row);
 }

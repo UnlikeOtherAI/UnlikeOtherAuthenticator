@@ -20,14 +20,16 @@ const TEST_CONFIG = {
   language_config: 'en',
 };
 
-function renderInviteRegistration(): string {
+function renderInviteRegistration(
+  initialSearch = '?invite_token=invite-capability&invite_email=invitee%40example.com',
+): string {
   return renderToString(
     <ThemeProvider config={TEST_CONFIG} configUrl="">
       <I18nProvider config={TEST_CONFIG} configUrl="">
         <PopupProvider
           configUrl=""
           config={TEST_CONFIG}
-          initialSearch="?invite_token=invite-capability&invite_email=invitee%40example.com"
+          initialSearch={initialSearch}
           initialView="invite-registration"
         >
           <InviteRegistrationPage />
@@ -54,5 +56,20 @@ describe('InviteRegistrationPage SSR', () => {
     expect(html).toContain('name="name"');
     expect(html).toContain('maxLength="120"');
     expect(html).not.toMatch(/name="name"[^>]*required/);
+  });
+
+  it('pre-fills the name the inviter gave, leaving it editable', () => {
+    const html = renderInviteRegistration(
+      '?invite_token=invite-capability&invite_email=invitee%40example.com&invite_name=Ada%20Lovelace',
+    );
+
+    expect(html).toMatch(/<input[^>]*name="name"[^>]*value="Ada Lovelace"/);
+    expect(html).not.toMatch(/<input[^>]*name="name"[^>]*readOnly/);
+  });
+
+  it('leaves the name empty when the inviter gave none', () => {
+    const html = renderInviteRegistration();
+
+    expect(html).toMatch(/<input[^>]*name="name"[^>]*value=""/);
   });
 });

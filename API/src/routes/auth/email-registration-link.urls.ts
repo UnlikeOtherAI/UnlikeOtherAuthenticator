@@ -9,19 +9,25 @@ import type { PkceChallenge } from '../../utils/pkce.js';
 
 /**
  * F5: `redirect_url` rides the invite-registration continuation so the SPA's
- * "Invitation accepted" view can offer a way into the product. It is only ever the
+ * "You’re in" view can offer a way into the product. It is only ever the
  * allow-listed value resolved by `resolveInviteContinueUrl`, never the raw query param.
+ *
+ * `invite_name` is the name the inviter typed, carried so the registration form can
+ * pre-fill its editable "Your name" field; it is omitted when the inviter gave none.
  */
 export function buildInviteRegistrationAuthUrl(
   configUrl: string,
   token: string,
   email: string,
   continueUrl?: string,
+  inviteName?: string | null,
 ): string {
   const params = new URLSearchParams();
   params.set('config_url', configUrl);
   params.set('invite_token', token);
   params.set('invite_email', email);
+  const name = inviteName?.trim();
+  if (name) params.set('invite_name', name);
   if (continueUrl) params.set('redirect_url', continueUrl);
   return `/auth?${params.toString()}`;
 }

@@ -199,6 +199,7 @@ describe('resendTeamInvite', () => {
     });
     prisma.verificationToken.updateMany.mockResolvedValue({ count: 0 });
     prisma.verificationToken.create.mockResolvedValue({ id: 'token-row-3' });
+    const sendTeamInviteEmail = vi.fn(async () => undefined);
 
     const result = await resendTeamInvite(
       {
@@ -230,9 +231,15 @@ describe('resendTeamInvite', () => {
         sharedSecret: 'test-shared-secret-with-enough-length',
         generateEmailToken: () => 'token-new',
         hashEmailToken: () => 'hash-new',
-        sendTeamInviteEmail: vi.fn(async () => undefined),
+        sendTeamInviteEmail,
       },
     );
+
+    // The resent e-mail still names who originally invited them — by name, never by address.
+    expect(sendTeamInviteEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ inviterName: 'Owner' }),
+    );
+    expect(JSON.stringify(sendTeamInviteEmail.mock.calls)).not.toContain('owner@example.com');
 
     expect(prisma.teamInvite.create).toHaveBeenCalledWith(
       expect.objectContaining({

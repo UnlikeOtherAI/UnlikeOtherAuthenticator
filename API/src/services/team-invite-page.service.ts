@@ -21,16 +21,6 @@ export function escapeInvitePageHtml(value: string): string {
 }
 
 /**
- * The product name to put on a "Continue to …" control: the client config's own logo
- * alt text when it has one, and otherwise its domain. Never a value taken from the
- * request — both come from the verified config JWT.
- */
-export function resolveInviteProductName(config: ClientConfig): string {
-  const alt = config.ui_theme?.logo?.alt?.trim();
-  return alt && alt.length > 0 ? alt : config.domain;
-}
-
-/**
  * The invitation flow's terminal pages are reached from a mailbox, so the only way back into
  * the product is a link UOA puts there itself. A `redirect_url` may only become that link when
  * it is one of the config's own `redirect_urls` — an unlisted or unparseable value is dropped
@@ -74,7 +64,7 @@ export function renderInviteHtml(params: {
     ? `<a href="${escapeInvitePageHtml(params.acceptUrl)}" style="display:inline-block;padding:12px 16px;border-radius:12px;background:#111827;color:#ffffff;text-decoration:none;font-weight:600;">Accept invitation</a>`
     : '';
   const declineButton = params.declineUrl
-    ? `<a href="${escapeInvitePageHtml(params.declineUrl)}" style="display:inline-block;padding:12px 16px;border-radius:12px;border:1px solid #d1d5db;color:#111827;text-decoration:none;font-weight:600;">Decline invitation</a>`
+    ? `<a href="${escapeInvitePageHtml(params.declineUrl)}" style="display:inline-block;padding:12px 16px;border-radius:12px;border:1px solid #d1d5db;color:#111827;text-decoration:none;font-weight:600;">Decline</a>`
     : '';
 
   return `<!doctype html>
@@ -104,12 +94,14 @@ export function renderInviteHtml(params: {
 export function renderInviteUnavailableHtml(err: unknown): string {
   if (isAppError(err) && err.message === 'INVITE_EXPIRED') {
     return renderInviteHtml({
-      title: 'Invitation expired',
-      body: 'This invitation has expired. Ask the team to send you a new invitation.',
+      title: 'This invitation has expired',
+      body: 'Ask the person who invited you to send a new one.',
     });
   }
   return renderInviteHtml({
-    title: 'Invitation invalid',
-    body: 'This invitation is invalid. Ask the team to send you a new invitation.',
+    title: 'This invitation can’t be used',
+    body:
+      'It may have been used already, cancelled, or replaced by a newer invitation. ' +
+      'Check your inbox for a newer email, or ask the person who invited you to send a new one.',
   });
 }

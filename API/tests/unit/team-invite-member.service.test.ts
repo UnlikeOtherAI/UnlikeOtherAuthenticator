@@ -56,6 +56,10 @@ function makeEnv() {
   };
 }
 
+// Display names of the people who send invitations in these tests; the invitation e-mail names
+// its sender from here (by name only — never by address).
+const USER_NAMES: Record<string, string> = { 'admin-1': 'Ada Admin', 'member-1': 'Mo Member' };
+
 function makePrisma(memberInvites = 'allowed') {
   return {
     organisation: {
@@ -87,6 +91,8 @@ function makePrisma(memberInvites = 'allowed') {
     },
     user: {
       findUnique: vi.fn().mockResolvedValue(null),
+      findMany: vi.fn(async ({ where }: { where: { id: { in: string[] } } }) =>
+        where.id.in.map((id) => ({ id, name: USER_NAMES[id] ?? null }))),
     },
     verificationToken: {
       updateMany: vi.fn().mockResolvedValue({ count: 0 }),
@@ -103,6 +109,8 @@ const inviteDeps = (prisma: PrismaClient, memberInvitesActor?: string) => ({
   generateEmailToken: () => 'token-123',
   hashEmailToken: () => 'hash-123',
   sendTeamInviteEmail: vi.fn(async () => undefined),
+  // The inviter's name is read on its own client (the admin connection in production).
+  inviterPrisma: prisma,
   ...(memberInvitesActor ? {} : {}),
 });
 
@@ -165,6 +173,9 @@ describe('member-initiated invites (Phase 4 Task 4)', () => {
       }),
     );
     expect(deps.sendTeamInviteEmail).toHaveBeenCalledTimes(1);
+    expect(deps.sendTeamInviteEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ inviterName: 'Ada Admin' }),
+    );
   });
 
   it('plain member + memberInvites "allowed": NOT_REQUIRED, sends email', async () => {
@@ -523,6 +534,10 @@ describe('invite approval workflow (Phase 4 Task 4)', () => {
       select: expect.any(Object),
     });
     expect(deps.sendTeamInviteEmail).toHaveBeenCalledTimes(1);
+    // The e-mail names the member who asked to invite, not the admin who approved it.
+    expect(deps.sendTeamInviteEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ inviterName: 'Mo Member' }),
+    );
   });
 
   it('deny: sets DENIED and sends nothing', async () => {

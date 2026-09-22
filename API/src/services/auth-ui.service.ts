@@ -5,6 +5,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { FastifyReply } from 'fastify';
 
 import type { ClientConfig } from './config.service.js';
+import { escapeHtml } from './email.templates.js';
+import { resolveProductName } from './product-name.service.js';
 import { readStaticFileUnderRoot } from '../utils/static-file.js';
 
 function repoRootFrom(metaUrl: string): string {
@@ -98,7 +100,11 @@ export async function renderAuthEntrypointHtml(params: {
   // it carries it. Optional so routes/tests that never set a nonce keep working.
   cspNonce?: string;
 }): Promise<string> {
-  let base = await readAuthIndexHtml();
+  // The built shell carries a placeholder title; the tab should name the product being signed
+  // in to, not this service.
+  // A replacer function, not a string: `$&`, `$'` and friends in a product name must stay literal.
+  const title = `<title>${escapeHtml(resolveProductName(params.config))}</title>`;
+  let base = (await readAuthIndexHtml()).replace(/<title>[^<]*<\/title>/i, () => title);
 
   // Brief 7.1 / 9.1: the OAuth auth UI is rendered server-side.
   const ssrHtml = await renderAuthAppSsr({

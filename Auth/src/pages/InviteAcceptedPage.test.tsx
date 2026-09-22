@@ -54,8 +54,8 @@ function render(redirectUrl?: string, config: unknown = TEST_CONFIG): string {
 describe('InviteAcceptedPage', () => {
   it('is a close-the-window confirmation when no redirect URL was carried', () => {
     const html = render();
-    expect(html).toContain('Invitation accepted');
-    expect(html).toContain('You can close this window.');
+    expect(html).toContain('You’re in');
+    expect(html).toContain('You can close this tab.');
     expect(html).not.toContain('Continue to');
     expect(html).not.toContain('<a href');
   });
@@ -65,14 +65,14 @@ describe('InviteAcceptedPage', () => {
     expect(html).toContain('Continue to Nessie');
     expect(html).toContain(`href="${ALLOWED}"`);
     // The dead-end sentence is replaced, not kept alongside a working link.
-    expect(html).not.toContain('You can close this window.');
+    expect(html).not.toContain('You can close this tab.');
   });
 
   it('drops a redirect URL the config does not list', () => {
     const html = render('https://evil.example.com/phish');
     expect(html).not.toContain('Continue to');
     expect(html).not.toContain('evil.example.com');
-    expect(html).toContain('You can close this window.');
+    expect(html).toContain('You can close this tab.');
   });
 
   it('drops a dangerous scheme even if it were somehow listed', () => {
