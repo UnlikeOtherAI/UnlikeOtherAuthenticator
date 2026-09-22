@@ -1,5 +1,31 @@
 # AWS SES Email Setup
 
+> **Status: retired on 2026-09-22.** UOA production no longer sends through SES.
+> We lost access to AWS account `946926531695`, and invitation and sign-in emails
+> sent through it were accepted by SES without being delivered. Production now
+> sends over SMTP through the company mail server:
+>
+> | Setting | Value |
+> | --- | --- |
+> | `EMAIL_PROVIDER` | `smtp` |
+> | `SMTP_HOST` / `SMTP_PORT` / `SMTP_SECURE` | `mail.unlikeotherai.com` / `465` / `true` (implicit TLS) |
+> | `SMTP_USER` | `noreply@unlikeotherai.com`, a Stalwart account used only for sending |
+> | `SMTP_PASSWORD` | Secret Manager `uoa-auth-smtp-password` |
+> | `EMAIL_FROM` / `EMAIL_REPLY_TO` | unchanged: `noreply@unlikeotherai.com` / `hello@unlikeotherai.com` |
+>
+> Stalwart signs these messages with its DKIM keys for `unlikeotherai.com`, and
+> they pass SPF through the domain's `mx` and `ip4:178.105.82.46` mechanisms.
+> The deploy workflow no longer passes `AWS_ACCESS_KEY_ID` or
+> `AWS_SECRET_ACCESS_KEY`. The SES DNS records (DKIM CNAMEs, the `bounce.`
+> MAIL FROM records and the `_amazonses` tokens) were removed from adgoes.live,
+> einstore.pro, ideasbox.live, myplace.rocks, painpoint.center,
+> teleprompter.rocks and translatemy.world on 2026-09-22; unlikeotherai.com's
+> follow once SMTP delivery is confirmed. `POST /email/send` now uses the same
+> SMTP account, so it can only send as `noreply@unlikeotherai.com`; per-domain
+> senders and the Admin panel's SES sender registration no longer work.
+>
+> Everything below describes the retired SES setup and is kept as history.
+
 ## Account & Region
 
 - **AWS Account:** 946926531695

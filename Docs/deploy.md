@@ -197,6 +197,15 @@ development and test databases may deliberately omit
 the admin assignment into the parent shell or export it: that would silently
 run the API as the RLS-bypassing principal.
 
+Both database URLs carry a Prisma pool cap: `connection_limit=3` on
+`DATABASE_URL` and `connection_limit=2` on `DATABASE_ADMIN_URL`, each with
+`pool_timeout=20`. `uoa-auth-db` is a `db-g1-small` instance with 50
+connections, shared with eleven other Cloud Run services. Without the cap each
+instance's two Prisma clients opened a default-sized pool: on 2026-09-22 UOA
+held 42 of the 50 slots, and every new revision failed at
+`prisma migrate deploy` with "remaining connection slots are reserved". Keep
+both parameters on any new version of either secret.
+
 Production requires two genuinely distinct principals. `DATABASE_URL` must
 report `current_user = 'uoa_app'`; `DATABASE_ADMIN_URL` must report
 `current_user = 'uoa_admin'`, and only the latter may have `BYPASSRLS`. Merely
