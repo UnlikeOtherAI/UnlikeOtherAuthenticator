@@ -17,10 +17,11 @@
 > they pass SPF through the domain's `mx` and `ip4:178.105.82.46` mechanisms.
 > The deploy workflow no longer passes `AWS_ACCESS_KEY_ID` or
 > `AWS_SECRET_ACCESS_KEY`. The SES DNS records (DKIM CNAMEs, the `bounce.`
-> MAIL FROM records and the `_amazonses` tokens) were removed from adgoes.live,
-> einstore.pro, ideasbox.live, myplace.rocks, painpoint.center,
-> teleprompter.rocks and translatemy.world on 2026-09-22; unlikeotherai.com's
-> follow once SMTP delivery is confirmed. `POST /email/send` now uses the same
+> MAIL FROM records and the `_amazonses` tokens) were removed on 2026-09-22 from
+> all eight domains that had them: unlikeotherai.com, adgoes.live, einstore.pro,
+> ideasbox.live, myplace.rocks, painpoint.center, teleprompter.rocks and
+> translatemy.world. unlikeotherai.com's went last, after the first invite sent
+> over SMTP was delivered. `POST /email/send` now uses the same
 > SMTP account, so it can only send as `noreply@unlikeotherai.com`; per-domain
 > senders and the Admin panel's SES sender registration no longer work.
 >
