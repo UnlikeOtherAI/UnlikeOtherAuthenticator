@@ -31,4 +31,12 @@ export const PRODUCTION_PUBLIC_ERROR_CODES = new Set([
   // backend-mode caller can already list `?status=DEACTIVATED`, and the invitee learns only their
   // own state. The hosted invitation page still renders the generic "This invitation can’t be used".
   'MEMBERSHIP_DEACTIVATED',
+  // Confidential token exchange (`POST /auth/token`, RFC 8693 grant) refusing a subject because of
+  // the person's own current state: a moved credential epoch, an unknown user, a lost
+  // source-domain role, or a selected organisation/team no longer available to them. The caller
+  // must branch on it to ask the person to sign in again. Not an oracle: it is reached only after
+  // domain-hash authentication, every one of those reasons shares this one code, and the product's
+  // own configuration refusals (TOKEN_EXCHANGE_TEAM_CONTEXT_*, TOKEN_EXCHANGE_DELEGATION_NOT_ALLOWED)
+  // are decided before any subject lookup and stay generic.
+  'TOKEN_EXCHANGE_SUBJECT_FORBIDDEN',
 ]);

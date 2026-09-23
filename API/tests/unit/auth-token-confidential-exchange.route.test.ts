@@ -2,6 +2,7 @@ import type { ClientConfig } from '../../src/services/config.service.js';
 import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AppError } from '../../src/utils/errors.js';
 import { testUiTheme } from '../helpers/test-config.js';
 
 const exchangeConfidentialSubjectTokenMock = vi.fn();
@@ -205,6 +206,58 @@ describe('POST /auth/token confidential grant', () => {
       expect(exchangeConfidentialSubjectTokenMock).not.toHaveBeenCalled();
     } finally {
       await app.close();
+    }
+  });
+
+  it('exposes only the person-level refusal code in a production body', async () => {
+    const originalDebug = process.env.DEBUG_ENABLED;
+    Reflect.deleteProperty(process.env, 'DEBUG_ENABLED');
+    const { createApp } = await import('../../src/app.js');
+    const app = await createApp();
+    await app.ready();
+    const exchange = (subjectTokenType: string) =>
+      app.inject({
+        method: 'POST',
+        url: '/auth/token?config_url=' + encodeURIComponent('https://api.nessie.works/auth/config'),
+        headers: { authorization: `Bearer ${'a'.repeat(64)}` },
+        payload: {
+          grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
+          subject_token: 'source.jwt.assertion',
+          subject_token_type: subjectTokenType,
+          product: 'nessie',
+          resource: 'https://ledger.unlikeotherai.com',
+          scope: 'ai.invoke',
+        },
+      });
+
+    try {
+      const person = { error: 'Request failed', code: 'TOKEN_EXCHANGE_SUBJECT_FORBIDDEN' };
+      const product = { error: 'Request failed' };
+      for (const [code, body] of [
+        ['TOKEN_EXCHANGE_SUBJECT_FORBIDDEN', person],
+        ['TOKEN_EXCHANGE_TEAM_CONTEXT_REQUIRED', product],
+        ['TOKEN_EXCHANGE_TEAM_CONTEXT_UNSUPPORTED', product],
+        ['TOKEN_EXCHANGE_DELEGATION_NOT_ALLOWED', product],
+      ] as const) {
+        exchangeConfidentialSubjectTokenMock.mockRejectedValueOnce(
+          new AppError('FORBIDDEN', 403, code),
+        );
+        exchangeConfidentialChainedAccessTokenMock.mockRejectedValueOnce(
+          new AppError('FORBIDDEN', 403, code),
+        );
+        for (const subjectTokenType of [
+          'urn:ietf:params:oauth:token-type:jwt',
+          'urn:ietf:params:oauth:token-type:access_token',
+        ]) {
+          const response = await exchange(subjectTokenType);
+          expect(response.statusCode).toBe(403);
+          expect(response.json()).toStrictEqual(body);
+        }
+      }
+    } finally {
+      await app.close();
+      if (originalDebug === undefined) Reflect.deleteProperty(process.env, 'DEBUG_ENABLED');
+      else process.env.DEBUG_ENABLED = originalDebug;
     }
   });
 

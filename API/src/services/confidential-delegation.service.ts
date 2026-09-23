@@ -68,7 +68,10 @@ function client(deps?: { prisma?: PrismaClient }): DelegationPrisma {
   return (deps?.prisma ?? getAdminPrisma()) as DelegationPrisma;
 }
 
-function invalidDelegation(): AppError {
+// A request or mapping the delegation policy does not allow. This is the
+// product's configuration, never the person's state, so it is deliberately not
+// a production public code: the caller sees only the generic 403.
+export function invalidDelegation(): AppError {
   return new AppError('FORBIDDEN', 403, 'TOKEN_EXCHANGE_DELEGATION_NOT_ALLOWED');
 }
 

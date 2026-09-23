@@ -76,6 +76,9 @@ describe('GET /api', () => {
     expect(body.confidential_token_exchange.issued_access_token.claims).toContain(
       'org and active are present together',
     );
+    expect(body.confidential_token_exchange.errors.TOKEN_EXCHANGE_SUBJECT_FORBIDDEN).toContain(
+      'sign in again',
+    );
     expect(body.endpoints).toEqual(expect.any(Array));
     expect(body.endpoints.length).toBeGreaterThan(0);
 
@@ -413,6 +416,7 @@ describe('GET /llm', () => {
     expect(res.body).toContain('There is deliberately no `operation_id`');
     expect(res.body).toContain('/oauth/jwks.json');
     expect(res.body).toContain('first-time or team-less users');
+    expect(res.body).toContain('"code":"TOKEN_EXCHANGE_SUBJECT_FORBIDDEN"');
     expect(res.body).toContain('concurrent replays are rejected');
     expect(res.body).toContain('Canonical tariff and entitlement control plane');
     expect(res.body).toContain('Raw token, request, byte, and search counts');

@@ -814,6 +814,24 @@ When `active` is present, UOA additionally re-resolves the requested ACTIVE org
 and team memberships. Unknown users, missing domain roles, and
 removed/deactivated or cross-tenant selected teams fail closed.
 
+**Refusal codes (2026-09 clarification).** The calling product must be able to
+tell the person's problem from its own. A refusal caused by the subject's own
+current state — a credential epoch (`tv`) that no longer matches, an unknown
+user, a missing source-domain role, or a selected organisation/team no longer
+available to them — is `403 TOKEN_EXCHANGE_SUBJECT_FORBIDDEN`, one code for all
+of those reasons, and it is a production public error code: the body is exactly
+`{"error":"Request failed","code":"TOKEN_EXCHANGE_SUBJECT_FORBIDDEN"}` and says
+nothing about which reason applied, so the product can only ask the person to
+sign in again. A refusal decided by the calling product's own request and
+configuration — no enabled delegation mapping, scope widening, an assertion
+without `active` where the product's team policy requires a team
+(`TOKEN_EXCHANGE_TEAM_CONTEXT_REQUIRED`), or an `active` team where the product
+supports none (`TOKEN_EXCHANGE_TEAM_CONTEXT_UNSUPPORTED`) — keeps the generic
+production body. UOA decides these configuration refusals before any subject
+lookup, so they are identical for every subject and cannot reveal whether a
+user exists or what their epoch is. This is consistent with §22.11: the code
+reaches only the domain-hash-authenticated product backend, never an end user.
+
 Each verified source-signed JWT assertion is one-time. After the current user, source-domain role,
 and any selected team pass validation, UOA atomically claims the
 source-domain + `jti` in PostgreSQL before signing. Concurrent or later reuse of

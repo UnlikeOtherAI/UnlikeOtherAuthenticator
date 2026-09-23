@@ -2601,7 +2601,13 @@ paths:
             edge exists, both are non-consuming and non-revoking. A matching replay whose
             committed target no longer satisfies either condition retires that family and returns
             authenticated 401 INVALID_REFRESH_TOKEN. Confidential exchange also uses 403
-            for denied mapping, target, scope, role, or team membership.
+            for denied mapping, target, scope, role, or team membership. When the person's
+            own current state refuses the exchange (moved credential epoch, unknown user,
+            lost source-domain role, or selected team no longer available) the body is exactly
+            {"error":"Request failed","code":"TOKEN_EXCHANGE_SUBJECT_FORBIDDEN"} without
+            saying which; ask the person to sign in again. The calling product's own mapping,
+            scope, or team-context configuration refusals are decided before any subject
+            lookup and return the generic body with no code.
           content:
             application/json:
               schema:

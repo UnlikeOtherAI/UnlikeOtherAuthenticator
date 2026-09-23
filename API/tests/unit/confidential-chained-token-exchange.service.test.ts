@@ -397,8 +397,39 @@ describe('chained confidential exchange', () => {
           consumeSubjectRateLimit: vi.fn(),
         },
       ),
-    ).rejects.toThrow('TOKEN_EXCHANGE_SUBJECT_FORBIDDEN');
+    ).rejects.toThrow('TOKEN_EXCHANGE_DELEGATION_NOT_ALLOWED');
     expect(signAccessToken).not.toHaveBeenCalled();
+  });
+
+  it('refuses a drifted original-product mapping as configuration before any subject lookup', async () => {
+    const { now, token } = await signInboundToken();
+    // A moved epoch must not win: the mapping refusal is decided first.
+    const prisma = prismaMock({ tokenVersion: 1 });
+
+    await expect(
+      exchangeConfidentialChainedAccessToken(
+        {
+          authenticatedClientDomainId: 'client-domain-deepsignal',
+          subjectToken: token,
+          product: 'deepsignal',
+          resource: ledgerResource,
+          scope: 'ai.invoke',
+          config: config(),
+        },
+        {
+          prisma,
+          now: () => now,
+          signAccessToken: vi.fn(),
+          resolveDelegation: resolveDelegation(),
+          resolveSourceDelegation: vi
+            .fn()
+            .mockResolvedValue({ product: 'nessie', resource: ledgerResource, scope: 'ai.invoke' }),
+          consumeSubjectRateLimit: vi.fn(),
+        },
+      ),
+    ).rejects.toThrow('TOKEN_EXCHANGE_DELEGATION_NOT_ALLOWED');
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    expect(prisma.domainRole.findUnique).not.toHaveBeenCalled();
   });
 
   it('fails closed when the original product link, user link, or selected team is revoked', async () => {
@@ -407,14 +438,17 @@ describe('chained confidential exchange', () => {
       {
         prisma: prismaMock(),
         sourceResolver: vi.fn().mockRejectedValue(new Error('mapping disabled')),
+        expected: 'mapping disabled',
       },
       {
         prisma: prismaMock({ domainRoleExists: false }),
         sourceResolver: resolveSourceDelegation(),
+        expected: 'TOKEN_EXCHANGE_SUBJECT_FORBIDDEN',
       },
       {
         prisma: prismaMock({ teams: [{ teamId: 'team_2', teamRole: 'member' }] }),
         sourceResolver: resolveSourceDelegation(),
+        expected: 'TOKEN_EXCHANGE_SUBJECT_FORBIDDEN',
       },
     ];
 
@@ -439,7 +473,7 @@ describe('chained confidential exchange', () => {
             consumeSubjectRateLimit: vi.fn(),
           },
         ),
-      ).rejects.toThrow();
+      ).rejects.toThrow(testCase.expected);
       expect(signAccessToken).not.toHaveBeenCalled();
     }
   });

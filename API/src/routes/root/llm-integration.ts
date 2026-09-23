@@ -344,6 +344,19 @@ re-reads the user and source-domain role. When \`active\` is supplied it also
 re-reads the requested ACTIVE org and team memberships. Unknown users, missing
 domain roles, and removed/deactivated or cross-org/team selections are rejected.
 
+Branch on the refusal body to tell the person's problem from your own. When the
+refusal comes from the person's current state — their credential epoch (\`tv\`)
+moved, the user is unknown, they lost the source-domain role, or the selected
+team is no longer available to them — UOA answers \`403\` with exactly
+\`{"error":"Request failed","code":"TOKEN_EXCHANGE_SUBJECT_FORBIDDEN"}\`. The code
+never says which of those it was; ask the person to sign in again. A \`403\` with
+the generic body \`{"error":"Request failed"}\` and no code is your product's
+own request or configuration: no enabled mapping for the product, resource, and
+scope, scope widening, an assertion without \`active\` where your team policy
+requires a team, or an \`active\` team where your product supports none. UOA
+decides those before looking at the subject, so they are identical for every
+person: treat them as an integration fault, not a sign-in problem.
+
 \`\`\`json
 {
   "access_token": "<5-minute RS256 JWT>",

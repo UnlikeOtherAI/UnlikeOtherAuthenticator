@@ -188,27 +188,37 @@ async function exchangeConfidentialSubjectTokenInsidePolicyLock(
   const credentialEpoch = assertion.tv;
 
   const prisma = deps.prisma ?? getAdminPrisma();
+  // Whether the assertion's team context fits the product is decided by the
+  // product's own config and server-owned team policy alone, so these are the
+  // product's refusals, never the person's. They run before any subject lookup:
+  // a misconfigured product gets the same answer for every subject and cannot
+  // use it to learn whether one exists or what its epoch is.
+  const teamPolicy = await resolveProductTeamPolicy({ domain: sourceDomain }, { prisma });
+  if (!assertion.active && requiresExactAuthorizationTeam(params.config, teamPolicy)) {
+    throw new AppError('FORBIDDEN', 403, 'TOKEN_EXCHANGE_TEAM_CONTEXT_REQUIRED');
+  }
+  if (
+    assertion.active &&
+    !params.config.org_features?.enabled &&
+    teamPolicy.scope !== 'all_active_memberships'
+  ) {
+    throw new AppError('FORBIDDEN', 403, 'TOKEN_EXCHANGE_TEAM_CONTEXT_UNSUPPORTED');
+  }
+
+  // Every refusal below depends on the subject's current state — moved
+  // credential epoch, unknown user, missing source-domain role, or a selected
+  // team no longer available to them — and shares one public code, so the
+  // product learns only that this subject may not be exchanged now.
   try {
     await lockAndAssertAuthenticationEpoch(
       { userId: assertion.sub, domain: sourceDomain, credentialEpoch },
       { prisma },
     );
   } catch (error) {
-    // Keep user existence and current epoch opaque to an authenticated source
-    // product; this is the same failure class as a missing source-domain role.
     if (isAuthenticationEpochMismatchError(error)) {
       throw new AppError('FORBIDDEN', 403, 'TOKEN_EXCHANGE_SUBJECT_FORBIDDEN');
     }
     throw error;
-  }
-  const teamPolicy = await resolveProductTeamPolicy({ domain: sourceDomain }, { prisma });
-  if (!assertion.active && requiresExactAuthorizationTeam(params.config, teamPolicy)) {
-    throw new AppError('FORBIDDEN', 403, 'TOKEN_EXCHANGE_SUBJECT_FORBIDDEN');
-  }
-  if (assertion.active && !params.config.org_features?.enabled) {
-    if (teamPolicy.scope !== 'all_active_memberships') {
-      throw new AppError('FORBIDDEN', 403, 'TOKEN_EXCHANGE_SUBJECT_FORBIDDEN');
-    }
   }
 
   const [user, domainRole, org] = await Promise.all([
