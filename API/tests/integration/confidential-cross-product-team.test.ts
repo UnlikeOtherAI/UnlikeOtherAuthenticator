@@ -228,6 +228,8 @@ describe.skipIf(!hasDatabase)('confidential cross-product team attribution', () 
       }),
     );
 
+    // The product's team policy requires a team and its own assertion named none: the product's
+    // refusal, not the person's.
     await expect(
       exchange(
         await signSubject({
@@ -237,13 +239,18 @@ describe.skipIf(!hasDatabase)('confidential cross-product team attribution', () 
           withActive: false,
         }),
       ),
-    ).rejects.toMatchObject({ statusCode: 403, message: 'TOKEN_EXCHANGE_SUBJECT_FORBIDDEN' });
+    ).rejects.toMatchObject({ statusCode: 403, message: 'TOKEN_EXCHANGE_TEAM_CONTEXT_REQUIRED' });
     await revoke(seeded);
+    // With the cross-product policy revoked and org features off, the product no longer supports
+    // team context at all.
     await expect(
       exchange(
         await signSubject({ domain: sourceDomain, jti: 'revoked', seed: seeded, withActive: true }),
       ),
-    ).rejects.toMatchObject({ statusCode: 403, message: 'TOKEN_EXCHANGE_SUBJECT_FORBIDDEN' });
+    ).rejects.toMatchObject({
+      statusCode: 403,
+      message: 'TOKEN_EXCHANGE_TEAM_CONTEXT_UNSUPPORTED',
+    });
   });
 
   it('keeps chained attribution cross-domain and rejects original-product policy revocation', async () => {
@@ -320,6 +327,8 @@ describe.skipIf(!hasDatabase)('confidential cross-product team attribution', () 
     expect(claims.org).toMatchObject({ org_id: seeded.orgId, teams: [seeded.teamId] });
 
     await revoke(seeded);
+    // The person's cross-product team is no longer resolvable for the original product, so the
+    // refusal is about the subject's current membership and a fresh sign-in is the remedy.
     await expect(exchange()).rejects.toMatchObject({
       statusCode: 403,
       message: 'TOKEN_EXCHANGE_SUBJECT_FORBIDDEN',

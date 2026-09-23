@@ -11,6 +11,7 @@ import { AppError } from '../utils/errors.js';
 import { hasOwnKey } from '../utils/untrusted-record.js';
 import type { ClientConfig } from './config.service.js';
 import {
+  invalidDelegation,
   parseConfidentialDelegationScope,
   resolveConfidentialDelegation,
   resolveConfidentialDelegationForSource,
@@ -105,6 +106,9 @@ function invalidSubjectToken(): AppError {
   return new AppError('UNAUTHORIZED', 401, 'INVALID_SUBJECT_TOKEN');
 }
 
+// Only for refusals that depend on the subject's current state (credential
+// epoch, user, source-domain role, organisation/team membership). Requests the
+// delegation policy does not allow use `invalidDelegation()` instead.
 function subjectForbidden(): AppError {
   return new AppError('FORBIDDEN', 403, 'TOKEN_EXCHANGE_SUBJECT_FORBIDDEN');
 }
@@ -266,11 +270,35 @@ async function exchangeConfidentialChainedAccessTokenInsidePolicyLock(
   );
   const requestedScopes = parseConfidentialDelegationScope(delegation.scope);
   const inboundScopes = new Set(parseConfidentialDelegationScope(subject.scope));
+  // Asking for more than the inbound token carries is scope widening, the same
+  // refusal as asking for more than the caller's own mapping allows.
   if (requestedScopes.some((scope) => !inboundScopes.has(scope))) {
-    throw subjectForbidden();
+    throw invalidDelegation();
   }
 
   const prisma = deps.prisma ?? getAdminPrisma();
+  // The inbound token must still be what the original product's mapping grants.
+  // Like scope widening, this is decided from configuration alone, so it runs
+  // before any subject lookup and never reads as the person's refusal.
+  const sourceDelegation = await (
+    deps.resolveSourceDelegation ?? resolveConfidentialDelegationForSource
+  )(
+    {
+      sourceDomain: subject.source_domain,
+      product: subject.product,
+      resource: callerAudience,
+      scope: subject.scope,
+    },
+    { prisma },
+  );
+  if (
+    sourceDelegation.product !== subject.product ||
+    sourceDelegation.resource !== callerAudience ||
+    sourceDelegation.scope !== subject.scope
+  ) {
+    throw invalidDelegation();
+  }
+
   const identityDomain = originalIdentityDomain(subject);
   const credentialEpoch = subject.tv;
   try {
@@ -282,16 +310,7 @@ async function exchangeConfidentialChainedAccessTokenInsidePolicyLock(
     if (isAuthenticationEpochMismatchError(error)) throw subjectForbidden();
     throw error;
   }
-  const [sourceDelegation, user, domainRole, currentOrg] = await Promise.all([
-    (deps.resolveSourceDelegation ?? resolveConfidentialDelegationForSource)(
-      {
-        sourceDomain: subject.source_domain,
-        product: subject.product,
-        resource: callerAudience,
-        scope: subject.scope,
-      },
-      { prisma },
-    ),
+  const [user, domainRole, currentOrg] = await Promise.all([
     prisma.user.findUnique({
       where: { id: subject.sub },
       select: { email: true },
@@ -317,9 +336,6 @@ async function exchangeConfidentialChainedAccessTokenInsidePolicyLock(
   ]);
 
   if (
-    sourceDelegation.product !== subject.product ||
-    sourceDelegation.resource !== callerAudience ||
-    sourceDelegation.scope !== subject.scope ||
     !user ||
     !domainRole ||
     !currentOrg ||

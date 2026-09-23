@@ -344,6 +344,12 @@ export const confidentialTokenExchangeDocumentation = {
     reuse:
       'Unlike a source-signed JWT assertion, an audience-bound access-token subject is reusable until exp so concurrent multi-process calls do not turn a normal bearer token into a one-shot credential.',
   },
+  errors: {
+    TOKEN_EXCHANGE_SUBJECT_FORBIDDEN:
+      '403 — public code; the subject cannot be exchanged now because of the person’s own current state: a moved credential epoch (`tv`), an unknown user, a lost source-domain role, or a selected organisation/team no longer available to them. Every reason shares this one code; ask the person to sign in again. The body is exactly {"error":"Request failed","code":"TOKEN_EXCHANGE_SUBJECT_FORBIDDEN"}',
+    configuration:
+      '403 with the generic body {"error":"Request failed"} and no code — the calling product’s own request or configuration was refused: no enabled delegation mapping for the product/resource/scope, scope widening, an assertion without team context where the product’s team policy requires one, or team context where the product supports none. These are decided before any subject lookup, so they are identical for every subject; treat them as an integration fault, not a sign-in problem.',
+  },
   issued_access_token: {
     algorithm: 'RS256',
     lifetime: 'maximum 300 seconds; a chained result never outlives its inbound access token',
