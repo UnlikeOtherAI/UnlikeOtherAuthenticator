@@ -4,7 +4,7 @@ A backend can use POST /auth/action-verification/start and POST /auth/action-ver
 with the domain-hash bearer, signed config_url, domain query, and exactly one authenticated
 user credential (X-UOA-Access-Token or a one-minute RS256 X-UOA-Subject-Assertion with /org audience).
 Backend-only calls are rejected. Start accepts actionDigest (64 lowercase hex SHA-256 of the
-exact user, action nonce and immutable terms) and description (1–240 characters for the email).
+exact user, action nonce and immutable terms) and description (1â€“240 characters for the email).
 It sends a five-minute code to UOA's canonical account email and returns challengeId, expiresAt,
 and twoFactorRequired. Verify accepts actionDigest, challengeId, code and, for enrolled accounts,
 twoFactorCode. It consumes the challenge and returns verified:true and actionDigest to the
