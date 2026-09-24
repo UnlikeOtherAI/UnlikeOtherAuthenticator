@@ -1,8 +1,10 @@
 import type { EndpointSchema } from './schema.js';
+import { actionVerificationEndpoints } from './schema.action-verification.js';
 import { authTokenEndpoint } from './schema.auth-token.js';
 import { authEmailEndpoints } from './schema.auth-email.js';
 
 export const authEndpoints: EndpointSchema[] = [
+  ...actionVerificationEndpoints,
   {
     method: 'GET',
     path: '/auth',

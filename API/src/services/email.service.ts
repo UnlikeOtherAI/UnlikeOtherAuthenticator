@@ -13,6 +13,7 @@ import {
   buildVerifyEmailSetPasswordTemplate,
 } from './email.templates.js';
 import { buildLoginCodeTemplate } from './email.templates.login-code.js';
+import { buildActionVerificationTemplate } from './email.templates.action-verification.js';
 import {
   createEmailProvider,
   safeEmailLog,
@@ -30,6 +31,16 @@ export {
 } from './email.providers.js';
 
 let cachedProvider: EmailProvider | undefined;
+
+export async function sendActionVerificationEmail(params: {
+  to: string; code: string; domain: string; description: string; theme?: Partial<EmailTheme>;
+}): Promise<void> {
+  const env = getEnv();
+  await dispatchEmail({
+    to: params.to, from: env.EMAIL_FROM, replyTo: env.EMAIL_REPLY_TO,
+    ...buildActionVerificationTemplate(params),
+  }, { swallowFailures: false });
+}
 
 export function resetEmailProviderCache(): void {
   cachedProvider = undefined;

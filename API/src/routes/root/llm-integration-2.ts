@@ -1,4 +1,20 @@
-export const llmIntegrationMarkdown2 = `## Phase 4.8 — Slack-style email sign-in codes + team selection (opt-in)
+export const llmIntegrationMarkdown2 = `## Fresh verification of a product action
+
+A backend can use POST /auth/action-verification/start and POST /auth/action-verification/verify
+with the domain-hash bearer, signed config_url, domain query, and exactly one authenticated
+user credential (X-UOA-Access-Token or a one-minute RS256 X-UOA-Subject-Assertion with /org audience).
+Backend-only calls are rejected. Start accepts actionDigest (64 lowercase hex SHA-256 of the
+exact user, action nonce and immutable terms) and description (1�240 characters for the email).
+It sends a five-minute code to UOA's canonical account email and returns challengeId, expiresAt,
+and twoFactorRequired. Verify accepts actionDigest, challengeId, code and, for enrolled accounts,
+twoFactorCode. It consumes the challenge and returns verified:true and actionDigest to the
+backend only. Required 2FA enrollment cannot be skipped. Five guesses exhaust a challenge;
+resend invalidates prior codes for that exact action. Issuance is limited to 20 per person per
+15 minutes across instances. Wrong person/domain/action, expired/replayed codes and revoked
+credential epochs fail. The product must recheck its authorization and apply only the bound
+change. Never treat an ordinary login/refresh or a client-provided verified flag as proof.
+
+## Phase 4.8 — Slack-style email sign-in codes + team selection (opt-in)
 
 Additive on top of \`/auth/register\` and \`/auth/login\` — chooser UI remains gated by config
 \`login_flow\`. Legacy clients are unchanged at the defaults; server-recognized products still

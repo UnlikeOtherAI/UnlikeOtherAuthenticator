@@ -1945,6 +1945,99 @@ components:
           type: string
 
 paths:
+  /auth/action-verification/start:
+    post:
+      operationId: startActionVerification
+      summary: Send a fresh verification code for an exact product action
+      description: Authenticated backend and person required. Five-minute single-use email code; 20 issuances per person per 15 minutes. No backend-only mode.
+      tags: [Auth]
+      security:
+        - domainHashBearer: []
+      parameters:
+        - $ref: '#/components/parameters/configUrl'
+        - $ref: '#/components/parameters/domainQuery'
+        - in: header
+          name: X-UOA-Subject-Assertion
+          schema: { type: string }
+          description: One-minute RS256 user assertion with /org audience; mutually exclusive with X-UOA-Access-Token.
+        - in: header
+          name: X-UOA-Access-Token
+          schema: { type: string }
+          description: User access token; exactly one user credential is required.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [actionDigest, description]
+              properties:
+                actionDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
+                description: { type: string, minLength: 1, maxLength: 240 }
+      responses:
+        '200':
+          description: Code sent to canonical account email.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [challengeId, expiresAt, twoFactorRequired]
+                properties:
+                  challengeId: { type: string, format: uuid }
+                  expiresAt: { type: string, format: date-time }
+                  twoFactorRequired: { type: boolean }
+        '401': { description: Authentication failed. }
+        '403': { description: Required authenticator enrollment is missing. }
+        '429': { description: Rate limit exceeded. }
+
+  /auth/action-verification/verify:
+    post:
+      operationId: verifyActionVerification
+      summary: Verify and consume an action-bound code
+      description: Five guesses. Actor, product, action and credential epoch must match. Replay and expiry fail. Enrolled accounts require fresh TOTP too.
+      tags: [Auth]
+      security:
+        - domainHashBearer: []
+      parameters:
+        - $ref: '#/components/parameters/configUrl'
+        - $ref: '#/components/parameters/domainQuery'
+        - in: header
+          name: X-UOA-Subject-Assertion
+          schema: { type: string }
+          description: One-minute RS256 user assertion with /org audience; mutually exclusive with X-UOA-Access-Token.
+        - in: header
+          name: X-UOA-Access-Token
+          schema: { type: string }
+          description: User access token; exactly one user credential is required.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [actionDigest, challengeId, code]
+              properties:
+                actionDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
+                challengeId: { type: string, format: uuid }
+                code: { type: string, pattern: '^[0-9]{6}$' }
+                twoFactorCode: { type: string, pattern: '^[0-9]{6}$' }
+      responses:
+        '200':
+          description: Proof consumed; apply only the bound action after checking current product authorization.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [verified, actionDigest]
+                properties:
+                  verified: { type: boolean, enum: [true] }
+                  actionDigest: { type: string }
+        '401': { description: Verification failed. }
+        '403': { description: Required authenticator enrollment is missing. }
+        '429': { description: Rate limit exceeded. }
+
   # ── Infrastructure ────────────────────────────────────────────────────────────
 
   /:

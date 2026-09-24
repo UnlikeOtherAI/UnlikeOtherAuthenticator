@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { randomUUID } from 'node:crypto';
-import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -18,25 +18,15 @@ function apiRootDir(): string {
   return path.resolve(here, '../..');
 }
 
-function prismaBinPath(): string {
-  const bin = process.platform === 'win32' ? 'prisma.cmd' : 'prisma';
-  // In npm teams, binaries are often hoisted to the repo root `node_modules/.bin`.
-  const local = path.join(apiRootDir(), 'node_modules', '.bin', bin);
-  if (fs.existsSync(local)) return local;
-  return path.join(apiRootDir(), '..', 'node_modules', '.bin', bin);
-}
-
 function withSchemaParam(databaseUrl: string, schema: string): string {
   const u = new URL(databaseUrl);
   u.searchParams.set('schema', schema);
   return u.toString();
 }
 
-function runPrisma(args: string[], env: NodeJS.ProcessEnv): void {
-  execFileSync(prismaBinPath(), args, {
-    cwd: apiRootDir(),
-    env,
-    stdio: 'ignore',
+function runPrisma(args: string[], env: NodeJS.ProcessEnv, input?: string): void {
+  execFileSync(process.execPath, [createRequire(import.meta.url).resolve('prisma/build/index.js'), ...args], {
+    cwd: apiRootDir(), env, input, stdio: ['pipe', 'ignore', 'pipe'],
   });
 }
 
@@ -145,25 +135,13 @@ export async function createTestDb(): Promise<TestDbHandle | null> {
   // installed in public, so expose a schema-local domain backed by public.citext before applying
   // migrations. The advisory lock makes first-time extension setup safe when Vitest starts many
   // DB-backed files concurrently.
-  await withStartupRetry(() =>
-    execFileSync(
-      process.platform === 'win32' ? 'cmd' : 'bash',
-      process.platform === 'win32'
-        ? [
-            '/c',
-            `echo SELECT pg_advisory_lock(847291); CREATE EXTENSION IF NOT EXISTS citext WITH SCHEMA public; CREATE SCHEMA IF NOT EXISTS "${schema}"; DROP DOMAIN IF EXISTS "${schema}".citext; CREATE DOMAIN "${schema}".citext AS public.citext; SELECT pg_advisory_unlock(847291); | "${prismaBinPath()}" db execute --stdin --schema prisma/schema.prisma`,
-          ]
-        : [
-            '-lc',
-            `echo 'SELECT pg_advisory_lock(847291); CREATE EXTENSION IF NOT EXISTS citext WITH SCHEMA public; CREATE SCHEMA IF NOT EXISTS "${schema}"; DROP DOMAIN IF EXISTS "${schema}".citext; CREATE DOMAIN "${schema}".citext AS public.citext; SELECT pg_advisory_unlock(847291);' | "${prismaBinPath()}" db execute --stdin --schema prisma/schema.prisma`,
-          ],
-      {
-        cwd: apiRootDir(),
-        env: { ...process.env, DATABASE_URL: adminUrl },
-        stdio: 'ignore',
-      },
-    ),
-  );
+  await withStartupRetry(() => runPrisma(
+    ['db', 'execute', '--stdin', '--schema', 'prisma/schema.prisma'],
+    { ...process.env, DATABASE_URL: adminUrl },
+    `SELECT pg_advisory_lock(847291); CREATE EXTENSION IF NOT EXISTS citext WITH SCHEMA public;
+     CREATE SCHEMA IF NOT EXISTS "${schema}"; DROP DOMAIN IF EXISTS "${schema}".citext;
+     CREATE DOMAIN "${schema}".citext AS public.citext; SELECT pg_advisory_unlock(847291);`,
+  ));
 
   // Apply migrations into the isolated schema.
   await withStartupRetry(() =>
@@ -177,22 +155,10 @@ export async function createTestDb(): Promise<TestDbHandle | null> {
 
   const cleanup = async (): Promise<void> => {
     await prisma.$disconnect();
-    execFileSync(
-      process.platform === 'win32' ? 'cmd' : 'bash',
-      process.platform === 'win32'
-        ? [
-            '/c',
-            `echo DROP SCHEMA IF EXISTS "${schema}" CASCADE; | "${prismaBinPath()}" db execute --stdin --schema prisma/schema.prisma`,
-          ]
-        : [
-            '-lc',
-            `echo 'DROP SCHEMA IF EXISTS "${schema}" CASCADE;' | "${prismaBinPath()}" db execute --stdin --schema prisma/schema.prisma`,
-          ],
-      {
-        cwd: apiRootDir(),
-        env: { ...process.env, DATABASE_URL: adminUrl },
-        stdio: 'ignore',
-      },
+    runPrisma(
+      ['db', 'execute', '--stdin', '--schema', 'prisma/schema.prisma'],
+      { ...process.env, DATABASE_URL: adminUrl },
+      `DROP SCHEMA IF EXISTS "${schema}" CASCADE;`,
     );
   };
 

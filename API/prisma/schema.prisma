@@ -19,6 +19,7 @@ enum VerificationTokenType {
   PASSWORD_RESET
   TWOFA_RESET
   LOGIN_CODE
+  ACTION_VERIFICATION
 }
 
 enum ClientDomainIntegrationStatus {
@@ -414,6 +415,7 @@ model VerificationToken {
   expiresAt    DateTime              @map("expires_at")
   usedAt       DateTime?             @map("used_at")
   attemptCount Int                   @default(0) @map("attempt_count")
+  actionDigest String?               @map("action_digest")
   createdAt    DateTime              @default(now()) @map("created_at")
 
   // Snapshot of User.tokenVersion when an existing-user capability is issued.

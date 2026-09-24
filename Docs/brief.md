@@ -1,5 +1,22 @@
 # Central OAuth & Auth Service — Full Build Brief
 
+## Product action verification (2026-09-24)
+
+Products can request fresh verification for an exact sensitive action through
+`POST /auth/action-verification/start` and `/verify`. Both require the domain
+pairing and an authenticated person (UOA access token or the existing one-minute
+subject assertion); backend-only authority cannot stand in for that person.
+UOA emails its canonical account address a five-minute, single-use code bound
+to the person, product domain, credential epoch and product action digest.
+Five failed guesses exhaust a challenge; resending invalidates the previous
+code for that action. Issuance is limited to 20 per person per 15 minutes across
+instances. Enrolled users must also provide a fresh TOTP; required enrollment
+is never bypassed. Verification is serialized with credential revocation.
+The authenticated response is for the requesting backend, which must apply
+only the bound action after checking its current authorization and terms.
+These are machine-only APIs: the relying product owns the review and code-entry
+surface (Nessie uses its existing machine-access confirmation dialog).
+
 ## 1. Purpose
 
 Build a **centralized OAuth / authentication service** used by multiple products (4–5+), providing:
