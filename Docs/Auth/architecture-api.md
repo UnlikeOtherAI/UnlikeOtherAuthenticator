@@ -846,3 +846,16 @@ admin client because every avatar route authenticates before a tenant context ex
 - Tests verify generic error responses (no leakage)
 - Tests verify enumeration protection
 - Test files live alongside what they test or in `/tests`
+
+## Product action verification
+
+The machine-only `/auth/action-verification/start` and `/verify` routes use the
+existing domain/config pairing and user-credential resolver. Their service owns
+hashed, action-bound `ACTION_VERIFICATION` tokens, persisted issuance/guess limits,
+user-lock serialization with revocation, single-use consumption and current 2FA
+policy checks. The relying product owns the human review/code-entry UI. Failed
+guesses return out of the transaction before the route throws so they commit.
+Tests include real PostgreSQL replay races, cross-action/person/domain misuse,
+expiry, credential revocation and persisted attempt exhaustion.
+The PostgreSQL test helper invokes Prisma through Node and pipes SQL through
+stdin on every platform, including Windows (no shell command interpolation).
