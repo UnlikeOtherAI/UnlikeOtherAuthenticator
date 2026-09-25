@@ -62,3 +62,12 @@ export const TOTP_QR_LOGO_MAX_BYTES = 1024 * 1024;
 // user/style/size, so they get a long private lifetime; uploaded and proxied images can change.
 export const AVATAR_DYNAMIC_CACHE_CONTROL = 'private, max-age=300';
 export const AVATAR_GENERATED_CACHE_CONTROL = 'private, max-age=86400';
+
+// Docs/Auth/user-settings.md §3: user settings quotas. A single value is capped (the DB enforces
+// the same ceiling), and each user's whole store is capped by entry count and total serialized
+// bytes so one account cannot turn the auth database into general-purpose storage.
+export const USER_SETTINGS_MAX_VALUE_BYTES = 256 * 1024;
+export const USER_SETTINGS_MAX_TOTAL_BYTES = 1024 * 1024;
+export const USER_SETTINGS_MAX_ENTRIES = 500;
+export const USER_SETTINGS_MAX_PATCH_ENTRIES = 100;
+export const USER_SETTINGS_MAX_DEPTH = 32;

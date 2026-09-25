@@ -409,6 +409,11 @@ The default remains strict no-enumeration: existing users receive the same gener
 - Store only external avatar URL
 - Update avatar URL on every login
 
+### Settings
+
+- Optional namespaced per-user settings are stored in a separate table, not on the user
+  record — see the 2026-09-25 addendum and [User Settings](./Auth/user-settings.md)
+
 ---
 
 ## 16. Login Logging & Auditing
@@ -2810,3 +2815,25 @@ These checks apply before reading invitation PII or sending replacement mail;
 resend retains the shared invitation state machine and cannot revive terminal
 or unapproved invitations. Member add and role-change request bodies use the
 existing camelCase `userId` and `teamRole` fields.
+
+## 2026-09-25 User settings: optional namespaced per-user storage
+
+This addendum adds a feature the brief did not previously cover. The complete
+specification is [User Settings](./Auth/user-settings.md), incorporated into this
+brief by reference and authoritative for the settings store.
+
+- Any user may **optionally** have settings stored in UOA, organised as
+  **namespace → key → JSON value** (Postgres `user_settings` table, one row per key).
+  Example: namespace `browser`, key `bookmarks`, value an array of
+  `{ favicon, url, name }`; or namespace `global` for ecosystem-wide key/value
+  preferences.
+- Managed through the dual-auth `/settings/me` endpoints (domain hash bearer +
+  `X-UOA-Access-Token`, `?domain=` equal to the token's domain claim), the same
+  boundary as `/avatar/me`. The acting identity is always the token subject.
+- Settings belong to the user row: a `global`-scope user shares one settings store
+  across every product they sign into, a `per_domain`-scope user has one per domain.
+  Any product the user signs into can read and write every namespace, so settings
+  must never hold secrets.
+- Values replace whole (no deep merge). Quotas: 256 KiB per value, 500 keys and
+  1 MiB total per user. Deleting a user deletes their settings.
+- UOA itself never interprets settings; it only stores them.

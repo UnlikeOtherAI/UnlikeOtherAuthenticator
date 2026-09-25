@@ -464,6 +464,10 @@ These endpoints require `org_features.enabled: true` in the config JWT.
 
 See [Section 24 of the brief](./Docs/brief.md#24-organisations-teams--groups) for the full specification.
 
+### User Settings
+
+- [User settings integration guide](https://github.com/UnlikeOtherAI/UnlikeOtherAuthenticator/blob/main/Docs/Auth/user-settings.md) — how a product stores and reads a user's optional namespaced JSON settings (e.g. browser bookmarks, ecosystem-wide preferences) through `/settings/me`.
+
 ### Health
 
 - `GET /health` — Health check endpoint

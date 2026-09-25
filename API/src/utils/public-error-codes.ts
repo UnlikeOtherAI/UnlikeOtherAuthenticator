@@ -39,4 +39,9 @@ export const PRODUCTION_PUBLIC_ERROR_CODES = new Set([
   // own configuration refusals (TOKEN_EXCHANGE_TEAM_CONTEXT_*, TOKEN_EXCHANGE_DELEGATION_NOT_ALLOWED)
   // are decided before any subject lookup and stay generic.
   'TOKEN_EXCHANGE_SUBJECT_FORBIDDEN',
+  // User settings writes over the per-value cap or the per-user quota (Docs/Auth/user-settings.md
+  // §3): products branch on these to tell the user their storage is full. Not an oracle — the
+  // caller is already authenticated as the user whose own store it is.
+  'SETTING_VALUE_TOO_LARGE',
+  'SETTINGS_QUOTA_EXCEEDED',
 ]);
