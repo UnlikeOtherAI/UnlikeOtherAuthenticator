@@ -11,7 +11,7 @@ import { isEmailPasswordEnabled } from '../utils/auth-config.js';
 export function LoginPage(): React.JSX.Element {
   const { classNames } = useTheme();
   const { t } = useTranslation();
-  const { config, notice } = usePopup();
+  const { config, notice, clientId } = usePopup();
   const showEmailPassword = isEmailPasswordEnabled(config);
 
   return (
@@ -26,10 +26,11 @@ export function LoginPage(): React.JSX.Element {
           {t(notice)}
         </p>
       ) : null}
+      {clientId ? <div className="my-6"><SocialButtons showDivider={false} /></div> : null}
       {showEmailPassword ? <LoginForm /> : null}
-      <div className="mt-6">
+      {!clientId ? <div className="mt-6">
         <SocialButtons showDivider={showEmailPassword} />
-      </div>
+      </div> : null}
     </div>
   );
 }
