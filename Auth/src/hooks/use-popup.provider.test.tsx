@@ -46,3 +46,14 @@ describe('PopupProvider — team_hint does not affect initial view on its own', 
     expect(html).toContain('team-chooser:design');
   });
 });
+
+function NativeFlowProbe(): React.JSX.Element {
+  const { nativeSocialComplete, nativeFlowId } = usePopup();
+  return <div>{`${nativeSocialComplete}:${nativeFlowId}`}</div>;
+}
+it('carries the server-bound native flow into completion context', () => {
+  const html = renderToString(<PopupProvider configUrl="" initialSearch="?client_id=client&native_social_complete=true&native_flow_id=native_bound">
+    <NativeFlowProbe />
+  </PopupProvider>);
+  expect(html).toContain('true:native_bound');
+});

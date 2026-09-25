@@ -81,7 +81,7 @@ export function LoginForm(): React.JSX.Element {
     setLoginToken,
     setSessionChoices,
   } = usePopup();
-  const registrationAllowed = isRegistrationAllowed(config);
+  const registrationAllowed = !clientId && isRegistrationAllowed(config);
   const emailCodeEnabled = isEmailCodeEnabled(config);
   const { rememberMeEnabled, rememberMeDefault } = readSessionConfig(config);
 
@@ -200,11 +200,6 @@ export function LoginForm(): React.JSX.Element {
         onChange={(e) => setPassword(e.currentTarget.value)}
       />
 
-      {clientId && <p className="text-sm">
-        Continue to {redirectUrl?.split(':')[0]}. This app will receive your UOA profile
-        {scope?.includes('settings.') ? ' and permission to read and save your personal settings, including favourites' : ''}.
-        Only continue if you opened this request from an app you trust.
-      </p>}
       {clientId && publicFactor && <>
         {publicFactor.manual_secret && <p className="text-sm">Add this secret to your authenticator: <code>{publicFactor.manual_secret}</code></p>}
         <Input name="code" label="Authenticator code" inputMode="numeric" autoComplete="one-time-code"
@@ -231,7 +226,7 @@ export function LoginForm(): React.JSX.Element {
         <button
           type="button"
           className="text-[var(--uoa-color-primary)] hover:underline"
-          onClick={() => setView('reset-password')}
+          onClick={() => setView('reset-password')} hidden={Boolean(clientId)}
         >
           {t('nav.forgotPassword')}
         </button>

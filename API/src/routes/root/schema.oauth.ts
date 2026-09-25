@@ -35,6 +35,7 @@ export const oauthEndpoints: EndpointSchema[] = [
     body: {
       redirect_uris: 'string[] (required; https / loopback http / native scheme)',
       client_name: 'string (optional)',
+      app_id: 'optional admin-registered reverse-domain identifier; stored policy controls branding, callbacks and scopes',
       token_endpoint_auth_method: 'string (optional; must be "none")',
       scope: 'string (optional)',
     },

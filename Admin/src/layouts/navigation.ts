@@ -22,6 +22,7 @@ export const navSections: NavSection[] = [
   {
     label: 'Configuration',
     items: [
+      { label: 'Apps', path: '/apps', icon: 'grid' },
       {
         label: 'New Integrations',
         path: '/integrations',

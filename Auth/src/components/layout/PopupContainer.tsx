@@ -1,4 +1,5 @@
 import React from 'react';
+import { NativeSocialPage } from '../../pages/NativeSocialPage.js';
 
 import { PopupProvider, usePopup } from '../../hooks/use-popup.js';
 import { AccessRequestedPage } from '../../pages/AccessRequestedPage.js';
@@ -18,6 +19,7 @@ import { AuthLayout } from './AuthLayout.js';
 
 function PopupContent(): React.JSX.Element {
   const popup = usePopup();
+  if (popup.clientId && popup.nativeSocialComplete && popup.view === 'login') return <NativeSocialPage />;
 
   // Required 2FA enrollment can be reached from password login or social callback.
   if (popup.twoFactorSetup) {

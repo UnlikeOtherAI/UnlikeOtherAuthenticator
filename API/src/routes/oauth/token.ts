@@ -42,10 +42,10 @@ export function registerOAuthTokenRoute(app: FastifyInstance): void {
         return;
       }
 
-      const config = buildMcpClientConfig(client.redirectUris);
+      const config = buildMcpClientConfig(client.redirectUris, client.nativeApp);
       request.tenantContext = { domain: config.domain, orgId: null, userId: null };
 
-      const result = await request.withTenantTx(async (tx) =>
+      const result = await request.adminDb.$transaction(async (tx) =>
         exchangeOAuthCodeForAccessToken(
           {
             code: body.code,

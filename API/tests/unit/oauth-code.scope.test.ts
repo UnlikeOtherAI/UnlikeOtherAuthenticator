@@ -21,6 +21,7 @@ describe('public OAuth code scope binding', () => {
 
   it('stores the authorize-time scope on the one-time code', async () => {
     const prisma = {
+      oAuthClient: { findUnique: vi.fn().mockResolvedValue({ clientId: 'client-1', redirectUris: ['https://tool.example/callback'], scopes: ['openid', 'profile'] }) },
       authorizationCode: { create: vi.fn().mockResolvedValue({ id: 'code-1' }) },
     } as unknown as Prisma.TransactionClient;
     await issueOAuthCode(

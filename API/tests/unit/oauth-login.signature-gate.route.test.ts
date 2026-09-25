@@ -54,6 +54,7 @@ describe('POST /oauth/login signature gate', () => {
     });
     buildMcpClientConfigMock.mockReset().mockReturnValue({
       domain: 'client.example.com',
+      enabled_auth_methods: ['email_password'],
       redirect_urls: ['https://client.example.com/callback'],
       session: { remember_me_default: true },
     });
@@ -70,9 +71,9 @@ describe('POST /oauth/login signature gate', () => {
   it('preserves public OAuth state, scope, resource, redirect, and PKCE at the gate', async () => {
     const { registerOAuthLoginRoute } = await import('../../src/routes/oauth/login.js');
     const app = Fastify();
-    app.decorateRequest('withTenantTx', null);
+    app.decorateRequest('adminDb', null);
     app.addHook('onRequest', async (request) => {
-      request.withTenantTx = async (callback) => callback({} as never);
+      request.adminDb = { $transaction: async (callback: (tx: unknown) => Promise<unknown>) => callback({}) } as never;
     });
     registerOAuthLoginRoute(app);
     await app.ready();
@@ -110,7 +111,7 @@ describe('POST /oauth/login signature gate', () => {
         twoFaCompleted: false,
         credentialEpoch: 0,
       },
-      { prisma: undefined },
+      { prisma: expect.objectContaining({ $transaction: expect.any(Function) }) },
     );
 
     await app.close();

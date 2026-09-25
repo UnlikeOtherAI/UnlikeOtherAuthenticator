@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { registerInternalAdminNativeApps } from './native-apps.js';
 
 import { registerInternalAdminApiKeyRoutes } from './api-keys.js';
 import { registerInternalAdminAppRoutes } from './apps.js';
@@ -22,6 +23,7 @@ import { registerInternalAdminTokenRoute } from './token.js';
 import { registerInternalAdminUserRoutes } from './users.js';
 
 export function registerInternalAdminRoutes(app: FastifyInstance): void {
+  registerInternalAdminNativeApps(app);
   registerInternalAdminConfigRoute(app);
   registerInternalAdminTokenRoute(app);
   registerInternalAdminReadRoutes(app);

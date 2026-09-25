@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { llmNativeAppsMarkdown } from './llm-native-apps.js';
 
 import { llmAvatarsMarkdown } from './llm-avatars.js';
 import { llmBillingMarkdown } from './llm-billing.js';
@@ -13,7 +14,7 @@ function renderLlmMarkdown(): string {
   // llmIntegrationMarkdown owns both confidential subject profiles: one-time
   // source assertions and reusable, audience-bound chained access tokens. llmRostersMarkdown
   // owns the exact-team invitation management and role-write contracts.
-  return `${llmIntroMarkdown}\n${llmIntegrationMarkdown}\n${llmIntegrationMarkdown2}\n${llmRostersMarkdown}\n${llmBillingMarkdown}\n${llmSignaturesMarkdown}\n${llmAvatarsMarkdown}\n${llmSettingsMarkdown}`;
+  return `${llmIntroMarkdown}\n${llmIntegrationMarkdown}\n${llmIntegrationMarkdown2}\n${llmRostersMarkdown}\n${llmBillingMarkdown}\n${llmSignaturesMarkdown}\n${llmAvatarsMarkdown}\n${llmSettingsMarkdown}\n${llmNativeAppsMarkdown}`;
 }
 
 export function registerLlmRoute(app: FastifyInstance): void {

@@ -1,4 +1,5 @@
 import React from 'react';
+import { NativeAppConsent } from '../components/form/NativeAppConsent.js';
 
 import { LoginForm } from '../components/form/LoginForm.js';
 import { SocialButtons } from '../components/form/SocialButtons.js';
@@ -16,6 +17,7 @@ export function LoginPage(): React.JSX.Element {
   return (
     <div>
       <h1 className={`text-balance ${classNames.title}`}>{t('auth.login.title')}</h1>
+      <NativeAppConsent />
       {notice ? (
         <p
           role="status"

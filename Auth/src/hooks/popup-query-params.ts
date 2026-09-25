@@ -6,6 +6,8 @@
  */
 
 export type PopupQueryParams = {
+  nativeSocialComplete?: boolean;
+  nativeFlowId?: string;
   redirectUrl: string | null;
   codeChallenge: string | null;
   codeChallengeMethod: 'S256' | null;
@@ -140,6 +142,8 @@ export function parsePopupQueryParams(search: string): PopupQueryParams {
     // Kept exactly as it arrived, like its siblings: the address-bar scrub compares raw values.
     inviteName: inviteName && inviteName.trim() ? inviteName : null,
     inviteAccepted,
+    nativeSocialComplete: params.get('native_social_complete') === 'true',
+    nativeFlowId: params.get('native_flow_id') ?? undefined,
     clientId: clientId && clientId.trim() ? clientId : null,
     state: state && state.trim() ? state : null,
     resource: resource && resource.trim() ? resource : null,

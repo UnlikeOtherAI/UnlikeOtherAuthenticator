@@ -10,6 +10,9 @@ import { AUTHORIZATION_CODE_TTL_MS } from '../../config/constants.js';
 import { requireEnv } from '../../config/env.js';
 import { AppError } from '../../utils/errors.js';
 import { verifyPkceCodeVerifier } from '../../utils/pkce.js';
+import { getOAuthClient } from './client.service.js';
+import { validatePublicScopes } from './scopes.service.js';
+import { lockProductTeamPolicyShared } from '../product-team-policy-lock.service.js';
 import {
   isAuthenticationEpochMismatchError,
   lockAndAssertAuthenticationEpoch,
@@ -47,6 +50,10 @@ export async function issueOAuthCode(
   now: Date = new Date(),
 ): Promise<{ code: string }> {
   const sharedSecret = requireEnv('SHARED_SECRET').SHARED_SECRET;
+  await lockProductTeamPolicyShared(prisma);
+  const client = await getOAuthClient(input.oauthClientId, prisma);
+  if (!client || !client.redirectUris.includes(input.redirectUrl)) throw new AppError('UNAUTHORIZED', 401, 'INVALID_CLIENT');
+  validatePublicScopes(input.scope, client.scopes);
   await lockAndAssertAuthenticationEpoch(
     {
       userId: input.userId,

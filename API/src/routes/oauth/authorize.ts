@@ -63,7 +63,7 @@ export function registerOAuthAuthorizeRoute(app: FastifyInstance): void {
       }
 
       validatePublicScopes(q.scope, client.scopes);
-      const config = buildMcpClientConfig(client.redirectUris);
+      const config = buildMcpClientConfig(client.redirectUris, client.nativeApp);
       const html = await renderAuthEntrypointHtml({
         config,
         // Sentinel in place of a client config_url; the UI's MCP mode keys off the

@@ -687,3 +687,28 @@ Enabling an individual domain additionally requires an explicit retention period
 - Max instances: 3
 - Startup CPU boost: enabled
 - Cloud SQL connection: `gen-lang-client-0561071620:europe-west1:uoa-auth-db`
+
+## Native app profiles
+
+After deploying the native-app migration, an admin superuser opens **Configuration →
+Apps** to register the immutable reverse-domain app identifier, exact callback list,
+allowed scopes/providers, display colors and a PNG/JPEG/WebP icon (maximum 256 KiB).
+The app sends only `app_id` at `/oauth/register`; no shared secret or unsigned config.
+Google also requires the service's existing Google credentials and callback registration.
+
+For controlled operator provisioning, `pnpm --filter @uoa/api exec tsx
+src/cli/provision-native-app.ts --input <profile.json> --actor <admin-email>
+--icon <raster-file>` validates without writing. Add `--apply` to create, or `--id
+<existing-row-id>` to update deliberately. It requires DATABASE_ADMIN_URL and the
+normal service environment; supply secrets through the process environment, never
+command arguments or checked-in files. The actor must have the current admin-domain
+SUPERUSER role. The tool uses the same audited service as Admin and never replaces
+an existing identifier implicitly. Icon upload is a separate audited operation.
+
+For Kelpie, register `com.unlikeotherai.kelpie`, callbacks
+`com.unlikeotherai.kelpie://oauth/callback` and `http://127.0.0.1/oauth/callback`, scopes
+`openid profile email settings.read settings.write`, and `google` / `email_password`.
+Numeric loopback registration permits the client's ephemeral port; every later
+redirect comparison is exact. Upload the existing Kelpie 256px app icon. Verify the
+hosted page and Google destination before releasing clients that send this app ID.
+Security policy edits revoke previous client revisions; cosmetic edits preserve them.
