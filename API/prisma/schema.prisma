@@ -333,6 +333,7 @@ model User {
   signatureClaimIntents  SignatureClaimIntent[]
   agreementSignatures    AgreementSignature[]
   avatar                 UserAvatar?
+  settings               UserSetting[]
 
   @@index([email])
   @@index([domain])
@@ -356,6 +357,26 @@ model UserAvatar {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("user_avatars")
+}
+
+// Docs/Auth/user-settings.md: optional, user-owned namespaced settings (e.g. namespace `browser`,
+// key `bookmarks`, value an array of `{ favicon, url, name }`; or namespace `global` for plain
+// key/value preferences shared across every product). One row per (user, namespace, key); the
+// value is arbitrary JSON. `size_bytes` is the UTF-8 length of the serialized value and backs the
+// per-user storage quota without re-serializing every row.
+model UserSetting {
+  userId    String   @map("user_id")
+  namespace String
+  key       String
+  value     Json
+  sizeBytes Int      @map("size_bytes")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, namespace, key])
+  @@map("user_settings")
 }
 
 // TODO(VM5/M8/VL11): Add OrgEmailDomainRule.teamId index, the partial unique
