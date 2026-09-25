@@ -6,6 +6,54 @@ incorporated into the brief by the dated addendum "2026-09-25 User settings" in
 
 ---
 
+## Integration quickstart
+
+Your **backend** calls these endpoints with two credentials: your domain hash bearer in
+`Authorization`, and the signed-in user's access token in `X-UOA-Access-Token`. `?domain=` must
+equal the access token's `domain` claim. You only ever read and write the settings of the user the
+access token belongs to.
+
+Save a user's bookmarks (one key, whole value replaced):
+
+```http
+PUT /settings/me/browser/bookmarks?domain=browser.example.com
+Authorization: Bearer <domain hash token>
+X-UOA-Access-Token: <user access token>
+Content-Type: application/json
+
+{ "value": [ { "favicon": "https://example.com/favicon.ico", "url": "https://example.com/", "name": "Example" } ] }
+```
+
+Set or remove several ecosystem-wide preferences at once (`null` deletes a key; all-or-nothing):
+
+```http
+PATCH /settings/me/global?domain=browser.example.com
+Authorization: Bearer <domain hash token>
+X-UOA-Access-Token: <user access token>
+Content-Type: application/json
+
+{ "settings": { "theme": "dark", "locale": "en-GB", "legacyFlag": null } }
+```
+
+Read them back:
+
+- `GET /settings/me/browser/bookmarks?domain=…` → `{ ok, namespace, key, value, updated_at }`
+- `GET /settings/me/global?domain=…` → `{ ok, namespace, settings: { theme: "dark", … }, updated_at }`
+- `GET /settings/me?domain=…` → every namespace plus quota `usage`
+
+Things to know before you ship:
+
+- **Values replace, never merge** — to add one bookmark, send the whole updated list.
+- **Everything here is visible to every product the user signs into.** Never store secrets.
+  Put product-private preferences in a namespace named after your product.
+- **Limits:** 256 KiB per value, 500 keys and 1 MiB per user. Over-limit writes return
+  `413 SETTING_VALUE_TOO_LARGE` / `413 SETTINGS_QUOTA_EXCEEDED` and change nothing.
+- **Writes** are rate-limited to 600/hour per domain + user.
+
+The machine-readable contract for every route is at `GET /api`; the full rules follow below.
+
+---
+
 ## 1. Overview
 
 Any user may optionally have settings stored in UOA. Settings are organised in
