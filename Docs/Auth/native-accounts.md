@@ -61,3 +61,7 @@ cosmetic edits preserve them. Disable retains the identifier permanently; re-ena
 does not revive old clients. Public refresh tokens remain unsupported. Offline resource
 servers may accept already-issued resource tokens until their expiry. See
 [the native app design](../plans/native-app-sign-in.md) for the authority boundaries.
+
+Native hosted login places enabled social methods above password fields so the
+Google button remains visible in short default-browser windows. Website login
+retains its existing order. Both methods display the registered app and access.

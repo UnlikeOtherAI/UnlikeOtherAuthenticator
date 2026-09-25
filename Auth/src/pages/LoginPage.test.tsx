@@ -35,14 +35,14 @@ const TEST_CONFIG = {
   language_config: 'en',
 };
 
-function renderLogin(): string {
+function renderLogin(search = "?config_url=https%3A%2F%2Fclient.example.com%2Fauth-config"): string {
   return renderToString(
     <ThemeProvider config={TEST_CONFIG} configUrl="">
       <I18nProvider config={TEST_CONFIG} configUrl="">
         <PopupProvider
           configUrl=""
           config={TEST_CONFIG}
-          initialSearch="?config_url=https%3A%2F%2Fclient.example.com%2Fauth-config"
+          initialSearch={search}
           initialView="login"
         >
           <LoginPage />
@@ -64,4 +64,11 @@ describe('LoginPage SSR', () => {
   it('does not autofocus any field, so the soft keyboard stays closed on arrival', () => {
     expect(renderLogin()).not.toMatch(/autofocus/i);
   });
+});
+
+it('shows native Google sign-in before password fields in a short popup', () => {
+  const html = renderLogin('?client_id=public-client&redirect_uri=com.example.app%3A%2F%2Foauth%2Fcallback');
+  expect(html.indexOf('/oauth/social/google')).toBeGreaterThan(0);
+  expect(html.indexOf('/oauth/social/google')).toBeLessThan(html.indexOf('type="email"'));
+  expect(html.match(/href="[^"]*oauth\/social\/google/g)).toHaveLength(1);
 });
