@@ -536,8 +536,48 @@ model OAuthClient {
   redirectUris String[] @map("redirect_uris")
   scopes       String[]
   createdAt    DateTime @default(now()) @map("created_at")
+  nativeAppId String? @map("native_app_id")
+  nativeAppRevision Int? @map("native_app_revision")
+  nativeApp NativeApp? @relation(fields: [nativeAppId], references: [id], onDelete: Restrict)
 
   @@map("oauth_clients")
+}
+
+// Operator-owned branding/policy for secretless native clients. Disable, never delete.
+model NativeApp {
+  id String @id @default(cuid())
+  identifier String @unique
+  name String
+  enabled Boolean @default(true)
+  revision Int @default(1)
+  redirectUris String[] @map("redirect_uris")
+  scopes String[]
+  methods String[]
+  allowRegistration Boolean @default(false) @map("allow_registration")
+  primaryColor String @map("primary_color")
+  backgroundColor String @map("background_color")
+  textColor String @map("text_color")
+  iconData Bytes? @map("icon_data")
+  iconType String? @map("icon_type")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  clients OAuthClient[]
+
+  @@map("native_apps")
+}
+
+// Short-lived browser-bound native OAuth transaction. No tokens or provider credentials.
+model NativeOAuthFlow {
+  id String @id
+  browserHash String @map("browser_hash")
+  context Json
+  userId String? @map("user_id")
+  credentialEpoch Int? @map("credential_epoch")
+  callbackUsedAt DateTime? @map("callback_used_at")
+  usedAt DateTime? @map("used_at")
+  expiresAt DateTime @map("expires_at")
+  @@index([expiresAt])
+  @@map("native_oauth_flows")
 }
 
 model RefreshToken {

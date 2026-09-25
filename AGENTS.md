@@ -39,3 +39,12 @@ several of those pipelines have sat broken for weeks without anyone noticing.
 - **Keep API schema in sync.** When adding/removing/changing any endpoint, update both `API/src/routes/root/index.ts` (endpoint schema) and `API/src/routes/root/llm.ts` (config docs). These are the machine-readable API contract.
 - **Preserve the confidential exchange boundary.** The `/auth/token` assertion grant stays domain-hash authenticated, verifies short-lived RS256 assertions through the source config JWKS, always re-resolves the current user and source-domain role, conditionally re-resolves org/team membership when the assertion selects a team, atomically consumes each source-domain `jti` once through accepted expiry plus clock tolerance, and issues only resource-bound RS256 tokens through `/oauth/jwks.json`. Never copy the domain bearer into token claims.
 - **Commit and push every turn.** After each turn, commit the files you touched in that turn and push them to the current branch. Keep the scope tight because there may be multiple agents or processes working in parallel.
+
+## Registered native apps
+
+Native app branding and providers are operator-owned records in Admin Apps. Public
+app identifiers are not secrets or binary attestation. Require exact registered
+callbacks (numeric loopback port variance only during DCR), S256, browser-bound
+one-use social flows, and current app revision at completion and account writes.
+Never accept unsigned client configuration or route native clients through the
+confidential signed website configuration/finalization path.

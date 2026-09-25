@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router';
+import { NativeAppsPage } from '../pages/NativeAppsPage';
 
 import { AdminSessionGuard } from '../features/auth/admin-session';
 import { AdminUiProvider } from '../features/shell/admin-ui';
@@ -41,6 +42,7 @@ export function App() {
       >
         <Route index element={<DashboardPage />} />
         <Route path="dashboard" element={<DashboardPage />} />
+        <Route path="apps" element={<NativeAppsPage />} />
         <Route path="integrations" element={<IntegrationRequestsPage />} />
         <Route path="domains" element={<DirectoryDomainsPage />} />
         <Route path="domains/:domainId" element={<DomainDetailPage />} />

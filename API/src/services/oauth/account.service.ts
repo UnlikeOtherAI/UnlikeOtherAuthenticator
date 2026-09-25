@@ -23,12 +23,12 @@ export async function verifyPublicAccountToken(authorization: string | undefined
         typeof payload.exp !== 'number' || typeof payload.scope !== 'string') throw new Error('claims');
     const client = await getOAuthClient(payload.client_id);
     if (!client) throw new Error('client');
-    const config = buildMcpClientConfig(client.redirectUris);
+    const config = buildMcpClientConfig(client.redirectUris, client.nativeApp);
     if (payload.domain !== config.domain) throw new Error('domain');
     validatePublicScopes(payload.scope, client.scopes);
     if (!payload.scope.split(' ').includes(scope)) throw new AppError('FORBIDDEN', 403, 'INSUFFICIENT_SCOPE');
     return { userId: payload.sub, domain: config.domain, credentialEpoch: payload.tv,
-      expiresAt: payload.exp, twoFaCompleted: payload.twofa === true, config };
+      expiresAt: payload.exp, twoFaCompleted: payload.twofa === true, config, clientId: payload.client_id };
   } catch (error) {
     if (error instanceof AppError && error.statusCode === 403) throw error;
     throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
@@ -39,6 +39,7 @@ export async function authorizePublicAccount(
   account: Awaited<ReturnType<typeof verifyPublicAccountToken>>, prisma: Prisma.TransactionClient,
 ): Promise<void> {
   await lockProductTeamPolicyShared(prisma);
+  if (!await getOAuthClient(account.clientId, prisma)) throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
   await lockAndAssertAuthenticationEpoch(account, { prisma });
   if (account.expiresAt <= Date.now() / 1000) throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
   const user = await prisma.user.findUnique({ where: { id: account.userId }, select: { twoFaEnabled: true } });

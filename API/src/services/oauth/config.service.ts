@@ -2,7 +2,8 @@
 // §22.14). The /oauth/* flow has no client-supplied config_url; instead the auth
 // service builds its own ClientConfig from env + the registered client's redirect
 // URIs, then drives the SAME login / token machinery as the config-JWT flow.
-import { getAdminAuthDomain, getEnv } from '../../config/env.js';
+import type { NativeApp } from '@prisma/client';
+import { getAdminAuthDomain, getEnv, getPublicBaseUrl } from '../../config/env.js';
 import { AppError } from '../../utils/errors.js';
 import { type ClientConfig, validateConfigFields } from '../config.service.js';
 
@@ -30,7 +31,7 @@ const DEFAULT_UI_THEME = {
 
 /** Build the validated first-party ClientConfig for the MCP profile. `redirectUris`
  *  are the registered client's, so selectRedirectUrl validates against them. */
-export function buildMcpClientConfig(redirectUris: string[]): ClientConfig {
+export function buildMcpClientConfig(redirectUris: string[], nativeApp?: NativeApp | null): ClientConfig {
   const env = getEnv();
   // The MCP profile must run on its own dedicated first-party domain — never the admin
   // domain (a SUPERUSER bootstrap there would bypass ADMIN_BOOTSTRAP_EMAILS) and never a
@@ -49,14 +50,20 @@ export function buildMcpClientConfig(redirectUris: string[]): ClientConfig {
 
   // validateConfigFields fills defaults for everything optional (session, org_features
   // disabled, access_requests disabled, user_scope=global, …) and validates the theme.
-  return validateConfigFields({
+  const config = validateConfigFields({
     domain,
     redirect_urls: redirectUris,
-    enabled_auth_methods: methods.length > 0 ? methods : ['email_password'],
+    enabled_auth_methods: nativeApp?.methods ?? (methods.length > 0 ? methods : ['email_password']),
     language_config: 'en',
-    ui_theme: DEFAULT_UI_THEME,
+    ui_theme: nativeApp ? { ...DEFAULT_UI_THEME, colors: { ...DEFAULT_UI_THEME.colors,
+      primary: nativeApp.primaryColor, bg: nativeApp.backgroundColor, text: nativeApp.textColor },
+      logo: { url: '', alt: nativeApp.name } } : DEFAULT_UI_THEME,
     // Hosted password login completes enrolled TOTP or required enrollment.
     '2fa_enabled': true,
-    allow_registration: false,
+    allow_registration: nativeApp?.allowRegistration ?? false,
+    session: { remember_me_enabled: false, remember_me_default: false },
   });
+  // Trusted server-owned raster path only. Signed client config origin validation is unchanged.
+  if (nativeApp?.iconType) config.ui_theme.logo.url = `${getPublicBaseUrl()}/oauth/apps/${encodeURIComponent(nativeApp.identifier)}/icon`;
+  return config;
 }

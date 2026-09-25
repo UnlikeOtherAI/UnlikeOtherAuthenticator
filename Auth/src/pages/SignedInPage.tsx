@@ -15,6 +15,7 @@ export function SignedInPage(): React.JSX.Element {
   const { classNames } = useTheme();
   const { t } = useTranslation();
   const target = usePopup().handoffTarget;
+  const cancelled = target ? new URL(target).searchParams.has('error') : false;
 
   useEffect(() => {
     if (target && typeof window !== 'undefined') {
@@ -24,8 +25,8 @@ export function SignedInPage(): React.JSX.Element {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className={`text-balance ${classNames.title}`}>{t('auth.signedIn.title')}</h1>
-      <p className="text-sm text-[var(--uoa-color-muted)]">{t('message.signedIn')}</p>
+      <h1 className={`text-balance ${classNames.title}`}>{cancelled ? 'Sign-in cancelled' : t('auth.signedIn.title')}</h1>
+      <p className="text-sm text-[var(--uoa-color-muted)]">{cancelled ? 'Return to the app. You can close this window.' : t('message.signedIn')}</p>
       {target ? (
         <Button type="button" onClick={() => window.location.assign(target)}>
           {t('action.openApp')}

@@ -111,6 +111,7 @@ Authenticated shell (`AdminSessionGuard` → `AdminUiProvider` → `AdminLayout`
 
 - `/` — index route, renders `DashboardPage`
 - `/dashboard` — dashboard/home inside the admin shell
+- `/apps` — operator-managed public native sign-in apps: reverse-domain identifier, name, raster icon, colors, callback/scope allowlists, enabled methods, registration and disable controls. Separate from billing keys and feature flags; superuser bearer only.
 - `/integrations` — integration requests (`IntegrationRequestsPage`)
 - `/domains` — domains listing (`DirectoryDomainsPage`); the single entry point for registered client domains, showing client hash, secret age, and status
 - `/domains/:domainId` — domain detail (`DomainDetailPage`); a flat tab bar (Overview · Organisations · Teams · Users · Access · Agreements · Signing keys · Email) that consolidates secret rotation and status, the editable friendly name, 2FA policy, the optional per-domain agreement-signature service, the §11 Domain Email and signing-keys sections, login-access whitelist, and allowed redirect URLs. The Agreements tab owns settings, versioned PDF lifecycle, evidence search/download/revocation, and signature audit history. The active tab is persisted in the `?tab=` query param. There is no separate Secrets page or domain-edit modal — both were merged here.

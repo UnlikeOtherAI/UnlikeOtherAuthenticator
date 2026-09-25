@@ -48,5 +48,16 @@ registration id may persist; it is not a credential. Local signed-out favourites
 separate and are restored on sign-out. Account switching or expiry discards pending local
 responses and account data; a write already accepted by UOA may complete for that account.
 
-The public hosted flow currently supports email/password and authenticator TOTP. Social
-sign-in and public refresh tokens are not advertised by this profile.
+Operators can register native sign-in profiles in **Admin → Apps**. Pass their public
+reverse-domain identifier as `app_id` when registering. The server checks the stored
+callbacks/scopes and supplies the saved icon, colors and login methods. Google supports
+existing accounts and, when allowed by the app policy, new verified accounts. Native
+email registration and password recovery are not advertised. TOTP and required enrollment
+remain enforced. The social callback uses a separate one-use server flow and per-login browser
+cookie; completion never enters the confidential website code flow.
+
+Security edits invalidate existing client registrations and UOA account sessions;
+cosmetic edits preserve them. Disable retains the identifier permanently; re-enabling
+does not revive old clients. Public refresh tokens remain unsupported. Offline resource
+servers may accept already-issued resource tokens until their expiry. See
+[the native app design](../plans/native-app-sign-in.md) for the authority boundaries.

@@ -14,6 +14,7 @@ const RegisterBodySchema = z
   .object({
     redirect_uris: z.array(z.string().min(1).max(2048)).min(1).max(10),
     client_name: z.string().min(1).max(200).optional(),
+    app_id: z.string().min(1).max(160).optional(),
     grant_types: z.array(z.string()).optional(),
     response_types: z.array(z.string()).optional(),
     token_endpoint_auth_method: z.string().optional(),
@@ -49,6 +50,7 @@ export function registerOAuthRegisterRoute(app: FastifyInstance): void {
       const client = await registerOAuthClient({
         redirectUris: body.redirect_uris,
         clientName: body.client_name,
+        appId: body.app_id,
         scopes,
       });
 

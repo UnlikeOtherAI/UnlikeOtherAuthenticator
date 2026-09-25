@@ -1,4 +1,6 @@
 import type { FastifyInstance } from 'fastify';
+import { registerNativeAppIcon } from './native-app-icon.js';
+import { registerPublicSocialRoutes } from './social.js';
 
 import { registerOAuthAccountRoutes } from './account.js';
 import { registerOAuthAuthorizeRoute } from './authorize.js';
@@ -10,6 +12,8 @@ import { registerOAuthTokenRoute } from './token.js';
 
 // Public-client / MCP OAuth profile (brief §22.14).
 export function registerOAuthRoutes(app: FastifyInstance): void {
+  registerNativeAppIcon(app);
+  registerPublicSocialRoutes(app);
   registerOAuthAccountRoutes(app);
   registerOAuthMetadataRoute(app);
   registerOAuthJwksRoute(app);

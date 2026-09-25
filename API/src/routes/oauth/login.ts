@@ -69,10 +69,14 @@ export function registerOAuthLoginRoute(app: FastifyInstance): void {
       }
 
       validatePublicScopes(q.scope, client.scopes);
-      const config = buildMcpClientConfig(client.redirectUris);
+      const config = buildMcpClientConfig(client.redirectUris, client.nativeApp);
+      if (!config.enabled_auth_methods.includes('email_password')) {
+        reply.status(403).send(buildPublicErrorBody({ statusCode: 403 }));
+        return;
+      }
       request.tenantContext = { domain: config.domain, orgId: null, userId: null };
 
-      const outcome = await request.withTenantTx(async (tx) => {
+      const outcome = await request.adminDb.$transaction(async (tx) => {
         const prisma = asPrismaClient(tx);
         await lockProductTeamPolicyShared(prisma);
         const { userId, twoFaEnabled, credentialEpoch } = await loginWithEmailPassword(

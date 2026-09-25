@@ -39,7 +39,7 @@ export async function exchangeOAuthCodeForAccessToken(
   prisma: Db,
   // BYPASSRLS admin client for the cross-tenant platform-superuser lookup on
   // ADMIN_AUTH_DOMAIN. Defaults to the tenant tx when omitted.
-  adminPrisma?: PrismaClient,
+  _adminPrisma?: PrismaClient,
 ): Promise<OAuthTokenResult> {
   await lockProductTeamPolicyShared(prisma);
   const consumed = await consumeOAuthCode(
@@ -56,10 +56,10 @@ export async function exchangeOAuthCodeForAccessToken(
   }
 
   if (consumed.domain !== params.domain) throw new AppError('UNAUTHORIZED', 401, 'INVALID_AUTH_CODE');
-  const client = await getOAuthClient(params.clientId);
+  const client = await getOAuthClient(params.clientId, prisma);
   if (!client) throw new AppError('UNAUTHORIZED', 401, 'INVALID_AUTH_CODE');
   validatePublicScopes(consumed.scope ?? undefined, client.scopes);
-  const config = buildMcpClientConfig(client.redirectUris);
+  const config = buildMcpClientConfig(client.redirectUris, client.nativeApp);
   const current = await prisma.user.findUnique({ where: { id: consumed.userId }, select: { twoFaEnabled: true } });
   const policy = await resolveTwoFaPolicy({ config, userId: consumed.userId }, { prisma });
   if (!current || !isTwoFaAuthenticationSufficient({ policy, twoFaEnabled: current.twoFaEnabled, twoFaCompleted: consumed.twoFaCompleted })) {
@@ -79,7 +79,7 @@ export async function exchangeOAuthCodeForAccessToken(
 
   const platformSuperuser = await isPlatformSuperuser({
     userId: consumed.userId,
-    prisma: (adminPrisma ?? prisma) as Parameters<typeof isPlatformSuperuser>[0]['prisma'],
+    prisma: prisma as Parameters<typeof isPlatformSuperuser>[0]['prisma'],
   });
 
   const issuer = getPublicBaseUrl();
@@ -91,7 +91,7 @@ export async function exchangeOAuthCodeForAccessToken(
     email: user.email,
     domain: params.domain,
     clientId: params.clientId,
-    role: domainRole.role === 'SUPERUSER' || platformSuperuser ? 'superuser' : 'user',
+    role: !client.nativeAppId && (domainRole.role === 'SUPERUSER' || platformSuperuser) ? 'superuser' : 'user',
     // RFC 8707: bind the token to the requested resource; fall back to the issuer.
     resource: consumed.resource ?? issuer,
     issuer,

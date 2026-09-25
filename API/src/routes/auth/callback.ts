@@ -20,12 +20,7 @@ import {
 } from '../../services/first-login.service.js';
 import { signLoginSession } from '../../services/login-session.service.js';
 import { assertSocialProviderAllowed } from '../../services/social/index.js';
-import { getAppleProfileFromCode } from '../../services/social/apple.service.js';
-import { getFacebookProfileFromCode } from '../../services/social/facebook.service.js';
-import { getGitHubProfileFromCode } from '../../services/social/github.service.js';
-import { getGoogleProfileFromCode } from '../../services/social/google.service.js';
-import { getLinkedInProfileFromCode } from '../../services/social/linkedin.service.js';
-import type { SocialProfile } from '../../services/social/provider.base.js';
+import { getSocialProfileFromCode } from '../../services/social/provider-profile.service.js';
 import { loginWithSocialProfile } from '../../services/social/social-login.service.js';
 import { verifySocialState } from '../../services/social/social-state.service.js';
 import {
@@ -50,6 +45,8 @@ import { selectRedirectUrl } from '../../services/authorization-code.service.js'
 import { lockAndAssertAuthenticationEpoch } from '../../services/authentication-epoch.service.js';
 import { lockRefreshSessionUserDomain } from '../../services/refresh-session-lock.service.js';
 import { socialCallbackRateLimiter } from './rate-limit-keys.js';
+import { isPublicSocialState } from '../../services/oauth/social-ticket.service.js';
+import { handlePublicGoogleCallback } from '../../services/oauth/social-login.service.js';
 
 const ParamsSchema = z.object({
   provider: z.enum(['google', 'apple', 'facebook', 'github', 'linkedin']),
@@ -100,6 +97,8 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
     async (request, reply) => {
       const { provider } = ParamsSchema.parse(request.params);
       const { code, state, error } = QuerySchema.parse(request.query);
+
+      if (state && isPublicSocialState(state)) return handlePublicGoogleCallback(request, reply, state, code, provider, error);
 
       // Any provider error is a generic auth failure. Don't leak specifics.
       if (error) {
@@ -170,79 +169,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         requestedRedirectUrl,
       });
 
-      const env = getEnv();
-
-      let profile: SocialProfile;
-      if (provider === 'google') {
-        if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
-          throw new AppError('INTERNAL', 500, 'GOOGLE_ENV_MISSING');
-        }
-
-        const redirectUri = `${baseUrl}/auth/callback/google`;
-        profile = await getGoogleProfileFromCode({
-          code,
-          clientId: env.GOOGLE_CLIENT_ID,
-          clientSecret: env.GOOGLE_CLIENT_SECRET,
-          redirectUri,
-        });
-      } else if (provider === 'facebook') {
-        if (!env.FACEBOOK_CLIENT_ID || !env.FACEBOOK_CLIENT_SECRET) {
-          throw new AppError('INTERNAL', 500, 'FACEBOOK_ENV_MISSING');
-        }
-
-        const redirectUri = `${baseUrl}/auth/callback/facebook`;
-        profile = await getFacebookProfileFromCode({
-          code,
-          clientId: env.FACEBOOK_CLIENT_ID,
-          clientSecret: env.FACEBOOK_CLIENT_SECRET,
-          redirectUri,
-        });
-      } else if (provider === 'github') {
-        if (!env.GITHUB_CLIENT_ID || !env.GITHUB_CLIENT_SECRET) {
-          throw new AppError('INTERNAL', 500, 'GITHUB_ENV_MISSING');
-        }
-
-        const redirectUri = `${baseUrl}/auth/callback/github`;
-        profile = await getGitHubProfileFromCode({
-          code,
-          clientId: env.GITHUB_CLIENT_ID,
-          clientSecret: env.GITHUB_CLIENT_SECRET,
-          redirectUri,
-        });
-      } else if (provider === 'apple') {
-        if (
-          !env.APPLE_CLIENT_ID ||
-          !env.APPLE_TEAM_ID ||
-          !env.APPLE_KEY_ID ||
-          !env.APPLE_PRIVATE_KEY
-        ) {
-          throw new AppError('INTERNAL', 500, 'APPLE_ENV_MISSING');
-        }
-
-        const redirectUri = `${baseUrl}/auth/callback/apple`;
-        profile = await getAppleProfileFromCode({
-          code,
-          clientId: env.APPLE_CLIENT_ID,
-          teamId: env.APPLE_TEAM_ID,
-          keyId: env.APPLE_KEY_ID,
-          privateKeyPem: env.APPLE_PRIVATE_KEY,
-          redirectUri,
-        });
-      } else if (provider === 'linkedin') {
-        if (!env.LINKEDIN_CLIENT_ID || !env.LINKEDIN_CLIENT_SECRET) {
-          throw new AppError('INTERNAL', 500, 'LINKEDIN_ENV_MISSING');
-        }
-
-        const redirectUri = `${baseUrl}/auth/callback/linkedin`;
-        profile = await getLinkedInProfileFromCode({
-          code,
-          clientId: env.LINKEDIN_CLIENT_ID,
-          clientSecret: env.LINKEDIN_CLIENT_SECRET,
-          redirectUri,
-        });
-      } else {
-        throw new AppError('BAD_REQUEST', 400);
-      }
+      const profile = await getSocialProfileFromCode(provider, code, baseUrl);
 
       const outcome = await runWithRequestAdminTransaction(request, async (prisma) => {
         await lockProductTeamPolicyShared(prisma);

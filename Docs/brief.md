@@ -2847,3 +2847,7 @@ subject-only profile/avatar and conditional personal-settings endpoints allow na
 products to use UOA directly without a product auth backend. The production profile
 uses a dedicated non-admin logical domain. See [Auth/native-accounts.md](Auth/native-accounts.md)
 for the protocol, scope/consent, storage, revocation and client requirements.
+
+## Native app profiles — 2026-09-25
+
+Admin-managed public native apps may use server-owned stored branding and login policy selected by a public reverse-domain app_id. This is a scoped extension of the existing public OAuth profile, not permission to accept unsigned website configs. Website config JWT verification and confidential client authentication are unchanged. Native apps receive no shared secret, retain S256 PKCE, and return only a one-use code. Apps are managed by current admin superusers, independently of billing app keys and feature flags. See Docs/Auth/native-accounts.md and Docs/plans/native-app-sign-in.md for policy, social login, revocation and operator setup.

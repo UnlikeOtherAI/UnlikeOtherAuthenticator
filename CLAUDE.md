@@ -122,3 +122,12 @@ Admin/                      — Admin panel UI
 4. When in doubt, ask — don't assume
 5. Commit messages should be clear and describe the "why"
 6. Don't create files unless necessary — prefer editing existing ones
+
+## Registered native apps
+
+Native app branding and providers are operator-owned records in Admin Apps. Public
+app identifiers are not secrets or binary attestation. Require exact registered
+callbacks (numeric loopback port variance only during DCR), S256, browser-bound
+one-use social flows, and current app revision at completion and account writes.
+Never accept unsigned client configuration or route native clients through the
+confidential signed website configuration/finalization path.

@@ -115,7 +115,7 @@ export function SocialButtons(props?: { showDivider?: boolean }): React.JSX.Elem
       {providers.map((provider) => {
         const Icon = PROVIDER_ICONS[provider];
         const label = PROVIDER_LABELS[provider];
-        const href = buildSocialUrl(
+        const href = popup.clientId ? buildPublicSocialUrl(popup, provider) : buildSocialUrl(
           popup.configUrl,
           provider,
           popup.redirectUrl,
@@ -169,4 +169,14 @@ function buildSocialUrl(
     params.set('invite_token', inviteToken);
   }
   return `/auth/social/${provider}?${params.toString()}`;
+}
+
+function buildPublicSocialUrl(popup: ReturnType<typeof usePopup>, provider: SocialProvider): string {
+  const query = new URLSearchParams();
+  for (const [name, value] of Object.entries({ client_id: popup.clientId, redirect_uri: popup.redirectUrl,
+    code_challenge: popup.codeChallenge, code_challenge_method: popup.codeChallengeMethod,
+    state: popup.state, scope: popup.scope, resource: popup.resource })) {
+    if (value !== null) query.set(name, value);
+  }
+  return `/oauth/social/${provider}?${query}`;
 }

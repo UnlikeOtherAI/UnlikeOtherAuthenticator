@@ -27,6 +27,7 @@ export function buildGoogleAuthorizationUrl(params: {
   clientId: string;
   redirectUri: string;
   state: string;
+  selectAccount?: boolean;
 }): string {
   const u = new URL(GOOGLE_AUTHORIZE_URL);
   u.searchParams.set('response_type', 'code');
@@ -34,6 +35,7 @@ export function buildGoogleAuthorizationUrl(params: {
   u.searchParams.set('redirect_uri', params.redirectUri);
   u.searchParams.set('scope', 'openid email profile');
   u.searchParams.set('state', params.state);
+  if (params.selectAccount) u.searchParams.set('prompt', 'select_account');
   // Keep minimal; no offline access, no refresh tokens.
   u.searchParams.set('access_type', 'online');
   return u.toString();

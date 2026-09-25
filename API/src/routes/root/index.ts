@@ -53,6 +53,7 @@ export function registerRootRoute(app: FastifyInstance): void {
       home: '/',
       docs: '/llm',
       api: '/api',
+      native_apps: { admin: '/admin/apps', registration: '/oauth/register', public_identifier: 'app_id', client_secret_required: false },
       config_jwt: configJwtDocumentation,
       access_token: accessTokenDocumentation,
       team_switch: teamSwitchDocumentation,

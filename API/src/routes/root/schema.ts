@@ -1,4 +1,5 @@
 import { authEndpoints } from './schema.auth.js';
+import { nativeAppEndpoints } from './schema.native-apps.js';
 import { avatarEndpoints } from './schema.avatars.js';
 import { billingEndpoints } from './schema.billing.js';
 import { configDebugEndpoints } from './schema.config-debug.js';
@@ -34,6 +35,7 @@ const orgContractEndpoints: EndpointSchema[] = withOrgContract([
 ]);
 
 export const endpoints: EndpointSchema[] = [
+  ...nativeAppEndpoints,
   ...baseEndpoints,
   ...configDebugEndpoints,
   ...authEndpoints,
