@@ -299,6 +299,7 @@ export async function finalizePublicOAuthAuthorizationWithSignatures(
         codeChallenge: pkce.codeChallenge,
         rememberMe: input.rememberMe,
         credentialEpoch: input.credentialEpoch,
+        twoFaCompleted: input.twoFaCompleted,
       };
       const issued = await (deps?.issuePublicCode ?? issueOAuthCode)(
         issueInput,
@@ -417,6 +418,7 @@ export async function completeSigningContinuation(
         codeChallenge: continuation.codeChallenge,
         rememberMe: continuation.rememberMe,
         credentialEpoch: publicInput.credentialEpoch,
+        twoFaCompleted: continuation.twoFaCompleted,
       },
       tx as unknown as Prisma.TransactionClient,
       consumedAt,

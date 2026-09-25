@@ -5,11 +5,13 @@ import { asPrismaClient } from '../../db/tenant-context.js';
 import { createRateLimiter } from '../../middleware/rate-limiter.js';
 import { loginWithEmailPassword } from '../../services/auth-login.service.js';
 import { buildMcpClientConfig } from '../../services/oauth/config.service.js';
+import { validatePublicScopes } from '../../services/oauth/scopes.service.js';
 import { getOAuthClient } from '../../services/oauth/client.service.js';
 import { validateRequestedResource } from '../../services/oauth/resource-validation.service.js';
 import { finalizePublicOAuthAuthorizationWithSignatures } from '../../services/signature-continuation.service.js';
 import { selectRedirectUrl } from '../../services/authorization-code.service.js';
-import { resolveTwoFaPolicy } from '../../services/twofactor-policy.service.js';
+import { completePublicSecondFactor } from '../../services/oauth/second-factor.service.js';
+import { lockProductTeamPolicyShared } from '../../services/product-team-policy-lock.service.js';
 import { buildPublicErrorBody } from '../../utils/error-response.js';
 import { parseRequiredPkceChallenge } from '../../utils/pkce.js';
 import { requireMcpOAuthPublicProfile } from './public-profile-guard.js';
@@ -23,6 +25,8 @@ const BodySchema = z
     email: z.string().trim().toLowerCase().email(),
     password: z.string().min(1).max(1024),
     remember_me: z.boolean().optional(),
+    code: z.string().regex(/^\d{6}$/).optional(),
+    setup_token: z.string().max(8192).optional(),
   })
   .strict();
 
@@ -49,7 +53,7 @@ export function registerOAuthLoginRoute(app: FastifyInstance): void {
     '/oauth/login',
     { preHandler: [requireMcpOAuthPublicProfile, limiter] },
     async (request, reply) => {
-      const { email, password, remember_me } = BodySchema.parse(request.body);
+      const { email, password, remember_me, code, setup_token } = BodySchema.parse(request.body);
       const q = QuerySchema.parse(request.query);
       // RFC 8707: bind the requested resource to the allowlist before issuing the code.
       const resource = validateRequestedResource(q.resource);
@@ -64,25 +68,23 @@ export function registerOAuthLoginRoute(app: FastifyInstance): void {
         return;
       }
 
+      validatePublicScopes(q.scope, client.scopes);
       const config = buildMcpClientConfig(client.redirectUris);
       request.tenantContext = { domain: config.domain, orgId: null, userId: null };
 
       const outcome = await request.withTenantTx(async (tx) => {
         const prisma = asPrismaClient(tx);
+        await lockProductTeamPolicyShared(prisma);
         const { userId, twoFaEnabled, credentialEpoch } = await loginWithEmailPassword(
           { email, password, config },
           { prisma },
         );
 
-        // Fail-closed: public /oauth 2FA completion is still a follow-up, so policy
-        // branches block completion instead of issuing a code.
-        const twoFaPolicy = await resolveTwoFaPolicy({ config, userId });
-        if (twoFaPolicy !== 'OFF' && twoFaEnabled) {
-          return { kind: 'twofa' as const };
-        }
-        if (twoFaPolicy === 'REQUIRED') {
-          return { kind: 'twofa_enroll_required' as const };
-        }
+        const factor = await completePublicSecondFactor({
+          userId, credentialEpoch, twoFaEnabled, config, context: q,
+          code, setupToken: setup_token,
+        }, prisma);
+        if (factor.response) return { kind: 'factor' as const, response: factor.response };
 
         const redirectUrl = selectRedirectUrl({
           allowedRedirectUrls: client.redirectUris,
@@ -102,21 +104,15 @@ export function registerOAuthLoginRoute(app: FastifyInstance): void {
             codeChallenge: pkce.codeChallenge,
             rememberMe,
             authMethod: 'email_password',
-            twoFaCompleted: false,
+            twoFaCompleted: factor.completed === true,
             credentialEpoch,
           },
         };
       });
 
-      if (outcome.kind === 'twofa') {
-        reply.status(200).send({ ok: true, twofa_required: true });
-        return;
-      }
-      if (outcome.kind === 'twofa_enroll_required') {
-        reply
-          .status(200)
-          .send({ ok: true, kind: 'twofa_enroll_required', twofa_enroll_required: true });
-        return;
+      reply.header('Cache-Control', 'no-store');
+      if (outcome.kind === 'factor') {
+        return reply.status(200).send(outcome.response);
       }
       const gate = await finalizePublicOAuthAuthorizationWithSignatures(outcome.input, {
         prisma: request.adminDb,

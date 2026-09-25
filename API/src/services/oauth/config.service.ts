@@ -55,8 +55,7 @@ export function buildMcpClientConfig(redirectUris: string[]): ClientConfig {
     enabled_auth_methods: methods.length > 0 ? methods : ['email_password'],
     language_config: 'en',
     ui_theme: DEFAULT_UI_THEME,
-    // Honour 2FA when a user has it (fail-closed: 2FA users are blocked until the
-    // /oauth 2FA completion step lands, never bypassed).
+    // Hosted password login completes enrolled TOTP or required enrollment.
     '2fa_enabled': true,
     allow_registration: false,
   });

@@ -81,10 +81,13 @@ export const oauthEndpoints: EndpointSchema[] = [
       email: 'string (required)',
       password: 'string (required)',
       remember_me: 'boolean (optional)',
+      code: 'six digit authenticator code (optional; resubmit password when twofa_required)',
+      setup_token: 'required with code when completing twofa_enroll_required',
     },
     response: {
       redirect_to: 'string — redirect_uri?code=&state= (on success)',
-      twofa_required: 'boolean — true when 2FA blocks completion (pending /oauth 2FA step)',
+      twofa_required: 'boolean — resubmit password with authenticator code',
+      twofa_enroll_required: 'boolean — enroll using returned setup_token and manual_secret, then resubmit password, setup_token and code',
     },
   },
   {

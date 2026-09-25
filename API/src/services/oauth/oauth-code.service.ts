@@ -38,6 +38,7 @@ export interface IssueOAuthCodeInput {
   codeChallenge: string;
   rememberMe?: boolean;
   credentialEpoch: number;
+  twoFaCompleted?: boolean;
 }
 
 export async function issueOAuthCode(
@@ -72,6 +73,7 @@ export async function issueOAuthCode(
           codeChallengeMethod: 'S256',
           rememberMe: input.rememberMe ?? false,
           tokenVersion: input.credentialEpoch,
+          twoFaCompleted: input.twoFaCompleted ?? false,
           expiresAt: new Date(now.getTime() + AUTHORIZATION_CODE_TTL_MS),
         },
         select: { id: true },
@@ -86,6 +88,9 @@ export async function issueOAuthCode(
 }
 
 export interface ConsumeOAuthCodeResult {
+  credentialEpoch: number;
+  twoFaCompleted: boolean;
+  domain: string;
   userId: string;
   resource: string | null;
   scope: string | null;
@@ -112,6 +117,7 @@ export async function consumeOAuthCode(
       codeChallengeMethod: true,
       rememberMe: true,
       tokenVersion: true,
+      twoFaCompleted: true,
       expiresAt: true,
       usedAt: true,
     },
@@ -157,6 +163,7 @@ export async function consumeOAuthCode(
     throw error;
   }
 
+  now = new Date(Math.max(now.getTime(), Date.now()));
   // One-time use: atomic compare-and-set guards against code replay / races.
   const updated = await prisma.authorizationCode.updateMany({
     where: { id: code.id, usedAt: null, expiresAt: { gt: now } },
@@ -166,6 +173,9 @@ export async function consumeOAuthCode(
 
   return {
     userId: code.userId,
+    domain: code.domain,
+    credentialEpoch,
+    twoFaCompleted: code.twoFaCompleted === true,
     resource: code.resource,
     scope: code.oauthScope,
     rememberMe: code.rememberMe,

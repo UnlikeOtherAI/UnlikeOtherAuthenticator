@@ -82,6 +82,9 @@ describe('public OAuth code scope binding', () => {
       resource: 'https://resource.example',
       scope: 'openid profile',
       rememberMe: false,
+      credentialEpoch: 0,
+      domain: 'mcp.example.com',
+      twoFaCompleted: false,
     });
   });
 });

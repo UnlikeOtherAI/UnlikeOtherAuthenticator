@@ -7,6 +7,7 @@ import {
   USER_SETTINGS_MAX_TOTAL_BYTES,
   USER_SETTINGS_MAX_VALUE_BYTES,
 } from '../config/constants.js';
+import { settingVersion } from './setting-version.js';
 import { getEnv } from '../config/env.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
@@ -45,7 +46,11 @@ export type UserSettingsOverview = {
 
 type SettingsPrisma = Pick<PrismaClient, 'userSetting' | '$transaction'>;
 
-export type UserSettingsDeps = { prisma?: SettingsPrisma };
+export type UserSettingsDeps = {
+  prisma?: SettingsPrisma;
+  authorizeWrite?: (tx: Prisma.TransactionClient) => Promise<void>;
+  expectedVersion?: { key: string; version: string };
+};
 
 function prismaFor(deps?: UserSettingsDeps): SettingsPrisma {
   if (deps?.prisma) return deps.prisma;
@@ -223,6 +228,7 @@ export async function updateUserSettings(
   }
 
   return await prismaFor(deps).$transaction(async (tx) => {
+    await deps?.authorizeWrite?.(tx);
     // NO KEY UPDATE rather than UPDATE: it still serializes settings writers for this user, but
     // does not block the FK KEY SHARE locks unrelated child-table inserts take on the user row.
     const locked = await tx.$queryRaw<Array<{ id: string }>>`
@@ -230,6 +236,13 @@ export async function updateUserSettings(
     `;
     if (locked.length === 0) throw new AppError('NOT_FOUND', 404, 'USER_NOT_FOUND');
 
+    if (deps?.expectedVersion) {
+      const { key, version } = deps.expectedVersion;
+      const previous = await tx.userSetting.findUnique({ where: { userId_namespace_key: { userId, namespace, key } }, select: { value: true } });
+      if (settingVersion(previous?.value ?? null) !== version) {
+        throw new AppError('BAD_REQUEST', 409, 'SETTING_VERSION_CONFLICT');
+      }
+    }
     if (deletions.length > 0) {
       await tx.userSetting.deleteMany({ where: { userId, namespace, key: { in: deletions } } });
     }
@@ -273,9 +286,7 @@ export async function deleteUserSetting(
   assertNamespace(params.namespace);
   assertKey(params.key);
 
-  await prismaFor(deps).userSetting.deleteMany({
-    where: { userId: params.userId, namespace: params.namespace, key: params.key },
-  });
+  await updateUserSettings({ userId: params.userId, namespace: params.namespace, entries: { [params.key]: null } }, deps);
 }
 
 /** Remove a whole namespace. Idempotent; returns how many keys were removed. */
@@ -285,8 +296,9 @@ export async function deleteUserSettingsNamespace(
 ): Promise<number> {
   assertNamespace(params.namespace);
 
-  const result = await prismaFor(deps).userSetting.deleteMany({
-    where: { userId: params.userId, namespace: params.namespace },
+  return prismaFor(deps).$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM users WHERE id = ${params.userId} FOR NO KEY UPDATE`;
+    const result = await tx.userSetting.deleteMany({ where: { userId: params.userId, namespace: params.namespace } });
+    return result.count;
   });
-  return result.count;
 }

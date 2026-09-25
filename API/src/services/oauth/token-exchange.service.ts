@@ -6,6 +6,11 @@ import type { Prisma, PrismaClient } from '@prisma/client';
 import { getEnv, getPublicBaseUrl } from '../../config/env.js';
 import { AppError } from '../../utils/errors.js';
 import { ensureDomainRoleForUser, isPlatformSuperuser } from '../domain-role.service.js';
+import { buildMcpClientConfig } from './config.service.js';
+import { validatePublicScopes } from './scopes.service.js';
+import { getOAuthClient } from './client.service.js';
+import { lockProductTeamPolicyShared } from '../product-team-policy-lock.service.js';
+import { resolveTwoFaPolicy, isTwoFaAuthenticationSufficient } from '../twofactor-policy.service.js';
 import { signMcpAccessToken } from './access-token.service.js';
 import { consumeOAuthCode } from './oauth-code.service.js';
 
@@ -36,6 +41,7 @@ export async function exchangeOAuthCodeForAccessToken(
   // ADMIN_AUTH_DOMAIN. Defaults to the tenant tx when omitted.
   adminPrisma?: PrismaClient,
 ): Promise<OAuthTokenResult> {
+  await lockProductTeamPolicyShared(prisma);
   const consumed = await consumeOAuthCode(
     {
       code: params.code,
@@ -49,6 +55,16 @@ export async function exchangeOAuthCodeForAccessToken(
     throw new AppError('UNAUTHORIZED', 401, 'INVALID_AUTH_CODE');
   }
 
+  if (consumed.domain !== params.domain) throw new AppError('UNAUTHORIZED', 401, 'INVALID_AUTH_CODE');
+  const client = await getOAuthClient(params.clientId);
+  if (!client) throw new AppError('UNAUTHORIZED', 401, 'INVALID_AUTH_CODE');
+  validatePublicScopes(consumed.scope ?? undefined, client.scopes);
+  const config = buildMcpClientConfig(client.redirectUris);
+  const current = await prisma.user.findUnique({ where: { id: consumed.userId }, select: { twoFaEnabled: true } });
+  const policy = await resolveTwoFaPolicy({ config, userId: consumed.userId }, { prisma });
+  if (!current || !isTwoFaAuthenticationSufficient({ policy, twoFaEnabled: current.twoFaEnabled, twoFaCompleted: consumed.twoFaCompleted })) {
+    throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
+  }
   const domainRole = await ensureDomainRoleForUser({
     prisma: prisma as unknown as Parameters<typeof ensureDomainRoleForUser>[0]['prisma'],
     domain: params.domain,
@@ -70,6 +86,8 @@ export async function exchangeOAuthCodeForAccessToken(
   const ttlSeconds = accessTokenTtlSeconds();
   const accessToken = await signMcpAccessToken({
     subject: consumed.userId,
+    credentialEpoch: consumed.credentialEpoch,
+    twoFaCompleted: consumed.twoFaCompleted,
     email: user.email,
     domain: params.domain,
     clientId: params.clientId,
