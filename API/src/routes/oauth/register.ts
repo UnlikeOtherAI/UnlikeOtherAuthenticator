@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
+import { validatePublicScopes } from '../../services/oauth/scopes.service.js';
 import { createRateLimiter } from '../../middleware/rate-limiter.js';
 import { registerOAuthClient } from '../../services/oauth/client.service.js';
 import { buildPublicErrorBody } from '../../utils/error-response.js';
@@ -38,6 +39,7 @@ export function registerOAuthRegisterRoute(app: FastifyInstance): void {
         return;
       }
 
+      validatePublicScopes(body.scope);
       const scopes = body.scope
         ? body.scope
             .split(' ')
@@ -56,7 +58,7 @@ export function registerOAuthRegisterRoute(app: FastifyInstance): void {
         client_id_issued_at: Math.floor(client.createdAt.getTime() / 1000),
         client_name: client.clientName ?? undefined,
         redirect_uris: client.redirectUris,
-        grant_types: ['authorization_code', 'refresh_token'],
+        grant_types: ['authorization_code'],
         response_types: ['code'],
         token_endpoint_auth_method: 'none',
         scope: client.scopes.join(' ') || undefined,

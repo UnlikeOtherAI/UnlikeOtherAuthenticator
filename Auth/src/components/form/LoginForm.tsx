@@ -19,6 +19,8 @@ type LoginRequest = {
   email: string;
   password: string;
   remember_me: boolean;
+  code?: string;
+  setup_token?: string;
 };
 
 type LoginResponse = {
@@ -83,6 +85,8 @@ export function LoginForm(): React.JSX.Element {
   const emailCodeEnabled = isEmailCodeEnabled(config);
   const { rememberMeEnabled, rememberMeDefault } = readSessionConfig(config);
 
+  const [publicFactor, setPublicFactor] = useState<LoginResponse | null>(null);
+  const [code, setCode] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(rememberMeDefault);
@@ -121,7 +125,7 @@ export function LoginForm(): React.JSX.Element {
 
     const result = await postJson<LoginRequest, LoginResponse>(
       endpoint,
-      { email, password, remember_me: rememberMe },
+      { email, password, remember_me: rememberMe, ...(mcpMode && publicFactor ? { code: code || undefined, setup_token: publicFactor.setup_token } : {}) },
       query,
     );
 
@@ -129,6 +133,11 @@ export function LoginForm(): React.JSX.Element {
 
     if (!result.ok) {
       setError(t('form.login.error'));
+      return;
+    }
+
+    if (mcpMode && (result.data.twofa_required || result.data.twofa_enroll_required)) {
+      setPublicFactor(result.data);
       return;
     }
 
@@ -191,7 +200,17 @@ export function LoginForm(): React.JSX.Element {
         onChange={(e) => setPassword(e.currentTarget.value)}
       />
 
-      {rememberMeEnabled && (
+      {clientId && <p className="text-sm">
+        Continue to {redirectUrl?.split(':')[0]}. This app will receive your UOA profile
+        {scope?.includes('settings.') ? ' and permission to read and save your personal settings, including favourites' : ''}.
+        Only continue if you opened this request from an app you trust.
+      </p>}
+      {clientId && publicFactor && <>
+        {publicFactor.manual_secret && <p className="text-sm">Add this secret to your authenticator: <code>{publicFactor.manual_secret}</code></p>}
+        <Input name="code" label="Authenticator code" inputMode="numeric" autoComplete="one-time-code"
+          required value={code} onChange={(event) => setCode(event.currentTarget.value)} />
+      </>}
+      {!clientId && rememberMeEnabled && (
         <Switch
           id={rememberMeId}
           checked={rememberMe}
@@ -208,7 +227,7 @@ export function LoginForm(): React.JSX.Element {
         </Button>
       </div>
 
-      <div className="flex items-center justify-between text-sm">
+      {!clientId && <div className="flex items-center justify-between text-sm">
         <button
           type="button"
           className="text-[var(--uoa-color-primary)] hover:underline"
@@ -225,9 +244,9 @@ export function LoginForm(): React.JSX.Element {
             {t('nav.createAccount')}
           </button>
         ) : null}
-      </div>
+      </div>}
 
-      {emailCodeEnabled ? (
+      {!clientId && emailCodeEnabled ? (
         <div className="text-center text-sm">
           <button
             type="button"

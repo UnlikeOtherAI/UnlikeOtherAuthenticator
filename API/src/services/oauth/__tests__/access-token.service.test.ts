@@ -35,6 +35,7 @@ describe('mcp access-token (RS256)', () => {
   it('signs a resource-bound token verifiable against the public JWKS', async () => {
     const resource = 'https://hw.kilomayo.dev/api/v1/mcp';
     const token = await signMcpAccessToken({
+      credentialEpoch: 0,
       subject: 'usr_1',
       email: 'a@b.com',
       domain: 'sso.kilomayo.dev',
@@ -62,6 +63,7 @@ describe('mcp access-token (RS256)', () => {
 
   it('a token bound to one resource fails audience check for another', async () => {
     const token = await signMcpAccessToken({
+      credentialEpoch: 0,
       subject: 'usr_1',
       email: 'a@b.com',
       domain: 'sso.kilomayo.dev',

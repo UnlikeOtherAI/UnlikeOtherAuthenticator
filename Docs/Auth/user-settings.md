@@ -211,3 +211,11 @@ This mirrors the trust decision already taken for uploaded avatars (one shared i
   access token), Admin panel UI and `/internal/admin/*` routes for settings.
 - Deep merge / JSON Patch, per-key optimistic concurrency, change feeds.
 - Per-product namespace ownership (§6).
+
+## Native public clients
+
+Direct PKCE clients use the scoped, subject-bound `/oauth/me/settings/:namespace/:key`
+GET/PUT endpoints described in [native-accounts.md](native-accounts.md). This is an
+additional authenticated entry point to the same user-owned store, with conditional
+writes to protect read/modify/write lists. The existing confidential dual-auth routes
+and their authorization requirements are unchanged.

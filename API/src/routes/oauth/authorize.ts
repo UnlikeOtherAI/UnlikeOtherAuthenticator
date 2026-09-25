@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
+import { validatePublicScopes } from '../../services/oauth/scopes.service.js';
 import { getOAuthClient } from '../../services/oauth/client.service.js';
 import { buildMcpClientConfig } from '../../services/oauth/config.service.js';
 import { validateRequestedResource } from '../../services/oauth/resource-validation.service.js';
@@ -61,6 +62,7 @@ export function registerOAuthAuthorizeRoute(app: FastifyInstance): void {
         return;
       }
 
+      validatePublicScopes(q.scope, client.scopes);
       const config = buildMcpClientConfig(client.redirectUris);
       const html = await renderAuthEntrypointHtml({
         config,

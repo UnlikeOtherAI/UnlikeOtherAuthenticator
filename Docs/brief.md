@@ -2837,3 +2837,13 @@ brief by reference and authoritative for the settings store.
 - Values replace whole (no deep merge). Quotas: 256 KiB per value, 500 keys and
   1 MiB total per user. Deleting a user deletes their settings.
 - UOA itself never interprets settings; it only stores them.
+
+### Native account completion (September 2026)
+
+The public PKCE profile now completes email/password plus enrolled TOTP and required
+TOTP setup; setup capabilities bind the complete OAuth request and credential epoch.
+Public access tokens carry a distinct token class and credential epoch. Scoped,
+subject-only profile/avatar and conditional personal-settings endpoints allow native
+products to use UOA directly without a product auth backend. The production profile
+uses a dedicated non-admin logical domain. See [Auth/native-accounts.md](Auth/native-accounts.md)
+for the protocol, scope/consent, storage, revocation and client requirements.

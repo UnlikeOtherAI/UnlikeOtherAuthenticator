@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 
-import { getEnv, getMcpOAuthResources, getPublicBaseUrl } from '../../config/env.js';
+import { getMcpOAuthResources, getPublicBaseUrl } from '../../config/env.js';
+import { publicOAuthScopes } from '../../services/oauth/scopes.service.js';
 import { requireMcpOAuthPublicProfile } from './public-profile-guard.js';
 
 // RFC 8414 Authorization Server Metadata for the public-client / MCP profile
@@ -12,10 +13,7 @@ export function registerOAuthMetadataRoute(app: FastifyInstance): void {
     { preHandler: [requireMcpOAuthPublicProfile] },
     async (_request, reply) => {
       const issuer = getPublicBaseUrl();
-      const scopes = (getEnv().MCP_OAUTH_SCOPES_SUPPORTED ?? 'openid')
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean);
+      const scopes = publicOAuthScopes();
       const resources = getMcpOAuthResources();
 
       reply.header('Cache-Control', 'public, max-age=300');

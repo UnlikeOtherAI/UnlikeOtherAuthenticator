@@ -58,6 +58,11 @@ tags:
 
 components:
   securitySchemes:
+    nativeAccountBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: RS256 JWT
+      description: Public PKCE token with issuer audience, public_oauth token use and current credential epoch.
     domainHashBearer:
       type: http
       scheme: bearer
@@ -9655,3 +9660,82 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+
+  /oauth/me:
+    get:
+      operationId: nativeAccountProfile
+      tags: [Auth]
+      summary: Current native account profile
+      security: [{nativeAccountBearer: []}]
+      description: Requires profile scope. Returns only the authenticated subject, with no-store caching.
+      responses:
+        '200':
+          description: Object containing sub, email and nullable name
+        '401':
+          description: Invalid, expired or revoked public token
+  /oauth/me/avatar:
+    get:
+      operationId: nativeAccountAvatar
+      tags: [Auth]
+      summary: Current native account avatar
+      security: [{nativeAccountBearer: []}]
+      description: Requires profile scope. Resolves the subject's UOA avatar without storing a product copy.
+      responses:
+        '200':
+          description: Image bytes with no-store caching
+        '401':
+          description: Invalid, expired or revoked public token
+  /oauth/me/settings/{namespace}/{key}:
+    parameters:
+      - in: path
+        name: namespace
+        required: true
+        schema: {type: string, pattern: '^[a-z0-9][a-z0-9_.-]{0,63}$'}
+      - in: path
+        name: key
+        required: true
+        schema: {type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$'}
+    get:
+      operationId: nativeAccountSetting
+      tags: [Auth]
+      summary: Read a personal setting
+      security: [{nativeAccountBearer: []}]
+      description: Requires settings.read. Uses the same user-owned store as /settings/me.
+      responses:
+        '200':
+          description: Object containing value (null when absent); no-store
+          headers:
+            ETag:
+              description: Opaque version required by PUT
+              schema: {type: string}
+        '401':
+          description: Invalid, expired or revoked token
+    put:
+      operationId: replaceNativeAccountSetting
+      tags: [Auth]
+      summary: Conditionally replace a personal setting
+      security: [{nativeAccountBearer: []}]
+      description: Requires settings.write. Existing settings quotas apply; null deletes the key.
+      parameters:
+        - in: header
+          name: If-Match
+          required: true
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [value]
+              properties:
+                value: {}
+      responses:
+        '200':
+          description: Object containing saved value and new ETag; no-store
+        '409':
+          description: Stale version; reread and reapply the intended change
+        '428':
+          description: Missing or invalid If-Match
+        '401':
+          description: Invalid, expired or revoked token

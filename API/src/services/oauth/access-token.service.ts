@@ -63,6 +63,8 @@ export async function getAccessTokenPublicJwks(): Promise<{ keys: JWK[] }> {
 }
 
 export interface McpAccessTokenClaims {
+  credentialEpoch: number;
+  twoFaCompleted?: boolean;
   subject: string;
   email: string;
   domain: string;
@@ -83,6 +85,9 @@ export async function signMcpAccessToken(claims: McpAccessTokenClaims): Promise<
     email: claims.email,
     domain: claims.domain,
     client_id: claims.clientId,
+    token_use: 'public_oauth',
+    tv: claims.credentialEpoch,
+    twofa: claims.twoFaCompleted === true,
     role: claims.role,
   };
   if (claims.scope) payload.scope = claims.scope;

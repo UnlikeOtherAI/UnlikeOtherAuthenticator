@@ -1,6 +1,8 @@
 import Fastify from 'fastify';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('../../src/services/product-team-policy-lock.service.js', () => ({ lockProductTeamPolicyShared: vi.fn() }));
+
 const loginWithEmailPasswordMock = vi.fn();
 const getOAuthClientMock = vi.fn();
 const buildMcpClientConfigMock = vi.fn();
